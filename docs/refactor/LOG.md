@@ -2066,3 +2066,27 @@
   every id preserved (schwarzPeerView green). Green: typecheck + lint + node (peer-view + glossary
   unchanged). VERIFIED (Playwright): at 1300px the σ canvas (770²) and the 304px controls panel sit side by
   side with the deltoid σ field rendered; at 760px it stacks.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase B — live rendering &
+  resolution):** the phase aimed squarely at the user's #1 pain (low resolution + no real interactivity),
+  in three commits. **B (render pipeline):** the σ field now renders at the displayed canvas size in device
+  pixels (`schwarzBackingSize` = CSS px × devicePixelRatio, GPU-`maxSize` capped) instead of a fixed 512²
+  upscaled — 1540² on a 770 px retina canvas, verified via Playwright — so the tiling is crisp. A
+  **progressive** paint draws a quarter-res draft during pan/zoom (scheduleSchwarzDraftPaint) then an idle
+  timer (150 ms) refines to full res, so interaction never blocks; a **field-dirty cache** re-renders the
+  field only on a view/coloring/map/escape change, so hover / inspect are overlay-only re-blits (they no
+  longer pay for a full field render). An **anti-aliasing** select (off / 2× / 3× / 4×) supersamples then
+  box-downsamples for smoother edges; the backing re-fits on resize / DPR change. The GPU renderer gained a
+  `maxSize` (min of MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE). Giving the A3 canvas a definite square also
+  pinned the earlier thin-strip headless artifact. **B (escape knobs):** the escape budget (48 / 1e4), one
+  budget shared by the field and the orbit inspector, becomes live — a Render-group **iterations** +
+  **escape radius** field retune it, re-rendering the field and re-tracing the pinned orbit so its fate
+  readout still matches the pixel under it. **B (draggable seed):** the pinned inspect seed w₀ is now
+  grab-and-drag — pressing within 10 px of it drags the seed (a "move" cursor signals it) and re-traces its
+  σ-orbit in real time (an overlay-only repaint, the view unchanged), verified live (the readout followed
+  the cursor). **Persistence:** aa + maxIter + escapeR join the `_sigma` state layer (permalink / saved view
+  / PNG), omitted at their defaults so an old or default-quality link stays byte-identical; schwarzState
+  round-trips them (clamped, hostile-link hard) and the PNG stamp summarises them. The renderer defaults
+  (`?? 48` / `?? 1e4`) are untouched, so the CPU↔GPU agreement corpus is unchanged. df64 deep-zoom stays
+  deferred (sampling quality only). Green: typecheck + lint + node **790** (schwarzState **+3** render-knob
+  round-trip; appState opt-out +2) + browser **17/17** (shaders + σ render shell). Deferred from the plan
+  and NOT started: draggable map handles + live parameter scrubbing (the other two interactivity options).

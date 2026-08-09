@@ -3463,6 +3463,18 @@ function init(): void {
     let downClient: [number, number] | null = null;
     let movedSinceDown = false;
     const CLICK_TOL_PX = 4; // total travel under this ⇒ a click (inspect the orbit), not a drag (pan)
+    const SEED_GRAB_PX = 10; // press within this of the pinned orbit's seed w₀ ⇒ drag the seed, not pan (B3)
+    let draggingSeed = false; // true ⇒ the current drag moves the inspect seed, not the view
+    // Is `uv` within grab range of the pinned inspect seed w₀ (measured in CSS px)? Starts a seed-drag and
+    // drives the "move" cursor. (The inverse of uvToPlotFrac maps w₀ back to its fractional screen position.)
+    const nearSchwarzSeed = (uv: [number, number]): boolean => {
+      if (!schwarzInspect) return false;
+      const w = schwarzInspect.points[0];
+      const su = ((w[0] - schwarzView.center[0]) * schwarzView.zoom + 1) / 2;
+      const sv = (1 - (w[1] - schwarzView.center[1]) * schwarzView.zoom) / 2;
+      const r = canvas.getBoundingClientRect();
+      return Math.hypot((uv[0] - su) * r.width, (uv[1] - sv) * r.height) <= SEED_GRAB_PX;
+    };
     // Hover orbit-preview (S5-A2): trace the orbit under the cursor and repaint (rAF-coalesced). Clears when
     // the pointer leaves. Off during a drag (a pan already repaints) and on touch (no hover).
     const setSchwarzHover = (e: PointerEvent): void => {
@@ -3483,32 +3495,42 @@ function init(): void {
     };
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
-      lastUv = clientToUv(e);
+      const uv = clientToUv(e);
+      draggingSeed = nearSchwarzSeed(uv); // press on the pinned seed ⇒ drag it, not the view (B3)
+      lastUv = uv;
       downClient = [e.clientX, e.clientY];
       movedSinceDown = false;
       schwarzHover = null; // a drag/click supersedes the hover preview
       canvas.setPointerCapture(e.pointerId);
-      canvas.style.cursor = "grabbing";
+      canvas.style.cursor = draggingSeed ? "move" : "grabbing";
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!schwarzSession) return;
       if (!lastUv) {
         setSchwarzHover(e); // not dragging ⇒ preview the orbit under the cursor
+        canvas.style.cursor = nearSchwarzSeed(clientToUv(e)) ? "move" : "grab"; // signal a draggable seed
         return;
       }
       if (downClient && Math.hypot(e.clientX - downClient[0], e.clientY - downClient[1]) > CLICK_TOL_PX) {
         movedSinceDown = true; // it's a drag now — a trailing click won't inspect
       }
       const cur = clientToUv(e);
-      schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
+      if (draggingSeed) {
+        // Move the inspect seed w₀ under the cursor and re-trace its σ-orbit in real time (B3). The view is
+        // unchanged, so this is an overlay-only repaint (setSchwarzInspect) — the field is not re-rendered.
+        setSchwarzInspect(uvToPlotFrac(schwarzView, cur[0], cur[1]));
+      } else {
+        schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
+        scheduleSchwarzDraftPaint(); // draft while dragging; refine to full res once the pan goes idle
+      }
       lastUv = cur;
-      scheduleSchwarzDraftPaint(); // draft while dragging; refine to full res once the pan goes idle
     });
     canvas.addEventListener("pointerleave", clearSchwarzHover);
     const endDrag = (e: PointerEvent): void => {
       if (!lastUv) return;
       lastUv = null;
       downClient = null;
+      draggingSeed = false;
       canvas.style.cursor = "grab";
       try {
         canvas.releasePointerCapture(e.pointerId);
@@ -3517,7 +3539,7 @@ function init(): void {
       }
     };
     canvas.addEventListener("pointerup", (e) => {
-      const wasClick = lastUv !== null && !movedSinceDown;
+      const wasClick = lastUv !== null && !movedSinceDown && !draggingSeed;
       endDrag(e);
       // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor.
       if (wasClick && schwarzSession) {
