@@ -41,6 +41,7 @@ const PROJECTS = [
   { name: 'gpu', match: '/packages/gpu/', floor: 1 },
   { name: 'schwarz', match: '/packages/schwarz/', floor: 1 },
   { name: 'complex-dynamics', match: '/apps/complex-dynamics/', floor: 1 },
+  { name: 'complex-function-plotter', match: '/apps/complex-function-plotter/', floor: 1 },
   { name: 'correspondences', match: '/apps/correspondences/', floor: 1 },
   { name: 'quadrature-domains', match: '/apps/quadrature-domains/', floor: 1 },
 ];
