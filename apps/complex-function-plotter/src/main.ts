@@ -11,12 +11,15 @@ import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
 import { ExprError } from "@cas/expr/ast";
 import { makeComplexFn } from "@cas/expr/evaluate";
+import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";
 import { drawModulusBar, drawPhaseWheel } from "./ui/legends.js";
 import { drawAxes } from "./ui/axes.js";
+import { drawMarkers } from "./ui/markers.js";
+import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import { decodeState, encodeState, shareUrl, type PlotterState } from "./state/viewState.js";
 
 const DEFAULTS: PlotterState = {
@@ -62,6 +65,8 @@ function main(): void {
   const hueShiftInput = byId("hueShift");
   const hueSignInput = byId("hueSign");
   const cvdSel = byId("cvd");
+  const markSingsInput = byId("markSings");
+  const singCount = byId("singCount");
   const homeBtn = byId("home");
   const savePngBtn = byId("savePng");
   const copyLinkBtn = byId("copyLink");
@@ -100,11 +105,21 @@ function main(): void {
   let framingSpan = initial.span;
 
   let probeFn: ((z: Complex, c: Complex) => Complex) | null = null;
-  const updateProbeFn = (src: string): void => {
+  let fpFn: ((z: Complex, c: Complex) => Complex) | null = null;
+  let sings: Singularities | null = null;
+  let markSings = false;
+  const updateFns = (src: string): void => {
     try {
-      probeFn = makeComplexFn(parse(src));
+      const ast = parse(src);
+      probeFn = makeComplexFn(ast);
+      try {
+        fpFn = makeComplexFn(differentiate(ast, "z"));
+      } catch {
+        fpFn = null; // non-holomorphic — the singularity finder needs f'
+      }
     } catch {
       probeFn = null;
+      fpFn = null;
     }
   };
 
@@ -138,7 +153,42 @@ function main(): void {
   const redraw = (draft = false): void => {
     plot.draw(draft);
     drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
+    if (markSings && sings)
+      drawMarkers(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight, sings);
     scheduleHash();
+  };
+
+  const showCounts = (): void => {
+    if (!(singCount instanceof HTMLElement)) return;
+    if (!markSings) {
+      singCount.textContent = "";
+    } else if (!sings) {
+      singCount.textContent = "—";
+    } else if (!sings.differentiable) {
+      singCount.textContent = "needs a holomorphic f";
+    } else {
+      const z = sings.zeros.reduce((n, s) => n + s.order, 0);
+      const p = sings.poles.reduce((n, s) => n + s.order, 0);
+      singCount.textContent = `zeros ${sings.zeros.length} (Σ ${z}) · poles ${sings.poles.length} (Σ ${p}) ≈`;
+    }
+  };
+  const recomputeSings = (): void => {
+    if (markSings && probeFn) {
+      const aspect = canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
+      sings = findSingularities(probeFn, fpFn, plot.view, aspect);
+    } else {
+      sings = null;
+    }
+    showCounts();
+  };
+  let singTimer = 0;
+  const recomputeSingsSoon = (): void => {
+    if (!markSings) return;
+    window.clearTimeout(singTimer);
+    singTimer = window.setTimeout(() => {
+      recomputeSings();
+      redraw(false);
+    }, 140);
   };
 
   const renderPreview = (src: string): void => {
@@ -158,7 +208,8 @@ function main(): void {
       plot.setFunction(src);
       setError("");
       renderPreview(src);
-      updateProbeFn(src);
+      updateFns(src);
+      recomputeSings();
       redraw(false);
     } catch (err) {
       if (err instanceof ExprError) {
@@ -242,6 +293,14 @@ function main(): void {
       redraw(false);
     });
   }
+  if (markSingsInput instanceof HTMLInputElement) {
+    markSingsInput.checked = markSings;
+    markSingsInput.addEventListener("change", () => {
+      markSings = markSingsInput.checked;
+      recomputeSings();
+      redraw(false);
+    });
+  }
   if (presetSel instanceof HTMLSelectElement) {
     addOption(presetSel, "", "Presets…");
     PRESETS.forEach((p, i) => addOption(presetSel, String(i), p.label));
@@ -265,6 +324,7 @@ function main(): void {
   if (homeBtn instanceof HTMLElement) {
     homeBtn.addEventListener("click", () => {
       plot.view = { cx: 0, cy: 0, span: framingSpan };
+      recomputeSings();
       redraw(false);
     });
   }
@@ -326,6 +386,7 @@ function main(): void {
     if (grabWorld) {
       grabWorld = null;
       redraw(false);
+      recomputeSingsSoon();
     }
   };
   canvas.addEventListener("pointerup", endPan);
@@ -336,6 +397,7 @@ function main(): void {
       e.preventDefault();
       plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY));
       redraw(false);
+      recomputeSingsSoon();
     },
     { passive: false },
   );

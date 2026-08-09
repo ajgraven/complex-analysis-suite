@@ -57,6 +57,12 @@
       label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: normal; font-size: 0.8rem; color: var(--text); margin: 0; }
       label.check input { width: auto; accent-color: var(--accent); }
       .subval { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
+      .singcount { margin: 6px 0 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.76rem; color: var(--muted); }
+      details.explain { margin-top: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
+      details.explain summary { cursor: pointer; font-size: 0.8rem; color: var(--text); }
+      details.explain p, details.explain ul { font-size: 0.76rem; color: var(--muted); margin: 8px 0 0; }
+      details.explain ul { padding-left: 18px; }
+      details.explain li { margin: 3px 0; }
 
       .legend { display: flex; gap: 14px; align-items: center; }
       .wheel-wrap { position: relative; flex: 0 0 auto; }
@@ -160,6 +166,11 @@
         </dl>
       </div>
 
+      <div class="group">
+        <label class="check"><input type="checkbox" id="markSings" /> Mark zeros &amp; poles</label>
+        <p class="singcount" id="singCount"></p>
+      </div>
+
       <div class="group actions">
         <button id="home" type="button">Reset</button>
         <button id="savePng" type="button">Save PNG</button>
@@ -167,6 +178,16 @@
       </div>
 
       <p class="hint">Drag to pan · scroll to zoom · move the cursor to read f(z). Hue = arg f, brightness = |f|.</p>
+
+      <details class="explain">
+        <summary>What am I looking at?</summary>
+        <p>Each pixel is coloured by <b>w = f(z)</b>: the hue is the phase (arg f), and brightness grows with the modulus |f|.</p>
+        <ul>
+          <li><b>Zero</b> — a dark point where all hues meet; the colour wheel winds once per order.</li>
+          <li><b>Pole</b> — a bright point where the hue winds the opposite way (|f| &rarr; &infin;).</li>
+          <li>The <b>conformal grid</b>'s near-square tiles mark where f preserves angles; they shear or pinch where it doesn't (e.g. at a zero or pole).</li>
+        </ul>
+      </details>
     </aside>
 
     <main class="stage">
