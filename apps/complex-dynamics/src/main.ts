@@ -3064,6 +3064,9 @@ function init(): void {
   /** Mirror the live view into the precise-nav fields — unless the user is editing one (don't clobber a
    *  half-typed value; a paint only fires on a view change, so this is just belt-and-suspenders). */
   function syncSchwarzViewFields(): void {
+    // The persistent view chip (A2) mirrors the window regardless of focus — update it first, before the
+    // guard below that leaves the input fields alone while the user is typing into one.
+    updateSchwarzViewChip();
     const re = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
     const im = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
     const zoom = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
@@ -3074,6 +3077,21 @@ function init(): void {
     re.value = f.re;
     im.value = f.im;
     zoom.value = f.zoom;
+  }
+
+  /** Reflect the live σ view in the persistent view chip (A2 — parity with the standard plots' `.view-summary`):
+   *  `centre · zoom · family`, or a prompt when no σ is loaded yet. */
+  function updateSchwarzViewChip(): void {
+    const chip = document.getElementById("schwarz-view-chip");
+    if (!chip) return;
+    if (!schwarzSession) {
+      chip.textContent = "generate a σ to begin";
+      return;
+    }
+    const f = formatSchwarzViewFields(schwarzView);
+    const centre = `${f.re}${f.im.startsWith("-") ? "" : "+"}${f.im}i`;
+    const family = schwarzSession.boundedOmega ? "bounded" : "unbounded";
+    chip.textContent = `${centre} · zoom ${f.zoom} · ${family}`;
   }
 
   /** (Re)render the σ legend chip — title + end labels describe WHAT the ramp maps in the active color mode

@@ -527,162 +527,254 @@ abs(z)>2</textarea
                      label and the bottom-left scale bar. -->
                 <div id="schwarz-legend" class="plot-legend schwarz-legend" aria-hidden="true"></div>
               </div>
+              <!-- σ controls adopt CD's collapsible control-group idiom (Phase A): a persistent status
+                   line (live view chip + orbit readout) over stacked Map / Coloring / View / Export groups,
+                   each a `.control-grid` of `.field` units — so the σ pane reads like the standard planes. -->
               <div class="controls">
-                <div class="field schwarz-builder" id="schwarz-builder">
-                  <label for="schwarz-preset">Riemann map φ preset</label>
-                  <select
-                    id="schwarz-preset"
-                    title="Start from a known map, or choose Custom… and enter your own φ."
-                  >
-                    <option value="">Custom…</option>
-                  </select>
-                  <label for="schwarz-family">Domain type</label>
-                  <select
-                    id="schwarz-family"
-                    title="Unbounded — φ maps the unit-disk EXTERIOR onto Ω (a Laurent map c·z + F/zˡ + poles). Bounded — φ maps the disk INTERIOR onto Ω, a centre w₀ plus interior poles (S5-C2)."
-                  >
-                    <option value="unbounded">Unbounded (exterior)</option>
-                    <option value="bounded">Bounded (interior)</option>
-                  </select>
-                  <div id="schwarz-fields-unbounded" data-family-fields="unbounded">
-                    <label for="schwarz-c">c — leading coefficient (real or complex, e.g. 1+0.5i)</label>
-                    <input id="schwarz-c" type="text" spellcheck="false" value="1" />
-                    <label for="schwarz-F">F — Laurent coeffs (const, 1/z, 1/z², …)</label>
-                    <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
-                  </div>
-                  <div id="schwarz-fields-bounded" data-family-fields="bounded" hidden>
-                    <label for="schwarz-w0">w₀ — domain centre φ(0) (e.g. 0)</label>
-                    <input id="schwarz-w0" type="text" spellcheck="false" value="0" />
-                  </div>
-                  <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, … (each |z| &lt; 1)</label>
-                  <textarea id="schwarz-poles" rows="2" spellcheck="false" placeholder="0.3 ; 0.4"></textarea>
-                  <div class="schwarz-builder-actions">
-                    <button id="schwarz-generate" type="button">Generate σ</button>
-                  </div>
-                  <div id="schwarz-error" class="input-errors" role="alert" hidden></div>
+                <!-- Live view chip (parity with the standard plots' `.view-summary`): mirrors the σ view as
+                     you pan/zoom. Populated by syncSchwarzViewFields() in main.ts. -->
+                <p class="view-summary">
+                  view
+                  <span class="view-chip-text" id="schwarz-view-chip">generate a σ to begin</span>
+                </p>
+                <!-- Orbit inspection (ADR-0009 item 3): click the σ canvas to trace a point's orbit; the
+                     readout is populated from render/schwarzView.ts in main.ts. Always visible so the
+                     click-to-trace guidance and the fate readout stay next to the canvas. -->
+                <div class="field schwarz-inspect-field">
+                  <p class="schwarz-inspect-hint">
+                    Click the plot to trace a point's σ-orbit.
+                    <button
+                      class="gloss-link"
+                      type="button"
+                      data-term="schwarz-reflection"
+                      aria-label="What is the Schwarz reflection σ?"
+                    >
+                      ?
+                    </button>
+                  </p>
+                  <div id="schwarz-inspect" class="schwarz-inspect" aria-live="polite" hidden></div>
                 </div>
+
+                <!-- Map — the Riemann map φ builder (S4b-iv): generate a σ from a preset or a custom φ. -->
+                <details class="control-group" id="schwarz-builder" open>
+                  <summary>Map — Riemann map φ</summary>
+                  <div class="control-grid">
+                    <div class="field">
+                      <label for="schwarz-preset">preset</label>
+                      <select
+                        id="schwarz-preset"
+                        title="Start from a known map, or choose Custom… and enter your own φ."
+                      >
+                        <option value="">Custom…</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-family">
+                        domain type
+                        <button
+                          class="gloss-link"
+                          type="button"
+                          data-term="riemann-map-phi"
+                          aria-label="What is the Riemann map φ?"
+                        >
+                          ?
+                        </button>
+                      </label>
+                      <select
+                        id="schwarz-family"
+                        title="Unbounded — φ maps the unit-disk EXTERIOR onto Ω (a Laurent map c·z + F/zˡ + poles). Bounded — φ maps the disk INTERIOR onto Ω, a centre w₀ plus interior poles (S5-C2)."
+                      >
+                        <option value="unbounded">Unbounded (exterior)</option>
+                        <option value="bounded">Bounded (interior)</option>
+                      </select>
+                    </div>
+                    <div class="field" id="schwarz-fields-unbounded" data-family-fields="unbounded">
+                      <label for="schwarz-c">c — leading coefficient (real or complex, e.g. 1+0.5i)</label>
+                      <input id="schwarz-c" type="text" spellcheck="false" value="1" />
+                      <label for="schwarz-F">
+                        F — Laurent coeffs (const, 1/z, 1/z², …)
+                        <button
+                          class="gloss-link"
+                          type="button"
+                          data-term="laurent-coefficients"
+                          aria-label="What are Laurent coefficients?"
+                        >
+                          ?
+                        </button>
+                      </label>
+                      <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
+                    </div>
+                    <div class="field" id="schwarz-fields-bounded" data-family-fields="bounded" hidden>
+                      <label for="schwarz-w0">w₀ — domain centre φ(0) (e.g. 0)</label>
+                      <input id="schwarz-w0" type="text" spellcheck="false" value="0" />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, … (each |z| &lt; 1)</label>
+                      <textarea id="schwarz-poles" rows="2" spellcheck="false" placeholder="0.3 ; 0.4"></textarea>
+                    </div>
+                    <div class="schwarz-builder-actions">
+                      <button id="schwarz-generate" type="button">Generate σ</button>
+                    </div>
+                    <div id="schwarz-error" class="input-errors" role="alert" hidden></div>
+                  </div>
+                </details>
+
                 <!-- Coloring parity with the standard fractals (ADR-0009 item 3): a shared @cas/gpu
                      colormap ramp + escape-time scale mode. Options are populated from
                      render/schwarzColormaps.ts in main.ts, so these start empty. -->
-                <div class="field schwarz-coloring">
-                  <label for="schwarz-colormap">colormap</label>
-                  <select
-                    id="schwarz-colormap"
-                    title="Colour ramp for the σ escape-time field"
-                  ></select>
-                  <label for="schwarz-scale">escape scale</label>
-                  <select
-                    id="schwarz-scale"
-                    title="How the escape count maps onto the colour ramp (linear, log, sqrt, discrete, cyclic)"
-                  ></select>
-                  <label for="schwarz-colormode">field coloring</label>
-                  <select
-                    id="schwarz-colormode"
-                    title="What the colour ramp encodes: escape time, orbit-trap closeness, or the stripe average of the σ-orbit (S5-B1)"
-                  ></select>
-                  <div class="schwarz-subfield" id="schwarz-trapshape-row" hidden>
-                    <label for="schwarz-trapshape">trap shape</label>
-                    <select
-                      id="schwarz-trapshape"
-                      title="The set the σ-orbit's closest approach is measured to (orbit-trap coloring)"
-                    ></select>
+                <details class="control-group" id="schwarz-coloring-group" open>
+                  <summary>Coloring</summary>
+                  <div class="control-grid">
+                    <div class="field">
+                      <label for="schwarz-colormap">colormap</label>
+                      <select id="schwarz-colormap" title="Colour ramp for the σ escape-time field"></select>
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-scale">
+                        escape scale
+                        <button
+                          class="gloss-link"
+                          type="button"
+                          data-term="escape-time"
+                          aria-label="What is escape time?"
+                        >
+                          ?
+                        </button>
+                      </label>
+                      <select
+                        id="schwarz-scale"
+                        title="How the escape count maps onto the colour ramp (linear, log, sqrt, discrete, cyclic)"
+                      ></select>
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-colormode">field coloring</label>
+                      <select
+                        id="schwarz-colormode"
+                        title="What the colour ramp encodes: escape time, orbit-trap closeness, or the stripe average of the σ-orbit (S5-B1)"
+                      ></select>
+                    </div>
+                    <div class="schwarz-subfield" id="schwarz-trapshape-row" hidden>
+                      <label for="schwarz-trapshape">trap shape</label>
+                      <select
+                        id="schwarz-trapshape"
+                        title="The set the σ-orbit's closest approach is measured to (orbit-trap coloring)"
+                      ></select>
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-rotation">palette rotation</label>
+                      <input
+                        type="range"
+                        id="schwarz-rotation"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value="0"
+                        title="Cycle the colour ramp (S5-A3)"
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-gamma">gamma</label>
+                      <input
+                        type="range"
+                        id="schwarz-gamma"
+                        min="0.4"
+                        max="2.5"
+                        step="0.05"
+                        value="1"
+                        title="Output gamma (1 = none)"
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-vignette">vignette</label>
+                      <input
+                        type="range"
+                        id="schwarz-vignette"
+                        min="0"
+                        max="1"
+                        step="0.02"
+                        value="0"
+                        title="Darken toward the edges (0 = off)"
+                      />
+                    </div>
                   </div>
-                  <label for="schwarz-rotation">palette rotation</label>
-                  <input
-                    type="range"
-                    id="schwarz-rotation"
-                    min="0"
-                    max="1"
-                    step="0.01"
-                    value="0"
-                    title="Cycle the colour ramp (S5-A3)"
-                  />
-                  <label for="schwarz-gamma">gamma</label>
-                  <input
-                    type="range"
-                    id="schwarz-gamma"
-                    min="0.4"
-                    max="2.5"
-                    step="0.05"
-                    value="1"
-                    title="Output gamma (1 = none)"
-                  />
-                  <label for="schwarz-vignette">vignette</label>
-                  <input
-                    type="range"
-                    id="schwarz-vignette"
-                    min="0"
-                    max="1"
-                    step="0.02"
-                    value="0"
-                    title="Darken toward the edges (0 = off)"
-                  />
-                </div>
-                <!-- Orbit inspection (ADR-0009 item 3): click the σ canvas to trace a point's orbit; the
-                     readout below is populated from render/schwarzView.ts in main.ts. -->
-                <div class="field schwarz-inspect-field">
-                  <p class="schwarz-inspect-hint">Click the plot to trace a point's σ-orbit.</p>
-                  <div id="schwarz-inspect" class="schwarz-inspect" aria-live="polite" hidden></div>
-                </div>
+                </details>
+
                 <!-- Precise navigation (ADR-0009 item 3): type an exact centre + zoom — parity with the
                      standard plots' center/zoom inputs. The fields mirror the live view (they update as you
                      drag/zoom); main.ts parses them via render/schwarzView.ts. -->
-                <div class="field schwarz-nav">
-                  <label for="schwarz-center-re">view — centre &amp; zoom</label>
-                  <div class="schwarz-nav-row">
-                    <input
-                      id="schwarz-center-re"
-                      type="text"
-                      inputmode="decimal"
-                      spellcheck="false"
-                      title="Centre — real part"
-                      aria-label="View centre, real part"
-                    />
-                    <input
-                      id="schwarz-center-im"
-                      type="text"
-                      inputmode="decimal"
-                      spellcheck="false"
-                      title="Centre — imaginary part"
-                      aria-label="View centre, imaginary part"
-                    />
-                    <input
-                      id="schwarz-zoom"
-                      type="text"
-                      inputmode="decimal"
-                      spellcheck="false"
-                      title="Zoom (larger is closer in)"
-                      aria-label="View zoom"
-                    />
+                <details class="control-group" id="schwarz-view-group">
+                  <summary>View — centre &amp; zoom</summary>
+                  <div class="control-grid">
+                    <div class="field schwarz-nav">
+                      <label for="schwarz-center-re">centre &amp; zoom</label>
+                      <div class="schwarz-nav-row">
+                        <input
+                          id="schwarz-center-re"
+                          type="text"
+                          inputmode="decimal"
+                          spellcheck="false"
+                          title="Centre — real part"
+                          aria-label="View centre, real part"
+                        />
+                        <input
+                          id="schwarz-center-im"
+                          type="text"
+                          inputmode="decimal"
+                          spellcheck="false"
+                          title="Centre — imaginary part"
+                          aria-label="View centre, imaginary part"
+                        />
+                        <input
+                          id="schwarz-zoom"
+                          type="text"
+                          inputmode="decimal"
+                          spellcheck="false"
+                          title="Zoom (larger is closer in)"
+                          aria-label="View zoom"
+                        />
+                      </div>
+                      <div class="schwarz-nav-actions">
+                        <button id="schwarz-view-apply" type="button" class="primary">apply</button>
+                        <button id="schwarz-view-reset" type="button">reset view</button>
+                      </div>
+                    </div>
                   </div>
-                  <div class="schwarz-nav-actions">
-                    <button id="schwarz-view-apply" type="button" class="primary">apply</button>
-                    <button id="schwarz-view-reset" type="button">reset view</button>
-                  </div>
-                </div>
+                </details>
+
                 <!-- Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2). -->
-                <div class="field schwarz-export">
-                  <label for="schwarz-export-size">export size</label>
-                  <select id="schwarz-export-size" title="Pixel size of the saved σ PNG (single-pass GPU render; capped at this GPU's max texture size)">
-                    <option value="512">512</option>
-                    <option value="1024" selected>1024</option>
-                    <option value="2048">2048</option>
-                    <option value="4096">4096</option>
-                  </select>
-                  <label class="checkbox" title="Draw the scale bar on the saved image">
-                    <input type="checkbox" id="schwarz-export-scalebar" checked /> scale bar
-                  </label>
-                  <label class="checkbox" title="Include the traced orbit (if one is inspected) on the saved image">
-                    <input type="checkbox" id="schwarz-export-orbit" /> include orbit
-                  </label>
-                  <button
-                    id="schwarz-save-png"
-                    type="button"
-                    title="Download the σ image as a PNG with its state embedded (reopen the link from the file's metadata)"
-                  >
-                    Save PNG
-                  </button>
-                </div>
+                <details class="control-group" id="schwarz-export-group">
+                  <summary>Export</summary>
+                  <div class="control-grid">
+                    <div class="field">
+                      <label for="schwarz-export-size">export size</label>
+                      <select id="schwarz-export-size" title="Pixel size of the saved σ PNG (single-pass GPU render; capped at this GPU's max texture size)">
+                        <option value="512">512</option>
+                        <option value="1024" selected>1024</option>
+                        <option value="2048">2048</option>
+                        <option value="4096">4096</option>
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label class="checkbox" title="Draw the scale bar on the saved image">
+                        <input type="checkbox" id="schwarz-export-scalebar" checked /> scale bar
+                      </label>
+                    </div>
+                    <div class="field">
+                      <label class="checkbox" title="Include the traced orbit (if one is inspected) on the saved image">
+                        <input type="checkbox" id="schwarz-export-orbit" /> include orbit
+                      </label>
+                    </div>
+                    <div class="field">
+                      <button
+                        id="schwarz-save-png"
+                        type="button"
+                        title="Download the σ image as a PNG with its state embedded (reopen the link from the file's metadata)"
+                      >
+                        Save PNG
+                      </button>
+                    </div>
+                  </div>
+                </details>
               </div>
             </section>
           </main>

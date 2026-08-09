@@ -2024,3 +2024,29 @@
   (schwarzPhiForm **+6** bounded; appState opt-out updated). With this the bounded family is complete
   end to end — import AND native authoring. (The single-pole presets render near-flat under escape-time-linear
   for the same trivial-dynamics reason noted in C2d; the machinery is correct.)
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view parity & integration — Phase A:
+  control-shell parity):** begins a new arc (agreed with the user): bring the σ full-screen mode up to full
+  parity with the CD tool and add QD-explorer depth, sequenced A–F — A control-shell, B live rendering &
+  resolution (progressive draft→refine + AA/high-DPI + draggable orbit seed), C coloring/relief polish, D
+  nav/export parity, E cross-cutting integration (share/saved-views/keyboard/glossary), F σ-native depth
+  (∂Ω overlay → plane/disk/sphere views → tiling tree → analysis cards). Locked decisions: polished
+  full-screen MODE (not a co-visible peer), σ as a standalone explorer (shares CD chrome, not z²+c math),
+  full parity refactor, all four priority areas; the `(≈)` honesty and the absence of z²+c-specific tooling
+  are **preserved** by design; df64 deep-zoom stays deferred (sampling quality only). **Phase A** (chrome
+  only, behavior-preserving): the σ pane controls (index.html) move from a flat list of composite
+  `.field` cards onto CD's collapsible idiom — `<details class="control-group">` + `.control-grid` of
+  granular `.field` units, grouped **Map / Coloring / View / Export** — so σ reads like the standard planes.
+  EVERY element id is preserved (the schwarzPeerView structural guard + all main.ts wiring are untouched; the
+  Map group keeps `id="schwarz-builder"`). A persistent **view chip** lands (parity with the plots'
+  `.view-summary`): `#schwarz-view-chip`, updated in syncSchwarzViewFields() every paint, shows
+  `centre · zoom · family` (or "generate a σ to begin"). Four **`.gloss-link` "?" hooks** (schwarz-reflection,
+  riemann-map-phi, laurent-coefficients, escape-time) ride the existing document-wide gloss wiring
+  (`querySelectorAll(".gloss-link[data-term]")` → the body-level `#glossary` modal, reachable in σ mode); two
+  **new honest glossary entries** define σ (σ(w)=conj(F(φ⁻¹(w))) + the ≈ numerical-inverse caveat) and the
+  Riemann map φ (exterior/|z|>1 unbounded vs interior/|z|<1 bounded). CSS: the dead `.schwarz-builder` card
+  rules give way to `#schwarz-plot`-scoped control-group styling (a centred ≤30rem column; each σ
+  `.control-grid` a single-column stacked form since σ's labels are long). NO logic change — the σ engine,
+  render, orbit, export, and serialization paths are byte-identical; the canvas (#JCSSchwarz, 512² square) is
+  untouched. Green: typecheck + lint + node **787** (CD app; glossary **+1** σ-terms guard). VERIFIED in the
+  dev app (Playwright): the σ pane shows the four collapsible groups, the chip populates
+  (`0+0i · zoom 0.4 · unbounded`), all four gloss-links resolve, and a σ generates with no error line.

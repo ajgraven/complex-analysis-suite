@@ -158,6 +158,17 @@ export const GLOSSARY: GlossaryEntry[] = [
     defn: "The numbers bₖ in ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ. For the filled Julia set of ANY polynomial — or a rational map with a superattracting ∞ (deg p − deg q ≥ 2) — they follow an exact recurrence from the Böttcher functional equation f(ψ(w)) = ψ(wᴰ) (a triangular solve, γ₁ = a_D^{−1/(D−1)} the capacity); the multibrot Mᵈ uses a Böttcher-product reversion (z^d + c only). Computed, not curve-fitted — for the Mandelbrot set the classical rationals −½, ⅛, −¼, 15/128, …",
   },
   {
+    id: "schwarz-reflection",
+    term: "Schwarz reflection σ",
+    defn: "The anti-holomorphic reflection across a domain's boundary ∂Ω, continued meromorphically into Ω from the Riemann map φ that uniformizes it: σ(w) = conj(F(φ⁻¹(w))), where F reflects φ's coefficients term by term. Iterating σ from a point partitions the plane into a tiling set (orbits that stay in Ω forever) and its complement (orbits that leave ∂Ω after n steps) — an escape-time fractal. It is reconstructed here from φ through a NUMERICAL inverse φ⁻¹ (Newton / Durand–Kerner), so every σ field is labeled ≈: an accurate reconstruction, not a certified closed form.",
+    latex: "\\sigma(w) = \\overline{F(\\varphi^{-1}(w))}",
+  },
+  {
+    id: "riemann-map-phi",
+    term: "Riemann map φ",
+    defn: "The conformal map φ that uniformizes the unit disk onto the domain Ω whose Schwarz reflection is drawn — the disk's EXTERIOR (|z| > 1) for an unbounded Ω, or its INTERIOR (|z| < 1) for a bounded one. An unbounded φ is a Laurent map c·z + Σ Fₗ/zˡ (plus finite interior poles); a bounded φ is a centre w₀ = φ(0) plus interior poles. Ω is the exterior of ∂Ω in the unbounded case and its interior in the bounded — which side σ reflects across.",
+  },
+  {
     id: "capacity",
     term: "Logarithmic capacity",
     defn: "The logarithmic capacity (= transfinite diameter) of a compact set: the conformal radius at ∞ — the leading coefficient of the map w ↦ cap·w + O(1) uniformizing its exterior (cap = 1 for the normalised ψ(w) = w + O(1)). For a degree-d polynomial filled Julia set it is |a_d|^(−1/(d−1)) from the leading coefficient a_d — exactly 1 for a monic zᵈ+c (and the multibrot set), and 1/|λ| for the logistic λz(1−z). It is undefined for rational, transcendental, and non-holomorphic maps, where the panel leaves it '—'.",

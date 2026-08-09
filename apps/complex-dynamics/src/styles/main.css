@@ -509,25 +509,31 @@ h2 {
   border: 0.5px solid rgba(255, 255, 255, 0.18);
   border-radius: 5px;
 }
-/* Native σ builder (S4b-iv): a compact form to generate a Schwarz reflection from a Riemann map φ. */
-.schwarz-builder {
-  display: flex;
+/* σ controls adopt CD's collapsible control-group idiom (Phase A): a centred, readable column below the
+   full-width canvas. The groups stack (the `.controls-pane > .control-group + .control-group` sibling rule
+   is scoped to the sidebar, which is hidden in σ mode), and each σ `.control-grid` is a single-column form
+   of full-width `.field`s rather than CD's side-by-side wrap — σ's labels are long, so a stacked form reads
+   cleaner while reusing the same `.control-group` / `.field` chrome. */
+#schwarz-plot .controls {
+  max-width: 30rem;
+  margin-inline: auto;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  align-items: stretch;
 }
-.schwarz-builder label {
-  font-size: 0.7rem;
-  opacity: 0.85;
+#schwarz-plot .control-group + .control-group {
+  margin-top: 0.4rem;
 }
-.schwarz-builder input,
-.schwarz-builder textarea,
-.schwarz-builder select {
+#schwarz-plot .control-grid {
+  flex-direction: column;
+  align-items: stretch;
+}
+#schwarz-plot .control-grid .field > input[type="text"],
+#schwarz-plot .control-grid .field > textarea,
+#schwarz-plot .control-grid .field > select {
   width: 100%;
   box-sizing: border-box;
 }
+/* The φ builder's Generate button row (S4b-iv). */
 .schwarz-builder-actions {
   display: flex;
   gap: 0.4rem;
