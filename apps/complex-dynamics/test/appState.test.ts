@@ -101,7 +101,7 @@ describe("SHARE_IDS DOM coverage", () => {
         // Native σ builder: inputs to the one-shot "Generate σ" button. The RESULT (the σ view) is what a
         // link carries — as the `_sigma` state layer (ADR-0009 item 2), NOT these ids; re-running Generate
         // on load would be a side effect, not a restored view — same rule as the one-shot tools above.
-        [["schwarz-preset", "schwarz-c", "schwarz-F", "schwarz-poles"], "σ builder input (one-shot tool; view travels as _sigma)"],
+        [["schwarz-preset", "schwarz-family", "schwarz-c", "schwarz-F", "schwarz-w0", "schwarz-poles"], "σ builder input (one-shot tool; view travels as _sigma)"],
         // σ coloring (ADR-0009 item 3): colormap + escape-scale for the σ pane. Part of the σ view, which
         // travels via the `_sigma` state layer (item 2) — not as its own shared control, the same way the
         // standard-fractal `palette` is opted out (SHARE_IDS omission).

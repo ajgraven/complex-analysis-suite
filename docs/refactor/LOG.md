@@ -2002,3 +2002,25 @@
   σ from φ" form's `buildSchwarzPhi` is unbounded-only (it requires a leading c), so bounded domains arrive
   by IMPORT today; a bounded input mode + presets is the next slice. With C2a–C2d the bounded family is
   engine + GPU + wire + render complete end to end.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5-C2 follow-on — native bounded-QD
+  authoring):** the C2d follow-on lands — bounded domains can now be **authored in-app**, not only imported.
+  The "Generate σ from φ" form (render/schwarzPhiForm.ts) gains a **Domain type** selector (unbounded /
+  bounded) that swaps the family-specific fields: unbounded shows `c` + Laurent `F`, bounded (S5-C2) shows
+  `w₀` (the centre φ(0)); the interior-poles field is shared (both families reflect a pole to z_j ∈ 𝔻).
+  `buildSchwarzPhi` dispatches on `fields.family` — an absent family is unbounded, so every pre-C2 caller is
+  unchanged — to a new `buildBoundedSchwarzPhi` that builds `{ family:"bounded", c:[0,0], F:[], w0, branches
+  }` from w₀ ("" ⇒ 0) and **≥1 interior pole** (a centre-only domain is a degenerate point and is rejected;
+  poles keep parsePoles's |z_j| < 1 invariant). Three **bounded presets** added, each a verifiable Ω
+  (honest-labeling): the **unit disk** (φ(z)=z, exact ground truth σ(w)=1/conj(w)), the **single lobe** (the
+  cross-app golden's φ), and a **cardioid** (φ(z)=z+0.3z², univalent on 𝔻 since φ'=1+0.6z≠0 there, a degree-2
+  boundary). main.ts wires the selector — `fill()` sets the family + w₀ and shows/hides the matching fields,
+  `generate()` dispatches on it, and switching family (or editing any field) marks the map "Custom…". NET:
+  buildSchwarzPhi bounded (the single-lobe golden φ) + buildBoundedSchwarzPhi (the disk, an empty-w₀ ⇒ 0, a
+  complex centre, and rejections for a no-pole domain / a pole outside 𝔻) + every-preset-builds now spans
+  both families; the appState opt-out gains `schwarz-family` + `schwarz-w0` (σ builder inputs travel via
+  `_sigma`, not as shared controls). VERIFIED in the BUILT app (Playwright): each of the three bounded
+  presets AND a custom second-order-pole domain renders in **GPU** mode with no error line, and the Domain
+  type toggle shows exactly the right fields (bounded ⇒ w₀ shown, c/F hidden). Green: typecheck + lint + node
+  (schwarzPhiForm **+6** bounded; appState opt-out updated). With this the bounded family is complete
+  end to end — import AND native authoring. (The single-pole presets render near-flat under escape-time-linear
+  for the same trivial-dynamics reason noted in C2d; the machinery is correct.)

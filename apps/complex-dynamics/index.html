@@ -536,11 +536,25 @@ abs(z)>2</textarea
                   >
                     <option value="">Custom…</option>
                   </select>
-                  <label for="schwarz-c">c — leading coefficient (real or complex, e.g. 1+0.5i)</label>
-                  <input id="schwarz-c" type="text" spellcheck="false" value="1" />
-                  <label for="schwarz-F">F — Laurent coeffs (const, 1/z, 1/z², …)</label>
-                  <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
-                  <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, …</label>
+                  <label for="schwarz-family">Domain type</label>
+                  <select
+                    id="schwarz-family"
+                    title="Unbounded — φ maps the unit-disk EXTERIOR onto Ω (a Laurent map c·z + F/zˡ + poles). Bounded — φ maps the disk INTERIOR onto Ω, a centre w₀ plus interior poles (S5-C2)."
+                  >
+                    <option value="unbounded">Unbounded (exterior)</option>
+                    <option value="bounded">Bounded (interior)</option>
+                  </select>
+                  <div id="schwarz-fields-unbounded" data-family-fields="unbounded">
+                    <label for="schwarz-c">c — leading coefficient (real or complex, e.g. 1+0.5i)</label>
+                    <input id="schwarz-c" type="text" spellcheck="false" value="1" />
+                    <label for="schwarz-F">F — Laurent coeffs (const, 1/z, 1/z², …)</label>
+                    <input id="schwarz-F" type="text" spellcheck="false" placeholder="0, 0, 0.5" />
+                  </div>
+                  <div id="schwarz-fields-bounded" data-family-fields="bounded" hidden>
+                    <label for="schwarz-w0">w₀ — domain centre φ(0) (e.g. 0)</label>
+                    <input id="schwarz-w0" type="text" spellcheck="false" value="0" />
+                  </div>
+                  <label for="schwarz-poles">Poles — one per line: z ; A₁, A₂, … (each |z| &lt; 1)</label>
                   <textarea id="schwarz-poles" rows="2" spellcheck="false" placeholder="0.3 ; 0.4"></textarea>
                   <div class="schwarz-builder-actions">
                     <button id="schwarz-generate" type="button">Generate σ</button>

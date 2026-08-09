@@ -3456,12 +3456,16 @@ function init(): void {
     const openBtn = document.getElementById("schwarz-open"); // sidebar → open the σ peer view
     const exitBtn = document.getElementById("schwarz-exit"); // σ pane header → back to the plots
     const presetSel = document.getElementById("schwarz-preset") as HTMLSelectElement | null;
+    const familySel = document.getElementById("schwarz-family") as HTMLSelectElement | null; // unbounded | bounded
     const cIn = document.getElementById("schwarz-c") as HTMLInputElement | null;
     const fIn = document.getElementById("schwarz-F") as HTMLInputElement | null;
+    const w0In = document.getElementById("schwarz-w0") as HTMLInputElement | null; // bounded centre φ(0) (S5-C2)
     const polesIn = document.getElementById("schwarz-poles") as HTMLTextAreaElement | null;
+    const unbFields = document.getElementById("schwarz-fields-unbounded");
+    const bndFields = document.getElementById("schwarz-fields-bounded");
     const genBtn = document.getElementById("schwarz-generate"); // in-pane → re-render the edited φ
     const errBox = document.getElementById("schwarz-error");
-    if (openBtn && exitBtn && presetSel && cIn && fIn && polesIn && genBtn && errBox) {
+    if (openBtn && exitBtn && presetSel && familySel && cIn && fIn && w0In && polesIn && unbFields && bndFields && genBtn && errBox) {
       // Populate the preset dropdown (the leading "Custom…" option is already in the HTML).
       for (const p of SCHWARZ_PRESETS) {
         const opt = document.createElement("option");
@@ -3473,12 +3477,22 @@ function init(): void {
         errBox.textContent = msg ?? "";
         errBox.hidden = msg === null;
       };
+      // Show only the active family's fields (unbounded: c + F; bounded: w₀). Poles are shared. The σ engine
+      // is chosen from this selector, so the visible fields always match what "Generate σ" will build.
+      const syncFamily = (): void => {
+        const bounded = familySel.value === "bounded";
+        unbFields.hidden = bounded;
+        bndFields.hidden = !bounded;
+      };
       const fill = (id: string): void => {
         const p = SCHWARZ_PRESETS.find((x) => x.id === id);
         if (!p) return;
+        familySel.value = p.family ?? "unbounded";
         cIn.value = p.c;
         fIn.value = p.F;
+        w0In.value = p.w0 ?? "0";
         polesIn.value = p.poles;
+        syncFamily();
       };
       // Start on the deltoid so the pane opens showing a working example (single source: SCHWARZ_PRESETS).
       presetSel.value = "deltoid";
@@ -3488,7 +3502,8 @@ function init(): void {
       const generate = (): void => {
         document.querySelector(".workspace")?.classList.add("schwarz-active");
         try {
-          renderSchwarzFromPhi(buildSchwarzPhi({ c: cIn.value, F: fIn.value, poles: polesIn.value }));
+          const family = familySel.value === "bounded" ? "bounded" : "unbounded";
+          renderSchwarzFromPhi(buildSchwarzPhi({ family, c: cIn.value, F: fIn.value, w0: w0In.value, poles: polesIn.value }));
           setError(null);
         } catch (err) {
           setError((err as Error).message); // buildSchwarzPhi's messages are written for this line
@@ -3506,8 +3521,13 @@ function init(): void {
           setError(null);
         }
       });
+      // Switching family is a deliberate mode change ⇒ a "Custom…" φ; swap the visible fields to match.
+      familySel.addEventListener("change", () => {
+        presetSel.value = "";
+        syncFamily();
+      });
       // Hand-editing any field makes it a "Custom…" map (programmatic fill() does not fire 'input').
-      for (const el of [cIn, fIn, polesIn]) {
+      for (const el of [cIn, fIn, w0In, polesIn]) {
         el.addEventListener("input", () => {
           presetSel.value = "";
         });
