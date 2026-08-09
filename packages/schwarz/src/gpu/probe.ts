@@ -25,8 +25,8 @@ export { MAX_BRANCHES, MAX_K, MAX_LAURENT };
 /** The map φ the σ evaluator reconstructs — the same triple `makeUnboundedLaurentSchwarz` takes, so a
  *  test (or CD) builds the CPU engine and the GPU uniforms from ONE spec. */
 export interface SigmaPhi {
-  /** Leading coefficient (φ ~ c·z at ∞). */
-  c: number;
+  /** Leading coefficient (φ ~ c·z at ∞). A real number (QD's family) or a complex `[re, im]` (S5-C1). */
+  c: number | Complex;
   /** Laurent coefficients F[l] (φ gains Σₗ F[l]/zˡ). */
   F: readonly Complex[];
   /** Optional finite-pole branches (a single exterior pole, a cardioid, …). */
@@ -35,7 +35,8 @@ export interface SigmaPhi {
 
 /** φ's uniforms packed into the fixed-size typed arrays the shader declares. */
 export interface PackedPhi {
-  c: number;
+  /** Leading coefficient as a complex `[re, im]` (real c packs to `[c, 0]`); uploaded to the vec2 u_c. */
+  c: Complex;
   polyA: Float32Array;
   polyALen: number;
   branchZ: Float32Array;
@@ -120,13 +121,14 @@ export function packPhi(phi: SigmaPhi): PackedPhi {
     }
   }
 
-  return { c: phi.c, polyA, polyALen: F.length, branchZ, branchA, branchACount, nBranches: branches.length };
+  const c: Complex = typeof phi.c === "number" ? [phi.c, 0] : [phi.c[0], phi.c[1]];
+  return { c, polyA, polyALen: F.length, branchZ, branchA, branchACount, nBranches: branches.length };
 }
 
 /** Upload a packed φ to the currently-bound program's uniforms. Call after `gl.useProgram(program)`. */
 export function uploadPhi(gl: WebGL2RenderingContext, program: WebGLProgram, packed: PackedPhi): void {
   const at = (name: string): WebGLUniformLocation | null => gl.getUniformLocation(program, name);
-  gl.uniform1f(at("u_c"), packed.c);
+  gl.uniform2f(at("u_c"), packed.c[0], packed.c[1]);
   gl.uniform2fv(at("u_polyA"), packed.polyA);
   gl.uniform1i(at("u_polyALen"), packed.polyALen);
   gl.uniform2fv(at("u_branchZ"), packed.branchZ);

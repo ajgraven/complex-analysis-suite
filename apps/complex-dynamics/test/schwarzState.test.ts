@@ -14,7 +14,7 @@ import { DEFAULT_SCHWARZ_COLORMAP, DEFAULT_SCHWARZ_SCALE } from "../src/render/s
 // dangerous payload → null, never a NaN engine input; a bad cosmetic tone → its identity default).
 
 const DELTOID: SigmaViewState = {
-  phi: { c: 1, F: [[0, 0], [0, 0], [0.5, 0]], branches: [] },
+  phi: { c: [1, 0], F: [[0, 0], [0, 0], [0.5, 0]], branches: [] },
   center: [0, 0],
   zoom: 0.4,
   colormap: "viridis",
@@ -24,7 +24,7 @@ const DELTOID: SigmaViewState = {
   ...SIGMA_TONE_DEFAULTS,
 };
 const POLE: SigmaViewState = {
-  phi: { c: 1, F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
+  phi: { c: [1, 0], F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
   center: [0.6, -0.3],
   zoom: 12.5,
   colormap: "turbo",
@@ -44,6 +44,14 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
   it("round-trips a pole-bearing state (branches, non-default view + coloring)", () => {
     expect(parseSigmaState(encodeSigmaState(POLE))).toEqual(POLE);
   });
+
+  it("round-trips a complex leading coefficient c (S5-C1)", () => {
+    const CPLX: SigmaViewState = { ...DELTOID, phi: { ...DELTOID.phi, c: [1, 0.5] } };
+    expect(parseSigmaState(encodeSigmaState(CPLX))).toEqual(CPLX);
+    // A real c still serializes as a bare number (compact, unchanged from pre-C1 links).
+    expect(encodeSigmaState(DELTOID)).toMatch(/"c":1(,|})/);
+    expect(encodeSigmaState(CPLX)).toContain('"c":[1,0.5]');
+  });
 });
 
 describe("parseSigmaState — hostile-link hardening", () => {
@@ -58,6 +66,7 @@ describe("parseSigmaState — hostile-link hardening", () => {
 
   it("rejects a zero or non-finite leading coefficient", () => {
     expect(parseSigmaState(enc({ ...base, c: 0 }))).toBeNull();
+    expect(parseSigmaState(enc({ ...base, c: [0, 0] }))).toBeNull(); // complex zero (S5-C1) also rejected
     expect(parseSigmaState(enc({ ...base, c: "x" }))).toBeNull();
     expect(parseSigmaState(enc({ ...base, c: null }))).toBeNull();
   });

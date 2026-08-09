@@ -44,6 +44,9 @@ const CORPUS: { name: string; phi: SigmaPhi & { branches?: SchwarzBranch[] } }[]
     name: "two branches",
     phi: { c: 1, F: [], branches: [{ z: [0.2, 0], A: [[0.15, 0]] }, { z: [-0.1, 0.2], A: [[0.05, 0.1]] }] },
   },
+  // Complex leading coefficient (S5-C1) — a map QD's real-c family never emits. Exercises conj(c) in F and
+  // complex division in the seed; |c| = 1.118 with a small Laurent tail keeps φ univalent on the exterior.
+  { name: "complex leading c", phi: { c: [1, 0.5], F: [[0, 0], [0, 0], [0.4, 0]] } },
 ];
 
 // Exterior probes, |z₀| ≤ 2.3 — well inside every branch's φ-pole radius 1/|z_j| (≥ 3.5), so φ is

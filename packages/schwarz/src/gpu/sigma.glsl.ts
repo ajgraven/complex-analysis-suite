@@ -46,7 +46,7 @@ const float DIVERGE_SQ   = 1e8;
 // Uniforms describing φ(z) = c·z + Σₗ u_polyA[l]/zˡ + Σⱼ Σₖ conj(u_branchA[j,k])·u_j(z)ᵏ. `u_branchA`
 // is flat, indexed `j * MAX_K + k`. See probe.ts `packPhi` for the CPU-side packing that fills these.
 export const SIGMA_UNIFORMS_GLSL = /* glsl */ `
-uniform float u_c;                              // leading coefficient (φ ~ c·z at ∞)
+uniform vec2  u_c;                              // leading coefficient (φ ~ c·z at ∞); complex since S5-C1
 uniform vec2  u_polyA[MAX_LAURENT];             // Laurent coefficients F[l]
 uniform int   u_polyALen;
 uniform vec2  u_branchZ[MAX_BRANCHES];          // reflected pole locations z_j ∈ 𝔻
@@ -121,7 +121,7 @@ vec2 branchSchwarz(vec2 z) {
 vec2 evalPhi(vec2 z) {
   vec2 sum, sumD;
   branchPhi(z, sum, sumD);
-  vec2 acc = u_c * z;
+  vec2 acc = cmul(u_c, z);
   if (u_polyALen > 0) {
     vec2 zInv = cinv(z);
     vec2 zInvPow = vec2(1.0, 0.0);
@@ -138,7 +138,7 @@ vec2 evalPhi(vec2 z) {
 vec2 evalPhiDeriv(vec2 z) {
   vec2 sum, sumD;
   branchPhi(z, sum, sumD);
-  vec2 acc = vec2(u_c, 0.0);
+  vec2 acc = u_c;
   if (u_polyALen > 1) {
     vec2 zInv = cinv(z);
     vec2 zInvPow = cmul(zInv, zInv);   // 1/z^2 (l=1 term)
@@ -154,7 +154,7 @@ vec2 evalPhiDeriv(vec2 z) {
 // The Schwarz extension F(z) = c/z + Σ conj(F[l])·z^l + branchSchwarz.
 vec2 evalF(vec2 z) {
   vec2 branchPart = branchSchwarz(z);
-  vec2 acc = u_c * cinv(z);
+  vec2 acc = cmul(cconj(u_c), cinv(z));  // conj(c)/z — reflected leading term (S5-C1; = c/z for real c)
   vec2 zPow = vec2(1.0, 0.0);
   for (int l = 0; l < MAX_LAURENT; ++l) {
     if (l >= u_polyALen) break;
@@ -169,7 +169,7 @@ vec2 evalF(vec2 z) {
 // per-step local scaling of the anti-holomorphic σ.
 vec2 evalFDeriv(vec2 z) {
   vec2 zInv = cinv(z);
-  vec2 acc = -u_c * cmul(zInv, zInv);   // −c/z²
+  vec2 acc = cmul(vec2(-u_c.x, u_c.y), cmul(zInv, zInv));   // −conj(c)/z² (S5-C1)
   if (u_polyALen > 1) {
     vec2 zPow = vec2(1.0, 0.0);         // z^{l-1}, l=1 → z⁰
     for (int l = 1; l < MAX_LAURENT; ++l) {
@@ -213,7 +213,7 @@ vec2 invertPhi(vec2 w, vec2 zSeed, out bool ok) {
 // Cold Newton seed for the exterior branch: z ≈ w/c (good when |w| large, φ ~ c·z at ∞), else pushed
 // just outside the unit disk along the w/c ray so the inverse lands in φ's domain {|z|>1}.
 vec2 newtonSeedFresh(vec2 w) {
-  vec2 cand = w / u_c;
+  vec2 cand = cdiv(w, u_c);
   float r = length(cand);
   if (r > 1.05) return cand;
   if (r < 1e-12) return vec2(1.1, 0.0);

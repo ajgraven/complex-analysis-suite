@@ -72,21 +72,26 @@ describe("schwarzPhiForm.parsePoles", () => {
 describe("schwarzPhiForm.buildSchwarzPhi", () => {
   it("builds a pole-free deltoid and a pole-bearing domain", () => {
     expect(buildSchwarzPhi({ c: "1", F: "0, 0, 0.5", poles: "" })).toEqual({
-      c: 1,
+      c: [1, 0],
       F: [[0, 0], [0, 0], [0.5, 0]],
       branches: [],
     });
     expect(buildSchwarzPhi({ c: "1", F: "", poles: "0.3 ; 0.4" })).toEqual({
-      c: 1,
+      c: [1, 0],
       F: [],
       branches: [{ z: [0.3, 0], A: [[0.4, 0]] }],
     });
   });
 
-  it("rejects empty / complex / zero c, and a c·z-only domain with no boundary structure", () => {
+  it("accepts a complex leading coefficient c (S5-C1)", () => {
+    expect(buildSchwarzPhi({ c: "1+0.5i", F: "0, 0, 0.4", poles: "" }).c).toEqual([1, 0.5]);
+    expect(buildSchwarzPhi({ c: "-i", F: "0, 0, 0.4", poles: "" }).c).toEqual([0, -1]);
+  });
+
+  it("rejects empty / zero c, and a c·z-only domain with no boundary structure", () => {
     expect(() => buildSchwarzPhi({ c: "", F: "0,0,0.5", poles: "" })).toThrow(/enter a leading coefficient/);
-    expect(() => buildSchwarzPhi({ c: "1+i", F: "0,0,0.5", poles: "" })).toThrow(/must be real/);
     expect(() => buildSchwarzPhi({ c: "0", F: "0,0,0.5", poles: "" })).toThrow(/non-zero/);
+    expect(() => buildSchwarzPhi({ c: "0+0i", F: "0,0,0.5", poles: "" })).toThrow(/non-zero/);
     expect(() => buildSchwarzPhi({ c: "1", F: "", poles: "" })).toThrow(/just a circle/);
     expect(() => buildSchwarzPhi({ c: "1", F: "0, 0", poles: "" })).toThrow(/just a circle/);
   });
@@ -104,7 +109,7 @@ describe("schwarzPhiForm presets", () => {
     const deltoid = SCHWARZ_PRESETS.find((p) => p.id === "deltoid");
     if (!deltoid) throw new Error("deltoid preset missing");
     expect(buildSchwarzPhi({ c: deltoid.c, F: deltoid.F, poles: deltoid.poles })).toEqual({
-      c: 1,
+      c: [1, 0],
       F: [[0, 0], [0, 0], [0.5, 0]],
       branches: [],
     });

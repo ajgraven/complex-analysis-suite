@@ -103,7 +103,8 @@ export function mapSpecToExpr(m: MapSpec): string {
  */
 /** φ's coefficients as the `[re,im]` tuples the @cas/schwarz engine (and its GPU twin's `packPhi`) take. */
 export interface SchwarzPhiCoeffs {
-  c: number;
+  /** Leading coefficient as a complex `[re, im]` (S5-C1); QD emits a real c, but the engine handles either. */
+  c: SchwarzTuple;
   F: SchwarzTuple[];
   branches: SchwarzBranch[];
 }
@@ -111,23 +112,22 @@ export interface SchwarzPhiCoeffs {
 /**
  * Extract φ's coefficients from a `form:"schwarz"` map, converting interchange `{re,im}` to the engine's
  * `[re,im]` tuples. Shared by `schwarzEngineFromMapSpec` (CPU engine) and the GPU σ renderer (which packs
- * these same coefficients into shader uniforms), so both reconstruct from ONE conversion. Throws for a
- * shape the unbounded-Laurent family can't represent (non-Laurent φ / complex leading c).
+ * these same coefficients into shader uniforms), so both reconstruct from ONE conversion. The leading c may
+ * be complex (S5-C1) — the engine reflects it to conj(c)/z; QD's family emits a real c, but a hand-authored
+ * or future map may carry a complex one. Throws only for a shape the unbounded-Laurent family can't
+ * represent (a non-Laurent φ).
  */
 export function schwarzPhiFromMapSpec(sigma: SchwarzMap): SchwarzPhiCoeffs {
   const phi = sigma.phi;
   if (phi.form !== "laurent") {
     throw new Error("schwarz reconstruction supports a Laurent φ only (the unbounded-classical family)");
   }
-  if (phi.c.im !== 0) {
-    throw new Error("schwarz reconstruction supports a real leading coefficient c only");
-  }
   const F: SchwarzTuple[] = phi.F.map((z) => [z.re, z.im]);
   const branches: SchwarzBranch[] = (phi.branches ?? []).map((br) => ({
     z: [br.z.re, br.z.im] as SchwarzTuple,
     A: br.A.map((a) => [a.re, a.im] as SchwarzTuple),
   }));
-  return { c: phi.c.re, F, branches };
+  return { c: [phi.c.re, phi.c.im], F, branches };
 }
 
 export function schwarzEngineFromMapSpec(sigma: SchwarzMap): UnboundedLaurentSchwarz {

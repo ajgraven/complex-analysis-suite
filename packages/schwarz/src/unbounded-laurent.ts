@@ -59,13 +59,19 @@ const NEWTON_TOL = 1e-12;
  * only (no closed-form cleared polynomial), matching QD's own σ machinery.
  */
 export function makeUnboundedLaurentSchwarz(
-  c: number,
+  c: number | Complex,
   F: readonly Complex[],
   branches: readonly SchwarzBranch[] = [],
 ): UnboundedLaurentSchwarz {
   const m = F.length;
   const hasBranches = branches.length > 0;
   const dk = makeDurandKerner(A);
+  // c may be complex (S5-C1). QD's real-c family passes a plain number; a CD-native map may pass [re,im].
+  // The Schwarz extension F reflects the leading term to conj(c)/z (= c/z only when c is real), so F / F'
+  // use conj(c) below — a silent factor-of-c bug otherwise (pinned by the boundary-reflection golden).
+  const cc: Complex = typeof c === "number" ? [c, 0] : [c[0], c[1]];
+  const conjC: Complex = [cc[0], -cc[1]];
+  const negConjC: Complex = [-cc[0], cc[1]]; // −conj(c), for F'(z)'s leading −conj(c)/z² term
 
   // Finite-pole branch contributions — ported verbatim from the QD app's canonical σ
   // (schwarz-common.mjs adaptUnbounded + branchPhiContribution / branchPhiDeriv / branchSchwarzContribution):
@@ -119,7 +125,7 @@ export function makeUnboundedLaurentSchwarz(
   };
 
   const evalPhi = (z: Complex): Complex => {
-    let acc = A.scale(z, c);
+    let acc = A.mul(cc, z);
     const zInv = inv(z);
     let zInvPow: Complex = [1, 0]; // z⁰
     for (let l = 0; l < m; l++) {
@@ -131,7 +137,7 @@ export function makeUnboundedLaurentSchwarz(
   };
 
   const evalPhiDeriv = (z: Complex): Complex => {
-    let acc: Complex = [c, 0];
+    let acc: Complex = [cc[0], cc[1]];
     const zInv = inv(z);
     let zInvPow: Complex = A.mul(zInv, zInv); // z⁻²
     for (let l = 1; l < m; l++) {
@@ -143,7 +149,7 @@ export function makeUnboundedLaurentSchwarz(
   };
 
   const evalF = (z: Complex): Complex => {
-    let acc = A.scale(inv(z), c);
+    let acc = A.mul(conjC, inv(z)); // conj(c)/z — the reflected leading term (= c/z only when c is real)
     let zPow: Complex = [1, 0];
     for (let l = 0; l < m; l++) {
       acc = A.add(acc, A.mul(conj(F[l]), zPow));
@@ -172,7 +178,7 @@ export function makeUnboundedLaurentSchwarz(
 
   const evalFDeriv = (z: Complex): Complex => {
     const zInv = inv(z);
-    let acc = A.scale(A.mul(zInv, zInv), -c); // −c/z²
+    let acc = A.mul(negConjC, A.mul(zInv, zInv)); // −conj(c)/z²
     let zPow: Complex = [1, 0]; // z^{l-1}, starting at l=1 → z⁰
     for (let l = 1; l < m; l++) {
       acc = A.add(acc, A.mul(A.scale(conj(F[l]), l), zPow));
@@ -187,7 +193,7 @@ export function makeUnboundedLaurentSchwarz(
   // in φ's domain {|z|>1}. A warm seed reused after σ jumps far drifts onto an interior preimage (the
   // "wings" bug); cold-seeding lands on the exterior branch directly, and the DK fallback covers any miss.
   const seedFor = (w: Complex): Complex => {
-    const cand: Complex = [w[0] / c, w[1] / c];
+    const cand: Complex = A.div(w, cc);
     const r = A.abs(cand);
     if (r > 1.05) return cand;
     if (r < 1e-12) return [1.1, 0];
@@ -206,14 +212,14 @@ export function makeUnboundedLaurentSchwarz(
   const exteriorRoot = (w: Complex): Complex | null => {
     const a: Complex[] = new Array(m + 1);
     a[m] = [1, 0];
-    a[m - 1] = A.scale(A.sub(F[0], w), 1 / c);
-    for (let l = 1; l < m; l++) a[m - 1 - l] = A.scale(F[l], 1 / c);
+    a[m - 1] = A.div(A.sub(F[0], w), cc);
+    for (let l = 1; l < m; l++) a[m - 1 - l] = A.div(F[l], cc);
     const evalMonic = (z: Complex): Complex => {
       let acc = a[m];
       for (let k = m - 1; k >= 0; k--) acc = A.add(A.mul(acc, z), a[k]);
       return acc;
     };
-    const r = Math.max(1.2, A.abs(w) / Math.abs(c));
+    const r = Math.max(1.2, A.abs(w) / A.abs(cc));
     const seeds: Complex[] = [];
     for (let k = 0; k < m; k++) {
       const t = (2 * Math.PI * (k + 0.5)) / m;
@@ -271,7 +277,7 @@ export function makeUnboundedLaurentSchwarz(
     // Pole-bearing φ: the branch term has finite poles at 1/conj(z_j) ∈ 𝔻*, so there is no single
     // cleared polynomial for DK — retry cold Newton from a few exterior seeds along the w/c ray (the
     // exterior preimage is unique for a valid domain, so the first |z|>1 hit is the branch σ needs).
-    const base: Complex = [w[0] / c, w[1] / c];
+    const base: Complex = A.div(w, cc);
     const ang = Math.atan2(base[1], base[0]);
     for (const rad of [Math.max(A.abs(base), 1.2), 1.3, 2, 4, 1.05]) {
       const z = newtonFrom(w, [rad * Math.cos(ang), rad * Math.sin(ang)]);

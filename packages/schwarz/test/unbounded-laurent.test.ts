@@ -221,3 +221,55 @@ describe("@cas/schwarz unbounded-Laurent σ — pole-bearing branch term (Phase 
     near(bare.sigma([1, 0.75]) as Complex, [0.5, -0.5]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Complex leading coefficient c (S5-C1). QD's real-c family never emits a complex c, but the engine now
+// accepts one (a CD-native map). The Schwarz extension reflects the leading term to conj(c)/z — NOT c/z —
+// so the boundary reflection identity F(z) = conj(φ(z)) on |z| = 1 is the golden that pins the conj(c):
+// a c/z here (the pre-C1 code) fails this test for any non-real c. A number and its [re,0] tuple must also
+// build the identical engine (backward-compat).
+const CPLX_C = makeUnboundedLaurentSchwarz([1, 0.5], [[0, 0], [0, 0], [0.4, 0]]);
+
+describe("@cas/schwarz unbounded-Laurent σ — complex leading coefficient c (S5-C1)", () => {
+  it("boundary reflection F(z) = conj(φ(z)) on |z| = 1 — pins conj(c) in the F extension", () => {
+    for (let k = 0; k < 24; k++) {
+      const t = (2 * Math.PI * (k + 0.5)) / 24;
+      const z: Complex = [Math.cos(t), Math.sin(t)];
+      near(CPLX_C.evalF(z), conj(CPLX_C.evalPhi(z)), 9);
+    }
+  });
+
+  it("σ = identity on ∂Ω and the round-trip σ(φ(z₀)) = conj(F(z₀)) hold with complex c", () => {
+    for (const z0 of EXTERIOR) {
+      const Fz0 = CPLX_C.evalF(z0);
+      const got = CPLX_C.sigma(CPLX_C.evalPhi(z0));
+      expect(got, `σ null at z₀=${z0}`).not.toBeNull();
+      if (got) near(got, [Fz0[0], -Fz0[1]], 7);
+    }
+    // σ fixes the boundary ∂Ω = φ(|z|=1) (the defining reflection property, requires the conj(c) F).
+    for (let k = 0; k < 12; k++) {
+      const t = (2 * Math.PI * (k + 0.5)) / 12;
+      const wOnBoundary = CPLX_C.evalPhi([Math.cos(t), Math.sin(t)]);
+      near(CPLX_C.sigma(wOnBoundary) as Complex, wOnBoundary, 6);
+    }
+  });
+
+  it("evalFDeriv = d/dz evalF with complex c — finite-difference (pins −conj(c)/z²)", () => {
+    const fd = (z: Complex, h = 1e-6): Complex => {
+      const fp = CPLX_C.evalF([z[0] + h, z[1]]);
+      const fm = CPLX_C.evalF([z[0] - h, z[1]]);
+      return [(fp[0] - fm[0]) / (2 * h), (fp[1] - fm[1]) / (2 * h)];
+    };
+    for (const z of EXTERIOR) near(CPLX_C.evalFDeriv(z), fd(z), 4);
+  });
+
+  it("a real number c and its [c, 0] tuple build the identical engine (backward-compat)", () => {
+    const asNum = makeUnboundedLaurentSchwarz(1, [[0, 0], [0, 0], [0.5, 0]]);
+    const asTuple = makeUnboundedLaurentSchwarz([1, 0], [[0, 0], [0, 0], [0.5, 0]]);
+    for (const z of EXTERIOR) {
+      near(asNum.evalPhi(z), asTuple.evalPhi(z), 12);
+      near(asNum.evalF(z), asTuple.evalF(z), 12);
+      near(asNum.evalFDeriv(z), asTuple.evalFDeriv(z), 12);
+    }
+  });
+});

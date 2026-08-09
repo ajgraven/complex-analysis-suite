@@ -38,12 +38,16 @@ describe("@cas/schwarz/gpu σ shader — the specialized unbounded-Laurent cut (
     // The load-bearing family-1 formula fragments: φ's leading c·z, and F's anti-holomorphic
     // conj(F[l])·zˡ (the Schwarz reflection). A dropped conj here is exactly the silent factor bug
     // the honest-labeling guardrail exists to prevent.
-    expect(frag).toContain("u_c * z");
+    expect(frag).toContain("cmul(u_c, z)"); // φ's leading c·z (u_c is a complex vec2 since S5-C1)
     expect(frag).toContain("cconj(u_polyA[l])");
     expect(frag).toContain("uniform vec2 uW;");
-    // F''s leading −c/z² term (S5-B2 distance estimator). A sign/term error here is exactly the kind of
-    // silent derivative bug the CPU finite-difference golden + the GPU↔CPU parity net guard against.
-    expect(frag).toContain("-u_c * cmul(zInv, zInv)");
+    expect(frag).toContain("uniform vec2  u_c;"); // complex leading coefficient (S5-C1)
+    // F reflects the leading term to conj(c)/z — the S5-C1 correctness point (= c/z only for real c); a
+    // dropped cconj here fails the boundary-reflection golden on the CPU and the GPU↔CPU parity net.
+    expect(frag).toContain("cmul(cconj(u_c), cinv(z))");
+    // F''s leading −conj(c)/z² term (S5-B2 distance estimator + S5-C1 conj). A sign/term error here is the
+    // kind of silent derivative bug the CPU finite-difference golden + the GPU↔CPU parity net guard against.
+    expect(frag).toContain("cmul(vec2(-u_c.x, u_c.y), cmul(zInv, zInv))");
   });
 
   it("is the SPECIALIZED cut — none of QD's other five families rode along (ADR-0007)", () => {
@@ -85,7 +89,8 @@ describe("@cas/schwarz/gpu packPhi — φ → fixed-size uniform arrays (pure, n
   it("packs c / Laurent / branches at the right offsets, zero-filled to the caps", () => {
     const p = packPhi({ c: 2, F, branches });
 
-    expect(p.c).toBe(2);
+    expect(p.c).toEqual([2, 0]); // real c packs to the [re, im] tuple uploaded to the vec2 u_c (S5-C1)
+    expect(packPhi({ c: [1, 0.5], F, branches }).c).toEqual([1, 0.5]); // a complex c packs through unchanged
     expect(p.polyALen).toBe(2);
     expect(p.nBranches).toBe(2);
 

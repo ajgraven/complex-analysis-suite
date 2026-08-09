@@ -5,12 +5,14 @@
 //
 // The supported family is the classical UNBOUNDED-Laurent quadrature domain (the only one @cas/schwarz
 // reconstructs): φ(z) = c·z + Σₗ F[l]/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ, u_j = z/(1 − conj(z_j)·z), z_j ∈ 𝔻.
-// c is real (the engine's constraint). Kept free of the DOM so the parsing/validation is unit-tested.
+// c may be complex (S5-C1) — a CD-native map QD's real-c family never emits. Kept free of the DOM so the
+// parsing/validation is unit-tested.
 import type { Complex, SchwarzBranch } from "@cas/schwarz";
 
 /** φ's coefficients — the argument triple `makeUnboundedLaurentSchwarz(c, F, branches)` takes. */
 export interface SchwarzPhi {
-  c: number;
+  /** Leading coefficient — complex since S5-C1 (real maps carry `[c, 0]`). */
+  c: Complex;
   F: Complex[];
   branches: SchwarzBranch[];
 }
@@ -19,7 +21,7 @@ export interface SchwarzPhi {
 export interface SchwarzPreset {
   id: string;
   label: string;
-  /** Real leading coefficient c. */
+  /** Leading coefficient c (real, or complex like "1+0.5i" since S5-C1). */
   c: string;
   /** Laurent coefficients, comma-separated, index 0 = constant, 1 = 1/z, 2 = 1/z², … (e.g. "0, 0, 0.5"). */
   F: string;
@@ -97,13 +99,13 @@ export interface SchwarzFormFields {
 }
 
 /** Build φ's coefficients from the form fields, with validation. Throws a message suitable for the form's
- *  error line (empty c, non-real c, |z_j| ≥ 1, unparseable coefficient, or a domain with no boundary at all). */
+ *  error line (empty or zero c, |z_j| ≥ 1, unparseable coefficient, or a domain with no boundary at all).
+ *  c may be complex (S5-C1); the engine reflects it to conj(c)/z in the Schwarz extension. */
 export function buildSchwarzPhi(fields: SchwarzFormFields): SchwarzPhi {
   const cTrim = fields.c.trim();
   if (cTrim === "") throw new Error("enter a leading coefficient c");
   const cVal = parseComplex(cTrim);
-  if (cVal[1] !== 0) throw new Error("c must be real for this family (a real leading coefficient)");
-  if (cVal[0] === 0) throw new Error("c must be non-zero");
+  if (cVal[0] === 0 && cVal[1] === 0) throw new Error("c must be non-zero");
   const F = parseComplexList(fields.F);
   const branches = parsePoles(fields.poles);
   // A pole-free domain needs at least one Laurent term beyond c·z, or the boundary φ(|z|=1) is a circle
@@ -111,5 +113,5 @@ export function buildSchwarzPhi(fields: SchwarzFormFields): SchwarzPhi {
   if (branches.length === 0 && F.every((f) => f[0] === 0 && f[1] === 0)) {
     throw new Error("add a Laurent coefficient (e.g. F = 0, 0, 0.5) or a pole — c·z alone is just a circle");
   }
-  return { c: cVal[0], F, branches };
+  return { c: cVal, F, branches };
 }

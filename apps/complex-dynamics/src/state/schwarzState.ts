@@ -57,7 +57,9 @@ const MAX_TERMS = 64;
  *  omitted when they hold their identity default, so a plain view's link stays as small as before A3. */
 export function encodeSigmaState(s: SigmaViewState): string {
   const out: Record<string, unknown> = {
-    c: s.phi.c,
+    // Real c serializes as a bare number (compact + byte-identical to pre-C1 links); a complex c (S5-C1)
+    // as a [re, im] pair. parseSigmaState accepts either.
+    c: s.phi.c[1] === 0 ? s.phi.c[0] : s.phi.c,
     F: s.phi.F,
     b: s.phi.branches.map((br) => ({ z: br.z, A: br.A })),
     ctr: s.center,
@@ -83,9 +85,10 @@ export function schwarzStampParams(s: SigmaViewState): string {
   const r = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
   const cplx = (z: Complex): string => `${r(z[0])}${z[1] >= 0 ? "+" : "-"}${r(Math.abs(z[1]))}i`;
   const F = s.phi.F.map(cplx).join(", ");
+  const cStr = s.phi.c[1] === 0 ? r(s.phi.c[0]) : cplx(s.phi.c); // bare real, or re±im i for a complex c
   const trap = s.colorMode === "trap" ? ` (${s.trapShape})` : "";
   return (
-    `plane=Schwarz reflection sigma (approx); c=${r(s.phi.c)}; F=[${F}]; poles=${s.phi.branches.length}; ` +
+    `plane=Schwarz reflection sigma (approx); c=${cStr}; F=[${F}]; poles=${s.phi.branches.length}; ` +
     `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}; ` +
     `colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; vignette=${r(s.vignette)}`
   );
@@ -119,7 +122,12 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
 
-  if (!fin(o.c) || o.c === 0) return null; // c must be a real, non-zero leading coefficient (engine requires it)
+  // c is the leading coefficient: a bare number (real maps / pre-C1 links) or a [re, im] pair (S5-C1),
+  // and must be non-zero (the engine requires it).
+  let cVal: Complex | null = null;
+  if (fin(o.c)) cVal = [o.c, 0];
+  else cVal = complex(o.c);
+  if (!cVal || (cVal[0] === 0 && cVal[1] === 0)) return null;
   const F = complexList(o.F);
   if (!F) return null;
 
@@ -160,5 +168,5 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const gamma = clampOr(o.gam, SIGMA_TONE_DEFAULTS.gamma, 0.2, 5);
   const vignette = clampOr(o.vig, SIGMA_TONE_DEFAULTS.vignette, 0, 1);
 
-  return { phi: { c: o.c, F, branches }, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette };
+  return { phi: { c: cVal, F, branches }, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette };
 }

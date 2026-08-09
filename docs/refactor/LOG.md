@@ -1856,3 +1856,30 @@
   21, +core/exact/expr/gpu/interchange) + apps (CD 776, correspondences 97, QD 2334); CD build; σ GPU
   browser 5/5; @cas/schwarz browser parity 10/10 (σ + derivative). **Phase B complete** (B1 orbit-stat + B2
   derivative modes). Remaining S5: C (engine/family breadth), D (df64 deep-zoom), E (branch-aware, uncertified).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C1 — complex leading coefficient c):**
+  the σ engine now accepts a **complex leading coefficient c** — a CD-native map QD's real-c family never
+  emits. The correctness crux: the Schwarz extension reflects the leading term to **conj(c)/z** (and
+  F'(z) to −conj(c)/z²), which equals the pre-C1 c/z ONLY when c is real — so a naive type-widen would be a
+  silent factor-of-c σ error. Confirmed against QD's canonical `adaptUnbounded` (it uses `C.scale(z, c)` /
+  `{re:c,im:0}` throughout — the family is real-c by construction). `makeUnboundedLaurentSchwarz` widens to
+  `c: number | Complex` (**backward-compatible** — every existing real-c caller and the wire keep working;
+  a number and its `[c,0]` tuple build the identical engine), normalises once, and threads conj(c) through
+  `evalF` / `evalFDeriv` plus complex division through the exterior-root polynomial and the Newton seed. The
+  GLSL twin follows: `u_c` becomes a **vec2**, with `cmul` / `cconj(u_c)` / `cdiv` (packPhi / uploadPhi pack
+  c as the vec2). CD: `SchwarzPhi.c → Complex`, `buildSchwarzPhi` drops the "c must be real" gate (the form
+  parser already reads "1+0.5i"), `_sigma` serialises a real c as a bare number (compact, byte-identical to
+  pre-C1 links) and a complex c as `[re,im]` (parse accepts either), and the wire reconstruct
+  (`schwarzPhiFromMapSpec`) now passes a complex c through too (the engine handles it; QD still emits real).
+  NET (net-first, shared package first): a CPU **boundary-reflection golden** F(z)=conj(φ(z)) on |z|=1 for a
+  complex-c domain (the pin a c/z fails) + σ=identity on ∂Ω + round-trip + F' finite-diff + a
+  number/[c,0]-equivalence case; GLSL-structure guards on the conj(c) fragments; a **complex-c row added to
+  the GPU↔CPU browser parity corpus** (σ AND |F'|/|φ'| match); CD state round-trip (real c stays a bare
+  number, complex c a pair) + a `buildSchwarzPhi` complex-c case. VERIFIED in the BUILT app (Playwright):
+  entering c = 1+0.5i is accepted (no error) and renders a **distinct** σ field (Δ=19 vs the real-c deltoid
+  — conj(c) is live), and the complex-c view round-trips through a permalink **pixel-identical** (Δ=0.00).
+  Green: full monorepo — typecheck all workspaces; node tests packages (schwarz 25) + apps (CD 778,
+  correspondences 97 [unchanged — backward-compat holds], QD 2334); CD build; σ GPU browser 5/5;
+  @cas/schwarz browser parity 12/12 (incl. complex-c σ + derivative). Follow-up (pre-existing, out of scope):
+  the one-shot σ-builder fields (c/F/poles) are not re-populated from a restored view — the render + share
+  are correct, but "Generate σ" after a restore uses the stale field. Remaining C: C2 (non-Laurent families
+  — bounded / PQD / LQD, one PR each).
