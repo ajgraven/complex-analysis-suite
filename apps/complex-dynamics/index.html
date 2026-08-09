@@ -701,6 +701,26 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
+                     in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
+                <details class="control-group" id="schwarz-render-group">
+                  <summary>Render</summary>
+                  <div class="control-grid">
+                    <div class="field">
+                      <label for="schwarz-aa">anti-aliasing</label>
+                      <select
+                        id="schwarz-aa"
+                        title="Supersample the σ field for smoother edges — render at N× the display resolution, then downsample. Higher is sharper but slower."
+                      >
+                        <option value="1">off (native)</option>
+                        <option value="2">2×</option>
+                        <option value="3">3×</option>
+                        <option value="4">4×</option>
+                      </select>
+                    </div>
+                  </div>
+                </details>
+
                 <!-- Precise navigation (ADR-0009 item 3): type an exact centre + zoom — parity with the
                      standard plots' center/zoom inputs. The fields mirror the live view (they update as you
                      drag/zoom); main.ts parses them via render/schwarzView.ts. -->

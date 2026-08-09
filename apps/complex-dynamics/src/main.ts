@@ -2999,7 +2999,6 @@ function init(): void {
         poly: ReturnType<typeof schwarzBoundaryPoly>;
         phi: SchwarzPhi; // the φ recipe (family, c, F, w0, branches) — serialized into the σ permalink (_sigma, item 2)
         boundedOmega: boolean; // S5-C2: Ω is INSIDE ∂Ω (bounded φ) — the CPU field + orbit tracer need it
-        size: number;
         mode: "GPU" | "CPU";
       }
     | null = null;
@@ -3023,42 +3022,81 @@ function init(): void {
   // σ hover orbit-preview (S5-A2): a transient orbit under the cursor, drawn faint beneath the pinned one.
   let schwarzHover: SchwarzOrbit | null = null;
 
-  /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
+  // σ progressive render (B1) + resolution (B2). The field is re-rendered only when schwarzFieldDirty (a
+  // view / coloring / map / escape change); an overlay-only repaint (hover, inspect) re-blits the cached GL
+  // frame. During pan/zoom a small DRAFT is drawn for fluidity, then an idle timer refines to full res.
+  const SCHWARZ_CPU_SIZE = 256; // the CPU fallback stays coarse (per-Ω-pixel Newton is heavy)
+  let schwarzAA = 1; // supersample factor for the GPU field (1 = native device pixels; B2 wires the UI)
+  let schwarzDraft = false; // true ⇒ render a low-res draft this paint (mid pan/zoom)
+  let schwarzFieldDirty = true; // true ⇒ the field changed and must be re-rendered (else re-blit the cache)
+  let schwarzLastRenderSize = 0; // the GL canvas's current dimension, for the draw-image source rect
+  let schwarzRefineTimer = 0; // the idle-refine debounce handle
+  let schwarzCpuImage: ImageData | null = null; // cached CPU field, for overlay-only repaints
+
+  /** The σ canvas backing resolution (device pixels): the displayed CSS size × devicePixelRatio, floored at
+   *  256 and capped at the GPU's max render size — so the field is crisp on hi-DPI displays instead of a
+   *  fixed 512² upscaled (B2). */
+  function schwarzBackingSize(): number {
+    const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
+    const r = canvas.getBoundingClientRect();
+    const cssMax = Math.max(r.width, r.height) || 512;
+    const dpr = window.devicePixelRatio || 1;
+    const cap = Math.min(schwarzGL?.maxSize ?? 4096, 4096); // the GPU limit, and a perf ceiling
+    return Math.max(256, Math.min(Math.round(cssMax * dpr), cap));
+  }
+
+  /** Paint the σ field at the current `schwarzView`. GPU → render (draft or full res) then drawImage; CPU →
+   *  putImageData. The field is re-rendered only when dirty; the orbit overlays + scale bar are drawn every
+   *  paint over the (possibly cached) field. */
   function paintSchwarz(): void {
     if (!schwarzSession) return;
-    const { engine, poly, size, mode, boundedOmega } = schwarzSession;
+    const { engine, poly, mode, boundedOmega } = schwarzSession;
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    if (canvas.width !== size || canvas.height !== size) {
-      canvas.width = size;
-      canvas.height = size;
+    const backing = mode === "GPU" ? schwarzBackingSize() : SCHWARZ_CPU_SIZE;
+    if (canvas.width !== backing || canvas.height !== backing) {
+      canvas.width = backing;
+      canvas.height = backing;
+      schwarzFieldDirty = true; // a backing resize invalidates the cached frame
     }
     if (mode === "GPU" && schwarzGL) {
-      schwarzGL.render(schwarzView, size, {
-        ...SCHWARZ_ESCAPE,
-        scaleMode: schwarzScaleMode,
-        colorMode: schwarzColorMode,
-        trapShape: schwarzTrapShape,
-        rotation: schwarzRotation,
-        gamma: schwarzGamma,
-        vignette: schwarzVignette,
-      });
-      ctx.drawImage(schwarzGL.canvas, 0, 0);
+      // Draft mid-interaction (a quarter res, fast); full res = the backing × the AA supersample, GPU-capped.
+      const full = Math.min(schwarzGL.maxSize, Math.round(backing * schwarzAA));
+      const renderSize = schwarzDraft ? Math.max(160, Math.round(backing / 4)) : full;
+      if (schwarzFieldDirty) {
+        schwarzGL.render(schwarzView, renderSize, {
+          ...SCHWARZ_ESCAPE,
+          scaleMode: schwarzScaleMode,
+          colorMode: schwarzColorMode,
+          trapShape: schwarzTrapShape,
+          rotation: schwarzRotation,
+          gamma: schwarzGamma,
+          vignette: schwarzVignette,
+        });
+        schwarzLastRenderSize = renderSize;
+      }
+      // Downscale a supersampled (or upscale a draft) GL frame into the backing; a 1:1 native frame is crisp.
+      ctx.imageSmoothingEnabled = schwarzLastRenderSize !== backing;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(schwarzGL.canvas, 0, 0, schwarzLastRenderSize, schwarzLastRenderSize, 0, 0, backing, backing);
     } else {
-      const rgba = renderSchwarzField(engine, poly, schwarzView, size, { ...SCHWARZ_ESCAPE, boundedOmega });
-      const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
-      img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
-      ctx.putImageData(img, 0, 0);
+      if (schwarzFieldDirty || !schwarzCpuImage || schwarzCpuImage.width !== backing) {
+        const rgba = renderSchwarzField(engine, poly, schwarzView, backing, { ...SCHWARZ_ESCAPE, boundedOmega });
+        schwarzCpuImage = new ImageData(backing, backing); // construct-then-set — avoids the
+        schwarzCpuImage.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance
+      }
+      ctx.putImageData(schwarzCpuImage, 0, 0);
     }
     // Orbit overlays on top of the field: the transient hover preview (faint, S5-A2) under the pinned
-    // click-inspect orbit (bold, ADR-0009 item 3) — both redrawn for the current view.
-    if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, size, { preview: true });
-    if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, size);
+    // click-inspect orbit (bold, ADR-0009 item 3) — both redrawn for the current view + backing scale.
+    if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
+    if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
     // Scale bar (ADR-0009 item 3) — CD's own overlay helper; the σ view shares its center/zoom convention
     // (span = 2/zoom), so it reads correctly. Last, so an orbit line never hides it (it has its own backing).
-    drawScaleBar(ctx, size, schwarzView.zoom);
-    syncSchwarzViewFields(); // keep the precise-nav fields mirroring the live view
+    drawScaleBar(ctx, backing, schwarzView.zoom);
+    schwarzFieldDirty = false;
+    syncSchwarzViewFields(); // keep the precise-nav fields + view chip mirroring the live view
   }
 
   /** Mirror the live view into the precise-nav fields — unless the user is editing one (don't clobber a
@@ -3127,13 +3165,38 @@ function init(): void {
     }
     renderSchwarzLegend(el, { colormapName: schwarzColormapName, title, loLabel, hiLabel });
   }
-  /** Coalesce rapid pan/zoom events into one paint per animation frame. */
-  function scheduleSchwarzPaint(): void {
+  /** rAF coalescer shared by the schedulers — at most one paint per animation frame. */
+  function schwarzScheduleFrame(): void {
     if (schwarzRaf) return;
     schwarzRaf = requestAnimationFrame(() => {
       schwarzRaf = 0;
       paintSchwarz();
     });
+  }
+  /** Schedule a σ repaint that RE-RENDERS the field at full res (view / coloring / map / escape changed). */
+  function scheduleSchwarzPaint(): void {
+    schwarzFieldDirty = true;
+    schwarzDraft = false;
+    schwarzScheduleFrame();
+  }
+  /** Schedule an OVERLAY-only repaint (hover / inspect orbit changed) — the cached field is re-blitted, not
+   *  re-rendered, so tracing an orbit never pays for a full field render. */
+  function scheduleSchwarzOverlayPaint(): void {
+    schwarzScheduleFrame();
+  }
+  /** Schedule a DRAFT field repaint (mid pan/zoom): render low-res now for fluidity, then refine to full res
+   *  once the interaction goes idle (~150 ms). */
+  function scheduleSchwarzDraftPaint(): void {
+    schwarzFieldDirty = true;
+    schwarzDraft = true;
+    schwarzScheduleFrame();
+    if (schwarzRefineTimer) clearTimeout(schwarzRefineTimer);
+    schwarzRefineTimer = window.setTimeout(() => {
+      schwarzRefineTimer = 0;
+      schwarzDraft = false;
+      schwarzFieldDirty = true; // refine ⇒ re-render at full res
+      schwarzScheduleFrame();
+    }, 150);
   }
 
   // σ orbit inspection (ADR-0009 item 3): clicking the σ canvas traces that point's orbit and draws it
@@ -3177,20 +3240,21 @@ function init(): void {
       boundedOmega: schwarzSession.boundedOmega,
     });
     renderSchwarzInspectReadout();
-    scheduleSchwarzPaint();
+    scheduleSchwarzOverlayPaint(); // the orbit is an overlay — re-blit the cached field, don't re-render it
   }
   /** Drop the inspected orbit (readout hides, overlay disappears on the next paint). */
   function clearSchwarzInspect(): void {
     if (!schwarzInspect) return;
     schwarzInspect = null;
     renderSchwarzInspectReadout();
-    scheduleSchwarzPaint();
+    scheduleSchwarzOverlayPaint();
   }
 
   /**
    * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
-   * and native-φ paths. Decides mode + size once (GPU paints a crisp 512² in one pass; the CPU fallback
-   * stays coarse since per-Ω-pixel Newton is heavy), resets the view, and shows the canvas + label.
+   * and native-φ paths. Decides the render mode (GPU when WebGL2 is available, else the coarse CPU fallback
+   * — per-Ω-pixel Newton is heavy), resets the view, and shows the canvas + label. The GPU render resolution
+   * is chosen per-paint from the display size (B2), not fixed here.
    */
   function enterSchwarz(engine: ReturnType<typeof schwarzEngineFromMapSpec>, phi: SchwarzPhi): void {
     const poly = schwarzBoundaryPoly(engine);
@@ -3199,21 +3263,21 @@ function init(): void {
     const boundedOmega = phi.family === "bounded";
     if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
     let mode: "GPU" | "CPU" = "CPU";
-    let size = 256;
     if (schwarzGL) {
       try {
         schwarzGL.setPhi(phi, poly);
         schwarzGL.setColormap(schwarzColormapName); // apply the current σ palette to this session
         mode = "GPU";
-        size = 512;
       } catch (err) {
         console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
       }
     }
-    schwarzSession = { engine, poly, phi, boundedOmega, size, mode };
+    schwarzSession = { engine, poly, phi, boundedOmega, mode };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     schwarzHover = null;
+    schwarzFieldDirty = true; // a new map ⇒ (re)render the field
+    schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
@@ -3223,7 +3287,8 @@ function init(): void {
       // A GPU render that throws at paint time degrades the whole session to CPU, in THIS call.
       if (schwarzSession.mode === "GPU") {
         console.warn("schwarzGL render failed; falling back to the CPU field:", err);
-        schwarzSession = { engine, poly, phi, boundedOmega, size: 256, mode: "CPU" };
+        schwarzSession = { engine, poly, phi, boundedOmega, mode: "CPU" };
+        schwarzFieldDirty = true;
         paintSchwarz();
       }
     }
@@ -3395,12 +3460,12 @@ function init(): void {
         uvToPlotFrac(schwarzView, uv[0], uv[1]),
         { ...SCHWARZ_ESCAPE, boundedOmega: schwarzSession.boundedOmega },
       );
-      scheduleSchwarzPaint();
+      scheduleSchwarzOverlayPaint(); // hover only moves the preview orbit — re-blit the cached field
     };
     const clearSchwarzHover = (): void => {
       if (!schwarzHover) return;
       schwarzHover = null;
-      scheduleSchwarzPaint();
+      scheduleSchwarzOverlayPaint();
     };
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
@@ -3423,7 +3488,7 @@ function init(): void {
       const cur = clientToUv(e);
       schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
       lastUv = cur;
-      scheduleSchwarzPaint();
+      scheduleSchwarzDraftPaint(); // draft while dragging; refine to full res once the pan goes idle
     });
     canvas.addEventListener("pointerleave", clearSchwarzHover);
     const endDrag = (e: PointerEvent): void => {
@@ -3456,7 +3521,7 @@ function init(): void {
         const next = zoomSchwarzView(schwarzView, factor, clientToUv(e));
         next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom)); // keep the window sane
         schwarzView = next;
-        scheduleSchwarzPaint();
+        scheduleSchwarzDraftPaint(); // draft while zooming; refine to full res once the wheel goes idle
       },
       { passive: false },
     );
@@ -3465,6 +3530,11 @@ function init(): void {
         e.preventDefault();
         exitSchwarzView();
       }
+    });
+    // Re-fit the backing resolution when the display size / devicePixelRatio changes (window resize, or the
+    // A3 side-panel reflowing the canvas cell). Draft first, then the idle refine renders crisp at the new size.
+    window.addEventListener("resize", () => {
+      if (schwarzSession) scheduleSchwarzDraftPaint();
     });
   }
 
@@ -3642,6 +3712,20 @@ function init(): void {
     wire("schwarz-rotation", (v) => (schwarzRotation = v));
     wire("schwarz-gamma", (v) => (schwarzGamma = v));
     wire("schwarz-vignette", (v) => (schwarzVignette = v));
+  }
+
+  // σ render controls (Phase B): the anti-aliasing (supersample) factor. Higher supersamples the field for
+  // smoother tiling edges; changing it triggers a full re-render (not a draft). The iterations / escape-radius
+  // fields join this group next (B2).
+  {
+    const aaSel = document.getElementById("schwarz-aa") as HTMLSelectElement | null;
+    if (aaSel) {
+      aaSel.value = String(schwarzAA);
+      aaSel.addEventListener("change", () => {
+        schwarzAA = Math.max(1, Math.min(4, Math.round(Number(aaSel.value) || 1)));
+        scheduleSchwarzPaint(); // full re-render at the new supersample factor
+      });
+    }
   }
 
   // σ precise navigation (ADR-0009 item 3 — type an exact centre + zoom; parity with the standard plots).

@@ -226,6 +226,10 @@ export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
 export interface SchwarzGLRenderer {
   /** The offscreen GL canvas holding the last render — drawImage it onto the visible 2D canvas. */
   readonly canvas: HTMLCanvasElement;
+  /** The largest safe square render dimension for this GPU — min(MAX_TEXTURE_SIZE, MAX_RENDERBUFFER_SIZE).
+   *  The hi-DPI / supersampled σ render (main.ts, B2) caps its size to this so a big display never asks for
+   *  a drawing buffer the GPU can't allocate. */
+  readonly maxSize: number;
   /** Upload φ and (re)build the Ω boundary mask. Call when the map changes, not on every view change. */
   setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void;
   /** Rebuild the escape-time colormap ramp from a named palette (render/schwarzColormaps.ts). Persists. */
@@ -250,6 +254,13 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   }
   if (!gl) return null;
   const ctx = gl;
+  // The largest square the GPU can render into (a texture-backed mask + the drawing buffer). Hi-DPI /
+  // supersampled renders cap to this so a large display never over-allocates. 2048 is the WebGL2 floor.
+  const maxSize =
+    Math.min(
+      (ctx.getParameter(ctx.MAX_TEXTURE_SIZE) as number) || 2048,
+      (ctx.getParameter(ctx.MAX_RENDERBUFFER_SIZE) as number) || 2048,
+    ) || 2048;
 
   let program: WebGLProgram;
   try {
@@ -370,5 +381,5 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.deleteProgram(program);
   }
 
-  return { canvas, setPhi, setColormap, render, destroy };
+  return { canvas, maxSize, setPhi, setColormap, render, destroy };
 }

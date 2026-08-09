@@ -117,6 +117,9 @@ describe("SHARE_IDS DOM coverage", () => {
           ],
           "σ coloring (travels inside _sigma, not as a control id)",
         ],
+        // σ render quality (Phase B): the anti-aliasing supersample factor is a property of the σ view, not
+        // a shared control in its own right (it joins the `_sigma` state layer with the other render knobs).
+        [["schwarz-aa"], "σ render setting (σ-view quality, not a shared control)"],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.
