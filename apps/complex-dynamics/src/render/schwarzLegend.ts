@@ -21,6 +21,17 @@ export function schwarzColormapGradientCss(name: string): string {
   return `linear-gradient(90deg, ${stops.join(", ")})`;
 }
 
+/** A CSS `linear-gradient` from POSITIONED custom stops (C1) — the custom-gradient legend ramp, so the
+ *  legend swatch matches the on-screen field when the "Custom…" palette is selected. */
+export function customStopsGradientCss(
+  stops: readonly { t: number; color: readonly [number, number, number] }[],
+): string {
+  const parts = [...stops]
+    .sort((a, b) => a.t - b.t)
+    .map((s) => `${rgbCss(s.color)} ${Math.round(s.t * 100)}%`);
+  return `linear-gradient(90deg, ${parts.join(", ")})`;
+}
+
 /** The flat-colour swatches shown under the ramp, in reading order. */
 const FLAT_SWATCHES: ReadonlyArray<{ color: readonly [number, number, number]; label: string }> = [
   { color: SCHWARZ_FLAT_RGB.escaped, label: "escapes → ∞" },
@@ -36,7 +47,14 @@ const FLAT_SWATCHES: ReadonlyArray<{ color: readonly [number, number, number]; l
  */
 export function renderSchwarzLegend(
   el: HTMLElement,
-  opts: { colormapName: string; title: string; loLabel: string; hiLabel: string },
+  opts: {
+    colormapName: string;
+    title: string;
+    loLabel: string;
+    hiLabel: string;
+    /** Positioned stops for the "custom" palette (C1); the ramp bar uses them so it matches the field. */
+    customStops?: readonly { t: number; color: readonly [number, number, number] }[];
+  },
 ): void {
   el.replaceChildren();
   const line = (cls: string, text?: string): HTMLDivElement => {
@@ -48,7 +66,11 @@ export function renderSchwarzLegend(
   };
 
   line("legend-title", opts.title);
-  line("legend-bar").style.background = schwarzColormapGradientCss(opts.colormapName);
+  const ramp =
+    opts.colormapName === "custom" && opts.customStops && opts.customStops.length >= 2
+      ? customStopsGradientCss(opts.customStops)
+      : schwarzColormapGradientCss(opts.colormapName);
+  line("legend-bar").style.background = ramp;
   const scale = line("legend-scale");
   const lo = document.createElement("span");
   lo.textContent = opts.loLabel;

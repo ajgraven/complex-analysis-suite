@@ -245,6 +245,36 @@ describe("parseSigmaState — render knobs (B2)", () => {
   });
 });
 
+describe("parseSigmaState — custom gradient (C1)", () => {
+  const CUSTOM: SigmaViewState = {
+    ...DELTOID,
+    colormap: "custom",
+    customStops: [
+      { t: 0, color: [10, 20, 30] },
+      { t: 0.5, color: [200, 100, 50] },
+      { t: 1, color: [255, 255, 0] },
+    ],
+  };
+
+  it("round-trips the custom stops when the palette is custom", () => {
+    expect(parseSigmaState(encodeSigmaState(CUSTOM))).toEqual(CUSTOM);
+    expect(encodeSigmaState(CUSTOM)).toContain('"grad"');
+  });
+
+  it("omits the gradient for a named palette (link unchanged from pre-C1)", () => {
+    expect(encodeSigmaState(DELTOID)).not.toContain('"grad"');
+    // Stops present but a NAMED palette selected ⇒ not serialized (they'd be ignored on restore anyway).
+    expect(encodeSigmaState({ ...DELTOID, customStops: CUSTOM.customStops })).not.toContain('"grad"');
+  });
+
+  it("drops malformed custom stops (hostile link) — no custom stops, not a rejected view", () => {
+    const bad = JSON.stringify({ c: 1, F: [[0, 0], [0, 0], [0.5, 0]], ctr: [0, 0], z: 0.4, grad: [{ t: 0 }] });
+    const s = parseSigmaState(bad);
+    expect(s).not.toBeNull();
+    expect(s?.customStops).toBeUndefined();
+  });
+});
+
 describe("schwarzStampParams (PNG metadata summary)", () => {
   it("summarises the σ view in one ASCII-safe line (no σ / ≈ / Unicode minus)", () => {
     const s = schwarzStampParams(DELTOID);

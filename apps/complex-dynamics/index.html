@@ -631,6 +631,9 @@ abs(z)>2</textarea
                       <label for="schwarz-colormap">colormap</label>
                       <select id="schwarz-colormap" title="Colour ramp for the σ escape-time field"></select>
                     </div>
+                    <!-- Custom-gradient editor (C1): CD's shared gradient widget (src/ui/gradient.ts), shown
+                         only when the "Custom…" colormap is selected. Populated by setupGradientEditor. -->
+                    <div class="field schwarz-gradient-field" id="schwarz-gradient-editor" hidden></div>
                     <div class="field">
                       <label for="schwarz-scale">
                         escape scale

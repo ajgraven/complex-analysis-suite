@@ -15,6 +15,8 @@
  */
 import type { SchwarzPhi } from "../render/schwarzPhiForm";
 import type { Complex, SchwarzBranch } from "@cas/schwarz";
+import type { GradientStop } from "../palettes";
+import { parseGradientStops } from "../ui/gradient";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../render/schwarzView";
 import {
   SCHWARZ_COLORMAPS,
@@ -51,6 +53,8 @@ export interface SigmaViewState {
   maxIter: number;
   /** σ escape radius (B2): |σⁿ| beyond this counts as escaped to ∞. */
   escapeR: number;
+  /** Custom-gradient stops (C1), present only when `colormap === "custom"`; else the named palette applies. */
+  customStops?: GradientStop[];
 }
 
 /** Identity/default image-space tone — a view with no tone adjustments (also the fallback for old links). */
@@ -96,6 +100,9 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.aa !== SIGMA_RENDER_DEFAULTS.aa) out.aa = s.aa;
   if (s.maxIter !== SIGMA_RENDER_DEFAULTS.maxIter) out.it = s.maxIter;
   if (s.escapeR !== SIGMA_RENDER_DEFAULTS.escapeR) out.er = s.escapeR;
+  // Custom gradient (C1) — carried only when the custom palette is active (and has ≥2 stops), so a named-
+  // palette view's link is unaffected.
+  if (s.colormap === "custom" && s.customStops && s.customStops.length >= 2) out.grad = s.customStops;
   return JSON.stringify(out);
 }
 
@@ -193,7 +200,9 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   if (!fin(o.z)) return null;
   const zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, o.z));
 
-  const colormap = typeof o.cm === "string" && o.cm in SCHWARZ_COLORMAPS ? o.cm : DEFAULT_SCHWARZ_COLORMAP;
+  // "custom" (C1) is a valid palette name too (its ramp comes from `grad`, not SCHWARZ_COLORMAPS).
+  const colormap =
+    typeof o.cm === "string" && (o.cm === "custom" || o.cm in SCHWARZ_COLORMAPS) ? o.cm : DEFAULT_SCHWARZ_COLORMAP;
   const scale =
     typeof o.sc === "string" && SCHWARZ_SCALE_MODES.some((m) => m.key === o.sc) ? o.sc : DEFAULT_SCHWARZ_SCALE;
   // S5-B1 color mode + trap shape — an unknown name normalises to the default (a stale link never blanks
@@ -215,9 +224,15 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const aa = Math.round(clampOr(o.aa, SIGMA_RENDER_DEFAULTS.aa, 1, 4));
   const maxIter = Math.round(clampOr(o.it, SIGMA_RENDER_DEFAULTS.maxIter, 1, 4096));
   const escapeR = clampOr(o.er, SIGMA_RENDER_DEFAULTS.escapeR, 1.0001, 1e12);
+  // Custom gradient (C1) — validated via the shared editor parser (≥2 stops, clamped t / bytes); a bad or
+  // absent value ⇒ no custom stops (the named palette applies). Only meaningful when colormap === "custom".
+  const customStops = o.grad !== undefined ? (parseGradientStops(JSON.stringify(o.grad)) ?? undefined) : undefined;
 
   // Unbounded stays `family`-less (byte-identical to pre-C2 states + their round-trip); only a bounded φ
   // carries the tag + centre w₀. Both reconstruct correctly — renderSchwarzFromPhi treats absent as unbounded.
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
-  return { phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter, escapeR };
+  return {
+    phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter, escapeR,
+    ...(customStops ? { customStops } : {}),
+  };
 }

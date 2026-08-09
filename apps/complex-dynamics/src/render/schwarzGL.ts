@@ -16,7 +16,7 @@
 // @cas/schwarz/gpu uniforms (u_family / u_w0).
 import { createProgram } from "@cas/gpu/shader";
 import { buildPolygonMaskTexture } from "@cas/gpu/mask";
-import { makeColormapTexture } from "@cas/gpu/colormap";
+import { makeColormapTexture, type RGB } from "@cas/gpu/colormap";
 import {
   schwarzColormap,
   schwarzScaleId,
@@ -234,6 +234,8 @@ export interface SchwarzGLRenderer {
   setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void;
   /** Rebuild the escape-time colormap ramp from a named palette (render/schwarzColormaps.ts). Persists. */
   setColormap(name: string): void;
+  /** Rebuild the colormap texture from an explicit even-spaced RGB ramp — the custom-gradient path (C1). */
+  setColormapRamp(colors: readonly RGB[]): void;
   /** Render the σ field at `size`×`size` for `view`. Returns false if setPhi hasn't run. */
   render(view: SchwarzView, size: number, opts?: SchwarzGLRenderOptions): boolean;
   destroy(): void;
@@ -303,9 +305,12 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   let boundedOmega = false; // S5-C2: Ω is the INTERIOR of ∂Ω for a bounded QD; set per-map in setPhi
   let colormapTex: WebGLTexture | null = makeColormapTexture(ctx, schwarzColormap(DEFAULT_SCHWARZ_COLORMAP));
 
-  function setColormap(name: string): void {
+  function setColormapRamp(colors: readonly RGB[]): void {
     if (colormapTex) ctx.deleteTexture(colormapTex);
-    colormapTex = makeColormapTexture(ctx, schwarzColormap(name));
+    colormapTex = makeColormapTexture(ctx, colors);
+  }
+  function setColormap(name: string): void {
+    setColormapRamp(schwarzColormap(name));
   }
 
   function setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void {
@@ -381,5 +386,5 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.deleteProgram(program);
   }
 
-  return { canvas, maxSize, setPhi, setColormap, render, destroy };
+  return { canvas, maxSize, setPhi, setColormap, setColormapRamp, render, destroy };
 }

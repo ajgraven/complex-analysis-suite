@@ -84,10 +84,10 @@ import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
 import { GLOSSARY, CONVENTIONS, type GlossaryEntry } from "./ui/glossary";
 import { validateInputs, type FieldError } from "./ui/validate";
-import { DEFAULT_GRADIENT, type PaletteName } from "./palettes";
+import { DEFAULT_GRADIENT, sampleGradient, type GradientStop, type PaletteName } from "./palettes";
 import { describeLegend } from "./render/legend";
 import { renderLegend } from "./ui/plotLegend";
-import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
+import { parseGradientStops, setupGradientEditor, type GradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { coeffsToCsv, coeffsToText, inspectToText, orbitToCsv } from "./ui/dataExport";
 import { interpolateView, type Keyframe } from "./render/keyframes";
@@ -3018,6 +3018,26 @@ function init(): void {
   let schwarzRotation: number = SIGMA_TONE_DEFAULTS.rotation;
   let schwarzGamma: number = SIGMA_TONE_DEFAULTS.gamma;
   let schwarzVignette: number = SIGMA_TONE_DEFAULTS.vignette;
+  // σ custom gradient (C1): a user-editable colour ramp reusing CD's shared gradient editor (ui/gradient.ts).
+  // Active only when the colormap is "custom"; the stops travel in the σ view (`_sigma`).
+  let schwarzGradientStops: GradientStop[] = DEFAULT_GRADIENT.map((s) => ({ t: s.t, color: [...s.color] }));
+  let schwarzGradientEditor: GradientEditor | null = null;
+
+  /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
+  function schwarzCustomRamp(): [number, number, number][] {
+    return Array.from({ length: 256 }, (_, i) => {
+      const c = sampleGradient(schwarzGradientStops, i / 255);
+      return [c[0], c[1], c[2]] as [number, number, number];
+    });
+  }
+  /** Apply the active σ colormap to the renderer — a named palette, or the custom-gradient ramp when the
+   *  "Custom…" palette is selected. Also reveals / hides the gradient editor. */
+  function applySchwarzColormap(): void {
+    const custom = schwarzColormapName === "custom";
+    schwarzGradientEditor?.setVisible(custom);
+    if (custom) schwarzGL?.setColormapRamp(schwarzCustomRamp());
+    else schwarzGL?.setColormap(schwarzColormapName);
+  }
   // σ orbit inspection (ADR-0009 item 3): the currently-inspected orbit (w₀ = points[0]) or null. Its
   // polyline is redrawn over the field on every paint, so it stays pinned to w₀ as the view pans/zooms.
   let schwarzInspect: SchwarzOrbit | null = null;
@@ -3165,7 +3185,13 @@ function init(): void {
       loLabel = "in K fast";
       hiLabel = "near ∂Ω";
     }
-    renderSchwarzLegend(el, { colormapName: schwarzColormapName, title, loLabel, hiLabel });
+    renderSchwarzLegend(el, {
+      colormapName: schwarzColormapName,
+      title,
+      loLabel,
+      hiLabel,
+      customStops: schwarzColormapName === "custom" ? schwarzGradientStops : undefined,
+    });
   }
   /** rAF coalescer shared by the schedulers — at most one paint per animation frame. */
   function schwarzScheduleFrame(): void {
@@ -3268,7 +3294,7 @@ function init(): void {
     if (schwarzGL) {
       try {
         schwarzGL.setPhi(phi, poly);
-        schwarzGL.setColormap(schwarzColormapName); // apply the current σ palette to this session
+        applySchwarzColormap(); // apply the current σ palette (named or custom gradient) to this session
         mode = "GPU";
       } catch (err) {
         console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
@@ -3328,6 +3354,11 @@ function init(): void {
     schwarzAA = s.aa; // B2 render knobs travel with the σ view
     schwarzEscape.maxIter = s.maxIter;
     schwarzEscape.escapeR = s.escapeR;
+    if (s.customStops) {
+      // C1: restore the custom gradient BEFORE entering, so enterSchwarz's applySchwarzColormap uses it.
+      schwarzGradientStops = s.customStops.map((st) => ({ t: st.t, color: [...st.color] }));
+      schwarzGradientEditor?.setStops(schwarzGradientStops);
+    }
     renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
     schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
     const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
@@ -3383,6 +3414,7 @@ function init(): void {
       aa: schwarzAA,
       maxIter: schwarzEscape.maxIter,
       escapeR: schwarzEscape.escapeR,
+      ...(schwarzColormapName === "custom" ? { customStops: schwarzGradientStops } : {}),
     };
   }
 
@@ -3673,13 +3705,33 @@ function init(): void {
         opt.textContent = name;
         cmSel.appendChild(opt);
       }
+      const customOpt = document.createElement("option"); // C1: the user-editable gradient
+      customOpt.value = "custom";
+      customOpt.textContent = "Custom…";
+      cmSel.appendChild(customOpt);
       cmSel.value = schwarzColormapName;
       cmSel.addEventListener("change", () => {
         schwarzColormapName = cmSel.value;
-        schwarzGL?.setColormap(schwarzColormapName);
+        applySchwarzColormap(); // a named palette, or the custom-gradient ramp (also shows/hides the editor)
         renderSchwarzLegendChip(); // legend ramp follows the colormap
         scheduleSchwarzPaint();
       });
+    }
+    // The custom-gradient editor (C1) — CD's shared widget (ui/gradient.ts). Editing the stops rebuilds the
+    // σ colormap texture + legend and repaints, but only while the "Custom…" palette is active.
+    {
+      const ge = document.getElementById("schwarz-gradient-editor");
+      if (ge) {
+        schwarzGradientEditor = setupGradientEditor(ge, schwarzGradientStops, (stops) => {
+          schwarzGradientStops = stops;
+          if (schwarzColormapName === "custom") {
+            schwarzGL?.setColormapRamp(schwarzCustomRamp());
+            renderSchwarzLegendChip();
+            scheduleSchwarzPaint();
+          }
+        });
+        schwarzGradientEditor.setVisible(schwarzColormapName === "custom");
+      }
     }
     if (scSel) {
       for (const m of SCHWARZ_SCALE_MODES) {
