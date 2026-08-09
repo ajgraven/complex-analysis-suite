@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/parser.js";
-import { freeParameters } from "../src/ast.js";
+import { freeParameters, calledFunctions } from "../src/ast.js";
 import { evaluate, makeComplexFn, makeEscapeFn, getComplexFn } from "../src/evaluate.js";
 import { compileF, compileEscape } from "../src/glsl.js";
 import type { Complex } from "../src/complex.js";
@@ -33,6 +33,30 @@ describe("freeParameters — the bindable named parameters", () => {
     expect(freeParameters(parse("a = a*2; z^2 + a"))).toEqual([]);
     // a genuine parameter alongside a local: only the parameter is reported
     expect(freeParameters(parse("w = z^2; a*w + b"))).toEqual(["a", "b"]);
+  });
+});
+
+describe("calledFunctions — the functions a map invokes", () => {
+  it("collects every call name, nested and de-duplicated", () => {
+    expect(calledFunctions(parse("sin(z) + cos(z)"))).toEqual(new Set(["sin", "cos"]));
+    expect(calledFunctions(parse("zeta(gamma(z))"))).toEqual(new Set(["zeta", "gamma"]));
+    expect(calledFunctions(parse("exp(exp(z))"))).toEqual(new Set(["exp"])); // repeats collapse
+  });
+
+  it("is empty for a map with no function calls", () => {
+    expect(calledFunctions(parse("z^2 + c"))).toEqual(new Set());
+    expect(calledFunctions(parse("a*z + b"))).toEqual(new Set());
+  });
+
+  it("includes the recursion call f and binary builtins, and reaches into every position", () => {
+    expect(calledFunctions(parse("f(z, c)")).has("f")).toBe(true);
+    expect(calledFunctions(parse("arctan2(im(z), re(z))"))).toEqual(
+      new Set(["arctan2", "im", "re"]),
+    );
+    // condition, both branches, and a local's value are all traversed
+    expect(calledFunctions(parse("w = sqrt(z); if(abs(w) > 1, log(w), exp(w))"))).toEqual(
+      new Set(["sqrt", "abs", "log", "exp"]),
+    );
   });
 });
 

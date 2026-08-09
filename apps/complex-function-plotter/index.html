@@ -45,6 +45,9 @@
       textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
       #preview { min-height: 26px; margin-top: 8px; color: var(--text); overflow-x: auto; }
       #error { min-height: 18px; margin-top: 4px; color: #ff9b9b; font-size: 0.8rem; visibility: hidden; font-family: ui-monospace, Menlo, monospace; }
+      #precisionBadge { margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: 0.74rem; line-height: 1.45; }
+      #precisionBadge.warn { color: #ffce8a; background: rgba(240, 170, 60, 0.09); border: 1px solid rgba(240, 170, 60, 0.35); }
+      #precisionBadge.note { color: var(--muted); background: var(--panel-2); border: 1px solid var(--border); }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       button {
         font: inherit; cursor: pointer; color: var(--text);
@@ -141,6 +144,7 @@
         <div id="acMenu" class="ac-menu" hidden></div>
         <div id="preview"></div>
         <div id="error"></div>
+        <div id="precisionBadge" hidden></div>
       </div>
 
       <div class="group">
@@ -281,6 +285,7 @@
           <li><b>Pole</b> — a bright point where the hue winds the opposite way (|f| &rarr; &infin;).</li>
           <li>The <b>conformal grid</b>'s near-square tiles mark where f preserves angles; they shear or pinch where it doesn't (e.g. at a zero or pole).</li>
           <li><b>Grey hatching</b> (with &ldquo;Flag unreliable regions&rdquo; on) marks where the phase changes faster than a pixel &mdash; near poles and essential singularities &mdash; so it reads as an estimate, not resolved structure.</li>
+          <li>A <b>&ldquo;&approx;&rdquo; precision badge</b> appears when f uses a float32-limited special function (&zeta; strongly, &Gamma; mildly), so its fine detail reads as indicative, not certified.</li>
         </ul>
       </details>
     </aside>

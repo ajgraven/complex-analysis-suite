@@ -13,12 +13,20 @@
 // of a pad. Around it: pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a
 // cursor readout, the zero/pole finder (analysis/singularities.ts), a parameter-sweep montage
 // (ui/sweep.ts: a grid of thumbnails across one parameter's range, click a cell to jump), share-links
-// (#vs= via @cas/interchange), and PNG export. Special functions (Phase 4) and the 3D views (Phase 5) follow.
+// (#vs= via @cas/interchange), and PNG export. The Phase-4 special functions Γ / ζ are in the language;
+// when the active map calls one, an honest float32 precision badge (ui/precision.ts) labels the picture
+// `≈`. The DLMF colouring mode (Phase 4) and the 3D views (Phase 5) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
-import { ExprError, COMPLEX_FUNCTIONS, BINARY_FUNCTIONS, type Node } from "@cas/expr/ast";
+import {
+  ExprError,
+  COMPLEX_FUNCTIONS,
+  BINARY_FUNCTIONS,
+  calledFunctions,
+  type Node,
+} from "@cas/expr/ast";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
@@ -32,6 +40,7 @@ import { createParamControls } from "./ui/params.js";
 import { createAnimator, DEFAULT_ANIM } from "./ui/animate.js";
 import { sweepValues, renderMontage } from "./ui/sweep.js";
 import { createAutocomplete, type Candidate } from "./ui/autocomplete.js";
+import { precisionNote } from "./ui/precision.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import {
   decodeState,
@@ -82,6 +91,7 @@ function main(): void {
   const acMenu = byId("acMenu");
   const previewEl = byId("preview");
   const errorEl = byId("error");
+  const precisionBadge = byId("precisionBadge");
   const colormapSel = byId("colormap");
   const modulusSel = byId("modulus");
   const presetSel = byId("preset");
@@ -276,6 +286,18 @@ function main(): void {
     }
   };
 
+  // Honest-labeling for the float32 special functions (Phase 4): when the active map calls a
+  // precision-limited builtin (ζ strongly, Γ mildly), show a badge so a domain-coloured ζ/Γ reads as
+  // an estimate (≈), not certified structure. Derived from the parsed map, so it needs no state.
+  const updatePrecisionBadge = (): void => {
+    if (!(precisionBadge instanceof HTMLElement)) return;
+    const note = fAst ? precisionNote(calledFunctions(fAst)) : null;
+    precisionBadge.hidden = !note;
+    precisionBadge.textContent = note ? note.text : "";
+    precisionBadge.classList.toggle("warn", note?.severity === "warn");
+    precisionBadge.classList.toggle("note", note?.severity === "note");
+  };
+
   // Live parameter controls (catalog G1): one ℂ-pad + real slider per named parameter the map reads.
   // Moving a value is a re-uniform (draft render while dragging) and, on release, a full render plus a
   // singularity recompute — the same interaction shape as pan/zoom.
@@ -408,6 +430,7 @@ function main(): void {
       setError("");
       renderPreview(src);
       updateFns(src);
+      updatePrecisionBadge();
       syncParamsUI();
       recomputeSings();
       redraw(false);

@@ -1,8 +1,8 @@
 # Complex Function Plotting Tool — Construction & Implementation Plan
 
-> **Status:** IN PROGRESS — **Phases 0–2 complete**, **Phase 3 underway** (the one shared-package change,
-> `@cas/expr` named parameters, has landed; see the Build-progress record below). Scope approved
-> 2026-08: **Core + v1 (67 items)** as the build target; **Later + Exploratory** tracked as a backlog.
+> **Status:** IN PROGRESS — **Phases 0–3 complete**, **Phase 4 underway** (Γ, ζ, and the float32
+> precision badge have landed; the DLMF colouring mode is next — see the Build-progress record below).
+> Scope approved 2026-08: **Core + v1 (67 items)** as the build target; **Later + Exploratory** tracked as a backlog.
 > This document is the _how_;
 > the _what_ is the itemized catalog (IDs `A1…L8` are used throughout). Companion docs:
 > [`complex-function-plotter-research-notes.md`](complex-function-plotter-research-notes.md) (the
@@ -24,24 +24,25 @@
 > [`README`](../../apps/complex-function-plotter/README.md); this table is the phase-level record.
 > The new app is recorded in [ADR-0010](../DECISIONS.md#adr-0010-complex-function-plotting-tool-as-a-separate-app).
 
-| Phase                                   | Status             | Commits                                    | Coverage (item IDs)                                                                                                                                                                                                           |
-| --------------------------------------- | ------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0 — Scaffold & walking skeleton**     | ✅ done            | `d47e815`                                  | app registered; fixed `z²` phase portrait proving the `@cas/expr → @cas/gpu` chain; L5                                                                                                                                        |
-| **`@cas/expr` hyperbolics (B3)**        | ✅ done            | `f74a9b7`                                  | sinh/cosh/tanh, arc-versions, sec/csc/cot added suite-wide (5-table checklist + parity tests)                                                                                                                                 |
-| **1 — Live 2D domain coloring**         | ✅ done            | `1f98005` (1A), `d98c57d` (1B)             | A1–A4, B10, C1–C4, D1, H1, I1–I4, J1–J2, K1(basic)/K2, L3/L5/L6 · GT: Wegert plate                                                                                                                                            |
-| **2 — Instrumented 2D research tool**   | ✅ done            | `cfca14d`, `f3eb87b`, `2b72e63`, `e894be1` | D2–D6, C5–C7, E1–E3, H2, H7, J3, J4, L4 · GT: conformal grid (exp→square, z²→pinch), zero/pole counts, `\|z²−1\|=1` lemniscate, `e^(1/z)` uncertainty hatch                                                                   |
-| **`@cas/expr` named params (B4)**       | ✅ done            | `554c734`                                  | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after  |
-| **G1 — parameter controls**             | ✅ done            | `2886f3d`                                  | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders) |
-| **G2 — animation variable `t`**         | ✅ done            | `8a019dc`                                  | `t` transport (play/scrub/loop/speed, `ui/animate.ts`) driving the `uParam_t` uniform; anim config in the share-link; pure `stepT` unit-tested; headless-verified (`a*z*exp(i*t)` plays, `t` excluded from the ℂ-pad list)    |
-| **G4 — parameter sweep**                | ✅ done            | `58dc934`                                  | small-multiples montage across a parameter's range (`ui/sweep.ts` + `Plot.renderThumbnail`), click-a-cell to jump; pure `sweepValues` unit-tested; headless-verified (9 distinct thumbnails, pick sets the value, no flicker) |
-| **`@cas/expr` literals & consts (B5)**  | ✅ done            | `ae9be23`                                  | imaginary literal `2i` (lexer `imag` → `num·i`, binds as a unit under `^`) + constants `tau`/`phi`/`γ` across evaluate/glsl/derivative/latex; dual-backend parity tests; headless-verified (all four compile + render on GPU) |
-| **A5/A7/A9 — input niceties**           | ✅ done            | `72bb04f`                                  | name autocomplete (`ui/autocomplete.ts`), two function slots `f`/`g` with a toggle, copy-as-LaTeX; pure `wordAt`/`filterCandidates` unit-tested; headless-verified (toggle, autocomplete insert, clipboard `f(z) = z^{2}`)    |
-| **3 — Parameters & families**           | ✅ **done**        | _all items landed_                         | ~~B4~~ · ~~G1~~ · ~~G2~~ · ~~G4~~ · ~~B5~~ · ~~A5/A7/A9~~ ✅ · GT: Blaschke `(z−a)/(1−ā z)` family animates (drag `a`, or drive `a=0.6·exp(i·t)`), zeros stay in the disk                                                     |
-| **Γ — gamma (B6, part 1)**              | ✅ done            | `b57339b`                                  | Lanczos `gamma` — JS + derived GLSL `cgamma` (both precisions, reflection branch); dual-backend corpus entry; JS known-value tests + numeric GLSL probe (rel err ≤ 2e-5, both branches); non-differentiable (no digamma)      |
-| **ζ — zeta (B6, part 2)**               | ✅ done            | _⚠ backfill hash next commit_              | Borwein `zeta` — JS + derived GLSL `czeta` (`d_k` recurrence, reflection reuses `cgamma`); corpus entry; tests (ζ(2/4/0/−1/−3), trivial + first nontrivial zeros, pole at 1) + numeric GLSL probe (both branches); non-diff   |
-| **4 — Special functions & DLMF**        | 🔨 **in progress** | _Γ + ζ done; badge + DLMF next_            | ~~Γ~~ ✅ · ~~ζ~~ ✅ · next: ζ f32 **precision badge** (honest-labeling) + D8 (DLMF colouring mode) · GT: DLMF Γ/ζ plates                                                                                                      |
-| **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                     |
-| **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                      |
+| Phase                                   | Status             | Commits                                    | Coverage (item IDs)                                                                                                                                                                                                               |
+| --------------------------------------- | ------------------ | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Scaffold & walking skeleton**     | ✅ done            | `d47e815`                                  | app registered; fixed `z²` phase portrait proving the `@cas/expr → @cas/gpu` chain; L5                                                                                                                                            |
+| **`@cas/expr` hyperbolics (B3)**        | ✅ done            | `f74a9b7`                                  | sinh/cosh/tanh, arc-versions, sec/csc/cot added suite-wide (5-table checklist + parity tests)                                                                                                                                     |
+| **1 — Live 2D domain coloring**         | ✅ done            | `1f98005` (1A), `d98c57d` (1B)             | A1–A4, B10, C1–C4, D1, H1, I1–I4, J1–J2, K1(basic)/K2, L3/L5/L6 · GT: Wegert plate                                                                                                                                                |
+| **2 — Instrumented 2D research tool**   | ✅ done            | `cfca14d`, `f3eb87b`, `2b72e63`, `e894be1` | D2–D6, C5–C7, E1–E3, H2, H7, J3, J4, L4 · GT: conformal grid (exp→square, z²→pinch), zero/pole counts, `\|z²−1\|=1` lemniscate, `e^(1/z)` uncertainty hatch                                                                       |
+| **`@cas/expr` named params (B4)**       | ✅ done            | `554c734`                                  | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after      |
+| **G1 — parameter controls**             | ✅ done            | `2886f3d`                                  | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders)     |
+| **G2 — animation variable `t`**         | ✅ done            | `8a019dc`                                  | `t` transport (play/scrub/loop/speed, `ui/animate.ts`) driving the `uParam_t` uniform; anim config in the share-link; pure `stepT` unit-tested; headless-verified (`a*z*exp(i*t)` plays, `t` excluded from the ℂ-pad list)        |
+| **G4 — parameter sweep**                | ✅ done            | `58dc934`                                  | small-multiples montage across a parameter's range (`ui/sweep.ts` + `Plot.renderThumbnail`), click-a-cell to jump; pure `sweepValues` unit-tested; headless-verified (9 distinct thumbnails, pick sets the value, no flicker)     |
+| **`@cas/expr` literals & consts (B5)**  | ✅ done            | `ae9be23`                                  | imaginary literal `2i` (lexer `imag` → `num·i`, binds as a unit under `^`) + constants `tau`/`phi`/`γ` across evaluate/glsl/derivative/latex; dual-backend parity tests; headless-verified (all four compile + render on GPU)     |
+| **A5/A7/A9 — input niceties**           | ✅ done            | `72bb04f`                                  | name autocomplete (`ui/autocomplete.ts`), two function slots `f`/`g` with a toggle, copy-as-LaTeX; pure `wordAt`/`filterCandidates` unit-tested; headless-verified (toggle, autocomplete insert, clipboard `f(z) = z^{2}`)        |
+| **3 — Parameters & families**           | ✅ **done**        | _all items landed_                         | ~~B4~~ · ~~G1~~ · ~~G2~~ · ~~G4~~ · ~~B5~~ · ~~A5/A7/A9~~ ✅ · GT: Blaschke `(z−a)/(1−ā z)` family animates (drag `a`, or drive `a=0.6·exp(i·t)`), zeros stay in the disk                                                         |
+| **Γ — gamma (B6, part 1)**              | ✅ done            | `b57339b`                                  | Lanczos `gamma` — JS + derived GLSL `cgamma` (both precisions, reflection branch); dual-backend corpus entry; JS known-value tests + numeric GLSL probe (rel err ≤ 2e-5, both branches); non-differentiable (no digamma)          |
+| **ζ — zeta (B6, part 2)**               | ✅ done            | `5ec772c`                                  | Borwein `zeta` — JS + derived GLSL `czeta` (`d_k` recurrence, reflection reuses `cgamma`); corpus entry; tests (ζ(2/4/0/−1/−3), trivial + first nontrivial zeros, pole at 1) + numeric GLSL probe (both branches); non-diff       |
+| **f32 precision badge**                 | ✅ done            | _⚠ backfill hash next commit_              | honest-labeling for float32 special fns: `calledFunctions(node)` in `@cas/expr` + pure `ui/precision.ts` policy (ζ warn ~1e-6, Γ note) → a badge under the formula labels a ζ/Γ map `≈`; unit tests both sides; headless-verified |
+| **4 — Special functions & DLMF**        | 🔨 **in progress** | _Γ + ζ + badge done; DLMF next_            | ~~Γ~~ ✅ · ~~ζ~~ ✅ · ~~ζ/Γ f32 precision badge~~ ✅ · next: D8 (DLMF colouring mode) · GT: DLMF Γ/ζ plates                                                                                                                       |
+| **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                         |
+| **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                          |
 
 **Workspace state at the Phase-2 gate:** green — `pnpm typecheck` / `pnpm lint` (+ dependency-cruiser) /
 `pnpm test` (**2406** tests, incl. the app's `smoke` / `colormaps` / `colorShader` / `viewState` /
@@ -53,7 +54,7 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
 ["--use-gl=angle","--use-angle=swiftshader","--enable-unsafe-swiftshader","--ignore-gpu-blocklist"] })`
 (do **not** run `playwright install`). A `/favicon.ico` 404 from the static server is expected/harmless.
 
-**Resume notes — Phase 3 complete; Phase 4 next:**
+**Resume notes — Phase 4 underway (Γ · ζ · f32 badge done; DLMF next):**
 
 - **✅ Phase 3 is complete (B4 · G1 · G2 · G4 · B5 · A5/A7/A9).** `@cas/expr` named parameters
   ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters)) are backward-compatible:
@@ -73,12 +74,16 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
   wired through ast/evaluate/glsl/latex; both non-differentiable (no digamma / ζ′). Verified per function:
   JS known-value tests + a numeric GLSL probe over both branches (Γ ≤ 2e-5; ζ core ~1e-7, reflection via
   cgamma exact to f32, first nontrivial zero ≈ 3e-5). Both registered in `@cas/gpu` `DUAL_BACKEND_CORPUS`.
-  _First thing next commit: backfill ζ's hash into the build-progress row above._
-- **Next — ζ f32 precision badge + D8.** ζ is float32-limited (~1e-6, worse high up the critical strip),
-  so per honest-labeling it must carry a **precision badge** in the plotter UI when a map uses `zeta` (and
-  a milder note for `gamma`) — a small app-side addition, do it before/with D8. Then **D8**: the DLMF
-  colouring mode (four-colour quadrant + continuous warped-hue + height). GT: the DLMF Γ / ζ plates (Γ
-  poles at the non-positive integers; ζ's pole at s=1, trivial zeros, nontrivial zeros on the critical line).
+- **✅ f32 precision badge done (honest-labeling).** Because the renderer evaluates in GLSL `float`, a map
+  that calls a precision-limited special function is now labelled. `@cas/expr` gained `calledFunctions(node)`
+  (the call-side companion to `freeParameters`); the app's pure `ui/precision.ts` maps that set to the
+  strongest note — ζ **warns** (Borwein f32, ~1e-6, degrading up the strip), Γ gets a milder **note** — and
+  `main.ts` shows a badge under the formula (`updatePrecisionBadge` on each `applyExpr`). Both sides
+  unit-tested; headless-verified (`zeta(z)` shows the warn badge, `gamma(z)` the note, `z^2` none).
+  _First thing next commit: backfill the badge's hash into the build-progress row above._
+- **Next — D8, the DLMF colouring mode.** The four-colour quadrant map + continuous warped-hue + height,
+  finishing Phase 4. GT: the DLMF Γ / ζ plates (Γ poles at the non-positive integers; ζ's pole at s=1,
+  trivial zeros, nontrivial zeros on the critical line).
 - **Adding a render knob** follows the established `ColorState` pattern in `render/plot.ts`: field +
   `Uniforms` entry + default + `getUniformLocation` + a `gl.uniform*` in `render()`; then a control in
   `index.html` + wiring in `main.ts`; persist via `state/viewState.ts` (`PlotterState` + `decodeState`

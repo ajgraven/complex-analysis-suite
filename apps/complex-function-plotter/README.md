@@ -37,7 +37,11 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
-  language adds imaginary literals `2i` and the constants `tau` / `phi` / `γ` (B5, in `@cas/expr`).
+  language adds imaginary literals `2i` and the constants `tau` / `phi` / `γ` (B5, in `@cas/expr`), and
+  the special functions **Γ** (`gamma`) and **ζ** (`zeta`) (Phase 4). Because the renderer evaluates in
+  GLSL `float`, a map that uses one carries an **honest precision badge** (`ui/precision.ts`): ζ warns
+  (Borwein in float32, ~1e-6, degrading up the critical strip), Γ gets a milder single-precision note —
+  so a domain-coloured ζ/Γ reads as an estimate (`≈`), not certified structure.
 - **Parameters** — any free variable that isn't `z`/`c` (e.g. `a*z*(1-z) + b`) becomes a live **named
   parameter** (via `@cas/expr`'s `freeParameters`, [ADR-0011](../../docs/DECISIONS.md)): each gets a
   draggable **ℂ-pad**, re/im fields, and a real slider. Values bind to a `uParam_<name>` uniform, so
@@ -70,7 +74,8 @@ Plus the Phase-2 research tool:
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Next — Phase 4 (special functions & the DLMF mode): Γ and ζ in `@cas/expr`, and the DLMF colouring. See
+Phase 4 is underway (special functions & the DLMF mode): **Γ and ζ are in `@cas/expr`** and carry the
+honest float32 precision badge above; next is the **DLMF colouring mode**. See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
@@ -87,6 +92,7 @@ Next — Phase 4 (special functions & the DLMF mode): Γ and ζ in `@cas/expr`, 
 | `ui/animate.ts`             | the `t` animation transport (G2): pure frame-stepping `stepT` + the play/scrub/loop/speed controls and rAF loop                                       |
 | `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                   |
 | `ui/autocomplete.ts`        | the expression-box name autocomplete (A5): pure `wordAt` / `filterCandidates` + the menu / keyboard wiring                                            |
+| `ui/precision.ts`           | the float32 honest-labeling policy (Phase 4): `precisionNote(calledFns)` → the ζ warn / Γ note the badge shows                                        |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                         |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                          |
 | `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
@@ -99,7 +105,8 @@ cyclic continuity, HSV anchors), `colorShader.test.ts` (fragment-program assembl
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),
-`autocomplete.test.ts` (the token-under-caret + prefix matching), and `singularities.test.ts` (the
-zero/pole finder recovers known counts and orders). Coloring
+`autocomplete.test.ts` (the token-under-caret + prefix matching), `precision.test.ts` (the float32
+badge policy — ζ warn / Γ note, strongest-first, over the `parse → calledFunctions → precisionNote`
+path), and `singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
 correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
 during development; an automated pixel-diff visual-regression harness is deferred.

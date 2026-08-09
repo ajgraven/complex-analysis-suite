@@ -141,6 +141,49 @@ function collectReadNames(node: Node, into: Set<string>): void {
   }
 }
 
+/**
+ * The set of function NAMES *called* anywhere in `node` — every `call` node's name, including the
+ * unary/binary builtins, the recursion call `f`, and any unknown name. The call-side companion of
+ * {@link freeParameters} (which enumerates read *variables*): a host uses it to introspect which
+ * functions a map depends on without walking the AST itself — e.g. to attach an honest precision note
+ * when a map calls a float32-limited special function such as `gamma` / `zeta`. Traversal mirrors
+ * {@link collectReadNames}.
+ */
+export function calledFunctions(node: Node): Set<string> {
+  const names = new Set<string>();
+  collectCalledFunctions(node, names);
+  return names;
+}
+
+function collectCalledFunctions(node: Node, into: Set<string>): void {
+  switch (node.kind) {
+    case "call":
+      into.add(node.name);
+      for (const a of node.args) collectCalledFunctions(a, into);
+      return;
+    case "neg":
+    case "not":
+      collectCalledFunctions(node.operand, into);
+      return;
+    case "arith":
+    case "compare":
+      collectCalledFunctions(node.left, into);
+      collectCalledFunctions(node.right, into);
+      return;
+    case "if":
+      collectCalledFunctions(node.cond, into);
+      collectCalledFunctions(node.then, into);
+      collectCalledFunctions(node.otherwise, into);
+      return;
+    case "assign":
+      collectCalledFunctions(node.value, into);
+      return;
+    case "seq":
+      for (const s of node.stmts) collectCalledFunctions(s, into);
+      return;
+  }
+}
+
 export function referencesVar(node: Node, name: string): boolean {
   switch (node.kind) {
     case "var":
