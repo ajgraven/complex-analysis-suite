@@ -52,7 +52,7 @@
         border-radius: 8px; padding: 8px 10px;
       }
       button:hover { border-color: var(--accent); }
-      .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       input[type="number"] { width: 100%; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
       input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
       input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0 8px; }
@@ -107,6 +107,17 @@
       dl.probe dd { margin: 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; overflow-x: auto; }
 
       .hint { color: var(--muted); font-size: 0.76rem; margin-top: 8px; }
+
+      .fn-group { position: relative; }
+      .fn-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+      .fn-head label { margin: 0; }
+      .fn-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+      .fn-tab { font: inherit; cursor: pointer; color: var(--muted); background: var(--panel-2); border: none; border-radius: 0; padding: 3px 12px; font-family: ui-monospace, Menlo, monospace; }
+      .fn-tab.active { background: var(--accent); color: #0b0e13; }
+      .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+      .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--text); cursor: pointer; }
+      .ac-item.active, .ac-item:hover { background: var(--accent); color: #0b0e13; }
+
       .stage { position: relative; flex: 1 1 auto; min-width: 0; }
       canvas#view, canvas#axes { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
       canvas#view { touch-action: none; }
@@ -118,9 +129,16 @@
       <h1>Complex Function Plotting Tool</h1>
       <p class="sub">Domain coloring of w = f(z)</p>
 
-      <div class="group">
-        <label for="expr">Function&nbsp; f(z)</label>
+      <div class="group fn-group">
+        <div class="fn-head">
+          <label for="expr" id="exprLabel">Function&nbsp; f(z)</label>
+          <div class="fn-toggle" role="group" aria-label="active function">
+            <button type="button" id="fnF" class="fn-tab active">f</button>
+            <button type="button" id="fnG" class="fn-tab">g</button>
+          </div>
+        </div>
         <textarea id="expr" spellcheck="false" autocapitalize="off" autocomplete="off">z^2</textarea>
+        <div id="acMenu" class="ac-menu" hidden></div>
         <div id="preview"></div>
         <div id="error"></div>
       </div>
@@ -250,6 +268,7 @@
         <button id="home" type="button">Reset</button>
         <button id="savePng" type="button">Save PNG</button>
         <button id="copyLink" type="button">Copy link</button>
+        <button id="copyTex" type="button">Copy LaTeX</button>
       </div>
 
       <p class="hint">Drag to pan · scroll to zoom · move the cursor to read f(z). Hue = arg f, brightness = |f|.</p>

@@ -9,7 +9,10 @@ import {
 import { DEFAULT_ANIM } from "../src/ui/animate.js";
 
 const S: PlotterState = {
-  expr: "a*z*(1-z)+b",
+  expr: "a*z*(1-z)+b", // = the active (f) slot
+  exprF: "a*z*(1-z)+b",
+  exprG: "sin(z)",
+  active: "f",
   cx: 0.5,
   cy: -0.25,
   span: 3,
@@ -43,6 +46,9 @@ describe("share-link view state", () => {
   it("fills defaults for missing numeric fields but keeps expr (and an absent params ⇒ {})", () => {
     expect(decodeState(encodeViewState(APP_NS, { expr: "1/z" }))).toEqual({
       expr: "1/z",
+      exprF: "1/z", // a pre-A7 link's expr becomes slot f
+      exprG: "1/z",
+      active: "f",
       cx: 0,
       cy: 0,
       span: 2,
@@ -56,6 +62,21 @@ describe("share-link view state", () => {
       params: {},
       anim: DEFAULT_ANIM,
     });
+  });
+
+  it("round-trips the f/g slots, and a g-active link plots g", () => {
+    const decoded = decodeState(
+      encodeViewState(APP_NS, {
+        expr: "sin(z)",
+        exprF: "z^2",
+        exprG: "sin(z)",
+        active: "g",
+      }),
+    );
+    expect(decoded?.exprF).toBe("z^2");
+    expect(decoded?.exprG).toBe("sin(z)");
+    expect(decoded?.active).toBe("g");
+    expect(decoded?.expr).toBe("sin(z)"); // expr mirrors the active slot
   });
 
   it("falls back to the default animation config field-by-field for a partial/absent anim", () => {

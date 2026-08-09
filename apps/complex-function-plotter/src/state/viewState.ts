@@ -10,7 +10,13 @@ import { DEFAULT_ANIM, type AnimConfig } from "../ui/animate.js";
 export const APP_NS = "cfp";
 
 export interface PlotterState extends Record<string, unknown> {
+  /** The ACTIVE (plotted) function's source — kept as the primary field for backward-compat: a
+   *  pre-A7 link (only `expr`) still opens, its expression becoming slot `f`. */
   expr: string;
+  /** The two function slots (catalog A7) and which is active. `expr` mirrors the active slot. */
+  exprF: string;
+  exprG: string;
+  active: "f" | "g";
   cx: number;
   cy: number;
   span: number;
@@ -79,8 +85,17 @@ export function decodeState(hashOrLink: string): PlotterState | null {
   if (!s || typeof s.expr !== "string") return null;
   const num = (v: unknown, fallback: number): number =>
     typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  const str = (v: unknown, fallback: string): string =>
+    typeof v === "string" ? v : fallback;
+  // Reconstruct the two slots (A7). A pre-A7 link carries only `expr`, which becomes slot f.
+  const active: "f" | "g" = s.active === "g" ? "g" : "f";
+  const exprF = str(s.exprF, active === "f" ? s.expr : "z^2");
+  const exprG = str(s.exprG, active === "g" ? s.expr : "1/z");
   return {
-    expr: s.expr,
+    expr: active === "f" ? exprF : exprG,
+    exprF,
+    exprG,
+    active,
     cx: num(s.cx, 0),
     cy: num(s.cy, 0),
     span: num(s.span, 2),

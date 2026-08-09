@@ -1,23 +1,24 @@
 // Complex Function Plotting Tool — the app entry: it wires the DOM to the render engine and the CPU
-// instruments. Through Phase 3 · G4 (named parameters, the animation variable t, parameter sweeps):
+// instruments. Phase 3 complete (parameters & families):
 //
 // Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
 // a JS evaluator for the probe/instruments), typeset live with KaTeX, and drawn by the layered coloring
 // engine (colorShader.ts): phase colormap × modulus transfer × an fwidth-AA enhancement (rings /
 // sectors / conformal grid / …), plus level sets, a CVD preview, and an honest-labeling uncertainty
-// hatch. Any free variable that isn't z/c is a live NAMED PARAMETER (ADR-0011): freeParameters drives
-// one ℂ-pad + real-slider control each (ui/params.ts), bound to a uParam_<name> uniform so dragging is
-// a re-uniform (the instruments rebuild with the same values, keeping CPU ≡ GPU). The reserved name `t`
-// is animated by a transport (play / scrub / loop / speed, ui/animate.ts) instead of a pad. Around it:
-// pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a cursor readout, the
-// zero/pole finder (analysis/singularities.ts), a parameter-sweep montage (ui/sweep.ts: a grid of
-// thumbnails across one parameter's range, click a cell to jump), share-links (#vs= via @cas/interchange,
-// parameters + animation config included), and PNG export. The 3D views (Phase 5) follow.
+// hatch. Input niceties: name autocomplete (ui/autocomplete.ts), two function slots f / g with a toggle
+// (A7), and copy-as-LaTeX (A9). Any free variable that isn't z/c is a live NAMED PARAMETER (ADR-0011):
+// freeParameters drives one ℂ-pad + real-slider control each (ui/params.ts), bound to a uParam_<name>
+// uniform so dragging is a re-uniform (the instruments rebuild with the same values, keeping CPU ≡ GPU).
+// The reserved name `t` is animated by a transport (play / scrub / loop / speed, ui/animate.ts) instead
+// of a pad. Around it: pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a
+// cursor readout, the zero/pole finder (analysis/singularities.ts), a parameter-sweep montage
+// (ui/sweep.ts: a grid of thumbnails across one parameter's range, click a cell to jump), share-links
+// (#vs= via @cas/interchange), and PNG export. Special functions (Phase 4) and the 3D views (Phase 5) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
-import { ExprError, type Node } from "@cas/expr/ast";
+import { ExprError, COMPLEX_FUNCTIONS, BINARY_FUNCTIONS, type Node } from "@cas/expr/ast";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
@@ -30,6 +31,7 @@ import { drawMarkers } from "./ui/markers.js";
 import { createParamControls } from "./ui/params.js";
 import { createAnimator, DEFAULT_ANIM } from "./ui/animate.js";
 import { sweepValues, renderMontage } from "./ui/sweep.js";
+import { createAutocomplete, type Candidate } from "./ui/autocomplete.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import {
   decodeState,
@@ -40,6 +42,9 @@ import {
 
 const DEFAULTS: PlotterState = {
   expr: "z^2",
+  exprF: "z^2",
+  exprG: "1/z",
+  active: "f",
   cx: 0,
   cy: 0,
   span: 2,
@@ -71,6 +76,10 @@ function main(): void {
   const canvas = byId("view");
   const axesCanvas = byId("axes");
   const exprInput = byId("expr");
+  const exprLabel = byId("exprLabel");
+  const fnF = byId("fnF");
+  const fnG = byId("fnG");
+  const acMenu = byId("acMenu");
   const previewEl = byId("preview");
   const errorEl = byId("error");
   const colormapSel = byId("colormap");
@@ -107,6 +116,7 @@ function main(): void {
   const homeBtn = byId("home");
   const savePngBtn = byId("savePng");
   const copyLinkBtn = byId("copyLink");
+  const copyTexBtn = byId("copyTex");
   const wheelCanvas = byId("wheel");
   const modbarCanvas = byId("modbar");
   const pz = byId("pz");
@@ -145,6 +155,11 @@ function main(): void {
   plot.color.hueSign = initial.hueSign < 0 ? -1 : 1;
   let framingSpan = initial.span;
 
+  // Two function slots (catalog A7). One expression box edits the ACTIVE slot; a toggle switches which
+  // slot is active (and therefore plotted). Both persist in the share-link.
+  const exprs: Record<"f" | "g", string> = { f: initial.exprF, g: initial.exprG };
+  let active: "f" | "g" = initial.active;
+
   let probeFn: ((z: Complex, c: Complex) => Complex) | null = null;
   let fpFn: ((z: Complex, c: Complex) => Complex) | null = null;
   let sings: Singularities | null = null;
@@ -178,13 +193,11 @@ function main(): void {
     rebuildInstrumentFns();
   };
 
-  const exprValue = (): string =>
-    exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement
-      ? exprInput.value
-      : "z^2";
-
   const currentState = (): PlotterState => ({
-    expr: exprValue(),
+    expr: exprs[active],
+    exprF: exprs.f,
+    exprG: exprs.g,
+    active,
     cx: plot.view.cx,
     cy: plot.view.cy,
     span: plot.view.span,
@@ -407,6 +420,55 @@ function main(): void {
     }
   };
 
+  const setExprBox = (src: string): void => {
+    if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement)
+      exprInput.value = src;
+  };
+
+  // The active-function toggle (A7): switch which slot is edited + plotted, loading its source.
+  const setActive = (which: "f" | "g"): void => {
+    active = which;
+    if (fnF instanceof HTMLElement) fnF.classList.toggle("active", which === "f");
+    if (fnG instanceof HTMLElement) fnG.classList.toggle("active", which === "g");
+    if (exprLabel instanceof HTMLElement) exprLabel.textContent = `Function  ${which}(z)`;
+    setExprBox(exprs[which]);
+    applyExpr(exprs[which]);
+  };
+  if (fnF instanceof HTMLElement) fnF.addEventListener("click", () => setActive("f"));
+  if (fnG instanceof HTMLElement) fnG.addEventListener("click", () => setActive("g"));
+
+  // Autocomplete (A5): builtins + constants + z/c + the current map's parameters.
+  const FN_NAMES = [...COMPLEX_FUNCTIONS, ...BINARY_FUNCTIONS, "f", "if", "not"];
+  const acCandidates = (): Candidate[] => {
+    const fns: Candidate[] = FN_NAMES.map((name) => ({ name, fn: true }));
+    const bare = ["z", "c", "i", "e", "pi", "tau", "phi", "γ", ...plot.paramNames()];
+    const names: Candidate[] = [...new Set(bare)].map((name) => ({ name, fn: false }));
+    return [...fns, ...names];
+  };
+  if (
+    (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement) &&
+    acMenu instanceof HTMLElement
+  ) {
+    // On accept, the value changed programmatically (no input event) — re-run the app's handling.
+    createAutocomplete(exprInput, acMenu, acCandidates, () => {
+      exprs[active] = exprInput.value;
+      applyExpr(exprInput.value);
+    });
+  }
+
+  // Copy-as-LaTeX (A9): the active function as `f(z) = …` / `g(z) = …`.
+  if (copyTexBtn instanceof HTMLElement) {
+    copyTexBtn.addEventListener("click", () => {
+      try {
+        const tex = `${active}(z) = ${toLatex(parse(exprs[active]))}`;
+        if (navigator.clipboard)
+          navigator.clipboard.writeText(tex).catch(() => undefined);
+      } catch {
+        /* a malformed expression has nothing to copy */
+      }
+    });
+  }
+
   const drawLegends = (): void => {
     if (wheelCanvas instanceof HTMLCanvasElement)
       drawPhaseWheel(
@@ -527,11 +589,8 @@ function main(): void {
     presetSel.addEventListener("change", () => {
       const preset = PRESETS[Number(presetSel.value)];
       if (!preset) return;
-      if (
-        exprInput instanceof HTMLTextAreaElement ||
-        exprInput instanceof HTMLInputElement
-      )
-        exprInput.value = preset.expr;
+      exprs[active] = preset.expr; // a preset loads into the active slot
+      setExprBox(preset.expr);
       plot.view = { cx: 0, cy: 0, span: preset.span };
       framingSpan = preset.span;
       applyExpr(preset.expr);
@@ -540,8 +599,10 @@ function main(): void {
   }
 
   if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement) {
-    exprInput.value = initial.expr;
-    exprInput.addEventListener("input", () => applyExpr(exprInput.value));
+    exprInput.addEventListener("input", () => {
+      exprs[active] = exprInput.value; // keep the active slot in sync with the box
+      applyExpr(exprInput.value);
+    });
   }
 
   if (homeBtn instanceof HTMLElement) {
@@ -629,7 +690,7 @@ function main(): void {
   observer.observe(canvas);
 
   drawLegends();
-  applyExpr(initial.expr);
+  setActive(active); // loads the active slot into the box + toggle and renders it (via applyExpr)
 
   // Seed saved parameter values from the share-link (applyExpr has already created the controls with
   // defaults for this formula's parameters); then reflect them in the pads, instruments, and render.

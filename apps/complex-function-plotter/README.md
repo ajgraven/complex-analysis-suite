@@ -31,10 +31,13 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 3 · G4 (named parameters, animation `t`, parameter sweeps)
+## Status — Phase 3 complete (parameters & families)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
+- **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
+  function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
+  language adds imaginary literals `2i` and the constants `tau` / `phi` / `γ` (B5, in `@cas/expr`).
 - **Parameters** — any free variable that isn't `z`/`c` (e.g. `a*z*(1-z) + b`) becomes a live **named
   parameter** (via `@cas/expr`'s `freeParameters`, [ADR-0011](../../docs/DECISIONS.md)): each gets a
   draggable **ℂ-pad**, re/im fields, and a real slider. Values bind to a `uParam_<name>` uniform, so
@@ -67,7 +70,7 @@ Plus the Phase-2 research tool:
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Next — the rest of Phase 3: complex literals / extra constants (B5) and input niceties (A5/A7/A9). See
+Next — Phase 4 (special functions & the DLMF mode): Γ and ζ in `@cas/expr`, and the DLMF colouring. See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
@@ -83,6 +86,7 @@ Next — the rest of Phase 3: complex literals / extra constants (B5) and input 
 | `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                         |
 | `ui/animate.ts`             | the `t` animation transport (G2): pure frame-stepping `stepT` + the play/scrub/loop/speed controls and rAF loop                                       |
 | `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                   |
+| `ui/autocomplete.ts`        | the expression-box name autocomplete (A5): pure `wordAt` / `filterCandidates` + the menu / keyboard wiring                                            |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                         |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                          |
 | `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
@@ -94,7 +98,8 @@ Next — the rest of Phase 3: complex literals / extra constants (B5) and input 
 cyclic continuity, HSV anchors), `colorShader.test.ts` (fragment-program assembly), `viewState.test.ts`
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
-(the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing), and
-`singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
+(the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),
+`autocomplete.test.ts` (the token-under-caret + prefix matching), and `singularities.test.ts` (the
+zero/pole finder recovers known counts and orders). Coloring
 correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
 during development; an automated pixel-diff visual-regression harness is deferred.
