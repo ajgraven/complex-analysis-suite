@@ -18,7 +18,8 @@
   "dependencies": {
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
-    "@cas/interchange": "workspace:*"
+    "@cas/interchange": "workspace:*",
+    "katex": "^0.17.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

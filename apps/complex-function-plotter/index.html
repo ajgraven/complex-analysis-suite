@@ -8,48 +8,100 @@
       :root {
         color-scheme: light dark;
         --bg: #0f1115;
+        --panel: #161a21;
+        --panel-2: #1b212b;
         --text: #e7e9ee;
         --muted: #99a1b3;
-        --border: #262b36;
+        --border: #262d38;
         --accent: #6ea8fe;
       }
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; }
       body {
         display: flex;
-        flex-direction: column;
+        height: 100%;
         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
         color: var(--text);
         background: var(--bg);
       }
-      header { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border); }
-      header h1 { margin: 0; font-size: 1rem; font-weight: 600; letter-spacing: -0.01em; }
-      header p { margin: 0.15rem 0 0; color: var(--muted); font-size: 0.8rem; }
-      header code { color: var(--accent); }
-      .stage { position: relative; flex: 1 1 auto; min-height: 0; }
-      canvas#view { display: block; width: 100%; height: 100%; }
-      .status {
-        position: absolute;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        margin: 0;
-        padding: 0.4rem 0.75rem;
-        font-size: 0.78rem;
-        color: var(--muted);
-        background: linear-gradient(to top, rgba(15, 17, 21, 0.85), rgba(15, 17, 21, 0));
+      aside {
+        flex: 0 0 320px;
+        max-width: 82vw;
+        overflow-y: auto;
+        padding: 16px;
+        background: var(--panel);
+        border-right: 1px solid var(--border);
       }
+      h1 { font-size: 1rem; font-weight: 650; margin: 0 0 2px; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 0.76rem; margin: 0 0 16px; }
+      .group { margin-bottom: 18px; }
+      label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
+      textarea, select {
+        width: 100%;
+        font: inherit;
+        color: var(--text);
+        background: var(--panel-2);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize: vertical; min-height: 42px; }
+      textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+      #preview { min-height: 26px; margin-top: 8px; color: var(--text); overflow-x: auto; }
+      #error { min-height: 18px; margin-top: 4px; color: #ff9b9b; font-size: 0.8rem; visibility: hidden; font-family: ui-monospace, Menlo, monospace; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      button {
+        font: inherit; cursor: pointer; color: var(--text);
+        background: var(--panel-2); border: 1px solid var(--border);
+        border-radius: 8px; padding: 8px 12px;
+      }
+      button:hover { border-color: var(--accent); }
+      .hint { color: var(--muted); font-size: 0.76rem; margin-top: 4px; }
+      .stage { position: relative; flex: 1 1 auto; min-width: 0; }
+      canvas#view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
     </style>
   </head>
   <body>
-    <header>
+    <aside>
       <h1>Complex Function Plotting Tool</h1>
-      <p>Phase 0 · walking skeleton — a fixed compiled function rendered via <code>@cas/expr</code> &rarr; <code>@cas/gpu</code></p>
-    </header>
-    <div class="stage">
+      <p class="sub">Domain coloring of w = f(z) · Phase 1</p>
+
+      <div class="group">
+        <label for="expr">Function&nbsp; f(z)</label>
+        <textarea id="expr" spellcheck="false" autocapitalize="off" autocomplete="off">z^2</textarea>
+        <div id="preview"></div>
+        <div id="error"></div>
+      </div>
+
+      <div class="group">
+        <div class="row">
+          <div>
+            <label for="colormap">Colormap</label>
+            <select id="colormap"></select>
+          </div>
+          <div>
+            <label for="modulus">Modulus</label>
+            <select id="modulus">
+              <option value="0">Phase only</option>
+              <option value="1">Linear</option>
+              <option value="2">Rational</option>
+              <option value="3">Logarithmic</option>
+              <option value="4">Log-log</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="group">
+        <button id="home" type="button">Reset view</button>
+        <p class="hint">Drag to pan · scroll to zoom · hue = arg f, brightness = |f|.</p>
+      </div>
+    </aside>
+
+    <main class="stage">
       <canvas id="view"></canvas>
-      <p class="status" id="status">initializing&hellip;</p>
-    </div>
+    </main>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

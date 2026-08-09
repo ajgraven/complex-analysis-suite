@@ -111,6 +111,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0
