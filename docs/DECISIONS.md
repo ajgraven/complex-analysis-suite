@@ -19,16 +19,19 @@ Format follows Michael Nygard's ADR convention.
 | [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)                       | Extract `@cas/exact`; keep QD's `sym-core` separate                   | Accepted |
 | [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics) | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics | Accepted |
 | [0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)                  | Complex Function Plotting Tool as a separate app                      | Accepted |
+| [0011](#adr-0011-casexpr-named-parameters)                                          | `@cas/expr` named parameters                                          | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All ten are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All eleven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
 > this way. Expect more of that shape than of the original seven. **0009 is another follow-on**, of a
 > different kind — a UI/product decision (σ becomes a first-class peer _view_ in Complex Dynamics), not an
 > extraction. **0010 is a third follow-on** — the suite's fourth app (the Complex Function Plotting Tool),
-> a product/topology decision made when the tool was requested.
+> a product/topology decision made when the tool was requested. **0011 is a fourth follow-on** — the
+> `@cas/expr` named-parameter generalization that [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)
+> itself anticipated (its first follow-on), the one non-trivial shared-package change in the plotter plan.
 > Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
@@ -851,9 +854,10 @@ forking it.
 - **Harder:** UI chrome is app-local (no `@cas/ui`); display conventions (phase→hue, modulus→height) stay
   app-local and tagged ([ADR-0006](#adr-0006-convention-neutral-core-packages)), never baked into packages.
 - **Follow-on ADRs this anticipates:** (i) a **named-parameter generalization of `@cas/expr`** — Phase 3, the
-  one non-trivial shared-package change, backward-compatible with CD; (ii) a **shared 3D slice** (mat4 / mesh /
-  camera) — Phase 5, on the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second-consumer
-  rule. Each gets its own record when it lands.
+  one non-trivial shared-package change, backward-compatible with CD — **now written as
+  [ADR-0011](#adr-0011-casexpr-named-parameters)**; (ii) a **shared 3D slice** (mat4 / mesh / camera) — Phase 5,
+  on the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second-consumer rule. Each gets its
+  own record when it lands.
 - **Watch for:** the app drifting into CD's escape-time territory (dynamics belong to CD); and the coloring
   shader growing bespoke per-mode branches instead of the layered `colorAt` composition.
 
@@ -867,5 +871,111 @@ forking it.
 3. [x] Phase 2 — enhanced portraits (rings / sectors / conformal grid / chessboards / Re-Im grid, `fwidth` AA),
        colormap library + colorblind-safe + CVD preview, the zero/pole instrument (argument principle) + level
        sets, and the honest-labeling / uncertainty layer. (`cfca14d`, `f3eb87b`, `2b72e63`, `e894be1`)
-4. [ ] Phase 3 — parameters & families; **opens with the `@cas/expr` named-parameter follow-on ADR**.
+4. [ ] Phase 3 — parameters & families; opened with the `@cas/expr` named-parameter follow-on ADR
+       ([ADR-0011](#adr-0011-casexpr-named-parameters)).
 5. [ ] Publish (flip the launcher card + add the `deploy-pages.yml` `cp`) at the plan's quality gate (Phase 6).
+
+---
+
+## ADR-0011: `@cas/expr` named parameters
+
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
+
+_The follow-on that [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app) anticipated
+(consequence (i)): the one non-trivial shared-package change in the plotter plan. `@cas/expr` is shared with
+Complex Dynamics, so the generalization is strictly backward-compatible. Build detail in
+[the plan §1.4 / Phase 3](design/complex-function-plotter-plan.md)._
+
+### Context
+
+`@cas/expr` compiles one AST to two backends that must agree — the **dual-backend guarantee**
+([RISKS](RISKS.md)): a JS interpreter/closure (`makeComplexFn`) and a GLSL string (`compileF`). Its
+free-variable scope is **hardcoded to `z, c, a`**. `z` and `c` are the two formal arguments of
+`fFn(cvec z, cvec c)`; `a` is a single **live parameter** — the JS side binds it to a value, and the GLSL side
+aliases it from a uniform (`cvec a = vec_(uA.x, uA.y);`) whenever the program reads it. That one parameter is
+what Complex Dynamics animates (its parameter-plane point / slider), wired through `uA` in
+`shaderBuilder` / `glPlot`.
+
+The plotter's Phase 3 (**G1**) needs **more than one** parameter, and named: type `a*z*(1-z) + b`, get an
+auto-detected control for `a` and one for `b`; type `k`, get a `k` control. Each must bind to a **uniform** so
+dragging it is a re-uniform, not a recompile (the CD live-parameter pattern). So the single hardcoded `a` has
+to generalize to an **arbitrary set of named parameters**.
+
+`@cas/expr` is depended on by Complex Dynamics, whose `a` / `uA` path must not shift by one ulp. So this is a
+**backward-compatibility problem first** and a feature second — the single risk on the whole plotter plan
+([RISKS §_`@cas/expr` param change regresses Complex Dynamics_](RISKS.md)).
+
+### Decision
+
+Generalize the free-variable scope to **arbitrary named parameters**, backward-compatibly, across three files:
+
+1. **Enumeration (`ast.ts`).** Add a pure `freeParameters(ast): string[]` — the variables referenced but never
+   locally assigned, minus the reserved formals `z` / `c`. This is what the host reads to build one control per
+   parameter. (`isFreeParameter` / `referencesVar` already existed for the single-`a` case; this is their
+   set-valued generalization.)
+2. **JS backend (`evaluate.ts`).** Parameters become a **name→value map** seeded into the evaluation scope, and
+   carried into `f(...)` recursion so JS ≡ GLSL holds even inside self-reference. The legacy **`Complex`-positional**
+   argument is kept as a calling convention: `makeComplexFn(ast, [3,0])` normalizes to `{ a: [3,0] }`, so every
+   existing CD call (and `rational.ts`, and `getComplexFn`) is unchanged. `a` stops being a language keyword —
+   it is just the conventional first name.
+3. **GLSL backend (`glsl.ts`).** `compileF` / `compileEscape` take an optional `CompileOptions { params?: string[] }`.
+   **Absent (the default) → legacy:** exactly one alias, `a → uA`, emitted byte-for-byte as before. **Present →
+   general:** each referenced parameter `p` aliases to `uParam_<p>` via the df64-safe
+   `vec_(uParam_<p>.x, uParam_<p>.y)` constructor. The host declares and sets those uniforms.
+
+Reserved formals stay `z`, `c`. The `a → uA` binding survives **only as the zero-config default**, which is
+exactly what keeps Complex Dynamics untouched; the plotter opts into the general path and binds every parameter
+(including `a`, if used) uniformly through `uParam_<name>`.
+
+### Options Considered
+
+- **A — Backward-compatible generalization (this ADR).** _Pros:_ CD's `a` / `uA` path is literally the default
+  codepath — byte-identical GLSL, identical JS results — guarded by its `expr` / `glslCodegen` suites; the plotter
+  gets real named parameters through the **same compiler**, so the dual-backend guarantee extends to them for free;
+  `t` (animation, G2) and family sweeps (G4) become "just more named parameters." _Cons:_ two JS calling
+  conventions (positional `Complex` legacy + name→map); the `a → uA` default is a small special case that lives on
+  for CD.
+- **B — Leave `@cas/expr` alone; substitute parameters in the app.** Bake parameter values into the AST/source
+  before compiling. _Cons:_ parameters would live **outside** the compiler, so JS ≡ GLSL would not cover them; and
+  baking values in forces a **recompile per frame** while dragging a control, instead of a uniform update — the
+  opposite of the CD live-parameter pattern. Rejected.
+- **C — Break the scope open** — make all identifiers parameters and drop the `a → uA` special case. _Cons:_ forces
+  a Complex-Dynamics migration (its `shaderBuilder` declares and sets `uA` every frame) for zero user benefit,
+  violating "working software at every step." Rejected.
+
+### Trade-off Analysis
+
+The entire risk is regressing Complex Dynamics, and the design collapses that risk to one question — _is the
+default path unchanged?_ — which the existing suites answer: `compileF(parse("z*z+a"))` still emits
+`cvec a = vec_(uA.x, uA.y);`; `makeComplexFn(parse("z+a"), [3,0])` still binds `a = 3` and defaults to `0`; the
+equality / df64 codegen is untouched. The new surface (`freeParameters`, the param map, `params`) is **purely
+additive** — reached only when a caller opts in — so CD exercises none of it. Carrying the param map into `f(...)`
+recursion is the one place the generalization had to be more than cosmetic: without it, a named parameter used
+inside a self-referential `f(...)` call would resolve on the GPU (the alias re-emits at the top of `fFn`) but
+throw on the CPU — a silent dual-backend split; with it, both agree.
+
+### Consequences
+
+- **Easier:** the plotter auto-detects parameters (`freeParameters`) and binds each to a `uParam_<name>` uniform;
+  the animation variable `t` (G2) and parameter sweeps (G4) are named parameters with a driver, not new machinery;
+  every parameterized map is still one compiled program per formula, re-uniformed as controls move.
+- **Harder:** the JS side now has two calling conventions — documented (`Complex` = legacy `a`, object = named
+  map); a parameter the host forgets to include in `params` compiles to an undeclared GLSL identifier — by design,
+  since the host passes `freeParameters(ast)`, which lists exactly them.
+- **Unchanged:** convention-neutrality ([ADR-0006](#adr-0006-convention-neutral-core-packages)) — parameters are
+  values, no π / 2πi normalization enters a package; and the reserved formals `z`, `c`.
+- **Watch for:** mixing the two uniform schemes in one program — the `a → uA` alias is legacy-only; the plotter
+  names every parameter `uParam_<name>` (never `uA`).
+
+### Action Items
+
+1. [x] `freeParameters(ast)` in `ast.ts`; the named-parameter map + legacy `Complex`-positional `a` in
+       `evaluate.ts` (scope seed + `f(...)` recursion); `CompileOptions { params }` + general `uParam_<name>`
+       aliases (legacy `a → uA` default) in `glsl.ts`. Guarded by CD's `expr` / `glslCodegen` and expr's `paramA`
+       suites green before & after. _(the commit introducing this ADR)_
+2. [ ] Plotter **G1** — auto-detected parameter controls (real slider on a segment; complex as a draggable ℂ-pad),
+       each bound to a `uParam_<name>` uniform, refreshed without a recompile.
+3. [ ] Plotter **G2 / G4** — the reserved animation variable `t` (scrub / play / loop / speed) and parameter
+       sweeps, as named parameters with a driver.
+4. [ ] Complex literals & extra constants — `2i`, `tau`, `phi`, `γ` (**B5**) — the small additive lexer / const
+       growth that rides alongside.

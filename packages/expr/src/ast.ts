@@ -81,6 +81,63 @@ export function isFreeParameter(node: Node, name: string): boolean {
   return referencesVar(node, name) && !assignsVar(node, name);
 }
 
+/** The reserved formal arguments of a compiled map — never treated as bindable parameters. */
+const RESERVED_FORMALS: ReadonlySet<string> = new Set(["z", "c"]);
+
+/**
+ * The **named parameters** of `node` (ADR-0011): every variable that is read somewhere but never
+ * assigned as a local, excluding the reserved formals `z` / `c`. Returned sorted, so a host builds
+ * one control per name in a stable order. This is the set-valued generalization of
+ * {@link isFreeParameter} — which asks the same question of a single name (`a`) — and it is exactly
+ * the set a caller passes as `params` to `compileF` so every referenced parameter gets a uniform
+ * alias. A name that is only ever *assigned* (a pure local, e.g. `w` in `w = z^2; w + 1/w`) is not a
+ * parameter, so it gets no control; a name read *before* it is assigned is a use-before-def local,
+ * not a parameter — write `…a…` (read-only) to make `a` a live parameter.
+ */
+export function freeParameters(node: Node): string[] {
+  const readNames = new Set<string>();
+  collectReadNames(node, readNames);
+  const params: string[] = [];
+  for (const name of readNames) {
+    if (!RESERVED_FORMALS.has(name) && !assignsVar(node, name)) params.push(name);
+  }
+  return params.sort();
+}
+
+/** Collect every variable NAME that is *read* (appears as a `var` node) anywhere in `node`. Mirrors
+ *  {@link referencesVar}'s traversal, but gathers the whole set in one pass rather than testing one
+ *  name — assignment *targets* (`assign.name`) are not reads, so a write-only local is not gathered. */
+function collectReadNames(node: Node, into: Set<string>): void {
+  switch (node.kind) {
+    case "var":
+      into.add(node.name);
+      return;
+    case "neg":
+    case "not":
+      collectReadNames(node.operand, into);
+      return;
+    case "arith":
+    case "compare":
+      collectReadNames(node.left, into);
+      collectReadNames(node.right, into);
+      return;
+    case "call":
+      for (const a of node.args) collectReadNames(a, into);
+      return;
+    case "if":
+      collectReadNames(node.cond, into);
+      collectReadNames(node.then, into);
+      collectReadNames(node.otherwise, into);
+      return;
+    case "assign":
+      collectReadNames(node.value, into);
+      return;
+    case "seq":
+      for (const s of node.stmts) collectReadNames(s, into);
+      return;
+  }
+}
+
 export function referencesVar(node: Node, name: string): boolean {
   switch (node.kind) {
     case "var":
