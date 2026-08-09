@@ -5,6 +5,7 @@
  * the way back in (a stale or hand-edited link must fail soft, not render garbage).
  */
 import { encodeViewState, decodeViewState } from "@cas/interchange";
+import { DEFAULT_ANIM, type AnimConfig } from "../ui/animate.js";
 
 export const APP_NS = "cfp";
 
@@ -23,6 +24,22 @@ export interface PlotterState extends Record<string, unknown> {
   /** Live named-parameter values (ADR-0011 / catalog G1): `{ a: [re, im], … }`. Absent on a
    *  parameter-free map and on pre-parameter links (which decode to `{}`, so they still render). */
   params: Record<string, [number, number]>;
+  /** Animation-variable `t` transport config (catalog G2). Playback state is not persisted — a loaded
+   *  link opens paused at the saved `t` (which travels in `params`). */
+  anim: AnimConfig;
+}
+
+/** Validate a decoded `anim` blob, falling back to {@link DEFAULT_ANIM} field-by-field. */
+function cleanAnim(raw: unknown): AnimConfig {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const numOr = (v: unknown, d: number): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : d;
+  return {
+    t0: numOr(o.t0, DEFAULT_ANIM.t0),
+    t1: numOr(o.t1, DEFAULT_ANIM.t1),
+    speed: Math.max(0, numOr(o.speed, DEFAULT_ANIM.speed)),
+    loop: typeof o.loop === "boolean" ? o.loop : DEFAULT_ANIM.loop,
+  };
 }
 
 /** Validate a decoded `params` blob: keep only `name → [finite, finite]` entries, drop anything else
@@ -75,5 +92,6 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     hueShift: num(s.hueShift, 0),
     hueSign: num(s.hueSign, 1),
     params: cleanParams(s.params),
+    anim: cleanAnim(s.anim),
   };
 }

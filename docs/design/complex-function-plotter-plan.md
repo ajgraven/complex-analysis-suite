@@ -31,8 +31,9 @@
 | **1 — Live 2D domain coloring**         | ✅ done            | `1f98005` (1A), `d98c57d` (1B)             | A1–A4, B10, C1–C4, D1, H1, I1–I4, J1–J2, K1(basic)/K2, L3/L5/L6 · GT: Wegert plate                                                                                                                                            |
 | **2 — Instrumented 2D research tool**   | ✅ done            | `cfca14d`, `f3eb87b`, `2b72e63`, `e894be1` | D2–D6, C5–C7, E1–E3, H2, H7, J3, J4, L4 · GT: conformal grid (exp→square, z²→pinch), zero/pole counts, `\|z²−1\|=1` lemniscate, `e^(1/z)` uncertainty hatch                                                                   |
 | **`@cas/expr` named params (B4)**       | ✅ done            | `554c734`                                  | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after  |
-| **G1 — parameter controls**             | ✅ done            | _⚠ backfill hash next commit_              | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders) |
-| **3 — Parameters & families**           | 🔨 **in progress** | _B4, G1 above; more app work next_         | ~~B4~~ ✅ · ~~G1~~ ✅ · next: G2 (`t` animation), G4 (sweep), B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9                                                                                                                           |
+| **G1 — parameter controls**             | ✅ done            | `2886f3d`                                  | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders) |
+| **G2 — animation variable `t`**         | ✅ done            | _⚠ backfill hash next commit_              | `t` transport (play/scrub/loop/speed, `ui/animate.ts`) driving the `uParam_t` uniform; anim config in the share-link; pure `stepT` unit-tested; headless-verified (`a*z*exp(i*t)` plays, `t` excluded from the ℂ-pad list)    |
+| **3 — Parameters & families**           | 🔨 **in progress** | _B4, G1, G2 above; more app work next_     | ~~B4~~ ✅ · ~~G1~~ ✅ · ~~G2~~ ✅ · next: G4 (sweep), B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9                                                                                                                                   |
 | **4 — Special functions & DLMF**        | ⬜                 | —                                          | B6 (Γ, ζ), B9, D8                                                                                                                                                                                                             |
 | **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                     |
 | **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                      |
@@ -49,20 +50,22 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
 
 **Resume notes for Phase 3:**
 
-- **✅ B4 + G1 have landed.** `@cas/expr` named parameters ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters))
+- **✅ B4 + G1 + G2 have landed.** `@cas/expr` named parameters ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters))
   are backward-compatible: `freeParameters(ast)` (in `@cas/expr/ast`) lists the bindable names;
   `makeComplexFn(ast, { a, b, … })` / `getComplexFn` take a name→value map (legacy positional `Complex`
   for `a` still works); `compileF(ast, "fFn", { params })` aliases each from a `uParam_<name>` uniform.
   In the app, `Plot` owns the parameter names/values/locations (`compileSource` preserves a surviving
   parameter's value across formula edits, defaults a new one to `[1, 0]`); `ui/params.ts` renders a
-  ℂ-pad + re/im + real-slider control per name; `main.ts` rebuilds the instrument closures
-  (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU, and `state/viewState.ts` round-trips
-  `params`. _First thing next commit: backfill G1's hash into the build-progress row above._
-- **G2 (next) — the animation variable `t`.** Reserve the name `t` as a parameter driven by a
-  scrub/play/loop/speed transport (a `requestAnimationFrame` loop stepping `t`'s real value along a
-  segment, reusing the G1 real-slider mapping). It's "just another named parameter" whose value a driver
-  sets each frame via `plot.setParamValue("t", …)` + `redraw(true)`; then **G4** sweeps a parameter over
-  a range (small-multiples or a scrub), and **B5** adds complex literals `2i` and constants `tau`/`phi`/`γ`.
+  ℂ-pad + re/im + real-slider control per name; the reserved `t` gets a play/scrub/loop/speed transport
+  instead (`ui/animate.ts`, pure `stepT` + a rAF loop, `t` filtered out of the ℂ-pad list in `main.ts`);
+  `main.ts` rebuilds the instrument closures (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU,
+  and `state/viewState.ts` round-trips `params` + the `anim` config. _First thing next commit: backfill
+  G2's hash into the build-progress row above._
+- **G4 (next) — parameter sweep.** Sample one chosen parameter across a range and present it as
+  small-multiples (a grid of mini-plots) or a scrub, reusing the G1 range mapping + the same
+  `setParamValue` → re-uniform path; then **B5** adds complex literals `2i` and constants
+  `tau` / `phi` / `γ` (an additive lexer/const growth), and **A5 / A7 / A9** are input niceties
+  (autocomplete, multiple functions f/g, copy-as-LaTeX).
 - **Adding a render knob** follows the established `ColorState` pattern in `render/plot.ts`: field +
   `Uniforms` entry + default + `getUniformLocation` + a `gl.uniform*` in `render()`; then a control in
   `index.html` + wiring in `main.ts`; persist via `state/viewState.ts` (`PlotterState` + `decodeState`

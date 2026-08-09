@@ -1,5 +1,5 @@
 // Complex Function Plotting Tool — the app entry: it wires the DOM to the render engine and the CPU
-// instruments. Through Phase 3 · G1 (named parameters):
+// instruments. Through Phase 3 · G2 (named parameters + the animation variable t):
 //
 // Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
 // a JS evaluator for the probe/instruments), typeset live with KaTeX, and drawn by the layered coloring
@@ -7,10 +7,11 @@
 // sectors / conformal grid / …), plus level sets, a CVD preview, and an honest-labeling uncertainty
 // hatch. Any free variable that isn't z/c is a live NAMED PARAMETER (ADR-0011): freeParameters drives
 // one ℂ-pad + real-slider control each (ui/params.ts), bound to a uParam_<name> uniform so dragging is
-// a re-uniform (the instruments rebuild with the same values, keeping CPU ≡ GPU). Around it: pan / zoom
-// / reset, axes + grid + scale bar, phase-wheel and modulus legends, a cursor readout, the zero/pole
-// finder (analysis/singularities.ts), share-links (#vs= via @cas/interchange, parameters included), and
-// PNG export. Animation (t, G2) / sweeps (G4) build on the parameters; the 3D views (Phase 5) follow.
+// a re-uniform (the instruments rebuild with the same values, keeping CPU ≡ GPU). The reserved name `t`
+// is animated by a transport (play / scrub / loop / speed, ui/animate.ts) instead of a pad. Around it:
+// pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a cursor readout, the
+// zero/pole finder (analysis/singularities.ts), share-links (#vs= via @cas/interchange, parameters +
+// animation config included), and PNG export. Sweeps (G4) build on this; the 3D views (Phase 5) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
@@ -26,6 +27,7 @@ import { drawModulusBar, drawPhaseWheel } from "./ui/legends.js";
 import { drawAxes } from "./ui/axes.js";
 import { drawMarkers } from "./ui/markers.js";
 import { createParamControls } from "./ui/params.js";
+import { createAnimator, DEFAULT_ANIM } from "./ui/animate.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import {
   decodeState,
@@ -47,6 +49,7 @@ const DEFAULTS: PlotterState = {
   hueShift: 0,
   hueSign: 1,
   params: {},
+  anim: { ...DEFAULT_ANIM },
 };
 
 function addOption(sel: HTMLSelectElement, value: string, label: string): void {
@@ -73,6 +76,8 @@ function main(): void {
   const presetSel = byId("preset");
   const paramsGroup = byId("paramsGroup");
   const paramsContainer = byId("params");
+  const animGroup = byId("animGroup");
+  const animRoot = byId("anim");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -178,6 +183,7 @@ function main(): void {
     hueShift: plot.color.hueShift,
     hueSign: plot.color.hueSign,
     params: plot.paramsRecord(),
+    anim: { ...animConfig },
   });
 
   let hashTimer = 0;
@@ -193,7 +199,9 @@ function main(): void {
     drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
     if (markSings && sings)
       drawMarkers(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight, sings);
-    scheduleHash();
+    // Only committed frames update the share-link — a draft (drag / animation frame) settles with a
+    // full redraw, so this keeps the hash off the per-frame path (no history churn while `t` plays).
+    if (!draft) scheduleHash();
   };
 
   const showCounts = (): void => {
@@ -263,10 +271,37 @@ function main(): void {
       },
     },
   );
+  // The animation variable `t` (catalog G2): an ordinary named parameter, but driven by a transport
+  // (play / scrub / loop / speed) instead of a ℂ-pad. `animConfig` is owned here (mutated by the
+  // transport's fields) so it round-trips in the share-link.
+  const animConfig = { ...initial.anim };
+  const animator = createAnimator(
+    animRoot instanceof HTMLElement ? animRoot : document.createElement("div"),
+    animConfig,
+    {
+      getT: () => plot.paramValue("t")[0],
+      setT: (t, committed) => {
+        plot.setParamValue("t", [t, 0]);
+        if (committed) {
+          rebuildInstrumentFns();
+          recomputeSings();
+          redraw(false);
+        } else {
+          redraw(true); // a play frame / live scrub — GPU-only, no per-frame instrument recompute
+        }
+      },
+    },
+  );
+
   const syncParamsUI = (): void => {
     const names = plot.paramNames();
-    if (paramsGroup instanceof HTMLElement) paramsGroup.hidden = names.length === 0;
-    paramControls.refresh(names);
+    const generic = names.filter((n) => n !== "t"); // `t` gets the animation transport, not a ℂ-pad
+    const hasT = names.includes("t");
+    if (paramsGroup instanceof HTMLElement) paramsGroup.hidden = generic.length === 0;
+    paramControls.refresh(generic);
+    if (animGroup instanceof HTMLElement) animGroup.hidden = !hasT;
+    if (hasT) animator.sync();
+    else animator.stop();
   };
 
   const applyExpr = (src: string): void => {
@@ -516,6 +551,7 @@ function main(): void {
   if (initial.params && Object.keys(initial.params).length > 0) {
     for (const [name, v] of Object.entries(initial.params)) plot.setParamValue(name, v);
     paramControls.sync();
+    animator.sync(); // reflect a saved `t` value in the scrubber/readout
     rebuildInstrumentFns();
     recomputeSings();
     redraw(false);

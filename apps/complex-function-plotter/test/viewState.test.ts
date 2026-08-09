@@ -6,6 +6,7 @@ import {
   encodeState,
   type PlotterState,
 } from "../src/state/viewState.js";
+import { DEFAULT_ANIM } from "../src/ui/animate.js";
 
 const S: PlotterState = {
   expr: "a*z*(1-z)+b",
@@ -20,6 +21,7 @@ const S: PlotterState = {
   hueShift: 1.5,
   hueSign: -1,
   params: { a: [1.5, 0], b: [-0.25, 0.75] },
+  anim: { t0: 0, t1: 1, speed: 0.5, loop: false },
 };
 
 describe("share-link view state", () => {
@@ -52,7 +54,17 @@ describe("share-link view state", () => {
       hueShift: 0,
       hueSign: 1,
       params: {},
+      anim: DEFAULT_ANIM,
     });
+  });
+
+  it("falls back to the default animation config field-by-field for a partial/absent anim", () => {
+    expect(
+      decodeState(encodeViewState(APP_NS, { expr: "z + t", anim: { speed: 3 } }))?.anim,
+    ).toEqual({ ...DEFAULT_ANIM, speed: 3 });
+    expect(decodeState(encodeViewState(APP_NS, { expr: "z" }))?.anim).toEqual(
+      DEFAULT_ANIM,
+    );
   });
 
   it("drops a payload with no expression", () => {

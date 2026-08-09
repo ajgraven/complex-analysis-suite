@@ -78,6 +78,14 @@
       .param-fields input.param-slider { grid-column: 1 / -1; margin: 2px 0 0; }
       .param-hint { color: var(--muted); font-size: 0.72rem; margin: 2px 0 0; }
 
+      .anim-transport { display: flex; align-items: center; gap: 8px; }
+      .anim-play { flex: 0 0 auto; width: 34px; padding: 6px 0; text-align: center; }
+      .anim-scrub { flex: 1 1 auto; margin: 0; }
+      .anim-readout { flex: 0 0 auto; font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); min-width: 58px; text-align: right; }
+      .anim-cfg { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 8px; }
+      .anim-cfg label { margin: 0; text-transform: none; letter-spacing: normal; font-size: 0.74rem; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+      .anim-cfg input[type="number"] { width: 68px; padding: 4px 6px; }
+
       .legend { display: flex; gap: 14px; align-items: center; }
       .wheel-wrap { position: relative; flex: 0 0 auto; }
       .wheel-wrap span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.68rem; color: var(--muted); }
@@ -117,6 +125,23 @@
         <label>Parameters</label>
         <div id="params"></div>
         <p class="param-hint">Drag the pad (or type) to set each parameter. The circle is |a| = 1.</p>
+      </div>
+
+      <div class="group" id="animGroup" hidden>
+        <label>Animate&nbsp; t</label>
+        <div id="anim" class="anim">
+          <div class="anim-transport">
+            <button type="button" class="anim-play" aria-label="play">▶</button>
+            <input type="range" class="anim-scrub" aria-label="t value" />
+            <span class="anim-readout">t = 0</span>
+          </div>
+          <div class="anim-cfg">
+            <label>from <input type="number" class="anim-t0" step="0.1" value="0" /></label>
+            <label>to <input type="number" class="anim-t1" step="0.1" value="6.2832" /></label>
+            <label>speed <input type="number" class="anim-speed" step="0.1" min="0" value="1" /></label>
+            <label class="check"><input type="checkbox" class="anim-loop" checked /> loop</label>
+          </div>
+        </div>
       </div>
 
       <div class="group">
