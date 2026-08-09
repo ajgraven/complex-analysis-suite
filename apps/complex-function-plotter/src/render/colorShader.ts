@@ -23,6 +23,10 @@ uniform int       uCrisp;      // 0 shaded bands, 1 crisp lines
 uniform float     uHueShift;   // radians added to arg for the hue lookup
 uniform float     uHueSign;    // +1 / -1 winding direction for the hue
 uniform int       uCvd;        // colour-vision-deficiency preview: 0 none, 1 protan, 2 deutan, 3 tritan
+uniform int       uUncertainty;// 1 = flag undersampled pixels (near poles / essential singularities)
+uniform float     uLevelAbs;   // draw the |f| = c contour when c > 0 (0 = off)
+uniform int       uLevelArgOn; // 1 = draw the arg f = uLevelArg contour
+uniform float     uLevelArg;   // arg level, in radians
 
 const float TWO_PI = 6.283185307179586;
 const float INV_TWO_PI = 0.15915494309189535;
@@ -46,6 +50,12 @@ float gridLine(float v) {
 
 // Wegert shaded sawtooth: brightness ramps from aMin up to 1 across each band, darkening toward the step.
 float sawShade(float v, float aMin) { return aMin + (1.0 - aMin) * fract(v); }
+
+// Antialiased line at v = 0 (for a single user-set level set, catalog H7).
+float line0(float v) {
+  float wpx = fwidth(v) * 1.4 + 1e-6;
+  return 1.0 - smoothstep(0.0, wpx, abs(v));
+}
 
 float enhancement(cvec w, float m, float arg) {
   if (uEnhance == 0) return 1.0;
@@ -90,16 +100,36 @@ vec3 simulateCvd(vec3 c) {
 
 vec3 colorAt(cvec w) {
   float m = cabsf(w);
+  float arg = cre1(carg(w));
+  // Phase-rotation rate per pixel, via the (branch-cut-free) unit direction of w — computed for EVERY
+  // pixel so fwidth stays in uniform control flow. Large where arg spins faster than a pixel can resolve.
+  vec2 dir = vec2(cre1(cre(w)), cre1(cim(w))) / max(m, 1e-20);
+  float uncMetric = length(fwidth(dir));
+
   vec3 col;
   // NaN/Inf sentinel (catalog L6): render unreliable pixels a neutral grey, never black (which reads
   // as a zero). cdiv floors true poles to huge-but-finite, so this mostly catches exp overflow / 0-over-0.
   if (!(m < 3.0e37) || m != m) {
     col = vec3(0.30, 0.30, 0.33);
   } else {
-    float arg = cre1(carg(w));
     float t = fract(uHueSign * arg * INV_TWO_PI + uHueShift * INV_TWO_PI + 1.0);
     vec3 hue = texture(uPhaseLUT, vec2(t, uPhaseRow)).rgb;
     col = clamp(hue * modulusLightness(m) * enhancement(w, m, arg), 0.0, 1.0);
+
+    // Level sets (catalog H7): a white |f| = c contour and/or a dark arg f = c contour.
+    if (uLevelAbs > 0.0) col = mix(col, vec3(1.0), 0.9 * line0(log(max(m, 1e-30)) - log(uLevelAbs)));
+    if (uLevelArgOn == 1) {
+      float dphi = atan(sin(arg - uLevelArg), cos(arg - uLevelArg)); // wrap-aware distance to the level
+      col = mix(col, vec3(0.04), 0.9 * line0(dphi));
+    }
+
+    // Honest-labelling / uncertainty layer (catalog J4): hatch the pixels where the phase is
+    // undersampled (near poles and essential singularities) — a visible "≈, do not trust this here".
+    if (uUncertainty == 1) {
+      float unc = smoothstep(0.8, 2.2, uncMetric);
+      float hatch = mod(floor((gl_FragCoord.x + gl_FragCoord.y) * 0.25), 2.0);
+      col = mix(col, mix(vec3(0.5), col, 0.3) * (0.65 + 0.35 * hatch), unc);
+    }
   }
   return simulateCvd(col);
 }`;

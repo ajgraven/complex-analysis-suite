@@ -34,6 +34,13 @@ describe("coloring shader assembly", () => {
     expect(frag).toContain("uCvd");
   });
 
+  it("includes the level-set and uncertainty layers", () => {
+    expect(frag).toContain("float line0(");
+    expect(frag).toContain("uLevelAbs");
+    expect(frag).toContain("uLevelArgOn");
+    expect(frag).toContain("uUncertainty");
+  });
+
   it("passes a fullscreen triangle from the vertex shader", () => {
     expect(VERTEX_SHADER).toContain("gl_Position");
   });

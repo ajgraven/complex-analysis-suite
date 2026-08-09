@@ -37,6 +37,14 @@ export interface ColorState {
   hueSign: number;
   /** Colour-vision-deficiency preview: 0 none, 1 protan, 2 deutan, 3 tritan (a viewing aid). */
   cvd: number;
+  /** 1 = flag undersampled pixels (near poles / essential singularities). */
+  uncertainty: number;
+  /** Draw the |f| = c contour when > 0 (0 = off). */
+  levelAbs: number;
+  /** 1 = draw the arg f = levelArg contour. */
+  levelArgOn: number;
+  /** arg-level for the level set, in radians. */
+  levelArg: number;
 }
 
 interface Uniforms {
@@ -53,6 +61,10 @@ interface Uniforms {
   uHueShift: WebGLUniformLocation | null;
   uHueSign: WebGLUniformLocation | null;
   uCvd: WebGLUniformLocation | null;
+  uUncertainty: WebGLUniformLocation | null;
+  uLevelAbs: WebGLUniformLocation | null;
+  uLevelArgOn: WebGLUniformLocation | null;
+  uLevelArg: WebGLUniformLocation | null;
 }
 
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
@@ -79,6 +91,10 @@ export class Plot {
     hueShift: 0,
     hueSign: 1,
     cvd: 0,
+    uncertainty: 0,
+    levelAbs: 0,
+    levelArgOn: 0,
+    levelArg: 0,
   };
 
   constructor(private readonly canvas: HTMLCanvasElement, initialSource: string) {
@@ -149,6 +165,10 @@ export class Plot {
       uHueShift: gl.getUniformLocation(program, "uHueShift"),
       uHueSign: gl.getUniformLocation(program, "uHueSign"),
       uCvd: gl.getUniformLocation(program, "uCvd"),
+      uUncertainty: gl.getUniformLocation(program, "uUncertainty"),
+      uLevelAbs: gl.getUniformLocation(program, "uLevelAbs"),
+      uLevelArgOn: gl.getUniformLocation(program, "uLevelArgOn"),
+      uLevelArg: gl.getUniformLocation(program, "uLevelArg"),
     };
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -225,6 +245,10 @@ export class Plot {
     gl.uniform1f(u.uHueShift, this.color.hueShift);
     gl.uniform1f(u.uHueSign, this.color.hueSign);
     gl.uniform1i(u.uCvd, this.color.cvd);
+    gl.uniform1i(u.uUncertainty, this.color.uncertainty);
+    gl.uniform1f(u.uLevelAbs, this.color.levelAbs);
+    gl.uniform1i(u.uLevelArgOn, this.color.levelArgOn);
+    gl.uniform1f(u.uLevelArg, this.color.levelArg);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

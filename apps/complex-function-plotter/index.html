@@ -53,6 +53,8 @@
       }
       button:hover { border-color: var(--accent); }
       .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+      input[type="number"] { width: 100%; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
       input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0 8px; }
       label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: normal; font-size: 0.8rem; color: var(--text); margin: 0; }
       label.check input { width: auto; accent-color: var(--accent); }
@@ -171,6 +173,15 @@
         <p class="singcount" id="singCount"></p>
       </div>
 
+      <div class="group">
+        <label class="check"><input type="checkbox" id="uncertainty" /> Flag unreliable regions</label>
+        <div class="row" style="margin-top: 8px">
+          <div><label for="levelAbs">|f| = c</label><input type="number" id="levelAbs" step="0.25" min="0" placeholder="off" /></div>
+          <div><label for="levelArg">arg = c&deg;</label><input type="number" id="levelArg" step="15" value="0" /></div>
+        </div>
+        <label class="check" style="margin-top: 8px"><input type="checkbox" id="levelArgOn" /> show arg = c contour</label>
+      </div>
+
       <div class="group actions">
         <button id="home" type="button">Reset</button>
         <button id="savePng" type="button">Save PNG</button>
@@ -186,6 +197,7 @@
           <li><b>Zero</b> — a dark point where all hues meet; the colour wheel winds once per order.</li>
           <li><b>Pole</b> — a bright point where the hue winds the opposite way (|f| &rarr; &infin;).</li>
           <li>The <b>conformal grid</b>'s near-square tiles mark where f preserves angles; they shear or pinch where it doesn't (e.g. at a zero or pole).</li>
+          <li><b>Grey hatching</b> (with &ldquo;Flag unreliable regions&rdquo; on) marks where the phase changes faster than a pixel &mdash; near poles and essential singularities &mdash; so it reads as an estimate, not resolved structure.</li>
         </ul>
       </details>
     </aside>

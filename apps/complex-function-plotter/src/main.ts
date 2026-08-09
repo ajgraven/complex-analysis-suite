@@ -67,6 +67,10 @@ function main(): void {
   const cvdSel = byId("cvd");
   const markSingsInput = byId("markSings");
   const singCount = byId("singCount");
+  const uncInput = byId("uncertainty");
+  const levelAbsInput = byId("levelAbs");
+  const levelArgInput = byId("levelArg");
+  const levelArgOnInput = byId("levelArgOn");
   const homeBtn = byId("home");
   const savePngBtn = byId("savePng");
   const copyLinkBtn = byId("copyLink");
@@ -298,6 +302,33 @@ function main(): void {
     markSingsInput.addEventListener("change", () => {
       markSings = markSingsInput.checked;
       recomputeSings();
+      redraw(false);
+    });
+  }
+  if (uncInput instanceof HTMLInputElement) {
+    uncInput.checked = plot.color.uncertainty === 1;
+    uncInput.addEventListener("change", () => {
+      plot.color.uncertainty = uncInput.checked ? 1 : 0;
+      redraw(false);
+    });
+  }
+  if (levelAbsInput instanceof HTMLInputElement) {
+    levelAbsInput.addEventListener("input", () => {
+      const v = Number(levelAbsInput.value);
+      plot.color.levelAbs = Number.isFinite(v) && v > 0 ? v : 0;
+      redraw(false);
+    });
+  }
+  if (levelArgInput instanceof HTMLInputElement) {
+    levelArgInput.addEventListener("input", () => {
+      const v = Number(levelArgInput.value);
+      plot.color.levelArg = ((Number.isFinite(v) ? v : 0) * Math.PI) / 180;
+      redraw(false);
+    });
+  }
+  if (levelArgOnInput instanceof HTMLInputElement) {
+    levelArgOnInput.addEventListener("change", () => {
+      plot.color.levelArgOn = levelArgOnInput.checked ? 1 : 0;
       redraw(false);
     });
   }

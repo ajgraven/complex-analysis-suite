@@ -31,24 +31,29 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 1 complete (2D domain coloring)
+## Status — Phase 2 complete (the instrumented 2D research tool)
 
-Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait. The expression is
-parsed and compiled by `@cas/expr` — to GLSL for the render and to a JS evaluator for the cursor
-probe — and typeset live with KaTeX (`toLatex`). The layered coloring engine offers a **swappable
-phase colormap** (perceptually-uniform **Oklch** by default + the classic **HSV** wheel) times a
-**modulus transfer** (phase-only / linear / rational / log / log-log), with a NaN/Inf sentinel so
-unreliable pixels never read as a false zero. **Pan / zoom-to-cursor / reset**, a coordinate **grid +
-axes + scale bar** (aspect locked 1:1, so angles read true), **phase-wheel and modulus legends**, a
-**cursor readout** (`z, f(z), |f|, arg f`), **share-links** (`#vs=` via `@cas/interchange`), and
-**PNG export** — with HiDPI + progressive rendering and WebGL2 context-loss recovery throughout. It
-reproduces the canonical Wegert enhanced-portrait plate. Built into CI, **not yet published** (the
-launcher lists it as "Coming soon").
+Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-Next — Phase 2: enhanced phase portraits (modulus/phase contour rings, the conformal proportional
-grid), more colormaps + a colorblind-safe cyclic map, conformal preimage grids, zero/pole & level-set
-instruments, and the honest-labeling layer. See
-[the plan](../../docs/design/complex-function-plotter-plan.md).
+- **Coloring** — a swappable phase colormap (perceptual **Oklch**, HSV, Twilight, and a
+  **colorblind-safe** map) times a modulus transfer (phase-only / linear / rational / log / log-log),
+  a NaN/Inf sentinel, and a **CVD-simulation preview** (protan / deutan / tritan).
+- **Enhanced portraits** — `fwidth`-antialiased modulus rings, phase sectors, the flagship
+  **conformal proportional grid**, chessboards, and a Re/Im grid, with crisp/shaded and hue rotate/
+  reverse controls.
+- **Instruments** — a live cursor readout (`z, f(z), |f|, arg f`); **zeros & poles located, counted,
+  and ordered** via the argument principle (marked, honestly labeled `≈`); user-set **level sets**
+  (`|f| = c`, `arg f = c`); and an **honest-labeling / uncertainty layer** that hatches pixels near
+  poles and essential singularities where the render is unreliable.
+- **Navigation & output** — pan / zoom-to-cursor / reset, axes + grid + scale bar (aspect locked
+  1:1, so angles read true), phase-wheel + modulus legends, share-links (`#vs=` via `@cas/interchange`),
+  and PNG export; HiDPI + progressive rendering and WebGL2 context-loss recovery throughout.
+
+It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
+rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
+
+Next — Phase 3 (parameters & families): named parameters with sliders, an animation variable, and
+parameter sweeps. See [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
@@ -62,11 +67,14 @@ instruments, and the honest-labeling layer. See
 | `presets.ts`            | the preset / example gallery (each expression is validated in the tests)                                                                              |
 | `ui/legends.ts`         | phase-wheel and modulus-scale legend painters                                                                                                          |
 | `ui/axes.ts`            | the axes / adaptive-grid / scale-bar overlay                                                                                                           |
+| `ui/markers.ts`         | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
+| `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                            |
 
 ## Tests
 
 `test/` — `smoke.test.ts` (shared-package wiring), `colormaps.test.ts` (atlas dimensions, sRGB gamut,
 cyclic continuity, HSV anchors), `colorShader.test.ts` (fragment-program assembly), `viewState.test.ts`
-(share-link round-trip + namespace guard), and `presets.test.ts` (every preset parses/compiles/
-evaluates). Coloring correctness is additionally checked visually against reference plates (the Wegert
-enhanced-portrait) during development; an automated pixel-diff visual-regression harness is deferred.
+(share-link round-trip + namespace guard), `presets.test.ts` (every preset parses/compiles/evaluates),
+and `singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
+correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
+during development; an automated pixel-diff visual-regression harness is deferred.
