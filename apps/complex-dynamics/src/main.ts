@@ -10,7 +10,7 @@ import "./styles/main.css";
 import type { Vec2 } from "./arrays";
 import { argDegrees, formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
 import { PROJECTIONS, type ProjectionMode } from "./render/projection";
-import { getMaxTextureSize, downloadCanvas } from "./hiResExport";
+import { getMaxTextureSize, downloadCanvas, copyCanvasToClipboard, ensurePngName } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
@@ -3454,9 +3454,11 @@ function init(): void {
    * on-screen 512² — else falls back to the current canvas. The `cdjs:state` tEXt is the same permalink
    * `readFullState` builds, so it now carries `_sigma`; `cdjs:sigma` is a human-readable summary.
    */
-  async function saveSchwarzPng(): Promise<void> {
+  /** Render the σ export image (size + baked overlays) and its reproducibility metadata, shared by the
+   *  Save-PNG and Copy-PNG paths (D2). Returns null when there is no σ session to export. */
+  function buildSchwarzExportImage(): { canvas: HTMLCanvasElement; metadata: Record<string, string> } | null {
     const sig = currentSigmaState();
-    if (!schwarzSession || !sig) return;
+    if (!schwarzSession || !sig) return null;
     // Export options (S5-A1): size + which overlays to bake in. The GPU path re-renders clean at `size`;
     // the CPU fallback can only give the on-screen field (per-pixel Newton at hi-res is too slow).
     const sizeSel = document.getElementById("schwarz-export-size") as HTMLSelectElement | null;
@@ -3482,7 +3484,7 @@ function init(): void {
       out.width = size;
       out.height = size;
       const octx = out.getContext("2d");
-      if (!octx) return;
+      if (!octx) return null;
       octx.drawImage(schwarzGL.canvas, 0, 0);
       if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
       if (wantScaleBar) drawScaleBar(octx, size, schwarzView.zoom);
@@ -3496,11 +3498,37 @@ function init(): void {
       "cdjs:sigma": schwarzStampParams(sig),
       "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
     };
+    return { canvas, metadata };
+  }
+
+  /** The user's export file name (D2), `.png`-normalized; falls back to `schwarz-sigma` when blank. */
+  function schwarzExportName(): string {
+    const raw = (document.getElementById("schwarz-export-name") as HTMLInputElement | null)?.value ?? "";
+    return ensurePngName(raw.trim() || "schwarz-sigma");
+  }
+
+  async function saveSchwarzPng(): Promise<void> {
+    const img = buildSchwarzExportImage();
+    if (!img) return;
     try {
-      await downloadCanvas(canvas, "schwarz-sigma.png", metadata);
+      await downloadCanvas(img.canvas, schwarzExportName(), img.metadata);
       showToast("Saved the σ image (state embedded in the PNG).", "info");
     } catch {
       showToast("Could not save the σ image.", "warn");
+    }
+  }
+
+  /** Copy the σ export image to the clipboard (D2). Same render as Save PNG; the OS may drop the embedded
+   *  state on paste, so the toast points at Save PNG for a reproducible file, and older browsers without
+   *  the clipboard-image API fall through to the warn. */
+  async function copySchwarzPng(): Promise<void> {
+    const img = buildSchwarzExportImage();
+    if (!img) return;
+    try {
+      await copyCanvasToClipboard(img.canvas, img.metadata);
+      showToast("Copied the σ image to the clipboard.", "info");
+    } catch {
+      showToast("Couldn't copy the σ image — use Save PNG instead.", "warn");
     }
   }
 
@@ -3931,9 +3959,23 @@ function init(): void {
         schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
         scheduleSchwarzPaint();
       });
+      // Copy the live centre + zoom at FULL precision (parity with the standard plots' copy-coords; no `c =`
+      // line — σ is a standalone explorer, not a z²+c map). Full precision, not the 6-sig-fig field mirror.
+      const copyBtn = document.getElementById("schwarz-copy-coords");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+          const c = schwarzView.center;
+          void navigator.clipboard
+            .writeText(`center = ${c[0]},${c[1]}\nzoom = ${schwarzView.zoom}`)
+            .then(() => showToast("Coordinates copied to the clipboard.", "info"))
+            .catch(() => showToast("Couldn't access the clipboard.", "warn"));
+        });
+      }
     }
     const savePngBtn = document.getElementById("schwarz-save-png");
     if (savePngBtn) savePngBtn.addEventListener("click", () => void saveSchwarzPng()); // PNG w/ embedded state
+    const copyPngBtn = document.getElementById("schwarz-copy-png");
+    if (copyPngBtn) copyPngBtn.addEventListener("click", () => void copySchwarzPng()); // same image → clipboard (D2)
   }
 
   /**

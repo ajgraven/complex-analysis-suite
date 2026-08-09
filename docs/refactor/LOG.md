@@ -2110,3 +2110,20 @@
   fixture carries non-default lighting; appState opt-out +5) + browser **17/17** (shaders + σ render shell).
   VERIFIED (Playwright): "Custom…" recolors the field + shows the editor; enabling relief lighting changes
   the field + reveals the az/el/depth sliders; both with no console error.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase D — nav & export parity):**
+  the σ pane's navigation and image export now mirror the standard plots. **D1 nav:** the centre input becomes
+  a `.center-pair` (re `+` im `i`, the same markup CD's Parameter/Dynamical plots use), and a `copy coords`
+  button (CD's `.copy-coords`) copies the live centre + zoom at FULL precision — `center = <re>,<im>` /
+  `zoom = <z>`, with NO `c =` line since σ is a standalone explorer, not a z²+c map. Dead `.schwarz-nav-row`
+  CSS removed; the action row wraps (`flex-wrap`) now that it holds three buttons. **D2 export:** a new
+  `copyCanvasToClipboard` in hiResExport.ts (the "copy image" twin of `downloadCanvas` — same tEXt metadata
+  injected best-effort, but it rejects on browsers without the async clipboard-image API so the caller can
+  fall back) backs a new **Copy PNG** button; a **file name** input (`schwarz-export-name`, `ensurePngName`-
+  normalized, default `schwarz-sigma.png`) and an **8192** size option complete the parity with the standard
+  Export-image panel. `saveSchwarzPng` was refactored to share a `buildSchwarzExportImage` helper with the
+  copy path (one render, two sinks) and Save PNG is now the `primary` button. The file name is an export
+  setting (a property of the file, not the view), so it is opted out of SHARE_IDS alongside the other σ
+  export knobs. Green: typecheck + lint + node **2424** (appState opt-out +1) + browser **17/17**. VERIFIED
+  (Playwright, clipboard-granted): copy-coords writes full-precision `center`/`zoom` and no `c =`; the nav
+  fields mirror a panned view (6-sig-fig); the filename defaults to `schwarz-sigma.png`; the size list carries
+  8192; Copy PNG puts an `image/png` item on the clipboard with a success toast. **Phase D complete.**

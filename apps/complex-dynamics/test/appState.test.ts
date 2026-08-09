@@ -71,6 +71,8 @@ describe("SHARE_IDS DOM coverage", () => {
             "schwarz-export-size",
             "schwarz-export-scalebar",
             "schwarz-export-orbit",
+            // σ export file name (D2): the name of the file you're about to write, not part of the view.
+            "schwarz-export-name",
           ],
           "export setting",
         ],

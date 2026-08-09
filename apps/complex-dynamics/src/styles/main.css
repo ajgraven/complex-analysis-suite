@@ -647,18 +647,9 @@ h2 {
   display: none;
 }
 
-.schwarz-nav-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.3rem;
-}
-.schwarz-nav-row input {
-  width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
-}
 .schwarz-nav-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.3rem;
 }

@@ -768,45 +768,70 @@ abs(z)>2</textarea
                   <summary>View — centre &amp; zoom</summary>
                   <div class="control-grid">
                     <div class="field schwarz-nav">
-                      <label for="schwarz-center-re">centre &amp; zoom</label>
-                      <div class="schwarz-nav-row">
+                      <label for="schwarz-center-re">centre</label>
+                      <!-- center-pair parity with the standard plots (D1): re + im with +/i separators. -->
+                      <span class="center-pair">
                         <input
                           id="schwarz-center-re"
+                          class="center-sub"
                           type="text"
                           inputmode="decimal"
                           spellcheck="false"
                           title="Centre — real part"
                           aria-label="View centre, real part"
                         />
+                        <span class="center-sep" aria-hidden="true">+</span>
                         <input
                           id="schwarz-center-im"
+                          class="center-sub"
                           type="text"
                           inputmode="decimal"
                           spellcheck="false"
                           title="Centre — imaginary part"
                           aria-label="View centre, imaginary part"
                         />
-                        <input
-                          id="schwarz-zoom"
-                          type="text"
-                          inputmode="decimal"
-                          spellcheck="false"
-                          title="Zoom (larger is closer in)"
-                          aria-label="View zoom"
-                        />
-                      </div>
+                        <span class="center-sep" aria-hidden="true">i</span>
+                      </span>
+                      <label for="schwarz-zoom">zoom</label>
+                      <input
+                        id="schwarz-zoom"
+                        type="text"
+                        inputmode="decimal"
+                        spellcheck="false"
+                        title="Zoom (larger is closer in)"
+                        aria-label="View zoom"
+                      />
                       <div class="schwarz-nav-actions">
                         <button id="schwarz-view-apply" type="button" class="primary">apply</button>
                         <button id="schwarz-view-reset" type="button">reset view</button>
+                        <button
+                          id="schwarz-copy-coords"
+                          type="button"
+                          class="copy-coords"
+                          title="Copy the centre and zoom (full precision) to the clipboard"
+                        >
+                          copy coords
+                        </button>
                       </div>
                     </div>
                   </div>
                 </details>
 
-                <!-- Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2). -->
+                <!-- Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2).
+                     Filename + size + Copy mirror the standard plots' Export-image panel (D2). -->
                 <details class="control-group" id="schwarz-export-group">
                   <summary>Export</summary>
                   <div class="control-grid">
+                    <div class="field">
+                      <label for="schwarz-export-name">file name</label>
+                      <input
+                        id="schwarz-export-name"
+                        type="text"
+                        value="schwarz-sigma.png"
+                        spellcheck="false"
+                        title="File name for the saved σ PNG (a .png suffix is added if you omit it)"
+                      />
+                    </div>
                     <div class="field">
                       <label for="schwarz-export-size">export size</label>
                       <select id="schwarz-export-size" title="Pixel size of the saved σ PNG (single-pass GPU render; capped at this GPU's max texture size)">
@@ -814,6 +839,7 @@ abs(z)>2</textarea
                         <option value="1024" selected>1024</option>
                         <option value="2048">2048</option>
                         <option value="4096">4096</option>
+                        <option value="8192">8192</option>
                       </select>
                     </div>
                     <div class="field">
@@ -827,13 +853,23 @@ abs(z)>2</textarea
                       </label>
                     </div>
                     <div class="field">
-                      <button
-                        id="schwarz-save-png"
-                        type="button"
-                        title="Download the σ image as a PNG with its state embedded (reopen the link from the file's metadata)"
-                      >
-                        Save PNG
-                      </button>
+                      <div class="schwarz-nav-actions">
+                        <button
+                          id="schwarz-save-png"
+                          type="button"
+                          class="primary"
+                          title="Download the σ image as a PNG with its state embedded (reopen the link from the file's metadata)"
+                        >
+                          Save PNG
+                        </button>
+                        <button
+                          id="schwarz-copy-png"
+                          type="button"
+                          title="Copy the σ image to the clipboard (the OS may drop the embedded state — use Save PNG for a reproducible file)"
+                        >
+                          Copy PNG
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </details>
