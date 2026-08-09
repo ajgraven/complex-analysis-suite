@@ -164,6 +164,36 @@ vec2 evalF(vec2 z) {
   return acc + branchPart;
 }
 
+// F'(z) = −c/z² + Σ_{l≥1} l·conj(F[l])·z^{l-1} − Σ (k+1)·A_{j,k}/(z−z_j)^{k+2}. The CPU twin of this is
+// evalFDeriv in ../unbounded-laurent.ts; the σ distance-estimator (S5-B2) reads |F'(z)|/|φ'(z)| as the
+// per-step local scaling of the anti-holomorphic σ.
+vec2 evalFDeriv(vec2 z) {
+  vec2 zInv = cinv(z);
+  vec2 acc = -u_c * cmul(zInv, zInv);   // −c/z²
+  if (u_polyALen > 1) {
+    vec2 zPow = vec2(1.0, 0.0);         // z^{l-1}, l=1 → z⁰
+    for (int l = 1; l < MAX_LAURENT; ++l) {
+      if (l >= u_polyALen) break;
+      acc = acc + cmul(cconj(u_polyA[l]), zPow) * float(l);
+      zPow = cmul(zPow, z);
+    }
+  }
+  for (int j = 0; j < MAX_BRANCHES; ++j) {
+    if (j >= u_nBranches) break;
+    vec2 d = z - u_branchZ[j];
+    if (dot(d, d) < EPS_DIV) continue;
+    vec2 dInv = cinv(d);
+    vec2 dInvPow = cmul(dInv, dInv);    // 1/(z−z_j)^{k+2}, k=0 → 1/(z−z_j)²
+    int  count = u_branchACount[j];
+    for (int k = 0; k < MAX_K; ++k) {
+      if (k >= count) break;
+      acc = acc - cmul(u_branchA[j * MAX_K + k], dInvPow) * float(k + 1);
+      dInvPow = cmul(dInvPow, dInv);
+    }
+  }
+  return acc;
+}
+
 // One Newton solve of φ(z) = w from zSeed. Strict-validates a run that used all NEWTON_MAX steps.
 vec2 invertPhi(vec2 w, vec2 zSeed, out bool ok) {
   vec2 z = zSeed;

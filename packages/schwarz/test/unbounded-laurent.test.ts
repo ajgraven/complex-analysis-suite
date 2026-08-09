@@ -51,6 +51,12 @@ describe("@cas/schwarz unbounded-Laurent σ (deltoid ground truth)", () => {
     near(DELTOID.evalPhiDeriv([2, 0]), [0.875, 0]); // 1 − 1/8
   });
 
+  it("evalFDeriv = z − 1/z² (deltoid F(z) = 1/z + ½z²; S5-B2)", () => {
+    near(DELTOID.evalFDeriv([2, 0]), [1.75, 0]); // 2 − 1/4
+    near(DELTOID.evalFDeriv([0, 2]), [0.25, 2]); // 2i − 1/(2i)² = 2i + ¼
+    near(DELTOID.evalFDeriv([1, 0]), [0, 0]); // 1 − 1
+  });
+
   it("σ(φ(z₀)) = conj(F(z₀)) — the exact round-trip identity", () => {
     for (const z0 of EXTERIOR) {
       const Fz0 = DELTOID.evalF(z0);
@@ -166,6 +172,22 @@ describe("@cas/schwarz unbounded-Laurent σ — pole-bearing branch term (Phase 
         const t = (2 * Math.PI * (k + 0.5)) / 16;
         const z: Complex = [Math.cos(t), Math.sin(t)];
         near(dom.evalF(z), conj(dom.evalPhi(z)), 9);
+      }
+    }
+  });
+
+  it("evalFDeriv = d/dz evalF everywhere — finite-difference golden (incl. branch principal parts; S5-B2)", () => {
+    // F is holomorphic off its poles (z = 0 and the z_j ∈ 𝔻), so the analytic F' must equal a central
+    // finite difference of evalF at every exterior probe (|z| ≥ 1.6, far from all poles). This pins the
+    // BRANCH derivative −Σ k·A/(z−z_j)^{k+1} — a dropped k factor or off-by-one power fails here.
+    const fd = (dom: UnboundedLaurentSchwarz, z: Complex, h = 1e-6): Complex => {
+      const fp = dom.evalF([z[0] + h, z[1]]);
+      const fm = dom.evalF([z[0] - h, z[1]]);
+      return [(fp[0] - fm[0]) / (2 * h), (fp[1] - fm[1]) / (2 * h)];
+    };
+    for (const dom of [DELTOID, SINGLE, HIGHER_R, TWO_R, CPLX, TWO_S]) {
+      for (const z of EXT_BRANCH) {
+        near(dom.evalFDeriv(z), fd(dom, z), 4); // central diff is O(h²); 4 digits is comfortably inside
       }
     }
   });

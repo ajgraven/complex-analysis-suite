@@ -57,6 +57,10 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
  * A single σ application per draw: seed Newton fresh from w, run `sigma` once. That is exactly what the
  * CPU `sigma(w)` does, so `runSigmaGLSL` vs `makeUnboundedLaurentSchwarz(...).sigma(w)` is a like-for-like
  * comparison.
+ *
+ * The `.w` channel carries the per-step σ scaling |F'(z)|/|φ'(z)| at z = φ⁻¹(w) (the σ distance-estimator
+ * factor, S5-B2). `sigma` leaves the converged inverse in `zSeed`, so it is read there with no re-solve;
+ * `runSigmaDerivGLSL` reads it back to pin GPU F'/φ' against the CPU engine (0.0 when the inverse failed).
  */
 export function buildSigmaProbeGLSL(): string {
   return `#version 300 es
@@ -72,7 +76,8 @@ void main() {
   vec2 zSeed = newtonSeedFresh(uW);
   bool ok = true;
   vec2 s = sigma(uW, zSeed, ok);
-  fragColor = vec4(s.x, s.y, ok ? 1.0 : 0.0, 1.0);
+  float dr = ok ? length(evalFDeriv(zSeed)) / max(length(evalPhiDeriv(zSeed)), EPS_DIV) : 0.0;
+  fragColor = vec4(s.x, s.y, ok ? 1.0 : 0.0, dr);
 }`;
 }
 
@@ -131,15 +136,16 @@ export function uploadPhi(gl: WebGL2RenderingContext, program: WebGLProgram, pac
 }
 
 /**
- * GPU-backend σ evaluation: compile the probe, upload φ once, and for each w render to a 1×1 RGBA32F
- * target and read σ(w) back. Returns the σ value, or null when the shader reported the inverse failed
- * (w ∉ Ω). Requires a WebGL2 context with EXT_color_buffer_float (for float readback).
+ * Compile the probe, upload φ once, render each w to a 1×1 RGBA32F target, and map the read-back pixel
+ * through `read`. The shared draw harness behind `runSigmaGLSL` (σ from RGB) and `runSigmaDerivGLSL`
+ * (the .w derivative factor). Requires a WebGL2 context with EXT_color_buffer_float (for float readback).
  */
-export function runSigmaGLSL(
+function runProbe<T>(
   gl: WebGL2RenderingContext,
   phi: SigmaPhi,
   ws: readonly Complex[],
-): (Complex | null)[] {
+  read: (px: Float32Array) => T,
+): T[] {
   if (!gl.getExtension("EXT_color_buffer_float")) {
     throw new Error("EXT_color_buffer_float unavailable — cannot read back float σ results");
   }
@@ -166,21 +172,46 @@ export function runSigmaGLSL(
     uploadPhi(gl, program, packPhi(phi));
     const uW = gl.getUniformLocation(program, "uW");
     const px = new Float32Array(4);
-    const out: (Complex | null)[] = [];
+    const out: T[] = [];
     for (const w of ws) {
       gl.uniform2f(uW, w[0], w[1]);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
-      out.push(px[2] > 0.5 ? [px[0], px[1]] : null);
+      out.push(read(px));
     }
     return out;
   } finally {
-    // Release the probe's GL objects — runSigmaGLSL is called once per case, so leaking these would
-    // accumulate programs / textures / buffers across a test run (matches dualBackend's runGLSL).
+    // Release the probe's GL objects — called once per case, so leaking these would accumulate
+    // programs / textures / buffers across a test run (matches dualBackend's runGLSL).
     gl.deleteProgram(program);
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(buf);
     gl.deleteTexture(tex);
     gl.deleteFramebuffer(fbo);
   }
+}
+
+/**
+ * GPU-backend σ evaluation: for each w render to a 1×1 RGBA32F target and read σ(w) back. Returns the σ
+ * value, or null when the shader reported the inverse failed (w ∉ Ω).
+ */
+export function runSigmaGLSL(
+  gl: WebGL2RenderingContext,
+  phi: SigmaPhi,
+  ws: readonly Complex[],
+): (Complex | null)[] {
+  return runProbe(gl, phi, ws, (px) => (px[2] > 0.5 ? [px[0], px[1]] : null));
+}
+
+/**
+ * GPU-backend read-back of the σ distance-estimator per-step factor |F'(z)|/|φ'(z)| at z = φ⁻¹(w) (S5-B2).
+ * Returns the ratio, or null when the shader reported the inverse failed (w ∉ Ω). Pins the GLSL evalFDeriv
+ * against the CPU engine's evalFDeriv/evalPhiDeriv.
+ */
+export function runSigmaDerivGLSL(
+  gl: WebGL2RenderingContext,
+  phi: SigmaPhi,
+  ws: readonly Complex[],
+): (number | null)[] {
+  return runProbe(gl, phi, ws, (px) => (px[2] > 0.5 ? px[3] : null));
 }

@@ -163,6 +163,13 @@ describe("parseSigmaState — field color mode (S5-B1)", () => {
     expect(s?.colorMode).toBe("escape");
     expect(s?.trapShape).toBe("cross");
   });
+
+  it("round-trips the derivative modes (smooth / distance, S5-B2)", () => {
+    for (const md of ["smooth", "distance"]) {
+      const s = parseSigmaState(encodeSigmaState({ ...DELTOID, colorMode: md }));
+      expect(s?.colorMode).toBe(md);
+    }
+  });
 });
 
 describe("schwarzStampParams (PNG metadata summary)", () => {

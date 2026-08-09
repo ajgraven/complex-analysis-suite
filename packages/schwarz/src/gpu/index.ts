@@ -20,5 +20,6 @@ export {
   packPhi,
   uploadPhi,
   runSigmaGLSL,
+  runSigmaDerivGLSL,
 } from "./probe.js";
 export type { SigmaPhi, PackedPhi } from "./probe.js";

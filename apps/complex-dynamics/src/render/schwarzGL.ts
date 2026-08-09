@@ -64,8 +64,9 @@ uniform int       u_modK;            // period for the cyclic mode
 uniform float     u_paletteRotation; // colormap-coordinate offset ∈[0,1) (0 = none); S5-A3 image-space tone
 uniform float     u_gamma;           // output gamma (1 = identity)
 uniform float     u_vignette;        // radial edge darkening (0 = off)
-uniform int       u_colorMode;       // 0 escape-time · 1 orbit-trap · 2 stripe-average (S5-B1)
+uniform int       u_colorMode;       // 0 escape-time · 1 orbit-trap · 2 stripe-average · 3 smooth · 4 distance
 uniform int       u_trapType;        // orbit-trap shape: 0 cross · 1 point · 2 line · 3 circle · 4 lattice
+uniform float     u_escapeDegree;    // σ escape degree d (σ ~ const·conj(w)^d at ∞); smooth/distance (S5-B2)
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
@@ -127,6 +128,29 @@ vec3 fundamentalStatColor(int n, float trap, float avgSum, float avgCount) {
   return fundamentalColor(n);
 }
 
+// Colour a pixel whose σ-orbit ESCAPED to ∞ at step n (|wₙ| > escapeR). Flat black in escape/trap/stripe
+// modes (unchanged). In the S5-B2 derivative modes the escaping set — where σ ~ const·conj(w)^d, a genuine
+// degree-d escape — is coloured: "smooth" by the continuous escape count ν, "distance" by ν darkened
+// toward the σ-Julia set via the analytic estimate DE = ½·|wₙ|·log|wₙ| / |D(σⁿ)|. Both are estimates (≈):
+// the tiling (K-entry) is a discrete event with no smooth interpolation, and D(σⁿ) rides a numerically
+// inverted φ'. derivMag = ∏|F'(z_k)|/|φ'(z_k)| = |D(σⁿ)| (σ is anti-conformal, so magnitudes multiply).
+vec3 escapedColor(int n, vec2 w, float derivMag) {
+  if (u_colorMode != 3 && u_colorMode != 4) return vec3(0.0); // escaped → ∞ (flat, pre-B2)
+  float az = length(w);
+  float d = max(u_escapeDegree, 2.0); // log-degree normalisation; guard degenerate d < 2
+  float nu = float(n) + 1.0 - log(log(az)) / log(d); // continuous (smooth) escape count
+  vec3 col = rampColor(clamp(nu / float(u_maxIter), 0.0, 1.0));
+  if (u_colorMode == 4) {
+    float dist = 0.5 * az * log(az) / max(derivMag, 1e-30); // distance to the σ-Julia set (plot units)
+    float px = 2.0 / (u_zoom * u_size);                     // plot units per pixel (matches the view map)
+    // Darken toward the boundary. The falloff spans a few pixels (DE_LINE_PX) so the σ-Julia set reads as
+    // a soft outline rather than a sub-pixel hairline — a presentation width, the estimate itself is dist.
+    const float DE_LINE_PX = 3.0;
+    col *= clamp(dist / (px * DE_LINE_PX), 0.0, 1.0);        // ~0 at the boundary → full brightness away
+  }
+  return col;
+}
+
 // The classification color at this fragment (fundamental via the colormap; escaped/invalid/interior flat).
 vec3 fieldColor() {
   // Fragment → complex w, matching schwarzView.ts pixelToPlot. gl_FragCoord is pixel-centered and y-up;
@@ -139,15 +163,20 @@ vec3 fieldColor() {
   vec2 zSeed = newtonSeedFresh(w);
   bool ok = true;
   // S5-B1 orbit statistics over σ¹(w)…σⁿ(w); left untouched (and unread) in escape-time mode, so mode 0 is
-  // byte-identical to pre-B1.
+  // byte-identical to pre-B1. S5-B2 derivMag = ∏|F'(z_k)|/|φ'(z_k)| = |D(σⁿ)|, accumulated only for the
+  // distance mode (zSeed holds z_k = φ⁻¹(w_{k}) after each sigma()).
   float trap = 1e20;
   float avgSum = 0.0, avgCount = 0.0;
+  float derivMag = 1.0;
   for (int n = 1; n <= 512; ++n) {           // 512 ≫ any maxIter; the real bound is u_maxIter below
     if (n > u_maxIter) break;
     vec2 next = sigma(w, zSeed, ok);
     if (!ok) return vec3(80.0) / 255.0;                          // invalid (inverse failed)
+    if (u_colorMode == 4) {
+      derivMag *= length(evalFDeriv(zSeed)) / max(length(evalPhiDeriv(zSeed)), 1e-30); // |σ'(w_{n-1})|
+    }
     w = next;
-    if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) return vec3(0.0);  // escaped → ∞
+    if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) return escapedColor(n, w, derivMag); // escaped → ∞
     if (u_colorMode == 1) {
       trap = min(trap, trapDistance(w));                         // closest approach to the trap set
     } else if (u_colorMode == 2) {
@@ -247,8 +276,10 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uVignette = U("u_vignette");
   const uColorMode = U("u_colorMode");
   const uTrapType = U("u_trapType");
+  const uEscapeDegree = U("u_escapeDegree");
 
   let packed: PackedPhi | null = null;
+  let escapeDegree = 2; // σ ~ const·conj(w)^d at ∞; d = highest nonzero Laurent index (set in setPhi)
   let maskTex: WebGLTexture | null = null;
   let maskCenter: [number, number] = [0, 0];
   let maskHalfExtent = 1;
@@ -261,6 +292,13 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
 
   function setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void {
     packed = packPhi(phi);
+    // σ escape degree (S5-B2): near ∞, F(z) ~ conj(F[d])·z^d and z ~ w/c, so σ(w) ~ const·conj(w)^d with
+    // d = the highest nonzero Laurent index. Drives the smooth/distance log-degree normalisation.
+    escapeDegree = 2;
+    for (let l = 0; l < phi.F.length; l++) {
+      if (Math.hypot(phi.F[l][0], phi.F[l][1]) > 1e-9) escapeDegree = l;
+    }
+    if (escapeDegree < 2) escapeDegree = 2; // smooth's log(d) needs d ≥ 2; degree-1 escape isn't superattracting
     if (maskTex) ctx.deleteTexture(maskTex);
     // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5).
     const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: 5, size: 1024 });
@@ -296,6 +334,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform1f(uVignette, opts.vignette ?? 0);
     ctx.uniform1i(uColorMode, schwarzColorModeId(opts.colorMode ?? DEFAULT_SCHWARZ_COLOR_MODE)); // S5-B1
     ctx.uniform1i(uTrapType, schwarzTrapShapeId(opts.trapShape ?? DEFAULT_SCHWARZ_TRAP_SHAPE));
+    ctx.uniform1f(uEscapeDegree, escapeDegree); // S5-B2 smooth/distance degree-d normalisation
 
     ctx.activeTexture(ctx.TEXTURE0);
     ctx.bindTexture(ctx.TEXTURE_2D, maskTex);

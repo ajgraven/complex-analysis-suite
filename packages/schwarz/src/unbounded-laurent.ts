@@ -37,6 +37,11 @@ export interface UnboundedLaurentSchwarz {
   evalPhiDeriv(z: Complex): Complex;
   /** The Schwarz extension F(z) = c/z + Σₗ conj(F[l])·zˡ. */
   evalF(z: Complex): Complex;
+  /** F'(z) = −c/z² + Σ_{l≥1} l·conj(F[l])·z^{l-1} (+ finite-pole branch derivatives). Used by the σ
+   *  distance-estimator coloring: σ is anti-holomorphic (σ = conj∘F∘φ⁻¹), so the local scaling factor is
+   *  |σ'(w)| = |F'(z)| / |φ'(z)| with z = φ⁻¹(w), and the n-fold-iterate derivative magnitude is the
+   *  product of those per step. */
+  evalFDeriv(z: Complex): Complex;
   /** φ⁻¹(w): the exterior branch |z|>1 (cold-seeded Newton, exact Durand–Kerner fallback); null if none (w ∉ Ω). */
   invertPhi(w: Complex): Complex | null;
   /** The Schwarz reflection σ(w) = conj(F(φ⁻¹(w))); null if the inverse fails (w ∉ Ω). */
@@ -148,6 +153,35 @@ export function makeUnboundedLaurentSchwarz(
     return acc;
   };
 
+  // F' branch contribution: d/dz Σₖ A_{j,k}/(z−z_j)ᵏ = −Σₖ k·A_{j,k}/(z−z_j)^{k+1}. Mirrors branchF's
+  // indexing (br.A[k] is the coefficient of 1/(z−z_j)^{k+1}), so its derivative is −(k+1)·A[k]/(z−z_j)^{k+2}.
+  const branchFDeriv = (z: Complex): Complex => {
+    let acc: Complex = [0, 0];
+    for (const br of branches) {
+      const d = A.sub(z, br.z);
+      if (A.abs(d) < 1e-300) continue;
+      const dInv = inv(d);
+      let dInvPow: Complex = A.mul(dInv, dInv); // 1/(z−z_j)^{k+2}, starting at k=0 → 1/(z−z_j)²
+      for (let k = 0; k < br.A.length; k++) {
+        acc = A.sub(acc, A.mul(A.scale(br.A[k], k + 1), dInvPow));
+        dInvPow = A.mul(dInvPow, dInv);
+      }
+    }
+    return acc;
+  };
+
+  const evalFDeriv = (z: Complex): Complex => {
+    const zInv = inv(z);
+    let acc = A.scale(A.mul(zInv, zInv), -c); // −c/z²
+    let zPow: Complex = [1, 0]; // z^{l-1}, starting at l=1 → z⁰
+    for (let l = 1; l < m; l++) {
+      acc = A.add(acc, A.mul(A.scale(conj(F[l]), l), zPow));
+      zPow = A.mul(zPow, z);
+    }
+    if (hasBranches) acc = A.add(acc, branchFDeriv(z));
+    return acc;
+  };
+
   // Newton seed — COLD, derived from w (never a warm/previous z): for |w| large, z ≈ w/c dominates
   // (φ(z) ≈ c·z at ∞); otherwise push just outside the unit disk along the same ray so the inverse lands
   // in φ's domain {|z|>1}. A warm seed reused after σ jumps far drifts onto an interior preimage (the
@@ -254,7 +288,7 @@ export function makeUnboundedLaurentSchwarz(
     return conj(Sv);
   };
 
-  return { evalPhi, evalPhiDeriv, evalF, invertPhi, sigma };
+  return { evalPhi, evalPhiDeriv, evalF, evalFDeriv, invertPhi, sigma };
 }
 
 /** Ray-casting point-in-polygon (even-odd rule). */

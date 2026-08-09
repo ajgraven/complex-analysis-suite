@@ -97,6 +97,11 @@ export const SCHWARZ_COLOR_MODES: readonly SchwarzColorMode[] = [
   { id: 0, key: "escape", label: "Escape time" },
   { id: 1, key: "trap", label: "Orbit trap" },
   { id: 2, key: "stripe", label: "Stripe average" },
+  // Derivative-dependent modes (S5-B2), on the ESCAPING set (orbits → ∞ like const·conj(w)^d). "smooth"
+  // is the continuous escape count; "distance" is the analytic distance estimate to the σ-Julia set,
+  // riding the numerically-inverted derivative |F'(z)|/|φ'(z)| — both are estimates (≈).
+  { id: 3, key: "smooth", label: "Smooth escape (≈)" },
+  { id: 4, key: "distance", label: "Distance estimate (≈)" },
 ];
 export const DEFAULT_SCHWARZ_COLOR_MODE = "escape";
 

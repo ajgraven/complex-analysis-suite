@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll } from "vitest";
 import { makeUnboundedLaurentSchwarz, type Complex, type SchwarzBranch } from "../src/index.js";
-import { runSigmaGLSL, type SigmaPhi } from "../src/gpu/index.js";
+import { runSigmaGLSL, runSigmaDerivGLSL, type SigmaPhi } from "../src/gpu/index.js";
 
 // BROWSER-MODE numeric parity harness for the GPU σ evaluator (S4b). Runs ONLY under `pnpm test:browser`
 // (vitest.browser.config.ts) — a real headless-Chromium WebGL2 context — never in the default node gate.
@@ -85,6 +85,29 @@ describe("@cas/schwarz/gpu: GPU σ(w) matches the CPU engine at round-trip sampl
       if (gpuSigma && cpuSigma) maxErr = Math.max(maxErr, dist(gpuSigma, cpuSigma));
     });
     expect(maxErr, `max |GPU σ − CPU σ| over the exterior probes`).toBeLessThan(TOL);
+  });
+
+  it.each(CORPUS)("$name: GPU |F'(z)|/|φ'(z)| ≈ CPU (σ distance-estimator factor, S5-B2)", ({ phi }) => {
+    // The σ distance estimator (S5-B2) needs the per-step local scaling |F'(z)|/|φ'(z)| of the
+    // anti-holomorphic σ. Pin the GLSL evalFDeriv against the CPU engine: at w = φ(z₀) the inverse is z₀,
+    // so the CPU ratio at z₀ is ground truth. A dropped k factor or wrong power in the branch F' — the
+    // exact bug the finite-difference golden guards on the CPU side — shows up here on the GPU side.
+    const cpu = makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches ?? []);
+    const cpuRatio = (z0: Complex): number => {
+      const fp = cpu.evalFDeriv(z0);
+      const pp = cpu.evalPhiDeriv(z0);
+      return Math.hypot(fp[0], fp[1]) / Math.hypot(pp[0], pp[1]);
+    };
+    const ws = EXTERIOR.map((z0) => cpu.evalPhi(z0));
+    const gpu = runSigmaDerivGLSL(gl, phi, ws);
+    EXTERIOR.forEach((z0, i) => {
+      const g = gpu[i];
+      expect(g, `GPU deriv-ratio null at z₀=${z0}`).not.toBeNull();
+      if (g !== null) {
+        const c = cpuRatio(z0);
+        expect(Math.abs(g - c), `|GPU − CPU| ratio @ z₀=${z0} (cpu=${c})`).toBeLessThan(1e-3 * Math.max(1, c));
+      }
+    });
   });
 
   it("reports σ = null (ok=0) for a point in the deltoid hole K (w ∉ Ω)", () => {

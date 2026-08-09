@@ -1831,3 +1831,28 @@
   round-trips through a permalink — selects restored, row shown, render **pixel-identical** (Δ=0.00). Green:
   typecheck / lint / test 76 files / 775 (+11 node), build; σ GPU browser test 5/5 + shader-compile 11/11.
   Next: B2 (derivative-dependent smooth + distance-estimator modes — needs dσⁿ/dw).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase B2 — σ derivative coloring):**
+  two more σ-field color modes, on the **escaping** set (orbits → ∞, currently flat black): **"Smooth
+  escape (≈)"** (continuous escape count) and **"Distance estimate (≈)"** (the analytic distance to the
+  σ-Julia set). σ is anti-holomorphic (σ = conj∘F∘φ⁻¹), so its per-step local scaling is |σ'(w)| =
+  |F'(z)|/|φ'(z)| with z = φ⁻¹(w), and — because each step is (anti)conformal — the n-fold magnitude is the
+  product ∏|F'(z_k)|/|φ'(z_k)| = |D(σⁿ)|. **Shared-package math (net-first):** `@cas/schwarz` gains
+  `evalFDeriv` (CPU + the GLSL twin in `@cas/schwarz/gpu`); near ∞, F(z) ~ conj(F[d])·z^d with z ~ w/c, so
+  σ ~ const·conj(w)^d and the escape degree d (highest nonzero Laurent index) drives the smooth log-degree
+  normalisation. DE = ½·|wₙ|·log|wₙ| / |D(σⁿ)|, rendered as CD's `distanceColorAnalytic` does — the smooth
+  ramp darkened toward the boundary (a few-pixel-wide σ-Julia outline). Both are **estimates (≈)**: K-entry
+  (the tiling) is a discrete event with no smooth interpolation, and D(σⁿ) rides the numerically-inverted
+  φ'. Escape-time / trap / stripe and the whole tiling are **unchanged** — only the escaped branch is
+  recoloured, and only in modes 3/4 (mode 0 stays byte-identical; the derivative product is accumulated only
+  in the distance mode). NET (net-first, shared package first): CPU `evalFDeriv` **finite-difference
+  golden** (deltoid hand values F'(z)=z−1/z² + a central-diff cross-check across the deltoid and 5
+  pole-bearing domains, so a dropped branch k-factor fails outright); the GLSL structure guard pins
+  `evalFDeriv` + its −c/z² leading term; a new **GPU↔CPU parity** test (`runSigmaDerivGLSL`, reading
+  |F'|/|φ'| from the probe's .w channel) confirms the shader F' tracks the CPU engine on all 4 corpus
+  domains. CD-side: +2 registry cases (smooth 3 / distance 4) + a state round-trip. VERIFIED in the BUILT
+  app (Playwright): smooth colours the escaped set (black area 50% → 0%, Δ=25 vs escape), distance adds the
+  DE boundary filament (6970 darkened px, 2.7% — the σ-Julia outline), and the mode round-trips through a
+  permalink (pixel Δ=0.00). Green: full monorepo — typecheck all workspaces; node tests packages (schwarz
+  21, +core/exact/expr/gpu/interchange) + apps (CD 776, correspondences 97, QD 2334); CD build; σ GPU
+  browser 5/5; @cas/schwarz browser parity 10/10 (σ + derivative). **Phase B complete** (B1 orbit-stat + B2
+  derivative modes). Remaining S5: C (engine/family breadth), D (df64 deep-zoom), E (branch-aware, uncertified).

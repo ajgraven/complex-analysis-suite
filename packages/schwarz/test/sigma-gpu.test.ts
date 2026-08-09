@@ -27,6 +27,7 @@ describe("@cas/schwarz/gpu σ shader — the specialized unbounded-Laurent cut (
       "vec2 evalPhi(",
       "vec2 evalPhiDeriv(",
       "vec2 evalF(",
+      "vec2 evalFDeriv(",
       "vec2 invertPhi(",
       "vec2 newtonSeedFresh(",
       "bool acceptZ(",
@@ -40,6 +41,9 @@ describe("@cas/schwarz/gpu σ shader — the specialized unbounded-Laurent cut (
     expect(frag).toContain("u_c * z");
     expect(frag).toContain("cconj(u_polyA[l])");
     expect(frag).toContain("uniform vec2 uW;");
+    // F''s leading −c/z² term (S5-B2 distance estimator). A sign/term error here is exactly the kind of
+    // silent derivative bug the CPU finite-difference golden + the GPU↔CPU parity net guard against.
+    expect(frag).toContain("-u_c * cmul(zInv, zInv)");
   });
 
   it("is the SPECIALIZED cut — none of QD's other five families rode along (ADR-0007)", () => {

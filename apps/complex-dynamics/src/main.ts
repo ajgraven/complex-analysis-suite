@@ -3090,6 +3090,15 @@ function init(): void {
       title = "Stripe average";
       loLabel = "low";
       hiLabel = "high";
+    } else if (schwarzColorMode === "smooth") {
+      // S5-B2: the ramp colours the ESCAPING set by the continuous escape count (≈; the tiling is discrete).
+      title = "Smooth escape (≈)";
+      loLabel = "fast escape";
+      hiLabel = "slow escape";
+    } else if (schwarzColorMode === "distance") {
+      title = "Distance estimate (≈)";
+      loLabel = "fast escape";
+      hiLabel = "near σ-Julia";
     } else {
       const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
       title = `Escape time · ${scaleLabel}`;
