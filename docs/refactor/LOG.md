@@ -1905,3 +1905,26 @@
   ground-truth foundation; the bounded family is **not yet wired** into the GPU shader, the interchange
   wire, or CD's render — those are the next C2 slices (C2b GPU GLSL + CPU↔GPU parity; C2c interchange schema
   + QD emit + CD reconstruct; C2d CD render / presets + cross-app golden).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2b — bounded-QD GPU σ):**
+  the GPU σ shader (`@cas/schwarz/gpu`) gains the **bounded family** via a `u_family` dispatch (0
+  unbounded-Laurent · 1 bounded) + a `u_w0` uniform — reintroducing QD's family-dispatch idea that had been
+  "specialized away". The family-specific LEADING terms are guarded so the **unbounded path stays
+  byte-identical** (each `evalPhi`/`evalPhiDeriv`/`evalF`/`evalFDeriv` is `(u_family==1) ? <bounded> :
+  <unchanged unbounded>`, and the branch accumulation order is untouched); bounded gives φ=w₀+branchPhi,
+  φ'=branchPhiDeriv, F=conj(w₀)+branchF, F'=branchFDeriv. The **inverse** is family-aware: `newtonSeedFresh`
+  seeds the interior branch z≈(w−w₀)/φ'(0) with φ'(0)=Σⱼ conj(A_{j,1}) (computed in-shader), `acceptZ` takes
+  |z|<1 (vs |z|>1), the retry ladder's push-out seed becomes a pull-in for bounded, and the tiny-z guard
+  (unbounded's c/z pole) is skipped. `packPhi`/`uploadPhi` pack `u_family` + `u_w0`; `SigmaPhi` gains
+  `family` + `w0` (and `c`/`F` become optional, defaulting for bounded). CD's shader is **untouched** — it
+  packs no `family`, so `u_family=0` and it renders exactly as before (proven: CD σ GPU browser 5/5, the
+  deltoid/pole renders unchanged). NET: the node structure guard now asserts the bounded dispatch is present
+  (`u_family`, `u_w0`, `conj(w₀)` in F, the interior-branch accept) AND that QD's remaining families still
+  did NOT ride along (no LQD/PQD/singular/β — `u_gamma`/`u_lqdBeta`/`u_alpha`/`cexp`/`blaschke`/`cpow`);
+  packPhi packs `family`/`w0`; and the **browser CPU↔GPU parity corpus gains three bounded domains** (the
+  exact-inversion disk, a single-lobe, a two-branch+centre) checked for both σ and the derivative ratio
+  against `makeBoundedSchwarz` — **18/18**, and the unbounded rows (deltoid / poles / complex-c) confirm the
+  byte-identity. Parity TOL loosened 1e-6→3e-6 to cover a bounded single-lobe interior sample that sits near
+  F's pole (|σ|≈2.5 ⇒ ~1.5e-6 absolute = ~6e-7 relative, still float32 ε; a gross bug lands ≫1e-5). Green:
+  full monorepo — typecheck all workspaces; node (schwarz **32**; CD 778, correspondences 97, QD 2334
+  unchanged). Next: C2c (interchange bounded schema + QD emit + CD reconstruct), C2d (CD render/presets +
+  cross-app golden).

@@ -25,18 +25,26 @@ export { MAX_BRANCHES, MAX_K, MAX_LAURENT };
 /** The map φ the σ evaluator reconstructs — the same triple `makeUnboundedLaurentSchwarz` takes, so a
  *  test (or CD) builds the CPU engine and the GPU uniforms from ONE spec. */
 export interface SigmaPhi {
-  /** Leading coefficient (φ ~ c·z at ∞). A real number (QD's family) or a complex `[re, im]` (S5-C1). */
-  c: number | Complex;
-  /** Laurent coefficients F[l] (φ gains Σₗ F[l]/zˡ). */
-  F: readonly Complex[];
-  /** Optional finite-pole branches (a single exterior pole, a cardioid, …). */
+  /** Family (S5-C2): "unbounded" (default) — φ: {|z|>1}→Ω; "bounded" — φ: {|z|<1}→Ω. */
+  family?: "unbounded" | "bounded";
+  /** Unbounded leading coefficient (φ ~ c·z at ∞). Real (QD) or complex `[re,im]` (S5-C1). Default [0,0]. */
+  c?: number | Complex;
+  /** Unbounded Laurent coefficients F[l] (φ gains Σₗ F[l]/zˡ). Default []. */
+  F?: readonly Complex[];
+  /** Bounded domain centre w₀ (φ(0) = w₀). Default [0,0]. */
+  w0?: Complex;
+  /** Finite-pole branches (shared by both families). */
   branches?: readonly SchwarzBranch[];
 }
 
 /** φ's uniforms packed into the fixed-size typed arrays the shader declares. */
 export interface PackedPhi {
+  /** 0 unbounded-Laurent · 1 bounded (S5-C2); uploaded to u_family. */
+  family: number;
   /** Leading coefficient as a complex `[re, im]` (real c packs to `[c, 0]`); uploaded to the vec2 u_c. */
   c: Complex;
+  /** Bounded domain centre w₀; uploaded to the vec2 u_w0. */
+  w0: Complex;
   polyA: Float32Array;
   polyALen: number;
   branchZ: Float32Array;
@@ -121,14 +129,19 @@ export function packPhi(phi: SigmaPhi): PackedPhi {
     }
   }
 
-  const c: Complex = typeof phi.c === "number" ? [phi.c, 0] : [phi.c[0], phi.c[1]];
-  return { c, polyA, polyALen: F.length, branchZ, branchA, branchACount, nBranches: branches.length };
+  const cc = phi.c ?? [0, 0];
+  const c: Complex = typeof cc === "number" ? [cc, 0] : [cc[0], cc[1]];
+  const family = phi.family === "bounded" ? 1 : 0;
+  const w0: Complex = phi.w0 ? [phi.w0[0], phi.w0[1]] : [0, 0];
+  return { family, c, w0, polyA, polyALen: F.length, branchZ, branchA, branchACount, nBranches: branches.length };
 }
 
 /** Upload a packed φ to the currently-bound program's uniforms. Call after `gl.useProgram(program)`. */
 export function uploadPhi(gl: WebGL2RenderingContext, program: WebGLProgram, packed: PackedPhi): void {
   const at = (name: string): WebGLUniformLocation | null => gl.getUniformLocation(program, name);
+  gl.uniform1i(at("u_family"), packed.family);
   gl.uniform2f(at("u_c"), packed.c[0], packed.c[1]);
+  gl.uniform2f(at("u_w0"), packed.w0[0], packed.w0[1]);
   gl.uniform2fv(at("u_polyA"), packed.polyA);
   gl.uniform1i(at("u_polyALen"), packed.polyALen);
   gl.uniform2fv(at("u_branchZ"), packed.branchZ);

@@ -50,21 +50,21 @@ describe("@cas/schwarz/gpu σ shader — the specialized unbounded-Laurent cut (
     expect(frag).toContain("cmul(vec2(-u_c.x, u_c.y), cmul(zInv, zInv))");
   });
 
-  it("is the SPECIALIZED cut — none of QD's other five families rode along (ADR-0007)", () => {
-    // The QD shader dispatches six families on u_family and carries bounded/LQD/singular/β machinery.
-    // CD reconstructs only the unbounded-Laurent family, so none of that vocabulary may appear here.
-    for (const forbidden of [
-      "u_family",
-      "u_w0",
-      "u_unbounded",
-      "u_gamma",
-      "u_lqdBeta",
-      "cexp",
-      "blaschke",
-      "evalBOverZ",
-    ]) {
+  it("carries the unbounded + bounded families only — QD's LQD/PQD/singular/β machinery did NOT ride along", () => {
+    // The shader now dispatches TWO families on u_family: unbounded-Laurent (0) and bounded (1, S5-C2). It
+    // must still carry NONE of QD's remaining four families (the power-weighted / log / singular variants).
+    for (const forbidden of ["u_gamma", "u_lqdBeta", "u_alpha", "cexp", "blaschke", "evalBOverZ", "cpow"]) {
       expect(frag, `must NOT contain ${forbidden}`).not.toContain(forbidden);
     }
+  });
+
+  it("dispatches the bounded family (S5-C2): u_family / u_w0, conj(w₀) in F, and the interior-branch accept", () => {
+    expect(frag).toContain("uniform int   u_family;");
+    expect(frag).toContain("uniform vec2  u_w0;");
+    // φ = w₀ + branches, F = conj(w₀) + branches, and the inverse accepts the INTERIOR branch |z| < 1.
+    expect(frag).toContain("(u_family == 1) ? u_w0 : cmul(u_c, z)");
+    expect(frag).toContain("(u_family == 1) ? cconj(u_w0) : cmul(cconj(u_c), cinv(z))");
+    expect(frag).toContain("length(z) < 1.0 - 1e-4"); // bounded interior-branch acceptance
   });
 
   it("bakes the compile-time caps as GLSL constants matching the JS packing (and QD's caps)", () => {
@@ -91,8 +91,16 @@ describe("@cas/schwarz/gpu packPhi — φ → fixed-size uniform arrays (pure, n
 
     expect(p.c).toEqual([2, 0]); // real c packs to the [re, im] tuple uploaded to the vec2 u_c (S5-C1)
     expect(packPhi({ c: [1, 0.5], F, branches }).c).toEqual([1, 0.5]); // a complex c packs through unchanged
+    expect(p.family).toBe(0); // default family is unbounded (S5-C2)
+    expect(p.w0).toEqual([0, 0]);
     expect(p.polyALen).toBe(2);
     expect(p.nBranches).toBe(2);
+
+    // A bounded φ packs family=1 + its centre w₀ (S5-C2).
+    const b = packPhi({ family: "bounded", w0: [0.1, -0.2], branches });
+    expect(b.family).toBe(1);
+    expect(b.w0).toEqual([0.1, -0.2]);
+    expect(b.polyALen).toBe(0); // bounded has no Laurent tail
 
     // Fixed-size arrays sized exactly to the shader's uniform arrays.
     expect(p.polyA.length).toBe(MAX_LAURENT * 2);
