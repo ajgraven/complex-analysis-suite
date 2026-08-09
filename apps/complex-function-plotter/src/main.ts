@@ -19,7 +19,19 @@ import { drawModulusBar, drawPhaseWheel } from "./ui/legends.js";
 import { drawAxes } from "./ui/axes.js";
 import { decodeState, encodeState, shareUrl, type PlotterState } from "./state/viewState.js";
 
-const DEFAULTS: PlotterState = { expr: "z^2", cx: 0, cy: 0, span: 2, colormap: 0, modulus: 2 };
+const DEFAULTS: PlotterState = {
+  expr: "z^2",
+  cx: 0,
+  cy: 0,
+  span: 2,
+  colormap: 0,
+  modulus: 2,
+  enhance: 0,
+  sectors: 12,
+  crisp: 1,
+  hueShift: 0,
+  hueSign: 1,
+};
 
 function addOption(sel: HTMLSelectElement, value: string, label: string): void {
   const opt = document.createElement("option");
@@ -43,6 +55,12 @@ function main(): void {
   const colormapSel = byId("colormap");
   const modulusSel = byId("modulus");
   const presetSel = byId("preset");
+  const enhanceSel = byId("enhance");
+  const sectorsInput = byId("sectors");
+  const sectorsVal = byId("sectorsVal");
+  const crispInput = byId("crisp");
+  const hueShiftInput = byId("hueShift");
+  const hueSignInput = byId("hueSign");
   const homeBtn = byId("home");
   const savePngBtn = byId("savePng");
   const copyLinkBtn = byId("copyLink");
@@ -73,6 +91,11 @@ function main(): void {
   plot.view = { cx: initial.cx, cy: initial.cy, span: initial.span };
   plot.color.colormap = clampIndex(initial.colormap, COLORMAPS.length);
   plot.color.modulus = clampIndex(initial.modulus, 5);
+  plot.color.enhance = clampIndex(initial.enhance, 6);
+  plot.color.sectors = initial.sectors >= 2 ? initial.sectors : 12;
+  plot.color.crisp = initial.crisp ? 1 : 0;
+  plot.color.hueShift = initial.hueShift;
+  plot.color.hueSign = initial.hueSign < 0 ? -1 : 1;
   let framingSpan = initial.span;
 
   let probeFn: ((z: Complex, c: Complex) => Complex) | null = null;
@@ -96,6 +119,11 @@ function main(): void {
     span: plot.view.span,
     colormap: plot.color.colormap,
     modulus: plot.color.modulus,
+    enhance: plot.color.enhance,
+    sectors: plot.color.sectors,
+    crisp: plot.color.crisp,
+    hueShift: plot.color.hueShift,
+    hueSign: plot.color.hueSign,
   });
 
   let hashTimer = 0;
@@ -141,7 +169,8 @@ function main(): void {
   };
 
   const drawLegends = (): void => {
-    if (wheelCanvas instanceof HTMLCanvasElement) drawPhaseWheel(wheelCanvas, plot.color.colormap);
+    if (wheelCanvas instanceof HTMLCanvasElement)
+      drawPhaseWheel(wheelCanvas, plot.color.colormap, plot.color.hueShift, plot.color.hueSign);
     if (modbarCanvas instanceof HTMLCanvasElement)
       drawModulusBar(modbarCanvas, plot.color.modulus, plot.color.modScale);
   };
@@ -159,6 +188,48 @@ function main(): void {
     modulusSel.value = String(plot.color.modulus);
     modulusSel.addEventListener("change", () => {
       plot.color.modulus = Number(modulusSel.value);
+      drawLegends();
+      redraw(false);
+    });
+  }
+  if (enhanceSel instanceof HTMLSelectElement) {
+    enhanceSel.value = String(plot.color.enhance);
+    enhanceSel.addEventListener("change", () => {
+      plot.color.enhance = Number(enhanceSel.value);
+      redraw(false);
+    });
+  }
+  if (sectorsInput instanceof HTMLInputElement) {
+    const showSectors = (): void => {
+      if (sectorsVal instanceof HTMLElement) sectorsVal.textContent = String(plot.color.sectors);
+    };
+    sectorsInput.value = String(plot.color.sectors);
+    showSectors();
+    sectorsInput.addEventListener("input", () => {
+      plot.color.sectors = Number(sectorsInput.value);
+      showSectors();
+      redraw(false);
+    });
+  }
+  if (crispInput instanceof HTMLInputElement) {
+    crispInput.checked = plot.color.crisp === 1;
+    crispInput.addEventListener("change", () => {
+      plot.color.crisp = crispInput.checked ? 1 : 0;
+      redraw(false);
+    });
+  }
+  if (hueShiftInput instanceof HTMLInputElement) {
+    hueShiftInput.value = String(Math.round((plot.color.hueShift * 180) / Math.PI));
+    hueShiftInput.addEventListener("input", () => {
+      plot.color.hueShift = (Number(hueShiftInput.value) * Math.PI) / 180;
+      drawLegends();
+      redraw(false);
+    });
+  }
+  if (hueSignInput instanceof HTMLInputElement) {
+    hueSignInput.checked = plot.color.hueSign < 0;
+    hueSignInput.addEventListener("change", () => {
+      plot.color.hueSign = hueSignInput.checked ? -1 : 1;
       drawLegends();
       redraw(false);
     });

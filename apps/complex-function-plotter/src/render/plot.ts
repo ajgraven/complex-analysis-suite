@@ -25,6 +25,16 @@ export interface ColorState {
   modulus: number;
   /** Reference |f| for the linear / log / log-log transfers. */
   modScale: number;
+  /** Enhancement overlay: 0 none, 1 modulus rings, 2 phase sectors, 3 conformal grid, 4 polar chessboard, 5 Re/Im grid. */
+  enhance: number;
+  /** Sectors per turn / grid density for the enhancement (where applicable). */
+  sectors: number;
+  /** Enhancement style: 0 shaded bands, 1 crisp lines. */
+  crisp: number;
+  /** Hue rotation (radians) applied to arg before the colormap lookup. */
+  hueShift: number;
+  /** Hue winding direction: +1 or -1. */
+  hueSign: number;
 }
 
 interface Uniforms {
@@ -35,6 +45,11 @@ interface Uniforms {
   uPhaseRow: WebGLUniformLocation | null;
   uModulus: WebGLUniformLocation | null;
   uModScale: WebGLUniformLocation | null;
+  uEnhance: WebGLUniformLocation | null;
+  uSectors: WebGLUniformLocation | null;
+  uCrisp: WebGLUniformLocation | null;
+  uHueShift: WebGLUniformLocation | null;
+  uHueSign: WebGLUniformLocation | null;
 }
 
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
@@ -51,7 +66,16 @@ export class Plot {
   private draft = false;
 
   view: View = { cx: 0, cy: 0, span: 2 };
-  color: ColorState = { colormap: 0, modulus: 2, modScale: 8 };
+  color: ColorState = {
+    colormap: 0,
+    modulus: 2,
+    modScale: 8,
+    enhance: 0,
+    sectors: 12,
+    crisp: 1,
+    hueShift: 0,
+    hueSign: 1,
+  };
 
   constructor(private readonly canvas: HTMLCanvasElement, initialSource: string) {
     const gl = canvas.getContext("webgl2", { antialias: true, preserveDrawingBuffer: true });
@@ -115,6 +139,11 @@ export class Plot {
       uPhaseRow: gl.getUniformLocation(program, "uPhaseRow"),
       uModulus: gl.getUniformLocation(program, "uModulus"),
       uModScale: gl.getUniformLocation(program, "uModScale"),
+      uEnhance: gl.getUniformLocation(program, "uEnhance"),
+      uSectors: gl.getUniformLocation(program, "uSectors"),
+      uCrisp: gl.getUniformLocation(program, "uCrisp"),
+      uHueShift: gl.getUniformLocation(program, "uHueShift"),
+      uHueSign: gl.getUniformLocation(program, "uHueSign"),
     };
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -185,6 +214,11 @@ export class Plot {
     gl.uniform1f(u.uPhaseRow, (this.color.colormap + 0.5) / this.atlasHeight);
     gl.uniform1i(u.uModulus, this.color.modulus);
     gl.uniform1f(u.uModScale, this.color.modScale);
+    gl.uniform1i(u.uEnhance, this.color.enhance);
+    gl.uniform1f(u.uSectors, this.color.sectors);
+    gl.uniform1i(u.uCrisp, this.color.crisp);
+    gl.uniform1f(u.uHueShift, this.color.hueShift);
+    gl.uniform1f(u.uHueSign, this.color.hueSign);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

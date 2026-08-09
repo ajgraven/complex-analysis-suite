@@ -7,8 +7,13 @@ import { COLORMAPS } from "../render/colormaps.js";
 
 const dpr = (): number => Math.min(window.devicePixelRatio || 1, 2);
 
-/** Paint the phase wheel: an annulus coloured by arg, counterclockwise, from the active colormap. */
-export function drawPhaseWheel(canvas: HTMLCanvasElement, colormapIndex: number): void {
+/** Paint the phase wheel: an annulus coloured by arg (matching the render's hue rotation/direction). */
+export function drawPhaseWheel(
+  canvas: HTMLCanvasElement,
+  colormapIndex: number,
+  hueShift = 0,
+  hueSign = 1,
+): void {
   const size = 92;
   const d = dpr();
   const W = Math.round(size * d);
@@ -31,7 +36,7 @@ export function drawPhaseWheel(canvas: HTMLCanvasElement, colormapIndex: number)
       const idx = (py * W + px) * 4;
       if (r >= rIn && r <= rOut) {
         const ang = Math.atan2(-dy, dx); // CCW, y-up
-        const t = (((ang / (2 * Math.PI)) % 1) + 1) % 1;
+        const t = ((((hueSign * ang + hueShift) / (2 * Math.PI)) % 1) + 1) % 1;
         const [rr, gg, bb] = cm.sample(t);
         img.data[idx] = Math.round(255 * rr);
         img.data[idx + 1] = Math.round(255 * gg);

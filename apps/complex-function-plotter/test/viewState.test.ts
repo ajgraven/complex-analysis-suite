@@ -2,7 +2,19 @@ import { describe, expect, it } from "vitest";
 import { encodeViewState } from "@cas/interchange";
 import { APP_NS, decodeState, encodeState, type PlotterState } from "../src/state/viewState.js";
 
-const S: PlotterState = { expr: "sin(z)+c", cx: 0.5, cy: -0.25, span: 3, colormap: 1, modulus: 3 };
+const S: PlotterState = {
+  expr: "sin(z)+c",
+  cx: 0.5,
+  cy: -0.25,
+  span: 3,
+  colormap: 1,
+  modulus: 3,
+  enhance: 3,
+  sectors: 8,
+  crisp: 0,
+  hueShift: 1.5,
+  hueSign: -1,
+};
 
 describe("share-link view state", () => {
   it("round-trips through encode/decode", () => {
@@ -28,6 +40,11 @@ describe("share-link view state", () => {
       span: 2,
       colormap: 0,
       modulus: 2,
+      enhance: 0,
+      sectors: 12,
+      crisp: 1,
+      hueShift: 0,
+      hueSign: 1,
     });
   });
 

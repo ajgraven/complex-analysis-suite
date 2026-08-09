@@ -53,6 +53,10 @@
       }
       button:hover { border-color: var(--accent); }
       .actions { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+      input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0 8px; }
+      label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: normal; font-size: 0.8rem; color: var(--text); margin: 0; }
+      label.check input { width: auto; accent-color: var(--accent); }
+      .subval { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
 
       .legend { display: flex; gap: 14px; align-items: center; }
       .wheel-wrap { position: relative; flex: 0 0 auto; }
@@ -106,6 +110,26 @@
             </select>
           </div>
         </div>
+      </div>
+
+      <div class="group">
+        <label for="enhance">Enhancement</label>
+        <select id="enhance">
+          <option value="0">None (plain)</option>
+          <option value="1">Modulus rings</option>
+          <option value="2">Phase sectors</option>
+          <option value="3">Conformal grid</option>
+          <option value="4">Polar chessboard</option>
+          <option value="5">Re/Im grid</option>
+        </select>
+        <div class="row" style="margin-top: 8px">
+          <label class="check"><input type="checkbox" id="crisp" checked /> Crisp lines</label>
+          <label class="check"><input type="checkbox" id="hueSign" /> Reverse hue</label>
+        </div>
+        <label for="sectors" style="margin-top: 8px">Density <span class="subval" id="sectorsVal"></span></label>
+        <input type="range" id="sectors" min="2" max="24" step="1" value="12" />
+        <label for="hueShift">Hue rotate</label>
+        <input type="range" id="hueShift" min="0" max="360" step="1" value="0" />
       </div>
 
       <div class="group">

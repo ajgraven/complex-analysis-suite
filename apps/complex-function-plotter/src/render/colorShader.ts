@@ -1,11 +1,10 @@
 /**
  * The layered coloring shader (catalog §1.1). A domain-coloring "mode" is a composition of shared
- * primitives, not a bespoke shader: a phase→hue lookup (a swappable colormap LUT) times a
- * modulus→lightness transfer, later times fwidth-antialiased overlay layers (Phase 2). This module
- * owns the reusable `colorAt(w)` GLSL chunk and the full fragment-program assembler; keeping it a pure
- * string builder means the assembly is unit-testable and the same `colorAt` can be reused by the 3D
- * surface pass (Phase 5). Precision-agnostic where it can be (`carg`/`cabsf`/`cre1`), so a df64 path
- * (backlog) drops in later.
+ * primitives: a phase→hue lookup (a swappable colormap LUT, optionally rotated/reflected) times a
+ * modulus→lightness transfer, times an `fwidth`-antialiased **enhancement** overlay (Wegert's modulus
+ * rings / phase sectors / the conformal proportional grid / chessboards / a Re-Im grid). Keeping it a
+ * pure string builder makes the assembly unit-testable, and the same `colorAt` is reused by the 3D
+ * surface pass later. Precision-agnostic where it can be, so a df64 path (backlog) drops in.
  */
 import { COMPLEX_SINGLE_GLSL, COMPLEX_DERIVED_GLSL } from "@cas/gpu/glsl";
 
@@ -13,17 +12,20 @@ export const VERTEX_SHADER = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
-/** The coloring chunk: phase LUT × modulus transfer, with a NaN/Inf sentinel (never black). */
 const COLORING_GLSL = `
 uniform sampler2D uPhaseLUT;   // width×N colormap atlas
 uniform float     uPhaseRow;   // (colormap index + 0.5) / N  -> the atlas row
 uniform int       uModulus;    // 0 constant, 1 linear, 2 rational, 3 log, 4 log-log
 uniform float     uModScale;   // reference |f| for the linear / log / log-log transfers
+uniform int       uEnhance;    // 0 none, 1 modulus rings, 2 phase sectors, 3 conformal grid, 4 polar chessboard, 5 Re/Im grid
+uniform float     uSectors;    // n: sectors per turn / grid density (where applicable)
+uniform int       uCrisp;      // 0 shaded bands, 1 crisp lines
+uniform float     uHueShift;   // radians added to arg for the hue lookup
+uniform float     uHueSign;    // +1 / -1 winding direction for the hue
 
+const float TWO_PI = 6.283185307179586;
 const float INV_TWO_PI = 0.15915494309189535;
 
-// |f| -> lightness in [0,1]. A monotone bounded transfer makes zeros dark and poles bright; the
-// constant transfer gives a pure phase portrait (catalog C1); the rest are catalog D1.
 float modulusLightness(float m) {
   if (uModulus == 0) return 1.0;
   if (uModulus == 1) return clamp(m / uModScale, 0.0, 1.0);
@@ -32,15 +34,58 @@ float modulusLightness(float m) {
   return clamp(log(1.0 + log(1.0 + m)) / log(1.0 + log(1.0 + uModScale)), 0.0, 1.0);
 }
 
+// Antialiased "on a gridline" factor for a field whose lines sit at integer values of v. fwidth gives
+// a screen-space line width, so lines stay ~1px at any zoom and dissolve (rather than alias/moiré)
+// where the field varies fastest — near zeros and poles. This is where catalog L4 is realised.
+float gridLine(float v) {
+  float dist = abs(v - floor(v + 0.5));
+  float w = fwidth(v) * 1.4 + 1e-6;
+  return 1.0 - smoothstep(0.0, w, dist);
+}
+
+// Wegert shaded sawtooth: brightness ramps from aMin up to 1 across each band, darkening toward the step.
+float sawShade(float v, float aMin) { return aMin + (1.0 - aMin) * fract(v); }
+
+float enhancement(cvec w, float m, float arg) {
+  if (uEnhance == 0) return 1.0;
+  float lm = log(max(m, 1e-30));
+  if (uEnhance == 1) {                         // modulus rings (log2 -> a band per doubling of |f|)
+    float v = log2(max(m, 1e-30));
+    return (uCrisp == 1) ? (1.0 - 0.8 * gridLine(v)) : sawShade(v, 0.6);
+  }
+  if (uEnhance == 2) {                         // phase sectors (n equal wedges)
+    float v = uSectors * (arg * INV_TWO_PI + 0.5);
+    return (uCrisp == 1) ? (1.0 - 0.8 * gridLine(v)) : sawShade(v, 0.6);
+  }
+  if (uEnhance == 3) {                         // conformal proportional grid: step 2pi/n in log|f| AND arg
+    float step = TWO_PI / uSectors;            // => cells are near-squares wherever f is conformal
+    float vm = lm / step;
+    float vp = arg / step;
+    if (uCrisp == 1) return 1.0 - 0.85 * max(gridLine(vm), gridLine(vp));
+    return sawShade(vm, 0.72) * sawShade(vp, 0.72);
+  }
+  if (uEnhance == 4) {                         // polar chessboard on (log|f|, arg)
+    float step = TWO_PI / uSectors;
+    float par = mod(floor(lm / step) + floor(arg / step), 2.0);
+    return 0.68 + 0.32 * par;
+  }
+  // uEnhance == 5: Cartesian Re/Im grid — the preimage of a unit square grid in the w-plane.
+  float re = cre1(cre(w));
+  float im = cre1(cim(w));
+  if (uCrisp == 1) return 1.0 - 0.8 * max(gridLine(re), gridLine(im));
+  return sawShade(re, 0.7) * sawShade(im, 0.7);
+}
+
 vec3 colorAt(cvec w) {
   float m = cabsf(w);
-  // NaN/Inf sentinel (catalog L6): render unreliable pixels a neutral grey, never black — black reads
-  // as a zero. The stdlib cdiv floors true poles to huge-but-finite, so this mostly catches exp overflow
-  // and 0/0 from user maps.
+  // NaN/Inf sentinel (catalog L6): render unreliable pixels a neutral grey, never black (which reads
+  // as a zero). cdiv floors true poles to huge-but-finite, so this mostly catches exp overflow / 0-over-0.
   if (!(m < 3.0e37) || m != m) return vec3(0.30, 0.30, 0.33);
-  float t = fract(cre1(carg(w)) * INV_TWO_PI + 1.0);   // arg(w)/2pi wrapped into [0,1)
+  float arg = cre1(carg(w));
+  float t = fract(uHueSign * arg * INV_TWO_PI + uHueShift * INV_TWO_PI + 1.0);
   vec3 hue = texture(uPhaseLUT, vec2(t, uPhaseRow)).rgb;
-  return hue * modulusLightness(m);
+  vec3 base = hue * modulusLightness(m);
+  return clamp(base * enhancement(w, m, arg), 0.0, 1.0);
 }`;
 
 /**

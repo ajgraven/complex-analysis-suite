@@ -15,6 +15,11 @@ export interface PlotterState extends Record<string, unknown> {
   span: number;
   colormap: number;
   modulus: number;
+  enhance: number;
+  sectors: number;
+  crisp: number;
+  hueShift: number;
+  hueSign: number;
 }
 
 export function encodeState(state: PlotterState): string {
@@ -41,5 +46,10 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     span: num(s.span, 2),
     colormap: num(s.colormap, 0),
     modulus: num(s.modulus, 2),
+    enhance: num(s.enhance, 0),
+    sectors: num(s.sectors, 12),
+    crisp: num(s.crisp, 1),
+    hueShift: num(s.hueShift, 0),
+    hueSign: num(s.hueSign, 1),
   };
 }

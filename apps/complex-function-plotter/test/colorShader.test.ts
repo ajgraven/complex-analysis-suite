@@ -20,6 +20,15 @@ describe("coloring shader assembly", () => {
     expect(frag).toContain("fFn(z, vec_(0.0, 0.0))");
   });
 
+  it("includes the fwidth-antialiased enhancement layer", () => {
+    expect(frag).toContain("float enhancement(cvec w");
+    expect(frag).toContain("fwidth(");
+    expect(frag).toContain("uEnhance");
+    expect(frag).toContain("uSectors");
+    expect(frag).toContain("uHueShift");
+    expect(frag).toContain("uHueSign");
+  });
+
   it("passes a fullscreen triangle from the vertex shader", () => {
     expect(VERTEX_SHADER).toContain("gl_Position");
   });
