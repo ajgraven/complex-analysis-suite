@@ -3333,7 +3333,7 @@ function init(): void {
       }
     }
     const label = byId<HTMLElement>("dyn-schwarz-label");
-    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · ↩/Esc to exit`;
+    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · arrows ± i · Esc to exit`;
   }
   /** Import path: reconstruct from an interchange schwarz map. Throws (to the caller's toast) for an
    *  unsupported φ — reconstruct BEFORE entering so a bad map never half-shows a wrong field. */
@@ -3655,12 +3655,59 @@ function init(): void {
       },
       { passive: false },
     );
-    window.addEventListener("keydown", (e) => {
-      if (schwarzSession && e.key === "Escape") {
+    // σ keyboard (E2 — parity with the standard plots, adapted to σ's full-screen mode). Only ONE view is
+    // active in σ mode, so — unlike CD's side-by-side plots, which key off canvas focus — the shortcuts act
+    // whenever a σ session is live, EXCEPT while typing in a field (so the centre / zoom / filename inputs and
+    // the range sliders keep their native arrow behaviour). Esc exits (unguarded, as before); arrows pan a
+    // quarter-window; +/- zoom ×2 about the centre; i inspects the centre point. Pan/zoom draft then refine.
+    window.addEventListener(
+      "keydown",
+      (e) => {
+      if (!schwarzSession) return;
+      if (e.key === "Escape") {
+        // A modal reachable from σ (the glossary / help behind the "?" links) must close on Escape WITHOUT
+        // also exiting σ out from under it. This is a capture-phase listener, so it runs BEFORE the modal's
+        // own document-level close handler — returning here lets the event bubble on to close the modal
+        // while σ stays put. With no modal open, Escape exits σ as before.
+        if (document.querySelector(".glossary-overlay:not([hidden])")) return;
         e.preventDefault();
         exitSchwarzView();
+        return;
       }
-    });
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) {
+        return; // don't hijack typing / slider nudges
+      }
+      const panBy = (dx: number, dy: number): void => {
+        // dx,dy are fractions of the half-window; ±0.25 ⇒ a quarter-window step = CD's 1/(zoom·4). +Im is up.
+        schwarzView = {
+          center: [schwarzView.center[0] + dx / schwarzView.zoom, schwarzView.center[1] + dy / schwarzView.zoom],
+          zoom: schwarzView.zoom,
+        };
+        scheduleSchwarzDraftPaint();
+      };
+      const zoomBy = (factor: number): void => {
+        const next = zoomSchwarzView(schwarzView, factor, [0.5, 0.5]); // about the view centre
+        next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom));
+        schwarzView = next;
+        scheduleSchwarzDraftPaint();
+      };
+      switch (e.key) {
+        case "ArrowLeft": panBy(-0.25, 0); break;
+        case "ArrowRight": panBy(0.25, 0); break;
+        case "ArrowUp": panBy(0, 0.25); break;
+        case "ArrowDown": panBy(0, -0.25); break;
+        case "+":
+        case "=": zoomBy(2); break;
+        case "-":
+        case "_": zoomBy(0.5); break;
+        case "i": setSchwarzInspect([schwarzView.center[0], schwarzView.center[1]]); break;
+        default: return;
+      }
+      e.preventDefault();
+      },
+      true, // capture: σ keys act before other handlers; Escape defers to an open modal (guard above)
+    );
     // Re-fit the backing resolution when the display size / devicePixelRatio changes (window resize, or the
     // A3 side-panel reflowing the canvas cell). Draft first, then the idle refine renders crisp at the new size.
     window.addEventListener("resize", () => {

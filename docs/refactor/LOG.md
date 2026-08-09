@@ -2127,3 +2127,22 @@
   (Playwright, clipboard-granted): copy-coords writes full-precision `center`/`zoom` and no `c =`; the nav
   fields mirror a panned view (6-sig-fig); the filename defaults to `schwarz-sigma.png`; the size list carries
   8192; Copy PNG puts an `image/png` item on the clipboard with a success toast. **Phase D complete.**
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase E — cross-cutting integration):**
+  the last parity phase; mostly a VERIFY pass, since the reuse-driven earlier phases had already wired most of
+  it. **E1 share · saved views** was found already complete: `_sigma` flows through `readFullState` /
+  `applyFullState` (permalink + saved views + PNG all share those two functions), and B–D each extended the
+  `SigmaViewState` layer with its new knob, so `restoreSchwarzFromState` re-syncs EVERY σ control on load.
+  End-to-end Playwright confirmed a share link AND a saved view both reopen the exact window + colormap +
+  relief-light + AA=2, and that the share/save UI is reachable while σ is active — nothing to build. **E2
+  glossary** was likewise already wired: the four σ `.gloss-link` "?" buttons (σ, φ, Laurent, escape) point at
+  real GLOSSARY ids and resolve through CD's document-wide handler (pinned by glossary.test.ts since Phase A).
+  **E2 keyboard** is the one code slice: σ gains CD's plot shortcuts, adapted to its full-screen mode — because
+  only ONE view is live in σ (unlike CD's side-by-side plots that key off canvas focus), the handler acts
+  whenever a σ session is active, guarded so typing in a field / nudging a slider is never hijacked. Arrows pan
+  a quarter-window (CD's `1/(zoom·4)`), `+`/`-` zoom ×2 about the centre, `i` inspects the centre; the label
+  now reads `arrows ± i · Esc to exit`. The handler is **capture-phase** so Escape can defer to an open modal:
+  pressing Escape with the glossary open (reachable from σ's "?" links) now closes the glossary and leaves σ
+  intact, instead of exiting σ out from under it. Green: typecheck + lint + node **2424** + browser **17/17**.
+  VERIFIED (Playwright, **22/22**): every key acts (arrows/±/i), the field-focus guard holds, all four glossary
+  terms resolve, Escape closes the modal while keeping σ, and both a share link and a saved view round-trip the
+  full σ view. **Phase E complete — the A–E parity arc is done.**
