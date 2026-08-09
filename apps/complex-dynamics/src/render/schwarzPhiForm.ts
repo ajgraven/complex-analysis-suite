@@ -9,11 +9,21 @@
 // parsing/validation is unit-tested.
 import type { Complex, SchwarzBranch } from "@cas/schwarz";
 
-/** φ's coefficients — the argument triple `makeUnboundedLaurentSchwarz(c, F, branches)` takes. */
+/**
+ * φ's coefficients — the σ engine input + its GPU-uniform source. The UNBOUNDED-Laurent family
+ * (`family` "unbounded" or absent) reads `c` + `F` (+ `branches`) — the triple
+ * `makeUnboundedLaurentSchwarz` takes; the BOUNDED family (S5-C2, `family:"bounded"`) reads `w0` (+
+ * `branches`) — the pair `makeBoundedSchwarz` takes — and carries `c=[0,0]`, `F=[]` in the unused slots
+ * so the shape is a single object the CPU builders, the GPU packer, and the σ-view serializer all consume.
+ */
 export interface SchwarzPhi {
-  /** Leading coefficient — complex since S5-C1 (real maps carry `[c, 0]`). */
+  /** Which family φ belongs to (S5-C2). Absent ⇒ "unbounded" (every pre-C2 φ + the native form). */
+  family?: "unbounded" | "bounded";
+  /** Leading coefficient — complex since S5-C1 (real maps carry `[c, 0]`). `[0,0]` for a bounded φ. */
   c: Complex;
   F: Complex[];
+  /** Bounded domain centre w₀ = φ(0) (S5-C2). Absent/`[0,0]` for an unbounded φ. */
+  w0?: Complex;
   branches: SchwarzBranch[];
 }
 

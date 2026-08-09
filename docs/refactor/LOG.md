@@ -1967,3 +1967,38 @@
   reconstruct ground-truth). The bounded family is now emit + reconstruct + wire-validated end to end; the
   remaining slice is **C2d** — CD's interior-Ω render (GPU `family` forward + the "Ω is inside ∂Ω" escape
   orientation) + bounded presets, which makes it user-visible.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2d — CD interior-Ω render for
+  the bounded family):** bounded-QD σ becomes **user-visible** — an imported bounded reflection now renders,
+  navigates, permalinks, and round-trips through CD's σ peer view, on the correct INTERIOR-Ω orientation.
+  The render was exterior-oriented throughout (Ω = OUTSIDE ∂Ω, the unbounded-Laurent assumption); a bounded
+  QD uniformizes 𝔻 → Ω, so Ω is the INSIDE. **GPU:** CD's σ shader forwards `family` + `w0` through the
+  shared `@cas/schwarz/gpu` uniforms (so the σ evaluator switches to the bounded interior-branch inverse —
+  the C2b GLSL) and gains a `u_boundedOmega` uniform that flips `inOmega()` to test INSIDE the boundary
+  polygon; the mask uses a tighter `padFactor` (2.4, QD's bounded value) for the compact interior. CD's
+  shader stays byte-identical for unbounded maps (no family ⇒ `u_boundedOmega = 0`, the original test).
+  **CPU:** `renderSchwarzField` / `schwarzOrbitAt` / `schwarzEscapeAt` gain a `boundedOmega` option routed
+  through one shared `makeIsInOmega` helper (interior vs exterior in ONE place), and take a `SchwarzEngine =
+  UnboundedLaurentSchwarz | BoundedSchwarz` union (both share the evaluator surface). **Glue:** `SchwarzPhi`
+  carries `family?` + `w0?`; `schwarzEngineFromMapSpec`'s union return flows through unchanged; `main.ts`
+  derives `boundedOmega = phi.family === "bounded"` once in `enterSchwarz`, threads it through the session
+  → paint → orbit-trace, dispatches `renderSchwarzFromPhi` on the family, and **removes the C2c import
+  guard** so a bounded σ link renders instead of declining. **Serialization:** the `_sigma` codec carries
+  `fam` + `w0` (emitted ONLY for bounded, so unbounded links stay byte-identical + round-trip unchanged);
+  parse relaxes the non-zero-`c` requirement for bounded and validates `w0`, and the PNG tEXt summary reads
+  `w0=…` for bounded rather than the trivial `c=0, F=[]`. NET: CPU orientation ground truth on the exact
+  DISK (φ(z)=z, Ω = unit disk) — an interior point is Ω-iterated under `boundedOmega` but K (n=0) without it,
+  the flip is load-bearing; `renderSchwarzField` repaints on the flag; the bounded `_sigma` state round-trips
+  (fam + w₀) and an unbounded link carries neither; the CD GPU browser suite gains a bounded render (opaque,
+  and the bounded family path produces a genuinely different frame than reading the same coefficients as
+  unbounded — u_family/u_w0/u_boundedOmega live in real WebGL2, **6/6**). VERIFIED end to end in the BUILT
+  app (Playwright): pasting the bounded-lobe golden link opens the σ view in **GPU** mode, painting a full
+  512² opaque field with no console error. HONEST NOTE: the single-lobe golden (one simple pole) has
+  **trivial** σ-dynamics — σ maps Ω out of Ω in ~one step, so under the linear escape scale
+  `computeT(0)=computeT(1)=0` and its field reads near-flat; the render is correct, the domain is simple, and
+  a richer multi-pole bounded QD shows a full tiling. Latent fix carried from C2c: `schwarzGL.setPhi` guards
+  the now-optional `phi.F`. Green: full monorepo — typecheck all workspaces + lint (eslint + dep-cruiser) +
+  node **2414** (schwarzView **+2** disk-orientation, schwarzState **+2** bounded round-trip) + CD σ GPU
+  browser **6/6** (+1 bounded). DEFERRED (a separate follow-on): native bounded **authoring** — the "Generate
+  σ from φ" form's `buildSchwarzPhi` is unbounded-only (it requires a leading c), so bounded domains arrive
+  by IMPORT today; a bounded input mode + presets is the next slice. With C2a–C2d the bounded family is
+  engine + GPU + wire + render complete end to end.

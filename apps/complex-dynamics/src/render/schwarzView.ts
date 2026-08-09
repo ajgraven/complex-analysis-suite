@@ -15,11 +15,16 @@
 import {
   escapeTime,
   pointInPolygon,
+  type BoundedSchwarz,
   type Complex,
   type EscapeKind,
   type EscapeResult,
   type UnboundedLaurentSchwarz,
 } from "@cas/schwarz";
+
+/** Either σ engine — the unbounded-Laurent (exterior branch) or bounded (interior branch) family. Both
+ *  expose the SAME evaluator surface (evalPhi/…/sigma), so the render/orbit helpers take either (S5-C2). */
+export type SchwarzEngine = UnboundedLaurentSchwarz | BoundedSchwarz;
 
 /** The complex-plane window: same center/zoom convention as GLPlot (half-width on each axis = 1/zoom). */
 export interface SchwarzView {
@@ -30,10 +35,20 @@ export interface SchwarzView {
 export interface SchwarzRenderOptions {
   maxIter?: number;
   escapeR?: number;
+  /** S5-C2: Ω is the INSIDE of ∂Ω for a bounded QD (φ: 𝔻 → Ω), vs the exterior for the unbounded-Laurent
+   *  family. Flips the in-Ω test so "fundamental" means the orbit left Ω into its complement K either way.
+   *  Absent/false ⇒ the exterior (unbounded) orientation — every pre-C2 render is unchanged. */
+  boundedOmega?: boolean;
 }
 
-/** The deltoid boundary as φ(unit circle); Ω is its EXTERIOR (the unbounded component). */
-export function schwarzBoundaryPoly(engine: UnboundedLaurentSchwarz, n = 512): Complex[] {
+/** Ω-membership for w against the boundary polygon: OUTSIDE ∂Ω for the unbounded-Laurent family, INSIDE for
+ *  a bounded QD (S5-C2). One helper so the field render and the orbit tracer share the exact same test. */
+function makeIsInOmega(poly: readonly Complex[], boundedOmega: boolean): (p: Complex) => boolean {
+  return boundedOmega ? (p: Complex) => pointInPolygon(p, poly) : (p: Complex) => !pointInPolygon(p, poly);
+}
+
+/** The deltoid boundary as φ(unit circle); Ω is its EXTERIOR (unbounded) or INTERIOR (bounded, S5-C2). */
+export function schwarzBoundaryPoly(engine: SchwarzEngine, n = 512): Complex[] {
   const pts: Complex[] = [];
   for (let k = 0; k < n; k++) {
     const t = (2 * Math.PI * k) / n;
@@ -125,12 +140,12 @@ export function formatSchwarzViewFields(view: SchwarzView): { re: string; im: st
 
 /** Classify one point w under σ (isInOmega = outside the boundary polygon). */
 export function schwarzEscapeAt(
-  engine: UnboundedLaurentSchwarz,
+  engine: SchwarzEngine,
   poly: Complex[],
   w: Complex,
   opts: SchwarzRenderOptions = {},
 ): EscapeResult {
-  const isInOmega = (p: Complex): boolean => !pointInPolygon(p, poly);
+  const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
   return escapeTime(engine, isInOmega, w, { maxIter: opts.maxIter ?? 64, escapeR: opts.escapeR ?? 1e6 });
 }
 
@@ -151,14 +166,14 @@ export interface SchwarzOrbit extends EscapeResult {
  * The `kind`/`n` semantics mirror `escapeTime` exactly; only the trajectory is added.
  */
 export function schwarzOrbitAt(
-  engine: UnboundedLaurentSchwarz,
+  engine: SchwarzEngine,
   poly: Complex[],
   w0: Complex,
   opts: SchwarzRenderOptions = {},
 ): SchwarzOrbit {
   const maxIter = opts.maxIter ?? 64;
   const escapeR = opts.escapeR ?? 1e6;
-  const isInOmega = (p: Complex): boolean => !pointInPolygon(p, poly);
+  const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
   const points: Complex[] = [w0];
   if (!isInOmega(w0)) return { kind: "fundamental", n: 0, points };
   let w = w0;
@@ -234,14 +249,14 @@ function colorFor(res: EscapeResult, maxIter: number): readonly [number, number,
  * `Uint8ClampedArray<ArrayBuffer>` buffer-variance check). Pure and synchronous; the caller sizes it.
  */
 export function renderSchwarzField(
-  engine: UnboundedLaurentSchwarz,
+  engine: SchwarzEngine,
   poly: Complex[],
   view: SchwarzView,
   size: number,
   opts: SchwarzRenderOptions = {},
 ): Uint8ClampedArray {
   const maxIter = opts.maxIter ?? 64;
-  const isInOmega = (p: Complex): boolean => !pointInPolygon(p, poly);
+  const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
   const escapeR = opts.escapeR ?? 1e6;
   const rgba = new Uint8ClampedArray(size * size * 4);
   for (let py = 0; py < size; py++) {

@@ -58,7 +58,7 @@ const MAX_TERMS = 64;
 export function encodeSigmaState(s: SigmaViewState): string {
   const out: Record<string, unknown> = {
     // Real c serializes as a bare number (compact + byte-identical to pre-C1 links); a complex c (S5-C1)
-    // as a [re, im] pair. parseSigmaState accepts either.
+    // as a [re, im] pair. parseSigmaState accepts either. (A bounded φ carries c = [0,0] in the unused slot.)
     c: s.phi.c[1] === 0 ? s.phi.c[0] : s.phi.c,
     F: s.phi.F,
     b: s.phi.branches.map((br) => ({ z: br.z, A: br.A })),
@@ -67,6 +67,13 @@ export function encodeSigmaState(s: SigmaViewState): string {
     cm: s.colormap,
     sc: s.scale,
   };
+  // S5-C2: a BOUNDED φ carries its family tag + centre w₀ (its σ is the interior-branch reconstruction;
+  // c / F are the unused [0,0] / [] slots). Emitted ONLY for bounded, so an unbounded view's link stays
+  // byte-identical to pre-C2 — the family tag is absent and parseSigmaState defaults it to "unbounded".
+  if (s.phi.family === "bounded") {
+    out.fam = "bounded";
+    out.w0 = s.phi.w0 ?? [0, 0];
+  }
   // S5-B1 color mode + trap shape, omitted at their defaults so a plain (escape-time) view's link is
   // unchanged from pre-B1 — same rule as the tone keys below.
   if (s.colorMode !== DEFAULT_SCHWARZ_COLOR_MODE) out.md = s.colorMode;
@@ -84,13 +91,18 @@ export function encodeSigmaState(s: SigmaViewState): string {
 export function schwarzStampParams(s: SigmaViewState): string {
   const r = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
   const cplx = (z: Complex): string => `${r(z[0])}${z[1] >= 0 ? "+" : "-"}${r(Math.abs(z[1]))}i`;
-  const F = s.phi.F.map(cplx).join(", ");
-  const cStr = s.phi.c[1] === 0 ? r(s.phi.c[0]) : cplx(s.phi.c); // bare real, or re±im i for a complex c
   const trap = s.colorMode === "trap" ? ` (${s.trapShape})` : "";
+  // A bounded φ (S5-C2) has no leading c / Laurent F — summarise it by its centre w₀ instead, so the PNG
+  // metadata reads honestly rather than printing the trivial c=0, F=[] slots.
+  const recipe =
+    s.phi.family === "bounded"
+      ? `plane=Schwarz reflection sigma (approx, bounded); w0=${cplx(s.phi.w0 ?? [0, 0])}; poles=${s.phi.branches.length}`
+      : `plane=Schwarz reflection sigma (approx); c=${s.phi.c[1] === 0 ? r(s.phi.c[0]) : cplx(s.phi.c)}; ` +
+        `F=[${s.phi.F.map(cplx).join(", ")}]; poles=${s.phi.branches.length}`;
   return (
-    `plane=Schwarz reflection sigma (approx); c=${cStr}; F=[${F}]; poles=${s.phi.branches.length}; ` +
-    `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}; ` +
-    `colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; vignette=${r(s.vignette)}`
+    `${recipe}; center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
+    `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
+    `vignette=${r(s.vignette)}`
   );
 }
 
@@ -122,14 +134,30 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
 
-  // c is the leading coefficient: a bare number (real maps / pre-C1 links) or a [re, im] pair (S5-C1),
-  // and must be non-zero (the engine requires it).
-  let cVal: Complex | null = null;
+  // S5-C2: a bounded φ (fam:"bounded") reconstructs on the interior branch — it has no leading c·z term, so
+  // c / F are ignored and it carries a centre w₀ instead. An unbounded φ (the default) still requires a
+  // non-zero c. An unknown family tag falls back to unbounded.
+  const bounded = o.fam === "bounded";
+
+  // c is the leading coefficient (unbounded): a bare number (real maps / pre-C1 links) or a [re, im] pair
+  // (S5-C1), and must be non-zero. For a bounded φ it is the unused [0,0] slot.
+  let cVal: Complex = [0, 0];
   if (fin(o.c)) cVal = [o.c, 0];
-  else cVal = complex(o.c);
-  if (!cVal || (cVal[0] === 0 && cVal[1] === 0)) return null;
+  else {
+    const c = complex(o.c);
+    if (c) cVal = c;
+  }
+  if (!bounded && cVal[0] === 0 && cVal[1] === 0) return null; // unbounded needs a non-zero c
   const F = complexList(o.F);
   if (!F) return null;
+
+  // A bounded φ must carry its centre w₀ (φ(0) = w₀); an unbounded φ has none.
+  let w0: Complex = [0, 0];
+  if (bounded) {
+    const w = complex(o.w0);
+    if (!w) return null;
+    w0 = w;
+  }
 
   const branches: SchwarzBranch[] = [];
   if (o.b !== undefined) {
@@ -168,5 +196,8 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const gamma = clampOr(o.gam, SIGMA_TONE_DEFAULTS.gamma, 0.2, 5);
   const vignette = clampOr(o.vig, SIGMA_TONE_DEFAULTS.vignette, 0, 1);
 
-  return { phi: { c: cVal, F, branches }, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette };
+  // Unbounded stays `family`-less (byte-identical to pre-C2 states + their round-trip); only a bounded φ
+  // carries the tag + centre w₀. Both reconstruct correctly — renderSchwarzFromPhi treats absent as unbounded.
+  const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
+  return { phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette };
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { makeUnboundedLaurentSchwarz, type Complex } from "@cas/schwarz";
+import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz, type Complex } from "@cas/schwarz";
 import { schwarzBoundaryPoly } from "../src/render/schwarzView";
 import { createSchwarzGLRenderer } from "../src/render/schwarzGL";
 import { schwarzColormap } from "../src/render/schwarzColormaps";
@@ -160,6 +160,44 @@ describe("CD σ GPU render (S4b-ii + ADR-0009 item 3) — full pipeline in real 
     const d = readPixels(r.canvas, size);
     for (let i = 3; i < d.length; i += 4) expect(d[i]).toBe(255); // opaque
     expect(distinctColors(d).size).toBeGreaterThan(1); // structure, not a flat fill
+    r.destroy();
+  });
+
+  // S5-C2d: a BOUNDED-QD σ field renders through the same shell — the σ evaluator switches family via the
+  // shared @cas/schwarz/gpu uniforms (u_family / u_w0) and inOmega() flips to the INTERIOR orientation
+  // (u_boundedOmega). Single-lobe fixture: w₀=0, one branch z_j=0.3 A=[0.5] (the cross-app golden's φ).
+  //
+  // This domain's σ-dynamics are deliberately TRIVIAL — a single simple pole, so σ maps Ω out of Ω in one
+  // step almost everywhere (interior points are fundamental at n=1). With the linear escape scale
+  // computeT(0)==computeT(1)==0, so the n=0 exterior K and the n=1 interior render the SAME base color and
+  // the field is (correctly) near-flat. The interior-Ω orientation itself is proven at the CPU level
+  // (schwarzView.test.ts); here we prove the GPU family path is LIVE — feeding the identical branch
+  // coefficients WITHOUT the bounded tag (unbounded σ + exterior orientation) yields a genuinely different,
+  // valid frame, so u_family / u_w0 / u_boundedOmega are wired end-to-end, not silently ignored.
+  it("renders a bounded-QD σ field opaque, and the bounded family path differs from the unbounded one", () => {
+    const r = createSchwarzGLRenderer();
+    expect(r).not.toBeNull();
+    if (!r) return;
+    const branches = [{ z: [0.3, 0] as Complex, A: [[0.5, 0] as Complex] }];
+    const bounded = { family: "bounded" as const, w0: [0, 0] as Complex, branches };
+    const engine = makeBoundedSchwarz([0, 0], branches);
+    const poly = schwarzBoundaryPoly(engine);
+    const size = 64;
+    const bview = { center: [0, 0] as [number, number], zoom: 0.8 };
+
+    r.setPhi(bounded, poly);
+    expect(r.render(bview, size, OPTS)).toBe(true);
+    const boundedFrame = readPixels(r.canvas, size);
+    for (let i = 3; i < boundedFrame.length; i += 4) expect(boundedFrame[i]).toBe(255); // opaque, fully rendered
+
+    // Same branch coefficients, but read as an UNBOUNDED φ (no family tag ⇒ exterior σ + exterior Ω): the
+    // frame must move — proof the family/w0/boundedOmega switch is live, not a no-op.
+    r.setPhi({ c: [1, 0] as Complex, F: [] as Complex[], branches }, poly);
+    r.render(bview, size, OPTS);
+    const asUnbounded = readPixels(r.canvas, size);
+    expect(pixelsDiffering(boundedFrame, asUnbounded), "bounded vs unbounded interpretation differ").toBeGreaterThan(
+      size,
+    );
     r.destroy();
   });
 });

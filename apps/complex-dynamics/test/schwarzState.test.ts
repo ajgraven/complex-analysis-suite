@@ -52,6 +52,34 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
     expect(encodeSigmaState(DELTOID)).toMatch(/"c":1(,|})/);
     expect(encodeSigmaState(CPLX)).toContain('"c":[1,0.5]');
   });
+
+  // S5-C2d: a bounded σ view carries family:"bounded" + centre w₀ so an imported bounded reflection can be
+  // permalinked / saved / stamped and restored on the interior branch (single-lobe fixture: w₀=0, z_j=0.3).
+  const BOUNDED: SigmaViewState = {
+    phi: { family: "bounded", c: [0, 0], F: [], w0: [0, 0], branches: [{ z: [0.3, 0], A: [[0.5, 0]] }] },
+    center: [0, 0],
+    zoom: 1.5,
+    colormap: "magma",
+    scale: "log",
+    colorMode: "escape",
+    trapShape: "cross",
+    ...SIGMA_TONE_DEFAULTS,
+  };
+
+  it("round-trips a bounded state (family + w₀) — S5-C2d", () => {
+    expect(parseSigmaState(encodeSigmaState(BOUNDED))).toEqual(BOUNDED);
+    // The bounded link carries fam + w0; an unbounded link carries neither (byte-identical to pre-C2).
+    expect(encodeSigmaState(BOUNDED)).toContain('"fam":"bounded"');
+    expect(encodeSigmaState(BOUNDED)).toContain('"w0":[0,0]');
+    expect(encodeSigmaState(DELTOID)).not.toContain('"fam"');
+  });
+
+  it("a bounded state does NOT require a non-zero c (its c is the unused [0,0] slot) — S5-C2d", () => {
+    // The unbounded guard 'c must be non-zero' would reject c=[0,0]; the bounded branch must skip it.
+    const restored = parseSigmaState(encodeSigmaState(BOUNDED));
+    expect(restored?.phi.family).toBe("bounded");
+    expect(restored?.phi.w0).toEqual([0, 0]);
+  });
 });
 
 describe("parseSigmaState — hostile-link hardening", () => {

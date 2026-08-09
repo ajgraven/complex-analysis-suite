@@ -133,7 +133,7 @@ import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
-import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
   SCHWARZ_COLORMAP_NAMES,
@@ -2997,7 +2997,8 @@ function init(): void {
     | {
         engine: ReturnType<typeof schwarzEngineFromMapSpec>;
         poly: ReturnType<typeof schwarzBoundaryPoly>;
-        phi: SchwarzPhi; // the φ recipe (c, F, branches) — serialized into the σ permalink (_sigma, item 2)
+        phi: SchwarzPhi; // the φ recipe (family, c, F, w0, branches) — serialized into the σ permalink (_sigma, item 2)
+        boundedOmega: boolean; // S5-C2: Ω is INSIDE ∂Ω (bounded φ) — the CPU field + orbit tracer need it
         size: number;
         mode: "GPU" | "CPU";
       }
@@ -3024,7 +3025,7 @@ function init(): void {
   /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
   function paintSchwarz(): void {
     if (!schwarzSession) return;
-    const { engine, poly, size, mode } = schwarzSession;
+    const { engine, poly, size, mode, boundedOmega } = schwarzSession;
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -3044,7 +3045,7 @@ function init(): void {
       });
       ctx.drawImage(schwarzGL.canvas, 0, 0);
     } else {
-      const rgba = renderSchwarzField(engine, poly, schwarzView, size, SCHWARZ_ESCAPE);
+      const rgba = renderSchwarzField(engine, poly, schwarzView, size, { ...SCHWARZ_ESCAPE, boundedOmega });
       const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
       img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
       ctx.putImageData(img, 0, 0);
@@ -3152,7 +3153,10 @@ function init(): void {
   /** Inspect the σ-orbit of w₀ (a plot point): trace it, show the readout, redraw with the overlay. */
   function setSchwarzInspect(w0: Complex): void {
     if (!schwarzSession) return;
-    schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, SCHWARZ_ESCAPE);
+    schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, {
+      ...SCHWARZ_ESCAPE,
+      boundedOmega: schwarzSession.boundedOmega,
+    });
     renderSchwarzInspectReadout();
     scheduleSchwarzPaint();
   }
@@ -3171,6 +3175,9 @@ function init(): void {
    */
   function enterSchwarz(engine: ReturnType<typeof schwarzEngineFromMapSpec>, phi: SchwarzPhi): void {
     const poly = schwarzBoundaryPoly(engine);
+    // S5-C2: a bounded φ uniformizes 𝔻 → Ω, so Ω is the INTERIOR of ∂Ω — the CPU field/orbit tracer flip
+    // their in-Ω test (the GPU reads phi.family itself in setPhi). Absent family ⇒ the exterior orientation.
+    const boundedOmega = phi.family === "bounded";
     if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
     let mode: "GPU" | "CPU" = "CPU";
     let size = 256;
@@ -3184,7 +3191,7 @@ function init(): void {
         console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
       }
     }
-    schwarzSession = { engine, poly, phi, size, mode };
+    schwarzSession = { engine, poly, phi, boundedOmega, size, mode };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     schwarzHover = null;
@@ -3197,7 +3204,7 @@ function init(): void {
       // A GPU render that throws at paint time degrades the whole session to CPU, in THIS call.
       if (schwarzSession.mode === "GPU") {
         console.warn("schwarzGL render failed; falling back to the CPU field:", err);
-        schwarzSession = { engine, poly, phi, size: 256, mode: "CPU" };
+        schwarzSession = { engine, poly, phi, boundedOmega, size: 256, mode: "CPU" };
         paintSchwarz();
       }
     }
@@ -3209,9 +3216,15 @@ function init(): void {
   function renderSchwarzView(spec: SchwarzMap): void {
     enterSchwarz(schwarzEngineFromMapSpec(spec), schwarzPhiFromMapSpec(spec));
   }
-  /** Native path: build the σ engine from φ coefficients (a preset or the custom form) and enter. */
+  /** Native + restore path: build the σ engine from φ coefficients (a preset, the custom form, or a
+   *  serialized σ view) and enter. Dispatches on the family — a bounded φ (S5-C2) uses the interior-branch
+   *  engine, everything else the unbounded-Laurent engine. */
   function renderSchwarzFromPhi(phi: SchwarzPhi): void {
-    enterSchwarz(makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches), phi);
+    const engine =
+      phi.family === "bounded"
+        ? makeBoundedSchwarz(phi.w0 ?? [0, 0], phi.branches)
+        : makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches);
+    enterSchwarz(engine, phi);
   }
   /**
    * Restore a σ view from a serialized `_sigma` state (permalink / saved view / PNG — ADR-0009 item 2):
@@ -3361,7 +3374,7 @@ function init(): void {
         schwarzSession.engine,
         schwarzSession.poly,
         uvToPlotFrac(schwarzView, uv[0], uv[1]),
-        SCHWARZ_ESCAPE,
+        { ...SCHWARZ_ESCAPE, boundedOmega: schwarzSession.boundedOmega },
       );
       scheduleSchwarzPaint();
     };
@@ -3645,20 +3658,10 @@ function init(): void {
       return true;
     }
     if (spec.form === "schwarz") {
-      if (spec.phi.form === "bounded") {
-        // S5-C2c reconstructs the bounded-QD σ engine (makeBoundedSchwarz — pinned in test/importMap.test.ts),
-        // but its INTERACTIVE render lands in the next slice (C2d): the field paint is exterior-oriented
-        // (Ω is OUTSIDE ∂Ω for the Laurent family; a bounded Ω is INSIDE it), and the GPU needs its family
-        // switch wired. Decline the live render honestly rather than paint a bounded domain inside-out.
-        showToast(
-          `Imported a bounded-QD σ from ${env.provenance.app}. Its interactive σ view is coming in a follow-up — the reconstruction is ready, the interior-domain render isn't wired yet.`,
-          "info",
-        );
-        return true;
-      }
       // σ is reconstructed NUMERICALLY (φ⁻¹ is iterative), not expr/GPU-compiled: rebuild the evaluator
-      // from sigma.phi via @cas/schwarz and paint its escape-time field on the CPU (S4a). The reconstruct
-      // can throw for a family the engine doesn't support (non-Laurent φ) — decline honestly, don't crash.
+      // from sigma.phi via @cas/schwarz and paint its escape-time field (S4a; bounded QDs since S5-C2d, on
+      // the interior branch + interior-Ω orientation). The reconstruct can throw for a family the engine
+      // doesn't support (a non-Laurent/non-bounded φ) — decline honestly, don't crash.
       try {
         renderSchwarzView(spec);
       } catch (err) {

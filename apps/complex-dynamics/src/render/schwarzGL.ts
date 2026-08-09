@@ -9,9 +9,11 @@
 //
 // It renders to a PRIVATE offscreen WebGL2 canvas; the caller `drawImage`s that onto the existing 2D
 // #JCSSchwarz canvas. That keeps the DOM/dismiss/label path and the CPU fallback untouched — the GPU is
-// only a faster pixel source. Ω is the EXTERIOR of K (the unbounded-Laurent family), so "in Ω" ⟺ outside
-// the boundary polygon φ(unit circle), tested via a mask texture (matching the CPU's point-in-polygon,
-// and avoiding the ∂Ω speckle a per-pixel ray-cast or a bare Newton-success test would give).
+// only a faster pixel source. "In Ω" is tested via a mask texture of the boundary polygon φ(∂𝔻) (matching
+// the CPU's point-in-polygon, and avoiding the ∂Ω speckle a per-pixel ray-cast or a bare Newton-success
+// test would give): Ω is the EXTERIOR of that polygon for the unbounded-Laurent family, and the INTERIOR
+// for a bounded QD (S5-C2, u_boundedOmega) — the σ evaluator itself is family-aware via the shared
+// @cas/schwarz/gpu uniforms (u_family / u_w0).
 import { createProgram } from "@cas/gpu/shader";
 import { buildPolygonMaskTexture } from "@cas/gpu/mask";
 import { makeColormapTexture } from "@cas/gpu/colormap";
@@ -55,9 +57,10 @@ uniform float     u_zoom;            // half-width on each axis = 1/zoom
 uniform float     u_size;            // square render size in px
 uniform int       u_maxIter;
 uniform float     u_escapeR;
-uniform sampler2D u_mask;            // 1 inside K (the boundary polygon), 0 outside
+uniform sampler2D u_mask;            // 1 inside the boundary polygon φ(∂𝔻), 0 outside
 uniform vec2      u_maskCenter;
 uniform float     u_maskHalfExtent;
+uniform int       u_boundedOmega;    // S5-C2: 1 ⇒ Ω is INSIDE ∂Ω (bounded QD) · 0 ⇒ Ω is the exterior
 uniform sampler2D u_colormap;        // 256×1 escape-time ramp (a @cas/gpu colormap texture)
 uniform int       u_scaleMode;       // 0 linear · 1 log · 2 sqrt · 3 discrete · 4 cyclic
 uniform int       u_modK;            // period for the cyclic mode
@@ -72,11 +75,13 @@ ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
 out vec4 outColor;
 
-// In Ω ⟺ OUTSIDE the boundary polygon K (Ω is the unbounded exterior). Out-of-frame uv ⇒ outside K ⇒ in Ω.
+// In Ω ⟺ OUTSIDE the boundary polygon φ(∂𝔻) for the unbounded-Laurent family (Ω is the exterior), or
+// INSIDE it for a bounded QD (S5-C2, u_boundedOmega==1). The mask.r is 1 inside the polygon; out-of-frame
+// uv is outside the polygon (⇒ in Ω when unbounded, ⇒ outside Ω when bounded).
 bool inOmega(vec2 w) {
   vec2 uv = (w - u_maskCenter) / (2.0 * u_maskHalfExtent) + 0.5;
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return true;
-  return texture(u_mask, uv).r < 0.5;
+  bool insidePoly = uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && texture(u_mask, uv).r >= 0.5;
+  return (u_boundedOmega == 1) ? insidePoly : !insidePoly;
 }
 
 // Escape count n → colormap coordinate t∈[0,1] under the selected scale mode (ids match
@@ -268,6 +273,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uMask = U("u_mask");
   const uMaskCenter = U("u_maskCenter");
   const uMaskHalfExtent = U("u_maskHalfExtent");
+  const uBoundedOmega = U("u_boundedOmega");
   const uColormap = U("u_colormap");
   const uScaleMode = U("u_scaleMode");
   const uModK = U("u_modK");
@@ -283,6 +289,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   let maskTex: WebGLTexture | null = null;
   let maskCenter: [number, number] = [0, 0];
   let maskHalfExtent = 1;
+  let boundedOmega = false; // S5-C2: Ω is the INTERIOR of ∂Ω for a bounded QD; set per-map in setPhi
   let colormapTex: WebGLTexture | null = makeColormapTexture(ctx, schwarzColormap(DEFAULT_SCHWARZ_COLORMAP));
 
   function setColormap(name: string): void {
@@ -292,6 +299,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
 
   function setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void {
     packed = packPhi(phi);
+    boundedOmega = phi.family === "bounded"; // S5-C2: interior-Ω orientation for the inOmega test + mask pad
     // σ escape degree (S5-B2): near ∞, F(z) ~ conj(F[d])·z^d and z ~ w/c, so σ(w) ~ const·conj(w)^d with
     // d = the highest nonzero Laurent index. Drives the smooth/distance log-degree normalisation. A bounded
     // φ carries no Laurent tail (F is undefined/empty) — it has no ∞ regime, so the default d = 2 is kept.
@@ -302,8 +310,10 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     }
     if (escapeDegree < 2) escapeDegree = 2; // smooth's log(d) needs d ≥ 2; degree-1 escape isn't superattracting
     if (maskTex) ctx.deleteTexture(maskTex);
-    // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5).
-    const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: 5, size: 1024 });
+    // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5). A
+    // bounded Ω is compact, so a tighter pad keeps the mask's resolution on ∂Ω (QD uses 2.4 for a bounded
+    // interior — @cas/gpu maskTexture).
+    const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: boundedOmega ? 2.4 : 5, size: 1024 });
     maskTex = m.texture;
     maskCenter = m.center;
     maskHalfExtent = m.halfExtent;
@@ -343,6 +353,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform1i(uMask, 0);
     ctx.uniform2f(uMaskCenter, maskCenter[0], maskCenter[1]);
     ctx.uniform1f(uMaskHalfExtent, maskHalfExtent);
+    ctx.uniform1i(uBoundedOmega, boundedOmega ? 1 : 0); // S5-C2 interior-Ω orientation for inOmega()
 
     ctx.activeTexture(ctx.TEXTURE1);
     ctx.bindTexture(ctx.TEXTURE_2D, colormapTex);
