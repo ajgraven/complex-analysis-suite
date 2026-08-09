@@ -13,3 +13,6 @@ export type {
   EscapeResult,
   EscapeOptions,
 } from "./unbounded-laurent.js";
+// Bounded-QD family (S5-C2): φ: {|z|<1} → Ω onto a bounded domain, the interior-branch Schwarz reflection.
+export { makeBoundedSchwarz } from "./bounded.js";
+export type { BoundedSchwarz } from "./bounded.js";

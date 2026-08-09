@@ -1883,3 +1883,25 @@
   the one-shot σ-builder fields (c/F/poles) are not re-populated from a restored view — the render + share
   are correct, but "Generate σ" after a restore uses the stale field. Remaining C: C2 (non-Laurent families
   — bounded / PQD / LQD, one PR each).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2a — bounded-QD σ engine):**
+  first slice of C2 (non-Laurent families): the **bounded-QD** Schwarz engine, lifted from QD's
+  `adaptBounded` into `@cas/schwarz` (engine-first, mirroring S2a for the unbounded family). For the
+  conformal map φ: {|z|<1} → Ω onto a **bounded** domain, φ(z) = w₀ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ, the σ
+  reflection is σ(w)=conj(F(φ⁻¹(w))) with F(z)=conj(w₀)+Σⱼ Σₖ A_{j,k}/(z−z_j)ᵏ and φ⁻¹ the **interior**
+  branch |z|<1 (cold-seeded Newton near 0). Three differences from unbounded-Laurent: no leading c·z term,
+  F carries conj(w₀) instead of the c/z pole, and the inverse is the interior disk branch. **The finite-pole
+  branch math is identical to the unbounded family**, so per ADR-0007 (bounded = the second consumer) the
+  four branch helpers (branchPhi / branchPhiDeriv / branchF / branchFDeriv) were **extracted** from
+  `unbounded-laurent.ts` into a shared `branches.ts`, taking `branches` as a parameter; the unbounded engine
+  now imports them and re-exports the shared types, so the package's public surface is unchanged and the
+  extraction is **behavior-preserving** (the 19-case unbounded golden stays green before and after). NEW
+  `makeBoundedSchwarz(w₀, branches)` + `BoundedSchwarz` exported. NET: a bounded golden — the **unit disk**
+  (w₀=0, z_j=0, A=[1] ⇒ φ(z)=z) reflects as the exact inversion **σ(w)=1/conj(w)** (closed-form ground
+  truth); hand values on a single-lobe domain; the **boundary reflection F(z)=conj(φ(z)) on |z|=1** (the
+  Schwarz-extension pin ⟺ σ=identity on ∂Ω) across the disk + a complex + a two-branch domain; the interior
+  round-trip σ(φ(z₀))=conj(F(z₀)); the interior-branch inverse; and an evalFDeriv finite-difference. Green:
+  full monorepo — typecheck all workspaces; node tests packages (schwarz **31**, +6 bounded) + apps (CD 778,
+  correspondences 97, QD 2334 — all unchanged, the extraction is transparent). This is the CPU engine +
+  ground-truth foundation; the bounded family is **not yet wired** into the GPU shader, the interchange
+  wire, or CD's render — those are the next C2 slices (C2b GPU GLSL + CPU↔GPU parity; C2c interchange schema
+  + QD emit + CD reconstruct; C2d CD render / presets + cross-app golden).

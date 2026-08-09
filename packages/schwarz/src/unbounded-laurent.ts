@@ -10,25 +10,23 @@
 //
 // Arithmetic uses @cas/core's convention-neutral tupleAlgebra ([re,im]); conj / inv are the two ops
 // the algebra contract omits (both trivial), defined locally.
-import { makeDurandKerner, tupleAlgebra, type ComplexTuple } from "@cas/core";
+import { makeDurandKerner, tupleAlgebra } from "@cas/core";
+import {
+  branchPhi,
+  branchPhiDeriv,
+  branchF,
+  branchFDeriv,
+  type Complex,
+  type SchwarzBranch,
+} from "./branches.js";
 
-export type Complex = ComplexTuple;
+// The shared branch math lives in ./branches.ts (used by the bounded family too); re-export the types so
+// `@cas/schwarz`'s public surface (index.ts) is unchanged.
+export type { Complex, SchwarzBranch };
 
 const A = tupleAlgebra;
 const conj = (z: Complex): Complex => [z[0], -z[1]];
 const inv = (z: Complex): Complex => A.div([1, 0], z);
-
-/**
- * A finite-pole branch of a pole-bearing unbounded QD. φ gains Σₖ conj(A[k-1])·u_j(z)^k with
- * u_j(z) = z/(1 − conj(z)·z); its Schwarz extension gains the reflected principal part
- * Σₖ A[k-1]/(w − z_j)^k. z_j ∈ 𝔻 (so both terms are regular where they must be). A[k-1] = A_{j,k}.
- */
-export interface SchwarzBranch {
-  /** Reflected pole location z_j ∈ 𝔻. */
-  z: Complex;
-  /** Principal-part coefficients, low order first: A[k-1] = A_{j,k}, k = 1..m_j. */
-  A: readonly Complex[];
-}
 
 export interface UnboundedLaurentSchwarz {
   /** φ(z) = c·z + Σₗ F[l] / zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ  (the conformal map {|z|>1} → Ω). */
@@ -73,56 +71,8 @@ export function makeUnboundedLaurentSchwarz(
   const conjC: Complex = [cc[0], -cc[1]];
   const negConjC: Complex = [-cc[0], cc[1]]; // −conj(c), for F'(z)'s leading −conj(c)/z² term
 
-  // Finite-pole branch contributions — ported verbatim from the QD app's canonical σ
-  // (schwarz-common.mjs adaptUnbounded + branchPhiContribution / branchPhiDeriv / branchSchwarzContribution):
-  //   φ:  Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ,        u_j(z) = z/(1 − conj(z_j)·z)
-  //   φ': Σⱼ (1/(1−conj(z_j)z)²)·Σₖ k·conj(A_{j,k})·u_j^{k-1}
-  //   F:  Σⱼ Σₖ A_{j,k}/(z − z_j)ᵏ            (on |z|=1, conj(u_j)ᵏ = 1/(z−z_j)ᵏ — the reflected principal part)
-  const branchPhi = (z: Complex): Complex => {
-    let acc: Complex = [0, 0];
-    for (const br of branches) {
-      const denom = A.sub([1, 0], A.mul(conj(br.z), z));
-      if (A.abs(denom) < 1e-300) continue;
-      const u = A.div(z, denom);
-      let uPow: Complex = [1, 0];
-      for (let k = 0; k < br.A.length; k++) {
-        uPow = A.mul(uPow, u); // u^{k+1}
-        acc = A.add(acc, A.mul(conj(br.A[k]), uPow));
-      }
-    }
-    return acc;
-  };
-  const branchPhiDeriv = (z: Complex): Complex => {
-    let acc: Complex = [0, 0];
-    for (const br of branches) {
-      const denom = A.sub([1, 0], A.mul(conj(br.z), z));
-      if (A.abs(denom) < 1e-300) continue;
-      const u = A.div(z, denom);
-      const denom2 = A.mul(denom, denom);
-      let uPowKm1: Complex = [1, 0]; // u^{k-1}, starting at k=1
-      let inner: Complex = [0, 0];
-      for (let k = 1; k <= br.A.length; k++) {
-        inner = A.add(inner, A.mul(A.scale(conj(br.A[k - 1]), k), uPowKm1));
-        uPowKm1 = A.mul(uPowKm1, u);
-      }
-      acc = A.add(acc, A.div(inner, denom2));
-    }
-    return acc;
-  };
-  const branchF = (z: Complex): Complex => {
-    let acc: Complex = [0, 0];
-    for (const br of branches) {
-      const d = A.sub(z, br.z);
-      if (A.abs(d) < 1e-300) continue;
-      const dInv = inv(d);
-      let dInvPow: Complex = [1, 0]; // 1/(z−z_j)^k, starting at k=0
-      for (let k = 0; k < br.A.length; k++) {
-        dInvPow = A.mul(dInvPow, dInv); // → 1/(z−z_j)^{k+1}
-        acc = A.add(acc, A.mul(br.A[k], dInvPow));
-      }
-    }
-    return acc;
-  };
+  // Finite-pole branch contributions are the SAME for bounded and unbounded QDs — see ./branches.ts
+  // (branchPhi / branchPhiDeriv / branchF / branchFDeriv, taking `branches` as their first argument).
 
   const evalPhi = (z: Complex): Complex => {
     let acc = A.mul(cc, z);
@@ -132,7 +82,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.add(acc, A.mul(F[l], zInvPow));
       zInvPow = A.mul(zInvPow, zInv);
     }
-    if (hasBranches) acc = A.add(acc, branchPhi(z));
+    if (hasBranches) acc = A.add(acc, branchPhi(branches, z));
     return acc;
   };
 
@@ -144,7 +94,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.sub(acc, A.mul(A.scale(F[l], l), zInvPow));
       zInvPow = A.mul(zInvPow, zInv);
     }
-    if (hasBranches) acc = A.add(acc, branchPhiDeriv(z));
+    if (hasBranches) acc = A.add(acc, branchPhiDeriv(branches, z));
     return acc;
   };
 
@@ -155,24 +105,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.add(acc, A.mul(conj(F[l]), zPow));
       zPow = A.mul(zPow, z);
     }
-    if (hasBranches) acc = A.add(acc, branchF(z));
-    return acc;
-  };
-
-  // F' branch contribution: d/dz Σₖ A_{j,k}/(z−z_j)ᵏ = −Σₖ k·A_{j,k}/(z−z_j)^{k+1}. Mirrors branchF's
-  // indexing (br.A[k] is the coefficient of 1/(z−z_j)^{k+1}), so its derivative is −(k+1)·A[k]/(z−z_j)^{k+2}.
-  const branchFDeriv = (z: Complex): Complex => {
-    let acc: Complex = [0, 0];
-    for (const br of branches) {
-      const d = A.sub(z, br.z);
-      if (A.abs(d) < 1e-300) continue;
-      const dInv = inv(d);
-      let dInvPow: Complex = A.mul(dInv, dInv); // 1/(z−z_j)^{k+2}, starting at k=0 → 1/(z−z_j)²
-      for (let k = 0; k < br.A.length; k++) {
-        acc = A.sub(acc, A.mul(A.scale(br.A[k], k + 1), dInvPow));
-        dInvPow = A.mul(dInvPow, dInv);
-      }
-    }
+    if (hasBranches) acc = A.add(acc, branchF(branches, z));
     return acc;
   };
 
@@ -184,7 +117,7 @@ export function makeUnboundedLaurentSchwarz(
       acc = A.add(acc, A.mul(A.scale(conj(F[l]), l), zPow));
       zPow = A.mul(zPow, z);
     }
-    if (hasBranches) acc = A.add(acc, branchFDeriv(z));
+    if (hasBranches) acc = A.add(acc, branchFDeriv(branches, z));
     return acc;
   };
 
