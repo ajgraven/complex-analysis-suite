@@ -47,7 +47,7 @@ describe("@cas/gpu dual-backend: real GLSL ≈ JS across the corpus (browser Web
   // FORMULA is pinned tightly by the arithmetic maps + the node dualBackend core; transcendental maps get a
   // bound that reflects SwiftShader's transcendental accuracy (still catches a gross formula bug ≫ 5e-3).
   const isTranscendental = (src: string) =>
-    /\b(exp|log|sin|cos|tan|lambertw|gamma)\b/.test(src);
+    /\b(exp|log|sin|cos|tan|lambertw|gamma|zeta)\b/.test(src);
   it.each(DUAL_BACKEND_CORPUS)(
     "$name: GLSL matches the JS backend (renderer-appropriate ε)",
     (c) => {

@@ -44,6 +44,7 @@ const UNARY_TEX: Record<string, (a: string) => string> = {
   arg: (a) => `\\arg\\left(${a}\\right)`,
   lambertw: (a) => `W\\left(${a}\\right)`,
   gamma: (a) => `\\Gamma\\left(${a}\\right)`,
+  zeta: (a) => `\\zeta\\left(${a}\\right)`,
   round: (a) => `\\operatorname{round}\\left(${a}\\right)`,
   floor: (a) => `\\lfloor ${a}\\rfloor`,
   ceil: (a) => `\\lceil ${a}\\rceil`,

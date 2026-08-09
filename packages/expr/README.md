@@ -33,7 +33,7 @@ and any number of **live named parameters** (`a`, `b`, `k`, …):
   the Greek character, distinct from the Γ function) and **imaginary literals** `2i`, `3.5i`, `1e3i`
   (a number with a trailing `i`; it binds as one unit, so `2i^2 = (2i)^2`); **operators** `+ - * / ^`
   (principal-branch complex powers), comparisons `> < ==`, `if(cond,a,b)`, `not(...)`;
-- **functions** — `re im conjugate abs arg sqrt exp log sin cos tan arcsin arccos arctan arctan2 mod lambertw gamma round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native; `gamma` is Γ via Lanczos — see Special functions below);
+- **functions** — `re im conjugate abs arg sqrt exp log sin cos tan arcsin arccos arctan arctan2 mod lambertw gamma zeta round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native; `gamma`/`zeta` are Γ/ζ — see Special functions below);
 - **`;`-separated statements** with local assignment; the `escape` predicate may call
   `f(z, c)`.
 
@@ -57,9 +57,19 @@ carried into `f(...)` recursion, keeping the GLSL ≈ JS invariant inside self-r
 `gamma` is Γ(z) via the classic Lanczos approximation (g = 7) with the reflection formula for the left
 half-plane. Like the hyperbolics, it is **derived** — one implementation in terms of the base ops
 (`cexp`/`clog`/`csin`/`cpow`), so both GLSL precisions get it, and a JS twin with the same coefficients
-keeps the backends in step (numerically checked to float32 ε against known Γ values, both branches). It
-is **not** differentiable in the system yet (Γ′ = Γ·ψ needs a digamma builtin), so the instruments that
-require `f′` skip a map built on Γ. ζ and the DLMF colouring mode are the rest of Phase 4.
+keeps the backends in step (numerically checked to float32 ε against known Γ values, both branches).
+
+`zeta` is the Riemann ζ(s) via **Borwein's** acceleration of the alternating series — the `d_k`
+coefficients built by a ratio recurrence (no factorial overflow, so the GLSL and JS backends run the
+same code, no baked constants). The core is accurate through the critical strip; **Re(s) < 0** takes the
+functional equation `ζ(s) = 2^s π^(s−1) sin(πs/2) Γ(1−s) ζ(1−s)`, reusing `gamma` — so it shows the pole
+at `s = 1`, the trivial zeros at `−2, −4, …`, and the nontrivial zeros on `Re = ½`. In **float32** it is
+limited to ~1e-6 and degrades high up the strip (the plotter shows an honest precision badge; deep
+Riemann–Siegel is a future concern).
+
+Both `gamma` and `zeta` are **not** differentiable in the system yet (their derivatives need digamma /
+ζ′ builtins), so the instruments that require `f′` skip a map built on them. The DLMF colouring mode is
+the rest of Phase 4.
 
 ## API
 
@@ -81,7 +91,8 @@ import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@ca
 
 `test/` — parser/AST, evaluate↔compile, derivative, LaTeX, param-`a` handling, **`namedParams`**,
 **`constantsLiterals`** (the `2i` imaginary literal + `tau`/`phi`/`γ` across all backends), **`gamma`**
-(Γ known values, reflection, the functional equation, and non-differentiability),
+(Γ known values, reflection, the functional equation, and non-differentiability), **`zeta`** (ζ special
+values, trivial + first nontrivial zeros, the pole at 1, non-differentiability),
 (the ADR-0011 named-parameter model — enumeration, JS map + legacy positional, GLSL `uParam_<name>`
 aliases, recursion propagation), and **`complexParity`** (the JS complex library vs. its intended
 GLSL semantics). The end-to-end

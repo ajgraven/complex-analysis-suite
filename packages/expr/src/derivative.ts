@@ -4,10 +4,11 @@
  * from the existing node kinds, so it compiles through the same GLSL and JS
  * backends — no new stdlib. Only the holomorphic subset with a builtin
  * derivative is supported; the non-holomorphic builtins (re/im/conjugate/abs/
- * arg/round/floor/ceil), `gamma` (holomorphic, but its derivative Γ·ψ needs a
- * digamma builtin we don't have), binary functions, recursion (`f`), and local
- * assignments throw {@link ExprError} (so Newton's method can report "this f
- * isn't differentiable").
+ * arg/round/floor/ceil), the special functions `gamma` / `zeta` (holomorphic,
+ * but their derivatives need digamma / zeta-prime builtins we don't have),
+ * binary functions, recursion (`f`), and local assignments throw
+ * {@link ExprError} (so Newton's method can report "this f isn't
+ * differentiable").
  */
 
 import type { Node } from "./ast";

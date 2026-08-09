@@ -184,6 +184,9 @@ export const DUAL_BACKEND_CORPUS: DualCase[] = [
   // in the right half-plane and the reflected left, exercising both branches of cgamma. JS is float64,
   // GLSL float32 with float32 coefficients, so its agreement is looser than the elementary maps' ~1e-7.
   { name: "gamma(z) + c", source: "gamma(z) + c" },
+  // ζ (Borwein, B6): the critical strip (core) + the reflected left plane (via cgamma). Same float32
+  // caveat as Γ, compounded — the loosest of the corpus (the plotter badges ζ's f32 precision).
+  { name: "zeta(z) + c", source: "zeta(z) + c" },
 ];
 
 /** Deterministic (z, c) sample grid over a modest disc — no RNG (Math.random is unavailable in some

@@ -37,8 +37,9 @@
 | **`@cas/expr` literals & consts (B5)**  | ✅ done            | `ae9be23`                                  | imaginary literal `2i` (lexer `imag` → `num·i`, binds as a unit under `^`) + constants `tau`/`phi`/`γ` across evaluate/glsl/derivative/latex; dual-backend parity tests; headless-verified (all four compile + render on GPU) |
 | **A5/A7/A9 — input niceties**           | ✅ done            | `72bb04f`                                  | name autocomplete (`ui/autocomplete.ts`), two function slots `f`/`g` with a toggle, copy-as-LaTeX; pure `wordAt`/`filterCandidates` unit-tested; headless-verified (toggle, autocomplete insert, clipboard `f(z) = z^{2}`)    |
 | **3 — Parameters & families**           | ✅ **done**        | _all items landed_                         | ~~B4~~ · ~~G1~~ · ~~G2~~ · ~~G4~~ · ~~B5~~ · ~~A5/A7/A9~~ ✅ · GT: Blaschke `(z−a)/(1−ā z)` family animates (drag `a`, or drive `a=0.6·exp(i·t)`), zeros stay in the disk                                                     |
-| **Γ — gamma (B6, part 1)**              | ✅ done            | _⚠ backfill hash next commit_              | Lanczos `gamma` — JS + derived GLSL `cgamma` (both precisions, reflection branch); dual-backend corpus entry; JS known-value tests + numeric GLSL probe (rel err ≤ 2e-5, both branches); non-differentiable (no digamma)      |
-| **4 — Special functions & DLMF**        | 🔨 **in progress** | _Γ done; ζ + DLMF next_                    | ~~Γ~~ ✅ · next: ζ (B6 part 2, Euler–Maclaurin/Riemann–Siegel + f32 precision badge), B9 parity, D8 (DLMF colouring) · GT: DLMF Γ/ζ plates                                                                                    |
+| **Γ — gamma (B6, part 1)**              | ✅ done            | `b57339b`                                  | Lanczos `gamma` — JS + derived GLSL `cgamma` (both precisions, reflection branch); dual-backend corpus entry; JS known-value tests + numeric GLSL probe (rel err ≤ 2e-5, both branches); non-differentiable (no digamma)      |
+| **ζ — zeta (B6, part 2)**               | ✅ done            | _⚠ backfill hash next commit_              | Borwein `zeta` — JS + derived GLSL `czeta` (`d_k` recurrence, reflection reuses `cgamma`); corpus entry; tests (ζ(2/4/0/−1/−3), trivial + first nontrivial zeros, pole at 1) + numeric GLSL probe (both branches); non-diff   |
+| **4 — Special functions & DLMF**        | 🔨 **in progress** | _Γ + ζ done; badge + DLMF next_            | ~~Γ~~ ✅ · ~~ζ~~ ✅ · next: ζ f32 **precision badge** (honest-labeling) + D8 (DLMF colouring mode) · GT: DLMF Γ/ζ plates                                                                                                      |
 | **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                     |
 | **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                      |
 
@@ -66,16 +67,18 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
   (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU. `state/viewState.ts` round-trips
   `exprF`/`exprG`/`active` + `params` + `anim` (the sweep is transient). B5 added `2i` / `tau` / `phi` / `γ`
   to `@cas/expr`. (Phase-3 GT: the Blaschke `(z−a)/(1−ā z)` family animates with its zero in the disk.)
-- **Phase 4 underway — special functions & DLMF.** **✅ Γ done:** `gamma` is a derived function
-  (`@cas/gpu` `cgamma` = Lanczos g=7 with a reflection branch, GLSL has no recursion so `cgammaCore` is
-  split out) + a JS twin sharing the coefficients; wired through ast/evaluate/glsl/latex; non-differentiable
-  (no digamma). Verified: JS known values + a numeric GLSL probe (rel err ≤ 2e-5, both branches);
-  registered in `@cas/gpu` `DUAL_BACKEND_CORPUS` (transcendental-tolerance branch of the browser harness).
-  _First thing next commit: backfill Γ's hash into the build-progress row above._
-- **ζ (next).** Riemann ζ via Euler–Maclaurin (+ the functional-equation reflection for Re < ½), the same
-  derived-function pattern; f32 needs an **honest precision badge** (RISKS §ζ). Then **D8** — the DLMF
-  colouring mode (four-colour quadrant + continuous warped-hue). GT: the DLMF Γ / ζ plates (Γ poles at the
-  non-positive integers; ζ's pole at s=1, trivial zeros, nontrivial zeros on the critical line).
+- **Phase 4 underway — special functions & DLMF.** **✅ Γ and ζ done**, both as derived functions in
+  `@cas/gpu` (`cgamma` = Lanczos g=7; `czeta` = Borwein with a `d_k` recurrence, its reflection reusing
+  `cgamma` — GLSL has no recursion, so each splits a `…Core` out) with JS twins sharing the algorithm;
+  wired through ast/evaluate/glsl/latex; both non-differentiable (no digamma / ζ′). Verified per function:
+  JS known-value tests + a numeric GLSL probe over both branches (Γ ≤ 2e-5; ζ core ~1e-7, reflection via
+  cgamma exact to f32, first nontrivial zero ≈ 3e-5). Both registered in `@cas/gpu` `DUAL_BACKEND_CORPUS`.
+  _First thing next commit: backfill ζ's hash into the build-progress row above._
+- **Next — ζ f32 precision badge + D8.** ζ is float32-limited (~1e-6, worse high up the critical strip),
+  so per honest-labeling it must carry a **precision badge** in the plotter UI when a map uses `zeta` (and
+  a milder note for `gamma`) — a small app-side addition, do it before/with D8. Then **D8**: the DLMF
+  colouring mode (four-colour quadrant + continuous warped-hue + height). GT: the DLMF Γ / ζ plates (Γ
+  poles at the non-positive integers; ζ's pole at s=1, trivial zeros, nontrivial zeros on the critical line).
 - **Adding a render knob** follows the established `ColorState` pattern in `render/plot.ts`: field +
   `Uniforms` entry + default + `getUniformLocation` + a `gl.uniform*` in `render()`; then a control in
   `index.html` + wiring in `main.ts`; persist via `state/viewState.ts` (`PlotterState` + `decodeState`

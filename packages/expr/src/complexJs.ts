@@ -217,3 +217,49 @@ export function gamma(z: Complex): Complex {
   if (z[0] < 0.5) return div([PI, 0], mul(sin(mul([PI, 0], z)), gammaCore(sub(ONE, z))));
   return gammaCore(z);
 }
+
+// --- Riemann zeta function -----------------------------------------------------
+// ζ(s) via Borwein's acceleration of the alternating (eta) series: with the d_k coefficients,
+// (1−2^(1−s))·ζ(s) = −(1/d_n)·Σ_{k=0}^{n−1} (−1)^k (d_k−d_n)/(k+1)^s (error ~ 1/8^n for Re s ≥ ½). The
+// d_k are built by a ratio RECURRENCE (t_0 = 1/n, t_i = t_{i−1}·(n+i−1)(n−i+1)·4/((2i)(2i−1)),
+// d_k = n·Σ_{i≤k} t_i), which avoids the factorial overflow of the closed form — so the SAME code runs
+// in the GLSL backend (@cas/gpu czeta) with no baked constants. The Borwein core stays accurate through
+// the whole critical strip (down to Re = 0, and the nontrivial zeros on Re = ½), so only Re(s) < 0 takes
+// the functional equation ζ(s) = 2^s π^(s−1) sin(πs/2) Γ(1−s) ζ(1−s) (reusing `gamma`) — which supplies
+// the trivial zeros at s = −2, −4, … The pole at s = 1 falls out of the core's 1/(1−2^(1−s)) factor.
+
+const ZETA_N = 24; // series length; ~1/8^24 error for Re s ≥ ½ (float32-limited in the GLSL twin)
+
+/** Borwein core ζ(s), accurate for Re(s) ≳ 0 (used directly there and, reflected, for Re < 0). */
+function zetaCore(s: Complex): Complex {
+  const n = ZETA_N;
+  const d: number[] = new Array(n + 1);
+  let ti = 1 / n; // t_0
+  let acc = n * ti; // d_0 = 1
+  d[0] = acc;
+  for (let i = 1; i <= n; i++) {
+    ti = (ti * (n + i - 1) * (n - i + 1) * 4) / (2 * i * (2 * i - 1));
+    acc += n * ti;
+    d[i] = acc;
+  }
+  const dn = d[n];
+  let sum: Complex = [0, 0];
+  for (let k = 0; k < n; k++) {
+    const sign = k % 2 === 0 ? 1 : -1;
+    const term = exp(mul(neg(s), [Math.log(k + 1), 0])); // (k+1)^(−s)
+    sum = add(sum, mul([sign * (d[k] - dn), 0], term));
+  }
+  const twoPow = exp(mul(sub(ONE, s), [Math.log(2), 0])); // 2^(1−s)
+  return neg(div(sum, mul([dn, 0], sub(ONE, twoPow))));
+}
+
+/** ζ(s), the Riemann zeta function. Pole at s = 1; trivial zeros at the negative even integers. */
+export function zeta(s: Complex): Complex {
+  if (s[0] < 0) {
+    const twoS = exp(mul(s, [Math.log(2), 0])); // 2^s
+    const piPow = exp(mul(sub(s, ONE), [Math.log(PI), 0])); // π^(s−1)
+    const refl = mul(mul(twoS, piPow), sin(mul([PI / 2, 0], s))); // 2^s π^(s−1) sin(πs/2)
+    return mul(refl, mul(gamma(sub(ONE, s)), zetaCore(sub(ONE, s))));
+  }
+  return zetaCore(s);
+}

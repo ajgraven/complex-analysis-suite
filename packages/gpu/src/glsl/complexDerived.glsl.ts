@@ -105,4 +105,43 @@ cvec cgamma(cvec z) {
   }
   return cgammaCore(z);
 }
+
+// Riemann ζ(s) — Borwein's acceleration of the alternating series (the SAME algorithm + d_k recurrence
+// as the JS reference @cas/expr complexJs.ts zeta, so the backends agree to this build's precision; the
+// d_k are built by recurrence, not the overflowing factorial closed form). The core is accurate through
+// the critical strip; only Re(s) < 0 takes the functional equation (which reuses cgamma above, so it
+// must follow it), supplying the trivial zeros. GLSL has no recursion, hence the czetaCore / czeta split.
+// f32 caps this at ~1e-6 and degrades high up the critical strip — the plotter shows an honest badge.
+cvec czetaCore(cvec s) {
+  const int ZN = 24;
+  float d[ZN + 1];
+  float ti = 1.0 / float(ZN);       // t_0
+  float acc = float(ZN) * ti;       // d_0 = 1
+  d[0] = acc;
+  for (int i = 1; i <= ZN; i++) {
+    float fi = float(i);
+    ti = ti * (float(ZN) + fi - 1.0) * (float(ZN) - fi + 1.0) * 4.0 / (2.0 * fi * (2.0 * fi - 1.0));
+    acc += float(ZN) * ti;
+    d[i] = acc;
+  }
+  float dn = d[ZN];
+  cvec sum = vec_(0.0, 0.0);
+  for (int k = 0; k < ZN; k++) {
+    float sgn = (k % 2 == 0) ? 1.0 : -1.0;
+    cvec term = cexp(cmul(cneg(s), vec_(log(float(k) + 1.0), 0.0))); // (k+1)^(-s)
+    sum = cadd(sum, cmul(vec_(sgn * (d[k] - dn), 0.0), term));
+  }
+  cvec twoPow = cexp(cmul(csub(vec_(1.0, 0.0), s), vec_(log(2.0), 0.0))); // 2^(1-s)
+  return cneg(cdiv(sum, cmul(vec_(dn, 0.0), csub(vec_(1.0, 0.0), twoPow))));
+}
+cvec czeta(cvec s) {
+  if (cre1(s) < 0.0) {
+    // ζ(s) = 2^s · π^(s-1) · sin(π s / 2) · Γ(1-s) · ζ(1-s)
+    cvec twoS = cexp(cmul(s, vec_(log(2.0), 0.0)));
+    cvec piPow = cexp(cmul(csub(s, vec_(1.0, 0.0)), vec_(log(C_PI), 0.0)));
+    cvec refl = cmul(cmul(twoS, piPow), csin(cmul(vec_(C_PI * 0.5, 0.0), s)));
+    return cmul(refl, cmul(cgamma(csub(vec_(1.0, 0.0), s)), czetaCore(csub(vec_(1.0, 0.0), s))));
+  }
+  return czetaCore(s);
+}
 `;
