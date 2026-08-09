@@ -718,6 +718,28 @@ abs(z)>2</textarea
                         <option value="4">4×</option>
                       </select>
                     </div>
+                    <div class="field">
+                      <label for="schwarz-iters">iterations</label>
+                      <input
+                        id="schwarz-iters"
+                        type="number"
+                        min="1"
+                        max="4096"
+                        step="1"
+                        inputmode="numeric"
+                        title="σ escape-time iteration cap — higher resolves deeper tiling near ∂Ω, but is slower. Shared by the field and the orbit inspector."
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-escaper">escape radius</label>
+                      <input
+                        id="schwarz-escaper"
+                        type="text"
+                        inputmode="decimal"
+                        spellcheck="false"
+                        title="|σⁿ| beyond this counts as escaped to ∞. Scientific notation allowed, e.g. 1e4."
+                      />
+                    </div>
                   </div>
                 </details>
 

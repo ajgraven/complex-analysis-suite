@@ -45,10 +45,20 @@ export interface SigmaViewState {
   gamma: number;
   /** Radial edge darkening ∈[0,1]; 0 = off. */
   vignette: number;
+  /** Anti-aliasing supersample factor (B2); 1 = native device pixels. */
+  aa: number;
+  /** σ escape-time iteration cap (B2) — shared by the field and the orbit inspector. */
+  maxIter: number;
+  /** σ escape radius (B2): |σⁿ| beyond this counts as escaped to ∞. */
+  escapeR: number;
 }
 
 /** Identity/default image-space tone — a view with no tone adjustments (also the fallback for old links). */
 export const SIGMA_TONE_DEFAULTS = { rotation: 0, gamma: 1, vignette: 0 } as const;
+
+/** Default render knobs (B2) — native resolution + the standard escape budget; also the fallback for links
+ *  that predate them, so an old permalink still restores a valid (default-quality) view. */
+export const SIGMA_RENDER_DEFAULTS = { aa: 1, maxIter: 48, escapeR: 1e4 } as const;
 
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
@@ -81,6 +91,11 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.rotation !== SIGMA_TONE_DEFAULTS.rotation) out.rot = s.rotation;
   if (s.gamma !== SIGMA_TONE_DEFAULTS.gamma) out.gam = s.gamma;
   if (s.vignette !== SIGMA_TONE_DEFAULTS.vignette) out.vig = s.vignette;
+  // Render knobs (B2), omitted at their defaults so a native-resolution / default-budget view's link stays
+  // as small as pre-B2 — same rule as the tone keys.
+  if (s.aa !== SIGMA_RENDER_DEFAULTS.aa) out.aa = s.aa;
+  if (s.maxIter !== SIGMA_RENDER_DEFAULTS.maxIter) out.it = s.maxIter;
+  if (s.escapeR !== SIGMA_RENDER_DEFAULTS.escapeR) out.er = s.escapeR;
   return JSON.stringify(out);
 }
 
@@ -102,7 +117,7 @@ export function schwarzStampParams(s: SigmaViewState): string {
   return (
     `${recipe}; center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
-    `vignette=${r(s.vignette)}`
+    `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}`
   );
 }
 
@@ -195,9 +210,14 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const rotation = clampOr(o.rot, SIGMA_TONE_DEFAULTS.rotation, 0, 1);
   const gamma = clampOr(o.gam, SIGMA_TONE_DEFAULTS.gamma, 0.2, 5);
   const vignette = clampOr(o.vig, SIGMA_TONE_DEFAULTS.vignette, 0, 1);
+  // Render knobs (B2) — clamp to sane bounds; a bad/absent value falls back to the default (never fatal, so
+  // an old or corrupt link still restores a valid view). aa / maxIter are integers.
+  const aa = Math.round(clampOr(o.aa, SIGMA_RENDER_DEFAULTS.aa, 1, 4));
+  const maxIter = Math.round(clampOr(o.it, SIGMA_RENDER_DEFAULTS.maxIter, 1, 4096));
+  const escapeR = clampOr(o.er, SIGMA_RENDER_DEFAULTS.escapeR, 1.0001, 1e12);
 
   // Unbounded stays `family`-less (byte-identical to pre-C2 states + their round-trip); only a bounded φ
   // carries the tag + centre w₀. Both reconstruct correctly — renderSchwarzFromPhi treats absent as unbounded.
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
-  return { phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette };
+  return { phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter, escapeR };
 }

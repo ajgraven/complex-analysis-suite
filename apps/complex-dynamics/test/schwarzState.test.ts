@@ -4,6 +4,7 @@ import {
   parseSigmaState,
   schwarzStampParams,
   SIGMA_TONE_DEFAULTS,
+  SIGMA_RENDER_DEFAULTS,
   type SigmaViewState,
 } from "../src/state/schwarzState";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../src/render/schwarzView";
@@ -22,6 +23,7 @@ const DELTOID: SigmaViewState = {
   colorMode: "escape",
   trapShape: "cross",
   ...SIGMA_TONE_DEFAULTS,
+  ...SIGMA_RENDER_DEFAULTS,
 };
 const POLE: SigmaViewState = {
   phi: { c: [1, 0], F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
@@ -34,6 +36,9 @@ const POLE: SigmaViewState = {
   rotation: 0.25,
   gamma: 1.8,
   vignette: 0.4,
+  aa: 2, // non-default render knobs, to prove they round-trip (B2)
+  maxIter: 128,
+  escapeR: 1000,
 };
 
 describe("encodeSigmaState / parseSigmaState round-trip", () => {
@@ -64,6 +69,7 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
     colorMode: "escape",
     trapShape: "cross",
     ...SIGMA_TONE_DEFAULTS,
+    ...SIGMA_RENDER_DEFAULTS,
   };
 
   it("round-trips a bounded state (family + w₀) — S5-C2d", () => {
@@ -209,6 +215,36 @@ describe("parseSigmaState — field color mode (S5-B1)", () => {
   });
 });
 
+describe("parseSigmaState — render knobs (B2)", () => {
+  const enc = (o: unknown): string => JSON.stringify(o);
+  const base = { c: 1, F: [[0, 0], [0, 0], [0.5, 0]], b: [], ctr: [0, 0], z: 0.4, cm: "viridis", sc: "linear" };
+
+  it("defaults aa / maxIter / escapeR when absent (old links pre-B2)", () => {
+    const s = parseSigmaState(enc(base));
+    expect(s?.aa).toBe(SIGMA_RENDER_DEFAULTS.aa);
+    expect(s?.maxIter).toBe(SIGMA_RENDER_DEFAULTS.maxIter);
+    expect(s?.escapeR).toBe(SIGMA_RENDER_DEFAULTS.escapeR);
+  });
+
+  it("round-trips non-default render knobs and omits identity-default keys from the encoding", () => {
+    // A default-quality view encodes without any render keys (link stays as small as pre-B2).
+    const plain = encodeSigmaState({ ...DELTOID });
+    expect(plain).not.toMatch(/"(aa|it|er)"/);
+    const s = parseSigmaState(encodeSigmaState({ ...DELTOID, aa: 3, maxIter: 200, escapeR: 500 }));
+    expect(s?.aa).toBe(3);
+    expect(s?.maxIter).toBe(200);
+    expect(s?.escapeR).toBe(500);
+  });
+
+  it("clamps out-of-range render knobs (aa 1..4, maxIter 1..4096) and defaults a bad value", () => {
+    expect(parseSigmaState(enc({ ...base, aa: 9 }))?.aa).toBe(4);
+    expect(parseSigmaState(enc({ ...base, aa: 0 }))?.aa).toBe(1);
+    expect(parseSigmaState(enc({ ...base, it: 99999 }))?.maxIter).toBe(4096);
+    expect(parseSigmaState(enc({ ...base, it: 0 }))?.maxIter).toBe(1);
+    expect(parseSigmaState(enc({ ...base, aa: "x", it: null }))?.aa).toBe(SIGMA_RENDER_DEFAULTS.aa);
+  });
+});
+
 describe("schwarzStampParams (PNG metadata summary)", () => {
   it("summarises the σ view in one ASCII-safe line (no σ / ≈ / Unicode minus)", () => {
     const s = schwarzStampParams(DELTOID);
@@ -222,6 +258,9 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("rotation=0");
     expect(s).toContain("gamma=1");
     expect(s).toContain("vignette=0");
+    expect(s).toContain("aa=1");
+    expect(s).toContain("iters=48");
+    expect(s).toContain("escapeR=10000");
     expect(s).not.toMatch(/[σ≈−]/); // PNG tEXt is Latin-1
   });
 
@@ -235,5 +274,8 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("rotation=0.25");
     expect(s).toContain("gamma=1.8");
     expect(s).toContain("vignette=0.4");
+    expect(s).toContain("aa=2");
+    expect(s).toContain("iters=128");
+    expect(s).toContain("escapeR=1000");
   });
 });

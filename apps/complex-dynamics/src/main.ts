@@ -2987,8 +2987,10 @@ function init(): void {
   // exits and restores the normal plot underneath.
   const SCHWARZ_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.4 }; // half-width 1/zoom = 2.5
   // ONE escape budget for both the σ field and the orbit inspector, so a clicked point's reported fate
-  // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree).
-  const SCHWARZ_ESCAPE = { maxIter: 48, escapeR: 1e4 } as const;
+  // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree). Mutable so
+  // the Render-group iterations / escape-radius fields (B2) retune it live; defaults hold at 48 / 1e4.
+  const SCHWARZ_ESCAPE_DEFAULTS = { maxIter: 48, escapeR: 1e4 } as const;
+  const schwarzEscape: { maxIter: number; escapeR: number } = { ...SCHWARZ_ESCAPE_DEFAULTS };
   // The GPU σ renderer is built once, lazily: `undefined` = not yet tried, `null` = WebGL2 unavailable
   // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
   let schwarzGL: SchwarzGLRenderer | null | undefined;
@@ -3066,7 +3068,7 @@ function init(): void {
       const renderSize = schwarzDraft ? Math.max(160, Math.round(backing / 4)) : full;
       if (schwarzFieldDirty) {
         schwarzGL.render(schwarzView, renderSize, {
-          ...SCHWARZ_ESCAPE,
+          ...schwarzEscape,
           scaleMode: schwarzScaleMode,
           colorMode: schwarzColorMode,
           trapShape: schwarzTrapShape,
@@ -3082,7 +3084,7 @@ function init(): void {
       ctx.drawImage(schwarzGL.canvas, 0, 0, schwarzLastRenderSize, schwarzLastRenderSize, 0, 0, backing, backing);
     } else {
       if (schwarzFieldDirty || !schwarzCpuImage || schwarzCpuImage.width !== backing) {
-        const rgba = renderSchwarzField(engine, poly, schwarzView, backing, { ...SCHWARZ_ESCAPE, boundedOmega });
+        const rgba = renderSchwarzField(engine, poly, schwarzView, backing, { ...schwarzEscape, boundedOmega });
         schwarzCpuImage = new ImageData(backing, backing); // construct-then-set — avoids the
         schwarzCpuImage.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance
       }
@@ -3236,7 +3238,7 @@ function init(): void {
   function setSchwarzInspect(w0: Complex): void {
     if (!schwarzSession) return;
     schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, {
-      ...SCHWARZ_ESCAPE,
+      ...schwarzEscape,
       boundedOmega: schwarzSession.boundedOmega,
     });
     renderSchwarzInspectReadout();
@@ -3323,12 +3325,21 @@ function init(): void {
     schwarzRotation = s.rotation;
     schwarzGamma = s.gamma;
     schwarzVignette = s.vignette;
+    schwarzAA = s.aa; // B2 render knobs travel with the σ view
+    schwarzEscape.maxIter = s.maxIter;
+    schwarzEscape.escapeR = s.escapeR;
     renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
     schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
     const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
     if (cm) cm.value = schwarzColormapName;
     const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
     if (sc) sc.value = schwarzScaleMode;
+    const aaEl = document.getElementById("schwarz-aa") as HTMLSelectElement | null;
+    if (aaEl) aaEl.value = String(schwarzAA);
+    const itEl = document.getElementById("schwarz-iters") as HTMLInputElement | null;
+    if (itEl) itEl.value = String(schwarzEscape.maxIter);
+    const erEl = document.getElementById("schwarz-escaper") as HTMLInputElement | null;
+    if (erEl) erEl.value = String(schwarzEscape.escapeR);
     syncSchwarzColorModeControls();
     syncSchwarzToneControls();
     renderSchwarzLegendChip();
@@ -3369,6 +3380,9 @@ function init(): void {
       rotation: schwarzRotation,
       gamma: schwarzGamma,
       vignette: schwarzVignette,
+      aa: schwarzAA,
+      maxIter: schwarzEscape.maxIter,
+      escapeR: schwarzEscape.escapeR,
     };
   }
 
@@ -3390,7 +3404,7 @@ function init(): void {
     let canvas: HTMLCanvasElement;
     if (schwarzSession.mode === "GPU" && schwarzGL) {
       schwarzGL.render(schwarzView, size, {
-        ...SCHWARZ_ESCAPE,
+        ...schwarzEscape,
         scaleMode: schwarzScaleMode,
         colorMode: schwarzColorMode,
         trapShape: schwarzTrapShape,
@@ -3458,7 +3472,7 @@ function init(): void {
         schwarzSession.engine,
         schwarzSession.poly,
         uvToPlotFrac(schwarzView, uv[0], uv[1]),
-        { ...SCHWARZ_ESCAPE, boundedOmega: schwarzSession.boundedOmega },
+        { ...schwarzEscape, boundedOmega: schwarzSession.boundedOmega },
       );
       scheduleSchwarzOverlayPaint(); // hover only moves the preview orbit — re-blit the cached field
     };
@@ -3714,16 +3728,48 @@ function init(): void {
     wire("schwarz-vignette", (v) => (schwarzVignette = v));
   }
 
-  // σ render controls (Phase B): the anti-aliasing (supersample) factor. Higher supersamples the field for
-  // smoother tiling edges; changing it triggers a full re-render (not a draft). The iterations / escape-radius
-  // fields join this group next (B2).
+  // σ render controls (Phase B): AA supersample + the escape budget (iterations + escape radius). Each
+  // re-renders the field at full res; the escape budget also re-traces the pinned inspect orbit so its fate
+  // readout matches the field (they share ONE budget). The values travel in the σ view (`_sigma`).
   {
     const aaSel = document.getElementById("schwarz-aa") as HTMLSelectElement | null;
+    const itIn = document.getElementById("schwarz-iters") as HTMLInputElement | null;
+    const erIn = document.getElementById("schwarz-escaper") as HTMLInputElement | null;
     if (aaSel) {
       aaSel.value = String(schwarzAA);
       aaSel.addEventListener("change", () => {
         schwarzAA = Math.max(1, Math.min(4, Math.round(Number(aaSel.value) || 1)));
         scheduleSchwarzPaint(); // full re-render at the new supersample factor
+      });
+    }
+    // The escape budget changes the FIELD (different escape counts) — full re-render, not an overlay blit;
+    // and re-trace any pinned orbit so its readout fate matches the new budget.
+    const applyEscape = (): void => {
+      if (schwarzSession && schwarzInspect) {
+        schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, schwarzInspect.points[0], {
+          ...schwarzEscape,
+          boundedOmega: schwarzSession.boundedOmega,
+        });
+        renderSchwarzInspectReadout();
+      }
+      scheduleSchwarzPaint();
+    };
+    if (itIn) {
+      itIn.value = String(schwarzEscape.maxIter);
+      itIn.addEventListener("change", () => {
+        const v = Math.round(Number(itIn.value));
+        if (Number.isFinite(v) && v >= 1) schwarzEscape.maxIter = Math.min(4096, v);
+        itIn.value = String(schwarzEscape.maxIter); // normalise / restore on a bad value
+        applyEscape();
+      });
+    }
+    if (erIn) {
+      erIn.value = String(schwarzEscape.escapeR);
+      erIn.addEventListener("change", () => {
+        const v = Number(erIn.value);
+        if (Number.isFinite(v) && v > 1) schwarzEscape.escapeR = v;
+        erIn.value = String(schwarzEscape.escapeR);
+        applyEscape();
       });
     }
   }
