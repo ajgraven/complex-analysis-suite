@@ -1807,3 +1807,27 @@
   5 tests, GPU). Green: typecheck / lint / test 75 files / 764, build. Phase A render-polish shipped (A1
   export options, A2 hover-preview, A3 tone); deferred A3 sub-slices — custom gradient (reuse the gradient
   editor), relief lighting, idle anti-aliasing accumulation — are clearly-scoped follow-ons, not started.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase B1 — σ orbit-stat coloring):**
+  the σ pane gains a **field-coloring** picker choosing WHAT the colormap ramp encodes: **escape time**
+  (the ADR-0009 default), **orbit trap**, or **stripe average** — the latter two are statistics of the
+  σ-orbit σⁿ(w) the engine already produces, so **no new map math** (that is B2's derivative modes). Orbit
+  trap adds a **trap-shape** sub-picker (cross · point · origin · real axis · unit circle · integer lattice)
+  shown only in trap mode. `schwarzGL.ts` gains `u_colorMode` + `u_trapType`; `main()`'s escape loop
+  accumulates the closest trap approach / the stripe running-average **only in the respective mode** and
+  dispatches at K-entry via `fundamentalStatColor`, so **escape-time mode is byte-identical to pre-B1**
+  (proven — the σ GPU browser test still passes: opaque, K-vs-Ω structure, colormap/scale still drive the
+  pixels). CD's **triangle-inequality** average is deliberately *not* ported — it is z²+c-specific (uses
+  |c| and the quadratic |zₙ₊₁|/|zₙ|²/|c| relation), meaningless for σ. The mode + shape ride the σ view
+  (`_sigma`, new short keys `md`/`tp`, omitted at their `escape`/`cross` defaults so a plain link is
+  unchanged from pre-B1; an unknown name normalises to the default like the colormap/scale). The **legend
+  stays honest** — its title + end labels now read "Orbit trap · <shape>" (far → near trap) or "Stripe
+  average" (low → high) instead of "Escape time", and `schwarzStampParams` reports `colormode=…`. New
+  registries (`SCHWARZ_COLOR_MODES` / `SCHWARZ_TRAP_SHAPES` + id lookups) mirror the scale-mode pattern; the
+  ids are the shader contract. NET: +8 `schwarzColorModes.test.ts` (id maps contiguous from 0, defaults,
+  unknown→0) + 3 `schwarzState.test.ts` cases (default when absent, round-trip + omit-default keys,
+  normalise unknown) + stamp assertions; the two selects join the σ-coloring opt-out. VERIFIED in the BUILT
+  app (Playwright): each mode visibly changes the render (escape→trap Δ=20, cross→circle Δ=16,
+  circle→lattice Δ=9, trap→stripe Δ=13), the trap-shape row gates on trap mode, and a trap view (point)
+  round-trips through a permalink — selects restored, row shown, render **pixel-identical** (Δ=0.00). Green:
+  typecheck / lint / test 76 files / 775 (+11 node), build; σ GPU browser test 5/5 + shader-compile 11/11.
+  Next: B2 (derivative-dependent smooth + distance-estimator modes — needs dσⁿ/dw).

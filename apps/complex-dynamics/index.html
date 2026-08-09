@@ -561,6 +561,18 @@ abs(z)>2</textarea
                     id="schwarz-scale"
                     title="How the escape count maps onto the colour ramp (linear, log, sqrt, discrete, cyclic)"
                   ></select>
+                  <label for="schwarz-colormode">field coloring</label>
+                  <select
+                    id="schwarz-colormode"
+                    title="What the colour ramp encodes: escape time, orbit-trap closeness, or the stripe average of the σ-orbit (S5-B1)"
+                  ></select>
+                  <div class="schwarz-subfield" id="schwarz-trapshape-row" hidden>
+                    <label for="schwarz-trapshape">trap shape</label>
+                    <select
+                      id="schwarz-trapshape"
+                      title="The set the σ-orbit's closest approach is measured to (orbit-trap coloring)"
+                    ></select>
+                  </div>
                   <label for="schwarz-rotation">palette rotation</label>
                   <input
                     type="range"

@@ -566,6 +566,18 @@ h2 {
   padding: 0.1rem 0.5rem;
 }
 /* σ precise navigation (ADR-0009 item 3): a compact centre-re / centre-im / zoom row + apply/reset. */
+/* σ orbit-trap shape row (S5-B1): a label+select pair shown only in "trap" color mode. Matches the
+   .field column layout so it stacks like the sibling colormap/scale controls; [hidden] must win over the
+   flex display. */
+.schwarz-subfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.schwarz-subfield[hidden] {
+  display: none;
+}
+
 .schwarz-nav-row {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;

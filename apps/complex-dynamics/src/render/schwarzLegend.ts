@@ -29,13 +29,14 @@ const FLAT_SWATCHES: ReadonlyArray<{ color: readonly [number, number, number]; l
 ];
 
 /**
- * Render the σ legend into `el` (cleared first): a title ("Escape time · <scale>"), the colormap ramp
- * with "in K fast" / "near ∂Ω" end labels, then the flat-colour swatches. Pure DOM — no state; the caller
- * passes the current colormap name + a human scale-mode label.
+ * Render the σ legend into `el` (cleared first): a title, the colormap ramp with its two end labels, then
+ * the flat-colour swatches. Pure DOM — no state; the caller passes the current colormap name plus a title
+ * and end labels that describe WHAT the ramp maps in the active color mode (S5-B1): escape time, orbit-trap
+ * closeness, or the stripe average. The flat classification swatches are the same in every mode.
  */
 export function renderSchwarzLegend(
   el: HTMLElement,
-  opts: { colormapName: string; scaleLabel: string },
+  opts: { colormapName: string; title: string; loLabel: string; hiLabel: string },
 ): void {
   el.replaceChildren();
   const line = (cls: string, text?: string): HTMLDivElement => {
@@ -46,13 +47,13 @@ export function renderSchwarzLegend(
     return d;
   };
 
-  line("legend-title", `Escape time · ${opts.scaleLabel}`);
+  line("legend-title", opts.title);
   line("legend-bar").style.background = schwarzColormapGradientCss(opts.colormapName);
   const scale = line("legend-scale");
   const lo = document.createElement("span");
-  lo.textContent = "in K fast";
+  lo.textContent = opts.loLabel;
   const hi = document.createElement("span");
-  hi.textContent = "near ∂Ω";
+  hi.textContent = opts.hiLabel;
   scale.append(lo, hi);
 
   for (const s of FLAT_SWATCHES) {

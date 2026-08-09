@@ -138,8 +138,12 @@ import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schw
 import {
   SCHWARZ_COLORMAP_NAMES,
   SCHWARZ_SCALE_MODES,
+  SCHWARZ_COLOR_MODES,
+  SCHWARZ_TRAP_SHAPES,
   DEFAULT_SCHWARZ_COLORMAP,
   DEFAULT_SCHWARZ_SCALE,
+  DEFAULT_SCHWARZ_COLOR_MODE,
+  DEFAULT_SCHWARZ_TRAP_SHAPE,
 } from "./render/schwarzColormaps";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
@@ -3004,6 +3008,9 @@ function init(): void {
   // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
   let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
   let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
+  // σ-field color mode (S5-B1): what the ramp encodes — escape time (default), orbit trap, or stripe average.
+  let schwarzColorMode: string = DEFAULT_SCHWARZ_COLOR_MODE;
+  let schwarzTrapShape: string = DEFAULT_SCHWARZ_TRAP_SHAPE;
   // σ image-space tone (S5-A3): palette rotation + gamma + vignette, part of the coloring the σ view serializes.
   let schwarzRotation: number = SIGMA_TONE_DEFAULTS.rotation;
   let schwarzGamma: number = SIGMA_TONE_DEFAULTS.gamma;
@@ -3029,6 +3036,8 @@ function init(): void {
       schwarzGL.render(schwarzView, size, {
         ...SCHWARZ_ESCAPE,
         scaleMode: schwarzScaleMode,
+        colorMode: schwarzColorMode,
+        trapShape: schwarzTrapShape,
         rotation: schwarzRotation,
         gamma: schwarzGamma,
         vignette: schwarzVignette,
@@ -3065,12 +3074,29 @@ function init(): void {
     zoom.value = f.zoom;
   }
 
-  /** (Re)render the σ legend chip from the current colormap + scale mode. */
+  /** (Re)render the σ legend chip — title + end labels describe WHAT the ramp maps in the active color mode
+   *  (S5-B1): escape time (with the scale mode), orbit-trap closeness (with the trap shape), or the stripe
+   *  average. Keeps the legend honest when the ramp no longer encodes escape count. */
   function renderSchwarzLegendChip(): void {
     const el = document.getElementById("schwarz-legend");
     if (!el) return;
-    const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
-    renderSchwarzLegend(el, { colormapName: schwarzColormapName, scaleLabel });
+    let title: string, loLabel: string, hiLabel: string;
+    if (schwarzColorMode === "trap") {
+      const shape = SCHWARZ_TRAP_SHAPES.find((m) => m.key === schwarzTrapShape)?.label ?? "Cross (axes)";
+      title = `Orbit trap · ${shape}`;
+      loLabel = "far";
+      hiLabel = "near trap";
+    } else if (schwarzColorMode === "stripe") {
+      title = "Stripe average";
+      loLabel = "low";
+      hiLabel = "high";
+    } else {
+      const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
+      title = `Escape time · ${scaleLabel}`;
+      loLabel = "in K fast";
+      hiLabel = "near ∂Ω";
+    }
+    renderSchwarzLegend(el, { colormapName: schwarzColormapName, title, loLabel, hiLabel });
   }
   /** Coalesce rapid pan/zoom events into one paint per animation frame. */
   function scheduleSchwarzPaint(): void {
@@ -3186,6 +3212,8 @@ function init(): void {
   function restoreSchwarzFromState(s: SigmaViewState): void {
     schwarzColormapName = s.colormap;
     schwarzScaleMode = s.scale;
+    schwarzColorMode = s.colorMode;
+    schwarzTrapShape = s.trapShape;
     schwarzRotation = s.rotation;
     schwarzGamma = s.gamma;
     schwarzVignette = s.vignette;
@@ -3195,6 +3223,7 @@ function init(): void {
     if (cm) cm.value = schwarzColormapName;
     const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
     if (sc) sc.value = schwarzScaleMode;
+    syncSchwarzColorModeControls();
     syncSchwarzToneControls();
     renderSchwarzLegendChip();
     scheduleSchwarzPaint(); // paint at the restored window (also mirrors it into the nav fields)
@@ -3210,6 +3239,16 @@ function init(): void {
     set("schwarz-gamma", schwarzGamma);
     set("schwarz-vignette", schwarzVignette);
   }
+  /** Mirror the σ color-mode + trap-shape state into their selects, and reveal the trap-shape row only in
+   *  "trap" mode (it is irrelevant to escape-time / stripe). */
+  function syncSchwarzColorModeControls(): void {
+    const md = document.getElementById("schwarz-colormode") as HTMLSelectElement | null;
+    if (md) md.value = schwarzColorMode;
+    const tp = document.getElementById("schwarz-trapshape") as HTMLSelectElement | null;
+    if (tp) tp.value = schwarzTrapShape;
+    const row = document.getElementById("schwarz-trapshape-row");
+    if (row) row.hidden = schwarzColorMode !== "trap";
+  }
   /** The σ view as a serializable state (for `_sigma` + the PNG stamp). Requires an active session. */
   function currentSigmaState(): SigmaViewState | null {
     if (!schwarzSession) return null;
@@ -3219,6 +3258,8 @@ function init(): void {
       zoom: schwarzView.zoom,
       colormap: schwarzColormapName,
       scale: schwarzScaleMode,
+      colorMode: schwarzColorMode,
+      trapShape: schwarzTrapShape,
       rotation: schwarzRotation,
       gamma: schwarzGamma,
       vignette: schwarzVignette,
@@ -3245,6 +3286,8 @@ function init(): void {
       schwarzGL.render(schwarzView, size, {
         ...SCHWARZ_ESCAPE,
         scaleMode: schwarzScaleMode,
+        colorMode: schwarzColorMode,
+        trapShape: schwarzTrapShape,
         rotation: schwarzRotation,
         gamma: schwarzGamma,
         vignette: schwarzVignette,
@@ -3485,6 +3528,40 @@ function init(): void {
         scheduleSchwarzPaint();
       });
     }
+    // σ-field color mode + orbit-trap shape (S5-B1). The mode picks WHAT the ramp encodes; the trap-shape
+    // row is revealed only in "trap" mode. Both travel in the σ view (`_sigma`), like the colormap + scale.
+    const mdSel = document.getElementById("schwarz-colormode") as HTMLSelectElement | null;
+    const tpSel = document.getElementById("schwarz-trapshape") as HTMLSelectElement | null;
+    if (mdSel) {
+      for (const m of SCHWARZ_COLOR_MODES) {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        opt.textContent = m.label;
+        mdSel.appendChild(opt);
+      }
+      mdSel.value = schwarzColorMode;
+      mdSel.addEventListener("change", () => {
+        schwarzColorMode = mdSel.value;
+        syncSchwarzColorModeControls(); // reveal / hide the trap-shape row
+        renderSchwarzLegendChip(); // legend now describes the active mode
+        scheduleSchwarzPaint();
+      });
+    }
+    if (tpSel) {
+      for (const m of SCHWARZ_TRAP_SHAPES) {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        opt.textContent = m.label;
+        tpSel.appendChild(opt);
+      }
+      tpSel.value = schwarzTrapShape;
+      tpSel.addEventListener("change", () => {
+        schwarzTrapShape = tpSel.value;
+        renderSchwarzLegendChip(); // legend title shows the trap shape
+        scheduleSchwarzPaint();
+      });
+    }
+    syncSchwarzColorModeControls(); // set the initial trap-shape row visibility
   }
 
   // σ image-space tone (S5-A3): palette rotation + gamma + vignette sliders. Each live-updates the state

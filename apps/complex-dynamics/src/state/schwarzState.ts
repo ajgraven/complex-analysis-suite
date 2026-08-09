@@ -21,6 +21,10 @@ import {
   DEFAULT_SCHWARZ_COLORMAP,
   SCHWARZ_SCALE_MODES,
   DEFAULT_SCHWARZ_SCALE,
+  SCHWARZ_COLOR_MODES,
+  DEFAULT_SCHWARZ_COLOR_MODE,
+  SCHWARZ_TRAP_SHAPES,
+  DEFAULT_SCHWARZ_TRAP_SHAPE,
 } from "../render/schwarzColormaps";
 
 /** Everything needed to reproduce a σ view: the φ recipe, the window, and the coloring (colormap + scale
@@ -31,6 +35,10 @@ export interface SigmaViewState {
   zoom: number;
   colormap: string;
   scale: string;
+  /** σ-field color mode (S5-B1): "escape" (default) · "trap" · "stripe". */
+  colorMode: string;
+  /** Orbit-trap shape (S5-B1), used when colorMode === "trap": "cross" (default) · point · line · circle · lattice. */
+  trapShape: string;
   /** Colormap-coordinate rotation ∈[0,1); 0 = none. */
   rotation: number;
   /** Output gamma; 1 = identity. */
@@ -57,6 +65,10 @@ export function encodeSigmaState(s: SigmaViewState): string {
     cm: s.colormap,
     sc: s.scale,
   };
+  // S5-B1 color mode + trap shape, omitted at their defaults so a plain (escape-time) view's link is
+  // unchanged from pre-B1 — same rule as the tone keys below.
+  if (s.colorMode !== DEFAULT_SCHWARZ_COLOR_MODE) out.md = s.colorMode;
+  if (s.trapShape !== DEFAULT_SCHWARZ_TRAP_SHAPE) out.tp = s.trapShape;
   if (s.rotation !== SIGMA_TONE_DEFAULTS.rotation) out.rot = s.rotation;
   if (s.gamma !== SIGMA_TONE_DEFAULTS.gamma) out.gam = s.gamma;
   if (s.vignette !== SIGMA_TONE_DEFAULTS.vignette) out.vig = s.vignette;
@@ -71,10 +83,11 @@ export function schwarzStampParams(s: SigmaViewState): string {
   const r = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
   const cplx = (z: Complex): string => `${r(z[0])}${z[1] >= 0 ? "+" : "-"}${r(Math.abs(z[1]))}i`;
   const F = s.phi.F.map(cplx).join(", ");
+  const trap = s.colorMode === "trap" ? ` (${s.trapShape})` : "";
   return (
     `plane=Schwarz reflection sigma (approx); c=${r(s.phi.c)}; F=[${F}]; poles=${s.phi.branches.length}; ` +
     `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}; ` +
-    `rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; vignette=${r(s.vignette)}`
+    `colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; vignette=${r(s.vignette)}`
   );
 }
 
@@ -132,6 +145,12 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const colormap = typeof o.cm === "string" && o.cm in SCHWARZ_COLORMAPS ? o.cm : DEFAULT_SCHWARZ_COLORMAP;
   const scale =
     typeof o.sc === "string" && SCHWARZ_SCALE_MODES.some((m) => m.key === o.sc) ? o.sc : DEFAULT_SCHWARZ_SCALE;
+  // S5-B1 color mode + trap shape — an unknown name normalises to the default (a stale link never blanks
+  // the picker), exactly like the colormap / scale above.
+  const colorMode =
+    typeof o.md === "string" && SCHWARZ_COLOR_MODES.some((m) => m.key === o.md) ? o.md : DEFAULT_SCHWARZ_COLOR_MODE;
+  const trapShape =
+    typeof o.tp === "string" && SCHWARZ_TRAP_SHAPES.some((m) => m.key === o.tp) ? o.tp : DEFAULT_SCHWARZ_TRAP_SHAPE;
 
   // Image-space tone (S5-A3) — cosmetic + optional, so a bad/absent value clamps to the identity default
   // rather than rejecting the whole (otherwise-valid) view.
@@ -141,5 +160,5 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const gamma = clampOr(o.gam, SIGMA_TONE_DEFAULTS.gamma, 0.2, 5);
   const vignette = clampOr(o.vig, SIGMA_TONE_DEFAULTS.vignette, 0, 1);
 
-  return { phi: { c: o.c, F, branches }, center, zoom, colormap, scale, rotation, gamma, vignette };
+  return { phi: { c: o.c, F, branches }, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette };
 }

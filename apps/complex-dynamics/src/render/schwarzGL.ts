@@ -18,8 +18,12 @@ import { makeColormapTexture } from "@cas/gpu/colormap";
 import {
   schwarzColormap,
   schwarzScaleId,
+  schwarzColorModeId,
+  schwarzTrapShapeId,
   DEFAULT_SCHWARZ_COLORMAP,
   DEFAULT_SCHWARZ_SCALE,
+  DEFAULT_SCHWARZ_COLOR_MODE,
+  DEFAULT_SCHWARZ_TRAP_SHAPE,
 } from "./schwarzColormaps";
 import {
   SIGMA_CONSTS_GLSL,
@@ -60,6 +64,8 @@ uniform int       u_modK;            // period for the cyclic mode
 uniform float     u_paletteRotation; // colormap-coordinate offset ∈[0,1) (0 = none); S5-A3 image-space tone
 uniform float     u_gamma;           // output gamma (1 = identity)
 uniform float     u_vignette;        // radial edge darkening (0 = off)
+uniform int       u_colorMode;       // 0 escape-time · 1 orbit-trap · 2 stripe-average (S5-B1)
+uniform int       u_trapType;        // orbit-trap shape: 0 cross · 1 point · 2 line · 3 circle · 4 lattice
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
@@ -88,13 +94,37 @@ float computeT(int n) {
   if (u_scaleMode == 3) t = (floor(t * fmax) + 0.5) / fmax;                                   // discrete
   return clamp(t, 0.0, 1.0);
 }
-// The fundamental (tiling) set is colored by the selected colormap; escaped / interior / invalid stay flat.
-// The rotation offset is cyclic (fract), applied ONLY when non-zero so the default (0) is byte-identical to
-// the pre-A3 lookup — the CLAMP_TO_EDGE ramp keeps t=1 on the bright end.
-vec3 fundamentalColor(int n) {
-  float t = computeT(n);
+// Colormap-ramp lookup at coordinate t∈[0,1], with the S5-A3 palette rotation (cyclic fract, applied ONLY
+// when non-zero so the default is byte-identical to the pre-A3 lookup — the CLAMP_TO_EDGE ramp keeps t=1 on
+// the bright end). Shared by the escape-time ramp and the S5-B1 orbit-stat ramps.
+vec3 rampColor(float t) {
   if (u_paletteRotation != 0.0) t = fract(t + u_paletteRotation);
   return texture(u_colormap, vec2(t, 0.5)).rgb;
+}
+// The fundamental (tiling) set is colored by the selected colormap; escaped / interior / invalid stay flat.
+vec3 fundamentalColor(int n) {
+  return rampColor(computeT(n));
+}
+
+// Distance from a σ-orbit iterate to the selected orbit-trap shape (S5-B1, colorMode 1). Mirrors CD's
+// standard trapDistance (shaderBuilder.ts); w is a plain complex point (vec2), so length/abs act directly.
+float trapDistance(vec2 z) {
+  float r = length(z);
+  if (u_trapType == 1) return r;                                              // point at the origin
+  if (u_trapType == 2) return abs(z.y);                                       // horizontal line (real axis)
+  if (u_trapType == 3) return abs(r - 1.0);                                   // unit circle
+  if (u_trapType == 4)                                                        // nearest Gaussian-integer point
+    return length(z - vec2(floor(z.x + 0.5), floor(z.y + 0.5)));
+  return min(abs(z.x), abs(z.y));                                            // cross (both axes) — default
+}
+
+// Colour a fundamental (tiling) pixel after its σ-orbit entered K at step n. In escape-time mode (default)
+// this is fundamentalColor(n), BYTE-IDENTICAL to pre-B1; the trap / stripe modes remap the SAME colormap
+// ramp by an orbit statistic accumulated over σ¹(w)…σⁿ(w) instead of by the step count.
+vec3 fundamentalStatColor(int n, float trap, float avgSum, float avgCount) {
+  if (u_colorMode == 1) return rampColor(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0)); // orbit trap: bright = near
+  if (u_colorMode == 2) return rampColor(avgCount > 0.0 ? avgSum / avgCount : 0.0); // stripe average
+  return fundamentalColor(n);
 }
 
 // The classification color at this fragment (fundamental via the colormap; escaped/invalid/interior flat).
@@ -105,16 +135,26 @@ vec3 fieldColor() {
   float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
   vec2 w = vec2(re, im);
 
-  if (!inOmega(w)) return fundamentalColor(0);                   // w₀ ∈ K ⇒ fundamental n=0
+  if (!inOmega(w)) return fundamentalColor(0);                   // w₀ ∈ K ⇒ fundamental n=0 (no σ-orbit)
   vec2 zSeed = newtonSeedFresh(w);
   bool ok = true;
+  // S5-B1 orbit statistics over σ¹(w)…σⁿ(w); left untouched (and unread) in escape-time mode, so mode 0 is
+  // byte-identical to pre-B1.
+  float trap = 1e20;
+  float avgSum = 0.0, avgCount = 0.0;
   for (int n = 1; n <= 512; ++n) {           // 512 ≫ any maxIter; the real bound is u_maxIter below
     if (n > u_maxIter) break;
     vec2 next = sigma(w, zSeed, ok);
     if (!ok) return vec3(80.0) / 255.0;                          // invalid (inverse failed)
     w = next;
     if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) return vec3(0.0);  // escaped → ∞
-    if (!inOmega(w)) return fundamentalColor(n);                 // entered K ⇒ fundamental n
+    if (u_colorMode == 1) {
+      trap = min(trap, trapDistance(w));                         // closest approach to the trap set
+    } else if (u_colorMode == 2) {
+      avgSum += 0.5 + 0.5 * sin(5.0 * atan(w.y, w.x));           // stripe: banded by arg(σⁿ(w))
+      avgCount += 1.0;
+    }
+    if (!inOmega(w)) return fundamentalStatColor(n, trap, avgSum, avgCount);  // entered K ⇒ fundamental n
   }
   return vec3(18.0, 20.0, 46.0) / 255.0;                         // interior (non-escaping)
 }
@@ -143,6 +183,10 @@ export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
   gamma?: number;
   /** Radial edge darkening ∈[0,1]; 0 = off. */
   vignette?: number;
+  /** σ-field color mode key (render/schwarzColormaps.ts SCHWARZ_COLOR_MODES); default "escape" (S5-B1). */
+  colorMode?: string;
+  /** Orbit-trap shape key (SCHWARZ_TRAP_SHAPES), used when colorMode === "trap"; default "cross". */
+  trapShape?: string;
 }
 
 export interface SchwarzGLRenderer {
@@ -201,6 +245,8 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uPaletteRotation = U("u_paletteRotation");
   const uGamma = U("u_gamma");
   const uVignette = U("u_vignette");
+  const uColorMode = U("u_colorMode");
+  const uTrapType = U("u_trapType");
 
   let packed: PackedPhi | null = null;
   let maskTex: WebGLTexture | null = null;
@@ -248,6 +294,8 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform1f(uPaletteRotation, opts.rotation ?? 0); // S5-A3 image-space tone; defaults are identity
     ctx.uniform1f(uGamma, opts.gamma ?? 1);
     ctx.uniform1f(uVignette, opts.vignette ?? 0);
+    ctx.uniform1i(uColorMode, schwarzColorModeId(opts.colorMode ?? DEFAULT_SCHWARZ_COLOR_MODE)); // S5-B1
+    ctx.uniform1i(uTrapType, schwarzTrapShapeId(opts.trapShape ?? DEFAULT_SCHWARZ_TRAP_SHAPE));
 
     ctx.activeTexture(ctx.TEXTURE0);
     ctx.bindTexture(ctx.TEXTURE_2D, maskTex);

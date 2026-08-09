@@ -19,6 +19,8 @@ const DELTOID: SigmaViewState = {
   zoom: 0.4,
   colormap: "viridis",
   scale: "linear",
+  colorMode: "escape",
+  trapShape: "cross",
   ...SIGMA_TONE_DEFAULTS,
 };
 const POLE: SigmaViewState = {
@@ -27,6 +29,8 @@ const POLE: SigmaViewState = {
   zoom: 12.5,
   colormap: "turbo",
   scale: "sqrt",
+  colorMode: "trap",
+  trapShape: "circle",
   rotation: 0.25,
   gamma: 1.8,
   vignette: 0.4,
@@ -136,6 +140,31 @@ describe("parseSigmaState — image-space tone (S5-A3)", () => {
   });
 });
 
+describe("parseSigmaState — field color mode (S5-B1)", () => {
+  const enc = (o: unknown): string => JSON.stringify(o);
+  const base = { c: 1, F: [[0, 0], [0, 0], [0.5, 0]], b: [], ctr: [0, 0], z: 0.4, cm: "viridis", sc: "linear" };
+
+  it("defaults to escape-time / cross when the keys are absent (old links pre-B1)", () => {
+    const s = parseSigmaState(enc(base));
+    expect(s?.colorMode).toBe("escape");
+    expect(s?.trapShape).toBe("cross");
+  });
+
+  it("round-trips a non-default mode + trap shape and omits the default keys from the encoding", () => {
+    const plain = encodeSigmaState({ ...DELTOID }); // escape + cross ⇒ no md/tp keys (link unchanged from pre-B1)
+    expect(plain).not.toMatch(/"(md|tp)"/);
+    const s = parseSigmaState(encodeSigmaState({ ...DELTOID, colorMode: "trap", trapShape: "lattice" }));
+    expect(s?.colorMode).toBe("trap");
+    expect(s?.trapShape).toBe("lattice");
+  });
+
+  it("normalises an unknown mode / trap shape to the defaults (a stale name never blanks the picker)", () => {
+    const s = parseSigmaState(enc({ ...base, md: "no-such-mode", tp: "no-such-shape" }));
+    expect(s?.colorMode).toBe("escape");
+    expect(s?.trapShape).toBe("cross");
+  });
+});
+
 describe("schwarzStampParams (PNG metadata summary)", () => {
   it("summarises the σ view in one ASCII-safe line (no σ / ≈ / Unicode minus)", () => {
     const s = schwarzStampParams(DELTOID);
@@ -145,6 +174,7 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("center=0+0i");
     expect(s).toContain("colormap=viridis");
     expect(s).toContain("scale=linear");
+    expect(s).toContain("colormode=escape");
     expect(s).toContain("rotation=0");
     expect(s).toContain("gamma=1");
     expect(s).toContain("vignette=0");
@@ -156,6 +186,7 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("poles=1");
     expect(s).toContain("colormap=turbo");
     expect(s).toContain("scale=sqrt");
+    expect(s).toContain("colormode=trap (circle)");
     expect(s).toContain("center=0.6-0.3i");
     expect(s).toContain("rotation=0.25");
     expect(s).toContain("gamma=1.8");

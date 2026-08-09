@@ -106,7 +106,15 @@ describe("SHARE_IDS DOM coverage", () => {
         // travels via the `_sigma` state layer (item 2) — not as its own shared control, the same way the
         // standard-fractal `palette` is opted out (SHARE_IDS omission).
         [
-          ["schwarz-colormap", "schwarz-scale", "schwarz-rotation", "schwarz-gamma", "schwarz-vignette"],
+          [
+            "schwarz-colormap",
+            "schwarz-scale",
+            "schwarz-colormode",
+            "schwarz-trapshape",
+            "schwarz-rotation",
+            "schwarz-gamma",
+            "schwarz-vignette",
+          ],
           "σ coloring (travels inside _sigma, not as a control id)",
         ],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
