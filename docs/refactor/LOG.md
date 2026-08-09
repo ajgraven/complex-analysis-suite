@@ -2050,3 +2050,19 @@
   untouched. Green: typecheck + lint + node **787** (CD app; glossary **+1** σ-terms guard). VERIFIED in the
   dev app (Playwright): the σ pane shows the four collapsible groups, the chip populates
   (`0+0i · zoom 0.4 · unbounded`), all four gloss-links resolve, and a σ generates with no error line.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase A3 — side-panel layout):**
+  chosen with the user (the "canvas + side-panel like the main tool" option), the σ pane becomes a
+  **two-column layout** at ≥900px, replacing the previous controls-below-a-viewport-tall-canvas stack:
+  #schwarz-plot is a CSS grid — a **topbar** (the σ heading + the ↩ exit button, spanning the top), the σ
+  **canvas** in the main area, and the **controls in an always-visible sticky panel** on the right (mirrors
+  CD's plots-pane + controls-pane split, so the controls stay beside the plot). The canvas is sized
+  `min(100% of its cell, calc(100vh − 5rem))` with `aspect-ratio: 1` and centred, so the whole square σ
+  field fits the viewport without scrolling past it and the corner label/legend still pin to its edges (the
+  `.canvas-stack` stays the positioning context) — as a bonus this pinned a headless artifact where the
+  width:100%/height:auto canvas could render as a thin strip mid-layout. Below 900px it falls back to the
+  stacked column (canvas over a centred controls column). The heading + exit move into a new
+  `.schwarz-topbar` wrapper; the exit button (a desktop-only absolute `.expand-btn`) is now shown in-flow at
+  **every** width, so σ can always be left by button, not only Esc. HTML + CSS only — no logic/TS change,
+  every id preserved (schwarzPeerView green). Green: typecheck + lint + node (peer-view + glossary
+  unchanged). VERIFIED (Playwright): at 1300px the σ canvas (770²) and the 304px controls panel sit side by
+  side with the deltoid σ field rendered; at 760px it stacks.
