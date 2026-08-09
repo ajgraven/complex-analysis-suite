@@ -84,10 +84,18 @@ describe("Schwarz fractal-mode interaction (jsdom)", () => {
     T._exportSigma();
     expect(status()).not.toMatch(/pole|Use this φ|bounded/i);
 
-    // (3) captured a BOUNDED domain → says bounded.
+    // (3) a bounded-CLASSICAL QD now EXPORTS (S5-C2) — the handler proceeds to the σ hand-off rather than
+    // refusing, so the status is an export outcome, not a "bounded"/"pole"/"Use this φ" refusal.
     T.sState.phiSnapshot = { unbounded: false, branches: [{ z: { re: 0.5, im: 0 }, A: [{ re: 1, im: 0 }] }] };
     T._exportSigma();
+    expect(status()).not.toMatch(/pole|Use this φ|bounded/i);
+
+    // (4) a WEIGHTED (log-/power-weighted) bounded QD still can't σ-export (its exp/power σ machinery is not
+    // lifted yet) → the handler names it: bounded and weighted.
+    T.sState.phiSnapshot = { unbounded: false, family: "boundedLQD", branches: [{ z: { re: 0.5, im: 0 }, A: [{ re: 1, im: 0 }] }] };
+    T._exportSigma();
     expect(status()).toMatch(/bounded/i);
+    expect(status()).toMatch(/weighted/i);
 
     document.body.removeChild(card);
     T.sState.phiSnapshot = null;

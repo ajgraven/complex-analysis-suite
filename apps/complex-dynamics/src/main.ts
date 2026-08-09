@@ -3645,6 +3645,17 @@ function init(): void {
       return true;
     }
     if (spec.form === "schwarz") {
+      if (spec.phi.form === "bounded") {
+        // S5-C2c reconstructs the bounded-QD σ engine (makeBoundedSchwarz — pinned in test/importMap.test.ts),
+        // but its INTERACTIVE render lands in the next slice (C2d): the field paint is exterior-oriented
+        // (Ω is OUTSIDE ∂Ω for the Laurent family; a bounded Ω is INSIDE it), and the GPU needs its family
+        // switch wired. Decline the live render honestly rather than paint a bounded domain inside-out.
+        showToast(
+          `Imported a bounded-QD σ from ${env.provenance.app}. Its interactive σ view is coming in a follow-up — the reconstruction is ready, the interior-domain render isn't wired yet.`,
+          "info",
+        );
+        return true;
+      }
       // σ is reconstructed NUMERICALLY (φ⁻¹ is iterative), not expr/GPU-compiled: rebuild the evaluator
       // from sigma.phi via @cas/schwarz and paint its escape-time field on the CPU (S4a). The reconstruct
       // can throw for a family the engine doesn't support (non-Laurent φ) — decline honestly, don't crash.

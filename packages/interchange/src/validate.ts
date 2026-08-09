@@ -121,19 +121,27 @@ export function isMapSpec(v: unknown): v is MapSpec {
     case "expr":
       return typeof v.expr === "string" && v.expr.length <= MAX_EXPR_LEN &&
         Array.isArray(v.vars) && v.vars.length <= MAX_VARS_LEN && v.vars.every(isVarName);
-    case "schwarz":
-      // A σ recipe (schema.ts SchwarzMap): a closed-form φ — laurent | rational ONLY, since the engine
-      // reads its coefficients (an `expr` or nested `schwarz` φ has none) — the disk φ uniformizes, a
-      // known inverse method, and the definitional anti-holomorphic flag. The `phi` recursion inherits
-      // the coefficient-length caps (MAX_COEFF_LEN), so `schwarz` adds no uncapped field of its own.
+    case "schwarz": {
+      // A σ recipe (schema.ts SchwarzMap): a closed-form φ — the disk φ uniformizes, a known inverse
+      // method, and the definitional anti-holomorphic flag. A laurent | rational φ is itself a MapSpec
+      // (recurse, inheriting the MAX_COEFF_LEN caps); a `bounded` φ (S5-C2, 1.3.0) is σ-only (not a
+      // standalone compilable map), so validate its fields here — w₀ + optional finite-pole branches, the
+      // branches already length-capped by isBranchArray. `expr` / nested `schwarz` φ have no coefficients
+      // to read, so they stay excluded.
+      const phi = v.phi;
+      const phiOk =
+        isObject(phi) &&
+        (((phi.form === "laurent" || phi.form === "rational") && isMapSpec(phi)) ||
+          (phi.form === "bounded" &&
+            isComplex(phi.w0) &&
+            (phi.branches === undefined || isBranchArray(phi.branches))));
       return (
-        isObject(v.phi) &&
-        (v.phi.form === "laurent" || v.phi.form === "rational") &&
-        isMapSpec(v.phi) &&
+        phiOk &&
         (v.disk === "D" || v.disk === "D*") &&
         typeof v.inverse === "string" && KNOWN_INVERSES.includes(v.inverse) &&
         v.antiholomorphic === true
       );
+    }
     default:
       return false;
   }

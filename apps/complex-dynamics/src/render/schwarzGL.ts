@@ -293,10 +293,12 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   function setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void {
     packed = packPhi(phi);
     // σ escape degree (S5-B2): near ∞, F(z) ~ conj(F[d])·z^d and z ~ w/c, so σ(w) ~ const·conj(w)^d with
-    // d = the highest nonzero Laurent index. Drives the smooth/distance log-degree normalisation.
+    // d = the highest nonzero Laurent index. Drives the smooth/distance log-degree normalisation. A bounded
+    // φ carries no Laurent tail (F is undefined/empty) — it has no ∞ regime, so the default d = 2 is kept.
     escapeDegree = 2;
-    for (let l = 0; l < phi.F.length; l++) {
-      if (Math.hypot(phi.F[l][0], phi.F[l][1]) > 1e-9) escapeDegree = l;
+    const F = phi.F ?? [];
+    for (let l = 0; l < F.length; l++) {
+      if (Math.hypot(F[l][0], F[l][1]) > 1e-9) escapeDegree = l;
     }
     if (escapeDegree < 2) escapeDegree = 2; // smooth's log(d) needs d ≥ 2; degree-1 escape isn't superattracting
     if (maskTex) ctx.deleteTexture(maskTex);

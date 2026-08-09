@@ -13,6 +13,9 @@ import {
   QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
   QD_TO_CD_SINGLE_POLE_SIGMA_W0,
   QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0,
+  QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK,
+  QD_TO_CD_BOUNDED_LOBE_SIGMA_W0,
+  QD_TO_CD_BOUNDED_LOBE_SIGMA_AT_W0,
   type Envelope,
   type QuadratureDomain,
 } from "@cas/interchange";
@@ -157,6 +160,23 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     if (!got) throw new Error("σ(w₀) should reconstruct to a finite value, not null");
     expect(got[0]).toBeCloseTo(QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0.re, 9); // 2/3 WITH the pole (pole-free → 1/3)
     expect(got[1]).toBeCloseTo(QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0.im, 9);
+  });
+
+  // S5-C2c: CD reconstructs a BOUNDED-classical σ from the cross-app golden — the FIRST non-Laurent family
+  // on the wire — through the same decode → envelopeToMapSpec → schwarzEngineFromMapSpec path. sigma.phi is
+  // `form:"bounded"` (1.3.0), so the dispatch must build makeBoundedSchwarz (interior branch, F = conj(w₀) +
+  // Σ A/(z−z_j)) rather than the exterior-branch Laurent engine — the two produce DIFFERENT σ. Ground truth
+  // on the single-lobe fixture (w₀=0, z_j=0.3, A=0.5): w = φ(½) = 5/17, σ(w) = conj(F(½)) = conj(0.5/0.2) = 2.5.
+  it("reconstructs the bounded-lobe σ from the golden via the interior branch — S5-C2c ground truth", () => {
+    const sigma = envelopeToMapSpec(decodeLink(QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK));
+    if (!sigma || sigma.form !== "schwarz") throw new Error("expected a schwarz map from the bounded-lobe σ golden");
+    expect(sigma.phi.form).toBe("bounded"); // the non-Laurent form rode the wire
+    expect((sigma.phi as { w0?: { re: number } }).w0?.re).toBe(0);
+    const engine = schwarzEngineFromMapSpec(sigma);
+    const got = engine.sigma([QD_TO_CD_BOUNDED_LOBE_SIGMA_W0.re, QD_TO_CD_BOUNDED_LOBE_SIGMA_W0.im]);
+    if (!got) throw new Error("σ(w) should reconstruct to a finite value for w ∈ Ω, not null");
+    expect(got[0]).toBeCloseTo(QD_TO_CD_BOUNDED_LOBE_SIGMA_AT_W0.re, 9); // 2.5 (interior branch; exterior-branch engine would miss)
+    expect(got[1]).toBeCloseTo(QD_TO_CD_BOUNDED_LOBE_SIGMA_AT_W0.im, 9);
   });
 
   it("emits complex coefficients with the imaginary unit", () => {

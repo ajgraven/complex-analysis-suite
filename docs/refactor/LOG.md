@@ -1928,3 +1928,42 @@
   full monorepo — typecheck all workspaces; node (schwarz **32**; CD 778, correspondences 97, QD 2334
   unchanged). Next: C2c (interchange bounded schema + QD emit + CD reconstruct), C2d (CD render/presets +
   cross-app golden).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2c — bounded-QD σ interchange
+  hand-off, both ends):** the bounded family crosses the **wire** — QD emits it, CD reconstructs it, and a
+  cross-app golden pins the producer↔consumer contract. **interchange 1.3.0:** a new `BoundedMap`
+  (`form:"bounded"`: w₀ + optional finite-pole `branches`) joins the `SchwarzMap.phi` union, deliberately
+  **NOT** a `MapSpec` member — a bounded φ is σ-only (its σ has a numerical inverse; it is never an
+  expr-compilable standalone map), so keeping it off `MapSpec` avoids rippling into `mapSpecToExpr`. The
+  validator's `schwarz` case validates a bounded φ **inline** (w₀ complex + branches length-capped by
+  `isBranchArray`) rather than recursing through `isMapSpec`. VERSION 1.2.0→1.3.0; per the schema's own
+  "each MINOR bump moves every stamped export to the new label" rule the **three Laurent goldens were
+  re-stamped** to 1.3.0 (byte-identical bar the embedded version — they use none of the new vocabulary),
+  and a **new bounded golden** added: a single-lobe QD (w₀=0, one branch z_j=0.3, A=[0.5], `disk:"D"`) with
+  frozen ground truth w=φ(½)=**5/17**, σ(w)=conj(F(½))=conj(0.5/0.2)=**2.5**. **QD emit:** a σ-only
+  `boundedClassicalMapSpec` helper (kept **out** of `phiToMapSpec`, so a bounded map never rides the φ /
+  quadrature-domain hand-off — it is not a MapSpec) detects the bounded-CLASSICAL family by its **unset
+  `phi.family`** tag (LQD/PQD/rational-bounded all tag it — schwarz-common's family dispatch, "gotcha #1");
+  `buildSigmaEnvelope` emits `form:"bounded"`, `disk:"D"` for it, and the `explain*` prose is corrected —
+  bounded-classical now σ-exports (no refusal), a **weighted** (log-/power-) bounded QD earns the "bounded +
+  weighted, not reconstructable yet" reason, and φ-export points bounded users at "Export σ". **CD
+  reconstruct:** `schwarzPhiFromMapSpec` returns a `family`-tagged coeffs object (unbounded reads c/F,
+  bounded reads w₀; unused slots zero-filled) and `schwarzEngineFromMapSpec` **dispatches** — bounded →
+  `makeBoundedSchwarz` (interior branch), Laurent → `makeUnboundedLaurentSchwarz` (exterior); the union
+  return type flows unchanged through the render/orbit helpers (both engines share the evaluator surface).
+  The live **import path declines the bounded render honestly** ("reconstruction ready, interior-domain
+  render coming next") — the σ field paint is exterior-oriented (Ω is OUTSIDE ∂Ω for the Laurent family; a
+  bounded Ω is INSIDE) and the GPU family switch isn't wired, so rather than paint a bounded domain
+  inside-out, the interactive view waits for C2d. NET (producer↔consumer meet on the golden): QD's
+  `exportSigmaLink` reproduces the bounded golden **byte-for-byte** (+ a `form:"bounded"`/`disk:"D"` shape
+  assertion, + a validate pass, + weighted-bounded and φ-path-null negatives); CD decodes the **same bytes**
+  and reconstructs σ(5/17)=**2.5** through its real import path (decode → envelopeToMapSpec →
+  schwarzEngineFromMapSpec → .sigma), the **interior** branch — the exterior-branch engine would miss it;
+  the interchange seatbelt gains a bounded-φ validator case (accepts bounded + branchless, rejects missing
+  w₀ / bad branches / over-cap). Latent fix surfaced by the package rebuild: CD's `schwarzGL.setPhi` read
+  `phi.F` (optional on `SigmaPhi` since C2b) unguarded — guarded (a bounded φ has no Laurent tail, so the
+  escape-degree default d=2 stands). Green: full monorepo — **typecheck** all workspaces + **lint**
+  (eslint + dep-cruiser) + **2410 tests** (interchange **35**, +1 bounded validator; QD schwarz-export +4
+  bounded-emit incl. the byte golden, schwarz-ui reason-string updated; CD importMap **11**, +1 bounded
+  reconstruct ground-truth). The bounded family is now emit + reconstruct + wire-validated end to end; the
+  remaining slice is **C2d** — CD's interior-Ω render (GPU `family` forward + the "Ω is inside ∂Ω" escape
+  orientation) + bounded presets, which makes it user-visible.

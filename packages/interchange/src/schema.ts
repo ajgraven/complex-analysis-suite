@@ -18,12 +18,13 @@ export const SCHEMA_ID = "complex-analysis-suite/interchange" as const;
 /**
  * Current schema version (semver). A MAJOR bump is a breaking change consumers must reject; a MINOR
  * bump adds backward-compatible vocabulary. 1.1.0 (S3a) added the `schwarz` MapSpec form; 1.2.0 added
- * optional finite-pole `branches` on `LaurentMap` (pole-bearing unbounded QDs). Each MINOR bump moves
+ * optional finite-pole `branches` on `LaurentMap` (pole-bearing unbounded QDs); 1.3.0 (S5-C2) added the
+ * `bounded` φ form for a `schwarz` map (bounded QDs — φ: 𝔻 → Ω, `disk: "D"`). Each MINOR bump moves
  * every `version: VERSION`-stamped export to the new label — a payload that uses none of the new
  * vocabulary is byte-identical bar that label, and consumers gate on MAJOR = 1 so it decodes unchanged.
  * Bump this whenever the type vocabulary below grows, never silently.
  */
-export const VERSION = "1.2.0" as const;
+export const VERSION = "1.3.0" as const;
 
 /** Cartesian complex number — the shared wire representation across the suite. */
 export interface Complex {
@@ -76,6 +77,21 @@ export interface LaurentMap {
   antiholomorphic?: boolean;
 }
 
+/**
+ * phi = w₀ + Σ_j Σ_k conj(A_{j,k})·u_j(z)^k  (a BOUNDED QD — φ: 𝔻 → Ω onto a bounded domain; S5-C2). No
+ * leading c·z term and no Laurent tail: a bounded φ is w₀ plus finite-pole branch terms only. Its Schwarz
+ * extension is F(z) = conj(w₀) + Σ_j Σ_k A_{j,k}/(z − z_j)^k (meromorphic on 𝔻), and φ⁻¹ is the INTERIOR
+ * branch. Only valid as a `schwarz` map's `phi` (with `disk: "D"`) — @cas/schwarz's `makeBoundedSchwarz`
+ * reads these coefficients. Added in schema 1.3.0.
+ */
+export interface BoundedMap {
+  form: "bounded";
+  w0: Complex; // domain centre, φ(0) = w₀
+  /** Finite-pole branch terms (bounded QDs are branch-only). Omitted/empty ⇒ a disk of radius |conj(A)|. */
+  branches?: BranchSpec[];
+  antiholomorphic?: boolean;
+}
+
 /** Arbitrary map as an expression string in the `expr` language (compiles to GLSL + JS). */
 export interface ExprMap {
   form: "expr";
@@ -90,13 +106,13 @@ export interface ExprMap {
  * inverse. Because that inverse is iterative, σ is NOT expr-compilable — a consumer rebuilds the σ
  * evaluator from `phi` via @cas/schwarz's `makeUnboundedLaurentSchwarz`, not through the `expr`
  * pipeline. (S3a first case: the deltoid, `phi` = its Laurent map, `disk` = "D*".) As of 1.2.0 a Laurent
- * `phi` may carry finite-pole `branches` (pole-bearing unbounded QDs); the non-Laurent families (bounded,
- * LQD, PQD) remain a later, separately-versioned addition.
+ * `phi` may carry finite-pole `branches` (pole-bearing unbounded QDs); 1.3.0 adds the `bounded` φ form
+ * (bounded QDs, `disk: "D"`). The remaining non-Laurent families (LQD, PQD) are a later addition.
  */
 export interface SchwarzMap {
   form: "schwarz";
   /** The closed-form uniformizing map φ this reflects; its coefficients are what the σ engine reads. */
-  phi: LaurentMap | RationalMap;
+  phi: LaurentMap | RationalMap | BoundedMap;
   /** Which disk φ uniformizes: "D" = the unit disk (bounded Ω), "D*" = its exterior (unbounded Ω). */
   disk: "D" | "D*";
   /** How φ⁻¹ is taken. "newton-dk" = cold-seeded Newton with an exact Durand–Kerner fallback (@cas/schwarz). */

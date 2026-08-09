@@ -42,6 +42,25 @@ export function phiToMapSpec(phi) {
   return null;
 }
 
+/**
+ * QD bounded-CLASSICAL φ -> interchange `BoundedMap` (`form:"bounded"`, schema 1.3.0), or null when φ is
+ * not a bounded-classical QD. φ(z) = w₀ + Σ_j Σ_k conj(A_{j,k})·u_j(z)^k maps 𝔻 → Ω onto a BOUNDED domain;
+ * @cas/schwarz's makeBoundedSchwarz reconstructs its σ from these coefficients (interior branch, disk "D").
+ *
+ * DELIBERATELY SEPARATE from phiToMapSpec: `BoundedMap` is NOT a `MapSpec` (it is valid only as a `schwarz`
+ * map's `phi`), so it must never ride the φ / quadrature-domain hand-off — only the σ recipe. Detection:
+ * the classical families leave `phi.family` UNSET (LQD/PQD/rational-bounded all tag it — schwarz-common's
+ * family dispatch, gotcha #1), so an untagged, non-unbounded φ carrying finite-pole branches is exactly the
+ * partial-fraction bounded QD this reconstructs. A real bounded QD has ≥1 branch; w₀ defaults to 0.
+ */
+function boundedClassicalMapSpec(phi) {
+  if (!phi || phi.unbounded || phi.family) return null;
+  const branches = phi.branches || [];
+  if (branches.length === 0) return null;
+  const w0 = phi.w0 ? cc(phi.w0) : { re: 0, im: 0 };
+  return { form: "bounded", w0, branches: branches.map((br) => ({ z: cc(br.z), A: (br.A || []).map(cc) })) };
+}
+
 // ---------------------------------------------------------------------------
 // Export availability — WHY a φ can't be handed off (Phase 1, σ-export legibility).
 //
@@ -80,17 +99,22 @@ const CAPTURE_HINT =
  */
 export function explainSigmaUnavailable(phi) {
   const spec = phiToMapSpec(phi);
-  if (spec && spec.form === "laurent") return null; // σ IS exportable (pole-free AND pole-bearing)
+  // σ IS exportable for the unbounded-Laurent family (→ laurent) AND the bounded-classical family
+  // (→ a bounded map, S5-C2). Deferring the null-decision to the real builders keeps this in lockstep.
+  if ((spec && spec.form === "laurent") || boundedClassicalMapSpec(phi)) return null;
   switch (classifyPhiForExport(phi).kind) {
     case "none":
       return CAPTURE_HINT;
     case "rational":
-      return 'This is a Direct-tab rational map (P/Q). σ export covers the unbounded-Laurent family ' +
-             '(the deltoid and pole-bearing QDs); use "Export Riemann map φ" for this map instead.';
+      return 'This is a Direct-tab rational map (P/Q). σ export covers the unbounded-Laurent and ' +
+             'bounded-classical families; use "Export Riemann map φ" for this map instead.';
     case "bounded":
-      return "σ export currently covers unbounded quadrature domains; this captured domain is bounded.";
+      // Bounded-classical now σ-exports (returns null above); reaching here means a WEIGHTED bounded QD
+      // (log-/power-weighted, LQD/PQD), whose σ needs the exp/power machinery not yet lifted to @cas/schwarz.
+      return "σ export covers unbounded-Laurent and bounded-classical domains; this captured domain is a " +
+             "weighted (log-/power-weighted) bounded QD, not reconstructable yet.";
     default:
-      return "σ export needs an unbounded-Laurent φ; this captured map isn't one.";
+      return "σ export needs an unbounded-Laurent or bounded-classical φ; this captured map isn't one.";
   }
 }
 
@@ -104,8 +128,10 @@ export function explainPhiUnavailable(phi) {
     case "none":
       return CAPTURE_HINT;
     case "bounded":
-      return "φ export currently covers unbounded-Laurent maps and Direct rational maps; " +
-             "this captured domain is bounded (not a closed-form map yet).";
+      // A bounded φ is not carried on the φ / quadrature-domain hand-off — `form:"bounded"` is σ-only
+      // (not a MapSpec). Bounded-classical QDs DO hand off, via Export σ; point the user there.
+      return "φ export covers unbounded-Laurent maps and Direct rational maps; this captured domain is " +
+             'bounded — bounded QDs hand off via "Export σ", not as a φ map.';
     default:
       return "No exportable φ yet — this captured family isn't a closed-form map.";
   }
@@ -205,21 +231,27 @@ export function exportPhiJSON(phi, opts = {}) {
 // map; this hands off σ(w)=conj(F(φ⁻¹(w))) as a RECIPE (interchange `form:"schwarz"`, v1.1.0): the
 // closed-form φ plus which disk it uniformizes and how φ⁻¹ is taken. σ is not a closed-form map (its
 // inverse is numerical), so CD reconstructs the evaluator from `sigma.phi` via @cas/schwarz (S4a) —
-// it does NOT compile through the expr pipeline. Scoped to the UNBOUNDED-LAURENT family — the deltoid
-// AND the pole-bearing unbounded QDs (its `sigma.phi` may carry finite-pole `branches`, 1.2.0), the
-// family @cas/schwarz's exterior-branch engine reconstructs; a rational/bounded φ returns null (we do
-// not emit a σ recipe no consumer can rebuild). The payload is CANONICAL: φ is a geometric map, so no
+// it does NOT compile through the expr pipeline. Two families reconstruct today: the UNBOUNDED-LAURENT
+// family — the deltoid AND the pole-bearing unbounded QDs (its `sigma.phi` may carry finite-pole
+// `branches`, 1.2.0), rebuilt by the exterior-branch engine (`disk:"D*"`) — and the BOUNDED-CLASSICAL
+// family (S5-C2), rebuilt by makeBoundedSchwarz's interior branch (`sigma.phi` is `form:"bounded"`,
+// `disk:"D"`, schema 1.3.0). A rational φ, or a weighted (LQD/PQD) bounded φ, returns null (we do not
+// emit a σ recipe no consumer can rebuild). The payload is CANONICAL: φ is a geometric map, so no
 // convention conversion — the QD normalizations touch h / areas, not φ's coefficients.
 
 /**
  * Build an interchange Envelope<"schwarz-reflection"> carrying σ as a `form:"schwarz"` recipe, or null
- * when φ is not an unbounded-Laurent map (the only family the shared σ engine reconstructs today).
+ * when φ is neither an unbounded-Laurent map nor a bounded-classical map (the two families the shared σ
+ * engine reconstructs today). The `disk` tag records which branch φ⁻¹ takes: "D*" (exterior) for a
+ * Laurent φ, "D" (interior) for a bounded φ.
  */
 export function buildSigmaEnvelope(phi, opts = {}) {
-  const mapSpec = phiToMapSpec(phi);
-  // Only the unbounded classical Laurent φ (→ a `laurent` MapSpec) has a σ @cas/schwarz can rebuild
-  // (its exterior-branch Newton engine maps {|z|>1} → Ω). Rational/bounded/non-exportable φ ⇒ null.
-  if (!mapSpec || mapSpec.form !== "laurent") return null;
+  // Unbounded-Laurent (→ a `laurent` MapSpec, exterior branch {|z|>1} → Ω) OR bounded-classical (→ a
+  // `bounded` map, interior branch 𝔻 → Ω). Rational/weighted-bounded/non-exportable φ ⇒ null.
+  const laurent = phiToMapSpec(phi);
+  const mapSpec = laurent && laurent.form === "laurent" ? laurent : boundedClassicalMapSpec(phi);
+  if (!mapSpec) return null;
+  const disk = mapSpec.form === "bounded" ? "D" : "D*";
   return {
     schema: SCHEMA_ID,
     version: VERSION,
@@ -228,7 +260,7 @@ export function buildSigmaEnvelope(phi, opts = {}) {
       sigma: {
         form: "schwarz",
         phi: mapSpec,
-        disk: "D*", // laurent ⇒ unbounded ⇒ φ uniformizes the exterior of the unit disk
+        disk, // "D*" (Laurent ⇒ exterior of the unit disk) or "D" (bounded ⇒ the unit disk)
         inverse: "newton-dk",
         antiholomorphic: true,
       },

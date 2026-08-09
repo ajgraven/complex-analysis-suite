@@ -23,9 +23,11 @@
 // result. A diff here is a format change and should be reviewed as one.
 //
 // VERSION NOTE: the links below carry the schema `version` field, so each MINOR bump regenerates them
-// — 1.0.0 → 1.1.0 (the `schwarz` MapSpec form, S3a) and 1.1.0 → 1.2.0 (optional finite-pole `branches`
-// on LaurentMap, Phase 2). Both bumps changed ONLY the embedded `version` (the deltoid uses none of the
-// new vocabulary — it is pole-free). Regenerated via QD's exportPhiLink/exportSigmaLink (below).
+// — 1.0.0 → 1.1.0 (the `schwarz` MapSpec form, S3a), 1.1.0 → 1.2.0 (optional finite-pole `branches` on
+// LaurentMap, Phase 2), and 1.2.0 → 1.3.0 (the `bounded` φ form, S5-C2). Each bump changed ONLY the
+// embedded `version` in the three Laurent goldens (they use none of the newer vocabulary), so they stay
+// byte-identical bar that label; the bounded golden below is the first to exercise 1.3.0's new form.
+// Regenerated via QD's exportPhiLink/exportSigmaLink (below).
 
 /** Frozen timestamp for the goldens — real exports use `new Date()`, which is not reproducible. */
 export const GOLDEN_CREATED_AT = "2026-07-06T00:00:00Z";
@@ -36,7 +38,7 @@ export const GOLDEN_CREATED_AT = "2026-07-06T00:00:00Z";
  * whose payload.phi is the LaurentMap CD compiles and renders.
  */
 export const QD_TO_CD_DELTOID_LINK =
-  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMi4wIiwia2luZCI6InF1YWRyYXR1cmUtZG9tYWluIiwicGF5bG9hZCI6eyJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImJvdW5kZWQiOmZhbHNlLCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMy4wIiwia2luZCI6InF1YWRyYXR1cmUtZG9tYWluIiwicGF5bG9hZCI6eyJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImJvdW5kZWQiOmZhbHNlLCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
 
 /** φ(2) for the deltoid golden: 2 + 0.5/4 = 2.125. The value CD's compiled expr must produce. */
 export const QD_TO_CD_DELTOID_PHI_AT_2 = 2.125;
@@ -60,7 +62,7 @@ export const QD_TO_CD_DELTOID_PHI_AT_2 = 2.125;
  * conventions. Decodes + validates through the same codec/seatbelt as φ; CD reconstructs σ from it (S4a).
  */
 export const QD_TO_CD_DELTOID_SIGMA_LINK =
-  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMi4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMy4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
 
 /**
  * A frozen (w₀, σ(w₀)) pair for the deltoid σ golden — the value CD's S4a reconstruction must reproduce
@@ -85,7 +87,7 @@ export const QD_TO_CD_DELTOID_SIGMA_AT_W0 = { re: 0.5, im: -0.5 } as const;
 /** The single-exterior-pole σ as an `Envelope<"schwarz-reflection">` deep link. Its `sigma.phi` is a
  *  `laurent` map carrying one finite-pole branch (z_j = 0.2, A = [0.3]). */
 export const QD_TO_CD_SINGLE_POLE_SIGMA_LINK =
-  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMi4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOltdLCJicmFuY2hlcyI6W3sieiI6eyJyZSI6MC4yLCJpbSI6MH0sIkEiOlt7InJlIjowLjMsImltIjowfV19XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMy4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOltdLCJicmFuY2hlcyI6W3sieiI6eyJyZSI6MC4yLCJpbSI6MH0sIkEiOlt7InJlIjowLjMsImltIjowfV19XX0sImRpc2siOiJEKiIsImludmVyc2UiOiJuZXd0b24tZGsiLCJhbnRpaG9sb21vcnBoaWMiOnRydWV9LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
 
 /**
  * A frozen (w₀, σ(w₀)) pair for the single-pole σ golden — the value CD's reconstruction must reproduce.
@@ -95,3 +97,27 @@ export const QD_TO_CD_SINGLE_POLE_SIGMA_LINK =
  */
 export const QD_TO_CD_SINGLE_POLE_SIGMA_W0 = { re: 3, im: 0 } as const;
 export const QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0 = { re: 2 / 3, im: 0 } as const;
+
+// --- Bounded-QD σ golden — the first NON-Laurent family (S5-C2, interchange 1.3.0) ------------------
+//
+// A genuine single-lobe BOUNDED quadrature domain: φ(z) = ½·u, u = z/(1 − 0.3z), centre w₀ = 0, so
+// φ: 𝔻 → Ω is bounded and its `sigma.phi` is the new `form:"bounded"` map (schema 1.3.0), tagged
+// `disk:"D"`. CD rebuilds the σ evaluator from it via @cas/schwarz's makeBoundedSchwarz (NOT
+// makeUnboundedLaurentSchwarz — the bounded engine uses the interior branch and F(z)=conj(w₀)+Σ A/(z−z_j)).
+// PRODUCER STATUS: no QD button emits this yet (that is the C2 QD-emit slice); until then this hand-built
+// envelope is the CANONICAL artifact QD's future emit must reproduce byte-for-byte.
+
+/** The bounded single-lobe σ as an `Envelope<"schwarz-reflection">` deep link: `sigma.phi` is a
+ *  `form:"bounded"` map (w₀=0, one branch z_j=0.3, A=[0.5]), `disk:"D"`, `newton-dk`, version 1.3.0. */
+export const QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK =
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMy4wIiwia2luZCI6InNjaHdhcnotcmVmbGVjdGlvbiIsInBheWxvYWQiOnsic2lnbWEiOnsiZm9ybSI6InNjaHdhcnoiLCJwaGkiOnsiZm9ybSI6ImJvdW5kZWQiLCJ3MCI6eyJyZSI6MCwiaW0iOjB9LCJicmFuY2hlcyI6W3sieiI6eyJyZSI6MC4zLCJpbSI6MH0sIkEiOlt7InJlIjowLjUsImltIjowfV19XX0sImRpc2siOiJEIiwiaW52ZXJzZSI6Im5ld3Rvbi1kayIsImFudGlob2xvbW9ycGhpYyI6dHJ1ZX0sImNvbnZlbnRpb25zIjp7ImFyZWEiOiJzdGFuZGFyZCIsImNvbnRvdXIiOiJzdGFuZGFyZCJ9fSwicHJvdmVuYW5jZSI6eyJhcHAiOiJxdWFkcmF0dXJlLWRvbWFpbnMiLCJhcHBWZXJzaW9uIjoiMC4xLjAiLCJjcmVhdGVkQXQiOiIyMDI2LTA3LTA2VDAwOjAwOjAwWiJ9fQ";
+
+/**
+ * A frozen (w₀, σ(w₀)) pair for the bounded-lobe σ golden — the value CD's reconstruction must reproduce
+ * (decode → build the engine from sigma.phi via makeBoundedSchwarz → evaluate σ at w). Derived via the
+ * exact identity σ(φ(z₀)) = conj(F(z₀)) at z₀ = ½ (interior of 𝔻):
+ *   w = φ(½) = ½·(½ / (1 − 0.15)) = 5/17 ,  σ(w) = conj(F(½)) = conj(0.5/(½ − 0.3)) = 2.5.
+ * Pinned against the real bounded engine in packages/schwarz/test/bounded.test.ts.
+ */
+export const QD_TO_CD_BOUNDED_LOBE_SIGMA_W0 = { re: 5 / 17, im: 0 } as const;
+export const QD_TO_CD_BOUNDED_LOBE_SIGMA_AT_W0 = { re: 2.5, im: 0 } as const;
