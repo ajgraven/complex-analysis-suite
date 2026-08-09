@@ -701,6 +701,21 @@ abs(z)>2</textarea
                         title="Darken toward the edges (0 = off)"
                       />
                     </div>
+                    <!-- Relief lighting (C2): shade the σ field as a lit 3-D surface. The az/el/depth sliders
+                         appear only when lighting is on. Reuses CD's shading model (GPU only). -->
+                    <div class="field">
+                      <label class="checkbox" title="Shade the σ field as a lit 3-D surface (relief lighting)">
+                        <input type="checkbox" id="schwarz-light" /> relief lighting
+                      </label>
+                    </div>
+                    <div class="schwarz-subfield" id="schwarz-light-controls" hidden>
+                      <label for="schwarz-light-az">light azimuth</label>
+                      <input type="range" id="schwarz-light-az" min="0" max="360" value="135" title="Light azimuth (direction, degrees)" />
+                      <label for="schwarz-light-el">light elevation</label>
+                      <input type="range" id="schwarz-light-el" min="0" max="90" value="45" title="Light elevation (height above the plane, degrees)" />
+                      <label for="schwarz-light-depth">relief depth</label>
+                      <input type="range" id="schwarz-light-depth" min="0" max="100" value="40" title="Relief depth — how strongly the surface is sculpted" />
+                    </div>
                   </div>
                 </details>
 

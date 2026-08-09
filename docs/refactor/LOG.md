@@ -2090,3 +2090,23 @@
   deferred (sampling quality only). Green: typecheck + lint + node **790** (schwarzState **+3** render-knob
   round-trip; appState opt-out +2) + browser **17/17** (shaders + σ render shell). Deferred from the plan
   and NOT started: draggable map handles + live parameter scrubbing (the other two interactivity options).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase C — coloring & render
+  polish):** two reuse-driven features, in two commits. **C1 custom gradient:** a "Custom…" colormap in the
+  σ pane, reusing CD's existing gradient editor (src/ui/gradient.ts) — the ADR-0007 second consumer of an
+  already-shared in-app widget, so NO new UI code. Selecting it reveals the stop editor; editing stops
+  rebuilds the σ colormap texture via a new `setColormapRamp` (the gradient sampled into a 256-entry RGB
+  ramp) + the legend swatch + repaints. The stops travel in `_sigma`, carried only when the custom palette
+  is active, validated on restore by the shared `parseGradientStops` (a hostile link falls back to no custom
+  stops). **C2 relief lighting:** the σ shader gains CD's shading model — `shadeWithGradient` copied verbatim
+  (Lambert + Blinn-Phong spec pow 24 ×0.4 + hemisphere ambient), fed the screen-space gradient
+  `vec2(dFdx(h),dFdy(h))·depth` of a new `fieldHeight()` (the escape/entry count, smoothed on the escaping
+  set like ν; the discrete tiling K-entry embosses as contours; interior/invalid → flat). u_lightDir is the
+  az/el spherical unit vector; a checkbox + light az/el/depth sliders drive it (depth = slider÷20, CD's
+  mapping). **Default OFF** (u_light==0) so the field is byte-identical to unlit — the CPU↔GPU agreement
+  corpus is unchanged; the shader has no byte-freeze (only a compile gate), which stays green. Lighting is
+  skipped on draft frames (dFdx relief on a low-res draft is noisy) and is GPU-only. aa/light/az/el/depth +
+  custom stops all travel in `_sigma` (permalink / saved view / PNG), omitted at defaults so old links are
+  byte-identical. Green: typecheck + lint + node **793** (schwarzState +3 custom-gradient round-trip; POLE
+  fixture carries non-default lighting; appState opt-out +5) + browser **17/17** (shaders + σ render shell).
+  VERIFIED (Playwright): "Custom…" recolors the field + shows the editor; enabling relief lighting changes
+  the field + reveals the az/el/depth sliders; both with no console error.

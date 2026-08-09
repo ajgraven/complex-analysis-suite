@@ -53,6 +53,14 @@ export interface SigmaViewState {
   maxIter: number;
   /** σ escape radius (B2): |σⁿ| beyond this counts as escaped to ∞. */
   escapeR: number;
+  /** Relief lighting on/off (C2). */
+  light: boolean;
+  /** Light azimuth (degrees, C2). */
+  lightAz: number;
+  /** Light elevation (degrees, C2). */
+  lightEl: number;
+  /** Relief depth — the height-gradient scale (C2). */
+  lightHeight: number;
   /** Custom-gradient stops (C1), present only when `colormap === "custom"`; else the named palette applies. */
   customStops?: GradientStop[];
 }
@@ -63,6 +71,9 @@ export const SIGMA_TONE_DEFAULTS = { rotation: 0, gamma: 1, vignette: 0 } as con
 /** Default render knobs (B2) — native resolution + the standard escape budget; also the fallback for links
  *  that predate them, so an old permalink still restores a valid (default-quality) view. */
 export const SIGMA_RENDER_DEFAULTS = { aa: 1, maxIter: 48, escapeR: 1e4 } as const;
+
+/** Default relief lighting (C2) — off, CD's light az/el, depth 2.0; also the fallback for pre-C2 links. */
+export const SIGMA_LIGHT_DEFAULTS = { light: false, lightAz: 135, lightEl: 45, lightHeight: 2 } as const;
 
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
@@ -100,6 +111,11 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.aa !== SIGMA_RENDER_DEFAULTS.aa) out.aa = s.aa;
   if (s.maxIter !== SIGMA_RENDER_DEFAULTS.maxIter) out.it = s.maxIter;
   if (s.escapeR !== SIGMA_RENDER_DEFAULTS.escapeR) out.er = s.escapeR;
+  // Relief lighting (C2), omitted at its defaults so an unlit view's link is unchanged from pre-C2.
+  if (s.light !== SIGMA_LIGHT_DEFAULTS.light) out.li = s.light;
+  if (s.lightAz !== SIGMA_LIGHT_DEFAULTS.lightAz) out.laz = s.lightAz;
+  if (s.lightEl !== SIGMA_LIGHT_DEFAULTS.lightEl) out.lel = s.lightEl;
+  if (s.lightHeight !== SIGMA_LIGHT_DEFAULTS.lightHeight) out.ldp = s.lightHeight;
   // Custom gradient (C1) — carried only when the custom palette is active (and has ≥2 stops), so a named-
   // palette view's link is unaffected.
   if (s.colormap === "custom" && s.customStops && s.customStops.length >= 2) out.grad = s.customStops;
@@ -124,7 +140,8 @@ export function schwarzStampParams(s: SigmaViewState): string {
   return (
     `${recipe}; center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
-    `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}`
+    `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
+    `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}`
   );
 }
 
@@ -224,6 +241,11 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const aa = Math.round(clampOr(o.aa, SIGMA_RENDER_DEFAULTS.aa, 1, 4));
   const maxIter = Math.round(clampOr(o.it, SIGMA_RENDER_DEFAULTS.maxIter, 1, 4096));
   const escapeR = clampOr(o.er, SIGMA_RENDER_DEFAULTS.escapeR, 1.0001, 1e12);
+  // Relief lighting (C2) — a bad/absent value falls back to the default (never fatal).
+  const light = typeof o.li === "boolean" ? o.li : SIGMA_LIGHT_DEFAULTS.light;
+  const lightAz = clampOr(o.laz, SIGMA_LIGHT_DEFAULTS.lightAz, 0, 360);
+  const lightEl = clampOr(o.lel, SIGMA_LIGHT_DEFAULTS.lightEl, 0, 90);
+  const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
   // Custom gradient (C1) — validated via the shared editor parser (≥2 stops, clamped t / bytes); a bad or
   // absent value ⇒ no custom stops (the named palette applies). Only meaningful when colormap === "custom".
   const customStops = o.grad !== undefined ? (parseGradientStops(JSON.stringify(o.grad)) ?? undefined) : undefined;
@@ -233,6 +255,7 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
   return {
     phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter, escapeR,
+    light, lightAz, lightEl, lightHeight,
     ...(customStops ? { customStops } : {}),
   };
 }

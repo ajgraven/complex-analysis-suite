@@ -70,6 +70,9 @@ uniform float     u_vignette;        // radial edge darkening (0 = off)
 uniform int       u_colorMode;       // 0 escape-time · 1 orbit-trap · 2 stripe-average · 3 smooth · 4 distance
 uniform int       u_trapType;        // orbit-trap shape: 0 cross · 1 point · 2 line · 3 circle · 4 lattice
 uniform float     u_escapeDegree;    // σ escape degree d (σ ~ const·conj(w)^d at ∞); smooth/distance (S5-B2)
+uniform int       u_light;           // relief lighting on/off (C2); 0 ⇒ the field is byte-identical to unlit
+uniform vec3      u_lightDir;        // normalised light direction (azimuth/elevation → unit vector)
+uniform float     u_lightHeight;     // relief depth — scales the escape-count gradient
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
@@ -193,8 +196,56 @@ vec3 fieldColor() {
   return vec3(18.0, 20.0, 46.0) / 255.0;                         // interior (non-escaping)
 }
 
+// Relief lighting (C2) — CD's shading model (shaderBuilder.ts shadeWithGradient), verbatim: Lambert +
+// Blinn-Phong specular + hemisphere ambient, from a 2D surface slope g (the height-field gradient × depth).
+vec3 shadeWithGradient(vec3 col, vec2 g) {
+  vec3 N = normalize(vec3(-g, 1.0));
+  vec3 L = u_lightDir;
+  float diff = max(dot(N, L), 0.0);
+  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+  float spec = pow(max(dot(N, H), 0.0), 24.0) * 0.4;
+  float hemi = 0.5 + 0.5 * N.z; // sky↔ground hemisphere ambient
+  const float ambient = 0.35;
+  return col * (ambient + (1.0 - ambient) * diff) * (0.7 + 0.3 * hemi) + spec;
+}
+
+// Continuous "height" for the relief surface (C2): the σ escape/entry count, smoothed on the ESCAPING set
+// (like escapedColor's ν) so its screen-space gradient tracks the colour bands. The tiling (K-entry) is a
+// DISCRETE event with no smooth interpolation, so its height is the step count n (the relief embosses the
+// tiling contours); interior / K-interior / invalid pixels return -1.0 (flat, no relief). Re-walks the
+// orbit, so it is computed ONLY when u_light == 1.
+float fieldHeight() {
+  float re = u_center.x + (2.0 * gl_FragCoord.x / u_size - 1.0) / u_zoom;
+  float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
+  vec2 w = vec2(re, im);
+  if (!inOmega(w)) return -1.0;                                   // w₀ ∈ K (n=0) — flat
+  vec2 zSeed = newtonSeedFresh(w);
+  bool ok = true;
+  for (int n = 1; n <= 512; ++n) {
+    if (n > u_maxIter) break;
+    vec2 next = sigma(w, zSeed, ok);
+    if (!ok) return -1.0;                                         // invalid — flat
+    w = next;
+    float az = length(w);
+    if (any(isnan(w)) || any(isinf(w)) || az > u_escapeR)         // escaped → smooth continuous count
+      return float(n) + 1.0 - log(log(max(az, 2.718281828))) / log(max(u_escapeDegree, 2.0));
+    if (!inOmega(w)) return float(n);                             // entered K at step n — the tiling height
+  }
+  return -1.0;                                                    // interior (non-escaping) — flat
+}
+
+// Relief lighting on the σ field (C2): shade the classification colour by the screen-space gradient of the
+// height field. Interior/flat pixels (h < 0) stay unlit. Mirrors CD's applyLighting.
+vec3 applyLighting(vec3 col, float h) {
+  if (h < 0.0) return col;
+  return shadeWithGradient(col, vec2(dFdx(h), dFdy(h)) * u_lightHeight);
+}
+
 void main() {
   vec3 col = fieldColor();
+  // Relief lighting (C2) — a lit 3-D surface from the escape-count height field. Default OFF (u_light == 0),
+  // so an unlit render is byte-identical to pre-C2. Applied before the image-space tone below.
+  if (u_light == 1) col = applyLighting(col, fieldHeight());
   // Image-space tone (S5-A3), each applied only when non-default so defaults stay byte-exact.
   if (u_gamma != 1.0) col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / u_gamma));     // gamma
   if (u_vignette > 0.0) {                                                       // radial edge darkening
@@ -221,6 +272,14 @@ export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
   colorMode?: string;
   /** Orbit-trap shape key (SCHWARZ_TRAP_SHAPES), used when colorMode === "trap"; default "cross". */
   trapShape?: string;
+  /** Relief lighting (C2): shade a lit 3-D surface from the escape-count height field; default off. */
+  light?: boolean;
+  /** Light azimuth in degrees (default 135). */
+  lightAz?: number;
+  /** Light elevation in degrees (default 45). */
+  lightEl?: number;
+  /** Relief depth — scales the height-field gradient (default 2.0). */
+  lightHeight?: number;
 }
 
 export interface SchwarzGLRenderer {
@@ -296,6 +355,9 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uColorMode = U("u_colorMode");
   const uTrapType = U("u_trapType");
   const uEscapeDegree = U("u_escapeDegree");
+  const uLight = U("u_light");
+  const uLightDir = U("u_lightDir");
+  const uLightHeight = U("u_lightHeight");
 
   let packed: PackedPhi | null = null;
   let escapeDegree = 2; // σ ~ const·conj(w)^d at ∞; d = highest nonzero Laurent index (set in setPhi)
@@ -363,6 +425,14 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform1i(uColorMode, schwarzColorModeId(opts.colorMode ?? DEFAULT_SCHWARZ_COLOR_MODE)); // S5-B1
     ctx.uniform1i(uTrapType, schwarzTrapShapeId(opts.trapShape ?? DEFAULT_SCHWARZ_TRAP_SHAPE));
     ctx.uniform1f(uEscapeDegree, escapeDegree); // S5-B2 smooth/distance degree-d normalisation
+
+    // Relief lighting (C2): default OFF ⇒ u_light = 0 ⇒ the shader's field is byte-identical to unlit.
+    // lightDir is the azimuth/elevation spherical unit vector; lightHeight scales the escape-count gradient.
+    ctx.uniform1i(uLight, opts.light ? 1 : 0);
+    const lightAz = ((opts.lightAz ?? 135) * Math.PI) / 180;
+    const lightEl = ((opts.lightEl ?? 45) * Math.PI) / 180;
+    ctx.uniform3f(uLightDir, Math.cos(lightEl) * Math.cos(lightAz), Math.cos(lightEl) * Math.sin(lightAz), Math.sin(lightEl));
+    ctx.uniform1f(uLightHeight, opts.lightHeight ?? 2.0);
 
     ctx.activeTexture(ctx.TEXTURE0);
     ctx.bindTexture(ctx.TEXTURE_2D, maskTex);

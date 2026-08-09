@@ -121,6 +121,11 @@ describe("SHARE_IDS DOM coverage", () => {
         // properties of the σ view, carried by the `_sigma` state layer — not shared controls in their own
         // right, the same way the σ coloring above travels inside _sigma.
         [["schwarz-aa", "schwarz-iters", "schwarz-escaper"], "σ render setting (travels inside _sigma)"],
+        // σ relief lighting (C2): on/off + light az / el / depth — a σ-view coloring property carried by _sigma.
+        [
+          ["schwarz-light", "schwarz-light-az", "schwarz-light-el", "schwarz-light-depth"],
+          "σ relief lighting (travels inside _sigma)",
+        ],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.

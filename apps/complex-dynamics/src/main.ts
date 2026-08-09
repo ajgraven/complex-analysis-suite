@@ -3022,6 +3022,12 @@ function init(): void {
   // Active only when the colormap is "custom"; the stops travel in the σ view (`_sigma`).
   let schwarzGradientStops: GradientStop[] = DEFAULT_GRADIENT.map((s) => ({ t: s.t, color: [...s.color] }));
   let schwarzGradientEditor: GradientEditor | null = null;
+  // σ relief lighting (C2): a lit 3-D surface from the escape-count height field (GPU only). Default off; the
+  // depth is the slider value ÷ 20 (slider 40 → 2.0), matching CD's mapping. Travels in the σ view (`_sigma`).
+  let schwarzLight = false;
+  let schwarzLightAz = 135;
+  let schwarzLightEl = 45;
+  let schwarzLightDepth = 2.0;
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3095,6 +3101,12 @@ function init(): void {
           rotation: schwarzRotation,
           gamma: schwarzGamma,
           vignette: schwarzVignette,
+          // Relief lighting (C2) — skipped on the draft frame (dFdx relief on a low-res draft is noisy + slow);
+          // the idle refine renders it lit.
+          light: schwarzLight && !schwarzDraft,
+          lightAz: schwarzLightAz,
+          lightEl: schwarzLightEl,
+          lightHeight: schwarzLightDepth,
         });
         schwarzLastRenderSize = renderSize;
       }
@@ -3354,6 +3366,10 @@ function init(): void {
     schwarzAA = s.aa; // B2 render knobs travel with the σ view
     schwarzEscape.maxIter = s.maxIter;
     schwarzEscape.escapeR = s.escapeR;
+    schwarzLight = s.light; // C2 relief lighting travels with the σ view
+    schwarzLightAz = s.lightAz;
+    schwarzLightEl = s.lightEl;
+    schwarzLightDepth = s.lightHeight;
     if (s.customStops) {
       // C1: restore the custom gradient BEFORE entering, so enterSchwarz's applySchwarzColormap uses it.
       schwarzGradientStops = s.customStops.map((st) => ({ t: st.t, color: [...st.color] }));
@@ -3371,6 +3387,16 @@ function init(): void {
     if (itEl) itEl.value = String(schwarzEscape.maxIter);
     const erEl = document.getElementById("schwarz-escaper") as HTMLInputElement | null;
     if (erEl) erEl.value = String(schwarzEscape.escapeR);
+    const lightCb = document.getElementById("schwarz-light") as HTMLInputElement | null;
+    if (lightCb) lightCb.checked = schwarzLight;
+    const lazEl = document.getElementById("schwarz-light-az") as HTMLInputElement | null;
+    if (lazEl) lazEl.value = String(schwarzLightAz);
+    const lelEl = document.getElementById("schwarz-light-el") as HTMLInputElement | null;
+    if (lelEl) lelEl.value = String(schwarzLightEl);
+    const ldpEl = document.getElementById("schwarz-light-depth") as HTMLInputElement | null;
+    if (ldpEl) ldpEl.value = String(schwarzLightDepth * 20);
+    const lcEl = document.getElementById("schwarz-light-controls");
+    if (lcEl) lcEl.hidden = !schwarzLight;
     syncSchwarzColorModeControls();
     syncSchwarzToneControls();
     renderSchwarzLegendChip();
@@ -3414,6 +3440,10 @@ function init(): void {
       aa: schwarzAA,
       maxIter: schwarzEscape.maxIter,
       escapeR: schwarzEscape.escapeR,
+      light: schwarzLight,
+      lightAz: schwarzLightAz,
+      lightEl: schwarzLightEl,
+      lightHeight: schwarzLightDepth,
       ...(schwarzColormapName === "custom" ? { customStops: schwarzGradientStops } : {}),
     };
   }
@@ -3443,6 +3473,10 @@ function init(): void {
         rotation: schwarzRotation,
         gamma: schwarzGamma,
         vignette: schwarzVignette,
+        light: schwarzLight, // C2: the export is a full render, so it is lit if lighting is on
+        lightAz: schwarzLightAz,
+        lightEl: schwarzLightEl,
+        lightHeight: schwarzLightDepth,
       });
       const out = document.createElement("canvas");
       out.width = size;
@@ -3800,6 +3834,27 @@ function init(): void {
     wire("schwarz-rotation", (v) => (schwarzRotation = v));
     wire("schwarz-gamma", (v) => (schwarzGamma = v));
     wire("schwarz-vignette", (v) => (schwarzVignette = v));
+  }
+
+  // σ relief lighting (C2): a checkbox + light az / el / depth sliders. Toggling reveals the sliders; each
+  // change repaints (full res, so the lit surface is shown). The depth slider (0–100) maps to depth ÷ 20
+  // (slider 40 → 2.0), matching CD's mapping. The values travel in the σ view (`_sigma`).
+  {
+    const lightCb = document.getElementById("schwarz-light") as HTMLInputElement | null;
+    const azIn = document.getElementById("schwarz-light-az") as HTMLInputElement | null;
+    const elIn = document.getElementById("schwarz-light-el") as HTMLInputElement | null;
+    const depthIn = document.getElementById("schwarz-light-depth") as HTMLInputElement | null;
+    const controls = document.getElementById("schwarz-light-controls");
+    const sync = (): void => {
+      schwarzLight = lightCb?.checked ?? false;
+      schwarzLightAz = Number(azIn?.value ?? 135);
+      schwarzLightEl = Number(elIn?.value ?? 45);
+      schwarzLightDepth = Number(depthIn?.value ?? 40) / 20;
+      if (controls) controls.hidden = !schwarzLight;
+      scheduleSchwarzPaint();
+    };
+    for (const el of [lightCb, azIn, elIn, depthIn]) el?.addEventListener("input", sync);
+    if (controls) controls.hidden = !schwarzLight; // initial visibility (no repaint)
   }
 
   // σ render controls (Phase B): AA supersample + the escape budget (iterations + escape radius). Each

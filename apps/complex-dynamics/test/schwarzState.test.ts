@@ -5,6 +5,7 @@ import {
   schwarzStampParams,
   SIGMA_TONE_DEFAULTS,
   SIGMA_RENDER_DEFAULTS,
+  SIGMA_LIGHT_DEFAULTS,
   type SigmaViewState,
 } from "../src/state/schwarzState";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../src/render/schwarzView";
@@ -24,6 +25,7 @@ const DELTOID: SigmaViewState = {
   trapShape: "cross",
   ...SIGMA_TONE_DEFAULTS,
   ...SIGMA_RENDER_DEFAULTS,
+  ...SIGMA_LIGHT_DEFAULTS,
 };
 const POLE: SigmaViewState = {
   phi: { c: [1, 0], F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
@@ -39,6 +41,10 @@ const POLE: SigmaViewState = {
   aa: 2, // non-default render knobs, to prove they round-trip (B2)
   maxIter: 128,
   escapeR: 1000,
+  light: true, // non-default relief lighting, to prove it round-trips (C2)
+  lightAz: 200,
+  lightEl: 30,
+  lightHeight: 3.5,
 };
 
 describe("encodeSigmaState / parseSigmaState round-trip", () => {
@@ -70,6 +76,7 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
     trapShape: "cross",
     ...SIGMA_TONE_DEFAULTS,
     ...SIGMA_RENDER_DEFAULTS,
+    ...SIGMA_LIGHT_DEFAULTS,
   };
 
   it("round-trips a bounded state (family + w₀) — S5-C2d", () => {
@@ -291,6 +298,7 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("aa=1");
     expect(s).toContain("iters=48");
     expect(s).toContain("escapeR=10000");
+    expect(s).toContain("light=off");
     expect(s).not.toMatch(/[σ≈−]/); // PNG tEXt is Latin-1
   });
 
@@ -307,5 +315,6 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("aa=2");
     expect(s).toContain("iters=128");
     expect(s).toContain("escapeR=1000");
+    expect(s).toContain("light=on(az200,el30,depth3.5)");
   });
 });
