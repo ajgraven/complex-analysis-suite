@@ -44,4 +44,21 @@ describe("coloring shader assembly", () => {
   it("passes a fullscreen triangle from the vertex shader", () => {
     expect(VERTEX_SHADER).toContain("gl_Position");
   });
+
+  it("declares a uParam_<name> uniform for each live parameter (ADR-0011 / G1)", () => {
+    const withParams = buildFragmentShader(
+      compileF(parse("a*z + b"), "fFn", { params: ["a", "b"] }),
+      ["a", "b"],
+    );
+    // the declaration must precede fFn (which reads the alias) — GLSL requires declaration before use
+    expect(withParams).toContain("uniform vec2 uParam_a;");
+    expect(withParams).toContain("uniform vec2 uParam_b;");
+    expect(withParams.indexOf("uniform vec2 uParam_a;")).toBeLessThan(
+      withParams.indexOf("cvec fFn("),
+    );
+    expect(withParams).toContain("cvec a = vec_(uParam_a.x, uParam_a.y);");
+    // a parameter-free map declares no uParam / uA uniforms
+    expect(frag).not.toContain("uParam_");
+    expect(frag).not.toContain("uA");
+  });
 });

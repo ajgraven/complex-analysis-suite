@@ -20,6 +20,29 @@ export interface PlotterState extends Record<string, unknown> {
   crisp: number;
   hueShift: number;
   hueSign: number;
+  /** Live named-parameter values (ADR-0011 / catalog G1): `{ a: [re, im], … }`. Absent on a
+   *  parameter-free map and on pre-parameter links (which decode to `{}`, so they still render). */
+  params: Record<string, [number, number]>;
+}
+
+/** Validate a decoded `params` blob: keep only `name → [finite, finite]` entries, drop anything else
+ *  (a stale or hand-edited link must fail soft). */
+function cleanParams(raw: unknown): Record<string, [number, number]> {
+  const out: Record<string, [number, number]> = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [name, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (
+      Array.isArray(v) &&
+      v.length === 2 &&
+      typeof v[0] === "number" &&
+      typeof v[1] === "number" &&
+      Number.isFinite(v[0]) &&
+      Number.isFinite(v[1])
+    ) {
+      out[name] = [v[0], v[1]];
+    }
+  }
+  return out;
 }
 
 export function encodeState(state: PlotterState): string {
@@ -51,5 +74,6 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     crisp: num(s.crisp, 1),
     hueShift: num(s.hueShift, 0),
     hueSign: num(s.hueSign, 1),
+    params: cleanParams(s.params),
   };
 }

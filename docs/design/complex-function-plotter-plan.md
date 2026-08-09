@@ -24,17 +24,18 @@
 > [`README`](../../apps/complex-function-plotter/README.md); this table is the phase-level record.
 > The new app is recorded in [ADR-0010](../DECISIONS.md#adr-0010-complex-function-plotting-tool-as-a-separate-app).
 
-| Phase                                   | Status             | Commits                                    | Coverage (item IDs)                                                                                                                                                                                                          |
-| --------------------------------------- | ------------------ | ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **0 — Scaffold & walking skeleton**     | ✅ done            | `d47e815`                                  | app registered; fixed `z²` phase portrait proving the `@cas/expr → @cas/gpu` chain; L5                                                                                                                                       |
-| **`@cas/expr` hyperbolics (B3)**        | ✅ done            | `f74a9b7`                                  | sinh/cosh/tanh, arc-versions, sec/csc/cot added suite-wide (5-table checklist + parity tests)                                                                                                                                |
-| **1 — Live 2D domain coloring**         | ✅ done            | `1f98005` (1A), `d98c57d` (1B)             | A1–A4, B10, C1–C4, D1, H1, I1–I4, J1–J2, K1(basic)/K2, L3/L5/L6 · GT: Wegert plate                                                                                                                                           |
-| **2 — Instrumented 2D research tool**   | ✅ done            | `cfca14d`, `f3eb87b`, `2b72e63`, `e894be1` | D2–D6, C5–C7, E1–E3, H2, H7, J3, J4, L4 · GT: conformal grid (exp→square, z²→pinch), zero/pole counts, `\|z²−1\|=1` lemniscate, `e^(1/z)` uncertainty hatch                                                                  |
-| **`@cas/expr` named params (B4)**       | ✅ done            | _⚠ backfill hash next commit_              | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after |
-| **3 — Parameters & families**           | 🔨 **in progress** | _B4 above; app work next_                  | ~~B4~~ ✅ · next: G1 (param controls), G2 (`t` animation), G4 (sweep), B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9                                                                                                                 |
-| **4 — Special functions & DLMF**        | ⬜                 | —                                          | B6 (Γ, ζ), B9, D8                                                                                                                                                                                                            |
-| **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                    |
-| **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                     |
+| Phase                                   | Status             | Commits                                    | Coverage (item IDs)                                                                                                                                                                                                           |
+| --------------------------------------- | ------------------ | ------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **0 — Scaffold & walking skeleton**     | ✅ done            | `d47e815`                                  | app registered; fixed `z²` phase portrait proving the `@cas/expr → @cas/gpu` chain; L5                                                                                                                                        |
+| **`@cas/expr` hyperbolics (B3)**        | ✅ done            | `f74a9b7`                                  | sinh/cosh/tanh, arc-versions, sec/csc/cot added suite-wide (5-table checklist + parity tests)                                                                                                                                 |
+| **1 — Live 2D domain coloring**         | ✅ done            | `1f98005` (1A), `d98c57d` (1B)             | A1–A4, B10, C1–C4, D1, H1, I1–I4, J1–J2, K1(basic)/K2, L3/L5/L6 · GT: Wegert plate                                                                                                                                            |
+| **2 — Instrumented 2D research tool**   | ✅ done            | `cfca14d`, `f3eb87b`, `2b72e63`, `e894be1` | D2–D6, C5–C7, E1–E3, H2, H7, J3, J4, L4 · GT: conformal grid (exp→square, z²→pinch), zero/pole counts, `\|z²−1\|=1` lemniscate, `e^(1/z)` uncertainty hatch                                                                   |
+| **`@cas/expr` named params (B4)**       | ✅ done            | `554c734`                                  | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after  |
+| **G1 — parameter controls**             | ✅ done            | _⚠ backfill hash next commit_              | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders) |
+| **3 — Parameters & families**           | 🔨 **in progress** | _B4, G1 above; more app work next_         | ~~B4~~ ✅ · ~~G1~~ ✅ · next: G2 (`t` animation), G4 (sweep), B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9                                                                                                                           |
+| **4 — Special functions & DLMF**        | ⬜                 | —                                          | B6 (Γ, ζ), B9, D8                                                                                                                                                                                                             |
+| **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                     |
+| **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                      |
 
 **Workspace state at the Phase-2 gate:** green — `pnpm typecheck` / `pnpm lint` (+ dependency-cruiser) /
 `pnpm test` (**2406** tests, incl. the app's `smoke` / `colormaps` / `colorShader` / `viewState` /
@@ -48,19 +49,20 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
 
 **Resume notes for Phase 3:**
 
-- **✅ The `@cas/expr` named-parameter change has landed** ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters)),
-  backward-compatibly. The API a resumed session picks up from: `freeParameters(ast)` (in `@cas/expr/ast`)
-  lists the bindable names; `makeComplexFn(ast, { a, b, … })` / `getComplexFn` take a name→value map (the
-  legacy positional `Complex` for `a` still works); `compileF(ast, "fFn", { params: freeParameters(ast) })`
-  (in `@cas/expr/glsl`) aliases each parameter from a **`uParam_<name>`** uniform (no options → legacy
-  `a → uA`). Guarded by CD's `expr` / `glslCodegen` + expr's `paramA` suites (green before & after).
-  _First thing next commit: backfill this commit's hash into the build-progress row above._
-- **G1 (next) — the plotter param UI.** Parse `f`, call `freeParameters(ast)`, build one control per name
-  (a real slider on a segment; a complex parameter as a draggable ℂ-pad), and pass `params` to `compileF`.
-  Declare + set a `uParam_<name>` `vec2` uniform per parameter (the CD live-parameter pattern:
-  `getUniformLocation` once per program rebuild; `gl.uniform2f` on drag — a re-uniform, **not** a
-  recompile). CPU instruments (`analysis/singularities.ts`) get the params by passing the map to
-  `makeComplexFn` / `differentiate`. Then `t` (G2) and sweeps (G4) are just more named parameters + a driver.
+- **✅ B4 + G1 have landed.** `@cas/expr` named parameters ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters))
+  are backward-compatible: `freeParameters(ast)` (in `@cas/expr/ast`) lists the bindable names;
+  `makeComplexFn(ast, { a, b, … })` / `getComplexFn` take a name→value map (legacy positional `Complex`
+  for `a` still works); `compileF(ast, "fFn", { params })` aliases each from a `uParam_<name>` uniform.
+  In the app, `Plot` owns the parameter names/values/locations (`compileSource` preserves a surviving
+  parameter's value across formula edits, defaults a new one to `[1, 0]`); `ui/params.ts` renders a
+  ℂ-pad + re/im + real-slider control per name; `main.ts` rebuilds the instrument closures
+  (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU, and `state/viewState.ts` round-trips
+  `params`. _First thing next commit: backfill G1's hash into the build-progress row above._
+- **G2 (next) — the animation variable `t`.** Reserve the name `t` as a parameter driven by a
+  scrub/play/loop/speed transport (a `requestAnimationFrame` loop stepping `t`'s real value along a
+  segment, reusing the G1 real-slider mapping). It's "just another named parameter" whose value a driver
+  sets each frame via `plot.setParamValue("t", …)` + `redraw(true)`; then **G4** sweeps a parameter over
+  a range (small-multiples or a scrub), and **B5** adds complex literals `2i` and constants `tau`/`phi`/`γ`.
 - **Adding a render knob** follows the established `ColorState` pattern in `render/plot.ts`: field +
   `Uniforms` entry + default + `getUniformLocation` + a `gl.uniform*` in `render()`; then a control in
   `index.html` + wiring in `main.ts`; persist via `state/viewState.ts` (`PlotterState` + `decodeState`

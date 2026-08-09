@@ -1,18 +1,21 @@
 // Complex Function Plotting Tool — the app entry: it wires the DOM to the render engine and the CPU
-// instruments. Through Phase 2 (the instrumented 2D research tool):
+// instruments. Through Phase 3 · G1 (named parameters):
 //
 // Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
 // a JS evaluator for the probe/instruments), typeset live with KaTeX, and drawn by the layered coloring
 // engine (colorShader.ts): phase colormap × modulus transfer × an fwidth-AA enhancement (rings /
 // sectors / conformal grid / …), plus level sets, a CVD preview, and an honest-labeling uncertainty
-// hatch. Around it: pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a
-// cursor readout, the zero/pole finder (analysis/singularities.ts), share-links (#vs= via
-// @cas/interchange), and PNG export. Parameters/animation (Phase 3) and the 3D views (Phase 5) follow.
+// hatch. Any free variable that isn't z/c is a live NAMED PARAMETER (ADR-0011): freeParameters drives
+// one ℂ-pad + real-slider control each (ui/params.ts), bound to a uParam_<name> uniform so dragging is
+// a re-uniform (the instruments rebuild with the same values, keeping CPU ≡ GPU). Around it: pan / zoom
+// / reset, axes + grid + scale bar, phase-wheel and modulus legends, a cursor readout, the zero/pole
+// finder (analysis/singularities.ts), share-links (#vs= via @cas/interchange, parameters included), and
+// PNG export. Animation (t, G2) / sweeps (G4) build on the parameters; the 3D views (Phase 5) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
-import { ExprError } from "@cas/expr/ast";
+import { ExprError, type Node } from "@cas/expr/ast";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
@@ -22,6 +25,7 @@ import { PRESETS } from "./presets.js";
 import { drawModulusBar, drawPhaseWheel } from "./ui/legends.js";
 import { drawAxes } from "./ui/axes.js";
 import { drawMarkers } from "./ui/markers.js";
+import { createParamControls } from "./ui/params.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import {
   decodeState,
@@ -42,6 +46,7 @@ const DEFAULTS: PlotterState = {
   crisp: 1,
   hueShift: 0,
   hueSign: 1,
+  params: {},
 };
 
 function addOption(sel: HTMLSelectElement, value: string, label: string): void {
@@ -66,6 +71,8 @@ function main(): void {
   const colormapSel = byId("colormap");
   const modulusSel = byId("modulus");
   const presetSel = byId("preset");
+  const paramsGroup = byId("paramsGroup");
+  const paramsContainer = byId("params");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -124,19 +131,33 @@ function main(): void {
   let fpFn: ((z: Complex, c: Complex) => Complex) | null = null;
   let sings: Singularities | null = null;
   let markSings = false;
-  const updateFns = (src: string): void => {
-    try {
-      const ast = parse(src);
-      probeFn = makeComplexFn(ast);
-      try {
-        fpFn = makeComplexFn(differentiate(ast, "z"));
-      } catch {
-        fpFn = null; // non-holomorphic — the singularity finder needs f'
-      }
-    } catch {
+  // Keep the parsed f (and its z-derivative, when holomorphic) so the CPU instruments can be rebuilt
+  // with the current parameter values baked in — without re-parsing — whenever a parameter moves.
+  let fAst: Node | null = null;
+  let fpAst: Node | null = null;
+  const rebuildInstrumentFns = (): void => {
+    if (!fAst) {
       probeFn = null;
       fpFn = null;
+      return;
     }
+    const params = plot.paramsRecord(); // GLSL and JS read the same parameter values (dual-backend)
+    probeFn = makeComplexFn(fAst, params);
+    fpFn = fpAst ? makeComplexFn(fpAst, params) : null;
+  };
+  const updateFns = (src: string): void => {
+    try {
+      fAst = parse(src);
+      try {
+        fpAst = differentiate(fAst, "z");
+      } catch {
+        fpAst = null; // non-holomorphic — the singularity finder needs f'
+      }
+    } catch {
+      fAst = null;
+      fpAst = null;
+    }
+    rebuildInstrumentFns();
   };
 
   const exprValue = (): string =>
@@ -156,6 +177,7 @@ function main(): void {
     crisp: plot.color.crisp,
     hueShift: plot.color.hueShift,
     hueSign: plot.color.hueSign,
+    params: plot.paramsRecord(),
   });
 
   let hashTimer = 0;
@@ -220,12 +242,40 @@ function main(): void {
     }
   };
 
+  // Live parameter controls (catalog G1): one ℂ-pad + real slider per named parameter the map reads.
+  // Moving a value is a re-uniform (draft render while dragging) and, on release, a full render plus a
+  // singularity recompute — the same interaction shape as pan/zoom.
+  const paramControls = createParamControls(
+    paramsContainer instanceof HTMLElement
+      ? paramsContainer
+      : document.createElement("div"),
+    {
+      get: (name) => plot.paramValue(name),
+      onInput: (name, value) => {
+        plot.setParamValue(name, value);
+        redraw(true);
+      },
+      onCommit: (name, value) => {
+        plot.setParamValue(name, value);
+        rebuildInstrumentFns();
+        recomputeSings();
+        redraw(false);
+      },
+    },
+  );
+  const syncParamsUI = (): void => {
+    const names = plot.paramNames();
+    if (paramsGroup instanceof HTMLElement) paramsGroup.hidden = names.length === 0;
+    paramControls.refresh(names);
+  };
+
   const applyExpr = (src: string): void => {
     try {
       plot.setFunction(src);
       setError("");
       renderPreview(src);
       updateFns(src);
+      syncParamsUI();
       recomputeSings();
       redraw(false);
     } catch (err) {
@@ -460,6 +510,16 @@ function main(): void {
 
   drawLegends();
   applyExpr(initial.expr);
+
+  // Seed saved parameter values from the share-link (applyExpr has already created the controls with
+  // defaults for this formula's parameters); then reflect them in the pads, instruments, and render.
+  if (initial.params && Object.keys(initial.params).length > 0) {
+    for (const [name, v] of Object.entries(initial.params)) plot.setParamValue(name, v);
+    paramControls.sync();
+    rebuildInstrumentFns();
+    recomputeSings();
+    redraw(false);
+  }
 }
 
 main();

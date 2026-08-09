@@ -31,9 +31,17 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 2 complete (the instrumented 2D research tool)
+## Status — Phase 3 · G1 (named parameters)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
+
+- **Parameters** — any free variable that isn't `z`/`c` (e.g. `a*z*(1-z) + b`) becomes a live **named
+  parameter** (via `@cas/expr`'s `freeParameters`, [ADR-0011](../../docs/DECISIONS.md)): each gets a
+  draggable **ℂ-pad**, re/im fields, and a real slider. Values bind to a `uParam_<name>` uniform, so
+  dragging re-renders without recompiling, the CPU instruments track the same values, and the parameter
+  set round-trips in the share-link.
+
+Plus the Phase-2 research tool:
 
 - **Coloring** — a swappable phase colormap (perceptual **Oklch**, HSV, Twilight, and a
   **colorblind-safe** map) times a modulus transfer (phase-only / linear / rational / log / log-log),
@@ -52,29 +60,32 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Next — Phase 3 (parameters & families): named parameters with sliders, an animation variable, and
-parameter sweeps. See [the plan](../../docs/design/complex-function-plotter-plan.md).
+Next — the rest of Phase 3: an animation variable `t` (G2) and parameter sweeps (G4), both built on the
+named parameters above, plus complex literals / extra constants (B5). See
+[the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
-| File                    | Role                                                                                                                                                   |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `main.ts`               | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, PNG |
-| `render/colorShader.ts` | the layered coloring GLSL (`colorAt` = phase LUT × modulus transfer, + NaN/Inf sentinel) and the fragment-program assembler                           |
-| `render/colormaps.ts`   | phase colormaps (perceptual Oklch + HSV) baked into one RGBA8 atlas; Oklab→sRGB conversion                                                            |
-| `render/plot.ts`        | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, PNG data-URL   |
-| `state/viewState.ts`    | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                 |
-| `presets.ts`            | the preset / example gallery (each expression is validated in the tests)                                                                              |
-| `ui/legends.ts`         | phase-wheel and modulus-scale legend painters                                                                                                          |
-| `ui/axes.ts`            | the axes / adaptive-grid / scale-bar overlay                                                                                                           |
-| `ui/markers.ts`         | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
-| `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                            |
+| File                        | Role                                                                                                                                                  |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `main.ts`                   | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, PNG |
+| `render/colorShader.ts`     | the layered coloring GLSL (`colorAt` = phase LUT × modulus transfer, + NaN/Inf sentinel) and the fragment-program assembler                           |
+| `render/colormaps.ts`       | phase colormaps (perceptual Oklch + HSV) baked into one RGBA8 atlas; Oklab→sRGB conversion                                                            |
+| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, PNG data-URL   |
+| `state/viewState.ts`        | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                 |
+| `presets.ts`                | the preset / example gallery (each expression is validated in the tests)                                                                              |
+| `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                         |
+| `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                         |
+| `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                          |
+| `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
+| `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                                |
 
 ## Tests
 
 `test/` — `smoke.test.ts` (shared-package wiring), `colormaps.test.ts` (atlas dimensions, sRGB gamut,
 cyclic continuity, HSV anchors), `colorShader.test.ts` (fragment-program assembly), `viewState.test.ts`
-(share-link round-trip + namespace guard), `presets.test.ts` (every preset parses/compiles/evaluates),
-and `singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
+(share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
+parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), and
+`singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
 correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
 during development; an automated pixel-diff visual-regression harness is deferred.

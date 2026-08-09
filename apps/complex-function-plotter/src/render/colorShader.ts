@@ -137,8 +137,17 @@ vec3 colorAt(cvec w) {
 /**
  * Assemble a complete fragment program from a compiled `fFn` body (from `@cas/expr` `compileF`). The
  * pixel's world coordinate becomes `z`; `c` is unused (the plotter draws a single map w = f(z)).
+ *
+ * `paramNames` are the map's live named parameters (ADR-0011): `compileF(ast, "fFn", { params })`
+ * aliases each from a `uParam_<name>` uniform, so the shader must **declare** those uniforms — done
+ * here, before `${"${fGlsl}"}`, since GLSL ES requires declaration before use. Empty (the default) keeps
+ * a parameter-free map's program identical.
  */
-export function buildFragmentShader(fGlsl: string): string {
+export function buildFragmentShader(
+  fGlsl: string,
+  paramNames: readonly string[] = [],
+): string {
+  const paramUniforms = paramNames.map((n) => `uniform vec2 uParam_${n};`).join("\n");
   return `#version 300 es
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
@@ -147,6 +156,7 @@ ${COMPLEX_DERIVED_GLSL}
 uniform vec2  uCenter;
 uniform float uHalfSpan;   // world half-height; x is scaled by the pixel aspect ratio
 uniform vec2  uResolution;
+${paramUniforms}
 ${COLORING_GLSL}
 ${fGlsl}
 out vec4 fragColor;

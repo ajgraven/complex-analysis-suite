@@ -8,8 +8,17 @@
 import { createProgram } from "@cas/gpu/shader";
 import { compileF } from "@cas/expr/glsl";
 import { parse } from "@cas/expr/parser";
+import { freeParameters } from "@cas/expr/ast";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
+
+/** A live parameter value `[re, im]` (ADR-0011). Kept as a plain tuple, the shape the `uParam_<name>`
+ *  uniforms and the JS instruments both consume. */
+export type ParamValue = [number, number];
+
+/** Default value for a newly-introduced parameter — nonzero so the map is visibly parameter-dependent
+ *  the moment a name appears (e.g. `a*z*(1-z)` renders rather than collapsing to 0). */
+const NEW_PARAM_DEFAULT: ParamValue = [1, 0];
 
 export interface View {
   cx: number;
@@ -80,6 +89,15 @@ export class Plot {
   private fGlsl: string;
   private draft = false;
 
+  // Live named parameters (ADR-0011, catalog G1). `paramNamesList` is the ordered set the current `f`
+  // reads (from `freeParameters`); `paramValues` holds each one's `[re, im]` (preserved across formula
+  // edits so tweaking a value doesn't reset the others); `paramLocs` caches the `uParam_<name>` uniform
+  // locations for the current program. Changing a value is a re-uniform (cheap); changing the SET of
+  // names is a program rebuild (a new formula).
+  private paramNamesList: string[] = [];
+  private paramValues = new Map<string, ParamValue>();
+  private paramLocs = new Map<string, WebGLUniformLocation | null>();
+
   view: View = { cx: 0, cy: 0, span: 2 };
   color: ColorState = {
     colormap: 0,
@@ -97,11 +115,17 @@ export class Plot {
     levelArg: 0,
   };
 
-  constructor(private readonly canvas: HTMLCanvasElement, initialSource: string) {
-    const gl = canvas.getContext("webgl2", { antialias: true, preserveDrawingBuffer: true });
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    initialSource: string,
+  ) {
+    const gl = canvas.getContext("webgl2", {
+      antialias: true,
+      preserveDrawingBuffer: true,
+    });
     if (!gl) throw new Error("WebGL2 is unavailable in this browser");
     this.gl = gl;
-    this.fGlsl = compileF(parse(initialSource));
+    this.fGlsl = this.compileSource(initialSource); // seeds paramNamesList / paramValues too
     this.initGpuResources();
 
     canvas.addEventListener("webglcontextlost", (e) => e.preventDefault());
@@ -111,12 +135,34 @@ export class Plot {
     });
   }
 
+  /**
+   * Parse + compile `src`, updating `paramNamesList` / `paramValues` for the map's named parameters
+   * (preserving the value of any name that survives the edit, defaulting a new name), and return the
+   * GLSL. The plotter always takes the general `{ params }` path — so it binds every parameter through
+   * `uParam_<name>` and never touches the legacy `uA` (ADR-0011). Throws `ExprError` on a bad parse.
+   */
+  private compileSource(src: string): string {
+    const ast = parse(src);
+    const names = freeParameters(ast);
+    const glsl = compileF(ast, "fFn", { params: names });
+    const nextValues = new Map<string, ParamValue>();
+    for (const n of names)
+      nextValues.set(n, this.paramValues.get(n) ?? [...NEW_PARAM_DEFAULT]);
+    this.paramNamesList = names;
+    this.paramValues = nextValues;
+    return glsl;
+  }
+
   /** (Re)create the quad, atlas texture, and program — used at startup and after a context restore. */
   private initGpuResources(): void {
     const gl = this.gl;
     this.quadBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 3, -1, -1, 3]),
+      gl.STATIC_DRAW,
+    );
     this.buildAtlas();
     this.rebuildProgram();
   }
@@ -148,9 +194,16 @@ export class Plot {
 
   private rebuildProgram(): void {
     const gl = this.gl;
-    const program = createProgram(gl, VERTEX_SHADER, buildFragmentShader(this.fGlsl));
+    const program = createProgram(
+      gl,
+      VERTEX_SHADER,
+      buildFragmentShader(this.fGlsl, this.paramNamesList),
+    );
     if (this.program) gl.deleteProgram(this.program);
     this.program = program;
+    this.paramLocs = new Map(
+      this.paramNamesList.map((n) => [n, gl.getUniformLocation(program, `uParam_${n}`)]),
+    );
     this.uniforms = {
       uCenter: gl.getUniformLocation(program, "uCenter"),
       uHalfSpan: gl.getUniformLocation(program, "uHalfSpan"),
@@ -187,16 +240,41 @@ export class Plot {
    * to surface — the view and color state are untouched.
    */
   setFunction(src: string): void {
-    const next = compileF(parse(src)); // throws ExprError on a bad parse
-    const prev = this.fGlsl;
+    const prevGlsl = this.fGlsl;
+    const prevNames = this.paramNamesList;
+    const prevValues = this.paramValues;
+    const next = this.compileSource(src); // throws ExprError on a bad parse; updates param state
     this.fGlsl = next;
     try {
       this.rebuildProgram(); // throws if the assembled GLSL fails to compile
     } catch (err) {
-      this.fGlsl = prev;
+      this.fGlsl = prevGlsl;
+      this.paramNamesList = prevNames;
+      this.paramValues = prevValues;
       this.rebuildProgram();
       throw err;
     }
+  }
+
+  // --- Live parameters (ADR-0011, catalog G1) -----------------------------------------------------
+  /** The map's live parameter names, in stable (sorted) order — one control per name. */
+  paramNames(): readonly string[] {
+    return this.paramNamesList;
+  }
+
+  /** The current value of a parameter (`[0, 0]` if it isn't one of this map's parameters). */
+  paramValue(name: string): ParamValue {
+    return this.paramValues.get(name) ?? [0, 0];
+  }
+
+  /** All parameter values as a plain map — for share-links and the CPU instruments (`makeComplexFn`). */
+  paramsRecord(): Record<string, ParamValue> {
+    return Object.fromEntries(this.paramValues);
+  }
+
+  /** Set a parameter value (a re-uniform, no recompile). Ignores names the current map doesn't use. */
+  setParamValue(name: string, value: ParamValue): void {
+    if (this.paramValues.has(name)) this.paramValues.set(name, [value[0], value[1]]);
   }
 
   private resize(): void {
@@ -249,6 +327,11 @@ export class Plot {
     gl.uniform1f(u.uLevelAbs, this.color.levelAbs);
     gl.uniform1i(u.uLevelArgOn, this.color.levelArgOn);
     gl.uniform1f(u.uLevelArg, this.color.levelArg);
+    // Live parameters (ADR-0011): one vec2 per named parameter the current f reads.
+    for (const name of this.paramNamesList) {
+      const v = this.paramValues.get(name) ?? [0, 0];
+      gl.uniform2f(this.paramLocs.get(name) ?? null, v[0], v[1]);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

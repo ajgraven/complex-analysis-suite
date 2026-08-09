@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { encodeViewState } from "@cas/interchange";
-import { APP_NS, decodeState, encodeState, type PlotterState } from "../src/state/viewState.js";
+import {
+  APP_NS,
+  decodeState,
+  encodeState,
+  type PlotterState,
+} from "../src/state/viewState.js";
 
 const S: PlotterState = {
-  expr: "sin(z)+c",
+  expr: "a*z*(1-z)+b",
   cx: 0.5,
   cy: -0.25,
   span: 3,
@@ -14,6 +19,7 @@ const S: PlotterState = {
   crisp: 0,
   hueShift: 1.5,
   hueSign: -1,
+  params: { a: [1.5, 0], b: [-0.25, 0.75] },
 };
 
 describe("share-link view state", () => {
@@ -32,7 +38,7 @@ describe("share-link view state", () => {
     expect(decodeState("#other=1")).toBeNull();
   });
 
-  it("fills defaults for missing numeric fields but keeps expr", () => {
+  it("fills defaults for missing numeric fields but keeps expr (and an absent params ⇒ {})", () => {
     expect(decodeState(encodeViewState(APP_NS, { expr: "1/z" }))).toEqual({
       expr: "1/z",
       cx: 0,
@@ -45,10 +51,26 @@ describe("share-link view state", () => {
       crisp: 1,
       hueShift: 0,
       hueSign: 1,
+      params: {},
     });
   });
 
   it("drops a payload with no expression", () => {
     expect(decodeState(encodeViewState(APP_NS, { cx: 1 }))).toBeNull();
+  });
+
+  it("keeps only well-formed [re, im] parameter entries (a stale link fails soft)", () => {
+    const decoded = decodeState(
+      encodeViewState(APP_NS, {
+        expr: "a*z + b + k",
+        params: {
+          a: [1, 2], // ok
+          b: [0.5], // wrong arity → dropped
+          k: ["x", 1], // non-numeric → dropped
+          m: [Infinity, 0], // non-finite → dropped
+        },
+      }),
+    );
+    expect(decoded?.params).toEqual({ a: [1, 2] });
   });
 });

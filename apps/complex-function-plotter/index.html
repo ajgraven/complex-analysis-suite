@@ -66,6 +66,18 @@
       details.explain ul { padding-left: 18px; }
       details.explain li { margin: 3px 0; }
 
+      .param { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel-2); }
+      .param-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+      .param-name { font-family: ui-monospace, Menlo, monospace; color: var(--accent); font-size: 0.85rem; }
+      .param-val { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); }
+      .param-body { display: flex; gap: 10px; align-items: center; }
+      canvas.cpad { flex: 0 0 auto; width: 84px; height: 84px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); touch-action: none; cursor: crosshair; }
+      .param-fields { flex: 1 1 auto; display: grid; grid-template-columns: auto 1fr; gap: 5px 8px; align-items: center; }
+      .param-fields label { margin: 0; text-transform: none; letter-spacing: normal; font-size: 0.74rem; color: var(--muted); }
+      .param-fields input[type="number"] { padding: 4px 6px; }
+      .param-fields input.param-slider { grid-column: 1 / -1; margin: 2px 0 0; }
+      .param-hint { color: var(--muted); font-size: 0.72rem; margin: 2px 0 0; }
+
       .legend { display: flex; gap: 14px; align-items: center; }
       .wheel-wrap { position: relative; flex: 0 0 auto; }
       .wheel-wrap span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.68rem; color: var(--muted); }
@@ -87,7 +99,7 @@
   <body>
     <aside>
       <h1>Complex Function Plotting Tool</h1>
-      <p class="sub">Domain coloring of w = f(z) · Phase 1</p>
+      <p class="sub">Domain coloring of w = f(z)</p>
 
       <div class="group">
         <label for="expr">Function&nbsp; f(z)</label>
@@ -99,6 +111,12 @@
       <div class="group">
         <label for="preset">Preset</label>
         <select id="preset"></select>
+      </div>
+
+      <div class="group" id="paramsGroup" hidden>
+        <label>Parameters</label>
+        <div id="params"></div>
+        <p class="param-hint">Drag the pad (or type) to set each parameter. The circle is |a| = 1.</p>
       </div>
 
       <div class="group">
