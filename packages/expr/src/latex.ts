@@ -48,7 +48,14 @@ const UNARY_TEX: Record<string, (a: string) => string> = {
   ceil: (a) => `\\lceil ${a}\\rceil`,
 };
 
-const CONST_TEX: Record<string, string> = { i: "i", e: "e", pi: "\\pi" };
+const CONST_TEX: Record<string, string> = {
+  i: "i",
+  e: "e",
+  pi: "\\pi",
+  tau: "\\tau",
+  phi: "\\phi",
+  γ: "\\gamma",
+};
 
 function wrap(node: Node, minPrec: number): string {
   const e = emit(node);

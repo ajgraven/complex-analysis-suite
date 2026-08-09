@@ -10,8 +10,9 @@ export type ArithOp = "+" | "-" | "*" | "/" | "^";
 /** Comparison operators, producing a boolean. */
 export type CompareOp = ">" | "<" | "==";
 
-/** Named constants recognised by the language. */
-export type ConstName = "i" | "e" | "pi";
+/** Named constants recognised by the language. `tau`, `phi`, and `γ` (Euler–Mascheroni) are the B5
+ *  additions; `γ` is the Greek character (distinct from the future Γ *function*). */
+export type ConstName = "i" | "e" | "pi" | "tau" | "phi" | "γ";
 
 export type Node =
   | { kind: "num"; value: number }

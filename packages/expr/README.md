@@ -29,8 +29,10 @@ imports only the passes it needs; no `dist` build to keep in sync.
 A CindyScript-compatible subset over complex numbers, with the reserved formal arguments `z`, `c`
 and any number of **live named parameters** (`a`, `b`, `k`, …):
 
-- **constants** `e · pi · i`; **operators** `+ - * / ^` (principal-branch complex powers),
-  comparisons `> < ==`, `if(cond,a,b)`, `not(...)`;
+- **constants** `e · pi · i · tau · phi · γ` (τ = 2π, φ = golden ratio, γ = Euler–Mascheroni; `γ` is
+  the Greek character, distinct from the Γ function) and **imaginary literals** `2i`, `3.5i`, `1e3i`
+  (a number with a trailing `i`; it binds as one unit, so `2i^2 = (2i)^2`); **operators** `+ - * / ^`
+  (principal-branch complex powers), comparisons `> < ==`, `if(cond,a,b)`, `not(...)`;
 - **functions** — `re im conjugate abs arg sqrt exp log sin cos tan arcsin arccos arctan arctan2 mod lambertw round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native);
 - **`;`-separated statements** with local assignment; the `escape` predicate may call
   `f(z, c)`.
@@ -68,7 +70,8 @@ import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@ca
 
 ## Tests
 
-`test/` — parser/AST, evaluate↔compile, derivative, LaTeX, param-`a` handling, **`namedParams`**
+`test/` — parser/AST, evaluate↔compile, derivative, LaTeX, param-`a` handling, **`namedParams`**,
+**`constantsLiterals`** (the `2i` imaginary literal + `tau`/`phi`/`γ` across all backends),
 (the ADR-0011 named-parameter model — enumeration, JS map + legacy positional, GLSL `uParam_<name>`
 aliases, recursion propagation), and **`complexParity`** (the JS complex library vs. its intended
 GLSL semantics). The end-to-end

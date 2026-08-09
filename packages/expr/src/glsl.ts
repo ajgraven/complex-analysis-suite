@@ -10,8 +10,9 @@
  * declarations followed by a `return`.
  */
 
-import type { Node } from "./ast";
+import type { Node, ConstName } from "./ast";
 import { ExprError, referencesVar, nodeIsBool } from "./ast";
+import { TAU, PHI, EGAMMA } from "./complexJs";
 
 /** Function-call names for unary complex builtins → GLSL stdlib names. */
 const UNARY_GLSL: Record<string, string> = {
@@ -55,17 +56,33 @@ export function glslFloat(n: number): string {
 
 const cnum = (n: number): string => `vec_(${glslFloat(n)}, 0.0)`;
 
+/** GLSL for a named constant. `e` / `pi` use the stdlib's named constants (`C_E` / `C_PI`); the B5
+ *  additions (`tau` / `phi` / `γ`) have no stdlib constant, so they emit float literals exactly as a
+ *  numeric literal would (float32 in the single build — the same precision as `C_PI`). */
+function constGlsl(name: ConstName): string {
+  switch (name) {
+    case "i":
+      return "vec_(0.0, 1.0)";
+    case "e":
+      return "vec_(C_E, 0.0)";
+    case "pi":
+      return "vec_(C_PI, 0.0)";
+    case "tau":
+      return `vec_(${glslFloat(TAU)}, 0.0)`;
+    case "phi":
+      return `vec_(${glslFloat(PHI)}, 0.0)`;
+    case "γ":
+      return `vec_(${glslFloat(EGAMMA)}, 0.0)`;
+  }
+}
+
 /** Emit a complex-valued node as a GLSL expression string. */
 function emitComplex(node: Node): string {
   switch (node.kind) {
     case "num":
       return cnum(node.value);
     case "const":
-      return node.name === "i"
-        ? "vec_(0.0, 1.0)"
-        : node.name === "e"
-          ? "vec_(C_E, 0.0)"
-          : "vec_(C_PI, 0.0)";
+      return constGlsl(node.name);
     case "var":
       return node.name;
     case "neg":
@@ -134,7 +151,18 @@ function constReal(node: Node): number | null {
     case "num":
       return node.value;
     case "const":
-      return node.name === "e" ? Math.E : node.name === "pi" ? Math.PI : null; // 'i' is imaginary ⇒ not real
+      // 'i' is imaginary ⇒ not a real constant; the rest fold to their real values.
+      return node.name === "e"
+        ? Math.E
+        : node.name === "pi"
+          ? Math.PI
+          : node.name === "tau"
+            ? TAU
+            : node.name === "phi"
+              ? PHI
+              : node.name === "γ"
+                ? EGAMMA
+                : null;
     case "neg": {
       const v = constReal(node.operand);
       return v === null ? null : -v;

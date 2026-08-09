@@ -17,6 +17,13 @@ import type { Complex } from "./complex";
  */
 export const E = Math.E;
 export const PI = Math.PI;
+/** τ = 2π (one full turn) — the language constant `tau`. */
+export const TAU = 2 * Math.PI;
+/** φ = (1 + √5) / 2, the golden ratio — the language constant `phi`. */
+export const PHI = (1 + Math.sqrt(5)) / 2;
+/** γ, the Euler–Mascheroni constant — the language constant `γ`. Not `gamma`, which is reserved for the
+ *  Γ *function* (Phase 4, B6). */
+export const EGAMMA = 0.5772156649015329;
 
 export const re = (z: Complex): Complex => [z[0], 0];
 export const im = (z: Complex): Complex => [z[1], 0];
@@ -140,7 +147,10 @@ const realFn =
 export const round = realFn(Math.round);
 export const floor = realFn(Math.floor);
 export const ceil = realFn(Math.ceil);
-export const mod = (x: Complex, y: Complex): Complex => [((x[0] % y[0]) + y[0]) % y[0], 0];
+export const mod = (x: Complex, y: Complex): Complex => [
+  ((x[0] % y[0]) + y[0]) % y[0],
+  0,
+];
 
 // --- Lambert W (principal branch) — port of the old CindyScript mathlib --------
 

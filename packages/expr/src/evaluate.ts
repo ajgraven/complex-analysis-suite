@@ -19,9 +19,28 @@
  */
 
 import type { Complex } from "./complex";
-import type { Node } from "./ast";
+import type { Node, ConstName } from "./ast";
 import { ExprError, nodeIsBool } from "./ast";
 import * as C from "./complexJs";
+
+/** The complex value of a named constant (a fresh tuple each call). `i` is imaginary; the rest are real
+ *  (ADR-0011 params aside, `tau`/`phi`/`γ` are the B5 additions). */
+const constComplex = (name: ConstName): Complex => {
+  switch (name) {
+    case "i":
+      return [0, 1];
+    case "e":
+      return [C.E, 0];
+    case "pi":
+      return [C.PI, 0];
+    case "tau":
+      return [C.TAU, 0];
+    case "phi":
+      return [C.PHI, 0];
+    case "γ":
+      return [C.EGAMMA, 0];
+  }
+};
 
 export type Value = Complex | boolean;
 
@@ -116,7 +135,7 @@ class Evaluator {
       case "bool":
         return node.value;
       case "const":
-        return node.name === "i" ? [0, 1] : node.name === "e" ? [C.E, 0] : [C.PI, 0];
+        return constComplex(node.name);
       case "var": {
         const v = this.scope.get(node.name);
         if (!v) throw new ExprError(`Unknown variable '${node.name}'`, 0);
@@ -258,9 +277,8 @@ function compileComplex(
       return () => [v, 0];
     }
     case "const": {
-      if (node.name === "i") return () => [0, 1];
-      if (node.name === "e") return () => [C.E, 0];
-      return () => [C.PI, 0];
+      const v = constComplex(node.name);
+      return () => [v[0], v[1]];
     }
     case "var": {
       const name = node.name;

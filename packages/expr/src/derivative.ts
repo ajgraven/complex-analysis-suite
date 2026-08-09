@@ -10,6 +10,7 @@
 
 import type { Node } from "./ast";
 import { ExprError } from "./ast";
+import { TAU, PHI, EGAMMA } from "./complexJs";
 
 const num = (value: number): Node => ({ kind: "num", value });
 const isNum = (n: Node, v: number): boolean => n.kind === "num" && n.value === v;
@@ -97,7 +98,17 @@ function constExp(node: Node): number | null {
     case "num":
       return node.value;
     case "const":
-      return node.name === "e" ? Math.E : node.name === "pi" ? Math.PI : null;
+      return node.name === "e"
+        ? Math.E
+        : node.name === "pi"
+          ? Math.PI
+          : node.name === "tau"
+            ? TAU
+            : node.name === "phi"
+              ? PHI
+              : node.name === "γ"
+                ? EGAMMA
+                : null;
     case "neg": {
       const x = constExp(node.operand);
       return x === null ? null : -x;
@@ -107,11 +118,16 @@ function constExp(node: Node): number | null {
       const r = constExp(node.right);
       if (l === null || r === null) return null;
       switch (node.op) {
-        case "+": return l + r;
-        case "-": return l - r;
-        case "*": return l * r;
-        case "/": return r === 0 ? null : l / r;
-        case "^": return Math.pow(l, r);
+        case "+":
+          return l + r;
+        case "-":
+          return l - r;
+        case "*":
+          return l * r;
+        case "/":
+          return r === 0 ? null : l / r;
+        case "^":
+          return Math.pow(l, r);
       }
       return null;
     }

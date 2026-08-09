@@ -33,8 +33,9 @@
 | **`@cas/expr` named params (B4)**       | ✅ done            | `554c734`                                  | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after  |
 | **G1 — parameter controls**             | ✅ done            | `2886f3d`                                  | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders) |
 | **G2 — animation variable `t`**         | ✅ done            | `8a019dc`                                  | `t` transport (play/scrub/loop/speed, `ui/animate.ts`) driving the `uParam_t` uniform; anim config in the share-link; pure `stepT` unit-tested; headless-verified (`a*z*exp(i*t)` plays, `t` excluded from the ℂ-pad list)    |
-| **G4 — parameter sweep**                | ✅ done            | _⚠ backfill hash next commit_              | small-multiples montage across a parameter's range (`ui/sweep.ts` + `Plot.renderThumbnail`), click-a-cell to jump; pure `sweepValues` unit-tested; headless-verified (9 distinct thumbnails, pick sets the value, no flicker) |
-| **3 — Parameters & families**           | 🔨 **in progress** | _the family engine (B4/G1/G2/G4) done_     | ~~B4~~ ✅ · ~~G1~~ ✅ · ~~G2~~ ✅ · ~~G4~~ ✅ · next: B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9 · GT: Blaschke `(z−a)/(1−ā z)` family animates, zeros stay in the disk                                                            |
+| **G4 — parameter sweep**                | ✅ done            | `58dc934`                                  | small-multiples montage across a parameter's range (`ui/sweep.ts` + `Plot.renderThumbnail`), click-a-cell to jump; pure `sweepValues` unit-tested; headless-verified (9 distinct thumbnails, pick sets the value, no flicker) |
+| **`@cas/expr` literals & consts (B5)**  | ✅ done            | _⚠ backfill hash next commit_              | imaginary literal `2i` (lexer `imag` → `num·i`, binds as a unit under `^`) + constants `tau`/`phi`/`γ` across evaluate/glsl/derivative/latex; dual-backend parity tests; headless-verified (all four compile + render on GPU) |
+| **3 — Parameters & families**           | 🔨 **in progress** | _B4/G1/G2/G4/B5 done; input niceties next_ | ~~B4~~ ✅ · ~~G1~~ ✅ · ~~G2~~ ✅ · ~~G4~~ ✅ · ~~B5~~ ✅ · next: A5, A7, A9 · GT: Blaschke `(z−a)/(1−ā z)` family animates, zeros stay in the disk                                                                           |
 | **4 — Special functions & DLMF**        | ⬜                 | —                                          | B6 (Γ, ζ), B9, D8                                                                                                                                                                                                             |
 | **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                     |
 | **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                      |
@@ -62,14 +63,16 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
   play/scrub/loop/speed transport instead (`ui/animate.ts`); `ui/sweep.ts` builds the small-multiples
   montage (click a cell to jump); `main.ts` rebuilds the instrument closures
   (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU, and `state/viewState.ts` round-trips
-  `params` + the `anim` config (the sweep is transient). _First thing next commit: backfill G4's hash
-  into the build-progress row above._
-- **B5 (next) — literals & constants.** Add complex literals `2i` (a lexer tweak) and the constants
-  `tau` / `phi` / `γ` (the additive `CONSTS` + backend `const`-case growth, one entry each in
-  `evaluate` / `glsl` / `latex`), with parity tests. Then **A5 / A7 / A9** are input niceties
-  (function-name autocomplete, multiple functions f/g, copy-as-LaTeX). The **Phase-3 ground truth** — a
-  Blaschke `(z−a)/(1−ā z)` family animating with its zero staying in the disk — is now demonstrable via
-  the `a` ℂ-pad + `t` animation; capture it as the phase's GT check before closing Phase 3.
+  `params` + the `anim` config (the sweep is transient).
+- **✅ B5 (literals & constants) is done.** The imaginary literal `2i` is a lexer `imag` token the parser
+  desugars to `num·i` (binds as a unit under `^`); `tau` / `phi` / `γ` are constants added across
+  evaluate / glsl / derivative / latex, with values shared from `complexJs` (`TAU` / `PHI` / `EGAMMA`).
+  Purely additive — CD's `expr` / `glslCodegen` stayed green. _First thing next commit: backfill B5's
+  hash into the build-progress row above._
+- **A5 / A7 / A9 (next) — input niceties.** Function-name autocomplete as you type (A5), a second
+  function `g` alongside `f` (A7), and copy-as-LaTeX from the existing `toLatex` (A9) — all app-local, no
+  further `@cas/expr` change. That closes the Phase-3 catalog; capture the Blaschke `(z−a)/(1−ā z)` ground
+  truth (family animates, zero stays in the disk) before the phase gate.
 - **Adding a render knob** follows the established `ColorState` pattern in `render/plot.ts`: field +
   `Uniforms` entry + default + `getUniformLocation` + a `gl.uniform*` in `render()`; then a control in
   `index.html` + wiring in `main.ts`; persist via `state/viewState.ts` (`PlotterState` + `decodeState`
