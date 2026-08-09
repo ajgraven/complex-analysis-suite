@@ -35,6 +35,8 @@ export interface ColorState {
   hueShift: number;
   /** Hue winding direction: +1 or -1. */
   hueSign: number;
+  /** Colour-vision-deficiency preview: 0 none, 1 protan, 2 deutan, 3 tritan (a viewing aid). */
+  cvd: number;
 }
 
 interface Uniforms {
@@ -50,6 +52,7 @@ interface Uniforms {
   uCrisp: WebGLUniformLocation | null;
   uHueShift: WebGLUniformLocation | null;
   uHueSign: WebGLUniformLocation | null;
+  uCvd: WebGLUniformLocation | null;
 }
 
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
@@ -75,6 +78,7 @@ export class Plot {
     crisp: 1,
     hueShift: 0,
     hueSign: 1,
+    cvd: 0,
   };
 
   constructor(private readonly canvas: HTMLCanvasElement, initialSource: string) {
@@ -144,6 +148,7 @@ export class Plot {
       uCrisp: gl.getUniformLocation(program, "uCrisp"),
       uHueShift: gl.getUniformLocation(program, "uHueShift"),
       uHueSign: gl.getUniformLocation(program, "uHueSign"),
+      uCvd: gl.getUniformLocation(program, "uCvd"),
     };
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
@@ -219,6 +224,7 @@ export class Plot {
     gl.uniform1i(u.uCrisp, this.color.crisp);
     gl.uniform1f(u.uHueShift, this.color.hueShift);
     gl.uniform1f(u.uHueSign, this.color.hueSign);
+    gl.uniform1i(u.uCvd, this.color.cvd);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

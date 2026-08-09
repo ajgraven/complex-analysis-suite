@@ -29,6 +29,11 @@ describe("coloring shader assembly", () => {
     expect(frag).toContain("uHueSign");
   });
 
+  it("applies a colour-vision-deficiency simulation pass", () => {
+    expect(frag).toContain("vec3 simulateCvd(vec3 c)");
+    expect(frag).toContain("uCvd");
+  });
+
   it("passes a fullscreen triangle from the vertex shader", () => {
     expect(VERTEX_SHADER).toContain("gl_Position");
   });

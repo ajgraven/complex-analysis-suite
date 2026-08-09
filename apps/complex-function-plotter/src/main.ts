@@ -61,6 +61,7 @@ function main(): void {
   const crispInput = byId("crisp");
   const hueShiftInput = byId("hueShift");
   const hueSignInput = byId("hueSign");
+  const cvdSel = byId("cvd");
   const homeBtn = byId("home");
   const savePngBtn = byId("savePng");
   const copyLinkBtn = byId("copyLink");
@@ -231,6 +232,13 @@ function main(): void {
     hueSignInput.addEventListener("change", () => {
       plot.color.hueSign = hueSignInput.checked ? -1 : 1;
       drawLegends();
+      redraw(false);
+    });
+  }
+  if (cvdSel instanceof HTMLSelectElement) {
+    cvdSel.value = String(plot.color.cvd);
+    cvdSel.addEventListener("change", () => {
+      plot.color.cvd = Number(cvdSel.value);
       redraw(false);
     });
   }

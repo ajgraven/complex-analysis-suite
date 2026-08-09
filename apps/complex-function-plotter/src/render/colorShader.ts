@@ -22,6 +22,7 @@ uniform float     uSectors;    // n: sectors per turn / grid density (where appl
 uniform int       uCrisp;      // 0 shaded bands, 1 crisp lines
 uniform float     uHueShift;   // radians added to arg for the hue lookup
 uniform float     uHueSign;    // +1 / -1 winding direction for the hue
+uniform int       uCvd;        // colour-vision-deficiency preview: 0 none, 1 protan, 2 deutan, 3 tritan
 
 const float TWO_PI = 6.283185307179586;
 const float INV_TWO_PI = 0.15915494309189535;
@@ -76,16 +77,31 @@ float enhancement(cvec w, float m, float arg) {
   return sawShade(re, 0.7) * sawShade(im, 0.7);
 }
 
+// Colour-vision-deficiency simulation (catalog C6) — an approximation applied in sRGB, for a quick
+// "how does this read for a CVD viewer" preview. Honestly a preview, not a calibrated transform.
+vec3 simulateCvd(vec3 c) {
+  if (uCvd == 0) return c;
+  mat3 m;
+  if (uCvd == 1)      m = mat3(0.152286, 0.114503, -0.003882, 1.052583, 0.786281, -0.048116, -0.204868, 0.099216, 1.051998);
+  else if (uCvd == 2) m = mat3(0.367322, 0.280085, -0.011820, 0.860646, 0.672501,  0.042940, -0.227968, 0.047413, 0.968881);
+  else                m = mat3(1.255528, -0.078411, 0.004733, -0.076749, 0.930809,  0.691367, -0.178779, 0.147602, 0.303900);
+  return clamp(m * c, 0.0, 1.0);
+}
+
 vec3 colorAt(cvec w) {
   float m = cabsf(w);
+  vec3 col;
   // NaN/Inf sentinel (catalog L6): render unreliable pixels a neutral grey, never black (which reads
   // as a zero). cdiv floors true poles to huge-but-finite, so this mostly catches exp overflow / 0-over-0.
-  if (!(m < 3.0e37) || m != m) return vec3(0.30, 0.30, 0.33);
-  float arg = cre1(carg(w));
-  float t = fract(uHueSign * arg * INV_TWO_PI + uHueShift * INV_TWO_PI + 1.0);
-  vec3 hue = texture(uPhaseLUT, vec2(t, uPhaseRow)).rgb;
-  vec3 base = hue * modulusLightness(m);
-  return clamp(base * enhancement(w, m, arg), 0.0, 1.0);
+  if (!(m < 3.0e37) || m != m) {
+    col = vec3(0.30, 0.30, 0.33);
+  } else {
+    float arg = cre1(carg(w));
+    float t = fract(uHueSign * arg * INV_TWO_PI + uHueShift * INV_TWO_PI + 1.0);
+    vec3 hue = texture(uPhaseLUT, vec2(t, uPhaseRow)).rgb;
+    col = clamp(hue * modulusLightness(m) * enhancement(w, m, arg), 0.0, 1.0);
+  }
+  return simulateCvd(col);
 }`;
 
 /**

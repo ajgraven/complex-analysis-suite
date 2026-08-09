@@ -83,8 +83,32 @@ export const hsvCyclic: Colormap = {
   sample: (t) => hsvToRgb(t, 1, 1),
 };
 
+// Twilight-like: chroma roughly constant, but lightness varies around the loop (light near arg 0,
+// dark near arg ±π) — the defining feature of matplotlib's "twilight". Not isoluminant, so it reads
+// best with the "phase only" modulus mode.
+export const twilightCyclic: Colormap = {
+  id: "twilight",
+  label: "Twilight",
+  sample: (t) => {
+    const L = 0.58 + 0.26 * Math.cos(2 * Math.PI * t);
+    return oklch(L, 0.1, OKLCH_HUE0 + 210 + 360 * t);
+  },
+};
+
+// Colorblind-safe cyclic: the loop runs mainly along the blue↔yellow axis (safe under red–green CVD),
+// with lightness carrying extra cyclic information. Built directly in Oklab.
+export const cvdSafeCyclic: Colormap = {
+  id: "cvd-safe",
+  label: "Colorblind-safe",
+  sample: (t) => {
+    const a = 2 * Math.PI * t;
+    const [r, g, b] = oklabToLinearSrgb(0.6 + 0.22 * Math.cos(a), 0.055 * Math.sin(a), 0.13 * Math.cos(a));
+    return [clamp01(linearToSrgb(r)), clamp01(linearToSrgb(g)), clamp01(linearToSrgb(b))];
+  },
+};
+
 /** Ordered list of available colormaps; the index is the atlas row and the share-state value. */
-export const COLORMAPS: Colormap[] = [oklchCyclic, hsvCyclic];
+export const COLORMAPS: Colormap[] = [oklchCyclic, hsvCyclic, twilightCyclic, cvdSafeCyclic];
 
 /** Bake one colormap into a width×1 RGBA8 row. */
 export function bakeRow(cm: Colormap, width = 256): Uint8Array {
