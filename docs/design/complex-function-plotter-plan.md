@@ -32,8 +32,9 @@
 | **2 — Instrumented 2D research tool**   | ✅ done            | `cfca14d`, `f3eb87b`, `2b72e63`, `e894be1` | D2–D6, C5–C7, E1–E3, H2, H7, J3, J4, L4 · GT: conformal grid (exp→square, z²→pinch), zero/pole counts, `\|z²−1\|=1` lemniscate, `e^(1/z)` uncertainty hatch                                                                   |
 | **`@cas/expr` named params (B4)**       | ✅ done            | `554c734`                                  | [ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters); `freeParameters`, JS param-map + legacy positional `a`, GLSL `uParam_<name>` aliases (legacy `a→uA`); CD `expr`/`glslCodegen` + `paramA` green before & after  |
 | **G1 — parameter controls**             | ✅ done            | `2886f3d`                                  | per-`freeParameter` ℂ-pad + re/im + real slider (`ui/params.ts`), `uParam_<name>` uniforms (re-uniform on drag), params in the share-link, instruments track the values; headless-verified (`a*z*(1-z)+b` compiles + renders) |
-| **G2 — animation variable `t`**         | ✅ done            | _⚠ backfill hash next commit_              | `t` transport (play/scrub/loop/speed, `ui/animate.ts`) driving the `uParam_t` uniform; anim config in the share-link; pure `stepT` unit-tested; headless-verified (`a*z*exp(i*t)` plays, `t` excluded from the ℂ-pad list)    |
-| **3 — Parameters & families**           | 🔨 **in progress** | _B4, G1, G2 above; more app work next_     | ~~B4~~ ✅ · ~~G1~~ ✅ · ~~G2~~ ✅ · next: G4 (sweep), B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9                                                                                                                                   |
+| **G2 — animation variable `t`**         | ✅ done            | `8a019dc`                                  | `t` transport (play/scrub/loop/speed, `ui/animate.ts`) driving the `uParam_t` uniform; anim config in the share-link; pure `stepT` unit-tested; headless-verified (`a*z*exp(i*t)` plays, `t` excluded from the ℂ-pad list)    |
+| **G4 — parameter sweep**                | ✅ done            | _⚠ backfill hash next commit_              | small-multiples montage across a parameter's range (`ui/sweep.ts` + `Plot.renderThumbnail`), click-a-cell to jump; pure `sweepValues` unit-tested; headless-verified (9 distinct thumbnails, pick sets the value, no flicker) |
+| **3 — Parameters & families**           | 🔨 **in progress** | _the family engine (B4/G1/G2/G4) done_     | ~~B4~~ ✅ · ~~G1~~ ✅ · ~~G2~~ ✅ · ~~G4~~ ✅ · next: B5 (`2i`/`tau`/`phi`/`γ`), A5, A7, A9 · GT: Blaschke `(z−a)/(1−ā z)` family animates, zeros stay in the disk                                                            |
 | **4 — Special functions & DLMF**        | ⬜                 | —                                          | B6 (Γ, ζ), B9, D8                                                                                                                                                                                                             |
 | **5 — 3D engine**                       | ⬜                 | —                                          | F1–F8, I7 (+ the 3D-slice extraction ADR)                                                                                                                                                                                     |
 | **6 — Export, interop, a11y & publish** | ⬜                 | —                                          | K1, K3, K7, K8, K9, L7, L8 → **publish**                                                                                                                                                                                      |
@@ -50,22 +51,25 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
 
 **Resume notes for Phase 3:**
 
-- **✅ B4 + G1 + G2 have landed.** `@cas/expr` named parameters ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters))
-  are backward-compatible: `freeParameters(ast)` (in `@cas/expr/ast`) lists the bindable names;
-  `makeComplexFn(ast, { a, b, … })` / `getComplexFn` take a name→value map (legacy positional `Complex`
-  for `a` still works); `compileF(ast, "fFn", { params })` aliases each from a `uParam_<name>` uniform.
-  In the app, `Plot` owns the parameter names/values/locations (`compileSource` preserves a surviving
-  parameter's value across formula edits, defaults a new one to `[1, 0]`); `ui/params.ts` renders a
-  ℂ-pad + re/im + real-slider control per name; the reserved `t` gets a play/scrub/loop/speed transport
-  instead (`ui/animate.ts`, pure `stepT` + a rAF loop, `t` filtered out of the ℂ-pad list in `main.ts`);
-  `main.ts` rebuilds the instrument closures (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU,
-  and `state/viewState.ts` round-trips `params` + the `anim` config. _First thing next commit: backfill
-  G2's hash into the build-progress row above._
-- **G4 (next) — parameter sweep.** Sample one chosen parameter across a range and present it as
-  small-multiples (a grid of mini-plots) or a scrub, reusing the G1 range mapping + the same
-  `setParamValue` → re-uniform path; then **B5** adds complex literals `2i` and constants
-  `tau` / `phi` / `γ` (an additive lexer/const growth), and **A5 / A7 / A9** are input niceties
-  (autocomplete, multiple functions f/g, copy-as-LaTeX).
+- **✅ The parameter-family engine (B4 + G1 + G2 + G4) is complete.** `@cas/expr` named parameters
+  ([ADR-0011](../DECISIONS.md#adr-0011-casexpr-named-parameters)) are backward-compatible:
+  `freeParameters(ast)` (in `@cas/expr/ast`) lists the bindable names; `makeComplexFn(ast, { a, b, … })` /
+  `getComplexFn` take a name→value map (legacy positional `Complex` for `a` still works);
+  `compileF(ast, "fFn", { params })` aliases each from a `uParam_<name>` uniform. In the app, `Plot` owns
+  the parameter names/values/locations (`compileSource` preserves a surviving parameter's value across
+  formula edits, defaults a new one to `[1, 0]`) plus `renderThumbnail` (small-buffer capture);
+  `ui/params.ts` renders a ℂ-pad + re/im + real-slider per name; the reserved `t` gets a
+  play/scrub/loop/speed transport instead (`ui/animate.ts`); `ui/sweep.ts` builds the small-multiples
+  montage (click a cell to jump); `main.ts` rebuilds the instrument closures
+  (`makeComplexFn(fAst, plot.paramsRecord())`) so CPU ≡ GPU, and `state/viewState.ts` round-trips
+  `params` + the `anim` config (the sweep is transient). _First thing next commit: backfill G4's hash
+  into the build-progress row above._
+- **B5 (next) — literals & constants.** Add complex literals `2i` (a lexer tweak) and the constants
+  `tau` / `phi` / `γ` (the additive `CONSTS` + backend `const`-case growth, one entry each in
+  `evaluate` / `glsl` / `latex`), with parity tests. Then **A5 / A7 / A9** are input niceties
+  (function-name autocomplete, multiple functions f/g, copy-as-LaTeX). The **Phase-3 ground truth** — a
+  Blaschke `(z−a)/(1−ā z)` family animating with its zero staying in the disk — is now demonstrable via
+  the `a` ℂ-pad + `t` animation; capture it as the phase's GT check before closing Phase 3.
 - **Adding a render knob** follows the established `ColorState` pattern in `render/plot.ts`: field +
   `Uniforms` entry + default + `getUniformLocation` + a `gl.uniform*` in `render()`; then a control in
   `index.html` + wiring in `main.ts`; persist via `state/viewState.ts` (`PlotterState` + `decodeState`

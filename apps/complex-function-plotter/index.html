@@ -86,6 +86,15 @@
       .anim-cfg label { margin: 0; text-transform: none; letter-spacing: normal; font-size: 0.74rem; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
       .anim-cfg input[type="number"] { width: 68px; padding: 4px 6px; }
 
+      .sweep-overlay { position: absolute; inset: 0; background: rgba(10, 12, 16, 0.94); display: flex; flex-direction: column; z-index: 5; }
+      .sweep-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+      .sweep-title { font-size: 0.85rem; color: var(--text); }
+      .sweep-grid { flex: 1 1 auto; overflow: auto; padding: 14px; display: grid; grid-template-columns: repeat(var(--sweep-cols, 3), 1fr); gap: 12px; align-content: start; }
+      figure.sweep-cell { margin: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); cursor: pointer; }
+      figure.sweep-cell:hover, figure.sweep-cell:focus { border-color: var(--accent); outline: none; }
+      figure.sweep-cell img { display: block; width: 100%; height: auto; }
+      figure.sweep-cell figcaption { padding: 4px 6px; font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); text-align: center; }
+
       .legend { display: flex; gap: 14px; align-items: center; }
       .wheel-wrap { position: relative; flex: 0 0 auto; }
       .wheel-wrap span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.68rem; color: var(--muted); }
@@ -142,6 +151,18 @@
             <label class="check"><input type="checkbox" class="anim-loop" checked /> loop</label>
           </div>
         </div>
+      </div>
+
+      <div class="group" id="sweepGroup" hidden>
+        <label for="sweepParam">Parameter sweep</label>
+        <select id="sweepParam"></select>
+        <div class="row" style="margin-top: 8px">
+          <div><label for="sweepFrom">from</label><input type="number" id="sweepFrom" step="0.25" value="-2" /></div>
+          <div><label for="sweepTo">to</label><input type="number" id="sweepTo" step="0.25" value="2" /></div>
+        </div>
+        <label for="sweepSteps" style="margin-top: 8px">Steps <span class="subval" id="sweepStepsVal">9</span></label>
+        <input type="range" id="sweepSteps" min="2" max="25" step="1" value="9" />
+        <button type="button" id="sweepShow" style="margin-top: 8px; width: 100%">Show sweep ▦</button>
       </div>
 
       <div class="group">
@@ -248,6 +269,13 @@
     <main class="stage">
       <canvas id="view"></canvas>
       <canvas id="axes"></canvas>
+      <div id="sweepOverlay" class="sweep-overlay" hidden>
+        <div class="sweep-bar">
+          <span id="sweepTitle" class="sweep-title"></span>
+          <button type="button" id="sweepClose">Close</button>
+        </div>
+        <div id="sweepGrid" class="sweep-grid"></div>
+      </div>
     </main>
 
     <script type="module" src="/src/main.ts"></script>

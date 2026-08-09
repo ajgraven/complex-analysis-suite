@@ -301,10 +301,16 @@ export class Plot {
   }
 
   private render(): void {
+    this.resize();
+    this.paint();
+  }
+
+  /** Draw the current program + state into the canvas at its current buffer size (no resize) — shared
+   *  by the live {@link render} and the {@link renderThumbnail} sweep capture. */
+  private paint(): void {
     const gl = this.gl;
     const u = this.uniforms;
     if (!this.program || !u) return;
-    this.resize();
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
     gl.activeTexture(gl.TEXTURE0);
@@ -370,6 +376,22 @@ export class Plot {
   /** A full-resolution PNG data URL of the current frame (basic export; hi-res tiling is Phase 6). */
   toDataURL(): string {
     this.draw(false);
+    return this.canvas.toDataURL("image/png");
+  }
+
+  /**
+   * Render the current state at a small buffer (`dim`×`dim/aspect`) and return a PNG data URL — the
+   * per-cell capture for the parameter-sweep montage (catalog G4). It bypasses {@link resize} (so the
+   * buffer stays at the thumbnail size) and does NOT restore; the caller sets each parameter value, calls
+   * this per value, then does one `draw()` to restore the full-resolution live view. Because the whole
+   * loop is synchronous, the browser only composites that final restored frame — the thumbnail-sized
+   * intermediate renders never reach the screen, so the main canvas doesn't flicker.
+   */
+  renderThumbnail(dim: number): string {
+    const aspect = this.aspect() || 1;
+    this.canvas.width = Math.max(1, Math.round(dim));
+    this.canvas.height = Math.max(1, Math.round(dim / aspect));
+    this.paint();
     return this.canvas.toDataURL("image/png");
   }
 }

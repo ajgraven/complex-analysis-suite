@@ -31,7 +31,7 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 3 · G2 (named parameters + the animation variable `t`)
+## Status — Phase 3 · G4 (named parameters, animation `t`, parameter sweeps)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
@@ -44,6 +44,9 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   pad: play / pause, a scrubber over a segment `[t0, t1]`, a speed, and a loop toggle. A
   `requestAnimationFrame` loop advances `t` as a re-uniform, so a formula that mentions `t` animates as a
   live family; the transport config travels in the share-link (which opens paused).
+- **Parameter sweep** — pick a parameter, a real range, and a step count, and **Show sweep** renders a
+  **small-multiples montage** — a grid of thumbnails of the map across that range (reusing the live GPU
+  program per cell). Click any cell to jump the plot to that value.
 
 Plus the Phase-2 research tool:
 
@@ -64,8 +67,8 @@ Plus the Phase-2 research tool:
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Next — the rest of Phase 3: parameter sweeps (G4, built on the named parameters above) and complex
-literals / extra constants (B5). See [the plan](../../docs/design/complex-function-plotter-plan.md).
+Next — the rest of Phase 3: complex literals / extra constants (B5) and input niceties (A5/A7/A9). See
+[the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
@@ -79,6 +82,7 @@ literals / extra constants (B5). See [the plan](../../docs/design/complex-functi
 | `presets.ts`                | the preset / example gallery (each expression is validated in the tests)                                                                              |
 | `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                         |
 | `ui/animate.ts`             | the `t` animation transport (G2): pure frame-stepping `stepT` + the play/scrub/loop/speed controls and rAF loop                                       |
+| `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                   |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                         |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                          |
 | `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
@@ -90,7 +94,7 @@ literals / extra constants (B5). See [the plan](../../docs/design/complex-functi
 cyclic continuity, HSV anchors), `colorShader.test.ts` (fragment-program assembly), `viewState.test.ts`
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
-(the `t` frame-stepping — wrap / clamp / ended), and `singularities.test.ts` (the zero/pole finder
-recovers known counts and orders). Coloring
+(the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing), and
+`singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
 correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
 during development; an automated pixel-diff visual-regression harness is deferred.

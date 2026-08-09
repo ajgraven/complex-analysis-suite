@@ -1,5 +1,5 @@
 // Complex Function Plotting Tool — the app entry: it wires the DOM to the render engine and the CPU
-// instruments. Through Phase 3 · G2 (named parameters + the animation variable t):
+// instruments. Through Phase 3 · G4 (named parameters, the animation variable t, parameter sweeps):
 //
 // Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
 // a JS evaluator for the probe/instruments), typeset live with KaTeX, and drawn by the layered coloring
@@ -10,8 +10,9 @@
 // a re-uniform (the instruments rebuild with the same values, keeping CPU ≡ GPU). The reserved name `t`
 // is animated by a transport (play / scrub / loop / speed, ui/animate.ts) instead of a pad. Around it:
 // pan / zoom / reset, axes + grid + scale bar, phase-wheel and modulus legends, a cursor readout, the
-// zero/pole finder (analysis/singularities.ts), share-links (#vs= via @cas/interchange, parameters +
-// animation config included), and PNG export. Sweeps (G4) build on this; the 3D views (Phase 5) follow.
+// zero/pole finder (analysis/singularities.ts), a parameter-sweep montage (ui/sweep.ts: a grid of
+// thumbnails across one parameter's range, click a cell to jump), share-links (#vs= via @cas/interchange,
+// parameters + animation config included), and PNG export. The 3D views (Phase 5) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
@@ -28,6 +29,7 @@ import { drawAxes } from "./ui/axes.js";
 import { drawMarkers } from "./ui/markers.js";
 import { createParamControls } from "./ui/params.js";
 import { createAnimator, DEFAULT_ANIM } from "./ui/animate.js";
+import { sweepValues, renderMontage } from "./ui/sweep.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import {
   decodeState,
@@ -78,6 +80,17 @@ function main(): void {
   const paramsContainer = byId("params");
   const animGroup = byId("animGroup");
   const animRoot = byId("anim");
+  const sweepGroup = byId("sweepGroup");
+  const sweepParam = byId("sweepParam");
+  const sweepFrom = byId("sweepFrom");
+  const sweepTo = byId("sweepTo");
+  const sweepSteps = byId("sweepSteps");
+  const sweepStepsVal = byId("sweepStepsVal");
+  const sweepShow = byId("sweepShow");
+  const sweepOverlay = byId("sweepOverlay");
+  const sweepGrid = byId("sweepGrid");
+  const sweepTitle = byId("sweepTitle");
+  const sweepClose = byId("sweepClose");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -293,6 +306,18 @@ function main(): void {
     },
   );
 
+  // Populate the sweep parameter selector from the current parameters (any of them, `t` included),
+  // preserving the selection when it survives a formula edit.
+  const syncSweepSelector = (names: readonly string[]): void => {
+    if (sweepParam instanceof HTMLSelectElement) {
+      const prev = sweepParam.value;
+      sweepParam.replaceChildren();
+      for (const n of names) addOption(sweepParam, n, n);
+      sweepParam.value = names.includes(prev) ? prev : (names[0] ?? "");
+    }
+    if (sweepGroup instanceof HTMLElement) sweepGroup.hidden = names.length === 0;
+  };
+
   const syncParamsUI = (): void => {
     const names = plot.paramNames();
     const generic = names.filter((n) => n !== "t"); // `t` gets the animation transport, not a ℂ-pad
@@ -302,7 +327,67 @@ function main(): void {
     if (animGroup instanceof HTMLElement) animGroup.hidden = !hasT;
     if (hasT) animator.sync();
     else animator.stop();
+    syncSweepSelector(names);
   };
+
+  // Parameter sweep (catalog G4): render a small-multiples montage of the map across one parameter's
+  // real range, reusing the live GPU program per cell. The whole loop is synchronous, so the
+  // thumbnail-sized intermediate renders never reach the screen (no flicker) — only the final restored
+  // full-res frame does. Clicking a cell jumps the live plot to that value. Transient: not persisted.
+  const SWEEP_THUMB = 240;
+  const round4 = (x: number): number => Math.round(x * 1e4) / 1e4;
+  const sweepLabel = (name: string, re: number, im: number): string =>
+    Math.abs(im) < 1e-9
+      ? `${name} = ${round4(re)}`
+      : `${name} = ${round4(re)} ${im < 0 ? "−" : "+"} ${round4(Math.abs(im))}i`;
+  const hideSweep = (): void => {
+    if (sweepOverlay instanceof HTMLElement) sweepOverlay.hidden = true;
+  };
+  const runSweep = (): void => {
+    if (!(sweepGrid instanceof HTMLElement)) return;
+    const names = plot.paramNames();
+    const name = sweepParam instanceof HTMLSelectElement ? sweepParam.value : "";
+    if (!names.includes(name)) return;
+    const v0 = sweepFrom instanceof HTMLInputElement ? Number(sweepFrom.value) : -2;
+    const v1 = sweepTo instanceof HTMLInputElement ? Number(sweepTo.value) : 2;
+    const steps = sweepSteps instanceof HTMLInputElement ? Number(sweepSteps.value) : 9;
+    if (!Number.isFinite(v0) || !Number.isFinite(v1)) return;
+    const saved = plot.paramValue(name); // sweep the real part; hold the imaginary part
+    const cells = sweepValues(v0, v1, steps).map((v) => {
+      const value: [number, number] = [v, saved[1]];
+      plot.setParamValue(name, value);
+      const url = plot.renderThumbnail(SWEEP_THUMB);
+      return {
+        label: sweepLabel(name, v, saved[1]),
+        url,
+        onPick: (): void => {
+          plot.setParamValue(name, value);
+          paramControls.sync();
+          if (name === "t") animator.sync();
+          rebuildInstrumentFns();
+          recomputeSings();
+          redraw(false);
+          hideSweep();
+        },
+      };
+    });
+    plot.setParamValue(name, saved);
+    redraw(false); // restore the full-resolution live view
+    renderMontage(sweepGrid, cells);
+    if (sweepTitle instanceof HTMLElement)
+      sweepTitle.textContent = `${name}: ${round4(v0)} → ${round4(v1)} · ${cells.length} steps`;
+    if (sweepOverlay instanceof HTMLElement) sweepOverlay.hidden = false;
+  };
+  if (sweepSteps instanceof HTMLInputElement) {
+    const showSteps = (): void => {
+      if (sweepStepsVal instanceof HTMLElement)
+        sweepStepsVal.textContent = sweepSteps.value;
+    };
+    showSteps();
+    sweepSteps.addEventListener("input", showSteps);
+  }
+  if (sweepShow instanceof HTMLElement) sweepShow.addEventListener("click", runSweep);
+  if (sweepClose instanceof HTMLElement) sweepClose.addEventListener("click", hideSweep);
 
   const applyExpr = (src: string): void => {
     try {
