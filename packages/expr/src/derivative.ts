@@ -173,6 +173,26 @@ function chainOuter(name: string, u: Node): Node {
       const w = call("lambertw", u);
       return div(w, mul(u, add(num(1), w)));
     }
+    case "sinh":
+      return call("cosh", u);
+    case "cosh":
+      return call("sinh", u);
+    case "tanh":
+      // d/dz tanh = sech²(u) = 1 − tanh²(u)
+      return sub(num(1), pow(call("tanh", u), num(2)));
+    case "arcsinh":
+      return div(num(1), call("sqrt", add(pow(u, num(2)), num(1))));
+    case "arccosh":
+      return div(num(1), call("sqrt", sub(pow(u, num(2)), num(1))));
+    case "arctanh":
+      return div(num(1), sub(num(1), pow(u, num(2))));
+    case "sec":
+      return mul(call("sec", u), call("tan", u));
+    case "csc":
+      return neg(mul(call("csc", u), call("cot", u)));
+    case "cot":
+      // d/dz cot = −csc²(u)
+      return neg(pow(call("csc", u), num(2)));
     default:
       throw new ExprError(`'${name}()' is not differentiable for Newton's method`, 0);
   }

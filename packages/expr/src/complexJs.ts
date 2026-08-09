@@ -107,6 +107,30 @@ export const arccos = (z: Complex): Complex => sub([PI / 2, 0], arcsin(z));
 export const arctan = (z: Complex): Complex =>
   mul([0, 0.5], sub(log(sub(ONE, mul(I, z))), log(add(ONE, mul(I, z)))));
 
+// --- Hyperbolic, inverse-hyperbolic, and reciprocal-circular functions ---------
+// The same closed forms the GLSL derived stdlib (@cas/gpu complexDerived.glsl.ts) uses, so the two
+// backends agree by construction — the parity contract complexParity.test.ts pins.
+const HALF: Complex = [0.5, 0];
+
+export const sinh = (z: Complex): Complex => mul(HALF, sub(exp(z), exp(neg(z))));
+export const cosh = (z: Complex): Complex => mul(HALF, add(exp(z), exp(neg(z))));
+export const tanh = (z: Complex): Complex => div(sinh(z), cosh(z));
+
+/** arcsinh(z) = log(z + sqrt(z² + 1)) (principal branch). */
+export const arcsinh = (z: Complex): Complex => log(add(z, sqrt(add(mul(z, z), ONE))));
+/** arccosh(z) = log(z + sqrt(z² − 1)) (principal branch). */
+export const arccosh = (z: Complex): Complex => log(add(z, sqrt(sub(mul(z, z), ONE))));
+/** arctanh(z) = ½·(log(1 + z) − log(1 − z)) (principal branch). */
+export const arctanh = (z: Complex): Complex =>
+  mul(HALF, sub(log(add(ONE, z)), log(sub(ONE, z))));
+
+/** sec(z) = 1 / cos(z). */
+export const sec = (z: Complex): Complex => div(ONE, cos(z));
+/** csc(z) = 1 / sin(z). */
+export const csc = (z: Complex): Complex => div(ONE, sin(z));
+/** cot(z) = cos(z) / sin(z). */
+export const cot = (z: Complex): Complex => div(cos(z), sin(z));
+
 /** Two-argument arctangent: angle of the vector (x, y) — matches CindyScript arctan2. */
 export const arctan2 = (x: Complex, y: Complex): Complex => [Math.atan2(y[0], x[0]), 0];
 

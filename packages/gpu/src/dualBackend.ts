@@ -167,6 +167,9 @@ export const DUAL_BACKEND_CORPUS: DualCase[] = [
   { name: "conjugate(z)^2 + c", source: "conjugate(z)^2 + c" },
   { name: "(z^2 + c)/(z - c)", source: "(z^2 + c)/(z - c)" },
   { name: "exp(z) + c", source: "exp(z) + c" },
+  { name: "sinh(z) + c", source: "sinh(z) + c" },
+  { name: "cosh(z) + c", source: "cosh(z) + c" },
+  { name: "tanh(z) + c", source: "tanh(z) + c" },
 ];
 
 /** Deterministic (z, c) sample grid over a modest disc — no RNG (Math.random is unavailable in some

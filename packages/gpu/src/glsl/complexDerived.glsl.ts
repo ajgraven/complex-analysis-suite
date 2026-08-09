@@ -41,6 +41,20 @@ cvec carctan(cvec a) {
          clog(cadd(vec_(1.0, 0.0), cmul(vec_(0.0, 1.0), a)))));
 }
 
+// Hyperbolic, inverse-hyperbolic, and reciprocal-circular — the same closed forms as the JS
+// reference (@cas/expr complexJs.ts), built from the base ops so both precisions get them for free.
+cvec csinh(cvec a) { return cmul(vec_(0.5, 0.0), csub(cexp(a), cexp(cneg(a)))); }
+cvec ccosh(cvec a) { return cmul(vec_(0.5, 0.0), cadd(cexp(a), cexp(cneg(a)))); }
+cvec ctanh(cvec a) { return cdiv(csinh(a), ccosh(a)); }
+cvec carcsinh(cvec a) { return clog(cadd(a, csqrt(cadd(cmul(a, a), vec_(1.0, 0.0))))); }
+cvec carccosh(cvec a) { return clog(cadd(a, csqrt(csub(cmul(a, a), vec_(1.0, 0.0))))); }
+cvec carctanh(cvec a) {
+  return cmul(vec_(0.5, 0.0), csub(clog(cadd(vec_(1.0, 0.0), a)), clog(csub(vec_(1.0, 0.0), a))));
+}
+cvec csec(cvec a) { return cdiv(vec_(1.0, 0.0), ccos(a)); }
+cvec ccsc(cvec a) { return cdiv(vec_(1.0, 0.0), csin(a)); }
+cvec ccot(cvec a) { return cdiv(ccos(a), csin(a)); }
+
 cvec lwZeroApprox(cvec z) {
   cvec ezsqrt = csqrt(cadd(vec_(1.0, 0.0), cmul(vec_(C_E, 0.0), z)));
   cvec num = cmul(cmul(vec_(12.0, 0.0), ezsqrt), cadd(vec_(45.0 * C_SQRT2, 0.0), cmul(vec_(32.0, 0.0), ezsqrt)));
