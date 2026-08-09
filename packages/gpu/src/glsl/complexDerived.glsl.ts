@@ -2,8 +2,9 @@
  * Precision-agnostic complex functions derived from the base stdlib ops
  * (`cadd`/`cmul`/`cexp`/`clog`/`csqrt`/…). Included after either the single- or
  * df64-precision base stdlib, so both builds get `cpow`, `ctan`, the inverse
- * trig, and `lambertw` for free — `lambertw`'s accuracy then follows the base
- * `cexp`/`cdiv` precision.
+ * trig, `lambertw`, and the Lanczos `cgamma` for free — their accuracy then
+ * follows the base `cexp`/`cdiv` precision (and, for `cgamma`, its float32
+ * coefficients).
  *
  * `lambertw` is a direct port of the old CindyScript mathlib: a seeded
  * approximation refined by 5 Halley steps `w = (w² + z/exp(w)) / (w + 1)`.
@@ -73,5 +74,35 @@ cvec clambertw(cvec z) {
     w = cdiv(cadd(cmul(w, w), cdiv(z, cexp(w))), cadd(w, vec_(1.0, 0.0)));
   }
   return w;
+}
+
+// Gamma function Γ(z) — the classic 9-coefficient Lanczos approximation (g = 7), the SAME coefficients
+// and order as the JS reference (@cas/expr complexJs.ts gamma), so the backends agree to this build's
+// precision. The coefficients are float literals, so in the df64 build they carry only float32 precision
+// (deep-zoom-accurate Γ is a future concern). GLSL has no recursion, so the reflection formula calls a
+// separate core: cgammaCore is the series (valid for Re ≥ ½); cgamma adds the left-half-plane reflection.
+cvec cgammaCore(cvec z) {
+  cvec zz = csub(z, vec_(1.0, 0.0)); // Lanczos is written in z − 1
+  cvec x = vec_(0.99999999999980993, 0.0);
+  x = cadd(x, cdiv(vec_(676.5203681218851, 0.0), cadd(zz, vec_(1.0, 0.0))));
+  x = cadd(x, cdiv(vec_(-1259.1392167224028, 0.0), cadd(zz, vec_(2.0, 0.0))));
+  x = cadd(x, cdiv(vec_(771.32342877765313, 0.0), cadd(zz, vec_(3.0, 0.0))));
+  x = cadd(x, cdiv(vec_(-176.61502916214059, 0.0), cadd(zz, vec_(4.0, 0.0))));
+  x = cadd(x, cdiv(vec_(12.507343278686905, 0.0), cadd(zz, vec_(5.0, 0.0))));
+  x = cadd(x, cdiv(vec_(-0.13857109526572012, 0.0), cadd(zz, vec_(6.0, 0.0))));
+  x = cadd(x, cdiv(vec_(9.9843695780195716e-6, 0.0), cadd(zz, vec_(7.0, 0.0))));
+  x = cadd(x, cdiv(vec_(1.5056327351493116e-7, 0.0), cadd(zz, vec_(8.0, 0.0))));
+  cvec t = cadd(zz, vec_(7.5, 0.0)); // zz + g + ½
+  // Γ = √(2π) · t^(zz + ½) · e^(−t) · x
+  cvec tpow = cpow(t, cadd(zz, vec_(0.5, 0.0)));
+  return cmul(cmul(vec_(2.5066282746310002, 0.0), tpow), cmul(cexp(cneg(t)), x));
+}
+cvec cgamma(cvec z) {
+  if (cre1(z) < 0.5) {
+    // Γ(z) = π / (sin(π z) · Γ(1 − z))
+    cvec s = csin(cmul(vec_(C_PI, 0.0), z));
+    return cdiv(vec_(C_PI, 0.0), cmul(s, cgammaCore(csub(vec_(1.0, 0.0), z))));
+  }
+  return cgammaCore(z);
 }
 `;

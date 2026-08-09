@@ -40,6 +40,7 @@ const UNARY_GLSL: Record<string, string> = {
   arccosh: "carccosh",
   arctanh: "carctanh",
   lambertw: "clambertw",
+  gamma: "cgamma",
   round: "cround",
   floor: "cfloor",
   ceil: "cceil",

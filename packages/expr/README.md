@@ -33,7 +33,7 @@ and any number of **live named parameters** (`a`, `b`, `k`, …):
   the Greek character, distinct from the Γ function) and **imaginary literals** `2i`, `3.5i`, `1e3i`
   (a number with a trailing `i`; it binds as one unit, so `2i^2 = (2i)^2`); **operators** `+ - * / ^`
   (principal-branch complex powers), comparisons `> < ==`, `if(cond,a,b)`, `not(...)`;
-- **functions** — `re im conjugate abs arg sqrt exp log sin cos tan arcsin arccos arctan arctan2 mod lambertw round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native);
+- **functions** — `re im conjugate abs arg sqrt exp log sin cos tan arcsin arccos arctan arctan2 mod lambertw gamma round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native; `gamma` is Γ via Lanczos — see Special functions below);
 - **`;`-separated statements** with local assignment; the `escape` predicate may call
   `f(z, c)`.
 
@@ -51,6 +51,15 @@ Any free variable that is neither `z`/`c` nor a local is a **parameter**, bound 
 
 Parameters bind to **uniforms**, so moving a control is a re-uniform, not a recompile; they are also
 carried into `f(...)` recursion, keeping the GLSL ≈ JS invariant inside self-reference.
+
+### Special functions (Phase 4)
+
+`gamma` is Γ(z) via the classic Lanczos approximation (g = 7) with the reflection formula for the left
+half-plane. Like the hyperbolics, it is **derived** — one implementation in terms of the base ops
+(`cexp`/`clog`/`csin`/`cpow`), so both GLSL precisions get it, and a JS twin with the same coefficients
+keeps the backends in step (numerically checked to float32 ε against known Γ values, both branches). It
+is **not** differentiable in the system yet (Γ′ = Γ·ψ needs a digamma builtin), so the instruments that
+require `f′` skip a map built on Γ. ζ and the DLMF colouring mode are the rest of Phase 4.
 
 ## API
 
@@ -71,7 +80,8 @@ import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@ca
 ## Tests
 
 `test/` — parser/AST, evaluate↔compile, derivative, LaTeX, param-`a` handling, **`namedParams`**,
-**`constantsLiterals`** (the `2i` imaginary literal + `tau`/`phi`/`γ` across all backends),
+**`constantsLiterals`** (the `2i` imaginary literal + `tau`/`phi`/`γ` across all backends), **`gamma`**
+(Γ known values, reflection, the functional equation, and non-differentiability),
 (the ADR-0011 named-parameter model — enumeration, JS map + legacy positional, GLSL `uParam_<name>`
 aliases, recursion propagation), and **`complexParity`** (the JS complex library vs. its intended
 GLSL semantics). The end-to-end

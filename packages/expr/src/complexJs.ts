@@ -184,3 +184,36 @@ export function lambertw(z: Complex): Complex {
   }
   return w;
 }
+
+// --- Gamma function (Lanczos, g = 7) -------------------------------------------
+// Γ(z) via the classic 9-coefficient Lanczos approximation, with the reflection formula for the left
+// half-plane. The SAME coefficients and evaluation order as the GLSL `cgamma`
+// (@cas/gpu complexDerived.glsl.ts) — so the two backends agree to the shader's float32 precision
+// (complexParity / the app's headless check pin it). Poles at the non-positive integers surface as
+// huge/NaN through the sin/divide, which the renderer's NaN-sentinel + uncertainty layer handle.
+
+const LANCZOS_G = 7;
+const LANCZOS_C = [
+  0.99999999999980993, 676.5203681218851, -1259.1392167224028, 771.32342877765313,
+  -176.61502916214059, 12.507343278686905, -0.13857109526572012, 9.9843695780195716e-6,
+  1.5056327351493116e-7,
+];
+const SQRT_2PI = Math.sqrt(2 * PI);
+
+/** Lanczos core Γ(z), valid for Re(z) ≥ 0.5 (the right half-plane). */
+function gammaCore(z: Complex): Complex {
+  const zz = sub(z, ONE); // shift: Lanczos is written in terms of z − 1
+  let x: Complex = [LANCZOS_C[0], 0];
+  for (let i = 1; i < LANCZOS_C.length; i++)
+    x = add(x, div([LANCZOS_C[i], 0], add(zz, [i, 0])));
+  const t = add(zz, [LANCZOS_G + 0.5, 0]); // zz + 7.5
+  // Γ(z) = √(2π) · t^(zz + ½) · e^(−t) · x
+  return mul(mul([SQRT_2PI, 0], pow(t, add(zz, HALF))), mul(exp(neg(t)), x));
+}
+
+/** Γ(z), the gamma function (principal branch). Reflection Γ(z) = π / (sin(πz)·Γ(1−z)) carries the
+ *  left half-plane (Re < ½) to the right, where the Lanczos series converges. */
+export function gamma(z: Complex): Complex {
+  if (z[0] < 0.5) return div([PI, 0], mul(sin(mul([PI, 0], z)), gammaCore(sub(ONE, z))));
+  return gammaCore(z);
+}

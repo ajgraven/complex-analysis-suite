@@ -54,6 +54,7 @@ export const COMPLEX_FUNCTIONS = new Set([
   "arccosh",
   "arctanh",
   "lambertw",
+  "gamma",
   "round",
   "floor",
   "ceil",

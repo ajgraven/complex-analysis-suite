@@ -84,6 +84,7 @@ const UNARY: Record<string, (z: Complex) => Complex> = {
   arccosh: C.arccosh,
   arctanh: C.arctanh,
   lambertw: C.lambertw,
+  gamma: C.gamma,
   round: C.round,
   floor: C.floor,
   ceil: C.ceil,
