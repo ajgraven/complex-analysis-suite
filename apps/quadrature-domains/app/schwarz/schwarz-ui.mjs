@@ -551,8 +551,9 @@ const QD = _QD;
   // Export the current φ's Schwarz reflection σ as an @cas/interchange deep link (S3b), ALONGSIDE the
   // φ export above. σ ships as a `form:"schwarz"` recipe (its φ⁻¹ is NUMERICAL, so σ is not a closed-
   // form map); the Complex Dynamics app reconstructs the σ evaluator from sigma.phi via @cas/schwarz.
-  // Available for the unbounded-Laurent families only — exportSigmaDeepLink returns null otherwise
-  // (a rational/bounded φ has no shared σ engine yet). Mirrors _exportMap.
+  // Available for the families @cas/schwarz reconstructs — the unbounded-Laurent QDs and (since S5-C2) the
+  // bounded-classical QDs; exportSigmaDeepLink returns null otherwise (a rational φ, or a weighted LQD/PQD
+  // domain, has no shared σ engine yet). Mirrors _exportMap.
   function _exportSigma() {
     const status = document.getElementById('schwarz-export-status');
     const setStatus = (msg, ok) => {

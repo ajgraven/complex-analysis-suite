@@ -1,8 +1,9 @@
 // Shared finite-pole branch math for the σ engines. A pole-bearing quadrature domain — bounded OR
 // unbounded — carries the SAME reflected principal-part terms, so these helpers are shared by both
 // families (ADR-0007: extracted when the bounded family became the second consumer of what the
-// unbounded-Laurent engine's branch closures did). Ported verbatim from the QD app's canonical σ
-// (schwarz-common.mjs branchPhiContribution / branchPhiDeriv / branchSchwarzContribution). z_j ∈ 𝔻;
+// unbounded-Laurent engine's branch closures did). `branchPhi` / `branchPhiDeriv` / `branchF` are ported
+// verbatim from the QD app's canonical σ (schwarz-common.mjs branchPhiContribution / branchPhiDeriv /
+// branchSchwarzContribution); `branchFDeriv` (F') is derived here, the exact d/dz of `branchF`. z_j ∈ 𝔻;
 // A[k-1] = A_{j,k}, k = 1..m_j:
 //   φ  += Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ,        u_j(z) = z/(1 − conj(z_j)·z)
 //   φ' += Σⱼ (1/(1−conj(z_j)z)²)·Σₖ k·conj(A_{j,k})·u_j^{k-1}

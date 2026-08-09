@@ -1,16 +1,20 @@
 // GPU σ evaluator — the WebGL2 (GLSL ES 3.00) half of @cas/schwarz, lifted from the Quadrature
 // Domains app's hand-written Schwarz-reflection fragment shader (apps/quadrature-domains/app/schwarz/
 // schwarz-webgl.mjs) at the S4b hand-off (docs/design/SIGMA-HANDOFF.md). It is the per-pixel GPU twin
-// of the CPU engine in ../unbounded-laurent.ts: for one w it computes σ(w) = conj(F(φ⁻¹(w))) by the
-// SAME numerical exterior-branch inverse (Newton), the SAME retry ladder, and the SAME formulas.
+// of the CPU engines in ../unbounded-laurent.ts and ../bounded.ts: for one w it computes
+// σ(w) = conj(F(φ⁻¹(w))) by the SAME numerical inverse (Newton), the SAME retry ladder, and the SAME
+// formulas.
 //
-// SCOPE — one family, deliberately. QD's shader dispatches SIX inverse families on `u_family`
+// SCOPE — two families, on a `u_family` dispatch (S5-C2). QD's shader dispatches SIX inverse families
 // (bounded/unbounded QD, bounded/unbounded LQD, and their singular variants, plus a polynomial-h
-// β-correction). CD's σ import path reconstructs exactly ONE of them — the classical UNBOUNDED-Laurent
-// map with optional finite-pole branches (`makeUnboundedLaurentSchwarz`) — so only that family is lifted
-// here. The others have no second consumer, so per ADR-0007 they stay in QD's app-local shader rather
-// than moving into this shared package. The dispatch is specialized away: no `u_family`, no `u_w0`, no
-// `cexp`/`blaschke`, unbounded-only seeding/acceptance. What remains is byte-for-byte the family-1 math.
+// β-correction). CD's σ import + native paths reconstruct TWO of them — the classical UNBOUNDED-Laurent
+// map with optional finite-pole branches (`makeUnboundedLaurentSchwarz`, `u_family == 0`, exterior
+// branch), and the classical BOUNDED map (`makeBoundedSchwarz`, `u_family == 1`, interior branch, using
+// `u_w0`) — so exactly those two are lifted here. The eval fns and the seed/accept are guarded on
+// `u_family`; the UNBOUNDED path is byte-for-byte the pre-C2 family-1 math (each guard's else-branch is
+// the original code, branch-accumulation order unchanged). The remaining LQD/PQD/singular families have
+// no second consumer, so per ADR-0007 they stay in QD's app-local shader (no `cexp`/`blaschke`/αth-root
+// here) rather than moving into this shared package.
 //
 // The GLSL is emitted as tagged template strings (same convention as @cas/gpu's complexSingle.glsl.ts).
 // A consumer assembles a complete fragment shader by concatenating, in order:

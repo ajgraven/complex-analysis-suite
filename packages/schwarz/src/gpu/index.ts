@@ -1,6 +1,7 @@
-// @cas/schwarz/gpu — the WebGL2 σ evaluator, the GPU twin of the package's CPU engine. Lifted from the
-// QD app's hand-written Schwarz shader (S4b, docs/design/SIGMA-HANDOFF.md), specialized to the one
-// family CD reconstructs: the classical unbounded-Laurent map with optional finite-pole branches.
+// @cas/schwarz/gpu — the WebGL2 σ evaluator, the GPU twin of the package's CPU engines. Lifted from the
+// QD app's hand-written Schwarz shader (S4b, docs/design/SIGMA-HANDOFF.md), scoped to the two families CD
+// reconstructs: the classical unbounded-Laurent map with optional finite-pole branches, and the classical
+// bounded map (interior branch, S5-C2) — dispatched on `u_family`.
 //
 // The GLSL constants (SIGMA_*_GLSL) are the reusable shader source a consumer concatenates into a full
 // fragment shader; the probe harness (buildSigmaProbeGLSL / packPhi / uploadPhi / runSigmaGLSL) is the

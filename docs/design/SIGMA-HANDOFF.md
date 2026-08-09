@@ -375,8 +375,31 @@ colormap texture, not CD's byte-frozen palette GLSL); σ **orbit inspection** (i
 — reusing the standard plots' `legend-*` CSS and `drawScaleBar`); and σ-**view serialization** (item 2 —
 share link + saved views + a PNG-embedded `cdjs:state`, all via a hostile-link-hard `_sigma` codec that
 layers onto the `AppState` like `_z0`/`_grad`/`_proj`). Only **ADR-0009 item 4** — this doc update — remained,
-and it is now done. **Still deferred — S5:** non-Laurent families on the wire (bounded / LQD / PQD),
-branch-aware continuation through cusps (uncertified — RISKS §3), df64 σ deep-zoom, and the PQD GPU αth-root.
+and it is now done.
+
+**S5 — polish + families (on `claude/repository-refactor-project-pg5ktu`, awaiting review).** The σ peer
+view was then extended in reviewable slices (per-increment detail in LOG):
+- **A** — σ **export options** (size picker + scale-bar/orbit toggles), **hover** orbit-preview, and
+  **image-space tone** (palette rotation + gamma + vignette, applied only when non-default so the default
+  render stays byte-exact).
+- **B** — two coloring modes beyond escape time: **orbit-stat** (orbit-trap distance + stripe average) and
+  **derivative** (smooth escape count + a distance-estimator outline, driven by |σ′|=|F′|/|φ′| per step).
+- **C1** — **complex leading `c`**. The engine widens `c: number | Complex`; F reflects the leading term to
+  **conj(c)/z** (= c/z only when c is real — a naive widen is a silent factor-of-c bug), threaded through
+  the CPU engine, the GLSL twin (`u_c` → vec2), and CD's state. QD still emits a real c; a CD-native map may
+  carry a complex one.
+- **C2 — the BOUNDED family, end to end.** φ: 𝔻 → Ω (interior branch): engine `makeBoundedSchwarz`
+  (F(z)=conj(w₀)+Σ A/(z−z_j)ᵏ) with the finite-pole branch math **shared** with the unbounded engine
+  (`branches.ts`, ADR-0007); GPU via a `u_family` dispatch (unbounded path byte-identical); interchange
+  **1.3.0** adds `form:"bounded"` (`disk:"D"`, σ-only — not a MapSpec); QD emits it for a bounded-classical
+  φ (detected by its unset `family` tag); CD reconstructs via `makeBoundedSchwarz` and renders on the
+  **interior-Ω** orientation (`u_boundedOmega` flips the in-Ω mask test); and the σ φ-form gains a **bounded
+  authoring mode** (a Domain-type selector + `w₀` field + bounded presets: unit disk, single lobe, cardioid).
+  A cross-app golden pins the loop (QD byte-match ↔ CD reconstruct → the frozen σ(5/17)=2.5, interior branch).
+
+**Still deferred — the remaining non-Laurent families:** power-weighted **PQD** (needs a GPU αth-root) and
+log-weighted **LQD** (needs `cexp`), branch-aware continuation through cusps (uncertified — RISKS §3), and
+df64 σ deep-zoom.
 (A true cardioid needs a bounded/positive-power map, not this unbounded-Laurent family, so it is intentionally
 not offered as a preset — honest labeling.)
 

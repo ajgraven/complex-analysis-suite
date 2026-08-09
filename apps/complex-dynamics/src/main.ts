@@ -3006,7 +3006,8 @@ function init(): void {
   let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
   let schwarzRaf = 0;
   // σ coloring (ADR-0009 item 3) — remembered for this page session so it survives σ enter/exit and a
-  // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
+  // regenerate. Also serialized into the σ-view permalink / saved view / PNG via the `_sigma` state layer
+  // (ADR-0009 item 2 — encodeSigmaState carries colormap + scale + colorMode + trapShape + tone).
   let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
   let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
   // σ-field color mode (S5-B1): what the ramp encodes — escape time (default), orbit trap, or stripe average.

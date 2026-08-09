@@ -138,7 +138,8 @@ export function formatSchwarzViewFields(view: SchwarzView): { re: string; im: st
   return { re: s(view.center[0]), im: s(view.center[1]), zoom: s(view.zoom) };
 }
 
-/** Classify one point w under σ (isInOmega = outside the boundary polygon). */
+/** Classify one point w under σ. `opts.boundedOmega` picks the in-Ω orientation: Ω = OUTSIDE the boundary
+ *  polygon (unbounded-Laurent, default) or INSIDE it (a bounded QD, S5-C2) — via the shared makeIsInOmega. */
 export function schwarzEscapeAt(
   engine: SchwarzEngine,
   poly: Complex[],

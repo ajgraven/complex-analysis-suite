@@ -91,19 +91,6 @@ export function mapSpecToExpr(m: MapSpec): string {
 }
 
 /**
- * Reconstruct the σ evaluator for a `form:"schwarz"` map. σ(w)=conj(F(φ⁻¹(w))) has a NUMERICAL inverse
- * (Newton + Durand–Kerner), so — unlike the rational/laurent/expr forms — it is NOT compiled through the
- * expr pipeline (`mapSpecToExpr` throws on it); it is rebuilt from φ's coefficients by @cas/schwarz's
- * exterior-branch engine. This is the CD half of the σ hand-off (S4a): the S3a golden's `sigma.phi`
- * feeds `makeUnboundedLaurentSchwarz`, and the resulting `.sigma(w)` reproduces the frozen σ(w₀).
- *
- * Supports the two families @cas/schwarz reconstructs: the unbounded-Laurent family QD emits (`disk:"D*"`,
- * real-or-complex leading c), pole-free AND pole-bearing (`phi.branches`, 1.2.0), and the bounded-classical
- * family (`form:"bounded"`, `disk:"D"`, 1.3.0 — φ: 𝔻 → Ω, centre w₀, interior branch). Interchange complex
- * numbers are `{re,im}`; the engines work in `[re,im]` tuples, so φ's coefficients (and each branch's z and
- * A) are converted. Throws for a shape neither engine can reconstruct rather than returning a wrong σ.
- */
-/**
  * φ's coefficients as the `[re,im]` tuples the @cas/schwarz engines (and the GPU twin's `packPhi`) take.
  * `family` selects the reconstruction engine: "unbounded" reads `c` + `F` (+ `branches`); "bounded" reads
  * `w0` (+ `branches`). The unused slots are filled with zeros ([0,0] / []) so the shape is a single object

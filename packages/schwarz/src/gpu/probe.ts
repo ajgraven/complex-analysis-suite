@@ -4,9 +4,9 @@
 //   · uploadPhi / runSigmaGLSL      — need a live WebGL2 context with float readback; browser-only.
 //
 // `runSigmaGLSL` is the numeric backstop the CPU-mirror tests structurally can't be: it executes the
-// ACTUAL float32 GLSL and reads σ(w) back, so it catches any drift from the CPU engine
-// (../unbounded-laurent.ts). CD's production renderer reuses `packPhi`/`uploadPhi` to feed the same
-// uniforms into its escape-time shader (S4b).
+// ACTUAL float32 GLSL and reads σ(w) back, so it catches any drift from the CPU engines
+// (../unbounded-laurent.ts, ../bounded.ts — the family is selected by `SigmaPhi.family`). CD's production
+// renderer reuses `packPhi`/`uploadPhi` to feed the same uniforms into its escape-time shader (S4b/S5-C2).
 
 import { createProgram } from "@cas/gpu/shader";
 import type { Complex, SchwarzBranch } from "../unbounded-laurent.js";
@@ -61,11 +61,12 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 /**
  * Assemble a self-contained WebGL2 fragment shader that evaluates σ(w) — from the `uW` uniform and the
  * φ uniforms — writing (re, im, ok, 1) into an RGBA32F render target. `ok` is 1.0 when the numerical
- * inverse succeeded (w ∈ Ω with a recoverable exterior preimage), else 0.0 with (re,im) = 0.
+ * inverse succeeded (w ∈ Ω with a recoverable preimage — the exterior branch for the unbounded family,
+ * the interior branch for the bounded family), else 0.0 with (re,im) = 0.
  *
  * A single σ application per draw: seed Newton fresh from w, run `sigma` once. That is exactly what the
- * CPU `sigma(w)` does, so `runSigmaGLSL` vs `makeUnboundedLaurentSchwarz(...).sigma(w)` is a like-for-like
- * comparison.
+ * CPU `sigma(w)` does, so `runSigmaGLSL` vs the matching CPU engine's `.sigma(w)`
+ * (`makeUnboundedLaurentSchwarz` / `makeBoundedSchwarz`) is a like-for-like comparison.
  *
  * The `.w` channel carries the per-step σ scaling |F'(z)|/|φ'(z)| at z = φ⁻¹(w) (the σ distance-estimator
  * factor, S5-B2). `sigma` leaves the converged inverse in `zSeed`, so it is read there with no re-solve;

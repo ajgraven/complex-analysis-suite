@@ -67,9 +67,10 @@ function boundedClassicalMapSpec(phi) {
 // phiToMapSpec()/buildSigmaEnvelope() collapse every unsupported φ to a bare `null`; the UI then
 // showed ONE blind line ("needs an unbounded-Laurent φ (e.g. the deltoid)") for all of them. But the
 // real reasons are distinct — nothing captured, a Direct rational map (φ-exportable, but no σ), or a
-// bounded domain (not exportable yet). ALL unbounded QDs export now, pole-free and pole-bearing alike
-// (Phase 2). These helpers name the real reason, and live beside phiToMapSpec so the availability
-// verdict stays in lockstep with the actual serializer (the ok-decision below IS phiToMapSpec).
+// weighted (log-/power-) bounded domain (not σ-reconstructable yet). ALL unbounded QDs σ-export (pole-free
+// and pole-bearing alike, Phase 2), and — since S5-C2 — bounded-classical QDs too (interior branch,
+// `disk:"D"`). These helpers name the real reason, and live beside phiToMapSpec/boundedClassicalMapSpec so
+// the availability verdict stays in lockstep with the actual serializers.
 
 /**
  * Structural classification of a captured φ, independent of export target. Pure.
@@ -94,8 +95,9 @@ const CAPTURE_HINT =
 
 /**
  * The user-facing reason σ export is unavailable for `phi`, or null when σ IS exportable (the caller
- * should then proceed). The null-decision defers to phiToMapSpec so it can never disagree with the
- * actual σ builder (buildSigmaEnvelope emits iff the MapSpec is `laurent` — now including pole-bearing).
+ * should then proceed). The null-decision mirrors the actual σ builder so it can never disagree:
+ * buildSigmaEnvelope emits iff φ is an unbounded-Laurent map (`laurent`, pole-free or pole-bearing) OR a
+ * bounded-classical map (`boundedClassicalMapSpec` → `form:"bounded"`, S5-C2).
  */
 export function explainSigmaUnavailable(phi) {
   const spec = phiToMapSpec(phi);

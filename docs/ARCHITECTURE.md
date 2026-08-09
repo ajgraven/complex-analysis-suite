@@ -8,10 +8,11 @@ for why extraction is demand-driven rather than up-front.
 > **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
 > inventory. What actually exists:
 >
-> - **Five packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
->   `@cas/interchange`, `@cas/exact`** — the last later than the phase plan, on the same
->   second-consumer rule (Complex Dynamics and Correspondences both needed exact polynomial
->   arithmetic). The **`ui`, `quadrature`, and `dynamics`** packages sketched in the
+> - **Six packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+>   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`** — the last two later than the phase plan, on
+>   the same second-consumer rule (`@cas/exact`: Complex Dynamics and Correspondences both needed
+>   exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ engine, shared by
+>   Complex Dynamics and Correspondences). The **`ui`, `quadrature`, and `dynamics`** packages sketched in the
 >   layer diagram and §3 were **never extracted** — no second consumer needed them, so that
 >   mathematics stayed in the apps (the Correspondences app keeps its own σ-construction and
 >   parabolic-Tricorn model). That is the [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
@@ -130,8 +131,9 @@ instead of an ad-hoc JSON blob.
 
 > The three packages below were part of the original design but were **NEVER EXTRACTED** — the
 > demand-driven rule (extract only when a second consumer needs it, ADR-0007) never fired for them.
-> The suite ships **five** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`. The
-> sections are kept as design intent; each notes where the functionality actually lives today.
+> The suite ships **six** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`,
+> `@cas/schwarz` (the last two extracted later than the phase plan, on the ADR-0007 second-consumer rule).
+> The sections are kept as design intent; each notes where the functionality actually lives today.
 
 ### `@cas/ui` — the shared UI kit *(planned — not built)*
 Would hold KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider
@@ -293,11 +295,12 @@ tools:
 
 ## 10. How the correspondence tool fits (forward reference)
 
-The correspondence tool is `apps/correspondences`. It depends on all five shipped packages
-(`@cas/core`, `@cas/gpu`, `@cas/expr`, `@cas/interchange`, `@cas/exact`) and — because `@cas/quadrature` and
-`@cas/dynamics` were never extracted (§3) — builds its own **σ-construction** (the deltoid
-Schwarz reflection) and reuses Complex-Dynamics' **Tricorn** model space via a shared `@cas/expr`
-preset, both app-local. Its only genuinely new code is the **branch-aware correspondence
+The correspondence tool is `apps/correspondences`. It depends on the shipped packages
+(`@cas/core`, `@cas/gpu`, `@cas/expr`, `@cas/interchange`, `@cas/exact`, `@cas/schwarz`) — its
+**σ-construction** (the deltoid Schwarz reflection) is no longer app-local: it was deduped onto the
+shared `@cas/schwarz` engine at the σ hand-off (S2e, ADR-0007's second-consumer rule). Because
+`@cas/quadrature` and `@cas/dynamics` were never extracted (§3), it reuses Complex-Dynamics'
+**Tricorn** model space via a shared `@cas/expr` preset (app-local). Its only genuinely new code is the **branch-aware correspondence
 engine** — enumerating the `d` branches of `f(w) = f(η(z))`, iterating an orbit *tree*
 (the Quadrature app's Schwarz module already has "tree" painters to reuse), and
 **branch continuation** (templated on the Mother Body Constructor's exclusive

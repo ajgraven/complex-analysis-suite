@@ -57,15 +57,20 @@ import type {
 
 **Envelope.** Everything on the wire is wrapped: `Envelope<K>` = `{ schema, version, kind,
 payload, provenance }`, where `schema === SCHEMA_ID` (`"complex-analysis-suite/interchange"`)
-and `version === VERSION` (`"1.0.0"`). `PayloadKind` is `"map" | "quadrature-domain" |
-"schwarz-reflection" | "view"`.
+and `version === VERSION` (currently `"1.3.0"`; consumers gate on MAJOR = 1, so every 1.x link
+decodes). `PayloadKind` is `"map" | "quadrature-domain" | "schwarz-reflection" | "view"`.
 
 **Maps** (`MapSpec`) — a map is described structurally when its shape is known, or as an
 expression otherwise (the consumer compiles any of them through `@cas/expr`):
 
 - `RationalMap` — `P(z)/Q(z)` by coefficient arrays
-- `LaurentMap` — `c·z + Σ F_l/z^l` at ∞ (the deltoid's `φ = ζ + 1/(2ζ²)` lives here)
+- `LaurentMap` — `c·z + Σ F_l/z^l` at ∞ (the deltoid's `φ = ζ + 1/(2ζ²)` lives here); may carry
+  optional finite-pole `branches` (pole-bearing unbounded QDs, since 1.2.0)
 - `ExprMap` — an `expr`-language string plus its free `vars`
+- `SchwarzMap` — `form:"schwarz"` (since 1.1.0): a σ reflection by its recipe (a closed-form `phi` +
+  `disk` + `inverse`); `phi` may be a `laurent`/`rational` map or, since 1.3.0, the σ-only
+  `bounded` form (a bounded QD, φ: 𝔻 → Ω). Not `@cas/expr`-compilable — a consumer rebuilds σ via
+  `@cas/schwarz`.
 
 Each carries an optional `antiholomorphic` flag.
 

@@ -52,9 +52,10 @@ export const QD_TO_CD_DELTOID_PHI_AT_2 = 2.125;
 // consumer rebuilds the evaluator from `sigma.phi` via @cas/schwarz (CD does this in S4a), it does not
 // go through `mapSpecToExpr`.
 //
-// PRODUCER STATUS: no QD button emits this yet — S3b adds "Export σ". Until then this hand-built
-// envelope is the CANONICAL artifact and S3b's `buildSigmaEnvelope` must reproduce it byte-for-byte
-// (then this comment moves to the exportSigmaLink regeneration recipe, like the φ golden above).
+// PRODUCER STATUS: QD's "Export σ" button emits this (S3b) — `buildSigmaEnvelope`/`exportSigmaLink`
+// reproduce it BYTE-FOR-BYTE, pinned from the QD side (apps/quadrature-domains/vitest/schwarz-export.test.ts
+// "emits the exact deltoid-σ link stored as the cross-app golden") and decoded + reconstructed from the CD
+// side. Regenerate only when the wire format INTENDS to change, via that exporter (like the φ golden above).
 
 /**
  * The deltoid σ as an `Envelope<"schwarz-reflection">` deep link: payload.sigma is the `form:"schwarz"`
@@ -104,8 +105,9 @@ export const QD_TO_CD_SINGLE_POLE_SIGMA_AT_W0 = { re: 2 / 3, im: 0 } as const;
 // φ: 𝔻 → Ω is bounded and its `sigma.phi` is the new `form:"bounded"` map (schema 1.3.0), tagged
 // `disk:"D"`. CD rebuilds the σ evaluator from it via @cas/schwarz's makeBoundedSchwarz (NOT
 // makeUnboundedLaurentSchwarz — the bounded engine uses the interior branch and F(z)=conj(w₀)+Σ A/(z−z_j)).
-// PRODUCER STATUS: no QD button emits this yet (that is the C2 QD-emit slice); until then this hand-built
-// envelope is the CANONICAL artifact QD's future emit must reproduce byte-for-byte.
+// PRODUCER STATUS: QD's "Export σ" emits this for a bounded-classical φ (S5-C2) — `buildSigmaEnvelope`
+// reproduces it BYTE-FOR-BYTE, pinned from the QD side (schwarz-export.test.ts "emits the exact
+// bounded-lobe σ link stored as the cross-app golden") and decoded + reconstructed from the CD side.
 
 /** The bounded single-lobe σ as an `Envelope<"schwarz-reflection">` deep link: `sigma.phi` is a
  *  `form:"bounded"` map (w₀=0, one branch z_j=0.3, A=[0.5]), `disk:"D"`, `newton-dk`, version 1.3.0. */

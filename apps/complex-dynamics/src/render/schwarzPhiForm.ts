@@ -1,12 +1,14 @@
 // schwarzPhiForm.ts — the native "generate a σ fractal from a Riemann map φ" entry (S4b-iv). Pure: turns
-// a preset choice OR a small text form (leading c, Laurent coefficients F, finite-pole branches) into the
-// φ coefficients the σ engine + its GPU twin take — the same `{ c, F, branches }` shape
-// schwarzPhiFromMapSpec produces on the import path, so native and imported σ share one render path.
+// a preset choice OR a small text form into the φ coefficients the σ engine + its GPU twin take — the same
+// `{ family, c, F, w0, branches }` shape schwarzPhiFromMapSpec produces on the import path, so native and
+// imported σ share one render path.
 //
-// The supported family is the classical UNBOUNDED-Laurent quadrature domain (the only one @cas/schwarz
-// reconstructs): φ(z) = c·z + Σₗ F[l]/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ, u_j = z/(1 − conj(z_j)·z), z_j ∈ 𝔻.
-// c may be complex (S5-C1) — a CD-native map QD's real-c family never emits. Kept free of the DOM so the
-// parsing/validation is unit-tested.
+// Both families @cas/schwarz reconstructs are authorable (S5-C2):
+//   · UNBOUNDED-Laurent (default): φ(z) = c·z + Σₗ F[l]/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ, exterior branch.
+//     c may be complex (S5-C1) — a CD-native map QD's real-c family never emits.
+//   · BOUNDED: φ(z) = w₀ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ (no c·z / Laurent tail), interior branch —
+//     buildBoundedSchwarzPhi, from the form's w₀ + poles.
+// u_j(z) = z/(1 − conj(z_j)·z), z_j ∈ 𝔻. Kept free of the DOM so the parsing/validation is unit-tested.
 import type { Complex, SchwarzBranch } from "@cas/schwarz";
 
 /**
