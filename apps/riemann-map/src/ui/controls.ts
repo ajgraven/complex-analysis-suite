@@ -18,6 +18,8 @@ export interface Controls {
   setDomain(id: string): void;
   /** Show/hide mode-irrelevant controls (contextual disclosure, A1). */
   setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean }): void;
+  /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
+  setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
   setAnalysis(rows: readonly (readonly [string, string])[] | null, title?: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
@@ -33,6 +35,8 @@ export interface Controls {
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
   onCopyExteriorMap(cb: () => void): void;
+  /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
+  onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void;
 }
 
 const GRID_KINDS = [
@@ -75,6 +79,22 @@ function labeledSelect(labelText: string, options: readonly { id: string; name: 
   return { field, select };
 }
 
+/** A compact label-over-input field (for the precise-nav numbers). */
+function labeledInput(labelText: string): { field: HTMLLabelElement; input: HTMLInputElement } {
+  const field = document.createElement("label");
+  field.className = "field";
+  const span = document.createElement("span");
+  span.className = "field-label";
+  span.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = "text";
+  input.spellcheck = false;
+  input.autocomplete = "off";
+  input.inputMode = "decimal";
+  field.append(span, input);
+  return { field, input };
+}
+
 /** A collapsible sidebar group (CD's `.control-group` disclosure). Returns the <details> + its summary. */
 function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElement; summary: HTMLElement } {
   const el = document.createElement("details");
@@ -95,6 +115,7 @@ export function createControls(initialExpr: string): Controls {
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
   const copyExtListeners: (() => void)[] = [];
+  const applyViewportListeners: ((re: number, im: number, zoom: number) => void)[] = [];
 
   const root = document.createElement("aside");
   root.className = "sidebar";
@@ -137,6 +158,22 @@ export function createControls(initialExpr: string): Controls {
   const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
   viewGroup.el.append(mode.field, cmap.field, grid.field, domain.field);
+
+  // --- Position group (precise-nav fields, A5; collapsed by default) ---------
+  const navGroup = controlGroup("Position", false);
+  const navGrid = document.createElement("div");
+  navGrid.className = "nav-grid";
+  const navRe = labeledInput("center re");
+  const navIm = labeledInput("center im");
+  const navZoom = labeledInput("zoom");
+  navGrid.append(navRe.field, navIm.field, navZoom.field);
+  const navButtons = document.createElement("div");
+  navButtons.className = "buttons";
+  const navApply = document.createElement("button");
+  navApply.type = "button";
+  navApply.textContent = "Apply";
+  navButtons.append(navApply);
+  navGroup.el.append(navGrid, navButtons);
 
   // --- Figure / export group (collapsed by default) -------------------------
   const figGroup = controlGroup("Figure", false);
@@ -196,7 +233,7 @@ export function createControls(initialExpr: string): Controls {
   }
   glossaryGroup.el.append(glossaryDl);
 
-  root.append(mapSection, viewGroup.el, figGroup.el, analysisGroup.el, hoverGroup.el, glossaryGroup.el);
+  root.append(mapSection, viewGroup.el, navGroup.el, figGroup.el, analysisGroup.el, hoverGroup.el, glossaryGroup.el);
 
   // --- behaviour ------------------------------------------------------------
   input.value = initialExpr;
@@ -222,6 +259,20 @@ export function createControls(initialExpr: string): Controls {
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
   copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
+  const applyViewport = (): void => {
+    const re = Number(navRe.input.value);
+    const im = Number(navIm.input.value);
+    const zoom = Number(navZoom.input.value);
+    if (Number.isFinite(re) && Number.isFinite(im) && Number.isFinite(zoom) && zoom > 0) {
+      applyViewportListeners.forEach((cb) => cb(re, im, zoom));
+    }
+  };
+  navApply.addEventListener("click", applyViewport);
+  for (const f of [navRe.input, navIm.input, navZoom.input]) {
+    f.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") applyViewport();
+    });
+  }
 
   function syncPreset(expr: string): void {
     preset.value = presetIdForExpr(expr) ?? CUSTOM;
@@ -260,6 +311,13 @@ export function createControls(initialExpr: string): Controls {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
       domain.field.style.display = v.domain ? "" : "none";
+    },
+    setViewportFields(re: number, im: number, zoom: number): void {
+      const active = document.activeElement; // don't clobber a field the user is typing into
+      const fmtN = (n: number): string => Number(n.toPrecision(8)).toString();
+      if (active !== navRe.input) navRe.input.value = fmtN(re);
+      if (active !== navIm.input) navIm.input.value = fmtN(im);
+      if (active !== navZoom.input) navZoom.input.value = fmtN(zoom);
     },
     setAnalysis(rows: readonly (readonly [string, string])[] | null, title = "Analysis"): void {
       analysisDl.replaceChildren();
@@ -322,6 +380,9 @@ export function createControls(initialExpr: string): Controls {
     },
     onCopyExteriorMap(cb: () => void): void {
       copyExtListeners.push(cb);
+    },
+    onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void {
+      applyViewportListeners.push(cb);
     },
   };
 }

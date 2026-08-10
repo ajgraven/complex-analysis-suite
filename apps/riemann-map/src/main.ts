@@ -330,6 +330,7 @@ function main(): void {
     if (modeIsDomain(state.render.mode)) {
       leftOverlay.drawLines(domainSource, 1.1);
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      leftOverlay.drawScaleBar();
       stage.classList.add("split");
       if (rightPane.resize()) {
         rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
@@ -344,6 +345,7 @@ function main(): void {
     leftOverlay.drawLines(rayLines, 1.3); // external rays
     for (const p of rayLandings) leftOverlay.drawMarker(p, "rgba(255,170,70,1)");
     if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+    leftOverlay.drawScaleBar();
 
     const split = gridKind() !== "none";
     stage.classList.toggle("split", split);
@@ -359,6 +361,7 @@ function main(): void {
   function updateReadout(): void {
     const v = state.viewport;
     readout.textContent = `center ${fmtC(v.centerRe, v.centerIm)} · zoom ${fmt(v.zoom)}`;
+    controls.setViewportFields(v.centerRe, v.centerIm, v.zoom); // keep the precise-nav fields live (A5)
   }
 
   // ---- PNG export (G2): composite plane + grid at Nx, embed the view-state ---
@@ -488,6 +491,7 @@ function main(): void {
   });
   controls.onSavePng(() => void exportPng());
   controls.onResetView(() => setViewport({ ...DEFAULT_VIEW_STATE.viewport }));
+  controls.onApplyViewport((re, im, zoom) => setViewport({ centerRe: re, centerIm: im, zoom }));
   controls.onCopyExteriorMap(() => {
     if (!analysis || !exteriorConformalValid()) return; // no valid ψ ⇒ nothing to export (button is hidden too)
     const link = exteriorMapLink(analysis, { sourceExpr: state.map.expr });

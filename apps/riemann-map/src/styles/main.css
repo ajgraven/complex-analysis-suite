@@ -100,6 +100,10 @@ body {
 .sidebar input.expr { font-family: var(--mono); }
 .field { display: flex; flex-direction: column; gap: 0.2rem; }
 .field-label { font-size: 0.72rem; color: var(--muted); }
+/* precise-nav: three compact number fields (centre re/im, zoom) side by side (A5) */
+.nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem 0.5rem; margin-bottom: 0.45rem; }
+.nav-grid input { width: 100%; padding: 0.3rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--field-bg); color: var(--fg); font-family: var(--mono); font-size: 0.82rem; }
+.nav-grid input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 1px;
 }
