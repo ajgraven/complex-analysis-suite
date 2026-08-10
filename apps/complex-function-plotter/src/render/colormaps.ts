@@ -1,10 +1,11 @@
 /**
  * Phase colormaps as 256-entry lookup tables, baked into one small RGBA8 atlas so switching maps is a
- * single shader uniform (the v-row), not a texture rebuild. Phase 1 ships two: a perceptually-uniform
- * Oklch cyclic map (the default — equal arg steps look equal, and hue does not smuggle lightness into
- * the modulus channel) and the classic HSV wheel (familiar, and for DLMF-legacy comparison). Pure
- * module — no DOM, no WebGL — so the ramps are unit-testable. Later phases add CET / cmocean / a
- * colorblind-safe cyclic map (catalog C5/C6) as extra rows.
+ * single shader uniform (the v-row), not a texture rebuild. The default is a perceptually-uniform Oklch
+ * cyclic map (equal arg steps look equal, and hue does not smuggle lightness into the modulus channel);
+ * alongside it the classic HSV wheel, a twilight, a colorblind-safe cyclic map, and the two **DLMF**
+ * schemes (D8): the continuous warped-hue and the four-colour quadrant indicator (see below). Pure
+ * module — no DOM, no WebGL — so the ramps are unit-testable, and each is just a row appended to the
+ * atlas (indices are stable, so a share-link's colormap number keeps its meaning).
  */
 
 export interface Colormap {
@@ -12,6 +13,10 @@ export interface Colormap {
   label: string;
   /** RGB, each in [0, 1], for a cyclic phase parameter t in [0, 1). */
   sample(t: number): [number, number, number];
+  /** Whether `sample` is continuous around the loop. Undefined = continuous (the common case). The
+   *  DLMF four-colour map is a step function — a deliberate discontinuity at the positive real axis
+   *  (the Q4→Q1 seam) — so it sets this `false`, and continuity checks skip it. */
+  continuous?: boolean;
 }
 
 // --- Oklab -> linear sRGB (Björn Ottosson's matrices) --------------------------------------------
@@ -102,13 +107,60 @@ export const cvdSafeCyclic: Colormap = {
   label: "Colorblind-safe",
   sample: (t) => {
     const a = 2 * Math.PI * t;
-    const [r, g, b] = oklabToLinearSrgb(0.6 + 0.22 * Math.cos(a), 0.055 * Math.sin(a), 0.13 * Math.cos(a));
+    const [r, g, b] = oklabToLinearSrgb(
+      0.6 + 0.22 * Math.cos(a),
+      0.055 * Math.sin(a),
+      0.13 * Math.cos(a),
+    );
     return [clamp01(linearToSrgb(r)), clamp01(linearToSrgb(g)), clamp01(linearToSrgb(b))];
   },
 };
 
-/** Ordered list of available colormaps; the index is the atlas row and the share-state value. */
-export const COLORMAPS: Colormap[] = [oklchCyclic, hsvCyclic, twilightCyclic, cvdSafeCyclic];
+// --- DLMF schemes (D8) ---------------------------------------------------------------------------
+// The NIST DLMF's domain-coloring conventions (dlmf.nist.gov/help/vrml/aboutcolor), so a plot here can
+// be read directly against the DLMF's Γ / ζ figures. Two phase schemes; |f| (the DLMF's "height") is
+// carried by the modulus→lightness transfer, exactly as for the other maps — a faithful DLMF density
+// plot is one of these maps × a modulus mode.
+
+// Continuous "warped-hue": phase → an HSV hue via the DLMF's piecewise-linear warp. With q = 4·t
+// (t = arg/2π ∈ [0, 1)), hue° = 60·f(q) where f = q | 2q−1 | q+1 | 2q−2 across the four quarters — so the
+// anchors are red (arg 0), yellow (π/2), cyan (π), blue (3π/2), and the hue lingers on red/yellow and
+// cyan/blue while rushing through green and magenta (the "warp" vs. an even HSV wheel).
+export const dlmfWarped: Colormap = {
+  id: "dlmf-warped",
+  label: "DLMF warped-hue",
+  sample: (t) => {
+    const q = 4 * t;
+    const f = q < 1 ? q : q < 2 ? 2 * q - 1 : q < 3 ? q + 1 : 2 * q - 2;
+    return hsvToRgb(f / 6, 1, 1); // hue° = 60·f ⇒ HSV hue-fraction = 60·f / 360 = f / 6 ∈ [0, 1)
+  },
+};
+
+// Four-colour quadrant indicator: which quadrant the function VALUE lies in — blue / green / red /
+// yellow for Q1 / Q2 / Q3 / Q4 (the DLMF's alphabetical mnemonic). A step function, so it is not
+// continuous at the positive real axis (`continuous: false`). These are saturated indicator colours,
+// not perceptual or CVD-safe — inherent to the scheme; the CVD preview reveals that honestly.
+const Q_BLUE: [number, number, number] = [0.15, 0.35, 0.95];
+const Q_GREEN: [number, number, number] = [0.1, 0.64, 0.22];
+const Q_RED: [number, number, number] = [0.9, 0.16, 0.16];
+const Q_YELLOW: [number, number, number] = [0.96, 0.82, 0.15];
+export const dlmfQuadrant: Colormap = {
+  id: "dlmf-quadrant",
+  label: "DLMF four-colour",
+  continuous: false,
+  sample: (t) => (t < 0.25 ? Q_BLUE : t < 0.5 ? Q_GREEN : t < 0.75 ? Q_RED : Q_YELLOW),
+};
+
+/** Ordered list of available colormaps; the index is the atlas row and the share-state value. New maps
+ *  are appended so existing indices stay stable (a saved share-link's `colormap` keeps its meaning). */
+export const COLORMAPS: Colormap[] = [
+  oklchCyclic,
+  hsvCyclic,
+  twilightCyclic,
+  cvdSafeCyclic,
+  dlmfWarped,
+  dlmfQuadrant,
+];
 
 /** Bake one colormap into a width×1 RGBA8 row. */
 export function bakeRow(cm: Colormap, width = 256): Uint8Array {

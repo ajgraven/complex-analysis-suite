@@ -31,7 +31,7 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 3 complete (parameters & families)
+## Status — Phase 4 complete (special functions & the DLMF mode)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
@@ -57,9 +57,17 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
 
 Plus the Phase-2 research tool:
 
-- **Coloring** — a swappable phase colormap (perceptual **Oklch**, HSV, Twilight, and a
-  **colorblind-safe** map) times a modulus transfer (phase-only / linear / rational / log / log-log),
-  a NaN/Inf sentinel, and a **CVD-simulation preview** (protan / deutan / tritan).
+- **Coloring** — a swappable phase colormap (perceptual **Oklch**, HSV, Twilight, a
+  **colorblind-safe** map, and the two **DLMF** schemes — see below) times a modulus transfer
+  (phase-only / linear / rational / log / log-log), a NaN/Inf sentinel, and a **CVD-simulation preview**
+  (protan / deutan / tritan).
+- **DLMF mode (D8)** — the NIST DLMF's own domain-coloring conventions
+  ([`aboutcolor`](https://dlmf.nist.gov/help/vrml/aboutcolor)), so a plot reads directly against the DLMF
+  Γ / ζ figures: a **continuous warped-hue** map (its piecewise hue warp anchors red/yellow/cyan/blue at
+  arg 0/π/2/π/3π/2) and a **four-colour quadrant** indicator (blue/green/red/yellow for the value's
+  quadrant Q1–Q4, the DLMF's alphabetical mnemonic). They're two more colormaps, so a DLMF figure is one
+  of them × a modulus transfer (the DLMF's "height"); the four-colour map's indicator hues are honestly
+  not CVD-safe (the CVD preview shows it).
 - **Enhanced portraits** — `fwidth`-antialiased modulus rings, phase sectors, the flagship
   **conformal proportional grid**, chessboards, and a Re/Im grid, with crisp/shaded and hue rotate/
   reverse controls.
@@ -74,8 +82,9 @@ Plus the Phase-2 research tool:
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Phase 4 is underway (special functions & the DLMF mode): **Γ and ζ are in `@cas/expr`** and carry the
-honest float32 precision badge above; next is the **DLMF colouring mode**. See
+Phase 4 is complete (special functions & the DLMF mode): **Γ and ζ are in `@cas/expr`** with the honest
+float32 precision badge, and the two **DLMF colormaps** land the DLMF-faithful figures. Next is Phase 5
+(the 3D analytic-landscape / Riemann-sphere engine). See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
@@ -101,7 +110,9 @@ honest float32 precision badge above; next is the **DLMF colouring mode**. See
 ## Tests
 
 `test/` — `smoke.test.ts` (shared-package wiring), `colormaps.test.ts` (atlas dimensions, sRGB gamut,
-cyclic continuity, HSV anchors), `colorShader.test.ts` (fragment-program assembly), `viewState.test.ts`
+cyclic continuity, HSV anchors, and the **DLMF** maps — warped-hue anchors + continuity, the four-colour
+quadrant indicator + its step discontinuity, stable indices), `colorShader.test.ts` (fragment-program
+assembly), `viewState.test.ts`
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),
