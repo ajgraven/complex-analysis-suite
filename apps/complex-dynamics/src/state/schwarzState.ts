@@ -73,6 +73,8 @@ export interface SigmaViewState {
   lightHeight: number;
   /** ∂Ω boundary overlay on/off (F1) — outline φ(unit circle) over the field; default off. */
   showBoundary: boolean;
+  /** σ-singularity markers on/off (F4h) — branch points (φ′=0 cusps) + σ-poles over the field; default off. */
+  showSingularities: boolean;
   /** Preimage-tiling depth (F3c) — the σ⁻¹ generation count a double-click seeds. A persisted SETTING (like
    *  maxIter); the tree ITSELF is a transient inspection (not serialized, like the pinned orbit), so a
    *  restored link keeps the preferred depth but draws no tree until the user double-clicks the tiling set. */
@@ -93,9 +95,9 @@ export const SIGMA_RENDER_DEFAULTS = { aa: 1, maxIter: 48, escapeR: 1e4 } as con
 /** Default relief lighting (C2) — off, CD's light az/el, depth 2.0; also the fallback for pre-C2 links. */
 export const SIGMA_LIGHT_DEFAULTS = { light: false, lightAz: 135, lightEl: 45, lightHeight: 2 } as const;
 
-/** Default σ overlays (F1) — the ∂Ω boundary outline off; the fallback for links that predate it, so an old
- *  permalink restores with no boundary (byte-identical). Future overlay toggles (F2+) extend this record. */
-export const SIGMA_OVERLAY_DEFAULTS = { showBoundary: false } as const;
+/** Default σ overlays (F1, F4h) — the ∂Ω boundary outline + the σ-singularity markers off; the fallback for
+ *  links that predate them, so an old permalink restores with neither (byte-identical). */
+export const SIGMA_OVERLAY_DEFAULTS = { showBoundary: false, showSingularities: false } as const;
 
 /** Default coordinate view (F2b) — the w-plane; the fallback for links that predate the z-disk, so an old
  *  permalink restores on the plane (byte-identical: `vm` is omitted when the view is the plane). */
@@ -153,6 +155,8 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.lightHeight !== SIGMA_LIGHT_DEFAULTS.lightHeight) out.ldp = s.lightHeight;
   // ∂Ω boundary overlay (F1), omitted at its default (off) so a view without it is byte-identical to pre-F1.
   if (s.showBoundary !== SIGMA_OVERLAY_DEFAULTS.showBoundary) out.bd = s.showBoundary;
+  // σ-singularity markers (F4h), omitted at their default (off) so a view without them is byte-identical to pre-F4h.
+  if (s.showSingularities !== SIGMA_OVERLAY_DEFAULTS.showSingularities) out.sg = s.showSingularities;
   // Preimage-tiling params (F3c) — persisted like the render knobs; omitted at the defaults so a view that
   // never retuned them is byte-identical to a pre-F3c link. The tree itself is transient (not serialized).
   if (s.tilingDepth !== SIGMA_TILING_DEFAULTS.tilingDepth) out.td = s.tilingDepth;
@@ -193,7 +197,8 @@ export function schwarzStampParams(s: SigmaViewState): string {
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
     `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
     `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}; ` +
-    `boundary=${s.showBoundary ? "on" : "off"}; tiling=depth${s.tilingDepth},budget${s.tilingBudget}`
+    `boundary=${s.showBoundary ? "on" : "off"}; singularities=${s.showSingularities ? "on" : "off"}; ` +
+    `tiling=depth${s.tilingDepth},budget${s.tilingBudget}`
   );
 }
 
@@ -300,6 +305,8 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
   // ∂Ω boundary overlay (F1) — a bad/absent value falls back to the default (off); never fatal.
   const showBoundary = typeof o.bd === "boolean" ? o.bd : SIGMA_OVERLAY_DEFAULTS.showBoundary;
+  // σ-singularity markers (F4h) — a bad/absent value falls back to the default (off).
+  const showSingularities = typeof o.sg === "boolean" ? o.sg : SIGMA_OVERLAY_DEFAULTS.showSingularities;
   // Preimage-tiling params (F3c) — clamped to sane integer bounds; a bad/absent value falls back to the
   // default (never fatal, so an old or corrupt link still restores a valid view).
   const tilingDepth = Math.round(clampOr(o.td, SIGMA_TILING_DEFAULTS.tilingDepth, 0, TILING_DEPTH_MAX));
@@ -325,7 +332,7 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
   return {
     phi, center, zoom, viewMode, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter,
-    escapeR, light, lightAz, lightEl, lightHeight, showBoundary, tilingDepth, tilingBudget,
+    escapeR, light, lightAz, lightEl, lightHeight, showBoundary, showSingularities, tilingDepth, tilingBudget,
     ...(sphereRot ? { sphereRot } : {}),
     ...(sphereZoom !== undefined ? { sphereZoom } : {}),
     ...(customStops ? { customStops } : {}),

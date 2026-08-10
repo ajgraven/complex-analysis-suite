@@ -136,6 +136,7 @@ import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
 import { explicitSigmaForm } from "./render/schwarzExplicitForm";
+import { drawSchwarzSingularities } from "./render/schwarzSingularityOverlay";
 import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
@@ -161,7 +162,9 @@ import {
   sampleLimitSet,
   boxCountingDimension,
   pointInPolygon,
+  findSigmaSingularities,
   type PreimageTree,
+  type SigmaSingularities,
 } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
@@ -3090,6 +3093,10 @@ function init(): void {
   // σ ∂Ω boundary overlay (F1): outline φ(unit circle) over the field for orientation. Overlay-only (the
   // field render is untouched), default off, travels in the σ view (`_sigma`).
   let schwarzShowBoundary: boolean = SIGMA_OVERLAY_DEFAULTS.showBoundary;
+  // σ-singularities (F4h): branch points (φ′=0 cusps) + σ-poles, computed from φ on each generate; a display
+  // toggle (default off, travels in `_sigma`) shows the markers + the card lists them.
+  let schwarzSingularities: SigmaSingularities | null = null;
+  let schwarzShowSingularities: boolean = SIGMA_OVERLAY_DEFAULTS.showSingularities;
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3254,6 +3261,8 @@ function init(): void {
       if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
       // Preimage tiling tree (F3c) — under the orbits (its dense dots shouldn't hide the traced orbit).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing);
+      // σ-singularity markers (F4h) — branch-point cusps + σ-poles.
+      if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing);
       // Orbit overlays: the transient hover preview (faint, S5-A2) under the pinned click-inspect orbit (bold).
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
@@ -3263,6 +3272,7 @@ function init(): void {
       if (schwarzShowBoundary) drawSchwarzUnitCircle(ctx, schwarzView, backing);
       // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
+      if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPlot: toZ });
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPlot: toZ });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPlot: toZ });
     } else if (schwarzViewMode === "sphere") {
@@ -3278,6 +3288,7 @@ function init(): void {
       if (schwarzShowBoundary) drawSchwarzBoundarySphere(ctx, poly, cam, backing);
       // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
+      if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPixel });
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPixel });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPixel });
     }
@@ -3593,6 +3604,54 @@ function init(): void {
     );
   }
 
+  // σ-singularities (F4h): branch points (φ′=0 cusps) + σ-poles, computed from the session's φ on each generate.
+  /** Recompute the singularities for the live session (cheap + deterministic) and refresh the card list. */
+  function refreshSchwarzSingularities(): void {
+    if (!schwarzSession) {
+      schwarzSingularities = null;
+    } else {
+      schwarzSingularities = findSigmaSingularities(schwarzSession.engine, schwarzSession.phi.branches ?? [], {
+        bounded: schwarzSession.boundedOmega,
+      });
+    }
+    renderSchwarzSingularitiesReadout();
+  }
+  /** List the branch points + σ-poles in the card (locations `≈`-labeled). */
+  function renderSchwarzSingularitiesReadout(): void {
+    const box = document.getElementById("schwarz-singularities-readout");
+    if (!box) return;
+    const line = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement("div");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    if (!schwarzSingularities) {
+      box.replaceChildren(line("schwarz-formula-hint", "Generate a σ to find its singularities."));
+      return;
+    }
+    const { branchPoints, poles } = schwarzSingularities;
+    const at = (w: Complex): string => formatComplex(truncateComplex(w));
+    const kids: HTMLElement[] = [
+      line(
+        "schwarz-formula-title",
+        `${branchPoints.length} branch point${branchPoints.length === 1 ? "" : "s"} (φ′=0, cusps) · ` +
+          `${poles.length} σ-pole${poles.length === 1 ? "" : "s"}`,
+      ),
+    ];
+    for (const b of branchPoints) kids.push(line("schwarz-sing-item schwarz-sing-branch", `○ branch point   ${at(b.w)}`));
+    for (const p of poles) kids.push(line("schwarz-sing-item schwarz-sing-pole", `× σ-pole ${p.label} (order ${p.order})   ${at(p.w)}`));
+    kids.push(
+      line(
+        "schwarz-formula-note",
+        poles.length === 0
+          ? "This family's σ-poles sit at ∞ (none finite); the branch points are ≈ (numerical)."
+          : "Markers are ≈ (a numerical reconstruction).",
+      ),
+    );
+    box.replaceChildren(...kids);
+  }
+
   /**
    * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
    * and native-φ paths. Decides the render mode (GPU when WebGL2 is available, else the coarse CPU fallback
@@ -3636,6 +3695,7 @@ function init(): void {
     renderSchwarzTilingReadout();
     renderSchwarzLimitReadout();
     renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
+    refreshSchwarzSingularities(); // F4h: find the branch points + σ-poles of the new map
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
@@ -3693,6 +3753,7 @@ function init(): void {
     schwarzLightEl = s.lightEl;
     schwarzLightDepth = s.lightHeight;
     schwarzShowBoundary = s.showBoundary; // F1 ∂Ω overlay travels with the σ view
+    schwarzShowSingularities = s.showSingularities; // F4h singularity markers travel with the σ view
     schwarzTilingDepth = s.tilingDepth; // F3c tiling params travel with the σ view (the tree itself does not)
     schwarzTilingBudget = s.tilingBudget;
     if (s.customStops) {
@@ -3741,6 +3802,8 @@ function init(): void {
     if (lcEl) lcEl.hidden = !schwarzLight;
     const bdEl = document.getElementById("schwarz-boundary") as HTMLInputElement | null;
     if (bdEl) bdEl.checked = schwarzShowBoundary; // F1 ∂Ω overlay checkbox mirrors the restored view
+    const sgEl = document.getElementById("schwarz-singularities") as HTMLInputElement | null;
+    if (sgEl) sgEl.checked = schwarzShowSingularities; // F4h singularity-markers checkbox mirrors the restored view
     const tdEl = document.getElementById("schwarz-tiling-depth") as HTMLInputElement | null;
     if (tdEl) tdEl.value = String(schwarzTilingDepth); // F3c tiling controls mirror the restored view
     const tbEl = document.getElementById("schwarz-tiling-budget") as HTMLSelectElement | null;
@@ -3797,6 +3860,7 @@ function init(): void {
       lightEl: schwarzLightEl,
       lightHeight: schwarzLightDepth,
       showBoundary: schwarzShowBoundary,
+      showSingularities: schwarzShowSingularities, // F4h: the singularity-markers toggle travels with the σ view
       tilingDepth: schwarzTilingDepth, // F3c: the tiling params travel with the σ view (the tree itself is transient)
       tilingBudget: schwarzTilingBudget,
       viewMode: schwarzViewMode,
@@ -3856,6 +3920,7 @@ function init(): void {
         if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size);
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
+        if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size);
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
       } else if (schwarzViewMode === "z") {
         const engine = schwarzSession.engine;
@@ -3863,6 +3928,7 @@ function init(): void {
         if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPlot: toZ });
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
+        if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPlot: toZ });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
       } else if (schwarzViewMode === "sphere") {
         const cam = schwarzSphereCam();
@@ -3873,6 +3939,7 @@ function init(): void {
         if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPixel });
         if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
+        if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPixel });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPixel });
       }
       if (wantScaleBar && schwarzViewMode !== "sphere") drawScaleBar(octx, size, schwarzView.zoom); // sphere: no linear scale
@@ -4405,6 +4472,19 @@ function init(): void {
       bdCb.checked = schwarzShowBoundary;
       bdCb.addEventListener("change", () => {
         schwarzShowBoundary = bdCb.checked;
+        scheduleSchwarzOverlayPaint();
+      });
+    }
+  }
+
+  // σ-singularity markers (F4h): a display toggle for the branch-point + σ-pole markers. Overlay-only (they
+  // are computed from φ on generate). Travels in `_sigma`.
+  {
+    const sgCb = document.getElementById("schwarz-singularities") as HTMLInputElement | null;
+    if (sgCb) {
+      sgCb.checked = schwarzShowSingularities;
+      sgCb.addEventListener("change", () => {
+        schwarzShowSingularities = sgCb.checked;
         scheduleSchwarzOverlayPaint();
       });
     }

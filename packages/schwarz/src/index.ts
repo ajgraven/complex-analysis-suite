@@ -24,3 +24,12 @@ export type { SchwarzInverse, PreimageTree, PreimageTreeOptions, PreimageEdge } 
 // The σ limit set (F4a): the chaos game on σ⁻¹ + its box-counting dimension. Also σ⁻¹-based, family-agnostic.
 export { sampleLimitSet, boxCountingDimension } from "./limit-set.js";
 export type { LimitSetOptions, BoxDimensionResult, BBox } from "./limit-set.js";
+// σ-singularities (F4h): σ-poles (finite map-pole reflection) + branch points (zeros of φ′). Forward-only.
+export { findSigmaSingularities } from "./singularities.js";
+export type {
+  SchwarzMap,
+  SigmaPole,
+  SigmaBranchPoint,
+  SigmaSingularities,
+  SingularityOptions,
+} from "./singularities.js";

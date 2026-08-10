@@ -130,6 +130,8 @@ describe("SHARE_IDS DOM coverage", () => {
         ],
         // σ ∂Ω boundary overlay (F1): a display toggle — a σ-view overlay property carried by _sigma.
         [["schwarz-boundary"], "σ boundary overlay (travels inside _sigma)"],
+        // σ-singularity markers (F4h): a display toggle — a σ-view overlay property carried by _sigma.
+        [["schwarz-singularities"], "σ singularity markers (travels inside _sigma)"],
         // σ preimage-tiling params (F3c): depth + visual budget — σ-view settings carried by _sigma (the tree
         // itself is a transient inspection, seeded by a canvas double-click, and is not serialized).
         [["schwarz-tiling-depth", "schwarz-tiling-budget"], "σ tiling setting (travels inside _sigma)"],

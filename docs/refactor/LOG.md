@@ -2448,3 +2448,26 @@
   trivial unit disk — the numbers matching the engine-test fixtures' documented φ/F). VERIFIED (Playwright): the
   card paints the deltoid's three lines + the ≈ note on generate. **F4i complete — the map's closed form is
   visible, σ honestly symbolic.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4h — σ-singularities):** a
+  forward-only card marking where σ = conj(F(φ⁻¹)) misbehaves — its **branch points** (the cusps) and
+  **σ-poles**. A new `@cas/schwarz/singularities.ts` (`findSigmaSingularities(map, branches, opts)`, a free
+  function over a minimal `{evalPhi, evalPhiDeriv}` surface): branch points are the zeros of φ′ (critical
+  points), found by a multi-start Newton on `evalPhiDeriv` with a finite-difference φ″ (exact for holomorphic φ),
+  deduplicated + mapped through φ; σ-poles depend on the branch of φ⁻¹ — **bounded** (interior branch, poles
+  z_j ∈ 𝔻 reachable) → the σ-pole is at w = φ(z_j); **unbounded-Laurent** (exterior branch) → the interior pole
+  is never hit, so there is NO finite σ-pole (it sits at φ(∞) = ∞). This corrects QD's reflection z_j → 1/conj(z_j),
+  which lands on φ's OWN pole → ∞ and is filtered — so QD shows no finite σ-pole for these families either, while
+  computing w = φ(z_j) surfaces the real bounded pole. A CD overlay (`schwarzSingularityOverlay.ts`) draws amber
+  ○ rings (branch points) + red × marks (σ-poles), reusing the σ-overlay projection so they live in all three
+  views; a "Singularities" card lists their locations, with a display toggle that travels in `_sigma`
+  (`showSingularities`, default off) and bakes into the PNG export. **Honest labeling:** the card title, list,
+  and note all carry `≈` (σ is numerical; the branch points are found numerically). Green: typecheck + lint +
+  node **2484 → 2492** (+8: +4 @cas/schwarz — the deltoid has 0 poles + exactly 3 branch points at its cusps φ(1)=1.5,
+  φ(e^{±2πi/3})=−0.75±1.299i, all on |z|=1; the unit disk φ′≡1 has none; a bounded lobe's σ-pole is φ(0.3)≈0.165
+  where σ overflows past 1e6; an unbounded interior pole gives NO finite marker; +4 schwarzSingularityOverlay —
+  a ring per branch point + a × per pole, a null projection drops the marker, toPixel precedence, empty a no-op;
+  appState opt-out for the toggle). VERIFIED (Playwright, **8/8**): the deltoid card lists 3 branch points + 0
+  σ-poles; the toggle draws + removes the markers; they survive the z-disk + sphere view switches; and a share
+  link restores the toggle + re-lists the singularities. Captured the deltoid with its 3 cusps ringed. **F4h
+  complete — σ's singular structure (the cusps) is visible + honestly labeled.** Remaining à-la-carte F4 cards
+  (F4b level curves · F4c/F4e orbit families · F4d cycle finder · F4g domain coloring) are the next picks.

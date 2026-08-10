@@ -646,6 +646,24 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Singularities (F4h): the branch points (φ′=0 cusps) + σ-poles of the generated map, found
+                     from φ. The toggle draws markers over the field (amber ○ = branch point, red × = σ-pole);
+                     the list shows their locations. All ≈ (a numerical reconstruction). The toggle travels in
+                     `_sigma`; the markers are computed on generate. -->
+                <details class="control-group" id="schwarz-singularities-group">
+                  <summary>Singularities — cusps · poles (≈)</summary>
+                  <div class="control-grid">
+                    <div class="field">
+                      <label class="checkbox" title="Mark the branch points (φ′=0 cusps, ○) and σ-poles (×) over the field">
+                        <input type="checkbox" id="schwarz-singularities" /> show markers
+                      </label>
+                    </div>
+                    <div id="schwarz-singularities-readout" class="schwarz-formula" aria-live="polite">
+                      <p class="schwarz-formula-hint">Generate a σ to find its singularities.</p>
+                    </div>
+                  </div>
+                </details>
+
                 <!-- Coloring parity with the standard fractals (ADR-0009 item 3): a shared @cas/gpu
                      colormap ramp + escape-time scale mode. Options are populated from
                      render/schwarzColormaps.ts in main.ts, so these start empty. -->

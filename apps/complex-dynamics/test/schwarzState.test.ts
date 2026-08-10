@@ -52,6 +52,7 @@ const POLE: SigmaViewState = {
   lightEl: 30,
   lightHeight: 3.5,
   showBoundary: true, // non-default F1 ∂Ω overlay, to prove it round-trips
+  showSingularities: true, // non-default F4h singularity markers, to prove they round-trip
   viewMode: "z", // non-default F2b z-disk view, to prove it round-trips
   tilingDepth: 6, // non-default F3c tiling params, to prove they round-trip
   tilingBudget: 1024,
