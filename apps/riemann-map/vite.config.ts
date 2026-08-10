@@ -1,18 +1,19 @@
-/// <reference types="vitest/config" />
-import { defineConfig } from "vite";
+import { defineConfig, configDefaults } from "vitest/config";
 
 // Relative base so the production build also works when served from a sub-path (GitHub Pages
 // project site), matching the other apps (CLAUDE.md decision 11).
 //
-// P0 is a single-page empty shell. The `test` block registers this app as a Vitest project (added to
-// the root vitest.workspace.ts): node environment for the pure-logic suite. A headless-WebGL2 browser
-// project + the CI `browser` job are deferred to P1, when the first real shaders land and there is an
-// actual GLSL≈JS parity to guard (matching how the other apps only compile shaders once they exist).
+// The `test` block registers this app as a Vitest project (added to the root vitest.workspace.ts):
+// node environment for the pure-logic suite. Real-WebGL2 specs live in *.browser.test.ts and run under
+// the separate browser project (vitest.browser.config.ts, via `pnpm test:browser` / the CI browser
+// job) — so they are EXCLUDED here, or the node runner would try to compile shaders without a GL
+// context. This mirrors the Complex Dynamics app's split.
 export default defineConfig({
   base: "./",
   server: { port: 5176, strictPort: true },
   test: {
     environment: "node",
     include: ["test/**/*.test.ts"],
+    exclude: [...configDefaults.exclude, "test/**/*.browser.test.ts"],
   },
 });

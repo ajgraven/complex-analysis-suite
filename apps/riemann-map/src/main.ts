@@ -1,51 +1,119 @@
-// apps/riemann-map — the research-grade Riemann-map / conformal-mapping studio (a new suite app).
+// apps/riemann-map — the research-grade Riemann-map / conformal-mapping studio.
 //
-// P0 (Genesis) is the empty, tested, deployable shell: it stands up the Vite/TS app, wires the shared
-// @cas/* packages, and proves the single serializable view-state (S2) round-trips end-to-end. The
-// custom-φ domain-coloring studio (S3/S4 + the render pipelines) lands in P1; every construction
-// engine (§A) plugs into this shell thereafter.
-import { makeComplexFn } from "@cas/expr/evaluate";
-import { parse } from "@cas/expr/parser";
+// P1 (walking skeleton, first increment): a working custom-φ domain-coloring view. Type/φ is compiled
+// once into a JS evaluator + a GLSL body (map.ts), rendered per-pixel as a phase portrait (shader.ts /
+// glRenderer.ts), and explored by pan/zoom (nav.ts). The view-state round-trips through the permalink.
+// Later P1 increments add render modes (C2–C6), curve grids (D1), linked panes (F2), a live editor
+// (F5), and PNG export (G2); every §A construction engine plugs into this same shell.
 import {
   DEFAULT_VIEW_STATE,
   decodeRiemannState,
   encodeRiemannState,
   type RiemannViewState,
+  type ViewportState,
 } from "./viewState.js";
+import { compileMap } from "./map.js";
+import { createRenderer, type Renderer } from "./render/glRenderer.js";
+import { attachPanZoom } from "./render/nav.js";
 
-/** Restore a view-state from the URL hash if present, else fall back to the default. */
 function initialState(): RiemannViewState {
-  const fromHash = decodeRiemannState(window.location.hash);
-  return fromHash ?? DEFAULT_VIEW_STATE;
+  return decodeRiemannState(window.location.hash) ?? DEFAULT_VIEW_STATE;
 }
 
-/** Render the P0 placeholder shell: names the app, its phase, and proves φ + view-state are wired. */
-function mount(root: HTMLElement, state: RiemannViewState): void {
-  // Prove the executable-map path is live: compile the default φ and evaluate it at a sample point.
-  const phi = makeComplexFn(parse(state.map.expr));
-  const [re, im] = phi([2, 0], [0, 0]); // z + 1/z at z = 2  ->  2.5
-  const permalink = encodeRiemannState(state);
-
-  const shell = document.createElement("main");
-  shell.className = "shell";
-  shell.innerHTML = `
-    <span class="badge">Conformal maps · scaffold</span>
-    <h1>Riemann Map</h1>
-    <p class="tag">
-      A research-grade Riemann-map &amp; conformal-mapping studio for the Complex Analysis Suite.
-    </p>
-    <p class="status">
-      <strong>Phase&nbsp;0 — Genesis.</strong> The app scaffold, shared-package wiring, and the single
-      serializable view-state are in place. The custom-&phi; domain-coloring studio arrives in Phase&nbsp;1.
-    </p>
-    <dl class="probe">
-      <dt>Map &phi;</dt><dd><code>${state.map.expr}</code></dd>
-      <dt>&phi;(2)</dt><dd><code>${re.toFixed(3)} ${im >= 0 ? "+" : "−"} ${Math.abs(im).toFixed(3)} i</code></dd>
-      <dt>Permalink</dt><dd><code class="permalink">${permalink}</code></dd>
-    </dl>
-  `;
-  root.replaceChildren(shell);
+/** Size the drawing buffer to the element's CSS box × devicePixelRatio (crisp on HiDPI). */
+function resizeToDisplay(canvas: HTMLCanvasElement): void {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
+  const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
 }
 
-const app = document.getElementById("app");
-if (app) mount(app, initialState());
+function fmt(n: number): string {
+  return Number.isFinite(n) ? n.toPrecision(6).replace(/\.?0+$/, "") : String(n);
+}
+
+function main(): void {
+  const app = document.getElementById("app");
+  if (!app) return;
+
+  let state = initialState();
+
+  // ---- DOM shell -----------------------------------------------------------
+  app.replaceChildren();
+  const bar = document.createElement("header");
+  bar.className = "topbar";
+  const title = document.createElement("span");
+  title.className = "brand";
+  title.textContent = "Riemann Map";
+  const mapLabel = document.createElement("span");
+  mapLabel.className = "maplabel";
+  const readout = document.createElement("span");
+  readout.className = "readout";
+  bar.append(title, mapLabel, readout);
+
+  const stage = document.createElement("div");
+  stage.className = "stage";
+  const canvas = document.createElement("canvas");
+  canvas.className = "plane";
+  stage.append(canvas);
+
+  const note = document.createElement("div");
+  note.className = "note";
+  stage.append(note);
+
+  app.append(bar, stage);
+
+  // ---- renderer ------------------------------------------------------------
+  const renderer: Renderer | null = createRenderer(canvas);
+  if (!renderer) {
+    note.textContent = "WebGL2 is unavailable in this browser — the GPU domain-coloring view needs it.";
+    note.classList.add("visible");
+  }
+
+  function applyMap(): void {
+    const compiled = compileMap(state.map);
+    mapLabel.textContent = `φ(z) = ${state.map.expr}`;
+    if (!compiled.ok) {
+      note.textContent = `Cannot compile φ: ${compiled.error}`;
+      note.classList.add("visible");
+      return;
+    }
+    if (renderer && renderer.setMap(compiled.map.glslBody)) {
+      note.classList.remove("visible");
+    }
+  }
+
+  function updateReadout(): void {
+    const v = state.viewport;
+    readout.textContent = `center ${fmt(v.centerRe)} ${v.centerIm >= 0 ? "+" : "−"} ${fmt(Math.abs(v.centerIm))}i · zoom ${fmt(v.zoom)}`;
+  }
+
+  // ---- render / permalink scheduling (rAF-coalesced) -----------------------
+  let frame = 0;
+  function schedule(): void {
+    if (frame) return;
+    frame = window.requestAnimationFrame(() => {
+      frame = 0;
+      resizeToDisplay(canvas);
+      renderer?.render(state.viewport);
+      updateReadout();
+      history.replaceState(null, "", encodeRiemannState(state));
+    });
+  }
+
+  function setViewport(v: ViewportState): void {
+    state = { ...state, viewport: v };
+    schedule();
+  }
+
+  attachPanZoom(canvas, () => state.viewport, setViewport);
+  window.addEventListener("resize", schedule);
+
+  applyMap();
+  schedule();
+}
+
+main();
