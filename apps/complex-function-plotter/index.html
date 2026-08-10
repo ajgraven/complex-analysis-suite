@@ -90,6 +90,7 @@
       .anim-cfg input[type="number"] { width: 68px; padding: 4px 6px; }
 
       .sweep-overlay { position: absolute; inset: 0; background: rgba(10, 12, 16, 0.94); display: flex; flex-direction: column; z-index: 5; }
+      .sweep-overlay[hidden] { display: none; } /* the class's display:flex would otherwise override the hidden attribute, leaving the scrim over the plot */
       .sweep-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
       .sweep-title { font-size: 0.85rem; color: var(--text); }
       .sweep-grid { flex: 1 1 auto; overflow: auto; padding: 14px; display: grid; grid-template-columns: repeat(var(--sweep-cols, 3), 1fr); gap: 12px; align-content: start; }
