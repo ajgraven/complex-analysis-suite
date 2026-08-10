@@ -35,13 +35,15 @@ Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publi
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-- **2D / 3D (5A)** — a **View** toggle lifts the flat portrait into an **analytic landscape**: the same
+- **2D / 3D (5A–5B)** — a **View** toggle lifts the flat portrait into an **analytic landscape**: the same
   map drawn as a height surface (height = log |f| / linear |f| / bounded stereographic, with an
   exaggeration slider), **coloured by the very same `colorAt`** so the surface reads like the portrait
-  wrapped over relief. Drag to orbit, scroll to dolly; **Top-down** snaps to the orthographic overhead
-  view, which reproduces the 2D portrait pixel-for-pixel (the phase gate). Built on an app-local 3D kit
-  (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader). Analytic `f'/f` normals,
-  richer shading, and the Riemann sphere are the rest of Phase 5.
+  wrapped over relief (its enhancements — rings, the conformal grid — wrap too). Drag to orbit, scroll to
+  dolly; **Top-down** snaps to the orthographic overhead view, which reproduces the 2D portrait
+  pixel-for-pixel (the phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
+  holomorphic map (a smooth per-pixel normal; a geometric normal for Γ/ζ/anti-holomorphic), with an
+  optional **specular** highlight. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid
+  mesh · height law · surface shader). The Riemann sphere + linked navigation are the rest of Phase 5.
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
@@ -91,8 +93,8 @@ It reproduces the canonical Wegert enhanced-portrait plate and recovers the know
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
 Phase 4 (special functions & the DLMF mode) is complete. **Phase 5 (the 3D engine) is underway**: the
-analytic-**landscape** surface (5A) above is in; analytic normals + shading (5B), the **Riemann sphere**
-(5C), and linked 2D↔3D navigation (5D) follow. See
+analytic-**landscape** surface with `f'/f` shading (5A–5B) above is in; the **Riemann sphere** (5C) and
+linked 2D↔3D navigation (5D) follow. See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)

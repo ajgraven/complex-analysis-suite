@@ -33,3 +33,23 @@ export function heightAt(mode: number, m: number, scale: number): number {
   const l = Math.log(Math.max(m, 1e-20));
   return Math.max(-LOG_CLAMP, Math.min(LOG_CLAMP, l)) / LOG_CLAMP;
 }
+
+/**
+ * `dH/dm` — the slope of {@link heightAt} in `|f|`, mirroring the GLSL `surfaceHeightSlope`. Used to build
+ * the **analytic** surface normal (5B, F4) for a holomorphic map: the height field's gradient is
+ * `dH/dm · d|f|/d(x,y)`. Zero in the clamped bands (a flat plateau) and at a zero, so the normal stays
+ * finite where the height saturates.
+ */
+export function heightSlopeAt(mode: number, m: number, scale: number): number {
+  if (!Number.isFinite(m) || m <= 0) return 0;
+  if (mode === 1) {
+    const s = scale > 1e-6 ? scale : 1;
+    return m < LINEAR_CLAMP * s ? 1 / s : 0;
+  }
+  if (mode === 2) {
+    const d = m * m + 1;
+    return (4 * m) / (d * d);
+  }
+  const l = Math.log(m);
+  return l > -LOG_CLAMP && l < LOG_CLAMP ? 1 / (LOG_CLAMP * m) : 0;
+}

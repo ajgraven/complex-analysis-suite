@@ -120,6 +120,7 @@ function main(): void {
   const heightScaleVal = byId("heightScaleVal");
   const topDownBtn = byId("topDown");
   const resetViewBtn = byId("resetView");
+  const specularInput = byId("specular");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -527,6 +528,13 @@ function main(): void {
       plot.resetCamera();
       redraw(false);
     });
+  if (specularInput instanceof HTMLInputElement) {
+    specularInput.checked = plot.specular;
+    specularInput.addEventListener("change", () => {
+      plot.specular = specularInput.checked;
+      redraw(false);
+    });
+  }
 
   // Autocomplete (A5): builtins + constants + z/c + the current map's parameters.
   const FN_NAMES = [...COMPLEX_FUNCTIONS, ...BINARY_FUNCTIONS, "f", "if", "not"];

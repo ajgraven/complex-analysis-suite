@@ -14,6 +14,7 @@ import { createProgram } from "@cas/gpu/shader";
 import { compileF } from "@cas/expr/glsl";
 import { parse } from "@cas/expr/parser";
 import { freeParameters } from "@cas/expr/ast";
+import { differentiate } from "@cas/expr/derivative";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
 import {
@@ -21,6 +22,7 @@ import {
   DEFAULT_CAMERA,
   TOP_DOWN,
   clampElevation,
+  cameraEye,
   viewProjection,
 } from "../render3d/camera.js";
 import { buildGridMesh } from "../render3d/mesh.js";
@@ -105,6 +107,8 @@ interface SurfaceUniforms extends ColorUniformLocs {
   uHeightScale: WebGLUniformLocation | null;
   uLightDir: WebGLUniformLocation | null;
   uShaded: WebGLUniformLocation | null;
+  uEye: WebGLUniformLocation | null;
+  uSpecular: WebGLUniformLocation | null;
 }
 
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
@@ -118,6 +122,10 @@ export class Plot {
   private atlasTex: WebGLTexture | null = null;
   private atlasHeight = 1;
   private fGlsl: string;
+  // The compiled derivative `fpFn` = f'(z) for the analytic surface normal (5B, F4), or null when the
+  // map isn't differentiable in the system (Γ / ζ / anti-holomorphic) — then the surface uses the
+  // geometric normal. Recomputed with `f`.
+  private fpGlsl: string | null = null;
   private draft = false;
 
   // 3D analytic-landscape path (Phase 5, 5A). A second program renders the domain grid mesh displaced
@@ -140,6 +148,8 @@ export class Plot {
   heightMode = 0;
   /** Height exaggeration (world units per unit of normalized height). */
   heightScale = 1;
+  /** Add a specular highlight to the landscape (5B, F2). */
+  specular = false;
 
   // Live named parameters (ADR-0011, catalog G1). `paramNamesList` is the ordered set the current `f`
   // reads (from `freeParameters`); `paramValues` holds each one's `[re, im]` (preserved across formula
@@ -197,6 +207,13 @@ export class Plot {
     const ast = parse(src);
     const names = freeParameters(ast);
     const glsl = compileF(ast, "fFn", { params: names });
+    // f' for the analytic surface normal (5B), when the map is differentiable in the system. Compiled
+    // with the same parameters so `fpFn` aliases from the same `uParam_<name>` uniforms as `fFn`.
+    try {
+      this.fpGlsl = compileF(differentiate(ast, "z"), "fpFn", { params: names });
+    } catch {
+      this.fpGlsl = null; // non-holomorphic / no derivative builtin → geometric normal
+    }
     const nextValues = new Map<string, ParamValue>();
     for (const n of names)
       nextValues.set(n, this.paramValues.get(n) ?? [...NEW_PARAM_DEFAULT]);
@@ -303,7 +320,7 @@ export class Plot {
    *  from {@link rebuildProgram}, so the surface tracks every formula / parameter-set change. */
   private rebuildSurfaceProgram(): void {
     const gl = this.gl;
-    const src = buildSurfaceProgram(this.fGlsl, this.paramNamesList);
+    const src = buildSurfaceProgram(this.fGlsl, this.paramNamesList, this.fpGlsl);
     const program = createProgram(gl, src.vertex, src.fragment);
     if (this.surfaceProgram) gl.deleteProgram(this.surfaceProgram);
     this.surfaceProgram = program;
@@ -321,6 +338,8 @@ export class Plot {
       uHeightScale: loc("uHeightScale"),
       uLightDir: loc("uLightDir"),
       uShaded: loc("uShaded"),
+      uEye: loc("uEye"),
+      uSpecular: loc("uSpecular"),
       uPhaseLUT: loc("uPhaseLUT"),
       uPhaseRow: loc("uPhaseRow"),
       uModulus: loc("uModulus"),
@@ -355,14 +374,16 @@ export class Plot {
    */
   setFunction(src: string): void {
     const prevGlsl = this.fGlsl;
+    const prevFp = this.fpGlsl;
     const prevNames = this.paramNamesList;
     const prevValues = this.paramValues;
-    const next = this.compileSource(src); // throws ExprError on a bad parse; updates param state
+    const next = this.compileSource(src); // throws ExprError on a bad parse; updates param + f' state
     this.fGlsl = next;
     try {
       this.rebuildProgram(); // throws if the assembled GLSL fails to compile
     } catch (err) {
       this.fGlsl = prevGlsl;
+      this.fpGlsl = prevFp;
       this.paramNamesList = prevNames;
       this.paramValues = prevValues;
       this.rebuildProgram();
@@ -500,6 +521,9 @@ export class Plot {
     gl.uniform1i(u.uHeightMode, this.heightMode);
     gl.uniform1f(u.uHeightScale, this.heightScale);
     gl.uniform3f(u.uLightDir, 0.4, 0.5, 0.75);
+    const eye = cameraEye(cam);
+    gl.uniform3f(u.uEye, eye[0], eye[1], eye[2]);
+    gl.uniform1i(u.uSpecular, this.specular ? 1 : 0);
     // Shade the landscape, except in the exact top-down view — there it must reproduce the 2D portrait.
     const topDown = cam.ortho && cam.elevation > Math.PI / 2 - 1e-3;
     gl.uniform1f(u.uShaded, topDown ? 0 : 1);
