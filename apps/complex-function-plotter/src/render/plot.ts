@@ -5,10 +5,11 @@
  * under the cursor fixed during pan and zoom. Deep-zoom (df64) is deferred (backlog L1); the view is a
  * plain float64 center for now, which the coordinate math keeps swap-ready.
  *
- * A second, 3D render path (Phase 5, 5A) draws the same map as an **analytic landscape**: a grid mesh
- * displaced by the height field and coloured by the *same* `colorAt`, through an orbit camera
- * (`render3d/`). Both programs are rebuilt together on every `f` change; `mode` selects which `paint()`
- * draws, and the 2D path is unchanged when `mode` is `2d`.
+ * Two more render paths reuse the *same* `colorAt` (Phase 5, `render3d/`): the **analytic landscape**
+ * (5A/5B — a grid mesh displaced by the height field, through an orbit camera) and the **Riemann sphere**
+ * (5C — a fullscreen per-fragment ray-cast, so ∞ is a literal point). All three programs are rebuilt
+ * together on every `f` change; `mode` (`2d` / `3d` / `sphere`) selects which `paint()` draws, and the 2D
+ * path is unchanged when `mode` is `2d`.
  */
 import { createProgram } from "@cas/gpu/shader";
 import { compileF } from "@cas/expr/glsl";
@@ -27,6 +28,18 @@ import {
 } from "../render3d/camera.js";
 import { buildGridMesh } from "../render3d/mesh.js";
 import { buildSurfaceProgram } from "../render3d/surfaceShader.js";
+import {
+  type Quat,
+  arcballDelta,
+  quatMultiply,
+  quatNormalize,
+  worldToModel,
+  DEFAULT_ROTATION,
+  SPHERE_DIST_MIN,
+  SPHERE_DIST_MAX,
+  SPHERE_DIST_DEFAULT,
+} from "../render3d/sphere.js";
+import { buildSphereFragment } from "../render3d/sphereShader.js";
 
 /** A live parameter value `[re, im]` (ADR-0011). Kept as a plain tuple, the shape the `uParam_<name>`
  *  uniforms and the JS instruments both consume. */
@@ -111,7 +124,17 @@ interface SurfaceUniforms extends ColorUniformLocs {
   uSpecular: WebGLUniformLocation | null;
 }
 
+/** The Riemann-sphere uniforms, on top of the shared {@link ColorUniformLocs}. */
+interface SphereUniforms extends ColorUniformLocs {
+  uResolution: WebGLUniformLocation | null;
+  uEyeDist: WebGLUniformLocation | null;
+  uTanHalfFov: WebGLUniformLocation | null;
+  uWorldToModel: WebGLUniformLocation | null;
+  uLightDir: WebGLUniformLocation | null;
+}
+
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
+const SPHERE_FOV = (50 * Math.PI) / 180; // vertical field of view for the Riemann-sphere camera
 
 export class Plot {
   private readonly gl: WebGL2RenderingContext;
@@ -140,8 +163,17 @@ export class Plot {
   private surfaceParamLocs = new Map<string, WebGLUniformLocation | null>();
   private surfaceVao: WebGLVertexArrayObject | null = null;
 
+  // Riemann-sphere path (Phase 5, 5C / F7). A third fullscreen program ray-casts the sphere, reusing the
+  // same `colorAt`; the drag accumulates `sphereRotation` (a quaternion), the wheel dollies `sphereDist`.
+  private sphereProgram: WebGLProgram | null = null;
+  private sphereUniforms: SphereUniforms | null = null;
+  private sphereParamLocs = new Map<string, WebGLUniformLocation | null>();
+  private sphereVao: WebGLVertexArrayObject | null = null;
+  private sphereRotation: Quat = DEFAULT_ROTATION;
+  private sphereDist = SPHERE_DIST_DEFAULT;
+
   /** Which view `paint()` draws. */
-  mode: "2d" | "3d" = "2d";
+  mode: "2d" | "3d" | "sphere" = "2d";
   /** The orbit camera for the 3D landscape (its `target` is taken from the view centre at paint time). */
   camera: OrbitCamera = { ...DEFAULT_CAMERA };
   /** Height compression: 0 log|f|, 1 linear |f|, 2 stereographic (see `render3d/height.ts`). */
@@ -317,6 +349,7 @@ export class Plot {
     this.vao = vao;
 
     this.rebuildSurfaceProgram();
+    this.rebuildSphereProgram();
   }
 
   /** Build the 3D surface program (vertex-displaced grid + `colorAt` fragment) for the current `f`, its
@@ -369,6 +402,54 @@ export class Plot {
     gl.bindVertexArray(null);
     if (this.surfaceVao) gl.deleteVertexArray(this.surfaceVao);
     this.surfaceVao = svao;
+  }
+
+  /** Build the Riemann-sphere program (a fullscreen ray-cast fragment sharing the fullscreen-triangle
+   *  vertex shader) for the current `f`, its uniforms, and its VAO. Called from {@link rebuildProgram}. */
+  private rebuildSphereProgram(): void {
+    const gl = this.gl;
+    const program = createProgram(
+      gl,
+      VERTEX_SHADER,
+      buildSphereFragment(this.fGlsl, this.paramNamesList),
+    );
+    if (this.sphereProgram) gl.deleteProgram(this.sphereProgram);
+    this.sphereProgram = program;
+    this.sphereParamLocs = new Map(
+      this.paramNamesList.map((n) => [n, gl.getUniformLocation(program, `uParam_${n}`)]),
+    );
+    const loc = (name: string): WebGLUniformLocation | null =>
+      gl.getUniformLocation(program, name);
+    this.sphereUniforms = {
+      uResolution: loc("uResolution"),
+      uEyeDist: loc("uEyeDist"),
+      uTanHalfFov: loc("uTanHalfFov"),
+      uWorldToModel: loc("uWorldToModel"),
+      uLightDir: loc("uLightDir"),
+      uPhaseLUT: loc("uPhaseLUT"),
+      uPhaseRow: loc("uPhaseRow"),
+      uModulus: loc("uModulus"),
+      uModScale: loc("uModScale"),
+      uEnhance: loc("uEnhance"),
+      uSectors: loc("uSectors"),
+      uCrisp: loc("uCrisp"),
+      uHueShift: loc("uHueShift"),
+      uHueSign: loc("uHueSign"),
+      uCvd: loc("uCvd"),
+      uUncertainty: loc("uUncertainty"),
+      uLevelAbs: loc("uLevelAbs"),
+      uLevelArgOn: loc("uLevelArgOn"),
+      uLevelArg: loc("uLevelArg"),
+    };
+    const svao = gl.createVertexArray();
+    gl.bindVertexArray(svao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.quadBuffer);
+    const aPos = gl.getAttribLocation(program, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    if (this.sphereVao) gl.deleteVertexArray(this.sphereVao);
+    this.sphereVao = svao;
   }
 
   /**
@@ -448,7 +529,8 @@ export class Plot {
    *  {@link render} and the {@link renderThumbnail} sweep capture. Dispatches to the flat portrait or the
    *  3D landscape by {@link mode}. */
   private paint(): void {
-    if (this.mode === "3d") this.paintSurface();
+    if (this.mode === "sphere") this.paintSphere();
+    else if (this.mode === "3d") this.paintSurface();
     else this.paint2D();
   }
 
@@ -535,6 +617,50 @@ export class Plot {
     this.applyParamUniforms(this.surfaceParamLocs);
     gl.drawElements(gl.TRIANGLES, this.gridIndexCount, gl.UNSIGNED_INT, 0);
     gl.disable(gl.DEPTH_TEST);
+  }
+
+  /** Draw the Riemann sphere: a fullscreen ray-cast, oriented by `sphereRotation`, coloured by the shared
+   *  `colorAt` (so ∞ is the literal north pole). No depth test — the ray-cast owns visibility. */
+  private paintSphere(): void {
+    const gl = this.gl;
+    const u = this.sphereUniforms;
+    if (!this.sphereProgram || !u || !this.sphereVao) return;
+    gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(this.sphereProgram);
+    gl.bindVertexArray(this.sphereVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.uniform2f(u.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform1f(u.uEyeDist, this.sphereDist);
+    gl.uniform1f(u.uTanHalfFov, Math.tan(SPHERE_FOV / 2));
+    gl.uniformMatrix3fv(u.uWorldToModel, false, worldToModel(this.sphereRotation));
+    gl.uniform3f(u.uLightDir, 0.4, 0.5, 0.75);
+    this.applyColorUniforms(u);
+    this.applyParamUniforms(this.sphereParamLocs);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------
+  /** Rotate the sphere by an arcball drag between two normalized pointer positions (uv ∈ [0, 1]²). */
+  rotateSphere(prevUv: [number, number], uv: [number, number]): void {
+    this.sphereRotation = quatNormalize(
+      quatMultiply(arcballDelta(prevUv, uv), this.sphereRotation),
+    );
+  }
+
+  /** Dolly the sphere camera in/out by a multiplicative factor (clamped outside the unit sphere). */
+  dollySphere(factor: number): void {
+    this.sphereDist = Math.min(
+      SPHERE_DIST_MAX,
+      Math.max(SPHERE_DIST_MIN, this.sphereDist * factor),
+    );
+  }
+
+  /** Reset the sphere to its default orientation and distance. */
+  resetSphere(): void {
+    this.sphereRotation = DEFAULT_ROTATION;
+    this.sphereDist = SPHERE_DIST_DEFAULT;
   }
 
   // --- 3D landscape controls (Phase 5, 5A) --------------------------------------------------------

@@ -31,19 +31,23 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 5 in progress (the 3D analytic landscape)
+## Status — Phase 5 in progress (the 3D engine)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-- **2D / 3D (5A–5B)** — a **View** toggle lifts the flat portrait into an **analytic landscape**: the same
-  map drawn as a height surface (height = log |f| / linear |f| / bounded stereographic, with an
-  exaggeration slider), **coloured by the very same `colorAt`** so the surface reads like the portrait
-  wrapped over relief (its enhancements — rings, the conformal grid — wrap too). Drag to orbit, scroll to
-  dolly; **Top-down** snaps to the orthographic overhead view, which reproduces the 2D portrait
-  pixel-for-pixel (the phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
-  holomorphic map (a smooth per-pixel normal; a geometric normal for Γ/ζ/anti-holomorphic), with an
-  optional **specular** highlight. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid
-  mesh · height law · surface shader). The Riemann sphere + linked navigation are the rest of Phase 5.
+- **2D / 3D / sphere (5A–5C)** — a three-way **View** toggle. **3D** lifts the flat portrait into an
+  **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
+  stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
+  like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). Drag to
+  orbit, scroll to dolly; **Top-down** snaps to the orthographic overhead view, which reproduces the 2D
+  portrait pixel-for-pixel (the phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
+  holomorphic map (a smooth per-pixel normal; a geometric normal for Γ/ζ/anti-holomorphic), with an optional
+  **specular** highlight. **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
+  per-fragment ray-cast of an analytic unit sphere, stereographically projected (south pole = 0, equator =
+  |z| = 1, **north pole = ∞**) and coloured by the same `colorAt`, so a pole is a bright patch you can rotate
+  to the top; drag is a quaternion **arcball**, scroll dollies. Built on an app-local 3D kit (`render3d/`:
+  mat4 · orbit camera · grid mesh · height law · surface shader · sphere arcball). Linked 2D↔3D navigation is
+  the rest of Phase 5.
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
@@ -95,34 +99,36 @@ It reproduces the canonical Wegert enhanced-portrait plate and recovers the know
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
 Phase 4 (special functions & the DLMF mode) is complete. **Phase 5 (the 3D engine) is underway**: the
-analytic-**landscape** surface with `f'/f` shading (5A–5B) above is in; the **Riemann sphere** (5C) and
-linked 2D↔3D navigation (5D) follow. See
+analytic-**landscape** surface with `f'/f` shading (5A–5B) and the **Riemann sphere** (5C) above are in;
+linked 2D↔3D navigation (5D) follows. See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
-| File                        | Role                                                                                                                                                  |
-| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `main.ts`                   | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, PNG |
-| `render/colorShader.ts`     | the layered coloring GLSL (`colorAt` = phase LUT × modulus transfer, + NaN/Inf sentinel) and the fragment-program assembler                           |
-| `render/colormaps.ts`       | phase colormaps (perceptual Oklch + HSV) baked into one RGBA8 atlas; Oklab→sRGB conversion                                                            |
-| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, PNG data-URL   |
-| `state/viewState.ts`        | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                 |
-| `presets.ts`                | the preset / example gallery (each expression is validated in the tests)                                                                              |
-| `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                         |
-| `ui/animate.ts`             | the `t` animation transport (G2): pure frame-stepping `stepT` + the play/scrub/loop/speed controls and rAF loop                                       |
-| `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                   |
-| `ui/autocomplete.ts`        | the expression-box name autocomplete (A5): pure `wordAt` / `filterCandidates` + the menu / keyboard wiring                                            |
-| `ui/precision.ts`           | the float32 honest-labeling policy (Phase 4): `precisionNote(calledFns)` → the ζ warn / Γ note the badge shows                                        |
-| `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                         |
-| `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                          |
-| `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
-| `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                                |
-| `render3d/mat4.ts`          | Phase-5 3D kit: typed column-major `mat4`/`vec3` (identity, multiply, lookAt, perspective, ortho, transformPoint) — ported from QD's `sphere-common`  |
-| `render3d/camera.ts`        | the orbit camera (F5): azimuth / elevation / dolly → view + projection in a Z-up world; the exact top-down ortho preset (top-down = the 2D portrait)  |
-| `render3d/mesh.ts`          | the domain grid mesh (F5): `buildGridMesh(n)` → UV lattice + Uint32 triangle indices the landscape vertex shader displaces by height                  |
-| `render3d/height.ts`        | the F1 height compression `heightAt` (log / linear / stereographic) — the JS mirror of the GLSL `surfaceHeight`                                       |
-| `render3d/surfaceShader.ts` | the surface program (F1/F2): vertex evaluates `f` + displaces by height; fragment recomputes `f` + reuses `colorAt` + geometric shading               |
+| File                        | Role                                                                                                                                                         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `main.ts`                   | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, PNG        |
+| `render/colorShader.ts`     | the layered coloring GLSL (`colorAt` = phase LUT × modulus transfer, + NaN/Inf sentinel) and the fragment-program assembler                                  |
+| `render/colormaps.ts`       | phase colormaps (perceptual Oklch + HSV) baked into one RGBA8 atlas; Oklab→sRGB conversion                                                                   |
+| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, PNG data-URL          |
+| `state/viewState.ts`        | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                        |
+| `presets.ts`                | the preset / example gallery (each expression is validated in the tests)                                                                                     |
+| `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                                |
+| `ui/animate.ts`             | the `t` animation transport (G2): pure frame-stepping `stepT` + the play/scrub/loop/speed controls and rAF loop                                              |
+| `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                          |
+| `ui/autocomplete.ts`        | the expression-box name autocomplete (A5): pure `wordAt` / `filterCandidates` + the menu / keyboard wiring                                                   |
+| `ui/precision.ts`           | the float32 honest-labeling policy (Phase 4): `precisionNote(calledFns)` → the ζ warn / Γ note the badge shows                                               |
+| `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                                |
+| `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                                 |
+| `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                               |
+| `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                                       |
+| `render3d/mat4.ts`          | Phase-5 3D kit: typed column-major `mat4`/`vec3` (identity, multiply, lookAt, perspective, ortho, transformPoint) — ported from QD's `sphere-common`         |
+| `render3d/camera.ts`        | the orbit camera (F5): azimuth / elevation / dolly → view + projection in a Z-up world; the exact top-down ortho preset (top-down = the 2D portrait)         |
+| `render3d/mesh.ts`          | the domain grid mesh (F5): `buildGridMesh(n)` → UV lattice + Uint32 triangle indices the landscape vertex shader displaces by height                         |
+| `render3d/height.ts`        | the F1 height compression `heightAt` (log / linear / stereographic) — the JS mirror of the GLSL `surfaceHeight`                                              |
+| `render3d/surfaceShader.ts` | the surface program (F1/F2): vertex evaluates `f` + displaces by height; fragment recomputes `f` + reuses `colorAt` + geometric shading                      |
+| `render3d/sphere.ts`        | the Riemann-sphere kit (F7): quaternion + arcball for the drag and the stereographic `sphereToZ` (JS mirror of the shader) — ported from CD's `sphereView`   |
+| `render3d/sphereShader.ts`  | the Riemann-sphere program (F7): a fullscreen ray-cast that intersects the unit sphere, projects the hit to `z`, and reuses `colorAt` so ∞ is the north pole |
 
 ## Tests
 
@@ -131,7 +137,9 @@ cyclic continuity, HSV anchors, and the **DLMF** maps — warped-hue anchors + c
 quadrant indicator + its step discontinuity, stable indices), `colorShader.test.ts` (fragment-program
 assembly), `render3d.test.ts` (the Phase-5 3D kit — mat4 projections, the orbit camera's **top-down =
 2D-portrait** mapping, and the grid mesh), `surface3d.test.ts` (the F1 height law + the surface program
-assembly — `fFn` in both stages, `colorAt` reuse, `uShaded`), `viewState.test.ts`
+assembly — `fFn` in both stages, `colorAt` reuse, `uShaded`), `sphere.test.ts` (the **Riemann-sphere**
+kit — quaternion/arcball identities, the `worldToModel` inverse-orientation invariant, the stereographic
+`sphereToZ` incl. its GLSL parity, and the ray-cast fragment assembly), `viewState.test.ts`
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),

@@ -192,11 +192,13 @@
       <div class="group fn-group">
         <div class="fn-head">
           <label id="viewLabel">View</label>
-          <div class="fn-toggle" role="group" aria-label="2D or 3D view">
+          <div class="fn-toggle" role="group" aria-label="view">
             <button type="button" id="view2d" class="fn-tab active">2D</button>
             <button type="button" id="view3d" class="fn-tab">3D</button>
+            <button type="button" id="viewSphere" class="fn-tab">Sphere</button>
           </div>
         </div>
+        <p id="sphereHint" class="param-hint" hidden>Drag to rotate &middot; scroll to dolly. The north pole is &infin;, the south pole is 0.</p>
         <div id="surfaceControls" hidden>
           <label for="heightMode" style="margin-top: 8px">Surface height</label>
           <select id="heightMode">

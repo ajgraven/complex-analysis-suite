@@ -15,9 +15,10 @@
 // (ui/sweep.ts: a grid of thumbnails across one parameter's range, click a cell to jump), share-links
 // (#vs= via @cas/interchange), and PNG export. The Phase-4 special functions Γ / ζ are in the language;
 // when the active map calls one, an honest float32 precision badge (ui/precision.ts) labels the picture
-// `≈`. A 2D/3D toggle swaps the flat portrait for the Phase-5 analytic **landscape** (render3d/): the
-// same map drawn as a height surface, orbit/dolly camera, coloured by the same colorAt (so top-down =
-// the 2D portrait). Further 3D (analytic normals, the Riemann sphere) and export (Phase 6) follow.
+// `≈`. A View toggle (2D / 3D / Sphere) swaps the flat portrait for the Phase-5 analytic **landscape**
+// (a height surface, orbit/dolly, coloured by the same colorAt so top-down = the 2D portrait) or the
+// **Riemann sphere** (a ray-cast of ℂ∪{∞}, arcball-rotated, so ∞ is the north pole) — all in render3d/.
+// The ∞-inspector (plot f(1/z)) and export (Phase 6) round it out.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
@@ -115,6 +116,8 @@ function main(): void {
   const sweepClose = byId("sweepClose");
   const view2d = byId("view2d");
   const view3d = byId("view3d");
+  const viewSphere = byId("viewSphere");
+  const sphereHint = byId("sphereHint");
   const surfaceControls = byId("surfaceControls");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
@@ -248,9 +251,9 @@ function main(): void {
 
   const redraw = (draft = false): void => {
     plot.draw(draft);
-    if (plot.mode === "3d") {
-      // The axes / grid / markers are 2D-projection overlays; in the 3D landscape they'd be wrong, so
-      // clear the overlay canvas and let the surface stand alone.
+    if (plot.mode !== "2d") {
+      // The axes / grid / markers are 2D-projection overlays; in the 3D landscape or on the sphere they'd
+      // be wrong, so clear the overlay canvas and let the surface / sphere stand alone.
       const ax = axesCanvas.getContext("2d");
       if (ax) ax.clearRect(0, 0, axesCanvas.width, axesCanvas.height);
     } else {
@@ -489,20 +492,25 @@ function main(): void {
   if (fnF instanceof HTMLElement) fnF.addEventListener("click", () => setActive("f"));
   if (fnG instanceof HTMLElement) fnG.addEventListener("click", () => setActive("g"));
 
-  // 2D / 3D view toggle + the analytic-landscape controls (Phase 5, 5A). Switching to 3D shows the
-  // surface controls and swaps the pan/zoom interaction for orbit/dolly (handled in the pointer code).
+  // View toggle 2D / 3D landscape / Sphere (Phase 5). Each mode swaps the pointer interaction (pan+zoom /
+  // orbit+dolly / arcball+dolly — handled in the pointer code) and shows its own controls.
   const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
-  const setView = (m: "2d" | "3d"): void => {
+  const setView = (m: "2d" | "3d" | "sphere"): void => {
     plot.mode = m;
     if (view2d instanceof HTMLElement) view2d.classList.toggle("active", m === "2d");
     if (view3d instanceof HTMLElement) view3d.classList.toggle("active", m === "3d");
+    if (viewSphere instanceof HTMLElement)
+      viewSphere.classList.toggle("active", m === "sphere");
     if (surfaceControls instanceof HTMLElement) surfaceControls.hidden = m !== "3d";
+    if (sphereHint instanceof HTMLElement) sphereHint.hidden = m !== "sphere";
     redraw(false);
   };
   if (view2d instanceof HTMLElement)
     view2d.addEventListener("click", () => setView("2d"));
   if (view3d instanceof HTMLElement)
     view3d.addEventListener("click", () => setView("3d"));
+  if (viewSphere instanceof HTMLElement)
+    viewSphere.addEventListener("click", () => setView("sphere"));
   if (heightModeSel instanceof HTMLSelectElement) {
     heightModeSel.value = String(plot.heightMode);
     heightModeSel.addEventListener("change", () => {
@@ -766,11 +774,20 @@ function main(): void {
     if (parg instanceof HTMLElement) parg.textContent = fmtNum(Math.atan2(w[1], w[0]));
   };
 
-  // 2D: pan (grab-and-drag) + zoom-to-cursor, probe when idle. 3D: orbit (drag) + dolly (wheel).
+  // 2D: pan + zoom-to-cursor, probe when idle. 3D: orbit + dolly. Sphere: arcball rotate + dolly.
   let grabWorld: Complex | null = null;
   let orbitLast: { x: number; y: number } | null = null;
+  let sphereLast: [number, number] | null = null;
+  const canvasUv = (clientX: number, clientY: number): [number, number] => {
+    const r = canvas.getBoundingClientRect();
+    return [
+      r.width > 0 ? (clientX - r.left) / r.width : 0,
+      r.height > 0 ? (clientY - r.top) / r.height : 0,
+    ];
+  };
   canvas.addEventListener("pointerdown", (e) => {
-    if (plot.mode === "3d") orbitLast = { x: e.clientX, y: e.clientY };
+    if (plot.mode === "sphere") sphereLast = canvasUv(e.clientX, e.clientY);
+    else if (plot.mode === "3d") orbitLast = { x: e.clientX, y: e.clientY };
     else grabWorld = plot.screenToWorld(e.clientX, e.clientY);
     try {
       canvas.setPointerCapture(e.pointerId);
@@ -779,7 +796,12 @@ function main(): void {
     }
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (orbitLast) {
+    if (sphereLast) {
+      const uv = canvasUv(e.clientX, e.clientY);
+      plot.rotateSphere(sphereLast, uv);
+      sphereLast = uv;
+      redraw(true);
+    } else if (orbitLast) {
       const dx = e.clientX - orbitLast.x;
       const dy = e.clientY - orbitLast.y;
       orbitLast = { x: e.clientX, y: e.clientY };
@@ -793,6 +815,10 @@ function main(): void {
     }
   });
   const endDrag = (): void => {
+    if (sphereLast) {
+      sphereLast = null;
+      redraw(false);
+    }
     if (orbitLast) {
       orbitLast = null;
       redraw(false);
@@ -809,7 +835,10 @@ function main(): void {
     "wheel",
     (e) => {
       e.preventDefault();
-      if (plot.mode === "3d") {
+      if (plot.mode === "sphere") {
+        plot.dollySphere(Math.pow(1.0012, e.deltaY));
+        redraw(false);
+      } else if (plot.mode === "3d") {
         plot.dolly(Math.pow(1.0012, e.deltaY));
         redraw(false);
       } else {
