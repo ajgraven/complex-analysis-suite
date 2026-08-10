@@ -61,6 +61,8 @@ export interface SigmaViewState {
   lightEl: number;
   /** Relief depth — the height-gradient scale (C2). */
   lightHeight: number;
+  /** ∂Ω boundary overlay on/off (F1) — outline φ(unit circle) over the field; default off. */
+  showBoundary: boolean;
   /** Custom-gradient stops (C1), present only when `colormap === "custom"`; else the named palette applies. */
   customStops?: GradientStop[];
 }
@@ -74,6 +76,10 @@ export const SIGMA_RENDER_DEFAULTS = { aa: 1, maxIter: 48, escapeR: 1e4 } as con
 
 /** Default relief lighting (C2) — off, CD's light az/el, depth 2.0; also the fallback for pre-C2 links. */
 export const SIGMA_LIGHT_DEFAULTS = { light: false, lightAz: 135, lightEl: 45, lightHeight: 2 } as const;
+
+/** Default σ overlays (F1) — the ∂Ω boundary outline off; the fallback for links that predate it, so an old
+ *  permalink restores with no boundary (byte-identical). Future overlay toggles (F2+) extend this record. */
+export const SIGMA_OVERLAY_DEFAULTS = { showBoundary: false } as const;
 
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
@@ -116,6 +122,8 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.lightAz !== SIGMA_LIGHT_DEFAULTS.lightAz) out.laz = s.lightAz;
   if (s.lightEl !== SIGMA_LIGHT_DEFAULTS.lightEl) out.lel = s.lightEl;
   if (s.lightHeight !== SIGMA_LIGHT_DEFAULTS.lightHeight) out.ldp = s.lightHeight;
+  // ∂Ω boundary overlay (F1), omitted at its default (off) so a view without it is byte-identical to pre-F1.
+  if (s.showBoundary !== SIGMA_OVERLAY_DEFAULTS.showBoundary) out.bd = s.showBoundary;
   // Custom gradient (C1) — carried only when the custom palette is active (and has ≥2 stops), so a named-
   // palette view's link is unaffected.
   if (s.colormap === "custom" && s.customStops && s.customStops.length >= 2) out.grad = s.customStops;
@@ -141,7 +149,8 @@ export function schwarzStampParams(s: SigmaViewState): string {
     `${recipe}; center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
     `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
-    `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}`
+    `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}; ` +
+    `boundary=${s.showBoundary ? "on" : "off"}`
   );
 }
 
@@ -246,6 +255,8 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const lightAz = clampOr(o.laz, SIGMA_LIGHT_DEFAULTS.lightAz, 0, 360);
   const lightEl = clampOr(o.lel, SIGMA_LIGHT_DEFAULTS.lightEl, 0, 90);
   const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
+  // ∂Ω boundary overlay (F1) — a bad/absent value falls back to the default (off); never fatal.
+  const showBoundary = typeof o.bd === "boolean" ? o.bd : SIGMA_OVERLAY_DEFAULTS.showBoundary;
   // Custom gradient (C1) — validated via the shared editor parser (≥2 stops, clamped t / bytes); a bad or
   // absent value ⇒ no custom stops (the named palette applies). Only meaningful when colormap === "custom".
   const customStops = o.grad !== undefined ? (parseGradientStops(JSON.stringify(o.grad)) ?? undefined) : undefined;
@@ -255,7 +266,7 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
   return {
     phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter, escapeR,
-    light, lightAz, lightEl, lightHeight,
+    light, lightAz, lightEl, lightHeight, showBoundary,
     ...(customStops ? { customStops } : {}),
   };
 }

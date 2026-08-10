@@ -2157,3 +2157,18 @@
   decisions so F's increments don't re-litigate them: the `(≈)` honesty rule is absolute; σ's instruments are
   σ-native (no z²+c rays / Böttcher / matings); extraction into `@cas/schwarz` is opportunistic + math-first
   (the three-app σ-shader merge is deferred to its own ADR). No code, no behavior change.
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F1 — ∂Ω boundary overlay):**
+  the first σ-native-depth increment, and a genuinely cheap one — the boundary polygon φ(unit circle) is
+  ALREADY computed for the in-Ω mask and lives on the live session as `poly`, so this just strokes it. A new
+  `render/schwarzBoundaryOverlay.ts` (`drawSchwarzBoundary`) maps that array to canvas pixels with
+  `plotToPixel` and strokes it as a closed loop in the σ-orbit overlay's casing+colour idiom (a light blue
+  over a dark casing, so it reads over both the deep-navy K interior and a bright Ω ramp). A **domain boundary
+  (∂Ω)** checkbox in the σ Coloring group toggles it; it repaints the OVERLAY only (`scheduleSchwarzOverlayPaint`
+  — the cached field is re-blitted, never re-rendered), and it's baked into the PNG export when on. **Default
+  off**, and it travels in `_sigma` via a new `SIGMA_OVERLAY_DEFAULTS` + a `bd` key omitted at the default, so
+  every pre-F1 link is byte-identical and the field render is untouched (overlay-only). Green: typecheck +
+  lint + node **2427** (schwarzState +3 boundary round-trip / omit / hostile-value; appState opt-out +1;
+  stamp `boundary=on/off`) + browser **17/17** (byte-identical — no shader change). VERIFIED (Playwright,
+  6/6): defaults off; toggling renders the ∂Ω stroke (canvas changes); toggling off restores the EXACT
+  boundary-free canvas (proving the field is reused, not re-rendered); and the toggle round-trips through a
+  share link. **F1 complete.**

@@ -6,6 +6,7 @@ import {
   SIGMA_TONE_DEFAULTS,
   SIGMA_RENDER_DEFAULTS,
   SIGMA_LIGHT_DEFAULTS,
+  SIGMA_OVERLAY_DEFAULTS,
   type SigmaViewState,
 } from "../src/state/schwarzState";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../src/render/schwarzView";
@@ -26,6 +27,7 @@ const DELTOID: SigmaViewState = {
   ...SIGMA_TONE_DEFAULTS,
   ...SIGMA_RENDER_DEFAULTS,
   ...SIGMA_LIGHT_DEFAULTS,
+  ...SIGMA_OVERLAY_DEFAULTS,
 };
 const POLE: SigmaViewState = {
   phi: { c: [1, 0], F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
@@ -45,6 +47,7 @@ const POLE: SigmaViewState = {
   lightAz: 200,
   lightEl: 30,
   lightHeight: 3.5,
+  showBoundary: true, // non-default F1 ∂Ω overlay, to prove it round-trips
 };
 
 describe("encodeSigmaState / parseSigmaState round-trip", () => {
@@ -77,6 +80,7 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
     ...SIGMA_TONE_DEFAULTS,
     ...SIGMA_RENDER_DEFAULTS,
     ...SIGMA_LIGHT_DEFAULTS,
+    ...SIGMA_OVERLAY_DEFAULTS,
   };
 
   it("round-trips a bounded state (family + w₀) — S5-C2d", () => {
@@ -252,6 +256,27 @@ describe("parseSigmaState — render knobs (B2)", () => {
   });
 });
 
+describe("parseSigmaState — ∂Ω boundary overlay (F1)", () => {
+  const enc = (o: unknown): string => JSON.stringify(o);
+  const base = { c: 1, F: [[0, 0], [0, 0], [0.5, 0]], b: [], ctr: [0, 0], z: 0.4, cm: "viridis", sc: "linear" };
+
+  it("defaults the boundary off when the key is absent (old links pre-F1)", () => {
+    expect(parseSigmaState(enc(base))?.showBoundary).toBe(SIGMA_OVERLAY_DEFAULTS.showBoundary);
+  });
+
+  it("round-trips the boundary toggle and omits it at the default (link unchanged from pre-F1)", () => {
+    expect(encodeSigmaState({ ...DELTOID })).not.toMatch(/"bd"/);
+    expect(parseSigmaState(encodeSigmaState({ ...DELTOID, showBoundary: true }))?.showBoundary).toBe(true);
+    expect(encodeSigmaState({ ...DELTOID, showBoundary: true })).toContain('"bd":true');
+  });
+
+  it("defaults a non-boolean boundary value rather than rejecting the (valid) view", () => {
+    const s = parseSigmaState(enc({ ...base, bd: "yes" }));
+    expect(s).not.toBeNull(); // a display toggle ⇒ never fatal
+    expect(s?.showBoundary).toBe(false);
+  });
+});
+
 describe("parseSigmaState — custom gradient (C1)", () => {
   const CUSTOM: SigmaViewState = {
     ...DELTOID,
@@ -299,6 +324,7 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("iters=48");
     expect(s).toContain("escapeR=10000");
     expect(s).toContain("light=off");
+    expect(s).toContain("boundary=off");
     expect(s).not.toMatch(/[σ≈−]/); // PNG tEXt is Latin-1
   });
 
@@ -316,5 +342,6 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("iters=128");
     expect(s).toContain("escapeR=1000");
     expect(s).toContain("light=on(az200,el30,depth3.5)");
+    expect(s).toContain("boundary=on");
   });
 });

@@ -105,6 +105,7 @@ import {
   parseSigmaState,
   schwarzStampParams,
   SIGMA_TONE_DEFAULTS,
+  SIGMA_OVERLAY_DEFAULTS,
   type SigmaViewState,
 } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
@@ -130,6 +131,7 @@ import {
   type SchwarzOrbit,
 } from "./render/schwarzView";
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
+import { drawSchwarzBoundary } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
@@ -3028,6 +3030,9 @@ function init(): void {
   let schwarzLightAz = 135;
   let schwarzLightEl = 45;
   let schwarzLightDepth = 2.0;
+  // σ ∂Ω boundary overlay (F1): outline φ(unit circle) over the field for orientation. Overlay-only (the
+  // field render is untouched), default off, travels in the σ view (`_sigma`).
+  let schwarzShowBoundary: boolean = SIGMA_OVERLAY_DEFAULTS.showBoundary;
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3122,6 +3127,9 @@ function init(): void {
       }
       ctx.putImageData(schwarzCpuImage, 0, 0);
     }
+    // ∂Ω boundary overlay (F1) — under the orbits, over the field. `poly` is the session's boundary polygon
+    // (already computed for the mask), so this is just a stroke; skipped entirely when the toggle is off.
+    if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
     // Orbit overlays on top of the field: the transient hover preview (faint, S5-A2) under the pinned
     // click-inspect orbit (bold, ADR-0009 item 3) — both redrawn for the current view + backing scale.
     if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
@@ -3370,6 +3378,7 @@ function init(): void {
     schwarzLightAz = s.lightAz;
     schwarzLightEl = s.lightEl;
     schwarzLightDepth = s.lightHeight;
+    schwarzShowBoundary = s.showBoundary; // F1 ∂Ω overlay travels with the σ view
     if (s.customStops) {
       // C1: restore the custom gradient BEFORE entering, so enterSchwarz's applySchwarzColormap uses it.
       schwarzGradientStops = s.customStops.map((st) => ({ t: st.t, color: [...st.color] }));
@@ -3397,6 +3406,8 @@ function init(): void {
     if (ldpEl) ldpEl.value = String(schwarzLightDepth * 20);
     const lcEl = document.getElementById("schwarz-light-controls");
     if (lcEl) lcEl.hidden = !schwarzLight;
+    const bdEl = document.getElementById("schwarz-boundary") as HTMLInputElement | null;
+    if (bdEl) bdEl.checked = schwarzShowBoundary; // F1 ∂Ω overlay checkbox mirrors the restored view
     syncSchwarzColorModeControls();
     syncSchwarzToneControls();
     renderSchwarzLegendChip();
@@ -3444,6 +3455,7 @@ function init(): void {
       lightAz: schwarzLightAz,
       lightEl: schwarzLightEl,
       lightHeight: schwarzLightDepth,
+      showBoundary: schwarzShowBoundary,
       ...(schwarzColormapName === "custom" ? { customStops: schwarzGradientStops } : {}),
     };
   }
@@ -3486,6 +3498,9 @@ function init(): void {
       const octx = out.getContext("2d");
       if (!octx) return null;
       octx.drawImage(schwarzGL.canvas, 0, 0);
+      // Bake the ∂Ω boundary (F1) into the export when it's on — it's part of the view you see. (The CPU
+      // fallback below reuses the on-screen canvas, which paintSchwarz already drew the boundary onto.)
+      if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
       if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
       if (wantScaleBar) drawScaleBar(octx, size, schwarzView.zoom);
       canvas = out;
@@ -3930,6 +3945,19 @@ function init(): void {
     };
     for (const el of [lightCb, azIn, elIn, depthIn]) el?.addEventListener("input", sync);
     if (controls) controls.hidden = !schwarzLight; // initial visibility (no repaint)
+  }
+
+  // σ ∂Ω boundary overlay (F1): a display toggle. Overlay-only — it repaints the overlay layer without
+  // re-rendering the field (the boundary polygon is the session's existing mask polygon). Travels in `_sigma`.
+  {
+    const bdCb = document.getElementById("schwarz-boundary") as HTMLInputElement | null;
+    if (bdCb) {
+      bdCb.checked = schwarzShowBoundary;
+      bdCb.addEventListener("change", () => {
+        schwarzShowBoundary = bdCb.checked;
+        scheduleSchwarzOverlayPaint();
+      });
+    }
   }
 
   // σ render controls (Phase B): AA supersample + the escape budget (iterations + escape radius). Each

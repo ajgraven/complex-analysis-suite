@@ -716,6 +716,13 @@ abs(z)>2</textarea
                       <label for="schwarz-light-depth">relief depth</label>
                       <input type="range" id="schwarz-light-depth" min="0" max="100" value="40" title="Relief depth — how strongly the surface is sculpted" />
                     </div>
+                    <!-- ∂Ω boundary overlay (F1): outline the domain boundary φ(unit circle). An orientation
+                         aid drawn over the field (overlay-only — the field render itself is unchanged). -->
+                    <div class="field">
+                      <label class="checkbox" title="Outline the domain boundary ∂Ω = φ(unit circle) over the field">
+                        <input type="checkbox" id="schwarz-boundary" /> domain boundary (∂Ω)
+                      </label>
+                    </div>
                   </div>
                 </details>
 
