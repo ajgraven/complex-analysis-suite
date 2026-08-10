@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parse } from "../src/parser.js";
-import { freeParameters, calledFunctions } from "../src/ast.js";
+import { freeParameters, calledFunctions, substitute } from "../src/ast.js";
 import { evaluate, makeComplexFn, makeEscapeFn, getComplexFn } from "../src/evaluate.js";
 import { compileF, compileEscape } from "../src/glsl.js";
 import type { Complex } from "../src/complex.js";
@@ -57,6 +57,29 @@ describe("calledFunctions — the functions a map invokes", () => {
     expect(calledFunctions(parse("w = sqrt(z); if(abs(w) > 1, log(w), exp(w))"))).toEqual(
       new Set(["sqrt", "abs", "log", "exp"]),
     );
+  });
+});
+
+describe("substitute — replace a variable's reads with a subtree", () => {
+  const evalAt = (node: ReturnType<typeof parse>, z: Complex): Complex =>
+    makeComplexFn(node)(z, [0, 0]);
+
+  it("plots f(1/z): z → 1/z is capture-safe and terminates", () => {
+    const g = substitute(parse("z^2 + 1"), "z", parse("1/z")); // (1/z)^2 + 1
+    close(evalAt(g, [2, 0]), [1.25, 0]); // (1/2)^2 + 1 = 0.25 + 1
+    close(evalAt(g, [1, 0]), [2, 0]); // 1 + 1
+  });
+
+  it("replaces every read, including inside calls and nested", () => {
+    const g = substitute(parse("sin(z) * z"), "z", parse("c")); // sin(c) * c, but evaluate binds c
+    // evaluate g with z ignored, c = π/2 → sin(π/2)*(π/2) = π/2
+    close(makeComplexFn(g)([0, 0], [Math.PI / 2, 0]), [Math.PI / 2, 0], 6);
+  });
+
+  it("leaves other variables and assignment targets alone", () => {
+    // w is a local target; only reads of z change
+    const g = substitute(parse("w = z + 1; w * z"), "z", parse("2"));
+    close(evalAt(g, [99, 0]), [6, 0]); // w = 2+1 = 3; 3 * 2 = 6 (z=99 ignored)
   });
 });
 

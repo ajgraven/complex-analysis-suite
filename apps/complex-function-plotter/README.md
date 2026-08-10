@@ -83,8 +83,10 @@ Plus the Phase-2 research tool:
   reverse controls.
 - **Instruments** — a live cursor readout (`z, f(z), |f|, arg f`); **zeros & poles located, counted,
   and ordered** via the argument principle (marked, honestly labeled `≈`); user-set **level sets**
-  (`|f| = c`, `arg f = c`); and an **honest-labeling / uncertainty layer** that hatches pixels near
-  poles and essential singularities where the render is unreliable.
+  (`|f| = c`, `arg f = c`); an **∞-inspector** (5C/F8) that plots **f(1/z)** so the origin shows the map's
+  behaviour at infinity (a `z → 1/z` substitution, so the 2D/3D render and the instruments agree); and an
+  **honest-labeling / uncertainty layer** that hatches pixels near poles and essential singularities where
+  the render is unreliable.
 - **Navigation & output** — pan / zoom-to-cursor / reset, axes + grid + scale bar (aspect locked
   1:1, so angles read true), phase-wheel + modulus legends, share-links (`#vs=` via `@cas/interchange`),
   and PNG export; HiDPI + progressive rendering and WebGL2 context-loss recovery throughout.

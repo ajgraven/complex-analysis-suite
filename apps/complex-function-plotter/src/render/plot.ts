@@ -13,7 +13,7 @@
 import { createProgram } from "@cas/gpu/shader";
 import { compileF } from "@cas/expr/glsl";
 import { parse } from "@cas/expr/parser";
-import { freeParameters } from "@cas/expr/ast";
+import { freeParameters, substitute } from "@cas/expr/ast";
 import { differentiate } from "@cas/expr/derivative";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
@@ -150,6 +150,9 @@ export class Plot {
   heightScale = 1;
   /** Add a specular highlight to the landscape (5B, F2). */
   specular = false;
+  /** ∞-inspector (5C, F8): plot `f(1/z)` instead of `f(z)`, so the origin shows the behaviour at ∞.
+   *  Applied as a `z → 1/z` AST substitution, so the GPU (2D + surface) and the CPU instruments agree. */
+  inspectInfinity = false;
 
   // Live named parameters (ADR-0011, catalog G1). `paramNamesList` is the ordered set the current `f`
   // reads (from `freeParameters`); `paramValues` holds each one's `[re, im]` (preserved across formula
@@ -204,7 +207,8 @@ export class Plot {
    * `uParam_<name>` and never touches the legacy `uA` (ADR-0011). Throws `ExprError` on a bad parse.
    */
   private compileSource(src: string): string {
-    const ast = parse(src);
+    let ast = parse(src);
+    if (this.inspectInfinity) ast = substitute(ast, "z", parse("1/z")); // plot f(1/z) — the ∞-inspector
     const names = freeParameters(ast);
     const glsl = compileF(ast, "fFn", { params: names });
     // f' for the analytic surface normal (5B), when the map is differentiable in the system. Compiled

@@ -184,6 +184,66 @@ function collectCalledFunctions(node: Node, into: Set<string>): void {
   }
 }
 
+/**
+ * Return a copy of `node` with every *read* of the variable `name` replaced by `replacement`. Walks the
+ * original tree only — the inserted `replacement` is never itself traversed, so a self-referential
+ * substitution like `z → 1/z` is capture-safe and terminates (the plotter's ∞-inspector plots `f(1/z)`
+ * this way). Assignment *targets* (`assign.name`) are left alone; only reads change. The `replacement`
+ * subtree is shared across occurrences — fine, since the AST passes are read-only.
+ */
+export function substitute(node: Node, name: string, replacement: Node): Node {
+  switch (node.kind) {
+    case "var":
+      return node.name === name ? replacement : node;
+    case "num":
+    case "const":
+    case "bool":
+      return node;
+    case "neg":
+      return { kind: "neg", operand: substitute(node.operand, name, replacement) };
+    case "not":
+      return { kind: "not", operand: substitute(node.operand, name, replacement) };
+    case "arith":
+      return {
+        kind: "arith",
+        op: node.op,
+        left: substitute(node.left, name, replacement),
+        right: substitute(node.right, name, replacement),
+      };
+    case "compare":
+      return {
+        kind: "compare",
+        op: node.op,
+        left: substitute(node.left, name, replacement),
+        right: substitute(node.right, name, replacement),
+      };
+    case "call":
+      return {
+        kind: "call",
+        name: node.name,
+        args: node.args.map((a) => substitute(a, name, replacement)),
+      };
+    case "if":
+      return {
+        kind: "if",
+        cond: substitute(node.cond, name, replacement),
+        then: substitute(node.then, name, replacement),
+        otherwise: substitute(node.otherwise, name, replacement),
+      };
+    case "assign":
+      return {
+        kind: "assign",
+        name: node.name,
+        value: substitute(node.value, name, replacement),
+      };
+    case "seq":
+      return {
+        kind: "seq",
+        stmts: node.stmts.map((s) => substitute(s, name, replacement)),
+      };
+  }
+}
+
 export function referencesVar(node: Node, name: string): boolean {
   switch (node.kind) {
     case "var":

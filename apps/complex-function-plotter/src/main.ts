@@ -27,6 +27,7 @@ import {
   COMPLEX_FUNCTIONS,
   BINARY_FUNCTIONS,
   calledFunctions,
+  substitute,
   type Node,
 } from "@cas/expr/ast";
 import { makeComplexFn } from "@cas/expr/evaluate";
@@ -130,6 +131,7 @@ function main(): void {
   const cvdSel = byId("cvd");
   const markSingsInput = byId("markSings");
   const singCount = byId("singCount");
+  const inspectInfInput = byId("inspectInf");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -185,6 +187,7 @@ function main(): void {
   let fpFn: ((z: Complex, c: Complex) => Complex) | null = null;
   let sings: Singularities | null = null;
   let markSings = false;
+  let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
   // Keep the parsed f (and its z-derivative, when holomorphic) so the CPU instruments can be rebuilt
   // with the current parameter values baked in — without re-parsing — whenever a parameter moves.
   let fAst: Node | null = null;
@@ -201,7 +204,9 @@ function main(): void {
   };
   const updateFns = (src: string): void => {
     try {
-      fAst = parse(src);
+      let ast = parse(src);
+      if (inspectInfinity) ast = substitute(ast, "z", parse("1/z")); // instruments track f(1/z) too
+      fAst = ast;
       try {
         fpAst = differentiate(fAst, "z");
       } catch {
@@ -533,6 +538,16 @@ function main(): void {
     specularInput.addEventListener("change", () => {
       plot.specular = specularInput.checked;
       redraw(false);
+    });
+  }
+  // ∞-inspector (F8): plot f(1/z) so the origin shows f near ∞. Toggling recompiles the map (GPU) and
+  // rebuilds the instruments (CPU) from the same z → 1/z substitution, so they stay in step.
+  if (inspectInfInput instanceof HTMLInputElement) {
+    inspectInfInput.checked = inspectInfinity;
+    inspectInfInput.addEventListener("change", () => {
+      inspectInfinity = inspectInfInput.checked;
+      plot.inspectInfinity = inspectInfInput.checked;
+      applyExpr(exprs[active]);
     });
   }
 

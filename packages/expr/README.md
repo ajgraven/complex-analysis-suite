@@ -79,15 +79,15 @@ the rest of Phase 4.
 import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@cas/expr";
 ```
 
-| Pass               | Entry                                        | What it gives you                                                                                                                                                                            |
-| ------------------ | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Parse**          | `@cas/expr` / `./parser`, `./lexer`, `./ast` | `tokenize(src) → Token[]`, `parse(src) → Node`; the `Node` tagged-union AST + helpers (`referencesVar`, `isFreeParameter`, `freeParameters`, `calledFunctions`); `ExprError` (carries `pos`) |
-| **Evaluate (JS)**  | `./evaluate`                                 | `makeComplexFn(node, params?) → (z,c) → Complex` and `makeEscapeFn(node, params?) → (z,c) → boolean` — the float64 reference backend (`params` = a `Complex` for `a`, or a name→value map)   |
-| **Compile (GLSL)** | `./glsl`                                     | `compileF(node, name?, opts?)` and `compileEscape(node, opts?)` — emit GLSL fragment functions (`opts.params` opts into named parameters); `glslFloat` for literals                          |
-| **Differentiate**  | `./derivative`                               | `differentiate(node, v?) → Node` (symbolic ∂/∂v) and `newtonIteration(f, df)` (GLSL Newton step)                                                                                             |
-| **Rational**       | `./rational`                                 | `fToRational(node, c, a)` → the rational `{num, den}`, or `null` if the map is transcendental                                                                                                |
-| **LaTeX**          | `./latex`                                    | `toLatex(node)` — KaTeX-ready, minimal parentheses                                                                                                                                           |
-| **Complex (JS)**   | `./complex`, `./complexJs`                   | the `Complex = [re, im]` tuple ops (`C.add · C.mul · C.exp · …`) the JS backend runs on                                                                                                      |
+| Pass               | Entry                                        | What it gives you                                                                                                                                                                                          |
+| ------------------ | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Parse**          | `@cas/expr` / `./parser`, `./lexer`, `./ast` | `tokenize(src) → Token[]`, `parse(src) → Node`; the `Node` tagged-union AST + helpers (`referencesVar`, `isFreeParameter`, `freeParameters`, `calledFunctions`, `substitute`); `ExprError` (carries `pos`) |
+| **Evaluate (JS)**  | `./evaluate`                                 | `makeComplexFn(node, params?) → (z,c) → Complex` and `makeEscapeFn(node, params?) → (z,c) → boolean` — the float64 reference backend (`params` = a `Complex` for `a`, or a name→value map)                 |
+| **Compile (GLSL)** | `./glsl`                                     | `compileF(node, name?, opts?)` and `compileEscape(node, opts?)` — emit GLSL fragment functions (`opts.params` opts into named parameters); `glslFloat` for literals                                        |
+| **Differentiate**  | `./derivative`                               | `differentiate(node, v?) → Node` (symbolic ∂/∂v) and `newtonIteration(f, df)` (GLSL Newton step)                                                                                                           |
+| **Rational**       | `./rational`                                 | `fToRational(node, c, a)` → the rational `{num, den}`, or `null` if the map is transcendental                                                                                                              |
+| **LaTeX**          | `./latex`                                    | `toLatex(node)` — KaTeX-ready, minimal parentheses                                                                                                                                                         |
+| **Complex (JS)**   | `./complex`, `./complexJs`                   | the `Complex = [re, im]` tuple ops (`C.add · C.mul · C.exp · …`) the JS backend runs on                                                                                                                    |
 
 ## Tests
 
@@ -96,7 +96,7 @@ import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@ca
 (Γ known values, reflection, the functional equation, and non-differentiability), **`zeta`** (ζ special
 values, trivial + first nontrivial zeros, the pole at 1, non-differentiability),
 (the ADR-0011 named-parameter model — enumeration, JS map + legacy positional, GLSL `uParam_<name>`
-aliases, recursion propagation, plus `calledFunctions`), and **`complexParity`** (the JS complex library vs. its intended
+aliases, recursion propagation, plus `calledFunctions` and `substitute`), and **`complexParity`** (the JS complex library vs. its intended
 GLSL semantics). The end-to-end
 GLSL≈JS numeric invariant is proven in [`@cas/gpu`'s dual-backend harness](../gpu), which
 imports this package to build probe shaders.
