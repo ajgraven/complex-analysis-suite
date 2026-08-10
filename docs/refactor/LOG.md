@@ -2146,3 +2146,14 @@
   VERIFIED (Playwright, **22/22**): every key acts (arrows/±/i), the field-focus guard holds, all four glossary
   terms resolve, Escape closes the modal while keeping σ, and both a share link and a saved view round-trip the
   full σ view. **Phase E complete — the A–E parity arc is done.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F0 — groundwork):** the
+  optional "σ-native depth" phase begins with docs, not code. Added [`refactor/PHASE-F.md`](PHASE-F.md) — the
+  full à-la-carte breakdown (F0 groundwork → F1 boundary overlay → F2 plane/disk/sphere views → F3 preimage
+  tree → F4 analysis cards), each a gated independently-shippable increment, ranked by value ÷ cost and
+  grounded in an inventory of QD's σ machinery (`apps/quadrature-domains/app/schwarz` + `sphere`, ~9.4k LOC)
+  against CD's existing substrate (`@cas/schwarz`, `schwarzBoundaryPoly`, `sphereView`'s camera, the `_sigma`
+  state layer). Recorded the forward-only vs σ⁻¹-dependent split that drives sequencing and a QD source map
+  for the porter. Added an **ADR-0009 addendum** ([`DECISIONS.md`](../DECISIONS.md)) pinning three standing
+  decisions so F's increments don't re-litigate them: the `(≈)` honesty rule is absolute; σ's instruments are
+  σ-native (no z²+c rays / Böttcher / matings); extraction into `@cas/schwarz` is opportunistic + math-first
+  (the three-app σ-shader merge is deferred to its own ADR). No code, no behavior change.

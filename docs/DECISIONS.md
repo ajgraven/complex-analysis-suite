@@ -711,3 +711,28 @@ one QD already validated for σ, so it is low-risk in design even though it is r
 serializable state across share links / saved views / PNG metadata (item 2); the design doc records the
 peer view as the realized target shape (item 4). Deferred beyond this ADR: S5 (SIGMA-HANDOFF.md) — more
 families, branch-aware continuation, df64.
+
+### Addendum (2026-08-10): σ as a multi-view standalone explorer (Phase F)
+
+The σ-view polish arc (LOG.md, Phases A–E) completed the peer view this ADR promised and, in doing so,
+settled σ's identity: it is a **standalone explorer that shares CD's chrome but not its z²+c math**. Phase F
+([`refactor/PHASE-F.md`](refactor/PHASE-F.md)) extends — does **not** reverse — this ADR from a single
+w-plane view into a **multi-view explorer with σ-native instruments**: additional coordinate views (the
+uniformizing z-disk via forward φ, and the Riemann sphere), the σ⁻¹ preimage/tiling tree, and σ-analytic
+cards (level curves, cycles, limit set, singularities, …), ported from the Quadrature Domains app. This
+addendum records three standing decisions so F's increments do not each re-litigate them:
+
+1. **The `(≈)` honesty rule is absolute.** σ is a numerical reconstruction (φ⁻¹ by Newton / Durand–Kerner),
+   so every F artifact — each view, curve, cycle, dimension, limit set — is `(≈)`-labeled and never reads as
+   certified (RISKS §3–4). This is the guardrail, not a nicety.
+2. **σ's instruments are σ-native, and the z²+c boundary from item 4 above still holds.** F adds σ's *own*
+   depth (reflection tiling, σ level curves, σ-orbit families); it does **not** import the map-specific
+   instruments (external rays / Böttcher / matings / Yoccoz / laminations), which remain out of scope for σ.
+3. **Extraction is opportunistic and math-first (ADR-0007).** Pure σ kernels F needs (σ⁻¹, preimage tree,
+   chaos-game limit set, level curves, cycle finder) move into `@cas/schwarz` as each item lands — the
+   second-consumer bar is already met (CD + QD + `apps/correspondences` all consume σ). Merging the three
+   apps' σ **shaders** into one `@cas/schwarz/gpu` is genuine duplication paydown but a large cross-app
+   refactor, and is deferred to its **own** future ADR rather than smuggled in under a Phase F item.
+
+Phase F is a **menu**, not a runbook: each item ships and reviews on its own gate, nothing here blocks the
+completed A–E arc, and the phase may stop at any depth.
