@@ -31,9 +31,17 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 4 complete (special functions & the DLMF mode)
+## Status — Phase 5 in progress (the 3D analytic landscape)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
+
+- **2D / 3D (5A)** — a **View** toggle lifts the flat portrait into an **analytic landscape**: the same
+  map drawn as a height surface (height = log |f| / linear |f| / bounded stereographic, with an
+  exaggeration slider), **coloured by the very same `colorAt`** so the surface reads like the portrait
+  wrapped over relief. Drag to orbit, scroll to dolly; **Top-down** snaps to the orthographic overhead
+  view, which reproduces the 2D portrait pixel-for-pixel (the phase gate). Built on an app-local 3D kit
+  (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader). Analytic `f'/f` normals,
+  richer shading, and the Riemann sphere are the rest of Phase 5.
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
@@ -82,9 +90,9 @@ Plus the Phase-2 research tool:
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Phase 4 is complete (special functions & the DLMF mode): **Γ and ζ are in `@cas/expr`** with the honest
-float32 precision badge, and the two **DLMF colormaps** land the DLMF-faithful figures. Next is Phase 5
-(the 3D analytic-landscape / Riemann-sphere engine). See
+Phase 4 (special functions & the DLMF mode) is complete. **Phase 5 (the 3D engine) is underway**: the
+analytic-**landscape** surface (5A) above is in; analytic normals + shading (5B), the **Riemann sphere**
+(5C), and linked 2D↔3D navigation (5D) follow. See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
@@ -109,6 +117,8 @@ float32 precision badge, and the two **DLMF colormaps** land the DLMF-faithful f
 | `render3d/mat4.ts`          | Phase-5 3D kit: typed column-major `mat4`/`vec3` (identity, multiply, lookAt, perspective, ortho, transformPoint) — ported from QD's `sphere-common`  |
 | `render3d/camera.ts`        | the orbit camera (F5): azimuth / elevation / dolly → view + projection in a Z-up world; the exact top-down ortho preset (top-down = the 2D portrait)  |
 | `render3d/mesh.ts`          | the domain grid mesh (F5): `buildGridMesh(n)` → UV lattice + Uint32 triangle indices the landscape vertex shader displaces by height                  |
+| `render3d/height.ts`        | the F1 height compression `heightAt` (log / linear / stereographic) — the JS mirror of the GLSL `surfaceHeight`                                       |
+| `render3d/surfaceShader.ts` | the surface program (F1/F2): vertex evaluates `f` + displaces by height; fragment recomputes `f` + reuses `colorAt` + geometric shading               |
 
 ## Tests
 
@@ -116,7 +126,8 @@ float32 precision badge, and the two **DLMF colormaps** land the DLMF-faithful f
 cyclic continuity, HSV anchors, and the **DLMF** maps — warped-hue anchors + continuity, the four-colour
 quadrant indicator + its step discontinuity, stable indices), `colorShader.test.ts` (fragment-program
 assembly), `render3d.test.ts` (the Phase-5 3D kit — mat4 projections, the orbit camera's **top-down =
-2D-portrait** mapping, and the grid mesh), `viewState.test.ts`
+2D-portrait** mapping, and the grid mesh), `surface3d.test.ts` (the F1 height law + the surface program
+assembly — `fFn` in both stages, `colorAt` reuse, `uShaded`), `viewState.test.ts`
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),

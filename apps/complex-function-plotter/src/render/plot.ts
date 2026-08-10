@@ -4,6 +4,11 @@
  * and HiDPI / progressive (draft-while-interacting) rendering. Coordinate helpers keep the world point
  * under the cursor fixed during pan and zoom. Deep-zoom (df64) is deferred (backlog L1); the view is a
  * plain float64 center for now, which the coordinate math keeps swap-ready.
+ *
+ * A second, 3D render path (Phase 5, 5A) draws the same map as an **analytic landscape**: a grid mesh
+ * displaced by the height field and coloured by the *same* `colorAt`, through an orbit camera
+ * (`render3d/`). Both programs are rebuilt together on every `f` change; `mode` selects which `paint()`
+ * draws, and the 2D path is unchanged when `mode` is `2d`.
  */
 import { createProgram } from "@cas/gpu/shader";
 import { compileF } from "@cas/expr/glsl";
@@ -11,6 +16,15 @@ import { parse } from "@cas/expr/parser";
 import { freeParameters } from "@cas/expr/ast";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
+import {
+  type OrbitCamera,
+  DEFAULT_CAMERA,
+  TOP_DOWN,
+  clampElevation,
+  viewProjection,
+} from "../render3d/camera.js";
+import { buildGridMesh } from "../render3d/mesh.js";
+import { buildSurfaceProgram } from "../render3d/surfaceShader.js";
 
 /** A live parameter value `[re, im]` (ADR-0011). Kept as a plain tuple, the shape the `uParam_<name>`
  *  uniforms and the JS instruments both consume. */
@@ -56,10 +70,9 @@ export interface ColorState {
   levelArg: number;
 }
 
-interface Uniforms {
-  uCenter: WebGLUniformLocation | null;
-  uHalfSpan: WebGLUniformLocation | null;
-  uResolution: WebGLUniformLocation | null;
+/** The colouring uniforms shared by the 2D fragment and the 3D surface fragment (both include the same
+ *  `colorAt`), so one setter fills them for either program. */
+interface ColorUniformLocs {
   uPhaseLUT: WebGLUniformLocation | null;
   uPhaseRow: WebGLUniformLocation | null;
   uModulus: WebGLUniformLocation | null;
@@ -76,6 +89,24 @@ interface Uniforms {
   uLevelArg: WebGLUniformLocation | null;
 }
 
+interface Uniforms extends ColorUniformLocs {
+  uCenter: WebGLUniformLocation | null;
+  uHalfSpan: WebGLUniformLocation | null;
+  uResolution: WebGLUniformLocation | null;
+}
+
+/** The 3D-surface-specific uniforms, on top of the shared {@link ColorUniformLocs}. */
+interface SurfaceUniforms extends ColorUniformLocs {
+  uVP: WebGLUniformLocation | null;
+  uCenter: WebGLUniformLocation | null;
+  uHalfSpan: WebGLUniformLocation | null;
+  uAspect: WebGLUniformLocation | null;
+  uHeightMode: WebGLUniformLocation | null;
+  uHeightScale: WebGLUniformLocation | null;
+  uLightDir: WebGLUniformLocation | null;
+  uShaded: WebGLUniformLocation | null;
+}
+
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
 
 export class Plot {
@@ -88,6 +119,27 @@ export class Plot {
   private atlasHeight = 1;
   private fGlsl: string;
   private draft = false;
+
+  // 3D analytic-landscape path (Phase 5, 5A). A second program renders the domain grid mesh displaced
+  // by the height field, reusing the same `colorAt`. Built alongside the 2D program on every `f` change;
+  // `mode` selects which one `paint()` draws. The 2D path is byte-for-byte unchanged when `mode` is 2d.
+  private readonly gridN = 160;
+  private gridUvBuffer: WebGLBuffer | null = null;
+  private gridIndexBuffer: WebGLBuffer | null = null;
+  private gridIndexCount = 0;
+  private surfaceProgram: WebGLProgram | null = null;
+  private surfaceUniforms: SurfaceUniforms | null = null;
+  private surfaceParamLocs = new Map<string, WebGLUniformLocation | null>();
+  private surfaceVao: WebGLVertexArrayObject | null = null;
+
+  /** Which view `paint()` draws. */
+  mode: "2d" | "3d" = "2d";
+  /** The orbit camera for the 3D landscape (its `target` is taken from the view centre at paint time). */
+  camera: OrbitCamera = { ...DEFAULT_CAMERA };
+  /** Height compression: 0 log|f|, 1 linear |f|, 2 stereographic (see `render3d/height.ts`). */
+  heightMode = 0;
+  /** Height exaggeration (world units per unit of normalized height). */
+  heightScale = 1;
 
   // Live named parameters (ADR-0011, catalog G1). `paramNamesList` is the ordered set the current `f`
   // reads (from `freeParameters`); `paramValues` holds each one's `[re, im]` (preserved across formula
@@ -163,6 +215,16 @@ export class Plot {
       new Float32Array([-1, -1, 3, -1, -1, 3]),
       gl.STATIC_DRAW,
     );
+    // The reusable domain grid mesh for the 3D surface (uploaded once; the vertex shader maps its UVs
+    // into the current view rectangle, so the same buffers serve any pan/zoom).
+    const mesh = buildGridMesh(this.gridN);
+    this.gridIndexCount = mesh.indexCount;
+    this.gridUvBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gridUvBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.uvs, gl.STATIC_DRAW);
+    this.gridIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
     this.buildAtlas();
     this.rebuildProgram();
   }
@@ -232,6 +294,58 @@ export class Plot {
     gl.bindVertexArray(null);
     if (this.vao) gl.deleteVertexArray(this.vao);
     this.vao = vao;
+
+    this.rebuildSurfaceProgram();
+  }
+
+  /** Build the 3D surface program (vertex-displaced grid + `colorAt` fragment) for the current `f`, its
+   *  uniform locations, and its VAO (the shared grid buffers bound to `aUV` + the index buffer). Called
+   *  from {@link rebuildProgram}, so the surface tracks every formula / parameter-set change. */
+  private rebuildSurfaceProgram(): void {
+    const gl = this.gl;
+    const src = buildSurfaceProgram(this.fGlsl, this.paramNamesList);
+    const program = createProgram(gl, src.vertex, src.fragment);
+    if (this.surfaceProgram) gl.deleteProgram(this.surfaceProgram);
+    this.surfaceProgram = program;
+    this.surfaceParamLocs = new Map(
+      this.paramNamesList.map((n) => [n, gl.getUniformLocation(program, `uParam_${n}`)]),
+    );
+    const loc = (name: string): WebGLUniformLocation | null =>
+      gl.getUniformLocation(program, name);
+    this.surfaceUniforms = {
+      uVP: loc("uVP"),
+      uCenter: loc("uCenter"),
+      uHalfSpan: loc("uHalfSpan"),
+      uAspect: loc("uAspect"),
+      uHeightMode: loc("uHeightMode"),
+      uHeightScale: loc("uHeightScale"),
+      uLightDir: loc("uLightDir"),
+      uShaded: loc("uShaded"),
+      uPhaseLUT: loc("uPhaseLUT"),
+      uPhaseRow: loc("uPhaseRow"),
+      uModulus: loc("uModulus"),
+      uModScale: loc("uModScale"),
+      uEnhance: loc("uEnhance"),
+      uSectors: loc("uSectors"),
+      uCrisp: loc("uCrisp"),
+      uHueShift: loc("uHueShift"),
+      uHueSign: loc("uHueSign"),
+      uCvd: loc("uCvd"),
+      uUncertainty: loc("uUncertainty"),
+      uLevelAbs: loc("uLevelAbs"),
+      uLevelArgOn: loc("uLevelArgOn"),
+      uLevelArg: loc("uLevelArg"),
+    };
+    const svao = gl.createVertexArray();
+    gl.bindVertexArray(svao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gridUvBuffer);
+    const aUV = gl.getAttribLocation(program, "aUV");
+    gl.enableVertexAttribArray(aUV);
+    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer); // recorded in the VAO
+    gl.bindVertexArray(null);
+    if (this.surfaceVao) gl.deleteVertexArray(this.surfaceVao);
+    this.surfaceVao = svao;
   }
 
   /**
@@ -305,12 +419,48 @@ export class Plot {
     this.paint();
   }
 
-  /** Draw the current program + state into the canvas at its current buffer size (no resize) — shared
-   *  by the live {@link render} and the {@link renderThumbnail} sweep capture. */
+  /** Draw the current state into the canvas at its current buffer size (no resize) — shared by the live
+   *  {@link render} and the {@link renderThumbnail} sweep capture. Dispatches to the flat portrait or the
+   *  3D landscape by {@link mode}. */
   private paint(): void {
+    if (this.mode === "3d") this.paintSurface();
+    else this.paint2D();
+  }
+
+  /** Set the shared colour uniforms (phase LUT + modulus + enhancement + level sets + uncertainty + CVD)
+   *  on whichever program is current — identical for the 2D fragment and the 3D surface fragment. */
+  private applyColorUniforms(u: ColorUniformLocs): void {
+    const gl = this.gl;
+    const c = this.color;
+    gl.uniform1i(u.uPhaseLUT, 0);
+    gl.uniform1f(u.uPhaseRow, (c.colormap + 0.5) / this.atlasHeight);
+    gl.uniform1i(u.uModulus, c.modulus);
+    gl.uniform1f(u.uModScale, c.modScale);
+    gl.uniform1i(u.uEnhance, c.enhance);
+    gl.uniform1f(u.uSectors, c.sectors);
+    gl.uniform1i(u.uCrisp, c.crisp);
+    gl.uniform1f(u.uHueShift, c.hueShift);
+    gl.uniform1f(u.uHueSign, c.hueSign);
+    gl.uniform1i(u.uCvd, c.cvd);
+    gl.uniform1i(u.uUncertainty, c.uncertainty);
+    gl.uniform1f(u.uLevelAbs, c.levelAbs);
+    gl.uniform1i(u.uLevelArgOn, c.levelArgOn);
+    gl.uniform1f(u.uLevelArg, c.levelArg);
+  }
+
+  /** Set the live named-parameter uniforms (ADR-0011) on the given program's locations. */
+  private applyParamUniforms(locs: Map<string, WebGLUniformLocation | null>): void {
+    for (const name of this.paramNamesList) {
+      const v = this.paramValues.get(name) ?? [0, 0];
+      this.gl.uniform2f(locs.get(name) ?? null, v[0], v[1]);
+    }
+  }
+
+  private paint2D(): void {
     const gl = this.gl;
     const u = this.uniforms;
     if (!this.program || !u) return;
+    gl.disable(gl.DEPTH_TEST);
     gl.useProgram(this.program);
     gl.bindVertexArray(this.vao);
     gl.activeTexture(gl.TEXTURE0);
@@ -319,26 +469,67 @@ export class Plot {
     gl.uniform2f(u.uCenter, this.view.cx, this.view.cy);
     gl.uniform1f(u.uHalfSpan, this.view.span);
     gl.uniform2f(u.uResolution, this.canvas.width, this.canvas.height);
-    gl.uniform1i(u.uPhaseLUT, 0);
-    gl.uniform1f(u.uPhaseRow, (this.color.colormap + 0.5) / this.atlasHeight);
-    gl.uniform1i(u.uModulus, this.color.modulus);
-    gl.uniform1f(u.uModScale, this.color.modScale);
-    gl.uniform1i(u.uEnhance, this.color.enhance);
-    gl.uniform1f(u.uSectors, this.color.sectors);
-    gl.uniform1i(u.uCrisp, this.color.crisp);
-    gl.uniform1f(u.uHueShift, this.color.hueShift);
-    gl.uniform1f(u.uHueSign, this.color.hueSign);
-    gl.uniform1i(u.uCvd, this.color.cvd);
-    gl.uniform1i(u.uUncertainty, this.color.uncertainty);
-    gl.uniform1f(u.uLevelAbs, this.color.levelAbs);
-    gl.uniform1i(u.uLevelArgOn, this.color.levelArgOn);
-    gl.uniform1f(u.uLevelArg, this.color.levelArg);
-    // Live parameters (ADR-0011): one vec2 per named parameter the current f reads.
-    for (const name of this.paramNamesList) {
-      const v = this.paramValues.get(name) ?? [0, 0];
-      gl.uniform2f(this.paramLocs.get(name) ?? null, v[0], v[1]);
-    }
+    this.applyColorUniforms(u);
+    this.applyParamUniforms(this.paramLocs);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Draw the analytic-landscape surface: the grid mesh displaced by the height field, orbit-camera
+   *  projected, coloured by the shared `colorAt`. The camera looks at the view centre `[cx, cy, 0]`, so
+   *  a top-down orthographic camera lines the surface up with the 2D portrait. */
+  private paintSurface(): void {
+    const gl = this.gl;
+    const u = this.surfaceUniforms;
+    if (!this.surfaceProgram || !u || !this.surfaceVao) return;
+    const w = this.canvas.width;
+    const h = this.canvas.height;
+    const aspect = h > 0 ? w / h : 1;
+    gl.useProgram(this.surfaceProgram);
+    gl.bindVertexArray(this.surfaceVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+    gl.viewport(0, 0, w, h);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg, so the surface sits in a dark scene
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    const cam: OrbitCamera = { ...this.camera, target: [this.view.cx, this.view.cy, 0] };
+    gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, this.view.span));
+    gl.uniform2f(u.uCenter, this.view.cx, this.view.cy);
+    gl.uniform1f(u.uHalfSpan, this.view.span);
+    gl.uniform1f(u.uAspect, aspect);
+    gl.uniform1i(u.uHeightMode, this.heightMode);
+    gl.uniform1f(u.uHeightScale, this.heightScale);
+    gl.uniform3f(u.uLightDir, 0.4, 0.5, 0.75);
+    // Shade the landscape, except in the exact top-down view — there it must reproduce the 2D portrait.
+    const topDown = cam.ortho && cam.elevation > Math.PI / 2 - 1e-3;
+    gl.uniform1f(u.uShaded, topDown ? 0 : 1);
+    this.applyColorUniforms(u); // also sets uModScale, which the vertex height law shares
+    this.applyParamUniforms(this.surfaceParamLocs);
+    gl.drawElements(gl.TRIANGLES, this.gridIndexCount, gl.UNSIGNED_INT, 0);
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  // --- 3D landscape controls (Phase 5, 5A) --------------------------------------------------------
+  /** Orbit the camera by screen-drag deltas (radians); switches to perspective (leaves top-down). */
+  orbit(dAzimuth: number, dElevation: number): void {
+    this.camera.azimuth += dAzimuth;
+    this.camera.elevation = clampElevation(this.camera.elevation + dElevation);
+    this.camera.ortho = false;
+  }
+
+  /** Dolly the camera in/out by a multiplicative factor (clamped). */
+  dolly(factor: number): void {
+    this.camera.distance = Math.min(60, Math.max(0.3, this.camera.distance * factor));
+  }
+
+  /** Snap to the exact top-down orthographic view — the landscape then equals the 2D portrait. */
+  topDown(): void {
+    this.camera = { ...this.camera, ...TOP_DOWN };
+  }
+
+  /** Reset the orbit camera to its default three-quarter framing. */
+  resetCamera(): void {
+    this.camera = { ...DEFAULT_CAMERA };
   }
 
   // --- Coordinate helpers (CSS pixels in client space -> world) -----------------------------------

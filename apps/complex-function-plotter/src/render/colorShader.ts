@@ -12,7 +12,14 @@ export const VERTEX_SHADER = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
-const COLORING_GLSL = `
+/**
+ * The colouring core: the phase-LUT + modulus + enhancement + level-set + uncertainty + CVD uniforms
+ * and `colorAt(w)`. Exported so the Phase-5 **3D surface** fragment shader reuses the exact same
+ * `colorAt` — the landscape's colour is then identical to the 2D portrait's (top-down matches
+ * pixel-for-pixel). Depends only on the complex GLSL stdlib (`cvec`, `carg`, `cabsf`, …), which every
+ * consumer includes ahead of it.
+ */
+export const COLORING_GLSL = `
 uniform sampler2D uPhaseLUT;   // width×N colormap atlas
 uniform float     uPhaseRow;   // (colormap index + 0.5) / N  -> the atlas row
 uniform int       uModulus;    // 0 constant, 1 linear, 2 rational, 3 log, 4 log-log

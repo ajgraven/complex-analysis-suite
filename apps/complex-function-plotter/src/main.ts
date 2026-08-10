@@ -1,5 +1,5 @@
 // Complex Function Plotting Tool — the app entry: it wires the DOM to the render engine and the CPU
-// instruments. Phase 3 complete (parameters & families):
+// instruments (2D research tool through the Phase-5 3D analytic landscape):
 //
 // Type f(z) (or pick a preset); it is parsed and compiled by @cas/expr (to GLSL for the render and to
 // a JS evaluator for the probe/instruments), typeset live with KaTeX, and drawn by the layered coloring
@@ -15,7 +15,9 @@
 // (ui/sweep.ts: a grid of thumbnails across one parameter's range, click a cell to jump), share-links
 // (#vs= via @cas/interchange), and PNG export. The Phase-4 special functions Γ / ζ are in the language;
 // when the active map calls one, an honest float32 precision badge (ui/precision.ts) labels the picture
-// `≈`. The DLMF colouring mode (Phase 4) and the 3D views (Phase 5) follow.
+// `≈`. A 2D/3D toggle swaps the flat portrait for the Phase-5 analytic **landscape** (render3d/): the
+// same map drawn as a height surface, orbit/dolly camera, coloured by the same colorAt (so top-down =
+// the 2D portrait). Further 3D (analytic normals, the Riemann sphere) and export (Phase 6) follow.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
@@ -110,6 +112,14 @@ function main(): void {
   const sweepGrid = byId("sweepGrid");
   const sweepTitle = byId("sweepTitle");
   const sweepClose = byId("sweepClose");
+  const view2d = byId("view2d");
+  const view3d = byId("view3d");
+  const surfaceControls = byId("surfaceControls");
+  const heightModeSel = byId("heightMode");
+  const heightScaleInput = byId("heightScale");
+  const heightScaleVal = byId("heightScaleVal");
+  const topDownBtn = byId("topDown");
+  const resetViewBtn = byId("resetView");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -232,9 +242,22 @@ function main(): void {
 
   const redraw = (draft = false): void => {
     plot.draw(draft);
-    drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
-    if (markSings && sings)
-      drawMarkers(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight, sings);
+    if (plot.mode === "3d") {
+      // The axes / grid / markers are 2D-projection overlays; in the 3D landscape they'd be wrong, so
+      // clear the overlay canvas and let the surface stand alone.
+      const ax = axesCanvas.getContext("2d");
+      if (ax) ax.clearRect(0, 0, axesCanvas.width, axesCanvas.height);
+    } else {
+      drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
+      if (markSings && sings)
+        drawMarkers(
+          axesCanvas,
+          plot.view,
+          canvas.clientWidth,
+          canvas.clientHeight,
+          sings,
+        );
+    }
     // Only committed frames update the share-link — a draft (drag / animation frame) settles with a
     // full redraw, so this keeps the hash off the per-frame path (no history churn while `t` plays).
     if (!draft) scheduleHash();
@@ -460,6 +483,51 @@ function main(): void {
   if (fnF instanceof HTMLElement) fnF.addEventListener("click", () => setActive("f"));
   if (fnG instanceof HTMLElement) fnG.addEventListener("click", () => setActive("g"));
 
+  // 2D / 3D view toggle + the analytic-landscape controls (Phase 5, 5A). Switching to 3D shows the
+  // surface controls and swaps the pan/zoom interaction for orbit/dolly (handled in the pointer code).
+  const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
+  const setView = (m: "2d" | "3d"): void => {
+    plot.mode = m;
+    if (view2d instanceof HTMLElement) view2d.classList.toggle("active", m === "2d");
+    if (view3d instanceof HTMLElement) view3d.classList.toggle("active", m === "3d");
+    if (surfaceControls instanceof HTMLElement) surfaceControls.hidden = m !== "3d";
+    redraw(false);
+  };
+  if (view2d instanceof HTMLElement)
+    view2d.addEventListener("click", () => setView("2d"));
+  if (view3d instanceof HTMLElement)
+    view3d.addEventListener("click", () => setView("3d"));
+  if (heightModeSel instanceof HTMLSelectElement) {
+    heightModeSel.value = String(plot.heightMode);
+    heightModeSel.addEventListener("change", () => {
+      plot.heightMode = Number(heightModeSel.value);
+      redraw(false);
+    });
+  }
+  if (heightScaleInput instanceof HTMLInputElement) {
+    const showHeightScale = (): void => {
+      if (heightScaleVal instanceof HTMLElement)
+        heightScaleVal.textContent = heightScaleInput.value;
+    };
+    heightScaleInput.value = String(plot.heightScale);
+    showHeightScale();
+    heightScaleInput.addEventListener("input", () => {
+      plot.heightScale = Number(heightScaleInput.value);
+      showHeightScale();
+      redraw(false);
+    });
+  }
+  if (topDownBtn instanceof HTMLElement)
+    topDownBtn.addEventListener("click", () => {
+      plot.topDown();
+      redraw(false);
+    });
+  if (resetViewBtn instanceof HTMLElement)
+    resetViewBtn.addEventListener("click", () => {
+      plot.resetCamera();
+      redraw(false);
+    });
+
   // Autocomplete (A5): builtins + constants + z/c + the current map's parameters.
   const FN_NAMES = [...COMPLEX_FUNCTIONS, ...BINARY_FUNCTIONS, "f", "if", "not"];
   const acCandidates = (): Candidate[] => {
@@ -675,36 +743,57 @@ function main(): void {
     if (parg instanceof HTMLElement) parg.textContent = fmtNum(Math.atan2(w[1], w[0]));
   };
 
-  // Pan (grab-and-drag) + zoom-to-cursor; probe when not dragging.
+  // 2D: pan (grab-and-drag) + zoom-to-cursor, probe when idle. 3D: orbit (drag) + dolly (wheel).
   let grabWorld: Complex | null = null;
+  let orbitLast: { x: number; y: number } | null = null;
   canvas.addEventListener("pointerdown", (e) => {
-    grabWorld = plot.screenToWorld(e.clientX, e.clientY);
-    canvas.setPointerCapture(e.pointerId);
+    if (plot.mode === "3d") orbitLast = { x: e.clientX, y: e.clientY };
+    else grabWorld = plot.screenToWorld(e.clientX, e.clientY);
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* a synthetic / already-released pointer can't be captured — harmless */
+    }
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (grabWorld) {
+    if (orbitLast) {
+      const dx = e.clientX - orbitLast.x;
+      const dy = e.clientY - orbitLast.y;
+      orbitLast = { x: e.clientX, y: e.clientY };
+      plot.orbit(dx * ORBIT_SPEED, -dy * ORBIT_SPEED); // drag right → spin; drag up → tilt toward top-down
+      redraw(true);
+    } else if (grabWorld) {
       plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld);
       redraw(true);
-    } else {
+    } else if (plot.mode === "2d") {
       updateProbe(e.clientX, e.clientY);
     }
   });
-  const endPan = (): void => {
+  const endDrag = (): void => {
+    if (orbitLast) {
+      orbitLast = null;
+      redraw(false);
+    }
     if (grabWorld) {
       grabWorld = null;
       redraw(false);
       recomputeSingsSoon();
     }
   };
-  canvas.addEventListener("pointerup", endPan);
-  canvas.addEventListener("pointercancel", endPan);
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
   canvas.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
-      plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY));
-      redraw(false);
-      recomputeSingsSoon();
+      if (plot.mode === "3d") {
+        plot.dolly(Math.pow(1.0012, e.deltaY));
+        redraw(false);
+      } else {
+        plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY));
+        redraw(false);
+        recomputeSingsSoon();
+      }
     },
     { passive: false },
   );

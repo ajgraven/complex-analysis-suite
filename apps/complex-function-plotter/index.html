@@ -187,6 +187,31 @@
         <button type="button" id="sweepShow" style="margin-top: 8px; width: 100%">Show sweep ▦</button>
       </div>
 
+      <div class="group fn-group">
+        <div class="fn-head">
+          <label id="viewLabel">View</label>
+          <div class="fn-toggle" role="group" aria-label="2D or 3D view">
+            <button type="button" id="view2d" class="fn-tab active">2D</button>
+            <button type="button" id="view3d" class="fn-tab">3D</button>
+          </div>
+        </div>
+        <div id="surfaceControls" hidden>
+          <label for="heightMode" style="margin-top: 8px">Surface height</label>
+          <select id="heightMode">
+            <option value="0">Log |f|</option>
+            <option value="1">Linear |f|</option>
+            <option value="2">Stereographic</option>
+          </select>
+          <label for="heightScale" style="margin-top: 8px">Exaggeration <span class="subval" id="heightScaleVal"></span></label>
+          <input type="range" id="heightScale" min="0.1" max="3" step="0.1" value="1" />
+          <div class="row" style="margin-top: 8px">
+            <button type="button" id="topDown">Top-down</button>
+            <button type="button" id="resetView">Reset view</button>
+          </div>
+          <p class="param-hint">Drag to orbit · scroll to dolly. Top-down matches the 2D portrait.</p>
+        </div>
+      </div>
+
       <div class="group">
         <div class="row">
           <div>
