@@ -64,8 +64,8 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # Builds packages + all apps via the root script. We only publish launcher + CD + QD below;
-      # building correspondences too is harmless and keeps parity with the CI build.
+      # Builds packages + all apps via the root script. We publish launcher + CD + QD + Complex Function
+      # Plotter + Riemann Map below; building correspondences too is harmless and keeps parity with CI.
       - name: Build
         run: pnpm build
 
@@ -76,6 +76,7 @@ jobs:
           cp -r apps/complex-dynamics/dist   _site/complex-dynamics
           cp -r apps/quadrature-domains/dist _site/quadrature-domains
           cp -r apps/complex-function-plotter/dist _site/complex-function-plotter
+          cp -r apps/riemann-map/dist        _site/riemann-map
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5

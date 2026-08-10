@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Riemann Map</title>
+    <meta
+      name="description"
+      content="A research-grade Riemann-map and conformal-mapping studio: custom conformal maps, domain coloring, grids, invariants, and multiple construction methods. Part of the Complex Analysis Suite."
+    />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #0f1115;
+        --panel: #141821;
+        --panel-border: #262b36;
+        --text: #e7e9ee;
+        --muted: #99a1b3;
+        --accent: #6ea8fe;
+        --danger: #e0876b;
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0;
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+      #app { height: 100%; display: flex; flex-direction: column; }
+      .topbar {
+        display: flex; align-items: baseline; gap: 1rem;
+        padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--panel-border);
+        background: var(--panel); flex: 0 0 auto;
+      }
+      .topbar .brand { font-weight: 600; letter-spacing: -0.01em; }
+      .topbar .readout { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .body { flex: 1 1 auto; min-height: 0; display: flex; }
+      .sidebar {
+        width: 20rem; flex: 0 0 auto; overflow-y: auto;
+        border-right: 1px solid var(--panel-border); background: var(--panel);
+        padding: 0.9rem; display: flex; flex-direction: column; gap: 1.3rem;
+      }
+      .sidebar h2 {
+        margin: 0 0 0.5rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--muted); font-weight: 600;
+      }
+      .sidebar section { display: flex; flex-direction: column; gap: 0.45rem; }
+      .sidebar select, .sidebar input.expr {
+        width: 100%; padding: 0.4rem 0.5rem; border-radius: 7px;
+        border: 1px solid var(--panel-border); background: #0f131b; color: var(--text);
+        font-size: 0.9rem;
+      }
+      .sidebar input.expr { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+      .sidebar select:focus, .sidebar input.expr:focus { outline: none; border-color: var(--accent); }
+      .sidebar .field { display: flex; flex-direction: column; gap: 0.2rem; }
+      .sidebar .field-label { font-size: 0.72rem; color: var(--muted); }
+      .sidebar .buttons { display: flex; gap: 0.5rem; }
+      .sidebar button {
+        flex: 1; padding: 0.45rem; border-radius: 7px; cursor: pointer; font-size: 0.88rem;
+        border: 1px solid var(--panel-border); background: #1a2230; color: var(--text);
+      }
+      .sidebar button:hover { border-color: var(--accent); }
+      .sidebar .error { display: none; color: var(--danger); font-size: 0.82rem; }
+      .sidebar .error.visible { display: block; }
+      .sidebar .preview { min-height: 1.6rem; padding: 0.2rem 0; overflow-x: auto; }
+      dl.hover { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.8rem; margin: 0; }
+      dl.hover dt { color: var(--muted); }
+      dl.hover dd { margin: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
+      .muted { color: var(--muted); font-size: 0.85rem; margin: 0; }
+      .glossary > summary {
+        cursor: pointer; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+        color: var(--muted); font-weight: 600; list-style-position: inside;
+      }
+      .glossary > summary:hover { color: var(--text); }
+      dl.glossary-dl { margin: 0.6rem 0 0; display: flex; flex-direction: column; gap: 0.5rem; }
+      dl.glossary-dl dt { color: var(--text); font-weight: 600; font-size: 0.82rem; }
+      dl.glossary-dl dd { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
+      .stage { flex: 1 1 auto; min-width: 0; display: flex; }
+      .pane { position: relative; flex: 1 1 0; min-width: 0; }
+      .pane.right { display: none; background: #0c0e13; border-left: 1px solid var(--panel-border); }
+      .stage.split .pane.right { display: block; }
+      canvas.plane, canvas.overlay, canvas.image { position: absolute; inset: 0; width: 100%; height: 100%; }
+      canvas.plane { touch-action: none; cursor: grab; }
+      canvas.plane:active { cursor: grabbing; }
+      canvas.overlay { pointer-events: none; }
+      .panelabel {
+        position: absolute; top: 0.5rem; left: 0.6rem; z-index: 1;
+        color: var(--muted); font-size: 0.75rem; background: rgba(15, 17, 21, 0.6);
+        padding: 0.1rem 0.45rem; border-radius: 5px;
+      }
+      .note {
+        position: absolute; left: 50%; top: 1rem; transform: translateX(-50%);
+        max-width: 40rem; padding: 0.5rem 0.8rem; border-radius: 8px;
+        background: rgba(176, 83, 58, 0.16); border: 1px solid rgba(176, 83, 58, 0.4);
+        color: var(--text); display: none; z-index: 2;
+      }
+      .note.visible { display: block; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <noscript>The Riemann Map studio requires JavaScript.</noscript>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

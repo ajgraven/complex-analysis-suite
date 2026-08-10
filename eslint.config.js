@@ -22,6 +22,7 @@ const APP_NAMES = [
   "quadrature-domains",
   "correspondences",
   "launcher",
+  "riemann-map",
 ];
 
 const noCrossAppImports = APP_NAMES.flatMap((name) => [name, `${name}/*`]).map(

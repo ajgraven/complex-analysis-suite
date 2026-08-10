@@ -18,7 +18,7 @@ import { inverseJuliaCloud } from "./inverseJulia";
 import type { Leaf } from "./laminationTypes";
 import { bulbRayAngles, dynamicRay, parameterRay, rayDepthForZoom } from "./rays";
 import { siegelInvariantCurves } from "./siegelCurves";
-import { reconstructBoundary } from "./uniformize";
+import { reconstructBoundary } from "@cas/dynamics";
 
 const OVERLAY_BASE = 500;
 
