@@ -9,7 +9,10 @@
  * Note: the cross-app `#s=` link carries the MAP + viewport, not live parameter VALUES (interchange's
  * `expr` map has no parameter-value slot); the plotter's own `#vs=` share-link is what round-trips a
  * parameterised view exactly. `zoom` carries the plotter's world half-height (an app-defined scale, per
- * Viewport.zoom) so a plotter→plotter round-trip restores the frame; another app reads it as its own scale.
+ * Viewport.zoom): a plotter→plotter round-trip restores the frame, but Complex Dynamics currently reads
+ * only the map from the envelope (never the viewport) and opens at its own default frame — and CD's own
+ * `zoom` is a *magnification* (half-width ≈ 1/zoom), the reciprocal of this half-height, so the viewport
+ * must not be wired into CD without converting it.
  */
 import {
   encodeLink,
@@ -58,9 +61,11 @@ export function encodeViewLink(v: ViewExport): string {
 }
 
 /**
- * A deep link that opens Complex Dynamics — a sibling app under the launcher root — with this view
- * preloaded. `base` is the plotter's current page URL (e.g. `…/complex-function-plotter/`); CD sits at
- * `../complex-dynamics/`. Falls back to a bare relative path if `base` isn't a usable URL.
+ * A deep link that opens Complex Dynamics — a sibling app under the launcher root — with the current
+ * MAP preloaded (CD reads the `#s=` envelope's map on load; it does not consume the viewport, so CD
+ * frames the map with its own default view). `base` is the plotter's current page URL (e.g.
+ * `…/complex-function-plotter/`); CD sits at `../complex-dynamics/`. Falls back to a bare relative path
+ * if `base` isn't a usable URL.
  */
 export function cdHandoffUrl(base: string, link: string): string {
   try {

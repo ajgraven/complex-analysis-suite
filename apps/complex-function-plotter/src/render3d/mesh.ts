@@ -10,7 +10,8 @@
 export interface GridMesh {
   /** `(n + 1)²` vertex UVs in `[0, 1]²`, row-major (`uvs[2k]`, `uvs[2k + 1]`). */
   uvs: Float32Array;
-  /** `n² · 2` triangles, three indices each — wound CCW as seen from +Z (above the plane). */
+  /** `n² · 2` triangles, three indices each. Winding is CW seen from +Z; back-face culling is never
+   *  enabled and the shader orients the normal itself, so the order does not affect rendering. */
   indices: Uint32Array;
   /** Cells per side. */
   n: number;
@@ -40,7 +41,8 @@ export function buildGridMesh(n: number): GridMesh {
       const b = a + 1;
       const c = a + side;
       const d = c + 1;
-      // Two CCW triangles per cell (matches the QD sphere-mesh winding, so front faces point outward).
+      // Two triangles per cell. As listed these wind CW seen from +Z — culling is off and the shader
+      // orients the normal itself, so it's inert; verify the order before ever enabling CULL_FACE.
       indices[k++] = a;
       indices[k++] = c;
       indices[k++] = b;
