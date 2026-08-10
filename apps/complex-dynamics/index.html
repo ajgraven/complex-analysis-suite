@@ -738,6 +738,57 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Tiling — the σ⁻¹ preimage tree (F3c). Double-click a point in the tiling set (its σ-orbit
+                     reaches the fundamental tile K) to grow its preimage tree; depth + budget bound the growth.
+                     Overlay-only — the field render is unchanged. The two params travel in the σ view (`_sigma`);
+                     the tree itself is a transient inspection (like the pinned orbit, it is not serialized). -->
+                <details class="control-group" id="schwarz-tiling-group">
+                  <summary>Tiling — preimage tree</summary>
+                  <div class="control-grid">
+                    <p class="schwarz-inspect-hint">
+                      Double-click a point in the tiling set to grow its σ⁻¹ preimage tree (≈).
+                      <button
+                        class="gloss-link"
+                        type="button"
+                        data-term="schwarz-reflection"
+                        aria-label="What is the Schwarz reflection σ?"
+                      >
+                        ?
+                      </button>
+                    </p>
+                    <div class="field">
+                      <label for="schwarz-tiling-depth">tree depth</label>
+                      <input
+                        id="schwarz-tiling-depth"
+                        type="number"
+                        min="0"
+                        max="8"
+                        step="1"
+                        inputmode="numeric"
+                        value="4"
+                        title="σ⁻¹ generations grown from the seed. The tiling branches ~2ⁿ (deltoid), so a deep tree hits the visual budget."
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-tiling-budget">visual budget</label>
+                      <select
+                        id="schwarz-tiling-budget"
+                        title="Total-node cap — stops the tree growing past this many preimages (keeps a deep tiling renderable)."
+                      >
+                        <option value="1024">1024</option>
+                        <option value="4096" selected>4096</option>
+                        <option value="16384">16384</option>
+                      </select>
+                    </div>
+                    <div class="field schwarz-tiling-actions">
+                      <div id="schwarz-tiling-count" class="schwarz-inspect" aria-live="polite" hidden></div>
+                      <button id="schwarz-tiling-clear" type="button" title="Remove the preimage tree overlay">
+                        clear tiling
+                      </button>
+                    </div>
+                  </div>
+                </details>
+
                 <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
                      in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
                 <details class="control-group" id="schwarz-render-group">

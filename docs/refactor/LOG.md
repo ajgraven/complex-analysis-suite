@@ -2349,3 +2349,37 @@
   truncates at `1,2,4,8,5` = 20, the lobe runs dry at `1,1,0`. **F3b complete — σ⁻¹ + the tiling tree are both
   in `@cas/schwarz` and unit-tested; F3c wires the CD double-click tiling UI (seed-in-set gate + plasma-ramped
   tree overlay + z-disk ψ-mirror + `_sigma` depth/budget).**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F3c — the CD tiling UI):**
+  the fundamental-domain tiling becomes interactive in Complex Dynamics — **double-click a point in the tiling
+  set to grow its σ⁻¹ preimage tree** over the σ field, in whichever of the three coordinate views is active.
+  A new `schwarzTreeOverlay.ts` (`drawSchwarzTree`) strokes a `buildPreimageTree` result — parent→child edges +
+  per-node dots — coloured by GENERATION with a plasma ramp ported from QD's `preimageGenColor` (bright yellow
+  seed → orange → deep purple, so the two apps' tilings read alike), over CD's dark casing so it stays legible
+  on both the navy K interior and a bright Ω ramp. Projection reuses the σ-orbit overlay's dispatch verbatim, so
+  the tiling lives coherently in all three views: the w-plane via plotToPixel, the **z-disk ψ-mirrored** (each
+  preimage pulled back to z = φ⁻¹(w)), and the **sphere** projected onto the ball (null on the occluded far cap
+  drops the node + any edge touching it). In `main.ts`: a `dblclick` handler maps the pointer to w via the
+  existing `schwarzSeedFromPointer` (plane · z-disk φ(z) · sphere raycast; null off-domain) and gates on
+  tiling-set membership — `schwarzEscapeAt(w).kind === "fundamental"` with a gate cap of `max(256, displayMaxIter·4)`
+  (QD's multiplier, so a truly-escaping seed isn't misread "interior" under a low display budget); a rejected seed
+  toasts and leaves any prior tree untouched. A successful seed drops the orbit its two synthesized single-clicks
+  pinned (matching QD — a dblclick never also pins), so the clean tiling + its `N preimages · M gens (capped?)`
+  readout stand alone. The tree is drawn UNDER the orbits every paint from w-space, so it survives pan/zoom/
+  view-switch; it is cleared on a new map. A **Tiling** control group adds depth (0–8) + a visual-budget select
+  (1024/4096/16384) that rebuild the active tree LIVE from its seed (no re-click), plus a clear button. Both params
+  travel in `_sigma` (schwarzState: `td`/`tb`, omitted at the F3b defaults 4/4096 so a pre-F3c link is byte-identical;
+  clamped 0–8 / 1–65536 on a hostile link) — the tree ITSELF is transient (like the pinned orbit, not serialized),
+  so a restored link keeps the preferred depth/budget and the user re-seeds with a double-click. The PNG export bakes
+  the tiling alongside ∂Ω + the orbit in each view. Green: typecheck + lint + node **2459 → 2466** (+5 schwarzTreeOverlay
+  — edges become moveTo→lineTo per edge, a null projection drops the node + both its edges, toPixel takes precedence,
+  empty/seed-only trees; +2 schwarzState — the tiling params round-trip, omit at their defaults, and clamp; appState
+  opt-out updated for the two new controls). VERIFIED (Playwright, **14/14**): a double-click on the deltoid's tiling
+  set seeds a 31-node depth-4 tree (readout shows, field changes); raising depth rebuilds it live (31 → 127 nodes);
+  the budget select rebuilds; the tiling ψ-mirrors into the z-disk and projects onto the sphere (surviving both view
+  switches); a share link restores depth 8 + budget 1024 but NOT the transient tree; clear removes it; and a
+  double-click off the uniformizing domain (|z|<1 in the z-disk) seeds nothing. The visual-budget CAP itself is
+  engine-unit-tested (F3b) — the deltoid tops out at 511 nodes by depth 8, under the 1024 select minimum, so it is
+  not reachable through this UI. Captured the depth-4 deltoid tiling (yellow seed → orange/purple preimage web).
+  σ⁻¹ is a numerical reconstruction, so the tiling stays `≈` (the hint reads "…preimage tree (≈)"). **F3c complete —
+  F3 (the preimage/tiling tree, M–L increment) is done end-to-end: σ⁻¹ + buildPreimageTree in `@cas/schwarz`, and the
+  CD double-click tiling UI across all three σ views with `_sigma` params.**

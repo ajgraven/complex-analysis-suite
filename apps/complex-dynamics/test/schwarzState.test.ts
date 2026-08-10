@@ -8,6 +8,7 @@ import {
   SIGMA_LIGHT_DEFAULTS,
   SIGMA_OVERLAY_DEFAULTS,
   SIGMA_VIEW_DEFAULTS,
+  SIGMA_TILING_DEFAULTS,
   type SigmaViewState,
 } from "../src/state/schwarzState";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../src/render/schwarzView";
@@ -30,6 +31,7 @@ const DELTOID: SigmaViewState = {
   ...SIGMA_LIGHT_DEFAULTS,
   ...SIGMA_OVERLAY_DEFAULTS,
   ...SIGMA_VIEW_DEFAULTS,
+  ...SIGMA_TILING_DEFAULTS,
 };
 const POLE: SigmaViewState = {
   phi: { c: [1, 0], F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
@@ -51,6 +53,8 @@ const POLE: SigmaViewState = {
   lightHeight: 3.5,
   showBoundary: true, // non-default F1 ∂Ω overlay, to prove it round-trips
   viewMode: "z", // non-default F2b z-disk view, to prove it round-trips
+  tilingDepth: 6, // non-default F3c tiling params, to prove they round-trip
+  tilingBudget: 1024,
 };
 
 describe("encodeSigmaState / parseSigmaState round-trip", () => {
@@ -60,6 +64,19 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
 
   it("round-trips a pole-bearing state (branches, non-default view + coloring)", () => {
     expect(parseSigmaState(encodeSigmaState(POLE))).toEqual(POLE);
+  });
+
+  it("carries the F3c tiling params only when non-default (byte-identical to pre-F3c at the defaults)", () => {
+    // POLE has non-default tiling (depth 6, budget 1024) → both keys present + they round-trip.
+    expect(encodeSigmaState(POLE)).toContain('"td":6');
+    expect(encodeSigmaState(POLE)).toContain('"tb":1024');
+    // DELTOID holds the defaults (depth 4, budget 4096) → neither key is emitted.
+    expect(encodeSigmaState(DELTOID)).not.toContain('"td"');
+    expect(encodeSigmaState(DELTOID)).not.toContain('"tb"');
+    // A pre-F3c link (no td/tb) restores the defaults.
+    const restored = parseSigmaState(encodeSigmaState(DELTOID));
+    expect(restored?.tilingDepth).toBe(SIGMA_TILING_DEFAULTS.tilingDepth);
+    expect(restored?.tilingBudget).toBe(SIGMA_TILING_DEFAULTS.tilingBudget);
   });
 
   it("round-trips a complex leading coefficient c (S5-C1)", () => {
@@ -85,6 +102,7 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
     ...SIGMA_LIGHT_DEFAULTS,
     ...SIGMA_OVERLAY_DEFAULTS,
     ...SIGMA_VIEW_DEFAULTS,
+    ...SIGMA_TILING_DEFAULTS,
   };
 
   it("round-trips a bounded state (family + w₀) — S5-C2d", () => {
@@ -146,6 +164,14 @@ describe("parseSigmaState — hostile-link hardening", () => {
   it("clamps zoom into [MIN, MAX]", () => {
     expect(parseSigmaState(enc({ ...base, z: 0 }))?.zoom).toBe(SCHWARZ_ZOOM_MIN);
     expect(parseSigmaState(enc({ ...base, z: 1e12 }))?.zoom).toBe(SCHWARZ_ZOOM_MAX);
+  });
+
+  it("clamps the F3c tiling params to sane integer bounds (never a runaway tree from a hostile link)", () => {
+    expect(parseSigmaState(enc({ ...base, td: 999, tb: 1e9 }))?.tilingDepth).toBe(8); // depth capped at 8
+    expect(parseSigmaState(enc({ ...base, td: 999, tb: 1e9 }))?.tilingBudget).toBe(65536); // budget capped
+    expect(parseSigmaState(enc({ ...base, td: -5 }))?.tilingDepth).toBe(0); // depth floored at 0
+    expect(parseSigmaState(enc({ ...base, td: 3.7 }))?.tilingDepth).toBe(4); // rounded to an integer
+    expect(parseSigmaState(enc({ ...base, td: "x", tb: null }))?.tilingDepth).toBe(SIGMA_TILING_DEFAULTS.tilingDepth); // bad ⇒ default
   });
 
   it("normalises an unknown colormap / scale to the defaults (a stale name never blanks the picker)", () => {

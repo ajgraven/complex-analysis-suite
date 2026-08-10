@@ -106,6 +106,7 @@ import {
   schwarzStampParams,
   SIGMA_TONE_DEFAULTS,
   SIGMA_OVERLAY_DEFAULTS,
+  SIGMA_TILING_DEFAULTS,
   type SigmaViewState,
 } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
@@ -123,6 +124,7 @@ import {
   uvToPlotFrac,
   schwarzOrbitAt,
   schwarzOrbitLabel,
+  schwarzEscapeAt,
   parseSchwarzViewInput,
   formatSchwarzViewFields,
   SCHWARZ_ZOOM_MIN,
@@ -131,6 +133,7 @@ import {
   type SchwarzOrbit,
 } from "./render/schwarzView";
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
+import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
@@ -149,7 +152,7 @@ import {
   type Quat,
   type SphereCamera,
 } from "./render/sphereView";
-import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz, buildPreimageTree, type PreimageTree } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
   SCHWARZ_COLORMAP_NAMES,
@@ -3098,6 +3101,14 @@ function init(): void {
   let schwarzInspect: SchwarzOrbit | null = null;
   // σ hover orbit-preview (S5-A2): a transient orbit under the cursor, drawn faint beneath the pinned one.
   let schwarzHover: SchwarzOrbit | null = null;
+  // σ preimage tiling (F3c): a σ⁻¹ tree grown from a double-clicked seed in the tiling set, drawn over the
+  // field (plasma-ramped by generation) in whichever coordinate view is active. Like the pinned orbit it is
+  // a transient inspection — redrawn from w-space every paint (so it survives pan/zoom/view-switch), cleared
+  // on a new map, and NOT serialized (only its depth/budget params travel in `_sigma`). The params default to
+  // the buildPreimageTree defaults so the UI + a fresh session agree.
+  let schwarzPreimageTree: PreimageTree | null = null;
+  let schwarzTilingDepth: number = SIGMA_TILING_DEFAULTS.tilingDepth;
+  let schwarzTilingBudget: number = SIGMA_TILING_DEFAULTS.tilingBudget;
 
   // σ progressive render (B1) + resolution (B2). The field is re-rendered only when schwarzFieldDirty (a
   // view / coloring / map / escape change); an overlay-only repaint (hover, inspect) re-blits the cached GL
@@ -3223,12 +3234,16 @@ function init(): void {
     if (schwarzViewMode === "plane") {
       // ∂Ω boundary overlay (F1) — under the orbits, over the field; `poly` is the session's mask polygon.
       if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
+      // Preimage tiling tree (F3c) — under the orbits (its dense dots shouldn't hide the traced orbit).
+      if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing);
       // Orbit overlays: the transient hover preview (faint, S5-A2) under the pinned click-inspect orbit (bold).
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
     } else if (schwarzViewMode === "z") {
       const toZ = (w: Complex): Complex | null => engine.invertPhi(w); // ψ-pullback into the uniformizing z
       if (schwarzShowBoundary) drawSchwarzUnitCircle(ctx, schwarzView, backing);
+      // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
+      if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPlot: toZ });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPlot: toZ });
     } else if (schwarzViewMode === "sphere") {
@@ -3241,6 +3256,8 @@ function init(): void {
         return uv ? [uv[0] * backing - 0.5, uv[1] * backing - 0.5] : null;
       };
       if (schwarzShowBoundary) drawSchwarzBoundarySphere(ctx, poly, cam, backing);
+      // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
+      if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPixel });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPixel });
     }
@@ -3414,6 +3431,72 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  // σ preimage tiling (F3c): double-click a point in the tiling set to grow its σ⁻¹ tree over the field. The
+  // tree is an overlay (a re-blit, not a re-render); its depth/budget are user controls that rebuild it live.
+  /** Node/generation count readout for the active tree, in the tiling control group (empty when no tree). */
+  function renderSchwarzTilingReadout(): void {
+    const box = document.getElementById("schwarz-tiling-count");
+    if (!box) return;
+    if (!schwarzPreimageTree) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    const nodes = schwarzPreimageTree.generations.reduce((s, g) => s + g.length, 0);
+    const gens = Math.max(0, schwarzPreimageTree.generations.length - 1); // generations past the seed
+    box.hidden = false;
+    box.textContent =
+      `${nodes} preimage${nodes === 1 ? "" : "s"} · ${gens} gen${gens === 1 ? "" : "s"}` +
+      (schwarzPreimageTree.truncatedByBudget ? " (capped)" : "");
+  }
+  /** Grow a σ⁻¹ tiling tree from w₀ — but only if w₀ is in the tiling SET (its σ-orbit reaches the fundamental
+   *  tile K). The gate cap is ≥256 and 4× the display budget so a truly-escaping seed isn't misread as
+   *  "interior" under a low display maxIter (mirrors QD's gate). A rejected seed toasts and leaves any prior
+   *  tree untouched (an overlay repaint isn't even scheduled). */
+  function seedSchwarzTiling(w0: Complex): void {
+    if (!schwarzSession) return;
+    const { engine, poly, boundedOmega } = schwarzSession;
+    const gate = schwarzEscapeAt(engine, poly, w0, {
+      maxIter: Math.max(256, schwarzEscape.maxIter * 4),
+      escapeR: schwarzEscape.escapeR,
+      boundedOmega,
+    });
+    if (gate.kind !== "fundamental") {
+      showToast("Double-click a point in the tiling set — its σ-orbit must reach K.", "info");
+      return;
+    }
+    schwarzPreimageTree = buildPreimageTree(w0, engine, {
+      depth: schwarzTilingDepth,
+      visualBudget: schwarzTilingBudget,
+    });
+    // A double-click is a "seed the tiling" gesture, so drop the orbit its two synthesized single-clicks pinned
+    // (matching QD, where a dblclick never also pins) — the clean tiling + its count readout stand alone.
+    schwarzInspect = null;
+    schwarzHover = null;
+    renderSchwarzInspectReadout();
+    renderSchwarzTilingReadout();
+    scheduleSchwarzOverlayPaint(); // the tree is an overlay — re-blit the cached field, don't re-render it
+  }
+  /** Rebuild the active tree from its seed with the current depth/budget (a control changed) — no re-click. */
+  function rebuildSchwarzTilingIfActive(): void {
+    if (!schwarzSession || !schwarzPreimageTree) return;
+    const seed = schwarzPreimageTree.generations[0]?.[0];
+    if (!seed) return;
+    schwarzPreimageTree = buildPreimageTree(seed, schwarzSession.engine, {
+      depth: schwarzTilingDepth,
+      visualBudget: schwarzTilingBudget,
+    });
+    renderSchwarzTilingReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the tiling tree (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzTiling(): void {
+    if (!schwarzPreimageTree) return;
+    schwarzPreimageTree = null;
+    renderSchwarzTilingReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
   /**
    * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
    * and native-φ paths. Decides the render mode (GPU when WebGL2 is available, else the coarse CPU fallback
@@ -3448,9 +3531,11 @@ function init(): void {
     syncSchwarzViewModeSeg();
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     schwarzHover = null;
+    schwarzPreimageTree = null; // a new φ ⇒ any previous tiling tree is stale
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
     schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
+    renderSchwarzTilingReadout();
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
@@ -3508,6 +3593,8 @@ function init(): void {
     schwarzLightEl = s.lightEl;
     schwarzLightDepth = s.lightHeight;
     schwarzShowBoundary = s.showBoundary; // F1 ∂Ω overlay travels with the σ view
+    schwarzTilingDepth = s.tilingDepth; // F3c tiling params travel with the σ view (the tree itself does not)
+    schwarzTilingBudget = s.tilingBudget;
     if (s.customStops) {
       // C1: restore the custom gradient BEFORE entering, so enterSchwarz's applySchwarzColormap uses it.
       schwarzGradientStops = s.customStops.map((st) => ({ t: st.t, color: [...st.color] }));
@@ -3554,6 +3641,10 @@ function init(): void {
     if (lcEl) lcEl.hidden = !schwarzLight;
     const bdEl = document.getElementById("schwarz-boundary") as HTMLInputElement | null;
     if (bdEl) bdEl.checked = schwarzShowBoundary; // F1 ∂Ω overlay checkbox mirrors the restored view
+    const tdEl = document.getElementById("schwarz-tiling-depth") as HTMLInputElement | null;
+    if (tdEl) tdEl.value = String(schwarzTilingDepth); // F3c tiling controls mirror the restored view
+    const tbEl = document.getElementById("schwarz-tiling-budget") as HTMLSelectElement | null;
+    if (tbEl) tbEl.value = String(schwarzTilingBudget);
     syncSchwarzColorModeControls();
     syncSchwarzToneControls();
     renderSchwarzLegendChip();
@@ -3606,6 +3697,8 @@ function init(): void {
       lightEl: schwarzLightEl,
       lightHeight: schwarzLightDepth,
       showBoundary: schwarzShowBoundary,
+      tilingDepth: schwarzTilingDepth, // F3c: the tiling params travel with the σ view (the tree itself is transient)
+      tilingBudget: schwarzTilingBudget,
       viewMode: schwarzViewMode,
       // Sphere camera (F2d-ii) — carried only on the sphere; the copy keeps the quaternion out of shared state.
       ...(schwarzViewMode === "sphere"
@@ -3661,11 +3754,13 @@ function init(): void {
       // (The CPU fallback below reuses the on-screen canvas, already drawn with the same gating.)
       if (schwarzViewMode === "plane") {
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
+        if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
       } else if (schwarzViewMode === "z") {
         const engine = schwarzSession.engine;
         const toZ = (w: Complex): Complex | null => engine.invertPhi(w);
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
+        if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
       } else if (schwarzViewMode === "sphere") {
         const cam = schwarzSphereCam();
@@ -3674,6 +3769,7 @@ function init(): void {
           return uv ? [uv[0] * size - 0.5, uv[1] * size - 0.5] : null;
         };
         if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
+        if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPixel });
       }
       if (wantScaleBar && schwarzViewMode !== "sphere") drawScaleBar(octx, size, schwarzView.zoom); // sphere: no linear scale
@@ -3735,7 +3831,8 @@ function init(): void {
   // once and are no-ops unless a σ session is active — so they never interfere with the normal plot.
   {
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
-    const clientToUv = (e: PointerEvent | WheelEvent): [number, number] => {
+    // MouseEvent covers every pointer/wheel/dblclick source (PointerEvent + WheelEvent both extend it).
+    const clientToUv = (e: MouseEvent): [number, number] => {
       const r = canvas.getBoundingClientRect();
       return [
         Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width))),
@@ -3858,6 +3955,16 @@ function init(): void {
       }
     });
     canvas.addEventListener("pointercancel", endDrag);
+    // Double-click a point in the tiling set → grow its σ⁻¹ preimage tree (F3c). schwarzSeedFromPointer maps the
+    // pointer to w for the active view (plane direct · z-disk φ(z) · sphere raycast; null off-domain), and
+    // seedSchwarzTiling gates on tiling-set membership before building. The two synthesized single-clicks that
+    // precede a dblclick also pin the seed's orbit — that's fine; the tree draws over it (both are informative).
+    canvas.addEventListener("dblclick", (e) => {
+      if (!schwarzSession) return;
+      e.preventDefault();
+      const w0 = schwarzSeedFromPointer(clientToUv(e));
+      if (w0) seedSchwarzTiling(w0);
+    });
     canvas.addEventListener(
       "wheel",
       (e) => {
@@ -4198,6 +4305,33 @@ function init(): void {
         scheduleSchwarzOverlayPaint();
       });
     }
+  }
+
+  // σ preimage tiling (F3c): depth (number, 0–8) + budget (select) retune the active tree LIVE (rebuilt from
+  // its seed, no re-click); the clear button removes it. Seeding is a double-click on the canvas (the dblclick
+  // handler in the interaction block). The two params travel in the σ view (`_sigma`); the tree is transient.
+  {
+    const tdIn = document.getElementById("schwarz-tiling-depth") as HTMLInputElement | null;
+    const tbSel = document.getElementById("schwarz-tiling-budget") as HTMLSelectElement | null;
+    const clearBtn = document.getElementById("schwarz-tiling-clear");
+    if (tdIn) {
+      tdIn.value = String(schwarzTilingDepth);
+      tdIn.addEventListener("change", () => {
+        const v = Math.round(Number(tdIn.value));
+        if (Number.isFinite(v)) schwarzTilingDepth = Math.max(0, Math.min(8, v));
+        tdIn.value = String(schwarzTilingDepth); // normalise / restore on a bad value
+        rebuildSchwarzTilingIfActive();
+      });
+    }
+    if (tbSel) {
+      tbSel.value = String(schwarzTilingBudget);
+      tbSel.addEventListener("change", () => {
+        const v = Math.round(Number(tbSel.value));
+        if (Number.isFinite(v) && v >= 1) schwarzTilingBudget = v;
+        rebuildSchwarzTilingIfActive();
+      });
+    }
+    clearBtn?.addEventListener("click", clearSchwarzTiling);
   }
 
   // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate

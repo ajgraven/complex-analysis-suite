@@ -73,6 +73,12 @@ export interface SigmaViewState {
   lightHeight: number;
   /** ∂Ω boundary overlay on/off (F1) — outline φ(unit circle) over the field; default off. */
   showBoundary: boolean;
+  /** Preimage-tiling depth (F3c) — the σ⁻¹ generation count a double-click seeds. A persisted SETTING (like
+   *  maxIter); the tree ITSELF is a transient inspection (not serialized, like the pinned orbit), so a
+   *  restored link keeps the preferred depth but draws no tree until the user double-clicks the tiling set. */
+  tilingDepth: number;
+  /** Preimage-tiling visual budget (F3c) — the total-node cap on a seeded tree. Persisted like tilingDepth. */
+  tilingBudget: number;
   /** Custom-gradient stops (C1), present only when `colormap === "custom"`; else the named palette applies. */
   customStops?: GradientStop[];
 }
@@ -94,6 +100,15 @@ export const SIGMA_OVERLAY_DEFAULTS = { showBoundary: false } as const;
 /** Default coordinate view (F2b) — the w-plane; the fallback for links that predate the z-disk, so an old
  *  permalink restores on the plane (byte-identical: `vm` is omitted when the view is the plane). */
 export const SIGMA_VIEW_DEFAULTS = { viewMode: "plane" } as const;
+
+/** Default preimage-tiling params (F3c) — depth 4 + a 4096-node budget (the buildPreimageTree defaults); the
+ *  fallback for links that predate F3c, so an old permalink restores the standard tiling params (and, being
+ *  defaults, `td`/`tb` are omitted — byte-identical to a pre-F3c link). */
+export const SIGMA_TILING_DEFAULTS = { tilingDepth: 4, tilingBudget: 4096 } as const;
+/** Hostile-link clamps on the tiling params — depth ∈ [0,8] (the UI slider's range; deltoid grows ~2ᵈ), a
+ *  visual budget ∈ [1, 65536] (well above the UI's 16384 select, still bounded). */
+const TILING_DEPTH_MAX = 8;
+const TILING_BUDGET_MAX = 65536;
 
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
@@ -138,6 +153,10 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.lightHeight !== SIGMA_LIGHT_DEFAULTS.lightHeight) out.ldp = s.lightHeight;
   // ∂Ω boundary overlay (F1), omitted at its default (off) so a view without it is byte-identical to pre-F1.
   if (s.showBoundary !== SIGMA_OVERLAY_DEFAULTS.showBoundary) out.bd = s.showBoundary;
+  // Preimage-tiling params (F3c) — persisted like the render knobs; omitted at the defaults so a view that
+  // never retuned them is byte-identical to a pre-F3c link. The tree itself is transient (not serialized).
+  if (s.tilingDepth !== SIGMA_TILING_DEFAULTS.tilingDepth) out.td = s.tilingDepth;
+  if (s.tilingBudget !== SIGMA_TILING_DEFAULTS.tilingBudget) out.tb = s.tilingBudget;
   // Coordinate view (F2b), omitted on the w-plane so a plane view's link is byte-identical to pre-F2b.
   if (s.viewMode !== SIGMA_VIEW_DEFAULTS.viewMode) out.vm = s.viewMode;
   // Sphere camera (F2d-ii) — the orientation quaternion + magnification, carried ONLY for a sphere view (a
@@ -174,7 +193,7 @@ export function schwarzStampParams(s: SigmaViewState): string {
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
     `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
     `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}; ` +
-    `boundary=${s.showBoundary ? "on" : "off"}`
+    `boundary=${s.showBoundary ? "on" : "off"}; tiling=depth${s.tilingDepth},budget${s.tilingBudget}`
   );
 }
 
@@ -281,6 +300,10 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
   // ∂Ω boundary overlay (F1) — a bad/absent value falls back to the default (off); never fatal.
   const showBoundary = typeof o.bd === "boolean" ? o.bd : SIGMA_OVERLAY_DEFAULTS.showBoundary;
+  // Preimage-tiling params (F3c) — clamped to sane integer bounds; a bad/absent value falls back to the
+  // default (never fatal, so an old or corrupt link still restores a valid view).
+  const tilingDepth = Math.round(clampOr(o.td, SIGMA_TILING_DEFAULTS.tilingDepth, 0, TILING_DEPTH_MAX));
+  const tilingBudget = Math.round(clampOr(o.tb, SIGMA_TILING_DEFAULTS.tilingBudget, 1, TILING_BUDGET_MAX));
   // Coordinate view — "z" (F2b) or "sphere" (F2d); anything else (or a corrupt value) falls back to the w-plane.
   const viewMode: "plane" | "z" | "sphere" = o.vm === "z" ? "z" : o.vm === "sphere" ? "sphere" : "plane";
   // Sphere camera (F2d-ii) — a valid 4-number unit quaternion + a clamped magnification, both only when on the
@@ -302,7 +325,7 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
   return {
     phi, center, zoom, viewMode, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter,
-    escapeR, light, lightAz, lightEl, lightHeight, showBoundary,
+    escapeR, light, lightAz, lightEl, lightHeight, showBoundary, tilingDepth, tilingBudget,
     ...(sphereRot ? { sphereRot } : {}),
     ...(sphereZoom !== undefined ? { sphereZoom } : {}),
     ...(customStops ? { customStops } : {}),

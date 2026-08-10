@@ -130,6 +130,9 @@ describe("SHARE_IDS DOM coverage", () => {
         ],
         // σ ∂Ω boundary overlay (F1): a display toggle — a σ-view overlay property carried by _sigma.
         [["schwarz-boundary"], "σ boundary overlay (travels inside _sigma)"],
+        // σ preimage-tiling params (F3c): depth + visual budget — σ-view settings carried by _sigma (the tree
+        // itself is a transient inspection, seeded by a canvas double-click, and is not serialized).
+        [["schwarz-tiling-depth", "schwarz-tiling-budget"], "σ tiling setting (travels inside _sigma)"],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.
