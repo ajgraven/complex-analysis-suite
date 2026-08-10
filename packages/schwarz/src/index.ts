@@ -21,3 +21,6 @@ export type { BoundedSchwarz } from "./bounded.js";
 // the minimal `sigmaInverse` surface both engines expose.
 export { buildPreimageTree } from "./preimage-tree.js";
 export type { SchwarzInverse, PreimageTree, PreimageTreeOptions, PreimageEdge } from "./preimage-tree.js";
+// The σ limit set (F4a): the chaos game on σ⁻¹ + its box-counting dimension. Also σ⁻¹-based, family-agnostic.
+export { sampleLimitSet, boxCountingDimension } from "./limit-set.js";
+export type { LimitSetOptions, BoxDimensionResult, BBox } from "./limit-set.js";

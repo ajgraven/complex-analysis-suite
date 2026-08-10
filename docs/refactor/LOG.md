@@ -2383,3 +2383,24 @@
   σ⁻¹ is a numerical reconstruction, so the tiling stays `≈` (the hint reads "…preimage tree (≈)"). **F3c complete —
   F3 (the preimage/tiling tree, M–L increment) is done end-to-end: σ⁻¹ + buildPreimageTree in `@cas/schwarz`, and the
   CD double-click tiling UI across all three σ views with `_sigma` params.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4a-i — limit-set engine in
+  `@cas/schwarz`):** the σ **limit set** (the fractal boundary the tiling converges to) + its **box-counting
+  dimension**, the last two σ⁻¹-based kernels of the extraction thread. A new `limit-set.ts` exports
+  `sampleLimitSet(schwarz, opts)` — the **chaos game on σ⁻¹**: from a seed in K, repeatedly pick ONE preimage at
+  random; after burn-in the walk densely samples the limit set (the attractor of the IFS of σ⁻¹ branches). It
+  restarts from a fresh random Ω^c seed when σ⁻¹ dead-ends (100-restart + 20×-budget failsafes), and returns an
+  interleaved `Float64Array`. And `boxCountingDimension(points, opts)` — occupied-cell counts N(ε) over a
+  geometric ε ladder, least-squares slope of (log ε, log N) = −dim. Both free functions over the F3b
+  `SchwarzInverse` surface (family-agnostic), ported verbatim (tuple form) from QD's `schwarz-inverse.mjs`;
+  `sampleLimitSet` takes `isInOmega` + a restart `bbox` as params (the @cas engines don't carry the boundary,
+  unlike QD's monkey-patched handle). Green: typecheck + lint + node **57** (+8). Goldens pin the log-log math on
+  SYNTHETIC sets with a known dimension on a coarse (unsaturated) ε ladder — a dense line → **1.0**, a filled
+  square → **2.0**, exact (counts `8,16,32,64` / `64,256,1024,4096`) — plus the Float64Array≡tuple input path and
+  the <2-valid-scales → NaN degenerate case; and `sampleLimitSet` on the deltoid (seeded LCG) reproduces the QD
+  S3 golden's robust invariants — ≥1500 of 2000 points, all finite + `|·|<5`, a reproducible cloud (same seed →
+  identical), and a finite box-dimension in QD's broad `[−0.05, 2.5]` with ≥4 valid scales. **Honest caveat
+  (documented + tested):** box-counting is SAMPLE-DENSITY biased — at ε finer than the point spacing N(ε)
+  plateaus at the point count and flattens the slope DOWNWARD (the deltoid reads ~0.9 at 50k points, an
+  underestimate), so the dimension is a rough `≈`, never certified. **F4a-i complete — the limit-set kernels are
+  in `@cas/schwarz` + golden-tested; F4a-ii wires the CD limit-set analysis card (chaos-game overlay + `(≈)`
+  dimension readout across the three views).**
