@@ -1,4 +1,5 @@
-// schwarzBoundaryOverlay.ts — stroke the domain boundary ∂Ω = φ(unit circle) over the σ field (Phase F1).
+// schwarzBoundaryOverlay.ts — stroke the domain boundary ∂Ω = φ(unit circle) over the σ field (Phase F1),
+// plus its z-disk image (the unit circle |z|=1, Phase F2c).
 //
 // The boundary polygon is ALREADY computed for the in-Ω mask (schwarzBoundaryPoly, stored on the live
 // session as `poly`), so this overlay is nearly free: map that same array to canvas pixels with plotToPixel
@@ -33,6 +34,33 @@ export function drawSchwarzBoundary(
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
+  ctx.strokeStyle = CASING;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = BOUNDARY;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Stroke the unit circle |z| = 1 — the z-disk image of ∂Ω (F2c). In the uniformizing coordinate z the
+ * domain boundary ∂Ω = φ(unit circle) IS the unit circle, so the z-disk boundary overlay is this fixed
+ * curve, independent of φ. `view` is the z-disk window; plotToPixel is a uniform-scale affine map (the
+ * same 1/zoom half-width on both axes), so the circle stays a circle — drawn exactly with `arc` about
+ * z = 0's pixel, radius = size·zoom/2. Same casing+colour idiom as drawSchwarzBoundary.
+ */
+export function drawSchwarzUnitCircle(
+  ctx: CanvasRenderingContext2D,
+  view: SchwarzView,
+  size: number,
+): void {
+  const [cx, cy] = plotToPixel(view, [0, 0], size);
+  const rPix = (size * view.zoom) / 2; // |z|=1 under plotToPixel's uniform scale
+  if (!(rPix > 0)) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, rPix, 0, 2 * Math.PI);
   ctx.strokeStyle = CASING;
   ctx.lineWidth = 3;
   ctx.stroke();

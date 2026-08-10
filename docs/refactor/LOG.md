@@ -2217,3 +2217,26 @@
   is preserved in the stash; a share link reopens in the z-disk with its window. Captured the z-disk deltoid
   (the |z|≤1 off-domain disk ringed by the 3-fold σ escape field). **F2b complete — plane · z-disk both live;
   sphere (F2d) still to come.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2c — z-disk overlays):** the
+  w-space σ overlays now mirror into the z-disk via a **ψ-pullback**. Three pieces: (1) **∂Ω boundary** — in the
+  uniformizing coordinate z, ∂Ω = φ(unit circle) IS the unit circle |z|=1, so `drawSchwarzUnitCircle` strokes a
+  fixed circle (exact `arc` about z=0's pixel, radius = size·zoom/2 — plotToPixel is a uniform-scale affine map)
+  in the same casing+colour idiom as F1's boundary. (2) **Orbit** — `drawSchwarzOrbit` gains an optional
+  `toPlot?:(w)=>Complex|null`; in the z-disk each w-space iterate is pulled back to z via `engine.invertPhi` (ψ),
+  and a null preimage (the iterate entered K, or the inverse failed) BREAKS the polyline there — the pen lifts,
+  the dot is skipped, the seed marker draws only if w₀ maps. With `toPlot` omitted the draw is byte-identical to
+  the pre-F2c plane path (one subpath). (3) **Inspect + hover** — a shared `schwarzSeedFromPointer` maps a
+  pointer to the σ world point w₀: identity on the plane, or `z ↦ φ(z)` in the z-disk, **null off the
+  uniformizing domain** (|z| ≤ 1 unbounded / |z| ≥ 1 bounded — φ is not the map, so the click/hover/`i`-key
+  inspects nothing). Click-inspect, the hover preview, and the `i` key all route through it; the readout names
+  the φ-mapped w-seed (honest — σ acts on w). **Seed-DRAG stays w-plane-only** (the z-disk re-pins by click). The
+  PNG export bakes the z-disk overlays the same way. Green: typecheck + lint + node **2437** (+6 new
+  schwarzOverlay.test: the unit-circle arc geometry + no-op at zero radius; the toPlot pullback breaking the
+  polyline at a null iterate — 2 subpaths, 0 bridging segments — vs one connected line by identity; the null
+  iterate drops its dot; an all-null pullback draws nothing) + browser **18/18** (unchanged — F2c touches no
+  shader; the field is byte-identical). VERIFIED (Playwright, **8/8**): the z-disk ∂Ω draws the unit circle; a
+  click off the uniformizing domain (z≈0) inspects nothing and leaves no persistent field change; a click on it
+  (|z|>1) pins an orbit whose ψ-pullback persists in the settled field; the readout reads "orbit of …" (the
+  φ-mapped seed); the pinned orbit survives the view swap; the plane click-inspect path is unchanged. Captured
+  the z-disk deltoid with the unit-circle ∂Ω + a pinned escaping orbit pulled back into z. **F2c complete —
+  the z-disk is now a full peer of the plane (field + boundary + orbit inspection); sphere (F2d) still to come.**

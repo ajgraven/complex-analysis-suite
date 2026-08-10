@@ -131,7 +131,7 @@ import {
   type SchwarzOrbit,
 } from "./render/schwarzView";
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
-import { drawSchwarzBoundary } from "./render/schwarzBoundaryOverlay";
+import { drawSchwarzBoundary, drawSchwarzUnitCircle } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
@@ -3174,15 +3174,21 @@ function init(): void {
       }
       ctx.putImageData(schwarzCpuImage, 0, 0);
     }
-    // w-space overlays (∂Ω boundary + orbits) are only meaningful in the w-plane view. In the z-disk view
-    // (F2b) they would need a ψ-pullback into z-coordinates (F2c), so they are simply NOT drawn there yet —
-    // the pinned orbit is kept in state, so returning to the plane restores it.
+    // Overlays (∂Ω boundary + orbits) live in whichever coordinate the active view uses. The w-plane draws
+    // them directly; the z-disk (F2c) pulls them back into z — ∂Ω becomes the unit circle |z|=1, and each
+    // orbit iterate maps through ψ = φ⁻¹ (engine.invertPhi; null where it entered K / off the branch, which
+    // breaks the polyline). The pinned orbit is kept in state across a view switch, so it survives round-trips.
     if (schwarzViewMode === "plane") {
       // ∂Ω boundary overlay (F1) — under the orbits, over the field; `poly` is the session's mask polygon.
       if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
       // Orbit overlays: the transient hover preview (faint, S5-A2) under the pinned click-inspect orbit (bold).
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
+    } else if (schwarzViewMode === "z") {
+      const toZ = (w: Complex): Complex | null => engine.invertPhi(w); // ψ-pullback into the uniformizing z
+      if (schwarzShowBoundary) drawSchwarzUnitCircle(ctx, schwarzView, backing);
+      if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPlot: toZ });
+      if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPlot: toZ });
     }
     // Scale bar (ADR-0009 item 3) — correct in either view (it just reads the active window's zoom). Last, so
     // an orbit line never hides it (it has its own backing).
@@ -3561,12 +3567,17 @@ function init(): void {
       const octx = out.getContext("2d");
       if (!octx) return null;
       octx.drawImage(schwarzGL.canvas, 0, 0);
-      // Bake the w-space overlays (∂Ω boundary + orbit) only on the plane — they'd need a ψ-pullback in the
-      // z-disk (F2c), matching paintSchwarz. (The CPU fallback below reuses the on-screen canvas, already
-      // drawn with the same gating.)
+      // Bake the overlays into the export the same way paintSchwarz draws them on screen: directly on the
+      // plane, or ψ-pulled-back into the z-disk (∂Ω → the unit circle, the orbit through engine.invertPhi).
+      // (The CPU fallback below reuses the on-screen canvas, already drawn with the same gating.)
       if (schwarzViewMode === "plane") {
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
+      } else if (schwarzViewMode === "z") {
+        const engine = schwarzSession.engine;
+        const toZ = (w: Complex): Complex | null => engine.invertPhi(w);
+        if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
+        if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
       }
       if (wantScaleBar) drawScaleBar(octx, size, schwarzView.zoom);
       canvas = out;
@@ -3643,30 +3654,45 @@ function init(): void {
     // Is `uv` within grab range of the pinned inspect seed w₀ (measured in CSS px)? Starts a seed-drag and
     // drives the "move" cursor. (The inverse of uvToPlotFrac maps w₀ back to its fractional screen position.)
     const nearSchwarzSeed = (uv: [number, number]): boolean => {
-      if (!schwarzInspect || schwarzViewMode !== "plane") return false; // the seed is a w-plane overlay (F2c mirrors it)
+      if (!schwarzInspect || schwarzViewMode !== "plane") return false; // seed-DRAG stays w-plane-only; the z-disk re-pins by click (F2c)
       const w = schwarzInspect.points[0];
       const su = ((w[0] - schwarzView.center[0]) * schwarzView.zoom + 1) / 2;
       const sv = (1 - (w[1] - schwarzView.center[1]) * schwarzView.zoom) / 2;
       const r = canvas.getBoundingClientRect();
       return Math.hypot((uv[0] - su) * r.width, (uv[1] - sv) * r.height) <= SEED_GRAB_PX;
     };
-    // Hover orbit-preview (S5-A2): trace the orbit under the cursor and repaint (rAF-coalesced). Clears when
-    // the pointer leaves. Off during a drag (a pan already repaints) and on touch (no hover).
-    const setSchwarzHover = (e: PointerEvent): void => {
-      if (!schwarzSession || schwarzViewMode !== "plane") return; // the orbit preview is w-plane-only (F2c mirrors it)
-      const uv = clientToUv(e);
-      schwarzHover = schwarzOrbitAt(
-        schwarzSession.engine,
-        schwarzSession.poly,
-        uvToPlotFrac(schwarzView, uv[0], uv[1]),
-        { ...schwarzEscape, boundedOmega: schwarzSession.boundedOmega },
-      );
-      scheduleSchwarzOverlayPaint(); // hover only moves the preview orbit — re-blit the cached field
+    // Map a pointer position (uv) to the σ world point w₀ whose orbit we trace: identity in the w-plane view,
+    // or z ↦ φ(z) in the z-disk (F2c), where the fragment is the uniformizing coordinate. Null when the
+    // pointer is off the uniformizing domain (|z|≤1 unbounded / |z|≥1 bounded), where φ is not the map — the
+    // caller then declines to inspect/preview. One helper so hover, click-inspect, and the `i` key agree.
+    const schwarzSeedFromPointer = (uv: [number, number]): Complex | null => {
+      if (!schwarzSession) return null;
+      const p = uvToPlotFrac(schwarzView, uv[0], uv[1]);
+      if (schwarzViewMode !== "z") return p; // plane: the fragment already IS w
+      const r = Math.hypot(p[0], p[1]);
+      if (schwarzSession.boundedOmega ? r >= 1 : r <= 1) return null; // off the uniformizing domain
+      return schwarzSession.engine.evalPhi(p); // lift the z-disk point forward: w₀ = φ(z)
     };
     const clearSchwarzHover = (): void => {
       if (!schwarzHover) return;
       schwarzHover = null;
       scheduleSchwarzOverlayPaint();
+    };
+    // Hover orbit-preview (S5-A2): trace the orbit under the cursor and repaint (rAF-coalesced). Clears when
+    // the pointer leaves or sits off the uniformizing domain in the z-disk. Off during a drag (a pan already
+    // repaints) and on touch (no hover). In the z-disk the seed is z ↦ φ(z) and the orbit is ψ-pulled back.
+    const setSchwarzHover = (e: PointerEvent): void => {
+      if (!schwarzSession) return;
+      const w0 = schwarzSeedFromPointer(clientToUv(e));
+      if (!w0) {
+        clearSchwarzHover();
+        return;
+      }
+      schwarzHover = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, {
+        ...schwarzEscape,
+        boundedOmega: schwarzSession.boundedOmega,
+      });
+      scheduleSchwarzOverlayPaint(); // hover only moves the preview orbit — re-blit the cached field
     };
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
@@ -3716,11 +3742,12 @@ function init(): void {
     canvas.addEventListener("pointerup", (e) => {
       const wasClick = lastUv !== null && !movedSinceDown && !draggingSeed;
       endDrag(e);
-      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor. w-plane only —
-      // the z-disk would need the click mapped through φ and the orbit drawn via ψ-pullback (F2c).
-      if (wasClick && schwarzSession && schwarzViewMode === "plane") {
-        const uv = clientToUv(e);
-        setSchwarzInspect(uvToPlotFrac(schwarzView, uv[0], uv[1]));
+      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor. schwarzSeedFromPointer
+      // gives the w-plane seed directly, or maps a z-disk click forward through φ (F2c); a z-disk click off the
+      // uniformizing domain returns null and inspects nothing.
+      if (wasClick && schwarzSession) {
+        const w0 = schwarzSeedFromPointer(clientToUv(e));
+        if (w0) setSchwarzInspect(w0);
       }
     });
     canvas.addEventListener("pointercancel", endDrag);
@@ -3783,7 +3810,13 @@ function init(): void {
         case "=": zoomBy(2); break;
         case "-":
         case "_": zoomBy(0.5); break;
-        case "i": if (schwarzViewMode === "plane") setSchwarzInspect([schwarzView.center[0], schwarzView.center[1]]); break;
+        case "i": {
+          // Inspect the view centre: its w directly on the plane, or φ(centre) in the z-disk (F2c) — a no-op
+          // when the z-disk centre sits off the uniformizing domain (e.g. z = 0 for the unbounded family).
+          const w0 = schwarzSeedFromPointer([0.5, 0.5]);
+          if (w0) setSchwarzInspect(w0);
+          break;
+        }
         default: return;
       }
       e.preventDefault();
