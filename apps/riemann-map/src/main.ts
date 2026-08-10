@@ -1,10 +1,9 @@
 // apps/riemann-map — the research-grade Riemann-map / conformal-mapping studio.
 //
-// P1 (walking skeleton, first increment): a working custom-φ domain-coloring view. Type/φ is compiled
-// once into a JS evaluator + a GLSL body (map.ts), rendered per-pixel as a phase portrait (shader.ts /
-// glRenderer.ts), and explored by pan/zoom (nav.ts). The view-state round-trips through the permalink.
-// Later P1 increments add render modes (C2–C6), curve grids (D1), linked panes (F2), a live editor
-// (F5), and PNG export (G2); every §A construction engine plugs into this same shell.
+// P1 (walking skeleton). P1a: custom-φ domain-coloring render + pan/zoom. P1b (this file): a live φ
+// editor with KaTeX preview + a preset gallery, and an under-cursor readout of φ(z), φ′(z) and the
+// local amplitwist (scale |φ′|, rotation arg φ′). Later P1 increments add render modes (C2–C6), curve
+// grids (D1), linked panes (F2), and PNG export (G2).
 import {
   DEFAULT_VIEW_STATE,
   decodeRiemannState,
@@ -12,9 +11,10 @@ import {
   type RiemannViewState,
   type ViewportState,
 } from "./viewState.js";
-import { compileMap } from "./map.js";
+import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
-import { attachPanZoom } from "./render/nav.js";
+import { attachPanZoom, pixelToWorld } from "./render/nav.js";
+import { createControls } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
   return decodeRiemannState(window.location.hash) ?? DEFAULT_VIEW_STATE;
@@ -32,13 +32,16 @@ function resizeToDisplay(canvas: HTMLCanvasElement): void {
 }
 
 function fmt(n: number): string {
-  return Number.isFinite(n) ? n.toPrecision(6).replace(/\.?0+$/, "") : String(n);
+  return Number.isFinite(n) ? n.toPrecision(5).replace(/\.?0+$/, "") : "∞";
+}
+function fmtC(re: number, im: number): string {
+  if (!Number.isFinite(re) || !Number.isFinite(im)) return "∞ (undefined)";
+  return `${fmt(re)} ${im >= 0 ? "+" : "−"} ${fmt(Math.abs(im))}i`;
 }
 
 function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
-
   let state = initialState();
 
   // ---- DOM shell -----------------------------------------------------------
@@ -48,23 +51,22 @@ function main(): void {
   const title = document.createElement("span");
   title.className = "brand";
   title.textContent = "Riemann Map";
-  const mapLabel = document.createElement("span");
-  mapLabel.className = "maplabel";
   const readout = document.createElement("span");
   readout.className = "readout";
-  bar.append(title, mapLabel, readout);
+  bar.append(title, readout);
 
+  const body = document.createElement("div");
+  body.className = "body";
+  const controls = createControls(state.map.expr);
   const stage = document.createElement("div");
   stage.className = "stage";
   const canvas = document.createElement("canvas");
   canvas.className = "plane";
-  stage.append(canvas);
-
   const note = document.createElement("div");
   note.className = "note";
-  stage.append(note);
-
-  app.append(bar, stage);
+  stage.append(canvas, note);
+  body.append(controls.root, stage);
+  app.append(bar, body);
 
   // ---- renderer ------------------------------------------------------------
   const renderer: Renderer | null = createRenderer(canvas);
@@ -73,22 +75,25 @@ function main(): void {
     note.classList.add("visible");
   }
 
+  let current: CompiledMap | null = null;
+
   function applyMap(): void {
     const compiled = compileMap(state.map);
-    mapLabel.textContent = `φ(z) = ${state.map.expr}`;
     if (!compiled.ok) {
-      note.textContent = `Cannot compile φ: ${compiled.error}`;
-      note.classList.add("visible");
+      controls.showError(compiled.error);
+      controls.setLatex("");
+      current = null;
       return;
     }
-    if (renderer && renderer.setMap(compiled.map.glslBody)) {
-      note.classList.remove("visible");
-    }
+    controls.showError(null);
+    controls.setLatex(compiled.map.latex);
+    current = compiled.map;
+    if (renderer && renderer.setMap(compiled.map.glslBody)) note.classList.remove("visible");
   }
 
   function updateReadout(): void {
     const v = state.viewport;
-    readout.textContent = `center ${fmt(v.centerRe)} ${v.centerIm >= 0 ? "+" : "−"} ${fmt(Math.abs(v.centerIm))}i · zoom ${fmt(v.zoom)}`;
+    readout.textContent = `center ${fmtC(v.centerRe, v.centerIm)} · zoom ${fmt(v.zoom)}`;
   }
 
   // ---- render / permalink scheduling (rAF-coalesced) -----------------------
@@ -103,11 +108,34 @@ function main(): void {
       history.replaceState(null, "", encodeRiemannState(state));
     });
   }
-
   function setViewport(v: ViewportState): void {
     state = { ...state, viewport: v };
     schedule();
   }
+
+  // ---- editing φ -----------------------------------------------------------
+  controls.onExpr((expr) => {
+    state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
+    applyMap();
+    schedule();
+  });
+
+  // ---- hover readout (F4) --------------------------------------------------
+  canvas.addEventListener("pointermove", (e) => {
+    if (!current) return;
+    const r = canvas.getBoundingClientRect();
+    const z = pixelToWorld(state.viewport, (e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height, r.width / r.height);
+    const w = current.jsFn([z[0], z[1]], [0, 0]);
+    const d = derivativeAt(current, z);
+    const exact = current.jsDeriv ? "= " : "≈ ";
+    controls.setHover([
+      ["z", fmtC(z[0], z[1])],
+      ["φ(z)", fmtC(w[0], w[1])],
+      ["|φ′|", exact + fmt(Math.hypot(d[0], d[1]))],
+      ["arg φ′", exact + fmt(Math.atan2(d[1], d[0])) + " rad"],
+    ]);
+  });
+  canvas.addEventListener("pointerleave", () => controls.setHover(null));
 
   attachPanZoom(canvas, () => state.viewport, setViewport);
   window.addEventListener("resize", schedule);
