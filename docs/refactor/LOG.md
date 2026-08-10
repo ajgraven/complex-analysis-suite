@@ -2186,3 +2186,17 @@
   touched). VERIFIED (Playwright, 7/7): all three buttons render; plane is active + aria-pressed; z-disk + sphere
   are disabled; the `data-schwarz-view` hook reads `plane`; clicking the disabled z-disk does not switch; clicking
   active plane stays active. **F2a complete — the shell is ready for F2b to fill in the z-disk render.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2b-i — z-disk field render):**
+  the first NEW σ shader path, proven but not yet exposed. The z-disk view treats the fragment as the
+  uniformizing coordinate z and lifts it FORWARD `w = φ(z)` (the shader's existing `evalPhi`, no Newton
+  inverse — cleaner/faster than the w-plane), then runs the SAME escape-time on w: the z-disk is the plane's
+  σ field re-coordinatized. Added a `u_viewMode` uniform + a `fragToW(out bool offDisk)` helper (unifying the
+  two copies of the fragment→w map) to `schwarzGL`; fragments off the uniformizing domain (|z| ≤ 1 for the
+  unbounded family, |z| ≥ 1 for a bounded QD — φ is not the map there) paint a shared background literal
+  `SCHWARZ_OFF_DISK_RGB` (defined in schwarzView.ts, mirrored in the GLSL). Mirrored on the CPU path
+  (`renderSchwarzField` gains `viewMode:"z"`). **Plane mode is byte-identical** (u_viewMode defaults to 0 —
+  the six existing GPU tests + the shader-compile gate pass unchanged). The z-disk **button stays disabled**;
+  F2b-ii exposes it. Green: typecheck + lint + node **2428** (+1 CPU z-disk: off-disk centre, structured,
+  differs from plane) + browser **18/18** (+1 CPU↔GPU z-disk parity: the shader compiles with the new path;
+  the off-disk mask — a pure |z| vs 1 test, free of float drift — agrees GPU↔CPU ≥ 97%; the z-disk differs
+  from the plane). **F2b-i complete.**

@@ -3,6 +3,7 @@ import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import {
   pixelToPlot,
   renderSchwarzField,
+  SCHWARZ_OFF_DISK_RGB,
   schwarzBoundaryPoly,
   schwarzEscapeAt,
   uvToPlotFrac,
@@ -50,6 +51,24 @@ describe("Schwarz σ CPU render (S4a-2)", () => {
     for (let i = 0; i < buf.length; i += 4) colors.add(`${buf[i]},${buf[i + 1]},${buf[i + 2]}`);
     expect(colors.size).toBeGreaterThan(1); // K vs Ω regions ⇒ not a flat fill
     expect(colors.has("30,60,140")).toBe(true); // the K interior (fundamental n=0) deep-blue base
+  });
+
+  it("renderSchwarzField z-disk (F2b): off-disk centre, structured, differs from the plane view", () => {
+    const view = { center: [0, 0] as [number, number], zoom: 0.5 }; // shows |z| ≤ 2, incl the unit disk
+    const size = 32;
+    const zbuf = renderSchwarzField(engine, poly, view, size, { maxIter: 48, escapeR: 1e4, viewMode: "z" });
+    const plane = renderSchwarzField(engine, poly, view, size, { maxIter: 48, escapeR: 1e4 });
+    // The centre pixel maps to z ≈ 0 (|z| < 1) ⇒ off the uniformizing domain (unbounded φ lives on 𝔻*).
+    const mid = ((size / 2) * size + size / 2) * 4;
+    expect([zbuf[mid], zbuf[mid + 1], zbuf[mid + 2]]).toEqual([...SCHWARZ_OFF_DISK_RGB]);
+    // Both regions present (off-disk background + the in-disk φ field), and it differs from the plane view.
+    const colors = new Set<string>();
+    for (let i = 0; i < zbuf.length; i += 4) colors.add(`${zbuf[i]},${zbuf[i + 1]},${zbuf[i + 2]}`);
+    expect(colors.size).toBeGreaterThan(1);
+    let diff = 0;
+    for (let i = 0; i < zbuf.length; i += 4)
+      if (zbuf[i] !== plane[i] || zbuf[i + 1] !== plane[i + 1] || zbuf[i + 2] !== plane[i + 2]) diff++;
+    expect(diff).toBeGreaterThan(size);
   });
 });
 

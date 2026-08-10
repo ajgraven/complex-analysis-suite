@@ -61,6 +61,7 @@ uniform sampler2D u_mask;            // 1 inside the boundary polygon φ(∂𝔻
 uniform vec2      u_maskCenter;
 uniform float     u_maskHalfExtent;
 uniform int       u_boundedOmega;    // S5-C2: 1 ⇒ Ω is INSIDE ∂Ω (bounded QD) · 0 ⇒ Ω is the exterior
+uniform int       u_viewMode;        // F2b coordinate view: 0 w-plane (fragment IS w) · 1 z-disk (w = φ(z))
 uniform sampler2D u_colormap;        // 256×1 escape-time ramp (a @cas/gpu colormap texture)
 uniform int       u_scaleMode;       // 0 linear · 1 log · 2 sqrt · 3 discrete · 4 cyclic
 uniform int       u_modK;            // period for the cyclic mode
@@ -159,13 +160,30 @@ vec3 escapedColor(int n, vec2 w, float derivMag) {
   return col;
 }
 
-// The classification color at this fragment (fundamental via the colormap; escaped/invalid/interior flat).
-vec3 fieldColor() {
-  // Fragment → complex w, matching schwarzView.ts pixelToPlot. gl_FragCoord is pixel-centered and y-up;
-  // the caller drawImages this canvas 1:1, so y-up here lands as +Im at the top, as the CPU path intends.
+// Fragment → the world point w the escape-time iterates. Matches schwarzView.ts pixelToPlot (gl_FragCoord is
+// pixel-centered and y-up; the caller drawImages this canvas 1:1, so y-up lands as +Im at the top). In
+// w-plane mode (u_viewMode 0) the fragment IS w. In z-disk mode (F2b) the fragment is the uniformizing
+// coordinate z and w = φ(z) FORWARD (no Newton inverse) — φ uniformizes 𝔻* (|z|>1) for the unbounded family
+// and 𝔻 (|z|<1) for a bounded QD, so a fragment on the wrong side of the unit circle is off-domain (offDisk
+// ⇒ the caller paints the background — φ is not the map there).
+vec2 fragToW(out bool offDisk) {
   float re = u_center.x + (2.0 * gl_FragCoord.x / u_size - 1.0) / u_zoom;
   float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
-  vec2 w = vec2(re, im);
+  vec2 z = vec2(re, im);
+  offDisk = false;
+  if (u_viewMode == 1) {
+    float r = length(z);
+    offDisk = (u_boundedOmega == 1) ? (r >= 1.0) : (r <= 1.0);
+    return evalPhi(z);
+  }
+  return z;
+}
+
+// The classification color at this fragment (fundamental via the colormap; escaped/invalid/interior flat).
+vec3 fieldColor() {
+  bool offDisk;
+  vec2 w = fragToW(offDisk);
+  if (offDisk) return vec3(30.0, 32.0, 38.0) / 255.0;           // z-disk background (mirrors SCHWARZ_OFF_DISK_RGB)
 
   if (!inOmega(w)) return fundamentalColor(0);                   // w₀ ∈ K ⇒ fundamental n=0 (no σ-orbit)
   vec2 zSeed = newtonSeedFresh(w);
@@ -215,9 +233,9 @@ vec3 shadeWithGradient(vec3 col, vec2 g) {
 // tiling contours); interior / K-interior / invalid pixels return -1.0 (flat, no relief). Re-walks the
 // orbit, so it is computed ONLY when u_light == 1.
 float fieldHeight() {
-  float re = u_center.x + (2.0 * gl_FragCoord.x / u_size - 1.0) / u_zoom;
-  float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
-  vec2 w = vec2(re, im);
+  bool offDisk;
+  vec2 w = fragToW(offDisk);
+  if (offDisk) return -1.0;                                       // z-disk background — flat (no relief)
   if (!inOmega(w)) return -1.0;                                   // w₀ ∈ K (n=0) — flat
   vec2 zSeed = newtonSeedFresh(w);
   bool ok = true;
@@ -346,6 +364,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uMaskCenter = U("u_maskCenter");
   const uMaskHalfExtent = U("u_maskHalfExtent");
   const uBoundedOmega = U("u_boundedOmega");
+  const uViewMode = U("u_viewMode");
   const uColormap = U("u_colormap");
   const uScaleMode = U("u_scaleMode");
   const uModK = U("u_modK");
@@ -440,6 +459,7 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform2f(uMaskCenter, maskCenter[0], maskCenter[1]);
     ctx.uniform1f(uMaskHalfExtent, maskHalfExtent);
     ctx.uniform1i(uBoundedOmega, boundedOmega ? 1 : 0); // S5-C2 interior-Ω orientation for inOmega()
+    ctx.uniform1i(uViewMode, opts.viewMode === "z" ? 1 : 0); // F2b: 1 ⇒ z-disk (fragment is z, w = φ(z))
 
     ctx.activeTexture(ctx.TEXTURE1);
     ctx.bindTexture(ctx.TEXTURE_2D, colormapTex);

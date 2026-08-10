@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz, type Complex } from "@cas/schwarz";
-import { schwarzBoundaryPoly } from "../src/render/schwarzView";
+import { schwarzBoundaryPoly, renderSchwarzField, SCHWARZ_OFF_DISK_RGB } from "../src/render/schwarzView";
 import { createSchwarzGLRenderer } from "../src/render/schwarzGL";
 import { schwarzColormap } from "../src/render/schwarzColormaps";
 
@@ -160,6 +160,49 @@ describe("CD σ GPU render (S4b-ii + ADR-0009 item 3) — full pipeline in real 
     const d = readPixels(r.canvas, size);
     for (let i = 3; i < d.length; i += 4) expect(d[i]).toBe(255); // opaque
     expect(distinctColors(d).size).toBeGreaterThan(1); // structure, not a flat fill
+    r.destroy();
+  });
+
+  // F2b — the z-disk view: the fragment is the uniformizing coordinate z, lifted forward w = φ(z) (no Newton
+  // inverse), then the SAME escape-time runs on w. So the z-disk is the plane's σ field re-coordinatized. This
+  // proves the new u_viewMode shader path: it renders, it differs from the plane, and its off-disk mask (a
+  // pure |z| vs 1 geometric test, so free of float-engine drift) matches the CPU renderSchwarzField mirror.
+  it("renders the z-disk view (F2b): forward-φ field, off-disk mask matches the CPU, differs from the plane", () => {
+    const r = createSchwarzGLRenderer();
+    expect(r).not.toBeNull();
+    if (!r) return;
+    const engine = makeUnboundedLaurentSchwarz(DELTOID.c, DELTOID.F);
+    const poly = schwarzBoundaryPoly(engine);
+    r.setPhi(DELTOID, poly);
+    const size = 64;
+    // A window showing the unit disk (|z| ≤ 1 = off-domain for the unbounded family) plus the annulus 1<|z|<2.
+    const zview = { center: [0, 0] as [number, number], zoom: 0.5 };
+
+    expect(r.render(zview, size, { ...OPTS, viewMode: "z" })).toBe(true);
+    const gpuZ = readPixels(r.canvas, size);
+    for (let i = 3; i < gpuZ.length; i += 4) expect(gpuZ[i]).toBe(255); // opaque
+    expect(distinctColors(gpuZ).size, "off-disk background + the in-disk φ field").toBeGreaterThan(1);
+
+    // The z-disk lifts through φ, so the SAME window renders differently from the w-plane.
+    r.render(zview, size, OPTS); // plane (viewMode defaults to plane)
+    const gpuPlane = readPixels(r.canvas, size);
+    expect(pixelsDiffering(gpuZ, gpuPlane), "z-disk differs from the plane").toBeGreaterThan(size);
+
+    // Off-disk mask (|z| ≤ 1) must agree with the CPU mirror — a pure geometric test, so only a 1–2px boundary
+    // ring can jitter between the float32 GPU and the float64 CPU.
+    const cpuZ = renderSchwarzField(engine, poly, zview, size, { ...OPTS, boundedOmega: false, viewMode: "z" });
+    const [O0, O1, O2] = SCHWARZ_OFF_DISK_RGB;
+    const isOff = (px: Uint8ClampedArray, i: number): boolean =>
+      Math.abs(px[i] - O0) <= 2 && Math.abs(px[i + 1] - O1) <= 2 && Math.abs(px[i + 2] - O2) <= 2;
+    let gpuOff = 0;
+    let agree = 0;
+    for (let i = 0; i < gpuZ.length; i += 4) {
+      const g = isOff(gpuZ, i);
+      if (g) gpuOff++;
+      if (g === isOff(cpuZ, i)) agree++;
+    }
+    expect(gpuOff, "there is an off-disk region (the unit-disk interior)").toBeGreaterThan(size);
+    expect(agree / (size * size), "GPU + CPU agree on the off-disk mask").toBeGreaterThan(0.97);
     r.destroy();
   });
 

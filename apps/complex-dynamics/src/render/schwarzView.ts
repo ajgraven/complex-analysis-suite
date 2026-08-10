@@ -39,6 +39,11 @@ export interface SchwarzRenderOptions {
    *  family. Flips the in-Ω test so "fundamental" means the orbit left Ω into its complement K either way.
    *  Absent/false ⇒ the exterior (unbounded) orientation — every pre-C2 render is unchanged. */
   boundedOmega?: boolean;
+  /** Coordinate view (F2b): "plane" (default) treats the fragment as the world point w; "z" treats it as the
+   *  uniformizing coordinate z and lifts w = φ(z) FORWARD (no Newton inverse), painting fragments off the
+   *  uniformizing domain SCHWARZ_OFF_DISK_RGB. The escape-time on the resulting w is identical either way —
+   *  the z-disk is the SAME σ field, re-coordinatized. */
+  viewMode?: "plane" | "z";
 }
 
 /** Ω-membership for w against the boundary polygon: OUTSIDE ∂Ω for the unbounded-Laurent family, INSIDE for
@@ -218,6 +223,12 @@ const INVALID = SCHWARZ_FLAT_RGB.invalid;
 const ESCAPED = SCHWARZ_FLAT_RGB.escaped;
 const INTERIOR = SCHWARZ_FLAT_RGB.interior;
 
+/** z-disk view (F2b): the flat background for fragments OFF the uniformizing domain — |z| ≤ 1 for the
+ *  unbounded family (φ lives on 𝔻*), |z| ≥ 1 for a bounded QD (φ lives on 𝔻). φ is not the uniformizer there,
+ *  so those pixels are painted this neutral slate rather than a meaningless φ value. The GPU shader
+ *  (render/schwarzGL.ts) mirrors this literal — this is its single source. */
+export const SCHWARZ_OFF_DISK_RGB = [30, 32, 38] as const;
+
 /** deep-blue → cyan → white ramp by iteration count n (fundamental only). */
 function fundamentalColor(n: number, maxIter: number): [number, number, number] {
   const t = Math.min(1, n / Math.max(1, Math.min(32, maxIter)));
@@ -257,19 +268,34 @@ export function renderSchwarzField(
   opts: SchwarzRenderOptions = {},
 ): Uint8ClampedArray {
   const maxIter = opts.maxIter ?? 64;
-  const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
+  const boundedOmega = opts.boundedOmega ?? false;
+  const isInOmega = makeIsInOmega(poly, boundedOmega);
   const escapeR = opts.escapeR ?? 1e6;
+  const zDisk = opts.viewMode === "z"; // F2b: the fragment is the uniformizing z; w = φ(z) forward
   const rgba = new Uint8ClampedArray(size * size * 4);
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
-      const w = pixelToPlot(px, py, size, view);
+      const idx = (py * size + px) * 4;
+      rgba[idx + 3] = 255;
+      const p = pixelToPlot(px, py, size, view);
+      let w = p;
+      if (zDisk) {
+        // Off the uniformizing domain (|z| ≤ 1 unbounded / |z| ≥ 1 bounded) φ is not the map — paint the
+        // background and skip. Otherwise lift the fragment forward: w = φ(z).
+        const r = Math.hypot(p[0], p[1]);
+        if (boundedOmega ? r >= 1 : r <= 1) {
+          rgba[idx] = SCHWARZ_OFF_DISK_RGB[0];
+          rgba[idx + 1] = SCHWARZ_OFF_DISK_RGB[1];
+          rgba[idx + 2] = SCHWARZ_OFF_DISK_RGB[2];
+          continue;
+        }
+        w = engine.evalPhi(p);
+      }
       const res = escapeTime(engine, isInOmega, w, { maxIter, escapeR });
       const [r, g, b] = colorFor(res, maxIter);
-      const idx = (py * size + px) * 4;
       rgba[idx] = r;
       rgba[idx + 1] = g;
       rgba[idx + 2] = b;
-      rgba[idx + 3] = 255;
     }
   }
   return rgba;
