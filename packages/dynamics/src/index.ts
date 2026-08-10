@@ -15,7 +15,7 @@ export {
   reconstructBoundary,
 } from "./uniformize.js";
 
-// External-ray tracing (z² + c), extracted from Complex Dynamics (ADR-0011 follow-on). The bulb-angle
+// External-ray tracing (z² + c), extracted from Complex Dynamics (ADR-0014 follow-on). The bulb-angle
 // combinatorics (`bulbRayAngles`) stays app-local in CD — it needs CD's orbit-portrait code.
 export { parameterRay, dynamicRay, rayDepthForZoom, parseAngle } from "./rays.js";
 export type { RayOptions } from "./rays.js";

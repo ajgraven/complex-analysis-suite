@@ -9,7 +9,7 @@
  * as the next initial guess (continuation). Fixing the target modulus at R avoids the w^{2^m} overflow.
  *
  * Extracted from Complex Dynamics on the ADR-0007 second-consumer rule (Riemann Map draws external rays,
- * ADR-0011 follow-on). Pure (no DOM/GL), specialized to the quadratic family z² + c. The bulb-angle
+ * ADR-0014 follow-on). Pure (no DOM/GL), specialized to the quadratic family z² + c. The bulb-angle
  * combinatorics (`bulbRayAngles`, which needs CD's orbit-portrait code) stays app-local.
  *
  * Double-precision-bound: the angle doubling 2^m·θ loses a bit per step, so landings deep in the set

@@ -131,7 +131,7 @@ instead of an ad-hoc JSON blob.
 > Of the three packages below, **`@cas/ui` and `@cas/quadrature` were never extracted** — the
 > demand-driven rule (extract only when a second consumer needs it, ADR-0007) never fired for them —
 > while **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map
-> app became a second consumer ([ADR-0011](DECISIONS.md#adr-0011-extract-casdynamics-on-the-second-consumer-rule-riemann-map)).
+> app became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)).
 > The suite now ships **six** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
 > `@cas/exact`, `@cas/dynamics`. The sections are kept as design intent; each notes where the
 > functionality actually lives today.
@@ -149,13 +149,13 @@ construction (`σ = f∘η∘f⁻¹`); boundary observables. **Status: never bui
 builds its own σ (deltoid) rather than consuming the QD solver, so this stayed inside
 `apps/quadrature-domains`.
 
-### `@cas/dynamics` — domain package *(genesis — inverse-Böttcher + external rays extracted, ADR-0011)*
+### `@cas/dynamics` — domain package *(genesis — inverse-Böttcher + external rays extracted, ADR-0014)*
 Holds the **inverse-Böttcher exterior maps** (the Laurent coefficients uniformizing the complement of a
 filled Julia set — z^d+c / general polynomial / rational — and of the multibrot connectedness locus, the
 capacity, a connectivity test, and boundary reconstruction) and the **external-ray tracing** for z²+c
 (parameter- and dynamical-plane rays, depth scaling, angle parsing) — both extracted from Complex Dynamics
 when the Riemann-map app became a second consumer
-([ADR-0011](DECISIONS.md#adr-0011-extract-casdynamics-on-the-second-consumer-rule-riemann-map)). Still
+([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)). Still
 **app-local** (awaiting a second consumer): escape-time / smooth iteration count; the **bulb-angle
 combinatorics** (`bulbRayAngles`, which needs the orbit-portrait code); cycle detection, multiplier, Fatou
 classification; and the **(parabolic) Tricorn model space** (the correspondence tool reuses

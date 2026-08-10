@@ -4,7 +4,7 @@
 // is ψ(w) = γ₁·w + Σ b_k w^{-k}. Its leading coefficient γ₁ IS the logarithmic capacity of the filled
 // Julia set K (transfinite diameter = conformal radius of the exterior); |γ₁| = 1 exactly for a monic
 // map (a theorem). The b_k are the exterior's "shape spectrum". All from the shared inverse-Böttcher
-// kernel (@cas/dynamics, ADR-0011). Pure → node-tested.
+// kernel (@cas/dynamics, ADR-0014). Pure → node-tested.
 import { parse } from "@cas/expr/parser";
 import { fToRational } from "@cas/expr/rational";
 import { rationalExteriorCoeffs, reconstructBoundary } from "@cas/dynamics";

@@ -10,8 +10,9 @@
  * declarations followed by a `return`.
  */
 
-import type { Node } from "./ast";
+import type { Node, ConstName } from "./ast";
 import { ExprError, referencesVar, nodeIsBool } from "./ast";
+import { TAU, PHI, EGAMMA } from "./complexJs";
 
 /** Function-call names for unary complex builtins → GLSL stdlib names. */
 const UNARY_GLSL: Record<string, string> = {
@@ -26,17 +27,27 @@ const UNARY_GLSL: Record<string, string> = {
   sin: "csin",
   cos: "ccos",
   tan: "ctan",
+  sinh: "csinh",
+  cosh: "ccosh",
+  tanh: "ctanh",
+  sec: "csec",
+  csc: "ccsc",
+  cot: "ccot",
   arcsin: "carcsin",
   arccos: "carccos",
   arctan: "carctan",
+  arcsinh: "carcsinh",
+  arccosh: "carccosh",
+  arctanh: "carctanh",
   lambertw: "clambertw",
+  gamma: "cgamma",
+  zeta: "czeta",
   round: "cround",
   floor: "cfloor",
   ceil: "cceil",
 };
 
 const BINARY_GLSL: Record<string, string> = { arctan2: "carctan2", mod: "cmod" };
-
 
 /** Format a JS number as a GLSL float literal (always with a decimal point or exponent). */
 export function glslFloat(n: number): string {
@@ -47,17 +58,33 @@ export function glslFloat(n: number): string {
 
 const cnum = (n: number): string => `vec_(${glslFloat(n)}, 0.0)`;
 
+/** GLSL for a named constant. `e` / `pi` use the stdlib's named constants (`C_E` / `C_PI`); the B5
+ *  additions (`tau` / `phi` / `γ`) have no stdlib constant, so they emit float literals exactly as a
+ *  numeric literal would (float32 in the single build — the same precision as `C_PI`). */
+function constGlsl(name: ConstName): string {
+  switch (name) {
+    case "i":
+      return "vec_(0.0, 1.0)";
+    case "e":
+      return "vec_(C_E, 0.0)";
+    case "pi":
+      return "vec_(C_PI, 0.0)";
+    case "tau":
+      return `vec_(${glslFloat(TAU)}, 0.0)`;
+    case "phi":
+      return `vec_(${glslFloat(PHI)}, 0.0)`;
+    case "γ":
+      return `vec_(${glslFloat(EGAMMA)}, 0.0)`;
+  }
+}
+
 /** Emit a complex-valued node as a GLSL expression string. */
 function emitComplex(node: Node): string {
   switch (node.kind) {
     case "num":
       return cnum(node.value);
     case "const":
-      return node.name === "i"
-        ? "vec_(0.0, 1.0)"
-        : node.name === "e"
-          ? "vec_(C_E, 0.0)"
-          : "vec_(C_PI, 0.0)";
+      return constGlsl(node.name);
     case "var":
       return node.name;
     case "neg":
@@ -126,7 +153,18 @@ function constReal(node: Node): number | null {
     case "num":
       return node.value;
     case "const":
-      return node.name === "e" ? Math.E : node.name === "pi" ? Math.PI : null; // 'i' is imaginary ⇒ not real
+      // 'i' is imaginary ⇒ not a real constant; the rest fold to their real values.
+      return node.name === "e"
+        ? Math.E
+        : node.name === "pi"
+          ? Math.PI
+          : node.name === "tau"
+            ? TAU
+            : node.name === "phi"
+              ? PHI
+              : node.name === "γ"
+                ? EGAMMA
+                : null;
     case "neg": {
       const v = constReal(node.operand);
       return v === null ? null : -v;
@@ -194,22 +232,27 @@ function emitCall(name: string, args: Node[]): string {
   throw new ExprError(`Unknown function '${name}'`, 0);
 }
 
-/** Emit the body (local declarations + `return`) shared by `f` and `escape`. */
-function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
+/** Emit the body (local declarations + `return`) shared by `f` and `escape`. `bindings` are the
+ *  parameter aliases emitted just above the body (see {@link paramBindings}). */
+function emitBody(
+  ast: Node,
+  emitFinal: (n: Node) => string,
+  bindings: ParamBinding[],
+): string {
   const stmts = ast.kind === "seq" ? ast.stmts : [ast];
   const lines: string[] = [];
   // Seed with the function parameters so `z = z^2 + c; z` (a natural iteration form) emits an ASSIGNMENT to
   // the existing parameter `z`, not `cvec z = …` which would REDECLARE the parameter → GLSL redefinition
   // error (the JS backend has no such notion, so the GPU shader used to die where the CPU overlay worked).
   //
-  // `a` is seeded on exactly the same condition that makes {@link paramAlias} emit its declaration — that
-  // it is READ anywhere — so the two stay in lockstep. Keying on "read but never assigned" instead left a
-  // hole at read-before-assign: `a = a*2; z^2 + a` got no alias AND no seed, so it emitted the
-  // self-referential `cvec a = cmul(a, vec_(2.0, 0.0));`, which GLSL rejects (declaration before use),
-  // while the JS backend compiled and ran. The GPU then kept rendering the PREVIOUS map under the new
-  // caption. (expr-glsl-01)
+  // Each aliased named parameter is seeded on exactly the condition that makes {@link paramBindings}
+  // emit its declaration — that it is READ anywhere — so the two stay in lockstep. Keying on "read but
+  // never assigned" instead left a hole at read-before-assign: `a = a*2; z^2 + a` got no alias AND no
+  // seed, so it emitted the self-referential `cvec a = cmul(a, vec_(2.0, 0.0));`, which GLSL rejects
+  // (declaration before use), while the JS backend compiled and ran. The GPU then kept rendering the
+  // PREVIOUS map under the new caption. (expr-glsl-01)
   const declared = new Set<string>(["z", "c"]);
-  if (referencesVar(ast, "a")) declared.add("a");
+  for (const b of bindings) declared.add(b.name);
   for (let i = 0; i < stmts.length; i++) {
     const stmt = stmts[i];
     const isLast = i === stmts.length - 1;
@@ -234,31 +277,69 @@ function emitBody(ast: Node, emitFinal: (n: Node) => string): string {
   return lines.join("\n");
 }
 
-/** Live-parameter alias: declare `a` from the `uA` uniform whenever the program READS it. Empty
- *  otherwise, so `a = z^2; z + c` (a local that is written but never read back) still declares its own
- *  `cvec a` and programs that never mention `a` cost nothing.
+/**
+ * Options for the GLSL backend. `params` opts into the **named-parameter model** (ADR-0011): each name
+ * listed here, when the program reads it, is aliased from a `uParam_<name>` uniform. Omit it (or omit
+ * `opts` entirely) for the **legacy** single-parameter behavior — the one parameter `a`, aliased from
+ * `uA`, exactly as before. Complex Dynamics passes no options and so is on the legacy path unchanged.
+ */
+export interface CompileOptions {
+  params?: readonly string[];
+}
+
+interface ParamBinding {
+  /** The parameter's variable name, as written in the expression. */
+  name: string;
+  /** The GLSL expression the alias is initialized from, e.g. `vec_(uA.x, uA.y)`. */
+  init: string;
+}
+
+/** The GLSL uniform a named parameter binds to on the general path — `a → uA` stays the legacy default
+ *  (see {@link paramBindings}); every other name, and `a` too once the caller opts in, uses the
+ *  systematic `uParam_<name>` the host declares and sets. */
+const uniformFor = (name: string): string => `uParam_${name}`;
+
+/**
+ * Which parameters the program declares, and from which uniform. LEGACY (no `opts.params`): the sole
+ * parameter `a`, bound to `uA`, iff the program reads it — byte-for-byte the pre-ADR-0011 output, so
+ * Complex Dynamics is untouched. GENERAL (`opts.params` given): each listed name the program reads,
+ * bound to `uParam_<name>`. A name is bound on "read" (not "read and never assigned"), matching the JS
+ * backend where a parameter enters scope holding its value and an assignment overwrites it — so
+ * `a = a*2; z^2 + a` reads the uniform on both backends (expr-glsl-01); {@link emitBody} seeds
+ * `declared` on the same set, so a following assignment is `a = …`, not a redeclaration.
  *
- *  Emitting on "read" rather than on "read and never assigned" is what matches the JS backend, where
- *  `a` enters scope holding the uniform and an assignment simply overwrites it — so `a = a*2; z^2 + a`
- *  reads 2·uA on both backends. Under the old condition that program got no declaration at all and the
- *  shader failed to compile (expr-glsl-01); `emitBody` seeds `declared` on the same condition, so the
- *  assignment that follows is emitted as `a = …` rather than a redeclaration.
- *
- *  Built via `vec_(uA.x, uA.y)` (the precision-agnostic complex constructor) rather than `= uA`, so it
- *  is valid in the df64 build where `cvec` is a `vec4` — a raw `cvec a = uA;` would be a vec4=vec2 type
- *  error that silently fails df64 compilation. */
-function paramAlias(ast: Node): string {
-  return referencesVar(ast, "a") ? "  cvec a = vec_(uA.x, uA.y);\n" : "";
+ * Built via `vec_(u.x, u.y)` (the precision-agnostic complex constructor) rather than `= u`, so it is
+ * valid in the df64 build where `cvec` is a `vec4` — a raw `cvec a = uA;` would be a vec4=vec2 type
+ * error that silently fails df64 compilation.
+ */
+function paramBindings(ast: Node, opts?: CompileOptions): ParamBinding[] {
+  const names = opts?.params ?? ["a"];
+  const legacy = opts?.params === undefined;
+  const bindings: ParamBinding[] = [];
+  for (const name of names) {
+    if (!referencesVar(ast, name)) continue;
+    const u = legacy ? "uA" : uniformFor(name);
+    bindings.push({ name, init: `vec_(${u}.x, ${u}.y)` });
+  }
+  return bindings;
+}
+
+/** Emit the parameter alias declarations (one `cvec <name> = <init>;` per referenced parameter), or the
+ *  empty string when the program reads none — so a plain `z^2 + c` costs nothing. */
+function paramAliases(bindings: ParamBinding[]): string {
+  return bindings.map((b) => `  cvec ${b.name} = ${b.init};\n`).join("");
 }
 
 /** GLSL for `cvec <name>(cvec z, cvec c) { … }` (default name `fFn`). The name param
  *  lets the symbolic derivatives ∂f/∂z and ∂f/∂c be emitted as `fZFn`/`fCFn` for the
- *  analytic distance-estimate and normal-lighting paths. */
-export function compileF(ast: Node, name = "fFn"): string {
-  return `cvec ${name}(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitComplex)}\n}`;
+ *  analytic distance-estimate and normal-lighting paths. `opts` opts into named parameters (ADR-0011). */
+export function compileF(ast: Node, name = "fFn", opts?: CompileOptions): string {
+  const bindings = paramBindings(ast, opts);
+  return `cvec ${name}(cvec z, cvec c) {\n${paramAliases(bindings)}${emitBody(ast, emitComplex, bindings)}\n}`;
 }
 
-/** GLSL for `bool escapeFn(cvec z, cvec c) { … }`. */
-export function compileEscape(ast: Node): string {
-  return `bool escapeFn(cvec z, cvec c) {\n${paramAlias(ast)}${emitBody(ast, emitBool)}\n}`;
+/** GLSL for `bool escapeFn(cvec z, cvec c) { … }`. `opts` opts into named parameters (ADR-0011). */
+export function compileEscape(ast: Node, opts?: CompileOptions): string {
+  const bindings = paramBindings(ast, opts);
+  return `bool escapeFn(cvec z, cvec c) {\n${paramAliases(bindings)}${emitBody(ast, emitBool, bindings)}\n}`;
 }

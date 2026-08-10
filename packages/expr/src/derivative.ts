@@ -2,14 +2,18 @@
  * Symbolic differentiation of an expression AST with respect to `z`, for Newton's
  * method (and, later, analytic distance/normals). The result is a new AST built
  * from the existing node kinds, so it compiles through the same GLSL and JS
- * backends — no new stdlib. Only the holomorphic subset is supported; the
- * non-holomorphic builtins (re/im/conjugate/abs/arg/round/floor/ceil), binary
- * functions, recursion (`f`), and local assignments throw {@link ExprError} (so
- * Newton's method can report "this f isn't differentiable").
+ * backends — no new stdlib. Only the holomorphic subset with a builtin
+ * derivative is supported; the non-holomorphic builtins (re/im/conjugate/abs/
+ * arg/round/floor/ceil), the special functions `gamma` / `zeta` (holomorphic,
+ * but their derivatives need digamma / zeta-prime builtins we don't have),
+ * binary functions, recursion (`f`), and local assignments throw
+ * {@link ExprError} (so Newton's method can report "this f isn't
+ * differentiable").
  */
 
 import type { Node } from "./ast";
 import { ExprError } from "./ast";
+import { TAU, PHI, EGAMMA } from "./complexJs";
 
 const num = (value: number): Node => ({ kind: "num", value });
 const isNum = (n: Node, v: number): boolean => n.kind === "num" && n.value === v;
@@ -97,7 +101,17 @@ function constExp(node: Node): number | null {
     case "num":
       return node.value;
     case "const":
-      return node.name === "e" ? Math.E : node.name === "pi" ? Math.PI : null;
+      return node.name === "e"
+        ? Math.E
+        : node.name === "pi"
+          ? Math.PI
+          : node.name === "tau"
+            ? TAU
+            : node.name === "phi"
+              ? PHI
+              : node.name === "γ"
+                ? EGAMMA
+                : null;
     case "neg": {
       const x = constExp(node.operand);
       return x === null ? null : -x;
@@ -107,11 +121,16 @@ function constExp(node: Node): number | null {
       const r = constExp(node.right);
       if (l === null || r === null) return null;
       switch (node.op) {
-        case "+": return l + r;
-        case "-": return l - r;
-        case "*": return l * r;
-        case "/": return r === 0 ? null : l / r;
-        case "^": return Math.pow(l, r);
+        case "+":
+          return l + r;
+        case "-":
+          return l - r;
+        case "*":
+          return l * r;
+        case "/":
+          return r === 0 ? null : l / r;
+        case "^":
+          return Math.pow(l, r);
       }
       return null;
     }
@@ -173,6 +192,26 @@ function chainOuter(name: string, u: Node): Node {
       const w = call("lambertw", u);
       return div(w, mul(u, add(num(1), w)));
     }
+    case "sinh":
+      return call("cosh", u);
+    case "cosh":
+      return call("sinh", u);
+    case "tanh":
+      // d/dz tanh = sech²(u) = 1 − tanh²(u)
+      return sub(num(1), pow(call("tanh", u), num(2)));
+    case "arcsinh":
+      return div(num(1), call("sqrt", add(pow(u, num(2)), num(1))));
+    case "arccosh":
+      return div(num(1), call("sqrt", sub(pow(u, num(2)), num(1))));
+    case "arctanh":
+      return div(num(1), sub(num(1), pow(u, num(2))));
+    case "sec":
+      return mul(call("sec", u), call("tan", u));
+    case "csc":
+      return neg(mul(call("csc", u), call("cot", u)));
+    case "cot":
+      // d/dz cot = −csc²(u)
+      return neg(pow(call("csc", u), num(2)));
     default:
       throw new ExprError(`'${name}()' is not differentiable for Newton's method`, 0);
   }

@@ -1,7 +1,7 @@
 /**
  * External rays for Complex Dynamics. The ray-*tracing* (parameter/dynamical rays, depth scaling, angle
  * parsing) was extracted to `@cas/dynamics` when the Riemann-map app became a second consumer
- * (ADR-0011 follow-on); this module re-exports it so CD's callers keep importing from `./rays` unchanged,
+ * (ADR-0014 follow-on); this module re-exports it so CD's callers keep importing from `./rays` unchanged,
  * and keeps the one CD-specific piece — `bulbRayAngles` — here, because it needs CD's orbit-portrait
  * combinatorics (`rotationCycleAngles`), which is not (yet) shared.
  */
