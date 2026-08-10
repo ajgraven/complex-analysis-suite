@@ -907,4 +907,8 @@ same rule symmetrically: don't extract what has only one consumer yet.
        `vitest.workspace.ts` and the test-census gate. Verified: full workspace lint / typecheck / test
        (288 files across 11 projects) / build green — behavior-preserving.
 3. [ ] Build Riemann Map's capacity / exterior-coefficient / boundary-overlay readouts on it (P2b).
-4. [ ] Extract `rays.ts` to `@cas/dynamics` when Riemann Map draws external rays (P2c) — a follow-on note.
+4. [x] Extract the **external-ray tracing** from `rays.ts` to `@cas/dynamics` when Riemann Map draws
+       external rays (P2c). Done as a clean split: the pure z²+c ray-tracing (`parameterRay`, `dynamicRay`,
+       `rayDepthForZoom`, `parseAngle`) moved to the package; CD's `render/rays.ts` became a re-export
+       shim keeping only `bulbRayAngles` (which needs CD's orbit-portrait combinatorics). Verified
+       behavior-preserving — CD's `rays.test.ts` + `yoccozCritical.test.ts` pass unchanged through the shim.

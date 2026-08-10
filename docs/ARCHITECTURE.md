@@ -149,16 +149,17 @@ construction (`σ = f∘η∘f⁻¹`); boundary observables. **Status: never bui
 builds its own σ (deltoid) rather than consuming the QD solver, so this stayed inside
 `apps/quadrature-domains`.
 
-### `@cas/dynamics` — domain package *(genesis — inverse-Böttcher extracted, ADR-0011)*
-Holds the **inverse-Böttcher exterior maps**: the Laurent coefficients uniformizing the complement of a
-filled Julia set (z^d+c / general polynomial / rational) and of the multibrot connectedness locus, the
-capacity (leading coefficient), a connectivity test, and boundary reconstruction — extracted from Complex
-Dynamics when the Riemann-map app became a second consumer
+### `@cas/dynamics` — domain package *(genesis — inverse-Böttcher + external rays extracted, ADR-0011)*
+Holds the **inverse-Böttcher exterior maps** (the Laurent coefficients uniformizing the complement of a
+filled Julia set — z^d+c / general polynomial / rational — and of the multibrot connectedness locus, the
+capacity, a connectivity test, and boundary reconstruction) and the **external-ray tracing** for z²+c
+(parameter- and dynamical-plane rays, depth scaling, angle parsing) — both extracted from Complex Dynamics
+when the Riemann-map app became a second consumer
 ([ADR-0011](DECISIONS.md#adr-0011-extract-casdynamics-on-the-second-consumer-rule-riemann-map)). Still
-**app-local** (awaiting a second consumer): escape-time / smooth iteration count; external/parameter ray
-tracing (`rays.ts`); cycle detection, multiplier, Fatou classification; connectivity estimates; and the
-**(parabolic) Tricorn model space** (the correspondence tool reuses Complex-Dynamics' tricorn preset via
-`@cas/expr`).
+**app-local** (awaiting a second consumer): escape-time / smooth iteration count; the **bulb-angle
+combinatorics** (`bulbRayAngles`, which needs the orbit-portrait code); cycle detection, multiplier, Fatou
+classification; and the **(parabolic) Tricorn model space** (the correspondence tool reuses
+Complex-Dynamics' tricorn preset via `@cas/expr`).
 
 ## 4. The dependency rule
 
