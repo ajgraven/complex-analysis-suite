@@ -14,6 +14,7 @@ export interface Controls {
   setMode(id: string): void;
   setColormap(id: string): void;
   setGrid(id: string): void;
+  setAnalysis(rows: readonly (readonly [string, string])[] | null): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
   onExpr(cb: (expr: string) => void): void;
   onMode(cb: (id: string) => void): void;
@@ -117,6 +118,17 @@ export function createControls(initialExpr: string): Controls {
   figNote.textContent = "PNG at 2× with the view embedded (reopen to restore). Readouts: = exact · ≈ numerical.";
   figSection.append(figTitle, buttons, figNote);
 
+  // --- Exterior invariants section (E2/E6) ----------------------------------
+  const analysisSection = document.createElement("section");
+  const analysisTitle = document.createElement("h2");
+  analysisTitle.textContent = "Exterior invariants";
+  const analysisDl = document.createElement("dl");
+  analysisDl.className = "hover";
+  const analysisHint = document.createElement("p");
+  analysisHint.className = "muted";
+  analysisHint.textContent = "In the Julia-exterior mode, a polynomial/rational map shows its capacity, Robin constant, and exterior-map coefficients.";
+  analysisSection.append(analysisTitle, analysisDl, analysisHint);
+
   // --- Under-cursor section -------------------------------------------------
   const hoverSection = document.createElement("section");
   const hoverTitle = document.createElement("h2");
@@ -128,7 +140,7 @@ export function createControls(initialExpr: string): Controls {
   hoverEmpty.textContent = "Hover the plane to read φ(z), φ′(z), and the local scale/rotation.";
   hoverSection.append(hoverTitle, hover, hoverEmpty);
 
-  root.append(mapSection, viewSection, figSection, hoverSection);
+  root.append(mapSection, viewSection, figSection, analysisSection, hoverSection);
 
   // --- behaviour ------------------------------------------------------------
   input.value = initialExpr;
@@ -182,6 +194,18 @@ export function createControls(initialExpr: string): Controls {
     },
     setGrid(id: string): void {
       grid.select.value = id;
+    },
+    setAnalysis(rows: readonly (readonly [string, string])[] | null): void {
+      analysisDl.replaceChildren();
+      analysisHint.style.display = rows && rows.length ? "none" : "";
+      if (!rows) return;
+      for (const [k, v] of rows) {
+        const dt = document.createElement("dt");
+        dt.textContent = k;
+        const dd = document.createElement("dd");
+        dd.textContent = v;
+        analysisDl.append(dt, dd);
+      }
     },
     setHover(rows: readonly (readonly [string, string])[] | null): void {
       hover.replaceChildren();

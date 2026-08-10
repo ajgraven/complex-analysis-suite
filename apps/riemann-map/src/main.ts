@@ -17,6 +17,7 @@ import { attachPanZoom, pixelToWorld } from "./render/nav.js";
 import { modeCode, colormapCode, modeIsDynamics } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
+import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
@@ -100,9 +101,11 @@ function main(): void {
   const rightPane = new Overlay2D(imageCanvas);
 
   let current: CompiledMap | null = null;
+  let analysis: ExteriorAnalysis | null = null;
   let cursorZ: Pt | null = null;
   let gridSource: GridLine[] = [];
   let gridImage: GridLine[] = [];
+  let boundaryLines: GridLine[] = [];
   let glDirty = true;
   let gridDirty = true;
   let linkDirty = true;
@@ -125,8 +128,26 @@ function main(): void {
     controls.showError(null);
     controls.setLatex(compiled.map.latex);
     current = compiled.map;
+    analysis = analyzeExterior(state.map.expr); // exterior invariants (E2/E6), null for non-degree-≥2 maps
     if (renderer && renderer.setMap(compiled.map.glslBody, compiled.map.glslDerivBody)) note.classList.remove("visible");
     refreshDynamicsNote();
+    updateAnalysisPanel();
+  }
+
+  /** Show capacity / Robin / exterior coefficients in the sidebar, but only in the Julia-exterior mode. */
+  function updateAnalysisPanel(): void {
+    if (modeIsDynamics(state.render.mode) && analysis) {
+      const rows: [string, string][] = [
+        ["capacity cap(K)", analysis.monic ? "= 1  (monic)" : "= " + fmt(analysis.capacity)],
+        ["Robin γ", "= " + fmt(analysis.robin)],
+      ];
+      const c = analysis.coeffs;
+      if (c.length > 1) rows.push(["|b₁|", "≈ " + fmt(Math.hypot(c[1][0], c[1][1]))]);
+      if (c.length > 2) rows.push(["|b₂|", "≈ " + fmt(Math.hypot(c[2][0], c[2][1]))]);
+      controls.setAnalysis(rows);
+    } else {
+      controls.setAnalysis(null);
+    }
   }
 
   /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
@@ -145,6 +166,10 @@ function main(): void {
     const aspect = canvas.height > 0 ? canvas.width / canvas.height : 1;
     gridSource = sourceGrid(gridKind(), v.centerRe, v.centerIm, 1 / v.zoom, aspect);
     gridImage = gridKind() !== "none" && current ? pushforward(gridSource, phi) : [];
+    boundaryLines =
+      modeIsDynamics(state.render.mode) && analysis
+        ? [{ color: "rgba(130,225,255,0.95)", pts: reconstructedBoundary(analysis, 1.02, 512) }]
+        : [];
   }
 
   function drawOverlays(): void {
@@ -152,6 +177,7 @@ function main(): void {
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
     leftOverlay.clear();
     leftOverlay.drawLines(gridSource);
+    leftOverlay.drawLines(boundaryLines, 1.6); // reconstructed ∂K in the Julia-exterior mode
     if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
 
     const split = gridKind() !== "none";
@@ -267,8 +293,9 @@ function main(): void {
   });
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
-    invalidate(true, false);
+    invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
     refreshDynamicsNote();
+    updateAnalysisPanel();
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };
