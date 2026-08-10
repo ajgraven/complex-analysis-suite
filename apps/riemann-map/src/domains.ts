@@ -13,6 +13,95 @@ export interface DomainPreset {
   readonly name: string;
   /** Polar boundary radius r(θ) > 0 (boundary point = r(θ)·(cos θ, sin θ)); star-shaped about 0. */
   radius(theta: number): number;
+  /** Corner vertices (for a polygon), where g is singular and the lightning solver clusters poles.
+   *  Absent ⇒ a smooth domain (polynomial-only fit). */
+  readonly corners?: readonly C[];
+}
+
+// --- polygon geometry (P3c) -------------------------------------------------------------------
+
+/** Ray-cast radius r(θ) of a star-shaped polygon about 0: distance from 0 to ∂Ω along direction θ. */
+function polygonRadius(vertices: readonly C[]): (t: number) => number {
+  return (t) => {
+    const cx = Math.cos(t);
+    const cy = Math.sin(t);
+    let best = Infinity;
+    for (let i = 0; i < vertices.length; i++) {
+      const a = vertices[i];
+      const b = vertices[(i + 1) % vertices.length];
+      const ex = b[0] - a[0];
+      const ey = b[1] - a[1];
+      const det = ex * cy - ey * cx; // s·dir − u·e = a
+      if (Math.abs(det) < 1e-12) continue;
+      const s = (ex * a[1] - ey * a[0]) / det; // distance along the ray
+      const u = (cx * a[1] - cy * a[0]) / det; // position along the edge
+      if (u >= -1e-9 && u <= 1 + 1e-9 && s > 1e-9 && s < best) best = s;
+    }
+    return Number.isFinite(best) ? best : 1;
+  };
+}
+
+/** Even-odd point-in-polygon test (orientation-independent). */
+export function pointInPolygon(p: C, poly: readonly C[]): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const yi = poly[i][1];
+    const yj = poly[j][1];
+    if (yi > p[1] !== yj > p[1]) {
+      const xcross = poly[i][0] + ((p[1] - yi) / (yj - yi)) * (poly[j][0] - poly[i][0]);
+      if (p[0] < xcross) inside = !inside;
+    }
+  }
+  return inside;
+}
+
+const nrm = (v: C): C => {
+  const r = Math.hypot(v[0], v[1]) || 1;
+  return [v[0] / r, v[1] / r];
+};
+const dist = (a: C, b: C): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
+
+/**
+ * Boundary samples of a polygon with points clustered toward each corner (a Chebyshev density
+ * t = ½(1−cos πu) on every edge), so the least-squares fit resolves the corner singularities.
+ */
+export function cornerBoundary(corners: readonly C[], perEdge = 90): C[] {
+  const pts: C[] = [];
+  const K = corners.length;
+  for (let i = 0; i < K; i++) {
+    const a = corners[i];
+    const b = corners[(i + 1) % K];
+    for (let k = 0; k < perEdge; k++) {
+      const t = 0.5 * (1 - Math.cos((Math.PI * k) / perEdge)); // clusters toward both endpoints
+      pts.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
+    }
+  }
+  return pts;
+}
+
+/**
+ * Poles for the rational part of the lightning fit: at each corner, `nPerCorner` poles clustered
+ * root-exponentially toward the corner (distance L·exp(−σ(√N−√k))), on the OUTWARD side of ∂Ω (oriented
+ * by a point-in-polygon test, so it is correct for both convex and reflex corners).
+ */
+export function cornerPoles(corners: readonly C[], nPerCorner = 16, sigma = 4): C[] {
+  const poles: C[] = [];
+  const K = corners.length;
+  for (let i = 0; i < K; i++) {
+    const w = corners[i];
+    const prev = corners[(i - 1 + K) % K];
+    const next = corners[(i + 1) % K];
+    const bis: C = [nrm([prev[0] - w[0], prev[1] - w[1]])[0] + nrm([next[0] - w[0], next[1] - w[1]])[0], nrm([prev[0] - w[0], prev[1] - w[1]])[1] + nrm([next[0] - w[0], next[1] - w[1]])[1]];
+    if (Math.hypot(bis[0], bis[1]) < 1e-9) continue; // straight (not a real corner)
+    let d = nrm([-bis[0], -bis[1]]); // outward = negative interior bisector…
+    const L = 0.5 * Math.min(dist(w, prev), dist(w, next));
+    if (pointInPolygon([w[0] + 0.01 * L * d[0], w[1] + 0.01 * L * d[1]], corners)) d = [-d[0], -d[1]]; // …flip if it pointed in
+    for (let k = 1; k <= nPerCorner; k++) {
+      const rho = L * Math.exp(-sigma * (Math.sqrt(nPerCorner) - Math.sqrt(k)));
+      poles.push([w[0] + rho * d[0], w[1] + rho * d[1]]);
+    }
+  }
+  return poles;
 }
 
 /** Off-centre disk |z − c| = R as a polar radius about 0 (positive root; requires |c| < R so 0 ∈ Ω). */
@@ -20,11 +109,30 @@ function offCentreDiskRadius(c: number, R: number): (t: number) => number {
   return (t) => c * Math.cos(t) + Math.sqrt(Math.max(0, R * R - c * c * Math.sin(t) * Math.sin(t)));
 }
 
+/** A regular n-gon (circumradius R) centred at 0, vertices from the given start angle. */
+function regularPolygon(sides: number, R: number, phase = Math.PI / 2): C[] {
+  return Array.from({ length: sides }, (_, k): C => {
+    const a = phase + (2 * Math.PI * k) / sides;
+    return [R * Math.cos(a), R * Math.sin(a)];
+  });
+}
+
+const SQUARE = regularPolygon(4, Math.SQRT2, Math.PI / 4); // axis-aligned unit square, corners at (±1,±1)
+const TRIANGLE = regularPolygon(3, 1.3);
+const PENTAGON = regularPolygon(5, 1.15);
+
+function polygonPreset(id: string, name: string, vertices: C[]): DomainPreset {
+  return { id, name, radius: polygonRadius(vertices), corners: vertices };
+}
+
 export const DOMAIN_PRESETS: readonly DomainPreset[] = [
   { id: "ellipse", name: "Ellipse (3:2)", radius: (t) => (1.5 * 1.0) / Math.hypot(1.0 * Math.cos(t), 1.5 * Math.sin(t)) },
   { id: "offdisk", name: "Off-centre disk", radius: offCentreDiskRadius(0.45, 1) },
   { id: "blob", name: "Smooth blob", radius: (t) => 1 + 0.3 * Math.cos(3 * t) },
   { id: "oval", name: "Rounded oval", radius: (t) => 1 + 0.35 * Math.cos(2 * t) },
+  polygonPreset("square", "Square (corners)", SQUARE),
+  polygonPreset("triangle", "Triangle (corners)", TRIANGLE),
+  polygonPreset("pentagon", "Pentagon (corners)", PENTAGON),
 ] as const;
 
 /** The preset with this id, or undefined. */

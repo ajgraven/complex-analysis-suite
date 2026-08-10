@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, type C } from "../src/domains.js";
-import { fitSmoothConformalMap } from "../src/solve/lightning.js";
+import {
+  DOMAIN_PRESETS,
+  domainById,
+  sampleDomainBoundary,
+  conformalSourceGrid,
+  cornerBoundary,
+  cornerPoles,
+  pointInPolygon,
+  type C,
+} from "../src/domains.js";
+import { fitSmoothConformalMap, fitConformalMap } from "../src/solve/lightning.js";
 
 /** Winding number of a closed polyline about the origin (÷2π); ≈1 ⇒ 0 is enclosed. */
 function windingAboutOrigin(poly: readonly C[]): number {
@@ -36,15 +45,35 @@ describe("preset domains + conformal source grid (P3b)", () => {
     }
   });
 
-  it("the fitted map sends every preset boundary onto the unit circle to good accuracy", () => {
-    for (const d of DOMAIN_PRESETS) {
+  it("the fitted map sends every smooth preset boundary onto the unit circle to good accuracy", () => {
+    for (const d of DOMAIN_PRESETS.filter((p) => !p.corners)) {
       const bdry = sampleDomainBoundary(d, 500);
       const map = fitSmoothConformalMap(bdry, 50);
-      // Sub-1% boundary residual on every preset — a valid numerical map (the wavy blob is the loosest).
+      // Sub-1% boundary residual on every smooth preset (the wavy blob is the loosest).
       expect(map.boundaryResidual, `${d.id} residual`).toBeLessThan(1e-2);
       // A ring interior to Ω maps strictly inside the disk.
       const ring = conformalSourceGrid(d, 4, 3, 40).rings[0];
       for (const p of ring) expect(Math.hypot(...map.eval(p))).toBeLessThan(1);
     }
+  });
+
+  it("clustered corner poles all sit OUTSIDE the polygon", () => {
+    const sq = domainById("square");
+    expect(sq?.corners).toBeDefined();
+    if (!sq?.corners) return;
+    const poles = cornerPoles(sq.corners, 16, 4);
+    expect(poles.length).toBe(16 * sq.corners.length);
+    for (const b of poles) expect(pointInPolygon(b, sq.corners)).toBe(false);
+  });
+
+  it("corner poles resolve the square's corner singularity that a polynomial alone cannot", () => {
+    const sq = domainById("square");
+    if (!sq?.corners) throw new Error("square must be a polygon preset");
+    const bdry = cornerBoundary(sq.corners, 110);
+    const poly = fitConformalMap(bdry, 24, []); // polynomial only — corners unresolved
+    const lightning = fitConformalMap(bdry, 24, cornerPoles(sq.corners, 16, 4)); // + clustered poles
+    expect(lightning.boundaryResidual).toBeLessThan(poly.boundaryResidual / 5); // poles help a lot
+    expect(lightning.boundaryResidual, "square lightning residual").toBeLessThan(1e-2);
+    expect(Math.hypot(...lightning.eval([0, 0]))).toBeCloseTo(0, 12); // f(0) = 0
   });
 });

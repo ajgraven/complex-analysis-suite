@@ -22,8 +22,8 @@ import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analys
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
 import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
-import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid } from "./domains.js";
-import { fitSmoothConformalMap, type ConformalMap } from "./solve/lightning.js";
+import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
+import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
@@ -239,8 +239,12 @@ function main(): void {
       controls.setAnalysis(null);
       return;
     }
-    const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
-    const f = fitSmoothConformalMap(boundary, DOMAIN_DEGREE);
+    // Corner domains (polygons) cluster poles at the vertices (lightning, P3c) and sample the boundary
+    // densely near the corners; smooth domains use the polynomial-only fit (P3a).
+    const corners = d.corners;
+    const boundary = corners ? cornerBoundary(corners, 110) : sampleDomainBoundary(d, DOMAIN_SAMPLES);
+    const poles = corners ? cornerPoles(corners, 16, 4) : [];
+    const f = fitConformalMap(boundary, corners ? 24 : DOMAIN_DEGREE, poles);
     domainMap = f;
     const cg = conformalSourceGrid(d, 24, 6, 160);
     const BDRY = "rgba(200,208,222,0.92)";
@@ -258,13 +262,14 @@ function main(): void {
       ...cg.rings.map((p) => ({ color: RING, pts: f.evalMany(p) as Pt[] })),
     ];
     // Honest readout: the map is numerical; the boundary residual is its ≈ accuracy.
-    controls.setAnalysis([
-      ["method", "lightning (LSQ)"],
+    const rows: [string, string][] = [
+      ["method", f.poles.length ? "lightning + corner poles" : "lightning (LSQ)"],
       ["domain", d.name],
       ["degree", "= " + f.degree],
-      ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
-      ["f(0)", "= 0  (exact)"],
-    ]);
+    ];
+    if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
+    rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
+    controls.setAnalysis(rows);
     controls.setExteriorExportAvailable(false);
   }
 
