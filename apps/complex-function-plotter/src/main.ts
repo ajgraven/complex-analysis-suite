@@ -141,6 +141,8 @@ function main(): void {
   const levelArgOnInput = byId("levelArgOn");
   const homeBtn = byId("home");
   const savePngBtn = byId("savePng");
+  const copyImgBtn = byId("copyImg");
+  const exportSizeSel = byId("exportSize");
   const copyLinkBtn = byId("copyLink");
   const copyTexBtn = byId("copyTex");
   const wheelCanvas = byId("wheel");
@@ -734,12 +736,42 @@ function main(): void {
       redraw(false);
     });
   }
+  // Export (K1 hi-res PNG · K3 reproducibility metadata · K9 copy-to-clipboard). The embedded metadata is
+  // the share URL, so an exported figure carries the exact map/params/view that produced it.
+  const exportEdge = (): number => {
+    const v =
+      exportSizeSel instanceof HTMLSelectElement ? Number(exportSizeSel.value) : 2000;
+    return Number.isFinite(v) && v > 0 ? v : 2000;
+  };
+  const exportMeta = (): Record<string, string> => ({
+    Software: "Complex Function Plotting Tool",
+    "cfp:url": shareUrl(currentState()),
+  });
   if (savePngBtn instanceof HTMLElement) {
     savePngBtn.addEventListener("click", () => {
-      const a = document.createElement("a");
-      a.href = plot.toDataURL();
-      a.download = "complex-function-plot.png";
-      a.click();
+      void plot.exportBlob(exportEdge(), exportMeta()).then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "complex-function-plot.png";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      });
+    });
+  }
+  if (copyImgBtn instanceof HTMLElement) {
+    copyImgBtn.addEventListener("click", () => {
+      // Pass the export promise straight to ClipboardItem so the blob resolves inside the user gesture
+      // (Safari requires that); silently no-op where the async Clipboard image API is unavailable.
+      if (
+        typeof ClipboardItem === "undefined" ||
+        typeof navigator.clipboard?.write !== "function"
+      )
+        return;
+      const item = new ClipboardItem({
+        "image/png": plot.exportBlob(exportEdge(), exportMeta()),
+      });
+      navigator.clipboard.write([item]).catch(() => undefined);
     });
   }
   if (copyLinkBtn instanceof HTMLElement) {

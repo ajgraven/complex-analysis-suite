@@ -18,6 +18,8 @@ import { freeParameters, substitute } from "@cas/expr/ast";
 import { differentiate } from "@cas/expr/derivative";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
+import { injectPngText } from "./pngMetadata.js";
+import { clampLongEdge, exportDims } from "./exportImage.js";
 import {
   type OrbitCamera,
   DEFAULT_CAMERA,
@@ -718,10 +720,44 @@ export class Plot {
     this.setCenterAtScreen(clientX, clientY, before);
   }
 
-  /** A full-resolution PNG data URL of the current frame (basic export; hi-res tiling is Phase 6). */
-  toDataURL(): string {
-    this.draw(false);
-    return this.canvas.toDataURL("image/png");
+  /**
+   * A hi-resolution PNG of the current view (any mode — 2D, landscape, or sphere) whose LONG edge is
+   * `longEdge` px, aspect preserved, embedding `metadata` as reproducibility `tEXt` (catalog K1/K3). The
+   * `preserveDrawingBuffer` context means this is just "grow the buffer, paint, read back": we size the
+   * drawing buffer up (bypassing {@link resize}, which caps at DPR / `MAX_BUFFER` for the live view),
+   * {@link paint} the current mode, `toBlob`, then restore the live buffer with a normal {@link draw}.
+   * Async (canvas `toBlob` is), and it may down-clamp `longEdge` to the GL `MAX_TEXTURE_SIZE`.
+   */
+  async exportBlob(
+    longEdge: number,
+    metadata: Record<string, string> = {},
+  ): Promise<Blob> {
+    const { size } = clampLongEdge(
+      longEdge,
+      this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number,
+    );
+    const { w, h } = exportDims(this.aspect() || 1, size);
+    this.canvas.width = w;
+    this.canvas.height = h;
+    this.paint();
+    const raw = await new Promise<Blob>((resolve, reject) => {
+      this.canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("PNG encoding failed"))),
+        "image/png",
+      );
+    });
+    this.draw(false); // restore the live buffer to the CSS size (also re-clears the export size)
+    if (Object.keys(metadata).length === 0) return raw;
+    // injectPngText returns a fresh full-length buffer at offset 0, so its `.buffer` is exactly the PNG
+    // bytes (the cast just narrows ArrayBufferLike → ArrayBuffer for the strict BlobPart type).
+    const stamped = injectPngText(new Uint8Array(await raw.arrayBuffer()), metadata);
+    return new Blob([stamped.buffer as ArrayBuffer], { type: "image/png" });
+  }
+
+  /** The largest hi-res export long-edge this device supports (the GL `MAX_TEXTURE_SIZE`), so the UI can
+   *  offer only sizes that will actually render. */
+  maxExportEdge(): number {
+    return this.gl.getParameter(this.gl.MAX_TEXTURE_SIZE) as number;
   }
 
   /**

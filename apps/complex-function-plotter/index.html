@@ -300,7 +300,15 @@
 
       <div class="group actions">
         <button id="home" type="button">Reset</button>
+        <label class="export-size" style="display: inline-flex; align-items: center; gap: 4px">
+          <select id="exportSize" title="Export resolution (long edge)">
+            <option value="1000">1000&thinsp;px</option>
+            <option value="2000" selected>2000&thinsp;px</option>
+            <option value="4000">4000&thinsp;px</option>
+          </select>
+        </label>
         <button id="savePng" type="button">Save PNG</button>
+        <button id="copyImg" type="button">Copy image</button>
         <button id="copyLink" type="button">Copy link</button>
         <button id="copyTex" type="button">Copy LaTeX</button>
       </div>

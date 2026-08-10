@@ -93,24 +93,32 @@ Plus the Phase-2 research tool:
   the render is unreliable.
 - **Navigation & output** — pan / zoom-to-cursor / reset, axes + grid + scale bar (aspect locked
   1:1, so angles read true), phase-wheel + modulus legends, share-links (`#vs=` via `@cas/interchange`),
-  and PNG export; HiDPI + progressive rendering and WebGL2 context-loss recovery throughout.
+  and **hi-resolution PNG export** (K1/K3/K9, Phase 6): pick a long-edge (up to the GPU's max texture
+  size), and any view — 2D, landscape, or sphere — re-renders at that size and downloads with the
+  **share-link embedded as `tEXt` metadata**, so the figure carries the exact map / params / view that
+  produced it; a **copy-image-to-clipboard** button does the same to the clipboard. HiDPI + progressive
+  rendering and WebGL2 context-loss recovery throughout.
 
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
 
-Phase 4 (special functions & the DLMF mode) is complete. **Phase 5 (the 3D engine) is underway**: the
-analytic-**landscape** surface with `f'/f` shading (5A–5B) and the **Riemann sphere** (5C) above are in;
-linked 2D↔3D navigation (5D) follows. See
+Phase 4 (special functions & the DLMF mode) and the core of Phase 5 (the 3D engine — analytic
+**landscape** with `f'/f` shading, and the **Riemann sphere**) are complete. **Phase 6 (export, interop,
+a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image (6A)** above
+is in; interop (import/export a map, 6B) and accessibility (6C) precede the publish flip. Linked 2D↔3D
+navigation (5D) + the 3D-slice extraction ADR are the parked remainder of Phase 5. See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
 | File                        | Role                                                                                                                                                         |
 | --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `main.ts`                   | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, PNG        |
+| `main.ts`                   | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, export     |
 | `render/colorShader.ts`     | the layered coloring GLSL (`colorAt` = phase LUT × modulus transfer, + NaN/Inf sentinel) and the fragment-program assembler                                  |
 | `render/colormaps.ts`       | phase colormaps (perceptual Oklch + HSV) baked into one RGBA8 atlas; Oklab→sRGB conversion                                                                   |
-| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, PNG data-URL          |
+| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, hi-res `exportBlob`   |
+| `render/pngMetadata.ts`     | pure PNG `tEXt` inject/read (K3): embeds the share-link into an exported PNG without touching a pixel — ported from CD's `pngMetadata`                       |
+| `render/exportImage.ts`     | pure export size algebra (K1): clamp a long-edge to the GPU max, derive aspect-preserving buffer dims, sanitise a filename                                   |
 | `state/viewState.ts`        | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                        |
 | `presets.ts`                | the preset / example gallery (each expression is validated in the tests)                                                                                     |
 | `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                                |
@@ -145,6 +153,9 @@ parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate m
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),
 `autocomplete.test.ts` (the token-under-caret + prefix matching), `precision.test.ts` (the float32
 badge policy — ζ warn / Γ note, strongest-first, over the `parse → calledFunctions → precisionNote`
-path), and `singularities.test.ts` (the zero/pole finder recovers known counts and orders). Coloring
+path), `pngMetadata.test.ts` (the export `tEXt` inject/read round-trip — canonical CRC-32, image bytes
+untouched, Latin-1 coercion, non-PNG passthrough), `exportImage.test.ts` (the hi-res export size algebra
+— clamp to the GPU max, aspect-preserving dims, filename sanitising), and `singularities.test.ts` (the
+zero/pole finder recovers known counts and orders). Coloring
 correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
 during development; an automated pixel-diff visual-regression harness is deferred.
