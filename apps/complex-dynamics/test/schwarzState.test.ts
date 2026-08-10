@@ -7,6 +7,7 @@ import {
   SIGMA_RENDER_DEFAULTS,
   SIGMA_LIGHT_DEFAULTS,
   SIGMA_OVERLAY_DEFAULTS,
+  SIGMA_VIEW_DEFAULTS,
   type SigmaViewState,
 } from "../src/state/schwarzState";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../src/render/schwarzView";
@@ -28,6 +29,7 @@ const DELTOID: SigmaViewState = {
   ...SIGMA_RENDER_DEFAULTS,
   ...SIGMA_LIGHT_DEFAULTS,
   ...SIGMA_OVERLAY_DEFAULTS,
+  ...SIGMA_VIEW_DEFAULTS,
 };
 const POLE: SigmaViewState = {
   phi: { c: [1, 0], F: [], branches: [{ z: [0.2, -0.1], A: [[0.3, 0], [0.05, 0.1]] }] },
@@ -48,6 +50,7 @@ const POLE: SigmaViewState = {
   lightEl: 30,
   lightHeight: 3.5,
   showBoundary: true, // non-default F1 ∂Ω overlay, to prove it round-trips
+  viewMode: "z", // non-default F2b z-disk view, to prove it round-trips
 };
 
 describe("encodeSigmaState / parseSigmaState round-trip", () => {
@@ -81,6 +84,7 @@ describe("encodeSigmaState / parseSigmaState round-trip", () => {
     ...SIGMA_RENDER_DEFAULTS,
     ...SIGMA_LIGHT_DEFAULTS,
     ...SIGMA_OVERLAY_DEFAULTS,
+    ...SIGMA_VIEW_DEFAULTS,
   };
 
   it("round-trips a bounded state (family + w₀) — S5-C2d", () => {
@@ -277,6 +281,26 @@ describe("parseSigmaState — ∂Ω boundary overlay (F1)", () => {
   });
 });
 
+describe("parseSigmaState — coordinate view (F2b)", () => {
+  const enc = (o: unknown): string => JSON.stringify(o);
+  const base = { c: 1, F: [[0, 0], [0, 0], [0.5, 0]], b: [], ctr: [0, 0], z: 0.4, cm: "viridis", sc: "linear" };
+
+  it("defaults to the w-plane when the key is absent (old links pre-F2b)", () => {
+    expect(parseSigmaState(enc(base))?.viewMode).toBe("plane");
+  });
+
+  it("round-trips the z-disk view and omits the key on the plane (link unchanged from pre-F2b)", () => {
+    expect(encodeSigmaState({ ...DELTOID })).not.toMatch(/"vm"/);
+    expect(parseSigmaState(encodeSigmaState({ ...DELTOID, viewMode: "z" }))?.viewMode).toBe("z");
+    expect(encodeSigmaState({ ...DELTOID, viewMode: "z" })).toContain('"vm":"z"');
+  });
+
+  it("falls back to the plane for an unknown view (a stale 'sphere' or corrupt value)", () => {
+    expect(parseSigmaState(enc({ ...base, vm: "sphere" }))?.viewMode).toBe("plane");
+    expect(parseSigmaState(enc({ ...base, vm: 3 }))?.viewMode).toBe("plane");
+  });
+});
+
 describe("parseSigmaState — custom gradient (C1)", () => {
   const CUSTOM: SigmaViewState = {
     ...DELTOID,
@@ -325,6 +349,7 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("escapeR=10000");
     expect(s).toContain("light=off");
     expect(s).toContain("boundary=off");
+    expect(s).toContain("view=plane");
     expect(s).not.toMatch(/[σ≈−]/); // PNG tEXt is Latin-1
   });
 
@@ -343,5 +368,6 @@ describe("schwarzStampParams (PNG metadata summary)", () => {
     expect(s).toContain("escapeR=1000");
     expect(s).toContain("light=on(az200,el30,depth3.5)");
     expect(s).toContain("boundary=on");
+    expect(s).toContain("view=z-disk");
   });
 });

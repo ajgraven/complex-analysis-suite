@@ -33,8 +33,12 @@ import {
  *  + image-space tone). The tone fields (S5-A3) are identity at their defaults. */
 export interface SigmaViewState {
   phi: SchwarzPhi;
+  /** The ACTIVE view's window (F2b): the w-plane window in "plane" mode, the uniformizing z-disk window in
+   *  "z" mode. The inactive view's window is per-session (the live stash), not serialized. */
   center: Complex;
   zoom: number;
+  /** Coordinate view (F2b): "plane" (default) or the uniformizing "z"-disk. */
+  viewMode: "plane" | "z";
   colormap: string;
   scale: string;
   /** σ-field color mode (S5-B1): "escape" (default) · "trap" · "stripe". */
@@ -81,6 +85,10 @@ export const SIGMA_LIGHT_DEFAULTS = { light: false, lightAz: 135, lightEl: 45, l
  *  permalink restores with no boundary (byte-identical). Future overlay toggles (F2+) extend this record. */
 export const SIGMA_OVERLAY_DEFAULTS = { showBoundary: false } as const;
 
+/** Default coordinate view (F2b) — the w-plane; the fallback for links that predate the z-disk, so an old
+ *  permalink restores on the plane (byte-identical: `vm` is omitted when the view is the plane). */
+export const SIGMA_VIEW_DEFAULTS = { viewMode: "plane" } as const;
+
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
 
@@ -124,6 +132,8 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.lightHeight !== SIGMA_LIGHT_DEFAULTS.lightHeight) out.ldp = s.lightHeight;
   // ∂Ω boundary overlay (F1), omitted at its default (off) so a view without it is byte-identical to pre-F1.
   if (s.showBoundary !== SIGMA_OVERLAY_DEFAULTS.showBoundary) out.bd = s.showBoundary;
+  // Coordinate view (F2b), omitted on the w-plane so a plane view's link is byte-identical to pre-F2b.
+  if (s.viewMode !== SIGMA_VIEW_DEFAULTS.viewMode) out.vm = s.viewMode;
   // Custom gradient (C1) — carried only when the custom palette is active (and has ≥2 stops), so a named-
   // palette view's link is unaffected.
   if (s.colormap === "custom" && s.customStops && s.customStops.length >= 2) out.grad = s.customStops;
@@ -146,7 +156,8 @@ export function schwarzStampParams(s: SigmaViewState): string {
       : `plane=Schwarz reflection sigma (approx); c=${s.phi.c[1] === 0 ? r(s.phi.c[0]) : cplx(s.phi.c)}; ` +
         `F=[${s.phi.F.map(cplx).join(", ")}]; poles=${s.phi.branches.length}`;
   return (
-    `${recipe}; center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
+    `${recipe}; view=${s.viewMode === "z" ? "z-disk" : "plane"}; center=${cplx(s.center)}; ` +
+    `zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
     `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
     `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}; ` +
@@ -257,6 +268,9 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
   // ∂Ω boundary overlay (F1) — a bad/absent value falls back to the default (off); never fatal.
   const showBoundary = typeof o.bd === "boolean" ? o.bd : SIGMA_OVERLAY_DEFAULTS.showBoundary;
+  // Coordinate view (F2b) — only "z" is a non-default; anything else (incl. a stale "sphere" from a future
+  // build, or a corrupt value) falls back to the w-plane.
+  const viewMode: "plane" | "z" = o.vm === "z" ? "z" : "plane";
   // Custom gradient (C1) — validated via the shared editor parser (≥2 stops, clamped t / bytes); a bad or
   // absent value ⇒ no custom stops (the named palette applies). Only meaningful when colormap === "custom".
   const customStops = o.grad !== undefined ? (parseGradientStops(JSON.stringify(o.grad)) ?? undefined) : undefined;
@@ -265,8 +279,8 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   // carries the tag + centre w₀. Both reconstruct correctly — renderSchwarzFromPhi treats absent as unbounded.
   const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
   return {
-    phi, center, zoom, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter, escapeR,
-    light, lightAz, lightEl, lightHeight, showBoundary,
+    phi, center, zoom, viewMode, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter,
+    escapeR, light, lightAz, lightEl, lightHeight, showBoundary,
     ...(customStops ? { customStops } : {}),
   };
 }

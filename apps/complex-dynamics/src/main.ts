@@ -2988,6 +2988,9 @@ function init(): void {
   // not a certified render. Drag to pan, scroll to zoom (about the cursor); Esc — or any control change —
   // exits and restores the normal plot underneath.
   const SCHWARZ_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.4 }; // half-width 1/zoom = 2.5
+  // F2b: the default uniformizing z-disk window — centred on the unit circle, showing |z| up to ~1.67 (the
+  // disk edge + a margin) for either family. The default per mode; each view pans/zooms independently.
+  const SCHWARZ_ZDISK_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.6 };
   // ONE escape budget for both the σ field and the orbit inspector, so a clicked point's reported fate
   // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree). Mutable so
   // the Render-group iterations / escape-radius fields (B2) retune it live; defaults hold at 48 / 1e4.
@@ -3006,6 +3009,14 @@ function init(): void {
         mode: "GPU" | "CPU";
       }
     | null = null;
+  // F2b coordinate view: `schwarzView` ALWAYS holds the ACTIVE view's window (so every pan/zoom/inspect/nav
+  // handler keeps operating on it unchanged); the inactive view is stashed in `schwarzViews` and swapped in
+  // setSchwarzViewMode. Only "plane" (w-plane) and "z" (z-disk) are live; "sphere" lands in F2d.
+  let schwarzViewMode: "plane" | "z" = "plane";
+  const schwarzViews: { plane: SchwarzView; z: SchwarzView } = {
+    plane: { ...SCHWARZ_DEFAULT_VIEW },
+    z: { ...SCHWARZ_ZDISK_DEFAULT_VIEW },
+  };
   let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
   let schwarzRaf = 0;
   // σ coloring (ADR-0009 item 3) — remembered for this page session so it survives σ enter/exit and a
@@ -3081,6 +3092,37 @@ function init(): void {
   /** Paint the σ field at the current `schwarzView`. GPU → render (draft or full res) then drawImage; CPU →
    *  putImageData. The field is re-rendered only when dirty; the orbit overlays + scale bar are drawn every
    *  paint over the (possibly cached) field. */
+  /** Reflect the active view mode into the segment (pressed button) + the `#schwarz-plot[data-schwarz-view]`
+   *  hook (F2a's DOM contract, now driven live in F2b). */
+  function syncSchwarzViewModeSeg(): void {
+    document.getElementById("schwarz-plot")?.setAttribute("data-schwarz-view", schwarzViewMode);
+    for (const [m, id] of [
+      ["plane", "schwarz-view-plane"],
+      ["z", "schwarz-view-z"],
+      ["sphere", "schwarz-view-sphere"],
+    ] as const) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      const active = m === schwarzViewMode;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    }
+  }
+
+  /** Switch the σ coordinate view (F2b). `schwarzView` always holds the ACTIVE window, so this stashes the
+   *  outgoing view, loads the incoming one (each view pans/zooms independently), reflects the segment, and
+   *  repaints the field in the new mode. The orbit/boundary overlays are w-space, so paintSchwarz simply
+   *  doesn't draw them off the plane — the pinned orbit is KEPT (not cleared), so returning restores it. */
+  function setSchwarzViewMode(mode: "plane" | "z"): void {
+    if (mode === schwarzViewMode) return;
+    schwarzViews[schwarzViewMode] = schwarzView; // save the (reassigned) active window
+    schwarzViewMode = mode;
+    schwarzView = { ...schwarzViews[mode] }; // load the incoming window (a copy — pan/zoom reassigns it)
+    schwarzHover = null; // transient w-space preview — stale in the new coordinates
+    syncSchwarzViewModeSeg();
+    scheduleSchwarzPaint(); // re-render the field in the new mode (also mirrors the nav fields + chip)
+  }
+
   function paintSchwarz(): void {
     if (!schwarzSession) return;
     const { engine, poly, mode, boundedOmega } = schwarzSession;
@@ -3112,6 +3154,7 @@ function init(): void {
           lightAz: schwarzLightAz,
           lightEl: schwarzLightEl,
           lightHeight: schwarzLightDepth,
+          viewMode: schwarzViewMode, // F2b: "z" ⇒ the uniformizing z-disk (w = φ(z)); "plane" is the default
         });
         schwarzLastRenderSize = renderSize;
       }
@@ -3121,21 +3164,28 @@ function init(): void {
       ctx.drawImage(schwarzGL.canvas, 0, 0, schwarzLastRenderSize, schwarzLastRenderSize, 0, 0, backing, backing);
     } else {
       if (schwarzFieldDirty || !schwarzCpuImage || schwarzCpuImage.width !== backing) {
-        const rgba = renderSchwarzField(engine, poly, schwarzView, backing, { ...schwarzEscape, boundedOmega });
+        const rgba = renderSchwarzField(engine, poly, schwarzView, backing, {
+          ...schwarzEscape,
+          boundedOmega,
+          viewMode: schwarzViewMode,
+        });
         schwarzCpuImage = new ImageData(backing, backing); // construct-then-set — avoids the
         schwarzCpuImage.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance
       }
       ctx.putImageData(schwarzCpuImage, 0, 0);
     }
-    // ∂Ω boundary overlay (F1) — under the orbits, over the field. `poly` is the session's boundary polygon
-    // (already computed for the mask), so this is just a stroke; skipped entirely when the toggle is off.
-    if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
-    // Orbit overlays on top of the field: the transient hover preview (faint, S5-A2) under the pinned
-    // click-inspect orbit (bold, ADR-0009 item 3) — both redrawn for the current view + backing scale.
-    if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
-    if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
-    // Scale bar (ADR-0009 item 3) — CD's own overlay helper; the σ view shares its center/zoom convention
-    // (span = 2/zoom), so it reads correctly. Last, so an orbit line never hides it (it has its own backing).
+    // w-space overlays (∂Ω boundary + orbits) are only meaningful in the w-plane view. In the z-disk view
+    // (F2b) they would need a ψ-pullback into z-coordinates (F2c), so they are simply NOT drawn there yet —
+    // the pinned orbit is kept in state, so returning to the plane restores it.
+    if (schwarzViewMode === "plane") {
+      // ∂Ω boundary overlay (F1) — under the orbits, over the field; `poly` is the session's mask polygon.
+      if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
+      // Orbit overlays: the transient hover preview (faint, S5-A2) under the pinned click-inspect orbit (bold).
+      if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
+      if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
+    }
+    // Scale bar (ADR-0009 item 3) — correct in either view (it just reads the active window's zoom). Last, so
+    // an orbit line never hides it (it has its own backing).
     drawScaleBar(ctx, backing, schwarzView.zoom);
     schwarzFieldDirty = false;
     syncSchwarzViewFields(); // keep the precise-nav fields + view chip mirroring the live view
@@ -3321,7 +3371,12 @@ function init(): void {
       }
     }
     schwarzSession = { engine, poly, phi, boundedOmega, mode };
+    // A new σ starts on the w-plane, with both coordinate views (F2b) at their defaults.
+    schwarzViewMode = "plane";
+    schwarzViews.plane = { ...SCHWARZ_DEFAULT_VIEW };
+    schwarzViews.z = { ...SCHWARZ_ZDISK_DEFAULT_VIEW };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+    syncSchwarzViewModeSeg();
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     schwarzHover = null;
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
@@ -3385,7 +3440,13 @@ function init(): void {
       schwarzGradientEditor?.setStops(schwarzGradientStops);
     }
     renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
-    schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
+    // ...then restore the exact window + coordinate view (F2b). enterSchwarz (via renderSchwarzFromPhi) reset
+    // both views to defaults + plane mode; apply the serialized mode + its window (the inactive view keeps
+    // its default — only the active window is serialized).
+    schwarzViewMode = s.viewMode;
+    schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom };
+    schwarzViews[s.viewMode] = { ...schwarzView };
+    syncSchwarzViewModeSeg();
     const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
     if (cm) cm.value = schwarzColormapName;
     const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
@@ -3456,6 +3517,7 @@ function init(): void {
       lightEl: schwarzLightEl,
       lightHeight: schwarzLightDepth,
       showBoundary: schwarzShowBoundary,
+      viewMode: schwarzViewMode, // F2b: center/zoom above are the ACTIVE view's window
       ...(schwarzColormapName === "custom" ? { customStops: schwarzGradientStops } : {}),
     };
   }
@@ -3491,6 +3553,7 @@ function init(): void {
         lightAz: schwarzLightAz,
         lightEl: schwarzLightEl,
         lightHeight: schwarzLightDepth,
+        viewMode: schwarzViewMode, // F2b: export the active coordinate view (plane or z-disk)
       });
       const out = document.createElement("canvas");
       out.width = size;
@@ -3498,10 +3561,13 @@ function init(): void {
       const octx = out.getContext("2d");
       if (!octx) return null;
       octx.drawImage(schwarzGL.canvas, 0, 0);
-      // Bake the ∂Ω boundary (F1) into the export when it's on — it's part of the view you see. (The CPU
-      // fallback below reuses the on-screen canvas, which paintSchwarz already drew the boundary onto.)
-      if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
-      if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
+      // Bake the w-space overlays (∂Ω boundary + orbit) only on the plane — they'd need a ψ-pullback in the
+      // z-disk (F2c), matching paintSchwarz. (The CPU fallback below reuses the on-screen canvas, already
+      // drawn with the same gating.)
+      if (schwarzViewMode === "plane") {
+        if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
+        if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
+      }
       if (wantScaleBar) drawScaleBar(octx, size, schwarzView.zoom);
       canvas = out;
       scheduleSchwarzPaint(); // the render above resized the offscreen GL canvas — repaint the on-screen 512²
@@ -3577,7 +3643,7 @@ function init(): void {
     // Is `uv` within grab range of the pinned inspect seed w₀ (measured in CSS px)? Starts a seed-drag and
     // drives the "move" cursor. (The inverse of uvToPlotFrac maps w₀ back to its fractional screen position.)
     const nearSchwarzSeed = (uv: [number, number]): boolean => {
-      if (!schwarzInspect) return false;
+      if (!schwarzInspect || schwarzViewMode !== "plane") return false; // the seed is a w-plane overlay (F2c mirrors it)
       const w = schwarzInspect.points[0];
       const su = ((w[0] - schwarzView.center[0]) * schwarzView.zoom + 1) / 2;
       const sv = (1 - (w[1] - schwarzView.center[1]) * schwarzView.zoom) / 2;
@@ -3587,7 +3653,7 @@ function init(): void {
     // Hover orbit-preview (S5-A2): trace the orbit under the cursor and repaint (rAF-coalesced). Clears when
     // the pointer leaves. Off during a drag (a pan already repaints) and on touch (no hover).
     const setSchwarzHover = (e: PointerEvent): void => {
-      if (!schwarzSession) return;
+      if (!schwarzSession || schwarzViewMode !== "plane") return; // the orbit preview is w-plane-only (F2c mirrors it)
       const uv = clientToUv(e);
       schwarzHover = schwarzOrbitAt(
         schwarzSession.engine,
@@ -3650,8 +3716,9 @@ function init(): void {
     canvas.addEventListener("pointerup", (e) => {
       const wasClick = lastUv !== null && !movedSinceDown && !draggingSeed;
       endDrag(e);
-      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor.
-      if (wasClick && schwarzSession) {
+      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor. w-plane only —
+      // the z-disk would need the click mapped through φ and the orbit drawn via ψ-pullback (F2c).
+      if (wasClick && schwarzSession && schwarzViewMode === "plane") {
         const uv = clientToUv(e);
         setSchwarzInspect(uvToPlotFrac(schwarzView, uv[0], uv[1]));
       }
@@ -3716,7 +3783,7 @@ function init(): void {
         case "=": zoomBy(2); break;
         case "-":
         case "_": zoomBy(0.5); break;
-        case "i": setSchwarzInspect([schwarzView.center[0], schwarzView.center[1]]); break;
+        case "i": if (schwarzViewMode === "plane") setSchwarzInspect([schwarzView.center[0], schwarzView.center[1]]); break;
         default: return;
       }
       e.preventDefault();
@@ -3960,29 +4027,14 @@ function init(): void {
     }
   }
 
-  // σ view-mode segment (F2a): the shell for the three coordinate views (plane · z-disk · sphere). Only the
-  // w-plane is live today; the z-disk (F2b) and sphere (F2d) render paths land later, so their buttons are
-  // DISABLED in the markup and never fire. The selected mode lives in `#schwarz-plot[data-schwarz-view]` —
-  // the single hook F2b/F2d read + branch on (and future view-only control cards key their visibility off).
-  {
-    const MODES = [
-      ["plane", "schwarz-view-plane"],
-      ["z", "schwarz-view-z"],
-      ["sphere", "schwarz-view-sphere"],
-    ] as const;
-    const setSchwarzViewMode = (mode: (typeof MODES)[number][0]): void => {
-      document.getElementById("schwarz-plot")?.setAttribute("data-schwarz-view", mode);
-      for (const [m, id] of MODES) {
-        const btn = document.getElementById(id);
-        if (!btn) continue;
-        const active = m === mode;
-        btn.classList.toggle("is-active", active);
-        btn.setAttribute("aria-pressed", String(active));
-      }
-    };
-    for (const [mode, id] of MODES) {
-      document.getElementById(id)?.addEventListener("click", () => setSchwarzViewMode(mode));
-    }
+  // σ view-mode segment (F2a shell → F2b live): the plane + z-disk buttons switch coordinate views via
+  // setSchwarzViewMode (the stash-swap + repaint + DOM sync live there). The sphere button stays DISABLED in
+  // the markup until F2d, so it never fires — only plane / z are wired.
+  for (const [mode, id] of [
+    ["plane", "schwarz-view-plane"],
+    ["z", "schwarz-view-z"],
+  ] as const) {
+    document.getElementById(id)?.addEventListener("click", () => setSchwarzViewMode(mode));
   }
 
   // σ render controls (Phase B): AA supersample + the escape budget (iterations + escape radius). Each
@@ -4056,7 +4108,7 @@ function init(): void {
         });
       }
       resetBtn.addEventListener("click", () => {
-        schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+        schwarzView = { ...(schwarzViewMode === "z" ? SCHWARZ_ZDISK_DEFAULT_VIEW : SCHWARZ_DEFAULT_VIEW) };
         scheduleSchwarzPaint();
       });
       // Copy the live centre + zoom at FULL precision (parity with the standard plots' copy-coords; no `c =`

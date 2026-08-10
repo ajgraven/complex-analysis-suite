@@ -2200,3 +2200,20 @@
   differs from plane) + browser **18/18** (+1 CPU↔GPU z-disk parity: the shader compiles with the new path;
   the off-disk mask — a pure |z| vs 1 test, free of float drift — agrees GPU↔CPU ≥ 97%; the z-disk differs
   from the plane). **F2b-i complete.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2b-ii — z-disk live):** wire
+  the proven z-disk render into the UI. The z-disk button is enabled; `setSchwarzViewMode` switches coordinate
+  views. Independent per-view pan/zoom via a **stash**: `schwarzView` always holds the ACTIVE window (so every
+  pan / wheel / keyboard / inspect / nav handler keeps operating on it unchanged), the inactive view lives in
+  `schwarzViews[mode]`, and the mode-switch saves the outgoing / loads the incoming window. `paintSchwarz` +
+  the PNG export pass `viewMode` to the renderers; the w-space overlays (∂Ω boundary + orbit + hover + seed +
+  keyboard-`i` inspect) are gated to the plane — in the z-disk they'd need a ψ-pullback (F2c), so they're not
+  drawn (the pinned orbit is KEPT, not cleared, so returning to the plane restores it). `viewMode` travels in
+  `_sigma` (omitted on the plane ⇒ pre-F2b links byte-identical); `center`/`zoom` now serialize the ACTIVE
+  view's window (the inactive is per-session). A new σ / reset is mode-aware. Green: typecheck + lint + node
+  **2431** (schwarzState +3: default / round-trip-z / unknown→plane; POLE fixture carries `viewMode:"z"`; stamp
+  `view=plane|z-disk`) + browser **18/18** (unchanged — F2b-i owns the shader). VERIFIED (Playwright, **9/9**):
+  starts on the plane; the z-disk button renders the φ field (differs from the plane) with its own default
+  window; panning moves the z window; switching back to the plane restores the plane window while the z window
+  is preserved in the stash; a share link reopens in the z-disk with its window. Captured the z-disk deltoid
+  (the |z|≤1 off-domain disk ringed by the 3-fold σ escape field). **F2b complete — plane · z-disk both live;
+  sphere (F2d) still to come.**
