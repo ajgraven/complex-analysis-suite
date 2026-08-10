@@ -20,6 +20,7 @@ import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
 import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
+import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
@@ -105,6 +106,8 @@ function main(): void {
 
   let current: CompiledMap | null = null;
   let analysis: ExteriorAnalysis | null = null;
+  let dynamics: DynamicsStats | null = null; // z²+c dynamical stats, when the map is that family
+  let dynC: [number, number] | null = null; // the z²+c parameter, or null when the map is not z²+c
   let cursorZ: Pt | null = null;
   let gridSource: GridLine[] = [];
   let gridImage: GridLine[] = [];
@@ -134,25 +137,53 @@ function main(): void {
     controls.setLatex(compiled.map.latex);
     current = compiled.map;
     analysis = analyzeExterior(state.map.expr); // exterior invariants (E2/E6), null for non-degree-≥2 maps
+    dynC = quadraticJuliaC(state.map.expr); // z²+c parameter (E12), null otherwise
+    dynamics = dynC ? juliaDynamics(dynC) : null;
     if (renderer && renderer.setMap(compiled.map.glslBody, compiled.map.glslDerivBody)) note.classList.remove("visible");
     refreshDynamicsNote();
     updateAnalysisPanel();
   }
 
-  /** Show capacity / Robin / exterior coefficients in the sidebar, but only in the Julia-exterior mode. */
+  /**
+   * The exterior conformal map ψ (and so its coefficients bₖ, the reconstructed-boundary overlay, and the
+   * exterior-map export) is only valid for a CONNECTED K — a disconnected Julia set's complement is not a
+   * topological disk exterior, so ψ does not exist. We only *know* connectivity for the z²+c family; for
+   * any other map we assume valid. The escape-based objects (Green's-function render, G(z), rays) stay valid.
+   */
+  function exteriorConformalValid(): boolean {
+    return !(dynamics && !dynamics.connected);
+  }
+
+  /** Show capacity / Robin / exterior coefficients + z²+c dynamics in the sidebar, only in the Julia mode. */
   function updateAnalysisPanel(): void {
-    if (modeIsDynamics(state.render.mode) && analysis) {
-      const rows: [string, string][] = [
-        ["capacity cap(K)", analysis.monic ? "= 1  (monic)" : "= " + fmt(analysis.capacity)],
-        ["Robin γ", "= " + fmt(analysis.robin)],
-      ];
+    if (!(modeIsDynamics(state.render.mode) && analysis)) {
+      controls.setAnalysis(null);
+      return;
+    }
+    // Capacity + Robin: for monic z²+c these are exactly 1 and 0 by theorem, connected or not.
+    const rows: [string, string][] = [
+      ["capacity cap(K)", analysis.monic ? "= 1  (monic)" : "= " + fmt(analysis.capacity)],
+      ["Robin γ", "= " + fmt(analysis.robin)],
+    ];
+    const valid = exteriorConformalValid();
+    if (valid) {
+      // bₖ describe the global conformal map ψ — only meaningful for a connected K.
       const c = analysis.coeffs;
       if (c.length > 1) rows.push(["|b₁|", "≈ " + fmt(Math.hypot(c[1][0], c[1][1]))]);
       if (c.length > 2) rows.push(["|b₂|", "≈ " + fmt(Math.hypot(c[2][0], c[2][1]))]);
-      controls.setAnalysis(rows);
-    } else {
-      controls.setAnalysis(null);
     }
+    // Dynamical invariants for the z²+c family (E12): parameter, connectedness, attracting cycle.
+    if (dynC && dynamics) {
+      rows.push(["c", "= " + fmtC(dynC[0], dynC[1])]);
+      rows.push(["K", dynamics.connected ? "= connected" : "= Cantor set (ψ n/a)"]);
+      if (dynamics.cycle) {
+        const sup = dynamics.cycle.multiplier < 1e-9;
+        rows.push(["attracting cycle", "period " + dynamics.cycle.period + (sup ? " (superattracting)" : "")]);
+        rows.push(["multiplier |λ|", sup ? "= 0" : "≈ " + fmt(dynamics.cycle.multiplier)]);
+      }
+    }
+    controls.setAnalysis(rows);
+    controls.setExteriorExportAvailable(valid); // no ψ ⇒ no exterior-map export
   }
 
   /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
@@ -172,7 +203,7 @@ function main(): void {
     gridSource = sourceGrid(gridKind(), v.centerRe, v.centerIm, 1 / v.zoom, aspect);
     gridImage = gridKind() !== "none" && current ? pushforward(gridSource, phi) : [];
     boundaryLines =
-      modeIsDynamics(state.render.mode) && analysis
+      modeIsDynamics(state.render.mode) && analysis && exteriorConformalValid()
         ? [{ color: "rgba(130,225,255,0.95)", pts: reconstructedBoundary(analysis, 1.02, 512) }]
         : [];
     const rays = modeIsDynamics(state.render.mode) ? juliaExternalRays(state.map.expr, DEFAULT_RAY_ANGLES) : null;
@@ -318,7 +349,7 @@ function main(): void {
   controls.onSavePng(() => void exportPng());
   controls.onResetView(() => setViewport({ ...DEFAULT_VIEW_STATE.viewport }));
   controls.onCopyExteriorMap(() => {
-    if (!analysis) return; // the button is only shown when an exterior analysis exists
+    if (!analysis || !exteriorConformalValid()) return; // no valid ψ ⇒ nothing to export (button is hidden too)
     const link = exteriorMapLink(analysis, { sourceExpr: state.map.expr });
     // The interchange fragment ("#s=…") is what another suite tool's "Import map" consumes.
     navigator.clipboard.writeText(link).then(
@@ -350,9 +381,8 @@ function main(): void {
     if (modeIsDynamics(state.render.mode) && current.degree !== null) {
       const pot = greenPotential(current.jsFn, current.degree, z);
       rows.push(["G(z)", pot.escaped ? "≈ " + fmt(pot.G) : "≈ 0  (in K)"]);
-      const c = quadraticJuliaC(state.map.expr);
-      if (c) {
-        const theta = externalAngleQuadratic(c, z);
+      if (dynC) {
+        const theta = externalAngleQuadratic(dynC, z);
         if (theta !== null) rows.push(["ext. angle θ", "≈ " + fmt(theta) + " turns"]);
       }
     }

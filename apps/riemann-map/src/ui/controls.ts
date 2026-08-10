@@ -16,6 +16,8 @@ export interface Controls {
   setGrid(id: string): void;
   setAnalysis(rows: readonly (readonly [string, string])[] | null): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
+  /** Show/hide the exterior-map export button (hidden when no valid conformal map ψ exists). */
+  setExteriorExportAvailable(available: boolean): void;
   /** Transient status under the exterior-map export button (copied / unavailable). */
   setExportStatus(msg: string): void;
   onExpr(cb: (expr: string) => void): void;
@@ -217,8 +219,12 @@ export function createControls(initialExpr: string): Controls {
       analysisDl.replaceChildren();
       const hasRows = !!(rows && rows.length);
       analysisHint.style.display = hasRows ? "none" : "";
-      exportRow.style.display = hasRows ? "" : "none";
-      if (!hasRows) exportStatus.textContent = "";
+      // The export button's visibility is owned by setExteriorExportAvailable; only clear it when the
+      // whole panel goes empty (leaving the Julia mode).
+      if (!hasRows) {
+        exportRow.style.display = "none";
+        exportStatus.textContent = "";
+      }
       if (!rows) return;
       for (const [k, v] of rows) {
         const dt = document.createElement("dt");
@@ -227,6 +233,10 @@ export function createControls(initialExpr: string): Controls {
         dd.textContent = v;
         analysisDl.append(dt, dd);
       }
+    },
+    setExteriorExportAvailable(available: boolean): void {
+      exportRow.style.display = available ? "" : "none";
+      if (!available) exportStatus.textContent = "";
     },
     setExportStatus(msg: string): void {
       exportStatus.textContent = msg;
