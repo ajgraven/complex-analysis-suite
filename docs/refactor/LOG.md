@@ -2325,3 +2325,27 @@
   exactly 1 — so the tiling branches ~2ⁿ for the deltoid, making the F3b visual budget load-bearing. **F3a
   complete — σ⁻¹ is unit-tested (round-trip + QD goldens) for both families; F3b grows the preimage tree,
   F3c wires the CD double-click tiling UI.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F3b —
+  `buildPreimageTree`):** the fundamental-domain tiling tree — the second half of the σ⁻¹ primitive, iterating
+  the F3a `sigmaInverse` from a seed. A new `preimage-tree.ts` exports `buildPreimageTree(seed, schwarz, opts)
+  → { generations, edges, truncatedByBudget }` as a FREE function (like `escapeTime`) over a minimal
+  `SchwarzInverse` surface (`{ sigmaInverse(w): Complex[] }`), so it serves BOTH families and any later one with
+  no per-family code. `generations[g]` holds the σ⁻ᵍ preimages (gen 0 = the seed, copied so the tree never
+  aliases the caller's point); each gen-(g+1) node carries a flat `edge {fromGen,fromIdx,toGen,toIdx}` back to
+  its parent so the F3c renderer strokes parent→child without re-deriving links. Expansion stops on any of three
+  conditions: `depth` generations reached (default 4), a generation yielding no preimages (the tiling ran dry),
+  or `visualBudget` total nodes hit (default 4096 — the deltoid branches ~2ⁿ, so a deep tree needs the cap;
+  `truncatedByBudget` is then set and the partially-filled final generation kept). A σ⁻¹ throw on any node is
+  swallowed as "no preimages" so one pathological node never aborts the whole tree. Ported verbatim (the tuple
+  form) from the QD app's `schwarz-inverse.mjs buildPreimageTree`. Green: typecheck + lint + node **2449 →
+  2459** (+10). Tests mirror the QD app's own tree goldens (`schwarz.test.js` S1 depth-structure + visual-budget)
+  and pin the structural invariants: depth D (untruncated) → D+1 generations with gen 0 = the seed (a distinct
+  copy, equal by value); `edges.length` = the non-root node count with every edge indexing valid endpoints;
+  **every edge a genuine parent→child σ⁻¹ link** (the child is one of `sigmaInverse(parent)`) that additionally
+  round-trips `σ(child) ≈ parent`; the budget cap holds `total ≤ budget` with `truncatedByBudget` set; the
+  single-lobe seed runs dry early (generations < depth+1, empty trailing generation, NOT budget-truncated);
+  depth 0 → the seed alone with no edges; omitted opts apply the (4, 4096) defaults; and a throwing stub engine
+  yields a well-formed single-node tree. Probed shapes: deltoid depth-4 grows `1,2,4,8,15` (edges 29), budget-20
+  truncates at `1,2,4,8,5` = 20, the lobe runs dry at `1,1,0`. **F3b complete — σ⁻¹ + the tiling tree are both
+  in `@cas/schwarz` and unit-tested; F3c wires the CD double-click tiling UI (seed-in-set gate + plasma-ramped
+  tree overlay + z-disk ψ-mirror + `_sigma` depth/budget).**

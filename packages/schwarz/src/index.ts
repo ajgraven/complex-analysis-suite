@@ -17,3 +17,7 @@ export type {
 // Bounded-QD family (S5-C2): φ: {|z|<1} → Ω onto a bounded domain, the interior-branch Schwarz reflection.
 export { makeBoundedSchwarz } from "./bounded.js";
 export type { BoundedSchwarz } from "./bounded.js";
+// The fundamental-domain tiling tree (F3b): iterate σ⁻¹ from a seed. Family-agnostic — a free function over
+// the minimal `sigmaInverse` surface both engines expose.
+export { buildPreimageTree } from "./preimage-tree.js";
+export type { SchwarzInverse, PreimageTree, PreimageTreeOptions, PreimageEdge } from "./preimage-tree.js";
