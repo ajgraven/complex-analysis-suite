@@ -60,14 +60,24 @@
       dl.hover dt { color: var(--muted); }
       dl.hover dd { margin: 0; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-variant-numeric: tabular-nums; }
       .muted { color: var(--muted); font-size: 0.85rem; margin: 0; }
-      .stage { position: relative; flex: 1 1 auto; min-width: 0; }
-      canvas.plane { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+      .stage { flex: 1 1 auto; min-width: 0; display: flex; }
+      .pane { position: relative; flex: 1 1 0; min-width: 0; }
+      .pane.right { display: none; background: #0c0e13; border-left: 1px solid var(--panel-border); }
+      .stage.split .pane.right { display: block; }
+      canvas.plane, canvas.overlay, canvas.image { position: absolute; inset: 0; width: 100%; height: 100%; }
+      canvas.plane { touch-action: none; cursor: grab; }
       canvas.plane:active { cursor: grabbing; }
+      canvas.overlay { pointer-events: none; }
+      .panelabel {
+        position: absolute; top: 0.5rem; left: 0.6rem; z-index: 1;
+        color: var(--muted); font-size: 0.75rem; background: rgba(15, 17, 21, 0.6);
+        padding: 0.1rem 0.45rem; border-radius: 5px;
+      }
       .note {
         position: absolute; left: 50%; top: 1rem; transform: translateX(-50%);
         max-width: 40rem; padding: 0.5rem 0.8rem; border-radius: 8px;
         background: rgba(176, 83, 58, 0.16); border: 1px solid rgba(176, 83, 58, 0.4);
-        color: var(--text); display: none;
+        color: var(--text); display: none; z-index: 2;
       }
       .note.visible { display: block; }
     </style>

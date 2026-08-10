@@ -13,11 +13,19 @@ export interface Controls {
   showError(msg: string | null): void;
   setMode(id: string): void;
   setColormap(id: string): void;
+  setGrid(id: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
   onExpr(cb: (expr: string) => void): void;
   onMode(cb: (id: string) => void): void;
   onColormap(cb: (id: string) => void): void;
+  onGrid(cb: (id: string) => void): void;
 }
+
+const GRID_KINDS = [
+  { id: "none", name: "None" },
+  { id: "cartesian", name: "Cartesian grid" },
+  { id: "polar", name: "Polar grid" },
+] as const;
 
 const CUSTOM = "__custom__";
 
@@ -42,6 +50,7 @@ export function createControls(initialExpr: string): Controls {
   const exprListeners: ((expr: string) => void)[] = [];
   const modeListeners: ((id: string) => void)[] = [];
   const cmapListeners: ((id: string) => void)[] = [];
+  const gridListeners: ((id: string) => void)[] = [];
 
   const root = document.createElement("aside");
   root.className = "sidebar";
@@ -83,7 +92,8 @@ export function createControls(initialExpr: string): Controls {
   viewTitle.textContent = "View";
   const mode = labeledSelect("Mode", RENDER_MODES);
   const cmap = labeledSelect("Colormap", COLORMAPS);
-  viewSection.append(viewTitle, mode.field, cmap.field);
+  const grid = labeledSelect("Grid", GRID_KINDS);
+  viewSection.append(viewTitle, mode.field, cmap.field, grid.field);
 
   // --- Under-cursor section -------------------------------------------------
   const hoverSection = document.createElement("section");
@@ -117,6 +127,7 @@ export function createControls(initialExpr: string): Controls {
   });
   mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
   cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
+  grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
 
   function syncPreset(expr: string): void {
     preset.value = presetIdForExpr(expr) ?? CUSTOM;
@@ -145,6 +156,9 @@ export function createControls(initialExpr: string): Controls {
     setColormap(id: string): void {
       cmap.select.value = id;
     },
+    setGrid(id: string): void {
+      grid.select.value = id;
+    },
     setHover(rows: readonly (readonly [string, string])[] | null): void {
       hover.replaceChildren();
       hoverEmpty.style.display = rows && rows.length ? "none" : "";
@@ -165,6 +179,9 @@ export function createControls(initialExpr: string): Controls {
     },
     onColormap(cb: (id: string) => void): void {
       cmapListeners.push(cb);
+    },
+    onGrid(cb: (id: string) => void): void {
+      gridListeners.push(cb);
     },
   };
 }

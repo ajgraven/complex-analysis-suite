@@ -51,6 +51,8 @@ export interface RenderState {
   readonly mode: string;
   /** Named colormap ramp (perceptually-uniform families land in P1). */
   readonly palette: string;
+  /** Coordinate-grid overlay: "none" | "cartesian" | "polar". Optional for older permalinks. */
+  readonly grid?: string;
 }
 
 /**
@@ -68,7 +70,7 @@ export type RiemannViewState = {
 export const DEFAULT_VIEW_STATE: RiemannViewState = {
   map: { expr: "z + 1/z", vars: ["z"], antiholomorphic: false },
   viewport: { centerRe: 0, centerIm: 0, zoom: 1 },
-  render: { mode: "phase", palette: "viridis" },
+  render: { mode: "phase", palette: "viridis", grid: "none" },
   conventions: { area: "standard", contour: "standard" },
 };
 
