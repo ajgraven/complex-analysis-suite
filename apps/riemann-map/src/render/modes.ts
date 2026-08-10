@@ -20,11 +20,19 @@ export const RENDER_MODES: readonly RenderMode[] = [
   { id: "log-deriv", name: "log|φ′|", code: 5, usesDeriv: true },
   { id: "arg-deriv", name: "arg φ′ — rotation", code: 6, usesDeriv: true },
   { id: "julia", name: "Julia exterior — Green's fn (iterate f)", code: 10, usesDeriv: false },
+  { id: "domain-map", name: "Riemann map: domain → disk (numeric)", code: 20, usesDeriv: false },
 ] as const;
 
 /** Dynamics modes (code ≥ 10) ITERATE the map f rather than evaluating φ once — they need a degree. */
 export function modeIsDynamics(id: string): boolean {
-  return modeCode(id) >= 10;
+  const c = modeCode(id);
+  return c >= 10 && c < 20;
+}
+
+/** The numerical-Riemann-map mode (code 20): fits f for a chosen DOMAIN, drawn as an overlay, not a
+ *  GLSL field — so main clears the GL pane and skips the φ-expression pipeline for it. */
+export function modeIsDomain(id: string): boolean {
+  return modeCode(id) === 20;
 }
 
 export interface Colormap {

@@ -14,7 +14,7 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, colormapCode, modeIsDynamics } from "./render/modes.js";
+import { modeCode, colormapCode, modeIsDynamics, modeIsDomain } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
@@ -22,6 +22,8 @@ import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analys
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
 import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
+import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid } from "./domains.js";
+import { fitSmoothConformalMap, type ConformalMap } from "./solve/lightning.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
@@ -114,8 +116,14 @@ function main(): void {
   let boundaryLines: GridLine[] = [];
   let rayLines: GridLine[] = [];
   let rayLandings: Pt[] = [];
+  // Numerical-Riemann-map (domain) mode (P3b): the fitted map + its source/image conformal grids.
+  let domainId = domainById(state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
+  let domainMap: ConformalMap | null = null;
+  let domainSource: GridLine[] = [];
+  let domainImage: GridLine[] = [];
   let glDirty = true;
   let gridDirty = true;
+  let domainDirty = true;
   let linkDirty = true;
 
   const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
@@ -156,6 +164,7 @@ function main(): void {
 
   /** Show capacity / Robin / exterior coefficients + z²+c dynamics in the sidebar, only in the Julia mode. */
   function updateAnalysisPanel(): void {
+    if (modeIsDomain(state.render.mode)) return; // the domain view owns the panel (set in computeDomain)
     if (!(modeIsDynamics(state.render.mode) && analysis)) {
       controls.setAnalysis(null);
       return;
@@ -211,10 +220,70 @@ function main(): void {
     rayLandings = rays ? rays.map((r) => r.pts[r.pts.length - 1]) : [];
   }
 
+  // ---- numerical Riemann map of a domain (P3b) -----------------------------
+  const DOMAIN_SAMPLES = 500;
+  const DOMAIN_DEGREE = 60;
+  const DOMAIN_BG: readonly [number, number, number] = [0.06, 0.07, 0.09];
+  const UNIT_CIRCLE: Pt[] = Array.from({ length: 361 }, (_, i): Pt => {
+    const t = (2 * Math.PI * i) / 360;
+    return [Math.cos(t), Math.sin(t)];
+  });
+
+  /** Fit f: Ω → 𝔻 for the selected domain and build its source (Ω) and image (disk) conformal grids. */
+  function computeDomain(): void {
+    const d = domainById(domainId);
+    if (!d) {
+      domainMap = null;
+      domainSource = [];
+      domainImage = [];
+      controls.setAnalysis(null);
+      return;
+    }
+    const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
+    const f = fitSmoothConformalMap(boundary, DOMAIN_DEGREE);
+    domainMap = f;
+    const cg = conformalSourceGrid(d, 24, 6, 160);
+    const BDRY = "rgba(200,208,222,0.92)";
+    const SPOKE = "rgba(110,168,254,0.8)";
+    const RING = "rgba(130,225,255,0.72)";
+    domainSource = [
+      { color: BDRY, pts: cg.boundary },
+      ...cg.spokes.map((p) => ({ color: SPOKE, pts: p as Pt[] })),
+      ...cg.rings.map((p) => ({ color: RING, pts: p as Pt[] })),
+    ];
+    domainImage = [
+      { color: "rgba(120,130,150,0.85)", pts: UNIT_CIRCLE }, // the target ∂𝔻, for reference
+      { color: BDRY, pts: f.evalMany(cg.boundary) as Pt[] },
+      ...cg.spokes.map((p) => ({ color: SPOKE, pts: f.evalMany(p) as Pt[] })),
+      ...cg.rings.map((p) => ({ color: RING, pts: f.evalMany(p) as Pt[] })),
+    ];
+    // Honest readout: the map is numerical; the boundary residual is its ≈ accuracy.
+    controls.setAnalysis([
+      ["method", "lightning (LSQ)"],
+      ["domain", d.name],
+      ["degree", "= " + f.degree],
+      ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
+      ["f(0)", "= 0  (exact)"],
+    ]);
+    controls.setExteriorExportAvailable(false);
+  }
+
   function drawOverlays(): void {
     leftOverlay.resize();
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
     leftOverlay.clear();
+    if (modeIsDomain(state.render.mode)) {
+      leftOverlay.drawLines(domainSource, 1.1);
+      if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      stage.classList.add("split");
+      if (rightPane.resize()) {
+        rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
+        rightPane.clear();
+        rightPane.drawLines(domainImage, 1.1);
+        if (cursorZ && domainMap) rightPane.drawMarker(domainMap.eval([cursorZ[0], cursorZ[1]]), CURSOR_COLOR);
+      }
+      return;
+    }
     leftOverlay.drawLines(gridSource);
     leftOverlay.drawLines(boundaryLines, 1.6); // reconstructed ∂K in the Julia-exterior mode
     leftOverlay.drawLines(rayLines, 1.3); // external rays
@@ -295,12 +364,18 @@ function main(): void {
     frame = window.requestAnimationFrame(() => {
       frame = 0;
       const resized = resizeToDisplay(canvas); // a resize clears the WebGL buffer → must re-render
-      if (gridDirty || resized) {
+      const domain = modeIsDomain(state.render.mode);
+      if (domain && domainDirty) {
+        computeDomain();
+        domainDirty = false;
+      }
+      if ((gridDirty || resized) && !domain) {
         computeGrid();
         gridDirty = false;
       }
       if (glDirty || resized) {
-        renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
+        if (domain) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
+        else renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
         glDirty = false;
       }
       drawOverlays();
@@ -327,6 +402,7 @@ function main(): void {
   controls.setMode(state.render.mode);
   controls.setColormap(state.render.palette);
   controls.setGrid(gridKind());
+  controls.setDomain(domainId);
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     applyMap();
@@ -334,9 +410,16 @@ function main(): void {
   });
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
+    if (modeIsDomain(id)) domainDirty = true; // (re)fit f on entering the numerical-map mode
     invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
     refreshDynamicsNote();
     updateAnalysisPanel();
+  });
+  controls.onDomain((id) => {
+    domainId = id;
+    state = { ...state, render: { ...state.render, domain: id } };
+    domainDirty = true;
+    invalidate(true, false);
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };
@@ -363,10 +446,23 @@ function main(): void {
 
   // ---- hover + linked cursor (F4/F2) ---------------------------------------
   canvas.addEventListener("pointermove", (e) => {
-    if (!current) return;
     const r = canvas.getBoundingClientRect();
     const z = pixelToWorld(state.viewport, (e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height, r.width / r.height);
     cursorZ = z;
+    // Numerical-map mode: read z and its image f(z) under the fitted Riemann map (no φ′ — f is numerical).
+    if (modeIsDomain(state.render.mode)) {
+      if (domainMap) {
+        const w = domainMap.eval([z[0], z[1]]);
+        controls.setHover([
+          ["z", fmtC(z[0], z[1])],
+          ["f(z)", fmtC(w[0], w[1])],
+          ["|f(z)|", "≈ " + fmt(Math.hypot(w[0], w[1]))],
+        ]);
+      }
+      schedule();
+      return;
+    }
+    if (!current) return;
     const w = current.jsFn([z[0], z[1]], [0, 0]);
     const d = derivativeAt(current, z);
     const exact = current.jsDeriv ? "= " : "≈ ";

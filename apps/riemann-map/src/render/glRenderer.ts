@@ -14,6 +14,8 @@ export interface Renderer {
   /** Draw the current program for `view`, in render mode `mode`, colormap `colormap`, degree `degree`
    *  (the local degree at ∞ for the Julia-exterior potential; ignored by the other modes). */
   render(view: ViewportState, mode: number, colormap: number, degree: number): void;
+  /** Flat-fill the pane (used by the domain view, which draws its map as an overlay, not a GLSL field). */
+  clear(r: number, g: number, b: number): void;
   /** Release the program and the WebGL2 context. */
   dispose(): void;
 }
@@ -78,6 +80,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
+  function clear(r: number, g: number, b: number): void {
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(r, g, b, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
   function dispose(): void {
     if (program) gl.deleteProgram(program);
     gl.deleteBuffer(buf);
@@ -85,5 +93,5 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 
-  return { setMap, render, dispose };
+  return { setMap, render, clear, dispose };
 }

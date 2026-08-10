@@ -5,6 +5,7 @@ import katex from "katex";
 import "katex/dist/katex.min.css";
 import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
 import { RENDER_MODES, COLORMAPS } from "../render/modes.js";
+import { DOMAIN_PRESETS } from "../domains.js";
 
 export interface Controls {
   readonly root: HTMLElement;
@@ -14,6 +15,7 @@ export interface Controls {
   setMode(id: string): void;
   setColormap(id: string): void;
   setGrid(id: string): void;
+  setDomain(id: string): void;
   setAnalysis(rows: readonly (readonly [string, string])[] | null): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
   /** Show/hide the exterior-map export button (hidden when no valid conformal map ψ exists). */
@@ -24,6 +26,7 @@ export interface Controls {
   onMode(cb: (id: string) => void): void;
   onColormap(cb: (id: string) => void): void;
   onGrid(cb: (id: string) => void): void;
+  onDomain(cb: (id: string) => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
   onCopyExteriorMap(cb: () => void): void;
@@ -74,6 +77,7 @@ export function createControls(initialExpr: string): Controls {
   const modeListeners: ((id: string) => void)[] = [];
   const cmapListeners: ((id: string) => void)[] = [];
   const gridListeners: ((id: string) => void)[] = [];
+  const domainListeners: ((id: string) => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
   const copyExtListeners: (() => void)[] = [];
@@ -119,7 +123,8 @@ export function createControls(initialExpr: string): Controls {
   const mode = labeledSelect("Mode", RENDER_MODES);
   const cmap = labeledSelect("Colormap", COLORMAPS);
   const grid = labeledSelect("Grid", GRID_KINDS);
-  viewSection.append(viewTitle, mode.field, cmap.field, grid.field);
+  const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
+  viewSection.append(viewTitle, mode.field, cmap.field, grid.field, domain.field);
 
   // --- Figure / export section ----------------------------------------------
   const figSection = document.createElement("section");
@@ -214,6 +219,7 @@ export function createControls(initialExpr: string): Controls {
   mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
   cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
   grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
+  domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
   copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
@@ -247,6 +253,9 @@ export function createControls(initialExpr: string): Controls {
     },
     setGrid(id: string): void {
       grid.select.value = id;
+    },
+    setDomain(id: string): void {
+      domain.select.value = id;
     },
     setAnalysis(rows: readonly (readonly [string, string])[] | null): void {
       analysisDl.replaceChildren();
@@ -297,6 +306,9 @@ export function createControls(initialExpr: string): Controls {
     },
     onGrid(cb: (id: string) => void): void {
       gridListeners.push(cb);
+    },
+    onDomain(cb: (id: string) => void): void {
+      domainListeners.push(cb);
     },
     onSavePng(cb: () => void): void {
       savePngListeners.push(cb);

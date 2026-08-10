@@ -53,6 +53,8 @@ export interface RenderState {
   readonly palette: string;
   /** Coordinate-grid overlay: "none" | "cartesian" | "polar". Optional for older permalinks. */
   readonly grid?: string;
+  /** Selected domain preset for the numerical Riemann-map mode. Optional for older permalinks. */
+  readonly domain?: string;
 }
 
 /**
