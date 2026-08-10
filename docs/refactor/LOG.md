@@ -2172,3 +2172,17 @@
   6/6): defaults off; toggling renders the ∂Ω stroke (canvas changes); toggling off restores the EXACT
   boundary-free canvas (proving the field is reused, not re-rendered); and the toggle round-trips through a
   share link. **F1 complete.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2a — view-mode shell):** the
+  scaffolding for F2's three coordinate views. A `plane · z-disk · sphere` segmented control (a small `.seg-btn`
+  pill in CD's `--accent` / `--border` tokens) sits under the σ view chip. Only the w-plane is live today, so
+  the **z-disk (F2b) and sphere (F2d) buttons are `disabled`** with "coming in F2b/F2d" titles — the segment
+  shows the roadmap without a broken view. The selected mode lives in `#schwarz-plot[data-schwarz-view]` — the
+  single hook F2b/F2d branch on, and future view-only control cards key their visibility off; a small DOM-only
+  wiring block (`setSchwarzViewMode`) keeps the attribute + button `is-active`/`aria-pressed` in sync. **No new
+  render, no module state, no `_sigma` change** — `viewMode` persistence + independent per-view pan/zoom land
+  with F2b, when a second view becomes selectable (serializing an unreachable mode now would be inert). PHASE-F.md
+  updated to match. Green: typecheck + lint + node **2427** (unchanged — pure scaffolding; the segment's buttons
+  are `type=button`, so the SHARE_IDS coverage guard ignores them) + browser **17/17** (byte-identical — no render
+  touched). VERIFIED (Playwright, 7/7): all three buttons render; plane is active + aria-pressed; z-disk + sphere
+  are disabled; the `data-schwarz-view` hook reads `plane`; clicking the disabled z-disk does not switch; clicking
+  active plane stays active. **F2a complete — the shell is ready for F2b to fill in the z-disk render.**

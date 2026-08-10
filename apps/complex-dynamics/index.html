@@ -503,7 +503,7 @@ abs(z)>2</textarea
               </div>
             </section>
             <!-- ================ Schwarz reflection (σ) — first-class peer view (ADR-0009) ======= -->
-            <section class="plot" id="schwarz-plot" aria-labelledby="schwarz-heading">
+            <section class="plot" id="schwarz-plot" aria-labelledby="schwarz-heading" data-schwarz-view="plane">
               <div class="schwarz-topbar">
                 <h2 id="schwarz-heading">Schwarz Reflection σ</h2>
                 <button
@@ -539,6 +539,18 @@ abs(z)>2</textarea
                   view
                   <span class="view-chip-text" id="schwarz-view-chip">generate a σ to begin</span>
                 </p>
+                <!-- View mode (F2a): the same σ iteration in three coordinate views — the w-plane (live), the
+                     uniformizing z-disk (forward φ), and the Riemann sphere. The z-disk / sphere render paths
+                     land in F2b / F2d; disabled until then, so the segment shows the roadmap without a broken
+                     view. -->
+                <div class="schwarz-viewseg" role="group" aria-label="σ view mode">
+                  <button type="button" id="schwarz-view-plane" class="seg-btn is-active" aria-pressed="true"
+                    title="w-plane — σ acts directly on the world point w (the current view)">plane</button>
+                  <button type="button" id="schwarz-view-z" class="seg-btn" aria-pressed="false" disabled
+                    title="Uniformizing z-disk (forward φ) — coming in F2b">z-disk</button>
+                  <button type="button" id="schwarz-view-sphere" class="seg-btn" aria-pressed="false" disabled
+                    title="Riemann sphere (stereographic) — coming in F2d">sphere</button>
+                </div>
                 <!-- Orbit inspection (ADR-0009 item 3): click the σ canvas to trace a point's orbit; the
                      readout is populated from render/schwarzView.ts in main.ts. Always visible so the
                      click-to-trace guidance and the fate readout stay next to the canvas. -->

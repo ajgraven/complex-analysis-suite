@@ -885,6 +885,43 @@ h2 {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
+/* σ view-mode segmented control (F2a): plane · z-disk · sphere. A small pill of buttons; the active view is
+   accent-filled, disabled (not-yet-built) views dim. Centered under the view chip. */
+.schwarz-viewseg {
+  display: flex;
+  justify-content: center;
+  margin: 0.35rem auto 0;
+  width: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg-btn {
+  appearance: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+}
+.seg-btn:last-child {
+  border-right: none;
+}
+.seg-btn.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.seg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.seg-btn:not(.is-active):not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
 .plot-more {
   margin-top: 0.45rem;
 }

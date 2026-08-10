@@ -3960,6 +3960,31 @@ function init(): void {
     }
   }
 
+  // σ view-mode segment (F2a): the shell for the three coordinate views (plane · z-disk · sphere). Only the
+  // w-plane is live today; the z-disk (F2b) and sphere (F2d) render paths land later, so their buttons are
+  // DISABLED in the markup and never fire. The selected mode lives in `#schwarz-plot[data-schwarz-view]` —
+  // the single hook F2b/F2d read + branch on (and future view-only control cards key their visibility off).
+  {
+    const MODES = [
+      ["plane", "schwarz-view-plane"],
+      ["z", "schwarz-view-z"],
+      ["sphere", "schwarz-view-sphere"],
+    ] as const;
+    const setSchwarzViewMode = (mode: (typeof MODES)[number][0]): void => {
+      document.getElementById("schwarz-plot")?.setAttribute("data-schwarz-view", mode);
+      for (const [m, id] of MODES) {
+        const btn = document.getElementById(id);
+        if (!btn) continue;
+        const active = m === mode;
+        btn.classList.toggle("is-active", active);
+        btn.setAttribute("aria-pressed", String(active));
+      }
+    };
+    for (const [mode, id] of MODES) {
+      document.getElementById(id)?.addEventListener("click", () => setSchwarzViewMode(mode));
+    }
+  }
+
   // σ render controls (Phase B): AA supersample + the escape budget (iterations + escape radius). Each
   // re-renders the field at full res; the escape budget also re-traces the pinned inspect orbit so its fate
   // readout matches the field (they share ONE budget). The values travel in the σ view (`_sigma`).

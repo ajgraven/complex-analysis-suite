@@ -67,13 +67,17 @@ where Ω is. The toggle travels in `_sigma`.
 QD renders the **same** field in three coordinate views from one capture, selected by a
 `viewMode ∈ {plane, z, sphere}`. Four gated slices:
 
-- **F2a — view-mode shell (S–M).** A 3-button segment (`plane | z-disk | sphere`), a `viewMode`
-  in `_sigma`, **independent** pan/zoom per view, and show/hide of view-specific control cards. No
-  new render yet — just scaffolding.
+- **F2a — view-mode shell (S–M).** A 3-button segment (`plane | z-disk | sphere`) with the w-plane
+  active and z-disk / sphere **disabled** until their renderers land (F2a is "no new render"), plus
+  the `#schwarz-plot[data-schwarz-view]` hook that F2b/F2d branch on and future view-only control
+  cards key their visibility off. The **`viewMode` persistence in `_sigma` and the independent
+  per-view pan/zoom land with F2b**, when a second view is actually selectable — serializing an
+  unreachable mode in F2a would be inert state. *(Shipped.)*
 - **F2b — z-disk field (M).** The fragment is a disk point `z`; lift forward `w = φ(z)` (an
   `evalPhi` the shader can do **without** the Newton inverse — *cleaner and faster* than the
   w-plane), then the existing σ escape-time runs in `w`. Add a `u_viewMode` to `schwarzGL` + a disk
-  mask; mirror on the CPU path. **Requires a CPU↔GPU parity test** (extends the browser corpus).
+  mask; mirror on the CPU path. Enables the z-disk button, and adds `viewMode` + the z-disk's own
+  pan/zoom to `_sigma`. **Requires a CPU↔GPU parity test** (extends the browser corpus).
 - **F2c — z-disk overlays (M–L).** Overlays (orbit, boundary = unit circle, later the tree) are
   w-space objects pulled *back* through ψ (a per-point Newton solve, memoized by source identity).
   Fiddly — many overlay cases — but no new *field* math.
