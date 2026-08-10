@@ -16,12 +16,15 @@ export interface Controls {
   setGrid(id: string): void;
   setAnalysis(rows: readonly (readonly [string, string])[] | null): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
+  /** Transient status under the exterior-map export button (copied / unavailable). */
+  setExportStatus(msg: string): void;
   onExpr(cb: (expr: string) => void): void;
   onMode(cb: (id: string) => void): void;
   onColormap(cb: (id: string) => void): void;
   onGrid(cb: (id: string) => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
+  onCopyExteriorMap(cb: () => void): void;
 }
 
 const GRID_KINDS = [
@@ -56,6 +59,7 @@ export function createControls(initialExpr: string): Controls {
   const gridListeners: ((id: string) => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
+  const copyExtListeners: (() => void)[] = [];
 
   const root = document.createElement("aside");
   root.className = "sidebar";
@@ -127,7 +131,20 @@ export function createControls(initialExpr: string): Controls {
   const analysisHint = document.createElement("p");
   analysisHint.className = "muted";
   analysisHint.textContent = "In the Julia-exterior mode, a polynomial/rational map shows its capacity, Robin constant, and exterior-map coefficients.";
-  analysisSection.append(analysisTitle, analysisDl, analysisHint);
+  // Hand off ψ (the exterior conformal map) as an @cas/interchange link (G8). Shown only when an
+  // exterior analysis exists — setAnalysis(null) hides it (an empty analysis has nothing to export).
+  const exportRow = document.createElement("div");
+  exportRow.className = "buttons";
+  exportRow.style.display = "none";
+  const copyExt = document.createElement("button");
+  copyExt.type = "button";
+  copyExt.textContent = "Copy exterior-map link";
+  exportRow.append(copyExt);
+  const exportStatus = document.createElement("p");
+  exportStatus.className = "muted";
+  exportStatus.setAttribute("role", "status");
+  exportStatus.setAttribute("aria-live", "polite");
+  analysisSection.append(analysisTitle, analysisDl, analysisHint, exportRow, exportStatus);
 
   // --- Under-cursor section -------------------------------------------------
   const hoverSection = document.createElement("section");
@@ -164,6 +181,7 @@ export function createControls(initialExpr: string): Controls {
   grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
+  copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
 
   function syncPreset(expr: string): void {
     preset.value = presetIdForExpr(expr) ?? CUSTOM;
@@ -197,7 +215,10 @@ export function createControls(initialExpr: string): Controls {
     },
     setAnalysis(rows: readonly (readonly [string, string])[] | null): void {
       analysisDl.replaceChildren();
-      analysisHint.style.display = rows && rows.length ? "none" : "";
+      const hasRows = !!(rows && rows.length);
+      analysisHint.style.display = hasRows ? "none" : "";
+      exportRow.style.display = hasRows ? "" : "none";
+      if (!hasRows) exportStatus.textContent = "";
       if (!rows) return;
       for (const [k, v] of rows) {
         const dt = document.createElement("dt");
@@ -206,6 +227,9 @@ export function createControls(initialExpr: string): Controls {
         dd.textContent = v;
         analysisDl.append(dt, dd);
       }
+    },
+    setExportStatus(msg: string): void {
+      exportStatus.textContent = msg;
     },
     setHover(rows: readonly (readonly [string, string])[] | null): void {
       hover.replaceChildren();
@@ -236,6 +260,9 @@ export function createControls(initialExpr: string): Controls {
     },
     onResetView(cb: () => void): void {
       resetListeners.push(cb);
+    },
+    onCopyExteriorMap(cb: () => void): void {
+      copyExtListeners.push(cb);
     },
   };
 }

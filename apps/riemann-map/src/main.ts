@@ -19,6 +19,7 @@ import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt 
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
 import { juliaExternalRays, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
+import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
@@ -315,6 +316,18 @@ function main(): void {
   });
   controls.onSavePng(() => void exportPng());
   controls.onResetView(() => setViewport({ ...DEFAULT_VIEW_STATE.viewport }));
+  controls.onCopyExteriorMap(() => {
+    if (!analysis) return; // the button is only shown when an exterior analysis exists
+    const link = exteriorMapLink(analysis, { sourceExpr: state.map.expr });
+    // The interchange fragment ("#s=…") is what another suite tool's "Import map" consumes.
+    navigator.clipboard.writeText(link).then(
+      () => controls.setExportStatus("Exterior map copied — paste into another tool's Import map."),
+      () => {
+        console.warn("exterior-map interchange link:", link); // clipboard blocked — surface it for copy
+        controls.setExportStatus("Clipboard blocked — the link was logged to the console.");
+      },
+    );
+  });
 
   // ---- hover + linked cursor (F4/F2) ---------------------------------------
   canvas.addEventListener("pointermove", (e) => {
