@@ -137,15 +137,15 @@
         <div class="fn-head">
           <label for="expr" id="exprLabel">Function&nbsp; f(z)</label>
           <div class="fn-toggle" role="group" aria-label="active function">
-            <button type="button" id="fnF" class="fn-tab active">f</button>
-            <button type="button" id="fnG" class="fn-tab">g</button>
+            <button type="button" id="fnF" class="fn-tab active" aria-pressed="true">f</button>
+            <button type="button" id="fnG" class="fn-tab" aria-pressed="false">g</button>
           </div>
         </div>
         <textarea id="expr" spellcheck="false" autocapitalize="off" autocomplete="off">z^2</textarea>
         <div id="acMenu" class="ac-menu" hidden></div>
         <div id="preview"></div>
-        <div id="error"></div>
-        <div id="precisionBadge" hidden></div>
+        <div id="error" role="alert"></div>
+        <div id="precisionBadge" role="status" hidden></div>
         <label class="check" style="margin-top: 8px"><input type="checkbox" id="inspectInf" /> Inspect &infin; &mdash; plot f(1/z)</label>
       </div>
 
@@ -193,10 +193,10 @@
         <div class="fn-head">
           <label id="viewLabel">View</label>
           <div class="fn-toggle" role="group" aria-label="view">
-            <button type="button" id="view2d" class="fn-tab active">2D</button>
-            <button type="button" id="view3d" class="fn-tab">3D</button>
-            <button type="button" id="viewSphere" class="fn-tab">Sphere</button>
-            <button type="button" id="viewLinked" class="fn-tab" title="2D portrait and 3D landscape side by side, sharing the view">Linked</button>
+            <button type="button" id="view2d" class="fn-tab active" aria-pressed="true">2D</button>
+            <button type="button" id="view3d" class="fn-tab" aria-pressed="false">3D</button>
+            <button type="button" id="viewSphere" class="fn-tab" aria-pressed="false">Sphere</button>
+            <button type="button" id="viewLinked" class="fn-tab" aria-pressed="false" title="2D portrait and 3D landscape side by side, sharing the view">Linked</button>
           </div>
         </div>
         <p id="sphereHint" class="param-hint" hidden>Drag to rotate &middot; scroll to dolly. The north pole is &infin;, the south pole is 0.</p>
