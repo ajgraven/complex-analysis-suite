@@ -149,7 +149,7 @@ export function createControls(initialExpr: string): Controls {
   const analysisTitle = document.createElement("h2");
   analysisTitle.textContent = "Exterior invariants";
   const analysisDl = document.createElement("dl");
-  analysisDl.className = "hover";
+  analysisDl.className = "hover analysis-dl";
   const analysisHint = document.createElement("p");
   analysisHint.className = "muted";
   analysisHint.textContent = "In the Julia-exterior mode, a polynomial/rational map shows its capacity, Robin constant, and exterior-map coefficients.";

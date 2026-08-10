@@ -4,6 +4,7 @@
 // hover readout. P1c: render modes + colormaps. P1d (this file): the "map the grid" view — a source
 // coordinate grid on the z-plane and its pushforward φ(grid) in a linked w-plane pane (shared colour
 // key), with a linked cursor. Later: PNG export (G2) + the Möbius gauge (A20).
+import "./styles/main.css";
 import {
   DEFAULT_VIEW_STATE,
   decodeRiemannState,
@@ -52,6 +53,44 @@ function fmtC(re: number, im: number): string {
 }
 const CURSOR_COLOR = "#ffffff";
 
+/** A CD-style tri-state theme toggle (auto → dark → light), persisted, driving `data-theme` on <html>. */
+function createThemeToggle(): HTMLButtonElement {
+  const KEY = "rm.theme";
+  const ORDER = ["auto", "dark", "light"] as const;
+  type Choice = (typeof ORDER)[number];
+  const LABEL: Record<Choice, string> = { auto: "Theme: auto", dark: "Theme: dark", light: "Theme: light" };
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Toggle colour theme");
+  const read = (): Choice => {
+    let v: string | null = null;
+    try {
+      v = localStorage.getItem(KEY);
+    } catch {
+      v = null;
+    }
+    return v === "dark" || v === "light" ? v : "auto";
+  };
+  const apply = (c: Choice): void => {
+    if (c === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = c;
+    btn.textContent = LABEL[c];
+  };
+  let current = read();
+  apply(current);
+  btn.addEventListener("click", () => {
+    current = ORDER[(ORDER.indexOf(current) + 1) % ORDER.length];
+    try {
+      if (current === "auto") localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, current);
+    } catch {
+      /* storage unavailable — theme still applies for this session */
+    }
+    apply(current);
+  });
+  return btn;
+}
+
 function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
@@ -66,7 +105,7 @@ function main(): void {
   title.textContent = "Riemann Map";
   const readout = document.createElement("span");
   readout.className = "readout";
-  bar.append(title, readout);
+  bar.append(title, readout, createThemeToggle());
 
   const body = document.createElement("div");
   body.className = "body";
