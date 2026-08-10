@@ -106,13 +106,17 @@ float32 precision badge, and the two **DLMF colormaps** land the DLMF-faithful f
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                          |
 | `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                        |
 | `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                                |
+| `render3d/mat4.ts`          | Phase-5 3D kit: typed column-major `mat4`/`vec3` (identity, multiply, lookAt, perspective, ortho, transformPoint) — ported from QD's `sphere-common`  |
+| `render3d/camera.ts`        | the orbit camera (F5): azimuth / elevation / dolly → view + projection in a Z-up world; the exact top-down ortho preset (top-down = the 2D portrait)  |
+| `render3d/mesh.ts`          | the domain grid mesh (F5): `buildGridMesh(n)` → UV lattice + Uint32 triangle indices the landscape vertex shader displaces by height                  |
 
 ## Tests
 
 `test/` — `smoke.test.ts` (shared-package wiring), `colormaps.test.ts` (atlas dimensions, sRGB gamut,
 cyclic continuity, HSV anchors, and the **DLMF** maps — warped-hue anchors + continuity, the four-colour
 quadrant indicator + its step discontinuity, stable indices), `colorShader.test.ts` (fragment-program
-assembly), `viewState.test.ts`
+assembly), `render3d.test.ts` (the Phase-5 3D kit — mat4 projections, the orbit camera's **top-down =
+2D-portrait** mapping, and the grid mesh), `viewState.test.ts`
 (share-link round-trip + namespace guard, incl. parameter values), `presets.test.ts` (every preset
 parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate mapping), `animate.test.ts`
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),
