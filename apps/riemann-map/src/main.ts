@@ -14,7 +14,7 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, colormapCode } from "./render/modes.js";
+import { modeCode, colormapCode, modeIsDynamics } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { injectPngText } from "./export/pngMeta.js";
@@ -126,6 +126,18 @@ function main(): void {
     controls.setLatex(compiled.map.latex);
     current = compiled.map;
     if (renderer && renderer.setMap(compiled.map.glslBody, compiled.map.glslDerivBody)) note.classList.remove("visible");
+    refreshDynamicsNote();
+  }
+
+  /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
+  function refreshDynamicsNote(): void {
+    if (!renderer) return; // the WebGL-unavailable note owns the banner in that case
+    if (modeIsDynamics(state.render.mode) && (!current || current.degree === null)) {
+      note.textContent = "Julia exterior needs a polynomial or rational map of degree ≥ 2 — e.g. z*z − 1.";
+      note.classList.add("visible");
+    } else {
+      note.classList.remove("visible");
+    }
   }
 
   function computeGrid(): void {
@@ -177,7 +189,7 @@ function main(): void {
     const H = Math.max(1, Math.round(baseH * scale));
     canvas.width = W;
     canvas.height = H;
-    renderer.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette));
+    renderer.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
 
     const ex = document.createElement("canvas");
     ex.width = W;
@@ -221,7 +233,7 @@ function main(): void {
         gridDirty = false;
       }
       if (glDirty || resized) {
-        renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette));
+        renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
         glDirty = false;
       }
       drawOverlays();
@@ -256,6 +268,7 @@ function main(): void {
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
     invalidate(true, false);
+    refreshDynamicsNote();
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };

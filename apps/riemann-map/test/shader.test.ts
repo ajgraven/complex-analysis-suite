@@ -25,6 +25,8 @@ describe("assembleFragmentShader (S4/C1–C6)", () => {
     expect(src).toMatch(/\bfFn\b/);
     expect(src).toContain("cvec dphi");
     expect(src).toMatch(/uMode/);
+    expect(src).toMatch(/uDegree/); // Julia-exterior potential
+    expect(src).toContain("uMode == 10"); // the dynamics (iterate-f) branch
     expect(src).toContain("void main()");
     expect(src).toContain("out vec4 fragColor;");
   });

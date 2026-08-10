@@ -11,8 +11,9 @@ import type { ViewportState } from "../viewState.js";
 export interface Renderer {
   /** Compile a new map (φ body + φ′ body, or null). Returns false and keeps the old program on failure. */
   setMap(glslBody: string, glslDerivBody: string | null): boolean;
-  /** Draw the current program for `view`, in render mode `mode` with colormap `colormap`. */
-  render(view: ViewportState, mode: number, colormap: number): void;
+  /** Draw the current program for `view`, in render mode `mode`, colormap `colormap`, degree `degree`
+   *  (the local degree at ∞ for the Julia-exterior potential; ignored by the other modes). */
+  render(view: ViewportState, mode: number, colormap: number, degree: number): void;
   /** Release the program and the WebGL2 context. */
   dispose(): void;
 }
@@ -36,6 +37,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   let uResolution: WebGLUniformLocation | null = null;
   let uMode: WebGLUniformLocation | null = null;
   let uColormap: WebGLUniformLocation | null = null;
+  let uDegree: WebGLUniformLocation | null = null;
 
   function setMap(glslBody: string, glslDerivBody: string | null): boolean {
     let next: WebGLProgram;
@@ -58,10 +60,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     uResolution = gl.getUniformLocation(program, "uResolution");
     uMode = gl.getUniformLocation(program, "uMode");
     uColormap = gl.getUniformLocation(program, "uColormap");
+    uDegree = gl.getUniformLocation(program, "uDegree");
     return true;
   }
 
-  function render(view: ViewportState, mode: number, colormap: number): void {
+  function render(view: ViewportState, mode: number, colormap: number, degree: number): void {
     if (!program) return;
     gl.useProgram(program);
     gl.bindVertexArray(vao);
@@ -71,6 +74,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     gl.uniform2f(uResolution, canvas.width, canvas.height);
     gl.uniform1i(uMode, mode);
     gl.uniform1i(uColormap, colormap);
+    gl.uniform1f(uDegree, degree);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

@@ -19,7 +19,13 @@ export const RENDER_MODES: readonly RenderMode[] = [
   { id: "abs-deriv", name: "|φ′| — scale", code: 4, usesDeriv: true },
   { id: "log-deriv", name: "log|φ′|", code: 5, usesDeriv: true },
   { id: "arg-deriv", name: "arg φ′ — rotation", code: 6, usesDeriv: true },
+  { id: "julia", name: "Julia exterior — Green's fn (iterate f)", code: 10, usesDeriv: false },
 ] as const;
+
+/** Dynamics modes (code ≥ 10) ITERATE the map f rather than evaluating φ once — they need a degree. */
+export function modeIsDynamics(id: string): boolean {
+  return modeCode(id) >= 10;
+}
 
 export interface Colormap {
   readonly id: string;

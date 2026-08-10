@@ -21,6 +21,7 @@ uniform float uHalfSpan;
 uniform vec2  uResolution;
 uniform int   uMode;
 uniform int   uColormap;
+uniform float uDegree;      // local degree at ∞ (Julia-exterior Böttcher potential)
 out vec4 fragColor;
 
 const float TAU = 6.28318530718;
@@ -85,6 +86,24 @@ void main() {
     vec2 g = floor(w * 2.0);
     float chk = mod(g.x + g.y, 2.0);
     col = mix(vec3(0.10, 0.11, 0.14), vec3(0.86, 0.88, 0.92), chk) * hsv2rgb(vec3(hue, 0.20, 1.0));
+  } else if (uMode == 10) {                              // Julia exterior — Green's function of the complement of K
+    cvec zz = z;
+    float mm = dot(zz, zz);
+    int iesc = -1;
+    for (int i = 0; i < 300; i++) {                      // iterate z ← f(z)
+      zz = fFn(zz, vec_(0.0, 0.0));
+      mm = dot(zz, zz);
+      if (mm > 1e8 || !(mm < 1e30)) { iesc = i; break; }
+    }
+    if (iesc < 0) {
+      col = vec3(0.02, 0.02, 0.05);                      // orbit stayed bounded → inside K
+    } else {
+      float dd = max(uDegree, 2.0);
+      float nu = float(iesc) + 1.0 - log(0.5 * log(mm) / log(1e4)) / log(dd); // smooth escape / Böttcher potential
+      col = ramp(clamp(1.0 - nu / 40.0, 0.0, 1.0));
+      float fr = fract(nu);                              // equipotential contours at integer levels
+      col *= 1.0 - 0.45 * smoothstep(0.06, 0.0, min(fr, 1.0 - fr));
+    }
   } else {                                               // phase family
     float light = 0.85;
     if (uMode == 0) light = clamp(0.5 + 0.34 * (fract(lg) - 0.5), 0.08, 1.0);
