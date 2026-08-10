@@ -18,6 +18,7 @@ import { modeCode, colormapCode, modeIsDynamics } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
+import { juliaExternalRays, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
@@ -106,6 +107,8 @@ function main(): void {
   let gridSource: GridLine[] = [];
   let gridImage: GridLine[] = [];
   let boundaryLines: GridLine[] = [];
+  let rayLines: GridLine[] = [];
+  let rayLandings: Pt[] = [];
   let glDirty = true;
   let gridDirty = true;
   let linkDirty = true;
@@ -170,6 +173,9 @@ function main(): void {
       modeIsDynamics(state.render.mode) && analysis
         ? [{ color: "rgba(130,225,255,0.95)", pts: reconstructedBoundary(analysis, 1.02, 512) }]
         : [];
+    const rays = modeIsDynamics(state.render.mode) ? juliaExternalRays(state.map.expr, DEFAULT_RAY_ANGLES) : null;
+    rayLines = rays ? rays.map((r) => ({ color: "rgba(255,170,70,0.9)", pts: r.pts })) : [];
+    rayLandings = rays ? rays.map((r) => r.pts[r.pts.length - 1]) : [];
   }
 
   function drawOverlays(): void {
@@ -178,6 +184,8 @@ function main(): void {
     leftOverlay.clear();
     leftOverlay.drawLines(gridSource);
     leftOverlay.drawLines(boundaryLines, 1.6); // reconstructed ∂K in the Julia-exterior mode
+    leftOverlay.drawLines(rayLines, 1.3); // external rays
+    for (const p of rayLandings) leftOverlay.drawMarker(p, "rgba(255,170,70,1)");
     if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
 
     const split = gridKind() !== "none";
