@@ -18,7 +18,8 @@ import { modeCode, colormapCode, modeIsDynamics } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
-import { juliaExternalRays, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
+import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
+import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
@@ -338,12 +339,24 @@ function main(): void {
     const w = current.jsFn([z[0], z[1]], [0, 0]);
     const d = derivativeAt(current, z);
     const exact = current.jsDeriv ? "= " : "≈ ";
-    controls.setHover([
+    const rows: [string, string][] = [
       ["z", fmtC(z[0], z[1])],
       ["φ(z)", fmtC(w[0], w[1])],
       ["|φ′|", exact + fmt(Math.hypot(d[0], d[1]))],
       ["arg φ′", exact + fmt(Math.atan2(d[1], d[0])) + " rad"],
-    ]);
+    ];
+    // In the Julia-exterior mode, add the escape-rate potential G(z) and (for z²+c) the external angle
+    // of the ray through the cursor (E3) — both numerical limits, so honestly labelled ≈.
+    if (modeIsDynamics(state.render.mode) && current.degree !== null) {
+      const pot = greenPotential(current.jsFn, current.degree, z);
+      rows.push(["G(z)", pot.escaped ? "≈ " + fmt(pot.G) : "≈ 0  (in K)"]);
+      const c = quadraticJuliaC(state.map.expr);
+      if (c) {
+        const theta = externalAngleQuadratic(c, z);
+        if (theta !== null) rows.push(["ext. angle θ", "≈ " + fmt(theta) + " turns"]);
+      }
+    }
+    controls.setHover(rows);
     schedule(); // overlays only (no dirty flags) → redraw the linked markers
   });
   canvas.addEventListener("pointerleave", () => {
