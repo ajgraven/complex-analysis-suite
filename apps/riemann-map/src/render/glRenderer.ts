@@ -1,18 +1,18 @@
-// glRenderer.ts — the WebGL2 domain-coloring renderer (catalog items S4 + C1 + F1 substrate).
+// glRenderer.ts — the WebGL2 renderer (catalog items S4 + C1–C6 + F1 substrate).
 //
-// Wraps the shared @cas/gpu compile/link plumbing around the assembled fragment shader (shader.ts) and
-// draws one full-screen triangle per view. Recompiles on a new map (`setMap`), keeping the previous
-// program if the new one fails to build (so a bad live edit never blanks the canvas). DOM/WebGL only —
-// imported by main.ts and the browser test, never by the node suite.
+// Wraps the shared @cas/gpu compile/link plumbing around the assembled fragment shader and draws one
+// full-screen triangle per view. Recompiles on a new map (`setMap`, which also carries φ′ so the
+// distortion modes work), keeping the previous program if the new one fails to build. Render mode +
+// colormap are plain uniforms, so switching them needs no recompile. DOM/WebGL only.
 import { createProgram } from "@cas/gpu/shader";
 import { RIEMANN_VERTEX, assembleFragmentShader } from "./shader.js";
 import type { ViewportState } from "../viewState.js";
 
 export interface Renderer {
-  /** Compile a new map body into the program. Returns false (and keeps the old program) on failure. */
-  setMap(glslBody: string): boolean;
-  /** Draw the current program for `view` into the canvas. No-op until a map has been set. */
-  render(view: ViewportState): void;
+  /** Compile a new map (φ body + φ′ body, or null). Returns false and keeps the old program on failure. */
+  setMap(glslBody: string, glslDerivBody: string | null): boolean;
+  /** Draw the current program for `view`, in render mode `mode` with colormap `colormap`. */
+  render(view: ViewportState, mode: number, colormap: number): void;
   /** Release the program and the WebGL2 context. */
   dispose(): void;
 }
@@ -21,9 +21,7 @@ export interface Renderer {
 export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   const ctx = canvas.getContext("webgl2", { antialias: false, preserveDrawingBuffer: true });
   if (!ctx) return null;
-  // Bind to a non-null-typed const: TS's control-flow narrowing from the guard above does not propagate
-  // into the nested render/setMap closures, and eslint forbids `!`, so pin the type once here.
-  const gl: WebGL2RenderingContext = ctx;
+  const gl: WebGL2RenderingContext = ctx; // pin non-null for the closures (narrowing doesn't propagate)
 
   const vao = gl.createVertexArray();
   const buf = gl.createBuffer();
@@ -36,11 +34,13 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   let uCenter: WebGLUniformLocation | null = null;
   let uHalfSpan: WebGLUniformLocation | null = null;
   let uResolution: WebGLUniformLocation | null = null;
+  let uMode: WebGLUniformLocation | null = null;
+  let uColormap: WebGLUniformLocation | null = null;
 
-  function setMap(glslBody: string): boolean {
+  function setMap(glslBody: string, glslDerivBody: string | null): boolean {
     let next: WebGLProgram;
     try {
-      next = createProgram(gl, RIEMANN_VERTEX, assembleFragmentShader(glslBody));
+      next = createProgram(gl, RIEMANN_VERTEX, assembleFragmentShader(glslBody, glslDerivBody));
     } catch (e) {
       console.error("riemann-map GPU: shader build failed —", e);
       return false; // keep the previously-compiled program
@@ -56,10 +56,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     uCenter = gl.getUniformLocation(program, "uCenter");
     uHalfSpan = gl.getUniformLocation(program, "uHalfSpan");
     uResolution = gl.getUniformLocation(program, "uResolution");
+    uMode = gl.getUniformLocation(program, "uMode");
+    uColormap = gl.getUniformLocation(program, "uColormap");
     return true;
   }
 
-  function render(view: ViewportState): void {
+  function render(view: ViewportState, mode: number, colormap: number): void {
     if (!program) return;
     gl.useProgram(program);
     gl.bindVertexArray(vao);
@@ -67,6 +69,8 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     gl.uniform2f(uCenter, view.centerRe, view.centerIm);
     gl.uniform1f(uHalfSpan, 1 / view.zoom); // world half-height = base(1) / zoom
     gl.uniform2f(uResolution, canvas.width, canvas.height);
+    gl.uniform1i(uMode, mode);
+    gl.uniform1i(uColormap, colormap);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

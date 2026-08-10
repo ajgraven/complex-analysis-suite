@@ -14,6 +14,7 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
+import { modeCode, colormapCode } from "./render/modes.js";
 import { createControls } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
@@ -88,7 +89,7 @@ function main(): void {
     controls.showError(null);
     controls.setLatex(compiled.map.latex);
     current = compiled.map;
-    if (renderer && renderer.setMap(compiled.map.glslBody)) note.classList.remove("visible");
+    if (renderer && renderer.setMap(compiled.map.glslBody, compiled.map.glslDerivBody)) note.classList.remove("visible");
   }
 
   function updateReadout(): void {
@@ -103,7 +104,7 @@ function main(): void {
     frame = window.requestAnimationFrame(() => {
       frame = 0;
       resizeToDisplay(canvas);
-      renderer?.render(state.viewport);
+      renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette));
       updateReadout();
       history.replaceState(null, "", encodeRiemannState(state));
     });
@@ -113,10 +114,20 @@ function main(): void {
     schedule();
   }
 
-  // ---- editing φ -----------------------------------------------------------
+  // ---- editing φ + view --------------------------------------------------
+  controls.setMode(state.render.mode);
+  controls.setColormap(state.render.palette);
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     applyMap();
+    schedule();
+  });
+  controls.onMode((id) => {
+    state = { ...state, render: { ...state.render, mode: id } };
+    schedule();
+  });
+  controls.onColormap((id) => {
+    state = { ...state, render: { ...state.render, palette: id } };
     schedule();
   });
 

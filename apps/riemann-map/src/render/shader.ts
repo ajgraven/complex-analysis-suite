@@ -1,29 +1,49 @@
-// shader.ts — assemble the per-pixel domain-coloring fragment shader (catalog items S4 + C1).
+// shader.ts — assemble the per-pixel fragment shader (catalog items S4 + C1–C4 + C6).
 //
 // The GLSL half of the dual pipeline: the shared complex GLSL stdlib (@cas/gpu/glsl) + the compiled
-// `fFn` body (from map.ts, one AST → this GLSL and the JS evaluator) + a `main()` that evaluates
-// w = φ(z) per pixel and colours by domain coloring (hue = arg w, lightness banded by log|w|). Kept a
-// PURE string builder so it is node-testable, and so the real-WebGL2 browser test can compile exactly
-// what ships.
+// `fFn` body + (when φ is holomorphic) the compiled `dFn` for φ′ + a `dphi` that resolves to dFn or a
+// finite difference + a `main()` that switches on `uMode`/`uColormap` across the render modes. Pure
+// string builder → node-testable; the real compile/link is renderShader.browser.test.ts.
 import { COMPLEX_SINGLE_GLSL, COMPLEX_DERIVED_GLSL } from "@cas/gpu/glsl";
 
-/** Full-screen-triangle vertex shader (a 3-vertex cover of clip space; no attributes beyond aPos). */
+/** Full-screen-triangle vertex shader. */
 export const RIEMANN_VERTEX = `#version 300 es
 in vec2 aPos;
 void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 
-// The colouring `main()`, appended AFTER the stdlib + fFn. Pixel → complex z (via the view uniforms) →
-// w = fFn(z). Non-finite w (poles, overflow) is caught by `!(|w|² < 1e38)`, which is true for both Inf
-// and NaN (a NaN compare is false), avoiding a hard dependency on isnan/isinf across GLSL drivers.
+// Colouring main. Pixel → z → w = fFn(z); modes:
+//   0 phase (hue + log|w| bands) · 1 phase-flat · 2 conformal grid (Wegert phase+modulus contours)
+//   3 checkerboard · 4 |φ′| (colormap) · 5 log|φ′| (colormap) · 6 arg φ′ (hue).
+// Non-finite w (poles/overflow/NaN) → grey, via `!(|w|² < 1e38)`.
 const COLOR_MAIN = `
-uniform vec2  uCenter;      // plane center (re, im)
-uniform float uHalfSpan;    // world half-height; x scaled by pixel aspect
-uniform vec2  uResolution;  // device pixels
+uniform vec2  uCenter;
+uniform float uHalfSpan;
+uniform vec2  uResolution;
+uniform int   uMode;
+uniform int   uColormap;
 out vec4 fragColor;
+
+const float TAU = 6.28318530718;
 
 vec3 hsv2rgb(vec3 c) {
   vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
   return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
+}
+
+// Polynomial approximation of matplotlib 'viridis' (perceptually uniform).
+vec3 viridis(float t) {
+  const vec3 c0 = vec3(0.2777, 0.0054, 0.3341);
+  const vec3 c1 = vec3(0.1051, 1.4046, 1.3846);
+  const vec3 c2 = vec3(-0.3309, 0.2148, 0.0951);
+  const vec3 c3 = vec3(-4.6342, -5.7991, -19.3324);
+  const vec3 c4 = vec3(6.2283, 14.1799, 56.6906);
+  const vec3 c5 = vec3(4.7764, -13.7451, -65.3530);
+  const vec3 c6 = vec3(-5.4355, 4.6459, 26.3124);
+  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), 0.0, 1.0);
+}
+vec3 ramp(float t) {
+  t = clamp(t, 0.0, 1.0);
+  return (uColormap == 1) ? vec3(t) : viridis(t);
 }
 
 void main() {
@@ -34,23 +54,62 @@ void main() {
   );
   cvec w = fFn(z, vec_(0.0, 0.0));
   float m2 = dot(w, w);
-  if (!(m2 < 1e38)) { fragColor = vec4(0.5, 0.5, 0.5, 1.0); return; }   // pole / overflow / NaN
-  float hue = atan(w.y, w.x) / 6.28318530718 + 0.5;                     // arg w -> [0,1)
-  float lg = log2(sqrt(m2) + 1e-12);
-  float shade = clamp(0.5 + 0.34 * (fract(lg) - 0.5), 0.08, 1.0);       // |w| contour bands as lightness
-  fragColor = vec4(hsv2rgb(vec3(hue, 0.85, shade)), 1.0);
+  bool bad = !(m2 < 1e38);
+  float absw = sqrt(m2);
+  float argw = atan(w.y, w.x);
+  float hue = argw / TAU + 0.5;
+
+  // Conformal-grid contour factor for mode 2, computed in uniform control flow (fwidth in a branch is
+  // undefined). fwidth is clamped so the arg branch cut doesn't paint a fat line.
+  float lg = log2(absw + 1e-12);
+  float sectors = 12.0;
+  float pw = min(fwidth(argw * sectors / TAU), 0.1);
+  float mw = min(fwidth(lg), 0.1);
+  float ps = fract(argw * sectors / TAU);
+  float ms = fract(lg);
+  float pline = 1.0 - smoothstep(0.0, pw * 1.5 + 1e-5, min(ps, 1.0 - ps));
+  float mline = 1.0 - smoothstep(0.0, mw * 1.5 + 1e-5, min(ms, 1.0 - ms));
+  float grid = 1.0 - 0.55 * max(pline, mline);
+
+  vec3 col;
+  if (uMode == 4 || uMode == 5 || uMode == 6) {          // distortion / derivative field
+    cvec d = dphi(z);
+    if (uMode == 6) {
+      col = hsv2rgb(vec3(atan(d.y, d.x) / TAU + 0.5, 0.85, 0.95));
+    } else {
+      float ad = length(d);
+      float t = (uMode == 4) ? ad / (1.0 + ad) : clamp(0.5 + 0.16 * log2(ad + 1e-12), 0.0, 1.0);
+      col = ramp(t);
+    }
+  } else if (uMode == 3) {                               // checkerboard pullback
+    vec2 g = floor(w * 2.0);
+    float chk = mod(g.x + g.y, 2.0);
+    col = mix(vec3(0.10, 0.11, 0.14), vec3(0.86, 0.88, 0.92), chk) * hsv2rgb(vec3(hue, 0.20, 1.0));
+  } else {                                               // phase family
+    float light = 0.85;
+    if (uMode == 0) light = clamp(0.5 + 0.34 * (fract(lg) - 0.5), 0.08, 1.0);
+    col = hsv2rgb(vec3(hue, 0.85, light));
+    if (uMode == 2) col *= grid;
+  }
+  if (bad) col = vec3(0.5, 0.5, 0.5);
+  fragColor = vec4(col, 1.0);
 }`;
 
 /**
- * Assemble the full fragment-shader source for a compiled map body. `glslBody` must be a
- * `cvec fFn(cvec z, cvec c)` definition (from {@link compileMap}); everything it can reference is
- * provided by the two stdlib blocks concatenated ahead of it.
+ * Assemble the full fragment-shader source. `glslBody` is a `cvec fFn(cvec z, cvec c)` definition;
+ * `glslDerivBody` is the matching `cvec dFn(...)` for φ′ (or null → the shader finite-differences φ).
  */
-export function assembleFragmentShader(glslBody: string): string {
+export function assembleFragmentShader(glslBody: string, glslDerivBody: string | null): string {
+  const dphi = glslDerivBody
+    ? "cvec dphi(cvec z) { return dFn(z, vec_(0.0, 0.0)); }"
+    : "cvec dphi(cvec z) { float h = 1e-3 * max(1.0, length(z)); " +
+      "return (fFn(z + vec_(h, 0.0), vec_(0.0, 0.0)) - fFn(z - vec_(h, 0.0), vec_(0.0, 0.0))) / (2.0 * h); }";
   return `#version 300 es
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
 ${glslBody}
+${glslDerivBody ?? ""}
+${dphi}
 ${COLOR_MAIN}`;
 }

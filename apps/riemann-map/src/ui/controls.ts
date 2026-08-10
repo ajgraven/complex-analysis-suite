@@ -1,30 +1,47 @@
-// controls.ts — the sidebar: live φ editor (F5), preset gallery (A19), KaTeX preview (I1), and the
-// under-cursor readout (F4). DOM-only (the app's node test suite stays DOM-free), so it is exercised
-// through the built app / screenshots rather than unit tests; the pure logic it drives (compileMap,
-// presets, derivativeAt) is what the node specs cover.
+// controls.ts — the sidebar: live φ editor (F5), preset gallery (A19), KaTeX preview (I1), the render
+// mode + colormap pickers (C1–C6), and the under-cursor readout (F4). DOM-only (the app's node suite
+// stays DOM-free); the pure logic it drives (compileMap, presets, modes, derivativeAt) is unit-tested.
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
+import { RENDER_MODES, COLORMAPS } from "../render/modes.js";
 
 export interface Controls {
   readonly root: HTMLElement;
-  /** Set the editor value and sync the preset picker, WITHOUT firing the change callback. */
   setExpr(expr: string): void;
-  /** Render the map as typeset math (empty string clears it). */
   setLatex(latex: string): void;
-  /** Show an inline compile error, or clear it with null. */
   showError(msg: string | null): void;
-  /** Fill the under-cursor readout with key/value rows, or clear it with null. */
+  setMode(id: string): void;
+  setColormap(id: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
-  /** Register a callback fired (debounced) when the user edits φ or picks a preset. */
   onExpr(cb: (expr: string) => void): void;
+  onMode(cb: (id: string) => void): void;
+  onColormap(cb: (id: string) => void): void;
 }
 
 const CUSTOM = "__custom__";
 
+function labeledSelect(labelText: string, options: readonly { id: string; name: string }[]): { field: HTMLLabelElement; select: HTMLSelectElement } {
+  const field = document.createElement("label");
+  field.className = "field";
+  const span = document.createElement("span");
+  span.className = "field-label";
+  span.textContent = labelText;
+  const select = document.createElement("select");
+  for (const o of options) {
+    const opt = document.createElement("option");
+    opt.value = o.id;
+    opt.textContent = o.name;
+    select.append(opt);
+  }
+  field.append(span, select);
+  return { field, select };
+}
+
 export function createControls(initialExpr: string): Controls {
-  const listeners: ((expr: string) => void)[] = [];
-  const fire = (expr: string): void => listeners.forEach((cb) => cb(expr));
+  const exprListeners: ((expr: string) => void)[] = [];
+  const modeListeners: ((id: string) => void)[] = [];
+  const cmapListeners: ((id: string) => void)[] = [];
 
   const root = document.createElement("aside");
   root.className = "sidebar";
@@ -56,11 +73,17 @@ export function createControls(initialExpr: string): Controls {
 
   const error = document.createElement("div");
   error.className = "error";
-
   const preview = document.createElement("div");
   preview.className = "preview";
-
   mapSection.append(mapTitle, preset, input, error, preview);
+
+  // --- View section ---------------------------------------------------------
+  const viewSection = document.createElement("section");
+  const viewTitle = document.createElement("h2");
+  viewTitle.textContent = "View";
+  const mode = labeledSelect("Mode", RENDER_MODES);
+  const cmap = labeledSelect("Colormap", COLORMAPS);
+  viewSection.append(viewTitle, mode.field, cmap.field);
 
   // --- Under-cursor section -------------------------------------------------
   const hoverSection = document.createElement("section");
@@ -73,7 +96,7 @@ export function createControls(initialExpr: string): Controls {
   hoverEmpty.textContent = "Hover the plane to read φ(z), φ′(z), and the local scale/rotation.";
   hoverSection.append(hoverTitle, hover, hoverEmpty);
 
-  root.append(mapSection, hoverSection);
+  root.append(mapSection, viewSection, hoverSection);
 
   // --- behaviour ------------------------------------------------------------
   input.value = initialExpr;
@@ -83,15 +106,17 @@ export function createControls(initialExpr: string): Controls {
   input.addEventListener("input", () => {
     syncPreset(input.value);
     window.clearTimeout(debounce);
-    debounce = window.setTimeout(() => fire(input.value.trim()), 180);
+    debounce = window.setTimeout(() => exprListeners.forEach((cb) => cb(input.value.trim())), 180);
   });
   preset.addEventListener("change", () => {
     if (preset.value === CUSTOM) return;
     const p = MAP_PRESETS.find((m) => m.id === preset.value);
     if (!p) return;
     input.value = p.expr;
-    fire(p.expr);
+    exprListeners.forEach((cb) => cb(p.expr));
   });
+  mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
+  cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
 
   function syncPreset(expr: string): void {
     preset.value = presetIdForExpr(expr) ?? CUSTOM;
@@ -114,6 +139,12 @@ export function createControls(initialExpr: string): Controls {
       error.textContent = msg ?? "";
       error.classList.toggle("visible", msg !== null);
     },
+    setMode(id: string): void {
+      mode.select.value = id;
+    },
+    setColormap(id: string): void {
+      cmap.select.value = id;
+    },
     setHover(rows: readonly (readonly [string, string])[] | null): void {
       hover.replaceChildren();
       hoverEmpty.style.display = rows && rows.length ? "none" : "";
@@ -127,7 +158,13 @@ export function createControls(initialExpr: string): Controls {
       }
     },
     onExpr(cb: (expr: string) => void): void {
-      listeners.push(cb);
+      exprListeners.push(cb);
+    },
+    onMode(cb: (id: string) => void): void {
+      modeListeners.push(cb);
+    },
+    onColormap(cb: (id: string) => void): void {
+      cmapListeners.push(cb);
     },
   };
 }
