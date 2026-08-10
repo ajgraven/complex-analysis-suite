@@ -9,18 +9,21 @@ export interface RenderMode {
   readonly code: number;
   /** True if the mode reads φ′ (so it needs the derivative / distortion field). */
   readonly usesDeriv: boolean;
+  /** True if the mode's colour comes from the colormap ramp (vs hue / checker) — drives whether the
+   *  Colormap picker is relevant (the shader reads uColormap only in modes 4, 5, 10). */
+  readonly usesColormap: boolean;
 }
 
 export const RENDER_MODES: readonly RenderMode[] = [
-  { id: "phase", name: "Phase portrait", code: 0, usesDeriv: false },
-  { id: "phase-plain", name: "Phase (flat)", code: 1, usesDeriv: false },
-  { id: "conformal", name: "Conformal grid (Wegert)", code: 2, usesDeriv: false },
-  { id: "checker", name: "Checkerboard", code: 3, usesDeriv: false },
-  { id: "abs-deriv", name: "|φ′| — scale", code: 4, usesDeriv: true },
-  { id: "log-deriv", name: "log|φ′|", code: 5, usesDeriv: true },
-  { id: "arg-deriv", name: "arg φ′ — rotation", code: 6, usesDeriv: true },
-  { id: "julia", name: "Julia exterior — Green's fn (iterate f)", code: 10, usesDeriv: false },
-  { id: "domain-map", name: "Riemann map: domain → disk (numeric)", code: 20, usesDeriv: false },
+  { id: "phase", name: "Phase portrait", code: 0, usesDeriv: false, usesColormap: false },
+  { id: "phase-plain", name: "Phase (flat)", code: 1, usesDeriv: false, usesColormap: false },
+  { id: "conformal", name: "Conformal grid (Wegert)", code: 2, usesDeriv: false, usesColormap: false },
+  { id: "checker", name: "Checkerboard", code: 3, usesDeriv: false, usesColormap: false },
+  { id: "abs-deriv", name: "|φ′| — scale", code: 4, usesDeriv: true, usesColormap: true },
+  { id: "log-deriv", name: "log|φ′|", code: 5, usesDeriv: true, usesColormap: true },
+  { id: "arg-deriv", name: "arg φ′ — rotation", code: 6, usesDeriv: true, usesColormap: false },
+  { id: "julia", name: "Julia exterior — Green's fn (iterate f)", code: 10, usesDeriv: false, usesColormap: true },
+  { id: "domain-map", name: "Riemann map: domain → disk (numeric)", code: 20, usesDeriv: false, usesColormap: false },
 ] as const;
 
 /** Dynamics modes (code ≥ 10) ITERATE the map f rather than evaluating φ once — they need a degree. */
@@ -56,6 +59,10 @@ export function modeCode(id: string): number {
 /** Whether the mode id reads the derivative field. */
 export function modeUsesDeriv(id: string): boolean {
   return modeById.get(id)?.usesDeriv ?? false;
+}
+/** Whether the mode id colours from the colormap ramp (so the Colormap picker is relevant). */
+export function modeUsesColormap(id: string): boolean {
+  return modeById.get(id)?.usesColormap ?? false;
 }
 /** `uColormap` code for a colormap id (falls back to viridis). */
 export function colormapCode(id: string): number {

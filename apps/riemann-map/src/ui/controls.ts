@@ -16,7 +16,10 @@ export interface Controls {
   setColormap(id: string): void;
   setGrid(id: string): void;
   setDomain(id: string): void;
-  setAnalysis(rows: readonly (readonly [string, string])[] | null): void;
+  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). */
+  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean }): void;
+  /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
+  setAnalysis(rows: readonly (readonly [string, string])[] | null, title?: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
   /** Show/hide the exterior-map export button (hidden when no valid conformal map ψ exists). */
   setExteriorExportAvailable(available: boolean): void;
@@ -72,6 +75,17 @@ function labeledSelect(labelText: string, options: readonly { id: string; name: 
   return { field, select };
 }
 
+/** A collapsible sidebar group (CD's `.control-group` disclosure). Returns the <details> + its summary. */
+function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElement; summary: HTMLElement } {
+  const el = document.createElement("details");
+  el.className = "control-group";
+  el.open = open;
+  const summary = document.createElement("summary");
+  summary.textContent = titleText;
+  el.append(summary);
+  return { el, summary };
+}
+
 export function createControls(initialExpr: string): Controls {
   const exprListeners: ((expr: string) => void)[] = [];
   const modeListeners: ((id: string) => void)[] = [];
@@ -116,20 +130,16 @@ export function createControls(initialExpr: string): Controls {
   preview.className = "preview";
   mapSection.append(mapTitle, preset, input, error, preview);
 
-  // --- View section ---------------------------------------------------------
-  const viewSection = document.createElement("section");
-  const viewTitle = document.createElement("h2");
-  viewTitle.textContent = "View";
+  // --- View group (collapsible; primary controls) ---------------------------
+  const viewGroup = controlGroup("View", true);
   const mode = labeledSelect("Mode", RENDER_MODES);
   const cmap = labeledSelect("Colormap", COLORMAPS);
   const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  viewSection.append(viewTitle, mode.field, cmap.field, grid.field, domain.field);
+  viewGroup.el.append(mode.field, cmap.field, grid.field, domain.field);
 
-  // --- Figure / export section ----------------------------------------------
-  const figSection = document.createElement("section");
-  const figTitle = document.createElement("h2");
-  figTitle.textContent = "Figure";
+  // --- Figure / export group (collapsed by default) -------------------------
+  const figGroup = controlGroup("Figure", false);
   const buttons = document.createElement("div");
   buttons.className = "buttons";
   const savePng = document.createElement("button");
@@ -142,19 +152,15 @@ export function createControls(initialExpr: string): Controls {
   const figNote = document.createElement("p");
   figNote.className = "muted";
   figNote.textContent = "PNG at 2× with the view embedded (reopen to restore). Readouts: = exact · ≈ numerical.";
-  figSection.append(figTitle, buttons, figNote);
+  figGroup.el.append(buttons, figNote);
 
-  // --- Exterior invariants section (E2/E6) ----------------------------------
-  const analysisSection = document.createElement("section");
-  const analysisTitle = document.createElement("h2");
-  analysisTitle.textContent = "Exterior invariants";
+  // --- Analysis group (contextual: title + visibility track the mode, A1) ----
+  const analysisGroup = controlGroup("Analysis", true);
+  analysisGroup.el.style.display = "none"; // shown only when the mode produces analysis
   const analysisDl = document.createElement("dl");
   analysisDl.className = "hover analysis-dl";
-  const analysisHint = document.createElement("p");
-  analysisHint.className = "muted";
-  analysisHint.textContent = "In the Julia-exterior mode, a polynomial/rational map shows its capacity, Robin constant, and exterior-map coefficients.";
   // Hand off ψ (the exterior conformal map) as an @cas/interchange link (G8). Shown only when an
-  // exterior analysis exists — setAnalysis(null) hides it (an empty analysis has nothing to export).
+  // exterior analysis exists — setExteriorExportAvailable(false) hides it.
   const exportRow = document.createElement("div");
   exportRow.className = "buttons";
   exportRow.style.display = "none";
@@ -166,25 +172,19 @@ export function createControls(initialExpr: string): Controls {
   exportStatus.className = "muted";
   exportStatus.setAttribute("role", "status");
   exportStatus.setAttribute("aria-live", "polite");
-  analysisSection.append(analysisTitle, analysisDl, analysisHint, exportRow, exportStatus);
+  analysisGroup.el.append(analysisDl, exportRow, exportStatus);
 
-  // --- Under-cursor section -------------------------------------------------
-  const hoverSection = document.createElement("section");
-  const hoverTitle = document.createElement("h2");
-  hoverTitle.textContent = "Under cursor";
+  // --- Under-cursor group (collapsible; live readout) -----------------------
+  const hoverGroup = controlGroup("Under cursor", true);
   const hover = document.createElement("dl");
   hover.className = "hover";
   const hoverEmpty = document.createElement("p");
   hoverEmpty.className = "muted";
   hoverEmpty.textContent = "Hover the plane to read φ(z), φ′(z), and the local scale/rotation.";
-  hoverSection.append(hoverTitle, hover, hoverEmpty);
+  hoverGroup.el.append(hover, hoverEmpty);
 
-  // --- Glossary (I2) --------------------------------------------------------
-  const glossarySection = document.createElement("section");
-  const glossary = document.createElement("details");
-  glossary.className = "glossary";
-  const glossarySummary = document.createElement("summary");
-  glossarySummary.textContent = "Glossary & notation";
+  // --- Glossary group (I2; collapsed by default) ----------------------------
+  const glossaryGroup = controlGroup("Glossary & notation", false);
   const glossaryDl = document.createElement("dl");
   glossaryDl.className = "glossary-dl";
   for (const [term, def] of GLOSSARY) {
@@ -194,10 +194,9 @@ export function createControls(initialExpr: string): Controls {
     dd.textContent = def;
     glossaryDl.append(dt, dd);
   }
-  glossary.append(glossarySummary, glossaryDl);
-  glossarySection.append(glossary);
+  glossaryGroup.el.append(glossaryDl);
 
-  root.append(mapSection, viewSection, figSection, analysisSection, hoverSection, glossarySection);
+  root.append(mapSection, viewGroup.el, figGroup.el, analysisGroup.el, hoverGroup.el, glossaryGroup.el);
 
   // --- behaviour ------------------------------------------------------------
   input.value = initialExpr;
@@ -257,18 +256,23 @@ export function createControls(initialExpr: string): Controls {
     setDomain(id: string): void {
       domain.select.value = id;
     },
-    setAnalysis(rows: readonly (readonly [string, string])[] | null): void {
+    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean }): void {
+      cmap.field.style.display = v.colormap ? "" : "none";
+      grid.field.style.display = v.grid ? "" : "none";
+      domain.field.style.display = v.domain ? "" : "none";
+    },
+    setAnalysis(rows: readonly (readonly [string, string])[] | null, title = "Analysis"): void {
       analysisDl.replaceChildren();
       const hasRows = !!(rows && rows.length);
-      analysisHint.style.display = hasRows ? "none" : "";
-      // The export button's visibility is owned by setExteriorExportAvailable; only clear it when the
-      // whole panel goes empty (leaving the Julia mode).
+      // Hide the whole group when the mode produces no analysis; else title it contextually (A1).
+      analysisGroup.el.style.display = hasRows ? "" : "none";
       if (!hasRows) {
         exportRow.style.display = "none";
         exportStatus.textContent = "";
+        return;
       }
-      if (!rows) return;
-      for (const [k, v] of rows) {
+      analysisGroup.summary.textContent = title;
+      for (const [k, v] of rows ?? []) {
         const dt = document.createElement("dt");
         dt.textContent = k;
         const dd = document.createElement("dd");

@@ -15,7 +15,7 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, colormapCode, modeIsDynamics, modeIsDomain } from "./render/modes.js";
+import { modeCode, colormapCode, modeIsDynamics, modeIsDomain, modeUsesColormap } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
@@ -230,8 +230,19 @@ function main(): void {
         rows.push(["multiplier |λ|", sup ? "= 0" : "≈ " + fmt(dynamics.cycle.multiplier)]);
       }
     }
-    controls.setAnalysis(rows);
+    controls.setAnalysis(rows, "Exterior invariants");
     controls.setExteriorExportAvailable(valid); // no ψ ⇒ no exterior-map export
+  }
+
+  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane. */
+  function applyModeContext(): void {
+    const m = state.render.mode;
+    controls.setControlVisibility({
+      colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
+      grid: !modeIsDomain(m), // the numeric-map mode draws its own conformal grid
+      domain: modeIsDomain(m), // the domain picker is only for the numeric-map mode
+    });
+    rlabel.textContent = modeIsDomain(m) ? "w = f(z)  ·  unit disk" : "w = φ(z)  ·  image grid";
   }
 
   /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
@@ -308,7 +319,7 @@ function main(): void {
     ];
     if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
     rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
-    controls.setAnalysis(rows);
+    controls.setAnalysis(rows, "Numerical map");
     controls.setExteriorExportAvailable(false);
   }
 
@@ -447,6 +458,7 @@ function main(): void {
   controls.setColormap(state.render.palette);
   controls.setGrid(gridKind());
   controls.setDomain(domainId);
+  applyModeContext(); // initial contextual disclosure
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     applyMap();
@@ -456,6 +468,7 @@ function main(): void {
     state = { ...state, render: { ...state.render, mode: id } };
     if (modeIsDomain(id)) domainDirty = true; // (re)fit f on entering the numerical-map mode
     invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
+    applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
     refreshDynamicsNote();
     updateAnalysisPanel();
   });
