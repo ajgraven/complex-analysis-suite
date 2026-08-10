@@ -29,6 +29,7 @@ import {
   BINARY_FUNCTIONS,
   calledFunctions,
   substitute,
+  referencesVar,
   type Node,
 } from "@cas/expr/ast";
 import { makeComplexFn } from "@cas/expr/evaluate";
@@ -52,6 +53,12 @@ import {
   shareUrl,
   type PlotterState,
 } from "./state/viewState.js";
+import { importEnvelopeText } from "./interchange/importMap.js";
+import {
+  encodeViewLink,
+  cdHandoffUrl,
+  type InterchangeVar,
+} from "./interchange/exportView.js";
 
 const DEFAULTS: PlotterState = {
   expr: "z^2",
@@ -145,6 +152,10 @@ function main(): void {
   const exportSizeSel = byId("exportSize");
   const copyLinkBtn = byId("copyLink");
   const copyTexBtn = byId("copyTex");
+  const importMapBtn = byId("importMap");
+  const copyInteropBtn = byId("copyInterop");
+  const toDynamicsBtn = byId("toDynamics");
+  const interopNote = byId("interopNote");
   const wheelCanvas = byId("wheel");
   const modbarCanvas = byId("modbar");
   const pz = byId("pz");
@@ -779,6 +790,83 @@ function main(): void {
       const url = shareUrl(currentState());
       history.replaceState(null, "", encodeState(currentState()));
       if (navigator.clipboard) navigator.clipboard.writeText(url).catch(() => undefined);
+    });
+  }
+
+  // Suite hand-off (interop, K7/K8). Import an @cas/interchange map from another tool (a QD φ / σ, a saved
+  // View, a bare map); export the current map + view as an #s= link, or a deep-link straight into Complex
+  // Dynamics. This is the cross-app `#s=` Envelope — distinct from the plotter's own `#vs=` share-link.
+  const currentVars = (src: string): InterchangeVar[] => {
+    try {
+      const ast = parse(src);
+      const vs = (["z", "c", "a"] as InterchangeVar[]).filter((n) =>
+        referencesVar(ast, n),
+      );
+      return vs.length ? vs : ["z"];
+    } catch {
+      return ["z"];
+    }
+  };
+  const currentViewExport = () => ({
+    expr: exprs[active],
+    vars: currentVars(exprs[active]),
+    center: { re: plot.view.cx, im: plot.view.cy },
+    span: plot.view.span,
+    coloring: COLORMAPS[plot.color.colormap]?.id,
+    createdAt: new Date().toISOString(),
+  });
+  const showInteropNote = (msg: string): void => {
+    if (!(interopNote instanceof HTMLElement)) return;
+    interopNote.textContent = msg;
+    interopNote.hidden = msg === "";
+  };
+  if (importMapBtn instanceof HTMLElement) {
+    importMapBtn.addEventListener("click", () => {
+      const text = window.prompt(
+        "Paste a suite hand-off link (#s=…) or interchange JSON:",
+      );
+      if (!text) return;
+      try {
+        const imported = importEnvelopeText(text);
+        exprs[active] = imported.expr;
+        setExprBox(imported.expr);
+        if (imported.viewport) {
+          plot.view = {
+            cx: imported.viewport.center.re,
+            cy: imported.viewport.center.im,
+            span: imported.viewport.span,
+          };
+          framingSpan = imported.viewport.span;
+        }
+        applyExpr(imported.expr);
+        const from =
+          imported.source && imported.source !== "unknown"
+            ? ` from ${imported.source}`
+            : "";
+        showInteropNote(
+          imported.note ? `Imported${from} — ${imported.note}` : `Imported a map${from}.`,
+        );
+      } catch (err) {
+        showInteropNote(
+          `Import failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    });
+  }
+  if (copyInteropBtn instanceof HTMLElement) {
+    copyInteropBtn.addEventListener("click", () => {
+      const link = encodeViewLink(currentViewExport());
+      if (navigator.clipboard) navigator.clipboard.writeText(link).catch(() => undefined);
+      showInteropNote("Copied a suite hand-off link (#s=…) for the current map + view.");
+    });
+  }
+  if (toDynamicsBtn instanceof HTMLElement) {
+    toDynamicsBtn.addEventListener("click", () => {
+      window.open(
+        cdHandoffUrl(location.href, encodeViewLink(currentViewExport())),
+        "_blank",
+        "noopener",
+      );
     });
   }
 

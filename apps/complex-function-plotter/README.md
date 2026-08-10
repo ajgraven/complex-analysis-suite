@@ -98,16 +98,26 @@ Plus the Phase-2 research tool:
   **share-link embedded as `tEXt` metadata**, so the figure carries the exact map / params / view that
   produced it; a **copy-image-to-clipboard** button does the same to the clipboard. HiDPI + progressive
   rendering and WebGL2 context-loss recovery throughout.
+- **Suite interop** (K7/K8, Phase 6) — the cross-app hand-off over `@cas/interchange` (the `#s=` map
+  Envelope, distinct from the plotter's own `#vs=` share-link). **Import** a map from another tool — a
+  Quadrature-Domains uniformizing map φ, a saved View, or a bare rational/Laurent/expr map — and it becomes
+  a live plot (`src/interchange/importMap.ts`, ported from Complex-Dynamics). A **numerical Schwarz σ** is
+  not a closed form, so the plotter plots its **generating map φ instead, honestly labelled** (σ needs the
+  QD solver). **Export** the current map + view as a hand-off link, or **→ Dynamics** to open it straight in
+  Complex Dynamics (which reads the `#s=` hash on load). Everything travels in the CANONICAL convention
+  (ADR-0006), and every converted coefficient string is parsed back through the same `@cas/expr` the render
+  uses, so a factor error can't slip through.
 
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
-rational maps. Built into CI, **not yet published** (the launcher lists it as "Coming soon").
+rational maps, and round-trips a map to Complex Dynamics and back. Built into CI, **not yet published** (the
+launcher lists it as "Coming soon").
 
 Phase 4 (special functions & the DLMF mode) and the core of Phase 5 (the 3D engine — analytic
 **landscape** with `f'/f` shading, and the **Riemann sphere**) are complete. **Phase 6 (export, interop,
-a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image (6A)** above
-is in; interop (import/export a map, 6B) and accessibility (6C) precede the publish flip. Linked 2D↔3D
-navigation (5D) + the 3D-slice extraction ADR are the parked remainder of Phase 5. See
-[the plan](../../docs/design/complex-function-plotter-plan.md).
+a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image (6A)** and
+**suite interop (6B: import/export a map, → Complex Dynamics)** above are in; accessibility (6C) precedes the
+publish flip. Linked 2D↔3D navigation (5D) + the 3D-slice extraction ADR are the parked remainder of
+Phase 5. See [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
@@ -120,6 +130,8 @@ navigation (5D) + the 3D-slice extraction ADR are the parked remainder of Phase 
 | `render/pngMetadata.ts`     | pure PNG `tEXt` inject/read (K3): embeds the share-link into an exported PNG without touching a pixel — ported from CD's `pngMetadata`                       |
 | `render/exportImage.ts`     | pure export size algebra (K1): clamp a long-edge to the GPU max, derive aspect-preserving buffer dims, sanitise a filename                                   |
 | `state/viewState.ts`        | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                        |
+| `interchange/importMap.ts`  | K7: `@cas/interchange` map Envelope → `@cas/expr` source (rational / Laurent / expr; σ → its φ, labelled) — ported from CD's `importMap`                     |
+| `interchange/exportView.ts` | K8: the current map + view → a `view` Envelope + `#s=` link; `cdHandoffUrl` for the "→ Dynamics" deep-link                                                   |
 | `presets.ts`                | the preset / example gallery (each expression is validated in the tests)                                                                                     |
 | `ui/params.ts`              | live named-parameter controls (G1): the ℂ-pad ↔ value mapping, per-parameter pad + re/im fields + real slider                                                |
 | `ui/animate.ts`             | the `t` animation transport (G2): pure frame-stepping `stepT` + the play/scrub/loop/speed controls and rAF loop                                              |
@@ -155,7 +167,10 @@ parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate m
 badge policy — ζ warn / Γ note, strongest-first, over the `parse → calledFunctions → precisionNote`
 path), `pngMetadata.test.ts` (the export `tEXt` inject/read round-trip — canonical CRC-32, image bytes
 untouched, Latin-1 coercion, non-PNG passthrough), `exportImage.test.ts` (the hi-res export size algebra
-— clamp to the GPU max, aspect-preserving dims, filename sanitising), and `singularities.test.ts` (the
-zero/pole finder recovers known counts and orders). Coloring
-correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
-during development; an automated pixel-diff visual-regression harness is deferred.
+— clamp to the GPU max, aspect-preserving dims, filename sanitising), `interop.test.ts` (the K7/K8 suite
+hand-off — MapSpec→expr conversion **re-parsed through `@cas/expr`**, the σ→φ redirect, envelope round-trip
+
+- validation, the `→ Dynamics` deep-link), and `singularities.test.ts` (the
+  zero/pole finder recovers known counts and orders). Coloring
+  correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
+  during development; an automated pixel-diff visual-regression harness is deferred.
