@@ -103,6 +103,40 @@ function clampIndex(v: number, n: number): number {
 
 function main(): void {
   const byId = (id: string): HTMLElement | null => document.getElementById(id);
+
+  // Color theme (matches the CD app): `auto` follows the OS; the toggle cycles auto → light → dark and
+  // persists the choice by stamping `data-theme` on <html> (absent = auto). The CSS defines the palette
+  // for all three states, so this just flips the attribute.
+  const THEME_KEY = "cfp-theme";
+  const THEME_GLYPH: Record<string, string> = { auto: "◐", light: "☀", dark: "☾" };
+  const applyTheme = (mode: string): void => {
+    if (mode === "light" || mode === "dark")
+      document.documentElement.setAttribute("data-theme", mode);
+    else document.documentElement.removeAttribute("data-theme");
+    const btn = byId("themeToggle");
+    if (btn) {
+      btn.textContent = THEME_GLYPH[mode] ?? "◐";
+      btn.setAttribute("title", `Color theme: ${mode} (click to change)`);
+    }
+  };
+  let themeMode = "auto";
+  try {
+    const saved = localStorage.getItem(THEME_KEY);
+    if (saved === "light" || saved === "dark" || saved === "auto") themeMode = saved;
+  } catch {
+    /* localStorage can throw in private mode — fall back to auto */
+  }
+  applyTheme(themeMode);
+  byId("themeToggle")?.addEventListener("click", () => {
+    themeMode = themeMode === "auto" ? "light" : themeMode === "light" ? "dark" : "auto";
+    applyTheme(themeMode);
+    try {
+      localStorage.setItem(THEME_KEY, themeMode);
+    } catch {
+      /* ignore persistence failure */
+    }
+  });
+
   const canvas = byId("view");
   const axesCanvas = byId("axes");
   const exprInput = byId("expr");

@@ -7,21 +7,40 @@
     <style>
       :root {
         color-scheme: light dark;
-        --bg: #0f1115;
-        --panel: #161a21;
-        --panel-2: #1b212b;
-        --text: #e7e9ee;
-        --muted: #99a1b3;
-        --border: #262d38;
-        --accent: #6ea8fe;
+        /* Design tokens aligned with the Complex Dynamics app: light-first, with a dark override that
+           follows the OS unless [data-theme] forces a choice. Shared palette across the two apps. */
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #555;
+        --border: #d0d0d0;
+        --accent: #2b6cb0;
+        --accent-contrast: #ffffff;
+        --field-bg: #fafafa;
+        --radius: 6px;
+        --gap: 1rem;
+        --danger: #c0392b;
+        --warn: #b7791f;
       }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #15171a; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3f44;
+          --accent: #4a90d9; --field-bg: #1e2125; --danger: #f08a8a; --warn: #ffce8a;
+        }
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #15171a; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3f44;
+        --accent: #4a90d9; --field-bg: #1e2125; --danger: #f08a8a; --warn: #ffce8a;
+      }
+      :root[data-theme="light"] { color-scheme: light; }
       * { box-sizing: border-box; }
+      [hidden] { display: none !important; } /* several display:flex/grid rules below would otherwise defeat the UA hidden rule */
       html, body { margin: 0; height: 100%; }
       body {
         display: flex;
         height: 100%;
         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-        color: var(--text);
+        color: var(--fg);
         background: var(--bg);
       }
       aside {
@@ -29,47 +48,56 @@
         max-width: 82vw;
         overflow-y: auto;
         padding: 16px;
-        background: var(--panel);
+        background: var(--bg);
         border-right: 1px solid var(--border);
+        scrollbar-gutter: stable;
       }
+      .app-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+      .app-bar .titles { min-width: 0; }
       h1 { font-size: 1rem; font-weight: 650; margin: 0 0 2px; letter-spacing: -0.01em; }
-      .sub { color: var(--muted); font-size: 0.76rem; margin: 0 0 16px; }
+      .sub { color: var(--muted); font-size: 0.76rem; margin: 0; }
+      .theme-toggle { flex: 0 0 auto; width: auto; padding: 5px 9px; font-size: 0.95rem; line-height: 1; }
       .group { margin-bottom: 16px; }
       label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
       textarea, select {
-        width: 100%; font: inherit; color: var(--text);
-        background: var(--panel-2); border: 1px solid var(--border);
-        border-radius: 8px; padding: 8px 10px;
+        width: 100%; font: inherit; color: var(--fg);
+        background: var(--field-bg); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 8px 10px;
       }
       textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize: vertical; min-height: 42px; }
       textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-      #preview { min-height: 26px; margin-top: 8px; color: var(--text); overflow-x: auto; }
-      #error { min-height: 18px; margin-top: 4px; color: #ff9b9b; font-size: 0.8rem; visibility: hidden; font-family: ui-monospace, Menlo, monospace; }
-      #precisionBadge { margin-top: 8px; padding: 6px 10px; border-radius: 8px; font-size: 0.74rem; line-height: 1.45; }
-      #precisionBadge.warn { color: #ffce8a; background: rgba(240, 170, 60, 0.09); border: 1px solid rgba(240, 170, 60, 0.35); }
-      #precisionBadge.note { color: var(--muted); background: var(--panel-2); border: 1px solid var(--border); }
+      #preview { min-height: 26px; margin-top: 8px; color: var(--fg); overflow-x: auto; }
+      #error { min-height: 18px; margin-top: 4px; color: var(--danger); font-size: 0.8rem; visibility: hidden; font-family: ui-monospace, Menlo, monospace; }
+      #precisionBadge { margin-top: 8px; padding: 6px 10px; border-radius: var(--radius); font-size: 0.74rem; line-height: 1.45; }
+      #precisionBadge.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+      #precisionBadge.note { color: var(--muted); background: var(--field-bg); border: 1px solid var(--border); }
       .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       button {
-        font: inherit; cursor: pointer; color: var(--text);
-        background: var(--panel-2); border: 1px solid var(--border);
-        border-radius: 8px; padding: 8px 10px;
+        font: inherit; cursor: pointer; color: var(--fg);
+        background: var(--field-bg); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 8px 10px;
       }
       button:hover { border-color: var(--accent); }
+      button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+      button.primary:hover { filter: brightness(1.06); }
+      button.danger { color: var(--danger); }
+      button.danger:hover { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
       .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-      input[type="number"] { width: 100%; font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+      input[type="number"] { width: 100%; font: inherit; color: var(--fg); background: var(--field-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
       input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
       input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0 8px; }
-      label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: normal; font-size: 0.8rem; color: var(--text); margin: 0; }
+      label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: normal; font-size: 0.8rem; color: var(--fg); margin: 0; }
       label.check input { width: auto; accent-color: var(--accent); }
       .subval { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
       .singcount { margin: 6px 0 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.76rem; color: var(--muted); }
-      details.explain { margin-top: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
-      details.explain summary { cursor: pointer; font-size: 0.8rem; color: var(--text); }
+      details.explain { margin-top: 4px; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; background: var(--field-bg); }
+      details.explain summary { cursor: pointer; font-size: 0.8rem; color: var(--fg); }
       details.explain p, details.explain ul { font-size: 0.76rem; color: var(--muted); margin: 8px 0 0; }
       details.explain ul { padding-left: 18px; }
       details.explain li { margin: 3px 0; }
 
-      .param { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--panel-2); }
+      .param { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; background: var(--field-bg); }
       .param-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
       .param-name { font-family: ui-monospace, Menlo, monospace; color: var(--accent); font-size: 0.85rem; }
       .param-val { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); }
@@ -92,9 +120,9 @@
       .sweep-overlay { position: absolute; inset: 0; background: rgba(10, 12, 16, 0.94); display: flex; flex-direction: column; z-index: 5; }
       .sweep-overlay[hidden] { display: none; } /* the class's display:flex would otherwise override the hidden attribute, leaving the scrim over the plot */
       .sweep-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
-      .sweep-title { font-size: 0.85rem; color: var(--text); }
+      .sweep-title { font-size: 0.85rem; color: var(--fg); }
       .sweep-grid { flex: 1 1 auto; overflow: auto; padding: 14px; display: grid; grid-template-columns: repeat(var(--sweep-cols, 3), 1fr); gap: 12px; align-content: start; }
-      figure.sweep-cell { margin: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--panel); cursor: pointer; }
+      figure.sweep-cell { margin: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); cursor: pointer; }
       figure.sweep-cell:hover, figure.sweep-cell:focus { border-color: var(--accent); outline: none; }
       figure.sweep-cell img { display: block; width: 100%; height: auto; }
       figure.sweep-cell figcaption { padding: 4px 6px; font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); text-align: center; }
@@ -116,11 +144,11 @@
       .fn-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
       .fn-head label { margin: 0; }
       .fn-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
-      .fn-tab { font: inherit; cursor: pointer; color: var(--muted); background: var(--panel-2); border: none; border-radius: 0; padding: 3px 12px; font-family: ui-monospace, Menlo, monospace; }
-      .fn-tab.active { background: var(--accent); color: #0b0e13; }
-      .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--panel-2); border: 1px solid var(--accent); border-radius: 8px; overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
-      .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--text); cursor: pointer; }
-      .ac-item.active, .ac-item:hover { background: var(--accent); color: #0b0e13; }
+      .fn-tab { font: inherit; cursor: pointer; color: var(--muted); background: var(--field-bg); border: none; border-radius: 0; padding: 3px 12px; font-family: ui-monospace, Menlo, monospace; }
+      .fn-tab.active { background: var(--accent); color: var(--accent-contrast); }
+      .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--field-bg); border: 1px solid var(--accent); border-radius: var(--radius); overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+      .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--fg); cursor: pointer; }
+      .ac-item.active, .ac-item:hover { background: var(--accent); color: var(--accent-contrast); }
 
       .stage { position: relative; flex: 1 1 auto; min-width: 0; }
       canvas#view, canvas#axes { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -130,8 +158,13 @@
   </head>
   <body>
     <aside>
-      <h1>Complex Function Plotting Tool</h1>
-      <p class="sub">Domain coloring of w = f(z)</p>
+      <div class="app-bar">
+        <div class="titles">
+          <h1>Complex Function Plotting Tool</h1>
+          <p class="sub">Domain coloring of w = f(z)</p>
+        </div>
+        <button type="button" id="themeToggle" class="theme-toggle" title="Color theme: auto / light / dark" aria-label="Toggle color theme">◐</button>
+      </div>
 
       <div class="group fn-group">
         <div class="fn-head">
@@ -186,7 +219,7 @@
         </div>
         <label for="sweepSteps" style="margin-top: 8px">Steps <span class="subval" id="sweepStepsVal">9</span></label>
         <input type="range" id="sweepSteps" min="2" max="25" step="1" value="9" />
-        <button type="button" id="sweepShow" style="margin-top: 8px; width: 100%">Show sweep ▦</button>
+        <button type="button" id="sweepShow" class="primary" style="margin-top: 8px; width: 100%">Show sweep ▦</button>
       </div>
 
       <div class="group fn-group">
@@ -312,14 +345,14 @@
             <option value="4000">4000&thinsp;px</option>
           </select>
         </label>
-        <button id="savePng" type="button">Save PNG</button>
+        <button id="savePng" type="button" class="primary">Save PNG</button>
         <button id="copyImg" type="button">Copy image</button>
         <button id="copyLink" type="button">Copy link</button>
         <button id="copyTex" type="button">Copy LaTeX</button>
       </div>
 
       <div class="group actions interop">
-        <button id="importMap" type="button" title="Plot a map from another suite tool (a QD Schwarz map, a saved view)">Import map…</button>
+        <button id="importMap" type="button" class="primary" title="Plot a map from another suite tool (a QD Schwarz map, a saved view)">Import map…</button>
         <button id="copyInterop" type="button" title="Copy an #s= hand-off link for the current map + view">Copy hand-off</button>
         <button id="toDynamics" type="button" title="Open this map in Complex Dynamics">&rarr; Dynamics</button>
       </div>
