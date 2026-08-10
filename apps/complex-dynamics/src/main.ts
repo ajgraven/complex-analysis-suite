@@ -134,6 +134,7 @@ import {
 } from "./render/schwarzView";
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
+import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
 import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
@@ -152,7 +153,15 @@ import {
   type Quat,
   type SphereCamera,
 } from "./render/sphereView";
-import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz, buildPreimageTree, type PreimageTree } from "@cas/schwarz";
+import {
+  makeBoundedSchwarz,
+  makeUnboundedLaurentSchwarz,
+  buildPreimageTree,
+  sampleLimitSet,
+  boxCountingDimension,
+  pointInPolygon,
+  type PreimageTree,
+} from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
   SCHWARZ_COLORMAP_NAMES,
@@ -3109,6 +3118,12 @@ function init(): void {
   let schwarzPreimageTree: PreimageTree | null = null;
   let schwarzTilingDepth: number = SIGMA_TILING_DEFAULTS.tilingDepth;
   let schwarzTilingBudget: number = SIGMA_TILING_DEFAULTS.tilingBudget;
+  // σ limit set (F4a): the chaos-game cloud sampling the σ⁻¹ attractor (the fractal the tiling converges to) +
+  // its box-counting dimension. Computed on demand — a transient analysis (not serialized, like the tree). The
+  // cloud is drawn from w-space every paint, so it survives pan/zoom/view-switch; cleared on a new map.
+  let schwarzLimitSetCloud: Float64Array | null = null;
+  let schwarzLimitDim = NaN; // box-counting dimension of the current cloud (≈ — sample-density biased)
+  let schwarzLimitPoints = 15000; // chaos-game sample count (the control)
 
   // σ progressive render (B1) + resolution (B2). The field is re-rendered only when schwarzFieldDirty (a
   // view / coloring / map / escape change); an overlay-only repaint (hover, inspect) re-blits the cached GL
@@ -3232,6 +3247,8 @@ function init(): void {
     // orbit iterate maps through ψ = φ⁻¹ (engine.invertPhi; null where it entered K / off the branch, which
     // breaks the polyline). The pinned orbit is kept in state across a view switch, so it survives round-trips.
     if (schwarzViewMode === "plane") {
+      // Limit-set cloud (F4a) — the bottom overlay layer (the fractal dust the tiling converges to).
+      if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing);
       // ∂Ω boundary overlay (F1) — under the orbits, over the field; `poly` is the session's mask polygon.
       if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
       // Preimage tiling tree (F3c) — under the orbits (its dense dots shouldn't hide the traced orbit).
@@ -3241,6 +3258,7 @@ function init(): void {
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
     } else if (schwarzViewMode === "z") {
       const toZ = (w: Complex): Complex | null => engine.invertPhi(w); // ψ-pullback into the uniformizing z
+      if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing, { toPlot: toZ });
       if (schwarzShowBoundary) drawSchwarzUnitCircle(ctx, schwarzView, backing);
       // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
@@ -3255,6 +3273,7 @@ function init(): void {
         const uv = planeToScreenUv(w, cam);
         return uv ? [uv[0] * backing - 0.5, uv[1] * backing - 0.5] : null;
       };
+      if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing, { toPixel });
       if (schwarzShowBoundary) drawSchwarzBoundarySphere(ctx, poly, cam, backing);
       // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
@@ -3497,6 +3516,57 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  // σ limit set (F4a): the chaos game on σ⁻¹ densely samples the limit set (the fractal the tiling converges
+  // to). "Sample" computes the cloud + its box-counting dimension; the cloud draws as bright dust under the
+  // other overlays. σ⁻¹ is a numerical reconstruction, so both the set + its dimension are `≈`.
+  /** Dimension + point-count readout (honest: dim is `≈` and sample-density biased). Empty when no cloud. */
+  function renderSchwarzLimitReadout(): void {
+    const box = document.getElementById("schwarz-limit-readout");
+    if (!box) return;
+    const pts = schwarzLimitSetCloud ? schwarzLimitSetCloud.length >> 1 : 0;
+    if (!schwarzLimitSetCloud || pts === 0) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const dim = Number.isFinite(schwarzLimitDim) ? schwarzLimitDim.toFixed(3) : "—";
+    // `≈` throughout: the reconstruction is numerical AND box-counting is a rough, sample-density-biased estimate.
+    box.textContent = `dim ≈ ${dim} (box-count · ${pts.toLocaleString()} pts)`;
+  }
+  /** Sample the σ limit set by the chaos game on σ⁻¹ (schwarzLimitPoints points), then estimate its
+   *  box-counting dimension. Synchronous — a moderate point count keeps it well under a second. The restart
+   *  seeds are drawn from the boundary polygon's padded bounding box, in Ω^c = K (the same in-Ω test the field
+   *  uses). Runs only for a live session. */
+  function computeSchwarzLimitSet(): void {
+    if (!schwarzSession) return;
+    const { engine, poly, boundedOmega } = schwarzSession;
+    // The SAME Ω-membership the field / orbit tracer use: outside ∂Ω (unbounded) or inside it (bounded QD).
+    const isInOmega = (w: Complex): boolean =>
+      boundedOmega ? pointInPolygon(w, poly) : !pointInPolygon(w, poly);
+    // Restart-seed box: the boundary polygon's extent, padded 25%, so restarts land near K.
+    let minRe = Infinity, maxRe = -Infinity, minIm = Infinity, maxIm = -Infinity;
+    for (const p of poly) {
+      minRe = Math.min(minRe, p[0]); maxRe = Math.max(maxRe, p[0]);
+      minIm = Math.min(minIm, p[1]); maxIm = Math.max(maxIm, p[1]);
+    }
+    const padRe = 0.25 * (maxRe - minRe) || 1;
+    const padIm = 0.25 * (maxIm - minIm) || 1;
+    const bbox: [number, number, number, number] = [minRe - padRe, maxRe + padRe, minIm - padIm, maxIm + padIm];
+    schwarzLimitSetCloud = sampleLimitSet(engine, { n: schwarzLimitPoints, isInOmega, bbox });
+    schwarzLimitDim = boxCountingDimension(schwarzLimitSetCloud).dim;
+    renderSchwarzLimitReadout();
+    scheduleSchwarzOverlayPaint(); // the cloud is an overlay — re-blit the cached field
+  }
+  /** Drop the limit-set cloud (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzLimitSet(): void {
+    if (!schwarzLimitSetCloud) return;
+    schwarzLimitSetCloud = null;
+    schwarzLimitDim = NaN;
+    renderSchwarzLimitReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
   /**
    * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
    * and native-φ paths. Decides the render mode (GPU when WebGL2 is available, else the coarse CPU fallback
@@ -3532,10 +3602,13 @@ function init(): void {
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     schwarzHover = null;
     schwarzPreimageTree = null; // a new φ ⇒ any previous tiling tree is stale
+    schwarzLimitSetCloud = null; // …and any previous limit-set cloud
+    schwarzLimitDim = NaN;
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
     schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
     renderSchwarzTilingReadout();
+    renderSchwarzLimitReadout();
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
@@ -3753,12 +3826,14 @@ function init(): void {
       // plane, or ψ-pulled-back into the z-disk (∂Ω → the unit circle, the orbit through engine.invertPhi).
       // (The CPU fallback below reuses the on-screen canvas, already drawn with the same gating.)
       if (schwarzViewMode === "plane") {
+        if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size);
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
       } else if (schwarzViewMode === "z") {
         const engine = schwarzSession.engine;
         const toZ = (w: Complex): Complex | null => engine.invertPhi(w);
+        if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPlot: toZ });
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
@@ -3768,6 +3843,7 @@ function init(): void {
           const uv = planeToScreenUv(w, cam);
           return uv ? [uv[0] * size - 0.5, uv[1] * size - 0.5] : null;
         };
+        if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPixel });
         if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPixel });
@@ -4332,6 +4408,24 @@ function init(): void {
       });
     }
     clearBtn?.addEventListener("click", clearSchwarzTiling);
+  }
+
+  // σ limit set (F4a): "sample" runs the chaos game on σ⁻¹ (the point count) and shows the cloud + its
+  // box-counting dimension; "clear" removes it. A transient analysis (computed on demand, not serialized).
+  {
+    const ptsIn = document.getElementById("schwarz-limit-points") as HTMLInputElement | null;
+    const sampleBtn = document.getElementById("schwarz-limit-sample");
+    const clearBtn = document.getElementById("schwarz-limit-clear");
+    if (ptsIn) {
+      ptsIn.value = String(schwarzLimitPoints);
+      ptsIn.addEventListener("change", () => {
+        const v = Math.round(Number(ptsIn.value));
+        if (Number.isFinite(v)) schwarzLimitPoints = Math.max(2000, Math.min(100000, v));
+        ptsIn.value = String(schwarzLimitPoints); // normalise / restore on a bad value
+      });
+    }
+    sampleBtn?.addEventListener("click", computeSchwarzLimitSet);
+    clearBtn?.addEventListener("click", clearSchwarzLimitSet);
   }
 
   // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate

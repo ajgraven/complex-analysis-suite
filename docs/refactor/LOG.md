@@ -2404,3 +2404,30 @@
   underestimate), so the dimension is a rough `≈`, never certified. **F4a-i complete — the limit-set kernels are
   in `@cas/schwarz` + golden-tested; F4a-ii wires the CD limit-set analysis card (chaos-game overlay + `(≈)`
   dimension readout across the three views).**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4a-ii — the CD limit-set
+  analysis card):** the σ limit set becomes an interactive analysis card in Complex Dynamics — **"sample limit
+  set"** runs the F4a-i chaos game on σ⁻¹ and paints the resulting cloud (the fractal the tiling converges to,
+  ≈ the black non-escaping set) under the other overlays, reporting its **box-counting dimension** `(≈)`. A new
+  `schwarzLimitSetOverlay.ts` (`drawSchwarzLimitSet`) fillRects one bright-cyan translucent dot per sample so
+  density accumulates along the fractal seams; projection reuses the σ-orbit / tiling dispatch verbatim, so the
+  cloud ψ-mirrors into the z-disk and projects onto the sphere (null projections dropped). In `main.ts`:
+  `computeSchwarzLimitSet` builds the SAME `isInOmega` the field uses (via `pointInPolygon` on the session's
+  boundary polygon) + a 25%-padded restart bbox, runs `sampleLimitSet` (a user point count, 2000–100000, default
+  15000) synchronously, then `boxCountingDimension` for the dimension; the readout reads `dim ≈ d.ddd (box-count ·
+  N pts)`. A Limit-set control group adds the point-count input + "sample"/"clear" buttons; the cloud is drawn
+  from w-space every paint (survives pan/zoom/view-switch), cleared on a new map, baked into the PNG export under
+  the boundary/tree/orbit, and — being a compute-on-demand analysis, not a view property — NOT serialized (like
+  the pinned orbit / tree). **Honest labeling:** the readout, the card title ("dimension (≈)"), and the hint all
+  carry `≈`, because σ⁻¹ is a numerical reconstruction AND box-counting is a rough, sample-density-biased estimate
+  — visible live in the smoke, where the deltoid reads dim ≈ 0.604 at 6k points and 0.688 at 10k (the saturation
+  plateau receding as density rises). Green: typecheck + lint + node **818 → 823** (+5 schwarzLimitSetOverlay —
+  one fillRect per on-canvas sample, a null projection drops the sample, toPixel precedence + a fully-occluded
+  ball draws nothing, off-canvas samples skipped, empty cloud a no-op; appState opt-out updated for the sample-
+  count control). VERIFIED (Playwright, **9/9**): sampling shows the `dim ≈` readout with a finite dimension +
+  point count; the cloud draws over the field; it ψ-mirrors into the z-disk and projects onto the sphere
+  (surviving both view switches); re-sampling with more points updates the readout; and clear removes it +
+  restores the field. Captured the deltoid limit set (cyan fractal dust, densest at the tiling cusps — the
+  σ⁻¹ residual set). **F4a complete — the σ limit set + its box-counting dimension are in `@cas/schwarz` and
+  live as a CD analysis card across the three σ views. This closes the σ⁻¹ "structure wave" (F3 tiling → F4a
+  limit set).** The remaining F4 cards (F4b level curves · F4c/F4e orbit families · F4d cycles · F4h
+  singularities · F4i explicit σ form — mostly cheap forward-only wins) stay à-la-carte for the next pick.

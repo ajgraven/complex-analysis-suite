@@ -789,6 +789,49 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Limit set — the σ⁻¹ chaos game + box-counting dimension (F4a). "Sample" densely samples the
+                     limit set (the fractal the tiling converges to, ≈ the black non-escaping set) by a random
+                     walk through σ⁻¹, and reports its box-counting dimension. Both the set and the dimension are
+                     ≈ — a numerical reconstruction + a rough, sample-density-biased estimate. A transient
+                     analysis: computed on demand, drawn under the other overlays, and not serialized. -->
+                <details class="control-group" id="schwarz-limit-group">
+                  <summary>Limit set — dimension (≈)</summary>
+                  <div class="control-grid">
+                    <p class="schwarz-inspect-hint">
+                      Sample the σ limit set (the fractal the tiling converges to) by the chaos game on σ⁻¹, and
+                      estimate its box-counting dimension (≈).
+                      <button
+                        class="gloss-link"
+                        type="button"
+                        data-term="schwarz-reflection"
+                        aria-label="What is the Schwarz reflection σ?"
+                      >
+                        ?
+                      </button>
+                    </p>
+                    <div class="field">
+                      <label for="schwarz-limit-points">sample points</label>
+                      <input
+                        id="schwarz-limit-points"
+                        type="number"
+                        min="2000"
+                        max="100000"
+                        step="1000"
+                        inputmode="numeric"
+                        value="15000"
+                        title="Chaos-game samples. More points sharpen the cloud and push the box-counting saturation finer (denser, slightly slower)."
+                      />
+                    </div>
+                    <div class="field schwarz-limit-actions">
+                      <button id="schwarz-limit-sample" type="button" class="primary">sample limit set</button>
+                      <button id="schwarz-limit-clear" type="button" title="Remove the limit-set cloud">
+                        clear
+                      </button>
+                    </div>
+                    <div id="schwarz-limit-readout" class="schwarz-inspect" aria-live="polite" hidden></div>
+                  </div>
+                </details>
+
                 <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
                      in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
                 <details class="control-group" id="schwarz-render-group">
