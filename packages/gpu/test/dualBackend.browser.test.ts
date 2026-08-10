@@ -41,13 +41,18 @@ describe("@cas/gpu dual-backend: real GLSL ≈ JS across the corpus (browser Web
 
   // Tolerance is RENDERER-appropriate. Headless Chromium's WebGL2 is SwiftShader (software) in CI: its
   // ARITHMETIC (add/sub/mul/div) is float32-exact, so poly/rational maps agree to float32 ε (≤ 2e-6), but
-  // it approximates the TRANSCENDENTALS exp/log/sin/cos/tan in software at only ~1e-3 relative precision —
+  // it approximates the TRANSCENDENTALS (exp / log / trig / hyperbolic) in software at only ~1e-3 precision —
   // far looser than a hardware GPU or float64. (This was measured here: `exp(z)+c` came out ~7e-4 while all
   // arithmetic maps stayed < 2e-6; the dualBackend header's ~1.5e-7 was a hardware-GPU run.) So the shader
   // FORMULA is pinned tightly by the arithmetic maps + the node dualBackend core; transcendental maps get a
   // bound that reflects SwiftShader's transcendental accuracy (still catches a gross formula bug ≫ 5e-3).
+  // "Transcendental" = built on exp / log / a trig or hyperbolic function. The pattern spans the whole
+  // trig/hyperbolic family via an optional `a` (arc-) prefix and `h` (hyperbolic) suffix, so `sinh` / `cosh`
+  // / `tanh` (and `asinh` / `sech` / …) are classified alongside `sin` / `exp` — not left on the
+  // arithmetic-tight 2e-6 bound they can't meet in software float32 (they're derived from `exp`, ~3e-4 on
+  // SwiftShader). Fixes a gap: `\bsin\b` never matched `sinh` (the trailing `h` blocks the word boundary).
   const isTranscendental = (src: string) =>
-    /\b(exp|log|sin|cos|tan|lambertw|gamma|zeta)\b/.test(src);
+    /\b(exp|log|lambertw|gamma|zeta|a?(sin|cos|tan|sec|csc|cot)h?)\b/.test(src);
   it.each(DUAL_BACKEND_CORPUS)(
     "$name: GLSL matches the JS backend (renderer-appropriate ε)",
     (c) => {
