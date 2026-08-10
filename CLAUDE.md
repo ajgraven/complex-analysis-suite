@@ -62,7 +62,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
   corpus representing both apps' needs.
 - **One dependency direction:** packages import downward only; apps import packages; no
   app imports another app; no cycles. Enforced with ESLint `no-restricted-imports`
-  (`eslint.config.js`); a `dependency-cruiser` check is a planned follow-on, not yet wired.
+  (`eslint.config.js`); a `dependency-cruiser` check is also wired — `pnpm dep:check`
+  (`depcruise packages apps`, config `.dependency-cruiser.cjs`), run inside `pnpm lint` and in CI.
 - **Honest labeling** of computed results (`=` exact, `≤` rigorous bound, `≈` estimate) —
   especially anything from the correspondence tool's straightening/surgery, which is
   exploratory and must never read as certified.

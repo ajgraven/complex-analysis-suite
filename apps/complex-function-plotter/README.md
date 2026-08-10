@@ -11,7 +11,10 @@ reimplementing them:
   compile/link, colormap LUTs.
 - **`@cas/interchange`** — share-links (`#vs=`) and suite hand-off (import a Schwarz reflection from
   Quadrature Domains, export a view to Complex Dynamics).
-- **`@cas/core`** — complex arithmetic and root-finding (added when the instruments land).
+
+The app rides those **three** shared packages. The zero/pole finder's root-finding (Newton + the
+argument principle) is small and app-local — built on `@cas/expr`'s `Complex` and symbolic `f'`, not on
+`@cas/core` (a future extraction target if a second consumer needs it, per ADR-0007).
 
 Design record: [`docs/design/complex-function-plotter-plan.md`](../../docs/design/complex-function-plotter-plan.md)
 (the phase-gated build plan) and
@@ -31,7 +34,7 @@ pnpm --filter complex-function-plotter test     # Vitest suite
 Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publish under
 `complex-function-plotter/` beneath the launcher).
 
-## Status — Phase 5 in progress (the 3D engine)
+## Status — complete (Phases 0–6)
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
@@ -118,10 +121,11 @@ Plus the Phase-2 research tool:
   **colorblind-safe** colormap + the CVD-simulation preview (the DLMF four-colour map is honestly flagged as
   not CVD-safe).
 
-It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
-rational maps, and round-trips a map to Complex Dynamics and back. Built into CI and **publish-ready** — the
-launcher card links to it and `deploy-pages.yml` copies it into the combined site; it goes live on the next
-merge to `master`.
+It visually matches the canonical Wegert enhanced-portrait plate (checked by hand against the reference
+during development — an automated pixel-diff golden is deferred, see below), recovers the known zero/pole
+counts of rational maps (unit-tested via the argument principle), and round-trips a map to Complex Dynamics
+and back. It is built into CI and **published** — the launcher card links to it and `deploy-pages.yml`
+copies it into the combined site.
 
 **All phases (0–6) are complete.** Phase 4 (special functions & the DLMF mode); Phase 5 (the 3D engine —
 analytic **landscape** with `f'/f` shading, the **Riemann sphere**, and **linked 2D↔3D navigation**); and

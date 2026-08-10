@@ -879,9 +879,9 @@ forking it.
 3. [x] Phase 2 — enhanced portraits (rings / sectors / conformal grid / chessboards / Re-Im grid, `fwidth` AA),
        colormap library + colorblind-safe + CVD preview, the zero/pole instrument (argument principle) + level
        sets, and the honest-labeling / uncertainty layer. (`cfca14d`, `f3eb87b`, `2b72e63`, `e894be1`)
-4. [ ] Phase 3 — parameters & families; opened with the `@cas/expr` named-parameter follow-on ADR
-       ([ADR-0011](#adr-0011-casexpr-named-parameters)).
-5. [ ] Publish (flip the launcher card + add the `deploy-pages.yml` `cp`) at the plan's quality gate (Phase 6).
+4. [x] Phase 3 — parameters & families; opened with the `@cas/expr` named-parameter follow-on ADR
+       ([ADR-0011](#adr-0011-casexpr-named-parameters)). Shipped (G1/G2/G4 + B5).
+5. [x] Publish (flipped the launcher card + added the `deploy-pages.yml` `cp`) at the Phase-6 gate; merged in #247.
 
 ---
 
@@ -981,11 +981,11 @@ throw on the CPU — a silent dual-backend split; with it, both agree.
        `evaluate.ts` (scope seed + `f(...)` recursion); `CompileOptions { params }` + general `uParam_<name>`
        aliases (legacy `a → uA` default) in `glsl.ts`. Guarded by CD's `expr` / `glslCodegen` and expr's `paramA`
        suites green before & after. _(the commit introducing this ADR)_
-2. [ ] Plotter **G1** — auto-detected parameter controls (real slider on a segment; complex as a draggable ℂ-pad),
+2. [x] Plotter **G1** — auto-detected parameter controls (real slider on a segment; complex as a draggable ℂ-pad),
        each bound to a `uParam_<name>` uniform, refreshed without a recompile.
-3. [ ] Plotter **G2 / G4** — the reserved animation variable `t` (scrub / play / loop / speed) and parameter
+3. [x] Plotter **G2 / G4** — the reserved animation variable `t` (scrub / play / loop / speed) and parameter
        sweeps, as named parameters with a driver.
-4. [ ] Complex literals & extra constants — `2i`, `tau`, `phi`, `γ` (**B5**) — the small additive lexer / const
+4. [x] Complex literals & extra constants — `2i`, `tau`, `phi`, `γ` (**B5**) — the small additive lexer / const
        growth that rides alongside.
 
 ---

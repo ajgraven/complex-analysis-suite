@@ -86,7 +86,7 @@ export interface ColorState {
   hueSign: number;
   /** Colour-vision-deficiency preview: 0 none, 1 protan, 2 deutan, 3 tritan (a viewing aid). */
   cvd: number;
-  /** 1 = flag undersampled pixels (near poles / essential singularities). */
+  /** 1 = flag undersampled pixels (where the phase winds fast — near poles, essential singularities, or zeros). */
   uncertainty: number;
   /** Draw the |f| = c contour when > 0 (0 = off). */
   levelAbs: number;

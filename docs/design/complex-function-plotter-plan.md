@@ -57,12 +57,14 @@
 | **6A — publication export**             | ✅ done     | `150464b`                                  | **hi-res PNG export** (K1): any view (2D / landscape / sphere) re-renders at a chosen long-edge — clamped to the GPU `MAX_TEXTURE_SIZE` — via `Plot.exportBlob` (the `preserveDrawingBuffer` context means grow-buffer→paint→`toBlob`, no FBO); **reproducibility metadata** (K3): the share-link is embedded as PNG `tEXt` (`render/pngMetadata.ts`, ported from CD) so a figure carries its exact map/view; **copy-image** (K9) writes the same to the clipboard. Pure size algebra in `render/exportImage.ts`. Headless GT: a 2000px portrait downloads with `Software` + `cfp:url` tEXt, clipboard copy works, live view restores                                                                                                                           |
 | **6B — suite interop (K7/K8)**          | ✅ done     | `ec5de49`                                  | the `@cas/interchange` `#s=` hand-off. **Import** (K7, `interchange/importMap.ts` ported from CD): a QD φ / a saved View / a bare rational·Laurent·expr map → an `@cas/expr` source; a numerical Schwarz **σ isn't a closed form**, so the plotter plots its generating **φ**, honestly labelled. **Export** (K8, `interchange/exportView.ts`): the current map+view → a `view` Envelope + `#s=` link, and **→ Dynamics** opens it in Complex Dynamics (which reads `#s=` on load). Every converted coeff string is re-parsed through `@cas/expr` (no silent factor error; ADR-0006 CANONICAL). Round-trip GT: the deltoid φ imports+renders, a z² link round-trips in the plotter AND re-opens in CD (`#inpf` = z²), no errors                                 |
 | **6C — accessibility (L7/L8)**          | ✅ done     | `e3fbead`                                  | **keyboard nav** (L7, `ui/navigation.ts` pure `keyToNav`): the focusable canvas takes arrows (pan / orbit / arcball), `+`/`-` (zoom / dolly), `0`/`Home` (reset) — mode-aware, same ops as the pointer path; **two-finger pinch-zoom** (pure `pinchFactor`) added to the pointer handlers; canvas `role`/`aria-label`. **L8**: a UI note points to the colorblind-safe colormap + CVD preview (DLMF four-colour honestly flagged not-CVD-safe). Headless GT: 2D pan/zoom + **Home restores exactly (diff 0.000)**, 3D orbit, sphere arcball, pinch-zoom all change the image; canvas focusable + labelled                                                                                                                                                       |
-| **6D — publish gate**                   | ✅ done     | _⚠ backfill hash next commit_              | wrote the **3D-slice extraction ADR** ([ADR-0012](../DECISIONS.md#adr-0012)): extract the `mat4` + quaternion core to `@cas/gpu`, keep the app-specific 3D local, migrate incrementally (physical move deferred) — §7's "three ADRs written" now holds. Flipped the launcher card "Coming soon" → a `complex-function-plotter/` link (honest description — dropped the unshipped residues/winding) and added the `cp` line to `deploy-pages.yml`; the plotter ships **no workers** so `check-built-artifacts.mjs` is unchanged. Goes live on the next merge to `master`                                                                                                                                                                                         |
+| **6D — publish gate**                   | ✅ done     | `36e8ebf`              | wrote the **3D-slice extraction ADR** ([ADR-0012](../DECISIONS.md#adr-0012)): extract the `mat4` + quaternion core to `@cas/gpu`, keep the app-specific 3D local, migrate incrementally (physical move deferred) — §7's "three ADRs written" now holds. Flipped the launcher card "Coming soon" → a `complex-function-plotter/` link (honest description — dropped the unshipped residues/winding) and added the `cp` line to `deploy-pages.yml`; the plotter ships **no workers** so `check-built-artifacts.mjs` is unchanged. Merged in **#247**, live on `master` (post-merge fix `48b2bfc`: hyperbolics classified as transcendental in the browser dual-backend tolerance)                                                                                                                                                                                         |
 | **6 — Export, interop, a11y & publish** | ✅ **done** | _all items landed; publish-ready_          | K1, K3, K7, K8, K9, L7, L8 → **publish** · ~~6A export (K1/K3/K9)~~ ✅ · ~~6B interop (K7/K8)~~ ✅ · ~~6C a11y (L7/L8)~~ ✅ · ~~6D publish (launcher + `deploy-pages.yml` + ADR-0012)~~ ✅ · GT: interop round-trip (QD φ → plot → View → CD) green                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 
-**Workspace state at the Phase-2 gate:** green — `pnpm typecheck` / `pnpm lint` (+ dependency-cruiser) /
-`pnpm test` (**2406** tests, incl. the app's `smoke` / `colormaps` / `colorShader` / `viewState` /
-`presets` / `singularities` specs) / `pnpm build`.
+**Workspace state (final gate):** green — `pnpm typecheck` / `pnpm lint` (+ dependency-cruiser) /
+`pnpm test` (**2587** tests across **301** files, incl. the plotter's 18 specs — `smoke` / `colormaps` /
+`colorShader` / `surface3d` / `sphere` / `render3d` / `viewState` / `presets` / `singularities` /
+`precision` / `interop` / `navigation` / `params` / `animate` / `sweep` / `autocomplete` / `exportImage`
+/ `pngMetadata`) / `pnpm build`.
 
 **Local render verification** (used to validate each phase — the string tests don't compile GLSL): build,
 serve `apps/complex-function-plotter/dist` with a static server, and drive the **pre-installed** Chromium
@@ -377,9 +379,13 @@ schema as a migratable format (the suite's share-link guardrail).
 
 ### 1.10 Dependency direction & lint boundaries
 
-The app imports packages only (`@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/core`), never a
-sibling app (lint-guarded `no-restricted-imports`; add `complex-function-plotter` to `APP_NAMES`).
-Any extraction (1.6) moves code _downward_ into a package. No cycles.
+The app imports packages only, never a sibling app (lint-guarded `no-restricted-imports`; add
+`complex-function-plotter` to `APP_NAMES`). Any extraction (1.6) moves code _downward_ into a package.
+No cycles. **As shipped it depends on three packages — `@cas/expr`, `@cas/gpu`, `@cas/interchange`** —
+plus `katex`; `@cas/core` was planned for the instruments' root-finding but proved unnecessary (the
+zero/pole finder is small and app-local on `@cas/expr`'s `Complex`), so it stays a future extraction
+target (ADR-0007), not a dependency. Earlier "`@cas/core` (Durand–Kerner/Newton)" notes below are that
+original plan, not the final wiring.
 
 ---
 
@@ -573,7 +579,8 @@ assemble step. `base:"./"` keeps assets path-independent. No workers planned →
 
 All **67 Core + v1** items shipped; each phase's ground-truth check passing; `@cas/expr` extended
 backward-compatibly with parity tests for every added function; the honest-labeling/uncertainty
-layer present; interop round-trip (QD σ → plot → View → CD) green; visual-regression goldens for the
-Wegert plate, DLMF Γ/ζ, and the Γ landscape committed; the app **published** in the combined Pages
-site; three ADRs written (§4, the 3D one when P5 proves the API). Later + Exploratory remain a
-tracked backlog with known insertion points (§3).
+layer present; interop round-trip (QD σ → plot → View → CD) green; each render feature checked against
+its reference by a **manual** headless-Chromium ground-truth run (Wegert plate, DLMF Γ/ζ, the Γ
+landscape) — an automated **committed** pixel-diff golden harness is _deferred_ (§1.9), so these are
+not CI-gated goldens; the app **published** in the combined Pages site; three ADRs written (§4, the 3D
+one when P5 proves the API). Later + Exploratory remain a tracked backlog with known insertion points (§3).

@@ -136,8 +136,9 @@ export function ortho(halfW: number, halfH: number, near: number, far: number): 
 
 /**
  * Apply `m` to the point `p` (as `(p, 1)`), then do the perspective divide — the full model-view-
- * projection of a world point down to normalized device coordinates. `w ≤ 0` (behind the camera) is
- * left un-divided by flooring `|w|`, which is enough for the unit tests that only probe in-front points.
+ * projection of a world point down to normalized device coordinates. Only a near-zero `w` (|w| < 1e-30)
+ * is floored to avoid a divide-by-zero; any other `w`, including a normal behind-the-camera `w < 0`,
+ * divides as usual. Enough for the unit tests, which only probe in-front points.
  */
 export function transformPoint(m: Mat4, p: Vec3): Vec3 {
   const x = m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12];
