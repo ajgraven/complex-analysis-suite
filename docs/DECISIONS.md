@@ -19,9 +19,10 @@ Format follows Michael Nygard's ADR convention.
 | [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) | Extract `@cas/exact`; keep QD's `sym-core` separate | Accepted |
 | [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics) | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics | Accepted |
 | [0010](#adr-0010-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one) | The Riemann-map tool is a new app (not a mode in an existing tool) | Accepted |
+| [0011](#adr-0011-extract-casdynamics-on-the-second-consumer-rule-riemann-map) | Extract `@cas/dynamics` (Böttcher exterior maps); Riemann Map is the second consumer | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All ten are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All eleven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first *follow-on*** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -29,7 +30,9 @@ Format follows Michael Nygard's ADR convention.
 > different kind — a UI/product decision (σ becomes a first-class peer *view* in Complex Dynamics), not an
 > extraction. **0010 is a third follow-on** — a topology decision occasioned by the new tool's own build:
 > the Riemann-map studio is a *new app*, not a mode in an existing one (the mirror image of 0009's call).
-> Supersede rather than rewrite if any change later.
+> **0011 is a fourth follow-on** — the first *extraction* since [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate):
+> the Riemann-map tool is the second consumer of Complex Dynamics' inverse-Böttcher machinery, so it moves
+> into a new `@cas/dynamics` package (the ADR-0007 rule again). Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
 > [migration runbook](MIGRATION.md) ran to completion — with two conscious deviations recorded
@@ -822,3 +825,86 @@ recipe) and letting the new app own general construction, with the interchange h
 3. [ ] Record the **numeric-linear-algebra seam** and the **`@cas/interchange` extension** (new
        `MapSpec` variants, minor version bump) as their own follow-on ADRs when they materialize
        (plan Phases 2–3).
+
+---
+
+## ADR-0011: Extract `@cas/dynamics` on the second-consumer rule (Riemann Map)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*The first *extraction* follow-on since [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate),
+and the genesis of the long-planned `@cas/dynamics` domain package
+([ARCHITECTURE §3](ARCHITECTURE.md#3-what-each-package-owns), previously "never built"). It is
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) working exactly as designed: a package
+comes into being the moment a **second consumer** needs it — here, the Riemann-map app's P2 (Böttcher /
+dynamics Riemann maps).*
+
+### Context
+Complex Dynamics' `src/render/uniformize.ts` is the suite's inverse-Böttcher engine: the Laurent
+coefficients ψ(w) = γ₁·w + Σ b_k w^{-k} that uniformize the **complement of a filled Julia set** for the
+z^d + c / general-polynomial / rational families (and the exterior map of the multibrot connectedness
+locus), plus the capacity γ₁ (leading coefficient), a connectivity test, and boundary reconstruction.
+
+The Riemann-map app's P2 needs exactly this — capacity, the exterior-map coefficients, the boundary
+overlay, and the Complex-Dynamics ↔ Riemann-map hand-off (emit a Julia exterior as an interchange
+`LaurentMap`). That is a **second consumer**. The [dependency rule](ARCHITECTURE.md#4-the-dependency-rule)
+forbids an app importing another app, so reuse means *extract to a package* — and `uniformize.ts` is
+already package-shaped: **pure** (depends only on `@cas/core` + `@cas/expr`, no DOM/GL/CD-internal
+coupling), and already covered by 31 unit tests.
+
+### Decision
+Extract `uniformize.ts` and its two test files into a new **`@cas/dynamics`** package (its genesis),
+consumed by Complex Dynamics (behavior unchanged) and Riemann Map. Moved with `git mv` (history
+preserved, per the provenance guardrail); the **only** code change is the type import
+`../complex` → `@cas/expr` (the identical `[re, im]` tuple). **Scope it minimally:** only the
+exterior-Böttcher machinery moves now. **External-ray tracing (`rays.ts`) stays in Complex Dynamics**
+until the Riemann-map app actually draws external rays (P2c) — at which point it is the second consumer
+of *that* module and the extraction is recorded as a follow-on. Escape-time, cycle classification, and
+the Tricorn model space likewise stay app-local until a second consumer forces them.
+
+### Options Considered
+
+#### Option A: Extract `@cas/dynamics` (this ADR)
+**Pros:** the code is already pure, tested, and downward-only, so the move is mechanical and
+behavior-preserving; a fix lands once for both apps; unlocks capacity / coefficients / boundary / the
+interchange hand-off in Riemann Map; realizes the planned domain package on real evidence rather than
+up-front speculation. **Cons:** "the Böttcher engine" now lives outside the app that authored it (a reader
+of CD follows one import); a sixth `@cas/*` package.
+
+#### Option B: Reimplement the inverse-Böttcher series in the Riemann-map app
+**Pros:** no change to Complex Dynamics. **Cons:** duplicates ~370 lines of the most delicate,
+correctness-critical math in the suite (a triangular series recursion whose every capacity/coefficient
+claim depends on it); a bug would be fixed once and survive once — precisely the drift the monorepo
+exists to prevent. Rejected against the north star.
+
+#### Option C: Import Complex Dynamics from the Riemann-map app
+**Pros:** none beyond "no new package". **Cons:** violates the one graph rule the architecture actively
+enforces (no app imports another app — ESLint + dependency-cruiser). Rejected on principle.
+
+### Trade-off Analysis
+This is the cheapest possible extraction (a pure, already-tested module with one type-import edit) against
+the highest-value seam (the exterior Riemann map is *the* object both apps share). The only real cost —
+a sixth package and a moved file — is exactly the cost ADR-0007 accepts in exchange for single-sourcing
+shared mathematics. Keeping `rays.ts` and the rest of the dynamics surface app-local for now honors the
+same rule symmetrically: don't extract what has only one consumer yet.
+
+### Consequences
+- **Easier:** Riemann Map builds capacity / coefficient / boundary readouts and the CD hand-off on a
+  shared, tested kernel; a Böttcher-math fix lands once; the domain package finally exists to grow into.
+- **Harder:** the inverse-Böttcher engine is one hop from Complex Dynamics now (mitigated: `@cas/dynamics`
+  is small and its README/exports name the surface); a sixth package to hold in mind (the suite ships
+  **six** shared packages now, not five).
+- **Watch for:** `rays.ts` — the obvious next extraction, gated on Riemann Map drawing external rays
+  (P2c). Record it as a follow-on then, not before.
+- **Revisit if:** a third consumer or the rest of the planned dynamics surface (escape-time, ray tracing,
+  cycle/multiplier classification, the Tricorn model space) is needed — grow `@cas/dynamics` accordingly.
+
+### Action Items
+1. [x] `git mv` `uniformize.ts` + its two tests into `packages/dynamics`; retarget the `../complex`
+       type import to `@cas/expr`. Verified: `@cas/dynamics` typecheck + 31 tests + lint green.
+2. [x] Rewire Complex Dynamics (`main.ts`, `render/juliaProperties.ts`, `render/overlay.ts`) to
+       `@cas/dynamics`; add the dependency to Complex Dynamics and Riemann Map; register the package in
+       `vitest.workspace.ts` and the test-census gate. Verified: full workspace lint / typecheck / test
+       (288 files across 11 projects) / build green — behavior-preserving.
+3. [ ] Build Riemann Map's capacity / exterior-coefficient / boundary-overlay readouts on it (P2b).
+4. [ ] Extract `rays.ts` to `@cas/dynamics` when Riemann Map draws external rays (P2c) — a follow-on note.

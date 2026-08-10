@@ -19,7 +19,7 @@ import { makeComplexFn, getComplexFn, getEscapeFn } from "@cas/expr/evaluate";
 import { lyapunovJacobian } from "./jacobian";
 import { inspect } from "./inspect";
 import { polynomialCoeffs } from "./critical";
-import { juliaExteriorCoeffs } from "./uniformize";
+import { juliaExteriorCoeffs } from "@cas/dynamics";
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
 

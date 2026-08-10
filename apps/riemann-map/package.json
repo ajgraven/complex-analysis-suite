@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@cas/core": "workspace:*",
+    "@cas/dynamics": "workspace:*",
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
