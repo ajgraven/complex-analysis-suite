@@ -107,6 +107,13 @@ Plus the Phase-2 research tool:
   Complex Dynamics (which reads the `#s=` hash on load). Everything travels in the CANONICAL convention
   (ADR-0006), and every converted coefficient string is parsed back through the same `@cas/expr` the render
   uses, so a factor error can't slip through.
+- **Accessibility** (L7/L8, Phase 6) — the plot canvas is keyboard-drivable (`ui/navigation.ts`): once
+  focused, **arrow keys** pan / orbit / rotate, **`+` / `-`** zoom or dolly, and **`0` / `Home`** reset —
+  mode-aware, the same operations as the pointer path. **Two-finger pinch** zooms (or dollies) on touch, on
+  top of the single-finger pan / orbit / arcball the pointer handlers already give. The canvas carries a
+  `role` + `aria-label` describing the controls, and a UI note points colorblind users at the
+  **colorblind-safe** colormap + the CVD-simulation preview (the DLMF four-colour map is honestly flagged as
+  not CVD-safe).
 
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
 rational maps, and round-trips a map to Complex Dynamics and back. Built into CI, **not yet published** (the
@@ -114,10 +121,11 @@ launcher lists it as "Coming soon").
 
 Phase 4 (special functions & the DLMF mode) and the core of Phase 5 (the 3D engine — analytic
 **landscape** with `f'/f` shading, and the **Riemann sphere**) are complete. **Phase 6 (export, interop,
-a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image (6A)** and
-**suite interop (6B: import/export a map, → Complex Dynamics)** above are in; accessibility (6C) precedes the
-publish flip. Linked 2D↔3D navigation (5D) + the 3D-slice extraction ADR are the parked remainder of
-Phase 5. See [the plan](../../docs/design/complex-function-plotter-plan.md).
+a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image (6A)**,
+**suite interop (6B: import/export a map, → Complex Dynamics)**, and **keyboard / touch / CVD accessibility
+(6C)** above are in; only the **publish flip (6D)** remains. Linked 2D↔3D navigation (5D) + the 3D-slice
+extraction ADR are the parked remainder of Phase 5. See
+[the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
 
@@ -138,6 +146,7 @@ Phase 5. See [the plan](../../docs/design/complex-function-plotter-plan.md).
 | `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                          |
 | `ui/autocomplete.ts`        | the expression-box name autocomplete (A5): pure `wordAt` / `filterCandidates` + the menu / keyboard wiring                                                   |
 | `ui/precision.ts`           | the float32 honest-labeling policy (Phase 4): `precisionNote(calledFns)` → the ζ warn / Γ note the badge shows                                               |
+| `ui/navigation.ts`          | pure a11y helpers (L7): `keyToNav(key)` → a mode-agnostic nav intent (arrows / ± / reset), and the two-finger `pinchFactor` math                             |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                                |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                                 |
 | `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                               |
@@ -168,9 +177,9 @@ badge policy — ζ warn / Γ note, strongest-first, over the `parse → calledF
 path), `pngMetadata.test.ts` (the export `tEXt` inject/read round-trip — canonical CRC-32, image bytes
 untouched, Latin-1 coercion, non-PNG passthrough), `exportImage.test.ts` (the hi-res export size algebra
 — clamp to the GPU max, aspect-preserving dims, filename sanitising), `interop.test.ts` (the K7/K8 suite
-hand-off — MapSpec→expr conversion **re-parsed through `@cas/expr`**, the σ→φ redirect, envelope round-trip
-
-- validation, the `→ Dynamics` deep-link), and `singularities.test.ts` (the
-  zero/pole finder recovers known counts and orders). Coloring
-  correctness is additionally checked visually against reference plates (the Wegert enhanced-portrait)
-  during development; an automated pixel-diff visual-regression harness is deferred.
+hand-off — MapSpec→expr conversion **re-parsed through `@cas/expr`**, the σ→φ redirect, envelope
+round-trip and validation, the `→ Dynamics` deep-link), `navigation.test.ts` (the a11y key→intent map and
+the pinch-zoom factor — direction, clamp, guards), and `singularities.test.ts` (the zero/pole finder
+recovers known counts and orders). Coloring correctness is additionally checked visually against reference
+plates (the Wegert enhanced-portrait) during development; an automated pixel-diff visual-regression harness
+is deferred.

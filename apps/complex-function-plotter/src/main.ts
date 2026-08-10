@@ -46,6 +46,14 @@ import { createAnimator, DEFAULT_ANIM } from "./ui/animate.js";
 import { sweepValues, renderMontage } from "./ui/sweep.js";
 import { createAutocomplete, type Candidate } from "./ui/autocomplete.js";
 import { precisionNote } from "./ui/precision.js";
+import {
+  keyToNav,
+  pointerDistance,
+  pointerMidpoint,
+  pinchFactor,
+  type NavIntent,
+  type Pt,
+} from "./ui/navigation.js";
 import { findSingularities, type Singularities } from "./analysis/singularities.js";
 import {
   decodeState,
@@ -894,10 +902,14 @@ function main(): void {
     if (parg instanceof HTMLElement) parg.textContent = fmtNum(Math.atan2(w[1], w[0]));
   };
 
-  // 2D: pan + zoom-to-cursor, probe when idle. 3D: orbit + dolly. Sphere: arcball rotate + dolly.
+  // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
+  // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
+  // operations for a mouse-free / accessible path (L7).
   let grabWorld: Complex | null = null;
   let orbitLast: { x: number; y: number } | null = null;
   let sphereLast: [number, number] | null = null;
+  const activePointers = new Map<number, Pt>();
+  let pinchPrev: number | null = null;
   const canvasUv = (clientX: number, clientY: number): [number, number] => {
     const r = canvas.getBoundingClientRect();
     return [
@@ -905,7 +917,22 @@ function main(): void {
       r.height > 0 ? (clientY - r.top) / r.height : 0,
     ];
   };
+  const twoPointers = (): [Pt, Pt] => {
+    const it = activePointers.values();
+    return [it.next().value as Pt, it.next().value as Pt];
+  };
   canvas.addEventListener("pointerdown", (e) => {
+    canvas.focus(); // so the keyboard path works after clicking the plot
+    activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointers.size >= 2) {
+      // A second finger begins a pinch: abandon any single-pointer drag and seed the pinch span.
+      grabWorld = null;
+      orbitLast = null;
+      sphereLast = null;
+      const [a, b] = twoPointers();
+      pinchPrev = pointerDistance(a, b);
+      return;
+    }
     if (plot.mode === "sphere") sphereLast = canvasUv(e.clientX, e.clientY);
     else if (plot.mode === "3d") orbitLast = { x: e.clientX, y: e.clientY };
     else grabWorld = plot.screenToWorld(e.clientX, e.clientY);
@@ -916,6 +943,20 @@ function main(): void {
     }
   });
   canvas.addEventListener("pointermove", (e) => {
+    if (activePointers.has(e.pointerId))
+      activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointers.size >= 2 && pinchPrev !== null) {
+      const [a, b] = twoPointers();
+      const dist = pointerDistance(a, b);
+      const factor = pinchFactor(pinchPrev, dist);
+      pinchPrev = dist;
+      const mid = pointerMidpoint(a, b);
+      if (plot.mode === "sphere") plot.dollySphere(factor);
+      else if (plot.mode === "3d") plot.dolly(factor);
+      else plot.zoomAt(mid.x, mid.y, factor);
+      redraw(true);
+      return;
+    }
     if (sphereLast) {
       const uv = canvasUv(e.clientX, e.clientY);
       plot.rotateSphere(sphereLast, uv);
@@ -934,7 +975,9 @@ function main(): void {
       updateProbe(e.clientX, e.clientY);
     }
   });
-  const endDrag = (): void => {
+  const endDrag = (e: PointerEvent): void => {
+    activePointers.delete(e.pointerId);
+    if (activePointers.size < 2) pinchPrev = null;
     if (sphereLast) {
       sphereLast = null;
       redraw(false);
@@ -969,6 +1012,62 @@ function main(): void {
     },
     { passive: false },
   );
+
+  // Keyboard navigation (L7): arrows pan / orbit / arcball-step, +/- zoom / dolly, 0 or Home reset — the
+  // same operations as the pointer path, dispatched by the current View mode.
+  const applyNav = (intent: NavIntent): void => {
+    const rect = canvas.getBoundingClientRect();
+    const midX = rect.left + rect.width / 2;
+    const midY = rect.top + rect.height / 2;
+    if (plot.mode === "sphere") {
+      const STEP = 0.06;
+      if (intent === "reset") plot.resetSphere();
+      else if (intent === "in") plot.dollySphere(0.9);
+      else if (intent === "out") plot.dollySphere(1 / 0.9);
+      else {
+        const to: [number, number] =
+          intent === "left"
+            ? [0.5 - STEP, 0.5]
+            : intent === "right"
+              ? [0.5 + STEP, 0.5]
+              : intent === "up"
+                ? [0.5, 0.5 - STEP]
+                : [0.5, 0.5 + STEP];
+        plot.rotateSphere([0.5, 0.5], to);
+      }
+    } else if (plot.mode === "3d") {
+      const STEP = 0.18;
+      if (intent === "reset") plot.resetCamera();
+      else if (intent === "in") plot.dolly(0.9);
+      else if (intent === "out") plot.dolly(1 / 0.9);
+      else if (intent === "left") plot.orbit(-STEP, 0);
+      else if (intent === "right") plot.orbit(STEP, 0);
+      else if (intent === "up") plot.orbit(0, STEP);
+      else plot.orbit(0, -STEP);
+    } else {
+      const asp = rect.height > 0 ? rect.width / rect.height : 1;
+      if (intent === "reset") plot.view = { cx: 0, cy: 0, span: framingSpan };
+      else if (intent === "in") plot.zoomAt(midX, midY, 0.8);
+      else if (intent === "out") plot.zoomAt(midX, midY, 1.25);
+      else {
+        const d = 0.15 * plot.view.span;
+        const v = plot.view;
+        plot.view = {
+          cx: v.cx + (intent === "left" ? -d * asp : intent === "right" ? d * asp : 0),
+          cy: v.cy + (intent === "up" ? d : intent === "down" ? -d : 0),
+          span: v.span,
+        };
+      }
+      recomputeSingsSoon();
+    }
+    redraw(false);
+  };
+  canvas.addEventListener("keydown", (e) => {
+    const intent = keyToNav(e.key);
+    if (!intent) return;
+    e.preventDefault();
+    applyNav(intent);
+  });
 
   const observer = new ResizeObserver(() => redraw(false));
   observer.observe(canvas);

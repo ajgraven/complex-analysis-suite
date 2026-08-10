@@ -241,6 +241,10 @@
           <option value="2">Deuteranopia</option>
           <option value="3">Tritanopia</option>
         </select>
+        <p class="hint" style="margin-top: 6px">
+          For a colorblind-safe figure, pick the <b>Colorblind-safe</b> colormap and check it with the
+          preview above. (The DLMF four-colour map is deliberately not CVD-safe.)
+        </p>
       </div>
 
       <div class="group">
@@ -336,8 +340,13 @@
     </aside>
 
     <main class="stage">
-      <canvas id="view"></canvas>
-      <canvas id="axes"></canvas>
+      <canvas
+        id="view"
+        tabindex="0"
+        role="application"
+        aria-label="Interactive plot of w = f(z). Drag to pan or rotate; scroll or the + and - keys to zoom; arrow keys to move; press 0 or Home to reset the view."
+      ></canvas>
+      <canvas id="axes" aria-hidden="true"></canvas>
       <div id="sweepOverlay" class="sweep-overlay" hidden>
         <div class="sweep-bar">
           <span id="sweepTitle" class="sweep-title"></span>
