@@ -58,6 +58,15 @@ export interface View {
   span: number;
 }
 
+/** A CSS-pixel viewport rect (a `getBoundingClientRect`-compatible subset): the region a client pixel is
+ *  measured against — the whole canvas in 2D, or the flat half in the linked view. */
+export interface ViewportRect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
 export interface ColorState {
   /** Index into COLORMAPS (atlas row). */
   colormap: number;
@@ -174,8 +183,9 @@ export class Plot {
   private sphereRotation: Quat = DEFAULT_ROTATION;
   private sphereDist = SPHERE_DIST_DEFAULT;
 
-  /** Which view `paint()` draws. */
-  mode: "2d" | "3d" | "sphere" = "2d";
+  /** Which view `paint()` draws. `linked` renders the 2D portrait and the 3D landscape side by side
+   *  (split viewports), both reading the same `view`, so navigating either keeps them in sync (I7). */
+  mode: "2d" | "3d" | "sphere" | "linked" = "2d";
   /** The orbit camera for the 3D landscape (its `target` is taken from the view centre at paint time). */
   camera: OrbitCamera = { ...DEFAULT_CAMERA };
   /** Height compression: 0 log|f|, 1 linear |f|, 2 stereographic (see `render3d/height.ts`). */
@@ -533,7 +543,24 @@ export class Plot {
   private paint(): void {
     if (this.mode === "sphere") this.paintSphere();
     else if (this.mode === "3d") this.paintSurface();
+    else if (this.mode === "linked") this.paintLinked();
     else this.paint2D();
+  }
+
+  /** Draw the 2D portrait and the 3D landscape side by side (I7): the left half is the flat portrait, the
+   *  right half the surface, both from the same `view` — so a pan/zoom in the flat half moves the surface's
+   *  domain and vice versa. Scissored so each half clears / draws only its own region. */
+  private paintLinked(): void {
+    const gl = this.gl;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const halfW = Math.max(1, Math.round(W / 2));
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, 0, halfW, H); // left half — the flat portrait fills its viewport, no clear needed
+    this.paint2D(0, 0, halfW, H);
+    gl.scissor(halfW, 0, W - halfW, H); // right half — the surface clears + draws its own region
+    this.paintSurface(halfW, 0, W - halfW, H);
+    gl.disable(gl.SCISSOR_TEST);
   }
 
   /** Set the shared colour uniforms (phase LUT + modulus + enhancement + level sets + uncertainty + CVD)
@@ -565,7 +592,14 @@ export class Plot {
     }
   }
 
-  private paint2D(): void {
+  /** Draw the flat portrait into a viewport (defaulting to the whole canvas; a sub-rect for the linked
+   *  view's left half). `uResolution` = the viewport size, so the aspect is right at any width. */
+  private paint2D(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
     const gl = this.gl;
     const u = this.uniforms;
     if (!this.program || !u) return;
@@ -574,10 +608,10 @@ export class Plot {
     gl.bindVertexArray(this.vao);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.viewport(vx, vy, vw, vh);
     gl.uniform2f(u.uCenter, this.view.cx, this.view.cy);
     gl.uniform1f(u.uHalfSpan, this.view.span);
-    gl.uniform2f(u.uResolution, this.canvas.width, this.canvas.height);
+    gl.uniform2f(u.uResolution, vw, vh);
     this.applyColorUniforms(u);
     this.applyParamUniforms(this.paramLocs);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -586,18 +620,21 @@ export class Plot {
   /** Draw the analytic-landscape surface: the grid mesh displaced by the height field, orbit-camera
    *  projected, coloured by the shared `colorAt`. The camera looks at the view centre `[cx, cy, 0]`, so
    *  a top-down orthographic camera lines the surface up with the 2D portrait. */
-  private paintSurface(): void {
+  private paintSurface(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
     const gl = this.gl;
     const u = this.surfaceUniforms;
     if (!this.surfaceProgram || !u || !this.surfaceVao) return;
-    const w = this.canvas.width;
-    const h = this.canvas.height;
-    const aspect = h > 0 ? w / h : 1;
+    const aspect = vh > 0 ? vw / vh : 1;
     gl.useProgram(this.surfaceProgram);
     gl.bindVertexArray(this.surfaceVao);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
-    gl.viewport(0, 0, w, h);
+    gl.viewport(vx, vy, vw, vh);
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg, so the surface sits in a dark scene
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -689,35 +726,46 @@ export class Plot {
   }
 
   // --- Coordinate helpers (CSS pixels in client space -> world) -----------------------------------
-  private aspect(): number {
-    const r = this.canvas.getBoundingClientRect();
+  // All take an optional CSS viewport rect (the region the flat portrait occupies): the whole canvas in
+  // 2D mode, or the left half in the linked view — so a pan/zoom in the linked flat pane maps correctly.
+  private rect(vp?: ViewportRect): ViewportRect {
+    return vp ?? this.canvas.getBoundingClientRect();
+  }
+
+  private aspect(vp?: ViewportRect): number {
+    const r = this.rect(vp);
     return r.height > 0 ? r.width / r.height : 1;
   }
 
-  screenToWorld(clientX: number, clientY: number): [number, number] {
-    const r = this.canvas.getBoundingClientRect();
+  screenToWorld(clientX: number, clientY: number, vp?: ViewportRect): [number, number] {
+    const r = this.rect(vp);
     const nx = r.width > 0 ? (clientX - r.left) / r.width - 0.5 : 0;
     const ny = r.height > 0 ? 0.5 - (clientY - r.top) / r.height : 0;
     return [
-      this.view.cx + nx * 2 * this.view.span * this.aspect(),
+      this.view.cx + nx * 2 * this.view.span * this.aspect(vp),
       this.view.cy + ny * 2 * this.view.span,
     ];
   }
 
   /** Move the center so that `world` sits under the given client pixel (drag-pan / zoom anchor). */
-  setCenterAtScreen(clientX: number, clientY: number, world: [number, number]): void {
-    const r = this.canvas.getBoundingClientRect();
+  setCenterAtScreen(
+    clientX: number,
+    clientY: number,
+    world: [number, number],
+    vp?: ViewportRect,
+  ): void {
+    const r = this.rect(vp);
     const nx = r.width > 0 ? (clientX - r.left) / r.width - 0.5 : 0;
     const ny = r.height > 0 ? 0.5 - (clientY - r.top) / r.height : 0;
-    this.view.cx = world[0] - nx * 2 * this.view.span * this.aspect();
+    this.view.cx = world[0] - nx * 2 * this.view.span * this.aspect(vp);
     this.view.cy = world[1] - ny * 2 * this.view.span;
   }
 
   /** Zoom by `factor` about a client pixel, keeping the world point under it fixed. */
-  zoomAt(clientX: number, clientY: number, factor: number): void {
-    const before = this.screenToWorld(clientX, clientY);
+  zoomAt(clientX: number, clientY: number, factor: number, vp?: ViewportRect): void {
+    const before = this.screenToWorld(clientX, clientY, vp);
     this.view.span = Math.min(1e6, Math.max(1e-9, this.view.span * factor));
-    this.setCenterAtScreen(clientX, clientY, before);
+    this.setCenterAtScreen(clientX, clientY, before, vp);
   }
 
   /**

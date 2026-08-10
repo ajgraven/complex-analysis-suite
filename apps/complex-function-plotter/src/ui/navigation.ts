@@ -43,6 +43,24 @@ export interface Pt {
   y: number;
 }
 
+/** A CSS-pixel rect (a `getBoundingClientRect`-compatible subset), used to split the linked view (I7). */
+export interface Rect {
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+}
+
+/** The left sub-rect of a horizontal split — the flat (2D) pane of the linked view. */
+export function leftHalf(r: Rect): Rect {
+  return { left: r.left, top: r.top, width: r.width / 2, height: r.height };
+}
+
+/** Whether a client-x falls in the left (flat) half of `r`; the right half is the 3D surface. */
+export function isLeftHalf(clientX: number, r: Rect): boolean {
+  return clientX < r.left + r.width / 2;
+}
+
 /** Euclidean distance between two pointers (the pinch span). */
 export function pointerDistance(a: Pt, b: Pt): number {
   return Math.hypot(a.x - b.x, a.y - b.y);

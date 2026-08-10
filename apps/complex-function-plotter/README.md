@@ -35,7 +35,7 @@ Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publi
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-- **2D / 3D / sphere (5A–5C)** — a three-way **View** toggle. **3D** lifts the flat portrait into an
+- **2D / 3D / sphere / linked (5A–5D)** — a four-way **View** toggle. **3D** lifts the flat portrait into an
   **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
   stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
   like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). Drag to
@@ -45,9 +45,12 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   **specular** highlight. **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
   per-fragment ray-cast of an analytic unit sphere, stereographically projected (south pole = 0, equator =
   |z| = 1, **north pole = ∞**) and coloured by the same `colorAt`, so a pole is a bright patch you can rotate
-  to the top; drag is a quaternion **arcball**, scroll dollies. Built on an app-local 3D kit (`render3d/`:
-  mat4 · orbit camera · grid mesh · height law · surface shader · sphere arcball). Linked 2D↔3D navigation is
-  the rest of Phase 5.
+  to the top; drag is a quaternion **arcball**, scroll dollies. **Linked** (5D / I7) shows the flat portrait
+  and the landscape **side by side** in one canvas (split viewports), both reading the **same `view`** — so
+  navigating the flat pane (drag-pan / scroll-zoom / keyboard) moves the surface's domain in lock-step, while
+  a drag on the surface pane orbits it alone; the shared-view coupling is the sync (no state to reconcile).
+  Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader ·
+  sphere arcball).
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
@@ -119,12 +122,12 @@ It reproduces the canonical Wegert enhanced-portrait plate and recovers the know
 rational maps, and round-trips a map to Complex Dynamics and back. Built into CI, **not yet published** (the
 launcher lists it as "Coming soon").
 
-Phase 4 (special functions & the DLMF mode) and the core of Phase 5 (the 3D engine — analytic
-**landscape** with `f'/f` shading, and the **Riemann sphere**) are complete. **Phase 6 (export, interop,
-a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image (6A)**,
-**suite interop (6B: import/export a map, → Complex Dynamics)**, and **keyboard / touch / CVD accessibility
-(6C)** above are in; only the **publish flip (6D)** remains. Linked 2D↔3D navigation (5D) + the 3D-slice
-extraction ADR are the parked remainder of Phase 5. See
+Phase 4 (special functions & the DLMF mode) and **Phase 5 (the 3D engine — analytic **landscape** with
+`f'/f` shading, the **Riemann sphere**, and **linked 2D↔3D navigation**) are complete. **Phase 6 (export,
+interop, a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image
+(6A)**, **suite interop (6B: import/export a map, → Complex Dynamics)**, and **keyboard / touch / CVD
+accessibility (6C)** are in; only the **publish flip (6D)** remains (with the 3D-slice extraction ADR — the
+three-consumer trigger is now met — to write alongside it). See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)
@@ -146,7 +149,7 @@ extraction ADR are the parked remainder of Phase 5. See
 | `ui/sweep.ts`               | the parameter-sweep montage (G4): pure `sweepValues` spacing + the clickable thumbnail-grid builder                                                          |
 | `ui/autocomplete.ts`        | the expression-box name autocomplete (A5): pure `wordAt` / `filterCandidates` + the menu / keyboard wiring                                                   |
 | `ui/precision.ts`           | the float32 honest-labeling policy (Phase 4): `precisionNote(calledFns)` → the ζ warn / Γ note the badge shows                                               |
-| `ui/navigation.ts`          | pure a11y helpers (L7): `keyToNav(key)` → a mode-agnostic nav intent (arrows / ± / reset), and the two-finger `pinchFactor` math                             |
+| `ui/navigation.ts`          | pure a11y + linked-view helpers: `keyToNav` (L7 arrows / ± / reset), the `pinchFactor` touch math, and `leftHalf` / `isLeftHalf` (the I7 split)              |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                                |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                                 |
 | `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                               |
@@ -178,8 +181,9 @@ path), `pngMetadata.test.ts` (the export `tEXt` inject/read round-trip — canon
 untouched, Latin-1 coercion, non-PNG passthrough), `exportImage.test.ts` (the hi-res export size algebra
 — clamp to the GPU max, aspect-preserving dims, filename sanitising), `interop.test.ts` (the K7/K8 suite
 hand-off — MapSpec→expr conversion **re-parsed through `@cas/expr`**, the σ→φ redirect, envelope
-round-trip and validation, the `→ Dynamics` deep-link), `navigation.test.ts` (the a11y key→intent map and
-the pinch-zoom factor — direction, clamp, guards), and `singularities.test.ts` (the zero/pole finder
+round-trip and validation, the `→ Dynamics` deep-link), `navigation.test.ts` (the a11y key→intent map, the
+pinch-zoom factor — direction, clamp, guards — and the linked-view `leftHalf` / `isLeftHalf` split), and
+`singularities.test.ts` (the zero/pole finder
 recovers known counts and orders). Coloring correctness is additionally checked visually against reference
 plates (the Wegert enhanced-portrait) during development; an automated pixel-diff visual-regression harness
 is deferred.

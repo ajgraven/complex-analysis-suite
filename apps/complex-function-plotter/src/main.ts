@@ -51,6 +51,8 @@ import {
   pointerDistance,
   pointerMidpoint,
   pinchFactor,
+  leftHalf,
+  isLeftHalf,
   type NavIntent,
   type Pt,
 } from "./ui/navigation.js";
@@ -132,6 +134,7 @@ function main(): void {
   const view2d = byId("view2d");
   const view3d = byId("view3d");
   const viewSphere = byId("viewSphere");
+  const viewLinked = byId("viewLinked");
   const sphereHint = byId("sphereHint");
   const surfaceControls = byId("surfaceControls");
   const heightModeSel = byId("heightMode");
@@ -201,6 +204,18 @@ function main(): void {
   plot.color.hueShift = initial.hueShift;
   plot.color.hueSign = initial.hueSign < 0 ? -1 : 1;
   let framingSpan = initial.span;
+
+  // Linked-view geometry (I7). In the linked mode the flat portrait fills the LEFT half of the canvas and
+  // the surface the right half, so a client pixel is measured against the flat pane's rect (`twoDRect`) and
+  // the effective interaction (`effMode`) depends on which half the cursor is in.
+  const canvasRect = (): DOMRect => canvas.getBoundingClientRect();
+  const twoDRect = (): DOMRect | ReturnType<typeof leftHalf> =>
+    plot.mode === "linked" ? leftHalf(canvasRect()) : canvasRect();
+  const effMode = (clientX: number): "2d" | "3d" | "sphere" => {
+    const m = plot.mode;
+    if (m === "linked") return isLeftHalf(clientX, canvasRect()) ? "2d" : "3d";
+    return m;
+  };
 
   // Two function slots (catalog A7). One expression box edits the ACTIVE slot; a toggle switches which
   // slot is active (and therefore plotted). Both persist in the share-link.
@@ -516,13 +531,17 @@ function main(): void {
   // View toggle 2D / 3D landscape / Sphere (Phase 5). Each mode swaps the pointer interaction (pan+zoom /
   // orbit+dolly / arcball+dolly — handled in the pointer code) and shows its own controls.
   const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
-  const setView = (m: "2d" | "3d" | "sphere"): void => {
+  const setView = (m: "2d" | "3d" | "sphere" | "linked"): void => {
     plot.mode = m;
     if (view2d instanceof HTMLElement) view2d.classList.toggle("active", m === "2d");
     if (view3d instanceof HTMLElement) view3d.classList.toggle("active", m === "3d");
     if (viewSphere instanceof HTMLElement)
       viewSphere.classList.toggle("active", m === "sphere");
-    if (surfaceControls instanceof HTMLElement) surfaceControls.hidden = m !== "3d";
+    if (viewLinked instanceof HTMLElement)
+      viewLinked.classList.toggle("active", m === "linked");
+    // The surface height controls apply whenever a surface is on screen — the 3D view or the linked pane.
+    if (surfaceControls instanceof HTMLElement)
+      surfaceControls.hidden = m !== "3d" && m !== "linked";
     if (sphereHint instanceof HTMLElement) sphereHint.hidden = m !== "sphere";
     redraw(false);
   };
@@ -532,6 +551,8 @@ function main(): void {
     view3d.addEventListener("click", () => setView("3d"));
   if (viewSphere instanceof HTMLElement)
     viewSphere.addEventListener("click", () => setView("sphere"));
+  if (viewLinked instanceof HTMLElement)
+    viewLinked.addEventListener("click", () => setView("linked"));
   if (heightModeSel instanceof HTMLSelectElement) {
     heightModeSel.value = String(plot.heightMode);
     heightModeSel.addEventListener("change", () => {
@@ -888,7 +909,7 @@ function main(): void {
     `${fmtNum(z[0])} ${z[1] < 0 ? "-" : "+"} ${fmtNum(Math.abs(z[1]))}i`;
   const updateProbe = (clientX: number, clientY: number): void => {
     if (!(pz instanceof HTMLElement)) return;
-    const z = plot.screenToWorld(clientX, clientY);
+    const z = plot.screenToWorld(clientX, clientY, twoDRect());
     pz.textContent = fmtComplex(z);
     if (!probeFn) return;
     let w: Complex;
@@ -933,9 +954,10 @@ function main(): void {
       pinchPrev = pointerDistance(a, b);
       return;
     }
-    if (plot.mode === "sphere") sphereLast = canvasUv(e.clientX, e.clientY);
-    else if (plot.mode === "3d") orbitLast = { x: e.clientX, y: e.clientY };
-    else grabWorld = plot.screenToWorld(e.clientX, e.clientY);
+    const m = effMode(e.clientX);
+    if (m === "sphere") sphereLast = canvasUv(e.clientX, e.clientY);
+    else if (m === "3d") orbitLast = { x: e.clientX, y: e.clientY };
+    else grabWorld = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch {
@@ -951,9 +973,10 @@ function main(): void {
       const factor = pinchFactor(pinchPrev, dist);
       pinchPrev = dist;
       const mid = pointerMidpoint(a, b);
-      if (plot.mode === "sphere") plot.dollySphere(factor);
-      else if (plot.mode === "3d") plot.dolly(factor);
-      else plot.zoomAt(mid.x, mid.y, factor);
+      const m = effMode(mid.x);
+      if (m === "sphere") plot.dollySphere(factor);
+      else if (m === "3d") plot.dolly(factor);
+      else plot.zoomAt(mid.x, mid.y, factor, twoDRect());
       redraw(true);
       return;
     }
@@ -969,9 +992,9 @@ function main(): void {
       plot.orbit(dx * ORBIT_SPEED, -dy * ORBIT_SPEED); // drag right → spin; drag up → tilt toward top-down
       redraw(true);
     } else if (grabWorld) {
-      plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld);
+      plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld, twoDRect());
       redraw(true);
-    } else if (plot.mode === "2d") {
+    } else if (effMode(e.clientX) === "2d") {
       updateProbe(e.clientX, e.clientY);
     }
   });
@@ -998,14 +1021,15 @@ function main(): void {
     "wheel",
     (e) => {
       e.preventDefault();
-      if (plot.mode === "sphere") {
+      const m = effMode(e.clientX);
+      if (m === "sphere") {
         plot.dollySphere(Math.pow(1.0012, e.deltaY));
         redraw(false);
-      } else if (plot.mode === "3d") {
+      } else if (m === "3d") {
         plot.dolly(Math.pow(1.0012, e.deltaY));
         redraw(false);
       } else {
-        plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY));
+        plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
         redraw(false);
         recomputeSingsSoon();
       }
@@ -1016,9 +1040,6 @@ function main(): void {
   // Keyboard navigation (L7): arrows pan / orbit / arcball-step, +/- zoom / dolly, 0 or Home reset — the
   // same operations as the pointer path, dispatched by the current View mode.
   const applyNav = (intent: NavIntent): void => {
-    const rect = canvas.getBoundingClientRect();
-    const midX = rect.left + rect.width / 2;
-    const midY = rect.top + rect.height / 2;
     if (plot.mode === "sphere") {
       const STEP = 0.06;
       if (intent === "reset") plot.resetSphere();
@@ -1045,10 +1066,14 @@ function main(): void {
       else if (intent === "up") plot.orbit(0, STEP);
       else plot.orbit(0, -STEP);
     } else {
-      const asp = rect.height > 0 ? rect.width / rect.height : 1;
+      // 2D or the linked flat pane: keyboard pans / zooms the shared domain (moving both linked halves).
+      const r = twoDRect();
+      const midX = r.left + r.width / 2;
+      const midY = r.top + r.height / 2;
+      const asp = r.height > 0 ? r.width / r.height : 1;
       if (intent === "reset") plot.view = { cx: 0, cy: 0, span: framingSpan };
-      else if (intent === "in") plot.zoomAt(midX, midY, 0.8);
-      else if (intent === "out") plot.zoomAt(midX, midY, 1.25);
+      else if (intent === "in") plot.zoomAt(midX, midY, 0.8, r);
+      else if (intent === "out") plot.zoomAt(midX, midY, 1.25, r);
       else {
         const d = 0.15 * plot.view.span;
         const v = plot.view;

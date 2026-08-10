@@ -4,6 +4,8 @@ import {
   pointerDistance,
   pointerMidpoint,
   pinchFactor,
+  leftHalf,
+  isLeftHalf,
 } from "../src/ui/navigation.js";
 
 // Phase 6 / 6C (L7): the pure navigation helpers behind keyboard + touch. The key→intent map and the
@@ -55,5 +57,20 @@ describe("pinch math", () => {
     expect(pinchFactor(0, 100)).toBe(1);
     expect(pinchFactor(100, 0)).toBe(1);
     expect(pinchFactor(Number.NaN, 100)).toBe(1);
+  });
+});
+
+describe("linked-view split (I7)", () => {
+  const rect = { left: 100, top: 20, width: 800, height: 600 };
+
+  it("leftHalf takes the left pane, same top/height, half the width", () => {
+    expect(leftHalf(rect)).toEqual({ left: 100, top: 20, width: 400, height: 600 });
+  });
+
+  it("isLeftHalf splits at the horizontal midpoint (left = 2D pane, right = surface)", () => {
+    expect(isLeftHalf(100, rect)).toBe(true); // left edge
+    expect(isLeftHalf(499, rect)).toBe(true); // just left of centre (100 + 800/2 = 500)
+    expect(isLeftHalf(500, rect)).toBe(false); // the centre line → right pane
+    expect(isLeftHalf(880, rect)).toBe(false); // right edge
   });
 });
