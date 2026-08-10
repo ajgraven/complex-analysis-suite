@@ -13,6 +13,7 @@ import {
   quatFromAxisAngle,
   quatMultiply,
   quatToMat3,
+  planeToScreenUv,
   rotateVec3,
   screenToPlane,
   screenToSpherePoint,
@@ -159,6 +160,29 @@ describe("orbit camera + ray-cast", () => {
     const z = screenToPlane([0.5, 0.5], rolled) as Complex;
     expect(z).not.toBeNull();
     expect(Math.hypot(z[0], z[1])).toBeGreaterThan(1e-3); // no longer the south pole
+  });
+});
+
+describe("planeToScreenUv (F2d-ii — inverse projection for on-sphere overlays)", () => {
+  const cam = makeSphereCamera(DEFAULT_ROTATION, DEFAULT_DISTANCE, DEFAULT_FOV, 1);
+
+  it("inverts screenToPlane: a front-cap pixel round-trips uv → w → uv", () => {
+    for (const uv of [[0.5, 0.5], [0.45, 0.52], [0.55, 0.47], [0.4, 0.4]] as Array<[number, number]>) {
+      const w = screenToPlane(uv, cam) as Complex;
+      const back = planeToScreenUv(w, cam);
+      expect(back, `${uv} hits the ball`).not.toBeNull();
+      expect(Math.hypot((back as [number, number])[0] - uv[0], (back as [number, number])[1] - uv[1])).toBeLessThan(1e-6);
+    }
+  });
+
+  it("maps the front pole (w = 0 under the default orientation) to the screen centre", () => {
+    const uv = planeToScreenUv([0, 0], cam);
+    expect(uv).not.toBeNull();
+    expect(Math.hypot((uv as [number, number])[0] - 0.5, (uv as [number, number])[1] - 0.5)).toBeLessThan(1e-9);
+  });
+
+  it("returns null for a point occluded on the far hemisphere (∞ is behind the default view)", () => {
+    expect(planeToScreenUv([100, 0], cam)).toBeNull(); // near the north pole ∞, on the back cap
   });
 });
 

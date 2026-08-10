@@ -8,6 +8,7 @@
 // for a bounded QD — the stroke is identical either way; it just says "here is ∂Ω". An orientation aid only:
 // it draws over the field and never changes the field bytes.
 import { plotToPixel, type SchwarzView } from "./schwarzView";
+import { planeToScreenUv, type SphereCamera } from "./sphereView";
 import type { Complex } from "@cas/schwarz";
 
 const CASING = "rgba(0, 0, 0, 0.72)"; // dark halo so the line reads over both dark K and a bright Ω ramp
@@ -34,6 +35,50 @@ export function drawSchwarzBoundary(
     else ctx.lineTo(x, y);
   }
   ctx.closePath();
+  ctx.strokeStyle = CASING;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.strokeStyle = BOUNDARY;
+  ctx.lineWidth = 1.4;
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * Stroke ∂Ω onto the rendered Riemann sphere (F2d-ii). Each boundary point w is projected to its pixel on
+ * the ball via planeToScreenUv; a point on the occluded far hemisphere returns null and LIFTS the pen, so
+ * only the front arc of the curve is drawn (it visibly runs over the horizon). `cam` is the σ sphere camera;
+ * `size` the square backing. Same casing+colour idiom as drawSchwarzBoundary. No-op for a degenerate polygon.
+ */
+export function drawSchwarzBoundarySphere(
+  ctx: CanvasRenderingContext2D,
+  poly: readonly Complex[],
+  cam: SphereCamera,
+  size: number,
+): void {
+  if (poly.length < 2) return;
+  const pts = poly.map((w) => {
+    const uv = planeToScreenUv(w, cam);
+    return uv ? ([uv[0] * size - 0.5, uv[1] * size - 0.5] as [number, number]) : null;
+  });
+  ctx.save();
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  // One path with breaks at the horizon; the closed loop is handled by the wrap-around pen logic (the last
+  // visible run reconnects to the first only if both ends are visible — otherwise it simply stops at the rim).
+  ctx.beginPath();
+  let penDown = false;
+  for (const pt of pts) {
+    if (!pt) {
+      penDown = false;
+      continue;
+    }
+    if (penDown) ctx.lineTo(pt[0], pt[1]);
+    else {
+      ctx.moveTo(pt[0], pt[1]);
+      penDown = true;
+    }
+  }
   ctx.strokeStyle = CASING;
   ctx.lineWidth = 3;
   ctx.stroke();

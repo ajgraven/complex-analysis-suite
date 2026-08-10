@@ -281,7 +281,7 @@ describe("parseSigmaState — ∂Ω boundary overlay (F1)", () => {
   });
 });
 
-describe("parseSigmaState — coordinate view (F2b)", () => {
+describe("parseSigmaState — coordinate view (F2b + F2d)", () => {
   const enc = (o: unknown): string => JSON.stringify(o);
   const base = { c: 1, F: [[0, 0], [0, 0], [0.5, 0]], b: [], ctr: [0, 0], z: 0.4, cm: "viridis", sc: "linear" };
 
@@ -295,9 +295,30 @@ describe("parseSigmaState — coordinate view (F2b)", () => {
     expect(encodeSigmaState({ ...DELTOID, viewMode: "z" })).toContain('"vm":"z"');
   });
 
-  it("falls back to the plane for an unknown view (a stale 'sphere' or corrupt value)", () => {
-    expect(parseSigmaState(enc({ ...base, vm: "sphere" }))?.viewMode).toBe("plane");
+  it("falls back to the plane for a corrupt view value", () => {
     expect(parseSigmaState(enc({ ...base, vm: 3 }))?.viewMode).toBe("plane");
+    expect(parseSigmaState(enc({ ...base, vm: "bogus" }))?.viewMode).toBe("plane");
+  });
+
+  it("round-trips the sphere view + its camera (F2d-ii), and never emits the camera off the sphere", () => {
+    const q: [number, number, number, number] = [0.1, 0.2, 0.3, 0.927361]; // ~unit quaternion
+    const encSphere = encodeSigmaState({ ...DELTOID, viewMode: "sphere", sphereRot: q, sphereZoom: 2.5 });
+    expect(encSphere).toContain('"vm":"sphere"');
+    expect(encSphere).toContain('"sq"');
+    expect(encSphere).toContain('"sz":2.5');
+    const back = parseSigmaState(encSphere);
+    expect(back?.viewMode).toBe("sphere");
+    expect(back?.sphereRot).toEqual(q);
+    expect(back?.sphereZoom).toBe(2.5);
+    // The camera keys never leak onto a plane / z link.
+    expect(encodeSigmaState({ ...DELTOID, viewMode: "z" })).not.toMatch(/"s[qz]"/);
+  });
+
+  it("a sphere link with a corrupt/absent camera parses with no rotation + default zoom", () => {
+    const back = parseSigmaState(enc({ ...base, vm: "sphere", sq: [1, 2, 3], sz: "x" }));
+    expect(back?.viewMode).toBe("sphere");
+    expect(back?.sphereRot).toBeUndefined(); // a 3-element array is rejected
+    expect(back?.sphereZoom).toBe(1); // a non-finite zoom falls back to the default
   });
 });
 

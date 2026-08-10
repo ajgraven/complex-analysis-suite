@@ -32,6 +32,10 @@ export interface SchwarzOrbitStyle {
    *  failed) returns null and BREAKS the polyline there — no connecting segment, no dot, no seed marker.
    *  Omitted ⇒ identity (the w-plane view draws the orbit directly, unchanged). */
   toPlot?: (w: Complex) => Complex | null;
+  /** Sphere projection (F2d-ii): map each w-space iterate straight to a canvas pixel, bypassing the flat
+   *  `view` + plotToPixel path. Returns null for an iterate on the far (occluded) hemisphere of the ball,
+   *  which BREAKS the polyline exactly like a null toPlot. Takes precedence over `toPlot`/`view` when set. */
+  toPixel?: (w: Complex) => [number, number] | null;
 }
 
 /**
@@ -49,10 +53,13 @@ export function drawSchwarzOrbit(
 ): void {
   const preview = style.preview === true;
   const toPlot = style.toPlot;
-  // Map each w-space iterate into the drawing plane (identity in the w-plane view; ψ = φ⁻¹ in the z-disk),
-  // then to pixels. A null pullback (the iterate has no preimage on the uniformizing domain) stays null so
-  // the polyline breaks and the dot is skipped at that iterate (F2c).
+  const toPixel = style.toPixel;
+  // Map each w-space iterate to a canvas pixel: the sphere (F2d-ii) projects straight to a pixel (`toPixel`,
+  // null on the occluded far cap); otherwise map into the drawing plane (identity on the w-plane; ψ = φ⁻¹ in
+  // the z-disk, F2c) then plotToPixel. A null at either stage stays null so the polyline breaks and the dot is
+  // skipped at that iterate.
   const pts: Array<[number, number] | null> = orbit.points.map((p) => {
+    if (toPixel) return toPixel(p);
     const q = toPlot ? toPlot(p) : p;
     return q ? plotToPixel(view, q, size) : null;
   });

@@ -37,8 +37,14 @@ export interface SigmaViewState {
    *  "z" mode. The inactive view's window is per-session (the live stash), not serialized. */
   center: Complex;
   zoom: number;
-  /** Coordinate view (F2b): "plane" (default) or the uniformizing "z"-disk. */
-  viewMode: "plane" | "z";
+  /** Coordinate view: "plane" (default) · the uniformizing "z"-disk (F2b) · the Riemann "sphere" (F2d). For a
+   *  sphere view, `center`/`zoom` above are the UNDERLYING w-plane window (the sphere has no flat window — its
+   *  camera is `sphereRot`/`sphereZoom`), so switching to the plane after restoring a sphere link is sensible. */
+  viewMode: "plane" | "z" | "sphere";
+  /** Sphere-view camera orientation (F2d-ii), a unit quaternion [x,y,z,w]; present only when viewMode === "sphere". */
+  sphereRot?: [number, number, number, number];
+  /** Sphere-view magnification (F2d-ii); present only when viewMode === "sphere". */
+  sphereZoom?: number;
   colormap: string;
   scale: string;
   /** σ-field color mode (S5-B1): "escape" (default) · "trap" · "stripe". */
@@ -134,6 +140,12 @@ export function encodeSigmaState(s: SigmaViewState): string {
   if (s.showBoundary !== SIGMA_OVERLAY_DEFAULTS.showBoundary) out.bd = s.showBoundary;
   // Coordinate view (F2b), omitted on the w-plane so a plane view's link is byte-identical to pre-F2b.
   if (s.viewMode !== SIGMA_VIEW_DEFAULTS.viewMode) out.vm = s.viewMode;
+  // Sphere camera (F2d-ii) — the orientation quaternion + magnification, carried ONLY for a sphere view (a
+  // plane / z link is unaffected). center/zoom above stay the underlying w-plane window for the sphere.
+  if (s.viewMode === "sphere") {
+    if (s.sphereRot) out.sq = s.sphereRot;
+    if (s.sphereZoom !== undefined) out.sz = s.sphereZoom;
+  }
   // Custom gradient (C1) — carried only when the custom palette is active (and has ≥2 stops), so a named-
   // palette view's link is unaffected.
   if (s.colormap === "custom" && s.customStops && s.customStops.length >= 2) out.grad = s.customStops;
@@ -155,8 +167,9 @@ export function schwarzStampParams(s: SigmaViewState): string {
       ? `plane=Schwarz reflection sigma (approx, bounded); w0=${cplx(s.phi.w0 ?? [0, 0])}; poles=${s.phi.branches.length}`
       : `plane=Schwarz reflection sigma (approx); c=${s.phi.c[1] === 0 ? r(s.phi.c[0]) : cplx(s.phi.c)}; ` +
         `F=[${s.phi.F.map(cplx).join(", ")}]; poles=${s.phi.branches.length}`;
+  const viewLabel = s.viewMode === "z" ? "z-disk" : s.viewMode === "sphere" ? "sphere" : "plane";
   return (
-    `${recipe}; view=${s.viewMode === "z" ? "z-disk" : "plane"}; center=${cplx(s.center)}; ` +
+    `${recipe}; view=${viewLabel}; center=${cplx(s.center)}; ` +
     `zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
     `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
     `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
@@ -268,9 +281,18 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
   // ∂Ω boundary overlay (F1) — a bad/absent value falls back to the default (off); never fatal.
   const showBoundary = typeof o.bd === "boolean" ? o.bd : SIGMA_OVERLAY_DEFAULTS.showBoundary;
-  // Coordinate view (F2b) — only "z" is a non-default; anything else (incl. a stale "sphere" from a future
-  // build, or a corrupt value) falls back to the w-plane.
-  const viewMode: "plane" | "z" = o.vm === "z" ? "z" : "plane";
+  // Coordinate view — "z" (F2b) or "sphere" (F2d); anything else (or a corrupt value) falls back to the w-plane.
+  const viewMode: "plane" | "z" | "sphere" = o.vm === "z" ? "z" : o.vm === "sphere" ? "sphere" : "plane";
+  // Sphere camera (F2d-ii) — a valid 4-number unit quaternion + a clamped magnification, both only when on the
+  // sphere. A bad/absent quaternion ⇒ omitted (the caller defaults the orientation); a bad zoom clamps sanely.
+  let sphereRot: [number, number, number, number] | undefined;
+  let sphereZoom: number | undefined;
+  if (viewMode === "sphere") {
+    if (Array.isArray(o.sq) && o.sq.length === 4 && o.sq.every(fin)) {
+      sphereRot = [o.sq[0], o.sq[1], o.sq[2], o.sq[3]];
+    }
+    sphereZoom = fin(o.sz) ? Math.min(1e6, Math.max(0.3, o.sz)) : 1;
+  }
   // Custom gradient (C1) — validated via the shared editor parser (≥2 stops, clamped t / bytes); a bad or
   // absent value ⇒ no custom stops (the named palette applies). Only meaningful when colormap === "custom".
   const customStops = o.grad !== undefined ? (parseGradientStops(JSON.stringify(o.grad)) ?? undefined) : undefined;
@@ -281,6 +303,8 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   return {
     phi, center, zoom, viewMode, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter,
     escapeR, light, lightAz, lightEl, lightHeight, showBoundary,
+    ...(sphereRot ? { sphereRot } : {}),
+    ...(sphereZoom !== undefined ? { sphereZoom } : {}),
     ...(customStops ? { customStops } : {}),
   };
 }

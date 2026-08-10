@@ -2269,3 +2269,30 @@
   default; and returning to the plane leaves its window byte-identical (the sphere never touched it). Captured the
   tilted-default deltoid sphere (K → ∂Ω → 3-fold tiling → the black ∞ cap at the north pole). **F2d-i complete —
   plane · z-disk · sphere all render + navigate; F2d-ii adds sphere orbit inspection + `_sigma` camera round-trip.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2d-ii — sphere inspection +
+  serialization):** the sphere becomes a full peer — overlays + `_sigma` round-trip. A new pure
+  `planeToScreenUv(w, cam)` in `sphereView.ts` is the exact INVERSE of `screenToPlane`: it projects a w-space
+  point onto the ball (`stereographicInverse` → model→world via the transpose of `worldToModel` → perspective),
+  returning null on the FAR (occluded) hemisphere. Overlays reuse it: `drawSchwarzOrbit` gains a `toPixel`
+  override (w → canvas pixel directly, null breaks the polyline at the horizon — same break logic as F2c's
+  z-pullback), and a new `drawSchwarzBoundarySphere` strokes ∂Ω over the ball (breaking where it wraps behind).
+  **Inspection**: `schwarzSeedFromPointer` ray-casts the pointer onto the sphere via `screenToPlane` (the CPU
+  mirror of the GPU raycast, so the seed matches the rendered pixel) — click-inspect, hover, and the `i` key all
+  work on the sphere now, drawing the traced orbit projected onto the ball; a click off the silhouette inspects
+  nothing. Seed-drag stays plane-only. **Serialization**: `_sigma` carries the sphere (`viewMode:"sphere"` +
+  `sq` orientation quaternion + `sz` magnification), emitted ONLY on the sphere (plane / z links byte-identical);
+  restore is GPU-guarded (a sphere link on a CPU session falls back to the plane). The arcball quaternion is now
+  RE-NORMALISED at every accumulation step so it never drifts off unit length (which also makes the serialized
+  camera round-trip exact). Green: typecheck + lint + node **2442** (+3 sphereView: `planeToScreenUv` inverts
+  `screenToPlane`, maps the front pole to the screen centre, and returns null on the occluded far cap; +2
+  schwarzState: the sphere view + camera round-trips and never leaks the camera keys onto a plane / z link, and a
+  corrupt/absent camera falls back to no-rotation + default zoom) + browser **19/19** (unchanged — F2d-ii touches
+  no shader). VERIFIED (Playwright, **9/9**): the z-disk-style ∂Ω draws on the ball; a click off the silhouette
+  inspects nothing; a click on the ball pins an orbit (readout "orbit of …") whose ψ-projection draws on the
+  sphere; clearing removes it; scrolling raises the camera magnification; and a share link reopens in sphere mode
+  with the magnification preserved. The exact quaternion round-trip is additionally pinned by decoding the real
+  share URL (`sq`/`sz` parse back exactly) and by the schwarzState unit test — a cross-page pixel-exact frame
+  match proved too SwiftShader-timing-sensitive to assert live (the minimal camera round-trip is byte-identical;
+  the ∂Ω curve, computed on the CPU in float64, shifts sub-pixel between the preset and restored φ). Captured the
+  deltoid sphere with ∂Ω stroked over the ball. **F2d complete — plane · z-disk · sphere are all full peers
+  (field + boundary + orbit inspection + `_sigma` round-trip). F2 (the multi-view explorer) is done.**
