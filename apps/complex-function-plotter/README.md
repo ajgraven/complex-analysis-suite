@@ -119,15 +119,15 @@ Plus the Phase-2 research tool:
   not CVD-safe).
 
 It reproduces the canonical Wegert enhanced-portrait plate and recovers the known zero/pole counts of
-rational maps, and round-trips a map to Complex Dynamics and back. Built into CI, **not yet published** (the
-launcher lists it as "Coming soon").
+rational maps, and round-trips a map to Complex Dynamics and back. Built into CI and **publish-ready** — the
+launcher card links to it and `deploy-pages.yml` copies it into the combined site; it goes live on the next
+merge to `master`.
 
-Phase 4 (special functions & the DLMF mode) and **Phase 5 (the 3D engine — analytic **landscape** with
-`f'/f` shading, the **Riemann sphere**, and **linked 2D↔3D navigation**) are complete. **Phase 6 (export,
-interop, a11y → publish) is underway**: **hi-res PNG export with reproducibility metadata + copy-image
-(6A)**, **suite interop (6B: import/export a map, → Complex Dynamics)**, and **keyboard / touch / CVD
-accessibility (6C)** are in; only the **publish flip (6D)** remains (with the 3D-slice extraction ADR — the
-three-consumer trigger is now met — to write alongside it). See
+**All phases (0–6) are complete.** Phase 4 (special functions & the DLMF mode); Phase 5 (the 3D engine —
+analytic **landscape** with `f'/f` shading, the **Riemann sphere**, and **linked 2D↔3D navigation**); and
+Phase 6 (**hi-res PNG export + metadata + copy-image (6A)**, **suite interop (6B, → Complex Dynamics)**,
+**keyboard / touch / CVD accessibility (6C)**, and the **publish gate (6D)** — the 3D-slice extraction
+[ADR-0012](../../docs/DECISIONS.md) written, the launcher flipped, and the deploy line added). See
 [the plan](../../docs/design/complex-function-plotter-plan.md).
 
 ## Source layout (`src/`)

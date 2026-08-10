@@ -979,3 +979,100 @@ throw on the CPU — a silent dual-backend split; with it, both agree.
        sweeps, as named parameters with a driver.
 4. [ ] Complex literals & extra constants — `2i`, `tau`, `phi`, `γ` (**B5**) — the small additive lexer / const
        growth that rides alongside.
+
+---
+
+## ADR-0012: The shared 3D slice — extract the `mat4` + quaternion core; keep the app-specific 3D local
+
+**Status:** Accepted **Date:** 2026-08 **Deciders:** Andrew
+
+_The follow-on that [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app) anticipated
+(consequence (ii)): the **shared 3D slice**, decided now that Phase 5 has proven the API. On the
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) rule — with a **third** consumer, the rule
+is unambiguously met — and mirroring [ADR-0008](#adr-0008-extract-casexact-leave-qds-sym-core-separate)'s
+"extract the shared core, deliberately leave the app-specific piece local" posture. Build detail in
+[the plan §1.6 / §4 / Phase 5](design/complex-function-plotter-plan.md)._
+
+### Context
+
+Three apps now carry 3D-math code. **Quadrature Domains** has `sphere-common.mjs` — a column-major `mat4`
+kit plus `buildSphereMesh` for a **rendered mesh**. **Complex Dynamics** has `sphereView.ts` — a
+**quaternion arcball** driving a **per-fragment ray-cast** sphere. The **plotter** (Phase 5) built
+`render3d/` app-local per ADR-0007, deliberately **adapting QD's `mat4` kit + CD's arcball** rather than
+importing (apps can't import apps): `mat4.ts` (ported from QD `sphere-common`), `camera.ts` (an orbit
+camera), `mesh.ts`, `height.ts`, `surfaceShader.ts`, `sphere.ts` (quaternion + arcball, ported from CD
+`sphereView`), and `sphereShader.ts`.
+
+So the ADR-0007 second-consumer trigger is not just met but exceeded (three consumers). But the three kits
+are **not one shape**: QD wants a mesh, CD a ray-cast, the plotter both plus a height/surface/orbit-camera
+layer. What is genuinely **identical** across them — the part the plotter literally copied — is the
+**linear-algebra + rotation core**: the column-major `mat4` / `vec3` ops and the quaternion + arcball
+primitives. Everything above that (mesh builders, the height law, the surface / sphere fragment shaders, the
+orbit-camera framing) is **app-specific display code**, not shared math.
+
+### Decision
+
+1. **Extract the stable core** — the column-major `mat4` / `vec3` kit and the quaternion + arcball primitives
+   — **into `@cas/gpu`** (the GL substrate; the natural, convention-neutral home its index already reserves,
+   per ADR-0010), as a new subpath (e.g. `@cas/gpu/mat4`). This is pure, dependency-free math with a golden
+   corpus; the three consumers migrate to it.
+2. **Keep app-local** the app-specific 3D: QD's `buildSphereMesh`, CD's ray-cast specifics, and the
+   plotter's `mesh` / `height` / `camera` / `surfaceShader` / `sphereShader`. These diverge by design
+   (mesh vs ray-cast vs surface); merging them would be a lowest-common-denominator kit with per-app
+   branches — the symmetric half of ADR-0007 ("two engines are not merged without one needing it"). This is
+   exactly ADR-0008's move: extract the shared core, leave the app-specific piece separate.
+3. **Migrate incrementally, and DEFER the physical move** — do it test-guarded, **one consumer at a time**,
+   as a dedicated follow-up, **not** in this commit. No consumer is currently blocked (each has a working
+   app-local copy), so a big-bang three-app refactor mid-Phase-6 is an unwarranted speculative change
+   ("working software at every step"; "ask before large refactors"). This ADR records **what** / **where** /
+   **how**; the code moves when a consumer next touches its 3D path or on a focused extraction pass.
+
+### Options Considered
+
+- **A — Extract the `mat4` + quaternion core to `@cas/gpu`, keep app-specific 3D local, defer the physical
+  migration (this ADR).** _Pros:_ removes the one genuine duplication (identical math the plotter copied);
+  honours the ADR-0007 trigger without over-reaching into code that legitimately differs; keeps every app
+  shippable throughout. _Cons:_ the duplication lives on until the deferred migration lands — a tracked debt,
+  not a silent one.
+- **B — Extract the _entire_ 3D slice** (mesh + camera + shaders too) into one package. _Cons:_ the apps'
+  needs diverge (ray-cast vs mesh vs surface), so the package becomes a lowest-common-denominator with
+  app-specific flags — coupling three apps to one another's display choices for no shared benefit. Rejected
+  on the ADR-0007 symmetric rule.
+- **C — Never extract; keep three copies.** _Cons:_ the `mat4` / quaternion math is byte-for-byte the same
+  (the plotter ported it verbatim); three copies is exactly the drift the second-consumer rule exists to
+  stop. Rejected — but the _timing_ is what's deferred, not the decision.
+- **D — Do the physical extraction now.** _Cons:_ touches all three apps at once while none is blocked;
+  a large, speculative, mid-phase refactor. Rejected on working-software grounds.
+
+### Trade-off Analysis
+
+The tension is ADR-0007's "extract on the second consumer" versus "don't over-reach / working software at
+every step." The resolution is to **split the slice**: the part that is genuinely one thing (the `mat4` /
+quaternion math) gets a decided home in `@cas/gpu`; the parts that are three things (mesh / ray-cast /
+surface) stay where they are. That keeps the extraction **small, pure, and low-risk** when it happens, and
+avoids inventing a shared abstraction over code that isn't actually shared. Deferring the physical move
+trades a little living duplication for zero mid-phase churn across three shipping apps — the debt is explicit
+(this ADR + its action items), so it is tracked, not silent.
+
+### Consequences
+
+- **Easier (once migrated):** one audited `mat4` / quaternion implementation with a golden corpus; new 3D
+  work in any app builds on it; the plotter's `render3d/mat4.ts` and the quaternion half of `sphere.ts`
+  collapse to imports.
+- **Harder / watch for:** until the migration lands, the `mat4` / quaternion code exists in QD, CD, and the
+  plotter — keep them in sync by hand (a change to the rotation math must touch all three), and treat any
+  divergence as a bug the extraction will fix. Convention-neutrality holds: this is display / geometry math,
+  no π / 2πi enters a package ([ADR-0006](#adr-0006-convention-neutral-core-packages)).
+- **Unchanged:** the app-specific 3D (mesh, height, camera, shaders) stays app-local by design; no app
+  imports another.
+
+### Action Items
+
+1. [x] Record the decision (this ADR): extract the `mat4` + quaternion / arcball core to `@cas/gpu`; keep
+       app-specific 3D local; migrate incrementally, physical move deferred. _(the Phase-6 6D commit)_
+2. [ ] Add `@cas/gpu/mat4` (column-major `mat4` / `vec3`) + a quaternion / arcball module, with a golden
+       corpus, without touching any consumer yet.
+3. [ ] Migrate the plotter's `render3d/mat4.ts` and the quaternion half of `render3d/sphere.ts` to the new
+       subpath — test-guarded (`render3d` / `sphere` suites green before & after).
+4. [ ] Migrate QD's `sphere-common.mjs` `mat4` kit and CD's `sphereView` quaternion core, one at a time,
+       each behind its existing tests. Leave the mesh / ray-cast / surface code app-local.

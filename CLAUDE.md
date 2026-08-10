@@ -48,9 +48,9 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
 11. **Deployment:** each app builds static (`base: "./"`) so its assets resolve from any path.
     **`.github/workflows/deploy-pages.yml` publishes automatically on every push to `master`**
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
-    combined Pages site** — launcher at the root, `complex-dynamics/` and `quadrature-domains/`
-    beneath it. `apps/correspondences` is **built but not published** (the launcher shows it as
-    "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
+    combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`, and
+    `complex-function-plotter/` beneath it. `apps/correspondences` is **built but not published** (the
+    launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
 ## Non-negotiable guardrails
