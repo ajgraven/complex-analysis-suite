@@ -2431,3 +2431,20 @@
   live as a CD analysis card across the three σ views. This closes the σ⁻¹ "structure wave" (F3 tiling → F4a
   limit set).** The remaining F4 cards (F4b level curves · F4c/F4e orbit families · F4d cycles · F4h
   singularities · F4i explicit σ form — mostly cheap forward-only wins) stay à-la-carte for the next pick.
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4i — explicit σ(w) form):**
+  a forward-only analysis card showing the **closed form** of the generated map — φ(z), its Schwarz extension
+  F(z), and the reflection σ(w) — derived from CD's own φ recipe. A new pure `schwarzExplicitForm.ts`
+  (`explicitSigmaForm(phi)`) renders the per-family formulas as Unicode-math text (CD has no KaTeX, so it uses
+  the same σ / φ / conj / superscript idiom as the readouts): the unbounded-Laurent family as
+  `φ(z) = c·z + Σₗ F[l]/zˡ + branches` / `F(z) = conj(c)/z + Σₗ conj(F[l])·zˡ + branches`, the bounded family as
+  `φ(z) = w₀ + branches` / `F(z) = conj(w₀) + Σ A/(z−z_j)ᵏ`; zero coefficients + unit exponents are dropped for
+  readability, complex coefficients parenthesised, reals bare. **Honest labeling:** φ and F ARE closed-form, but
+  σ(w) = conj(F(ψ(w))) is shown symbolically (ψ = φ⁻¹) with the note that φ⁻¹ is solved numerically, so σ and
+  everything derived from it are `≈` — the card never presents a closed-form σ. A read-only "Explicit form"
+  control group (no inputs → no shared state) is populated from the session's φ each time a σ is generated.
+  Green: typecheck + lint + node **823 → 828** (+5 schwarzExplicitForm goldens — the deltoid `z + 0.5/z²` /
+  `1/z + 0.5·z²`; a complex leading c reflecting to `conj(c) = 1−0.5i` in F (the load-bearing S5-C1 sign); an
+  order-1 + order-2 finite pole; the bounded lobe with its zero centre dropped + an off-centre conj(w₀); and the
+  trivial unit disk — the numbers matching the engine-test fixtures' documented φ/F). VERIFIED (Playwright): the
+  card paints the deltoid's three lines + the ≈ note on generate. **F4i complete — the map's closed form is
+  visible, σ honestly symbolic.**

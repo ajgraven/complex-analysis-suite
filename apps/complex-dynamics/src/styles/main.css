@@ -634,6 +634,34 @@ h2 {
   font-size: 0.66rem;
   padding: 0.1rem 0.5rem;
 }
+/* σ explicit form (F4i): the closed-form φ / F / σ as monospace equations. */
+.schwarz-formula {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.schwarz-formula-hint {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin: 0;
+}
+.schwarz-formula-title {
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+.schwarz-formula-eq {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.schwarz-formula-note {
+  font-size: 0.66rem;
+  opacity: 0.6;
+}
 /* σ precise navigation (ADR-0009 item 3): a compact centre-re / centre-im / zoom row + apply/reset. */
 /* σ orbit-trap shape row (S5-B1): a label+select pair shown only in "trap" color mode. Matches the
    .field column layout so it stacks like the sibling colormap/scale controls; [hidden] must win over the

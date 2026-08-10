@@ -135,6 +135,7 @@ import {
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
+import { explicitSigmaForm } from "./render/schwarzExplicitForm";
 import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
@@ -3567,6 +3568,31 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  /** Show the generated map's closed form (F4i) — the exact φ / F + the symbolic σ (φ⁻¹ is numerical, so σ is
+   *  `≈`). Derived from the session's φ recipe; re-rendered whenever a σ is generated. Read-only text. */
+  function renderSchwarzExplicitForm(): void {
+    const box = document.getElementById("schwarz-formula");
+    if (!box) return;
+    const line = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement("div");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    if (!schwarzSession) {
+      box.replaceChildren(line("schwarz-formula-hint", "Generate a σ to see its closed form."));
+      return;
+    }
+    const f = explicitSigmaForm(schwarzSession.phi);
+    box.replaceChildren(
+      line("schwarz-formula-title", f.title),
+      line("schwarz-formula-eq", f.phi),
+      line("schwarz-formula-eq", f.F),
+      line("schwarz-formula-eq", f.sigma),
+      line("schwarz-formula-note", f.note),
+    );
+  }
+
   /**
    * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
    * and native-φ paths. Decides the render mode (GPU when WebGL2 is available, else the coarse CPU fallback
@@ -3609,6 +3635,7 @@ function init(): void {
     renderSchwarzInspectReadout();
     renderSchwarzTilingReadout();
     renderSchwarzLimitReadout();
+    renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {

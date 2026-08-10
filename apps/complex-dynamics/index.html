@@ -633,6 +633,19 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Explicit form (F4i): the closed-form φ / F / σ of the generated map, derived from its
+                     recipe. φ and F are exact; σ(w) = conj(F(φ⁻¹(w))) is symbolic — φ⁻¹ is numerical, so
+                     σ-derived values are ≈. Populated from render/schwarzExplicitForm.ts in main.ts (updates
+                     each time a σ is generated). Read-only — no inputs, so it carries no shared state. -->
+                <details class="control-group" id="schwarz-formula-group">
+                  <summary>Explicit form — φ · F · σ</summary>
+                  <div class="control-grid">
+                    <div id="schwarz-formula" class="schwarz-formula" aria-live="polite">
+                      <p class="schwarz-formula-hint">Generate a σ to see its closed form.</p>
+                    </div>
+                  </div>
+                </details>
+
                 <!-- Coloring parity with the standard fractals (ADR-0009 item 3): a shared @cas/gpu
                      colormap ramp + escape-time scale mode. Options are populated from
                      render/schwarzColormaps.ts in main.ts, so these start empty. -->
