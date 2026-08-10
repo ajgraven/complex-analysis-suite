@@ -22,6 +22,7 @@ import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from ".
 import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
 import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
+import { legendModel, renderLegend } from "./ui/legend.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
@@ -121,7 +122,9 @@ function main(): void {
   overlayCanvas.className = "overlay";
   const note = document.createElement("div");
   note.className = "note";
-  left.append(canvas, overlayCanvas, note);
+  const legendEl = document.createElement("div");
+  legendEl.className = "legend-chip";
+  left.append(canvas, overlayCanvas, legendEl, note);
 
   const right = document.createElement("div");
   right.className = "pane right";
@@ -243,6 +246,7 @@ function main(): void {
       domain: modeIsDomain(m), // the domain picker is only for the numeric-map mode
     });
     rlabel.textContent = modeIsDomain(m) ? "w = f(z)  ·  unit disk" : "w = φ(z)  ·  image grid";
+    renderLegend(legendEl, legendModel(m, state.render.palette)); // colour-key chip (A4)
   }
 
   /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
@@ -483,6 +487,7 @@ function main(): void {
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };
+    renderLegend(legendEl, legendModel(state.render.mode, id)); // the ramp bar follows the colormap (A4)
     invalidate(true, false);
   });
   controls.onGrid((id) => {
