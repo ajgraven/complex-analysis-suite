@@ -18,6 +18,7 @@ import tseslint from "typescript-eslint";
 // workspace member violates the dependency rule.
 const APP_NAMES = [
   "complex-dynamics",
+  "complex-function-plotter",
   "quadrature-domains",
   "correspondences",
   "launcher",

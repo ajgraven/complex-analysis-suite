@@ -9,7 +9,7 @@ export * from "./ast.js";
 export * from "./lexer.js";
 export { parse } from "./parser.js";
 export * from "./evaluate.js";
-export { glslFloat, compileF, compileEscape } from "./glsl.js";
+export { glslFloat, compileF, compileEscape, type CompileOptions } from "./glsl.js";
 export { differentiate, newtonIteration } from "./derivative.js";
 export { toLatex } from "./latex.js";
 export { fToRational } from "./rational.js";

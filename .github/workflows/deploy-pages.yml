@@ -75,6 +75,7 @@ jobs:
           cp -r apps/launcher/dist/.         _site/
           cp -r apps/complex-dynamics/dist   _site/complex-dynamics
           cp -r apps/quadrature-domains/dist _site/quadrature-domains
+          cp -r apps/complex-function-plotter/dist _site/complex-function-plotter
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5

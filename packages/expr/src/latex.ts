@@ -27,19 +27,37 @@ const UNARY_TEX: Record<string, (a: string) => string> = {
   sin: (a) => `\\sin\\left(${a}\\right)`,
   cos: (a) => `\\cos\\left(${a}\\right)`,
   tan: (a) => `\\tan\\left(${a}\\right)`,
+  sinh: (a) => `\\sinh\\left(${a}\\right)`,
+  cosh: (a) => `\\cosh\\left(${a}\\right)`,
+  tanh: (a) => `\\tanh\\left(${a}\\right)`,
+  sec: (a) => `\\sec\\left(${a}\\right)`,
+  csc: (a) => `\\csc\\left(${a}\\right)`,
+  cot: (a) => `\\cot\\left(${a}\\right)`,
   arcsin: (a) => `\\arcsin\\left(${a}\\right)`,
   arccos: (a) => `\\arccos\\left(${a}\\right)`,
   arctan: (a) => `\\arctan\\left(${a}\\right)`,
+  arcsinh: (a) => `\\operatorname{arcsinh}\\left(${a}\\right)`,
+  arccosh: (a) => `\\operatorname{arccosh}\\left(${a}\\right)`,
+  arctanh: (a) => `\\operatorname{arctanh}\\left(${a}\\right)`,
   re: (a) => `\\operatorname{re}\\left(${a}\\right)`,
   im: (a) => `\\operatorname{im}\\left(${a}\\right)`,
   arg: (a) => `\\arg\\left(${a}\\right)`,
   lambertw: (a) => `W\\left(${a}\\right)`,
+  gamma: (a) => `\\Gamma\\left(${a}\\right)`,
+  zeta: (a) => `\\zeta\\left(${a}\\right)`,
   round: (a) => `\\operatorname{round}\\left(${a}\\right)`,
   floor: (a) => `\\lfloor ${a}\\rfloor`,
   ceil: (a) => `\\lceil ${a}\\rceil`,
 };
 
-const CONST_TEX: Record<string, string> = { i: "i", e: "e", pi: "\\pi" };
+const CONST_TEX: Record<string, string> = {
+  i: "i",
+  e: "e",
+  pi: "\\pi",
+  tau: "\\tau",
+  phi: "\\phi",
+  γ: "\\gamma",
+};
 
 function wrap(node: Node, minPrec: number): string {
   const e = emit(node);

@@ -2,8 +2,9 @@
  * Precision-agnostic complex functions derived from the base stdlib ops
  * (`cadd`/`cmul`/`cexp`/`clog`/`csqrt`/…). Included after either the single- or
  * df64-precision base stdlib, so both builds get `cpow`, `ctan`, the inverse
- * trig, and `lambertw` for free — `lambertw`'s accuracy then follows the base
- * `cexp`/`cdiv` precision.
+ * trig, `lambertw`, and the Lanczos `cgamma` for free — their accuracy then
+ * follows the base `cexp`/`cdiv` precision (and, for `cgamma`, its float32
+ * coefficients).
  *
  * `lambertw` is a direct port of the old CindyScript mathlib: a seeded
  * approximation refined by 5 Halley steps `w = (w² + z/exp(w)) / (w + 1)`.
@@ -41,6 +42,20 @@ cvec carctan(cvec a) {
          clog(cadd(vec_(1.0, 0.0), cmul(vec_(0.0, 1.0), a)))));
 }
 
+// Hyperbolic, inverse-hyperbolic, and reciprocal-circular — the same closed forms as the JS
+// reference (@cas/expr complexJs.ts), built from the base ops so both precisions get them for free.
+cvec csinh(cvec a) { return cmul(vec_(0.5, 0.0), csub(cexp(a), cexp(cneg(a)))); }
+cvec ccosh(cvec a) { return cmul(vec_(0.5, 0.0), cadd(cexp(a), cexp(cneg(a)))); }
+cvec ctanh(cvec a) { return cdiv(csinh(a), ccosh(a)); }
+cvec carcsinh(cvec a) { return clog(cadd(a, csqrt(cadd(cmul(a, a), vec_(1.0, 0.0))))); }
+cvec carccosh(cvec a) { return clog(cadd(a, csqrt(csub(cmul(a, a), vec_(1.0, 0.0))))); }
+cvec carctanh(cvec a) {
+  return cmul(vec_(0.5, 0.0), csub(clog(cadd(vec_(1.0, 0.0), a)), clog(csub(vec_(1.0, 0.0), a))));
+}
+cvec csec(cvec a) { return cdiv(vec_(1.0, 0.0), ccos(a)); }
+cvec ccsc(cvec a) { return cdiv(vec_(1.0, 0.0), csin(a)); }
+cvec ccot(cvec a) { return cdiv(ccos(a), csin(a)); }
+
 cvec lwZeroApprox(cvec z) {
   cvec ezsqrt = csqrt(cadd(vec_(1.0, 0.0), cmul(vec_(C_E, 0.0), z)));
   cvec num = cmul(cmul(vec_(12.0, 0.0), ezsqrt), cadd(vec_(45.0 * C_SQRT2, 0.0), cmul(vec_(32.0, 0.0), ezsqrt)));
@@ -59,5 +74,74 @@ cvec clambertw(cvec z) {
     w = cdiv(cadd(cmul(w, w), cdiv(z, cexp(w))), cadd(w, vec_(1.0, 0.0)));
   }
   return w;
+}
+
+// Gamma function Γ(z) — the classic 9-coefficient Lanczos approximation (g = 7), the SAME coefficients
+// and order as the JS reference (@cas/expr complexJs.ts gamma), so the backends agree to this build's
+// precision. The coefficients are float literals, so in the df64 build they carry only float32 precision
+// (deep-zoom-accurate Γ is a future concern). GLSL has no recursion, so the reflection formula calls a
+// separate core: cgammaCore is the series (valid for Re ≥ ½); cgamma adds the left-half-plane reflection.
+cvec cgammaCore(cvec z) {
+  cvec zz = csub(z, vec_(1.0, 0.0)); // Lanczos is written in z − 1
+  cvec x = vec_(0.99999999999980993, 0.0);
+  x = cadd(x, cdiv(vec_(676.5203681218851, 0.0), cadd(zz, vec_(1.0, 0.0))));
+  x = cadd(x, cdiv(vec_(-1259.1392167224028, 0.0), cadd(zz, vec_(2.0, 0.0))));
+  x = cadd(x, cdiv(vec_(771.32342877765313, 0.0), cadd(zz, vec_(3.0, 0.0))));
+  x = cadd(x, cdiv(vec_(-176.61502916214059, 0.0), cadd(zz, vec_(4.0, 0.0))));
+  x = cadd(x, cdiv(vec_(12.507343278686905, 0.0), cadd(zz, vec_(5.0, 0.0))));
+  x = cadd(x, cdiv(vec_(-0.13857109526572012, 0.0), cadd(zz, vec_(6.0, 0.0))));
+  x = cadd(x, cdiv(vec_(9.9843695780195716e-6, 0.0), cadd(zz, vec_(7.0, 0.0))));
+  x = cadd(x, cdiv(vec_(1.5056327351493116e-7, 0.0), cadd(zz, vec_(8.0, 0.0))));
+  cvec t = cadd(zz, vec_(7.5, 0.0)); // zz + g + ½
+  // Γ = √(2π) · t^(zz + ½) · e^(−t) · x
+  cvec tpow = cpow(t, cadd(zz, vec_(0.5, 0.0)));
+  return cmul(cmul(vec_(2.5066282746310002, 0.0), tpow), cmul(cexp(cneg(t)), x));
+}
+cvec cgamma(cvec z) {
+  if (cre1(z) < 0.5) {
+    // Γ(z) = π / (sin(π z) · Γ(1 − z))
+    cvec s = csin(cmul(vec_(C_PI, 0.0), z));
+    return cdiv(vec_(C_PI, 0.0), cmul(s, cgammaCore(csub(vec_(1.0, 0.0), z))));
+  }
+  return cgammaCore(z);
+}
+
+// Riemann ζ(s) — Borwein's acceleration of the alternating series (the SAME algorithm + d_k recurrence
+// as the JS reference @cas/expr complexJs.ts zeta, so the backends agree to this build's precision; the
+// d_k are built by recurrence, not the overflowing factorial closed form). The core is accurate through
+// the critical strip; only Re(s) < 0 takes the functional equation (which reuses cgamma above, so it
+// must follow it), supplying the trivial zeros. GLSL has no recursion, hence the czetaCore / czeta split.
+// f32 caps this at ~1e-6 and degrades high up the critical strip — the plotter shows an honest badge.
+cvec czetaCore(cvec s) {
+  const int ZN = 24;
+  float d[ZN + 1];
+  float ti = 1.0 / float(ZN);       // t_0
+  float acc = float(ZN) * ti;       // d_0 = 1
+  d[0] = acc;
+  for (int i = 1; i <= ZN; i++) {
+    float fi = float(i);
+    ti = ti * (float(ZN) + fi - 1.0) * (float(ZN) - fi + 1.0) * 4.0 / (2.0 * fi * (2.0 * fi - 1.0));
+    acc += float(ZN) * ti;
+    d[i] = acc;
+  }
+  float dn = d[ZN];
+  cvec sum = vec_(0.0, 0.0);
+  for (int k = 0; k < ZN; k++) {
+    float sgn = (k % 2 == 0) ? 1.0 : -1.0;
+    cvec term = cexp(cmul(cneg(s), vec_(log(float(k) + 1.0), 0.0))); // (k+1)^(-s)
+    sum = cadd(sum, cmul(vec_(sgn * (d[k] - dn), 0.0), term));
+  }
+  cvec twoPow = cexp(cmul(csub(vec_(1.0, 0.0), s), vec_(log(2.0), 0.0))); // 2^(1-s)
+  return cneg(cdiv(sum, cmul(vec_(dn, 0.0), csub(vec_(1.0, 0.0), twoPow))));
+}
+cvec czeta(cvec s) {
+  if (cre1(s) < 0.0) {
+    // ζ(s) = 2^s · π^(s-1) · sin(π s / 2) · Γ(1-s) · ζ(1-s)
+    cvec twoS = cexp(cmul(s, vec_(log(2.0), 0.0)));
+    cvec piPow = cexp(cmul(csub(s, vec_(1.0, 0.0)), vec_(log(C_PI), 0.0)));
+    cvec refl = cmul(cmul(twoS, piPow), csin(cmul(vec_(C_PI * 0.5, 0.0), s)));
+    return cmul(refl, cmul(cgamma(csub(vec_(1.0, 0.0), s)), czetaCore(csub(vec_(1.0, 0.0), s))));
+  }
+  return czetaCore(s);
 }
 `;

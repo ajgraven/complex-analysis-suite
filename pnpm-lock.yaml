@@ -100,6 +100,43 @@ importers:
         specifier: ^2.1.4
         version: 2.1.9(@types/node@26.1.1)(@vitest/browser@2.1.9)(jsdom@26.1.0)(msw@2.15.0(@types/node@26.1.1)(typescript@5.9.3))(terser@5.48.0)
 
+  apps/complex-function-plotter:
+    dependencies:
+      '@cas/expr':
+        specifier: workspace:*
+        version: link:../../packages/expr
+      '@cas/gpu':
+        specifier: workspace:*
+        version: link:../../packages/gpu
+      '@cas/interchange':
+        specifier: workspace:*
+        version: link:../../packages/interchange
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.17.0
+        version: 9.39.4
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.4
+      globals:
+        specifier: ^15.14.0
+        version: 15.15.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.18.0
+        version: 8.62.1(eslint@9.39.4)(typescript@5.9.3)
+      vite:
+        specifier: ^5.4.10
+        version: 5.4.21(@types/node@26.1.1)(terser@5.48.0)
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@26.1.1)(@vitest/browser@2.1.9)(jsdom@26.1.0)(msw@2.15.0(@types/node@26.1.1)(typescript@5.9.3))(terser@5.48.0)
+
   apps/correspondences:
     dependencies:
       '@cas/core':
