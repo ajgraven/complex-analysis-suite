@@ -18,15 +18,17 @@ Format follows Michael Nygard's ADR convention.
 | [0007](#adr-0007-incremental-extraction-driven-by-real-need) | Incremental extraction driven by real need | Accepted |
 | [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) | Extract `@cas/exact`; keep QD's `sym-core` separate | Accepted |
 | [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics) | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics | Accepted |
+| [0010](#adr-0010-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one) | The Riemann-map tool is a new app (not a mode in an existing tool) | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All nine are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All ten are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first *follow-on*** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
 > this way. Expect more of that shape than of the original seven. **0009 is another follow-on**, of a
 > different kind — a UI/product decision (σ becomes a first-class peer *view* in Complex Dynamics), not an
-> extraction.
+> extraction. **0010 is a third follow-on** — a topology decision occasioned by the new tool's own build:
+> the Riemann-map studio is a *new app*, not a mode in an existing one (the mirror image of 0009's call).
 > Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
@@ -711,3 +713,112 @@ one QD already validated for σ, so it is low-risk in design even though it is r
 serializable state across share links / saved views / PNG metadata (item 2); the design doc records the
 peer view as the realized target shape (item 4). Deferred beyond this ADR: S5 (SIGMA-HANDOFF.md) — more
 families, branch-aware continuation, df64.
+
+---
+
+## ADR-0010: The Riemann-map tool is a new app, not a mode in an existing one
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A third follow-on of the kind [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+anticipated — a topology decision, occasioned by the first substantive build of a **fourth** tool
+(the research-grade Riemann-map / conformal-mapping studio). It is the mirror image of
+[ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics): 0009 kept a
+conformal-map feature *inside* Complex Dynamics; this one puts a broader conformal-map tool in its
+*own* app. The two are consistent, for the reason spelled out below.*
+
+### Context
+The suite already touches Riemann maps in two places. Complex Dynamics builds a Riemann map φ
+(presets + a custom unbounded-Laurent form) and reflects it into the σ **peer view**
+([ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics)); Quadrature
+Domains carries closed-form parametric conformal maps (Faber / inverse-problem data) and its own
+Schwarz machinery. So a fair question is whether a new Riemann-map tool should be **(A)** a new app,
+**(B)** a peer view inside Complex Dynamics (as σ is), or **(C)** a mode inside Quadrature Domains.
+
+The deciding fact is *scope*. The new tool's headline is a broad, **new** capability neither existing
+app has: multiple **numerical construction engines** — lightning/rational (AAA + Vandermonde–Arnoldi),
+Schwarz–Christoffel, the zipper/geodesic algorithm, kernel / integral-equation methods, and Böttcher
+uniformization — plus a large visualization, conformal-invariant, and publication-export surface. None
+of that numerical-construction machinery exists anywhere in the suite yet: there is (as the research
+phase confirmed) essentially **no research-grade JS/TS conformal-mapping code** to reuse. CD's φ is a
+narrow *recipe* (a Laurent form it reflects into σ), not a general constructor; QD's maps are
+closed-form solutions of the *inverse quadrature-domain* problem, not a boundary→map solver. The new
+tool is a from-scratch construction studio that happens to render and analyze conformal maps — not a
+reflection of a map an existing app already owns.
+
+### Decision
+Build it as a **separate app, `apps/riemann-map`**, a peer to the three existing apps, on the shared
+`@cas/*` packages, listed on the launcher — consistent with
+[CLAUDE.md decision #8](../CLAUDE.md) (separate apps + a unified menu; **no** unified single-page
+shell). It **imports** a φ handed off from Complex Dynamics, and can hand maps back, via
+[`@cas/interchange`](INTERCHANGE.md); but it **owns** the general construction engines CD and QD lack.
+It is **not** a mode inside CD or QD.
+
+### Options Considered
+
+#### Option A: A new standalone app `apps/riemann-map` (this ADR)
+| Dimension | Assessment |
+|---|---|
+| Fit with scope | High — room for many construction engines + analysis + export without bloating a host app |
+| Reuse | High — pulls the `@cas/*` stack *downward*; adds only genuinely new numerics |
+| Suite shape | Matches decision #8 (separate apps + launcher); the north-star "each new tool builds fewer primitives from scratch" |
+
+**Pros:** the broad new surface has a natural home; independent build/deploy; the CD/QD hand-off stays
+a clean **data contract** (interchange), not a code coupling; keeps each app simple and shippable.
+**Cons:** a fourth app to maintain; "conformal map" now appears in two apps (CD's φ/σ and this one),
+so the boundary between them must be kept honest.
+
+#### Option B: A peer view inside Complex Dynamics (like σ, ADR-0009)
+**Pros:** reuses CD's engine/coloring/interaction directly; σ already validated the peer-view shape.
+**Cons — and why rejected:** σ earned its place *inside* CD precisely because it **shares CD's
+foundation** — it is a thin reflection of a φ CD already builds, with the map-specific instruments
+(rays, Böttcher, matings) explicitly out of scope (ADR-0009). The Riemann-map tool is the opposite: its
+value is a large body of **new construction/analysis/export** machinery that CD's `f(z,c)` escape-time
+pipeline does not provide and that would swell CD's already ~5k-line `main.ts`. A view is the right
+shape for something that *reuses* a host app's engine; an app is the right shape for something that
+*brings its own*.
+
+#### Option C: A mode inside Quadrature Domains
+**Pros:** QD is the suite's closest existing conformal-map surface (Faber, Schwarz function).
+**Cons:** QD's maps are closed-form solutions of the inverse *quadrature-domain* problem in a
+gradually-typed JS codebase; grafting a general numerical boundary→map studio (in strict TS, on the
+shared packages) onto it couples two very different tools and inherits QD's conventions
+([ADR-0006](#adr-0006-convention-neutral-core-packages) territory). Rejected for the same
+scope/foundation reason as B.
+
+### Trade-off Analysis
+This is **not** in tension with [ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics);
+it applies the same test and gets the opposite answer because the input is opposite. ADR-0009's own
+rule: a feature that **shares** a host app's engine, coloring, interaction, and import path belongs
+*inside* that app as a view; one that would **re-duplicate** primitives or bring a large independent
+surface belongs in its own app (that ADR rejected a *separate* σ app for exactly that reuse reason).
+σ shares CD's foundation, so it is a view; the Riemann-map studio brings its own construction engines
+and reuses only the **packages** (downward), so it is an app. Decision #8 is the standing suite
+topology, and a genuinely new tool of this breadth is precisely what it is for. The honest cost —
+a fourth app, and "conformal map" living in two apps — is bounded by keeping CD's φ narrow (its σ
+recipe) and letting the new app own general construction, with the interchange hand-off as the seam.
+
+### Consequences
+- **Easier:** giving the tool's broad engine/analysis/export surface a home without bloating CD;
+  reusing `@cas/*` downward (north-star); independent deploy; a clean CD↔riemann-map (and QD)
+  hand-off as a versioned **data contract** rather than a cross-app import (which the dependency rule
+  forbids anyway — [ARCHITECTURE §4](ARCHITECTURE.md#4-the-dependency-rule)).
+- **Harder:** a fourth app to maintain; two homes for "conformal map" (CD's φ/σ and this app) whose
+  boundary must be kept honest; a shared **numeric-linear-algebra** seam (QR/Arnoldi/FFT/quadrature)
+  will likely want extraction once a second consumer appears — its own follow-on ADR
+  ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)), with QD's in-app
+  `houseQR`/`condEst`/Newton as the standing candidate.
+- **Watch for:** duplication drift between CD's φ builder and the new app's map input. Keep CD's φ to
+  its σ recipe; let the new app own general construction; the interchange hand-off is the seam, not
+  copied code.
+- **Revisit if:** the new app and CD's φ/σ converge enough that one should consume the other — then
+  extract the shared piece into a package (ADR-0007), rather than merging the apps.
+
+### Action Items
+1. [x] Scaffold `apps/riemann-map` on the shared packages — P0 Genesis: the empty, tested, deployable
+       shell (Vite/TS, the single serializable view-state over `@cas/interchange`, node parity-seed
+       tests, launcher "Coming soon" card; local `lint`/`typecheck`/`test`/`build` gate green).
+2. [ ] Wire the Complex-Dynamics → riemann-map φ hand-off through `@cas/interchange` (plan Phase 2).
+3. [ ] Record the **numeric-linear-algebra seam** and the **`@cas/interchange` extension** (new
+       `MapSpec` variants, minor version bump) as their own follow-on ADRs when they materialize
+       (plan Phases 2–3).
