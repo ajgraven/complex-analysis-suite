@@ -19,6 +19,8 @@ export interface Controls {
   onMode(cb: (id: string) => void): void;
   onColormap(cb: (id: string) => void): void;
   onGrid(cb: (id: string) => void): void;
+  onSavePng(cb: () => void): void;
+  onResetView(cb: () => void): void;
 }
 
 const GRID_KINDS = [
@@ -51,6 +53,8 @@ export function createControls(initialExpr: string): Controls {
   const modeListeners: ((id: string) => void)[] = [];
   const cmapListeners: ((id: string) => void)[] = [];
   const gridListeners: ((id: string) => void)[] = [];
+  const savePngListeners: (() => void)[] = [];
+  const resetListeners: (() => void)[] = [];
 
   const root = document.createElement("aside");
   root.className = "sidebar";
@@ -95,6 +99,24 @@ export function createControls(initialExpr: string): Controls {
   const grid = labeledSelect("Grid", GRID_KINDS);
   viewSection.append(viewTitle, mode.field, cmap.field, grid.field);
 
+  // --- Figure / export section ----------------------------------------------
+  const figSection = document.createElement("section");
+  const figTitle = document.createElement("h2");
+  figTitle.textContent = "Figure";
+  const buttons = document.createElement("div");
+  buttons.className = "buttons";
+  const savePng = document.createElement("button");
+  savePng.type = "button";
+  savePng.textContent = "Save PNG";
+  const resetView = document.createElement("button");
+  resetView.type = "button";
+  resetView.textContent = "Reset view";
+  buttons.append(savePng, resetView);
+  const figNote = document.createElement("p");
+  figNote.className = "muted";
+  figNote.textContent = "PNG at 2× with the view embedded (reopen to restore). Readouts: = exact · ≈ numerical.";
+  figSection.append(figTitle, buttons, figNote);
+
   // --- Under-cursor section -------------------------------------------------
   const hoverSection = document.createElement("section");
   const hoverTitle = document.createElement("h2");
@@ -106,7 +128,7 @@ export function createControls(initialExpr: string): Controls {
   hoverEmpty.textContent = "Hover the plane to read φ(z), φ′(z), and the local scale/rotation.";
   hoverSection.append(hoverTitle, hover, hoverEmpty);
 
-  root.append(mapSection, viewSection, hoverSection);
+  root.append(mapSection, viewSection, figSection, hoverSection);
 
   // --- behaviour ------------------------------------------------------------
   input.value = initialExpr;
@@ -128,6 +150,8 @@ export function createControls(initialExpr: string): Controls {
   mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
   cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
   grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
+  savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
+  resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
 
   function syncPreset(expr: string): void {
     preset.value = presetIdForExpr(expr) ?? CUSTOM;
@@ -182,6 +206,12 @@ export function createControls(initialExpr: string): Controls {
     },
     onGrid(cb: (id: string) => void): void {
       gridListeners.push(cb);
+    },
+    onSavePng(cb: () => void): void {
+      savePngListeners.push(cb);
+    },
+    onResetView(cb: () => void): void {
+      resetListeners.push(cb);
     },
   };
 }

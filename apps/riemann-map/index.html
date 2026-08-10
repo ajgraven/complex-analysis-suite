@@ -53,6 +53,14 @@
       }
       .sidebar input.expr { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
       .sidebar select:focus, .sidebar input.expr:focus { outline: none; border-color: var(--accent); }
+      .sidebar .field { display: flex; flex-direction: column; gap: 0.2rem; }
+      .sidebar .field-label { font-size: 0.72rem; color: var(--muted); }
+      .sidebar .buttons { display: flex; gap: 0.5rem; }
+      .sidebar button {
+        flex: 1; padding: 0.45rem; border-radius: 7px; cursor: pointer; font-size: 0.88rem;
+        border: 1px solid var(--panel-border); background: #1a2230; color: var(--text);
+      }
+      .sidebar button:hover { border-color: var(--accent); }
       .sidebar .error { display: none; color: var(--danger); font-size: 0.82rem; }
       .sidebar .error.visible { display: block; }
       .sidebar .preview { min-height: 1.6rem; padding: 0.2rem 0; overflow-x: auto; }

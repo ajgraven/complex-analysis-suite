@@ -17,6 +17,7 @@ import { attachPanZoom, pixelToWorld } from "./render/nav.js";
 import { modeCode, colormapCode } from "./render/modes.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
+import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
@@ -157,6 +158,57 @@ function main(): void {
     readout.textContent = `center ${fmtC(v.centerRe, v.centerIm)} · zoom ${fmt(v.zoom)}`;
   }
 
+  // ---- PNG export (G2): composite plane + grid at Nx, embed the view-state ---
+  function downloadBytes(bytes: Uint8Array, filename: string): void {
+    // Copy into a fresh ArrayBuffer-backed view so the Blob part is definitely non-shared (TS 5.7 typing).
+    const url = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/png" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function exportPng(scale = 2): Promise<void> {
+    if (!renderer) return;
+    const baseW = canvas.width;
+    const baseH = canvas.height;
+    const W = Math.max(1, Math.round(baseW * scale));
+    const H = Math.max(1, Math.round(baseH * scale));
+    canvas.width = W;
+    canvas.height = H;
+    renderer.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette));
+
+    const ex = document.createElement("canvas");
+    ex.width = W;
+    ex.height = H;
+    const ctx = ex.getContext("2d");
+    if (ctx) {
+      ctx.drawImage(canvas, 0, 0);
+      if (gridKind() !== "none") {
+        const ov = new Overlay2D(ex); // ex.width/height already set → draw without a CSS-box resize
+        ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
+        ov.drawLines(gridSource, 2);
+      }
+    }
+    const blob = await new Promise<Blob | null>((res) => ex.toBlob(res, "image/png"));
+
+    canvas.width = baseW; // restore the live drawing buffer
+    canvas.height = baseH;
+    glDirty = true;
+    schedule();
+
+    if (!ctx || !blob) return;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const permalink = location.origin + location.pathname + encodeRiemannState(state);
+    const withMeta = injectPngText(
+      injectPngText(bytes, "Software", "Riemann Map — Complex Analysis Suite"),
+      "cas:state",
+      permalink,
+    );
+    downloadBytes(withMeta, "riemann-map.png");
+  }
+
   // ---- unified frame (rAF-coalesced; dirty flags decide what to recompute) --
   let frame = 0;
   function schedule(): void {
@@ -213,6 +265,8 @@ function main(): void {
     state = { ...state, render: { ...state.render, grid: id } };
     invalidate(false, true);
   });
+  controls.onSavePng(() => void exportPng());
+  controls.onResetView(() => setViewport({ ...DEFAULT_VIEW_STATE.viewport }));
 
   // ---- hover + linked cursor (F4/F2) ---------------------------------------
   canvas.addEventListener("pointermove", (e) => {
