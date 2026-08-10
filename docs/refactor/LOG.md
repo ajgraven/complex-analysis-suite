@@ -2240,3 +2240,32 @@
   φ-mapped seed); the pinned orbit survives the view swap; the plane click-inspect path is unchanged. Captured
   the z-disk deltoid with the unit-circle ∂Ω + a pinned escaping orbit pulled back into z. **F2c complete —
   the z-disk is now a full peer of the plane (field + boundary + orbit inspection); sphere (F2d) still to come.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2d-i — sphere field + camera):**
+  the third σ coordinate view — the **Riemann sphere** — renders. A single-pass fragment ray-cast (no FBO),
+  mirroring CD's main-plot sphere technique verbatim: `schwarzGL` gains a `sphereRayW` (a copy of shaderBuilder's
+  `sphereRayZ`, aspect fixed at 1) + a `u_viewMode == 2` branch in `fragToW` that ray-casts the unit sphere from
+  a fixed camera at (0,0,dist) — the arcball orientation applied to the HIT (`u_sphereRot = worldToModel`), not
+  the ray — and stereographically projects `w = (x+iy)/(1−Z)` (∞ at the north pole); the SAME σ escape-time then
+  runs on w, so the sphere is the plane's field wrapped onto a ball. A silhouette miss paints the shared
+  off-domain background; a hit is Lambert+spec **ball-shaded** (world normal, shared `u_lightDir`) so it reads as
+  a lit 3-D sphere. Three camera uniforms (`u_sphereRot` mat3 · `u_sphereDist` · `u_sphereTanFov`) pushed only in
+  sphere mode; the FOV↔magnification map is a telescope zoom (distance fixed), mirroring glPlot. **Plane + z-disk
+  are byte-identical** (u_viewMode 0/1 unchanged). The camera reuses `sphereView.ts` wholesale (`makeSphereCamera`
+  / `arcballDelta` / `quatMultiply` / `quatFromAxisAngle` / `quatToMat3`). In `main.ts`: a `schwarzSphereRot` +
+  `schwarzSphereZoom` camera (separate from the flat views' center/zoom stash), sphere branches in the pointer
+  handlers (drag → arcball rotate · wheel → telescope zoom) and keyboard (arrows spin · ± zoom), the sphere button
+  **enabled per-session in a GPU renderer** (CPU refuses with a toast — the per-pixel ray-cast is GPU-only), the
+  view chip reads "Riemann sphere · zoom …", overlays + the scale bar suppressed on the ball, and Reset restores
+  the camera. A **σ-specific default orientation** tilts the shared K-facing default ~90° so the ∂Ω equator sits
+  centre-frame (K cap below, the Ω tiling wrapping toward ∞ above) instead of the featureless K hemisphere the
+  map's bounded complement shows head-on. **Orbit inspection + serialization are deferred to F2d-ii** — while on
+  the sphere `_sigma` captures the underlying w-plane view, so a share link is always a coherent flat view.
+  Green: typecheck + lint + node **2437** (unchanged — the sphere is GPU-only, so its coverage is the browser
+  corpus) + browser **19/19** (+1 F2d: the composed σ shader compiles with the sphere path; a σ ball renders
+  opaque with K-vs-Ω structure + a silhouette void; the viewport corners fall in the void; it differs from the
+  plane; and rotating the camera moves the frame). VERIFIED (Playwright, **9/9**): the sphere button is enabled
+  in a GPU session; the button + `data-schwarz-view=sphere` reflect the mode; the field renders + differs from the
+  plane; the chip reads "Riemann sphere"; dragging rotates + scrolling zooms the camera; Reset restores the
+  default; and returning to the plane leaves its window byte-identical (the sphere never touched it). Captured the
+  tilted-default deltoid sphere (K → ∂Ω → 3-fold tiling → the black ∞ cap at the north pole). **F2d-i complete —
+  plane · z-disk · sphere all render + navigate; F2d-ii adds sphere orbit inspection + `_sigma` camera round-trip.**

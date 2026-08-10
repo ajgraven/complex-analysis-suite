@@ -539,17 +539,17 @@ abs(z)>2</textarea
                   view
                   <span class="view-chip-text" id="schwarz-view-chip">generate a σ to begin</span>
                 </p>
-                <!-- View mode (F2a): the same σ iteration in three coordinate views — the w-plane (live), the
-                     uniformizing z-disk (forward φ), and the Riemann sphere. The z-disk / sphere render paths
-                     land in F2b / F2d; disabled until then, so the segment shows the roadmap without a broken
-                     view. -->
+                <!-- View mode: the same σ iteration in three coordinate views — the w-plane, the uniformizing
+                     z-disk (forward φ, F2b), and the Riemann sphere (stereographic, F2d). All three are live;
+                     the sphere ray-cast is GPU-only, so its button starts disabled and enterSchwarz enables it
+                     per-session when a GPU renderer is available. -->
                 <div class="schwarz-viewseg" role="group" aria-label="σ view mode">
                   <button type="button" id="schwarz-view-plane" class="seg-btn is-active" aria-pressed="true"
                     title="w-plane — σ acts directly on the world point w (the current view)">plane</button>
                   <button type="button" id="schwarz-view-z" class="seg-btn" aria-pressed="false"
                     title="Uniformizing z-disk — the σ field in the coordinate z, lifted forward w = φ(z)">z-disk</button>
                   <button type="button" id="schwarz-view-sphere" class="seg-btn" aria-pressed="false" disabled
-                    title="Riemann sphere (stereographic) — coming in F2d">sphere</button>
+                    title="Riemann sphere (stereographic ∞) — drag to rotate, scroll to zoom (GPU only)">sphere</button>
                 </div>
                 <!-- Orbit inspection (ADR-0009 item 3): click the σ canvas to trace a point's orbit; the
                      readout is populated from render/schwarzView.ts in main.ts. Always visible so the

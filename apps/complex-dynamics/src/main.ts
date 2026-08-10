@@ -135,6 +135,13 @@ import { drawSchwarzBoundary, drawSchwarzUnitCircle } from "./render/schwarzBoun
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
+import {
+  arcballDelta,
+  quatFromAxisAngle,
+  quatMultiply,
+  DEFAULT_ROTATION as SPHERE_DEFAULT_ROTATION,
+  type Quat,
+} from "./render/sphereView";
 import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
@@ -3009,15 +3016,27 @@ function init(): void {
         mode: "GPU" | "CPU";
       }
     | null = null;
-  // F2b coordinate view: `schwarzView` ALWAYS holds the ACTIVE view's window (so every pan/zoom/inspect/nav
-  // handler keeps operating on it unchanged); the inactive view is stashed in `schwarzViews` and swapped in
-  // setSchwarzViewMode. Only "plane" (w-plane) and "z" (z-disk) are live; "sphere" lands in F2d.
-  let schwarzViewMode: "plane" | "z" = "plane";
+  // Coordinate view: `schwarzView` ALWAYS holds the ACTIVE flat (plane/z) view's window (so every pan/zoom/
+  // inspect/nav handler keeps operating on it unchanged); the inactive flat view is stashed in `schwarzViews`
+  // and swapped in setSchwarzViewMode. The "sphere" view (F2d) has no center/zoom window — it uses a camera
+  // (schwarzSphereRot + schwarzSphereZoom) instead, and leaves the flat window untouched while it is active.
+  let schwarzViewMode: "plane" | "z" | "sphere" = "plane";
   const schwarzViews: { plane: SchwarzView; z: SchwarzView } = {
     plane: { ...SCHWARZ_DEFAULT_VIEW },
     z: { ...SCHWARZ_ZDISK_DEFAULT_VIEW },
   };
   let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+  // σ-specific default sphere orientation: the shared SPHERE_DEFAULT_ROTATION faces the south pole (w = 0),
+  // which for σ is the featureless K cap — the whole visible hemisphere is |w| ≤ 1 ⊂ K, so the ball reads as a
+  // flat colour. Tilt it ~90° about the screen-horizontal axis so the ∂Ω equator sits centre-frame instead:
+  // the K cap below, the Ω tiling wrapping toward ∞ above. The user can still rotate anywhere from here.
+  const SCHWARZ_SPHERE_DEFAULT_ROT: Quat = quatMultiply(quatFromAxisAngle([1, 0, 0], Math.PI / 2), SPHERE_DEFAULT_ROTATION);
+  // F2d sphere camera — orientation (arcball quaternion) + magnification (telescope zoom, distance fixed),
+  // separate from the flat views' center/zoom. Per-session in F2d-i (the sphere is not yet serialized into
+  // `_sigma` — a share link while on the sphere falls back to the underlying plane view); F2d-ii adds the
+  // camera to the permalink. Reset with the view / a new σ.
+  let schwarzSphereRot: Quat = SCHWARZ_SPHERE_DEFAULT_ROT;
+  let schwarzSphereZoom = 1;
   let schwarzRaf = 0;
   // σ coloring (ADR-0009 item 3) — remembered for this page session so it survives σ enter/exit and a
   // regenerate. Also serialized into the σ-view permalink / saved view / PNG via the `_sigma` state layer
@@ -3113,11 +3132,18 @@ function init(): void {
    *  outgoing view, loads the incoming one (each view pans/zooms independently), reflects the segment, and
    *  repaints the field in the new mode. The orbit/boundary overlays are w-space, so paintSchwarz simply
    *  doesn't draw them off the plane — the pinned orbit is KEPT (not cleared), so returning restores it. */
-  function setSchwarzViewMode(mode: "plane" | "z"): void {
+  function setSchwarzViewMode(mode: "plane" | "z" | "sphere"): void {
     if (mode === schwarzViewMode) return;
-    schwarzViews[schwarzViewMode] = schwarzView; // save the (reassigned) active window
+    // The sphere ray-cast is GPU-only (per-pixel on the CPU would be far too slow) — refuse it in a CPU session.
+    if (mode === "sphere" && schwarzSession?.mode !== "GPU") {
+      showToast("The sphere view needs the GPU renderer (unavailable here).", "warn");
+      return;
+    }
+    // Flat views (plane/z) carry a center/zoom window in `schwarzView`; the sphere carries none, so it neither
+    // saves nor loads that window — it leaves the flat window intact for when the user switches back.
+    if (schwarzViewMode !== "sphere") schwarzViews[schwarzViewMode] = schwarzView; // stash the outgoing flat window
     schwarzViewMode = mode;
-    schwarzView = { ...schwarzViews[mode] }; // load the incoming window (a copy — pan/zoom reassigns it)
+    if (mode !== "sphere") schwarzView = { ...schwarzViews[mode] }; // load the incoming flat window (a copy)
     schwarzHover = null; // transient w-space preview — stale in the new coordinates
     syncSchwarzViewModeSeg();
     scheduleSchwarzPaint(); // re-render the field in the new mode (also mirrors the nav fields + chip)
@@ -3154,7 +3180,9 @@ function init(): void {
           lightAz: schwarzLightAz,
           lightEl: schwarzLightEl,
           lightHeight: schwarzLightDepth,
-          viewMode: schwarzViewMode, // F2b: "z" ⇒ the uniformizing z-disk (w = φ(z)); "plane" is the default
+          viewMode: schwarzViewMode, // "z" ⇒ z-disk (F2b) · "sphere" ⇒ Riemann sphere (F2d) · else the w-plane
+          sphereRot: schwarzSphereRot, // F2d camera (ignored unless viewMode === "sphere")
+          sphereZoom: schwarzSphereZoom,
         });
         schwarzLastRenderSize = renderSize;
       }
@@ -3190,9 +3218,10 @@ function init(): void {
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPlot: toZ });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPlot: toZ });
     }
-    // Scale bar (ADR-0009 item 3) — correct in either view (it just reads the active window's zoom). Last, so
-    // an orbit line never hides it (it has its own backing).
-    drawScaleBar(ctx, backing, schwarzView.zoom);
+    // Scale bar (ADR-0009 item 3) — correct for the flat views (it reads the active window's zoom). The sphere
+    // has no single linear scale (stereographic distortion varies across the ball), so it carries no scale bar.
+    // Last, so an orbit line never hides it (it has its own backing).
+    if (schwarzViewMode !== "sphere") drawScaleBar(ctx, backing, schwarzView.zoom);
     schwarzFieldDirty = false;
     syncSchwarzViewFields(); // keep the precise-nav fields + view chip mirroring the live view
   }
@@ -3224,9 +3253,14 @@ function init(): void {
       chip.textContent = "generate a σ to begin";
       return;
     }
+    const family = schwarzSession.boundedOmega ? "bounded" : "unbounded";
+    // The sphere (F2d) has no centre/zoom window — report the camera magnification instead of a plane point.
+    if (schwarzViewMode === "sphere") {
+      chip.textContent = `Riemann sphere · zoom ${Number(schwarzSphereZoom.toPrecision(3))} · ${family}`;
+      return;
+    }
     const f = formatSchwarzViewFields(schwarzView);
     const centre = `${f.re}${f.im.startsWith("-") ? "" : "+"}${f.im}i`;
-    const family = schwarzSession.boundedOmega ? "bounded" : "unbounded";
     chip.textContent = `${centre} · zoom ${f.zoom} · ${family}`;
   }
 
@@ -3377,11 +3411,14 @@ function init(): void {
       }
     }
     schwarzSession = { engine, poly, phi, boundedOmega, mode };
-    // A new σ starts on the w-plane, with both coordinate views (F2b) at their defaults.
+    // A new σ starts on the w-plane, with every coordinate view at its default: both flat windows (F2b) and
+    // the sphere camera (F2d).
     schwarzViewMode = "plane";
     schwarzViews.plane = { ...SCHWARZ_DEFAULT_VIEW };
     schwarzViews.z = { ...SCHWARZ_ZDISK_DEFAULT_VIEW };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+    schwarzSphereRot = SCHWARZ_SPHERE_DEFAULT_ROT;
+    schwarzSphereZoom = 1;
     syncSchwarzViewModeSeg();
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
     schwarzHover = null;
@@ -3401,6 +3438,11 @@ function init(): void {
         paintSchwarz();
       }
     }
+    // The sphere ray-cast is GPU-only, so its segment button is enabled only in a GPU session (a CPU fallback
+    // leaves it disabled — clicking it would otherwise toast-and-refuse). Re-evaluated per session (the GPU
+    // render can degrade to CPU in the catch above).
+    const sphereBtn = document.getElementById("schwarz-view-sphere") as HTMLButtonElement | null;
+    if (sphereBtn) sphereBtn.disabled = schwarzSession.mode !== "GPU";
     const label = byId<HTMLElement>("dyn-schwarz-label");
     label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · arrows ± i · Esc to exit`;
   }
@@ -3504,10 +3546,15 @@ function init(): void {
   /** The σ view as a serializable state (for `_sigma` + the PNG stamp). Requires an active session. */
   function currentSigmaState(): SigmaViewState | null {
     if (!schwarzSession) return null;
+    // F2d-i: the sphere carries a camera, not a center/zoom window, and is not yet serialized (F2d-ii adds it).
+    // While on the sphere, capture the underlying w-plane view instead — schwarzViews.plane always holds a valid
+    // plane window there (the flat window was stashed on the switch to the sphere) — so a link is always coherent.
+    const flatMode: "plane" | "z" = schwarzViewMode === "z" ? "z" : "plane";
+    const flatView = schwarzViewMode === "sphere" ? schwarzViews.plane : schwarzView;
     return {
       phi: schwarzSession.phi,
-      center: schwarzView.center,
-      zoom: schwarzView.zoom,
+      center: flatView.center,
+      zoom: flatView.zoom,
       colormap: schwarzColormapName,
       scale: schwarzScaleMode,
       colorMode: schwarzColorMode,
@@ -3523,7 +3570,7 @@ function init(): void {
       lightEl: schwarzLightEl,
       lightHeight: schwarzLightDepth,
       showBoundary: schwarzShowBoundary,
-      viewMode: schwarzViewMode, // F2b: center/zoom above are the ACTIVE view's window
+      viewMode: flatMode, // center/zoom above are this flat view's window (sphere ⇒ its underlying plane, F2d-i)
       ...(schwarzColormapName === "custom" ? { customStops: schwarzGradientStops } : {}),
     };
   }
@@ -3559,7 +3606,9 @@ function init(): void {
         lightAz: schwarzLightAz,
         lightEl: schwarzLightEl,
         lightHeight: schwarzLightDepth,
-        viewMode: schwarzViewMode, // F2b: export the active coordinate view (plane or z-disk)
+        viewMode: schwarzViewMode, // export the active coordinate view (plane · z-disk · sphere)
+        sphereRot: schwarzSphereRot, // F2d camera (ignored unless viewMode === "sphere")
+        sphereZoom: schwarzSphereZoom,
       });
       const out = document.createElement("canvas");
       out.width = size;
@@ -3579,7 +3628,7 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
       }
-      if (wantScaleBar) drawScaleBar(octx, size, schwarzView.zoom);
+      if (wantScaleBar && schwarzViewMode !== "sphere") drawScaleBar(octx, size, schwarzView.zoom); // sphere: no linear scale
       canvas = out;
       scheduleSchwarzPaint(); // the render above resized the offscreen GL canvas — repaint the on-screen 512²
     } else {
@@ -3667,6 +3716,7 @@ function init(): void {
     // caller then declines to inspect/preview. One helper so hover, click-inspect, and the `i` key agree.
     const schwarzSeedFromPointer = (uv: [number, number]): Complex | null => {
       if (!schwarzSession) return null;
+      if (schwarzViewMode === "sphere") return null; // F2d-i: no orbit inspection on the sphere yet
       const p = uvToPlotFrac(schwarzView, uv[0], uv[1]);
       if (schwarzViewMode !== "z") return p; // plane: the fragment already IS w
       const r = Math.hypot(p[0], p[1]);
@@ -3720,6 +3770,11 @@ function init(): void {
         // Move the inspect seed w₀ under the cursor and re-trace its σ-orbit in real time (B3). The view is
         // unchanged, so this is an overlay-only repaint (setSchwarzInspect) — the field is not re-rendered.
         setSchwarzInspect(uvToPlotFrac(schwarzView, cur[0], cur[1]));
+      } else if (schwarzViewMode === "sphere") {
+        // F2d: arcball — rotate the Riemann sphere by the incremental drag, accumulated onto its orientation
+        // (pre-multiply, mirroring the main plots). The flat center/zoom window is untouched.
+        schwarzSphereRot = quatMultiply(arcballDelta(lastUv, cur), schwarzSphereRot);
+        scheduleSchwarzDraftPaint(); // draft while spinning; refine to full res once it goes idle
       } else {
         schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
         scheduleSchwarzDraftPaint(); // draft while dragging; refine to full res once the pan goes idle
@@ -3756,6 +3811,13 @@ function init(): void {
       (e) => {
         if (!schwarzSession) return;
         e.preventDefault();
+        if (schwarzViewMode === "sphere") {
+          // F2d: telescope zoom — narrow/widen the sphere-camera FOV (distance fixed), clamped like the main plots.
+          const mag = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+          schwarzSphereZoom = Math.min(1e6, Math.max(0.3, schwarzSphereZoom * mag));
+          scheduleSchwarzDraftPaint();
+          return;
+        }
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12; // scroll up ⇒ zoom in
         const next = zoomSchwarzView(schwarzView, factor, clientToUv(e));
         next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom)); // keep the window sane
@@ -3786,6 +3848,32 @@ function init(): void {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) {
         return; // don't hijack typing / slider nudges
+      }
+      // F2d sphere: the arrows SPIN the ball (about the view up/right axes) and +/- zoom the camera; there is
+      // no flat pan/zoom or centre-inspect. Handle it first, then bail before the plane/z switch below.
+      if (schwarzViewMode === "sphere") {
+        const spin = (axis: [number, number, number], ang: number): void => {
+          schwarzSphereRot = quatMultiply(quatFromAxisAngle(axis, ang), schwarzSphereRot);
+          scheduleSchwarzDraftPaint();
+        };
+        const zoomSphere = (mag: number): void => {
+          schwarzSphereZoom = Math.min(1e6, Math.max(0.3, schwarzSphereZoom * mag));
+          scheduleSchwarzDraftPaint();
+        };
+        const STEP = 0.15;
+        switch (e.key) {
+          case "ArrowLeft": spin([0, 1, 0], -STEP); break;
+          case "ArrowRight": spin([0, 1, 0], STEP); break;
+          case "ArrowUp": spin([1, 0, 0], -STEP); break;
+          case "ArrowDown": spin([1, 0, 0], STEP); break;
+          case "+":
+          case "=": zoomSphere(1.3); break;
+          case "-":
+          case "_": zoomSphere(1 / 1.3); break;
+          default: return;
+        }
+        e.preventDefault();
+        return;
       }
       const panBy = (dx: number, dy: number): void => {
         // dx,dy are fractions of the half-window; ±0.25 ⇒ a quarter-window step = CD's 1/(zoom·4). +Im is up.
@@ -4060,12 +4148,13 @@ function init(): void {
     }
   }
 
-  // σ view-mode segment (F2a shell → F2b live): the plane + z-disk buttons switch coordinate views via
-  // setSchwarzViewMode (the stash-swap + repaint + DOM sync live there). The sphere button stays DISABLED in
-  // the markup until F2d, so it never fires — only plane / z are wired.
+  // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate
+  // views via setSchwarzViewMode (the stash-swap / camera + repaint + DOM sync live there). The sphere button
+  // is enabled per-session in enterSchwarz (GPU only); setSchwarzViewMode also guards a non-GPU sphere click.
   for (const [mode, id] of [
     ["plane", "schwarz-view-plane"],
     ["z", "schwarz-view-z"],
+    ["sphere", "schwarz-view-sphere"],
   ] as const) {
     document.getElementById(id)?.addEventListener("click", () => setSchwarzViewMode(mode));
   }
@@ -4141,7 +4230,13 @@ function init(): void {
         });
       }
       resetBtn.addEventListener("click", () => {
-        schwarzView = { ...(schwarzViewMode === "z" ? SCHWARZ_ZDISK_DEFAULT_VIEW : SCHWARZ_DEFAULT_VIEW) };
+        // Reset the ACTIVE view to its default: the sphere camera (F2d) or the flat window (plane / z-disk).
+        if (schwarzViewMode === "sphere") {
+          schwarzSphereRot = SCHWARZ_SPHERE_DEFAULT_ROT;
+          schwarzSphereZoom = 1;
+        } else {
+          schwarzView = { ...(schwarzViewMode === "z" ? SCHWARZ_ZDISK_DEFAULT_VIEW : SCHWARZ_DEFAULT_VIEW) };
+        }
         scheduleSchwarzPaint();
       });
       // Copy the live centre + zoom at FULL precision (parity with the standard plots' copy-coords; no `c =`

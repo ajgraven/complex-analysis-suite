@@ -39,11 +39,13 @@ export interface SchwarzRenderOptions {
    *  family. Flips the in-Ω test so "fundamental" means the orbit left Ω into its complement K either way.
    *  Absent/false ⇒ the exterior (unbounded) orientation — every pre-C2 render is unchanged. */
   boundedOmega?: boolean;
-  /** Coordinate view (F2b): "plane" (default) treats the fragment as the world point w; "z" treats it as the
+  /** Coordinate view: "plane" (default) treats the fragment as the world point w; "z" (F2b) treats it as the
    *  uniformizing coordinate z and lifts w = φ(z) FORWARD (no Newton inverse), painting fragments off the
-   *  uniformizing domain SCHWARZ_OFF_DISK_RGB. The escape-time on the resulting w is identical either way —
-   *  the z-disk is the SAME σ field, re-coordinatized. */
-  viewMode?: "plane" | "z";
+   *  uniformizing domain SCHWARZ_OFF_DISK_RGB. "sphere" (F2d) ray-casts the Riemann sphere and stereographically
+   *  projects the hit to w — GPU-only (the CPU renderSchwarzField treats it as the plane; the sphere is only
+   *  reachable in a GPU session). The escape-time on the resulting w is identical across all three — each is the
+   *  SAME σ field, re-coordinatized. */
+  viewMode?: "plane" | "z" | "sphere";
 }
 
 /** Ω-membership for w against the boundary polygon: OUTSIDE ∂Ω for the unbounded-Laurent family, INSIDE for

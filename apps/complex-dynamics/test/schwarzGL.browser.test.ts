@@ -3,6 +3,7 @@ import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz, type Complex } from "@
 import { schwarzBoundaryPoly, renderSchwarzField, SCHWARZ_OFF_DISK_RGB } from "../src/render/schwarzView";
 import { createSchwarzGLRenderer } from "../src/render/schwarzGL";
 import { schwarzColormap } from "../src/render/schwarzColormaps";
+import { quatFromAxisAngle } from "../src/render/sphereView";
 
 // BROWSER-MODE end-to-end test for the GPU σ render (S4b-ii + ADR-0009 item 3). The node/jsdom gate can't
 // run WebGL2, so this joins CD's existing `pnpm test:browser` project (real headless-Chromium WebGL2,
@@ -203,6 +204,48 @@ describe("CD σ GPU render (S4b-ii + ADR-0009 item 3) — full pipeline in real 
     }
     expect(gpuOff, "there is an off-disk region (the unit-disk interior)").toBeGreaterThan(size);
     expect(agree / (size * size), "GPU + CPU agree on the off-disk mask").toBeGreaterThan(0.97);
+    r.destroy();
+  });
+
+  // F2d — the Riemann sphere view: a fragment ray-casts the unit sphere, the front-facing hit stereographically
+  // projects to w, and the SAME escape-time runs on w — the plane's σ field wrapped onto a ball (∞ at the north
+  // pole). This proves the new u_viewMode==2 shader path: it compiles, renders an opaque σ ball with K-vs-Ω
+  // structure and a silhouette void around it, differs from the plane, and the arcball camera rotation moves it.
+  it("renders the sphere view (F2d): a σ ball with a silhouette void, differing from the plane + on camera rotation", () => {
+    const r = createSchwarzGLRenderer();
+    expect(r).not.toBeNull();
+    if (!r) return;
+    const engine = makeUnboundedLaurentSchwarz(DELTOID.c, DELTOID.F);
+    r.setPhi(DELTOID, schwarzBoundaryPoly(engine));
+    const size = 64;
+    const view = { center: [0, 0] as [number, number], zoom: 0.4 }; // the sphere ignores center/zoom, but the API takes a view
+
+    expect(r.render(view, size, { ...OPTS, viewMode: "sphere" })).toBe(true);
+    const sphere = readPixels(r.canvas, size);
+    for (let i = 3; i < sphere.length; i += 4) expect(sphere[i]).toBe(255); // opaque
+    expect(distinctColors(sphere).size, "the σ ball + its background void").toBeGreaterThan(1);
+
+    // The ball's silhouette (angular radius asin(1/3) ≈ 19.5°) sits inside the ~50° FOV, so the viewport corners
+    // (~33° off-axis) fall in the void — the SCHWARZ_OFF_DISK_RGB background painted on a ray miss.
+    const [O0, O1, O2] = SCHWARZ_OFF_DISK_RGB;
+    const cornerVoid = (x: number, y: number): boolean => {
+      const i = (y * size + x) * 4;
+      return Math.abs(sphere[i] - O0) <= 2 && Math.abs(sphere[i + 1] - O1) <= 2 && Math.abs(sphere[i + 2] - O2) <= 2;
+    };
+    expect(
+      cornerVoid(0, 0) || cornerVoid(size - 1, 0) || cornerVoid(0, size - 1) || cornerVoid(size - 1, size - 1),
+      "the viewport corners fall in the silhouette void",
+    ).toBe(true);
+
+    // The sphere is a re-projection of the same σ field, so it differs from the w-plane at the same window.
+    r.render(view, size, OPTS); // plane (viewMode defaults to plane)
+    const plane = readPixels(r.canvas, size);
+    expect(pixelsDiffering(sphere, plane), "the sphere differs from the plane").toBeGreaterThan(size);
+
+    // Rotating the arcball camera turns the ball — a different orientation ⇒ a visibly different frame.
+    r.render(view, size, { ...OPTS, viewMode: "sphere", sphereRot: quatFromAxisAngle([0, 1, 0], 0.8) });
+    const rotated = readPixels(r.canvas, size);
+    expect(pixelsDiffering(sphere, rotated), "rotating the sphere camera changes the frame").toBeGreaterThan(size);
     r.destroy();
   });
 

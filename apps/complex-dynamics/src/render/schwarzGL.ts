@@ -40,6 +40,7 @@ import {
 } from "@cas/schwarz/gpu";
 import type { Complex } from "@cas/schwarz";
 import type { SchwarzView, SchwarzRenderOptions } from "./schwarzView";
+import { makeSphereCamera, DEFAULT_ROTATION, DEFAULT_DISTANCE, DEFAULT_FOV, type Quat } from "./sphereView";
 
 // The escape-time + coloring shell around the shared σ evaluator. The CLASSIFICATION mirrors
 // schwarzView.ts's escapeTime — fundamental (orbit left Ω into K), escaped (|σⁿ|>escapeR), interior
@@ -61,7 +62,7 @@ uniform sampler2D u_mask;            // 1 inside the boundary polygon φ(∂𝔻
 uniform vec2      u_maskCenter;
 uniform float     u_maskHalfExtent;
 uniform int       u_boundedOmega;    // S5-C2: 1 ⇒ Ω is INSIDE ∂Ω (bounded QD) · 0 ⇒ Ω is the exterior
-uniform int       u_viewMode;        // F2b coordinate view: 0 w-plane (fragment IS w) · 1 z-disk (w = φ(z))
+uniform int       u_viewMode;        // coordinate view: 0 w-plane (fragment IS w) · 1 z-disk (w = φ(z)) · 2 sphere (F2d)
 uniform sampler2D u_colormap;        // 256×1 escape-time ramp (a @cas/gpu colormap texture)
 uniform int       u_scaleMode;       // 0 linear · 1 log · 2 sqrt · 3 discrete · 4 cyclic
 uniform int       u_modK;            // period for the cyclic mode
@@ -74,6 +75,9 @@ uniform float     u_escapeDegree;    // σ escape degree d (σ ~ const·conj(w)^
 uniform int       u_light;           // relief lighting on/off (C2); 0 ⇒ the field is byte-identical to unlit
 uniform vec3      u_lightDir;        // normalised light direction (azimuth/elevation → unit vector)
 uniform float     u_lightHeight;     // relief depth — scales the escape-count gradient
+uniform mat3      u_sphereRot;       // F2d sphere camera: worldToModel (a world-space hit → the sphere's own frame)
+uniform float     u_sphereDist;      // F2d sphere camera: eye at (0,0,u_sphereDist), looking down −Z
+uniform float     u_sphereTanFov;    // F2d sphere camera: tan(fov/2) — the magnification (a telescope zoom)
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
@@ -160,17 +164,50 @@ vec3 escapedColor(int n, vec2 w, float derivMag) {
   return col;
 }
 
+// F2d sphere view: ray-cast the Riemann sphere and stereographically project the hit to the world point w.
+// A verbatim mirror of the main plots' sphereRayZ (render/shaderBuilder.ts): a FIXED camera at (0,0,dist)
+// looking down −Z, with the arcball orientation applied to the HIT (u_sphereRot = worldToModel) rather than
+// the ray — so the intersection stays the canonical unit sphere. North-pole stereographic w = (x+iy)/(1−Z),
+// |w| clamped near the pole for f32 safety. The σ canvas is square, so the viewport aspect is 1. worldN is
+// the outward normal (the unit hit point) for the ball shading in main(). Returns false on a silhouette miss.
+bool sphereRayW(vec2 uv, out vec2 w, out vec3 worldN) {
+  float nx = (uv.x * 2.0 - 1.0) * u_sphereTanFov;
+  float ny = (uv.y * 2.0 - 1.0) * u_sphereTanFov; // gl_FragCoord is y-up ⇒ +Im at the top, as elsewhere
+  vec3 dir = normalize(vec3(nx, ny, -1.0));
+  vec3 eye = vec3(0.0, 0.0, u_sphereDist);
+  float b = 2.0 * dot(eye, dir);                  // a = dir·dir = 1
+  float c = dot(eye, eye) - 1.0;
+  float disc = b * b - 4.0 * c;
+  if (disc < 0.0) return false;
+  float t = (-b - sqrt(disc)) * 0.5;              // the near (front-facing) root
+  if (t < 0.0) return false;
+  vec3 pw = eye + t * dir;                         // world hit (on the unit sphere ⇒ also the outward normal)
+  worldN = pw;
+  vec3 pm = u_sphereRot * pw;                      // world → sphere frame
+  float d = max(1.0 - pm.z, 1e-15);
+  w = vec2(pm.x, pm.y) / d;                        // stereographic from the north pole
+  float az = length(w);
+  if (az > 1e8) w *= 1e8 / az;                     // clamp |w| near the pole for f32 safety
+  return true;
+}
+
 // Fragment → the world point w the escape-time iterates. Matches schwarzView.ts pixelToPlot (gl_FragCoord is
 // pixel-centered and y-up; the caller drawImages this canvas 1:1, so y-up lands as +Im at the top). In
-// w-plane mode (u_viewMode 0) the fragment IS w. In z-disk mode (F2b) the fragment is the uniformizing
-// coordinate z and w = φ(z) FORWARD (no Newton inverse) — φ uniformizes 𝔻* (|z|>1) for the unbounded family
-// and 𝔻 (|z|<1) for a bounded QD, so a fragment on the wrong side of the unit circle is off-domain (offDisk
-// ⇒ the caller paints the background — φ is not the map there).
+// w-plane mode (u_viewMode 0) the fragment IS w. In z-disk mode (F2b, u_viewMode 1) the fragment is the
+// uniformizing coordinate z and w = φ(z) FORWARD (no Newton inverse) — φ uniformizes 𝔻* (|z|>1) for the
+// unbounded family and 𝔻 (|z|<1) for a bounded QD, so a fragment on the wrong side of the unit circle is
+// off-domain (offDisk ⇒ the caller paints the background). In sphere mode (F2d, u_viewMode 2) the fragment
+// is a screen ray into the Riemann sphere; a silhouette miss is off-domain (the void around the ball).
 vec2 fragToW(out bool offDisk) {
+  offDisk = false;
+  if (u_viewMode == 2) {
+    vec2 w; vec3 nrm;
+    if (!sphereRayW(gl_FragCoord.xy / u_size, w, nrm)) { offDisk = true; return vec2(0.0); }
+    return w;
+  }
   float re = u_center.x + (2.0 * gl_FragCoord.x / u_size - 1.0) / u_zoom;
   float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
   vec2 z = vec2(re, im);
-  offDisk = false;
   if (u_viewMode == 1) {
     float r = length(z);
     offDisk = (u_boundedOmega == 1) ? (r >= 1.0) : (r <= 1.0);
@@ -264,6 +301,18 @@ void main() {
   // Relief lighting (C2) — a lit 3-D surface from the escape-count height field. Default OFF (u_light == 0),
   // so an unlit render is byte-identical to pre-C2. Applied before the image-space tone below.
   if (u_light == 1) col = applyLighting(col, fieldHeight());
+  // F2d: geometric ball shading — emboss the σ field onto a LIT sphere (Lambert + a little Blinn-Phong spec,
+  // from the world normal), so the projection reads as a 3-D ball rather than a flat stereographic window. Only
+  // on a hit; a silhouette miss keeps the flat background from fieldColor. Mirrors the main plots' sphere light.
+  if (u_viewMode == 2) {
+    vec2 sw; vec3 sn;
+    if (sphereRayW(gl_FragCoord.xy / u_size, sw, sn)) {
+      float diff = max(dot(sn, u_lightDir), 0.0);
+      vec3 H = normalize(u_lightDir + vec3(0.0, 0.0, 1.0));
+      float spec = pow(max(dot(sn, H), 0.0), 32.0) * 0.25;
+      col = col * (0.45 + 0.55 * diff) + spec;
+    }
+  }
   // Image-space tone (S5-A3), each applied only when non-default so defaults stay byte-exact.
   if (u_gamma != 1.0) col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / u_gamma));     // gamma
   if (u_vignette > 0.0) {                                                       // radial edge darkening
@@ -298,6 +347,10 @@ export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
   lightEl?: number;
   /** Relief depth — scales the height-field gradient (default 2.0). */
   lightHeight?: number;
+  /** Sphere-view camera orientation (F2d), used when viewMode === "sphere"; default DEFAULT_ROTATION. */
+  sphereRot?: Quat;
+  /** Sphere-view magnification (F2d): narrows the FOV like the main plots' telescope zoom; default 1. */
+  sphereZoom?: number;
 }
 
 export interface SchwarzGLRenderer {
@@ -377,6 +430,9 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uLight = U("u_light");
   const uLightDir = U("u_lightDir");
   const uLightHeight = U("u_lightHeight");
+  const uSphereRot = U("u_sphereRot");
+  const uSphereDist = U("u_sphereDist");
+  const uSphereTanFov = U("u_sphereTanFov");
 
   let packed: PackedPhi | null = null;
   let escapeDegree = 2; // σ ~ const·conj(w)^d at ∞; d = highest nonzero Laurent index (set in setPhi)
@@ -459,7 +515,17 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform2f(uMaskCenter, maskCenter[0], maskCenter[1]);
     ctx.uniform1f(uMaskHalfExtent, maskHalfExtent);
     ctx.uniform1i(uBoundedOmega, boundedOmega ? 1 : 0); // S5-C2 interior-Ω orientation for inOmega()
-    ctx.uniform1i(uViewMode, opts.viewMode === "z" ? 1 : 0); // F2b: 1 ⇒ z-disk (fragment is z, w = φ(z))
+    // Coordinate view: 0 w-plane · 1 z-disk (F2b) · 2 sphere (F2d). The sphere camera uniforms are pushed only
+    // in sphere mode; the FOV↔magnification map (a telescope zoom, distance fixed) mirrors glPlot.sphereCamera.
+    const sphere = opts.viewMode === "sphere";
+    ctx.uniform1i(uViewMode, sphere ? 2 : opts.viewMode === "z" ? 1 : 0);
+    if (sphere) {
+      const fov = 2 * Math.atan(Math.tan(DEFAULT_FOV / 2) / (opts.sphereZoom ?? 1));
+      const cam = makeSphereCamera(opts.sphereRot ?? DEFAULT_ROTATION, DEFAULT_DISTANCE, fov, 1);
+      ctx.uniformMatrix3fv(uSphereRot, false, cam.worldToModel); // column-major ⇒ transpose = false
+      ctx.uniform1f(uSphereDist, cam.eye[2]);
+      ctx.uniform1f(uSphereTanFov, cam.tanHalfFov);
+    }
 
     ctx.activeTexture(ctx.TEXTURE1);
     ctx.bindTexture(ctx.TEXTURE_2D, colormapTex);
