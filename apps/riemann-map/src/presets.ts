@@ -23,6 +23,12 @@ export const MAP_PRESETS: readonly MapPreset[] = [
   { id: "sin", name: "sin z", expr: "sin(z)" },
   { id: "tan", name: "tan z", expr: "tan(z)" },
   { id: "conjugate", name: "z̄  (anti-holomorphic)", expr: "conjugate(z)" },
+  // z²+c dynamical maps — switch to the "Julia exterior" render mode to see their filled Julia sets,
+  // capacity / external rays / dynamics stats (P2). The first three are connected; the last is a Cantor set.
+  { id: "basilica", name: "Basilica  z²−1", expr: "z*z - 1" },
+  { id: "rabbit", name: "Douady rabbit  z²−0.123+0.745i", expr: "z*z - 0.123 + 0.745*i" },
+  { id: "airplane", name: "Airplane  z²−1.7549", expr: "z*z - 1.7549" },
+  { id: "dust", name: "Cantor dust  z²+½", expr: "z*z + 0.5" },
 ] as const;
 
 /** The preset id whose expression matches `expr`, or null (used to sync the picker to a typed edit). */

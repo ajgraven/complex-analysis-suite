@@ -35,6 +35,21 @@ const GRID_KINDS = [
   { id: "polar", name: "Polar grid" },
 ] as const;
 
+/** Glossary of the notation the studio surfaces (catalog item I2) — a self-documenting reference. */
+const GLOSSARY: readonly (readonly [string, string])[] = [
+  ["= vs ≈", "“=” is an exact/closed-form value; “≈” is a numerical estimate (a limit or a truncated series)."],
+  ["Conformal / Riemann map φ", "An angle-preserving map. The Riemann mapping theorem uniformizes any simply-connected domain (≠ ℂ) onto the unit disk."],
+  ["Domain coloring", "A phase portrait: hue = arg φ(z), shaded bands = |φ(z)|. Reads a complex function as an image."],
+  ["Amplitwist |φ′|, arg φ′", "The local scale factor and rotation the map applies at a point (Needham’s term for the derivative’s action)."],
+  ["Filled Julia set K", "The points whose orbit under f stays bounded. Its boundary ∂K is the Julia set."],
+  ["Green’s function G(z)", "The escape-rate potential of ℂ∖K: 0 on K, positive outside, growing like log|z| at ∞."],
+  ["Capacity, Robin γ", "cap(K) = e^(−γ), the conformal size of K. It equals |γ₁|, the leading coefficient of ψ; = 1 exactly for a monic map."],
+  ["Exterior map ψ, bₖ", "The conformal map ext(𝔻) → ext(K), ψ(w) = γ₁·w + Σ bₖ w^(−k). Exists only for a connected K."],
+  ["External ray / angle θ", "The image under ψ of a straight ray {r·e^(2πiθ) : r > 1}; θ is the angle at which it lands on ∂K."],
+  ["Connectivity (z²+c)", "K is connected ⟺ c ∈ the Mandelbrot set (the critical orbit stays bounded); otherwise K is a Cantor set."],
+  ["Attracting cycle, |λ|", "The cycle the critical orbit falls into; |λ| < 1 is attracting, |λ| = 0 superattracting (the cycle contains the critical point)."],
+];
+
 const CUSTOM = "__custom__";
 
 function labeledSelect(labelText: string, options: readonly { id: string; name: string }[]): { field: HTMLLabelElement; select: HTMLSelectElement } {
@@ -159,7 +174,25 @@ export function createControls(initialExpr: string): Controls {
   hoverEmpty.textContent = "Hover the plane to read φ(z), φ′(z), and the local scale/rotation.";
   hoverSection.append(hoverTitle, hover, hoverEmpty);
 
-  root.append(mapSection, viewSection, figSection, analysisSection, hoverSection);
+  // --- Glossary (I2) --------------------------------------------------------
+  const glossarySection = document.createElement("section");
+  const glossary = document.createElement("details");
+  glossary.className = "glossary";
+  const glossarySummary = document.createElement("summary");
+  glossarySummary.textContent = "Glossary & notation";
+  const glossaryDl = document.createElement("dl");
+  glossaryDl.className = "glossary-dl";
+  for (const [term, def] of GLOSSARY) {
+    const dt = document.createElement("dt");
+    dt.textContent = term;
+    const dd = document.createElement("dd");
+    dd.textContent = def;
+    glossaryDl.append(dt, dd);
+  }
+  glossary.append(glossarySummary, glossaryDl);
+  glossarySection.append(glossary);
+
+  root.append(mapSection, viewSection, figSection, analysisSection, hoverSection, glossarySection);
 
   // --- behaviour ------------------------------------------------------------
   input.value = initialExpr;
