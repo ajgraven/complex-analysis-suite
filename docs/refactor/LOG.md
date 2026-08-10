@@ -2471,3 +2471,30 @@
   link restores the toggle + re-lists the singularities. Captured the deltoid with its 3 cusps ringed. **F4h
   complete — σ's singular structure (the cusps) is visible + honestly labeled.** Remaining à-la-carte F4 cards
   (F4b level curves · F4c/F4e orbit families · F4d cycle finder · F4g domain coloring) are the next picks.
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4c + F4e — orbit families):**
+  one "Orbit family" card that traces a whole *family* of σ-orbits at once, two ways. A new pure
+  `schwarzOrbitFamily.ts`: **`sweepSeeds('line'|'circle', …)`** lays out evenly-spaced seeds (F4e — a circle of
+  N points, default 24, at a radius, default 1.5, around the plane-view centre; a line variant is there for the
+  future curve tool); **`canonicalSchwarzSeeds(engine, phi, isInOmega)`** returns the map's *natural* seeds
+  (F4c) — the **bounded** family's centre φ(0) = w₀, or the **unbounded** family's pole-reflection centroid
+  (empty for the pole-free deltoid, which has no natural seed); **`familyHue(i, n)`** ramps the family 0…300°
+  (warm → cool) so each orbit is distinguishable. The seeds ride the *existing* `schwarzOrbitAt` tracer, and
+  draw through the *existing* `drawSchwarzOrbit` — extended only by a new optional `color` on
+  `SchwarzOrbitStyle` (default keeps `orbitColor(kind)`), so the whole card reuses the σ-overlay projection and
+  lives in all three views. In CD: the card sweeps a circle (filtered to Ω, else a toast), or seeds the
+  canonical orbits (a toast when there are none — the honest deltoid case), reading `N orbit(s) · circle
+  sweep` / `· canonical seeds`; the family is drawn every paint (survives pan/zoom/view-switch), baked into the
+  PNG export under the pinned orbit, cleared on a new map, and — being a compute-on-demand analysis, not a view
+  property — NOT serialized (like the tree / limit set / pinned orbit; its seed-count + radius controls are
+  appState opt-outs). **Honest labeling:** the card title, readout, and hint carry `≈`, because every σ-orbit is
+  a numerical reconstruction (σ = conj(F(φ⁻¹))). Green: typecheck + lint + node **2492 → 2500** (+8
+  schwarzOrbitFamily goldens — a line's evenly-spaced + single-point-midpoint seeds, a circle's 4 cardinal
+  seeds, n = 0 → none; the bounded lobe's canonical seed is w₀ + is dropped when not in Ω; the deltoid has none;
+  familyHue spans 0°→300° with a singleton at the first hue). VERIFIED (Playwright, **7/7**): canonical on the
+  pole-free deltoid seeds no family (honest "none"); a circle sweep traces 24 orbits (`24 orbits · circle
+  sweep`) that draw over the field; the family survives the z-disk + sphere view switches; clear removes it; and
+  canonical on a bounded lobe traces the single centre orbit (`1 orbit · canonical seeds`). Captured the deltoid
+  under a 24-orbit hue-ramped sweep — the family zig-zagging through the tiling, warm seeds outermost.
+  **F4c + F4e complete — σ-orbit families (swept + canonical) join the CD analysis cards.** Remaining
+  à-la-carte F4 cards (F4b level curves · F4d cycle finder · F4g domain coloring · F4f forward image of a drawn
+  curve) are the next picks.

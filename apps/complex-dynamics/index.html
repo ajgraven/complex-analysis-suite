@@ -863,6 +863,49 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Orbit family (F4e sweep · F4c canonical): trace a set of σ-orbits at once — a circle of
+                     seeds swept about the view centre (hue-ramped), or the map's canonical seeds. A transient
+                     analysis, drawn under the pinned orbit; not serialized. -->
+                <details class="control-group" id="schwarz-family-group">
+                  <summary>Orbit family — sweep · canonical</summary>
+                  <div class="control-grid">
+                    <p class="schwarz-inspect-hint">
+                      Trace many σ-orbits at once: a circle of seeds swept around the view centre (hue-ramped),
+                      or the map's canonical seeds.
+                    </p>
+                    <div class="field">
+                      <label for="schwarz-family-n">seeds</label>
+                      <input
+                        id="schwarz-family-n"
+                        type="number"
+                        min="1"
+                        max="200"
+                        step="1"
+                        inputmode="numeric"
+                        value="24"
+                        title="Number of seeds in the circle sweep."
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-family-radius">sweep radius</label>
+                      <input
+                        id="schwarz-family-radius"
+                        type="text"
+                        inputmode="decimal"
+                        spellcheck="false"
+                        value="1.5"
+                        title="Radius of the seed circle about the current view centre. Seeds landing outside Ω are skipped."
+                      />
+                    </div>
+                    <div class="field schwarz-family-actions">
+                      <button id="schwarz-family-sweep" type="button" class="primary">sweep circle</button>
+                      <button id="schwarz-family-canonical" type="button">canonical</button>
+                      <button id="schwarz-family-clear" type="button">clear</button>
+                    </div>
+                    <div id="schwarz-family-readout" class="schwarz-inspect" aria-live="polite" hidden></div>
+                  </div>
+                </details>
+
                 <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
                      in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
                 <details class="control-group" id="schwarz-render-group">

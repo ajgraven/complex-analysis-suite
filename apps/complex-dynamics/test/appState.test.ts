@@ -138,6 +138,9 @@ describe("SHARE_IDS DOM coverage", () => {
         // σ limit-set sample count (F4a): a control for a transient analysis (the chaos-game cloud + its
         // box-counting dimension are computed on demand, not serialized).
         [["schwarz-limit-points"], "σ limit-set analysis control (transient; not serialized)"],
+        // σ orbit-family controls (F4e/F4c): seed count + sweep radius for a transient analysis (the traced
+        // family is computed on demand, not serialized).
+        [["schwarz-family-n", "schwarz-family-radius"], "σ orbit-family control (transient; not serialized)"],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.

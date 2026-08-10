@@ -137,6 +137,7 @@ import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
 import { explicitSigmaForm } from "./render/schwarzExplicitForm";
 import { drawSchwarzSingularities } from "./render/schwarzSingularityOverlay";
+import { sweepSeeds, canonicalSchwarzSeeds, familyHue } from "./render/schwarzOrbitFamily";
 import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
@@ -3097,6 +3098,13 @@ function init(): void {
   // toggle (default off, travels in `_sigma`) shows the markers + the card lists them.
   let schwarzSingularities: SigmaSingularities | null = null;
   let schwarzShowSingularities: boolean = SIGMA_OVERLAY_DEFAULTS.showSingularities;
+  // σ orbit family (F4e sweep · F4c canonical): a set of σ-orbits traced from a swept line/circle of seeds
+  // (hue-ramped) or the map's canonical seeds. A transient analysis (computed on demand, not serialized, like
+  // the tree / limit set); drawn from w-space every paint, cleared on a new map. The sweep circles the plane
+  // view centre.
+  let schwarzOrbitFamily: SchwarzOrbit[] | null = null;
+  let schwarzFamilyN = 24; // sweep seed count
+  let schwarzFamilyRadius = 1.5; // sweep circle radius (about the plane-view centre)
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3263,6 +3271,10 @@ function init(): void {
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing);
       // σ-singularity markers (F4h) — branch-point cusps + σ-poles.
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing);
+      // Orbit family (F4e/F4c) — each member thin + hue-ramped, under the pinned orbit.
+      if (schwarzOrbitFamily)
+        for (let i = 0; i < schwarzOrbitFamily.length; i++)
+          drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length) });
       // Orbit overlays: the transient hover preview (faint, S5-A2) under the pinned click-inspect orbit (bold).
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
@@ -3273,6 +3285,9 @@ function init(): void {
       // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPlot: toZ });
+      if (schwarzOrbitFamily)
+        for (let i = 0; i < schwarzOrbitFamily.length; i++)
+          drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPlot: toZ });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPlot: toZ });
     } else if (schwarzViewMode === "sphere") {
@@ -3289,6 +3304,9 @@ function init(): void {
       // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPixel });
+      if (schwarzOrbitFamily)
+        for (let i = 0; i < schwarzOrbitFamily.length; i++)
+          drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
       if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPixel });
       if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPixel });
     }
@@ -3579,6 +3597,68 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  // σ orbit family (F4e sweep · F4c canonical): trace a set of σ-orbits + draw them hue-ramped. Reuses the
+  // orbit tracer (schwarzOrbitAt) + the orbit overlay (a colour override per member). A transient analysis.
+  /** Count readout for the active family (empty when none). */
+  function renderSchwarzFamilyReadout(label: string): void {
+    const box = document.getElementById("schwarz-family-readout");
+    if (!box) return;
+    if (!schwarzOrbitFamily || schwarzOrbitFamily.length === 0) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const n = schwarzOrbitFamily.length;
+    box.textContent = `${n} orbit${n === 1 ? "" : "s"} · ${label}`;
+  }
+  /** The Ω-membership the field/tracer use (outside ∂Ω unbounded / inside it bounded). */
+  function schwarzInOmega(w: Complex): boolean {
+    if (!schwarzSession) return false;
+    return schwarzSession.boundedOmega
+      ? pointInPolygon(w, schwarzSession.poly)
+      : !pointInPolygon(w, schwarzSession.poly);
+  }
+  /** Trace σ-orbits from a list of w-seeds (already in Ω), sharing the field's escape budget. */
+  function traceSchwarzFamily(seeds: readonly Complex[]): SchwarzOrbit[] {
+    if (!schwarzSession) return [];
+    const { engine, poly, boundedOmega } = schwarzSession;
+    return seeds.map((w0) => schwarzOrbitAt(engine, poly, w0, { ...schwarzEscape, boundedOmega }));
+  }
+  /** F4e — sweep a circle of seeds about the plane-view centre; trace the in-Ω ones. */
+  function computeSchwarzSweep(): void {
+    if (!schwarzSession) return;
+    const wCenter = schwarzViewMode === "plane" ? schwarzView.center : schwarzViews.plane.center;
+    const seeds = sweepSeeds("circle", {
+      n: schwarzFamilyN,
+      center: [wCenter[0], wCenter[1]],
+      radius: schwarzFamilyRadius,
+    }).filter(schwarzInOmega);
+    schwarzOrbitFamily = seeds.length ? traceSchwarzFamily(seeds) : null;
+    if (!seeds.length) showToast("No sweep seeds landed in Ω — try a different radius or recentre.", "info");
+    renderSchwarzFamilyReadout("circle sweep");
+    scheduleSchwarzOverlayPaint();
+  }
+  /** F4c — trace the map's canonical seeds (bounded centre w₀; the unbounded pole centroid where it exists). */
+  function computeSchwarzCanonical(): void {
+    if (!schwarzSession) return;
+    const seeds = canonicalSchwarzSeeds(schwarzSession.engine, schwarzSession.phi, schwarzInOmega);
+    if (!seeds.length) {
+      showToast("No canonical seeds for this map — try the sweep.", "info");
+      return;
+    }
+    schwarzOrbitFamily = traceSchwarzFamily(seeds.map((s) => s.w));
+    renderSchwarzFamilyReadout("canonical seeds");
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the orbit family (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzOrbitFamily(): void {
+    if (!schwarzOrbitFamily) return;
+    schwarzOrbitFamily = null;
+    renderSchwarzFamilyReadout("");
+    scheduleSchwarzOverlayPaint();
+  }
+
   /** Show the generated map's closed form (F4i) — the exact φ / F + the symbolic σ (φ⁻¹ is numerical, so σ is
    *  `≈`). Derived from the session's φ recipe; re-rendered whenever a σ is generated. Read-only text. */
   function renderSchwarzExplicitForm(): void {
@@ -3689,6 +3769,7 @@ function init(): void {
     schwarzPreimageTree = null; // a new φ ⇒ any previous tiling tree is stale
     schwarzLimitSetCloud = null; // …and any previous limit-set cloud
     schwarzLimitDim = NaN;
+    schwarzOrbitFamily = null; // …and any previous orbit family
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
     schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
@@ -3921,6 +4002,9 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size);
+        if (schwarzOrbitFamily)
+          for (let i = 0; i < schwarzOrbitFamily.length; i++)
+            drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length) });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
       } else if (schwarzViewMode === "z") {
         const engine = schwarzSession.engine;
@@ -3929,6 +4013,9 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPlot: toZ });
+        if (schwarzOrbitFamily)
+          for (let i = 0; i < schwarzOrbitFamily.length; i++)
+            drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
       } else if (schwarzViewMode === "sphere") {
         const cam = schwarzSphereCam();
@@ -3940,6 +4027,9 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPixel });
+        if (schwarzOrbitFamily)
+          for (let i = 0; i < schwarzOrbitFamily.length; i++)
+            drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
         if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPixel });
       }
       if (wantScaleBar && schwarzViewMode !== "sphere") drawScaleBar(octx, size, schwarzView.zoom); // sphere: no linear scale
@@ -4533,6 +4623,34 @@ function init(): void {
     }
     sampleBtn?.addEventListener("click", computeSchwarzLimitSet);
     clearBtn?.addEventListener("click", clearSchwarzLimitSet);
+  }
+
+  // σ orbit family (F4e sweep · F4c canonical): seed count + radius, and sweep / canonical / clear buttons.
+  {
+    const nIn = document.getElementById("schwarz-family-n") as HTMLInputElement | null;
+    const rIn = document.getElementById("schwarz-family-radius") as HTMLInputElement | null;
+    const sweepBtn = document.getElementById("schwarz-family-sweep");
+    const canonBtn = document.getElementById("schwarz-family-canonical");
+    const clearBtn = document.getElementById("schwarz-family-clear");
+    if (nIn) {
+      nIn.value = String(schwarzFamilyN);
+      nIn.addEventListener("change", () => {
+        const v = Math.round(Number(nIn.value));
+        if (Number.isFinite(v)) schwarzFamilyN = Math.max(1, Math.min(200, v));
+        nIn.value = String(schwarzFamilyN);
+      });
+    }
+    if (rIn) {
+      rIn.value = String(schwarzFamilyRadius);
+      rIn.addEventListener("change", () => {
+        const v = Number(rIn.value);
+        if (Number.isFinite(v) && v > 0) schwarzFamilyRadius = v;
+        rIn.value = String(schwarzFamilyRadius);
+      });
+    }
+    sweepBtn?.addEventListener("click", computeSchwarzSweep);
+    canonBtn?.addEventListener("click", computeSchwarzCanonical);
+    clearBtn?.addEventListener("click", clearSchwarzOrbitFamily);
   }
 
   // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate

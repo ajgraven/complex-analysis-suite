@@ -36,6 +36,9 @@ export interface SchwarzOrbitStyle {
    *  `view` + plotToPixel path. Returns null for an iterate on the far (occluded) hemisphere of the ball,
    *  which BREAKS the polyline exactly like a null toPlot. Takes precedence over `toPlot`/`view` when set. */
   toPixel?: (w: Complex) => [number, number] | null;
+  /** Override the fate colour with a fixed CSS colour (F4e orbit-family sweep: each family member gets a hue
+   *  keyed to its seed, not its fate). Omitted ⇒ the fate colour (orbitColor(kind)) — unchanged. */
+  color?: string;
 }
 
 /**
@@ -63,7 +66,7 @@ export function drawSchwarzOrbit(
     const q = toPlot ? toPlot(p) : p;
     return q ? plotToPixel(view, q, size) : null;
   });
-  const color = orbitColor(orbit.kind);
+  const color = style.color ?? orbitColor(orbit.kind);
   ctx.save();
   if (preview) ctx.globalAlpha = 0.55; // the hover preview is a light hint under the pinned orbit
   ctx.lineJoin = "round";
