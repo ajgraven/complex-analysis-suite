@@ -110,6 +110,63 @@ describe("@cas/schwarz unbounded-Laurent σ (deltoid ground truth)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// σ⁻¹ (F3a) — the multivalued Schwarz inverse used to grow the fundamental-domain tiling.
+// σ⁻¹(w) = φ(F⁻¹(conj(w))): the exterior roots z (|z|>1) of F(z)=conj(w), mapped through φ. Mirrors the
+// QD app's own σ⁻¹ goldens (apps/quadrature-domains/app/test/schwarz.test.js) which pin the ROBUST
+// invariants — degree bound, ≥1 preimage, and the exact round-trip σ(σ⁻¹(w)) ≈ w — rather than a fragile
+// exact count (the number of EXTERIOR roots varies with w even when the cleared polynomial degree is fixed).
+describe("@cas/schwarz unbounded-Laurent σ⁻¹ (deltoid preimages, F3a)", () => {
+  const contains = (set: Complex[], p: Complex, tol = 1e-6): boolean =>
+    set.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < tol);
+
+  it("σ⁻¹ recovers the forward preimage: φ(z₀) ∈ σ⁻¹(σ(φ(z₀))) — exact by construction", () => {
+    // z₀ exterior ⇒ w₀ = φ(z₀), s = σ(w₀) = conj(F(z₀)); then F(z₀) = conj(s), z₀ is an exterior root of
+    // F(z)=conj(s), so φ(z₀) = w₀ MUST appear in σ⁻¹(s). A rock-solid, family-agnostic membership test.
+    for (const z0 of EXTERIOR) {
+      const w0 = DELTOID.evalPhi(z0);
+      const s = DELTOID.sigma(w0);
+      expect(s, `σ null at z₀=${z0}`).not.toBeNull();
+      if (!s) continue;
+      const pre = DELTOID.sigmaInverse(s);
+      expect(pre.length, `no preimage of σ(φ(${z0}))`).toBeGreaterThanOrEqual(1);
+      expect(contains(pre, w0), `φ(${z0}) missing from σ⁻¹(σ(φ(${z0})))`).toBe(true);
+    }
+  });
+
+  it("every σ⁻¹ preimage round-trips: σ(σ⁻¹(w)) ≈ w (the branch-slip guard is exact here)", () => {
+    for (const z0 of EXTERIOR) {
+      const w = DELTOID.sigma(DELTOID.evalPhi(z0)) as Complex;
+      const pre = DELTOID.sigmaInverse(w);
+      for (const p of pre) {
+        const back = DELTOID.sigma(p);
+        expect(back, `σ null on preimage ${p}`).not.toBeNull();
+        if (back) near(back, w, 6);
+      }
+    }
+  });
+
+  it("σ⁻¹([2.5,0]) contains the cusp-side preimage [2.125,0] (the S3a interchange golden, inverted)", () => {
+    // σ([2.125,0]) = [2.5,0] (the frozen S3a golden), so [2.125,0] ∈ σ⁻¹([2.5,0]). The deltoid clears to
+    // the cubic 0.5·z³ − conj(w)·z + 1 = 0 ⇒ ≤ 3 roots, so ≤ 3 exterior preimages.
+    const pre = DELTOID.sigmaInverse([2.5, 0]);
+    expect(pre.length).toBeGreaterThanOrEqual(1);
+    expect(pre.length).toBeLessThanOrEqual(3);
+    expect(contains(pre, [2.125, 0])).toBe(true);
+  });
+
+  it("σ⁻¹ of a generic tiling point is non-empty and every preimage round-trips (branch-bearing SINGLE too)", () => {
+    // Also exercises the pole-bearing Newton path (solveFNewton) on the SINGLE domain.
+    for (const dom of [DELTOID, SINGLE]) {
+      const w = dom.sigma(dom.evalPhi([1.7, 0.9])) as Complex;
+      expect(w).not.toBeNull();
+      const pre = dom.sigmaInverse(w);
+      expect(pre.length).toBeGreaterThanOrEqual(1);
+      for (const p of pre) near(dom.sigma(p) as Complex, w, 6);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Pole-bearing unbounded QDs (Phase 2). φ gains finite-pole branch terms:
 //   φ(z) = c·z + Σₗ F[l]/zˡ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ,   u_j(z) = z/(1 − conj(z_j)·z),  z_j ∈ 𝔻.
 // Its Schwarz extension gains the reflected principal part (conj(u_j)ᵏ = 1/(z−z_j)ᵏ on |z|=1):

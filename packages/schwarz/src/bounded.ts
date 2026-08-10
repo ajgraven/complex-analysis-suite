@@ -35,6 +35,11 @@ export interface BoundedSchwarz {
   invertPhi(w: Complex): Complex | null;
   /** The Schwarz reflection σ(w) = conj(F(φ⁻¹(w))); null if the inverse fails (w ∉ Ω). */
   sigma(w: Complex): Complex | null;
+  /** σ⁻¹(w) = φ(F⁻¹(conj(w))): the (multivalued) SET of σ-preimages of w. Each is round-trip-validated
+   *  σ(preimage) ≈ w and kept only for the interior branch |z| < 1; coincident preimages are merged.
+   *  Empty when w has no interior preimage. Iterated to build the fundamental-domain tiling
+   *  (buildPreimageTree). */
+  sigmaInverse(w: Complex): Complex[];
 }
 
 const NEWTON_MAX = 40;
@@ -106,5 +111,62 @@ export function makeBoundedSchwarz(w0: Complex, branches: readonly SchwarzBranch
     return conj(Sv);
   };
 
-  return { evalPhi, evalPhiDeriv, evalF, evalFDeriv, invertPhi, sigma };
+  // --- σ⁻¹ (F3a) -----------------------------------------------------------------------------------
+  // σ⁻¹(w) = φ(F⁻¹(conj(w))): F is meromorphic on 𝔻 (finite poles at the z_j), so F(z) = conj(w) is
+  // multivalued — this returns the SET of σ-preimages of w. Each INTERIOR root z (|z| < 1) gives a
+  // preimage φ(z) with σ(φ(z)) = conj(F(z)) = w EXACTLY (φ is injective on 𝔻 for a valid domain, so
+  // invertPhi(φ(z)) = z); the round-trip is kept as a guard against a numerical branch slip, and
+  // coincident preimages are merged. Iterated to build the fundamental-domain tiling (buildPreimageTree).
+
+  /** Seeded multi-start Newton on F(z) − t = 0 across the interior disk 𝔻 (|z| < 1). F has finite poles at
+   *  the z_j, so there is no single cleared polynomial for a direct all-roots solve (the @cas/core/poly
+   *  extraction is task #62, still pending); a ring grid of interior seeds finds the distinct roots and the
+   *  caller filters + round-trip-validates them. */
+  const solveFInterior = (t: Complex): Complex[] => {
+    const roots: Complex[] = [];
+    const push = (z: Complex): void => {
+      for (const r of roots) if (A.abs(A.sub(r, z)) < 1e-7) return;
+      roots.push(z);
+    };
+    const ANG = 12;
+    for (const rad of [0, 0.3, 0.55, 0.78, 0.93]) {
+      const n = rad === 0 ? 1 : ANG;
+      for (let k = 0; k < n; k++) {
+        const th = (2 * Math.PI * k) / n;
+        let z: Complex = [rad * Math.cos(th), rad * Math.sin(th)];
+        let ok = false;
+        for (let it = 0; it < NEWTON_MAX; it++) {
+          const fz = A.sub(evalF(z), t);
+          if (A.abs(fz) < NEWTON_TOL) {
+            ok = true;
+            break;
+          }
+          const dfz = evalFDeriv(z);
+          if (A.abs(dfz) < 1e-300) break;
+          z = A.sub(z, A.div(fz, dfz));
+          if (!A.isFinite(z) || A.abs(z) > 1e8) break;
+        }
+        if (ok && A.isFinite(z)) push(z);
+      }
+    }
+    return roots;
+  };
+
+  const sigmaInverse = (w: Complex): Complex[] => {
+    const t = conj(w); // solve F(z) = conj(w)
+    const out: Complex[] = [];
+    for (const z of solveFInterior(t)) {
+      if (!A.isFinite(z) || A.abs(z) >= 1 - 1e-9) continue; // interior branch |z| < 1 (φ: 𝔻 → Ω)
+      const wPre = evalPhi(z);
+      if (!A.isFinite(wPre)) continue;
+      const back = sigma(wPre);
+      if (!back || A.abs(A.sub(back, w)) >= 1e-6) continue; // round-trip σ(σ⁻¹(w)) ≈ w
+      let dup = false;
+      for (const o of out) if (A.abs(A.sub(o, wPre)) < 1e-7) dup = true;
+      if (!dup) out.push(wPre);
+    }
+    return out;
+  };
+
+  return { evalPhi, evalPhiDeriv, evalF, evalFDeriv, invertPhi, sigma, sigmaInverse };
 }

@@ -2296,3 +2296,32 @@
   the ∂Ω curve, computed on the CPU in float64, shifts sub-pixel between the preset and restored φ). Captured the
   deltoid sphere with ∂Ω stroked over the ball. **F2d complete — plane · z-disk · sphere are all full peers
   (field + boundary + orbit inspection + `_sigma` round-trip). F2 (the multi-view explorer) is done.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F3a — σ⁻¹ engine in
+  `@cas/schwarz`):** the shared σ engine gains the multivalued Schwarz **inverse** σ⁻¹, the primitive the
+  fundamental-domain tiling is grown from (F3b `buildPreimageTree`, then the F3c CD UI). σ⁻¹(w) = φ(F⁻¹(conj(w)))
+  is a SET — F⁻¹ is many-valued — so `sigmaInverse(w): Complex[]` returns every valid preimage. Added to BOTH
+  families as an engine method (it needs the closure's F coefficients + the shared Durand–Kerner), matching how
+  `sigma` lives on the engine rather than as a free function. **Unbounded-Laurent** (`unbounded-laurent.ts`):
+  pole-free φ clears to a polynomial — conj(c)/z + Σₗ conj(F[l])·zˡ = t times z ⇒ conj(c) + Σₗ conj(F[l])·z^{l+1}
+  − t·z = 0 — solved for ALL roots by Durand–Kerner (`solveFPolynomial`, the exact all-roots path, immune to the
+  branch drift a warm Newton suffers); pole-bearing φ has finite F-poles so there is no single cleared polynomial,
+  and a ring-grid multi-start Newton (`solveFNewton`, mirroring `invertPhi`'s branch fallback) finds the distinct
+  roots. **Bounded** (`bounded.ts`): F is meromorphic on 𝔻, so `solveFInterior` sweeps interior seeds with the
+  same multi-start Newton. Both filter to the correct branch (exterior |z|>1 for the unbounded map, interior
+  |z|<1 for the bounded map), map surviving roots through φ, and **round-trip-validate σ(preimage) ≈ w** (tol
+  1e-6) before keeping them — coincident preimages merged. The round-trip is near-exact by construction: the
+  exterior/interior roots of F(z)=conj(w) satisfy σ(φ(z)) = conj(F(z)) = w whenever φ is injective on its branch
+  domain (so invertPhi(φ(z)) = z), the guard only catching a numerical branch slip. Deferred: the direct
+  all-roots clear for the pole-bearing/bounded families waits on the `@cas/core/poly` extraction (task #62,
+  pending) — until then the validated Newton sweep is the robust path (it is what QD's own σ⁻¹ does for the
+  general case). Green: typecheck + lint + node **2449** (+4 unbounded, +3 bounded). New tests mirror the QD app's
+  own σ⁻¹ goldens (`apps/quadrature-domains/app/test/schwarz.test.js`), pinning the ROBUST invariants rather than
+  a fragile exact count: the unit disk returns exactly ONE preimage = 1/conj(w) (round-trip < 1e-8, the QD
+  S1/unit-disk golden); the deltoid recovers its forward preimage exactly — φ(z₀) ∈ σ⁻¹(σ(φ(z₀))) — and every
+  returned preimage round-trips σ(σ⁻¹(w)) ≈ w; the S3a interchange golden inverts (σ⁻¹([2.5,0]) contains the
+  cusp-side [2.125,0], within the cubic's ≤3 exterior roots); and the pole-bearing (SINGLE) + two-branch (bounded
+  TWO) paths each find ≥1 preimage that round-trips. Probed counts: the deltoid yields **2 exterior preimages**
+  per node (the cleared cubic's third root is interior, correctly filtered; round-trip ~1e-14), the disk/lobe
+  exactly 1 — so the tiling branches ~2ⁿ for the deltoid, making the F3b visual budget load-bearing. **F3a
+  complete — σ⁻¹ is unit-tested (round-trip + QD goldens) for both families; F3b grows the preimage tree,
+  F3c wires the CD double-click tiling UI.**

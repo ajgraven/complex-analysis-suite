@@ -44,6 +44,11 @@ export interface UnboundedLaurentSchwarz {
   invertPhi(w: Complex): Complex | null;
   /** The Schwarz reflection σ(w) = conj(F(φ⁻¹(w))); null if the inverse fails (w ∉ Ω). */
   sigma(w: Complex): Complex | null;
+  /** σ⁻¹(w) = φ(F⁻¹(conj(w))): the (multivalued) SET of σ-preimages of w. Each is round-trip-validated
+   *  σ(preimage) ≈ w and kept only for the exterior branch |z|>1; coincident preimages are merged.
+   *  Empty when w has no exterior preimage (outside the tiling reach). Iterated to build the fundamental-
+   *  domain tiling (buildPreimageTree). */
+  sigmaInverse(w: Complex): Complex[];
 }
 
 const NEWTON_MAX = 40;
@@ -227,7 +232,93 @@ export function makeUnboundedLaurentSchwarz(
     return conj(Sv);
   };
 
-  return { evalPhi, evalPhiDeriv, evalF, evalFDeriv, invertPhi, sigma };
+  // --- σ⁻¹ (F3a) -----------------------------------------------------------------------------------
+  // σ⁻¹(w) = φ(F⁻¹(conj(w))): F⁻¹ is MULTIVALUED, so this returns the SET of σ-preimages of w — the
+  // fundamental-domain tiling is built by iterating it (buildPreimageTree). The exterior roots z (|z|>1) of
+  // F(z)=conj(w) satisfy σ(φ(z)) = conj(F(z)) = conj(conj(w)) = w EXACTLY (φ is injective on 𝔻* for a valid
+  // domain, so invertPhi(φ(z)) = z), so the |z|>1 filter selects the valid preimages; the round-trip is kept
+  // as a guard against a numerical branch slip. Preimages coincident in w are merged.
+
+  /** Roots of the CLEARED polynomial F(z)=t for the pole-free family (exact, all roots): multiply
+   *  conj(c)/z + Σₗ conj(F[l])·zˡ = t by z ⇒ conj(c) + Σₗ conj(F[l])·z^{l+1} − t·z = 0, then Durand–Kerner. */
+  const solveFPolynomial = (t: Complex): Complex[] => {
+    const size = Math.max(m, 1) + 1; // highest power is m (from conj(F[m-1])·zᵐ), or 1 when m = 0
+    const coef: Complex[] = new Array(size);
+    for (let i = 0; i < size; i++) coef[i] = [0, 0];
+    coef[0] = conjC;
+    for (let l = 0; l < m; l++) coef[l + 1] = conj(F[l]);
+    coef[1] = A.sub(coef[1], t); // the −t·z term
+    let deg = size - 1;
+    while (deg > 0 && A.abs(coef[deg]) < 1e-14) deg--; // drop a vanishing top Laurent coefficient
+    if (deg < 1) return [];
+    const lead = coef[deg];
+    const a = coef.slice(0, deg + 1).map((c0) => A.div(c0, lead));
+    a[deg] = [1, 0]; // exact monic leading term
+    const evalMonic = (z: Complex): Complex => {
+      let acc = a[deg];
+      for (let k = deg - 1; k >= 0; k--) acc = A.add(A.mul(acc, z), a[k]);
+      return acc;
+    };
+    const rad = Math.max(1.2, A.abs(t) / Math.max(A.abs(lead), 1e-12));
+    const seeds: Complex[] = [];
+    for (let k = 0; k < deg; k++) {
+      const th = (2 * Math.PI * (k + 0.5)) / deg;
+      seeds.push([rad * Math.cos(th), rad * Math.sin(th)]);
+    }
+    const res = dk(evalMonic, seeds, { tol: 1e-13, maxIter: 200 });
+    return res ? res.roots : [];
+  };
+
+  /** Seeded multi-start Newton on F(z)−t = 0 across the exterior 𝔻* (|z|>1) — the pole-bearing family has
+   *  finite F-poles at each z_j, so there is no single cleared polynomial for DK (mirrors invertPhi's fallback).
+   *  A ring grid of seeds finds the distinct roots; the caller filters + round-trip-validates them. */
+  const solveFNewton = (t: Complex): Complex[] => {
+    const roots: Complex[] = [];
+    const push = (z: Complex): void => {
+      for (const r of roots) if (A.abs(A.sub(r, z)) < 1e-7) return;
+      roots.push(z);
+    };
+    const ANG = 12;
+    for (const rad of [1.05, 1.3, 2, 4, 8]) {
+      for (let k = 0; k < ANG; k++) {
+        const th = (2 * Math.PI * k) / ANG;
+        let z: Complex = [rad * Math.cos(th), rad * Math.sin(th)];
+        let ok = false;
+        for (let it = 0; it < NEWTON_MAX; it++) {
+          const fz = A.sub(evalF(z), t);
+          if (A.abs(fz) < NEWTON_TOL) {
+            ok = true;
+            break;
+          }
+          const dfz = evalFDeriv(z);
+          if (A.abs(dfz) < 1e-300) break;
+          z = A.sub(z, A.div(fz, dfz));
+          if (!A.isFinite(z) || A.abs(z) > 1e8) break;
+        }
+        if (ok && A.isFinite(z)) push(z);
+      }
+    }
+    return roots;
+  };
+
+  const sigmaInverse = (w: Complex): Complex[] => {
+    const t = conj(w); // solve F(z) = conj(w)
+    const roots = hasBranches ? solveFNewton(t) : solveFPolynomial(t);
+    const out: Complex[] = [];
+    for (const z of roots) {
+      if (!A.isFinite(z) || A.abs(z) <= 1 + 1e-6) continue; // exterior branch |z|>1 (φ: 𝔻* → Ω)
+      const wPre = evalPhi(z);
+      if (!A.isFinite(wPre)) continue;
+      const back = sigma(wPre);
+      if (!back || A.abs(A.sub(back, w)) >= 1e-6) continue; // round-trip σ(σ⁻¹(w)) ≈ w
+      let dup = false;
+      for (const o of out) if (A.abs(A.sub(o, wPre)) < 1e-7) dup = true;
+      if (!dup) out.push(wPre);
+    }
+    return out;
+  };
+
+  return { evalPhi, evalPhiDeriv, evalF, evalFDeriv, invertPhi, sigma, sigmaInverse };
 }
 
 /** Ray-casting point-in-polygon (even-odd rule). */

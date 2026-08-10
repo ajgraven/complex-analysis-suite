@@ -94,3 +94,49 @@ describe("@cas/schwarz bounded-QD σ (S5-C2)", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// σ⁻¹ (F3a) — the interior-branch Schwarz inverse for the bounded family. σ⁻¹(w) = φ(F⁻¹(conj(w))): the
+// INTERIOR roots z (|z|<1) of F(z)=conj(w), mapped through φ. Mirrors the QD app's σ⁻¹ goldens for the
+// unit disk (exactly one preimage = 1/conj(w)) and pins the family-agnostic invariants — ≥1 preimage +
+// exact round-trip — on the single- and two-branch lobes.
+describe("@cas/schwarz bounded-QD σ⁻¹ (S5-C2 / F3a)", () => {
+  const contains = (set: Complex[], p: Complex, tol = 1e-6): boolean =>
+    set.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < tol);
+
+  it("the unit disk: σ⁻¹(w) = {1/conj(w)} — exactly one preimage, round-trips (QD golden mirror)", () => {
+    // σ(w)=1/conj(w) has degree 1, so σ⁻¹(1.5+0.3i) is the single point 1/conj(w) = w/|w|². (mirrors the QD
+    // schwarz.test.js S1/unit-disk golden.)
+    const seed: Complex = [1.5, 0.3];
+    const pre = DISK.sigmaInverse(seed);
+    expect(pre.length, `n=${pre.length}`).toBe(1);
+    near(DISK.sigma(pre[0]) as Complex, seed, 8); // σ(σ⁻¹(w)) ≈ w
+    const d = seed[0] * seed[0] + seed[1] * seed[1];
+    near(pre[0], [seed[0] / d, seed[1] / d], 8); // = 1/conj(w)
+  });
+
+  it("σ⁻¹ recovers the forward preimage: φ(z₀) ∈ σ⁻¹(σ(φ(z₀))) for interior z₀ — exact by construction", () => {
+    for (const dom of [DISK, LOBE]) {
+      for (const z0 of INTERIOR) {
+        const w0 = dom.evalPhi(z0);
+        const s = dom.sigma(w0);
+        expect(s, `σ null at z₀=${z0}`).not.toBeNull();
+        if (!s) continue;
+        const pre = dom.sigmaInverse(s);
+        expect(pre.length, `no preimage at z₀=${z0}`).toBeGreaterThanOrEqual(1);
+        expect(contains(pre, w0), `φ(${z0}) missing from σ⁻¹`).toBe(true);
+      }
+    }
+  });
+
+  it("every σ⁻¹ preimage round-trips: σ(σ⁻¹(w)) ≈ w (incl. the two-branch domain)", () => {
+    for (const dom of [LOBE, TWO]) {
+      for (const z0 of INTERIOR) {
+        const w = dom.sigma(dom.evalPhi(z0)) as Complex;
+        const pre = dom.sigmaInverse(w);
+        expect(pre.length, `no preimage at z₀=${z0}`).toBeGreaterThanOrEqual(1);
+        for (const p of pre) near(dom.sigma(p) as Complex, w, 6);
+      }
+    }
+  });
+});
