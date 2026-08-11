@@ -10,7 +10,7 @@
 //
 // Arithmetic uses @cas/core's convention-neutral tupleAlgebra ([re,im]); conj / inv are the two ops
 // the algebra contract omits (both trivial), defined locally.
-import { makeDurandKerner, tupleAlgebra } from "@cas/core";
+import { makeDurandKerner, makePoly, tupleAlgebra } from "@cas/core";
 import {
   branchPhi,
   branchPhiDeriv,
@@ -25,6 +25,7 @@ import {
 export type { Complex, SchwarzBranch };
 
 const A = tupleAlgebra;
+const poly = makePoly(A); // dense-polynomial coefficient ops (Horner eval, trim, monic) — @cas/core/poly
 const conj = (z: Complex): Complex => [z[0], -z[1]];
 const inv = (z: Complex): Complex => A.div([1, 0], z);
 
@@ -152,18 +153,13 @@ export function makeUnboundedLaurentSchwarz(
     a[m] = [1, 0];
     a[m - 1] = A.div(A.sub(F[0], w), cc);
     for (let l = 1; l < m; l++) a[m - 1 - l] = A.div(F[l], cc);
-    const evalMonic = (z: Complex): Complex => {
-      let acc = a[m];
-      for (let k = m - 1; k >= 0; k--) acc = A.add(A.mul(acc, z), a[k]);
-      return acc;
-    };
     const r = Math.max(1.2, A.abs(w) / A.abs(cc));
     const seeds: Complex[] = [];
     for (let k = 0; k < m; k++) {
       const t = (2 * Math.PI * (k + 0.5)) / m;
       seeds.push([r * Math.cos(t), r * Math.sin(t)]);
     }
-    const res = dk(evalMonic, seeds, { tol: 1e-13, maxIter: 200 });
+    const res = dk((z) => poly.eval(a, z), seeds, { tol: 1e-13, maxIter: 200 });
     if (!res) return null;
     // The outermost root: |z|>1 for w ∈ Ω, |z|=1 for w on ∂Ω (the other roots are interior). A small
     // tolerance keeps boundary points valid; a genuinely interior w (never iterated here) yields null.
@@ -179,7 +175,7 @@ export function makeUnboundedLaurentSchwarz(
     // If DK didn't reach tol (a pathological w), only trust the outermost estimate when it is genuinely a
     // root — an unconverged solve can otherwise surface a spurious "outer" point. |p(z)| scales like
     // |z|^m for a monic degree-m polynomial, so scale the residual gate accordingly.
-    if (!res.converged && best && A.abs(evalMonic(best)) > 1e-6 * Math.max(1, bestAbs) ** m) return null;
+    if (!res.converged && best && A.abs(poly.eval(a, best)) > 1e-6 * Math.max(1, bestAbs) ** m) return null;
     return bestAbs >= 1 - 1e-6 ? best : null;
   };
 
@@ -248,24 +244,19 @@ export function makeUnboundedLaurentSchwarz(
     coef[0] = conjC;
     for (let l = 0; l < m; l++) coef[l + 1] = conj(F[l]);
     coef[1] = A.sub(coef[1], t); // the −t·z term
-    let deg = size - 1;
-    while (deg > 0 && A.abs(coef[deg]) < 1e-14) deg--; // drop a vanishing top Laurent coefficient
-    if (deg < 1) return [];
-    const lead = coef[deg];
-    const a = coef.slice(0, deg + 1).map((c0) => A.div(c0, lead));
-    a[deg] = [1, 0]; // exact monic leading term
-    const evalMonic = (z: Complex): Complex => {
-      let acc = a[deg];
-      for (let k = deg - 1; k >= 0; k--) acc = A.add(A.mul(acc, z), a[k]);
-      return acc;
-    };
+    const trimmed = poly.trim(coef); // drop a vanishing top Laurent coefficient (trailing near-zero)
+    if (trimmed.length < 2) return []; // degree 0 ⇒ a constant, no roots
+    const deg = trimmed.length - 1;
+    const lead = trimmed[deg];
+    const a = poly.monic(trimmed); // divide through by the leading coefficient …
+    a[deg] = [1, 0]; // … forcing an exact monic top term
     const rad = Math.max(1.2, A.abs(t) / Math.max(A.abs(lead), 1e-12));
     const seeds: Complex[] = [];
     for (let k = 0; k < deg; k++) {
       const th = (2 * Math.PI * (k + 0.5)) / deg;
       seeds.push([rad * Math.cos(th), rad * Math.sin(th)]);
     }
-    const res = dk(evalMonic, seeds, { tol: 1e-13, maxIter: 200 });
+    const res = dk((z) => poly.eval(a, z), seeds, { tol: 1e-13, maxIter: 200 });
     return res ? res.roots : [];
   };
 

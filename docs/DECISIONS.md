@@ -18,6 +18,7 @@ Format follows Michael Nygard's ADR convention.
 | [0007](#adr-0007-incremental-extraction-driven-by-real-need) | Incremental extraction driven by real need | Accepted |
 | [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) | Extract `@cas/exact`; keep QD's `sym-core` separate | Accepted |
 | [0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics) | Schwarz reflection (σ) is a first-class peer view in Complex Dynamics | Accepted |
+| [0010](#adr-0010-extract-cascorepoly--format-float-only-exact-stays-in-casexact) | Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All nine are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -736,3 +737,74 @@ addendum records three standing decisions so F's increments do not each re-litig
 
 Phase F is a **menu**, not a runbook: each item ships and reviews on its own gate, nothing here blocks the
 completed A–E arc, and the phase may stop at any depth.
+
+---
+
+## ADR-0010: Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact`
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A follow-on extraction ADR, as [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks for
+notable ones — the second, after [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate).*
+
+### Context
+The Quadrature app's `app/core/poly-helpers.mjs` bundles two unrelated things (its own header admits the
+second only co-locates for load-order): **`QD.Poly`**, dense polynomial arithmetic over complex coefficients
+(ascending-power `Complex[]`: zero/one/variable/trim/add/neg/mul/scale/pow/linearPower), and **`QD.Format`**,
+Unicode sub/superscript label rendering. A consumer sweep found the drift [ADR-0001](#adr-0001-monorepo-over-multi-repo)
+named ("multiple root-finders") in full flower: **five** codebases besides QD each re-roll dense-poly
+coefficient arithmetic — `@cas/schwarz` (the σ⁻¹ cleared-polynomial build), `@cas/expr` (`rational.ts`, a
+near-complete duplicate that feeds three CD sites), `apps/correspondences`, and `apps/complex-dynamics`
+(matingEngine / critical / perturbation / uniformize / dynatomic). The generic **root-finder is already
+shared** (`@cas/core`'s `makeDurandKerner(alg)` takes an eval closure); what every site still re-rolls is the
+**coefficient-array layer around it** — build, Horner-eval, monic-normalize, trim. The `QD.Format` copy had
+likewise drifted into `@cas/schwarz` (`singularities.ts`) and Complex Dynamics (`schwarzExplicitForm.ts`).
+Both primitives clear the second-consumer bar many times over.
+
+### Decision
+**Extract to `@cas/core`**: `poly.ts` — `makePoly<C>(alg: ComplexAlgebra<C>)`, written once against the
+representation-genericity keystone (so QD's `objAlgebra {re,im}` and CD/schwarz's `tupleAlgebra [re,im]`
+share one implementation, exactly as `durand-kerner.ts` / `series.ts` are) — plus `eval` (Horner) and
+`monic`, the coefficient-array glue the non-QD consumers wrapped around the solver; and `format.ts` —
+`subscript` / `superscript`. The degree-**preserving** trimming convention is carried verbatim (add/mul/scale
+do NOT trim; `trim` is separate — the σ⁻¹ root count is the degree; silently trimming would drop roots).
+
+**Scope boundary — float only.** `@cas/core/poly` is `Complex[]`-over-`ComplexAlgebra`. The **exact**-ring
+polynomial consumers (`@cas/exact`'s `qiPoly`/`biPoly`, `correspondences`' exact curve/deltoid) stay in
+`@cas/exact` — a different ring and shape, the same "two engines for two shapes" call
+[ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) made for `sym-core`, and symmetric with
+ADR-0007's don't-merge-without-a-consumer rule (nothing needs one poly type spanning both fields).
+
+**Incremental, need-driven.** P1 (this commit) lands the two modules with a golden corpus, converts QD's
+`poly-helpers.mjs` to a **byte-identical shim** over `makePoly(objAlgebra)` (the frozen classic `.js` twin,
+still vm-loaded in the legacy suite, is a live parity check of exactly that), and refactors `@cas/schwarz` as
+the **proving second consumer** (its σ⁻¹ cleared-polynomial build now uses `poly.eval`/`trim`/`monic`;
+`singularities.ts` uses `format.subscript`). The remaining float consumers (`@cas/expr/rational`, then the CD
+matingEngine/critical/perturbation and correspondence sites) peel onto `poly` one test-guarded PR at a time,
+as ADR-0008 grew `@cas/exact` — **not** in a speculative big-bang.
+
+### Options Considered
+- **A — float `@cas/core/poly` + `format`, incremental (this ADR).** *Pros:* generic over the existing
+  keystone; kills the most-duplicated numeric primitive in the suite; each consumer converts test-guarded and
+  shippable alone. *Cons:* a temporarily heterogeneous set of consumers (some on `poly`, some still rolling
+  their own) until the later phases land.
+- **B — a ring-generic poly to absorb the exact consumers too.** *Rejected:* speculative abstraction over a
+  general ring for a job the float and exact sides don't share; trades a real guarantee (the exactness engine
+  is correctness-critical) for a tidier diagram — the same reasoning that rejected merging `sym-core` in
+  ADR-0008.
+- **C — leave the copies.** *Rejected:* it is precisely the drift the monorepo exists to end.
+
+### Consequences
+- **Easier:** one dense-poly kernel behind the shared solver; a bug fixed once; new σ / correspondence math
+  reaches for `@cas/core/poly` instead of re-rolling a Horner loop.
+- **Harder:** the mixed-state interval while consumers convert; two poly worlds (float in `@cas/core`, exact
+  in `@cas/exact`) that a reader must keep straight — named here rather than explained away.
+- **Revisit:** if a genuine need ever arises for one polynomial type over both fields (none does today).
+
+### Action Items
+1. [x] `poly.ts` + `format.ts` in `@cas/core` with a golden corpus; QD shim (bit-identical); `@cas/schwarz`
+   converted as the proving consumer (**P1**).
+2. [ ] Peel `@cas/expr/rational` and the CD / correspondences float consumers onto `poly`, one test-guarded
+   PR each (**P2–P3**, need-driven).
+3. [ ] `uniformize.ts`'s truncated `Series` is a cousin of `@cas/core/series.ts` — a related but separate
+   consolidation, scoped on its own.

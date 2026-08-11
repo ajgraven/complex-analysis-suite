@@ -8,9 +8,12 @@
 //                      (objAlgebra {re,im}, tupleAlgebra [re,im]) — representation-genericity.
 //   - durand-kerner  : generic Durand-Kerner root-finding over any ComplexAlgebra.
 //   - series         : truncated formal power-series multiply (the shared workhorse).
+//   - poly           : dense polynomial coefficient arithmetic over any ComplexAlgebra (the
+//                      float coefficient-array layer around Durand-Kerner; TS port of QD.Poly).
+//   - format         : Unicode sub/superscript label rendering (a display leaf; the display half
+//                      of the poly-helpers extraction).
 //   - sphere         : stereographic projection C∪{∞} ↔ the Riemann sphere (cancellation-safe
 //                      inverse), shared by both apps' sphere views.
-// Still to come (Phase 5/6): the rest of formal series, Newton + deflation, mat4/camera.
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
 export { objAlgebra, tupleAlgebra } from "./algebra.js";
@@ -19,4 +22,7 @@ export { makeDurandKerner } from "./durand-kerner.js";
 export type { DurandKernerOptions, DurandKernerResult } from "./durand-kerner.js";
 export { makeSeries } from "./series.js";
 export type { Series } from "./series.js";
+export { makePoly } from "./poly.js";
+export type { Poly, PolyOps } from "./poly.js";
+export { subscript, superscript } from "./format.js";
 export { planeToSphere, sphereToPlane } from "./sphere.js";

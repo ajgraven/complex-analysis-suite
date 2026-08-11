@@ -2590,3 +2590,29 @@
   them. Captured the deltoid with a drawn arc (white) folding through the tiling under repeated σ, the images
   cascading warm → cool. **F4f complete — the forward action of σ on a drawn curve is visible, honestly labeled.
   This closes the à-la-carte F4 analysis cards (F4a–F4i all shipped).**
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (extraction — `@cas/core/poly` + `format`,
+  P1; ADR-0010):** the long-pending "extract `@cas/core/poly` from poly-helpers.mjs" (task S1a). A consumer
+  sweep found the drift ADR-0001 named — **five** codebases besides QD each re-rolling dense-polynomial
+  coefficient arithmetic around the already-shared Durand–Kerner solver, and the `subscript`/`superscript`
+  label helper drifted into `@cas/schwarz` + Complex Dynamics too. Presented a phased plan; **P1** lands the
+  foundation + the proving consumer (later phases peel the rest, need-driven — [ADR-0010](../DECISIONS.md)).
+  New **`@cas/core/poly.ts`** — `makePoly<C>(alg: ComplexAlgebra<C>)`, written once against the
+  representation-genericity keystone (serves QD's `objAlgebra {re,im}` and CD/schwarz's `tupleAlgebra [re,im]`,
+  like `durand-kerner`/`series`): `zero/one/variable/trim/add/neg/mul/scale/pow/linearPower` ported verbatim
+  from `QD.Poly` (the **degree-preserving** trim convention carried exactly — the σ⁻¹ root count is the degree)
+  + `eval` (Horner) and `monic`, the coefficient-array glue the non-QD consumers wrapped around the solver. New
+  **`@cas/core/format.ts`** — `subscript`/`superscript` (a display leaf; the second half of poly-helpers, which
+  its own header admits only co-located for load-order). **Scope boundary (ADR-0010):** float only — the
+  exact-ring poly consumers stay in `@cas/exact` (the ADR-0008 "two shapes, two engines" call, symmetric). QD's
+  `poly-helpers.mjs` is now a **byte-identical shim** over `makePoly(objAlgebra)` (`Complex.mul` uses the same
+  formula it inlined; the frozen classic `.js` twin, still vm-loaded in the legacy suite, is a live parity
+  check) + `format`. **`@cas/schwarz` is the proving second consumer** (ADR-0007): `unbounded-laurent.ts`'s
+  `exteriorRoot`/`solveFPolynomial` drop their inline Horner + own trim-loop + own monic-map for
+  `poly.eval`/`trim`/`monic`, and `singularities.ts` uses `format.subscript`. Green: typecheck + lint + build
+  (worker-bundle gate: 5 chunks present) + node — **2527 → 2543 (+16 @cas/core goldens)** (poly: hand-computed products /
+  powers / (z−z0)^m / Horner eval / monic / the load-bearing trim + degree-preserving convention / obj-vs-tuple
+  representation invariance; format: digit maps + non-digit passthrough); the 74 `@cas/schwarz` tests
+  (σ⁻¹ round-trip + QD goldens) **unchanged** — a bit-identical refactor; QD's **2334**-assertion legacy suite
+  green (the classic↔.mjs parity check confirms byte-identity). **P1 complete — `@cas/core/poly` + `format`
+  exist, QD delegates to them bit-identically, and `@cas/schwarz` rides them. P2–P3 (peel `@cas/expr/rational`
+  + the CD / correspondences float consumers) stay need-driven per ADR-0010.**

@@ -13,7 +13,7 @@
 // A free function over a minimal {evalPhi, evalPhiDeriv} surface (both families expose it). σ is a numerical
 // reconstruction, so the markers are `≈`; branch points are found numerically (multi-start Newton on φ′), so
 // that set is best-effort.
-import { tupleAlgebra } from "@cas/core";
+import { tupleAlgebra, subscript } from "@cas/core";
 import { type Complex, type SchwarzBranch } from "./branches.js";
 
 const A = tupleAlgebra;
@@ -56,8 +56,6 @@ export interface SingularityOptions {
   angles?: number;
 }
 
-const SUB = ["₀", "₁", "₂", "₃", "₄", "₅", "₆", "₇", "₈", "₉"] as const;
-const sub = (n: number): string => String(n).split("").map((d) => SUB[+d] ?? d).join("");
 
 /**
  * Locate σ's singularities from the map φ. `branches` gives the finite poles (for the σ-pole pullback); the
@@ -77,7 +75,7 @@ export function findSigmaSingularities(
     for (let j = 0; j < branches.length; j++) {
       const w = map.evalPhi(branches[j].z);
       if (!A.isFinite(w) || A.abs(w) > 1e6) continue; // a z_j at the very rim maps far out — not a useful marker
-      poles.push({ w, order: branches[j].A.length, label: `a${sub(j + 1)}` });
+      poles.push({ w, order: branches[j].A.length, label: `a${subscript(j + 1)}` });
     }
   }
 
