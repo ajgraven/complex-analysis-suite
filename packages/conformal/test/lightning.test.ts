@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fitSmoothConformalMap } from "../src/solve/lightning.js";
-import type { C } from "../src/solve/vandermondeArnoldi.js";
+import { fitSmoothConformalMap } from "../src/lightning.js";
+import type { C } from "../src/vandermondeArnoldi.js";
 
 function sampleBoundary(m: number, gamma: (t: number) => C): C[] {
   return Array.from({ length: m }, (_, j) => gamma((2 * Math.PI * j) / m));
 }
 
-describe("smooth-domain Riemann map (P3a lightning core)", () => {
+describe("smooth-domain Riemann map (lightning core)", () => {
   it("recovers the closed form for a centred circle of radius R: f(z) = z/R", () => {
     const R = 2;
     const bdry = sampleBoundary(400, (t) => [R * Math.cos(t), R * Math.sin(t)]);

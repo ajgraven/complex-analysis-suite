@@ -7,9 +7,9 @@
 // rational terms clustered just OUTSIDE ∂𝔻 at the corner preimages γ̂, where g is algebraically singular.
 //
 // Honesty: numerical (≈). boundaryResidual = maxⱼ |g(uⱼ) − pⱼ| is the accuracy tag. Pure; node-tested.
+import { lstsqHouseholder } from "@cas/core";
 import { type ConformalMap } from "./lightning.js";
 import { arnoldiBasis, evalExpansion, type C } from "./vandermondeArnoldi.js";
-import { lstsqHouseholder } from "./lstsq.js";
 
 const nrm = (v: C): C => {
   const r = Math.hypot(v[0], v[1]) || 1;

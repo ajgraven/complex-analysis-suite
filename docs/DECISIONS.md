@@ -26,9 +26,10 @@ Format follows Michael Nygard's ADR convention.
 | [0015](#adr-0015-extract-cascorepoly--format-float-only-exact-stays-in-casexact)   | Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact` | Accepted |
 | [0016](#adr-0016-extract-casexport--shared-png-text-metadata--shared-glsl-snippets) | Extract `@cas/export` — shared PNG `tEXt` metadata (+ shared GLSL snippets) | Accepted |
 | [0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) | CD → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer | Accepted |
+| [0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) | Extract `@cas/conformal` ahead of demand; lift `lstsq` into `@cas/core` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All seventeen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All eighteen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -52,7 +53,12 @@ Format follows Michael Nygard's ADR convention.
 > (like 0009/0010/0013): Complex Dynamics hands a filled Julia set's Böttcher map to the Riemann-map studio
 > over `@cas/interchange`, and Riemann Map sheds its whole dynamics + GPU stack to become a pure-2D conformal
 > consumer — it **supersedes ADR-0014's premise** that RM is a live `@cas/dynamics` consumer and **narrows
-> ADR-0013**. Supersede rather than rewrite if any change later.
+> ADR-0013**. **0018 is an eleventh follow-on** — an *extraction*, but the first that deliberately **breaks** the
+> ADR-0007 second-consumer rule: `@cas/conformal` (the lightning + forward-map conformal builder) is carved out
+> of the Riemann-map app *ahead* of its second consumer (Schwarz–Christoffel, roadmap step E), and the
+> `lstsqHouseholder` primitive beneath it is lifted into `@cas/core`; the near-twin least-squares solver in
+> Quadrature Domains is recorded as the *deferred* consumer (the two have diverged on rank-deficiency policy),
+> not force-merged. Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
 > [migration runbook](MIGRATION.md) ran to completion — with two conscious deviations recorded
@@ -1505,3 +1511,88 @@ under conformal maps, and the construction of those maps*.
    `@cas/dynamics` and the dead `@cas/schwarz`.
 4. [x] **C** — RM drops the generic domain-coloring modes and the whole GPU fragment pipeline; drops `@cas/gpu`;
    renders pure-2D.
+
+## ADR-0018: Extract `@cas/conformal` ahead of demand; lift `lstsq` into `@cas/core`
+
+**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) (extract *ahead* of a proven second consumer); the lifted primitive lands in [ADR-0006](#adr-0006-convention-neutral-core)-neutral `@cas/core`
+
+### Context
+Roadmap step D. The Riemann-map studio's numerical region map 𝔻 → Ω is produced by a self-contained conformal-map
+**builder** that lived in `apps/riemann-map/src/solve/`: the Vandermonde–Arnoldi stable polynomial basis
+(Brubeck–Nakatsukasa–Trefethen 2021), the lightning Riemann-map solver f: Ω → 𝔻 (Gopal–Trefethen 2019) with
+corner-clustered poles, the forward map g: 𝔻 → Ω, and beneath all three a real Householder-QR least-squares
+solver `lstsqHouseholder`. The roadmap's **next** step (E) is Schwarz–Christoffel — a *new* conformal engine that
+will want the same basis + least-squares substrate and the same `corners?` hook. Two placement questions follow:
+where should the **builder** live, and where should the **least-squares primitive** live.
+
+Every prior `@cas/*` package waited for a proven **second consumer** before extraction
+([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)). Here there is none yet for the *builder* — RM
+is its only consumer today. For the *least-squares* primitive an investigation found a genuine near-twin in
+**Quadrature Domains** (`app/solvers/solver.mjs`: `houseQR` / `solveLeastSquares` / `leastSquaresWithCond`), used
+load-bearingly in QD's near-cusp Newton solver — but the two have **diverged**: RM zero-fills a rank-deficient
+column (tol `1e-300`, never throws) while QD **throws** `"singular"` (tol `1e-13`) and is genuinely richer
+(a reusable factorization handle, numerical rank, and a `condEst`-driven iterative refinement its Newton recovery
+path depends on). They are **not drop-in interchangeable** — which refutes the roadmap note's "RM ≡ QD" wording
+(the "QD's is richer" half is true; the "≡" is false).
+
+### Decision
+Two moves, both recorded here:
+
+1. **Extract `@cas/conformal` ahead of demand.** The builder (Vandermonde–Arnoldi + lightning + forward map)
+   becomes the **ninth** `@cas/*` package now, *before* a second consumer exists — a deliberate exception to
+   ADR-0007. Rationale: step E (Schwarz–Christoffel) is a genuinely new engine, and it is cheaper and cleaner to
+   give it a package to be **born into** than to build it inside the app and re-seam afterward (the
+   build-then-migrate waste [VISION §5](VISION.md#5-the-strategic-thesis) rejects). The exception is safe because
+   the seam is drawn where the mathematics already is — the builder is pure, self-contained, and node-tested — so
+   the "premature/wrong seam" risk ADR-0007 guards against is low. Source-exports model (like
+   [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)'s `@cas/dynamics`), on `@cas/core`.
+
+2. **Lift `lstsqHouseholder` into `@cas/core`** (not into `@cas/conformal`). Real Householder-QR least squares is
+   foundational, general-purpose linear algebra — nothing conformal-specific about it — and QD independently
+   implementing the same routine *proves* it is a shared primitive. `@cas/core` (ADR-0006-neutral, and already
+   `dist`-built so QD's headless `node` suite could import it) is the right home. **But do not rewire QD's solver
+   in this step.** QD's variant has diverged (rank policy) and is cusp-critical; forcing it onto RM's zero-fill
+   contract would regress it, and merging the two properly is its own risk-bearing consolidation ("ask before
+   large speculative refactors"). So `@cas/core`'s `lstsqHouseholder` is, today, consumed only by
+   `@cas/conformal` — an extract-ahead like the builder — with **QD documented as the anticipated second
+   consumer** whose adoption is deferred. This mirrors
+   [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)'s precedent of deliberately leaving QD's
+   mature numerics in place.
+
+### Options Considered
+- **A — extract `@cas/conformal` + lift lstsq→core, defer QD (this ADR).** *Pros:* gives step E a home to build
+  into; `@cas/core` gains the honest foundational primitive; touches **no** mature app math. *Cons:* two
+  extract-aheads in one step (softens ADR-0007 twice — recorded, not hidden).
+- **B — keep the builder in RM; extract only when Schwarz–Christoffel lands.** *Rejected:* builds a new engine
+  inside an app and then re-seams it — the exact build-then-migrate waste VISION §5 rejects, and the seam is
+  already clean today.
+- **C — lift a *superset* LSQ (QD's `houseQR` + a selectable rank policy) into core and rewire BOTH RM and QD
+  now.** *Rejected for this step:* a large, risky rewrite of QD's most numerically sensitive (near-cusp) code.
+  It remains available as a future opt-in consolidation (Action Item 5).
+- **D — keep `lstsq` inside `@cas/conformal`, not core.** *Rejected:* least squares is not conformal-specific;
+  hiding a general primitive inside a domain package is the wrong seam, and QD's twin shows the primitive recurs.
+
+### Consequences
+- **Easier:** Schwarz–Christoffel (step E) has a package + a `corners?` hook to build into; `@cas/core` now owns
+  the suite's least-squares primitive; Riemann Map shrinks (its whole `solve/` directory is gone — four fewer app
+  files — and it gains one more `@cas/*` dependency instead).
+- **Harder / owed:** two single-consumer extractions to be retro-justified by future work (step E for the builder;
+  a QD consolidation for core-`lstsq`). If step E is abandoned, ADR-0007's symmetric "don't split without two"
+  would invite folding `@cas/conformal` back into RM.
+- **Documented divergence:** the RM/QD least-squares split (zero-fill @ `1e-300` vs throw @ `1e-13`, plus QD's
+  `condEst`/refinement/reusable-handle machinery) is now on record, so a future merge is informed rather than
+  surprised.
+- **Revisit:** when Schwarz–Christoffel lands (the builder's second consumer) the ahead-of-demand exception
+  retro-justifies; when/if QD's `solver.mjs` least squares is consolidated onto `@cas/core` (with a selectable
+  rank-deficiency policy) the core primitive gets its honest second consumer.
+
+### Action Items
+1. [x] Add `lstsqHouseholder` to `@cas/core` (moved from RM; plus rank-deficient-column and underdetermined-throw coverage).
+2. [x] Create `@cas/conformal` (Vandermonde–Arnoldi + lightning + forward map) on `@cas/core`; source-exports model.
+3. [x] Rewire Riemann Map onto `@cas/conformal`; delete `apps/riemann-map/src/solve/`; keep RM's forward-map
+   integration test over its domain-preset library.
+4. [x] Register the package in `vitest.workspace.ts` + the test-census `PROJECTS` (a `conformal` bucket).
+5. [ ] **Deferred:** consolidate QD's `solver.mjs` least squares onto `@cas/core` — needs a selectable
+   rank-deficiency policy to reconcile the `1e-300`/`1e-13` + zero-fill/throw divergence, and to preserve QD's
+   `condEst`/refinement. QD is the anticipated second consumer.
+6. [ ] **Anticipated:** build Schwarz–Christoffel (roadmap step E) into `@cas/conformal` — the builder's second consumer.

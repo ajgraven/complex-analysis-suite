@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { lstsqHouseholder } from "../src/solve/lstsq.js";
+import { lstsqHouseholder } from "../src/lstsq.js";
 
-describe("Householder least squares (P3a)", () => {
+describe("Householder least squares (@cas/core)", () => {
   it("recovers the exact solution of a consistent overdetermined line fit y = 2x + 1", () => {
     // 3 collinear points on y = 2x+1; columns [x, 1].
     const A = [
@@ -37,5 +37,23 @@ describe("Householder least squares (P3a)", () => {
     const x = lstsqHouseholder(A, b); // 2a+b=5, a+3b=10 → a=1, b=3
     expect(x[0]).toBeCloseTo(1, 10);
     expect(x[1]).toBeCloseTo(3, 10);
+  });
+
+  it("returns 0 for a rank-deficient column rather than NaN", () => {
+    // Column 1 is all-zero (rank-deficient); the stable choice sets x[1] = 0 and fits the rest.
+    const A = [
+      [1, 0],
+      [2, 0],
+      [3, 0],
+    ];
+    const b = [2, 4, 6]; // b = 2·col0
+    const x = lstsqHouseholder(A, b);
+    expect(x[0]).toBeCloseTo(2, 10);
+    expect(x[1]).toBe(0);
+    expect(Number.isNaN(x[1])).toBe(false);
+  });
+
+  it("throws on an underdetermined system (m < n)", () => {
+    expect(() => lstsqHouseholder([[1, 2, 3]], [1])).toThrow(/underdetermined/);
   });
 });

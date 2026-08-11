@@ -32,6 +32,7 @@ import Complex, {
   tupleAlgebra,
   makeDurandKerner,
   makeSeries,
+  lstsqHouseholder,
 } from "@cas/core";
 import type {
   Cx,
@@ -72,6 +73,15 @@ claimed.
 from the Riemann sphere, with a cancellation-safe inverse. Shared by both apps' sphere views,
 which is what earned it a place in the kernel (ADR-0007).
 
+**Least squares** — `lstsqHouseholder(A, b)` solves the overdetermined `min‖A·x − b‖₂` (real,
+row-major `A`, single right-hand side) by backward-stable Householder QR, zero-filling a
+rank-deficient column rather than returning `NaN`. It is the numeric workhorse under
+[`@cas/conformal`](../conformal)'s lightning fits; it lives here
+([ADR-0018](../../docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
+because it is foundational, general-purpose linear algebra — the Quadrature app carries a near-twin
+(under its cusp-critical Newton solver) that is the *anticipated* second consumer, its adoption deferred
+because the two diverged on rank-deficiency policy.
+
 ## What is _not_ here
 
 By design (and per the kernel's own header comment): **no** Newton/deflation, **no**
@@ -84,4 +94,4 @@ them here the day a second app needs them, with golden tests, not before.
 ## Tests
 
 `test/` — a golden-value corpus representing both apps' needs (`complex`, `durand-kerner`,
-`series`, `sphere`). This corpus is what makes "fix a bug once" safe for a shared kernel.
+`series`, `sphere`, `lstsq`). This corpus is what makes "fix a bug once" safe for a shared kernel.

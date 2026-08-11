@@ -1,8 +1,10 @@
 // lstsq.ts — real linear least squares by Householder QR: minimise ‖A·x − b‖₂ over x (A is m×n, m ≥ n).
 //
-// The numerical workhorse under the lightning conformal solver (P3). Householder QR is backward-stable —
-// far better than the normal equations AᵀA x = Aᵀb, which square the condition number and lose the
-// accuracy the Vandermonde–Arnoldi basis was built to preserve. Pure, dependency-free, node-tested.
+// The pure numeric workhorse under any overdetermined fit in the suite — the conformal builder's
+// Vandermonde–Arnoldi solve (@cas/conformal) and the Quadrature Domains boundary/coefficient fits both
+// stand on it. Householder QR is backward-stable — far better than the normal equations AᵀA x = Aᵀb,
+// which square the condition number and lose the accuracy a well-chosen basis was built to preserve.
+// Convention-neutral (ADR-0006): no π / 2πi constants — this is plain linear algebra. Dependency-free.
 
 /**
  * Solve the overdetermined least-squares problem min‖A·x − b‖₂ by Householder QR.
