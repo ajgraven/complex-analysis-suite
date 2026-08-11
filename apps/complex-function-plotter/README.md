@@ -122,7 +122,7 @@ Plus the Phase-2 research tool:
   not CVD-safe).
 
 It visually matches the canonical Wegert enhanced-portrait plate (checked by hand against the reference
-during development — an automated pixel-diff golden is deferred, see below), recovers the known zero/pole
+during development; render-consistency goldens run in the CI browser gate — see below), recovers the known zero/pole
 counts of rational maps (unit-tested via the argument principle), and round-trips a map to Complex Dynamics
 and back. It is built into CI and **published** — the launcher card links to it and `deploy-pages.yml`
 copies it into the combined site.
@@ -188,6 +188,9 @@ hand-off — MapSpec→expr conversion **re-parsed through `@cas/expr`**, the σ
 round-trip and validation, the `→ Dynamics` deep-link), `navigation.test.ts` (the a11y key→intent map, the
 pinch-zoom factor — direction, clamp, guards — and the linked-view `leftHalf` / `isLeftHalf` split), and
 `singularities.test.ts` (the zero/pole finder
-recovers known counts and orders). Coloring correctness is additionally checked visually against reference
-plates (the Wegert enhanced-portrait) during development; an automated pixel-diff visual-regression harness
-is deferred.
+recovers known counts and orders). Under `pnpm test:browser` (CI's `browser` job, in a real WebGL2
+context) the app's **real GLSL is compiled** — all three programs (2D · surface · sphere) across a
+15-function corpus (`shaderCompile.browser.test.ts`) — and **render-consistency goldens** run
+(`renderGolden.browser.test.ts`): a non-blank portrait, z² 180°-rotation symmetry, and the top-down
+landscape equal to the 2D portrait (the Phase-5 gate). A full pixel-diff of the canonical Wegert / DLMF
+plates against committed images is still checked by hand during development.

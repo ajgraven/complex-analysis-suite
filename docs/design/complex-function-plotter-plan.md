@@ -368,13 +368,18 @@ schema as a migratable format (the suite's share-link guardrail).
   mapping), the parameter model, the instruments (root-finding, winding), the view-state codec,
   and the `@cas/expr` additions. Pure-first design is what keeps them testable (the suite's
   discipline).
-- **Browser Vitest** (`test:browser`, headless Chromium): real WebGL2 **shader compile** of the
-  assembled coloring/surface programs, and a **dual-backend probe** (JS `colorAt` reference vs GLSL)
-  reusing `@cas/gpu/dual-backend`'s 1×1-RGBA32F readback pattern. _(If added, wire the app into the
-  root `test:browser` script and `ci.yml`'s `browser` job.)_
-- **Visual-regression golden images** for the ground-truth plates: a small pixel-diff harness over a
-  fixed set of views (Wegert plate, DLMF Γ/ζ, Γ landscape), tolerant of GPU differences. Numeric
-  golden values cross-checked against ComplexPhasePortrait.jl / DomainColoring.jl.
+- **Browser Vitest** (`test:browser`, headless Chromium): **DONE** — the app is wired into the root
+  `test:browser` script and `ci.yml`'s `browser` job. `shaderCompile.browser.test.ts` compiles + links
+  the real WebGL2 programs (2D · surface · sphere) across a 15-function corpus (polynomials,
+  poles/rationals, transcendentals, hyperbolics, the float32 special functions, named parameters, the
+  ∞-inspector, a non-holomorphic map). _(A JS-`colorAt`-vs-GLSL dual-backend probe was **not** added —
+  the coloring has no JS mirror; the numeric backstop stays `@cas/gpu`'s dual-backend harness.)_
+- **Render-consistency goldens** (`renderGolden.browser.test.ts`): **DONE** — renders through the real
+  `Plot` and asserts tolerant invariants (a non-blank portrait, z² 180°-rotation symmetry, and the
+  top-down landscape == the 2D portrait, the Phase-5 gate), chosen over brittle committed pixel data
+  for SwiftShader stability. A **full pixel-diff of the canonical plates** (Wegert, DLMF Γ/ζ, Γ
+  landscape) against committed images, cross-checked against ComplexPhasePortrait.jl /
+  DomainColoring.jl, remains future work.
 - **Census floor:** ≥1 test from P0 (satisfies `scripts/assert-test-census.mjs`).
 
 ### 1.10 Dependency direction & lint boundaries
@@ -579,8 +584,9 @@ assemble step. `base:"./"` keeps assets path-independent. No workers planned →
 
 All **67 Core + v1** items shipped; each phase's ground-truth check passing; `@cas/expr` extended
 backward-compatibly with parity tests for every added function; the honest-labeling/uncertainty
-layer present; interop round-trip (QD σ → plot → View → CD) green; each render feature checked against
-its reference by a **manual** headless-Chromium ground-truth run (Wegert plate, DLMF Γ/ζ, the Γ
-landscape) — an automated **committed** pixel-diff golden harness is _deferred_ (§1.9), so these are
-not CI-gated goldens; the app **published** in the combined Pages site; three ADRs written (§4, the 3D
+layer present; interop round-trip (QD σ → plot → View → CD) green; the app's real GLSL **compiled in
+CI** (`shaderCompile.browser.test.ts`, all three programs across a function corpus) and **render-
+consistency goldens** CI-gated (`renderGolden.browser.test.ts`: non-blank · z² 180° symmetry ·
+top-down == 2D), with a full committed pixel-diff of the canonical plates (Wegert, DLMF Γ/ζ, the Γ
+landscape) still by hand (§1.9); the app **published** in the combined Pages site; three ADRs written (§4, the 3D
 one when P5 proves the API). Later + Exploratory remain a tracked backlog with known insertion points (§3).
