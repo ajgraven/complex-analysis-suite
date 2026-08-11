@@ -75,16 +75,20 @@ import {
   type InterchangeVar,
 } from "./interchange/exportView.js";
 
+// The fresh-boot state (no share-link). The app now opens 3D-first on a Γ(z) landscape: a phase-only
+// HSV portrait draped over a linear-|f| surface, the map whose poles best show off the 3D view. NOTE:
+// these are the NO-LINK defaults only — `DEFAULT_V3D` / `cleanV3d` stay 2D-neutral so an existing
+// share-link (which always carries its own colormap/modulus/view) still reopens exactly as it was.
 const DEFAULTS: PlotterState = {
-  expr: "z^2",
-  exprF: "z^2",
+  expr: "gamma(z)",
+  exprF: "gamma(z)",
   exprG: "1/z",
   active: "f",
   cx: 0,
   cy: 0,
-  span: 2,
-  colormap: 0,
-  modulus: 2,
+  span: 4, // frames Γ's poles at 0, −1, −2, −3
+  colormap: 1, // HSV (classic)
+  modulus: 0, // phase only
   enhance: 0,
   sectors: 12,
   crisp: 1,
@@ -92,7 +96,7 @@ const DEFAULTS: PlotterState = {
   hueSign: 1,
   params: {},
   anim: { ...DEFAULT_ANIM },
-  v3d: { ...DEFAULT_V3D },
+  v3d: { ...DEFAULT_V3D, mode: "3d", heightMode: 1 }, // 3D landscape, linear-|f| height
 };
 
 function addOption(sel: HTMLSelectElement, value: string, label: string): void {
@@ -233,7 +237,7 @@ function main(): void {
 
   let plot: Plot;
   try {
-    plot = new Plot(canvas, "z^2");
+    plot = new Plot(canvas, "gamma(z)"); // seed; the real map is applied from `initial` via setActive, below
   } catch (err) {
     setError(err instanceof Error ? err.message : String(err));
     return;
