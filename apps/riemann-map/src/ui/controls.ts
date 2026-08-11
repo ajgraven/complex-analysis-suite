@@ -27,7 +27,7 @@ export interface Controls {
   setDiskAngular(n: number): void;
   setDiskLayout(id: string): void;
   /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`bottcher` = disk-image numeric sources. */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean }): void;
+  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean; import: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
@@ -55,6 +55,8 @@ export interface Controls {
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
   onCopyExteriorMap(cb: () => void): void;
+  /** Paste-import an @cas/interchange "#s=" map link (the "Import map…" action). */
+  onImportMap(cb: (link: string) => void): void;
   /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
   onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void;
 }
@@ -85,6 +87,7 @@ const DISK_SOURCES = [
   { id: "expression", name: "Expression  φ(z)" },
   { id: "region", name: "Region  𝔻 → Ω  (numeric)" },
   { id: "bottcher", name: "Exterior map ψ  (Böttcher)" },
+  { id: "import", name: "Imported map  (from a link)" },
 ] as const;
 
 const DISK_LAYOUTS = [
@@ -196,6 +199,7 @@ export function createControls(initialExpr: string): Controls {
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
   const copyExtListeners: (() => void)[] = [];
+  const importMapListeners: ((link: string) => void)[] = [];
   const applyViewportListeners: ((re: number, im: number, zoom: number) => void)[] = [];
 
   const root = document.createElement("aside");
@@ -250,7 +254,16 @@ export function createControls(initialExpr: string): Controls {
   // The region SOURCE offers only smooth domains — the forward map g: 𝔻 → Ω is stable there; polygon
   // corners need a Schwarz–Christoffel engine (roadmap 3.1).
   const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.filter((d) => !d.corners).map((d) => ({ id: d.id, name: d.name })));
-  viewGroup.el.append(mode.field, diskSource.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, cmap.field, grid.field, domain.field, regionDomain.field);
+  // "Import map…" action for the imported-map source (B2): paste an interchange "#s=" link (a filled
+  // Julia set's exterior Riemann map, handed off from Complex Dynamics). Shown only for that source.
+  const importField = document.createElement("div");
+  importField.className = "field";
+  const importBtn = document.createElement("button");
+  importBtn.type = "button";
+  importBtn.textContent = "Import map…";
+  importBtn.title = "Paste a Complex Dynamics “Riemann Map ↗” link (#s=…) to render its exterior map";
+  importField.append(importBtn);
+  viewGroup.el.append(mode.field, diskSource.field, importField, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, cmap.field, grid.field, domain.field, regionDomain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -380,6 +393,10 @@ export function createControls(initialExpr: string): Controls {
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
   copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
+  importBtn.addEventListener("click", () => {
+    const link = window.prompt("Paste an interchange map link (#s=…) from Complex Dynamics:");
+    if (link && link.trim()) importMapListeners.forEach((cb) => cb(link.trim()));
+  });
   const applyViewport = (): void => {
     const re = Number(navRe.input.value);
     const im = Number(navIm.input.value);
@@ -455,14 +472,15 @@ export function createControls(initialExpr: string): Controls {
     setDiskLayout(id: string): void {
       layout.select.value = id;
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean }): void {
+    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean; import: boolean }): void {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
       domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
       regionDomain.field.style.display = v.region ? "" : "none"; // disk-image region source (smooth only)
       diskSource.field.style.display = v.disk ? "" : "none";
+      importField.style.display = v.import ? "" : "none"; // "Import map…" — imported-map source only
       for (const f of [diskStyle.field, radial.field, angular.field, layout.field]) f.style.display = v.disk ? "" : "none";
-      // interior/exterior is expression-only (region is 𝔻 → Ω interior; Böttcher is ext(𝔻) → ext(K))
+      // interior/exterior is expression-only (region is 𝔻 → Ω interior; an exterior map is ext(𝔻) → ext(·))
       diskSide.field.style.display = v.disk && !v.region && !v.bottcher ? "" : "none";
       // the "Show" subset field is disk-only AND line-style-only
       diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
@@ -562,6 +580,9 @@ export function createControls(initialExpr: string): Controls {
     },
     onCopyExteriorMap(cb: () => void): void {
       copyExtListeners.push(cb);
+    },
+    onImportMap(cb: (link: string) => void): void {
+      importMapListeners.push(cb);
     },
     onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void {
       applyViewportListeners.push(cb);

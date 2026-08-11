@@ -36,6 +36,7 @@ import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js"
 import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
+import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
 import { fitForwardMap, type ForwardMap } from "./solve/forwardMap.js";
@@ -44,6 +45,32 @@ import { createControls } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
   return decodeRiemannState(window.location.hash) ?? DEFAULT_VIEW_STATE;
+}
+
+/** Evaluate a Laurent exterior map ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ from its coefficients. Shared by the Böttcher
+ *  source (coeffs computed locally) and the imported-map source (coeffs decoded from an interchange link). */
+function evalLaurentPsi(
+  lead: readonly [number, number],
+  coeffs: readonly (readonly [number, number])[],
+  w: Pt,
+): Pt {
+  let re = lead[0] * w[0] - lead[1] * w[1]; // γ₁·w
+  let im = lead[0] * w[1] + lead[1] * w[0];
+  const den = w[0] * w[0] + w[1] * w[1];
+  if (den === 0) return [Infinity, Infinity];
+  const invRe = w[0] / den; // w⁻¹
+  const invIm = -w[1] / den;
+  let pRe = 1; // w⁻ᵏ, k = 0
+  let pIm = 0;
+  for (const b of coeffs) {
+    re += b[0] * pRe - b[1] * pIm;
+    im += b[0] * pIm + b[1] * pRe;
+    const nRe = pRe * invRe - pIm * invIm;
+    const nIm = pRe * invIm + pIm * invRe;
+    pRe = nRe;
+    pIm = nIm;
+  }
+  return [re, im];
 }
 /** Size the drawing buffer to the CSS box × DPR. Returns true if it changed — a resize clears the
  *  WebGL buffer, so the caller must re-render even when nothing else is dirty (else the plane blanks). */
@@ -109,6 +136,12 @@ function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
   let state = initialState();
+  // A "#s=" interchange deep link (e.g. Complex Dynamics' "Send to Riemann Map") boots straight into the
+  // imported exterior map as the disk-image source. A "#vs=" permalink has no s= payload, so this is null.
+  let importedMap: ImportedExterior | null = importExteriorMap(window.location.hash);
+  if (importedMap) {
+    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image" } };
+  }
 
   // ---- DOM shell -----------------------------------------------------------
   app.replaceChildren();
@@ -202,17 +235,20 @@ function main(): void {
   const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
   const diskSourceIsRegion = (): boolean => state.render.diskSource === "region";
   const diskSourceIsBottcher = (): boolean => state.render.diskSource === "bottcher";
-  const diskSourceIsNumeric = (): boolean => diskSourceIsRegion() || diskSourceIsBottcher();
-  // Region maps are 𝔻 → Ω (interior); the Böttcher map ψ is ext(𝔻) → ext(K) (exterior). Interior/exterior
-  // + the draggable c apply only to the explicit-expression source.
+  const diskSourceIsImport = (): boolean => state.render.diskSource === "import";
+  const diskSourceIsNumeric = (): boolean =>
+    diskSourceIsRegion() || diskSourceIsBottcher() || diskSourceIsImport();
+  // Region maps are 𝔻 → Ω (interior); the Böttcher map ψ and an imported exterior map are ext(𝔻) → ext(·)
+  // (exterior). Interior/exterior + the draggable c apply only to the explicit-expression source.
+  const diskSourceIsExteriorMap = (): boolean => diskSourceIsBottcher() || diskSourceIsImport();
   const diskSide = (): DiskSide =>
-    diskSourceIsBottcher() ? "exterior" : !diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior";
+    diskSourceIsExteriorMap() ? "exterior" : !diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior";
   const diskRadial = (): number => state.render.diskDensity ?? 18;
   const diskSectors = (): number => state.render.diskSectors ?? 2 * diskRadial();
   const diskStyle = (): string => state.render.diskStyle ?? "filled";
   const diskShow = (): string => state.render.diskShow ?? "both";
   const diskLayout = (): string => state.render.diskLayout ?? "split";
-  const diskExtLogR = (): number => (diskSourceIsBottcher() ? BOTTCHER_LOG_R : 2.5); // exterior grid reach
+  const diskExtLogR = (): number => (diskSourceIsExteriorMap() ? BOTTCHER_LOG_R : 2.5); // exterior grid reach
   const diskMaxR = (): number => (diskSide() === "exterior" ? Math.exp(diskExtLogR()) : 1);
   const phi = (z: Pt): Pt => {
     if (!current) return z;
@@ -226,30 +262,21 @@ function main(): void {
   };
   /** The exterior Riemann map ψ(w) = γ₁·w + Σ bₖ w⁻ᵏ, from the exterior analysis (Böttcher source, 2.2). */
   const bottcherValid = (): boolean => !!analysis && exteriorConformalValid();
-  const bottcherPsi = (w: Pt): Pt => {
-    if (!analysis) return w;
-    const lead = analysis.lead;
-    let re = lead[0] * w[0] - lead[1] * w[1]; // γ₁·w
-    let im = lead[0] * w[1] + lead[1] * w[0];
-    const den = w[0] * w[0] + w[1] * w[1];
-    if (den === 0) return [Infinity, Infinity];
-    const invRe = w[0] / den; // w⁻¹
-    const invIm = -w[1] / den;
-    let pRe = 1; // w⁻ᵏ, k = 0
-    let pIm = 0;
-    for (const b of analysis.coeffs) {
-      re += b[0] * pRe - b[1] * pIm;
-      im += b[0] * pIm + b[1] * pRe;
-      const nRe = pRe * invRe - pIm * invIm;
-      const nIm = pRe * invIm + pIm * invRe;
-      pRe = nRe;
-      pIm = nIm;
-    }
-    return [re, im];
-  };
-  /** The φ the disk-image mode pushes forward: explicit φ, the region map g, or the Böttcher map ψ. */
+  const bottcherPsi = (w: Pt): Pt => (analysis ? evalLaurentPsi(analysis.lead, analysis.coeffs, w) : w);
+  /** An imported exterior map ψ (B2): same Laurent evaluation, coefficients decoded from an interchange
+   *  link (e.g. Complex Dynamics' Böttcher map of a filled Julia set) rather than computed here. */
+  const importedValid = (): boolean => !!importedMap;
+  const importedPsi = (w: Pt): Pt => (importedMap ? evalLaurentPsi(importedMap.lead, importedMap.coeffs, w) : w);
+  /** The φ the disk-image mode pushes forward: explicit φ, the region map g, the Böttcher map ψ, or an
+   *  imported exterior map ψ. */
   const activePhi = (): ((z: Pt) => Pt) =>
-    diskSourceIsRegion() ? regionPhi : diskSourceIsBottcher() ? bottcherPsi : phi;
+    diskSourceIsRegion()
+      ? regionPhi
+      : diskSourceIsBottcher()
+        ? bottcherPsi
+        : diskSourceIsImport()
+          ? importedPsi
+          : phi;
   /** φ′ at w for the active source (symbolic for φ; a central difference for the numerical maps). */
   const activeDeriv = (w: Pt): [number, number] => {
     if (diskSourceIsNumeric()) {
@@ -331,20 +358,24 @@ function main(): void {
     const disk = modeIsDiskImage(m);
     const region = disk && diskSourceIsRegion();
     const bottcher = disk && diskSourceIsBottcher();
+    const imported = disk && diskSourceIsImport();
     controls.setControlVisibility({
       colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
       grid: !modeIsDomain(m) && !disk, // the numeric-map + disk-image modes draw their own grid
       domain: modeIsDomain(m), // the numeric domain→disk mode's region picker
       disk, // the disk-image controls (source, style, density…)
       region, // region source ⇒ show the region picker
-      bottcher, // Böttcher source ⇒ exterior-only (hide interior/exterior with region)
+      bottcher: bottcher || imported, // an exterior map ⇒ exterior-only (hide interior/exterior + region)
+      import: imported, // imported source ⇒ show the "Import map…" action
     });
     rlabel.textContent = disk
       ? region
         ? "w = g(w)  ·  image of 𝔻 in Ω"
         : bottcher
           ? "w = ψ(w)  ·  ext(𝔻) → ext(K)"
-          : "w = φ(z)  ·  image of the disk"
+          : imported
+            ? "w = ψ(w)  ·  imported exterior map"
+            : "w = φ(z)  ·  image of the disk"
       : modeIsDomain(m)
         ? "w = f(z)  ·  unit disk"
         : "w = φ(z)  ·  image grid";
@@ -458,7 +489,8 @@ function main(): void {
   function computeDiskImage(): void {
     const region = diskSourceIsRegion();
     const bottcher = diskSourceIsBottcher();
-    const ready = bottcher ? bottcherValid() : region ? !!regionMap : !!current;
+    const imported = diskSourceIsImport();
+    const ready = imported ? importedValid() : bottcher ? bottcherValid() : region ? !!regionMap : !!current;
     if (!ready) {
       diskSourceCells = [];
       diskImageCells = [];
@@ -468,12 +500,17 @@ function main(): void {
       diskUnitImg = [];
       diskFoldReason = null;
       controls.setAnalysis(
-        bottcher
+        imported
           ? [
-              ["source", "exterior map ψ  (Böttcher)"],
-              ["needs", "a degree-≥2 polynomial with connected K — e.g. z*z − 1"],
+              ["source", "imported exterior map ψ"],
+              ["needs", "a map link — open one from Complex Dynamics, or paste via “Import map…”"],
             ]
-          : null,
+          : bottcher
+            ? [
+                ["source", "exterior map ψ  (Böttcher)"],
+                ["needs", "a degree-≥2 polynomial with connected K — e.g. z*z − 1"],
+              ]
+            : null,
         "Image of the disk",
       );
       return;
@@ -535,7 +572,16 @@ function main(): void {
     }
 
     let rows: [string, string][];
-    if (bottcher && analysis) {
+    if (imported && importedMap) {
+      const gamma = importedMap.lead;
+      rows = [
+        ["source", `imported map  ·  from ${importedMap.app}`],
+        ["ψ(w)", "γ₁·w + Σ bₖ w⁻ᵏ"],
+        ["γ₁", "≈ " + fmtC(gamma[0], gamma[1])],
+        ["terms", `${importedMap.coeffs.length} bₖ  ·  grid ${diskRadial()} × ${diskSectors()}`],
+        ["univalent", "= yes  (exterior map, by construction)"],
+      ];
+    } else if (bottcher && analysis) {
       rows = [
         ["source", "exterior map ψ  (Böttcher)"],
         ["ψ(w)", "γ₁·w + Σ bₖ w⁻ᵏ"],
@@ -871,6 +917,25 @@ function main(): void {
     fitPending = true; // a region map is interior-only — reframe the pane
     applyModeContext(); // show the region picker / hide interior-exterior + the c handle
     invalidate(false, false);
+  });
+  // Paste an @cas/interchange "#s=" link (Complex Dynamics' "Send to Riemann Map", or a QD φ) → import it
+  // as the exterior disk-image source. The deep-link path (a "#s=" hash on load) is handled at boot.
+  controls.onImportMap((link) => {
+    const m = importExteriorMap(link);
+    if (!m) {
+      note.textContent = "That doesn't look like an exterior-map link (expected a Complex Dynamics “Riemann Map ↗” link).";
+      note.classList.add("visible");
+      return;
+    }
+    note.classList.remove("visible");
+    importedMap = m;
+    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image" } };
+    controls.setMode(state.render.mode);
+    controls.setDiskSource("import");
+    diskDirty = true;
+    fitPending = true;
+    applyModeContext();
+    invalidate(true, true);
   });
   controls.onDiskSide((side) => {
     state = { ...state, render: { ...state.render, disk: side } };
