@@ -22,6 +22,10 @@ import { COLORING_GLSL } from "../render/colorShader.js";
 /** GLSL height law — the mirror of {@link "./height".heightAt} (0 log · 1 linear · 2 stereographic). */
 export const HEIGHT_GLSL = `
 float surfaceHeight(int mode, float m, float scale) {
+  // A pole can push |f| past float32's finite range; guard before mode 2 squares it (m^2 would overflow
+  // to Inf and (Inf-1)/(Inf+1) = NaN, and a NaN vertex height collapses the triangle). Mirrors the
+  // non-finite guard in height.ts: a blown-up |f| maps to the top. The !(m < 3e18) form also catches NaN.
+  if (!(m < 3.0e18)) return mode == 1 ? 3.0 : 1.0;
   if (mode == 1) {                       // linear |f|, clamped to a finite spike
     float s = scale > 1e-6 ? scale : 1.0;
     return min(m / s, 3.0);
@@ -37,7 +41,7 @@ float surfaceHeight(int mode, float m, float scale) {
 /** GLSL `dH/dm` — the mirror of {@link "./height".heightSlopeAt}, for the analytic normal. */
 export const HEIGHT_SLOPE_GLSL = `
 float surfaceHeightSlope(int mode, float m, float scale) {
-  if (m <= 0.0) return 0.0;
+  if (!(m > 0.0 && m < 3.0e18)) return 0.0; // m ≤ 0, NaN, or a pre-overflow |f| → flat (mirror height.ts)
   if (mode == 1) {                       // linear: 1/scale below the clamp, else flat
     float s = scale > 1e-6 ? scale : 1.0;
     return m < 3.0 * s ? 1.0 / s : 0.0;

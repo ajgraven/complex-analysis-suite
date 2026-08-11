@@ -288,8 +288,9 @@ function main(): void {
   const redraw = (draft = false): void => {
     plot.draw(draft);
     if (plot.mode !== "2d") {
-      // The axes / grid / markers are 2D-projection overlays; in the 3D landscape or on the sphere they'd
-      // be wrong, so clear the overlay canvas and let the surface / sphere stand alone.
+      // The axes / grid / markers are full-canvas 2D-projection overlays; in the 3D landscape, on the
+      // sphere, AND in the linked view they'd be wrong (in linked mode drawAxes spans the whole canvas
+      // and would bleed across the surface half), so clear the overlay and let the surface stand alone.
       const ax = axesCanvas.getContext("2d");
       if (ax) ax.clearRect(0, 0, axesCanvas.width, axesCanvas.height);
     } else {
@@ -492,7 +493,9 @@ function main(): void {
   if (sweepShow instanceof HTMLElement) sweepShow.addEventListener("click", runSweep);
   if (sweepClose instanceof HTMLElement) sweepClose.addEventListener("click", hideSweep);
 
-  const applyExpr = (src: string): void => {
+  // Returns true when `src` parsed and rendered, false on a parse error (the box keeps the bad text but
+  // the caller can then decline to persist it). Never throws.
+  const applyExpr = (src: string): boolean => {
     try {
       plot.setFunction(src);
       setError("");
@@ -502,12 +505,14 @@ function main(): void {
       syncParamsUI();
       recomputeSings();
       redraw(false);
+      return true;
     } catch (err) {
       if (err instanceof ExprError) {
         setError(err.pos >= 0 ? `${err.message} (position ${err.pos})` : err.message);
       } else {
         setError(err instanceof Error ? err.message : String(err));
       }
+      return false;
     }
   };
 
@@ -517,10 +522,18 @@ function main(): void {
   };
 
   // The active-function toggle (A7): switch which slot is edited + plotted, loading its source.
+  // Reflect a toggle button's on/off state to BOTH the CSS class (visual) and `aria-pressed` (screen
+  // readers), so the f/g and View groups announce which option is active.
+  const setPressed = (el: Element | null, on: boolean): void => {
+    if (el instanceof HTMLElement) {
+      el.classList.toggle("active", on);
+      el.setAttribute("aria-pressed", String(on));
+    }
+  };
   const setActive = (which: "f" | "g"): void => {
     active = which;
-    if (fnF instanceof HTMLElement) fnF.classList.toggle("active", which === "f");
-    if (fnG instanceof HTMLElement) fnG.classList.toggle("active", which === "g");
+    setPressed(fnF, which === "f");
+    setPressed(fnG, which === "g");
     if (exprLabel instanceof HTMLElement) exprLabel.textContent = `Function  ${which}(z)`;
     setExprBox(exprs[which]);
     applyExpr(exprs[which]);
@@ -533,12 +546,10 @@ function main(): void {
   const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
   const setView = (m: "2d" | "3d" | "sphere" | "linked"): void => {
     plot.mode = m;
-    if (view2d instanceof HTMLElement) view2d.classList.toggle("active", m === "2d");
-    if (view3d instanceof HTMLElement) view3d.classList.toggle("active", m === "3d");
-    if (viewSphere instanceof HTMLElement)
-      viewSphere.classList.toggle("active", m === "sphere");
-    if (viewLinked instanceof HTMLElement)
-      viewLinked.classList.toggle("active", m === "linked");
+    setPressed(view2d, m === "2d");
+    setPressed(view3d, m === "3d");
+    setPressed(viewSphere, m === "sphere");
+    setPressed(viewLinked, m === "linked");
     // The surface height controls apply whenever a surface is on screen — the 3D view or the linked pane.
     if (surfaceControls instanceof HTMLElement)
       surfaceControls.hidden = m !== "3d" && m !== "linked";
@@ -751,6 +762,7 @@ function main(): void {
     addOption(presetSel, "", "Presets…");
     PRESETS.forEach((p, i) => addOption(presetSel, String(i), p.label));
     presetSel.addEventListener("change", () => {
+      if (presetSel.value === "") return; // the "Presets…" placeholder — Number("") is 0, so guard it
       const preset = PRESETS[Number(presetSel.value)];
       if (!preset) return;
       exprs[active] = preset.expr; // a preset loads into the active slot
@@ -764,8 +776,11 @@ function main(): void {
 
   if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement) {
     exprInput.addEventListener("input", () => {
-      exprs[active] = exprInput.value; // keep the active slot in sync with the box
-      applyExpr(exprInput.value);
+      // Only a parseable expression is written back to the active slot (and thus to currentState /
+      // the share-link): a half-typed, invalid formula stays visible in the box but never gets
+      // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
+      // URL and lose the last good function on reload.
+      if (applyExpr(exprInput.value)) exprs[active] = exprInput.value;
     });
   }
 
@@ -789,14 +804,21 @@ function main(): void {
   });
   if (savePngBtn instanceof HTMLElement) {
     savePngBtn.addEventListener("click", () => {
-      void plot.exportBlob(exportEdge(), exportMeta()).then((blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "complex-function-plot.png";
-        a.click();
-        setTimeout(() => URL.revokeObjectURL(url), 0);
-      });
+      plot
+        .exportBlob(exportEdge(), exportMeta())
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "complex-function-plot.png";
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+        })
+        .catch((err) => {
+          // exportBlob rejects if toBlob or the metadata stamp fails — surface it rather than
+          // leaving a silent unhandled rejection (Copy image swallows the same failure by design).
+          setError(err instanceof Error ? `PNG export failed: ${err.message}` : "PNG export failed");
+        });
     });
   }
   if (copyImgBtn instanceof HTMLElement) {
@@ -942,9 +964,26 @@ function main(): void {
     const it = activePointers.values();
     return [it.next().value as Pt, it.next().value as Pt];
   };
+  // Seed the single-pointer drag appropriate to the mode under `clientX` (pan in 2D / the linked flat
+  // pane, orbit in 3D, arcball on the sphere). Used both on pointerdown and when a pinch drops to one
+  // finger, so the survivor keeps dragging.
+  const seedDrag = (clientX: number, clientY: number): void => {
+    const m = effMode(clientX);
+    if (m === "sphere") sphereLast = canvasUv(clientX, clientY);
+    else if (m === "3d") orbitLast = { x: clientX, y: clientY };
+    else grabWorld = plot.screenToWorld(clientX, clientY, twoDRect());
+  };
   canvas.addEventListener("pointerdown", (e) => {
     canvas.focus(); // so the keyboard path works after clicking the plot
     activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    // Capture EVERY pointer, not just the first: a second finger that later lifts off-canvas must still
+    // deliver its pointerup here, or its activePointers entry leaks and the next lone touch is misread
+    // as a pinch.
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* a synthetic / already-released pointer can't be captured — harmless */
+    }
     if (activePointers.size >= 2) {
       // A second finger begins a pinch: abandon any single-pointer drag and seed the pinch span.
       grabWorld = null;
@@ -954,15 +993,7 @@ function main(): void {
       pinchPrev = pointerDistance(a, b);
       return;
     }
-    const m = effMode(e.clientX);
-    if (m === "sphere") sphereLast = canvasUv(e.clientX, e.clientY);
-    else if (m === "3d") orbitLast = { x: e.clientX, y: e.clientY };
-    else grabWorld = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
-    try {
-      canvas.setPointerCapture(e.pointerId);
-    } catch {
-      /* a synthetic / already-released pointer can't be captured — harmless */
-    }
+    seedDrag(e.clientX, e.clientY);
   });
   canvas.addEventListener("pointermove", (e) => {
     if (activePointers.has(e.pointerId))
@@ -989,7 +1020,14 @@ function main(): void {
       const dx = e.clientX - orbitLast.x;
       const dy = e.clientY - orbitLast.y;
       orbitLast = { x: e.clientX, y: e.clientY };
-      plot.orbit(dx * ORBIT_SPEED, -dy * ORBIT_SPEED); // drag right → spin; drag up → tilt toward top-down
+      // Landscape orbit — the matplotlib / plotly plot convention, mixed by design:
+      //  • horizontal: the surface SPINS TO FOLLOW the cursor. Azimuth is negated because +azimuth walks
+      //    the eye screen-right, which would swing the surface the opposite way to the drag (that
+      //    un-negated version was the reported "backwards" bug); negating makes drag-right spin right.
+      //  • vertical: drag up RAISES the viewpoint toward top-down (bird's-eye) — elevation up. This axis
+      //    is intentionally camera-centric (not a full grab-turntable), matching how 3D plot tools pitch;
+      //    the keyboard up/down below share this sense.
+      plot.orbit(-dx * ORBIT_SPEED, -dy * ORBIT_SPEED);
       redraw(true);
     } else if (grabWorld) {
       plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld, twoDRect());
@@ -999,8 +1037,19 @@ function main(): void {
     }
   });
   const endDrag = (e: PointerEvent): void => {
+    const wasPinching = activePointers.size >= 2 && pinchPrev !== null;
     activePointers.delete(e.pointerId);
     if (activePointers.size < 2) pinchPrev = null;
+    if (wasPinching && activePointers.size === 1) {
+      // Pinch → one finger: re-seed a single-pointer drag for the survivor so it keeps panning /
+      // orbiting from where it is, instead of going inert until it too is lifted.
+      grabWorld = null;
+      orbitLast = null;
+      sphereLast = null;
+      const survivor = activePointers.values().next().value as Pt;
+      seedDrag(survivor.x, survivor.y);
+      return;
+    }
     if (sphereLast) {
       sphereLast = null;
       redraw(false);
@@ -1061,8 +1110,10 @@ function main(): void {
       if (intent === "reset") plot.resetCamera();
       else if (intent === "in") plot.dolly(0.9);
       else if (intent === "out") plot.dolly(1 / 0.9);
-      else if (intent === "left") plot.orbit(-STEP, 0);
-      else if (intent === "right") plot.orbit(STEP, 0);
+      // Same turntable sense as the pointer drag (left spins the surface left) — so the negated azimuth
+      // delta of the drag path is mirrored here: "left" → +azimuth, "right" → −azimuth.
+      else if (intent === "left") plot.orbit(STEP, 0);
+      else if (intent === "right") plot.orbit(-STEP, 0);
       else if (intent === "up") plot.orbit(0, STEP);
       else plot.orbit(0, -STEP);
     } else {

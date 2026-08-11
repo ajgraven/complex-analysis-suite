@@ -106,6 +106,20 @@ export function findSingularities(
     }
   }
 
+  // A scale-INVARIANT candidate gate: threshold |f| against the field's own median magnitude, never an
+  // absolute constant. A local min is a zero candidate only when it dips well below the typical field
+  // level; a local max a pole candidate only when it towers over it. This makes a uniformly scaled map
+  // (`100·z`, `0.1/z`) detected exactly like `z` / `1/z` — an absolute gate silently missed those (the
+  // min of `100·z` sits at |f|≈4, above a `<1` zero gate; the max of `0.1/z` at |f|≈2, below a `>5`
+  // pole gate). The winding integral below is the real classifier; this gate only decides which extrema
+  // are worth the Newton refine + winding.
+  const positiveMags = Array.from(mag)
+    .filter((v) => Number.isFinite(v) && v > 0)
+    .sort((a, b) => a - b);
+  const fieldScale = positiveMags.length ? positiveMags[positiveMags.length >> 1] : 1;
+  const ZERO_GATE = 0.5 * fieldScale; // a min this far below the median field is a plausible zero
+  const POLE_GATE = 2.0 * fieldScale; // a max this far above it is a plausible pole
+
   const stepW = Math.min((xmax - xmin) / NX, (ymax - ymin) / NY);
   const r = Math.min(Math.max(0.3 * stepW, 1e-4), 0.2 * view.span);
   const margin = 0.02 * view.span;
@@ -130,13 +144,13 @@ export function findSingularities(
           if (mm > m) isMax = false;
         }
       }
-      if (isMin && m < 1.0) {
+      if (isMin && m < ZERO_GATE) {
         const p = refine(f, fp, center(i, j), false);
         if (p && inView(p) && !near(zeros, p)) {
           const k = winding(f, p, r);
           if (k > 0) zeros.push({ z: p, order: k });
         }
-      } else if (isMax && m > 5.0) {
+      } else if (isMax && m > POLE_GATE) {
         const p = refine(f, fp, center(i, j), true);
         if (p && inView(p) && !near(poles, p)) {
           const k = winding(f, p, r);

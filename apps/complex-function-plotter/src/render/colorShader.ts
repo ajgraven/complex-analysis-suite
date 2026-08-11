@@ -121,6 +121,10 @@ vec3 colorAt(cvec w) {
   } else {
     float t = fract(uHueSign * arg * INV_TWO_PI + uHueShift * INV_TWO_PI + 1.0);
     vec3 hue = texture(uPhaseLUT, vec2(t, uPhaseRow)).rgb;
+    // NOTE: enhancement()/line0() below call fwidth INSIDE this data-dependent branch (unlike uncMetric,
+    // hoisted above) — strictly non-uniform control flow, where GLSL-ES leaves derivatives undefined.
+    // Benign here: drivers flatten this branch, and at the finite/non-finite seam these features already
+    // dissolve to ~0, so nothing is drawn there regardless. Kept in-branch to avoid the per-pixel cost.
     col = clamp(hue * modulusLightness(m) * enhancement(w, m, arg), 0.0, 1.0);
 
     // Level sets (catalog H7): a white |f| = c contour and/or a dark arg f = c contour.
@@ -131,7 +135,8 @@ vec3 colorAt(cvec w) {
     }
 
     // Honest-labelling / uncertainty layer (catalog J4): hatch the pixels where the phase is
-    // undersampled (near poles and essential singularities) — a visible "≈, do not trust this here".
+    // undersampled — near poles, essential singularities, AND zeros (the unit phase direction spins fast
+    // around any of them) — a visible "≈, do not trust this here".
     if (uUncertainty == 1) {
       float unc = smoothstep(0.8, 2.2, uncMetric);
       float hatch = mod(floor((gl_FragCoord.x + gl_FragCoord.y) * 0.25), 2.0);

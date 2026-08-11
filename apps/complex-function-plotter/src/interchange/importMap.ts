@@ -48,6 +48,13 @@ function rationalExpr(
 ): string {
   const p = polyExpr(num, v);
   if (den.length === 1 && den[0].re === 1 && den[0].im === 0) return p; // unit denominator ⇒ pure polynomial
+  if (den.length === 0 || den.every(isZero)) {
+    // An empty or all-zero denominator validates as a MapSpec but is 0/0 everywhere; fail loudly rather
+    // than emit a degenerate NaN map (matching the schwarz / pole-bearing-Laurent refusals).
+    throw new Error(
+      "This rational map has an empty or identically-zero denominator (division by zero) — refusing to build a degenerate map.",
+    );
+  }
   return `(${p}) / (${polyExpr(den, v)})`;
 }
 
@@ -63,9 +70,10 @@ function laurentExpr(c: Complex, F: readonly Complex[], v: string): string {
 
 /**
  * Convert an interchange MapSpec into an `@cas/expr` source string. An anti-holomorphic closed form acts
- * on `conj(z)`, so it is built on `conjugate(z)`. Throws for the two shapes the plotter can't represent as
- * a closed form: a `schwarz` σ (numerical inverse) and a pole-bearing Laurent map (finite-pole branches) —
- * loudly, rather than silently dropping terms into a subtly-wrong map.
+ * on `conj(z)`, so it is built on `conjugate(z)`. Throws for the shapes the plotter can't represent as a
+ * closed form — a `schwarz` σ (numerical inverse), a pole-bearing Laurent map (finite-pole branches), and
+ * a rational map with an empty / identically-zero denominator (a degenerate 0/0) — loudly, rather than
+ * silently dropping terms into a subtly-wrong map.
  */
 export function mapSpecToExpr(m: MapSpec): string {
   const v = m.antiholomorphic ? "conjugate(z)" : "z";

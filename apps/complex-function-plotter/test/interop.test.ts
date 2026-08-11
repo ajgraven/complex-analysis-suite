@@ -100,7 +100,7 @@ describe("mapSpecToExpr — MapSpec → @cas/expr source", () => {
     );
   });
 
-  it("refuses the two shapes it can't represent as a closed form (loudly, not silently)", () => {
+  it("refuses the shapes it can't represent as a closed form (loudly, not silently)", () => {
     expect(() =>
       mapSpecToExpr({
         form: "laurent",
@@ -118,6 +118,13 @@ describe("mapSpecToExpr — MapSpec → @cas/expr source", () => {
         antiholomorphic: true,
       }),
     ).toThrow(/expr-compilable/);
+    // A validated-but-degenerate rational: empty or identically-zero denominator (0/0), not a NaN map.
+    expect(() => mapSpecToExpr({ form: "rational", num: [cx(1)], den: [] })).toThrow(
+      /denominator/,
+    );
+    expect(() =>
+      mapSpecToExpr({ form: "rational", num: [cx(1)], den: [cx(0), cx(0)] }),
+    ).toThrow(/denominator/);
   });
 });
 

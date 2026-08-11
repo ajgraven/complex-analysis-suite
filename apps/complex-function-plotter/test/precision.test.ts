@@ -25,16 +25,27 @@ describe("precisionNote — the float32 special-function policy", () => {
     expect(note?.text.startsWith("≈")).toBe(true);
   });
 
-  it("returns null for a map that uses no limited builtin", () => {
-    expect(noteFor("z^2 + c")).toBeNull();
-    expect(noteFor("sin(z) + exp(z)")).toBeNull();
-    expect(noteFor("a*z + b")).toBeNull();
+  it("gives a note for W (Lambert — a seeded 5-Halley-step iteration in float32)", () => {
+    const note = noteFor("lambertw(z)");
+    expect(note?.fn).toBe("lambertw");
+    expect(note?.severity).toBe("note");
+    expect(note?.text.startsWith("≈")).toBe(true);
   });
 
-  it("shows the stronger ζ warning when a map uses both ζ and Γ", () => {
+  it("returns null for a map that uses no limited builtin", () => {
+    expect(noteFor("z^2 + c")).toBeNull();
+    // sin / cos / exp / log / sqrt etc. are closed forms — float32 rounding only, no badge.
+    expect(noteFor("sin(z) + exp(z)")).toBeNull();
+    expect(noteFor("a*z + b")).toBeNull();
+    expect(noteFor("tanh(z) + log(z)")).toBeNull();
+  });
+
+  it("shows the stronger ζ warning when a map mixes ζ with a milder note (Γ or W)", () => {
     // ζ dominates — its reflection evaluates Γ internally anyway, so the Γ caveat is subsumed.
     expect(noteFor("zeta(gamma(z))")?.fn).toBe("zeta");
     expect(noteFor("gamma(z) + zeta(z)")?.fn).toBe("zeta");
+    // The `warn` (ζ) wins over a `note` (W) regardless of their order in PRECISION_NOTES.
+    expect(noteFor("zeta(z) + lambertw(z)")?.fn).toBe("zeta");
   });
 
   it("fires when the special function is nested deep in the expression", () => {

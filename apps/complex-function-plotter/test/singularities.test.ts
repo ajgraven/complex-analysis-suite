@@ -49,6 +49,24 @@ describe("zero/pole finder (argument principle)", () => {
     expect(s.poles.length).toBe(0);
   });
 
+  it("is scale-invariant: a high-amplitude map (100·z) still shows its zero", () => {
+    // Regression: an absolute |f|<1 gate missed this — the min nearest the origin sits at |f|≈4.
+    const { f, fp } = fns("100*z");
+    const s = findSingularities(f, fp, V, 1);
+    expect(s.zeros.length).toBe(1);
+    expect(s.zeros[0].order).toBe(1);
+    expect(s.poles.length).toBe(0);
+  });
+
+  it("is scale-invariant: a low-residue map (0.1/z) still shows its pole", () => {
+    // Regression: an absolute |f|>5 gate missed this — the max nearest the pole sits at |f|≈2.
+    const { f, fp } = fns("0.1/z");
+    const s = findSingularities(f, fp, V, 1);
+    expect(s.poles.length).toBe(1);
+    expect(s.poles[0].order).toBe(1);
+    expect(s.zeros.length).toBe(0);
+  });
+
   it("reports a non-differentiable f (the finder needs f')", () => {
     const s = findSingularities(makeComplexFn(parse("conjugate(z)")), null, V, 1);
     expect(s.differentiable).toBe(false);

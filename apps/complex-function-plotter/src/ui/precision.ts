@@ -1,9 +1,12 @@
 /**
  * Honest-labeling for the float32 special functions (Phase 4). The renderer evaluates the map in GLSL
- * `float` (single precision), so a domain-coloured ζ or Γ must never read as *certified* structure. ζ
+ * `float` (single precision), so a domain-coloured ζ, Γ or W must never read as *certified* structure. ζ
  * is Borwein in float32 — good to about 1e-6 and losing precision higher up the critical strip; Γ is
- * Lanczos (g = 7) — tight, but still single-precision near its poles. When the active map calls one of
- * these, the plotter shows a **precision badge** so the picture is labelled `≈` (an estimate), matching
+ * Lanczos (g = 7) — tight, but still single-precision near its poles; W (Lambert) is a seeded iteration
+ * refined by 5 Halley steps — tight away from the branch point, but single-precision near z = −1/e and
+ * along the branch cut. These are the map's *iterative / series* builtins: everything else the shader
+ * exposes is a closed form whose only error is ordinary float32 rounding. When the active map calls one
+ * of them, the plotter shows a **precision badge** so the picture is labelled `≈` (an estimate), matching
  * the suite's honest-labeling guardrail (`=` exact · `≤` bound · `≈` estimate).
  *
  * The *policy* — which builtins are limited, how strongly, and what to say — lives here as a pure
@@ -24,9 +27,10 @@ export interface PrecisionNote {
 }
 
 /**
- * Precision notes for the float32-limited builtins, **strongest first**. {@link precisionNote} returns
- * the first applicable one, so a map that calls both ζ and Γ shows the ζ warning — ζ dominates (its
- * reflection branch evaluates Γ internally anyway, so the Γ caveat is already subsumed).
+ * Precision notes for the float32-limited builtins. Conventionally listed **strongest first**, but
+ * {@link precisionNote} selects by severity (not array order), so a map that calls both ζ and Γ shows
+ * the ζ warning regardless — ζ dominates (its reflection branch evaluates Γ internally anyway, so the Γ
+ * caveat is already subsumed).
  */
 export const PRECISION_NOTES: readonly PrecisionNote[] = [
   {
@@ -41,6 +45,13 @@ export const PRECISION_NOTES: readonly PrecisionNote[] = [
     severity: "note",
     text: "≈ Γ is evaluated in float32 (Lanczos, g = 7): close, but single-precision near the poles.",
   },
+  {
+    fn: "lambertw",
+    severity: "note",
+    text:
+      "≈ W is evaluated in float32 (seeded, then 5 Halley steps): tight away from the branch point, " +
+      "but single-precision near z = −1/e and along the negative-real branch cut.",
+  },
 ];
 
 /**
@@ -50,5 +61,8 @@ export const PRECISION_NOTES: readonly PrecisionNote[] = [
  */
 export function precisionNote(calledFns: Iterable<string>): PrecisionNote | null {
   const set = calledFns instanceof Set ? calledFns : new Set(calledFns);
-  return PRECISION_NOTES.find((n) => set.has(n.fn)) ?? null;
+  const applicable = PRECISION_NOTES.filter((n) => set.has(n.fn));
+  if (applicable.length === 0) return null;
+  // Strongest severity wins independent of table order (`warn` ≻ `note`); ties keep table order.
+  return applicable.find((n) => n.severity === "warn") ?? applicable[0];
 }
