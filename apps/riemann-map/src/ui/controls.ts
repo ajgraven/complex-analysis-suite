@@ -1,11 +1,10 @@
 // controls.ts — the sidebar: live φ editor (F5), preset gallery (A19), KaTeX preview (I1), the render
-// mode + colormap pickers (C1–C6), and the under-cursor readout (F4). DOM-only (the app's node suite
+// mode picker + disk-image controls, and the under-cursor readout (F4). DOM-only (the app's node suite
 // stays DOM-free); the pure logic it drives (compileMap, presets, modes, derivativeAt) is unit-tested.
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
 import { RENDER_MODES } from "../render/modes.js";
-import { COLORMAPS } from "../render/colormaps.js";
 import { DOMAIN_PRESETS } from "../domains.js";
 
 export interface Controls {
@@ -14,8 +13,6 @@ export interface Controls {
   setLatex(latex: string): void;
   showError(msg: string | null): void;
   setMode(id: string): void;
-  setColormap(id: string): void;
-  setGrid(id: string): void;
   setDomain(id: string): void;
   setRegionDomain(id: string): void;
   /** Disk-image mode: source (expression | region), side of ∂𝔻, grid style/subset, densities. */
@@ -26,21 +23,15 @@ export interface Controls {
   setDiskRadial(n: number): void;
   setDiskAngular(n: number): void;
   setDiskLayout(id: string): void;
-  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`bottcher` = disk-image numeric sources. */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean }): void;
+  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`exterior`/`import` = disk-image sources. */
+  setControlVisibility(v: { domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
   setAnalysis(rows: readonly (readonly [string, string])[] | null, title?: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
-  /** Show/hide the exterior-map export button (hidden when no valid conformal map ψ exists). */
-  setExteriorExportAvailable(available: boolean): void;
-  /** Transient status under the exterior-map export button (copied / unavailable). */
-  setExportStatus(msg: string): void;
   onExpr(cb: (expr: string) => void): void;
   onMode(cb: (id: string) => void): void;
-  onColormap(cb: (id: string) => void): void;
-  onGrid(cb: (id: string) => void): void;
   onDomain(cb: (id: string) => void): void;
   onRegionDomain(cb: (id: string) => void): void;
   onDiskSource(cb: (id: string) => void): void;
@@ -54,16 +45,11 @@ export interface Controls {
   onFit(cb: () => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
-  onCopyExteriorMap(cb: () => void): void;
+  /** Paste-import an @cas/interchange "#s=" map link (the "Import map…" action). */
+  onImportMap(cb: (link: string) => void): void;
   /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
   onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void;
 }
-
-const GRID_KINDS = [
-  { id: "none", name: "None" },
-  { id: "cartesian", name: "Cartesian grid" },
-  { id: "polar", name: "Polar grid" },
-] as const;
 
 const DISK_SIDES = [
   { id: "interior", name: "Interior  𝔻  (|z| ≤ 1)" },
@@ -84,7 +70,7 @@ const DISK_SHOWS = [
 const DISK_SOURCES = [
   { id: "expression", name: "Expression  φ(z)" },
   { id: "region", name: "Region  𝔻 → Ω  (numeric)" },
-  { id: "bottcher", name: "Exterior map ψ  (Böttcher)" },
+  { id: "import", name: "Imported map  (from a link)" },
 ] as const;
 
 const DISK_LAYOUTS = [
@@ -98,13 +84,9 @@ const GLOSSARY: readonly (readonly [string, string])[] = [
   ["Conformal / Riemann map φ", "An angle-preserving map. The Riemann mapping theorem uniformizes any simply-connected domain (≠ ℂ) onto the unit disk."],
   ["Domain coloring", "A phase portrait: hue = arg φ(z), shaded bands = |φ(z)|. Reads a complex function as an image."],
   ["Amplitwist |φ′|, arg φ′", "The local scale factor and rotation the map applies at a point (Needham’s term for the derivative’s action)."],
-  ["Filled Julia set K", "The points whose orbit under f stays bounded. Its boundary ∂K is the Julia set."],
-  ["Green’s function G(z)", "The escape-rate potential of ℂ∖K: 0 on K, positive outside, growing like log|z| at ∞."],
+  ["Filled Julia set K", "The points whose orbit under f stays bounded. Its boundary ∂K is the Julia set — the source of an imported exterior map."],
   ["Capacity, Robin γ", "cap(K) = e^(−γ), the conformal size of K. It equals |γ₁|, the leading coefficient of ψ; = 1 exactly for a monic map."],
-  ["Exterior map ψ, bₖ", "The conformal map ext(𝔻) → ext(K), ψ(w) = γ₁·w + Σ bₖ w^(−k). Exists only for a connected K."],
-  ["External ray / angle θ", "The image under ψ of a straight ray {r·e^(2πiθ) : r > 1}; θ is the angle at which it lands on ∂K."],
-  ["Connectivity (z²+c)", "K is connected ⟺ c ∈ the Mandelbrot set (the critical orbit stays bounded); otherwise K is a Cantor set."],
-  ["Attracting cycle, |λ|", "The cycle the critical orbit falls into; |λ| < 1 is attracting, |λ| = 0 superattracting (the cycle contains the critical point)."],
+  ["Exterior map ψ, bₖ", "The conformal map ext(𝔻) → ext(K), ψ(w) = γ₁·w + Σ bₖ w^(−k). Imported from Complex Dynamics as a disk-image source."],
 ];
 
 const CUSTOM = "__custom__";
@@ -181,8 +163,6 @@ function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElemen
 export function createControls(initialExpr: string): Controls {
   const exprListeners: ((expr: string) => void)[] = [];
   const modeListeners: ((id: string) => void)[] = [];
-  const cmapListeners: ((id: string) => void)[] = [];
-  const gridListeners: ((id: string) => void)[] = [];
   const domainListeners: ((id: string) => void)[] = [];
   const regionDomainListeners: ((id: string) => void)[] = [];
   const diskSourceListeners: ((id: string) => void)[] = [];
@@ -195,7 +175,7 @@ export function createControls(initialExpr: string): Controls {
   const fitListeners: (() => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
-  const copyExtListeners: (() => void)[] = [];
+  const importMapListeners: ((link: string) => void)[] = [];
   const applyViewportListeners: ((re: number, im: number, zoom: number) => void)[] = [];
 
   const root = document.createElement("aside");
@@ -244,13 +224,20 @@ export function createControls(initialExpr: string): Controls {
   const radial = labeledRange("Radial rings", 4, 48, 18);
   const angular = labeledRange("Angular sectors", 6, 96, 36);
   const layout = labeledSelect("Layout", DISK_LAYOUTS);
-  const cmap = labeledSelect("Colormap", COLORMAPS);
-  const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
   // The region SOURCE offers only smooth domains — the forward map g: 𝔻 → Ω is stable there; polygon
   // corners need a Schwarz–Christoffel engine (roadmap 3.1).
   const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.filter((d) => !d.corners).map((d) => ({ id: d.id, name: d.name })));
-  viewGroup.el.append(mode.field, diskSource.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, cmap.field, grid.field, domain.field, regionDomain.field);
+  // "Import map…" action for the imported-map source (B2): paste an interchange "#s=" link (a filled
+  // Julia set's exterior Riemann map, handed off from Complex Dynamics). Shown only for that source.
+  const importField = document.createElement("div");
+  importField.className = "field";
+  const importBtn = document.createElement("button");
+  importBtn.type = "button";
+  importBtn.textContent = "Import map…";
+  importBtn.title = "Paste a Complex Dynamics “Riemann Map ↗” link (#s=…) to render its exterior map";
+  importField.append(importBtn);
+  viewGroup.el.append(mode.field, diskSource.field, importField, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, domain.field, regionDomain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -293,20 +280,7 @@ export function createControls(initialExpr: string): Controls {
   analysisGroup.el.style.display = "none"; // shown only when the mode produces analysis
   const analysisDl = document.createElement("dl");
   analysisDl.className = "hover analysis-dl";
-  // Hand off ψ (the exterior conformal map) as an @cas/interchange link (G8). Shown only when an
-  // exterior analysis exists — setExteriorExportAvailable(false) hides it.
-  const exportRow = document.createElement("div");
-  exportRow.className = "buttons";
-  exportRow.style.display = "none";
-  const copyExt = document.createElement("button");
-  copyExt.type = "button";
-  copyExt.textContent = "Copy exterior-map link";
-  exportRow.append(copyExt);
-  const exportStatus = document.createElement("p");
-  exportStatus.className = "muted";
-  exportStatus.setAttribute("role", "status");
-  exportStatus.setAttribute("aria-live", "polite");
-  analysisGroup.el.append(analysisDl, exportRow, exportStatus);
+  analysisGroup.el.append(analysisDl);
 
   // --- Under-cursor group (collapsible; live readout) -----------------------
   const hoverGroup = controlGroup("Under cursor", true);
@@ -350,8 +324,6 @@ export function createControls(initialExpr: string): Controls {
     exprListeners.forEach((cb) => cb(p.expr));
   });
   mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
-  cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
-  grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
   domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
   regionDomain.select.addEventListener("change", () => regionDomainListeners.forEach((cb) => cb(regionDomain.select.value)));
   diskSource.select.addEventListener("change", () => diskSourceListeners.forEach((cb) => cb(diskSource.select.value)));
@@ -379,7 +351,10 @@ export function createControls(initialExpr: string): Controls {
   fitBtn.addEventListener("click", () => fitListeners.forEach((cb) => cb()));
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
-  copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
+  importBtn.addEventListener("click", () => {
+    const link = window.prompt("Paste an interchange map link (#s=…) from Complex Dynamics:");
+    if (link && link.trim()) importMapListeners.forEach((cb) => cb(link.trim()));
+  });
   const applyViewport = (): void => {
     const re = Number(navRe.input.value);
     const im = Number(navIm.input.value);
@@ -419,12 +394,6 @@ export function createControls(initialExpr: string): Controls {
     setMode(id: string): void {
       mode.select.value = id;
     },
-    setColormap(id: string): void {
-      cmap.select.value = id;
-    },
-    setGrid(id: string): void {
-      grid.select.value = id;
-    },
     setDomain(id: string): void {
       domain.select.value = id;
     },
@@ -455,15 +424,14 @@ export function createControls(initialExpr: string): Controls {
     setDiskLayout(id: string): void {
       layout.select.value = id;
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean }): void {
-      cmap.field.style.display = v.colormap ? "" : "none";
-      grid.field.style.display = v.grid ? "" : "none";
+    setControlVisibility(v: { domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void {
       domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
       regionDomain.field.style.display = v.region ? "" : "none"; // disk-image region source (smooth only)
       diskSource.field.style.display = v.disk ? "" : "none";
+      importField.style.display = v.import ? "" : "none"; // "Import map…" — imported-map source only
       for (const f of [diskStyle.field, radial.field, angular.field, layout.field]) f.style.display = v.disk ? "" : "none";
-      // interior/exterior is expression-only (region is 𝔻 → Ω interior; Böttcher is ext(𝔻) → ext(K))
-      diskSide.field.style.display = v.disk && !v.region && !v.bottcher ? "" : "none";
+      // interior/exterior is expression-only (region is 𝔻 → Ω interior; an imported map is ext(𝔻) → ext(·))
+      diskSide.field.style.display = v.disk && !v.region && !v.exterior ? "" : "none";
       // the "Show" subset field is disk-only AND line-style-only
       diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
     },
@@ -479,11 +447,7 @@ export function createControls(initialExpr: string): Controls {
       const hasRows = !!(rows && rows.length);
       // Hide the whole group when the mode produces no analysis; else title it contextually (A1).
       analysisGroup.el.style.display = hasRows ? "" : "none";
-      if (!hasRows) {
-        exportRow.style.display = "none";
-        exportStatus.textContent = "";
-        return;
-      }
+      if (!hasRows) return;
       analysisGroup.summary.textContent = title;
       for (const [k, v] of rows ?? []) {
         const dt = document.createElement("dt");
@@ -492,13 +456,6 @@ export function createControls(initialExpr: string): Controls {
         dd.textContent = v;
         analysisDl.append(dt, dd);
       }
-    },
-    setExteriorExportAvailable(available: boolean): void {
-      exportRow.style.display = available ? "" : "none";
-      if (!available) exportStatus.textContent = "";
-    },
-    setExportStatus(msg: string): void {
-      exportStatus.textContent = msg;
     },
     setHover(rows: readonly (readonly [string, string])[] | null): void {
       hover.replaceChildren();
@@ -517,12 +474,6 @@ export function createControls(initialExpr: string): Controls {
     },
     onMode(cb: (id: string) => void): void {
       modeListeners.push(cb);
-    },
-    onColormap(cb: (id: string) => void): void {
-      cmapListeners.push(cb);
-    },
-    onGrid(cb: (id: string) => void): void {
-      gridListeners.push(cb);
     },
     onDomain(cb: (id: string) => void): void {
       domainListeners.push(cb);
@@ -560,8 +511,8 @@ export function createControls(initialExpr: string): Controls {
     onResetView(cb: () => void): void {
       resetListeners.push(cb);
     },
-    onCopyExteriorMap(cb: () => void): void {
-      copyExtListeners.push(cb);
+    onImportMap(cb: (link: string) => void): void {
+      importMapListeners.push(cb);
     },
     onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void {
       applyViewportListeners.push(cb);

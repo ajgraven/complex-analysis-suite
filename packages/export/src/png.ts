@@ -1,14 +1,14 @@
-/**
- * Minimal PNG `tEXt` metadata injection — embeds reproducibility parameters into an exported PNG
- * without touching a single image pixel. A `tEXt` chunk is `keyword\0text` (both Latin-1), inserted
- * just before the terminating `IEND` chunk, with a correct CRC-32. Ancillary chunks are ignored by
- * image renderers but read by metadata viewers and by {@link readPngText} here.
- *
- * Pure and dependency-free (no DOM), so it is unit-tested directly and can run anywhere.
- */
+// png.ts — PNG `tEXt` metadata: embed reproducibility parameters into an exported PNG without
+// touching a single image pixel. A `tEXt` chunk is `keyword\0text` (both Latin-1), spliced in just
+// before the terminating `IEND` chunk with a correct CRC-32. Ancillary chunks are ignored by image
+// renderers but read by metadata viewers and by {@link readPngText} here — so an exported figure
+// carries its own recipe (its permalink / parameters travel inside the picture).
+//
+// Pure and dependency-free (no DOM), so it is unit-tested directly and can run anywhere. Convention-
+// neutral (ADR-0006): this is byte manipulation — no `π`/`2πi`, indeed no mathematics, lives here.
 
 /** PNG 8-byte signature. */
-const SIG = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+export const PNG_SIGNATURE = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** CRC-32 (ISO-HDLC, reflected poly 0xEDB88320) — the variant PNG chunk CRCs use. */
 const CRC_TABLE = ((): Uint32Array => {
@@ -38,10 +38,9 @@ function latin1(s: string): number[] {
   return out;
 }
 
-/** Build one `tEXt` chunk: [length][type "tEXt"][keyword\0text][crc]. */
-function textChunk(keyword: string, text: string): Uint8Array {
-  const data = [...latin1(keyword.slice(0, 79)), 0, ...latin1(text)];
-  const typeAndData = Uint8Array.from([0x74, 0x45, 0x58, 0x74, ...data]); // "tEXt" + data
+/** Build one complete PNG chunk: [length][type][data][crc], with the CRC over type+data. */
+export function pngChunk(type: string, data: Uint8Array): Uint8Array {
+  const typeAndData = Uint8Array.from([...latin1(type.slice(0, 4)), ...data]);
   const chunk = new Uint8Array(4 + typeAndData.length + 4);
   const dv = new DataView(chunk.buffer);
   dv.setUint32(0, data.length); // chunk length excludes the type + CRC fields
@@ -50,9 +49,15 @@ function textChunk(keyword: string, text: string): Uint8Array {
   return chunk;
 }
 
+/** Build one `tEXt` chunk from a keyword (PNG caps keywords at 79 bytes) and its text. */
+function textChunk(keyword: string, text: string): Uint8Array {
+  const data = Uint8Array.from([...latin1(keyword.slice(0, 79)), 0, ...latin1(text)]);
+  return pngChunk("tEXt", data);
+}
+
 /** Position of the `IEND` chunk's length field, or -1 if `png` is not a walkable PNG. */
 function findIend(png: Uint8Array): number {
-  for (let i = 0; i < 8; i++) if (png[i] !== SIG[i]) return -1; // not a PNG
+  for (let i = 0; i < 8; i++) if (png[i] !== PNG_SIGNATURE[i]) return -1; // not a PNG
   const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
   let pos = 8;
   while (pos + 8 <= png.length) {
@@ -88,7 +93,7 @@ export function injectPngText(png: Uint8Array, entries: Record<string, string>):
 /** Read back all `tEXt` keyword → text entries from a PNG (inverse of {@link injectPngText}). */
 export function readPngText(png: Uint8Array): Record<string, string> {
   const out: Record<string, string> = {};
-  for (let i = 0; i < 8; i++) if (png[i] !== SIG[i]) return out;
+  for (let i = 0; i < 8; i++) if (png[i] !== PNG_SIGNATURE[i]) return out;
   const dv = new DataView(png.buffer, png.byteOffset, png.byteLength);
   let pos = 8;
   while (pos + 8 <= png.length) {

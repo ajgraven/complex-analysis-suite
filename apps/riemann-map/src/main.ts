@@ -1,9 +1,10 @@
 // apps/riemann-map — the research-grade Riemann-map / conformal-mapping studio.
 //
-// P1 walking skeleton. P1a: domain-coloring render + pan/zoom. P1b: live φ editor, KaTeX, presets,
-// hover readout. P1c: render modes + colormaps. P1d (this file): the "map the grid" view — a source
-// coordinate grid on the z-plane and its pushforward φ(grid) in a linked w-plane pane (shared colour
-// key), with a linked cursor. Later: PNG export (G2) + the Möbius gauge (A20).
+// A conformal-map studio: the two modes both draw a 2D-canvas picture (source pane + linked image
+// pane), not a GPU field. `disk-image` (the default) pushes the unit disk's polar grid forward through
+// φ — from the editor, a numerical region map g: 𝔻 → Ω, or an exterior map ψ imported from Complex
+// Dynamics; `domain-map` fits the numerical Riemann map of a chosen region. Live φ editor + KaTeX,
+// presets, hover readout, pan/zoom, PNG export (G2), and `#vs=` permalinks / `#s=` map hand-off.
 import "./styles/main.css";
 import {
   DEFAULT_VIEW_STATE,
@@ -13,50 +14,70 @@ import {
   type ViewportState,
 } from "./viewState.js";
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
-import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, modeIsDynamics, modeIsDomain, modeIsDiskImage, modeUsesColormap } from "./render/modes.js";
-import { colormapColors } from "./render/colormaps.js";
+import { modeIsDomain, modeIsDiskImage } from "./render/modes.js";
 import {
-  sourceGrid,
-  pushforward,
   pushforwardCells,
   diskGrid,
   bounds,
-  type GridKind,
   type GridLine,
   type DiskSide,
   type Pt,
 } from "./render/grid.js";
 import { Overlay2D, type FillCell } from "./render/overlay2d.js";
 import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
-import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
-import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
-import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
-import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
-import { exteriorMapLink } from "./interchange/exteriorMap.js";
+import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
 import { fitForwardMap, type ForwardMap } from "./solve/forwardMap.js";
-import { injectPngText } from "./export/pngMeta.js";
+import { injectPngText } from "@cas/export";
 import { createControls } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
   return decodeRiemannState(window.location.hash) ?? DEFAULT_VIEW_STATE;
 }
-/** Size the drawing buffer to the CSS box × DPR. Returns true if it changed — a resize clears the
- *  WebGL buffer, so the caller must re-render even when nothing else is dirty (else the plane blanks). */
-function resizeToDisplay(canvas: HTMLCanvasElement): boolean {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
-  const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-    return true;
+
+/** Reconstruct the in-memory imported map from a view-state's serialized `render.imported` — a permalink of
+ *  an imported figure carries the coefficients, so a reload restores the map. Null if absent or malformed. */
+function restoreImported(
+  imp:
+    | { lead: readonly [number, number]; coeffs: readonly (readonly [number, number])[]; app?: string; note?: string }
+    | undefined,
+): ImportedExterior | null {
+  if (!imp || !Array.isArray(imp.lead) || imp.lead.length !== 2 || !Array.isArray(imp.coeffs)) return null;
+  return {
+    lead: [imp.lead[0], imp.lead[1]],
+    coeffs: imp.coeffs.map((c) => [c[0], c[1]] as [number, number]),
+    app: imp.app ?? "imported",
+    note: imp.note,
+  };
+}
+
+/** Evaluate a Laurent exterior map ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ from its coefficients (the imported-map source's
+ *  ψ; the coefficients are decoded from an interchange link, not computed here). */
+function evalLaurentPsi(
+  lead: readonly [number, number],
+  coeffs: readonly (readonly [number, number])[],
+  w: Pt,
+): Pt {
+  let re = lead[0] * w[0] - lead[1] * w[1]; // γ₁·w
+  let im = lead[0] * w[1] + lead[1] * w[0];
+  const den = w[0] * w[0] + w[1] * w[1];
+  if (den === 0) return [Infinity, Infinity];
+  const invRe = w[0] / den; // w⁻¹
+  const invIm = -w[1] / den;
+  let pRe = 1; // w⁻ᵏ, k = 0
+  let pIm = 0;
+  for (const b of coeffs) {
+    re += b[0] * pRe - b[1] * pIm;
+    im += b[0] * pIm + b[1] * pRe;
+    const nRe = pRe * invRe - pIm * invIm;
+    const nIm = pRe * invIm + pIm * invRe;
+    pRe = nRe;
+    pIm = nIm;
   }
-  return false;
+  return [re, im];
 }
 function fmt(n: number): string {
   return Number.isFinite(n) ? n.toPrecision(5).replace(/\.?0+$/, "") : "∞";
@@ -109,6 +130,20 @@ function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
   let state = initialState();
+  // A "#s=" interchange deep link (e.g. Complex Dynamics' "Send to Riemann Map") boots straight into the
+  // imported map. Its coefficients are recorded IN the view-state (render.imported) so the "#vs=" permalink
+  // the first frame writes is self-contained — reopening/refreshing it restores the map without the "#s="
+  // link. A "#vs=" permalink of a previously-imported figure carries render.imported; restore it here.
+  let importedMap: ImportedExterior | null = importExteriorMap(window.location.hash);
+  if (importedMap) {
+    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image", imported: importedMap } };
+  } else if (state.render.diskSource === "import") {
+    importedMap = restoreImported(state.render.imported);
+  }
+  // An unknown mode id (e.g. a render mode retired in C, in an old permalink) falls back to the default view.
+  if (state.render.mode !== "disk-image" && state.render.mode !== "domain-map") {
+    state = { ...state, render: { ...state.render, mode: "disk-image" } };
+  }
 
   // ---- DOM shell -----------------------------------------------------------
   app.replaceChildren();
@@ -152,25 +187,12 @@ function main(): void {
   body.append(controls.root, stage);
   app.append(bar, body);
 
-  // ---- renderers -----------------------------------------------------------
-  const renderer: Renderer | null = createRenderer(canvas);
-  if (!renderer) {
-    note.textContent = "WebGL2 is unavailable in this browser — the GPU domain-coloring view needs it.";
-    note.classList.add("visible");
-  }
+  // ---- 2D overlays (the panes are pure 2D canvases; `canvas` is the pan/zoom + pointer surface) ----
   const leftOverlay = new Overlay2D(overlayCanvas);
   const rightPane = new Overlay2D(imageCanvas);
 
   let current: CompiledMap | null = null;
-  let analysis: ExteriorAnalysis | null = null;
-  let dynamics: DynamicsStats | null = null; // z²+c dynamical stats, when the map is that family
-  let dynC: [number, number] | null = null; // the z²+c parameter, or null when the map is not z²+c
   let cursorZ: Pt | null = null;
-  let gridSource: GridLine[] = [];
-  let gridImage: GridLine[] = [];
-  let boundaryLines: GridLine[] = [];
-  let rayLines: GridLine[] = [];
-  let rayLandings: Pt[] = [];
   // Numerical-Riemann-map (domain) mode (P3b): the fitted map + its source/image conformal grids.
   let domainId = domainById(state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
   // Disk-image region source (2.1): the target Ω for the forward map g: 𝔻 → Ω (smooth domains only).
@@ -190,29 +212,26 @@ function main(): void {
   let cParam: [number, number] = state.map.c ? [state.map.c[0], state.map.c[1]] : [0.45, 0.2]; // family param
   let usesC = /\bc\b/.test(state.map.expr); // does φ reference the draggable c?
   let regionMap: ForwardMap | null = null; // the forward Riemann map g: 𝔻 → Ω (region source, 2.1)
-  let glDirty = true;
-  let gridDirty = true;
   let domainDirty = true;
   let diskDirty = true;
   let regionDirty = true; // (re)fit the forward map g when the region source or domain changes
   let fitPending = true; // fit the disk pane to the actual pane aspect on first paint (1.5)
   let linkDirty = true;
 
-  const BOTTCHER_LOG_R = 0.9; // exterior reach for the Böttcher source (r up to e^0.9 ≈ 2.46 — near K)
-  const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
+  const IMPORT_LOG_R = 0.9; // exterior grid reach for an imported map (r up to e^0.9 ≈ 2.46)
   const diskSourceIsRegion = (): boolean => state.render.diskSource === "region";
-  const diskSourceIsBottcher = (): boolean => state.render.diskSource === "bottcher";
-  const diskSourceIsNumeric = (): boolean => diskSourceIsRegion() || diskSourceIsBottcher();
-  // Region maps are 𝔻 → Ω (interior); the Böttcher map ψ is ext(𝔻) → ext(K) (exterior). Interior/exterior
-  // + the draggable c apply only to the explicit-expression source.
+  const diskSourceIsImport = (): boolean => state.render.diskSource === "import";
+  const diskSourceIsNumeric = (): boolean => diskSourceIsRegion() || diskSourceIsImport();
+  // Region maps are 𝔻 → Ω (interior); an imported exterior map ψ is ext(𝔻) → ext(·) (exterior).
+  // Interior/exterior + the draggable c apply only to the explicit-expression source.
   const diskSide = (): DiskSide =>
-    diskSourceIsBottcher() ? "exterior" : !diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior";
+    diskSourceIsImport() ? "exterior" : !diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior";
   const diskRadial = (): number => state.render.diskDensity ?? 18;
   const diskSectors = (): number => state.render.diskSectors ?? 2 * diskRadial();
   const diskStyle = (): string => state.render.diskStyle ?? "filled";
   const diskShow = (): string => state.render.diskShow ?? "both";
   const diskLayout = (): string => state.render.diskLayout ?? "split";
-  const diskExtLogR = (): number => (diskSourceIsBottcher() ? BOTTCHER_LOG_R : 2.5); // exterior grid reach
+  const diskExtLogR = (): number => (diskSourceIsImport() ? IMPORT_LOG_R : 2.5); // exterior grid reach
   const diskMaxR = (): number => (diskSide() === "exterior" ? Math.exp(diskExtLogR()) : 1);
   const phi = (z: Pt): Pt => {
     if (!current) return z;
@@ -224,32 +243,13 @@ function main(): void {
     const p = regionMap.eval([w[0], w[1]]);
     return [p[0], p[1]];
   };
-  /** The exterior Riemann map ψ(w) = γ₁·w + Σ bₖ w⁻ᵏ, from the exterior analysis (Böttcher source, 2.2). */
-  const bottcherValid = (): boolean => !!analysis && exteriorConformalValid();
-  const bottcherPsi = (w: Pt): Pt => {
-    if (!analysis) return w;
-    const lead = analysis.lead;
-    let re = lead[0] * w[0] - lead[1] * w[1]; // γ₁·w
-    let im = lead[0] * w[1] + lead[1] * w[0];
-    const den = w[0] * w[0] + w[1] * w[1];
-    if (den === 0) return [Infinity, Infinity];
-    const invRe = w[0] / den; // w⁻¹
-    const invIm = -w[1] / den;
-    let pRe = 1; // w⁻ᵏ, k = 0
-    let pIm = 0;
-    for (const b of analysis.coeffs) {
-      re += b[0] * pRe - b[1] * pIm;
-      im += b[0] * pIm + b[1] * pRe;
-      const nRe = pRe * invRe - pIm * invIm;
-      const nIm = pRe * invIm + pIm * invRe;
-      pRe = nRe;
-      pIm = nIm;
-    }
-    return [re, im];
-  };
-  /** The φ the disk-image mode pushes forward: explicit φ, the region map g, or the Böttcher map ψ. */
+  /** An imported exterior map ψ(w) = γ₁·w + Σ bₖ w⁻ᵏ (B): the Laurent coefficients are decoded from an
+   *  interchange link (e.g. Complex Dynamics' Böttcher map of a filled Julia set), not computed here. */
+  const importedValid = (): boolean => !!importedMap;
+  const importedPsi = (w: Pt): Pt => (importedMap ? evalLaurentPsi(importedMap.lead, importedMap.coeffs, w) : w);
+  /** The φ the disk-image mode pushes forward: explicit φ, the region map g, or an imported exterior map ψ. */
   const activePhi = (): ((z: Pt) => Pt) =>
-    diskSourceIsRegion() ? regionPhi : diskSourceIsBottcher() ? bottcherPsi : phi;
+    diskSourceIsRegion() ? regionPhi : diskSourceIsImport() ? importedPsi : phi;
   /** φ′ at w for the active source (symbolic for φ; a central difference for the numerical maps). */
   const activeDeriv = (w: Pt): [number, number] => {
     if (diskSourceIsNumeric()) {
@@ -273,107 +273,30 @@ function main(): void {
     controls.showError(null);
     controls.setLatex(compiled.map.latex);
     current = compiled.map;
-    analysis = analyzeExterior(state.map.expr); // exterior invariants (E2/E6), null for non-degree-≥2 maps
-    dynC = quadraticJuliaC(state.map.expr); // z²+c parameter (E12), null otherwise
-    dynamics = dynC ? juliaDynamics(dynC) : null;
-    if (renderer && renderer.setMap(compiled.map.glslBody, compiled.map.glslDerivBody)) note.classList.remove("visible");
-    refreshDynamicsNote();
-    updateAnalysisPanel();
   }
 
-  /**
-   * The exterior conformal map ψ (and so its coefficients bₖ, the reconstructed-boundary overlay, and the
-   * exterior-map export) is only valid for a CONNECTED K — a disconnected Julia set's complement is not a
-   * topological disk exterior, so ψ does not exist. We only *know* connectivity for the z²+c family; for
-   * any other map we assume valid. The escape-based objects (Green's-function render, G(z), rays) stay valid.
-   */
-  function exteriorConformalValid(): boolean {
-    return !(dynamics && !dynamics.connected);
-  }
-
-  /** Show capacity / Robin / exterior coefficients + z²+c dynamics in the sidebar, only in the Julia mode. */
-  function updateAnalysisPanel(): void {
-    if (modeIsDomain(state.render.mode)) return; // the domain view owns the panel (set in computeDomain)
-    if (modeIsDiskImage(state.render.mode)) return; // the disk-image view owns the panel (computeDiskImage)
-    if (!(modeIsDynamics(state.render.mode) && analysis)) {
-      controls.setAnalysis(null);
-      return;
-    }
-    // Capacity + Robin: for monic z²+c these are exactly 1 and 0 by theorem, connected or not.
-    const rows: [string, string][] = [
-      ["capacity cap(K)", analysis.monic ? "= 1  (monic)" : "= " + fmt(analysis.capacity)],
-      ["Robin γ", "= " + fmt(analysis.robin)],
-    ];
-    const valid = exteriorConformalValid();
-    if (valid) {
-      // bₖ describe the global conformal map ψ — only meaningful for a connected K.
-      const c = analysis.coeffs;
-      if (c.length > 1) rows.push(["|b₁|", "≈ " + fmt(Math.hypot(c[1][0], c[1][1]))]);
-      if (c.length > 2) rows.push(["|b₂|", "≈ " + fmt(Math.hypot(c[2][0], c[2][1]))]);
-    }
-    // Dynamical invariants for the z²+c family (E12): parameter, connectedness, attracting cycle.
-    if (dynC && dynamics) {
-      rows.push(["c", "= " + fmtC(dynC[0], dynC[1])]);
-      rows.push(["K", dynamics.connected ? "= connected" : "= Cantor set (ψ n/a)"]);
-      if (dynamics.cycle) {
-        const sup = dynamics.cycle.multiplier < 1e-9;
-        rows.push(["attracting cycle", "period " + dynamics.cycle.period + (sup ? " (superattracting)" : "")]);
-        rows.push(["multiplier |λ|", sup ? "= 0" : "≈ " + fmt(dynamics.cycle.multiplier)]);
-      }
-    }
-    controls.setAnalysis(rows, "Exterior invariants");
-    controls.setExteriorExportAvailable(valid); // no ψ ⇒ no exterior-map export
-  }
-
-  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane. */
+  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane.
+   *  The two modes are the disk-image view (the default, for any non-domain id) and the numeric domain map. */
   function applyModeContext(): void {
     const m = state.render.mode;
     const disk = modeIsDiskImage(m);
     const region = disk && diskSourceIsRegion();
-    const bottcher = disk && diskSourceIsBottcher();
+    const imported = disk && diskSourceIsImport();
     controls.setControlVisibility({
-      colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
-      grid: !modeIsDomain(m) && !disk, // the numeric-map + disk-image modes draw their own grid
       domain: modeIsDomain(m), // the numeric domain→disk mode's region picker
       disk, // the disk-image controls (source, style, density…)
       region, // region source ⇒ show the region picker
-      bottcher, // Böttcher source ⇒ exterior-only (hide interior/exterior with region)
+      exterior: imported, // an imported exterior map ⇒ exterior-only (hide interior/exterior + region)
+      import: imported, // imported source ⇒ show the "Import map…" action
     });
     rlabel.textContent = disk
       ? region
         ? "w = g(w)  ·  image of 𝔻 in Ω"
-        : bottcher
-          ? "w = ψ(w)  ·  ext(𝔻) → ext(K)"
+        : imported
+          ? "w = ψ(w)  ·  imported exterior map"
           : "w = φ(z)  ·  image of the disk"
-      : modeIsDomain(m)
-        ? "w = f(z)  ·  unit disk"
-        : "w = φ(z)  ·  image grid";
-    renderLegend(legendEl, legendModel(m, state.render.palette)); // colour-key chip (A4)
-  }
-
-  /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
-  function refreshDynamicsNote(): void {
-    if (!renderer) return; // the WebGL-unavailable note owns the banner in that case
-    if (modeIsDynamics(state.render.mode) && (!current || current.degree === null)) {
-      note.textContent = "Julia exterior needs a polynomial or rational map of degree ≥ 2 — e.g. z*z − 1.";
-      note.classList.add("visible");
-    } else {
-      note.classList.remove("visible");
-    }
-  }
-
-  function computeGrid(): void {
-    const v = state.viewport;
-    const aspect = canvas.height > 0 ? canvas.width / canvas.height : 1;
-    gridSource = sourceGrid(gridKind(), v.centerRe, v.centerIm, 1 / v.zoom, aspect);
-    gridImage = gridKind() !== "none" && current ? pushforward(gridSource, phi) : [];
-    boundaryLines =
-      modeIsDynamics(state.render.mode) && analysis && exteriorConformalValid()
-        ? [{ color: "rgba(130,225,255,0.95)", pts: reconstructedBoundary(analysis, 1.02, 512) }]
-        : [];
-    const rays = modeIsDynamics(state.render.mode) ? juliaExternalRays(state.map.expr, DEFAULT_RAY_ANGLES) : null;
-    rayLines = rays ? rays.map((r) => ({ color: "rgba(255,170,70,0.9)", pts: r.pts })) : [];
-    rayLandings = rays ? rays.map((r) => r.pts[r.pts.length - 1]) : [];
+      : "w = f(z)  ·  unit disk";
+    renderLegend(legendEl, legendModel(m)); // colour-key chip (A4)
   }
 
   // ---- numerical Riemann map of a domain (P3b) -----------------------------
@@ -426,7 +349,6 @@ function main(): void {
     if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
     rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
     controls.setAnalysis(rows, "Numerical map");
-    controls.setExteriorExportAvailable(false);
   }
 
   // ---- the image of the disk (P4 — the primary view) -----------------------
@@ -457,8 +379,8 @@ function main(): void {
    *  the active source (explicit φ, or the numerical region map g), plus the honest univalence verdict. */
   function computeDiskImage(): void {
     const region = diskSourceIsRegion();
-    const bottcher = diskSourceIsBottcher();
-    const ready = bottcher ? bottcherValid() : region ? !!regionMap : !!current;
+    const imported = diskSourceIsImport();
+    const ready = imported ? importedValid() : region ? !!regionMap : !!current;
     if (!ready) {
       diskSourceCells = [];
       diskImageCells = [];
@@ -468,10 +390,10 @@ function main(): void {
       diskUnitImg = [];
       diskFoldReason = null;
       controls.setAnalysis(
-        bottcher
+        imported
           ? [
-              ["source", "exterior map ψ  (Böttcher)"],
-              ["needs", "a degree-≥2 polynomial with connected K — e.g. z*z − 1"],
+              ["source", "imported exterior map ψ"],
+              ["needs", "a map link — open one from Complex Dynamics, or paste via “Import map…”"],
             ]
           : null,
         "Image of the disk",
@@ -527,7 +449,7 @@ function main(): void {
     // construction, so it is univalent without a check (honest, ≈): an interior critical point φ′≈0, or a
     // self-intersecting image boundary flags a folded explicit map.
     if (diskSourceIsNumeric()) {
-      diskFoldReason = null; // a Riemann / Böttcher map is a bijection by construction
+      diskFoldReason = null; // a Riemann / imported exterior map is a bijection by construction
     } else {
       const critical = Number.isFinite(minBulk) && maxMag > 0 && minBulk < 1e-3 * maxMag;
       const boundaryFold = polylineSelfIntersects(downsample(diskUnitImg, 180), true);
@@ -535,13 +457,14 @@ function main(): void {
     }
 
     let rows: [string, string][];
-    if (bottcher && analysis) {
+    if (imported && importedMap) {
+      const gamma = importedMap.lead;
       rows = [
-        ["source", "exterior map ψ  (Böttcher)"],
+        ["source", `imported map  ·  from ${importedMap.app}`],
         ["ψ(w)", "γ₁·w + Σ bₖ w⁻ᵏ"],
-        ["capacity cap(K)", analysis.monic ? "= 1  (monic)" : "≈ " + fmt(analysis.capacity)],
-        ["grid", `${diskRadial()} × ${diskSectors()}  ·  rings→equipotentials, rays→external`],
-        ["univalent", "= yes  (Böttcher map)"],
+        ["γ₁", "≈ " + fmtC(gamma[0], gamma[1])],
+        ["terms", `${importedMap.coeffs.length} bₖ  ·  grid ${diskRadial()} × ${diskSectors()}`],
+        ["univalent", "= yes  (exterior map, by construction)"],
       ];
     } else if (region && regionMap) {
       const d = domainById(regionId);
@@ -566,7 +489,6 @@ function main(): void {
       if (usesC) rows.splice(1, 0, ["c", "= " + fmtC(cParam[0], cParam[1]) + "  (drag on 𝔻)"]);
     }
     controls.setAnalysis(rows, "Image of the disk");
-    controls.setExteriorExportAvailable(false);
   }
 
   /** All image-cell corners, for auto-framing the image pane. */
@@ -577,12 +499,12 @@ function main(): void {
   };
 
   function drawOverlays(): void {
-    // Decide split-ness FIRST, then size the left overlay: the pane's final (half) width must be in
-    // effect before resize() reads it, or a full-width buffer gets CSS-squished (the disk turns oval).
+    // Both modes are two-pane (source + linked image), so the stage is always split. Toggle split FIRST,
+    // then size the left overlay: the pane's final (half) width must be in effect before resize() reads it,
+    // or a full-width buffer gets CSS-squished (the disk turns oval).
     const disk = modeIsDiskImage(state.render.mode);
     const domain = modeIsDomain(state.render.mode);
-    const split = disk || domain || gridKind() !== "none";
-    stage.classList.toggle("split", split);
+    stage.classList.add("split");
     stage.classList.toggle("solo", disk && diskLayout() === "image"); // image-only layout (2.4)
     leftOverlay.resize();
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
@@ -624,20 +546,6 @@ function main(): void {
       }
       return;
     }
-    leftOverlay.drawLines(gridSource);
-    leftOverlay.drawLines(boundaryLines, 1.6); // reconstructed ∂K in the Julia-exterior mode
-    leftOverlay.drawLines(rayLines, 1.3); // external rays
-    for (const p of rayLandings) leftOverlay.drawMarker(p, "rgba(255,170,70,1)");
-    if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
-    leftOverlay.drawScaleBar();
-
-    if (split && rightPane.resize()) {
-      const b = bounds(gridImage);
-      if (b) rightPane.fitBounds(b);
-      rightPane.clear();
-      rightPane.drawLines(gridImage);
-      if (cursorZ) rightPane.drawMarker(phi(cursorZ), CURSOR_COLOR);
-    }
   }
 
   function updateReadout(): void {
@@ -657,52 +565,58 @@ function main(): void {
     URL.revokeObjectURL(url);
   }
 
-  async function exportPng(scale = 2): Promise<void> {
-    if (!renderer) return;
-    const baseW = canvas.width;
-    const baseH = canvas.height;
-    const W = Math.max(1, Math.round(baseW * scale));
-    const H = Math.max(1, Math.round(baseH * scale));
-    canvas.width = W;
-    canvas.height = H;
-    const disk = modeIsDiskImage(state.render.mode);
-    if (disk) renderer.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // 2D-overlay picture — no GLSL field
-    else renderer.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
+  /** Numeric-domain-map export: a combined [ Ω │ disk ] plate of the region and its conformal image.
+   *  Pure 2D (offscreen canvases), mirroring {@link exportDiskPlate}. */
+  async function exportDomainPlate(scale = 2): Promise<void> {
+    const paneW = Math.max(1, Math.round((canvas.clientWidth || 600) * scale));
+    const H = Math.max(1, Math.round((canvas.clientHeight || 600) * scale));
+    const bg = `rgb(${Math.round(DOMAIN_BG[0] * 255)},${Math.round(DOMAIN_BG[1] * 255)},${Math.round(DOMAIN_BG[2] * 255)})`;
 
-    const ex = document.createElement("canvas");
-    ex.width = W;
-    ex.height = H;
-    const ctx = ex.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(canvas, 0, 0);
-      // ex.width/height already set → the Overlay2D draws without a CSS-box resize.
-      if (disk) {
-        const ov = new Overlay2D(ex);
-        ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
-        ov.fillCells(diskSourceCells, 1);
-        ov.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitSrc }], 2);
-      } else if (gridKind() !== "none") {
-        const ov = new Overlay2D(ex);
-        ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
-        ov.drawLines(gridSource, 2);
+    const makePane = (draw: (ov: Overlay2D) => void): HTMLCanvasElement => {
+      const cv = document.createElement("canvas");
+      cv.width = paneW;
+      cv.height = H;
+      const c2 = cv.getContext("2d");
+      if (c2) {
+        c2.fillStyle = bg;
+        c2.fillRect(0, 0, paneW, H);
       }
-    }
-    const blob = await new Promise<Blob | null>((res) => ex.toBlob(res, "image/png"));
+      draw(new Overlay2D(cv));
+      return cv;
+    };
 
-    canvas.width = baseW; // restore the live drawing buffer
-    canvas.height = baseH;
-    glDirty = true;
-    schedule();
+    const left = makePane((ov) => {
+      ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
+      ov.drawLines(domainSource, 1.4);
+    });
+    const right = makePane((ov) => {
+      ov.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
+      ov.drawLines(domainImage, 1.4);
+    });
 
-    if (!ctx || !blob) return;
+    const plate = document.createElement("canvas");
+    plate.width = paneW * 2;
+    plate.height = H;
+    const ctx = plate.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(left, 0, 0);
+    ctx.drawImage(right, paneW, 0);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = Math.max(1, scale);
+    ctx.beginPath();
+    ctx.moveTo(paneW, 0);
+    ctx.lineTo(paneW, H);
+    ctx.stroke();
+
+    const blob = await new Promise<Blob | null>((res) => plate.toBlob(res, "image/png"));
+    if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const permalink = location.origin + location.pathname + encodeRiemannState(state);
-    const withMeta = injectPngText(
-      injectPngText(bytes, "Software", "Riemann Map — Complex Analysis Suite"),
-      "cas:state",
-      permalink,
-    );
-    downloadBytes(withMeta, "riemann-map.png");
+    const withMeta = injectPngText(bytes, {
+      Software: "Riemann Map — Complex Analysis Suite",
+      "cas:state": permalink,
+    });
+    downloadBytes(withMeta, "riemann-domain-map.png");
   }
 
   /** Disk-image export (1.2): a combined [ disk │ image ] plate, so the deliverable is the IMAGE, not
@@ -762,11 +676,10 @@ function main(): void {
     if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const permalink = location.origin + location.pathname + encodeRiemannState(state);
-    const withMeta = injectPngText(
-      injectPngText(bytes, "Software", "Riemann Map — Complex Analysis Suite"),
-      "cas:state",
-      permalink,
-    );
+    const withMeta = injectPngText(bytes, {
+      Software: "Riemann Map — Complex Analysis Suite",
+      "cas:state": permalink,
+    });
     downloadBytes(withMeta, "riemann-disk-image.png");
   }
 
@@ -776,7 +689,6 @@ function main(): void {
     if (frame) return;
     frame = window.requestAnimationFrame(() => {
       frame = 0;
-      const resized = resizeToDisplay(canvas); // a resize clears the WebGL buffer → must re-render
       const domain = modeIsDomain(state.render.mode);
       const disk = modeIsDiskImage(state.render.mode);
       if (domain && domainDirty) {
@@ -792,16 +704,7 @@ function main(): void {
         computeDiskImage(); // cells live on the unit disk — independent of the canvas size
         diskDirty = false;
       }
-      if ((gridDirty || resized) && !domain && !disk) {
-        computeGrid();
-        gridDirty = false;
-      }
-      if (glDirty || resized) {
-        if (domain || disk) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
-        else renderer?.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
-        glDirty = false;
-      }
-      drawOverlays();
+      drawOverlays(); // both modes draw pure-2D overlays; the panes' dark background is CSS (no GLSL field)
       // Fit the disk pane to the ACTUAL pane aspect (now that drawOverlays has sized the overlay). 1.5.
       if (fitPending) {
         fitPending = false;
@@ -820,23 +723,20 @@ function main(): void {
       }
     });
   }
-  function invalidate(gl: boolean, gridChanged: boolean): void {
-    if (gl) glDirty = true;
-    if (gridChanged) gridDirty = true;
+  /** Mark the permalink stale and schedule a redraw. (The 2D overlays recompute from their own dirty
+   *  flags — diskDirty / domainDirty / regionDirty — set by the caller before invalidating.) */
+  function invalidate(): void {
     linkDirty = true;
     schedule();
   }
 
   function setViewport(v: ViewportState): void {
     state = { ...state, viewport: v };
-    invalidate(true, true); // grid follows the z-window
+    invalidate();
   }
 
   // ---- controls ------------------------------------------------------------
-  renderer?.setColormap(colormapColors(state.render.palette)); // upload the initial ramp LUT (A6)
   controls.setMode(state.render.mode);
-  controls.setColormap(state.render.palette);
-  controls.setGrid(gridKind());
   controls.setDomain(domainId);
   controls.setRegionDomain(regionId);
   controls.setDiskSource(state.render.diskSource ?? "expression");
@@ -852,7 +752,7 @@ function main(): void {
     usesC = /\bc\b/.test(expr); // does the new φ have a draggable parameter?
     applyMap();
     diskDirty = true; // the disk-image cells are a function of φ
-    invalidate(true, true);
+    invalidate();
   });
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
@@ -861,10 +761,8 @@ function main(): void {
       diskDirty = true; // (re)build the disk-image cells on entering
       fitPending = true; // and re-frame the disk pane
     }
-    invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
+    invalidate();
     applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
-    refreshDynamicsNote();
-    updateAnalysisPanel();
   });
   controls.onDiskSource((id) => {
     state = { ...state, render: { ...state.render, diskSource: id } };
@@ -872,32 +770,52 @@ function main(): void {
     diskDirty = true;
     fitPending = true; // a region map is interior-only — reframe the pane
     applyModeContext(); // show the region picker / hide interior-exterior + the c handle
-    invalidate(false, false);
+    invalidate();
+  });
+  // Paste an @cas/interchange "#s=" link (Complex Dynamics' "Send to Riemann Map", or a QD φ) → import it
+  // as the exterior disk-image source. The deep-link path (a "#s=" hash on load) is handled at boot.
+  controls.onImportMap((link) => {
+    const m = importExteriorMap(link);
+    if (!m) {
+      note.textContent = "That doesn't look like an exterior-map link (expected a Complex Dynamics “Riemann Map ↗” link).";
+      note.classList.add("visible");
+      return;
+    }
+    note.classList.remove("visible");
+    importedMap = m;
+    // Record the coefficients in the view-state so the permalink is self-contained (survives reload).
+    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image", imported: m } };
+    controls.setMode(state.render.mode);
+    controls.setDiskSource("import");
+    diskDirty = true;
+    fitPending = true;
+    applyModeContext();
+    invalidate();
   });
   controls.onDiskSide((side) => {
     state = { ...state, render: { ...state.render, disk: side } };
     diskDirty = true;
     fitPending = true; // fit the pane to the new side (interior ↔ exterior), replacing the zoom preset
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDiskStyle((id) => {
     state = { ...state, render: { ...state.render, diskStyle: id } };
-    invalidate(false, false); // both styles are already computed each rebuild — just redraw
+    invalidate(); // both styles are already computed each rebuild — just redraw
   });
   controls.onDiskShow((id) => {
     state = { ...state, render: { ...state.render, diskShow: id } };
     diskDirty = true; // the curve subset is chosen at build time
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDiskRadial((n) => {
     state = { ...state, render: { ...state.render, diskDensity: n } };
     diskDirty = true;
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDiskAngular((n) => {
     state = { ...state, render: { ...state.render, diskSectors: n } };
     diskDirty = true;
-    invalidate(false, false);
+    invalidate();
   });
   controls.onFit(() => {
     fitPending = true;
@@ -906,13 +824,13 @@ function main(): void {
   controls.onDiskLayout((id) => {
     state = { ...state, render: { ...state.render, diskLayout: id } };
     fitPending = true; // switching back to two-pane re-frames the (now narrower) disk pane
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDomain((id) => {
     domainId = id;
     state = { ...state, render: { ...state.render, domain: id } };
     domainDirty = true; // the numeric domain→disk mode
-    invalidate(true, false);
+    invalidate();
   });
   controls.onRegionDomain((id) => {
     regionId = id;
@@ -920,19 +838,9 @@ function main(): void {
     regionDirty = true; // (re)fit the forward map g: 𝔻 → Ω
     diskDirty = true;
     fitPending = true;
-    invalidate(false, false);
+    invalidate();
   });
-  controls.onColormap((id) => {
-    state = { ...state, render: { ...state.render, palette: id } };
-    renderer?.setColormap(colormapColors(id)); // re-upload the ramp LUT (A6)
-    renderLegend(legendEl, legendModel(state.render.mode, id)); // the ramp bar follows the colormap (A4)
-    invalidate(true, false);
-  });
-  controls.onGrid((id) => {
-    state = { ...state, render: { ...state.render, grid: id } };
-    invalidate(false, true);
-  });
-  controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportPng()));
+  controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportDomainPlate()));
   controls.onResetView(() => {
     if (modeIsDiskImage(state.render.mode)) {
       fitPending = true; // reset = re-fit the disk pane
@@ -940,18 +848,6 @@ function main(): void {
     } else setViewport({ ...DEFAULT_VIEW_STATE.viewport });
   });
   controls.onApplyViewport((re, im, zoom) => setViewport({ centerRe: re, centerIm: im, zoom }));
-  controls.onCopyExteriorMap(() => {
-    if (!analysis || !exteriorConformalValid()) return; // no valid ψ ⇒ nothing to export (button is hidden too)
-    const link = exteriorMapLink(analysis, { sourceExpr: state.map.expr });
-    // The interchange fragment ("#s=…") is what another suite tool's "Import map" consumes.
-    navigator.clipboard.writeText(link).then(
-      () => controls.setExportStatus("Exterior map copied — paste into another tool's Import map."),
-      () => {
-        console.warn("exterior-map interchange link:", link); // clipboard blocked — surface it for copy
-        controls.setExportStatus("Clipboard blocked — the link was logged to the console.");
-      },
-    );
-  });
 
   // ---- hover + linked cursor (F4/F2) ---------------------------------------
   canvas.addEventListener("pointermove", (e) => {
@@ -971,16 +867,16 @@ function main(): void {
       schedule();
       return;
     }
-    // Disk-image numeric source: read the disk point w and its image under g (region) or ψ (Böttcher).
+    // Disk-image numeric source: read the disk point w and its image under g (region) or ψ (imported map).
     if (modeIsDiskImage(state.render.mode) && diskSourceIsNumeric()) {
-      const bott = diskSourceIsBottcher();
-      if (bott ? bottcherValid() : !!regionMap) {
+      const imp = diskSourceIsImport();
+      if (imp ? importedValid() : !!regionMap) {
         const p = activePhi()([z[0], z[1]]);
         const rr = Math.hypot(z[0], z[1]);
         controls.setHover([
           ["w", fmtC(z[0], z[1])],
-          [bott ? "ψ(w)" : "g(w)", fmtC(p[0], p[1])],
-          ["|w|", "≈ " + fmt(rr) + (bott ? (rr >= 1 ? "  (ext 𝔻)" : "  (in 𝔻 — n/a)") : rr <= 1 ? "  (in 𝔻)" : "  (outside 𝔻)")],
+          [imp ? "ψ(w)" : "g(w)", fmtC(p[0], p[1])],
+          ["|w|", "≈ " + fmt(rr) + (imp ? (rr >= 1 ? "  (ext 𝔻)" : "  (in 𝔻 — n/a)") : rr <= 1 ? "  (in 𝔻)" : "  (outside 𝔻)")],
         ]);
       }
       schedule();
@@ -996,16 +892,6 @@ function main(): void {
       ["|φ′|", exact + fmt(Math.hypot(d[0], d[1]))],
       ["arg φ′", exact + fmt(Math.atan2(d[1], d[0])) + " rad"],
     ];
-    // In the Julia-exterior mode, add the escape-rate potential G(z) and (for z²+c) the external angle
-    // of the ray through the cursor (E3) — both numerical limits, so honestly labelled ≈.
-    if (modeIsDynamics(state.render.mode) && current.degree !== null) {
-      const pot = greenPotential(current.jsFn, current.degree, z);
-      rows.push(["G(z)", pot.escaped ? "≈ " + fmt(pot.G) : "≈ 0  (in K)"]);
-      if (dynC) {
-        const theta = externalAngleQuadratic(dynC, z);
-        if (theta !== null) rows.push(["ext. angle θ", "≈ " + fmt(theta) + " turns"]);
-      }
-    }
     controls.setHover(rows);
     schedule(); // overlays only (no dirty flags) → redraw the linked markers
   });
@@ -1038,7 +924,7 @@ function main(): void {
       cParam = [cx, cy];
       state = { ...state, map: { ...state.map, c: [cx, cy] } };
       diskDirty = true;
-      invalidate(false, false);
+      invalidate();
     };
     const up = (): void => {
       window.removeEventListener("pointermove", move);
@@ -1049,7 +935,7 @@ function main(): void {
   });
 
   attachPanZoom(canvas, () => state.viewport, setViewport);
-  window.addEventListener("resize", () => invalidate(true, true));
+  window.addEventListener("resize", () => invalidate());
 
   applyMap();
   schedule();

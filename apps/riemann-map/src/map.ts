@@ -7,17 +7,9 @@
 // fall back to a finite difference. Pure and DOM-free, so it unit-tests directly.
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
-import { compileF } from "@cas/expr/glsl";
 import { differentiate } from "@cas/expr/derivative";
-import { fToRational } from "@cas/expr/rational";
 import { toLatex } from "@cas/expr/latex";
 import type { MapState } from "./viewState.js";
-
-/** Highest index with a non-zero coefficient in an ascending complex-coeff polynomial, or −1. */
-function polyDegree(p: ReadonlyArray<readonly [number, number]>): number {
-  for (let i = p.length - 1; i >= 0; i--) if (p[i][0] !== 0 || p[i][1] !== 0) return i;
-  return -1;
-}
 
 /** The JS evaluator's signature: (z, c) → w, on `[re, im]` tuples (the @cas/expr complex rep). */
 export type ComplexFn = ReturnType<typeof makeComplexFn>;
@@ -27,15 +19,8 @@ export interface CompiledMap {
   readonly jsFn: ComplexFn;
   /** Symbolic ∂φ/∂z as a JS evaluator, or null for anti-holomorphic / non-differentiable maps. */
   readonly jsDeriv: ComplexFn | null;
-  /** A GLSL function definition `cvec fFn(cvec z, cvec c){…}`, written in the abstract complex ops. */
-  readonly glslBody: string;
-  /** The GLSL `cvec dFn(cvec z, cvec c){…}` for φ′, or null (shader then finite-differences). */
-  readonly glslDerivBody: string | null;
   /** KaTeX-ready LaTeX for the map (falls back to the raw source if typesetting fails). */
   readonly latex: string;
-  /** Local degree at ∞ (deg num − deg den) when the map is rational of degree ≥ 2, else null. Drives
-   *  the Böttcher-potential normalization g = log|zₙ| / dⁿ for the Julia-exterior render. */
-  readonly degree: number | null;
 }
 
 /** Result of compiling a user map: either the compiled map, or a human-readable parse/compile error. */
@@ -54,33 +39,16 @@ export function compileMap(state: MapState): MapResult {
   }
   try {
     const jsFn = makeComplexFn(ast);
-    const glslBody = compileF(ast);
 
     // φ′: only when φ is genuinely holomorphic. `conjugate` has no holomorphic ∂/∂z, so skip it (the
     // symbolic pass could otherwise return a misleading result); callers finite-difference instead.
     let jsDeriv: ComplexFn | null = null;
-    let glslDerivBody: string | null = null;
     if (!/conjugate/.test(state.expr)) {
       try {
-        const dAst = differentiate(ast, "z");
-        jsDeriv = makeComplexFn(dAst);
-        glslDerivBody = compileF(dAst, "dFn");
+        jsDeriv = makeComplexFn(differentiate(ast, "z"));
       } catch {
         jsDeriv = null;
-        glslDerivBody = null;
       }
-    }
-
-    // Local degree at ∞ for the Böttcher potential: only for rational maps of degree ≥ 2.
-    let degree: number | null = null;
-    try {
-      const rat = fToRational(ast, [0, 0], [0, 0]);
-      if (rat) {
-        const D = polyDegree(rat.num) - polyDegree(rat.den);
-        if (Number.isInteger(D) && D >= 2) degree = D;
-      }
-    } catch {
-      degree = null;
     }
 
     let latex: string;
@@ -89,7 +57,7 @@ export function compileMap(state: MapState): MapResult {
     } catch {
       latex = state.expr;
     }
-    return { ok: true, map: { jsFn, jsDeriv, glslBody, glslDerivBody, latex, degree } };
+    return { ok: true, map: { jsFn, jsDeriv, latex } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

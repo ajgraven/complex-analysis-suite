@@ -13,6 +13,7 @@ import { defineWorkspace } from "vitest/config";
 export default defineWorkspace([
   "./packages/core/vitest.config.ts",
   "./packages/exact/vitest.config.ts",
+  "./packages/export/vitest.config.ts",
   "./packages/interchange/vitest.config.ts",
   "./packages/expr/vitest.config.ts",
   "./packages/gpu/vitest.config.ts",

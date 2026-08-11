@@ -47,14 +47,10 @@ export interface ViewportState {
   readonly zoom: number;
 }
 
-/** How the field is coloured. The `mode` union grows per phase (phase portraits, |φ′|, Böttcher, …). */
+/** How the view is drawn. The two modes are "disk-image" (the default) and "domain-map" (numeric). */
 export interface RenderState {
-  /** Active render mode id. P0 seeds the map-agnostic "phase" portrait. */
+  /** Active render mode id: "disk-image" (default) | "domain-map". An unknown id falls back to disk-image. */
   readonly mode: string;
-  /** Named colormap ramp (perceptually-uniform families land in P1). */
-  readonly palette: string;
-  /** Coordinate-grid overlay: "none" | "cartesian" | "polar". Optional for older permalinks. */
-  readonly grid?: string;
   /** Selected domain preset for the numerical Riemann-map mode. Optional for older permalinks. */
   readonly domain?: string;
   /** Disk-image mode: which side of ∂𝔻 to map — "interior" (default) | "exterior". */
@@ -73,6 +69,15 @@ export interface RenderState {
   readonly region?: string;
   /** Disk-image layout: "split" (disk + image, default) | "image" (image only, presentation). */
   readonly diskLayout?: string;
+  /** Disk-image "import" source (B2): the received exterior map's coefficients, carried IN the view-state
+   *  so a permalink of an imported figure is self-contained — it reopens the map without the original
+   *  `#s=` hand-off link. `lead` = γ₁, `coeffs` = the bₖ tail (ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ). */
+  readonly imported?: {
+    readonly lead: readonly [number, number];
+    readonly coeffs: readonly (readonly [number, number])[];
+    readonly app?: string;
+    readonly note?: string;
+  };
 }
 
 /**
@@ -96,8 +101,6 @@ export const DEFAULT_VIEW_STATE: RiemannViewState = {
   viewport: { centerRe: 0, centerIm: 0, zoom: 0.75 },
   render: {
     mode: "disk-image",
-    palette: "viridis",
-    grid: "none",
     disk: "interior",
     diskDensity: 18,
     diskSectors: 36,
@@ -119,7 +122,7 @@ export function isRiemannViewState(value: unknown): value is RiemannViewState {
   if (typeof map.antiholomorphic !== "boolean") return false;
   if (!vp || !Number.isFinite(vp.centerRe) || !Number.isFinite(vp.centerIm)) return false;
   if (!Number.isFinite(vp.zoom) || (vp.zoom as number) <= 0) return false;
-  if (!rn || typeof rn.mode !== "string" || typeof rn.palette !== "string") return false;
+  if (!rn || typeof rn.mode !== "string") return false;
   if (!cv || cv.area !== "standard" || cv.contour !== "standard") return false;
   return true;
 }

@@ -1,0 +1,16 @@
+{
+  // Emit config: compile src/ -> dist/ as ESM JavaScript + declarations. Consumers import the built
+  // `dist/` (package.json `exports`) — the CD / CFP / Riemann-map Vite builds and the root Vitest run.
+  // Internal src/ imports carry a `.js` extension so the emitted ESM resolves under Node. Tests excluded.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"],
+  "exclude": ["test", "dist", "node_modules"]
+}

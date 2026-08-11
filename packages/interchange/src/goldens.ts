@@ -123,3 +123,28 @@ export const QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK =
  */
 export const QD_TO_CD_BOUNDED_LOBE_SIGMA_W0 = { re: 5 / 17, im: 0 } as const;
 export const QD_TO_CD_BOUNDED_LOBE_SIGMA_AT_W0 = { re: 2.5, im: 0 } as const;
+
+// --- CD → Riemann-Map exterior-Böttcher-map golden (B) ---------------------------------------------
+//
+// The reverse direction of the corpus so far: Complex Dynamics EXPORTS a filled Julia set's exterior
+// Riemann (Böttcher) map ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ as a bare `kind:"map"` `LaurentMap` (γ₁ → c, {bₖ} → F),
+// and the Riemann-Map studio IMPORTS it as a disk-image source. A Laurent map is exterior by
+// construction (Laurent at ∞), so the consumer renders it as an ext(𝔻) → ext(K) pushforward.
+//
+// The fixture is the deltoid exterior map ψ(w) = w + ½·w⁻² (lead γ₁ = 1, coeffs = [0, 0, ½]) — the same
+// coefficients as the deltoid φ golden above, so the two directions are easy to eyeball against each
+// other, and ψ(2) = 2.125 matches QD_TO_CD_DELTOID_PHI_AT_2.
+//
+// PRODUCER STATUS: CD's `bottcherMapLink` reproduces this BYTE-FOR-BYTE, pinned from the CD side
+// (apps/complex-dynamics/test/exportMap.test.ts), and decoded + evaluated from the Riemann-Map side
+// (apps/riemann-map/test/importMap.test.ts). Regenerate only when the wire format INTENDS to change,
+// via `bottcherMapLink({lead:[1,0], coeffs:[[0,0],[0,0],[0.5,0]]}, { createdAt: GOLDEN_CREATED_AT })`.
+
+/** The deltoid exterior map ψ(w) = w + ½·w⁻² as CD's "Send to Riemann Map" hand-off emits it: an
+ *  `Envelope<"map">` whose payload is a `LaurentMap` (c = 1, F = [0,0,½]), app `complex-dynamics`. */
+export const CD_TO_RM_BOTTCHER_LINK =
+  "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuMy4wIiwia2luZCI6Im1hcCIsInBheWxvYWQiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOlt7InJlIjowLCJpbSI6MH0seyJyZSI6MCwiaW0iOjB9LHsicmUiOjAuNSwiaW0iOjB9XX0sInByb3ZlbmFuY2UiOnsiYXBwIjoiY29tcGxleC1keW5hbWljcyIsImFwcFZlcnNpb24iOiIxLjAuMCIsImNyZWF0ZWRBdCI6IjIwMjYtMDctMDZUMDA6MDA6MDBaIiwibm90ZSI6IkV4dGVyaW9yIFJpZW1hbm4gbWFwIM-IKHcpPc6z4oKBwrd3K86jYuKClnfigbvhtY8gb2YgYSBmaWxsZWQgSnVsaWEgc2V0OiBjYXBhY2l0eSDOs-KCgSBleGFjdCwgdGFpbCB0cnVuY2F0ZWQgdG8gMyBlc3RpbWF0ZWQgYuKCliAo4omIKS4ifX0";
+
+/** ψ(2) for the CD→RM golden: 2 + 0.5/4 = 2.125. The value the Riemann-Map consumer's ψ evaluator must
+ *  produce from the decoded LaurentMap (γ₁·w + Σ bₖ·w⁻ᵏ at w = 2). */
+export const CD_TO_RM_BOTTCHER_PSI_AT_2 = 2.125;

@@ -40,4 +40,25 @@ describe("riemann-map view-state (S2)", () => {
     expect(isRiemannViewState({ map: { expr: "z" } })).toBe(false);
     expect(isRiemannViewState(null)).toBe(false);
   });
+
+  it("carries an imported map's coefficients through the permalink (a self-contained figure)", () => {
+    // An imported figure must survive reload / sharing: the coefficients ride IN render.imported, not only
+    // in the transient "#s=" hand-off link (regression guard for the first-frame replaceState dropping them).
+    const state = {
+      ...DEFAULT_VIEW_STATE,
+      render: {
+        ...DEFAULT_VIEW_STATE.render,
+        diskSource: "import",
+        imported: {
+          lead: [1, 0] as [number, number],
+          coeffs: [[0, 0], [0, 0], [0.5, 0]] as [number, number][],
+          app: "complex-dynamics",
+        },
+      },
+    };
+    const restored = decodeRiemannState(encodeRiemannState(state));
+    expect(restored?.render.imported?.lead).toEqual([1, 0]);
+    expect(restored?.render.imported?.coeffs).toEqual([[0, 0], [0, 0], [0.5, 0]]);
+    expect(restored?.render.imported?.app).toBe("complex-dynamics");
+  });
 });

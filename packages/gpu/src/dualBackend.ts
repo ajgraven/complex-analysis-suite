@@ -25,6 +25,7 @@ import { makeComplexFn, makeEscapeFn } from "@cas/expr/evaluate";
 import type { Complex } from "@cas/expr/complex";
 import { COMPLEX_SINGLE_GLSL } from "./glsl/complexSingle.glsl.js";
 import { COMPLEX_DERIVED_GLSL } from "./glsl/complexDerived.glsl.js";
+import { FULLSCREEN_VERTEX_GLSL } from "./glsl/fullscreenVertex.glsl.js";
 import { createProgram } from "./shader.js";
 
 export interface Sample {
@@ -39,9 +40,7 @@ export interface DualCase {
 }
 
 /** Trivial fullscreen-triangle vertex shader; the fragment shader does all the work at one pixel. */
-export const PROBE_VERTEX = `#version 300 es
-in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+export const PROBE_VERTEX = FULLSCREEN_VERTEX_GLSL;
 
 /**
  * Assemble a self-contained WebGL2 (GLSL ES 3.00) fragment shader that evaluates f(z, c) — compiled

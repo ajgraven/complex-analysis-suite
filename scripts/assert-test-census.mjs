@@ -36,6 +36,7 @@ const files = Array.isArray(report.testResults) ? report.testResults : [];
 const PROJECTS = [
   { name: 'core', match: '/packages/core/', floor: 1 },
   { name: 'exact', match: '/packages/exact/', floor: 1 },
+  { name: 'export', match: '/packages/export/', floor: 1 },
   { name: 'interchange', match: '/packages/interchange/', floor: 1 },
   { name: 'expr', match: '/packages/expr/', floor: 1 },
   { name: 'gpu', match: '/packages/gpu/', floor: 1 },

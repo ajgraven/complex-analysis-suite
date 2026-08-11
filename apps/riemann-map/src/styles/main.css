@@ -173,7 +173,9 @@ dl.glossary-dl dd { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.82rem;
 .stage.solo .pane.left { display: none; }
 .stage.solo .pane.right { border-left: none; }
 canvas.plane, canvas.overlay, canvas.image { position: absolute; inset: 0; width: 100%; height: 100%; }
-canvas.plane { touch-action: none; cursor: grab; }
+/* The source pane's dark field (matches DOMAIN_BG in main.ts). `canvas.plane` no longer renders — it is
+   the pan/zoom + pointer surface — so its background is what the 2D overlay draws its grid onto. */
+canvas.plane { touch-action: none; cursor: grab; background: rgb(15, 18, 23); }
 canvas.plane:active { cursor: grabbing; }
 canvas.overlay { pointer-events: none; }
 

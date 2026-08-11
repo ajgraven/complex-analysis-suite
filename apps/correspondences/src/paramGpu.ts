@@ -11,17 +11,16 @@
 // identical, as this line used to claim: ~0.22% of pixels differ (fp32 GPU vs float64 CPU shifts the
 // escape count by one near class boundaries), and no test asserts agreement on the escape counts
 // themselves. Treat the GPU render as the CPU classifier's fast twin, not as a verified mirror.
-import { COMPLEX_SINGLE_GLSL } from "@cas/gpu/glsl";
+import { COMPLEX_SINGLE_GLSL, FULLSCREEN_VERTEX_GLSL, PLANE_FROM_FRAG_GLSL } from "@cas/gpu/glsl";
 import { createProgram } from "@cas/gpu/shader";
 import type { ParamView } from "./paramPlane.js";
 
-const VERT = `#version 300 es
-in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+const VERT = FULLSCREEN_VERTEX_GLSL;
 
 const FRAG = `#version 300 es
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
+${PLANE_FROM_FRAG_GLSL}
 
 uniform vec2  uCenter;      // a-plane centre
 uniform float uHalfSpan;    // a-plane world half-height; x scaled by aspect
@@ -92,11 +91,7 @@ vec3 shade(int best, int maxIter) {
 }
 
 void main() {
-  float aspect = uResolution.x / uResolution.y;
-  cvec a = vec_(
-    uCenter.x + (gl_FragCoord.x / uResolution.x - 0.5) * 2.0 * uHalfSpan * aspect,
-    uCenter.y + (gl_FragCoord.y / uResolution.y - 0.5) * 2.0 * uHalfSpan
-  );
+  cvec a = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
 
   const cvec OMEGA = vec_(-0.5, 0.86602540378);  // e^{2πi/3}
   cvec root = ccbrt(a);                          // ζ_0 = a^{1/3}

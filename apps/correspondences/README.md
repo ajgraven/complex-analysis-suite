@@ -3,10 +3,11 @@
 The suite's third tool: a visualizer for **anti-holomorphic correspondences and
 Schwarz-reflection matings**, motivated by the Lee–Lyubich–Makarov–Mukherjee (LLMM) and
 Lyubich–Mazor–Mukherjee program. It is the app the whole monorepo was factored to enable —
-it rides all **five** shared packages — `@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu` and
-`@cas/interchange` — rather than reimplementing complex arithmetic, root-finding, exact polynomial
-arithmetic, GLSL, or the map compiler. (`@cas/exact` backs the exact correspondence-curve engine;
-`@cas/interchange` is exercised through the σ hand-off in the smoke test.)
+it rides six shared packages — `@cas/core`, `@cas/exact`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`,
+and `@cas/schwarz` — rather than reimplementing complex arithmetic, root-finding, exact polynomial
+arithmetic, GLSL, the map compiler, or the Schwarz-reflection σ engine. (`@cas/exact` backs the exact
+correspondence-curve engine; `@cas/schwarz` the σ reconstruction; `@cas/interchange` is exercised through
+the σ hand-off in the smoke test.)
 
 Built in [Phase 6](../../docs/MIGRATION.md#phase-6--build-appscorrespondences-in-parallel-with-the-tail-of-phase-5),
 **deltoid-first**: the deltoid Schwarz reflection is the ground-truth milestone that

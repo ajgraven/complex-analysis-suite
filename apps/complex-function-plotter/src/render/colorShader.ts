@@ -6,11 +6,14 @@
  * pure string builder makes the assembly unit-testable, and the same `colorAt` is reused by the 3D
  * surface pass later. Precision-agnostic where it can be, so a df64 path (backlog) drops in.
  */
-import { COMPLEX_SINGLE_GLSL, COMPLEX_DERIVED_GLSL } from "@cas/gpu/glsl";
+import {
+  COMPLEX_SINGLE_GLSL,
+  COMPLEX_DERIVED_GLSL,
+  FULLSCREEN_VERTEX_GLSL,
+  PLANE_FROM_FRAG_GLSL,
+} from "@cas/gpu/glsl";
 
-export const VERTEX_SHADER = `#version 300 es
-in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+export const VERTEX_SHADER = FULLSCREEN_VERTEX_GLSL;
 
 /**
  * The colouring core: the phase-LUT + modulus + enhancement + level-set + uncertainty + CVD uniforms
@@ -164,6 +167,7 @@ export function buildFragmentShader(
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
+${PLANE_FROM_FRAG_GLSL}
 
 uniform vec2  uCenter;
 uniform float uHalfSpan;   // world half-height; x is scaled by the pixel aspect ratio
@@ -174,11 +178,7 @@ ${fGlsl}
 out vec4 fragColor;
 
 void main() {
-  float aspect = uResolution.x / uResolution.y;
-  cvec z = vec_(
-    uCenter.x + (gl_FragCoord.x / uResolution.x - 0.5) * 2.0 * uHalfSpan * aspect,
-    uCenter.y + (gl_FragCoord.y / uResolution.y - 0.5) * 2.0 * uHalfSpan
-  );
+  cvec z = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
   fragColor = vec4(colorAt(fFn(z, vec_(0.0, 0.0))), 1.0);
 }`;
 }

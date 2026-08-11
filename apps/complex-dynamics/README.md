@@ -248,7 +248,8 @@ clipboard) buttons in the **Export image** section, with two adjacent controls:
 Every downloaded PNG also embeds invisible **reproducibility metadata** (`tEXt` chunks — no image
 pixels change): the software name, a human-readable parameter summary (`f`, `c`, centre, zoom,
 iterations, mode), and the full **shareable-state URL** — paste it back to reproduce the exact view,
-double-double centre and all ([`pngMetadata.ts`](src/render/pngMetadata.ts)).
+double-double centre and all (via the shared [`@cas/export`](../../packages/export) `injectPngText`,
+called from [`hiResExport.ts`](src/hiResExport.ts)).
 
 The renderer draws into an off-screen RGBA8 framebuffer in horizontal strips
 ([`GLPlot.renderToImageData`](src/render/glPlot.ts)) — full detail at the requested
