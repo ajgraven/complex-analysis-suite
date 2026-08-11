@@ -5,15 +5,18 @@
 // distortion modes work), keeping the previous program if the new one fails to build. Render mode +
 // colormap are plain uniforms, so switching them needs no recompile. DOM/WebGL only.
 import { createProgram } from "@cas/gpu/shader";
+import { makeColormapTexture, type RGB } from "@cas/gpu/colormap";
 import { RIEMANN_VERTEX, assembleFragmentShader } from "./shader.js";
 import type { ViewportState } from "../viewState.js";
 
 export interface Renderer {
   /** Compile a new map (φ body + φ′ body, or null). Returns false and keeps the old program on failure. */
   setMap(glslBody: string, glslDerivBody: string | null): boolean;
-  /** Draw the current program for `view`, in render mode `mode`, colormap `colormap`, degree `degree`
-   *  (the local degree at ∞ for the Julia-exterior potential; ignored by the other modes). */
-  render(view: ViewportState, mode: number, colormap: number, degree: number): void;
+  /** (Re)build the colour-ramp LUT texture the shader samples (A6). */
+  setColormap(colors: readonly RGB[]): void;
+  /** Draw the current program for `view`, in render mode `mode`, degree `degree` (the local degree at ∞
+   *  for the Julia-exterior potential; ignored by the other modes). Colour uses the current colormap. */
+  render(view: ViewportState, mode: number, degree: number): void;
   /** Flat-fill the pane (used by the domain view, which draws its map as an overlay, not a GLSL field). */
   clear(r: number, g: number, b: number): void;
   /** Release the program and the WebGL2 context. */
@@ -34,6 +37,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 
   let program: WebGLProgram | null = null;
+  let colormapTex: WebGLTexture | null = null;
   let uCenter: WebGLUniformLocation | null = null;
   let uHalfSpan: WebGLUniformLocation | null = null;
   let uResolution: WebGLUniformLocation | null = null;
@@ -66,7 +70,12 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     return true;
   }
 
-  function render(view: ViewportState, mode: number, colormap: number, degree: number): void {
+  function setColormap(colors: readonly RGB[]): void {
+    if (colormapTex) gl.deleteTexture(colormapTex);
+    colormapTex = makeColormapTexture(gl, colors);
+  }
+
+  function render(view: ViewportState, mode: number, degree: number): void {
     if (!program) return;
     gl.useProgram(program);
     gl.bindVertexArray(vao);
@@ -75,7 +84,9 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     gl.uniform1f(uHalfSpan, 1 / view.zoom); // world half-height = base(1) / zoom
     gl.uniform2f(uResolution, canvas.width, canvas.height);
     gl.uniform1i(uMode, mode);
-    gl.uniform1i(uColormap, colormap);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, colormapTex);
+    gl.uniform1i(uColormap, 0); // colour-ramp LUT on texture unit 0
     gl.uniform1f(uDegree, degree);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
@@ -88,10 +99,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
 
   function dispose(): void {
     if (program) gl.deleteProgram(program);
+    if (colormapTex) gl.deleteTexture(colormapTex);
     gl.deleteBuffer(buf);
     gl.deleteVertexArray(vao);
     gl.getExtension("WEBGL_lose_context")?.loseContext();
   }
 
-  return { setMap, render, clear, dispose };
+  return { setMap, setColormap, render, clear, dispose };
 }

@@ -4,7 +4,8 @@
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
-import { RENDER_MODES, COLORMAPS } from "../render/modes.js";
+import { RENDER_MODES } from "../render/modes.js";
+import { COLORMAPS } from "../render/colormaps.js";
 import { DOMAIN_PRESETS } from "../domains.js";
 
 export interface Controls {

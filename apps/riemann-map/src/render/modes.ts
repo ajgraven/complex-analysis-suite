@@ -38,19 +38,7 @@ export function modeIsDomain(id: string): boolean {
   return modeCode(id) === 20;
 }
 
-export interface Colormap {
-  readonly id: string;
-  readonly name: string;
-  readonly code: number;
-}
-
-export const COLORMAPS: readonly Colormap[] = [
-  { id: "viridis", name: "Viridis", code: 0 },
-  { id: "grayscale", name: "Grayscale", code: 1 },
-] as const;
-
 const modeById = new Map(RENDER_MODES.map((m) => [m.id, m]));
-const cmapById = new Map(COLORMAPS.map((c) => [c.id, c]));
 
 /** `uMode` code for a mode id (falls back to the phase portrait for an unknown id). */
 export function modeCode(id: string): number {
@@ -63,8 +51,4 @@ export function modeUsesDeriv(id: string): boolean {
 /** Whether the mode id colours from the colormap ramp (so the Colormap picker is relevant). */
 export function modeUsesColormap(id: string): boolean {
   return modeById.get(id)?.usesColormap ?? false;
-}
-/** `uColormap` code for a colormap id (falls back to viridis). */
-export function colormapCode(id: string): number {
-  return cmapById.get(id)?.code ?? 0;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RENDER_MODES, COLORMAPS, modeCode, colormapCode, modeUsesDeriv, modeUsesColormap, modeIsDynamics, modeIsDomain } from "../src/render/modes.js";
+import { RENDER_MODES, modeCode, modeUsesDeriv, modeUsesColormap, modeIsDynamics, modeIsDomain } from "../src/render/modes.js";
 
 describe("render modes registry (C1–C6, P2 julia)", () => {
   it("mode codes are unique and resolve by id (with a phase-portrait fallback)", () => {
@@ -40,12 +40,5 @@ describe("render modes registry (C1–C6, P2 julia)", () => {
     expect(modeUsesColormap("phase")).toBe(false);
     expect(modeUsesColormap("checker")).toBe(false);
     expect(modeUsesColormap("domain-map")).toBe(false);
-  });
-
-  it("colormap codes resolve by id with a viridis fallback", () => {
-    expect(COLORMAPS.length).toBeGreaterThanOrEqual(2);
-    expect(colormapCode("viridis")).toBe(0);
-    expect(colormapCode("grayscale")).toBe(1);
-    expect(colormapCode("nope")).toBe(0);
   });
 });

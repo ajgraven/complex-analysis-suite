@@ -20,7 +20,7 @@ uniform vec2  uCenter;
 uniform float uHalfSpan;
 uniform vec2  uResolution;
 uniform int   uMode;
-uniform int   uColormap;
+uniform sampler2D uColormap; // 256×1 colour ramp LUT (A6); sampled by ramp()
 uniform float uDegree;      // local degree at ∞ (Julia-exterior Böttcher potential)
 out vec4 fragColor;
 
@@ -31,20 +31,9 @@ vec3 hsv2rgb(vec3 c) {
   return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
 }
 
-// Polynomial approximation of matplotlib 'viridis' (perceptually uniform).
-vec3 viridis(float t) {
-  const vec3 c0 = vec3(0.2777, 0.0054, 0.3341);
-  const vec3 c1 = vec3(0.1051, 1.4046, 1.3846);
-  const vec3 c2 = vec3(-0.3309, 0.2148, 0.0951);
-  const vec3 c3 = vec3(-4.6342, -5.7991, -19.3324);
-  const vec3 c4 = vec3(6.2283, 14.1799, 56.6906);
-  const vec3 c5 = vec3(4.7764, -13.7451, -65.3530);
-  const vec3 c6 = vec3(-5.4355, 4.6459, 26.3124);
-  return clamp(c0 + t * (c1 + t * (c2 + t * (c3 + t * (c4 + t * (c5 + t * c6))))), 0.0, 1.0);
-}
+// Sample the active colour ramp from its 256×1 LUT texture (A6). The CPU uploads the selected map.
 vec3 ramp(float t) {
-  t = clamp(t, 0.0, 1.0);
-  return (uColormap == 1) ? vec3(t) : viridis(t);
+  return texture(uColormap, vec2(clamp(t, 0.0, 1.0), 0.5)).rgb;
 }
 
 void main() {

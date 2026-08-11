@@ -15,7 +15,8 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, colormapCode, modeIsDynamics, modeIsDomain, modeUsesColormap } from "./render/modes.js";
+import { modeCode, modeIsDynamics, modeIsDomain, modeUsesColormap } from "./render/modes.js";
+import { colormapColors } from "./render/colormaps.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
@@ -387,7 +388,7 @@ function main(): void {
     const H = Math.max(1, Math.round(baseH * scale));
     canvas.width = W;
     canvas.height = H;
-    renderer.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
+    renderer.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
 
     const ex = document.createElement("canvas");
     ex.width = W;
@@ -437,7 +438,7 @@ function main(): void {
       }
       if (glDirty || resized) {
         if (domain) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
-        else renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
+        else renderer?.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
         glDirty = false;
       }
       drawOverlays();
@@ -461,6 +462,7 @@ function main(): void {
   }
 
   // ---- controls ------------------------------------------------------------
+  renderer?.setColormap(colormapColors(state.render.palette)); // upload the initial ramp LUT (A6)
   controls.setMode(state.render.mode);
   controls.setColormap(state.render.palette);
   controls.setGrid(gridKind());
@@ -487,6 +489,7 @@ function main(): void {
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };
+    renderer?.setColormap(colormapColors(id)); // re-upload the ramp LUT (A6)
     renderLegend(legendEl, legendModel(state.render.mode, id)); // the ramp bar follows the colormap (A4)
     invalidate(true, false);
   });
