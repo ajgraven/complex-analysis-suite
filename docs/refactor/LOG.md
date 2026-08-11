@@ -2569,3 +2569,24 @@
   3×p4`); clear removes them. Captured the deltoid's three period-4 orbit loops (golden-angle hues) threading the
   tiling with the three fixed points marked. **F4d complete — σ's periodic orbits are found + drawn, honestly
   advisory.** The last à-la-carte F4 card (F4f forward image of a drawn curve) is the next pick.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4f — forward image of a drawn
+  curve):** a "Forward curve" card — **shift-drag a path in Ω** on the plot and its forward σ-images σ(path),
+  σ²(path), … are traced. The pure kernel is `iterateCurveForward` (the second export of `@cas/schwarz/forward.ts`
+  from F4d) — a verbatim tuple-form port of QD's schwarz-forward.mjs: apply σ to every vertex, k times, dropping a
+  vertex once it leaves Ω / σ fails (padding the tail so the output is always k+1 steps). The **shift-drag
+  interaction** rides the existing σ-canvas pointer handlers (B3's seed-drag lives alongside): a shift-pointerdown
+  starts a polyline, pointermove appends w-points (via the shared `schwarzSeedFromPointer`, so it draws in the
+  w-plane, the z-disk, or on the sphere) throttled by screen distance with a live seed-curve preview, and
+  pointerup finalises it through iterateCurveForward. A CD overlay (`schwarzForwardCurveOverlay.ts`) strokes the
+  drawn seed white + each σ-image hue-ramped (warm → cool), reusing the σ-overlay projection so the family lives
+  in all three views + bakes into the PNG export; an iterations control re-traces the last path at a new depth,
+  and it is NOT serialized (a transient analysis, like the tree / limit set / family / level curves / cycles; its
+  control is an appState opt-out). **Honest labeling:** the card title, hint, and readout carry `≈` — σ is a
+  numerical reconstruction. Green: typecheck + lint + node **2524 → 2527** (+3 schwarzForwardCurveOverlay — a
+  moveTo per curve + a lineTo per subsequent vertex, an unmappable vertex breaks the polyline, the hue ramp; the
+  iterateCurveForward kernel goldens shipped with F4d). VERIFIED (Playwright, **6/6**): a simulated shift-drag
+  across the exterior Ω traces an 11-pt path + its 5 forward images (`≈ 11-pt curve · 5 forward images`); they
+  draw + survive the z-disk + sphere switches; changing the iteration count re-traces to 8 images; clear removes
+  them. Captured the deltoid with a drawn arc (white) folding through the tiling under repeated σ, the images
+  cascading warm → cool. **F4f complete — the forward action of σ on a drawn curve is visible, honestly labeled.
+  This closes the à-la-carte F4 analysis cards (F4a–F4i all shipped).**

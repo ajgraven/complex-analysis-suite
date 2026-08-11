@@ -979,6 +979,35 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Forward curve (F4f): shift-drag a polyline in Ω → iterate it forward under σ. A transient
+                     analysis (not serialized); the drawn curve is white + its σ-images hue-ramped. -->
+                <details class="control-group" id="schwarz-forward-group">
+                  <summary>Forward curve — σ of a drawn path (≈)</summary>
+                  <div class="control-grid">
+                    <p class="schwarz-inspect-hint">
+                      <strong>Shift-drag</strong> on the plot to draw a path in Ω; its forward σ-images
+                      σ(path), σ²(path), … are traced (hue-ramped). σ is numerical, so the images are ≈.
+                    </p>
+                    <div class="field">
+                      <label for="schwarz-forward-k">iterations</label>
+                      <input
+                        id="schwarz-forward-k"
+                        type="number"
+                        min="1"
+                        max="30"
+                        step="1"
+                        inputmode="numeric"
+                        value="5"
+                        title="How many forward σ-images of the drawn path to trace."
+                      />
+                    </div>
+                    <div class="field schwarz-family-actions">
+                      <button id="schwarz-forward-clear" type="button">clear</button>
+                    </div>
+                    <div id="schwarz-forward-readout" class="schwarz-inspect" aria-live="polite" hidden></div>
+                  </div>
+                </details>
+
                 <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
                      in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
                 <details class="control-group" id="schwarz-render-group">

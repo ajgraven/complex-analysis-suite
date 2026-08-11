@@ -137,6 +137,7 @@ import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
 import { drawSchwarzLevelCurves } from "./render/schwarzLevelCurveOverlay";
 import { drawSchwarzCycles } from "./render/schwarzCycleOverlay";
+import { drawSchwarzForwardCurves } from "./render/schwarzForwardCurveOverlay";
 import { explicitSigmaForm } from "./render/schwarzExplicitForm";
 import { drawSchwarzSingularities } from "./render/schwarzSingularityOverlay";
 import { sweepSeeds, canonicalSchwarzSeeds, familyHue } from "./render/schwarzOrbitFamily";
@@ -166,6 +167,7 @@ import {
   boxCountingDimension,
   computeSigmaLevelCurves,
   findCycles,
+  iterateCurveForward,
   pointInPolygon,
   findSigmaSingularities,
   type PreimageTree,
@@ -3122,6 +3124,13 @@ function init(): void {
   // level curves). Each cycle is drawn as its closed orbit loop + point markers, cleared on a new map.
   let schwarzCycles: SchwarzCycle[] | null = null;
   let schwarzCycleN = 2; // the period to search for (the control; default 2 — the first non-trivial dynamics)
+  // σ forward-curve image (F4f): a user shift-draws a polyline in Ω, and its forward σ-images σ(curve), σ²(curve),
+  // … are traced (hue-ramped). A transient analysis (not serialized). `schwarzCurveDraft` collects the polyline
+  // live during the shift-drag; on release the family is computed into `schwarzForwardCurves`.
+  let schwarzForwardCurves: Complex[][] | null = null;
+  let schwarzForwardK = 5; // number of forward iterations (the control)
+  let schwarzDrawingCurve = false; // true ⇒ a shift-drag is drawing the seed polyline
+  let schwarzCurveDraft: Complex[] = []; // the polyline being drawn (w-space)
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3292,6 +3301,8 @@ function init(): void {
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing);
       // Periodic cycles (F4d) — each cycle's closed orbit loop + point markers, one hue per cycle.
       if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing);
+      // Forward-curve image (F4f) — the drawn polyline (white) + its σ-images, hue-ramped by iteration.
+      if (schwarzForwardCurves) drawSchwarzForwardCurves(ctx, schwarzForwardCurves, schwarzView, backing);
       // Orbit family (F4e/F4c) — each member thin + hue-ramped, under the pinned orbit.
       if (schwarzOrbitFamily)
         for (let i = 0; i < schwarzOrbitFamily.length; i++)
@@ -3308,6 +3319,7 @@ function init(): void {
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPlot: toZ });
       if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing, { toPlot: toZ });
+      if (schwarzForwardCurves) drawSchwarzForwardCurves(ctx, schwarzForwardCurves, schwarzView, backing, { toPlot: toZ });
       if (schwarzOrbitFamily)
         for (let i = 0; i < schwarzOrbitFamily.length; i++)
           drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
@@ -3329,6 +3341,7 @@ function init(): void {
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPixel });
       if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing, { toPixel });
+      if (schwarzForwardCurves) drawSchwarzForwardCurves(ctx, schwarzForwardCurves, schwarzView, backing, { toPixel });
       if (schwarzOrbitFamily)
         for (let i = 0; i < schwarzOrbitFamily.length; i++)
           drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
@@ -3740,6 +3753,47 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  // σ forward-curve image (F4f): the user shift-draws a polyline in Ω; its forward σ-images σ(curve), σ²(curve),
+  // … are traced + drawn hue-ramped. The draft is collected live during the shift-drag (in the canvas pointer
+  // handlers); this finalises it. A transient analysis (not serialized). σ is numerical, so the images are `≈`.
+  /** Readout for the forward-curve family (empty when none). */
+  function renderSchwarzForwardReadout(): void {
+    const box = document.getElementById("schwarz-forward-readout");
+    if (!box) return;
+    if (!schwarzForwardCurves || schwarzForwardCurves.length === 0) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const seed = schwarzForwardCurves[0]?.length ?? 0;
+    const iters = schwarzForwardCurves.length - 1;
+    box.textContent = `≈ ${seed}-pt curve · ${iters} forward image${iters === 1 ? "" : "s"}`;
+  }
+  /** Finalise the drawn polyline (`schwarzCurveDraft`) into its forward-σ family (schwarzForwardK iterations).
+   *  Needs ≥ 2 points; a shorter draft clears. The σ-images ride iterateCurveForward over the field's surface. */
+  function computeSchwarzForward(): void {
+    if (!schwarzSession || schwarzCurveDraft.length < 2) {
+      schwarzForwardCurves = null;
+      renderSchwarzForwardReadout();
+      scheduleSchwarzOverlayPaint();
+      return;
+    }
+    const { engine } = schwarzSession;
+    const surface = { sigma: (w: Complex): Complex | null => engine.sigma(w), isInOmega: schwarzInOmega };
+    schwarzForwardCurves = iterateCurveForward(schwarzCurveDraft, surface, schwarzForwardK);
+    renderSchwarzForwardReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the forward-curve family + any in-progress draft (readout hides, overlay disappears next paint). */
+  function clearSchwarzForward(): void {
+    schwarzCurveDraft = [];
+    if (!schwarzForwardCurves) return;
+    schwarzForwardCurves = null;
+    renderSchwarzForwardReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
   // σ orbit family (F4e sweep · F4c canonical): trace a set of σ-orbits + draw them hue-ramped. Reuses the
   // orbit tracer (schwarzOrbitAt) + the orbit overlay (a colour override per member). A transient analysis.
   /** Count readout for the active family (empty when none). */
@@ -3915,6 +3969,8 @@ function init(): void {
     schwarzOrbitFamily = null; // …and any previous orbit family
     schwarzLevelCurves = null; // …and any previous level curves
     schwarzCycles = null; // …and any previous periodic cycles
+    schwarzForwardCurves = null; // …and any previous forward-curve image
+    schwarzCurveDraft = [];
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
     schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
@@ -3922,6 +3978,7 @@ function init(): void {
     renderSchwarzLimitReadout();
     renderSchwarzLevelReadout();
     renderSchwarzCycleReadout();
+    renderSchwarzForwardReadout();
     renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
     refreshSchwarzSingularities(); // F4h: find the branch points + σ-poles of the new map
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
@@ -4151,6 +4208,7 @@ function init(): void {
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size);
         if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size);
+        if (schwarzForwardCurves) drawSchwarzForwardCurves(octx, schwarzForwardCurves, schwarzView, size);
         if (schwarzOrbitFamily)
           for (let i = 0; i < schwarzOrbitFamily.length; i++)
             drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length) });
@@ -4164,6 +4222,7 @@ function init(): void {
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPlot: toZ });
         if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size, { toPlot: toZ });
+        if (schwarzForwardCurves) drawSchwarzForwardCurves(octx, schwarzForwardCurves, schwarzView, size, { toPlot: toZ });
         if (schwarzOrbitFamily)
           for (let i = 0; i < schwarzOrbitFamily.length; i++)
             drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
@@ -4180,6 +4239,7 @@ function init(): void {
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPixel });
         if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size, { toPixel });
+        if (schwarzForwardCurves) drawSchwarzForwardCurves(octx, schwarzForwardCurves, schwarzView, size, { toPixel });
         if (schwarzOrbitFamily)
           for (let i = 0; i < schwarzOrbitFamily.length; i++)
             drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
@@ -4258,6 +4318,7 @@ function init(): void {
     const CLICK_TOL_PX = 4; // total travel under this ⇒ a click (inspect the orbit), not a drag (pan)
     const SEED_GRAB_PX = 10; // press within this of the pinned orbit's seed w₀ ⇒ drag the seed, not pan (B3)
     let draggingSeed = false; // true ⇒ the current drag moves the inspect seed, not the view
+    let schwarzForwardDrawLastUv: [number, number] | null = null; // F4f: last appended draw point (screen throttle)
     // Is `uv` within grab range of the pinned inspect seed w₀ (measured in CSS px)? Starts a seed-drag and
     // drives the "move" cursor. (The inverse of uvToPlotFrac maps w₀ back to its fractional screen position.)
     const nearSchwarzSeed = (uv: [number, number]): boolean => {
@@ -4307,6 +4368,20 @@ function init(): void {
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
       const uv = clientToUv(e);
+      // F4f: shift-drag draws a polyline in Ω whose forward σ-images we trace. Intercept before pan / seed-drag.
+      if (e.shiftKey) {
+        schwarzDrawingCurve = true;
+        schwarzCurveDraft = [];
+        const w0 = schwarzSeedFromPointer(uv);
+        if (w0) schwarzCurveDraft.push(w0);
+        schwarzForwardDrawLastUv = uv;
+        schwarzForwardCurves = schwarzCurveDraft.length ? [schwarzCurveDraft.slice()] : null;
+        schwarzHover = null;
+        canvas.setPointerCapture(e.pointerId);
+        canvas.style.cursor = "crosshair";
+        scheduleSchwarzOverlayPaint();
+        return;
+      }
       draggingSeed = nearSchwarzSeed(uv); // press on the pinned seed ⇒ drag it, not the view (B3)
       lastUv = uv;
       downClient = [e.clientX, e.clientY];
@@ -4317,6 +4392,24 @@ function init(): void {
     });
     canvas.addEventListener("pointermove", (e) => {
       if (!schwarzSession) return;
+      if (schwarzDrawingCurve) {
+        // F4f: append points to the drawn polyline, throttled by screen distance; live-preview the seed curve.
+        const uvm = clientToUv(e);
+        const rect = canvas.getBoundingClientRect();
+        const moved =
+          !schwarzForwardDrawLastUv ||
+          Math.hypot((uvm[0] - schwarzForwardDrawLastUv[0]) * rect.width, (uvm[1] - schwarzForwardDrawLastUv[1]) * rect.height) >= 6;
+        if (moved) {
+          const w0 = schwarzSeedFromPointer(uvm);
+          if (w0) {
+            schwarzCurveDraft.push(w0);
+            schwarzForwardDrawLastUv = uvm;
+            schwarzForwardCurves = [schwarzCurveDraft.slice()];
+            scheduleSchwarzOverlayPaint();
+          }
+        }
+        return;
+      }
       if (!lastUv) {
         setSchwarzHover(e); // not dragging ⇒ preview the orbit under the cursor
         canvas.style.cursor = nearSchwarzSeed(clientToUv(e)) ? "move" : "grab"; // signal a draggable seed
@@ -4357,6 +4450,19 @@ function init(): void {
       }
     };
     canvas.addEventListener("pointerup", (e) => {
+      if (schwarzDrawingCurve) {
+        // F4f: finish the drawn curve → trace its forward σ-images (computeSchwarzForward finalises the draft).
+        schwarzDrawingCurve = false;
+        schwarzForwardDrawLastUv = null;
+        canvas.style.cursor = "grab";
+        try {
+          canvas.releasePointerCapture(e.pointerId);
+        } catch {
+          /* pointer was not captured — fine */
+        }
+        computeSchwarzForward();
+        return;
+      }
       const wasClick = lastUv !== null && !movedSinceDown && !draggingSeed;
       endDrag(e);
       // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor. schwarzSeedFromPointer
@@ -4367,7 +4473,16 @@ function init(): void {
         if (w0) setSchwarzInspect(w0);
       }
     });
-    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener("pointercancel", (e) => {
+      if (schwarzDrawingCurve) {
+        schwarzDrawingCurve = false;
+        schwarzForwardDrawLastUv = null;
+        canvas.style.cursor = "grab";
+        computeSchwarzForward();
+        return;
+      }
+      endDrag(e);
+    });
     // Double-click a point in the tiling set → grow its σ⁻¹ preimage tree (F3c). schwarzSeedFromPointer maps the
     // pointer to w for the active view (plane direct · z-disk φ(z) · sphere raycast; null off-domain), and
     // seedSchwarzTiling gates on tiling-set membership before building. The two synthesized single-clicks that
@@ -4849,6 +4964,23 @@ function init(): void {
     }
     findBtn?.addEventListener("click", computeSchwarzCycles);
     clearBtn?.addEventListener("click", clearSchwarzCycles);
+  }
+
+  // σ forward-curve image (F4f): the iteration count + clear. The curve itself is shift-drawn on the canvas;
+  // changing the count re-traces the last drawn polyline. A transient analysis (not serialized).
+  {
+    const kIn = document.getElementById("schwarz-forward-k") as HTMLInputElement | null;
+    const clearBtn = document.getElementById("schwarz-forward-clear");
+    if (kIn) {
+      kIn.value = String(schwarzForwardK);
+      kIn.addEventListener("change", () => {
+        const v = Math.round(Number(kIn.value));
+        if (Number.isFinite(v)) schwarzForwardK = Math.max(1, Math.min(30, v));
+        kIn.value = String(schwarzForwardK);
+        if (schwarzCurveDraft.length >= 2) computeSchwarzForward(); // re-trace the last curve at the new depth
+      });
+    }
+    clearBtn?.addEventListener("click", clearSchwarzForward);
   }
 
   // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate

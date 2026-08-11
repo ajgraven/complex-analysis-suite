@@ -147,6 +147,9 @@ describe("SHARE_IDS DOM coverage", () => {
         // σ cycle-finder control (F4d): the period to search for a transient advisory analysis (the cycles are
         // computed on demand, not serialized).
         [["schwarz-cycle-n"], "σ cycle-finder control (transient; not serialized)"],
+        // σ forward-curve control (F4f): the iteration count for a transient analysis (the drawn curve + its
+        // σ-images are computed on demand, not serialized).
+        [["schwarz-forward-k"], "σ forward-curve control (transient; not serialized)"],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.
