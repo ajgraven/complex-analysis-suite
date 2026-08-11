@@ -91,6 +91,25 @@ export function viewProjection(
   return multiply(projectionMatrix(cam, aspect, worldHalfHeight), viewMatrix(cam));
 }
 
+/**
+ * World distance per screen pixel in the (re, im) target plane, for the span-framed landscape camera
+ * (§B — see `Plot.surfaceCamera`). The perspective eye distance tracks the view span, so the on-screen
+ * scale is `2·span·framing / viewportHeightPx`; the top-down orthographic snap sizes its box from span
+ * directly (`framing` → 1). A click-drag pan multiplies its pixel delta by this, so it is **span-coupled**:
+ * the domain moves by the same on-screen amount at every zoom. (A fixed world-per-pixel — e.g. one built
+ * from the constant orbit-dolly distance — makes a deep zoom pan far too fast.) Returns 0 for a degenerate
+ * viewport or span (a no-op pan).
+ */
+export function landscapeWorldPerPixel(
+  span: number,
+  viewportHeightPx: number,
+  ortho: boolean,
+  framing: number,
+): number {
+  if (!(viewportHeightPx > 0) || !(span > 0)) return 0;
+  return (2 * span * (ortho ? 1 : framing)) / viewportHeightPx;
+}
+
 /** The orbit settings for the exact top-down orthographic view: straight down (`elevation = π/2`) with
  *  the orthographic projection on, so the landscape's top-down equals the 2D portrait. Merge onto a
  *  camera (`{ ...cam, ...TOP_DOWN }`) — applied directly, bypassing {@link clampElevation}. */
