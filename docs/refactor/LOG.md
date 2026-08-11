@@ -2544,3 +2544,28 @@
   winding around σ's three zeros/poles (the same singularities F4b's level curves mark), the deltoid K held
   neutral. **F4g complete — σ is now legible as a phase portrait, honestly labeled.** Remaining à-la-carte F4
   cards (F4d cycle finder · F4f forward image of a drawn curve) are the next picks.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4d — cycle finder):** a
+  "Cycles" card that finds **period-n cycles of σ** (σⁿ(w) = w). A new `@cas/schwarz/forward.ts` (`findCycles`,
+  a free function over a `{sigma, isInOmega}` surface) — ported from the QD app's schwarz-forward.mjs (ADR-0007):
+  grid-seed Ω, run Newton on G(w) = σⁿ(w) − w at each seed (QD's complex step, (σⁿ)′ via a forward x-difference —
+  exact for the holomorphic even n, a heuristic for the anti-holomorphic odd n), dedup the converged roots, then
+  trace each into its cycle. **Corrected QD's period detection** (F4h precedent): QD broke the trace one step
+  early and under-reported an n-cycle's period; this traces [w, σ(w), …] until it returns within n steps, so a
+  2-cycle reads as period 2 (pinned by a synthetic test — σ = w²−1, whose super-attracting 2-cycle {0,−1} and
+  golden-ratio fixed points are textbook). A CD overlay (`schwarzCycleOverlay.ts`) draws each cycle as its closed
+  orbit loop + point markers, one golden-angle hue per cycle, reusing the σ-overlay projection (all three views)
+  + baking into the PNG export; the card searches on demand over the boundary polygon's bbox — **padded well into
+  the exterior for the unbounded family, whose Ω is outside ∂Ω** — with a period control, and is NOT serialized
+  (a transient advisory analysis, like the tree / limit set / family / level curves; its control is an appState
+  opt-out). **Honest labeling:** the card title, summary, and readout carry `≈` and the word "advisory" — σ is
+  numerical AND this is a coarse global search, never exhaustive. Green: typecheck + lint + node **2513 → 2524**
+  (+7 @cas/schwarz forward goldens — iterateCurveForward's k+1 steps / Ω-drop / empty; findCycles on w²−1 finds
+  the golden-ratio fixed points + the {0,−1} 2-cycle at the correct period, a constant map's fixed point, and a
+  deltoid round-trip smoke; +4 schwarzCycleOverlay — an arc per point + the loop for period>1, a lone marker for
+  a fixed point, the null-projection drop, the golden-angle hue). VERIFIED (Playwright, **6/6**): a period-2
+  search on the deltoid finds its **3 σ-fixed points** (`≈ 3 cycles · 3×p1` — found via the holomorphic σ², which
+  the direct period-1 search misses: the anti-holomorphic subtlety made visible); the markers draw + survive the
+  z-disk + sphere switches; a period-4 search finds **3 fixed points + 3 genuine 4-cycles** (`≈ 6 cycles · 3×p1,
+  3×p4`); clear removes them. Captured the deltoid's three period-4 orbit loops (golden-angle hues) threading the
+  tiling with the three fixed points marked. **F4d complete — σ's periodic orbits are found + drawn, honestly
+  advisory.** The last à-la-carte F4 card (F4f forward image of a drawn curve) is the next pick.

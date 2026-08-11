@@ -136,6 +136,7 @@ import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
 import { drawSchwarzLevelCurves } from "./render/schwarzLevelCurveOverlay";
+import { drawSchwarzCycles } from "./render/schwarzCycleOverlay";
 import { explicitSigmaForm } from "./render/schwarzExplicitForm";
 import { drawSchwarzSingularities } from "./render/schwarzSingularityOverlay";
 import { sweepSeeds, canonicalSchwarzSeeds, familyHue } from "./render/schwarzOrbitFamily";
@@ -164,11 +165,13 @@ import {
   sampleLimitSet,
   boxCountingDimension,
   computeSigmaLevelCurves,
+  findCycles,
   pointInPolygon,
   findSigmaSingularities,
   type PreimageTree,
   type SigmaSingularities,
   type SigmaLevelCurves,
+  type SchwarzCycle,
 } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
@@ -3114,6 +3117,11 @@ function init(): void {
   let schwarzLevelCurves: SigmaLevelCurves | null = null;
   let schwarzLevelGrid = 160; // marching-squares grid samples per axis (the control)
   let schwarzLevelPhases = 6; // phase lines through arg σ ∈ [0,π) (the control)
+  // σ periodic cycles (F4d): period-n cycles of σ, by grid-seeded Newton on σⁿ(w)=w. A coarse, advisory global
+  // search (≈); computed on demand — a transient analysis (not serialized, like the tree / limit set / family /
+  // level curves). Each cycle is drawn as its closed orbit loop + point markers, cleared on a new map.
+  let schwarzCycles: SchwarzCycle[] | null = null;
+  let schwarzCycleN = 2; // the period to search for (the control; default 2 — the first non-trivial dynamics)
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3282,6 +3290,8 @@ function init(): void {
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing);
       // σ-singularity markers (F4h) — branch-point cusps + σ-poles.
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing);
+      // Periodic cycles (F4d) — each cycle's closed orbit loop + point markers, one hue per cycle.
+      if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing);
       // Orbit family (F4e/F4c) — each member thin + hue-ramped, under the pinned orbit.
       if (schwarzOrbitFamily)
         for (let i = 0; i < schwarzOrbitFamily.length; i++)
@@ -3297,6 +3307,7 @@ function init(): void {
       // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPlot: toZ });
+      if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing, { toPlot: toZ });
       if (schwarzOrbitFamily)
         for (let i = 0; i < schwarzOrbitFamily.length; i++)
           drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
@@ -3317,6 +3328,7 @@ function init(): void {
       // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
       if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPixel });
+      if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing, { toPixel });
       if (schwarzOrbitFamily)
         for (let i = 0; i < schwarzOrbitFamily.length; i++)
           drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
@@ -3673,6 +3685,61 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  // σ periodic cycles (F4d): grid-seeded Newton on σⁿ(w)=w over Ω. "Find" searches for the period (the
+  // control); each cycle draws as its closed orbit loop + markers. A COARSE, advisory global search — σ is
+  // numerical, so the cycles are `≈` and never exhaustive.
+  /** Cycle summary readout (grouped by period; empty when none searched). */
+  function renderSchwarzCycleReadout(): void {
+    const box = document.getElementById("schwarz-cycle-readout");
+    if (!box) return;
+    if (!schwarzCycles) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const n = schwarzCycles.length;
+    if (n === 0) {
+      box.textContent = `≈ no period-${schwarzCycleN} cycles found (advisory search)`;
+      return;
+    }
+    const byPeriod = new Map<number, number>();
+    for (const c of schwarzCycles) byPeriod.set(c.period, (byPeriod.get(c.period) ?? 0) + 1);
+    const parts = [...byPeriod.entries()].sort((a, b) => a[0] - b[0]).map(([p, ct]) => `${ct}×p${p}`);
+    box.textContent = `≈ ${n} cycle${n === 1 ? "" : "s"} · ${parts.join(", ")}`;
+  }
+  /** Search σ for period-n cycles over the boundary polygon's padded bbox. The unbounded family's Ω is the
+   *  EXTERIOR, so its seed box is padded well beyond ∂Ω (the polygon's own bbox is mostly K); a bounded QD's Ω
+   *  is the interior, so it needs little pad. Synchronous — a modest grid keeps it under a second. Advisory (`≈`). */
+  function computeSchwarzCycles(): void {
+    if (!schwarzSession) return;
+    const { engine, poly, boundedOmega } = schwarzSession;
+    const surface = {
+      sigma: (w: Complex): Complex | null => engine.sigma(w),
+      isInOmega: (w: Complex): boolean => (boundedOmega ? pointInPolygon(w, poly) : !pointInPolygon(w, poly)),
+    };
+    let minRe = Infinity, maxRe = -Infinity, minIm = Infinity, maxIm = -Infinity;
+    for (const p of poly) {
+      minRe = Math.min(minRe, p[0]); maxRe = Math.max(maxRe, p[0]);
+      minIm = Math.min(minIm, p[1]); maxIm = Math.max(maxIm, p[1]);
+    }
+    const pad = boundedOmega ? 0.1 : 0.6; // reach into the exterior Ω for the unbounded family
+    const padRe = pad * (maxRe - minRe) || 1;
+    const padIm = pad * (maxIm - minIm) || 1;
+    const bbox: [number, number, number, number] = [minRe - padRe, maxRe + padRe, minIm - padIm, maxIm + padIm];
+    schwarzCycles = findCycles(surface, schwarzCycleN, { bbox });
+    if (schwarzCycles.length === 0) showToast(`No period-${schwarzCycleN} cycles found (advisory search).`, "info");
+    renderSchwarzCycleReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the cycles (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzCycles(): void {
+    if (!schwarzCycles) return;
+    schwarzCycles = null;
+    renderSchwarzCycleReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
   // σ orbit family (F4e sweep · F4c canonical): trace a set of σ-orbits + draw them hue-ramped. Reuses the
   // orbit tracer (schwarzOrbitAt) + the orbit overlay (a colour override per member). A transient analysis.
   /** Count readout for the active family (empty when none). */
@@ -3847,12 +3914,14 @@ function init(): void {
     schwarzLimitDim = NaN;
     schwarzOrbitFamily = null; // …and any previous orbit family
     schwarzLevelCurves = null; // …and any previous level curves
+    schwarzCycles = null; // …and any previous periodic cycles
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
     schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
     renderSchwarzTilingReadout();
     renderSchwarzLimitReadout();
     renderSchwarzLevelReadout();
+    renderSchwarzCycleReadout();
     renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
     refreshSchwarzSingularities(); // F4h: find the branch points + σ-poles of the new map
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
@@ -4081,6 +4150,7 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size);
+        if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size);
         if (schwarzOrbitFamily)
           for (let i = 0; i < schwarzOrbitFamily.length; i++)
             drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length) });
@@ -4093,6 +4163,7 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPlot: toZ });
+        if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size, { toPlot: toZ });
         if (schwarzOrbitFamily)
           for (let i = 0; i < schwarzOrbitFamily.length; i++)
             drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
@@ -4108,6 +4179,7 @@ function init(): void {
         if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPixel });
+        if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size, { toPixel });
         if (schwarzOrbitFamily)
           for (let i = 0; i < schwarzOrbitFamily.length; i++)
             drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
@@ -4759,6 +4831,24 @@ function init(): void {
     }
     drawBtn?.addEventListener("click", computeSchwarzLevelCurves);
     clearBtn?.addEventListener("click", clearSchwarzLevelCurves);
+  }
+
+  // σ periodic cycles (F4d): the period to search + find / clear buttons. A transient advisory analysis
+  // (computed on demand, not serialized).
+  {
+    const nIn = document.getElementById("schwarz-cycle-n") as HTMLInputElement | null;
+    const findBtn = document.getElementById("schwarz-cycle-find");
+    const clearBtn = document.getElementById("schwarz-cycle-clear");
+    if (nIn) {
+      nIn.value = String(schwarzCycleN);
+      nIn.addEventListener("change", () => {
+        const v = Math.round(Number(nIn.value));
+        if (Number.isFinite(v)) schwarzCycleN = Math.max(1, Math.min(8, v)); // periods 1–8 (advisory beyond ~3)
+        nIn.value = String(schwarzCycleN);
+      });
+    }
+    findBtn?.addEventListener("click", computeSchwarzCycles);
+    clearBtn?.addEventListener("click", clearSchwarzCycles);
   }
 
   // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate

@@ -949,6 +949,36 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Cycles (F4d): period-n cycles of σ by grid-seeded Newton on σⁿ(w)=w. A coarse, advisory
+                     search; transient (not serialized). Each cycle draws as its orbit loop + markers. -->
+                <details class="control-group" id="schwarz-cycle-group">
+                  <summary>Cycles — period-n orbits (≈)</summary>
+                  <div class="control-grid">
+                    <p class="schwarz-inspect-hint">
+                      Search for period-n cycles of σ (σⁿ(w) = w) by grid-seeded Newton. A coarse, advisory
+                      search — reliable at low periods, approximate (≈) throughout.
+                    </p>
+                    <div class="field">
+                      <label for="schwarz-cycle-n">period</label>
+                      <input
+                        id="schwarz-cycle-n"
+                        type="number"
+                        min="1"
+                        max="8"
+                        step="1"
+                        inputmode="numeric"
+                        value="2"
+                        title="The period n to search for (cycles of σⁿ(w) = w). Low periods are the most reliable."
+                      />
+                    </div>
+                    <div class="field schwarz-family-actions">
+                      <button id="schwarz-cycle-find" type="button" class="primary">find</button>
+                      <button id="schwarz-cycle-clear" type="button">clear</button>
+                    </div>
+                    <div id="schwarz-cycle-readout" class="schwarz-inspect" aria-live="polite" hidden></div>
+                  </div>
+                </details>
+
                 <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
                      in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
                 <details class="control-group" id="schwarz-render-group">

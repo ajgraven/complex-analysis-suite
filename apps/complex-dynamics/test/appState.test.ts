@@ -144,6 +144,9 @@ describe("SHARE_IDS DOM coverage", () => {
         // σ level-curve controls (F4b): grid resolution + phase-line count for a transient analysis (the
         // contours are computed on demand, not serialized).
         [["schwarz-level-grid", "schwarz-level-phases"], "σ level-curve control (transient; not serialized)"],
+        // σ cycle-finder control (F4d): the period to search for a transient advisory analysis (the cycles are
+        // computed on demand, not serialized).
+        [["schwarz-cycle-n"], "σ cycle-finder control (transient; not serialized)"],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.

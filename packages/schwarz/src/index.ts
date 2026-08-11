@@ -28,6 +28,10 @@ export type { LimitSetOptions, BoxDimensionResult, BBox } from "./limit-set.js";
 // agnostic (a free function over the minimal `sigma` surface).
 export { computeSigmaLevelCurves } from "./level-curves.js";
 export type { SchwarzSigma, LevelCurveOptions, LevelSegment, SigmaLevelCurves } from "./level-curves.js";
+// Forward σ-dynamics (F4d cycle finder + F4f forward-curve image): free functions over a {sigma, isInOmega}
+// surface. Both `≈` (σ is numerical); the cycle finder is a coarse, advisory global search.
+export { iterateCurveForward, findCycles } from "./forward.js";
+export type { SchwarzForward, CycleOptions, SchwarzCycle } from "./forward.js";
 // σ-singularities (F4h): σ-poles (finite map-pole reflection) + branch points (zeros of φ′). Forward-only.
 export { findSigmaSingularities } from "./singularities.js";
 export type {
