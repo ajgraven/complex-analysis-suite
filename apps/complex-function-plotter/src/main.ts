@@ -61,6 +61,7 @@ import {
   decodeState,
   encodeState,
   shareUrl,
+  DEFAULT_V3D,
   type PlotterState,
 } from "./state/viewState.js";
 import { importEnvelopeText } from "./interchange/importMap.js";
@@ -87,6 +88,7 @@ const DEFAULTS: PlotterState = {
   hueSign: 1,
   params: {},
   anim: { ...DEFAULT_ANIM },
+  v3d: { ...DEFAULT_V3D },
 };
 
 function addOption(sel: HTMLSelectElement, value: string, label: string): void {
@@ -237,6 +239,16 @@ function main(): void {
   plot.color.crisp = initial.crisp ? 1 : 0;
   plot.color.hueShift = initial.hueShift;
   plot.color.hueSign = initial.hueSign < 0 ? -1 : 1;
+  // Restore the 3D camera + surface-height settings from the share-link (the mode itself is applied via
+  // setView once the view controls are wired, below). Set here — before the height controls initialise
+  // their values from `plot.*` — so the UI reflects the restored state without extra syncing.
+  plot.camera.azimuth = initial.v3d.azimuth;
+  plot.camera.elevation = initial.v3d.elevation;
+  plot.camera.distance = initial.v3d.distance;
+  plot.camera.ortho = initial.v3d.ortho;
+  plot.heightMode = initial.v3d.heightMode;
+  plot.heightScale = initial.v3d.heightScale;
+  plot.specular = initial.v3d.specular;
   let framingSpan = initial.span;
 
   // Linked-view geometry (I7). In the linked mode the flat portrait fills the LEFT half of the canvas and
@@ -258,6 +270,10 @@ function main(): void {
 
   let probeFn: ((z: Complex, c: Complex) => Complex) | null = null;
   let fpFn: ((z: Complex, c: Complex) => Complex) | null = null;
+  // True when the map calls a float32-limited special function (ζ / Γ / W): those are series /
+  // iterations, so the cursor readout is an estimate too (the CPU path is float64, but still not a
+  // closed form) — labelled `≈` to match the picture's precision badge. Cached on each formula change.
+  let probeEstimate = false;
   let sings: Singularities | null = null;
   let markSings = false;
   let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
@@ -309,6 +325,16 @@ function main(): void {
     hueSign: plot.color.hueSign,
     params: plot.paramsRecord(),
     anim: { ...animConfig },
+    v3d: {
+      mode: plot.mode,
+      azimuth: plot.camera.azimuth,
+      elevation: plot.camera.elevation,
+      distance: plot.camera.distance,
+      ortho: plot.camera.ortho,
+      heightMode: plot.heightMode,
+      heightScale: plot.heightScale,
+      specular: plot.specular,
+    },
   });
 
   let hashTimer = 0;
@@ -393,8 +419,9 @@ function main(): void {
   // precision-limited builtin (ζ strongly, Γ mildly), show a badge so a domain-coloured ζ/Γ reads as
   // an estimate (≈), not certified structure. Derived from the parsed map, so it needs no state.
   const updatePrecisionBadge = (): void => {
-    if (!(precisionBadge instanceof HTMLElement)) return;
     const note = fAst ? precisionNote(calledFunctions(fAst)) : null;
+    probeEstimate = note !== null; // drives the cursor readout's `≈` prefix too
+    if (!(precisionBadge instanceof HTMLElement)) return;
     precisionBadge.hidden = !note;
     precisionBadge.textContent = note ? note.text : "";
     precisionBadge.classList.toggle("warn", note?.severity === "warn");
@@ -809,12 +836,19 @@ function main(): void {
   }
 
   if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement) {
+    // Debounce the recompile: each keystroke otherwise rebuilds three GPU shader programs synchronously
+    // (2D + surface + sphere), which janks on slow GPUs mid-formula. A short delay coalesces a burst of
+    // keystrokes into one compile once typing pauses.
+    let exprTimer = 0;
     exprInput.addEventListener("input", () => {
-      // Only a parseable expression is written back to the active slot (and thus to currentState /
-      // the share-link): a half-typed, invalid formula stays visible in the box but never gets
-      // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
-      // URL and lose the last good function on reload.
-      if (applyExpr(exprInput.value)) exprs[active] = exprInput.value;
+      window.clearTimeout(exprTimer);
+      exprTimer = window.setTimeout(() => {
+        // Only a parseable expression is written back to the active slot (and thus to currentState /
+        // the share-link): a half-typed, invalid formula stays visible in the box but never gets
+        // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
+        // URL and lose the last good function on reload.
+        if (applyExpr(exprInput.value)) exprs[active] = exprInput.value;
+      }, 140);
     });
   }
 
@@ -832,6 +866,22 @@ function main(): void {
       exportSizeSel instanceof HTMLSelectElement ? Number(exportSizeSel.value) : 2000;
     return Number.isFinite(v) && v > 0 ? v : 2000;
   };
+  // Offer only sizes the device can actually render: disable any export long-edge above the GL
+  // MAX_TEXTURE_SIZE. exportBlob self-clamps, but the dropdown shouldn't advertise a size that would
+  // silently downscale. The limit is fixed per context, so this runs once.
+  if (exportSizeSel instanceof HTMLSelectElement) {
+    const maxEdge = plot.maxExportEdge();
+    for (const opt of Array.from(exportSizeSel.options)) {
+      if (Number(opt.value) > maxEdge) {
+        opt.disabled = true;
+        opt.textContent += " (too large)";
+      }
+    }
+    if (exportSizeSel.selectedOptions[0]?.disabled) {
+      const ok = Array.from(exportSizeSel.options).find((o) => !o.disabled);
+      if (ok) exportSizeSel.value = ok.value; // never leave a disabled size selected
+    }
+  }
   const exportMeta = (): Record<string, string> => ({
     Software: "Complex Function Plotting Tool",
     "cfp:url": shareUrl(currentState()),
@@ -974,9 +1024,12 @@ function main(): void {
     } catch {
       w = [NaN, NaN];
     }
-    if (pfz instanceof HTMLElement) pfz.textContent = fmtComplex(w);
-    if (pabs instanceof HTMLElement) pabs.textContent = fmtNum(Math.hypot(w[0], w[1]));
-    if (parg instanceof HTMLElement) parg.textContent = fmtNum(Math.atan2(w[1], w[0]));
+    // `≈` when f uses a float32-limited special function (ζ/Γ/W): the value is a good float64 estimate,
+    // not a certified closed form — matching the picture's precision badge (honest labeling).
+    const pre = probeEstimate && Number.isFinite(w[0]) && Number.isFinite(w[1]) ? "≈ " : "";
+    if (pfz instanceof HTMLElement) pfz.textContent = pre + fmtComplex(w);
+    if (pabs instanceof HTMLElement) pabs.textContent = pre + fmtNum(Math.hypot(w[0], w[1]));
+    if (parg instanceof HTMLElement) parg.textContent = pre + fmtNum(Math.atan2(w[1], w[0]));
   };
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
@@ -1100,22 +1153,24 @@ function main(): void {
   };
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  // Wheel zoom/dolly renders a DRAFT frame during the scroll burst and commits one full-res frame once
+  // scrolling settles — the same draft-then-commit discipline as the pointer-drag path, instead of a
+  // full-res repaint on every tick.
+  let wheelCommitTimer = 0;
   canvas.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
       const m = effMode(e.clientX);
-      if (m === "sphere") {
-        plot.dollySphere(Math.pow(1.0012, e.deltaY));
+      if (m === "sphere") plot.dollySphere(Math.pow(1.0012, e.deltaY));
+      else if (m === "3d") plot.dolly(Math.pow(1.0012, e.deltaY));
+      else plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
+      redraw(true);
+      window.clearTimeout(wheelCommitTimer);
+      wheelCommitTimer = window.setTimeout(() => {
         redraw(false);
-      } else if (m === "3d") {
-        plot.dolly(Math.pow(1.0012, e.deltaY));
-        redraw(false);
-      } else {
-        plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
-        redraw(false);
-        recomputeSingsSoon();
-      }
+        if (m === "2d") recomputeSingsSoon(); // zeros/poles only track the flat portrait
+      }, 140);
     },
     { passive: false },
   );
@@ -1195,6 +1250,10 @@ function main(): void {
     recomputeSings();
     redraw(false);
   }
+
+  // Restore the saved render mode last (now that setView + its controls exist). The camera / height were
+  // applied above, so a shared 3D landscape / linked figure reopens exactly as it was framed.
+  if (initial.v3d.mode !== "2d") setView(initial.v3d.mode);
 }
 
 main();

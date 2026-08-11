@@ -4,6 +4,7 @@ import {
   APP_NS,
   decodeState,
   encodeState,
+  DEFAULT_V3D,
   type PlotterState,
 } from "../src/state/viewState.js";
 import { DEFAULT_ANIM } from "../src/ui/animate.js";
@@ -25,6 +26,16 @@ const S: PlotterState = {
   hueSign: -1,
   params: { a: [1.5, 0], b: [-0.25, 0.75] },
   anim: { t0: 0, t1: 1, speed: 0.5, loop: false },
+  v3d: {
+    mode: "3d",
+    azimuth: -1.2,
+    elevation: 0.6,
+    distance: 5,
+    ortho: false,
+    heightMode: 1,
+    heightScale: 1.5,
+    specular: true,
+  },
 };
 
 describe("share-link view state", () => {
@@ -61,7 +72,24 @@ describe("share-link view state", () => {
       hueSign: 1,
       params: {},
       anim: DEFAULT_ANIM,
+      v3d: DEFAULT_V3D,
     });
+  });
+
+  it("round-trips the 3D view (mode + camera + height), defaults a pre-3D link, and clamps bad values", () => {
+    expect(decodeState(encodeState(S))?.v3d).toEqual(S.v3d); // a shared landscape reopens framed
+    // A pre-3D-persist link carries no v3d → the 2D default.
+    expect(decodeState(encodeViewState(APP_NS, { expr: "z^2" }))?.v3d).toEqual(DEFAULT_V3D);
+    // A stale / hand-edited v3d fails soft: unknown mode → 2d, out-of-range camera/height clamped.
+    const bad = decodeState(
+      encodeViewState(APP_NS, {
+        expr: "z",
+        v3d: { mode: "nope", distance: 999, heightMode: 9 },
+      }),
+    );
+    expect(bad?.v3d.mode).toBe("2d");
+    expect(bad?.v3d.distance).toBe(60);
+    expect(bad?.v3d.heightMode).toBe(2);
   });
 
   it("round-trips the f/g slots, and a g-active link plots g", () => {
