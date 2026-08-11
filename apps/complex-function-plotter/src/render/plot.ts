@@ -18,7 +18,7 @@ import { freeParameters, substitute } from "@cas/expr/ast";
 import { differentiate } from "@cas/expr/derivative";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
-import { injectPngText } from "./pngMetadata.js";
+import { injectPngText } from "@cas/export";
 import { clampLongEdge, exportDims } from "./exportImage.js";
 import {
   type OrbitCamera,

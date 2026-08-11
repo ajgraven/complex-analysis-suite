@@ -6,7 +6,7 @@
  * the scaled overlay before downloading.
  */
 
-import { injectPngText } from "./render/pngMetadata";
+import { injectPngText } from "@cas/export";
 
 /** Smallest export size we allow, in pixels. */
 const MIN_EXPORT_SIZE = 256;

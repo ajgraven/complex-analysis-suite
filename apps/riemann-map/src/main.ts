@@ -39,7 +39,7 @@ import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
 import { fitForwardMap, type ForwardMap } from "./solve/forwardMap.js";
-import { injectPngText } from "./export/pngMeta.js";
+import { injectPngText } from "@cas/export";
 import { createControls } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
@@ -697,11 +697,10 @@ function main(): void {
     if (!ctx || !blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const permalink = location.origin + location.pathname + encodeRiemannState(state);
-    const withMeta = injectPngText(
-      injectPngText(bytes, "Software", "Riemann Map — Complex Analysis Suite"),
-      "cas:state",
-      permalink,
-    );
+    const withMeta = injectPngText(bytes, {
+      Software: "Riemann Map — Complex Analysis Suite",
+      "cas:state": permalink,
+    });
     downloadBytes(withMeta, "riemann-map.png");
   }
 
@@ -762,11 +761,10 @@ function main(): void {
     if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const permalink = location.origin + location.pathname + encodeRiemannState(state);
-    const withMeta = injectPngText(
-      injectPngText(bytes, "Software", "Riemann Map — Complex Analysis Suite"),
-      "cas:state",
-      permalink,
-    );
+    const withMeta = injectPngText(bytes, {
+      Software: "Riemann Map — Complex Analysis Suite",
+      "cas:state": permalink,
+    });
     downloadBytes(withMeta, "riemann-disk-image.png");
   }
 
