@@ -58,6 +58,7 @@ import {
   type Pt,
 } from "./ui/navigation.js";
 import { heightAt } from "./render3d/height.js";
+import { gridResolutionForField, GRID_SCAN_N, GRID_N_BASE } from "./render3d/mesh.js";
 import {
   findSingularities,
   type Singularities,
@@ -376,10 +377,47 @@ function main(): void {
     }, 350);
   };
 
+  // Coarse-scan the plotted surface's height field over the current view and return the mesh resolution it
+  // warrants (`gridResolutionForField`): the steepest step between adjacent samples flags a pole spike /
+  // clamp cliff, which then drives a finer, zoom-aware mesh so sharp features stay smooth even zoomed out.
+  const surfaceResolutionTarget = (): number => {
+    const pf = probeFn;
+    if (!pf) return GRID_N_BASE;
+    const aspect = canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
+    const { cx, cy, span } = plot.view;
+    const N = GRID_SCAN_N;
+    const mode = plot.heightMode;
+    const scale = plot.color.modScale;
+    const ex = plot.heightScale;
+    const h = new Float64Array(N * N);
+    for (let j = 0; j < N; j++) {
+      const im = cy - span + (2 * span * j) / (N - 1);
+      for (let i = 0; i < N; i++) {
+        const re = cx - span * aspect + (2 * span * aspect * i) / (N - 1);
+        let w: Complex;
+        try {
+          w = pf([re, im], [0, 0]);
+        } catch {
+          w = [0, 0];
+        }
+        h[j * N + i] = heightAt(mode, Math.hypot(w[0], w[1]), scale) * ex;
+      }
+    }
+    let maxJump = 0;
+    for (let j = 0; j < N; j++)
+      for (let i = 0; i < N; i++) {
+        const c = h[j * N + i];
+        if (i + 1 < N) maxJump = Math.max(maxJump, Math.abs(h[j * N + i + 1] - c));
+        if (j + 1 < N) maxJump = Math.max(maxJump, Math.abs(h[(j + 1) * N + i] - c));
+      }
+    return gridResolutionForField(maxJump, span * Math.max(1, aspect));
+  };
+
   const redraw = (draft = false): void => {
-    // On a committed frame in a surface mode, adapt the mesh density to the current zoom (§B) — a cheap
-    // no-op when unchanged; skipped on draft frames so a zoom/drag burst never rebuilds mid-gesture.
-    if (!draft && (plot.mode === "3d" || plot.mode === "linked")) plot.reconcileMeshResolution();
+    // On a committed frame in a surface mode, adapt the mesh density to the field + zoom (§B / poles) — a
+    // cheap no-op when unchanged; skipped on draft frames so a zoom/drag burst never rebuilds mid-gesture.
+    if (!draft && (plot.mode === "3d" || plot.mode === "linked"))
+      plot.reconcileMeshResolution(surfaceResolutionTarget());
     plot.draw(draft);
     if (plot.mode !== "2d") {
       // The axes / grid / markers are full-canvas 2D-projection overlays; in the 3D landscape, on the

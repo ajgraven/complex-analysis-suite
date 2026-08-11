@@ -54,18 +54,32 @@ export function buildGridMesh(n: number): GridMesh {
   return { uvs, indices, n: cells, vertexCount, indexCount: indices.length };
 }
 
-// Adaptive tessellation (§B): because the surface now fills the viewport at any zoom, a denser mesh when
-// zoomed in (small span) keeps fine structure near poles smooth, while a coarser one when zoomed out
-// avoids waste. Cells per side scale as √(reference span / span), clamped. `GRID_N_BASE` also seeds the
-// initial mesh, so `gridResolutionForSpan(GRID_N_SPAN_REF)` returns exactly `GRID_N_BASE`.
-export const GRID_N_BASE = 320;
-const GRID_N_SPAN_REF = 4; // the default view span → the base resolution
-const GRID_N_MIN = 96;
-const GRID_N_MAX = 640;
+// Field-driven adaptive tessellation. A uniform mesh can't resolve poles: a pole spike has a roughly
+// FIXED domain width, so as you zoom OUT (or the mesh coarsens) the spike falls into ever fewer cells and
+// reads "chunky" — worst exactly where the old √(span) law thinned the mesh. Instead, the caller
+// coarse-scans the surface height each commit (a `GRID_SCAN_N`-square grid over the view) and reports the
+// steepest jump between adjacent samples; when that flags a sharp feature (a pole spike, or a |f|-clamp
+// cliff), we size the mesh so a cell stays under `GRID_TARGET_CELL` in world units — which grows the mesh
+// with the view extent, so zoomed-out poles get the triangles they need. Smooth maps stay at the light
+// `GRID_N_BASE` (also the initial mesh). Capped at `GRID_N_MAX` to bound the rebuild.
+export const GRID_N_BASE = 320; // on-screen-smoothness floor + initial mesh
+export const GRID_SCAN_N = 48; // the caller scans the height field on this many samples per side
+const GRID_POLE_JUMP = 0.5; // an adjacent-sample height jump above this flags a sharp feature
+const GRID_TARGET_CELL = 0.02; // a mesh cell should not exceed this world size near such a feature
+const GRID_N_MAX = 1024;
 
-/** Surface-mesh resolution (cells per side) appropriate to a view span — fed to {@link buildGridMesh}. */
-export function gridResolutionForSpan(span: number): number {
-  if (!(span > 0)) return GRID_N_BASE; // guard a degenerate / not-yet-set span
-  const n = Math.round(GRID_N_BASE * Math.sqrt(GRID_N_SPAN_REF / span));
-  return Math.min(GRID_N_MAX, Math.max(GRID_N_MIN, n));
+/**
+ * Surface-mesh resolution (cells per side) for the current view — fed to {@link buildGridMesh}.
+ * `maxAdjacentJump` is the steepest height step between neighbouring coarse samples over the view;
+ * `domainHalfExtent` is the larger world half-extent (`span · max(1, aspect)`). Below the pole threshold
+ * (a smooth view) the light base resolution suffices; above it the mesh grows with the extent so a fixed-
+ * width spike keeps enough triangles at any zoom.
+ */
+export function gridResolutionForField(
+  maxAdjacentJump: number,
+  domainHalfExtent: number,
+): number {
+  if (!(maxAdjacentJump > GRID_POLE_JUMP) || !(domainHalfExtent > 0)) return GRID_N_BASE;
+  const needed = Math.round((2 * domainHalfExtent) / GRID_TARGET_CELL);
+  return Math.min(GRID_N_MAX, Math.max(GRID_N_BASE, needed));
 }
