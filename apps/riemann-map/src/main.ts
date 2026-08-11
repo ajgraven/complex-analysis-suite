@@ -29,8 +29,7 @@ import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
-import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
-import { fitForwardMap, type ForwardMap } from "./solve/forwardMap.js";
+import { fitConformalMap, fitForwardMap, type ConformalMap, type ForwardMap } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
 import { createControls } from "./ui/controls.js";
 

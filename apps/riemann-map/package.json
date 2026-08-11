@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Research-grade Riemann-map / conformal-mapping studio. A new suite app (separate app per CLAUDE.md decision 8) built on the shared @cas/* packages: custom φ via @cas/expr, figure export via @cas/export, and map hand-off + permalinks via @cas/interchange (it imports another tool's conformal map rather than computing dynamics itself). Renders pure-2D — the source region and its conformal image in linked canvas panes.",
+  "description": "Research-grade Riemann-map / conformal-mapping studio. A new suite app (separate app per CLAUDE.md decision 8) built on the shared @cas/* packages: custom φ via @cas/expr, the numerical region map 𝔻 → Ω via @cas/conformal (lightning + forward-map builder), figure export via @cas/export, and map hand-off + permalinks via @cas/interchange (it imports another tool's conformal map rather than computing dynamics itself). Renders pure-2D — the source region and its conformal image in linked canvas panes.",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "scripts": {
@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cas/conformal": "workspace:*",
     "@cas/core": "workspace:*",
     "@cas/export": "workspace:*",
     "@cas/expr": "workspace:*",

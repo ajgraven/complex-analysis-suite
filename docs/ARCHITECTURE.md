@@ -137,10 +137,11 @@ instead of an ad-hoc JSON blob.
 > **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
 > became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
 > though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
-> The suite now ships **eight** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
-> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export` (the last four extracted later than the phase
-> plan, on the ADR-0007 second-consumer rule). The sections are kept as design intent; each notes where the
-> functionality actually lives today.
+> The suite now ships **nine** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, and `@cas/conformal` (`@cas/exact` through
+> `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
+> extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)).
+> The sections are kept as design intent; each notes where the functionality actually lives today.
 
 ### `@cas/ui` — the shared UI kit *(partly built — PNG metadata shipped as `@cas/export`)*
 Would hold KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider
@@ -156,6 +157,19 @@ permalink / parameters into an exported PNG before `IEND` with a correct CRC-32,
 pixel. Pure, DOM-free, convention-neutral (ADR-0006: byte manipulation, no maths). Consumers: Complex
 Dynamics, the Complex-Function Plotter, and the Riemann-map studio. The natural future home for the
 medium-term high-res / SVG export goal.
+
+### `@cas/conformal` — the conformal-map builder *(built — ADR-0018, extract-ahead-of-demand)*
+Holds the numerical **Riemann-map builder**: the Vandermonde–Arnoldi stable polynomial basis
+(Brubeck–Nakatsukasa–Trefethen 2021), the **lightning** solver f: Ω → 𝔻 (Gopal–Trefethen 2019) with
+corner-clustered poles, and the forward map g: 𝔻 → Ω. Built on `@cas/core` — including its Householder-QR
+least squares (`lstsqHouseholder`), lifted into the numeric kernel from RM's `solve/` in the same step.
+Convention-neutral (ADR-0006). It is **the one package extracted *before* a second consumer proved it needed
+one** — a deliberate exception to ADR-0007
+([ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)) — so the coming
+Schwarz–Christoffel engine (roadmap step E) has a home to be born into. Consumer today: the Riemann-map studio
+(its numerical region-map source). The near-twin least-squares solver in Quadrature Domains is the *anticipated*
+second consumer of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on
+rank-deficiency policy — see ADR-0018).
 
 ### `@cas/quadrature` — domain package *(planned — not built)*
 Would hold the Faber-transform machinery; the inverse solvers (classical/log-weighted/power,

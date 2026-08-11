@@ -14,6 +14,8 @@
 //                      of the poly-helpers extraction).
 //   - sphere         : stereographic projection C∪{∞} ↔ the Riemann sphere (cancellation-safe
 //                      inverse), shared by both apps' sphere views.
+//   - lstsq          : real overdetermined least squares by (backward-stable) Householder QR — the
+//                      numeric workhorse under overdetermined fits (the @cas/conformal builder; QD).
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
 export { objAlgebra, tupleAlgebra } from "./algebra.js";
@@ -26,3 +28,4 @@ export { makePoly } from "./poly.js";
 export type { Poly, PolyOps } from "./poly.js";
 export { subscript, superscript } from "./format.js";
 export { planeToSphere, sphereToPlane } from "./sphere.js";
+export { lstsqHouseholder } from "./lstsq.js";

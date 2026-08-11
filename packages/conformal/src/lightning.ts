@@ -11,8 +11,8 @@
 //
 // Honesty: the map is numerical (≈). Its `boundaryResidual` = maxⱼ ‖f(zⱼ)| − 1‖ is reported as the
 // accuracy indicator, so a figure never claims more than the fit earns. Pure; node-tested.
+import { lstsqHouseholder } from "@cas/core";
 import { arnoldiBasis, evalExpansion, type C } from "./vandermondeArnoldi.js";
-import { lstsqHouseholder } from "./lstsq.js";
 
 const expC = (g: C): C => {
   const r = Math.exp(g[0]);

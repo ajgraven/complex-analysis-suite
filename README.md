@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **five** applications riding **eight** shared `@cas/*` packages:
+It currently hosts **five** applications riding **nine** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -33,9 +33,10 @@ incidental.
 **fully executed and merged.** The workspace skeleton, unified tooling, the
 Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 (`@cas/core` → `@cas/interchange` → `@cas/expr` + `@cas/gpu`, then `@cas/exact`, `@cas/schwarz`,
-`@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule) are all done; the
-Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**1820 Vitest tests** across 193
+`@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
+extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
+are all done; the Correspondences app exists through its parameter-space milestone plus a complete
+interactive mating visualizer. The whole workspace is green (**2846 Vitest tests** across 337
 files, lint, typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
@@ -102,7 +103,8 @@ complex-analysis-suite/
 │   ├── exact/                ← @cas/exact       exact polynomial arithmetic (CD + Correspondences)
 │   ├── schwarz/              ← @cas/schwarz     the Schwarz-reflection σ engine (CD + Correspondences)
 │   ├── dynamics/             ← @cas/dynamics    inverse-Böttcher exterior maps + external rays (Complex Dynamics)
-│   └── export/               ← @cas/export      PNG tEXt reproducibility metadata (CD + plotter + Riemann Map)
+│   ├── export/               ← @cas/export      PNG tEXt reproducibility metadata (CD + plotter + Riemann Map)
+│   └── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map (Riemann Map; Schwarz–Christoffel to come)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
@@ -112,14 +114,17 @@ complex-analysis-suite/
     └── riemann-map/          ← pure-2D conformal-mapping studio (disk image + numeric Riemann map)
 ```
 
-> **The eight packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export`. Packages were
-> extracted **only as a second consumer proved it needed them**
+> **The nine packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, and `@cas/conformal`.
+> Packages were extracted **only as a second consumer proved it needed them**
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
 > `ui` and `quadrature` packages that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
 > fully materialized (the `ui` package's PNG-metadata half did ship, as `@cas/export`), and why
 > `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` appeared *later* than the phase plan:
-> each waited for its second consumer.
+> each waited for its second consumer. The **one exception** is `@cas/conformal` — the lightning +
+> forward-map conformal builder, carved out of the Riemann-map app *ahead* of its second consumer
+> ([ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
+> to give the coming Schwarz–Christoffel engine a home to be born into.
 
 > **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
 > each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately

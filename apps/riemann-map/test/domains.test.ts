@@ -9,7 +9,7 @@ import {
   pointInPolygon,
   type C,
 } from "../src/domains.js";
-import { fitSmoothConformalMap, fitConformalMap } from "../src/solve/lightning.js";
+import { fitSmoothConformalMap, fitConformalMap } from "@cas/conformal";
 
 /** Winding number of a closed polyline about the origin (÷2π); ≈1 ⇒ 0 is enclosed. */
 function windingAboutOrigin(poly: readonly C[]): number {

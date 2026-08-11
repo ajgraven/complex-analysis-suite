@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { arnoldiBasis, evalArnoldi, evalExpansion, type C } from "../src/solve/vandermondeArnoldi.js";
-import { lstsqHouseholder } from "../src/solve/lstsq.js";
+import { lstsqHouseholder } from "@cas/core";
+import { arnoldiBasis, evalArnoldi, evalExpansion, type C } from "../src/vandermondeArnoldi.js";
 
 function circle(m: number, r = 1): C[] {
   return Array.from({ length: m }, (_, j): C => {
@@ -9,7 +9,7 @@ function circle(m: number, r = 1): C[] {
   });
 }
 
-describe("Vandermonde–Arnoldi basis (P3a)", () => {
+describe("Vandermonde–Arnoldi basis", () => {
   it("produces column-orthonormal Q under the discrete inner product", () => {
     const z = circle(200, 1.3);
     const { Q, n } = arnoldiBasis(z, 12);

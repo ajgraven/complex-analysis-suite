@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fitConformalMap } from "../src/solve/lightning.js";
-import { fitForwardMap } from "../src/solve/forwardMap.js";
+import { fitConformalMap, fitForwardMap, type C } from "@cas/conformal";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary } from "../src/domains.js";
-import type { C } from "../src/solve/vandermondeArnoldi.js";
 
 const boundaryOf = (id: string, m: number): C[] => {
   const d = domainById(id);

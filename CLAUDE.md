@@ -88,9 +88,9 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Five apps ride the eight shared `@cas/*` packages
+and the parabolic-Tricorn model coordinate. Five apps ride the nine shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
-`@cas/export`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
+`@cas/export`, `@cas/conformal`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
@@ -98,7 +98,7 @@ Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it 
 studio. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed on `master` alongside
 the σ arc. (The launcher consumes no packages.)
 
-**`@cas/export` + CD → Riemann-Map hand-off + Riemann Map goes pure-2D (on `claude/riemann-map-visualization-5kal5n`):**
+**`@cas/export` + CD → Riemann-Map hand-off + Riemann Map goes pure-2D (merged, #257):**
 The eighth package **`@cas/export`** collapses three byte-equivalent copies of the PNG `tEXt` metadata code
 (CD / plotter / Riemann-map), and three shared GLSL snippets fold into `@cas/gpu/glsl` (ADR-0016). Complex
 Dynamics gains its first interchange **producer** — a "Riemann Map ↗" deep link that exports a filled Julia
@@ -108,6 +108,18 @@ analysis, external rays, local Böttcher, generic domain-coloring modes, and the
 dropping `@cas/dynamics`, `@cas/schwarz`, and `@cas/gpu` to render **pure-2D**. It now consumes only
 `@cas/core`, `@cas/export`, `@cas/expr`, and `@cas/interchange` (ADR-0017; supersedes ADR-0014's RM-consumer
 premise, narrows ADR-0013). Cross-app golden `CD_TO_RM_BOTTCHER_LINK` pins both sides.
+
+**`@cas/conformal` + `lstsq` → `@cas/core` (step D, on `claude/riemann-map-visualization-5kal5n`):**
+The **ninth** package **`@cas/conformal`** is carved out of the Riemann-map app — the conformal-map builder
+(the Vandermonde–Arnoldi stable basis, the lightning solver f: Ω → 𝔻, and the forward map g: 𝔻 → Ω) — with the
+real Householder-QR least-squares primitive `lstsqHouseholder` beneath it lifted into **`@cas/core`**. This is
+the suite's **first deliberate extract-*ahead*-of-demand** (ADR-0018): unlike every prior package it precedes
+its second consumer (Schwarz–Christoffel, roadmap step E) — a recorded exception to ADR-0007. Riemann Map drops
+its whole `src/solve/` directory and consumes `@cas/conformal`; it now rides `@cas/core`, `@cas/conformal`,
+`@cas/export`, `@cas/expr`, and `@cas/interchange`. Quadrature Domains' near-twin least-squares solver is
+documented as the *deferred* second consumer of core-`lstsq` — the two diverged on rank-deficiency policy
+(RM zero-fills at `1e-300`; QD throws at `1e-13`, with `condEst`-driven refinement its cusp Newton solver
+needs), so QD's solver is **not** rewired in this step.
 
 **QD → CD σ hand-off (QD-HANDOFF-2 + S5, on `claude/repository-refactor-project-pg5ktu`, awaiting review):**
 Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe
