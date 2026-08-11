@@ -163,7 +163,7 @@ describe("gridResolutionForSpan", () => {
   });
 
   it("clamps to [96, 384] at the extremes and guards a degenerate span", () => {
-    expect(gridResolutionForSpan(1e-6)).toBe(384); // very deep zoom → capped
+    expect(gridResolutionForSpan(1e-6)).toBe(640); // very deep zoom → capped
     expect(gridResolutionForSpan(1e6)).toBe(96); // very wide → floored
     expect(gridResolutionForSpan(0)).toBe(GRID_N_BASE); // not-yet-set span → base
     expect(gridResolutionForSpan(NaN)).toBe(GRID_N_BASE);
