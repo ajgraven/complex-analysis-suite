@@ -135,6 +135,7 @@ import {
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
 import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
 import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
+import { drawSchwarzLevelCurves } from "./render/schwarzLevelCurveOverlay";
 import { explicitSigmaForm } from "./render/schwarzExplicitForm";
 import { drawSchwarzSingularities } from "./render/schwarzSingularityOverlay";
 import { sweepSeeds, canonicalSchwarzSeeds, familyHue } from "./render/schwarzOrbitFamily";
@@ -162,10 +163,12 @@ import {
   buildPreimageTree,
   sampleLimitSet,
   boxCountingDimension,
+  computeSigmaLevelCurves,
   pointInPolygon,
   findSigmaSingularities,
   type PreimageTree,
   type SigmaSingularities,
+  type SigmaLevelCurves,
 } from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
@@ -3105,6 +3108,12 @@ function init(): void {
   let schwarzOrbitFamily: SchwarzOrbit[] | null = null;
   let schwarzFamilyN = 24; // sweep seed count
   let schwarzFamilyRadius = 1.5; // sweep circle radius (about the plane-view centre)
+  // σ level curves (F4b): the iso-|σ| (solid) + iso-arg-σ (dashed) lines by marching squares over Ω, computed
+  // on demand. A transient analysis (not serialized, like the tree / limit set / family); the w-space segments
+  // are re-projected every paint (so they survive pan/zoom/view-switch), cleared on a new map.
+  let schwarzLevelCurves: SigmaLevelCurves | null = null;
+  let schwarzLevelGrid = 160; // marching-squares grid samples per axis (the control)
+  let schwarzLevelPhases = 6; // phase lines through arg σ ∈ [0,π) (the control)
 
   /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
   function schwarzCustomRamp(): [number, number, number][] {
@@ -3265,6 +3274,8 @@ function init(): void {
     if (schwarzViewMode === "plane") {
       // Limit-set cloud (F4a) — the bottom overlay layer (the fractal dust the tiling converges to).
       if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing);
+      // σ level curves (F4b) — iso-|σ| (solid) / iso-arg (dashed) lines annotating the field, under the boundary.
+      if (schwarzLevelCurves) drawSchwarzLevelCurves(ctx, schwarzLevelCurves, schwarzView, backing);
       // ∂Ω boundary overlay (F1) — under the orbits, over the field; `poly` is the session's mask polygon.
       if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
       // Preimage tiling tree (F3c) — under the orbits (its dense dots shouldn't hide the traced orbit).
@@ -3281,6 +3292,7 @@ function init(): void {
     } else if (schwarzViewMode === "z") {
       const toZ = (w: Complex): Complex | null => engine.invertPhi(w); // ψ-pullback into the uniformizing z
       if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing, { toPlot: toZ });
+      if (schwarzLevelCurves) drawSchwarzLevelCurves(ctx, schwarzLevelCurves, schwarzView, backing, { toPlot: toZ });
       if (schwarzShowBoundary) drawSchwarzUnitCircle(ctx, schwarzView, backing);
       // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
@@ -3300,6 +3312,7 @@ function init(): void {
         return uv ? [uv[0] * backing - 0.5, uv[1] * backing - 0.5] : null;
       };
       if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing, { toPixel });
+      if (schwarzLevelCurves) drawSchwarzLevelCurves(ctx, schwarzLevelCurves, schwarzView, backing, { toPixel });
       if (schwarzShowBoundary) drawSchwarzBoundarySphere(ctx, poly, cam, backing);
       // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
       if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
@@ -3597,6 +3610,50 @@ function init(): void {
     scheduleSchwarzOverlayPaint();
   }
 
+  // σ level curves (F4b): marching squares of |σ| (solid) + arg σ (dashed) over Ω. "Draw" contours σ over the
+  // boundary polygon's padded bbox; the w-space segments redraw under the other overlays. A transient analysis
+  // (not serialized, like the tree / limit set / family). σ is a numerical reconstruction, so the curves are `≈`.
+  /** Segment-count readout for the active curves (empty when none). */
+  function renderSchwarzLevelReadout(): void {
+    const box = document.getElementById("schwarz-level-readout");
+    if (!box) return;
+    if (!schwarzLevelCurves) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const segs = schwarzLevelCurves.magnitude.length + schwarzLevelCurves.phase.length;
+    const nLevels = schwarzLevelCurves.magnitudeLevels.length;
+    // `≈`: σ is numerical, so the curves are an estimate of the true level sets.
+    box.textContent = `≈ ${segs.toLocaleString()} segs · ${nLevels} |σ| levels · ${schwarzLevelPhases} arg lines`;
+  }
+  /** Contour σ over the boundary polygon's padded bounding box (grid + phase-line controls). Synchronous — a
+   *  moderate grid keeps it well under a second. σ = null off Ω, so cells there are skipped (curves live only
+   *  where the reflection is defined). Runs only for a live session. */
+  function computeSchwarzLevelCurves(): void {
+    if (!schwarzSession) return;
+    const { engine, poly } = schwarzSession;
+    let minRe = Infinity, maxRe = -Infinity, minIm = Infinity, maxIm = -Infinity;
+    for (const p of poly) {
+      minRe = Math.min(minRe, p[0]); maxRe = Math.max(maxRe, p[0]);
+      minIm = Math.min(minIm, p[1]); maxIm = Math.max(maxIm, p[1]);
+    }
+    const padRe = 0.5 * (maxRe - minRe) || 1; // a half-extent margin of Ω around ∂Ω to show the curves in
+    const padIm = 0.5 * (maxIm - minIm) || 1;
+    const bbox: [number, number, number, number] = [minRe - padRe, maxRe + padRe, minIm - padIm, maxIm + padIm];
+    schwarzLevelCurves = computeSigmaLevelCurves(engine, bbox, { grid: schwarzLevelGrid, phaseLines: schwarzLevelPhases });
+    renderSchwarzLevelReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the level curves (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzLevelCurves(): void {
+    if (!schwarzLevelCurves) return;
+    schwarzLevelCurves = null;
+    renderSchwarzLevelReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
   // σ orbit family (F4e sweep · F4c canonical): trace a set of σ-orbits + draw them hue-ramped. Reuses the
   // orbit tracer (schwarzOrbitAt) + the orbit overlay (a colour override per member). A transient analysis.
   /** Count readout for the active family (empty when none). */
@@ -3770,11 +3827,13 @@ function init(): void {
     schwarzLimitSetCloud = null; // …and any previous limit-set cloud
     schwarzLimitDim = NaN;
     schwarzOrbitFamily = null; // …and any previous orbit family
+    schwarzLevelCurves = null; // …and any previous level curves
     schwarzFieldDirty = true; // a new map ⇒ (re)render the field
     schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
     renderSchwarzTilingReadout();
     renderSchwarzLimitReadout();
+    renderSchwarzLevelReadout();
     renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
     refreshSchwarzSingularities(); // F4h: find the branch points + σ-poles of the new map
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
@@ -3999,6 +4058,7 @@ function init(): void {
       // (The CPU fallback below reuses the on-screen canvas, already drawn with the same gating.)
       if (schwarzViewMode === "plane") {
         if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size);
+        if (schwarzLevelCurves) drawSchwarzLevelCurves(octx, schwarzLevelCurves, schwarzView, size);
         if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size);
@@ -4010,6 +4070,7 @@ function init(): void {
         const engine = schwarzSession.engine;
         const toZ = (w: Complex): Complex | null => engine.invertPhi(w);
         if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPlot: toZ });
+        if (schwarzLevelCurves) drawSchwarzLevelCurves(octx, schwarzLevelCurves, schwarzView, size, { toPlot: toZ });
         if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPlot: toZ });
@@ -4024,6 +4085,7 @@ function init(): void {
           return uv ? [uv[0] * size - 0.5, uv[1] * size - 0.5] : null;
         };
         if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPixel });
+        if (schwarzLevelCurves) drawSchwarzLevelCurves(octx, schwarzLevelCurves, schwarzView, size, { toPixel });
         if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
         if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
         if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPixel });
@@ -4651,6 +4713,33 @@ function init(): void {
     sweepBtn?.addEventListener("click", computeSchwarzSweep);
     canonBtn?.addEventListener("click", computeSchwarzCanonical);
     clearBtn?.addEventListener("click", clearSchwarzOrbitFamily);
+  }
+
+  // σ level curves (F4b): grid resolution + phase-line count, and draw / clear buttons. A transient analysis
+  // (computed on demand, not serialized).
+  {
+    const gridIn = document.getElementById("schwarz-level-grid") as HTMLInputElement | null;
+    const phasesIn = document.getElementById("schwarz-level-phases") as HTMLInputElement | null;
+    const drawBtn = document.getElementById("schwarz-level-draw");
+    const clearBtn = document.getElementById("schwarz-level-clear");
+    if (gridIn) {
+      gridIn.value = String(schwarzLevelGrid);
+      gridIn.addEventListener("change", () => {
+        const v = Math.round(Number(gridIn.value));
+        if (Number.isFinite(v)) schwarzLevelGrid = Math.max(24, Math.min(400, v)); // 24²…400² σ evaluations
+        gridIn.value = String(schwarzLevelGrid);
+      });
+    }
+    if (phasesIn) {
+      phasesIn.value = String(schwarzLevelPhases);
+      phasesIn.addEventListener("change", () => {
+        const v = Math.round(Number(phasesIn.value));
+        if (Number.isFinite(v)) schwarzLevelPhases = Math.max(0, Math.min(24, v));
+        phasesIn.value = String(schwarzLevelPhases);
+      });
+    }
+    drawBtn?.addEventListener("click", computeSchwarzLevelCurves);
+    clearBtn?.addEventListener("click", clearSchwarzLevelCurves);
   }
 
   // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate

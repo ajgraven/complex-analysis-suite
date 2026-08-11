@@ -24,6 +24,10 @@ export type { SchwarzInverse, PreimageTree, PreimageTreeOptions, PreimageEdge } 
 // The σ limit set (F4a): the chaos game on σ⁻¹ + its box-counting dimension. Also σ⁻¹-based, family-agnostic.
 export { sampleLimitSet, boxCountingDimension } from "./limit-set.js";
 export type { LimitSetOptions, BoxDimensionResult, BBox } from "./limit-set.js";
+// σ level curves (F4b): iso-magnitude |σ| + iso-phase arg σ lines by marching squares. Forward-only, family-
+// agnostic (a free function over the minimal `sigma` surface).
+export { computeSigmaLevelCurves } from "./level-curves.js";
+export type { SchwarzSigma, LevelCurveOptions, LevelSegment, SigmaLevelCurves } from "./level-curves.js";
 // σ-singularities (F4h): σ-poles (finite map-pole reflection) + branch points (zeros of φ′). Forward-only.
 export { findSigmaSingularities } from "./singularities.js";
 export type {

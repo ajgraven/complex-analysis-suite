@@ -906,6 +906,49 @@ abs(z)>2</textarea
                   </div>
                 </details>
 
+                <!-- Level curves (F4b): marching squares of |σ| (solid) + arg σ (dashed) over Ω. A transient
+                     analysis, drawn under the boundary/orbits; not serialized. -->
+                <details class="control-group" id="schwarz-level-group">
+                  <summary>Level curves — |σ| · arg σ (≈)</summary>
+                  <div class="control-grid">
+                    <p class="schwarz-inspect-hint">
+                      Contour the reflection over Ω: iso-|σ| lines (solid) and iso-arg-σ lines (dashed), by
+                      marching squares. σ is numerical, so the curves are approximate (≈).
+                    </p>
+                    <div class="field">
+                      <label for="schwarz-level-grid">grid</label>
+                      <input
+                        id="schwarz-level-grid"
+                        type="number"
+                        min="24"
+                        max="400"
+                        step="1"
+                        inputmode="numeric"
+                        value="160"
+                        title="Marching-squares grid samples per axis (higher = smoother curves, more σ evaluations)."
+                      />
+                    </div>
+                    <div class="field">
+                      <label for="schwarz-level-phases">arg lines</label>
+                      <input
+                        id="schwarz-level-phases"
+                        type="number"
+                        min="0"
+                        max="24"
+                        step="1"
+                        inputmode="numeric"
+                        value="6"
+                        title="Phase lines through arg σ ∈ [0, π): the dashed iso-arg contours (0 = none)."
+                      />
+                    </div>
+                    <div class="field schwarz-family-actions">
+                      <button id="schwarz-level-draw" type="button" class="primary">draw</button>
+                      <button id="schwarz-level-clear" type="button">clear</button>
+                    </div>
+                    <div id="schwarz-level-readout" class="schwarz-inspect" aria-live="polite" hidden></div>
+                  </div>
+                </details>
+
                 <!-- Render — resolution & sampling (Phase B). The σ field renders at the display resolution
                      in device pixels; anti-aliasing supersamples for smoother tiling edges. -->
                 <details class="control-group" id="schwarz-render-group">

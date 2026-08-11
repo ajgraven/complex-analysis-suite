@@ -2498,3 +2498,29 @@
   **F4c + F4e complete — σ-orbit families (swept + canonical) join the CD analysis cards.** Remaining
   à-la-carte F4 cards (F4b level curves · F4d cycle finder · F4g domain coloring · F4f forward image of a drawn
   curve) are the next picks.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4b — level curves):** a
+  "Level curves" card that contours the reflection σ over Ω — the iso-**|σ|** lines (solid) + iso-**arg σ**
+  lines (dashed) — by marching squares. A new pure `@cas/schwarz/level-curves.ts` (`computeSigmaLevelCurves`,
+  a free function over the minimal `{sigma}` surface both engines expose): it samples σ ONCE per grid node,
+  then marches |σ| per magnitude level and — the load-bearing choice — draws the **phase** lines SEAM-FREE, as
+  the zero set of the smooth field `g_θ(w) = Im(σ·e^{−iθ}) = |σ|·sin(arg σ − θ)`. Its zeros are exactly
+  arg σ ≡ θ (mod π), so one level-0 march per θ = kπ/M gives the phase lines with NO reference to arg's ±π
+  branch cut — the negative-real-axis "seam" a raw-arg marcher must special-case simply never appears (proven
+  in a unit test: the identity's θ=0 contour spans the *whole* real axis, negative half included). A grid node
+  where σ = null (φ⁻¹ failed, w ∉ Ω) is invalid and every cell touching it is skipped, so the curves live only
+  where σ is defined. Magnitude levels auto-derive as a geometric ladder off the **median** |σ| (robust to a
+  bounded map's σ-pole spike). A CD overlay (`schwarzLevelCurveOverlay.ts`) strokes the w-space segments with
+  the shared σ-overlay projection (solid magnitude over dashed phase; a wrap-length span rejected), so they
+  live in all three views + bake into the PNG export; the card computes on demand over the boundary polygon's
+  padded bbox with grid + phase-line controls, and — a transient analysis, not a view property — is NOT
+  serialized (like the tree / limit set / family; its two controls are appState opt-outs). **Honest labeling:**
+  the card title, summary, and readout carry `≈` — σ is a numerical reconstruction, so the level sets are
+  estimates. Green: typecheck + lint + node **2500 → 2512** (+6 @cas/schwarz — the identity's |σ|=1 unit circle,
+  the seam-free real axis + both axes for M=2, a σ-undefined region skipped, the median ladder, a deltoid smoke;
+  +6 schwarzLevelCurveOverlay — one moveTo/lineTo per drawn segment, dashed-phase/solid-magnitude, null-projection
+  drop, toPixel precedence, wrap-length reject, empty no-op). VERIFIED (Playwright, **6/6**): drawing contours
+  the deltoid (`≈ 3,746 segs · 5 |σ| levels · 6 arg lines`) over the field; the curves survive the z-disk +
+  sphere switches; clear removes them; a bounded lobe contours too. Captured the deltoid's σ phase portrait —
+  concentric |σ| loops + arg-σ spokes converging on σ's zeros/poles, the classic circle-and-spoke signature.
+  **F4b complete — σ's level sets are visible + honestly labeled.** Remaining à-la-carte F4 cards (F4g domain
+  coloring · F4d cycle finder · F4f forward image of a drawn curve) are the next picks.
