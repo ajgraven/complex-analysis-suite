@@ -100,6 +100,9 @@ body {
 .sidebar input.expr { font-family: var(--mono); }
 .field { display: flex; flex-direction: column; gap: 0.2rem; }
 .field-label { font-size: 0.72rem; color: var(--muted); }
+/* disk-grid density slider + its live value */
+.field input[type="range"] { width: 100%; accent-color: var(--accent); }
+.field-value { align-self: flex-end; margin-top: -0.15rem; font-size: 0.72rem; color: var(--muted); font-family: var(--mono); }
 /* precise-nav: three compact number fields (centre re/im, zoom) side by side (A5) */
 .nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem 0.5rem; margin-bottom: 0.45rem; }
 .nav-grid input { width: 100%; padding: 0.3rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--field-bg); color: var(--fg); font-family: var(--mono); font-size: 0.82rem; }
@@ -166,6 +169,9 @@ dl.glossary-dl dd { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.82rem;
 .pane { position: relative; flex: 1 1 0; min-width: 0; }
 .pane.right { display: none; border-left: 1px solid var(--border); }
 .stage.split .pane.right { display: block; }
+/* "Image only" layout (2.4): hide the source pane, let the image pane fill the stage. */
+.stage.solo .pane.left { display: none; }
+.stage.solo .pane.right { border-left: none; }
 canvas.plane, canvas.overlay, canvas.image { position: absolute; inset: 0; width: 100%; height: 100%; }
 canvas.plane { touch-action: none; cursor: grab; }
 canvas.plane:active { cursor: grabbing; }

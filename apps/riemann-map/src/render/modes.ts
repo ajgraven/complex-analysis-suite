@@ -15,6 +15,9 @@ export interface RenderMode {
 }
 
 export const RENDER_MODES: readonly RenderMode[] = [
+  // The primary (default) view: the image of the unit disk under φ, drawn as a pushed-forward polar
+  // grid of filled cells (code 30 — a 2D-overlay picture, not a GLSL field, so the shader never sees it).
+  { id: "disk-image", name: "Image of the disk (conformal)", code: 30, usesDeriv: false, usesColormap: false },
   { id: "phase", name: "Phase portrait", code: 0, usesDeriv: false, usesColormap: false },
   { id: "phase-plain", name: "Phase (flat)", code: 1, usesDeriv: false, usesColormap: false },
   { id: "conformal", name: "Conformal grid (Wegert)", code: 2, usesDeriv: false, usesColormap: false },
@@ -36,6 +39,12 @@ export function modeIsDynamics(id: string): boolean {
  *  GLSL field — so main clears the GL pane and skips the φ-expression pipeline for it. */
 export function modeIsDomain(id: string): boolean {
   return modeCode(id) === 20;
+}
+
+/** The primary disk-image mode (code 30): pushes the unit disk's polar grid forward through φ and
+ *  draws the image cells — a 2D overlay, so main clears the GL pane (as the domain mode does). */
+export function modeIsDiskImage(id: string): boolean {
+  return modeCode(id) === 30;
 }
 
 const modeById = new Map(RENDER_MODES.map((m) => [m.id, m]));

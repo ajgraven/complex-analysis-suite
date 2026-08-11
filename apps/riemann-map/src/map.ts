@@ -95,14 +95,20 @@ export function compileMap(state: MapState): MapResult {
   }
 }
 
-/** φ′ at z: the symbolic derivative when available, else a central finite difference of φ (honest ≈). */
-export function derivativeAt(map: CompiledMap, z: readonly [number, number]): [number, number] {
+/** φ′ at z (holding the family parameter c): the symbolic derivative when available, else a central
+ *  finite difference of φ in z (honest ≈). `c` defaults to the origin for maps that don't use it. */
+export function derivativeAt(
+  map: CompiledMap,
+  z: readonly [number, number],
+  c: readonly [number, number] = [0, 0],
+): [number, number] {
+  const cc: [number, number] = [c[0], c[1]];
   if (map.jsDeriv) {
-    const d = map.jsDeriv([z[0], z[1]], [0, 0]);
+    const d = map.jsDeriv([z[0], z[1]], cc);
     return [d[0], d[1]];
   }
   const h = 1e-4 * Math.max(1, Math.hypot(z[0], z[1]));
-  const zp = map.jsFn([z[0] + h, z[1]], [0, 0]);
-  const zm = map.jsFn([z[0] - h, z[1]], [0, 0]);
+  const zp = map.jsFn([z[0] + h, z[1]], cc);
+  const zm = map.jsFn([z[0] - h, z[1]], cc);
   return [(zp[0] - zm[0]) / (2 * h), (zp[1] - zm[1]) / (2 * h)];
 }

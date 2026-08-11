@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { sourceGrid, pushforward, bounds, type GridLine } from "../src/render/grid.js";
+import {
+  sourceGrid,
+  pushforward,
+  bounds,
+  diskGrid,
+  pushforwardCells,
+  cellCorners,
+  type GridLine,
+  type Pt,
+} from "../src/render/grid.js";
 
 describe("coordinate grids (D1/D2)", () => {
   it("a cartesian grid has 2·(N+1) lines, all inside the z-window", () => {
@@ -33,5 +42,62 @@ describe("coordinate grids (D1/D2)", () => {
     expect(b.maxx).toBe(2);
     expect(b.maxy).toBe(2);
     expect(b.minx).toBe(0);
+  });
+});
+
+describe("disk-image grid (the primary view)", () => {
+  it("interior: R radial × 2R angular quad cells, all corners inside 𝔻 (|z| ≤ 1)", () => {
+    const dg = diskGrid("interior", 10);
+    expect(dg.cells.length).toBe(10 * 20);
+    for (const c of dg.cells) {
+      expect(c.quad.length).toBe(4);
+      for (const [x, y] of c.quad) expect(Math.hypot(x, y)).toBeLessThanOrEqual(1 + 1e-9);
+    }
+    // the reference curve is the unit circle
+    for (const [x, y] of dg.unitCircle) expect(Math.hypot(x, y)).toBeCloseTo(1, 10);
+  });
+
+  it("exterior: every cell corner lies outside 𝔻 (|z| ≥ 1) out to ~e^2.5", () => {
+    const dg = diskGrid("exterior", 8);
+    expect(dg.cells.length).toBe(8 * 16);
+    let maxR = 0;
+    for (const c of dg.cells) {
+      for (const [x, y] of c.quad) {
+        const r = Math.hypot(x, y);
+        expect(r).toBeGreaterThanOrEqual(1 - 1e-9);
+        maxR = Math.max(maxR, r);
+      }
+    }
+    expect(maxR).toBeCloseTo(Math.exp(2.5), 6); // outer ring at e^2.5 (reference parity)
+  });
+
+  it("rings is clamped to [2, 64]", () => {
+    expect(diskGrid("interior", 0).cells.length).toBe(2 * 4); // → 2 rings
+    expect(diskGrid("interior", 999).cells.length).toBe(64 * 128); // → 64 rings
+  });
+
+  it("takes an independent angular count and returns ring + spoke polylines", () => {
+    const dg = diskGrid("interior", 6, 10);
+    expect(dg.cells.length).toBe(6 * 10);
+    expect(dg.rings.length).toBe(6); // interior: rings at r₁…r₆
+    expect(dg.spokes.length).toBe(10);
+    for (const ring of dg.rings) for (const [x, y] of ring) expect(Math.hypot(x, y)).toBeLessThanOrEqual(1 + 1e-9);
+  });
+
+  it("exterior includes ∂𝔻 among its rings (r runs 1 outward)", () => {
+    const dg = diskGrid("exterior", 5, 8);
+    expect(dg.rings.length).toBe(6); // k = 0…5, so the unit circle is included
+    for (const [x, y] of dg.rings[0]) expect(Math.hypot(x, y)).toBeCloseTo(1, 6);
+  });
+
+  it("pushforwardCells maps every corner + midpoint through φ; cellCorners flattens them", () => {
+    const dg = diskGrid("interior", 3);
+    const sq = pushforwardCells(dg.cells, (z: Pt): Pt => [z[0] * z[0] - z[1] * z[1], 2 * z[0] * z[1]]); // z²
+    expect(sq.length).toBe(dg.cells.length);
+    // z² doubles the argument, so an image corner's modulus is the source modulus squared.
+    const [sx, sy] = dg.cells[0].quad[1];
+    const [ix, iy] = sq[0].quad[1];
+    expect(Math.hypot(ix, iy)).toBeCloseTo(Math.hypot(sx, sy) ** 2, 10);
+    expect(cellCorners(sq).length).toBe(sq.length * 4);
   });
 });

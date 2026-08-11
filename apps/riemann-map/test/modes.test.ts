@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RENDER_MODES, modeCode, modeUsesDeriv, modeUsesColormap, modeIsDynamics, modeIsDomain } from "../src/render/modes.js";
+import { RENDER_MODES, modeCode, modeUsesDeriv, modeUsesColormap, modeIsDynamics, modeIsDomain, modeIsDiskImage } from "../src/render/modes.js";
 
 describe("render modes registry (C1–C6, P2 julia)", () => {
   it("mode codes are unique and resolve by id (with a phase-portrait fallback)", () => {
@@ -24,6 +24,15 @@ describe("render modes registry (C1–C6, P2 julia)", () => {
     expect(modeCode("domain-map")).toBe(20);
   });
 
+  it("flags the primary disk-image mode (code 30) and lists it first", () => {
+    expect(modeIsDiskImage("disk-image")).toBe(true);
+    expect(modeIsDiskImage("phase")).toBe(false);
+    expect(modeIsDiskImage("domain-map")).toBe(false);
+    expect(modeCode("disk-image")).toBe(30);
+    expect(RENDER_MODES[0].id).toBe("disk-image"); // the default view leads the picker
+    expect(modeIsDynamics("disk-image")).toBe(false); // it evaluates φ once, doesn't iterate
+  });
+
   it("marks exactly the derivative-field modes as usesDeriv", () => {
     expect(modeUsesDeriv("abs-deriv")).toBe(true);
     expect(modeUsesDeriv("log-deriv")).toBe(true);
@@ -40,5 +49,6 @@ describe("render modes registry (C1–C6, P2 julia)", () => {
     expect(modeUsesColormap("phase")).toBe(false);
     expect(modeUsesColormap("checker")).toBe(false);
     expect(modeUsesColormap("domain-map")).toBe(false);
+    expect(modeUsesColormap("disk-image")).toBe(false); // hue by arg φ′, not a ramp
   });
 });

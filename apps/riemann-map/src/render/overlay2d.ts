@@ -5,6 +5,13 @@
 // only; the geometry it draws (grid.ts) is what the node suite covers.
 import type { GridLine, Pt } from "./grid.js";
 
+/** A filled + outlined quad cell (the disk-image view): fill = light hue, edge = saturated hue. */
+export interface FillCell {
+  readonly quad: readonly [Pt, Pt, Pt, Pt];
+  readonly fill: string;
+  readonly edge: string;
+}
+
 export class Overlay2D {
   private readonly ctx: CanvasRenderingContext2D;
   private centerRe = 0;
@@ -86,6 +93,36 @@ export class Overlay2D {
     }
   }
 
+  /** Fill + outline quad cells (the disk-image view). Cells with a non-finite or blown-up (>`cap`)
+   *  corner — e.g. cells the map sends near a pole — are skipped rather than drawn to ∞. */
+  fillCells(cells: readonly FillCell[], edgeWidth = 0.75, cap = 1e3): void {
+    const ctx = this.ctx;
+    ctx.lineJoin = "round";
+    ctx.lineWidth = edgeWidth * this.dpr;
+    for (const c of cells) {
+      let ok = true;
+      for (const p of c.quad) {
+        if (!Number.isFinite(p[0]) || !Number.isFinite(p[1]) || Math.hypot(p[0], p[1]) > cap) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) continue;
+      ctx.beginPath();
+      const [x0, y0] = this.toPx(c.quad[0]);
+      ctx.moveTo(x0, y0);
+      for (let i = 1; i < 4; i++) {
+        const [px, py] = this.toPx(c.quad[i]);
+        ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fillStyle = c.fill;
+      ctx.fill();
+      ctx.strokeStyle = c.edge;
+      ctx.stroke();
+    }
+  }
+
   /** A ringed dot at world point `p` (the linked cursor). */
   drawMarker(p: Pt, color: string): void {
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
@@ -99,6 +136,27 @@ export class Overlay2D {
     ctx.arc(px, py, r, 0, 2 * Math.PI);
     ctx.fill();
     ctx.stroke();
+  }
+
+  /** A draggable parameter handle (a larger ringed dot + a label) at world point `p`. */
+  drawHandle(p: Pt, color: string, label: string): void {
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
+    const ctx = this.ctx;
+    const [px, py] = this.toPx(p);
+    const r = 7 * this.dpr;
+    ctx.lineWidth = 2.5 * this.dpr;
+    ctx.strokeStyle = "rgba(0,0,0,0.65)";
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = `${Math.round(12 * this.dpr)}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillText(label, px + r + 3 * this.dpr + 1, py - r + 1);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, px + r + 3 * this.dpr, py - r);
   }
 
   /** A bottom-left scale bar: a "nice" 1/2/5×10ⁿ world length (CD parity), with end ticks + a label
