@@ -52,10 +52,12 @@ import {
   pointerMidpoint,
   pinchFactor,
   leftHalf,
+  rightHalf,
   isLeftHalf,
   type NavIntent,
   type Pt,
 } from "./ui/navigation.js";
+import { heightAt } from "./render3d/height.js";
 import {
   findSingularities,
   type Singularities,
@@ -271,6 +273,9 @@ function main(): void {
   const canvasRect = (): DOMRect => canvas.getBoundingClientRect();
   const twoDRect = (): DOMRect | ReturnType<typeof leftHalf> =>
     plot.mode === "linked" ? leftHalf(canvasRect()) : canvasRect();
+  // The surface pane's rect — the whole canvas in 3D, the right half in the linked view — for the 3D pick.
+  const threeDRect = (): DOMRect | ReturnType<typeof rightHalf> =>
+    plot.mode === "linked" ? rightHalf(canvasRect()) : canvasRect();
   const effMode = (clientX: number): "2d" | "3d" | "sphere" => {
     const m = plot.mode;
     if (m === "linked") return isLeftHalf(clientX, canvasRect()) ? "2d" : "3d";
@@ -1087,9 +1092,14 @@ function main(): void {
   };
   const fmtComplex = (z: Complex): string =>
     `${fmtNum(z[0])} ${z[1] < 0 ? "-" : "+"} ${fmtNum(Math.abs(z[1]))}i`;
-  const updateProbe = (clientX: number, clientY: number): void => {
+  // Fill the readout from a domain point `z` (its f, |f|, arg), or blank it (`—`) when `z` is null — the
+  // cursor is off the surface. Shared by the 2D screen→world probe and the 3D surface pick.
+  const renderProbe = (z: Complex | null): void => {
     if (!(pz instanceof HTMLElement)) return;
-    const z = plot.screenToWorld(clientX, clientY, twoDRect());
+    if (!z) {
+      for (const el of [pz, pfz, pabs, parg]) if (el instanceof HTMLElement) el.textContent = "—";
+      return;
+    }
     pz.textContent = fmtComplex(z);
     if (!probeFn) return;
     let w: Complex;
@@ -1105,6 +1115,22 @@ function main(): void {
     if (pabs instanceof HTMLElement) pabs.textContent = pre + fmtNum(Math.hypot(w[0], w[1]));
     if (parg instanceof HTMLElement) parg.textContent = pre + fmtNum(Math.atan2(w[1], w[0]));
   };
+  const updateProbe = (clientX: number, clientY: number): void =>
+    renderProbe(plot.screenToWorld(clientX, clientY, twoDRect()));
+  // The CPU height field (|f| → surface height), matching the GPU vertex law, so the 3D pick lands on the
+  // drawn surface. Then the value inspector reads the exact point under the cursor (height + occlusion).
+  const surfaceHeight = (re: number, im: number): number => {
+    if (!probeFn) return 0;
+    let w: Complex;
+    try {
+      w = probeFn([re, im], [0, 0]);
+    } catch {
+      return 0;
+    }
+    return heightAt(plot.heightMode, Math.hypot(w[0], w[1]), plot.color.modScale) * plot.heightScale;
+  };
+  const updateProbe3d = (clientX: number, clientY: number): void =>
+    renderProbe(plot.pickSurface(clientX, clientY, surfaceHeight, threeDRect()));
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
@@ -1206,8 +1232,12 @@ function main(): void {
     } else if (grabWorld) {
       plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld, twoDRect());
       redraw(true);
-    } else if (effMode(e.clientX) === "2d") {
-      updateProbe(e.clientX, e.clientY);
+    } else {
+      // Idle hover (no drag): update the value inspector for the pane under the cursor. 2D reads the
+      // screen→world point; 3D picks the point on the surface; the sphere has no readout.
+      const m = effMode(e.clientX);
+      if (m === "2d") updateProbe(e.clientX, e.clientY);
+      else if (m === "3d") updateProbe3d(e.clientX, e.clientY);
     }
   });
   const endDrag = (e: PointerEvent): void => {

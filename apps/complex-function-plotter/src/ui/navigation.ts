@@ -56,6 +56,11 @@ export function leftHalf(r: Rect): Rect {
   return { left: r.left, top: r.top, width: r.width / 2, height: r.height };
 }
 
+/** The right sub-rect of a horizontal split — the 3D surface pane of the linked view. */
+export function rightHalf(r: Rect): Rect {
+  return { left: r.left + r.width / 2, top: r.top, width: r.width / 2, height: r.height };
+}
+
 /** Whether a client-x falls in the left (flat) half of `r`; the right half is the 3D surface. */
 export function isLeftHalf(clientX: number, r: Rect): boolean {
   return clientX < r.left + r.width / 2;

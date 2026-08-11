@@ -29,6 +29,7 @@ import {
   viewProjection,
 } from "../render3d/camera.js";
 import { buildGridMesh, gridResolutionForSpan, GRID_N_BASE } from "../render3d/mesh.js";
+import { pickHeightField } from "../render3d/pick.js";
 import { buildSurfaceProgram } from "../render3d/surfaceShader.js";
 import {
   type Quat,
@@ -653,16 +654,7 @@ export class Plot {
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg, so the surface sits in a dark scene
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    // Frame the surface to fill the viewport at ANY zoom: the perspective eye distance tracks the view
-    // span, so zooming the domain (§B) no longer shrinks the landscape to a small centred patch. The
-    // top-down ORTHO path keeps its own distance — its box is sized from `span` directly, so top-down
-    // still reproduces the 2D portrait pixel-for-pixel (the Phase-5 golden).
-    const framedDistance = (this.view.span * SURFACE_FRAMING) / Math.tan(this.camera.fov / 2);
-    const cam: OrbitCamera = {
-      ...this.camera,
-      distance: this.camera.ortho ? this.camera.distance : framedDistance,
-      target: [this.view.cx, this.view.cy, 0],
-    };
+    const cam = this.surfaceCamera();
     gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, this.view.span));
     gl.uniform2f(u.uCenter, this.view.cx, this.view.cy);
     gl.uniform1f(u.uHalfSpan, this.view.span);
@@ -795,6 +787,49 @@ export class Plot {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
     gl.bindVertexArray(null);
+  }
+
+  /** The render camera for the 3D landscape: the orbit camera framed to fill the viewport (§B — the
+   *  perspective eye distance tracks the view span; the top-down ortho snap keeps its own distance, its
+   *  box sized from span directly, so top-down still equals the 2D portrait) and re-targeted at the view
+   *  centre. Shared by the surface paint and the cursor pick so they agree exactly. */
+  private surfaceCamera(): OrbitCamera {
+    const framedDistance = (this.view.span * SURFACE_FRAMING) / Math.tan(this.camera.fov / 2);
+    return {
+      ...this.camera,
+      distance: this.camera.ortho ? this.camera.distance : framedDistance,
+      target: [this.view.cx, this.view.cy, 0],
+    };
+  }
+
+  /** Value-inspector pick (catalog H1): the domain point (re, im) ON the 3D surface under a client pixel,
+   *  or null if the cursor is over empty scene. `heightFn(re, im)` is the CPU height field (|f| → height),
+   *  supplied by the caller so this stays DOM/GL-free. Uses the same framed camera as the paint, so the
+   *  pick matches what's drawn (surface height + self-occlusion accounted for, not a base-plane shadow). */
+  pickSurface(
+    clientX: number,
+    clientY: number,
+    heightFn: (re: number, im: number) => number,
+    vp?: ViewportRect,
+  ): [number, number] | null {
+    const r = this.rect(vp);
+    if (r.width <= 0 || r.height <= 0) return null;
+    const ndcX = ((clientX - r.left) / r.width) * 2 - 1;
+    const ndcY = 1 - ((clientY - r.top) / r.height) * 2;
+    const cam = this.surfaceCamera();
+    return pickHeightField(
+      {
+        eye: cameraEye(cam),
+        target: cam.target,
+        fov: cam.fov,
+        ortho: cam.ortho,
+        worldHalfHeight: this.view.span,
+      },
+      ndcX,
+      ndcY,
+      r.width / r.height,
+      heightFn,
+    );
   }
 
   /** Snap to the exact top-down orthographic view — the landscape then equals the 2D portrait. */
