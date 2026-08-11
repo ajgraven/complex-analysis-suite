@@ -197,6 +197,10 @@ export class Plot {
   /** ∞-inspector (5C, F8): plot `f(1/z)` instead of `f(z)`, so the origin shows the behaviour at ∞.
    *  Applied as a `z → 1/z` AST substitution, so the GPU (2D + surface) and the CPU instruments agree. */
   inspectInfinity = false;
+  /** Derivative overlay (H9): plot `f′(z)` instead of `f(z)`. Applied as a symbolic `d/dz` on the AST
+   *  (after any ∞-substitution), so every downstream instrument describes the plotted derivative. Throws
+   *  on a map with no symbolic derivative — the caller keeps the previous program and shows the error. */
+  plotDerivative = false;
 
   // Live named parameters (ADR-0011, catalog G1). `paramNamesList` is the ordered set the current `f`
   // reads (from `freeParameters`); `paramValues` holds each one's `[re, im]` (preserved across formula
@@ -253,6 +257,7 @@ export class Plot {
   private compileSource(src: string): string {
     let ast = parse(src);
     if (this.inspectInfinity) ast = substitute(ast, "z", parse("1/z")); // plot f(1/z) — the ∞-inspector
+    if (this.plotDerivative) ast = differentiate(ast, "z"); // plot f′ — the derivative overlay (H9)
     const names = freeParameters(ast);
     const glsl = compileF(ast, "fFn", { params: names });
     // f' for the analytic surface normal (5B), when the map is differentiable in the system. Compiled

@@ -56,7 +56,11 @@ import {
   type NavIntent,
   type Pt,
 } from "./ui/navigation.js";
-import { findSingularities, type Singularities } from "./analysis/singularities.js";
+import {
+  findSingularities,
+  type Singularities,
+  type Singularity,
+} from "./analysis/singularities.js";
 import {
   decodeState,
   encodeState,
@@ -188,7 +192,10 @@ function main(): void {
   const cvdSel = byId("cvd");
   const markSingsInput = byId("markSings");
   const singCount = byId("singCount");
+  const markCriticalInput = byId("markCritical");
+  const critCount = byId("critCount");
   const inspectInfInput = byId("inspectInf");
+  const plotDerivInput = byId("plotDeriv");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -276,34 +283,45 @@ function main(): void {
   let probeEstimate = false;
   let sings: Singularities | null = null;
   let markSings = false;
+  let crits: Singularity[] = []; // located critical points (f′ = 0), catalog H6
+  let markCritical = false;
   let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
+  let plotDerivative = false; // derivative overlay (H9): plot f′(z). Transient (not persisted).
   // Keep the parsed f (and its z-derivative, when holomorphic) so the CPU instruments can be rebuilt
   // with the current parameter values baked in — without re-parsing — whenever a parameter moves.
   let fAst: Node | null = null;
   let fpAst: Node | null = null;
+  let fppAst: Node | null = null; // f″, so the critical-point finder (H6) can Newton-refine zeros of f′
+  let fppFn: ((z: Complex, c: Complex) => Complex) | null = null;
   const rebuildInstrumentFns = (): void => {
     if (!fAst) {
       probeFn = null;
       fpFn = null;
+      fppFn = null;
       return;
     }
     const params = plot.paramsRecord(); // GLSL and JS read the same parameter values (dual-backend)
     probeFn = makeComplexFn(fAst, params);
     fpFn = fpAst ? makeComplexFn(fpAst, params) : null;
+    fppFn = fppAst ? makeComplexFn(fppAst, params) : null;
   };
   const updateFns = (src: string): void => {
     try {
       let ast = parse(src);
       if (inspectInfinity) ast = substitute(ast, "z", parse("1/z")); // instruments track f(1/z) too
-      fAst = ast;
+      if (plotDerivative) ast = differentiate(ast, "z"); // …and f′ when the derivative overlay is on
+      fAst = ast; // `fAst` is always the *plotted* map, so every instrument describes what's on screen
       try {
         fpAst = differentiate(fAst, "z");
+        fppAst = differentiate(fpAst, "z");
       } catch {
-        fpAst = null; // non-holomorphic — the singularity finder needs f'
+        fpAst = null; // non-holomorphic — the singularity / critical-point finders need f′ (and f″)
+        fppAst = null;
       }
     } catch {
       fAst = null;
       fpAst = null;
+      fppAst = null;
     }
     rebuildInstrumentFns();
   };
@@ -355,13 +373,14 @@ function main(): void {
       if (ax) ax.clearRect(0, 0, axesCanvas.width, axesCanvas.height);
     } else {
       drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
-      if (markSings && sings)
+      if ((markSings && sings) || (markCritical && crits.length))
         drawMarkers(
           axesCanvas,
           plot.view,
           canvas.clientWidth,
           canvas.clientHeight,
-          sings,
+          markSings ? sings : null,
+          markCritical ? crits : [],
         );
     }
     // Only committed frames update the share-link — a draft (drag / animation frame) settles with a
@@ -370,32 +389,39 @@ function main(): void {
   };
 
   const showCounts = (): void => {
-    if (!(singCount instanceof HTMLElement)) return;
-    if (!markSings) {
-      singCount.textContent = "";
-    } else if (!sings) {
-      singCount.textContent = "—";
-    } else if (!sings.differentiable) {
-      singCount.textContent = "needs a holomorphic f";
-    } else {
-      const z = sings.zeros.reduce((n, s) => n + s.order, 0);
-      const p = sings.poles.reduce((n, s) => n + s.order, 0);
-      singCount.textContent = `zeros ${sings.zeros.length} (Σ ${z}) · poles ${sings.poles.length} (Σ ${p}) ≈`;
+    if (singCount instanceof HTMLElement) {
+      if (!markSings) {
+        singCount.textContent = "";
+      } else if (!sings) {
+        singCount.textContent = "—";
+      } else if (!sings.differentiable) {
+        singCount.textContent = "needs a holomorphic f";
+      } else {
+        const z = sings.zeros.reduce((n, s) => n + s.order, 0);
+        const p = sings.poles.reduce((n, s) => n + s.order, 0);
+        singCount.textContent = `zeros ${sings.zeros.length} (Σ ${z}) · poles ${sings.poles.length} (Σ ${p}) ≈`;
+      }
+    }
+    // Critical-point count (H6): distinct located points; a degenerate one is flagged by its order label.
+    if (critCount instanceof HTMLElement) {
+      if (!markCritical) critCount.textContent = "";
+      else if (!fpFn) critCount.textContent = "needs a holomorphic f";
+      else critCount.textContent = `critical points ${crits.length} ≈`;
     }
   };
   const recomputeSings = (): void => {
-    if (markSings && probeFn) {
-      const aspect =
-        canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
-      sings = findSingularities(probeFn, fpFn, plot.view, aspect);
-    } else {
-      sings = null;
-    }
+    const aspect =
+      canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
+    sings = markSings && probeFn ? findSingularities(probeFn, fpFn, plot.view, aspect) : null;
+    // Critical points = zeros of f′ (H6): reuse the zero-finder on f′ itself — it needs f″ to
+    // Newton-refine and order each root — and keep only its zeros.
+    crits =
+      markCritical && fpFn ? findSingularities(fpFn, fppFn, plot.view, aspect).zeros : [];
     showCounts();
   };
   let singTimer = 0;
   const recomputeSingsSoon = (): void => {
-    if (!markSings) return;
+    if (!markSings && !markCritical) return;
     window.clearTimeout(singTimer);
     singTimer = window.setTimeout(() => {
       recomputeSings();
@@ -672,6 +698,20 @@ function main(): void {
       applyExpr(exprs[active]);
     });
   }
+  // Derivative overlay (H9): plot f′(z). Like the ∞-inspector, toggling recompiles the map (GPU) and
+  // rebuilds the instruments (CPU) from the same symbolic derivative, so probe / finders track f′. A map
+  // with no symbolic derivative can't be overlaid — `applyExpr` surfaces the error and keeps the plot.
+  if (plotDerivInput instanceof HTMLInputElement) {
+    plotDerivInput.checked = plotDerivative;
+    plotDerivInput.addEventListener("change", () => {
+      plotDerivative = plotDerivInput.checked;
+      plot.plotDerivative = plotDerivInput.checked;
+      // A map with no symbolic derivative (e.g. conjugate) can't be overlaid — replace the shared
+      // package's implementation-detail error ("…for Newton's method (position 0)") with a plain one.
+      if (!applyExpr(exprs[active]) && plotDerivative)
+        setError("Plot f′: this map has no symbolic derivative.");
+    });
+  }
 
   // Autocomplete (A5): builtins + constants + z/c + the current map's parameters.
   const FN_NAMES = [...COMPLEX_FUNCTIONS, ...BINARY_FUNCTIONS, "f", "if", "not"];
@@ -788,6 +828,15 @@ function main(): void {
     markSingsInput.checked = markSings;
     markSingsInput.addEventListener("change", () => {
       markSings = markSingsInput.checked;
+      recomputeSings();
+      redraw(false);
+    });
+  }
+  // Critical points (H6): mark where f′ = 0 with diamonds, computed on demand like the zero/pole finder.
+  if (markCriticalInput instanceof HTMLInputElement) {
+    markCriticalInput.checked = markCritical;
+    markCriticalInput.addEventListener("change", () => {
+      markCritical = markCriticalInput.checked;
       recomputeSings();
       redraw(false);
     });

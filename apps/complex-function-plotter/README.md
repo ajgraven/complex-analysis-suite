@@ -92,11 +92,12 @@ Plus the Phase-2 research tool:
   **conformal proportional grid**, chessboards, and a Re/Im grid, with crisp/shaded and hue rotate/
   reverse controls.
 - **Instruments** — a live cursor readout (`z, f(z), |f|, arg f`); **zeros & poles located, counted,
-  and ordered** via the argument principle (marked, honestly labeled `≈`); user-set **level sets**
+  and ordered** via the argument principle (marked, honestly labeled `≈`); **critical points** where
+  **f′ = 0** (H6), found by running that same finder on f′ and marked with diamonds; user-set **level sets**
   (`|f| = c`, `arg f = c`); an **∞-inspector** (5C/F8) that plots **f(1/z)** so the origin shows the map's
-  behaviour at infinity (a `z → 1/z` substitution, so the 2D/3D render and the instruments agree); and an
-  **honest-labeling / uncertainty layer** that hatches pixels near poles and essential singularities where
-  the render is unreliable.
+  behaviour at infinity, and a **derivative overlay** (H9) that plots **f′(z)** — both are AST rewrites, so
+  the 2D/3D render and the instruments track the same map; and an **honest-labeling / uncertainty layer**
+  that hatches pixels near poles and essential singularities where the render is unreliable.
 - **Navigation & output** — pan / zoom-to-cursor / reset, axes + grid + scale bar (aspect locked
   1:1, so angles read true), phase-wheel + modulus legends, share-links (`#vs=` via `@cas/interchange`),
   and **hi-resolution PNG export** (K1/K3/K9, Phase 6): pick a long-edge (up to the GPU's max texture
@@ -156,7 +157,7 @@ Phase 6 (**hi-res PNG export + metadata + copy-image (6A)**, **suite interop (6B
 | `ui/navigation.ts`          | pure a11y + linked-view helpers: `keyToNav` (L7 arrows / ± / reset), the `pinchFactor` touch math, and `leftHalf` / `isLeftHalf` (the I7 split)              |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                                |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                                 |
-| `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                               |
+| `ui/markers.ts`             | draws located zeros (circles), poles (×), and critical points where f′=0 (diamonds), with order labels, on the overlay                                        |
 | `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                                       |
 | `render3d/mat4.ts`          | Phase-5 3D kit: typed column-major `mat4`/`vec3` (identity, multiply, lookAt, perspective, ortho, transformPoint) — ported from QD's `sphere-common`         |
 | `render3d/camera.ts`        | the orbit camera (F5): azimuth / elevation / dolly → view + projection in a Z-up world; the exact top-down ortho preset (top-down = the 2D portrait)         |
