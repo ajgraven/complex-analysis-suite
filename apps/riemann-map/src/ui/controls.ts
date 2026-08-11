@@ -27,16 +27,12 @@ export interface Controls {
   setDiskAngular(n: number): void;
   setDiskLayout(id: string): void;
   /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`bottcher` = disk-image numeric sources. */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean; import: boolean }): void;
+  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
   setAnalysis(rows: readonly (readonly [string, string])[] | null, title?: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
-  /** Show/hide the exterior-map export button (hidden when no valid conformal map ψ exists). */
-  setExteriorExportAvailable(available: boolean): void;
-  /** Transient status under the exterior-map export button (copied / unavailable). */
-  setExportStatus(msg: string): void;
   onExpr(cb: (expr: string) => void): void;
   onMode(cb: (id: string) => void): void;
   onColormap(cb: (id: string) => void): void;
@@ -54,7 +50,6 @@ export interface Controls {
   onFit(cb: () => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
-  onCopyExteriorMap(cb: () => void): void;
   /** Paste-import an @cas/interchange "#s=" map link (the "Import map…" action). */
   onImportMap(cb: (link: string) => void): void;
   /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
@@ -86,7 +81,6 @@ const DISK_SHOWS = [
 const DISK_SOURCES = [
   { id: "expression", name: "Expression  φ(z)" },
   { id: "region", name: "Region  𝔻 → Ω  (numeric)" },
-  { id: "bottcher", name: "Exterior map ψ  (Böttcher)" },
   { id: "import", name: "Imported map  (from a link)" },
 ] as const;
 
@@ -101,13 +95,9 @@ const GLOSSARY: readonly (readonly [string, string])[] = [
   ["Conformal / Riemann map φ", "An angle-preserving map. The Riemann mapping theorem uniformizes any simply-connected domain (≠ ℂ) onto the unit disk."],
   ["Domain coloring", "A phase portrait: hue = arg φ(z), shaded bands = |φ(z)|. Reads a complex function as an image."],
   ["Amplitwist |φ′|, arg φ′", "The local scale factor and rotation the map applies at a point (Needham’s term for the derivative’s action)."],
-  ["Filled Julia set K", "The points whose orbit under f stays bounded. Its boundary ∂K is the Julia set."],
-  ["Green’s function G(z)", "The escape-rate potential of ℂ∖K: 0 on K, positive outside, growing like log|z| at ∞."],
+  ["Filled Julia set K", "The points whose orbit under f stays bounded. Its boundary ∂K is the Julia set — the source of an imported exterior map."],
   ["Capacity, Robin γ", "cap(K) = e^(−γ), the conformal size of K. It equals |γ₁|, the leading coefficient of ψ; = 1 exactly for a monic map."],
-  ["Exterior map ψ, bₖ", "The conformal map ext(𝔻) → ext(K), ψ(w) = γ₁·w + Σ bₖ w^(−k). Exists only for a connected K."],
-  ["External ray / angle θ", "The image under ψ of a straight ray {r·e^(2πiθ) : r > 1}; θ is the angle at which it lands on ∂K."],
-  ["Connectivity (z²+c)", "K is connected ⟺ c ∈ the Mandelbrot set (the critical orbit stays bounded); otherwise K is a Cantor set."],
-  ["Attracting cycle, |λ|", "The cycle the critical orbit falls into; |λ| < 1 is attracting, |λ| = 0 superattracting (the cycle contains the critical point)."],
+  ["Exterior map ψ, bₖ", "The conformal map ext(𝔻) → ext(K), ψ(w) = γ₁·w + Σ bₖ w^(−k). Imported from Complex Dynamics as a disk-image source."],
 ];
 
 const CUSTOM = "__custom__";
@@ -198,7 +188,6 @@ export function createControls(initialExpr: string): Controls {
   const fitListeners: (() => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
-  const copyExtListeners: (() => void)[] = [];
   const importMapListeners: ((link: string) => void)[] = [];
   const applyViewportListeners: ((re: number, im: number, zoom: number) => void)[] = [];
 
@@ -306,20 +295,7 @@ export function createControls(initialExpr: string): Controls {
   analysisGroup.el.style.display = "none"; // shown only when the mode produces analysis
   const analysisDl = document.createElement("dl");
   analysisDl.className = "hover analysis-dl";
-  // Hand off ψ (the exterior conformal map) as an @cas/interchange link (G8). Shown only when an
-  // exterior analysis exists — setExteriorExportAvailable(false) hides it.
-  const exportRow = document.createElement("div");
-  exportRow.className = "buttons";
-  exportRow.style.display = "none";
-  const copyExt = document.createElement("button");
-  copyExt.type = "button";
-  copyExt.textContent = "Copy exterior-map link";
-  exportRow.append(copyExt);
-  const exportStatus = document.createElement("p");
-  exportStatus.className = "muted";
-  exportStatus.setAttribute("role", "status");
-  exportStatus.setAttribute("aria-live", "polite");
-  analysisGroup.el.append(analysisDl, exportRow, exportStatus);
+  analysisGroup.el.append(analysisDl);
 
   // --- Under-cursor group (collapsible; live readout) -----------------------
   const hoverGroup = controlGroup("Under cursor", true);
@@ -392,7 +368,6 @@ export function createControls(initialExpr: string): Controls {
   fitBtn.addEventListener("click", () => fitListeners.forEach((cb) => cb()));
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
-  copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
   importBtn.addEventListener("click", () => {
     const link = window.prompt("Paste an interchange map link (#s=…) from Complex Dynamics:");
     if (link && link.trim()) importMapListeners.forEach((cb) => cb(link.trim()));
@@ -472,7 +447,7 @@ export function createControls(initialExpr: string): Controls {
     setDiskLayout(id: string): void {
       layout.select.value = id;
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean; import: boolean }): void {
+    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
       domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
@@ -480,8 +455,8 @@ export function createControls(initialExpr: string): Controls {
       diskSource.field.style.display = v.disk ? "" : "none";
       importField.style.display = v.import ? "" : "none"; // "Import map…" — imported-map source only
       for (const f of [diskStyle.field, radial.field, angular.field, layout.field]) f.style.display = v.disk ? "" : "none";
-      // interior/exterior is expression-only (region is 𝔻 → Ω interior; an exterior map is ext(𝔻) → ext(·))
-      diskSide.field.style.display = v.disk && !v.region && !v.bottcher ? "" : "none";
+      // interior/exterior is expression-only (region is 𝔻 → Ω interior; an imported map is ext(𝔻) → ext(·))
+      diskSide.field.style.display = v.disk && !v.region && !v.exterior ? "" : "none";
       // the "Show" subset field is disk-only AND line-style-only
       diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
     },
@@ -497,11 +472,7 @@ export function createControls(initialExpr: string): Controls {
       const hasRows = !!(rows && rows.length);
       // Hide the whole group when the mode produces no analysis; else title it contextually (A1).
       analysisGroup.el.style.display = hasRows ? "" : "none";
-      if (!hasRows) {
-        exportRow.style.display = "none";
-        exportStatus.textContent = "";
-        return;
-      }
+      if (!hasRows) return;
       analysisGroup.summary.textContent = title;
       for (const [k, v] of rows ?? []) {
         const dt = document.createElement("dt");
@@ -510,13 +481,6 @@ export function createControls(initialExpr: string): Controls {
         dd.textContent = v;
         analysisDl.append(dt, dd);
       }
-    },
-    setExteriorExportAvailable(available: boolean): void {
-      exportRow.style.display = available ? "" : "none";
-      if (!available) exportStatus.textContent = "";
-    },
-    setExportStatus(msg: string): void {
-      exportStatus.textContent = msg;
     },
     setHover(rows: readonly (readonly [string, string])[] | null): void {
       hover.replaceChildren();
@@ -577,9 +541,6 @@ export function createControls(initialExpr: string): Controls {
     },
     onResetView(cb: () => void): void {
       resetListeners.push(cb);
-    },
-    onCopyExteriorMap(cb: () => void): void {
-      copyExtListeners.push(cb);
     },
     onImportMap(cb: (link: string) => void): void {
       importMapListeners.push(cb);

@@ -17,13 +17,6 @@ describe("legend model (A4)", () => {
     expect(inf).not.toBe(vir); // a different colormap → a different bar
   });
 
-  it("the Julia-exterior legend ramps and carries an interior-set (K) swatch", () => {
-    const m = legendModel("julia", "viridis");
-    expect(m.barCss).toContain("linear-gradient");
-    expect(m.interior?.label).toBe("K");
-    expect(m.title).toContain("G(z)");
-  });
-
   it("the numeric-map mode has no colour bar (it's a grid)", () => {
     expect(legendModel("domain-map", "viridis").barCss).toBeNull();
   });

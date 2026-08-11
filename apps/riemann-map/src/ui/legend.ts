@@ -13,11 +13,9 @@ export interface LegendModel {
   readonly barCss: string | null;
   readonly low?: string;
   readonly high?: string;
-  /** A swatch for the interior set (e.g. K in the Julia-exterior mode), or absent. */
-  readonly interior?: { label: string; color: string };
 }
 
-/** The legend for a render mode + colormap. The `ramp` modes (|φ′|, log|φ′|, Julia) use the colormap. */
+/** The legend for a render mode + colormap. The `ramp` modes (|φ′|, log|φ′|) use the colormap. */
 export function legendModel(modeId: string, colormapId: string): LegendModel {
   const ramp = (): string => colormapGradientCss(colormapId);
   switch (modeId) {
@@ -36,8 +34,6 @@ export function legendModel(modeId: string, colormapId: string): LegendModel {
       return { title: "log|φ′|", barCss: ramp(), low: "small", high: "large" };
     case "arg-deriv":
       return { title: "arg φ′ — rotation", barCss: HUE_CSS, low: "−π", high: "+π" };
-    case "julia":
-      return { title: "Green's fn G(z)", barCss: ramp(), low: "near ∂K", high: "escapes fast", interior: { label: "K", color: "#050510" } };
     case "domain-map":
       return { title: "Ω → 𝔻 conformal grid", barCss: null };
     default:
@@ -72,16 +68,5 @@ export function renderLegend(el: HTMLElement, m: LegendModel | null): void {
       scale.append(lo, hi);
       el.append(scale);
     }
-  }
-  if (m.interior) {
-    const row = document.createElement("div");
-    row.className = "legend-interior";
-    const sw = document.createElement("span");
-    sw.className = "legend-sw";
-    sw.style.background = m.interior.color;
-    const lbl = document.createElement("span");
-    lbl.textContent = m.interior.label;
-    row.append(sw, lbl);
-    el.append(row);
   }
 }

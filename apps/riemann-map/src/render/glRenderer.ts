@@ -14,9 +14,8 @@ export interface Renderer {
   setMap(glslBody: string, glslDerivBody: string | null): boolean;
   /** (Re)build the colour-ramp LUT texture the shader samples (A6). */
   setColormap(colors: readonly RGB[]): void;
-  /** Draw the current program for `view`, in render mode `mode`, degree `degree` (the local degree at ∞
-   *  for the Julia-exterior potential; ignored by the other modes). Colour uses the current colormap. */
-  render(view: ViewportState, mode: number, degree: number): void;
+  /** Draw the current program for `view`, in render mode `mode`. Colour uses the current colormap. */
+  render(view: ViewportState, mode: number): void;
   /** Flat-fill the pane (used by the domain view, which draws its map as an overlay, not a GLSL field). */
   clear(r: number, g: number, b: number): void;
   /** Release the program and the WebGL2 context. */
@@ -43,7 +42,6 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
   let uResolution: WebGLUniformLocation | null = null;
   let uMode: WebGLUniformLocation | null = null;
   let uColormap: WebGLUniformLocation | null = null;
-  let uDegree: WebGLUniformLocation | null = null;
 
   function setMap(glslBody: string, glslDerivBody: string | null): boolean {
     let next: WebGLProgram;
@@ -66,7 +64,6 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     uResolution = gl.getUniformLocation(program, "uResolution");
     uMode = gl.getUniformLocation(program, "uMode");
     uColormap = gl.getUniformLocation(program, "uColormap");
-    uDegree = gl.getUniformLocation(program, "uDegree");
     return true;
   }
 
@@ -75,7 +72,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     colormapTex = makeColormapTexture(gl, colors);
   }
 
-  function render(view: ViewportState, mode: number, degree: number): void {
+  function render(view: ViewportState, mode: number): void {
     if (!program) return;
     gl.useProgram(program);
     gl.bindVertexArray(vao);
@@ -87,7 +84,6 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer | null {
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, colormapTex);
     gl.uniform1i(uColormap, 0); // colour-ramp LUT on texture unit 0
-    gl.uniform1f(uDegree, degree);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 

@@ -237,9 +237,6 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@cas/dynamics':
-        specifier: workspace:*
-        version: link:../../packages/dynamics
       '@cas/export':
         specifier: workspace:*
         version: link:../../packages/export
@@ -252,9 +249,6 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
-      '@cas/schwarz':
-        specifier: workspace:*
-        version: link:../../packages/schwarz
       katex:
         specifier: ^0.17.0
         version: 0.17.0

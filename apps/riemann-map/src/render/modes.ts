@@ -10,7 +10,7 @@ export interface RenderMode {
   /** True if the mode reads φ′ (so it needs the derivative / distortion field). */
   readonly usesDeriv: boolean;
   /** True if the mode's colour comes from the colormap ramp (vs hue / checker) — drives whether the
-   *  Colormap picker is relevant (the shader reads uColormap only in modes 4, 5, 10). */
+   *  Colormap picker is relevant (the shader reads uColormap only in modes 4, 5). */
   readonly usesColormap: boolean;
 }
 
@@ -25,15 +25,8 @@ export const RENDER_MODES: readonly RenderMode[] = [
   { id: "abs-deriv", name: "|φ′| — scale", code: 4, usesDeriv: true, usesColormap: true },
   { id: "log-deriv", name: "log|φ′|", code: 5, usesDeriv: true, usesColormap: true },
   { id: "arg-deriv", name: "arg φ′ — rotation", code: 6, usesDeriv: true, usesColormap: false },
-  { id: "julia", name: "Julia exterior — Green's fn (iterate f)", code: 10, usesDeriv: false, usesColormap: true },
   { id: "domain-map", name: "Riemann map: domain → disk (numeric)", code: 20, usesDeriv: false, usesColormap: false },
 ] as const;
-
-/** Dynamics modes (code ≥ 10) ITERATE the map f rather than evaluating φ once — they need a degree. */
-export function modeIsDynamics(id: string): boolean {
-  const c = modeCode(id);
-  return c >= 10 && c < 20;
-}
 
 /** The numerical-Riemann-map mode (code 20): fits f for a chosen DOMAIN, drawn as an overlay, not a
  *  GLSL field — so main clears the GL pane and skips the φ-expression pipeline for it. */

@@ -4,12 +4,13 @@ import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { CANONICAL, SCHEMA_ID } from "@cas/interchange";
 import { COMPLEX_SINGLE_GLSL, DF64_GLSL } from "@cas/gpu/glsl";
-import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import { CD_TO_RM_BOTTCHER_LINK } from "@cas/interchange";
+import { importExteriorMap } from "../src/interchange/importMap.js";
 
 // P0 scaffold: prove the Riemann-map app can consume every shared package it depends on, exercising the
 // exact capabilities the plan leans on — a user map compiled+evaluated via @cas/expr, root-finding via
-// @cas/core, the GLSL stdlib via @cas/gpu, the hand-off contract via @cas/interchange, and (the piece
-// most specific to this tool) a numerical Riemann-map inverse φ⁻¹ via @cas/schwarz.
+// @cas/core, the GLSL stdlib via @cas/gpu, and the map hand-off via @cas/interchange (the piece most
+// specific to this tool now: RM IMPORTS another tool's conformal map rather than computing dynamics).
 
 describe("riemann-map scaffold — shared-package wiring", () => {
   it("@cas/expr compiles & evaluates a user map (Joukowski z + 1/z)", () => {
@@ -41,19 +42,11 @@ describe("riemann-map scaffold — shared-package wiring", () => {
     expect(DF64_GLSL.length).toBeGreaterThan(0);
   });
 
-  it("@cas/schwarz gives a numerical Riemann-map inverse φ⁻¹ (deltoid φ = z + 1/(2z²))", () => {
-    // Deltoid Laurent coefficients: φ(z) = c·z + Σ_l F[l]/z^l with c = 1, F = [0, 0, 1/2].
-    const schwarz = makeUnboundedLaurentSchwarz(1, [
-      [0, 0],
-      [0, 0],
-      [0.5, 0],
-    ]);
-    const z: ComplexTuple = [2, 0]; // exterior point (|z| > 1)
-    const w = schwarz.evalPhi(z); // 2 + 0.5/4 = 2.125
-    expect(w[0]).toBeCloseTo(2.125, 10);
-    const back = schwarz.invertPhi(w); // exterior-branch inverse must recover z
-    if (!back) throw new Error("invertPhi returned null on an exterior point");
-    expect(back[0]).toBeCloseTo(2, 8);
-    expect(back[1]).toBeCloseTo(0, 8);
+  it("@cas/interchange hand-off: imports another tool's exterior map (the CD→RM golden)", () => {
+    const m = importExteriorMap(CD_TO_RM_BOTTCHER_LINK);
+    if (!m) throw new Error("importExteriorMap returned null on the cross-app golden");
+    expect(m.app).toBe("complex-dynamics");
+    expect(m.lead).toEqual([1, 0]); // γ₁ = 1 (the deltoid ψ(w) = w + ½·w⁻²)
+    expect(m.coeffs).toEqual([[0, 0], [0, 0], [0.5, 0]]);
   });
 });

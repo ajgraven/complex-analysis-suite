@@ -45,16 +45,4 @@ describe("compileMap (A1/S3)", () => {
     expect(d[0]).toBeCloseTo(1, 5);
     expect(d[1]).toBeCloseTo(0, 5);
   });
-
-  it("reports the local degree at ∞ for rational maps of degree ≥ 2, else null (P2)", () => {
-    const deg = (expr: string) => {
-      const r = compileMap(mk(expr));
-      return r.ok ? r.map.degree : "err";
-    };
-    expect(deg("z*z - 1")).toBe(2); // basilica
-    expect(deg("z*z*z + 0.1")).toBe(3);
-    expect(deg("(z - 1)/(z + 1)")).toBeNull(); // Möbius: degree 0 at ∞
-    expect(deg("1/z")).toBeNull(); // degree −1 at ∞
-    expect(deg("exp(z)")).toBeNull(); // transcendental → not rational
-  });
 });
