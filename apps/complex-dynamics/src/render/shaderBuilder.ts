@@ -17,15 +17,14 @@ import {
   COMPLEX_DF64_GLSL,
   COMPLEX_DERIVED_GLSL,
   DF64_GLSL,
+  FULLSCREEN_VERTEX_GLSL,
+  HSV2RGB_GLSL,
 } from "@cas/gpu/glsl";
 
 export type Precision = "single" | "df64";
 
 /** Trivial pass-through vertex shader driving a clip-space fullscreen quad. */
-export const VERTEX_SHADER = `#version 300 es
-layout(location = 0) in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
-`;
+export const VERTEX_SHADER = FULLSCREEN_VERTEX_GLSL;
 
 /**
  * Post-processing pass: sample the rendered scene texture and apply a vignette and
@@ -719,10 +718,7 @@ out vec4 fragColor;
 ${COLOR_GLSL}
 
 // HSV→RGB for domain colouring.
-vec3 hsv2rgb(vec3 c) {
-  vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
-  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
-}
+${HSV2RGB_GLSL}
 
 // Distance from an orbit iterate to the selected trap shape (orbit-trap colouring).
 float trapDistance(cvec z) {

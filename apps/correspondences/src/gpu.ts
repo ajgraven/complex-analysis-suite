@@ -5,20 +5,19 @@
 // by a mask texture (the deltoid boundary filled to an offscreen canvas) rather than a per-pixel
 // polygon scan. Dogfoods @cas/gpu: the complex stdlib (@cas/gpu/glsl) and the shared compile/link
 // (@cas/gpu/shader). The colour scheme mirrors src/render.ts so GPU and CPU renders match.
-import { COMPLEX_SINGLE_GLSL } from "@cas/gpu/glsl";
+import { COMPLEX_SINGLE_GLSL, FULLSCREEN_VERTEX_GLSL, PLANE_FROM_FRAG_GLSL } from "@cas/gpu/glsl";
 import { createProgram } from "@cas/gpu/shader";
 import { deltoidBoundary, type Complex } from "./deltoid.js";
 import type { View } from "./render.js";
 
-const VERT = `#version 300 es
-in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+const VERT = FULLSCREEN_VERTEX_GLSL;
 
 // The deltoid maps + Newton σ, in single-precision complex GLSL. Baked for φ(z) = z + 1/(2 z²) (a later
 // slice can generalize to arbitrary Laurent coefficients via uniforms, à la QD's u_polyA).
 const FRAG = `#version 300 es
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
+${PLANE_FROM_FRAG_GLSL}
 
 uniform vec2  uCenter;
 uniform float uHalfSpan;       // world half-height; x scaled by the pixel aspect
@@ -64,11 +63,7 @@ bool inK(cvec w) {
 vec3 pal(float t) { return 0.5 + 0.5 * cos(6.2831853 * (t + vec3(0.0, 0.33, 0.67))); }
 
 void main() {
-  float aspect = uResolution.x / uResolution.y;
-  cvec w = vec_(
-    uCenter.x + (gl_FragCoord.x / uResolution.x - 0.5) * 2.0 * uHalfSpan * aspect,
-    uCenter.y + (gl_FragCoord.y / uResolution.y - 0.5) * 2.0 * uHalfSpan
-  );
+  cvec w = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
   if (inK(w)) { fragColor = vec4(0.10, 0.11, 0.16, 1.0); return; }   // K (the deltoid interior)
 
   int nn = 0; bool escaped = false;

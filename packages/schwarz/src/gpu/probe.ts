@@ -9,6 +9,7 @@
 // renderer reuses `packPhi`/`uploadPhi` to feed the same uniforms into its escape-time shader (S4b/S5-C2).
 
 import { createProgram } from "@cas/gpu/shader";
+import { FULLSCREEN_VERTEX_GLSL } from "@cas/gpu/glsl";
 import type { Complex, SchwarzBranch } from "../unbounded-laurent.js";
 import {
   MAX_BRANCHES,
@@ -54,9 +55,7 @@ export interface PackedPhi {
 }
 
 /** Trivial fullscreen-triangle vertex shader; the fragment shader does all the work at one pixel. */
-export const SIGMA_PROBE_VERTEX = `#version 300 es
-in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+export const SIGMA_PROBE_VERTEX = FULLSCREEN_VERTEX_GLSL;
 
 /**
  * Assemble a self-contained WebGL2 fragment shader that evaluates σ(w) — from the `uW` uniform and the

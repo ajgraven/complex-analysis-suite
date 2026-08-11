@@ -4,12 +4,16 @@
 // `fFn` body + (when φ is holomorphic) the compiled `dFn` for φ′ + a `dphi` that resolves to dFn or a
 // finite difference + a `main()` that switches on `uMode`/`uColormap` across the render modes. Pure
 // string builder → node-testable; the real compile/link is renderShader.browser.test.ts.
-import { COMPLEX_SINGLE_GLSL, COMPLEX_DERIVED_GLSL } from "@cas/gpu/glsl";
+import {
+  COMPLEX_SINGLE_GLSL,
+  COMPLEX_DERIVED_GLSL,
+  FULLSCREEN_VERTEX_GLSL,
+  HSV2RGB_GLSL,
+  PLANE_FROM_FRAG_GLSL,
+} from "@cas/gpu/glsl";
 
 /** Full-screen-triangle vertex shader. */
-export const RIEMANN_VERTEX = `#version 300 es
-in vec2 aPos;
-void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
+export const RIEMANN_VERTEX = FULLSCREEN_VERTEX_GLSL;
 
 // Colouring main. Pixel → z → w = fFn(z); modes:
 //   0 phase (hue + log|w| bands) · 1 phase-flat · 2 conformal grid (Wegert phase+modulus contours)
@@ -26,10 +30,7 @@ out vec4 fragColor;
 
 const float TAU = 6.28318530718;
 
-vec3 hsv2rgb(vec3 c) {
-  vec3 p = abs(fract(c.xxx + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
-  return c.z * mix(vec3(1.0), clamp(p - 1.0, 0.0, 1.0), c.y);
-}
+${HSV2RGB_GLSL}
 
 // Sample the active colour ramp from its 256×1 LUT texture (A6). The CPU uploads the selected map.
 vec3 ramp(float t) {
@@ -37,11 +38,7 @@ vec3 ramp(float t) {
 }
 
 void main() {
-  float aspect = uResolution.x / uResolution.y;
-  cvec z = vec_(
-    uCenter.x + (gl_FragCoord.x / uResolution.x - 0.5) * 2.0 * uHalfSpan * aspect,
-    uCenter.y + (gl_FragCoord.y / uResolution.y - 0.5) * 2.0 * uHalfSpan
-  );
+  cvec z = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
   cvec w = fFn(z, vec_(0.0, 0.0));
   float m2 = dot(w, w);
   bool bad = !(m2 < 1e38);
@@ -116,6 +113,7 @@ export function assembleFragmentShader(glslBody: string, glslDerivBody: string |
 precision highp float;
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
+${PLANE_FROM_FRAG_GLSL}
 ${glslBody}
 ${glslDerivBody ?? ""}
 ${dphi}
