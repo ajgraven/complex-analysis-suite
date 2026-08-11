@@ -133,6 +133,7 @@ interface SurfaceUniforms extends ColorUniformLocs {
   uShaded: WebGLUniformLocation | null;
   uEye: WebGLUniformLocation | null;
   uSpecular: WebGLUniformLocation | null;
+  uOpacity: WebGLUniformLocation | null;
 }
 
 /** The Riemann-sphere uniforms, on top of the shared {@link ColorUniformLocs}. */
@@ -200,6 +201,8 @@ export class Plot {
   heightScale = 1;
   /** Add a specular highlight to the landscape (5B, F2). */
   specular = false;
+  /** Surface opacity for the 3D landscape (§E): 1 = opaque; < 1 draws translucent (alpha-blended). */
+  opacity = 1;
   /** ∞-inspector (5C, F8): plot `f(1/z)` instead of `f(z)`, so the origin shows the behaviour at ∞.
    *  Applied as a `z → 1/z` AST substitution, so the GPU (2D + surface) and the CPU instruments agree. */
   inspectInfinity = false;
@@ -398,6 +401,7 @@ export class Plot {
       uHeightScale: loc("uHeightScale"),
       uLightDir: loc("uLightDir"),
       uShaded: loc("uShaded"),
+      uOpacity: loc("uOpacity"),
       uEye: loc("uEye"),
       uSpecular: loc("uSpecular"),
       uPhaseLUT: loc("uPhaseLUT"),
@@ -672,9 +676,24 @@ export class Plot {
     // Shade the landscape, except in the exact top-down view — there it must reproduce the 2D portrait.
     const topDown = cam.ortho && cam.elevation > Math.PI / 2 - 1e-3;
     gl.uniform1f(u.uShaded, topDown ? 0 : 1);
+    gl.uniform1f(u.uOpacity, this.opacity);
     this.applyColorUniforms(u); // also sets uModScale, which the vertex height law shares
     this.applyParamUniforms(this.surfaceParamLocs);
+    // A translucent surface (§E) blends over the scene and its own far side. Stop writing depth so
+    // nearer triangles don't z-reject the farther ones behind them (they draw in index order — a mild,
+    // acceptable painter's approximation for one smooth layer). The depth clear above already ran with
+    // the default write mask on, so the buffer is clean. Opaque surfaces keep exact depth occlusion.
+    const translucent = this.opacity < 1;
+    if (translucent) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+    }
     gl.drawElements(gl.TRIANGLES, this.gridIndexCount, gl.UNSIGNED_INT, 0);
+    if (translucent) {
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
     gl.disable(gl.DEPTH_TEST);
   }
 

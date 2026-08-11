@@ -35,6 +35,7 @@ const S: PlotterState = {
     heightMode: 1,
     heightScale: 1.5,
     specular: true,
+    opacity: 0.6,
   },
 };
 
@@ -84,12 +85,13 @@ describe("share-link view state", () => {
     const bad = decodeState(
       encodeViewState(APP_NS, {
         expr: "z",
-        v3d: { mode: "nope", distance: 999, heightMode: 9 },
+        v3d: { mode: "nope", distance: 999, heightMode: 9, opacity: 5 },
       }),
     );
     expect(bad?.v3d.mode).toBe("2d");
     expect(bad?.v3d.distance).toBe(60);
     expect(bad?.v3d.heightMode).toBe(2);
+    expect(bad?.v3d.opacity).toBe(1); // clamped to [0.1, 1]
   });
 
   it("round-trips the f/g slots, and a g-active link plots g", () => {

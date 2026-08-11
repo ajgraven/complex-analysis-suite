@@ -47,7 +47,7 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   **Top-down** snaps to the orthographic overhead view, which reproduces the 2D portrait pixel-for-pixel (the
   phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
   holomorphic map (a smooth per-pixel normal; a geometric normal for Γ/ζ/anti-holomorphic), with an optional
-  **specular** highlight. **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
+  **specular** highlight and an adjustable **surface opacity** (a translucent landscape you can see through). **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
   per-fragment ray-cast of an analytic unit sphere, stereographically projected (south pole = 0, equator =
   |z| = 1, **north pole = ∞**) and coloured by the same `colorAt`, so a pole is a bright patch you can rotate
   to the top; drag is a quaternion **arcball**, scroll dollies. **Linked** (5D / I7) shows the flat portrait

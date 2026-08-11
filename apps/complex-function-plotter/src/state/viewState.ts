@@ -22,6 +22,7 @@ export interface View3dState {
   heightMode: number;
   heightScale: number;
   specular: boolean;
+  opacity: number;
 }
 
 /** The default 3D-view state: 2D mode with the default orbit camera and a log-height surface. */
@@ -34,6 +35,7 @@ export const DEFAULT_V3D: View3dState = {
   heightMode: 0,
   heightScale: 1,
   specular: false,
+  opacity: 1,
 };
 
 export interface PlotterState extends Record<string, unknown> {
@@ -116,6 +118,7 @@ function cleanV3d(raw: unknown): View3dState {
     heightMode: Math.min(2, Math.max(0, Math.round(numOr(o.heightMode, 0)))),
     heightScale: Math.min(3, Math.max(0.1, numOr(o.heightScale, 1))),
     specular: boolOr(o.specular, false),
+    opacity: Math.min(1, Math.max(0.1, numOr(o.opacity, 1))),
   };
 }
 

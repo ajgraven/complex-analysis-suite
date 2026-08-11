@@ -187,6 +187,8 @@ function main(): void {
   const topDownBtn = byId("topDown");
   const resetViewBtn = byId("resetView");
   const specularInput = byId("specular");
+  const opacityInput = byId("opacity");
+  const opacityVal = byId("opacityVal");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -260,6 +262,7 @@ function main(): void {
   plot.heightMode = initial.v3d.heightMode;
   plot.heightScale = initial.v3d.heightScale;
   plot.specular = initial.v3d.specular;
+  plot.opacity = initial.v3d.opacity;
   let framingSpan = initial.span;
 
   // Linked-view geometry (I7). In the linked mode the flat portrait fills the LEFT half of the canvas and
@@ -356,6 +359,7 @@ function main(): void {
       heightMode: plot.heightMode,
       heightScale: plot.heightScale,
       specular: plot.specular,
+      opacity: plot.opacity,
     },
   });
 
@@ -693,6 +697,19 @@ function main(): void {
     specularInput.checked = plot.specular;
     specularInput.addEventListener("change", () => {
       plot.specular = specularInput.checked;
+      redraw(false);
+    });
+  }
+  // Surface opacity (§E): a translucent landscape lets you see through to its own far side.
+  if (opacityInput instanceof HTMLInputElement) {
+    const showOpacity = (): void => {
+      if (opacityVal instanceof HTMLElement) opacityVal.textContent = opacityInput.value;
+    };
+    opacityInput.value = String(plot.opacity);
+    showOpacity();
+    opacityInput.addEventListener("input", () => {
+      plot.opacity = Number(opacityInput.value);
+      showOpacity();
       redraw(false);
     });
   }
