@@ -1090,6 +1090,7 @@ function main(): void {
   // operations for a mouse-free / accessible path (L7).
   let grabWorld: Complex | null = null;
   let orbitLast: { x: number; y: number } | null = null;
+  let panLast: { x: number; y: number } | null = null; // 3D left-drag pan (recenter the domain)
   let sphereLast: [number, number] | null = null;
   const activePointers = new Map<number, Pt>();
   let pinchPrev: number | null = null;
@@ -1105,13 +1106,16 @@ function main(): void {
     return [it.next().value as Pt, it.next().value as Pt];
   };
   // Seed the single-pointer drag appropriate to the mode under `clientX` (pan in 2D / the linked flat
-  // pane, orbit in 3D, arcball on the sphere). Used both on pointerdown and when a pinch drops to one
-  // finger, so the survivor keeps dragging.
-  const seedDrag = (clientX: number, clientY: number): void => {
+  // pane, orbit-or-pan in 3D, arcball on the sphere). Used both on pointerdown and when a pinch drops to
+  // one finger, so the survivor keeps dragging. `pan3d` (left mouse button) pans the 3D landscape; the
+  // default (right button / touch / pinch-survivor) orbits it.
+  const seedDrag = (clientX: number, clientY: number, pan3d = false): void => {
     const m = effMode(clientX);
     if (m === "sphere") sphereLast = canvasUv(clientX, clientY);
-    else if (m === "3d") orbitLast = { x: clientX, y: clientY };
-    else grabWorld = plot.screenToWorld(clientX, clientY, twoDRect());
+    else if (m === "3d") {
+      if (pan3d) panLast = { x: clientX, y: clientY };
+      else orbitLast = { x: clientX, y: clientY };
+    } else grabWorld = plot.screenToWorld(clientX, clientY, twoDRect());
   };
   canvas.addEventListener("pointerdown", (e) => {
     canvas.focus(); // so the keyboard path works after clicking the plot
@@ -1128,12 +1132,16 @@ function main(): void {
       // A second finger begins a pinch: abandon any single-pointer drag and seed the pinch span.
       grabWorld = null;
       orbitLast = null;
+      panLast = null;
       sphereLast = null;
       const [a, b] = twoPointers();
       pinchPrev = pointerDistance(a, b);
       return;
     }
-    seedDrag(e.clientX, e.clientY);
+    // Left mouse button pans the 3D landscape; the right button (or touch / pen) orbits it — the familiar
+    // left-drag = move, right-drag = rotate. In 2D / on the sphere the button is ignored (seedDrag decides).
+    const pan3d = e.pointerType === "mouse" && e.button === 0;
+    seedDrag(e.clientX, e.clientY, pan3d);
   });
   canvas.addEventListener("pointermove", (e) => {
     if (activePointers.has(e.pointerId))
@@ -1156,18 +1164,23 @@ function main(): void {
       plot.rotateSphere(sphereLast, uv);
       sphereLast = uv;
       redraw(true);
+    } else if (panLast) {
+      // 3D left-drag pan: recenter the domain so the grabbed point tracks the cursor (explore ℂ, stay framed).
+      const dx = e.clientX - panLast.x;
+      const dy = e.clientY - panLast.y;
+      panLast = { x: e.clientX, y: e.clientY };
+      plot.panSurface(dx, dy, canvas.clientHeight);
+      redraw(true);
     } else if (orbitLast) {
       const dx = e.clientX - orbitLast.x;
       const dy = e.clientY - orbitLast.y;
       orbitLast = { x: e.clientX, y: e.clientY };
-      // Landscape orbit — the matplotlib / plotly plot convention, mixed by design:
-      //  • horizontal: the surface SPINS TO FOLLOW the cursor. Azimuth is negated because +azimuth walks
-      //    the eye screen-right, which would swing the surface the opposite way to the drag (that
-      //    un-negated version was the reported "backwards" bug); negating makes drag-right spin right.
-      //  • vertical: drag up RAISES the viewpoint toward top-down (bird's-eye) — elevation up. This axis
-      //    is intentionally camera-centric (not a full grab-turntable), matching how 3D plot tools pitch;
-      //    the keyboard up/down below share this sense.
-      plot.orbit(-dx * ORBIT_SPEED, -dy * ORBIT_SPEED);
+      // Landscape orbit (right-drag). A grab-turntable sense, so the surface follows the cursor on both axes:
+      //  • horizontal: drag right spins the surface right. Azimuth is negated because +azimuth walks the eye
+      //    screen-right, which would swing the surface the opposite way to the drag.
+      //  • vertical: drag up tips the surface's near edge up toward you (elevation down, more side-on); drag
+      //    down looks more top-down. The keyboard up/down below share this sense.
+      plot.orbit(-dx * ORBIT_SPEED, dy * ORBIT_SPEED);
       redraw(true);
     } else if (grabWorld) {
       plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld, twoDRect());
@@ -1185,6 +1198,7 @@ function main(): void {
       // orbiting from where it is, instead of going inert until it too is lifted.
       grabWorld = null;
       orbitLast = null;
+      panLast = null;
       sphereLast = null;
       const survivor = activePointers.values().next().value as Pt;
       seedDrag(survivor.x, survivor.y);
@@ -1198,6 +1212,11 @@ function main(): void {
       orbitLast = null;
       redraw(false);
     }
+    if (panLast) {
+      panLast = null;
+      redraw(false);
+      recomputeSingsSoon(); // the domain moved — refresh the (2D) zero/pole finder
+    }
     if (grabWorld) {
       grabWorld = null;
       redraw(false);
@@ -1206,6 +1225,8 @@ function main(): void {
   };
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  // Right-drag orbits the 3D landscape, so suppress the browser context menu over the plot canvas.
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   // Wheel zoom/dolly renders a DRAFT frame during the scroll burst and commits one full-res frame once
   // scrolling settles — the same draft-then-commit discipline as the pointer-drag path, instead of a
   // full-res repaint on every tick.
@@ -1252,12 +1273,12 @@ function main(): void {
       if (intent === "reset") plot.resetCamera();
       else if (intent === "in") plot.dolly(0.9);
       else if (intent === "out") plot.dolly(1 / 0.9);
-      // Same turntable sense as the pointer drag (left spins the surface left) — so the negated azimuth
-      // delta of the drag path is mirrored here: "left" → +azimuth, "right" → −azimuth.
+      // Same grab-turntable sense as the right-drag orbit (surface follows the key): "left" → +azimuth,
+      // "right" → −azimuth; "up" tips the near edge up (elevation down), "down" looks more top-down.
       else if (intent === "left") plot.orbit(STEP, 0);
       else if (intent === "right") plot.orbit(-STEP, 0);
-      else if (intent === "up") plot.orbit(0, STEP);
-      else plot.orbit(0, -STEP);
+      else if (intent === "up") plot.orbit(0, -STEP);
+      else plot.orbit(0, STEP);
     } else {
       // 2D or the linked flat pane: keyboard pans / zooms the shared domain (moving both linked halves).
       const r = twoDRect();

@@ -720,6 +720,25 @@ export class Plot {
     this.camera.distance = Math.min(60, Math.max(0.3, this.camera.distance * factor));
   }
 
+  /**
+   * Pan the 3D landscape by a screen-drag delta (CSS px): move the look-at point (= the view centre) in
+   * the ground plane so the grabbed domain point tracks the cursor — a "recenter to explore ℂ" pan, so
+   * the surface always stays framed (no empty space past its edges). Screen-right and screen-up are
+   * projected onto z = 0 through the camera azimuth; `worldPerPixel` is the perspective scale at the
+   * target plane. Signs match the 2D grab-pan feel (content follows the cursor).
+   */
+  panSurface(dxPx: number, dyPx: number, viewportHeightPx: number): void {
+    const cam = this.camera;
+    const wpp =
+      viewportHeightPx > 0
+        ? (2 * cam.distance * Math.tan(cam.fov / 2)) / viewportHeightPx
+        : 0;
+    const ca = Math.cos(cam.azimuth);
+    const sa = Math.sin(cam.azimuth);
+    this.view.cx += wpp * (dxPx * sa - dyPx * ca);
+    this.view.cy += wpp * (-dxPx * ca - dyPx * sa);
+  }
+
   /** Snap to the exact top-down orthographic view — the landscape then equals the 2D portrait. */
   topDown(): void {
     this.camera = { ...this.camera, ...TOP_DOWN };
