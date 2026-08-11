@@ -55,6 +55,10 @@ export interface RenderState {
   readonly grid?: string;
   /** Selected domain preset for the numerical Riemann-map mode. Optional for older permalinks. */
   readonly domain?: string;
+  /** Disk-image mode: which side of ∂𝔻 to map — "interior" (default) | "exterior". */
+  readonly disk?: string;
+  /** Disk-image mode: radial subdivisions of the polar grid (angular = 2×). Optional; default 18. */
+  readonly diskDensity?: number;
 }
 
 /**
@@ -68,11 +72,15 @@ export type RiemannViewState = {
   readonly conventions: ConventionTag;
 };
 
-/** The default view: the Joukowski map on a centred unit-scale window, phase-portrait coloured. */
+/**
+ * The default view — the tool's primary purpose: the IMAGE OF THE UNIT DISK under a conformal map.
+ * φ = z + z²/2 carries 𝔻 onto a smooth cardioid-like region; the disk-image mode draws its polar grid
+ * pushed forward, coloured by the local rotation arg φ′. zoom 0.75 ⇒ world half-height 1.33, framing 𝔻.
+ */
 export const DEFAULT_VIEW_STATE: RiemannViewState = {
-  map: { expr: "z + 1/z", vars: ["z"], antiholomorphic: false },
-  viewport: { centerRe: 0, centerIm: 0, zoom: 1 },
-  render: { mode: "phase", palette: "viridis", grid: "none" },
+  map: { expr: "z + z*z/2", vars: ["z"], antiholomorphic: false },
+  viewport: { centerRe: 0, centerIm: 0, zoom: 0.75 },
+  render: { mode: "disk-image", palette: "viridis", grid: "none", disk: "interior", diskDensity: 18 },
   conventions: { area: "standard", contour: "standard" },
 };
 

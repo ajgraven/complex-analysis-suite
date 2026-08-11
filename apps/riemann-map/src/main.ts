@@ -15,10 +15,20 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, modeIsDynamics, modeIsDomain, modeUsesColormap } from "./render/modes.js";
+import { modeCode, modeIsDynamics, modeIsDomain, modeIsDiskImage, modeUsesColormap } from "./render/modes.js";
 import { colormapColors } from "./render/colormaps.js";
-import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
-import { Overlay2D } from "./render/overlay2d.js";
+import {
+  sourceGrid,
+  pushforward,
+  pushforwardCells,
+  diskGrid,
+  bounds,
+  type GridKind,
+  type GridLine,
+  type DiskSide,
+  type Pt,
+} from "./render/grid.js";
+import { Overlay2D, type FillCell } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
 import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
@@ -164,12 +174,20 @@ function main(): void {
   let domainMap: ConformalMap | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
+  // Disk-image mode (the primary view): the unit-disk polar grid and its φ-pushforward, as filled cells.
+  let diskSourceCells: FillCell[] = [];
+  let diskImageCells: FillCell[] = [];
+  let diskUnitSrc: Pt[] = []; // ∂𝔻 in the source pane
+  let diskUnitImg: Pt[] = []; // φ(∂𝔻) in the image pane
   let glDirty = true;
   let gridDirty = true;
   let domainDirty = true;
+  let diskDirty = true;
   let linkDirty = true;
 
   const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
+  const diskSide = (): DiskSide => (state.render.disk === "exterior" ? "exterior" : "interior");
+  const diskDensity = (): number => state.render.diskDensity ?? 18;
   const phi = (z: Pt): Pt => {
     if (!current) return z;
     const w = current.jsFn([z[0], z[1]], [0, 0]);
@@ -208,6 +226,7 @@ function main(): void {
   /** Show capacity / Robin / exterior coefficients + z²+c dynamics in the sidebar, only in the Julia mode. */
   function updateAnalysisPanel(): void {
     if (modeIsDomain(state.render.mode)) return; // the domain view owns the panel (set in computeDomain)
+    if (modeIsDiskImage(state.render.mode)) return; // the disk-image view owns the panel (computeDiskImage)
     if (!(modeIsDynamics(state.render.mode) && analysis)) {
       controls.setAnalysis(null);
       return;
@@ -241,12 +260,18 @@ function main(): void {
   /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane. */
   function applyModeContext(): void {
     const m = state.render.mode;
+    const disk = modeIsDiskImage(m);
     controls.setControlVisibility({
       colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
-      grid: !modeIsDomain(m), // the numeric-map mode draws its own conformal grid
+      grid: !modeIsDomain(m) && !disk, // the numeric-map + disk-image modes draw their own grid
       domain: modeIsDomain(m), // the domain picker is only for the numeric-map mode
+      disk, // interior/exterior + density belong to the disk-image mode
     });
-    rlabel.textContent = modeIsDomain(m) ? "w = f(z)  ·  unit disk" : "w = φ(z)  ·  image grid";
+    rlabel.textContent = disk
+      ? "w = φ(z)  ·  image of the disk"
+      : modeIsDomain(m)
+        ? "w = f(z)  ·  unit disk"
+        : "w = φ(z)  ·  image grid";
     renderLegend(legendEl, legendModel(m, state.render.palette)); // colour-key chip (A4)
   }
 
@@ -328,15 +353,90 @@ function main(): void {
     controls.setExteriorExportAvailable(false);
   }
 
+  // ---- the image of the disk (P4 — the primary view) -----------------------
+  /** Colour key for a cell: hue = arg φ′ (local rotation), lighter fill + saturated edge. */
+  function cellColors(deriv: [number, number]): { fill: string; edge: string } {
+    const h = (((Math.atan2(deriv[1], deriv[0]) / (2 * Math.PI)) % 1) + 1) % 1;
+    const H = (h * 360).toFixed(0);
+    return { fill: `hsla(${H}, 60%, 55%, 0.5)`, edge: `hsl(${H}, 85%, 58%)` };
+  }
+
+  /** Build the unit-disk polar grid (interior or exterior) and its φ-pushforward as filled cells. */
+  function computeDiskImage(): void {
+    if (!current) {
+      diskSourceCells = [];
+      diskImageCells = [];
+      diskUnitSrc = [];
+      diskUnitImg = [];
+      controls.setAnalysis(null);
+      return;
+    }
+    const side = diskSide();
+    const dg = diskGrid(side, diskDensity());
+    const img = pushforwardCells(dg.cells, phi);
+    const src: FillCell[] = [];
+    const imf: FillCell[] = [];
+    for (let i = 0; i < dg.cells.length; i++) {
+      const { fill, edge } = cellColors(derivativeAt(current, dg.cells[i].mid));
+      src.push({ quad: dg.cells[i].quad, fill, edge });
+      imf.push({ quad: img[i].quad, fill, edge });
+    }
+    diskSourceCells = src;
+    diskImageCells = imf;
+    diskUnitSrc = dg.unitCircle;
+    diskUnitImg = dg.unitCircle.map(phi);
+    // Honest labels: the grid + colour are computed from φ and φ′ (exact when φ has a symbolic derivative).
+    const exact = current.jsDeriv ? "=" : "≈";
+    controls.setAnalysis(
+      [
+        ["map φ", "= " + state.map.expr],
+        ["disk", side === "exterior" ? "exterior 𝔻*  (|z| ≥ 1)" : "interior 𝔻  (|z| ≤ 1)"],
+        ["cells", "= " + dg.cells.length],
+        ["colour", exact + " arg φ′  (local rotation)"],
+      ],
+      "Image of the disk",
+    );
+    controls.setExteriorExportAvailable(false);
+  }
+
+  /** All image-cell corners, for auto-framing the image pane. */
+  const cellPts = (cells: readonly FillCell[]): Pt[] => {
+    const out: Pt[] = [];
+    for (const c of cells) for (const p of c.quad) out.push(p);
+    return out;
+  };
+
   function drawOverlays(): void {
+    // Decide split-ness FIRST, then size the left overlay: the pane's final (half) width must be in
+    // effect before resize() reads it, or a full-width buffer gets CSS-squished (the disk turns oval).
+    const disk = modeIsDiskImage(state.render.mode);
+    const domain = modeIsDomain(state.render.mode);
+    const split = disk || domain || gridKind() !== "none";
+    stage.classList.toggle("split", split);
     leftOverlay.resize();
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
     leftOverlay.clear();
-    if (modeIsDomain(state.render.mode)) {
+    if (disk) {
+      // Left pane: the unit disk with its polar grid (filled cells keyed by arg φ′) + ∂𝔻 on top.
+      leftOverlay.fillCells(diskSourceCells, 0.6);
+      leftOverlay.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitSrc }], 1.4);
+      if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      leftOverlay.drawScaleBar();
+      // Right pane: the image φ(𝔻), auto-framed, same per-cell colour key + φ(∂𝔻).
+      if (rightPane.resize()) {
+        const b = bounds([{ color: "", pts: cellPts(diskImageCells) }]) ?? { minx: -1, maxx: 1, miny: -1, maxy: 1 };
+        rightPane.fitBounds(b);
+        rightPane.clear();
+        rightPane.fillCells(diskImageCells, 0.6);
+        rightPane.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitImg }], 1.4);
+        if (cursorZ) rightPane.drawMarker(phi(cursorZ), CURSOR_COLOR);
+      }
+      return;
+    }
+    if (domain) {
       leftOverlay.drawLines(domainSource, 1.1);
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
       leftOverlay.drawScaleBar();
-      stage.classList.add("split");
       if (rightPane.resize()) {
         rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
         rightPane.clear();
@@ -352,8 +452,6 @@ function main(): void {
     if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
     leftOverlay.drawScaleBar();
 
-    const split = gridKind() !== "none";
-    stage.classList.toggle("split", split);
     if (split && rightPane.resize()) {
       const b = bounds(gridImage);
       if (b) rightPane.fitBounds(b);
@@ -388,7 +486,9 @@ function main(): void {
     const H = Math.max(1, Math.round(baseH * scale));
     canvas.width = W;
     canvas.height = H;
-    renderer.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
+    const disk = modeIsDiskImage(state.render.mode);
+    if (disk) renderer.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // 2D-overlay picture — no GLSL field
+    else renderer.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
 
     const ex = document.createElement("canvas");
     ex.width = W;
@@ -396,8 +496,14 @@ function main(): void {
     const ctx = ex.getContext("2d");
     if (ctx) {
       ctx.drawImage(canvas, 0, 0);
-      if (gridKind() !== "none") {
-        const ov = new Overlay2D(ex); // ex.width/height already set → draw without a CSS-box resize
+      // ex.width/height already set → the Overlay2D draws without a CSS-box resize.
+      if (disk) {
+        const ov = new Overlay2D(ex);
+        ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
+        ov.fillCells(diskSourceCells, 1);
+        ov.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitSrc }], 2);
+      } else if (gridKind() !== "none") {
+        const ov = new Overlay2D(ex);
         ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
         ov.drawLines(gridSource, 2);
       }
@@ -428,16 +534,21 @@ function main(): void {
       frame = 0;
       const resized = resizeToDisplay(canvas); // a resize clears the WebGL buffer → must re-render
       const domain = modeIsDomain(state.render.mode);
+      const disk = modeIsDiskImage(state.render.mode);
       if (domain && domainDirty) {
         computeDomain();
         domainDirty = false;
       }
-      if ((gridDirty || resized) && !domain) {
+      if (disk && diskDirty) {
+        computeDiskImage(); // cells live on the unit disk — independent of the canvas size
+        diskDirty = false;
+      }
+      if ((gridDirty || resized) && !domain && !disk) {
         computeGrid();
         gridDirty = false;
       }
       if (glDirty || resized) {
-        if (domain) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
+        if (domain || disk) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
         else renderer?.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
         glDirty = false;
       }
@@ -467,19 +578,34 @@ function main(): void {
   controls.setColormap(state.render.palette);
   controls.setGrid(gridKind());
   controls.setDomain(domainId);
+  controls.setDiskSide(diskSide());
+  controls.setDiskDensity(diskDensity());
   applyModeContext(); // initial contextual disclosure
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     applyMap();
+    diskDirty = true; // the disk-image cells are a function of φ
     invalidate(true, true);
   });
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
     if (modeIsDomain(id)) domainDirty = true; // (re)fit f on entering the numerical-map mode
+    if (modeIsDiskImage(id)) diskDirty = true; // (re)build the disk-image cells on entering
     invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
     applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
     refreshDynamicsNote();
     updateAnalysisPanel();
+  });
+  controls.onDiskSide((side) => {
+    state = { ...state, render: { ...state.render, disk: side } };
+    diskDirty = true;
+    // Reframe the source pane to the chosen side (interior ⇒ ½-height 1.33, exterior ⇒ ~13).
+    setViewport({ centerRe: 0, centerIm: 0, zoom: side === "exterior" ? 0.075 : 0.75 });
+  });
+  controls.onDiskDensity((n) => {
+    state = { ...state, render: { ...state.render, diskDensity: n } };
+    diskDirty = true;
+    invalidate(false, false); // recompute the cells + redraw; the GL background is unchanged
   });
   controls.onDomain((id) => {
     domainId = id;

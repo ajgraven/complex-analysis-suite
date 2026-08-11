@@ -21,6 +21,8 @@ export interface LegendModel {
 export function legendModel(modeId: string, colormapId: string): LegendModel {
   const ramp = (): string => colormapGradientCss(colormapId);
   switch (modeId) {
+    case "disk-image":
+      return { title: "arg φ′ — local rotation", barCss: HUE_CSS, low: "−π", high: "+π" };
     case "phase":
     case "phase-plain":
       return { title: "arg φ(z)", barCss: HUE_CSS, low: "−π", high: "+π" };

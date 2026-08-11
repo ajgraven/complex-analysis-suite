@@ -17,8 +17,11 @@ export interface Controls {
   setColormap(id: string): void;
   setGrid(id: string): void;
   setDomain(id: string): void;
+  /** Disk-image mode: which side of ∂𝔻 ("interior" | "exterior") and the radial grid density. */
+  setDiskSide(id: string): void;
+  setDiskDensity(n: number): void;
   /** Show/hide mode-irrelevant controls (contextual disclosure, A1). */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean }): void;
+  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
@@ -33,6 +36,8 @@ export interface Controls {
   onColormap(cb: (id: string) => void): void;
   onGrid(cb: (id: string) => void): void;
   onDomain(cb: (id: string) => void): void;
+  onDiskSide(cb: (id: string) => void): void;
+  onDiskDensity(cb: (n: number) => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
   onCopyExteriorMap(cb: () => void): void;
@@ -44,6 +49,11 @@ const GRID_KINDS = [
   { id: "none", name: "None" },
   { id: "cartesian", name: "Cartesian grid" },
   { id: "polar", name: "Polar grid" },
+] as const;
+
+const DISK_SIDES = [
+  { id: "interior", name: "Interior  𝔻  (|z| ≤ 1)" },
+  { id: "exterior", name: "Exterior  𝔻*  (|z| ≥ 1)" },
 ] as const;
 
 /** Glossary of the notation the studio surfaces (catalog item I2) — a self-documenting reference. */
@@ -96,6 +106,31 @@ function labeledInput(labelText: string): { field: HTMLLabelElement; input: HTML
   return { field, input };
 }
 
+/** A label-over-slider field (disk grid density). `out` shows the live value. */
+function labeledRange(
+  labelText: string,
+  min: number,
+  max: number,
+  value: number,
+): { field: HTMLLabelElement; input: HTMLInputElement; out: HTMLSpanElement } {
+  const field = document.createElement("label");
+  field.className = "field";
+  const span = document.createElement("span");
+  span.className = "field-label";
+  span.textContent = labelText;
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = String(min);
+  input.max = String(max);
+  input.step = "1";
+  input.value = String(value);
+  const out = document.createElement("span");
+  out.className = "field-value";
+  out.textContent = String(value);
+  field.append(span, input, out);
+  return { field, input, out };
+}
+
 /** A collapsible sidebar group (CD's `.control-group` disclosure). Returns the <details> + its summary. */
 function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElement; summary: HTMLElement } {
   const el = document.createElement("details");
@@ -113,6 +148,8 @@ export function createControls(initialExpr: string): Controls {
   const cmapListeners: ((id: string) => void)[] = [];
   const gridListeners: ((id: string) => void)[] = [];
   const domainListeners: ((id: string) => void)[] = [];
+  const diskSideListeners: ((id: string) => void)[] = [];
+  const diskDensityListeners: ((n: number) => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
   const copyExtListeners: (() => void)[] = [];
@@ -153,12 +190,16 @@ export function createControls(initialExpr: string): Controls {
   mapSection.append(mapTitle, preset, input, error, preview);
 
   // --- View group (collapsible; primary controls) ---------------------------
+  // Order leads with the disk-image knobs (the default view): Mode, then Disk side + Density. The
+  // Colormap / Grid / Domain fields below are contextual — shown only for the modes that use them.
   const viewGroup = controlGroup("View", true);
   const mode = labeledSelect("Mode", RENDER_MODES);
+  const diskSide = labeledSelect("Disk", DISK_SIDES);
+  const density = labeledRange("Grid density", 4, 40, 18);
   const cmap = labeledSelect("Colormap", COLORMAPS);
   const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  viewGroup.el.append(mode.field, cmap.field, grid.field, domain.field);
+  viewGroup.el.append(mode.field, diskSide.field, density.field, cmap.field, grid.field, domain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -257,6 +298,12 @@ export function createControls(initialExpr: string): Controls {
   cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
   grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
   domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
+  diskSide.select.addEventListener("change", () => diskSideListeners.forEach((cb) => cb(diskSide.select.value)));
+  density.input.addEventListener("input", () => {
+    const n = Number(density.input.value);
+    density.out.textContent = String(n);
+    diskDensityListeners.forEach((cb) => cb(n));
+  });
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
   copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
@@ -308,10 +355,19 @@ export function createControls(initialExpr: string): Controls {
     setDomain(id: string): void {
       domain.select.value = id;
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean }): void {
+    setDiskSide(id: string): void {
+      diskSide.select.value = id;
+    },
+    setDiskDensity(n: number): void {
+      density.input.value = String(n);
+      density.out.textContent = String(n);
+    },
+    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean }): void {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
       domain.field.style.display = v.domain ? "" : "none";
+      diskSide.field.style.display = v.disk ? "" : "none";
+      density.field.style.display = v.disk ? "" : "none";
     },
     setViewportFields(re: number, im: number, zoom: number): void {
       const active = document.activeElement; // don't clobber a field the user is typing into
@@ -372,6 +428,12 @@ export function createControls(initialExpr: string): Controls {
     },
     onDomain(cb: (id: string) => void): void {
       domainListeners.push(cb);
+    },
+    onDiskSide(cb: (id: string) => void): void {
+      diskSideListeners.push(cb);
+    },
+    onDiskDensity(cb: (n: number) => void): void {
+      diskDensityListeners.push(cb);
     },
     onSavePng(cb: () => void): void {
       savePngListeners.push(cb);
