@@ -10,13 +10,15 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **three** applications riding **five** shared `@cas/*` packages:
+It currently hosts **five** applications riding **eight** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | **Complex Dynamics** (`apps/complex-dynamics`)     | GPU escape-time visualizer for parametrized families `f(z,c)` — Mandelbrot/multibrot, Julia sets, Tricorn/multicorn, rational & transcendental maps, Herman rings, Böttcher coordinates, external rays, df64 deep zoom                                                                                        | Vite + TypeScript       |
 | **Quadrature Domains** (`apps/quadrature-domains`) | Solver + visualizer for (log-weighted) quadrature domains in the inverse and direct directions, plus **single-valued Schwarz-reflection dynamics**, limit sets, a Riemann-sphere view, a symbolic-elimination Algebra workspace, and a parameter-slice sweep engine                                           | Vite + JavaScript (ESM) |
 | **Correspondences** (`apps/correspondences`)       | The new tool: **anti-holomorphic correspondences / Schwarz-reflection matings**. The deltoid Schwarz reflection σ (CPU + GPU), its deleted correspondence (branch engine + orbit trees + density render), a family parameter plane, a parabolic-Tricorn model space, and an interactive **mating visualizer** | Vite + TypeScript       |
+| **Complex Function Plotter** (`apps/complex-function-plotter`) | Domain-coloring plotter for complex functions `f(z)` — phase portraits with modulus/phase enhancements and the conformal grid, a 3D modulus surface and a Riemann-sphere view, a live expression editor with named parameters, hi-res PNG export                          | Vite + TypeScript       |
+| **Riemann Map** (`apps/riemann-map`)               | Pure-2D conformal-mapping studio: the image of the unit disk under a conformal map — from the editor, a numerical region map 𝔻 → Ω by the lightning method, or an exterior (Böttcher) map imported from Complex Dynamics — plus the numerical Riemann map of a chosen domain            | Vite + TypeScript       |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -29,8 +31,9 @@ incidental.
 
 **Built.** The phased migration ([docs/MIGRATION.md](docs/MIGRATION.md), Phases 0–6) is
 **fully executed and merged.** The workspace skeleton, unified tooling, the
-Quadrature-app-onto-Vite ESM-ification, and the five shared-package extractions
-(`@cas/core` → `@cas/interchange` → `@cas/expr` + `@cas/gpu`) are all done; the
+Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
+(`@cas/core` → `@cas/interchange` → `@cas/expr` + `@cas/gpu`, then `@cas/exact`, `@cas/schwarz`,
+`@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule) are all done; the
 Correspondences app exists through its parameter-space milestone plus a complete
 interactive mating visualizer. The whole workspace is green (**1820 Vitest tests** across 193
 files, lint, typecheck, and per-app builds).
@@ -92,24 +95,31 @@ complex-analysis-suite/
 ├── README.md                 ← you are here
 ├── docs/                     ← the architecture + the executed migration plan (see the map below)
 ├── packages/                 ← shared libraries (the reuse surface); dependencies point downward only
-│   ├── core/                 ← @cas/core        complex arithmetic, the ComplexAlgebra contract, Durand–Kerner, series-multiply
-│   ├── gpu/                  ← @cas/gpu         WebGL2 substrate: shader compile/link, df64 deep-zoom, complex-GLSL
+│   ├── core/                 ← @cas/core        complex arithmetic, the ComplexAlgebra contract, Durand–Kerner, series, dense-poly + label formatting
+│   ├── gpu/                  ← @cas/gpu         WebGL2 substrate: shader compile/link, df64 deep-zoom, complex-GLSL + shared GLSL snippets
 │   ├── expr/                 ← @cas/expr        one AST → GLSL shader body + JS evaluator (dual-backend)
-│   ├── interchange/          ← @cas/interchange typed hand-off schema (envelope + MapSpec/SchwarzReflection) + deep-link codec
-│   └── exact/                ← @cas/exact       exact polynomial arithmetic (CD + Correspondences)
+│   ├── interchange/          ← @cas/interchange typed hand-off schema (envelope + MapSpec/SchwarzReflection) + deep-link codec + golden corpus
+│   ├── exact/                ← @cas/exact       exact polynomial arithmetic (CD + Correspondences)
+│   ├── schwarz/              ← @cas/schwarz     the Schwarz-reflection σ engine (CD + Correspondences)
+│   ├── dynamics/             ← @cas/dynamics    inverse-Böttcher exterior maps + external rays (Complex Dynamics)
+│   └── export/               ← @cas/export      PNG tEXt reproducibility metadata (CD + plotter + Riemann Map)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
     ├── quadrature-domains/
-    └── correspondences/      ← the Phase-6 tool (dynamical views + the mating explorer)
+    ├── correspondences/      ← the Phase-6 tool (dynamical views + the mating explorer)
+    ├── complex-function-plotter/  ← domain-coloring plotter (2D portraits + 3D surface)
+    └── riemann-map/          ← pure-2D conformal-mapping studio (disk image + numeric Riemann map)
 ```
 
-> **The five packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, and `@cas/exact`. Packages were extracted **only as a second consumer
-> proved it needed them** ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) —
-> which is why the `ui`, `quadrature`, and `dynamics` packages that
-> [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never materialized, and why
-> `@cas/exact` appeared *later* than the phase plan: it waited for its second consumer.
+> **The eight packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export`. Packages were
+> extracted **only as a second consumer proved it needed them**
+> ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
+> `ui` and `quadrature` packages that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
+> fully materialized (the `ui` package's PNG-metadata half did ship, as `@cas/export`), and why
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` appeared *later* than the phase plan:
+> each waited for its second consumer.
 
 > **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
 > each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately

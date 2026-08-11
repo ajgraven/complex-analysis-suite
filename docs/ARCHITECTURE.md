@@ -8,15 +8,17 @@ for why extraction is demand-driven rather than up-front.
 > **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
 > inventory. What actually exists:
 >
-> - **Six packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
->   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`** — the last two later than the phase plan, on
->   the same second-consumer rule (`@cas/exact`: Complex Dynamics and Correspondences both needed
->   exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ engine, shared by
->   Complex Dynamics and Correspondences). The **`ui`, `quadrature`, and `dynamics`** packages sketched in the
->   layer diagram and §3 were **never extracted** — no second consumer needed them, so that
->   mathematics stayed in the apps (the Correspondences app keeps its own σ-construction and
->   parabolic-Tricorn model). That is the [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
->   demand-driven rule working as intended, not an unfinished migration.
+> - **Eight packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+>   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`** — the last four
+>   later than the phase plan, on the same second-consumer rule (`@cas/exact`: Complex Dynamics and
+>   Correspondences both needed exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ
+>   engine, shared by Complex Dynamics and Correspondences; `@cas/dynamics`: the inverse-Böttcher machinery,
+>   ADR-0014; `@cas/export`: PNG `tEXt` metadata across three apps, ADR-0016). The **`ui` and `quadrature`**
+>   packages sketched in the layer diagram and §3 were **never extracted** — no second consumer needed the
+>   whole of either (the Correspondences app keeps its own σ-construction and parabolic-Tricorn model),
+>   though the `ui` package's PNG-metadata half did later ship as `@cas/export`. That is the
+>   [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need) demand-driven rule working
+>   as intended, not an unfinished migration.
 > - **`@cas/core` shipped leaner** than §3 describes: it holds complex arithmetic, the
 >   `ComplexAlgebra` contract, Durand–Kerner, and truncated series-multiply — **not**
 >   Newton/deflation, mat4/camera helpers, or the full series library (all likewise left in the
@@ -129,20 +131,31 @@ in [INTERCHANGE.md](INTERCHANGE.md). This is what makes "pass off a Schwarz refl
 from the Quadrature tool to the Dynamics tool" a one-line, type-checked operation
 instead of an ad-hoc JSON blob.
 
-> Of the three packages below, **`@cas/ui` and `@cas/quadrature` were never extracted** — the
-> demand-driven rule (extract only when a second consumer needs it, ADR-0007) never fired for them —
-> while **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map
-> app became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)).
-> The suite now ships **seven** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
-> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics` (the last three extracted later than the phase plan, on
-> the ADR-0007 second-consumer rule). The sections are kept as design intent; each notes where the
+> Of the three packages below, **`@cas/quadrature` was never extracted** and **`@cas/ui` only partly**
+> (its PNG-metadata half shipped as `@cas/export`, ADR-0016; the rest stayed app-local) — the demand-driven
+> rule (extract only when a second consumer needs it, ADR-0007) fired for them selectively — while
+> **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
+> became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
+> though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
+> The suite now ships **eight** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export` (the last four extracted later than the phase
+> plan, on the ADR-0007 second-consumer rule). The sections are kept as design intent; each notes where the
 > functionality actually lives today.
 
-### `@cas/ui` — the shared UI kit *(planned — not built)*
+### `@cas/ui` — the shared UI kit *(partly built — PNG metadata shipped as `@cas/export`)*
 Would hold KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider
 pads; the glossary framework; share-link serialization and reproducibility-metadata PNG embedding;
-theming. **Status: never built.** The UI helpers and PNG-metadata remain app-local; only the
-versioned `#vs=` **view-state codec** was shared — into `@cas/interchange`, not a UI package.
+theming. **Status: only the PNG-metadata half shipped** — as **`@cas/export`** (ADR-0016), when three
+apps each carried a byte-equivalent copy. The KaTeX / inspector / theming UI helpers remain app-local;
+the versioned `#vs=` **view-state codec** is shared into `@cas/interchange`.
+
+### `@cas/export` — figure-export primitives *(built — ADR-0016)*
+Holds the PNG `tEXt` reproducibility metadata (`crc32`, `pngChunk`, `injectPngText(entries)`,
+`readPngText`, `PNG_SIGNATURE`) — the "a figure carries its own recipe" mechanism that splices a
+permalink / parameters into an exported PNG before `IEND` with a correct CRC-32, without touching a
+pixel. Pure, DOM-free, convention-neutral (ADR-0006: byte manipulation, no maths). Consumers: Complex
+Dynamics, the Complex-Function Plotter, and the Riemann-map studio. The natural future home for the
+medium-term high-res / SVG export goal.
 
 ### `@cas/quadrature` — domain package *(planned — not built)*
 Would hold the Faber-transform machinery; the inverse solvers (classical/log-weighted/power,
@@ -157,8 +170,12 @@ filled Julia set — z^d+c / general polynomial / rational — and of the multib
 capacity, a connectivity test, and boundary reconstruction) and the **external-ray tracing** for z²+c
 (parameter- and dynamical-plane rays, depth scaling, angle parsing) — both extracted from Complex Dynamics
 when the Riemann-map app became a second consumer
-([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)). Still
-**app-local** (awaiting a second consumer): escape-time / smooth iteration count; the **bulb-angle
+([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)).
+**Now single-consumer:** the Riemann-map studio subsequently **shed** `@cas/dynamics` when it dropped local
+dynamics in favor of importing a Böttcher map from Complex Dynamics over `@cas/interchange`
+([ADR-0017](DECISIONS.md#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer)),
+so Complex Dynamics is again the sole consumer (a weaker extraction rationale, recorded not reversed).
+Still **app-local** (awaiting a second consumer): escape-time / smooth iteration count; the **bulb-angle
 combinatorics** (`bulbRayAngles`, which needs the orbit-portrait code); cycle detection, multiplier, Fatou
 classification; and the **(parabolic) Tricorn model space** (the correspondence tool reuses
 Complex-Dynamics' tricorn preset via `@cas/expr`).
@@ -257,8 +274,8 @@ tools:
 - The Dynamics app can **gain a quadrature-domain mode** or draw Böttcher external rays
   on the Quadrature app's limit sets, by depending on the `quadrature` package.
 - Every tool shares the versioned `#vs=` **view-state codec** (`@cas/interchange`) for linkable
-  views; reproducibility-metadata PNG embedding remains app-local (the `@cas/ui` package that would
-  have unified it was never extracted — §3).
+  views, and reproducibility-metadata **PNG embedding is now shared via `@cas/export`** (ADR-0016, §3);
+  the `@cas/ui` package that would also have carried the KaTeX / theming UI helpers was never extracted.
 
 ## 8. Build & deployment model
 

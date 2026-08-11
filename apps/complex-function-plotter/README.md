@@ -147,8 +147,7 @@ Phase 6 (**hi-res PNG export + metadata + copy-image (6A)**, **suite interop (6B
 | `main.ts`                   | wires everything: expression box + KaTeX preview + errors, presets, colormap/modulus controls, legends, cursor probe, pan/zoom/reset, share-link, export     |
 | `render/colorShader.ts`     | the layered coloring GLSL (`colorAt` = phase LUT × modulus transfer, + NaN/Inf sentinel) and the fragment-program assembler                                  |
 | `render/colormaps.ts`       | phase colormaps (perceptual Oklch + HSV) baked into one RGBA8 atlas; Oklab→sRGB conversion                                                                   |
-| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, hi-res `exportBlob`   |
-| `render/pngMetadata.ts`     | pure PNG `tEXt` inject/read (K3): embeds the share-link into an exported PNG without touching a pixel — ported from CD's `pngMetadata`                       |
+| `render/plot.ts`            | the WebGL2 plot: context + loss/restore, program rebuild on `f` change, the atlas texture, HiDPI/progressive render, pan/zoom helpers, hi-res `exportBlob` (stamps the share-link via `@cas/export`'s `injectPngText`) |
 | `render/exportImage.ts`     | pure export size algebra (K1): clamp a long-edge to the GPU max, derive aspect-preserving buffer dims, sanitise a filename                                   |
 | `state/viewState.ts`        | share-link encode/decode over `@cas/interchange`'s `#vs=` codec (app namespace `cfp`)                                                                        |
 | `interchange/importMap.ts`  | K7: `@cas/interchange` map Envelope → `@cas/expr` source (rational / Laurent / expr; σ → its φ, labelled) — ported from CD's `importMap`                     |
@@ -187,8 +186,7 @@ parses/compiles/evaluates), `params.test.ts` (the ℂ-pad ↔ value coordinate m
 (the `t` frame-stepping — wrap / clamp / ended), `sweep.test.ts` (the sweep value spacing),
 `autocomplete.test.ts` (the token-under-caret + prefix matching), `precision.test.ts` (the float32
 badge policy — ζ warn / Γ note, strongest-first, over the `parse → calledFunctions → precisionNote`
-path), `pngMetadata.test.ts` (the export `tEXt` inject/read round-trip — canonical CRC-32, image bytes
-untouched, Latin-1 coercion, non-PNG passthrough), `exportImage.test.ts` (the hi-res export size algebra
+path), `exportImage.test.ts` (the hi-res export size algebra
 — clamp to the GPU max, aspect-preserving dims, filename sanitising), `interop.test.ts` (the K7/K8 suite
 hand-off — MapSpec→expr conversion **re-parsed through `@cas/expr`**, the σ→φ redirect, envelope
 round-trip and validation, the `→ Dynamics` deep-link), `navigation.test.ts` (the a11y key→intent map, the

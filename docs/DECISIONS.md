@@ -24,9 +24,11 @@ Format follows Michael Nygard's ADR convention.
 | [0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one)  | The Riemann-map tool is a new app (not a mode in an existing tool)    | Accepted |
 | [0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)       | Extract `@cas/dynamics` (Böttcher exterior maps); Riemann Map is the second consumer | Accepted |
 | [0015](#adr-0015-extract-cascorepoly--format-float-only-exact-stays-in-casexact)   | Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact` | Accepted |
+| [0016](#adr-0016-extract-casexport--shared-png-text-metadata--shared-glsl-snippets) | Extract `@cas/export` — shared PNG `tEXt` metadata (+ shared GLSL snippets) | Accepted |
+| [0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) | CD → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All fifteen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All seventeen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -44,7 +46,13 @@ Format follows Michael Nygard's ADR convention.
 > `@cas/dynamics` package (ADR-0007 once more). **0015 is an eighth follow-on** — one more *extraction*:
 > the shared dense-polynomial kernel and label formatting move into `@cas/core/poly` + `format` (float-only;
 > exact stays in `@cas/exact`), the ADR-0007 rule again, with `@cas/schwarz` and the Quadrature app as the
-> two consumers. Supersede rather than rewrite if any change later.
+> two consumers. **0016 is a ninth follow-on** — one more *extraction*: the PNG `tEXt` reproducibility-metadata
+> code (three byte-equivalent copies) becomes `@cas/export`, plus three shared GLSL snippets fold into
+> `@cas/gpu/glsl` — the ADR-0007 rule once more. **0017 is a tenth follow-on** — a *product/topology* decision
+> (like 0009/0010/0013): Complex Dynamics hands a filled Julia set's Böttcher map to the Riemann-map studio
+> over `@cas/interchange`, and Riemann Map sheds its whole dynamics + GPU stack to become a pure-2D conformal
+> consumer — it **supersedes ADR-0014's premise** that RM is a live `@cas/dynamics` consumer and **narrows
+> ADR-0013**. Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
 > [migration runbook](MIGRATION.md) ran to completion — with two conscious deviations recorded
@@ -1379,3 +1387,121 @@ as ADR-0008 grew `@cas/exact` — **not** in a speculative big-bang.
    PR each (**P2–P3**, need-driven).
 3. [ ] `uniformize.ts`'s truncated `Series` is a cousin of `@cas/core/series.ts` — a related but separate
    consolidation, scoped on its own.
+
+---
+
+## ADR-0016: Extract `@cas/export` — shared PNG `tEXt` metadata (+ shared GLSL snippets)
+
+**Status:** Accepted
+
+### Context
+Three apps — Complex Dynamics, the Complex-Function Plotter, and the Riemann-map studio — each carried
+their own copy of the "a figure carries its own recipe" mechanism: after a canvas is encoded to PNG, splice
+a `tEXt` chunk (the permalink / parameters) in front of `IEND` with a correct CRC-32, without touching a
+pixel. CD's and CFP's copies were byte-for-byte equivalent (a `Record<string,string>` API); RM's was a
+near-twin with a different single-pair API (`injectPngText(png, keyword, text)`) and `& 0xff` Latin-1
+wrapping instead of `?`-coercion. Three independent copies of the same byte-manipulation is well past the
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second-consumer bar. Separately, a shader
+sweep found three GLSL strings re-declared verbatim across renderers: the trivial fullscreen-triangle
+vertex program (**7** copies), the HSV→RGB helper (**2**), and the fragment-coord → complex-plane viewport
+map (**4**).
+
+### Decision
+**Extract `@cas/export`** (an eighth `@cas/*` package): PNG `tEXt` metadata as a canonical Record API —
+`crc32`, `pngChunk`, `injectPngText(png, entries)`, `readPngText(png)`, `PNG_SIGNATURE`. CD's version is
+promoted as canonical (keyword truncation to 79 bytes, `?`-coercion for non-Latin-1); RM is migrated onto
+it (its two nested single-pair calls collapse to one Record call per export path). Convention-neutral per
+[ADR-0006](#adr-0006-convention-neutral-core-packages) — this is byte manipulation, no `π`/`2πi`, indeed no
+mathematics. Consumers: Complex Dynamics, Complex-Function Plotter, Riemann Map.
+
+**Companion (same rule, existing package):** the three shared GLSL snippets move into the
+`@cas/gpu/glsl` barrel — `FULLSCREEN_VERTEX_GLSL` (with `layout(location = 0)`, harmless for the
+`getAttribLocation` consumers and required by CD's explicit-index bind), `HSV2RGB_GLSL`, and
+`PLANE_FROM_FRAG_GLSL` (a `planeFromFrag()` function, concatenated after `COMPLEX_SINGLE_GLSL` which defines
+the `cvec`/`vec_` aliases it uses). Centralising the viewport map is load-bearing: it is the one convention
+("which pixel is which complex number") the plane renderers must agree on.
+
+### Options Considered
+- **A — extract `@cas/export` + fold the GLSL snippets into `@cas/gpu` (this ADR).** *Pros:* one PNG-metadata
+  kernel; one fullscreen-vertex/viewport-map source of truth; each is pure and node/GPU-tested. *Cons:* an
+  eighth package for a small surface.
+- **B — the never-built `@cas/ui` bundle** ([ARCHITECTURE §3](ARCHITECTURE.md)) that would have carried PNG
+  metadata *and* the KaTeX/inspector/theming helpers. *Rejected:* only the PNG-metadata and GLSL halves have
+  proven (multi-consumer) demand; the UI helpers still do not. Extract the part with consumers, not the bundle.
+- **C — leave the copies.** *Rejected:* three drifting copies of a CRC-bearing byte format is exactly the
+  drift the monorepo exists to end.
+
+### Consequences
+- **Easier:** a PNG-metadata bug fixed once; a new export reaches for `@cas/export`; the fullscreen vertex and
+  the pixel→plane convention live in one place. `@cas/export` is also the natural home for the medium-term
+  high-res / SVG export goal.
+- **Harder:** one more package in the graph. The [ARCHITECTURE.md](ARCHITECTURE.md) "`@cas/ui` never built"
+  note is now only half-true — its PNG-metadata half shipped here.
+
+### Action Items
+1. [x] `@cas/export` with `png.ts` + golden test; census / workspace / dep wiring; CD / CFP / RM migrated.
+2. [x] `FULLSCREEN_VERTEX_GLSL` / `HSV2RGB_GLSL` / `PLANE_FROM_FRAG_GLSL` added to `@cas/gpu/glsl`; all 7 / 2 / 4
+   consumers migrated; a real-WebGL2 compile of the assembled shaders confirms the extraction.
+
+## ADR-0017: The Complex-Dynamics → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer
+
+**Status:** Accepted — **supersedes the RM-consumer premise of [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map), narrows [ADR-0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one)**
+
+### Context
+[ADR-0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one) gave the Riemann-map
+studio its own identity; [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)
+made it the second consumer of Complex Dynamics' inverse-Böttcher machinery (`@cas/dynamics`) so it could
+compute a filled Julia set's exterior map, capacity, external rays, and render an escape-time Green's-function
+field. In practice this made RM a jack-of-all-trades that **re-computed dynamics Complex Dynamics already
+owns**, and carried a generic phase / distortion / checker domain-coloring render pipeline that overlaps the
+Complex-Function Plotter's job. Crucially, the exterior Böttcher map ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ is **exactly** the
+interchange `LaurentMap` shape, so it can be handed between tools with **no schema change**.
+
+### Decision
+Make **one tool own dynamics**. Complex Dynamics gains its first interchange **producer** (`exportMap.ts`, the
+app's first `encodeLink` use): a "Riemann Map ↗" action exports the current Julia set's Böttcher map as a
+`kind:"map"` `LaurentMap` deep link. Riemann Map gains a **consumer** (`importMap.ts`) and an "import"
+disk-image source that renders the received ψ as an ext(𝔻) → ext(·) pushforward. RM then **sheds its whole
+dynamics + GPU stack**: the escape-time Julia render mode, the dynamics analysis panel, external rays, the
+Green's function, its own local Böttcher computation and interchange *producer*, the generic domain-coloring
+render modes, and the entire WebGL fragment pipeline. RM is now **pure-2D** and consumes only `@cas/core`,
+`@cas/export`, `@cas/expr`, and `@cas/interchange`. A cross-app golden `CD_TO_RM_BOTTCHER_LINK` (in
+`@cas/interchange`) pins the producer and consumer to the same bytes. Honest labeling is preserved: the
+capacity γ₁ is exact, the tail bₖ are `≈` truncated-series estimates, carried in the payload's provenance note.
+
+This **supersedes** ADR-0014's premise that RM is a live `@cas/dynamics` consumer (RM dropped the dependency;
+`@cas/dynamics` is now a single-consumer package — Complex Dynamics — which per
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) does not *force* a re-merge, but is recorded
+here), and **narrows** ADR-0013: RM no longer owns dynamics or domain-coloring — it owns *images of regions
+under conformal maps, and the construction of those maps*.
+
+### Options Considered
+- **A — hand-off + full cut (this ADR).** *Pros:* one owner for dynamics; RM's identity sharpens to the
+  conformal tool; RM drops `@cas/dynamics`, `@cas/schwarz`, and `@cas/gpu`; no schema change (the format
+  already carried the map). *Cons:* a researcher can no longer compute a Julia set's Böttcher map *inside* RM
+  — they round-trip through Complex Dynamics (typing a plain exterior map still works via the expression source).
+- **B — keep RM computing dynamics locally alongside the import.** *Rejected:* duplicates Complex Dynamics,
+  blurs the two tools' identity, and keeps `@cas/dynamics` in RM for a job another tool already does.
+- **C — keep the generic domain-coloring modes (retain the GPU pipeline).** *Rejected:* phase / distortion /
+  checker portraits are the Complex-Function Plotter's domain (independent code, a clean product cut, not a
+  dedup), and those modes are the *only* consumer of RM's fragment shader — keeping them orphans nothing, but
+  removing them orphans the whole GPU stack, so it goes too. The domain-coloring shader is not reusable for a
+  future conformal-image GPU render (that would be a different shader).
+
+### Consequences
+- **Easier:** RM is a lean, pure-2D studio (source region + its conformal image in linked canvas panes); no
+  WebGL, so the "WebGL2 unavailable" failure mode is gone; the suite has a worked example of the interchange
+  keystone carrying a map *between* two tools in the CD → RM direction (the mirror of QD → CD).
+- **Harder:** `@cas/dynamics` is now single-consumer (a weaker extraction rationale, recorded not reversed);
+  the exterior-map *authoring* that used to live in RM now requires Complex Dynamics.
+- **Revisit:** if a second `@cas/dynamics` consumer never re-materialises and the package becomes maintenance
+  drag, ADR-0007's symmetric "don't split without two" would invite folding it back into Complex Dynamics —
+  not done now (it is small, correct, and green).
+
+### Action Items
+1. [x] **B1** — CD producer (`exportMap.ts` + "Riemann Map ↗" deep-link button); cross-app golden.
+2. [x] **B2** — RM consumer (`importMap.ts`) + the "import" disk-image source (deep-link on boot + paste).
+3. [x] **B4** — RM sheds the Julia render mode, dynamics analysis, rays, local Böttcher + its producer; drops
+   `@cas/dynamics` and the dead `@cas/schwarz`.
+4. [x] **C** — RM drops the generic domain-coloring modes and the whole GPU fragment pipeline; drops `@cas/gpu`;
+   renders pure-2D.

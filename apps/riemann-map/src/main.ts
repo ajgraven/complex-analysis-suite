@@ -38,6 +38,22 @@ function initialState(): RiemannViewState {
   return decodeRiemannState(window.location.hash) ?? DEFAULT_VIEW_STATE;
 }
 
+/** Reconstruct the in-memory imported map from a view-state's serialized `render.imported` — a permalink of
+ *  an imported figure carries the coefficients, so a reload restores the map. Null if absent or malformed. */
+function restoreImported(
+  imp:
+    | { lead: readonly [number, number]; coeffs: readonly (readonly [number, number])[]; app?: string; note?: string }
+    | undefined,
+): ImportedExterior | null {
+  if (!imp || !Array.isArray(imp.lead) || imp.lead.length !== 2 || !Array.isArray(imp.coeffs)) return null;
+  return {
+    lead: [imp.lead[0], imp.lead[1]],
+    coeffs: imp.coeffs.map((c) => [c[0], c[1]] as [number, number]),
+    app: imp.app ?? "imported",
+    note: imp.note,
+  };
+}
+
 /** Evaluate a Laurent exterior map ψ(w) = γ₁·w + Σ bₖ·w⁻ᵏ from its coefficients (the imported-map source's
  *  ψ; the coefficients are decoded from an interchange link, not computed here). */
 function evalLaurentPsi(
@@ -115,10 +131,18 @@ function main(): void {
   if (!app) return;
   let state = initialState();
   // A "#s=" interchange deep link (e.g. Complex Dynamics' "Send to Riemann Map") boots straight into the
-  // imported exterior map as the disk-image source. A "#vs=" permalink has no s= payload, so this is null.
+  // imported map. Its coefficients are recorded IN the view-state (render.imported) so the "#vs=" permalink
+  // the first frame writes is self-contained — reopening/refreshing it restores the map without the "#s="
+  // link. A "#vs=" permalink of a previously-imported figure carries render.imported; restore it here.
   let importedMap: ImportedExterior | null = importExteriorMap(window.location.hash);
   if (importedMap) {
-    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image" } };
+    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image", imported: importedMap } };
+  } else if (state.render.diskSource === "import") {
+    importedMap = restoreImported(state.render.imported);
+  }
+  // An unknown mode id (e.g. a render mode retired in C, in an old permalink) falls back to the default view.
+  if (state.render.mode !== "disk-image" && state.render.mode !== "domain-map") {
+    state = { ...state, render: { ...state.render, mode: "disk-image" } };
   }
 
   // ---- DOM shell -----------------------------------------------------------
@@ -759,7 +783,8 @@ function main(): void {
     }
     note.classList.remove("visible");
     importedMap = m;
-    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image" } };
+    // Record the coefficients in the view-state so the permalink is self-contained (survives reload).
+    state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image", imported: m } };
     controls.setMode(state.render.mode);
     controls.setDiskSource("import");
     diskDirty = true;

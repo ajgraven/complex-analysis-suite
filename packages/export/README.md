@@ -8,7 +8,7 @@ Extracted per [ADR-0007](../../docs/DECISIONS.md#adr-0007-incremental-extraction
 once **three** apps each carried a byte-for-byte-equivalent copy of the same code — Complex
 Dynamics, the Complex-Function Plotter, and Riemann Map. The rule is "extract on the second
 consumer"; this one was well past due. Convention-neutral per
-[ADR-0006](../../docs/DECISIONS.md#adr-0006-convention-neutral-core): this is byte manipulation —
+[ADR-0006](../../docs/DECISIONS.md#adr-0006-convention-neutral-core-packages): this is byte manipulation —
 no `π` / `2πi`, indeed no mathematics, lives here.
 
 ## Why a figure should carry its own recipe

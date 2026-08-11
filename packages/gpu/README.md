@@ -57,7 +57,12 @@ the driver's log on failure.
 **GLSL standard library** (`./glsl`) — source-string constants you concatenate into a
 fragment shader: `DF64_GLSL` (double-float primitive ops), `COMPLEX_SINGLE_GLSL` (`vec2`
 complex arithmetic), `COMPLEX_DF64_GLSL` (`vec4` df64 complex arithmetic), and
-`COMPLEX_DERIVED_GLSL` (transcendentals built on the stdlib).
+`COMPLEX_DERIVED_GLSL` (transcendentals built on the stdlib). Plus three small building blocks
+every renderer otherwise re-declares (ADR-0016): `FULLSCREEN_VERTEX_GLSL` (the trivial
+fullscreen-triangle vertex program, `layout(location = 0) in vec2 aPos`), `HSV2RGB_GLSL` (the
+HSV→RGB hue-wheel helper), and `PLANE_FROM_FRAG_GLSL` (a `planeFromFrag()` mapping a fragment
+coordinate to a complex-plane point — concatenate it **after** `COMPLEX_SINGLE_GLSL`, which
+defines the `cvec` / `vec_` aliases it uses).
 
 **df64 reference** (`./df64`) — the JS mirror of the shader's double-float math (`DF =
 [hi, lo]` float32 pair): `df · toNumber · dfAdd · dfSub · dfMul · dfDiv · dfSqrt · dfExp ·
