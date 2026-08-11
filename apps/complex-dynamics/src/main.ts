@@ -116,6 +116,7 @@ import {
   schwarzEngineFromMapSpec,
   schwarzPhiFromMapSpec,
 } from "./interchange/importMap";
+import { bottcherMapDeepLink } from "./interchange/exportMap";
 import {
   renderSchwarzField,
   schwarzBoundaryPoly,
@@ -1800,6 +1801,7 @@ function init(): void {
     byId<HTMLButtonElement>("exterior-param-csv").disabled = !paramOn;
     byId<HTMLButtonElement>("exterior-dyn-copy").disabled = !dynOn;
     byId<HTMLButtonElement>("exterior-dyn-csv").disabled = !dynOn;
+    byId<HTMLButtonElement>("exterior-dyn-rm").disabled = !dynOn;
   }
 
   /**
@@ -6396,6 +6398,32 @@ function init(): void {
   byId("exterior-dyn-csv").addEventListener("click", () =>
     exportCoeffs(lastDynCoeffs, "julia-exterior-map.csv"),
   );
+  // Hand the filled Julia set's exterior Riemann (Böttcher) map ψ to the Riemann-Map studio as an
+  // @cas/interchange `kind:"map"` LaurentMap deep link (B). Opens RM in a new tab; also copies the URL
+  // so a blocked popup still leaves the link on the clipboard.
+  byId("exterior-dyn-rm").addEventListener("click", () => {
+    const raw = Number(byId<HTMLInputElement>("exterior-n").value);
+    const n = Math.max(1, Math.min(64, Math.round(Number.isFinite(raw) ? raw : 12)));
+    const dyn = dynExterior(n);
+    if (dyn.kind !== "ok") {
+      showToast("No exterior Riemann map here — need a filled Julia set with connected K.", "warn");
+      return;
+    }
+    const { url, resolvable } = bottcherMapDeepLink({ lead: dyn.lead, coeffs: dyn.coeffs }, window.location, {
+      sourceExpr: dynamicalView.plot.f,
+      c: dynamicalView.plot.cValue,
+    });
+    const opened = window.open(url, "_blank", "noopener");
+    void navigator.clipboard?.writeText(url).catch(() => {});
+    showToast(
+      opened
+        ? "Opened the exterior Riemann map in the Riemann Map studio (link also copied)."
+        : resolvable
+          ? "Riemann-map link copied — paste it into the Riemann Map studio."
+          : "Riemann-map link copied (couldn't resolve the studio URL — paste it there).",
+      "info",
+    );
+  });
   updateExteriorMap();
 
   // Boundary-overlay controls (in the same group as the readout).
