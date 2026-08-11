@@ -27,6 +27,7 @@ import {
   clampElevation,
   cameraEye,
   viewProjection,
+  landscapeWorldPerPixel,
 } from "../render3d/camera.js";
 import { buildGridMesh, GRID_N_BASE } from "../render3d/mesh.js";
 import { pickHeightField } from "../render3d/pick.js";
@@ -750,15 +751,21 @@ export class Plot {
    * Pan the 3D landscape by a screen-drag delta (CSS px): move the look-at point (= the view centre) in
    * the ground plane so the grabbed domain point tracks the cursor — a "recenter to explore ℂ" pan, so
    * the surface always stays framed (no empty space past its edges). Screen-right and screen-up are
-   * projected onto z = 0 through the camera azimuth; `worldPerPixel` is the perspective scale at the
-   * target plane. Signs match the 2D grab-pan feel (content follows the cursor).
+   * projected onto z = 0 through the camera azimuth; the world-per-pixel is **span-coupled** (via
+   * {@link landscapeWorldPerPixel}), matching the framing the surface is actually drawn with
+   * ({@link surfaceCamera}). That is the whole point of the scale: the stored `camera.distance` is only
+   * the orbit dolly and stays fixed through a span-zoom, so deriving the scale from it (as this once did)
+   * made the pan speed independent of zoom — a deep zoom then flew across the plane. Signs match the 2D
+   * grab-pan feel (content follows the cursor).
    */
   panSurface(dxPx: number, dyPx: number, viewportHeightPx: number): void {
     const cam = this.camera;
-    const wpp =
-      viewportHeightPx > 0
-        ? (2 * cam.distance * Math.tan(cam.fov / 2)) / viewportHeightPx
-        : 0;
+    const wpp = landscapeWorldPerPixel(
+      this.view.span,
+      viewportHeightPx,
+      cam.ortho,
+      SURFACE_FRAMING,
+    );
     const ca = Math.cos(cam.azimuth);
     const sa = Math.sin(cam.azimuth);
     this.view.cx += wpp * (dxPx * sa - dyPx * ca);

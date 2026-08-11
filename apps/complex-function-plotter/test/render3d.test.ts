@@ -16,6 +16,7 @@ import {
   clampElevation,
   ELEV_MIN,
   ELEV_MAX,
+  landscapeWorldPerPixel,
 } from "../src/render3d/camera.js";
 import { buildGridMesh, gridResolutionForField, GRID_N_BASE } from "../src/render3d/mesh.js";
 
@@ -168,5 +169,34 @@ describe("gridResolutionForField", () => {
     expect(gridResolutionForField(3, 1000)).toBe(1024); // extreme zoom-out → capped
     expect(gridResolutionForField(NaN, 4)).toBe(GRID_N_BASE);
     expect(gridResolutionForField(3, 0)).toBe(GRID_N_BASE); // no extent → base
+  });
+});
+
+// The world-per-pixel a 3D-landscape click-drag pan uses. It must scale with the view span (§B framing),
+// so panning covers the same fraction of the window at every zoom — the fix for "deep zooms pan too fast",
+// where the scale was built from the fixed orbit-dolly distance and so didn't shrink as you zoomed in.
+describe("landscapeWorldPerPixel", () => {
+  const FRAMING = 0.42; // must match SURFACE_FRAMING in render/plot.ts
+
+  it("scales linearly with the view span (deep zoom ⇒ proportionally slower pan)", () => {
+    const near = landscapeWorldPerPixel(4, 900, false, FRAMING);
+    // 10× smaller span ⇒ 10× smaller world-per-pixel: a drag covers the same fraction of the window.
+    expect(landscapeWorldPerPixel(0.4, 900, false, FRAMING)).toBeCloseTo(near / 10, 12);
+    expect(landscapeWorldPerPixel(8, 900, false, FRAMING)).toBeCloseTo(near * 2, 12);
+  });
+
+  it("matches the perspective framing, and the ortho (top-down) box sized from span directly", () => {
+    const persp = landscapeWorldPerPixel(4, 900, false, FRAMING);
+    const orthoTopDown = landscapeWorldPerPixel(4, 900, true, FRAMING);
+    expect(persp).toBeCloseTo((2 * 4 * FRAMING) / 900, 12);
+    expect(orthoTopDown).toBeCloseTo((2 * 4) / 900, 12); // ortho half-height = span
+    expect(orthoTopDown / persp).toBeCloseTo(1 / FRAMING, 12);
+  });
+
+  it("is a no-op (0) for a degenerate viewport or span", () => {
+    expect(landscapeWorldPerPixel(4, 0, false, FRAMING)).toBe(0);
+    expect(landscapeWorldPerPixel(4, -10, false, FRAMING)).toBe(0);
+    expect(landscapeWorldPerPixel(0, 900, false, FRAMING)).toBe(0);
+    expect(landscapeWorldPerPixel(-1, 900, false, FRAMING)).toBe(0);
   });
 });
