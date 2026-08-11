@@ -17,7 +17,7 @@ import {
   ELEV_MIN,
   ELEV_MAX,
 } from "../src/render3d/camera.js";
-import { buildGridMesh, gridResolutionForSpan, GRID_N_BASE } from "../src/render3d/mesh.js";
+import { buildGridMesh, gridResolutionForField, GRID_N_BASE } from "../src/render3d/mesh.js";
 
 // Phase 5 / 5A: the pure 3D kit (mat4 · orbit camera · grid mesh) the analytic-landscape renderer is
 // built on. Everything here is math-only, so it pins the projection algebra — most importantly the
@@ -148,24 +148,25 @@ describe("grid mesh", () => {
   });
 });
 
-// §B adaptive tessellation: the mesh density scales with the zoom so a deep zoom stays smooth without a
-// wastefully dense mesh when zoomed out. The reference span returns the base resolution exactly.
-describe("gridResolutionForSpan", () => {
-  it("returns the base resolution at the reference span", () => {
-    expect(gridResolutionForSpan(4)).toBe(GRID_N_BASE); // 160 at the default span
+// Field-driven adaptive tessellation: a smooth view stays light; a sharp feature (pole spike / |f|-clamp
+// cliff) drives a finer mesh that grows with the view extent, so a fixed-width spike keeps enough
+// triangles even when zoomed out (where a uniform mesh went chunky). Capped to bound the rebuild.
+describe("gridResolutionForField", () => {
+  it("stays at the base resolution for a smooth view (no sharp feature)", () => {
+    expect(gridResolutionForField(0.1, 4)).toBe(GRID_N_BASE); // a small height step → the light mesh
+    expect(gridResolutionForField(0, 4)).toBe(GRID_N_BASE);
   });
 
-  it("is denser zoomed in and coarser zoomed out (monotone), within bounds", () => {
-    expect(gridResolutionForSpan(1)).toBeGreaterThan(GRID_N_BASE); // zoomed in → more cells
-    expect(gridResolutionForSpan(16)).toBeLessThan(GRID_N_BASE); // zoomed out → fewer
-    expect(gridResolutionForSpan(0.5)).toBeGreaterThanOrEqual(gridResolutionForSpan(1));
-    expect(gridResolutionForSpan(16)).toBeGreaterThanOrEqual(gridResolutionForSpan(100));
+  it("a sharp feature drives a finer mesh, denser the further you zoom out", () => {
+    const near = gridResolutionForField(3, 4); // a pole at a default-ish zoom
+    const far = gridResolutionForField(3, 12); // the same spike, zoomed out (larger extent)
+    expect(near).toBeGreaterThan(GRID_N_BASE);
+    expect(far).toBeGreaterThan(near); // zoomed out → more triangles for the fixed-width spike
   });
 
-  it("clamps to [96, 384] at the extremes and guards a degenerate span", () => {
-    expect(gridResolutionForSpan(1e-6)).toBe(640); // very deep zoom → capped
-    expect(gridResolutionForSpan(1e6)).toBe(96); // very wide → floored
-    expect(gridResolutionForSpan(0)).toBe(GRID_N_BASE); // not-yet-set span → base
-    expect(gridResolutionForSpan(NaN)).toBe(GRID_N_BASE);
+  it("caps the resolution and guards degenerate inputs", () => {
+    expect(gridResolutionForField(3, 1000)).toBe(1024); // extreme zoom-out → capped
+    expect(gridResolutionForField(NaN, 4)).toBe(GRID_N_BASE);
+    expect(gridResolutionForField(3, 0)).toBe(GRID_N_BASE); // no extent → base
   });
 });

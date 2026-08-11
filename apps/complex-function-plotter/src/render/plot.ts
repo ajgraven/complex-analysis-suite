@@ -28,7 +28,7 @@ import {
   cameraEye,
   viewProjection,
 } from "../render3d/camera.js";
-import { buildGridMesh, gridResolutionForSpan, GRID_N_BASE } from "../render3d/mesh.js";
+import { buildGridMesh, GRID_N_BASE } from "../render3d/mesh.js";
 import { pickHeightField } from "../render3d/pick.js";
 import { buildSurfaceProgram } from "../render3d/surfaceShader.js";
 import {
@@ -771,12 +771,20 @@ export class Plot {
     this.view.span = Math.min(1e6, Math.max(1e-9, this.view.span * factor));
   }
 
-  /** Rebuild the surface grid mesh at the zoom-appropriate resolution (§B, {@link gridResolutionForSpan});
-   *  a no-op when it already matches, so it is cheap to call on every zoom-settle. Re-uploads into the
-   *  existing buffers, so the surface VAO (which records them) stays valid — no program / VAO rebuild. */
-  reconcileMeshResolution(): void {
-    const n = gridResolutionForSpan(this.view.span);
-    if (n === this.gridN || !this.gridUvBuffer || !this.gridIndexBuffer || !this.surfaceVao) return;
+  /** Rebuild the surface grid mesh at `targetN` cells/side (the caller computes it from a field scan —
+   *  see `gridResolutionForField`); a no-op when it already matches, so it is cheap to call on every
+   *  commit. Re-uploads into the existing buffers, so the surface VAO (which records them) stays valid —
+   *  no program / VAO rebuild. */
+  reconcileMeshResolution(targetN: number): void {
+    const n = Math.round(targetN);
+    if (
+      !Number.isFinite(n) ||
+      n === this.gridN ||
+      !this.gridUvBuffer ||
+      !this.gridIndexBuffer ||
+      !this.surfaceVao
+    )
+      return;
     this.gridN = n;
     const gl = this.gl;
     const mesh = buildGridMesh(n);
