@@ -12,6 +12,7 @@ export interface Preset {
 }
 
 export const PRESETS: Preset[] = [
+  { label: "Γ(z) — gamma", expr: "gamma(z)", span: 4 },
   { label: "z² — double zero", expr: "z^2", span: 2 },
   { label: "1/z — simple pole", expr: "1/z", span: 2 },
   { label: "Möbius (z−1)/(z+1)", expr: "(z - 1)/(z + 1)", span: 3 },

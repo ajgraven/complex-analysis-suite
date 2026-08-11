@@ -17,7 +17,7 @@ import {
   ELEV_MIN,
   ELEV_MAX,
 } from "../src/render3d/camera.js";
-import { buildGridMesh } from "../src/render3d/mesh.js";
+import { buildGridMesh, gridResolutionForSpan, GRID_N_BASE } from "../src/render3d/mesh.js";
 
 // Phase 5 / 5A: the pure 3D kit (mat4 · orbit camera · grid mesh) the analytic-landscape renderer is
 // built on. Everything here is math-only, so it pins the projection algebra — most importantly the
@@ -145,5 +145,27 @@ describe("grid mesh", () => {
     expect(buildGridMesh(0).n).toBe(1);
     expect(buildGridMesh(3.7).n).toBe(3);
     expect(buildGridMesh(1).vertexCount).toBe(4);
+  });
+});
+
+// §B adaptive tessellation: the mesh density scales with the zoom so a deep zoom stays smooth without a
+// wastefully dense mesh when zoomed out. The reference span returns the base resolution exactly.
+describe("gridResolutionForSpan", () => {
+  it("returns the base resolution at the reference span", () => {
+    expect(gridResolutionForSpan(4)).toBe(GRID_N_BASE); // 160 at the default span
+  });
+
+  it("is denser zoomed in and coarser zoomed out (monotone), within bounds", () => {
+    expect(gridResolutionForSpan(1)).toBeGreaterThan(GRID_N_BASE); // zoomed in → more cells
+    expect(gridResolutionForSpan(16)).toBeLessThan(GRID_N_BASE); // zoomed out → fewer
+    expect(gridResolutionForSpan(0.5)).toBeGreaterThanOrEqual(gridResolutionForSpan(1));
+    expect(gridResolutionForSpan(16)).toBeGreaterThanOrEqual(gridResolutionForSpan(100));
+  });
+
+  it("clamps to [96, 384] at the extremes and guards a degenerate span", () => {
+    expect(gridResolutionForSpan(1e-6)).toBe(384); // very deep zoom → capped
+    expect(gridResolutionForSpan(1e6)).toBe(96); // very wide → floored
+    expect(gridResolutionForSpan(0)).toBe(GRID_N_BASE); // not-yet-set span → base
+    expect(gridResolutionForSpan(NaN)).toBe(GRID_N_BASE);
   });
 });

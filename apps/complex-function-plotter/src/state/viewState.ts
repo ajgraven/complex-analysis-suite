@@ -6,8 +6,37 @@
  */
 import { encodeViewState, decodeViewState } from "@cas/interchange";
 import { DEFAULT_ANIM, type AnimConfig } from "../ui/animate.js";
+import { DEFAULT_CAMERA } from "../render3d/camera.js";
 
 export const APP_NS = "cfp";
+
+/** The 3D-view state (catalog F5–F7): the render mode plus the orbit-camera and surface-height settings,
+ *  so a shared landscape / linked figure reopens as it was framed. The sphere's arcball rotation is
+ *  interactive-only and not persisted — a sphere link reopens in sphere mode at the default orientation. */
+export interface View3dState {
+  mode: "2d" | "3d" | "sphere" | "linked";
+  azimuth: number;
+  elevation: number;
+  distance: number;
+  ortho: boolean;
+  heightMode: number;
+  heightScale: number;
+  specular: boolean;
+  opacity: number;
+}
+
+/** The default 3D-view state: 2D mode with the default orbit camera and a log-height surface. */
+export const DEFAULT_V3D: View3dState = {
+  mode: "2d",
+  azimuth: DEFAULT_CAMERA.azimuth,
+  elevation: DEFAULT_CAMERA.elevation,
+  distance: DEFAULT_CAMERA.distance,
+  ortho: DEFAULT_CAMERA.ortho,
+  heightMode: 0,
+  heightScale: 1,
+  specular: false,
+  opacity: 1,
+};
 
 export interface PlotterState extends Record<string, unknown> {
   /** The ACTIVE (plotted) function's source — kept as the primary field for backward-compat: a
@@ -33,6 +62,9 @@ export interface PlotterState extends Record<string, unknown> {
   /** Animation-variable `t` transport config (catalog G2). Playback state is not persisted — a loaded
    *  link opens paused at the saved `t` (which travels in `params`). */
   anim: AnimConfig;
+  /** Render mode + 3D camera/height (catalog F5–F7), so a shared landscape / linked / sphere figure
+   *  reopens in its view. Absent on a pre-3D-persist link → decodes to the 2D default. */
+  v3d: View3dState;
 }
 
 /** Validate a decoded `anim` blob, falling back to {@link DEFAULT_ANIM} field-by-field. */
@@ -66,6 +98,28 @@ function cleanParams(raw: unknown): Record<string, [number, number]> {
     }
   }
   return out;
+}
+
+/** Validate a decoded `v3d` blob, falling back to the 2D default view + default camera field-by-field. */
+function cleanV3d(raw: unknown): View3dState {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const numOr = (v: unknown, d: number): number =>
+    typeof v === "number" && Number.isFinite(v) ? v : d;
+  const boolOr = (v: unknown, d: boolean): boolean => (typeof v === "boolean" ? v : d);
+  const mode =
+    o.mode === "3d" || o.mode === "sphere" || o.mode === "linked" ? o.mode : "2d";
+  return {
+    mode,
+    azimuth: numOr(o.azimuth, DEFAULT_CAMERA.azimuth),
+    // clamp to [0, π/2]: the orbit drag stays under 90°, but the discrete top-down snap is exactly π/2.
+    elevation: Math.min(Math.PI / 2, Math.max(0, numOr(o.elevation, DEFAULT_CAMERA.elevation))),
+    distance: Math.min(60, Math.max(0.3, numOr(o.distance, DEFAULT_CAMERA.distance))),
+    ortho: boolOr(o.ortho, DEFAULT_CAMERA.ortho),
+    heightMode: Math.min(2, Math.max(0, Math.round(numOr(o.heightMode, 0)))),
+    heightScale: Math.min(3, Math.max(0.1, numOr(o.heightScale, 1))),
+    specular: boolOr(o.specular, false),
+    opacity: Math.min(1, Math.max(0.1, numOr(o.opacity, 1))),
+  };
 }
 
 export function encodeState(state: PlotterState): string {
@@ -108,5 +162,6 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     hueSign: num(s.hueSign, 1),
     params: cleanParams(s.params),
     anim: cleanAnim(s.anim),
+    v3d: cleanV3d(s.v3d),
   };
 }

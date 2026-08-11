@@ -52,15 +52,22 @@ import {
   pointerMidpoint,
   pinchFactor,
   leftHalf,
+  rightHalf,
   isLeftHalf,
   type NavIntent,
   type Pt,
 } from "./ui/navigation.js";
-import { findSingularities, type Singularities } from "./analysis/singularities.js";
+import { heightAt } from "./render3d/height.js";
+import {
+  findSingularities,
+  type Singularities,
+  type Singularity,
+} from "./analysis/singularities.js";
 import {
   decodeState,
   encodeState,
   shareUrl,
+  DEFAULT_V3D,
   type PlotterState,
 } from "./state/viewState.js";
 import { importEnvelopeText } from "./interchange/importMap.js";
@@ -70,16 +77,20 @@ import {
   type InterchangeVar,
 } from "./interchange/exportView.js";
 
+// The fresh-boot state (no share-link). The app now opens 3D-first on a Γ(z) landscape: a phase-only
+// HSV portrait draped over a linear-|f| surface, the map whose poles best show off the 3D view. NOTE:
+// these are the NO-LINK defaults only — `DEFAULT_V3D` / `cleanV3d` stay 2D-neutral so an existing
+// share-link (which always carries its own colormap/modulus/view) still reopens exactly as it was.
 const DEFAULTS: PlotterState = {
-  expr: "z^2",
-  exprF: "z^2",
+  expr: "gamma(z)",
+  exprF: "gamma(z)",
   exprG: "1/z",
   active: "f",
   cx: 0,
   cy: 0,
-  span: 2,
-  colormap: 0,
-  modulus: 2,
+  span: 4, // frames Γ's poles at 0, −1, −2, −3
+  colormap: 1, // HSV (classic)
+  modulus: 0, // phase only
   enhance: 0,
   sectors: 12,
   crisp: 1,
@@ -87,6 +98,7 @@ const DEFAULTS: PlotterState = {
   hueSign: 1,
   params: {},
   anim: { ...DEFAULT_ANIM },
+  v3d: { ...DEFAULT_V3D, mode: "3d", heightMode: 1 }, // 3D landscape, linear-|f| height
 };
 
 function addOption(sel: HTMLSelectElement, value: string, label: string): void {
@@ -177,6 +189,8 @@ function main(): void {
   const topDownBtn = byId("topDown");
   const resetViewBtn = byId("resetView");
   const specularInput = byId("specular");
+  const opacityInput = byId("opacity");
+  const opacityVal = byId("opacityVal");
   const enhanceSel = byId("enhance");
   const sectorsInput = byId("sectors");
   const sectorsVal = byId("sectorsVal");
@@ -186,7 +200,10 @@ function main(): void {
   const cvdSel = byId("cvd");
   const markSingsInput = byId("markSings");
   const singCount = byId("singCount");
+  const markCriticalInput = byId("markCritical");
+  const critCount = byId("critCount");
   const inspectInfInput = byId("inspectInf");
+  const plotDerivInput = byId("plotDeriv");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -224,7 +241,7 @@ function main(): void {
 
   let plot: Plot;
   try {
-    plot = new Plot(canvas, "z^2");
+    plot = new Plot(canvas, "gamma(z)"); // seed; the real map is applied from `initial` via setActive, below
   } catch (err) {
     setError(err instanceof Error ? err.message : String(err));
     return;
@@ -237,6 +254,17 @@ function main(): void {
   plot.color.crisp = initial.crisp ? 1 : 0;
   plot.color.hueShift = initial.hueShift;
   plot.color.hueSign = initial.hueSign < 0 ? -1 : 1;
+  // Restore the 3D camera + surface-height settings from the share-link (the mode itself is applied via
+  // setView once the view controls are wired, below). Set here — before the height controls initialise
+  // their values from `plot.*` — so the UI reflects the restored state without extra syncing.
+  plot.camera.azimuth = initial.v3d.azimuth;
+  plot.camera.elevation = initial.v3d.elevation;
+  plot.camera.distance = initial.v3d.distance;
+  plot.camera.ortho = initial.v3d.ortho;
+  plot.heightMode = initial.v3d.heightMode;
+  plot.heightScale = initial.v3d.heightScale;
+  plot.specular = initial.v3d.specular;
+  plot.opacity = initial.v3d.opacity;
   let framingSpan = initial.span;
 
   // Linked-view geometry (I7). In the linked mode the flat portrait fills the LEFT half of the canvas and
@@ -245,6 +273,9 @@ function main(): void {
   const canvasRect = (): DOMRect => canvas.getBoundingClientRect();
   const twoDRect = (): DOMRect | ReturnType<typeof leftHalf> =>
     plot.mode === "linked" ? leftHalf(canvasRect()) : canvasRect();
+  // The surface pane's rect — the whole canvas in 3D, the right half in the linked view — for the 3D pick.
+  const threeDRect = (): DOMRect | ReturnType<typeof rightHalf> =>
+    plot.mode === "linked" ? rightHalf(canvasRect()) : canvasRect();
   const effMode = (clientX: number): "2d" | "3d" | "sphere" => {
     const m = plot.mode;
     if (m === "linked") return isLeftHalf(clientX, canvasRect()) ? "2d" : "3d";
@@ -258,36 +289,51 @@ function main(): void {
 
   let probeFn: ((z: Complex, c: Complex) => Complex) | null = null;
   let fpFn: ((z: Complex, c: Complex) => Complex) | null = null;
+  // True when the map calls a float32-limited special function (ζ / Γ / W): those are series /
+  // iterations, so the cursor readout is an estimate too (the CPU path is float64, but still not a
+  // closed form) — labelled `≈` to match the picture's precision badge. Cached on each formula change.
+  let probeEstimate = false;
   let sings: Singularities | null = null;
   let markSings = false;
+  let crits: Singularity[] = []; // located critical points (f′ = 0), catalog H6
+  let markCritical = false;
   let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
+  let plotDerivative = false; // derivative overlay (H9): plot f′(z). Transient (not persisted).
   // Keep the parsed f (and its z-derivative, when holomorphic) so the CPU instruments can be rebuilt
   // with the current parameter values baked in — without re-parsing — whenever a parameter moves.
   let fAst: Node | null = null;
   let fpAst: Node | null = null;
+  let fppAst: Node | null = null; // f″, so the critical-point finder (H6) can Newton-refine zeros of f′
+  let fppFn: ((z: Complex, c: Complex) => Complex) | null = null;
   const rebuildInstrumentFns = (): void => {
     if (!fAst) {
       probeFn = null;
       fpFn = null;
+      fppFn = null;
       return;
     }
     const params = plot.paramsRecord(); // GLSL and JS read the same parameter values (dual-backend)
     probeFn = makeComplexFn(fAst, params);
     fpFn = fpAst ? makeComplexFn(fpAst, params) : null;
+    fppFn = fppAst ? makeComplexFn(fppAst, params) : null;
   };
   const updateFns = (src: string): void => {
     try {
       let ast = parse(src);
       if (inspectInfinity) ast = substitute(ast, "z", parse("1/z")); // instruments track f(1/z) too
-      fAst = ast;
+      if (plotDerivative) ast = differentiate(ast, "z"); // …and f′ when the derivative overlay is on
+      fAst = ast; // `fAst` is always the *plotted* map, so every instrument describes what's on screen
       try {
         fpAst = differentiate(fAst, "z");
+        fppAst = differentiate(fpAst, "z");
       } catch {
-        fpAst = null; // non-holomorphic — the singularity finder needs f'
+        fpAst = null; // non-holomorphic — the singularity / critical-point finders need f′ (and f″)
+        fppAst = null;
       }
     } catch {
       fAst = null;
       fpAst = null;
+      fppAst = null;
     }
     rebuildInstrumentFns();
   };
@@ -309,6 +355,17 @@ function main(): void {
     hueSign: plot.color.hueSign,
     params: plot.paramsRecord(),
     anim: { ...animConfig },
+    v3d: {
+      mode: plot.mode,
+      azimuth: plot.camera.azimuth,
+      elevation: plot.camera.elevation,
+      distance: plot.camera.distance,
+      ortho: plot.camera.ortho,
+      heightMode: plot.heightMode,
+      heightScale: plot.heightScale,
+      specular: plot.specular,
+      opacity: plot.opacity,
+    },
   });
 
   let hashTimer = 0;
@@ -320,6 +377,9 @@ function main(): void {
   };
 
   const redraw = (draft = false): void => {
+    // On a committed frame in a surface mode, adapt the mesh density to the current zoom (§B) — a cheap
+    // no-op when unchanged; skipped on draft frames so a zoom/drag burst never rebuilds mid-gesture.
+    if (!draft && (plot.mode === "3d" || plot.mode === "linked")) plot.reconcileMeshResolution();
     plot.draw(draft);
     if (plot.mode !== "2d") {
       // The axes / grid / markers are full-canvas 2D-projection overlays; in the 3D landscape, on the
@@ -329,13 +389,14 @@ function main(): void {
       if (ax) ax.clearRect(0, 0, axesCanvas.width, axesCanvas.height);
     } else {
       drawAxes(axesCanvas, plot.view, canvas.clientWidth, canvas.clientHeight);
-      if (markSings && sings)
+      if ((markSings && sings) || (markCritical && crits.length))
         drawMarkers(
           axesCanvas,
           plot.view,
           canvas.clientWidth,
           canvas.clientHeight,
-          sings,
+          markSings ? sings : null,
+          markCritical ? crits : [],
         );
     }
     // Only committed frames update the share-link — a draft (drag / animation frame) settles with a
@@ -344,32 +405,39 @@ function main(): void {
   };
 
   const showCounts = (): void => {
-    if (!(singCount instanceof HTMLElement)) return;
-    if (!markSings) {
-      singCount.textContent = "";
-    } else if (!sings) {
-      singCount.textContent = "—";
-    } else if (!sings.differentiable) {
-      singCount.textContent = "needs a holomorphic f";
-    } else {
-      const z = sings.zeros.reduce((n, s) => n + s.order, 0);
-      const p = sings.poles.reduce((n, s) => n + s.order, 0);
-      singCount.textContent = `zeros ${sings.zeros.length} (Σ ${z}) · poles ${sings.poles.length} (Σ ${p}) ≈`;
+    if (singCount instanceof HTMLElement) {
+      if (!markSings) {
+        singCount.textContent = "";
+      } else if (!sings) {
+        singCount.textContent = "—";
+      } else if (!sings.differentiable) {
+        singCount.textContent = "needs a holomorphic f";
+      } else {
+        const z = sings.zeros.reduce((n, s) => n + s.order, 0);
+        const p = sings.poles.reduce((n, s) => n + s.order, 0);
+        singCount.textContent = `zeros ${sings.zeros.length} (Σ ${z}) · poles ${sings.poles.length} (Σ ${p}) ≈`;
+      }
+    }
+    // Critical-point count (H6): distinct located points; a degenerate one is flagged by its order label.
+    if (critCount instanceof HTMLElement) {
+      if (!markCritical) critCount.textContent = "";
+      else if (!fpFn) critCount.textContent = "needs a holomorphic f";
+      else critCount.textContent = `critical points ${crits.length} ≈`;
     }
   };
   const recomputeSings = (): void => {
-    if (markSings && probeFn) {
-      const aspect =
-        canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
-      sings = findSingularities(probeFn, fpFn, plot.view, aspect);
-    } else {
-      sings = null;
-    }
+    const aspect =
+      canvas.clientHeight > 0 ? canvas.clientWidth / canvas.clientHeight : 1;
+    sings = markSings && probeFn ? findSingularities(probeFn, fpFn, plot.view, aspect) : null;
+    // Critical points = zeros of f′ (H6): reuse the zero-finder on f′ itself — it needs f″ to
+    // Newton-refine and order each root — and keep only its zeros.
+    crits =
+      markCritical && fpFn ? findSingularities(fpFn, fppFn, plot.view, aspect).zeros : [];
     showCounts();
   };
   let singTimer = 0;
   const recomputeSingsSoon = (): void => {
-    if (!markSings) return;
+    if (!markSings && !markCritical) return;
     window.clearTimeout(singTimer);
     singTimer = window.setTimeout(() => {
       recomputeSings();
@@ -393,8 +461,9 @@ function main(): void {
   // precision-limited builtin (ζ strongly, Γ mildly), show a badge so a domain-coloured ζ/Γ reads as
   // an estimate (≈), not certified structure. Derived from the parsed map, so it needs no state.
   const updatePrecisionBadge = (): void => {
-    if (!(precisionBadge instanceof HTMLElement)) return;
     const note = fAst ? precisionNote(calledFunctions(fAst)) : null;
+    probeEstimate = note !== null; // drives the cursor readout's `≈` prefix too
+    if (!(precisionBadge instanceof HTMLElement)) return;
     precisionBadge.hidden = !note;
     precisionBadge.textContent = note ? note.text : "";
     precisionBadge.classList.toggle("warn", note?.severity === "warn");
@@ -626,12 +695,26 @@ function main(): void {
   if (resetViewBtn instanceof HTMLElement)
     resetViewBtn.addEventListener("click", () => {
       plot.resetCamera();
+      plot.view = { cx: 0, cy: 0, span: framingSpan }; // also restore the framing (pan/zoom move it in 3D)
       redraw(false);
     });
   if (specularInput instanceof HTMLInputElement) {
     specularInput.checked = plot.specular;
     specularInput.addEventListener("change", () => {
       plot.specular = specularInput.checked;
+      redraw(false);
+    });
+  }
+  // Surface opacity (§E): a translucent landscape lets you see through to its own far side.
+  if (opacityInput instanceof HTMLInputElement) {
+    const showOpacity = (): void => {
+      if (opacityVal instanceof HTMLElement) opacityVal.textContent = opacityInput.value;
+    };
+    opacityInput.value = String(plot.opacity);
+    showOpacity();
+    opacityInput.addEventListener("input", () => {
+      plot.opacity = Number(opacityInput.value);
+      showOpacity();
       redraw(false);
     });
   }
@@ -643,6 +726,20 @@ function main(): void {
       inspectInfinity = inspectInfInput.checked;
       plot.inspectInfinity = inspectInfInput.checked;
       applyExpr(exprs[active]);
+    });
+  }
+  // Derivative overlay (H9): plot f′(z). Like the ∞-inspector, toggling recompiles the map (GPU) and
+  // rebuilds the instruments (CPU) from the same symbolic derivative, so probe / finders track f′. A map
+  // with no symbolic derivative can't be overlaid — `applyExpr` surfaces the error and keeps the plot.
+  if (plotDerivInput instanceof HTMLInputElement) {
+    plotDerivInput.checked = plotDerivative;
+    plotDerivInput.addEventListener("change", () => {
+      plotDerivative = plotDerivInput.checked;
+      plot.plotDerivative = plotDerivInput.checked;
+      // A map with no symbolic derivative (e.g. conjugate) can't be overlaid — replace the shared
+      // package's implementation-detail error ("…for Newton's method (position 0)") with a plain one.
+      if (!applyExpr(exprs[active]) && plotDerivative)
+        setError("Plot f′: this map has no symbolic derivative.");
     });
   }
 
@@ -765,6 +862,15 @@ function main(): void {
       redraw(false);
     });
   }
+  // Critical points (H6): mark where f′ = 0 with diamonds, computed on demand like the zero/pole finder.
+  if (markCriticalInput instanceof HTMLInputElement) {
+    markCriticalInput.checked = markCritical;
+    markCriticalInput.addEventListener("change", () => {
+      markCritical = markCriticalInput.checked;
+      recomputeSings();
+      redraw(false);
+    });
+  }
   if (uncInput instanceof HTMLInputElement) {
     uncInput.checked = plot.color.uncertainty === 1;
     uncInput.addEventListener("change", () => {
@@ -809,12 +915,19 @@ function main(): void {
   }
 
   if (exprInput instanceof HTMLTextAreaElement || exprInput instanceof HTMLInputElement) {
+    // Debounce the recompile: each keystroke otherwise rebuilds three GPU shader programs synchronously
+    // (2D + surface + sphere), which janks on slow GPUs mid-formula. A short delay coalesces a burst of
+    // keystrokes into one compile once typing pauses.
+    let exprTimer = 0;
     exprInput.addEventListener("input", () => {
-      // Only a parseable expression is written back to the active slot (and thus to currentState /
-      // the share-link): a half-typed, invalid formula stays visible in the box but never gets
-      // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
-      // URL and lose the last good function on reload.
-      if (applyExpr(exprInput.value)) exprs[active] = exprInput.value;
+      window.clearTimeout(exprTimer);
+      exprTimer = window.setTimeout(() => {
+        // Only a parseable expression is written back to the active slot (and thus to currentState /
+        // the share-link): a half-typed, invalid formula stays visible in the box but never gets
+        // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
+        // URL and lose the last good function on reload.
+        if (applyExpr(exprInput.value)) exprs[active] = exprInput.value;
+      }, 140);
     });
   }
 
@@ -832,6 +945,22 @@ function main(): void {
       exportSizeSel instanceof HTMLSelectElement ? Number(exportSizeSel.value) : 2000;
     return Number.isFinite(v) && v > 0 ? v : 2000;
   };
+  // Offer only sizes the device can actually render: disable any export long-edge above the GL
+  // MAX_TEXTURE_SIZE. exportBlob self-clamps, but the dropdown shouldn't advertise a size that would
+  // silently downscale. The limit is fixed per context, so this runs once.
+  if (exportSizeSel instanceof HTMLSelectElement) {
+    const maxEdge = plot.maxExportEdge();
+    for (const opt of Array.from(exportSizeSel.options)) {
+      if (Number(opt.value) > maxEdge) {
+        opt.disabled = true;
+        opt.textContent += " (too large)";
+      }
+    }
+    if (exportSizeSel.selectedOptions[0]?.disabled) {
+      const ok = Array.from(exportSizeSel.options).find((o) => !o.disabled);
+      if (ok) exportSizeSel.value = ok.value; // never leave a disabled size selected
+    }
+  }
   const exportMeta = (): Record<string, string> => ({
     Software: "Complex Function Plotting Tool",
     "cfp:url": shareUrl(currentState()),
@@ -963,9 +1092,14 @@ function main(): void {
   };
   const fmtComplex = (z: Complex): string =>
     `${fmtNum(z[0])} ${z[1] < 0 ? "-" : "+"} ${fmtNum(Math.abs(z[1]))}i`;
-  const updateProbe = (clientX: number, clientY: number): void => {
+  // Fill the readout from a domain point `z` (its f, |f|, arg), or blank it (`—`) when `z` is null — the
+  // cursor is off the surface. Shared by the 2D screen→world probe and the 3D surface pick.
+  const renderProbe = (z: Complex | null): void => {
     if (!(pz instanceof HTMLElement)) return;
-    const z = plot.screenToWorld(clientX, clientY, twoDRect());
+    if (!z) {
+      for (const el of [pz, pfz, pabs, parg]) if (el instanceof HTMLElement) el.textContent = "—";
+      return;
+    }
     pz.textContent = fmtComplex(z);
     if (!probeFn) return;
     let w: Complex;
@@ -974,16 +1108,36 @@ function main(): void {
     } catch {
       w = [NaN, NaN];
     }
-    if (pfz instanceof HTMLElement) pfz.textContent = fmtComplex(w);
-    if (pabs instanceof HTMLElement) pabs.textContent = fmtNum(Math.hypot(w[0], w[1]));
-    if (parg instanceof HTMLElement) parg.textContent = fmtNum(Math.atan2(w[1], w[0]));
+    // `≈` when f uses a float32-limited special function (ζ/Γ/W): the value is a good float64 estimate,
+    // not a certified closed form — matching the picture's precision badge (honest labeling).
+    const pre = probeEstimate && Number.isFinite(w[0]) && Number.isFinite(w[1]) ? "≈ " : "";
+    if (pfz instanceof HTMLElement) pfz.textContent = pre + fmtComplex(w);
+    if (pabs instanceof HTMLElement) pabs.textContent = pre + fmtNum(Math.hypot(w[0], w[1]));
+    if (parg instanceof HTMLElement) parg.textContent = pre + fmtNum(Math.atan2(w[1], w[0]));
   };
+  const updateProbe = (clientX: number, clientY: number): void =>
+    renderProbe(plot.screenToWorld(clientX, clientY, twoDRect()));
+  // The CPU height field (|f| → surface height), matching the GPU vertex law, so the 3D pick lands on the
+  // drawn surface. Then the value inspector reads the exact point under the cursor (height + occlusion).
+  const surfaceHeight = (re: number, im: number): number => {
+    if (!probeFn) return 0;
+    let w: Complex;
+    try {
+      w = probeFn([re, im], [0, 0]);
+    } catch {
+      return 0;
+    }
+    return heightAt(plot.heightMode, Math.hypot(w[0], w[1]), plot.color.modScale) * plot.heightScale;
+  };
+  const updateProbe3d = (clientX: number, clientY: number): void =>
+    renderProbe(plot.pickSurface(clientX, clientY, surfaceHeight, threeDRect()));
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
   // operations for a mouse-free / accessible path (L7).
   let grabWorld: Complex | null = null;
   let orbitLast: { x: number; y: number } | null = null;
+  let panLast: { x: number; y: number } | null = null; // 3D left-drag pan (recenter the domain)
   let sphereLast: [number, number] | null = null;
   const activePointers = new Map<number, Pt>();
   let pinchPrev: number | null = null;
@@ -999,13 +1153,16 @@ function main(): void {
     return [it.next().value as Pt, it.next().value as Pt];
   };
   // Seed the single-pointer drag appropriate to the mode under `clientX` (pan in 2D / the linked flat
-  // pane, orbit in 3D, arcball on the sphere). Used both on pointerdown and when a pinch drops to one
-  // finger, so the survivor keeps dragging.
-  const seedDrag = (clientX: number, clientY: number): void => {
+  // pane, orbit-or-pan in 3D, arcball on the sphere). Used both on pointerdown and when a pinch drops to
+  // one finger, so the survivor keeps dragging. `pan3d` (left mouse button) pans the 3D landscape; the
+  // default (right button / touch / pinch-survivor) orbits it.
+  const seedDrag = (clientX: number, clientY: number, pan3d = false): void => {
     const m = effMode(clientX);
     if (m === "sphere") sphereLast = canvasUv(clientX, clientY);
-    else if (m === "3d") orbitLast = { x: clientX, y: clientY };
-    else grabWorld = plot.screenToWorld(clientX, clientY, twoDRect());
+    else if (m === "3d") {
+      if (pan3d) panLast = { x: clientX, y: clientY };
+      else orbitLast = { x: clientX, y: clientY };
+    } else grabWorld = plot.screenToWorld(clientX, clientY, twoDRect());
   };
   canvas.addEventListener("pointerdown", (e) => {
     canvas.focus(); // so the keyboard path works after clicking the plot
@@ -1022,12 +1179,16 @@ function main(): void {
       // A second finger begins a pinch: abandon any single-pointer drag and seed the pinch span.
       grabWorld = null;
       orbitLast = null;
+      panLast = null;
       sphereLast = null;
       const [a, b] = twoPointers();
       pinchPrev = pointerDistance(a, b);
       return;
     }
-    seedDrag(e.clientX, e.clientY);
+    // Left mouse button pans the 3D landscape; the right button (or touch / pen) orbits it — the familiar
+    // left-drag = move, right-drag = rotate. In 2D / on the sphere the button is ignored (seedDrag decides).
+    const pan3d = e.pointerType === "mouse" && e.button === 0;
+    seedDrag(e.clientX, e.clientY, pan3d);
   });
   canvas.addEventListener("pointermove", (e) => {
     if (activePointers.has(e.pointerId))
@@ -1040,7 +1201,7 @@ function main(): void {
       const mid = pointerMidpoint(a, b);
       const m = effMode(mid.x);
       if (m === "sphere") plot.dollySphere(factor);
-      else if (m === "3d") plot.dolly(factor);
+      else if (m === "3d") plot.zoomSpan(factor); // §B: pinch zooms the domain
       else plot.zoomAt(mid.x, mid.y, factor, twoDRect());
       redraw(true);
       return;
@@ -1050,24 +1211,33 @@ function main(): void {
       plot.rotateSphere(sphereLast, uv);
       sphereLast = uv;
       redraw(true);
+    } else if (panLast) {
+      // 3D left-drag pan: recenter the domain so the grabbed point tracks the cursor (explore ℂ, stay framed).
+      const dx = e.clientX - panLast.x;
+      const dy = e.clientY - panLast.y;
+      panLast = { x: e.clientX, y: e.clientY };
+      plot.panSurface(dx, dy, canvas.clientHeight);
+      redraw(true);
     } else if (orbitLast) {
       const dx = e.clientX - orbitLast.x;
       const dy = e.clientY - orbitLast.y;
       orbitLast = { x: e.clientX, y: e.clientY };
-      // Landscape orbit — the matplotlib / plotly plot convention, mixed by design:
-      //  • horizontal: the surface SPINS TO FOLLOW the cursor. Azimuth is negated because +azimuth walks
-      //    the eye screen-right, which would swing the surface the opposite way to the drag (that
-      //    un-negated version was the reported "backwards" bug); negating makes drag-right spin right.
-      //  • vertical: drag up RAISES the viewpoint toward top-down (bird's-eye) — elevation up. This axis
-      //    is intentionally camera-centric (not a full grab-turntable), matching how 3D plot tools pitch;
-      //    the keyboard up/down below share this sense.
-      plot.orbit(-dx * ORBIT_SPEED, -dy * ORBIT_SPEED);
+      // Landscape orbit (right-drag). A grab-turntable sense, so the surface follows the cursor on both axes:
+      //  • horizontal: drag right spins the surface right. Azimuth is negated because +azimuth walks the eye
+      //    screen-right, which would swing the surface the opposite way to the drag.
+      //  • vertical: drag up tips the surface's near edge up toward you (elevation down, more side-on); drag
+      //    down looks more top-down. The keyboard up/down below share this sense.
+      plot.orbit(-dx * ORBIT_SPEED, dy * ORBIT_SPEED);
       redraw(true);
     } else if (grabWorld) {
       plot.setCenterAtScreen(e.clientX, e.clientY, grabWorld, twoDRect());
       redraw(true);
-    } else if (effMode(e.clientX) === "2d") {
-      updateProbe(e.clientX, e.clientY);
+    } else {
+      // Idle hover (no drag): update the value inspector for the pane under the cursor. 2D reads the
+      // screen→world point; 3D picks the point on the surface; the sphere has no readout.
+      const m = effMode(e.clientX);
+      if (m === "2d") updateProbe(e.clientX, e.clientY);
+      else if (m === "3d") updateProbe3d(e.clientX, e.clientY);
     }
   });
   const endDrag = (e: PointerEvent): void => {
@@ -1079,6 +1249,7 @@ function main(): void {
       // orbiting from where it is, instead of going inert until it too is lifted.
       grabWorld = null;
       orbitLast = null;
+      panLast = null;
       sphereLast = null;
       const survivor = activePointers.values().next().value as Pt;
       seedDrag(survivor.x, survivor.y);
@@ -1092,6 +1263,11 @@ function main(): void {
       orbitLast = null;
       redraw(false);
     }
+    if (panLast) {
+      panLast = null;
+      redraw(false);
+      recomputeSingsSoon(); // the domain moved — refresh the (2D) zero/pole finder
+    }
     if (grabWorld) {
       grabWorld = null;
       redraw(false);
@@ -1100,22 +1276,26 @@ function main(): void {
   };
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
+  // Right-drag orbits the 3D landscape, so suppress the browser context menu over the plot canvas.
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  // Wheel zoom/dolly renders a DRAFT frame during the scroll burst and commits one full-res frame once
+  // scrolling settles — the same draft-then-commit discipline as the pointer-drag path, instead of a
+  // full-res repaint on every tick.
+  let wheelCommitTimer = 0;
   canvas.addEventListener(
     "wheel",
     (e) => {
       e.preventDefault();
       const m = effMode(e.clientX);
-      if (m === "sphere") {
-        plot.dollySphere(Math.pow(1.0012, e.deltaY));
+      if (m === "sphere") plot.dollySphere(Math.pow(1.0012, e.deltaY));
+      else if (m === "3d") plot.zoomSpan(Math.pow(1.0015, e.deltaY)); // §B: scroll zooms the domain
+      else plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
+      redraw(true);
+      window.clearTimeout(wheelCommitTimer);
+      wheelCommitTimer = window.setTimeout(() => {
         redraw(false);
-      } else if (m === "3d") {
-        plot.dolly(Math.pow(1.0012, e.deltaY));
-        redraw(false);
-      } else {
-        plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
-        redraw(false);
-        recomputeSingsSoon();
-      }
+        if (m === "2d") recomputeSingsSoon(); // zeros/poles only track the flat portrait
+      }, 140);
     },
     { passive: false },
   );
@@ -1141,15 +1321,19 @@ function main(): void {
       }
     } else if (plot.mode === "3d") {
       const STEP = 0.18;
-      if (intent === "reset") plot.resetCamera();
-      else if (intent === "in") plot.dolly(0.9);
-      else if (intent === "out") plot.dolly(1 / 0.9);
-      // Same turntable sense as the pointer drag (left spins the surface left) — so the negated azimuth
-      // delta of the drag path is mirrored here: "left" → +azimuth, "right" → −azimuth.
+      // Reset restores the default three-quarter camera AND the framing (centre + span), since pan/zoom
+      // now move those in 3D too.
+      if (intent === "reset") {
+        plot.resetCamera();
+        plot.view = { cx: 0, cy: 0, span: framingSpan };
+      } else if (intent === "in") plot.zoomSpan(0.8); // §B: +/- zoom the domain (like 2D)
+      else if (intent === "out") plot.zoomSpan(1.25);
+      // Same grab-turntable sense as the right-drag orbit (surface follows the key): "left" → +azimuth,
+      // "right" → −azimuth; "up" tips the near edge up (elevation down), "down" looks more top-down.
       else if (intent === "left") plot.orbit(STEP, 0);
       else if (intent === "right") plot.orbit(-STEP, 0);
-      else if (intent === "up") plot.orbit(0, STEP);
-      else plot.orbit(0, -STEP);
+      else if (intent === "up") plot.orbit(0, -STEP);
+      else plot.orbit(0, STEP);
     } else {
       // 2D or the linked flat pane: keyboard pans / zooms the shared domain (moving both linked halves).
       const r = twoDRect();
@@ -1195,6 +1379,10 @@ function main(): void {
     recomputeSings();
     redraw(false);
   }
+
+  // Restore the saved render mode last (now that setView + its controls exist). The camera / height were
+  // applied above, so a shared 3D landscape / linked figure reopens exactly as it was framed.
+  if (initial.v3d.mode !== "2d") setView(initial.v3d.mode);
 }
 
 main();

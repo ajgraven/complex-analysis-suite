@@ -529,7 +529,7 @@ Parked, but each has a known home so pulling it in is cheap:
 | D7 two-color B&W portraits                                                                                      | P2                | trivial overlay variant                             |
 | E4 image-of-grid · E5 image-as-domain                                                                           | P2                | forward map; E5 needs texture upload                |
 | E6 Pólya field / streamlines                                                                                    | P2 or P5          | integration audience                                |
-| H3 residue · H4 winding · H5 contour ∮ · H6 critical pts · H8 Taylor/Laurent · H9 f′ overlay · H10 branch marks | P2/P5             | CPU instruments; H3/H5 **must tag 1/(2πi)** (1.5)   |
+| H3 residue · H4 winding · H5 contour ∮ · H8 Taylor/Laurent · H10 branch marks (~~H6 critical pts~~ ✅ · ~~H9 f′ overlay~~ ✅ landed post-publish) | P2/P5             | CPU instruments; H3/H5 **must tag 1/(2πi)** (1.5)   |
 | G3 cursor-`c` · G5 param-path · G6 homotopy · G7 video capture                                                  | P3/P5             | G7 = video export (deferred per priorities)         |
 | A6 MathLive editor · A8 composition/iteration                                                                   | P3                | input depth                                         |
 | I5 bookmarks · I6 linked z↔w · I8 A/B split · I9 inset sphere                                                   | P2/P5             | I6 is a strong differentiator to pull forward       |

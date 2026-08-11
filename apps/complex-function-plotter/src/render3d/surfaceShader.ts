@@ -133,6 +133,7 @@ uniform float uShaded;      // 1 = shade the landscape; 0 = flat, so top-down re
 uniform int   uSpecular;    // 1 = add a specular highlight
 uniform int   uHeightMode;
 uniform float uHeightScale;
+uniform float uOpacity;     // surface alpha (1 = opaque); < 1 draws with alpha blending
 in vec2 vWorldXY;
 in vec3 vSurfPos;
 out vec4 fragColor;
@@ -149,7 +150,7 @@ ${normalGlsl}
     vec3 hh = normalize(L + v);
     col += vec3(0.7) * pow(max(dot(n, hh), 0.0), 20.0);                  // additive white highlight
   }
-  fragColor = vec4(min(col, vec3(1.0)), 1.0);
+  fragColor = vec4(min(col, vec3(1.0)), uOpacity);
 }`;
 
   return { vertex, fragment };

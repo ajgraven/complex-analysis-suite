@@ -41,17 +41,20 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
 - **2D / 3D / sphere / linked (5A–5D)** — a four-way **View** toggle. **3D** lifts the flat portrait into an
   **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
   stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
-  like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). Drag to
-  orbit, scroll to dolly; **Top-down** snaps to the orthographic overhead view, which reproduces the 2D
-  portrait pixel-for-pixel (the phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
+  like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). **Left-drag
+  pans** (recenters the domain), **right-drag orbits**, and **scroll zooms the domain** — the perspective
+  framing tracks the view span so the surface fills the window at any zoom, and the mesh resolution adapts;
+  **Top-down** snaps to the orthographic overhead view, which reproduces the 2D portrait pixel-for-pixel (the
+  phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
   holomorphic map (a smooth per-pixel normal; a geometric normal for Γ/ζ/anti-holomorphic), with an optional
-  **specular** highlight. **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
+  **specular** highlight and an adjustable **surface opacity** (a translucent landscape you can see through). **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
   per-fragment ray-cast of an analytic unit sphere, stereographically projected (south pole = 0, equator =
   |z| = 1, **north pole = ∞**) and coloured by the same `colorAt`, so a pole is a bright patch you can rotate
   to the top; drag is a quaternion **arcball**, scroll dollies. **Linked** (5D / I7) shows the flat portrait
   and the landscape **side by side** in one canvas (split viewports), both reading the **same `view`** — so
   navigating the flat pane (drag-pan / scroll-zoom / keyboard) moves the surface's domain in lock-step, while
-  a drag on the surface pane orbits it alone; the shared-view coupling is the sync (no state to reconcile).
+  a right-drag on the surface pane orbits it alone (a left-drag there pans both, like the flat pane); the
+  shared-view coupling is the sync (no state to reconcile).
   Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader ·
   sphere arcball).
 
@@ -91,12 +94,15 @@ Plus the Phase-2 research tool:
 - **Enhanced portraits** — `fwidth`-antialiased modulus rings, phase sectors, the flagship
   **conformal proportional grid**, chessboards, and a Re/Im grid, with crisp/shaded and hue rotate/
   reverse controls.
-- **Instruments** — a live cursor readout (`z, f(z), |f|, arg f`); **zeros & poles located, counted,
-  and ordered** via the argument principle (marked, honestly labeled `≈`); user-set **level sets**
+- **Instruments** — a live cursor readout (`z, f(z), |f|, arg f`) — a **value inspector** that in 3D
+  ray-casts the cursor against the height field to read the point actually **on the surface** under it
+  (height + self-occlusion accounted for), not its base-plane shadow; **zeros & poles located, counted,
+  and ordered** via the argument principle (marked, honestly labeled `≈`); **critical points** where
+  **f′ = 0** (H6), found by running that same finder on f′ and marked with diamonds; user-set **level sets**
   (`|f| = c`, `arg f = c`); an **∞-inspector** (5C/F8) that plots **f(1/z)** so the origin shows the map's
-  behaviour at infinity (a `z → 1/z` substitution, so the 2D/3D render and the instruments agree); and an
-  **honest-labeling / uncertainty layer** that hatches pixels near poles and essential singularities where
-  the render is unreliable.
+  behaviour at infinity, and a **derivative overlay** (H9) that plots **f′(z)** — both are AST rewrites, so
+  the 2D/3D render and the instruments track the same map; and an **honest-labeling / uncertainty layer**
+  that hatches pixels near poles and essential singularities where the render is unreliable.
 - **Navigation & output** — pan / zoom-to-cursor / reset, axes + grid + scale bar (aspect locked
   1:1, so angles read true), phase-wheel + modulus legends, share-links (`#vs=` via `@cas/interchange`),
   and **hi-resolution PNG export** (K1/K3/K9, Phase 6): pick a long-edge (up to the GPU's max texture
@@ -156,7 +162,7 @@ Phase 6 (**hi-res PNG export + metadata + copy-image (6A)**, **suite interop (6B
 | `ui/navigation.ts`          | pure a11y + linked-view helpers: `keyToNav` (L7 arrows / ± / reset), the `pinchFactor` touch math, and `leftHalf` / `isLeftHalf` (the I7 split)              |
 | `ui/legends.ts`             | phase-wheel and modulus-scale legend painters                                                                                                                |
 | `ui/axes.ts`                | the axes / adaptive-grid / scale-bar overlay                                                                                                                 |
-| `ui/markers.ts`             | draws located zeros (circles) and poles (×), with order labels, on the overlay                                                                               |
+| `ui/markers.ts`             | draws located zeros (circles), poles (×), and critical points where f′=0 (diamonds), with order labels, on the overlay                                        |
 | `analysis/singularities.ts` | locate / count / order zeros & poles: grid candidates → Newton refinement → argument-principle winding                                                       |
 | `render3d/mat4.ts`          | Phase-5 3D kit: typed column-major `mat4`/`vec3` (identity, multiply, lookAt, perspective, ortho, transformPoint) — ported from QD's `sphere-common`         |
 | `render3d/camera.ts`        | the orbit camera (F5): azimuth / elevation / dolly → view + projection in a Z-up world; the exact top-down ortho preset (top-down = the 2D portrait)         |

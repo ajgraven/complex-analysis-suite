@@ -28,7 +28,8 @@ import {
   cameraEye,
   viewProjection,
 } from "../render3d/camera.js";
-import { buildGridMesh } from "../render3d/mesh.js";
+import { buildGridMesh, gridResolutionForSpan, GRID_N_BASE } from "../render3d/mesh.js";
+import { pickHeightField } from "../render3d/pick.js";
 import { buildSurfaceProgram } from "../render3d/surfaceShader.js";
 import {
   type Quat,
@@ -133,6 +134,7 @@ interface SurfaceUniforms extends ColorUniformLocs {
   uShaded: WebGLUniformLocation | null;
   uEye: WebGLUniformLocation | null;
   uSpecular: WebGLUniformLocation | null;
+  uOpacity: WebGLUniformLocation | null;
 }
 
 /** The Riemann-sphere uniforms, on top of the shared {@link ColorUniformLocs}. */
@@ -146,6 +148,10 @@ interface SphereUniforms extends ColorUniformLocs {
 
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
 const SPHERE_FOV = (50 * Math.PI) / 180; // vertical field of view for the Riemann-sphere camera
+// 3D landscape framing (§B): the perspective eye distance = span * SURFACE_FRAMING / tan(fov/2), so the
+// surface fills a consistent share of the viewport at every zoom. Tuned so the default Γ view fills the
+// window without clipping its pole spikes.
+const SURFACE_FRAMING = 0.42;
 
 export class Plot {
   private readonly gl: WebGL2RenderingContext;
@@ -165,7 +171,9 @@ export class Plot {
   // 3D analytic-landscape path (Phase 5, 5A). A second program renders the domain grid mesh displaced
   // by the height field, reusing the same `colorAt`. Built alongside the 2D program on every `f` change;
   // `mode` selects which one `paint()` draws. The 2D path is byte-for-byte unchanged when `mode` is 2d.
-  private readonly gridN = 160;
+  // `gridN` (cells per side) adapts to the zoom (§B): {@link reconcileMeshResolution}, so a deep zoom
+  // stays smooth without a wastefully dense mesh when zoomed out.
+  private gridN = GRID_N_BASE;
   private gridUvBuffer: WebGLBuffer | null = null;
   private gridIndexBuffer: WebGLBuffer | null = null;
   private gridIndexCount = 0;
@@ -194,9 +202,15 @@ export class Plot {
   heightScale = 1;
   /** Add a specular highlight to the landscape (5B, F2). */
   specular = false;
+  /** Surface opacity for the 3D landscape (§E): 1 = opaque; < 1 draws translucent (alpha-blended). */
+  opacity = 1;
   /** ∞-inspector (5C, F8): plot `f(1/z)` instead of `f(z)`, so the origin shows the behaviour at ∞.
    *  Applied as a `z → 1/z` AST substitution, so the GPU (2D + surface) and the CPU instruments agree. */
   inspectInfinity = false;
+  /** Derivative overlay (H9): plot `f′(z)` instead of `f(z)`. Applied as a symbolic `d/dz` on the AST
+   *  (after any ∞-substitution), so every downstream instrument describes the plotted derivative. Throws
+   *  on a map with no symbolic derivative — the caller keeps the previous program and shows the error. */
+  plotDerivative = false;
 
   // Live named parameters (ADR-0011, catalog G1). `paramNamesList` is the ordered set the current `f`
   // reads (from `freeParameters`); `paramValues` holds each one's `[re, im]` (preserved across formula
@@ -253,6 +267,7 @@ export class Plot {
   private compileSource(src: string): string {
     let ast = parse(src);
     if (this.inspectInfinity) ast = substitute(ast, "z", parse("1/z")); // plot f(1/z) — the ∞-inspector
+    if (this.plotDerivative) ast = differentiate(ast, "z"); // plot f′ — the derivative overlay (H9)
     const names = freeParameters(ast);
     const glsl = compileF(ast, "fFn", { params: names });
     // f' for the analytic surface normal (5B), when the map is differentiable in the system. Compiled
@@ -387,6 +402,7 @@ export class Plot {
       uHeightScale: loc("uHeightScale"),
       uLightDir: loc("uLightDir"),
       uShaded: loc("uShaded"),
+      uOpacity: loc("uOpacity"),
       uEye: loc("uEye"),
       uSpecular: loc("uSpecular"),
       uPhaseLUT: loc("uPhaseLUT"),
@@ -638,7 +654,7 @@ export class Plot {
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg, so the surface sits in a dark scene
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const cam: OrbitCamera = { ...this.camera, target: [this.view.cx, this.view.cy, 0] };
+    const cam = this.surfaceCamera();
     gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, this.view.span));
     gl.uniform2f(u.uCenter, this.view.cx, this.view.cy);
     gl.uniform1f(u.uHalfSpan, this.view.span);
@@ -652,9 +668,24 @@ export class Plot {
     // Shade the landscape, except in the exact top-down view — there it must reproduce the 2D portrait.
     const topDown = cam.ortho && cam.elevation > Math.PI / 2 - 1e-3;
     gl.uniform1f(u.uShaded, topDown ? 0 : 1);
+    gl.uniform1f(u.uOpacity, this.opacity);
     this.applyColorUniforms(u); // also sets uModScale, which the vertex height law shares
     this.applyParamUniforms(this.surfaceParamLocs);
+    // A translucent surface (§E) blends over the scene and its own far side. Stop writing depth so
+    // nearer triangles don't z-reject the farther ones behind them (they draw in index order — a mild,
+    // acceptable painter's approximation for one smooth layer). The depth clear above already ran with
+    // the default write mask on, so the buffer is clean. Opaque surfaces keep exact depth occlusion.
+    const translucent = this.opacity < 1;
+    if (translucent) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+    }
     gl.drawElements(gl.TRIANGLES, this.gridIndexCount, gl.UNSIGNED_INT, 0);
+    if (translucent) {
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
     gl.disable(gl.DEPTH_TEST);
   }
 
@@ -713,6 +744,92 @@ export class Plot {
   /** Dolly the camera in/out by a multiplicative factor (clamped). */
   dolly(factor: number): void {
     this.camera.distance = Math.min(60, Math.max(0.3, this.camera.distance * factor));
+  }
+
+  /**
+   * Pan the 3D landscape by a screen-drag delta (CSS px): move the look-at point (= the view centre) in
+   * the ground plane so the grabbed domain point tracks the cursor — a "recenter to explore ℂ" pan, so
+   * the surface always stays framed (no empty space past its edges). Screen-right and screen-up are
+   * projected onto z = 0 through the camera azimuth; `worldPerPixel` is the perspective scale at the
+   * target plane. Signs match the 2D grab-pan feel (content follows the cursor).
+   */
+  panSurface(dxPx: number, dyPx: number, viewportHeightPx: number): void {
+    const cam = this.camera;
+    const wpp =
+      viewportHeightPx > 0
+        ? (2 * cam.distance * Math.tan(cam.fov / 2)) / viewportHeightPx
+        : 0;
+    const ca = Math.cos(cam.azimuth);
+    const sa = Math.sin(cam.azimuth);
+    this.view.cx += wpp * (dxPx * sa - dyPx * ca);
+    this.view.cy += wpp * (-dxPx * ca - dyPx * sa);
+  }
+
+  /** Zoom the 3D landscape by scaling the view span about its centre (§B): scrolling shows more / less
+   *  of ℂ, and the span-coupled framing keeps the surface filling the window. Same clamp as {@link zoomAt}. */
+  zoomSpan(factor: number): void {
+    this.view.span = Math.min(1e6, Math.max(1e-9, this.view.span * factor));
+  }
+
+  /** Rebuild the surface grid mesh at the zoom-appropriate resolution (§B, {@link gridResolutionForSpan});
+   *  a no-op when it already matches, so it is cheap to call on every zoom-settle. Re-uploads into the
+   *  existing buffers, so the surface VAO (which records them) stays valid — no program / VAO rebuild. */
+  reconcileMeshResolution(): void {
+    const n = gridResolutionForSpan(this.view.span);
+    if (n === this.gridN || !this.gridUvBuffer || !this.gridIndexBuffer || !this.surfaceVao) return;
+    this.gridN = n;
+    const gl = this.gl;
+    const mesh = buildGridMesh(n);
+    this.gridIndexCount = mesh.indexCount;
+    gl.bindVertexArray(this.surfaceVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gridUvBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.uvs, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
+  }
+
+  /** The render camera for the 3D landscape: the orbit camera framed to fill the viewport (§B — the
+   *  perspective eye distance tracks the view span; the top-down ortho snap keeps its own distance, its
+   *  box sized from span directly, so top-down still equals the 2D portrait) and re-targeted at the view
+   *  centre. Shared by the surface paint and the cursor pick so they agree exactly. */
+  private surfaceCamera(): OrbitCamera {
+    const framedDistance = (this.view.span * SURFACE_FRAMING) / Math.tan(this.camera.fov / 2);
+    return {
+      ...this.camera,
+      distance: this.camera.ortho ? this.camera.distance : framedDistance,
+      target: [this.view.cx, this.view.cy, 0],
+    };
+  }
+
+  /** Value-inspector pick (catalog H1): the domain point (re, im) ON the 3D surface under a client pixel,
+   *  or null if the cursor is over empty scene. `heightFn(re, im)` is the CPU height field (|f| → height),
+   *  supplied by the caller so this stays DOM/GL-free. Uses the same framed camera as the paint, so the
+   *  pick matches what's drawn (surface height + self-occlusion accounted for, not a base-plane shadow). */
+  pickSurface(
+    clientX: number,
+    clientY: number,
+    heightFn: (re: number, im: number) => number,
+    vp?: ViewportRect,
+  ): [number, number] | null {
+    const r = this.rect(vp);
+    if (r.width <= 0 || r.height <= 0) return null;
+    const ndcX = ((clientX - r.left) / r.width) * 2 - 1;
+    const ndcY = 1 - ((clientY - r.top) / r.height) * 2;
+    const cam = this.surfaceCamera();
+    return pickHeightField(
+      {
+        eye: cameraEye(cam),
+        target: cam.target,
+        fov: cam.fov,
+        ortho: cam.ortho,
+        worldHalfHeight: this.view.span,
+      },
+      ndcX,
+      ndcY,
+      r.width / r.height,
+      heightFn,
+    );
   }
 
   /** Snap to the exact top-down orthographic view — the landscape then equals the 2D portrait. */

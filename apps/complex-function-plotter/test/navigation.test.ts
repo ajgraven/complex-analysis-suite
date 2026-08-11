@@ -5,6 +5,7 @@ import {
   pointerMidpoint,
   pinchFactor,
   leftHalf,
+  rightHalf,
   isLeftHalf,
 } from "../src/ui/navigation.js";
 
@@ -65,6 +66,10 @@ describe("linked-view split (I7)", () => {
 
   it("leftHalf takes the left pane, same top/height, half the width", () => {
     expect(leftHalf(rect)).toEqual({ left: 100, top: 20, width: 400, height: 600 });
+  });
+
+  it("rightHalf takes the surface pane (offset to the midpoint), half the width", () => {
+    expect(rightHalf(rect)).toEqual({ left: 500, top: 20, width: 400, height: 600 });
   });
 
   it("isLeftHalf splits at the horizontal midpoint (left = 2D pane, right = surface)", () => {
