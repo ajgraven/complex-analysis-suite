@@ -23,9 +23,10 @@ Format follows Michael Nygard's ADR convention.
 | [0012](#adr-0012-the-shared-3d-slice--extract-the-mat4--quaternion-core-keep-the-app-specific-3d-local) | The shared 3D slice — extract the `mat4` + quaternion core            | Accepted |
 | [0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one)  | The Riemann-map tool is a new app (not a mode in an existing tool)    | Accepted |
 | [0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)       | Extract `@cas/dynamics` (Böttcher exterior maps); Riemann Map is the second consumer | Accepted |
+| [0015](#adr-0015-extract-cascorepoly--format-float-only-exact-stays-in-casexact)   | Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All fourteen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All fifteen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -40,7 +41,10 @@ Format follows Michael Nygard's ADR convention.
 > follow-on** — a topology decision from the fifth app's own build: the Riemann-map studio is a *new app*, not a
 > mode (the mirror image of 0009's call). **0014 is a seventh follow-on** — another *extraction*: the Riemann-map
 > tool is the second consumer of Complex Dynamics' inverse-Böttcher machinery, so it moves into a new
-> `@cas/dynamics` package (ADR-0007 once more). Supersede rather than rewrite if any change later.
+> `@cas/dynamics` package (ADR-0007 once more). **0015 is an eighth follow-on** — one more *extraction*:
+> the shared dense-polynomial kernel and label formatting move into `@cas/core/poly` + `format` (float-only;
+> exact stays in `@cas/exact`), the ADR-0007 rule again, with `@cas/schwarz` and the Quadrature app as the
+> two consumers. Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
 > [migration runbook](MIGRATION.md) ran to completion — with two conscious deviations recorded
@@ -795,11 +799,35 @@ one QD already validated for σ, so it is low-risk in design even though it is r
        branch-aware continuation, df64 σ, PQD GPU) deferred.
 
 **ALL FOUR ACTION ITEMS COMPLETE (2026-08-08).** σ is a first-class peer view with its own pane + controls
-
 - persistent lifecycle (item 1), full generic-parity coloring/inspection/legend/nav (item 3), and
   serializable state across share links / saved views / PNG metadata (item 2); the design doc records the
   peer view as the realized target shape (item 4). Deferred beyond this ADR: S5 (SIGMA-HANDOFF.md) — more
   families, branch-aware continuation, df64.
+
+### Addendum (2026-08-10): σ as a multi-view standalone explorer (Phase F)
+
+The σ-view polish arc (LOG.md, Phases A–E) completed the peer view this ADR promised and, in doing so,
+settled σ's identity: it is a **standalone explorer that shares CD's chrome but not its z²+c math**. Phase F
+([`refactor/PHASE-F.md`](refactor/PHASE-F.md)) extends — does **not** reverse — this ADR from a single
+w-plane view into a **multi-view explorer with σ-native instruments**: additional coordinate views (the
+uniformizing z-disk via forward φ, and the Riemann sphere), the σ⁻¹ preimage/tiling tree, and σ-analytic
+cards (level curves, cycles, limit set, singularities, …), ported from the Quadrature Domains app. This
+addendum records three standing decisions so F's increments do not each re-litigate them:
+
+1. **The `(≈)` honesty rule is absolute.** σ is a numerical reconstruction (φ⁻¹ by Newton / Durand–Kerner),
+   so every F artifact — each view, curve, cycle, dimension, limit set — is `(≈)`-labeled and never reads as
+   certified (RISKS §3–4). This is the guardrail, not a nicety.
+2. **σ's instruments are σ-native, and the z²+c boundary from item 4 above still holds.** F adds σ's *own*
+   depth (reflection tiling, σ level curves, σ-orbit families); it does **not** import the map-specific
+   instruments (external rays / Böttcher / matings / Yoccoz / laminations), which remain out of scope for σ.
+3. **Extraction is opportunistic and math-first (ADR-0007).** Pure σ kernels F needs (σ⁻¹, preimage tree,
+   chaos-game limit set, level curves, cycle finder) move into `@cas/schwarz` as each item lands — the
+   second-consumer bar is already met (CD + QD + `apps/correspondences` all consume σ). Merging the three
+   apps' σ **shaders** into one `@cas/schwarz/gpu` is genuine duplication paydown but a large cross-app
+   refactor, and is deferred to its **own** future ADR rather than smuggled in under a Phase F item.
+
+Phase F is a **menu**, not a runbook: each item ships and reviews on its own gate, nothing here blocks the
+completed A–E arc, and the phase may stop at any depth.
 
 ---
 
@@ -1280,3 +1308,74 @@ same rule symmetrically: don't extract what has only one consumer yet.
        `rayDepthForZoom`, `parseAngle`) moved to the package; CD's `render/rays.ts` became a re-export
        shim keeping only `bulbRayAngles` (which needs CD's orbit-portrait combinatorics). Verified
        behavior-preserving — CD's `rays.test.ts` + `yoccozCritical.test.ts` pass unchanged through the shim.
+
+---
+
+## ADR-0015: Extract `@cas/core/poly` + `format`; float-only, exact stays in `@cas/exact`
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A follow-on extraction ADR, as [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks for
+notable ones — the latest, after [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate), [ADR-0012](#adr-0012-the-shared-3d-slice--extract-the-mat4--quaternion-core-keep-the-app-specific-3d-local), and [ADR-0014](#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map).*
+
+### Context
+The Quadrature app's `app/core/poly-helpers.mjs` bundles two unrelated things (its own header admits the
+second only co-locates for load-order): **`QD.Poly`**, dense polynomial arithmetic over complex coefficients
+(ascending-power `Complex[]`: zero/one/variable/trim/add/neg/mul/scale/pow/linearPower), and **`QD.Format`**,
+Unicode sub/superscript label rendering. A consumer sweep found the drift [ADR-0001](#adr-0001-monorepo-over-multi-repo)
+named ("multiple root-finders") in full flower: **five** codebases besides QD each re-roll dense-poly
+coefficient arithmetic — `@cas/schwarz` (the σ⁻¹ cleared-polynomial build), `@cas/expr` (`rational.ts`, a
+near-complete duplicate that feeds three CD sites), `apps/correspondences`, and `apps/complex-dynamics`
+(matingEngine / critical / perturbation / uniformize / dynatomic). The generic **root-finder is already
+shared** (`@cas/core`'s `makeDurandKerner(alg)` takes an eval closure); what every site still re-rolls is the
+**coefficient-array layer around it** — build, Horner-eval, monic-normalize, trim. The `QD.Format` copy had
+likewise drifted into `@cas/schwarz` (`singularities.ts`) and Complex Dynamics (`schwarzExplicitForm.ts`).
+Both primitives clear the second-consumer bar many times over.
+
+### Decision
+**Extract to `@cas/core`**: `poly.ts` — `makePoly<C>(alg: ComplexAlgebra<C>)`, written once against the
+representation-genericity keystone (so QD's `objAlgebra {re,im}` and CD/schwarz's `tupleAlgebra [re,im]`
+share one implementation, exactly as `durand-kerner.ts` / `series.ts` are) — plus `eval` (Horner) and
+`monic`, the coefficient-array glue the non-QD consumers wrapped around the solver; and `format.ts` —
+`subscript` / `superscript`. The degree-**preserving** trimming convention is carried verbatim (add/mul/scale
+do NOT trim; `trim` is separate — the σ⁻¹ root count is the degree; silently trimming would drop roots).
+
+**Scope boundary — float only.** `@cas/core/poly` is `Complex[]`-over-`ComplexAlgebra`. The **exact**-ring
+polynomial consumers (`@cas/exact`'s `qiPoly`/`biPoly`, `correspondences`' exact curve/deltoid) stay in
+`@cas/exact` — a different ring and shape, the same "two engines for two shapes" call
+[ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) made for `sym-core`, and symmetric with
+ADR-0007's don't-merge-without-a-consumer rule (nothing needs one poly type spanning both fields).
+
+**Incremental, need-driven.** P1 (this commit) lands the two modules with a golden corpus, converts QD's
+`poly-helpers.mjs` to a **byte-identical shim** over `makePoly(objAlgebra)` (the frozen classic `.js` twin,
+still vm-loaded in the legacy suite, is a live parity check of exactly that), and refactors `@cas/schwarz` as
+the **proving second consumer** (its σ⁻¹ cleared-polynomial build now uses `poly.eval`/`trim`/`monic`;
+`singularities.ts` uses `format.subscript`). The remaining float consumers (`@cas/expr/rational`, then the CD
+matingEngine/critical/perturbation and correspondence sites) peel onto `poly` one test-guarded PR at a time,
+as ADR-0008 grew `@cas/exact` — **not** in a speculative big-bang.
+
+### Options Considered
+- **A — float `@cas/core/poly` + `format`, incremental (this ADR).** *Pros:* generic over the existing
+  keystone; kills the most-duplicated numeric primitive in the suite; each consumer converts test-guarded and
+  shippable alone. *Cons:* a temporarily heterogeneous set of consumers (some on `poly`, some still rolling
+  their own) until the later phases land.
+- **B — a ring-generic poly to absorb the exact consumers too.** *Rejected:* speculative abstraction over a
+  general ring for a job the float and exact sides don't share; trades a real guarantee (the exactness engine
+  is correctness-critical) for a tidier diagram — the same reasoning that rejected merging `sym-core` in
+  ADR-0008.
+- **C — leave the copies.** *Rejected:* it is precisely the drift the monorepo exists to end.
+
+### Consequences
+- **Easier:** one dense-poly kernel behind the shared solver; a bug fixed once; new σ / correspondence math
+  reaches for `@cas/core/poly` instead of re-rolling a Horner loop.
+- **Harder:** the mixed-state interval while consumers convert; two poly worlds (float in `@cas/core`, exact
+  in `@cas/exact`) that a reader must keep straight — named here rather than explained away.
+- **Revisit:** if a genuine need ever arises for one polynomial type over both fields (none does today).
+
+### Action Items
+1. [x] `poly.ts` + `format.ts` in `@cas/core` with a golden corpus; QD shim (bit-identical); `@cas/schwarz`
+   converted as the proving consumer (**P1**).
+2. [ ] Peel `@cas/expr/rational` and the CD / correspondences float consumers onto `poly`, one test-guarded
+   PR each (**P2–P3**, need-driven).
+3. [ ] `uniformize.ts`'s truncated `Series` is a cousin of `@cas/core/series.ts` — a related but separate
+   consolidation, scoped on its own.

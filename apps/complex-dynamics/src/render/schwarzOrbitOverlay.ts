@@ -4,7 +4,7 @@
 // dynamical-plane orbit preview (render/orbitPreview.ts). Colour is keyed to the orbit's classification
 // so the eye reads the fate at a glance; w₀ gets a ringed marker so the seed is distinct from its iterates.
 import { plotToPixel, type SchwarzOrbit, type SchwarzView } from "./schwarzView";
-import type { EscapeKind } from "@cas/schwarz";
+import type { Complex, EscapeKind } from "@cas/schwarz";
 
 /** Orbit colour by fate — green settles into the tiling, orange diverges, violet lingers, gray failed. */
 function orbitColor(kind: EscapeKind): string {
@@ -22,6 +22,25 @@ function orbitColor(kind: EscapeKind): string {
 
 const CASING = "rgba(0, 0, 0, 0.72)";
 
+/** Draw options. `preview` = the transient hover orbit (S5-A2): fainter + thinner + no ringed seed, so it
+ *  reads as a live preview under the bold, pinned click-inspect orbit. */
+export interface SchwarzOrbitStyle {
+  preview?: boolean;
+  /** z-disk pullback (F2c): map each w-space orbit point into the drawing plane before plotToPixel. In the
+   *  z-disk view the overlay lives in the uniformizing z-coordinate, so points are pulled back via ψ = φ⁻¹
+   *  (engine.invertPhi); an iterate with no preimage on the uniformizing domain (it entered K, or the inverse
+   *  failed) returns null and BREAKS the polyline there — no connecting segment, no dot, no seed marker.
+   *  Omitted ⇒ identity (the w-plane view draws the orbit directly, unchanged). */
+  toPlot?: (w: Complex) => Complex | null;
+  /** Sphere projection (F2d-ii): map each w-space iterate straight to a canvas pixel, bypassing the flat
+   *  `view` + plotToPixel path. Returns null for an iterate on the far (occluded) hemisphere of the ball,
+   *  which BREAKS the polyline exactly like a null toPlot. Takes precedence over `toPlot`/`view` when set. */
+  toPixel?: (w: Complex) => [number, number] | null;
+  /** Override the fate colour with a fixed CSS colour (F4e orbit-family sweep: each family member gets a hue
+   *  keyed to its seed, not its fate). Omitted ⇒ the fate colour (orbitColor(kind)) — unchanged. */
+  color?: string;
+}
+
 /**
  * Stroke `orbit` onto `ctx` (a size×size 2D context showing the σ field for `view`). Points are mapped
  * with plotToPixel; off-canvas iterates (an escaping orbit shoots far out) are still connected so the line
@@ -33,51 +52,87 @@ export function drawSchwarzOrbit(
   orbit: SchwarzOrbit,
   view: SchwarzView,
   size: number,
+  style: SchwarzOrbitStyle = {},
 ): void {
-  const pts = orbit.points.map((p) => plotToPixel(view, p, size));
-  const color = orbitColor(orbit.kind);
+  const preview = style.preview === true;
+  const toPlot = style.toPlot;
+  const toPixel = style.toPixel;
+  // Map each w-space iterate to a canvas pixel: the sphere (F2d-ii) projects straight to a pixel (`toPixel`,
+  // null on the occluded far cap); otherwise map into the drawing plane (identity on the w-plane; ψ = φ⁻¹ in
+  // the z-disk, F2c) then plotToPixel. A null at either stage stays null so the polyline breaks and the dot is
+  // skipped at that iterate.
+  const pts: Array<[number, number] | null> = orbit.points.map((p) => {
+    if (toPixel) return toPixel(p);
+    const q = toPlot ? toPlot(p) : p;
+    return q ? plotToPixel(view, q, size) : null;
+  });
+  const color = style.color ?? orbitColor(orbit.kind);
   ctx.save();
+  if (preview) ctx.globalAlpha = 0.55; // the hover preview is a light hint under the pinned orbit
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
   if (pts.length > 1) {
+    // One path with breaks: a null iterate lifts the pen so the next mapped point starts a fresh subpath
+    // (with no null in the pullback this is a single subpath — byte-identical to the pre-F2c plane draw).
     ctx.beginPath();
-    pts.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+    let penDown = false;
+    for (const pt of pts) {
+      if (!pt) {
+        penDown = false;
+        continue;
+      }
+      if (penDown) ctx.lineTo(pt[0], pt[1]);
+      else {
+        ctx.moveTo(pt[0], pt[1]);
+        penDown = true;
+      }
+    }
     ctx.strokeStyle = CASING;
-    ctx.lineWidth = 2.6;
+    ctx.lineWidth = preview ? 1.8 : 2.6;
     ctx.stroke();
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = preview ? 0.9 : 1.2;
     ctx.stroke();
   }
 
-  // Per-iterate dots (on-canvas only).
+  // Per-iterate dots (on-canvas, mapped iterates only).
+  const rOuter = preview ? 1.8 : 2.4;
+  const rInner = preview ? 1.0 : 1.4;
   for (let i = 1; i < pts.length; i++) {
-    const [x, y] = pts[i];
+    const pt = pts[i];
+    if (!pt) continue;
+    const [x, y] = pt;
     if (x < 0 || x > size || y < 0 || y > size) continue;
     ctx.beginPath();
-    ctx.arc(x, y, 2.4, 0, 2 * Math.PI);
+    ctx.arc(x, y, rOuter, 0, 2 * Math.PI);
     ctx.fillStyle = CASING;
     ctx.fill();
     ctx.beginPath();
-    ctx.arc(x, y, 1.4, 0, 2 * Math.PI);
+    ctx.arc(x, y, rInner, 0, 2 * Math.PI);
     ctx.fillStyle = color;
     ctx.fill();
   }
 
-  // w₀ — a ringed marker so the seed stands out from its iterates.
-  const [x0, y0] = pts[0];
-  ctx.beginPath();
-  ctx.arc(x0, y0, 5, 0, 2 * Math.PI);
-  ctx.strokeStyle = CASING;
-  ctx.lineWidth = 3;
-  ctx.stroke();
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.6;
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(x0, y0, 1.8, 0, 2 * Math.PI);
-  ctx.fillStyle = color;
-  ctx.fill();
+  // w₀ — a ringed marker so the seed stands out from its iterates (the preview uses just a plain dot). Drawn
+  // only when the seed maps (in the z-disk a seed clicked on the uniformizing domain always pulls back).
+  const seed = pts[0];
+  if (seed) {
+    const [x0, y0] = seed;
+    if (!preview) {
+      ctx.beginPath();
+      ctx.arc(x0, y0, 5, 0, 2 * Math.PI);
+      ctx.strokeStyle = CASING;
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.6;
+      ctx.stroke();
+    }
+    ctx.beginPath();
+    ctx.arc(x0, y0, preview ? 2.4 : 1.8, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
   ctx.restore();
 }

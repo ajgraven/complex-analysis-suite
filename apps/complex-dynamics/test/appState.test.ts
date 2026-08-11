@@ -67,6 +67,12 @@ describe("SHARE_IDS DOM coverage", () => {
             "dynExportScaleBar",
             "mImageName",
             "jImageName",
+            // σ PNG export (S5-A1): size + which overlays to bake into the file — file properties, not the view.
+            "schwarz-export-size",
+            "schwarz-export-scalebar",
+            "schwarz-export-orbit",
+            // σ export file name (D2): the name of the file you're about to write, not part of the view.
+            "schwarz-export-name",
           ],
           "export setting",
         ],
@@ -97,11 +103,53 @@ describe("SHARE_IDS DOM coverage", () => {
         // Native σ builder: inputs to the one-shot "Generate σ" button. The RESULT (the σ view) is what a
         // link carries — as the `_sigma` state layer (ADR-0009 item 2), NOT these ids; re-running Generate
         // on load would be a side effect, not a restored view — same rule as the one-shot tools above.
-        [["schwarz-preset", "schwarz-c", "schwarz-F", "schwarz-poles"], "σ builder input (one-shot tool; view travels as _sigma)"],
+        [["schwarz-preset", "schwarz-family", "schwarz-c", "schwarz-F", "schwarz-w0", "schwarz-poles"], "σ builder input (one-shot tool; view travels as _sigma)"],
         // σ coloring (ADR-0009 item 3): colormap + escape-scale for the σ pane. Part of the σ view, which
         // travels via the `_sigma` state layer (item 2) — not as its own shared control, the same way the
         // standard-fractal `palette` is opted out (SHARE_IDS omission).
-        [["schwarz-colormap", "schwarz-scale"], "σ coloring (travels inside _sigma, not as a control id)"],
+        [
+          [
+            "schwarz-colormap",
+            "schwarz-scale",
+            "schwarz-colormode",
+            "schwarz-trapshape",
+            "schwarz-rotation",
+            "schwarz-gamma",
+            "schwarz-vignette",
+          ],
+          "σ coloring (travels inside _sigma, not as a control id)",
+        ],
+        // σ render knobs (Phase B): AA supersample + the escape budget (iterations + escape radius) are
+        // properties of the σ view, carried by the `_sigma` state layer — not shared controls in their own
+        // right, the same way the σ coloring above travels inside _sigma.
+        [["schwarz-aa", "schwarz-iters", "schwarz-escaper"], "σ render setting (travels inside _sigma)"],
+        // σ relief lighting (C2): on/off + light az / el / depth — a σ-view coloring property carried by _sigma.
+        [
+          ["schwarz-light", "schwarz-light-az", "schwarz-light-el", "schwarz-light-depth"],
+          "σ relief lighting (travels inside _sigma)",
+        ],
+        // σ ∂Ω boundary overlay (F1): a display toggle — a σ-view overlay property carried by _sigma.
+        [["schwarz-boundary"], "σ boundary overlay (travels inside _sigma)"],
+        // σ-singularity markers (F4h): a display toggle — a σ-view overlay property carried by _sigma.
+        [["schwarz-singularities"], "σ singularity markers (travels inside _sigma)"],
+        // σ preimage-tiling params (F3c): depth + visual budget — σ-view settings carried by _sigma (the tree
+        // itself is a transient inspection, seeded by a canvas double-click, and is not serialized).
+        [["schwarz-tiling-depth", "schwarz-tiling-budget"], "σ tiling setting (travels inside _sigma)"],
+        // σ limit-set sample count (F4a): a control for a transient analysis (the chaos-game cloud + its
+        // box-counting dimension are computed on demand, not serialized).
+        [["schwarz-limit-points"], "σ limit-set analysis control (transient; not serialized)"],
+        // σ orbit-family controls (F4e/F4c): seed count + sweep radius for a transient analysis (the traced
+        // family is computed on demand, not serialized).
+        [["schwarz-family-n", "schwarz-family-radius"], "σ orbit-family control (transient; not serialized)"],
+        // σ level-curve controls (F4b): grid resolution + phase-line count for a transient analysis (the
+        // contours are computed on demand, not serialized).
+        [["schwarz-level-grid", "schwarz-level-phases"], "σ level-curve control (transient; not serialized)"],
+        // σ cycle-finder control (F4d): the period to search for a transient advisory analysis (the cycles are
+        // computed on demand, not serialized).
+        [["schwarz-cycle-n"], "σ cycle-finder control (transient; not serialized)"],
+        // σ forward-curve control (F4f): the iteration count for a transient analysis (the drawn curve + its
+        // σ-images are computed on demand, not serialized).
+        [["schwarz-forward-k"], "σ forward-curve control (transient; not serialized)"],
         // σ precise-nav fields mirror the live σ view (centre + zoom) and apply back to it. The window is a
         // property of the σ view and travels inside `_sigma` (item 2) — not as a shared control in its own
         // right, the same way the standard plots' centre/zoom travel via the view, not these input ids.

@@ -7,6 +7,7 @@ import {
   QD_TO_CD_DELTOID_LINK,
   QD_TO_CD_DELTOID_SIGMA_LINK,
   QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
+  QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK,
 } from "@cas/interchange";
 import {
   buildExportEnvelope,
@@ -141,9 +142,12 @@ describe("export availability — structural classifier (Phase 1)", () => {
   });
 });
 
-describe("export availability — σ reason strings (Phase 1)", () => {
+describe("export availability — σ reason strings (Phase 1; bounded-classical exports since S5-C2)", () => {
   const polePhi = { unbounded: true, c: 0.6, polyA: [], branches: [{ z: C(2), A: [C(1)] }] };
-  const boundedPhi = { unbounded: false, branches: [{ z: C(0.5), A: [C(1)] }] };
+  // Bounded-CLASSICAL (no family tag): σ-exportable since S5-C2. Bounded-WEIGHTED (LQD/PQD, family-tagged):
+  // still not reconstructable, so it is the shape that now earns the "bounded" reason string.
+  const boundedClassicalPhi = { unbounded: false, branches: [{ z: C(0.5), A: [C(1)] }] };
+  const boundedWeightedPhi = { unbounded: false, family: "boundedLQD", branches: [{ z: C(0.5), A: [C(1)] }] };
 
   it("returns null (no message) exactly when σ IS exportable — the deltoid", () => {
     expect(explainSigmaUnavailable(deltoidPhi)).toBeNull();
@@ -158,8 +162,14 @@ describe("export availability — σ reason strings (Phase 1)", () => {
     expect(msg).toMatch(/rational/i);
     expect(msg).toContain("φ");
   });
-  it("bounded domain → says bounded, does not blame the deltoid", () => {
-    expect(explainSigmaUnavailable(boundedPhi)).toMatch(/bounded/i);
+  it("bounded-classical QD → now σ-exports (S5-C2), so no message", () => {
+    expect(explainSigmaUnavailable(boundedClassicalPhi)).toBeNull();
+  });
+  it("weighted (LQD/PQD) bounded QD → says bounded/weighted, does not blame the deltoid", () => {
+    const msg = explainSigmaUnavailable(boundedWeightedPhi)!;
+    expect(msg).toMatch(/bounded/i);
+    expect(msg).toMatch(/weighted/i);
+    expect(msg).not.toMatch(/deltoid/i);
   });
   it("pole-bearing unbounded QD → now σ-exports (Phase 2), so no message", () => {
     expect(explainSigmaUnavailable(polePhi)).toBeNull();
@@ -218,5 +228,45 @@ describe("pole-bearing φ → branches on the interchange laurent (Phase 2)", ()
     const singlePolePhi = { unbounded: true, c: 1, polyA: [], branches: [{ z: C(0.2, 0), A: [C(0.3, 0)] }] };
     const link = exportSigmaLink(singlePolePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
     expect(link).toBe(QD_TO_CD_SINGLE_POLE_SIGMA_LINK);
+  });
+});
+
+// S5-C2: bounded-classical QDs now σ-export — the FIRST non-Laurent family on the wire. buildSigmaEnvelope
+// emits `sigma.phi` as `form:"bounded"` (schema 1.3.0, `disk:"D"`); CD rebuilds σ via makeBoundedSchwarz's
+// interior branch. A bounded φ is σ-ONLY: `form:"bounded"` is not a MapSpec, so it never rides the φ /
+// quadrature-domain hand-off (phiToMapSpec / buildExportEnvelope stay null for it).
+describe("bounded-classical φ → form:bounded σ recipe (S5-C2)", () => {
+  // A single-lobe bounded QD: φ(z) = ½·u, u = z/(1 − 0.3z), centre w₀ = 0 (no family tag ⇒ classical).
+  const boundedLobePhi = { unbounded: false, w0: C(0), branches: [{ z: C(0.3), A: [C(0.5)] }] };
+
+  it("buildSigmaEnvelope emits the form:bounded recipe (disk:D) and validates", () => {
+    const env = buildSigmaEnvelope(boundedLobePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(env).not.toBeNull();
+    expect(isEnvelopeOfKind(validateEnvelope(env), "schwarz-reflection")).toBe(true);
+    expect((env!.payload as { sigma: unknown }).sigma).toEqual({
+      form: "schwarz",
+      phi: { form: "bounded", w0: C(0), branches: [{ z: C(0.3), A: [C(0.5)] }] },
+      disk: "D",
+      inverse: "newton-dk",
+      antiholomorphic: true,
+    });
+  });
+
+  it("a bounded φ is σ-only — it never rides the φ / quadrature-domain hand-off", () => {
+    expect(phiToMapSpec(boundedLobePhi)).toBeNull(); // form:bounded is not a MapSpec
+    expect(buildExportEnvelope(boundedLobePhi, { createdAt: GOLDEN_CREATED_AT })).toBeNull();
+  });
+
+  it("a weighted (LQD/PQD) bounded φ is NOT σ-exportable — its σ needs exp/power machinery not lifted yet", () => {
+    const weighted = { unbounded: false, family: "boundedLQD", w0: C(0), branches: [{ z: C(0.3), A: [C(0.5)] }] };
+    expect(buildSigmaEnvelope(weighted)).toBeNull();
+  });
+
+  // The PRODUCER half of the bounded-lobe σ cross-app contract: QD reproduces the exact bytes stored as the
+  // golden and consumed by CD (apps/complex-dynamics/test/importMap.test.ts). If this drifts, the bounded
+  // wire format changed — regenerate the golden only if intended, and CD starts consuming the new bytes.
+  it("emits the exact bounded-lobe σ link stored as the cross-app golden", () => {
+    const link = exportSigmaLink(boundedLobePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(link).toBe(QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK);
   });
 });

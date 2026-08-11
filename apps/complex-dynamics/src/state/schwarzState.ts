@@ -15,37 +15,164 @@
  */
 import type { SchwarzPhi } from "../render/schwarzPhiForm";
 import type { Complex, SchwarzBranch } from "@cas/schwarz";
+import type { GradientStop } from "../palettes";
+import { parseGradientStops } from "../ui/gradient";
 import { SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX } from "../render/schwarzView";
 import {
   SCHWARZ_COLORMAPS,
   DEFAULT_SCHWARZ_COLORMAP,
   SCHWARZ_SCALE_MODES,
   DEFAULT_SCHWARZ_SCALE,
+  SCHWARZ_COLOR_MODES,
+  DEFAULT_SCHWARZ_COLOR_MODE,
+  SCHWARZ_TRAP_SHAPES,
+  DEFAULT_SCHWARZ_TRAP_SHAPE,
 } from "../render/schwarzColormaps";
 
-/** Everything needed to reproduce a σ view: the φ recipe, the window, and the coloring. */
+/** Everything needed to reproduce a σ view: the φ recipe, the window, and the coloring (colormap + scale
+ *  + image-space tone). The tone fields (S5-A3) are identity at their defaults. */
 export interface SigmaViewState {
   phi: SchwarzPhi;
+  /** The ACTIVE view's window (F2b): the w-plane window in "plane" mode, the uniformizing z-disk window in
+   *  "z" mode. The inactive view's window is per-session (the live stash), not serialized. */
   center: Complex;
   zoom: number;
+  /** Coordinate view: "plane" (default) · the uniformizing "z"-disk (F2b) · the Riemann "sphere" (F2d). For a
+   *  sphere view, `center`/`zoom` above are the UNDERLYING w-plane window (the sphere has no flat window — its
+   *  camera is `sphereRot`/`sphereZoom`), so switching to the plane after restoring a sphere link is sensible. */
+  viewMode: "plane" | "z" | "sphere";
+  /** Sphere-view camera orientation (F2d-ii), a unit quaternion [x,y,z,w]; present only when viewMode === "sphere". */
+  sphereRot?: [number, number, number, number];
+  /** Sphere-view magnification (F2d-ii); present only when viewMode === "sphere". */
+  sphereZoom?: number;
   colormap: string;
   scale: string;
+  /** σ-field color mode (S5-B1): "escape" (default) · "trap" · "stripe". */
+  colorMode: string;
+  /** Orbit-trap shape (S5-B1), used when colorMode === "trap": "cross" (default) · point · line · circle · lattice. */
+  trapShape: string;
+  /** Colormap-coordinate rotation ∈[0,1); 0 = none. */
+  rotation: number;
+  /** Output gamma; 1 = identity. */
+  gamma: number;
+  /** Radial edge darkening ∈[0,1]; 0 = off. */
+  vignette: number;
+  /** Anti-aliasing supersample factor (B2); 1 = native device pixels. */
+  aa: number;
+  /** σ escape-time iteration cap (B2) — shared by the field and the orbit inspector. */
+  maxIter: number;
+  /** σ escape radius (B2): |σⁿ| beyond this counts as escaped to ∞. */
+  escapeR: number;
+  /** Relief lighting on/off (C2). */
+  light: boolean;
+  /** Light azimuth (degrees, C2). */
+  lightAz: number;
+  /** Light elevation (degrees, C2). */
+  lightEl: number;
+  /** Relief depth — the height-gradient scale (C2). */
+  lightHeight: number;
+  /** ∂Ω boundary overlay on/off (F1) — outline φ(unit circle) over the field; default off. */
+  showBoundary: boolean;
+  /** σ-singularity markers on/off (F4h) — branch points (φ′=0 cusps) + σ-poles over the field; default off. */
+  showSingularities: boolean;
+  /** Preimage-tiling depth (F3c) — the σ⁻¹ generation count a double-click seeds. A persisted SETTING (like
+   *  maxIter); the tree ITSELF is a transient inspection (not serialized, like the pinned orbit), so a
+   *  restored link keeps the preferred depth but draws no tree until the user double-clicks the tiling set. */
+  tilingDepth: number;
+  /** Preimage-tiling visual budget (F3c) — the total-node cap on a seeded tree. Persisted like tilingDepth. */
+  tilingBudget: number;
+  /** Custom-gradient stops (C1), present only when `colormap === "custom"`; else the named palette applies. */
+  customStops?: GradientStop[];
 }
+
+/** Identity/default image-space tone — a view with no tone adjustments (also the fallback for old links). */
+export const SIGMA_TONE_DEFAULTS = { rotation: 0, gamma: 1, vignette: 0 } as const;
+
+/** Default render knobs (B2) — native resolution + the standard escape budget; also the fallback for links
+ *  that predate them, so an old permalink still restores a valid (default-quality) view. */
+export const SIGMA_RENDER_DEFAULTS = { aa: 1, maxIter: 48, escapeR: 1e4 } as const;
+
+/** Default relief lighting (C2) — off, CD's light az/el, depth 2.0; also the fallback for pre-C2 links. */
+export const SIGMA_LIGHT_DEFAULTS = { light: false, lightAz: 135, lightEl: 45, lightHeight: 2 } as const;
+
+/** Default σ overlays (F1, F4h) — the ∂Ω boundary outline + the σ-singularity markers off; the fallback for
+ *  links that predate them, so an old permalink restores with neither (byte-identical). */
+export const SIGMA_OVERLAY_DEFAULTS = { showBoundary: false, showSingularities: false } as const;
+
+/** Default coordinate view (F2b) — the w-plane; the fallback for links that predate the z-disk, so an old
+ *  permalink restores on the plane (byte-identical: `vm` is omitted when the view is the plane). */
+export const SIGMA_VIEW_DEFAULTS = { viewMode: "plane" } as const;
+
+/** Default preimage-tiling params (F3c) — depth 4 + a 4096-node budget (the buildPreimageTree defaults); the
+ *  fallback for links that predate F3c, so an old permalink restores the standard tiling params (and, being
+ *  defaults, `td`/`tb` are omitted — byte-identical to a pre-F3c link). */
+export const SIGMA_TILING_DEFAULTS = { tilingDepth: 4, tilingBudget: 4096 } as const;
+/** Hostile-link clamps on the tiling params — depth ∈ [0,8] (the UI slider's range; deltoid grows ~2ᵈ), a
+ *  visual budget ∈ [1, 65536] (well above the UI's 16384 select, still bounded). */
+const TILING_DEPTH_MAX = 8;
+const TILING_BUDGET_MAX = 65536;
 
 /** Hostile-link cap on each coefficient list (F, a pole's A, the pole count) — keep the engine bounded. */
 const MAX_TERMS = 64;
 
-/** Serialize to a compact JSON string (short keys keep the base64 permalink small). */
+/** Serialize to a compact JSON string (short keys keep the base64 permalink small). The tone keys are
+ *  omitted when they hold their identity default, so a plain view's link stays as small as before A3. */
 export function encodeSigmaState(s: SigmaViewState): string {
-  return JSON.stringify({
-    c: s.phi.c,
+  const out: Record<string, unknown> = {
+    // Real c serializes as a bare number (compact + byte-identical to pre-C1 links); a complex c (S5-C1)
+    // as a [re, im] pair. parseSigmaState accepts either. (A bounded φ carries c = [0,0] in the unused slot.)
+    c: s.phi.c[1] === 0 ? s.phi.c[0] : s.phi.c,
     F: s.phi.F,
     b: s.phi.branches.map((br) => ({ z: br.z, A: br.A })),
     ctr: s.center,
     z: s.zoom,
     cm: s.colormap,
     sc: s.scale,
-  });
+  };
+  // S5-C2: a BOUNDED φ carries its family tag + centre w₀ (its σ is the interior-branch reconstruction;
+  // c / F are the unused [0,0] / [] slots). Emitted ONLY for bounded, so an unbounded view's link stays
+  // byte-identical to pre-C2 — the family tag is absent and parseSigmaState defaults it to "unbounded".
+  if (s.phi.family === "bounded") {
+    out.fam = "bounded";
+    out.w0 = s.phi.w0 ?? [0, 0];
+  }
+  // S5-B1 color mode + trap shape, omitted at their defaults so a plain (escape-time) view's link is
+  // unchanged from pre-B1 — same rule as the tone keys below.
+  if (s.colorMode !== DEFAULT_SCHWARZ_COLOR_MODE) out.md = s.colorMode;
+  if (s.trapShape !== DEFAULT_SCHWARZ_TRAP_SHAPE) out.tp = s.trapShape;
+  if (s.rotation !== SIGMA_TONE_DEFAULTS.rotation) out.rot = s.rotation;
+  if (s.gamma !== SIGMA_TONE_DEFAULTS.gamma) out.gam = s.gamma;
+  if (s.vignette !== SIGMA_TONE_DEFAULTS.vignette) out.vig = s.vignette;
+  // Render knobs (B2), omitted at their defaults so a native-resolution / default-budget view's link stays
+  // as small as pre-B2 — same rule as the tone keys.
+  if (s.aa !== SIGMA_RENDER_DEFAULTS.aa) out.aa = s.aa;
+  if (s.maxIter !== SIGMA_RENDER_DEFAULTS.maxIter) out.it = s.maxIter;
+  if (s.escapeR !== SIGMA_RENDER_DEFAULTS.escapeR) out.er = s.escapeR;
+  // Relief lighting (C2), omitted at its defaults so an unlit view's link is unchanged from pre-C2.
+  if (s.light !== SIGMA_LIGHT_DEFAULTS.light) out.li = s.light;
+  if (s.lightAz !== SIGMA_LIGHT_DEFAULTS.lightAz) out.laz = s.lightAz;
+  if (s.lightEl !== SIGMA_LIGHT_DEFAULTS.lightEl) out.lel = s.lightEl;
+  if (s.lightHeight !== SIGMA_LIGHT_DEFAULTS.lightHeight) out.ldp = s.lightHeight;
+  // ∂Ω boundary overlay (F1), omitted at its default (off) so a view without it is byte-identical to pre-F1.
+  if (s.showBoundary !== SIGMA_OVERLAY_DEFAULTS.showBoundary) out.bd = s.showBoundary;
+  // σ-singularity markers (F4h), omitted at their default (off) so a view without them is byte-identical to pre-F4h.
+  if (s.showSingularities !== SIGMA_OVERLAY_DEFAULTS.showSingularities) out.sg = s.showSingularities;
+  // Preimage-tiling params (F3c) — persisted like the render knobs; omitted at the defaults so a view that
+  // never retuned them is byte-identical to a pre-F3c link. The tree itself is transient (not serialized).
+  if (s.tilingDepth !== SIGMA_TILING_DEFAULTS.tilingDepth) out.td = s.tilingDepth;
+  if (s.tilingBudget !== SIGMA_TILING_DEFAULTS.tilingBudget) out.tb = s.tilingBudget;
+  // Coordinate view (F2b), omitted on the w-plane so a plane view's link is byte-identical to pre-F2b.
+  if (s.viewMode !== SIGMA_VIEW_DEFAULTS.viewMode) out.vm = s.viewMode;
+  // Sphere camera (F2d-ii) — the orientation quaternion + magnification, carried ONLY for a sphere view (a
+  // plane / z link is unaffected). center/zoom above stay the underlying w-plane window for the sphere.
+  if (s.viewMode === "sphere") {
+    if (s.sphereRot) out.sq = s.sphereRot;
+    if (s.sphereZoom !== undefined) out.sz = s.sphereZoom;
+  }
+  // Custom gradient (C1) — carried only when the custom palette is active (and has ≥2 stops), so a named-
+  // palette view's link is unaffected.
+  if (s.colormap === "custom" && s.customStops && s.customStops.length >= 2) out.grad = s.customStops;
+  return JSON.stringify(out);
 }
 
 /**
@@ -55,10 +182,23 @@ export function encodeSigmaState(s: SigmaViewState): string {
 export function schwarzStampParams(s: SigmaViewState): string {
   const r = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
   const cplx = (z: Complex): string => `${r(z[0])}${z[1] >= 0 ? "+" : "-"}${r(Math.abs(z[1]))}i`;
-  const F = s.phi.F.map(cplx).join(", ");
+  const trap = s.colorMode === "trap" ? ` (${s.trapShape})` : "";
+  // A bounded φ (S5-C2) has no leading c / Laurent F — summarise it by its centre w₀ instead, so the PNG
+  // metadata reads honestly rather than printing the trivial c=0, F=[] slots.
+  const recipe =
+    s.phi.family === "bounded"
+      ? `plane=Schwarz reflection sigma (approx, bounded); w0=${cplx(s.phi.w0 ?? [0, 0])}; poles=${s.phi.branches.length}`
+      : `plane=Schwarz reflection sigma (approx); c=${s.phi.c[1] === 0 ? r(s.phi.c[0]) : cplx(s.phi.c)}; ` +
+        `F=[${s.phi.F.map(cplx).join(", ")}]; poles=${s.phi.branches.length}`;
+  const viewLabel = s.viewMode === "z" ? "z-disk" : s.viewMode === "sphere" ? "sphere" : "plane";
   return (
-    `plane=Schwarz reflection sigma (approx); c=${r(s.phi.c)}; F=[${F}]; poles=${s.phi.branches.length}; ` +
-    `center=${cplx(s.center)}; zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; scale=${s.scale}`
+    `${recipe}; view=${viewLabel}; center=${cplx(s.center)}; ` +
+    `zoom=${s.zoom.toExponential(3)}; colormap=${s.colormap}; ` +
+    `scale=${s.scale}; colormode=${s.colorMode}${trap}; rotation=${r(s.rotation)}; gamma=${r(s.gamma)}; ` +
+    `vignette=${r(s.vignette)}; aa=${s.aa}; iters=${s.maxIter}; escapeR=${r(s.escapeR)}; ` +
+    `light=${s.light ? `on(az${r(s.lightAz)},el${r(s.lightEl)},depth${r(s.lightHeight)})` : "off"}; ` +
+    `boundary=${s.showBoundary ? "on" : "off"}; singularities=${s.showSingularities ? "on" : "off"}; ` +
+    `tiling=depth${s.tilingDepth},budget${s.tilingBudget}`
   );
 }
 
@@ -90,9 +230,30 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   if (!raw || typeof raw !== "object") return null;
   const o = raw as Record<string, unknown>;
 
-  if (!fin(o.c) || o.c === 0) return null; // c must be a real, non-zero leading coefficient (engine requires it)
+  // S5-C2: a bounded φ (fam:"bounded") reconstructs on the interior branch — it has no leading c·z term, so
+  // c / F are ignored and it carries a centre w₀ instead. An unbounded φ (the default) still requires a
+  // non-zero c. An unknown family tag falls back to unbounded.
+  const bounded = o.fam === "bounded";
+
+  // c is the leading coefficient (unbounded): a bare number (real maps / pre-C1 links) or a [re, im] pair
+  // (S5-C1), and must be non-zero. For a bounded φ it is the unused [0,0] slot.
+  let cVal: Complex = [0, 0];
+  if (fin(o.c)) cVal = [o.c, 0];
+  else {
+    const c = complex(o.c);
+    if (c) cVal = c;
+  }
+  if (!bounded && cVal[0] === 0 && cVal[1] === 0) return null; // unbounded needs a non-zero c
   const F = complexList(o.F);
   if (!F) return null;
+
+  // A bounded φ must carry its centre w₀ (φ(0) = w₀); an unbounded φ has none.
+  let w0: Complex = [0, 0];
+  if (bounded) {
+    const w = complex(o.w0);
+    if (!w) return null;
+    w0 = w;
+  }
 
   const branches: SchwarzBranch[] = [];
   if (o.b !== undefined) {
@@ -113,9 +274,67 @@ export function parseSigmaState(json: string): SigmaViewState | null {
   if (!fin(o.z)) return null;
   const zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, o.z));
 
-  const colormap = typeof o.cm === "string" && o.cm in SCHWARZ_COLORMAPS ? o.cm : DEFAULT_SCHWARZ_COLORMAP;
+  // "custom" (C1) is a valid palette name too (its ramp comes from `grad`, not SCHWARZ_COLORMAPS).
+  const colormap =
+    typeof o.cm === "string" && (o.cm === "custom" || o.cm in SCHWARZ_COLORMAPS) ? o.cm : DEFAULT_SCHWARZ_COLORMAP;
   const scale =
     typeof o.sc === "string" && SCHWARZ_SCALE_MODES.some((m) => m.key === o.sc) ? o.sc : DEFAULT_SCHWARZ_SCALE;
+  // S5-B1 color mode + trap shape — an unknown name normalises to the default (a stale link never blanks
+  // the picker), exactly like the colormap / scale above.
+  const colorMode =
+    typeof o.md === "string" && SCHWARZ_COLOR_MODES.some((m) => m.key === o.md) ? o.md : DEFAULT_SCHWARZ_COLOR_MODE;
+  const trapShape =
+    typeof o.tp === "string" && SCHWARZ_TRAP_SHAPES.some((m) => m.key === o.tp) ? o.tp : DEFAULT_SCHWARZ_TRAP_SHAPE;
 
-  return { phi: { c: o.c, F, branches }, center, zoom, colormap, scale };
+  // Image-space tone (S5-A3) — cosmetic + optional, so a bad/absent value clamps to the identity default
+  // rather than rejecting the whole (otherwise-valid) view.
+  const clampOr = (x: unknown, def: number, lo: number, hi: number): number =>
+    fin(x) ? Math.min(hi, Math.max(lo, x)) : def;
+  const rotation = clampOr(o.rot, SIGMA_TONE_DEFAULTS.rotation, 0, 1);
+  const gamma = clampOr(o.gam, SIGMA_TONE_DEFAULTS.gamma, 0.2, 5);
+  const vignette = clampOr(o.vig, SIGMA_TONE_DEFAULTS.vignette, 0, 1);
+  // Render knobs (B2) — clamp to sane bounds; a bad/absent value falls back to the default (never fatal, so
+  // an old or corrupt link still restores a valid view). aa / maxIter are integers.
+  const aa = Math.round(clampOr(o.aa, SIGMA_RENDER_DEFAULTS.aa, 1, 4));
+  const maxIter = Math.round(clampOr(o.it, SIGMA_RENDER_DEFAULTS.maxIter, 1, 4096));
+  const escapeR = clampOr(o.er, SIGMA_RENDER_DEFAULTS.escapeR, 1.0001, 1e12);
+  // Relief lighting (C2) — a bad/absent value falls back to the default (never fatal).
+  const light = typeof o.li === "boolean" ? o.li : SIGMA_LIGHT_DEFAULTS.light;
+  const lightAz = clampOr(o.laz, SIGMA_LIGHT_DEFAULTS.lightAz, 0, 360);
+  const lightEl = clampOr(o.lel, SIGMA_LIGHT_DEFAULTS.lightEl, 0, 90);
+  const lightHeight = clampOr(o.ldp, SIGMA_LIGHT_DEFAULTS.lightHeight, 0, 20);
+  // ∂Ω boundary overlay (F1) — a bad/absent value falls back to the default (off); never fatal.
+  const showBoundary = typeof o.bd === "boolean" ? o.bd : SIGMA_OVERLAY_DEFAULTS.showBoundary;
+  // σ-singularity markers (F4h) — a bad/absent value falls back to the default (off).
+  const showSingularities = typeof o.sg === "boolean" ? o.sg : SIGMA_OVERLAY_DEFAULTS.showSingularities;
+  // Preimage-tiling params (F3c) — clamped to sane integer bounds; a bad/absent value falls back to the
+  // default (never fatal, so an old or corrupt link still restores a valid view).
+  const tilingDepth = Math.round(clampOr(o.td, SIGMA_TILING_DEFAULTS.tilingDepth, 0, TILING_DEPTH_MAX));
+  const tilingBudget = Math.round(clampOr(o.tb, SIGMA_TILING_DEFAULTS.tilingBudget, 1, TILING_BUDGET_MAX));
+  // Coordinate view — "z" (F2b) or "sphere" (F2d); anything else (or a corrupt value) falls back to the w-plane.
+  const viewMode: "plane" | "z" | "sphere" = o.vm === "z" ? "z" : o.vm === "sphere" ? "sphere" : "plane";
+  // Sphere camera (F2d-ii) — a valid 4-number unit quaternion + a clamped magnification, both only when on the
+  // sphere. A bad/absent quaternion ⇒ omitted (the caller defaults the orientation); a bad zoom clamps sanely.
+  let sphereRot: [number, number, number, number] | undefined;
+  let sphereZoom: number | undefined;
+  if (viewMode === "sphere") {
+    if (Array.isArray(o.sq) && o.sq.length === 4 && o.sq.every(fin)) {
+      sphereRot = [o.sq[0], o.sq[1], o.sq[2], o.sq[3]];
+    }
+    sphereZoom = fin(o.sz) ? Math.min(1e6, Math.max(0.3, o.sz)) : 1;
+  }
+  // Custom gradient (C1) — validated via the shared editor parser (≥2 stops, clamped t / bytes); a bad or
+  // absent value ⇒ no custom stops (the named palette applies). Only meaningful when colormap === "custom".
+  const customStops = o.grad !== undefined ? (parseGradientStops(JSON.stringify(o.grad)) ?? undefined) : undefined;
+
+  // Unbounded stays `family`-less (byte-identical to pre-C2 states + their round-trip); only a bounded φ
+  // carries the tag + centre w₀. Both reconstruct correctly — renderSchwarzFromPhi treats absent as unbounded.
+  const phi: SchwarzPhi = bounded ? { family: "bounded", c: cVal, F, w0, branches } : { c: cVal, F, branches };
+  return {
+    phi, center, zoom, viewMode, colormap, scale, colorMode, trapShape, rotation, gamma, vignette, aa, maxIter,
+    escapeR, light, lightAz, lightEl, lightHeight, showBoundary, showSingularities, tilingDepth, tilingBudget,
+    ...(sphereRot ? { sphereRot } : {}),
+    ...(sphereZoom !== undefined ? { sphereZoom } : {}),
+    ...(customStops ? { customStops } : {}),
+  };
 }

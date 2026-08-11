@@ -4,9 +4,9 @@
 //   · uploadPhi / runSigmaGLSL      — need a live WebGL2 context with float readback; browser-only.
 //
 // `runSigmaGLSL` is the numeric backstop the CPU-mirror tests structurally can't be: it executes the
-// ACTUAL float32 GLSL and reads σ(w) back, so it catches any drift from the CPU engine
-// (../unbounded-laurent.ts). CD's production renderer reuses `packPhi`/`uploadPhi` to feed the same
-// uniforms into its escape-time shader (S4b).
+// ACTUAL float32 GLSL and reads σ(w) back, so it catches any drift from the CPU engines
+// (../unbounded-laurent.ts, ../bounded.ts — the family is selected by `SigmaPhi.family`). CD's production
+// renderer reuses `packPhi`/`uploadPhi` to feed the same uniforms into its escape-time shader (S4b/S5-C2).
 
 import { createProgram } from "@cas/gpu/shader";
 import type { Complex, SchwarzBranch } from "../unbounded-laurent.js";
@@ -25,17 +25,26 @@ export { MAX_BRANCHES, MAX_K, MAX_LAURENT };
 /** The map φ the σ evaluator reconstructs — the same triple `makeUnboundedLaurentSchwarz` takes, so a
  *  test (or CD) builds the CPU engine and the GPU uniforms from ONE spec. */
 export interface SigmaPhi {
-  /** Leading coefficient (φ ~ c·z at ∞). */
-  c: number;
-  /** Laurent coefficients F[l] (φ gains Σₗ F[l]/zˡ). */
-  F: readonly Complex[];
-  /** Optional finite-pole branches (a single exterior pole, a cardioid, …). */
+  /** Family (S5-C2): "unbounded" (default) — φ: {|z|>1}→Ω; "bounded" — φ: {|z|<1}→Ω. */
+  family?: "unbounded" | "bounded";
+  /** Unbounded leading coefficient (φ ~ c·z at ∞). Real (QD) or complex `[re,im]` (S5-C1). Default [0,0]. */
+  c?: number | Complex;
+  /** Unbounded Laurent coefficients F[l] (φ gains Σₗ F[l]/zˡ). Default []. */
+  F?: readonly Complex[];
+  /** Bounded domain centre w₀ (φ(0) = w₀). Default [0,0]. */
+  w0?: Complex;
+  /** Finite-pole branches (shared by both families). */
   branches?: readonly SchwarzBranch[];
 }
 
 /** φ's uniforms packed into the fixed-size typed arrays the shader declares. */
 export interface PackedPhi {
-  c: number;
+  /** 0 unbounded-Laurent · 1 bounded (S5-C2); uploaded to u_family. */
+  family: number;
+  /** Leading coefficient as a complex `[re, im]` (real c packs to `[c, 0]`); uploaded to the vec2 u_c. */
+  c: Complex;
+  /** Bounded domain centre w₀; uploaded to the vec2 u_w0. */
+  w0: Complex;
   polyA: Float32Array;
   polyALen: number;
   branchZ: Float32Array;
@@ -52,11 +61,16 @@ void main() { gl_Position = vec4(aPos, 0.0, 1.0); }`;
 /**
  * Assemble a self-contained WebGL2 fragment shader that evaluates σ(w) — from the `uW` uniform and the
  * φ uniforms — writing (re, im, ok, 1) into an RGBA32F render target. `ok` is 1.0 when the numerical
- * inverse succeeded (w ∈ Ω with a recoverable exterior preimage), else 0.0 with (re,im) = 0.
+ * inverse succeeded (w ∈ Ω with a recoverable preimage — the exterior branch for the unbounded family,
+ * the interior branch for the bounded family), else 0.0 with (re,im) = 0.
  *
  * A single σ application per draw: seed Newton fresh from w, run `sigma` once. That is exactly what the
- * CPU `sigma(w)` does, so `runSigmaGLSL` vs `makeUnboundedLaurentSchwarz(...).sigma(w)` is a like-for-like
- * comparison.
+ * CPU `sigma(w)` does, so `runSigmaGLSL` vs the matching CPU engine's `.sigma(w)`
+ * (`makeUnboundedLaurentSchwarz` / `makeBoundedSchwarz`) is a like-for-like comparison.
+ *
+ * The `.w` channel carries the per-step σ scaling |F'(z)|/|φ'(z)| at z = φ⁻¹(w) (the σ distance-estimator
+ * factor, S5-B2). `sigma` leaves the converged inverse in `zSeed`, so it is read there with no re-solve;
+ * `runSigmaDerivGLSL` reads it back to pin GPU F'/φ' against the CPU engine (0.0 when the inverse failed).
  */
 export function buildSigmaProbeGLSL(): string {
   return `#version 300 es
@@ -72,7 +86,8 @@ void main() {
   vec2 zSeed = newtonSeedFresh(uW);
   bool ok = true;
   vec2 s = sigma(uW, zSeed, ok);
-  fragColor = vec4(s.x, s.y, ok ? 1.0 : 0.0, 1.0);
+  float dr = ok ? length(evalFDeriv(zSeed)) / max(length(evalPhiDeriv(zSeed)), EPS_DIV) : 0.0;
+  fragColor = vec4(s.x, s.y, ok ? 1.0 : 0.0, dr);
 }`;
 }
 
@@ -115,13 +130,19 @@ export function packPhi(phi: SigmaPhi): PackedPhi {
     }
   }
 
-  return { c: phi.c, polyA, polyALen: F.length, branchZ, branchA, branchACount, nBranches: branches.length };
+  const cc = phi.c ?? [0, 0];
+  const c: Complex = typeof cc === "number" ? [cc, 0] : [cc[0], cc[1]];
+  const family = phi.family === "bounded" ? 1 : 0;
+  const w0: Complex = phi.w0 ? [phi.w0[0], phi.w0[1]] : [0, 0];
+  return { family, c, w0, polyA, polyALen: F.length, branchZ, branchA, branchACount, nBranches: branches.length };
 }
 
 /** Upload a packed φ to the currently-bound program's uniforms. Call after `gl.useProgram(program)`. */
 export function uploadPhi(gl: WebGL2RenderingContext, program: WebGLProgram, packed: PackedPhi): void {
   const at = (name: string): WebGLUniformLocation | null => gl.getUniformLocation(program, name);
-  gl.uniform1f(at("u_c"), packed.c);
+  gl.uniform1i(at("u_family"), packed.family);
+  gl.uniform2f(at("u_c"), packed.c[0], packed.c[1]);
+  gl.uniform2f(at("u_w0"), packed.w0[0], packed.w0[1]);
   gl.uniform2fv(at("u_polyA"), packed.polyA);
   gl.uniform1i(at("u_polyALen"), packed.polyALen);
   gl.uniform2fv(at("u_branchZ"), packed.branchZ);
@@ -131,15 +152,16 @@ export function uploadPhi(gl: WebGL2RenderingContext, program: WebGLProgram, pac
 }
 
 /**
- * GPU-backend σ evaluation: compile the probe, upload φ once, and for each w render to a 1×1 RGBA32F
- * target and read σ(w) back. Returns the σ value, or null when the shader reported the inverse failed
- * (w ∉ Ω). Requires a WebGL2 context with EXT_color_buffer_float (for float readback).
+ * Compile the probe, upload φ once, render each w to a 1×1 RGBA32F target, and map the read-back pixel
+ * through `read`. The shared draw harness behind `runSigmaGLSL` (σ from RGB) and `runSigmaDerivGLSL`
+ * (the .w derivative factor). Requires a WebGL2 context with EXT_color_buffer_float (for float readback).
  */
-export function runSigmaGLSL(
+function runProbe<T>(
   gl: WebGL2RenderingContext,
   phi: SigmaPhi,
   ws: readonly Complex[],
-): (Complex | null)[] {
+  read: (px: Float32Array) => T,
+): T[] {
   if (!gl.getExtension("EXT_color_buffer_float")) {
     throw new Error("EXT_color_buffer_float unavailable — cannot read back float σ results");
   }
@@ -166,21 +188,46 @@ export function runSigmaGLSL(
     uploadPhi(gl, program, packPhi(phi));
     const uW = gl.getUniformLocation(program, "uW");
     const px = new Float32Array(4);
-    const out: (Complex | null)[] = [];
+    const out: T[] = [];
     for (const w of ws) {
       gl.uniform2f(uW, w[0], w[1]);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.FLOAT, px);
-      out.push(px[2] > 0.5 ? [px[0], px[1]] : null);
+      out.push(read(px));
     }
     return out;
   } finally {
-    // Release the probe's GL objects — runSigmaGLSL is called once per case, so leaking these would
-    // accumulate programs / textures / buffers across a test run (matches dualBackend's runGLSL).
+    // Release the probe's GL objects — called once per case, so leaking these would accumulate
+    // programs / textures / buffers across a test run (matches dualBackend's runGLSL).
     gl.deleteProgram(program);
     gl.deleteVertexArray(vao);
     gl.deleteBuffer(buf);
     gl.deleteTexture(tex);
     gl.deleteFramebuffer(fbo);
   }
+}
+
+/**
+ * GPU-backend σ evaluation: for each w render to a 1×1 RGBA32F target and read σ(w) back. Returns the σ
+ * value, or null when the shader reported the inverse failed (w ∉ Ω).
+ */
+export function runSigmaGLSL(
+  gl: WebGL2RenderingContext,
+  phi: SigmaPhi,
+  ws: readonly Complex[],
+): (Complex | null)[] {
+  return runProbe(gl, phi, ws, (px) => (px[2] > 0.5 ? [px[0], px[1]] : null));
+}
+
+/**
+ * GPU-backend read-back of the σ distance-estimator per-step factor |F'(z)|/|φ'(z)| at z = φ⁻¹(w) (S5-B2).
+ * Returns the ratio, or null when the shader reported the inverse failed (w ∉ Ω). Pins the GLSL evalFDeriv
+ * against the CPU engine's evalFDeriv/evalPhiDeriv.
+ */
+export function runSigmaDerivGLSL(
+  gl: WebGL2RenderingContext,
+  phi: SigmaPhi,
+  ws: readonly Complex[],
+): (number | null)[] {
+  return runProbe(gl, phi, ws, (px) => (px[2] > 0.5 ? px[3] : null));
 }

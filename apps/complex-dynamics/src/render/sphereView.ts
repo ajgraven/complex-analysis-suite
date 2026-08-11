@@ -137,6 +137,16 @@ function applyMat3(m: number[], v: Vec3): Vec3 {
   ];
 }
 
+/** Apply the TRANSPOSE of a column-major 3×3 rotation matrix — i.e. its inverse (rotations are orthogonal).
+ *  For `worldToModel` this is `modelToWorld`, sending a sphere-frame point back to world space. */
+function applyMat3Transpose(m: number[], v: Vec3): Vec3 {
+  return [
+    m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
+    m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
+    m[6] * v[0] + m[7] * v[1] + m[8] * v[2],
+  ];
+}
+
 // --- arcball (drag → rotation) ---------------------------------------------
 
 /**
@@ -249,4 +259,26 @@ export function screenToSpherePoint(uv: Vec2, cam: SphereCamera): Vec3 | null {
 export function screenToPlane(uv: Vec2, cam: SphereCamera): Complex | null {
   const p = screenToSpherePoint(uv, cam);
   return p ? stereographic(p) : null;
+}
+
+/**
+ * The inverse of {@link screenToPlane}: a plane point w ↦ the normalised screen uv ∈ [0,1]² (v top-down,
+ * matching the pointer / `sphereRay` convention) where it appears on the rendered ball, or `null` when the
+ * point lies on the FAR hemisphere and is occluded by the sphere. Used to draw w-space overlays (a traced
+ * σ-orbit, ∂Ω) onto the sphere: project w to its sphere point, rotate model→world (the transpose of
+ * `worldToModel`), reject the far cap, then perspective-project. A point on the near cap that lands outside
+ * the viewport still returns its uv (the caller clips) — only occlusion returns null.
+ */
+export function planeToScreenUv(w: Complex, cam: SphereCamera): Vec2 | null {
+  const pm = stereographicInverse(w); // sphere-frame (model) point, a unit vector
+  const pw = applyMat3Transpose(cam.worldToModel, pm); // model → world
+  // Visibility: only the cap facing the eye is drawn. dot(pw, eye) > 1 ⟺ the near side (eye = (0,0,dist),
+  // so this is pw.z·dist > 1); the tangent silhouette is exactly 1, the far cap < 1.
+  const denom = cam.eye[2] - pw[2]; // dist − Z, always > 0 for a unit point (Z ≤ 1 < dist)
+  if (pw[2] * cam.eye[2] <= 1) return null; // occluded by the ball
+  const nx = pw[0] / denom;
+  const ny = pw[1] / denom;
+  const u = (nx / (cam.aspect * cam.tanHalfFov) + 1) / 2;
+  const v = (1 - ny / cam.tanHalfFov) / 2; // v top-down (undo sphereRay's +y-up flip)
+  return [u, v];
 }

@@ -83,6 +83,25 @@ describe("@cas/interchange schema + constants", () => {
     const manyBranches = Array.from({ length: 5000 }, () => br);
     expect(isMapSpec({ ...deltoidSigma, branches: manyBranches })).toBe(false);
   });
+  it("isMapSpec validates the bounded schwarz φ form (S5-C2, 1.3.0)", () => {
+    // A schwarz map's φ may be `form:"bounded"` — a bounded QD (φ: 𝔻 → Ω): w₀ + finite-pole branches, no
+    // c / Laurent tail. CD rebuilds it via @cas/schwarz makeBoundedSchwarz (the interior branch).
+    const bounded = {
+      form: "schwarz",
+      phi: { form: "bounded", w0: { re: 0, im: 0 }, branches: [{ z: { re: 0.3, im: 0 }, A: [{ re: 0.5, im: 0 }] }] },
+      disk: "D",
+      inverse: "newton-dk",
+      antiholomorphic: true,
+    };
+    expect(isMapSpec(bounded)).toBe(true);
+    expect(isMapSpec({ ...bounded, phi: { form: "bounded", w0: { re: 0.1, im: -0.2 } } })).toBe(true); // branchless
+    // Malformed bounded φ is REJECTED, not silently coerced (the seatbelt owns the guarantee).
+    expect(isMapSpec({ ...bounded, phi: { form: "bounded" } })).toBe(false); // w₀ missing
+    expect(isMapSpec({ ...bounded, phi: { form: "bounded", w0: { re: 0 } } })).toBe(false); // w₀.im missing
+    expect(isMapSpec({ ...bounded, phi: { form: "bounded", w0: { re: 0, im: 0 }, branches: "nope" } })).toBe(false);
+    const manyBranches = Array.from({ length: 5000 }, () => ({ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }] }));
+    expect(isMapSpec({ ...bounded, phi: { form: "bounded", w0: { re: 0, im: 0 }, branches: manyBranches } })).toBe(false); // over-cap
+  });
 });
 
 describe("validateEnvelope", () => {

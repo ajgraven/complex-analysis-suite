@@ -9,17 +9,23 @@
 //
 // It renders to a PRIVATE offscreen WebGL2 canvas; the caller `drawImage`s that onto the existing 2D
 // #JCSSchwarz canvas. That keeps the DOM/dismiss/label path and the CPU fallback untouched — the GPU is
-// only a faster pixel source. Ω is the EXTERIOR of K (the unbounded-Laurent family), so "in Ω" ⟺ outside
-// the boundary polygon φ(unit circle), tested via a mask texture (matching the CPU's point-in-polygon,
-// and avoiding the ∂Ω speckle a per-pixel ray-cast or a bare Newton-success test would give).
+// only a faster pixel source. "In Ω" is tested via a mask texture of the boundary polygon φ(∂𝔻) (matching
+// the CPU's point-in-polygon, and avoiding the ∂Ω speckle a per-pixel ray-cast or a bare Newton-success
+// test would give): Ω is the EXTERIOR of that polygon for the unbounded-Laurent family, and the INTERIOR
+// for a bounded QD (S5-C2, u_boundedOmega) — the σ evaluator itself is family-aware via the shared
+// @cas/schwarz/gpu uniforms (u_family / u_w0).
 import { createProgram } from "@cas/gpu/shader";
 import { buildPolygonMaskTexture } from "@cas/gpu/mask";
-import { makeColormapTexture } from "@cas/gpu/colormap";
+import { makeColormapTexture, type RGB } from "@cas/gpu/colormap";
 import {
   schwarzColormap,
   schwarzScaleId,
+  schwarzColorModeId,
+  schwarzTrapShapeId,
   DEFAULT_SCHWARZ_COLORMAP,
   DEFAULT_SCHWARZ_SCALE,
+  DEFAULT_SCHWARZ_COLOR_MODE,
+  DEFAULT_SCHWARZ_TRAP_SHAPE,
 } from "./schwarzColormaps";
 import {
   SIGMA_CONSTS_GLSL,
@@ -34,6 +40,7 @@ import {
 } from "@cas/schwarz/gpu";
 import type { Complex } from "@cas/schwarz";
 import type { SchwarzView, SchwarzRenderOptions } from "./schwarzView";
+import { makeSphereCamera, DEFAULT_ROTATION, DEFAULT_DISTANCE, DEFAULT_FOV, type Quat } from "./sphereView";
 
 // The escape-time + coloring shell around the shared σ evaluator. The CLASSIFICATION mirrors
 // schwarzView.ts's escapeTime — fundamental (orbit left Ω into K), escaped (|σⁿ|>escapeR), interior
@@ -51,22 +58,38 @@ uniform float     u_zoom;            // half-width on each axis = 1/zoom
 uniform float     u_size;            // square render size in px
 uniform int       u_maxIter;
 uniform float     u_escapeR;
-uniform sampler2D u_mask;            // 1 inside K (the boundary polygon), 0 outside
+uniform sampler2D u_mask;            // 1 inside the boundary polygon φ(∂𝔻), 0 outside
 uniform vec2      u_maskCenter;
 uniform float     u_maskHalfExtent;
+uniform int       u_boundedOmega;    // S5-C2: 1 ⇒ Ω is INSIDE ∂Ω (bounded QD) · 0 ⇒ Ω is the exterior
+uniform int       u_viewMode;        // coordinate view: 0 w-plane (fragment IS w) · 1 z-disk (w = φ(z)) · 2 sphere (F2d)
 uniform sampler2D u_colormap;        // 256×1 escape-time ramp (a @cas/gpu colormap texture)
 uniform int       u_scaleMode;       // 0 linear · 1 log · 2 sqrt · 3 discrete · 4 cyclic
 uniform int       u_modK;            // period for the cyclic mode
+uniform float     u_paletteRotation; // colormap-coordinate offset ∈[0,1) (0 = none); S5-A3 image-space tone
+uniform float     u_gamma;           // output gamma (1 = identity)
+uniform float     u_vignette;        // radial edge darkening (0 = off)
+uniform int       u_colorMode;       // 0 escape · 1 trap · 2 stripe · 3 smooth · 4 distance · 5 domain-coloring (F4g)
+uniform int       u_trapType;        // orbit-trap shape: 0 cross · 1 point · 2 line · 3 circle · 4 lattice
+uniform float     u_escapeDegree;    // σ escape degree d (σ ~ const·conj(w)^d at ∞); smooth/distance (S5-B2)
+uniform int       u_light;           // relief lighting on/off (C2); 0 ⇒ the field is byte-identical to unlit
+uniform vec3      u_lightDir;        // normalised light direction (azimuth/elevation → unit vector)
+uniform float     u_lightHeight;     // relief depth — scales the escape-count gradient
+uniform mat3      u_sphereRot;       // F2d sphere camera: worldToModel (a world-space hit → the sphere's own frame)
+uniform float     u_sphereDist;      // F2d sphere camera: eye at (0,0,u_sphereDist), looking down −Z
+uniform float     u_sphereTanFov;    // F2d sphere camera: tan(fov/2) — the magnification (a telescope zoom)
 ${SIGMA_UNIFORMS_GLSL}
 ${SIGMA_COMPLEX_GLSL}
 ${SIGMA_EVAL_GLSL}
 out vec4 outColor;
 
-// In Ω ⟺ OUTSIDE the boundary polygon K (Ω is the unbounded exterior). Out-of-frame uv ⇒ outside K ⇒ in Ω.
+// In Ω ⟺ OUTSIDE the boundary polygon φ(∂𝔻) for the unbounded-Laurent family (Ω is the exterior), or
+// INSIDE it for a bounded QD (S5-C2, u_boundedOmega==1). The mask.r is 1 inside the polygon; out-of-frame
+// uv is outside the polygon (⇒ in Ω when unbounded, ⇒ outside Ω when bounded).
 bool inOmega(vec2 w) {
   vec2 uv = (w - u_maskCenter) / (2.0 * u_maskHalfExtent) + 0.5;
-  if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return true;
-  return texture(u_mask, uv).r < 0.5;
+  bool insidePoly = uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && texture(u_mask, uv).r >= 0.5;
+  return (u_boundedOmega == 1) ? insidePoly : !insidePoly;
 }
 
 // Escape count n → colormap coordinate t∈[0,1] under the selected scale mode (ids match
@@ -85,32 +108,244 @@ float computeT(int n) {
   if (u_scaleMode == 3) t = (floor(t * fmax) + 0.5) / fmax;                                   // discrete
   return clamp(t, 0.0, 1.0);
 }
+// Colormap-ramp lookup at coordinate t∈[0,1], with the S5-A3 palette rotation (cyclic fract, applied ONLY
+// when non-zero so the default is byte-identical to the pre-A3 lookup — the CLAMP_TO_EDGE ramp keeps t=1 on
+// the bright end). Shared by the escape-time ramp and the S5-B1 orbit-stat ramps.
+vec3 rampColor(float t) {
+  if (u_paletteRotation != 0.0) t = fract(t + u_paletteRotation);
+  return texture(u_colormap, vec2(t, 0.5)).rgb;
+}
 // The fundamental (tiling) set is colored by the selected colormap; escaped / interior / invalid stay flat.
 vec3 fundamentalColor(int n) {
-  return texture(u_colormap, vec2(computeT(n), 0.5)).rgb;
+  return rampColor(computeT(n));
 }
 
-void main() {
-  // Fragment → complex w, matching schwarzView.ts pixelToPlot. gl_FragCoord is pixel-centered and y-up;
-  // the caller drawImages this canvas 1:1, so y-up here lands as +Im at the top, as the CPU path intends.
+// Distance from a σ-orbit iterate to the selected orbit-trap shape (S5-B1, colorMode 1). Mirrors CD's
+// standard trapDistance (shaderBuilder.ts); w is a plain complex point (vec2), so length/abs act directly.
+float trapDistance(vec2 z) {
+  float r = length(z);
+  if (u_trapType == 1) return r;                                              // point at the origin
+  if (u_trapType == 2) return abs(z.y);                                       // horizontal line (real axis)
+  if (u_trapType == 3) return abs(r - 1.0);                                   // unit circle
+  if (u_trapType == 4)                                                        // nearest Gaussian-integer point
+    return length(z - vec2(floor(z.x + 0.5), floor(z.y + 0.5)));
+  return min(abs(z.x), abs(z.y));                                            // cross (both axes) — default
+}
+
+// Colour a fundamental (tiling) pixel after its σ-orbit entered K at step n. In escape-time mode (default)
+// this is fundamentalColor(n), BYTE-IDENTICAL to pre-B1; the trap / stripe modes remap the SAME colormap
+// ramp by an orbit statistic accumulated over σ¹(w)…σⁿ(w) instead of by the step count.
+vec3 fundamentalStatColor(int n, float trap, float avgSum, float avgCount) {
+  if (u_colorMode == 1) return rampColor(1.0 - clamp(sqrt(trap) * 1.3, 0.0, 1.0)); // orbit trap: bright = near
+  if (u_colorMode == 2) return rampColor(avgCount > 0.0 ? avgSum / avgCount : 0.0); // stripe average
+  return fundamentalColor(n);
+}
+
+// Colour a pixel whose σ-orbit ESCAPED to ∞ at step n (|wₙ| > escapeR). Flat black in escape/trap/stripe
+// modes (unchanged). In the S5-B2 derivative modes the escaping set — where σ ~ const·conj(w)^d, a genuine
+// degree-d escape — is coloured: "smooth" by the continuous escape count ν, "distance" by ν darkened
+// toward the σ-Julia set via the analytic estimate DE = ½·|wₙ|·log|wₙ| / |D(σⁿ)|. Both are estimates (≈):
+// the tiling (K-entry) is a discrete event with no smooth interpolation, and D(σⁿ) rides a numerically
+// inverted φ'. derivMag = ∏|F'(z_k)|/|φ'(z_k)| = |D(σⁿ)| (σ is anti-conformal, so magnitudes multiply).
+vec3 escapedColor(int n, vec2 w, float derivMag) {
+  if (u_colorMode != 3 && u_colorMode != 4) return vec3(0.0); // escaped → ∞ (flat, pre-B2)
+  float az = length(w);
+  float d = max(u_escapeDegree, 2.0); // log-degree normalisation; guard degenerate d < 2
+  float nu = float(n) + 1.0 - log(log(az)) / log(d); // continuous (smooth) escape count
+  vec3 col = rampColor(clamp(nu / float(u_maxIter), 0.0, 1.0));
+  if (u_colorMode == 4) {
+    float dist = 0.5 * az * log(az) / max(derivMag, 1e-30); // distance to the σ-Julia set (plot units)
+    float px = 2.0 / (u_zoom * u_size);                     // plot units per pixel (matches the view map)
+    // Darken toward the boundary. The falloff spans a few pixels (DE_LINE_PX) so the σ-Julia set reads as
+    // a soft outline rather than a sub-pixel hairline — a presentation width, the estimate itself is dist.
+    const float DE_LINE_PX = 3.0;
+    col *= clamp(dist / (px * DE_LINE_PX), 0.0, 1.0);        // ~0 at the boundary → full brightness away
+  }
+  return col;
+}
+
+// F4g domain coloring (colorMode 5): a per-pixel phase portrait of σ(w). hue = arg σ (the isochromatic phase),
+// lightness gently banded by log2|σ| so each octave of |σ| reads as a soft shell. Standard compact HSL→RGB
+// (hue in turns). σ is a numerical reconstruction, so the mode is ≈.
+const float TAU = 6.28318530718;
+vec3 hsl2rgb(float h, float s, float l) {
+  vec3 hue = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+  return l + c * (hue - 0.5);
+}
+vec3 domainColor(vec2 s) {
+  float h = atan(s.y, s.x) / TAU + 0.5;      // arg σ ∈ (−π,π] → hue [0,1)
+  float lg = log2(length(s) + 1e-20);
+  float l = 0.5 + 0.16 * sin(TAU * lg);      // gentle |σ| shells, one soft band per octave
+  return clamp(hsl2rgb(h, 0.9, l), 0.0, 1.0);
+}
+
+// F2d sphere view: ray-cast the Riemann sphere and stereographically project the hit to the world point w.
+// A verbatim mirror of the main plots' sphereRayZ (render/shaderBuilder.ts): a FIXED camera at (0,0,dist)
+// looking down −Z, with the arcball orientation applied to the HIT (u_sphereRot = worldToModel) rather than
+// the ray — so the intersection stays the canonical unit sphere. North-pole stereographic w = (x+iy)/(1−Z),
+// |w| clamped near the pole for f32 safety. The σ canvas is square, so the viewport aspect is 1. worldN is
+// the outward normal (the unit hit point) for the ball shading in main(). Returns false on a silhouette miss.
+bool sphereRayW(vec2 uv, out vec2 w, out vec3 worldN) {
+  float nx = (uv.x * 2.0 - 1.0) * u_sphereTanFov;
+  float ny = (uv.y * 2.0 - 1.0) * u_sphereTanFov; // gl_FragCoord is y-up ⇒ +Im at the top, as elsewhere
+  vec3 dir = normalize(vec3(nx, ny, -1.0));
+  vec3 eye = vec3(0.0, 0.0, u_sphereDist);
+  float b = 2.0 * dot(eye, dir);                  // a = dir·dir = 1
+  float c = dot(eye, eye) - 1.0;
+  float disc = b * b - 4.0 * c;
+  if (disc < 0.0) return false;
+  float t = (-b - sqrt(disc)) * 0.5;              // the near (front-facing) root
+  if (t < 0.0) return false;
+  vec3 pw = eye + t * dir;                         // world hit (on the unit sphere ⇒ also the outward normal)
+  worldN = pw;
+  vec3 pm = u_sphereRot * pw;                      // world → sphere frame
+  float d = max(1.0 - pm.z, 1e-15);
+  w = vec2(pm.x, pm.y) / d;                        // stereographic from the north pole
+  float az = length(w);
+  if (az > 1e8) w *= 1e8 / az;                     // clamp |w| near the pole for f32 safety
+  return true;
+}
+
+// Fragment → the world point w the escape-time iterates. Matches schwarzView.ts pixelToPlot (gl_FragCoord is
+// pixel-centered and y-up; the caller drawImages this canvas 1:1, so y-up lands as +Im at the top). In
+// w-plane mode (u_viewMode 0) the fragment IS w. In z-disk mode (F2b, u_viewMode 1) the fragment is the
+// uniformizing coordinate z and w = φ(z) FORWARD (no Newton inverse) — φ uniformizes 𝔻* (|z|>1) for the
+// unbounded family and 𝔻 (|z|<1) for a bounded QD, so a fragment on the wrong side of the unit circle is
+// off-domain (offDisk ⇒ the caller paints the background). In sphere mode (F2d, u_viewMode 2) the fragment
+// is a screen ray into the Riemann sphere; a silhouette miss is off-domain (the void around the ball).
+vec2 fragToW(out bool offDisk) {
+  offDisk = false;
+  if (u_viewMode == 2) {
+    vec2 w; vec3 nrm;
+    if (!sphereRayW(gl_FragCoord.xy / u_size, w, nrm)) { offDisk = true; return vec2(0.0); }
+    return w;
+  }
   float re = u_center.x + (2.0 * gl_FragCoord.x / u_size - 1.0) / u_zoom;
   float im = u_center.y + (2.0 * gl_FragCoord.y / u_size - 1.0) / u_zoom;
-  vec2 w = vec2(re, im);
+  vec2 z = vec2(re, im);
+  if (u_viewMode == 1) {
+    float r = length(z);
+    offDisk = (u_boundedOmega == 1) ? (r >= 1.0) : (r <= 1.0);
+    return evalPhi(z);
+  }
+  return z;
+}
 
-  if (!inOmega(w)) { outColor = vec4(fundamentalColor(0), 1.0); return; }  // w₀ ∈ K ⇒ fundamental n=0
+// The classification color at this fragment (fundamental via the colormap; escaped/invalid/interior flat).
+vec3 fieldColor() {
+  bool offDisk;
+  vec2 w = fragToW(offDisk);
+  if (offDisk) return vec3(30.0, 32.0, 38.0) / 255.0;           // z-disk background (mirrors SCHWARZ_OFF_DISK_RGB)
+
+  if (u_colorMode == 5) {                                       // F4g domain coloring — a phase portrait of σ(w)
+    if (!inOmega(w)) return vec3(18.0, 20.0, 46.0) / 255.0;      // K — σ undefined here (deep-indigo neutral)
+    vec2 zSeedD = newtonSeedFresh(w);
+    bool okD = true;
+    vec2 sD = sigma(w, zSeedD, okD);
+    if (!okD) return vec3(80.0) / 255.0;                        // invalid (the inverse failed) — same grey as below
+    return domainColor(sD);
+  }
+
+  if (!inOmega(w)) return fundamentalColor(0);                   // w₀ ∈ K ⇒ fundamental n=0 (no σ-orbit)
   vec2 zSeed = newtonSeedFresh(w);
   bool ok = true;
+  // S5-B1 orbit statistics over σ¹(w)…σⁿ(w); left untouched (and unread) in escape-time mode, so mode 0 is
+  // byte-identical to pre-B1. S5-B2 derivMag = ∏|F'(z_k)|/|φ'(z_k)| = |D(σⁿ)|, accumulated only for the
+  // distance mode (zSeed holds z_k = φ⁻¹(w_{k}) after each sigma()).
+  float trap = 1e20;
+  float avgSum = 0.0, avgCount = 0.0;
+  float derivMag = 1.0;
   for (int n = 1; n <= 512; ++n) {           // 512 ≫ any maxIter; the real bound is u_maxIter below
     if (n > u_maxIter) break;
     vec2 next = sigma(w, zSeed, ok);
-    if (!ok) { outColor = vec4(vec3(80.0) / 255.0, 1.0); return; }         // invalid (inverse failed)
-    w = next;
-    if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) {
-      outColor = vec4(0.0, 0.0, 0.0, 1.0); return;                         // escaped → ∞
+    if (!ok) return vec3(80.0) / 255.0;                          // invalid (inverse failed)
+    if (u_colorMode == 4) {
+      derivMag *= length(evalFDeriv(zSeed)) / max(length(evalPhiDeriv(zSeed)), 1e-30); // |σ'(w_{n-1})|
     }
-    if (!inOmega(w)) { outColor = vec4(fundamentalColor(n), 1.0); return; } // entered K ⇒ fundamental n
+    w = next;
+    if (any(isnan(w)) || any(isinf(w)) || length(w) > u_escapeR) return escapedColor(n, w, derivMag); // escaped → ∞
+    if (u_colorMode == 1) {
+      trap = min(trap, trapDistance(w));                         // closest approach to the trap set
+    } else if (u_colorMode == 2) {
+      avgSum += 0.5 + 0.5 * sin(5.0 * atan(w.y, w.x));           // stripe: banded by arg(σⁿ(w))
+      avgCount += 1.0;
+    }
+    if (!inOmega(w)) return fundamentalStatColor(n, trap, avgSum, avgCount);  // entered K ⇒ fundamental n
   }
-  outColor = vec4(vec3(18.0, 20.0, 46.0) / 255.0, 1.0);                    // interior (non-escaping)
+  return vec3(18.0, 20.0, 46.0) / 255.0;                         // interior (non-escaping)
+}
+
+// Relief lighting (C2) — CD's shading model (shaderBuilder.ts shadeWithGradient), verbatim: Lambert +
+// Blinn-Phong specular + hemisphere ambient, from a 2D surface slope g (the height-field gradient × depth).
+vec3 shadeWithGradient(vec3 col, vec2 g) {
+  vec3 N = normalize(vec3(-g, 1.0));
+  vec3 L = u_lightDir;
+  float diff = max(dot(N, L), 0.0);
+  vec3 H = normalize(L + vec3(0.0, 0.0, 1.0));
+  float spec = pow(max(dot(N, H), 0.0), 24.0) * 0.4;
+  float hemi = 0.5 + 0.5 * N.z; // sky↔ground hemisphere ambient
+  const float ambient = 0.35;
+  return col * (ambient + (1.0 - ambient) * diff) * (0.7 + 0.3 * hemi) + spec;
+}
+
+// Continuous "height" for the relief surface (C2): the σ escape/entry count, smoothed on the ESCAPING set
+// (like escapedColor's ν) so its screen-space gradient tracks the colour bands. The tiling (K-entry) is a
+// DISCRETE event with no smooth interpolation, so its height is the step count n (the relief embosses the
+// tiling contours); interior / K-interior / invalid pixels return -1.0 (flat, no relief). Re-walks the
+// orbit, so it is computed ONLY when u_light == 1.
+float fieldHeight() {
+  bool offDisk;
+  vec2 w = fragToW(offDisk);
+  if (offDisk) return -1.0;                                       // z-disk background — flat (no relief)
+  if (!inOmega(w)) return -1.0;                                   // w₀ ∈ K (n=0) — flat
+  vec2 zSeed = newtonSeedFresh(w);
+  bool ok = true;
+  for (int n = 1; n <= 512; ++n) {
+    if (n > u_maxIter) break;
+    vec2 next = sigma(w, zSeed, ok);
+    if (!ok) return -1.0;                                         // invalid — flat
+    w = next;
+    float az = length(w);
+    if (any(isnan(w)) || any(isinf(w)) || az > u_escapeR)         // escaped → smooth continuous count
+      return float(n) + 1.0 - log(log(max(az, 2.718281828))) / log(max(u_escapeDegree, 2.0));
+    if (!inOmega(w)) return float(n);                             // entered K at step n — the tiling height
+  }
+  return -1.0;                                                    // interior (non-escaping) — flat
+}
+
+// Relief lighting on the σ field (C2): shade the classification colour by the screen-space gradient of the
+// height field. Interior/flat pixels (h < 0) stay unlit. Mirrors CD's applyLighting.
+vec3 applyLighting(vec3 col, float h) {
+  if (h < 0.0) return col;
+  return shadeWithGradient(col, vec2(dFdx(h), dFdy(h)) * u_lightHeight);
+}
+
+void main() {
+  vec3 col = fieldColor();
+  // Relief lighting (C2) — a lit 3-D surface from the escape-count height field. Default OFF (u_light == 0),
+  // so an unlit render is byte-identical to pre-C2. Applied before the image-space tone below.
+  if (u_light == 1) col = applyLighting(col, fieldHeight());
+  // F2d: geometric ball shading — emboss the σ field onto a LIT sphere (Lambert + a little Blinn-Phong spec,
+  // from the world normal), so the projection reads as a 3-D ball rather than a flat stereographic window. Only
+  // on a hit; a silhouette miss keeps the flat background from fieldColor. Mirrors the main plots' sphere light.
+  if (u_viewMode == 2) {
+    vec2 sw; vec3 sn;
+    if (sphereRayW(gl_FragCoord.xy / u_size, sw, sn)) {
+      float diff = max(dot(sn, u_lightDir), 0.0);
+      vec3 H = normalize(u_lightDir + vec3(0.0, 0.0, 1.0));
+      float spec = pow(max(dot(sn, H), 0.0), 32.0) * 0.25;
+      col = col * (0.45 + 0.55 * diff) + spec;
+    }
+  }
+  // Image-space tone (S5-A3), each applied only when non-default so defaults stay byte-exact.
+  if (u_gamma != 1.0) col = pow(clamp(col, 0.0, 1.0), vec3(1.0 / u_gamma));     // gamma
+  if (u_vignette > 0.0) {                                                       // radial edge darkening
+    vec2 d = gl_FragCoord.xy / u_size - 0.5;
+    float r2 = dot(d, d) * 2.0;                                                 // 0 at centre, 1 at corners
+    col *= 1.0 - u_vignette * r2;
+  }
+  outColor = vec4(col, 1.0);
 }`;
 
 /** Render options for the GPU σ path — the CPU escape options plus GPU-only coloring controls. */
@@ -119,15 +354,43 @@ export interface SchwarzGLRenderOptions extends SchwarzRenderOptions {
   scaleMode?: string;
   /** Period for the cyclic scale mode; default 8. */
   modK?: number;
+  /** Image-space tone (S5-A3), all identity at their defaults. Colormap-coordinate rotation ∈[0,1); 0 = none. */
+  rotation?: number;
+  /** Output gamma; 1 = identity. */
+  gamma?: number;
+  /** Radial edge darkening ∈[0,1]; 0 = off. */
+  vignette?: number;
+  /** σ-field color mode key (render/schwarzColormaps.ts SCHWARZ_COLOR_MODES); default "escape" (S5-B1). */
+  colorMode?: string;
+  /** Orbit-trap shape key (SCHWARZ_TRAP_SHAPES), used when colorMode === "trap"; default "cross". */
+  trapShape?: string;
+  /** Relief lighting (C2): shade a lit 3-D surface from the escape-count height field; default off. */
+  light?: boolean;
+  /** Light azimuth in degrees (default 135). */
+  lightAz?: number;
+  /** Light elevation in degrees (default 45). */
+  lightEl?: number;
+  /** Relief depth — scales the height-field gradient (default 2.0). */
+  lightHeight?: number;
+  /** Sphere-view camera orientation (F2d), used when viewMode === "sphere"; default DEFAULT_ROTATION. */
+  sphereRot?: Quat;
+  /** Sphere-view magnification (F2d): narrows the FOV like the main plots' telescope zoom; default 1. */
+  sphereZoom?: number;
 }
 
 export interface SchwarzGLRenderer {
   /** The offscreen GL canvas holding the last render — drawImage it onto the visible 2D canvas. */
   readonly canvas: HTMLCanvasElement;
+  /** The largest safe square render dimension for this GPU — min(MAX_TEXTURE_SIZE, MAX_RENDERBUFFER_SIZE).
+   *  The hi-DPI / supersampled σ render (main.ts, B2) caps its size to this so a big display never asks for
+   *  a drawing buffer the GPU can't allocate. */
+  readonly maxSize: number;
   /** Upload φ and (re)build the Ω boundary mask. Call when the map changes, not on every view change. */
   setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void;
   /** Rebuild the escape-time colormap ramp from a named palette (render/schwarzColormaps.ts). Persists. */
   setColormap(name: string): void;
+  /** Rebuild the colormap texture from an explicit even-spaced RGB ramp — the custom-gradient path (C1). */
+  setColormapRamp(colors: readonly RGB[]): void;
   /** Render the σ field at `size`×`size` for `view`. Returns false if setPhi hasn't run. */
   render(view: SchwarzView, size: number, opts?: SchwarzGLRenderOptions): boolean;
   destroy(): void;
@@ -148,6 +411,13 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   }
   if (!gl) return null;
   const ctx = gl;
+  // The largest square the GPU can render into (a texture-backed mask + the drawing buffer). Hi-DPI /
+  // supersampled renders cap to this so a large display never over-allocates. 2048 is the WebGL2 floor.
+  const maxSize =
+    Math.min(
+      (ctx.getParameter(ctx.MAX_TEXTURE_SIZE) as number) || 2048,
+      (ctx.getParameter(ctx.MAX_RENDERBUFFER_SIZE) as number) || 2048,
+    ) || 2048;
 
   let program: WebGLProgram;
   try {
@@ -171,26 +441,57 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
   const uMask = U("u_mask");
   const uMaskCenter = U("u_maskCenter");
   const uMaskHalfExtent = U("u_maskHalfExtent");
+  const uBoundedOmega = U("u_boundedOmega");
+  const uViewMode = U("u_viewMode");
   const uColormap = U("u_colormap");
   const uScaleMode = U("u_scaleMode");
   const uModK = U("u_modK");
+  const uPaletteRotation = U("u_paletteRotation");
+  const uGamma = U("u_gamma");
+  const uVignette = U("u_vignette");
+  const uColorMode = U("u_colorMode");
+  const uTrapType = U("u_trapType");
+  const uEscapeDegree = U("u_escapeDegree");
+  const uLight = U("u_light");
+  const uLightDir = U("u_lightDir");
+  const uLightHeight = U("u_lightHeight");
+  const uSphereRot = U("u_sphereRot");
+  const uSphereDist = U("u_sphereDist");
+  const uSphereTanFov = U("u_sphereTanFov");
 
   let packed: PackedPhi | null = null;
+  let escapeDegree = 2; // σ ~ const·conj(w)^d at ∞; d = highest nonzero Laurent index (set in setPhi)
   let maskTex: WebGLTexture | null = null;
   let maskCenter: [number, number] = [0, 0];
   let maskHalfExtent = 1;
+  let boundedOmega = false; // S5-C2: Ω is the INTERIOR of ∂Ω for a bounded QD; set per-map in setPhi
   let colormapTex: WebGLTexture | null = makeColormapTexture(ctx, schwarzColormap(DEFAULT_SCHWARZ_COLORMAP));
 
-  function setColormap(name: string): void {
+  function setColormapRamp(colors: readonly RGB[]): void {
     if (colormapTex) ctx.deleteTexture(colormapTex);
-    colormapTex = makeColormapTexture(ctx, schwarzColormap(name));
+    colormapTex = makeColormapTexture(ctx, colors);
+  }
+  function setColormap(name: string): void {
+    setColormapRamp(schwarzColormap(name));
   }
 
   function setPhi(phi: SigmaPhi, boundaryPoly: readonly Complex[]): void {
     packed = packPhi(phi);
+    boundedOmega = phi.family === "bounded"; // S5-C2: interior-Ω orientation for the inOmega test + mask pad
+    // σ escape degree (S5-B2): near ∞, F(z) ~ conj(F[d])·z^d and z ~ w/c, so σ(w) ~ const·conj(w)^d with
+    // d = the highest nonzero Laurent index. Drives the smooth/distance log-degree normalisation. A bounded
+    // φ carries no Laurent tail (F is undefined/empty) — it has no ∞ regime, so the default d = 2 is kept.
+    escapeDegree = 2;
+    const F = phi.F ?? [];
+    for (let l = 0; l < F.length; l++) {
+      if (Math.hypot(F[l][0], F[l][1]) > 1e-9) escapeDegree = l;
+    }
+    if (escapeDegree < 2) escapeDegree = 2; // smooth's log(d) needs d ≥ 2; degree-1 escape isn't superattracting
     if (maskTex) ctx.deleteTexture(maskTex);
-    // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5).
-    const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: 5, size: 1024 });
+    // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5). A
+    // bounded Ω is compact, so a tighter pad keeps the mask's resolution on ∂Ω (QD uses 2.4 for a bounded
+    // interior — @cas/gpu maskTexture).
+    const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: boundedOmega ? 2.4 : 5, size: 1024 });
     maskTex = m.texture;
     maskCenter = m.center;
     maskHalfExtent = m.halfExtent;
@@ -218,12 +519,38 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
 
     ctx.uniform1i(uScaleMode, schwarzScaleId(opts.scaleMode ?? DEFAULT_SCHWARZ_SCALE));
     ctx.uniform1i(uModK, Math.max(2, opts.modK ?? 8));
+    ctx.uniform1f(uPaletteRotation, opts.rotation ?? 0); // S5-A3 image-space tone; defaults are identity
+    ctx.uniform1f(uGamma, opts.gamma ?? 1);
+    ctx.uniform1f(uVignette, opts.vignette ?? 0);
+    ctx.uniform1i(uColorMode, schwarzColorModeId(opts.colorMode ?? DEFAULT_SCHWARZ_COLOR_MODE)); // S5-B1
+    ctx.uniform1i(uTrapType, schwarzTrapShapeId(opts.trapShape ?? DEFAULT_SCHWARZ_TRAP_SHAPE));
+    ctx.uniform1f(uEscapeDegree, escapeDegree); // S5-B2 smooth/distance degree-d normalisation
+
+    // Relief lighting (C2): default OFF ⇒ u_light = 0 ⇒ the shader's field is byte-identical to unlit.
+    // lightDir is the azimuth/elevation spherical unit vector; lightHeight scales the escape-count gradient.
+    ctx.uniform1i(uLight, opts.light ? 1 : 0);
+    const lightAz = ((opts.lightAz ?? 135) * Math.PI) / 180;
+    const lightEl = ((opts.lightEl ?? 45) * Math.PI) / 180;
+    ctx.uniform3f(uLightDir, Math.cos(lightEl) * Math.cos(lightAz), Math.cos(lightEl) * Math.sin(lightAz), Math.sin(lightEl));
+    ctx.uniform1f(uLightHeight, opts.lightHeight ?? 2.0);
 
     ctx.activeTexture(ctx.TEXTURE0);
     ctx.bindTexture(ctx.TEXTURE_2D, maskTex);
     ctx.uniform1i(uMask, 0);
     ctx.uniform2f(uMaskCenter, maskCenter[0], maskCenter[1]);
     ctx.uniform1f(uMaskHalfExtent, maskHalfExtent);
+    ctx.uniform1i(uBoundedOmega, boundedOmega ? 1 : 0); // S5-C2 interior-Ω orientation for inOmega()
+    // Coordinate view: 0 w-plane · 1 z-disk (F2b) · 2 sphere (F2d). The sphere camera uniforms are pushed only
+    // in sphere mode; the FOV↔magnification map (a telescope zoom, distance fixed) mirrors glPlot.sphereCamera.
+    const sphere = opts.viewMode === "sphere";
+    ctx.uniform1i(uViewMode, sphere ? 2 : opts.viewMode === "z" ? 1 : 0);
+    if (sphere) {
+      const fov = 2 * Math.atan(Math.tan(DEFAULT_FOV / 2) / (opts.sphereZoom ?? 1));
+      const cam = makeSphereCamera(opts.sphereRot ?? DEFAULT_ROTATION, DEFAULT_DISTANCE, fov, 1);
+      ctx.uniformMatrix3fv(uSphereRot, false, cam.worldToModel); // column-major ⇒ transpose = false
+      ctx.uniform1f(uSphereDist, cam.eye[2]);
+      ctx.uniform1f(uSphereTanFov, cam.tanHalfFov);
+    }
 
     ctx.activeTexture(ctx.TEXTURE1);
     ctx.bindTexture(ctx.TEXTURE_2D, colormapTex);
@@ -240,5 +567,5 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.deleteProgram(program);
   }
 
-  return { canvas, setPhi, setColormap, render, destroy };
+  return { canvas, maxSize, setPhi, setColormap, setColormapRamp, render, destroy };
 }

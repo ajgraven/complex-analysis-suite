@@ -88,14 +88,27 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Three apps ride the five shared `@cas/*` packages
-(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`) — `@cas/exact` was
-extracted later than the phase plan, on the ADR-0007 second-consumer rule, and is used by
-Complex-Dynamics and Correspondences. (The launcher consumes no packages.)
+and the parabolic-Tricorn model coordinate. Five apps ride the seven shared `@cas/*` packages
+(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`) —
+`@cas/exact`, `@cas/schwarz`, and `@cas/dynamics` were all extracted later than the phase plan, on the
+ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by Complex-Dynamics and
+Correspondences, and `@cas/dynamics` (Böttcher exterior maps + external rays) by Complex-Dynamics and the
+Riemann-map studio. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed on
+`master` alongside the σ arc and are folded in by this merge. (The launcher consumes no packages.)
+
+**QD → CD σ hand-off (QD-HANDOFF-2 + S5, on `claude/repository-refactor-project-pg5ktu`, awaiting review):**
+Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe
+(closed-form φ + branch of the inverse); Complex Dynamics reconstructs σ via `@cas/schwarz` and renders
+its escape-time field on the GPU as a first-class **peer view** (ADR-0009), `≈`-labeled. Covers the
+unbounded-Laurent family (pole-free deltoid + finite-pole QDs, complex leading `c`) and the **bounded**
+family (φ: 𝔻 → Ω, interior branch, interchange 1.3.0) — both importable AND authorable natively in CD's
+σ φ-form. Full per-increment detail in [`docs/refactor/LOG.md`](docs/refactor/LOG.md) and
+[`docs/design/SIGMA-HANDOFF.md`](docs/design/SIGMA-HANDOFF.md).
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
-Chebyshev → general d:d), analytic branch continuation through cusps (uncertified — RISKS §3), and QD
-Schwarz df64 deep-zoom. See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
+Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),
+analytic branch continuation through cusps (uncertified — RISKS §3), and QD Schwarz df64 deep-zoom.
+See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

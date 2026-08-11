@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz } from "@cas/schwarz";
 import {
   pixelToPlot,
   renderSchwarzField,
+  SCHWARZ_OFF_DISK_RGB,
   schwarzBoundaryPoly,
   schwarzEscapeAt,
   uvToPlotFrac,
@@ -50,6 +51,60 @@ describe("Schwarz σ CPU render (S4a-2)", () => {
     for (let i = 0; i < buf.length; i += 4) colors.add(`${buf[i]},${buf[i + 1]},${buf[i + 2]}`);
     expect(colors.size).toBeGreaterThan(1); // K vs Ω regions ⇒ not a flat fill
     expect(colors.has("30,60,140")).toBe(true); // the K interior (fundamental n=0) deep-blue base
+  });
+
+  it("renderSchwarzField z-disk (F2b): off-disk centre, structured, differs from the plane view", () => {
+    const view = { center: [0, 0] as [number, number], zoom: 0.5 }; // shows |z| ≤ 2, incl the unit disk
+    const size = 32;
+    const zbuf = renderSchwarzField(engine, poly, view, size, { maxIter: 48, escapeR: 1e4, viewMode: "z" });
+    const plane = renderSchwarzField(engine, poly, view, size, { maxIter: 48, escapeR: 1e4 });
+    // The centre pixel maps to z ≈ 0 (|z| < 1) ⇒ off the uniformizing domain (unbounded φ lives on 𝔻*).
+    const mid = ((size / 2) * size + size / 2) * 4;
+    expect([zbuf[mid], zbuf[mid + 1], zbuf[mid + 2]]).toEqual([...SCHWARZ_OFF_DISK_RGB]);
+    // Both regions present (off-disk background + the in-disk φ field), and it differs from the plane view.
+    const colors = new Set<string>();
+    for (let i = 0; i < zbuf.length; i += 4) colors.add(`${zbuf[i]},${zbuf[i + 1]},${zbuf[i + 2]}`);
+    expect(colors.size).toBeGreaterThan(1);
+    let diff = 0;
+    for (let i = 0; i < zbuf.length; i += 4)
+      if (zbuf[i] !== plane[i] || zbuf[i + 1] !== plane[i + 1] || zbuf[i + 2] !== plane[i + 2]) diff++;
+    expect(diff).toBeGreaterThan(size);
+  });
+});
+
+// S5-C2d: a BOUNDED QD uniformizes 𝔻 → Ω, so Ω is the INTERIOR of ∂Ω — the CPU field/orbit tracer must
+// flip their in-Ω test (boundedOmega). Disk ground truth: w₀=0, one branch z_j=0 A=[1] ⇒ φ(z)=z, so ∂Ω is
+// the unit circle and Ω is the open unit disk; σ(w)=1/conj(w) maps the interior to the exterior.
+describe("Schwarz σ CPU render — bounded interior-Ω orientation (S5-C2d)", () => {
+  const disk = makeBoundedSchwarz([0, 0], [{ z: [0, 0], A: [[1, 0]] }]);
+  const diskPoly = schwarzBoundaryPoly(disk); // φ(unit circle) = the unit circle
+
+  it("boundedOmega flips which side of ∂Ω is Ω (interior) vs K (exterior)", () => {
+    const inside: [number, number] = [0.3, 0]; // ∈ 𝔻 = Ω for a bounded QD
+    // Bounded orientation: the interior point is IN Ω, so its σ-orbit is iterated (leaves after ≥1 step —
+    // σ(0.3)=1/0.3 exits 𝔻 → fundamental n=1), NOT the n=0 of a K point.
+    expect(schwarzEscapeAt(disk, diskPoly, inside, { boundedOmega: true }).n).toBeGreaterThanOrEqual(1);
+    // Flip the flag off (the default exterior orientation) and the SAME interior point now reads as K ⇒
+    // fundamental n=0, never iterated — proof the flag is load-bearing, not cosmetic.
+    expect(schwarzEscapeAt(disk, diskPoly, inside, { boundedOmega: false })).toMatchObject({
+      kind: "fundamental",
+      n: 0,
+    });
+    // And an EXTERIOR point is K under the bounded orientation — outside the bounded Ω, fundamental at n=0.
+    expect(schwarzEscapeAt(disk, diskPoly, [2, 0], { boundedOmega: true })).toMatchObject({
+      kind: "fundamental",
+      n: 0,
+    });
+  });
+
+  it("renderSchwarzField respects boundedOmega — the interior-Ω field differs from the exterior one", () => {
+    const view = { center: [0, 0] as [number, number], zoom: 0.4 };
+    const size = 24;
+    const bounded = renderSchwarzField(disk, diskPoly, view, size, { maxIter: 48, escapeR: 1e4, boundedOmega: true });
+    const exterior = renderSchwarzField(disk, diskPoly, view, size, { maxIter: 48, escapeR: 1e4, boundedOmega: false });
+    let differ = 0;
+    for (let i = 0; i < bounded.length; i++) if (bounded[i] !== exterior[i]) differ++;
+    expect(differ).toBeGreaterThan(0); // the orientation genuinely repaints the K/Ω split
   });
 });
 

@@ -1762,3 +1762,857 @@
   legend / precise nav (item 3) and serializable state across share links / saved views / PNG (item 2),
   recorded as the realized target shape (item 4). No code change; gates unaffected (test-census unchanged at
   278 files). Next σ work, if any, is S5 — a separate, larger effort.
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S5 Phase A1 — σ export options):**
+  first slice of the post-ADR-0009 S5 render-polish workstream. The σ "Save PNG" export gains an **export-size
+  picker** (512 / 1024 / 2048 / 4096, capped at this GPU's max texture size via `getMaxTextureSize` +
+  `disableUnsupportedSizes`) and **scale-bar / include-orbit toggles** — parity with the standard plots'
+  export options. The GPU path re-renders clean at the chosen size (single-pass), optionally baking in the
+  scale bar and/or the currently-inspected orbit; the CPU fallback keeps the on-screen field. The three
+  controls are file properties (not the view), so they join the export-settings opt-out in appState's
+  DOM-coverage guard. VERIFIED in the BUILT app (Playwright): export at 2048 → a 2048² PNG; scale-bar OFF/ON →
+  bottom-left white pixels 0 → 120; include-orbit ON vs OFF → the PNG changes (orbit baked in); no console
+  errors. Green: typecheck / lint / test, build. Branch restarted from the freshly-merged master (#246);
+  Phase A stacks on top. Next: A2 (σ hover orbit-preview).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S5 Phase A2 — σ hover orbit-preview):**
+  hovering the σ canvas now **traces a transient σ-orbit under the cursor** (parity with CD's orbit preview),
+  drawn faint beneath the bold, pinned click-inspect orbit. `drawSchwarzOrbit` gains a `preview` style
+  (lower alpha + thinner strokes + a plain seed dot, no ring); `main.ts` adds a `schwarzHover` orbit that
+  the pointermove handler sets (when NOT dragging — off on touch, off during a pan) via the same
+  `schwarzOrbitAt` the pinned inspect uses, and `pointerleave` / a fresh pointerdown clear it (rAF-coalesced
+  repaint). The hover is view-only — it is never baked into the σ PNG export (only the pinned orbit is).
+  Reuses the existing tested tracer, so no new pure logic. VERIFIED in the BUILT app (Playwright): moving
+  over a point draws a preview (checksum 22591461 → 22602474), leaving the canvas clears it (back to
+  22591461 exactly), and a click still pins the bold orbit; no console errors. Green: typecheck / lint /
+  test 75 files, build. Next: A3 (σ image-space coloring).
+- **2026-08-08 · branch claude/repository-refactor-project-pg5ktu (S5 Phase A3 — σ image-space tone):**
+  the σ pane gains three **image-space tone** controls — **palette rotation** (cycle the colour ramp),
+  **gamma**, and **vignette** (radial edge darkening) — parity with the standard fractals' post controls.
+  `schwarzGL.ts` gains `u_paletteRotation` / `u_gamma` / `u_vignette`; `main()` is refactored into a
+  `fieldColor()` (the classification / escape-ramp lookup, unchanged) plus a small tone post-pass, and
+  `fundamentalColor` rotates the colormap coordinate — every tone step is applied **conditionally** (only
+  when non-default), so a default view is **byte-identical** to pre-A3. The tone rides the σ view: it is
+  serialized into `_sigma` (new `SIGMA_TONE_DEFAULTS`), and `encodeSigmaState` **omits** each tone key when
+  it holds its identity default (a plain view's link stays exactly as small as pre-A3); `parseSigmaState`
+  **clamps** each into its band (rotation 0–1, gamma 0.2–5, vignette 0–1) and — because tone is cosmetic —
+  **defaults** a bad/absent value rather than rejecting the whole (otherwise valid) view. `schwarzStampParams`
+  appends `rotation` / `gamma` / `vignette` to the PNG summary line. The three sliders join the σ-coloring
+  opt-out in appState's DOM-coverage guard (they travel inside `_sigma`, not as their own share ids), and
+  `restoreSchwarzFromState` syncs them from a loaded view. NET: +4 `schwarzState.test.ts` tone cases
+  (defaults when the keys are absent [old links]; round-trips a non-default tone AND the encoding omits
+  identity keys; clamps out-of-range into band; a non-finite tone value defaults rather than nulls the view)
+  + the stamp cases now assert the three tone fields. VERIFIED in the BUILT app (Playwright): each slider
+  visibly changes the σ render (gamma 1→2.4 Δ=23, rotation 0→.5 Δ=26, vignette 0→.9 Δ=2.9), and a full toned
+  view (rotation .3 / gamma 1.7 / vignette .5) → "Share link" → fresh page restores all three sliders and the
+  render is **pixel-identical** (Δ=0.00); the shader stays byte-identical at defaults (`schwarzGL.browser.test.ts`
+  5 tests, GPU). Green: typecheck / lint / test 75 files / 764, build. Phase A render-polish shipped (A1
+  export options, A2 hover-preview, A3 tone); deferred A3 sub-slices — custom gradient (reuse the gradient
+  editor), relief lighting, idle anti-aliasing accumulation — are clearly-scoped follow-ons, not started.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase B1 — σ orbit-stat coloring):**
+  the σ pane gains a **field-coloring** picker choosing WHAT the colormap ramp encodes: **escape time**
+  (the ADR-0009 default), **orbit trap**, or **stripe average** — the latter two are statistics of the
+  σ-orbit σⁿ(w) the engine already produces, so **no new map math** (that is B2's derivative modes). Orbit
+  trap adds a **trap-shape** sub-picker (cross · point · origin · real axis · unit circle · integer lattice)
+  shown only in trap mode. `schwarzGL.ts` gains `u_colorMode` + `u_trapType`; `main()`'s escape loop
+  accumulates the closest trap approach / the stripe running-average **only in the respective mode** and
+  dispatches at K-entry via `fundamentalStatColor`, so **escape-time mode is byte-identical to pre-B1**
+  (proven — the σ GPU browser test still passes: opaque, K-vs-Ω structure, colormap/scale still drive the
+  pixels). CD's **triangle-inequality** average is deliberately *not* ported — it is z²+c-specific (uses
+  |c| and the quadratic |zₙ₊₁|/|zₙ|²/|c| relation), meaningless for σ. The mode + shape ride the σ view
+  (`_sigma`, new short keys `md`/`tp`, omitted at their `escape`/`cross` defaults so a plain link is
+  unchanged from pre-B1; an unknown name normalises to the default like the colormap/scale). The **legend
+  stays honest** — its title + end labels now read "Orbit trap · <shape>" (far → near trap) or "Stripe
+  average" (low → high) instead of "Escape time", and `schwarzStampParams` reports `colormode=…`. New
+  registries (`SCHWARZ_COLOR_MODES` / `SCHWARZ_TRAP_SHAPES` + id lookups) mirror the scale-mode pattern; the
+  ids are the shader contract. NET: +8 `schwarzColorModes.test.ts` (id maps contiguous from 0, defaults,
+  unknown→0) + 3 `schwarzState.test.ts` cases (default when absent, round-trip + omit-default keys,
+  normalise unknown) + stamp assertions; the two selects join the σ-coloring opt-out. VERIFIED in the BUILT
+  app (Playwright): each mode visibly changes the render (escape→trap Δ=20, cross→circle Δ=16,
+  circle→lattice Δ=9, trap→stripe Δ=13), the trap-shape row gates on trap mode, and a trap view (point)
+  round-trips through a permalink — selects restored, row shown, render **pixel-identical** (Δ=0.00). Green:
+  typecheck / lint / test 76 files / 775 (+11 node), build; σ GPU browser test 5/5 + shader-compile 11/11.
+  Next: B2 (derivative-dependent smooth + distance-estimator modes — needs dσⁿ/dw).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase B2 — σ derivative coloring):**
+  two more σ-field color modes, on the **escaping** set (orbits → ∞, currently flat black): **"Smooth
+  escape (≈)"** (continuous escape count) and **"Distance estimate (≈)"** (the analytic distance to the
+  σ-Julia set). σ is anti-holomorphic (σ = conj∘F∘φ⁻¹), so its per-step local scaling is |σ'(w)| =
+  |F'(z)|/|φ'(z)| with z = φ⁻¹(w), and — because each step is (anti)conformal — the n-fold magnitude is the
+  product ∏|F'(z_k)|/|φ'(z_k)| = |D(σⁿ)|. **Shared-package math (net-first):** `@cas/schwarz` gains
+  `evalFDeriv` (CPU + the GLSL twin in `@cas/schwarz/gpu`); near ∞, F(z) ~ conj(F[d])·z^d with z ~ w/c, so
+  σ ~ const·conj(w)^d and the escape degree d (highest nonzero Laurent index) drives the smooth log-degree
+  normalisation. DE = ½·|wₙ|·log|wₙ| / |D(σⁿ)|, rendered as CD's `distanceColorAnalytic` does — the smooth
+  ramp darkened toward the boundary (a few-pixel-wide σ-Julia outline). Both are **estimates (≈)**: K-entry
+  (the tiling) is a discrete event with no smooth interpolation, and D(σⁿ) rides the numerically-inverted
+  φ'. Escape-time / trap / stripe and the whole tiling are **unchanged** — only the escaped branch is
+  recoloured, and only in modes 3/4 (mode 0 stays byte-identical; the derivative product is accumulated only
+  in the distance mode). NET (net-first, shared package first): CPU `evalFDeriv` **finite-difference
+  golden** (deltoid hand values F'(z)=z−1/z² + a central-diff cross-check across the deltoid and 5
+  pole-bearing domains, so a dropped branch k-factor fails outright); the GLSL structure guard pins
+  `evalFDeriv` + its −c/z² leading term; a new **GPU↔CPU parity** test (`runSigmaDerivGLSL`, reading
+  |F'|/|φ'| from the probe's .w channel) confirms the shader F' tracks the CPU engine on all 4 corpus
+  domains. CD-side: +2 registry cases (smooth 3 / distance 4) + a state round-trip. VERIFIED in the BUILT
+  app (Playwright): smooth colours the escaped set (black area 50% → 0%, Δ=25 vs escape), distance adds the
+  DE boundary filament (6970 darkened px, 2.7% — the σ-Julia outline), and the mode round-trips through a
+  permalink (pixel Δ=0.00). Green: full monorepo — typecheck all workspaces; node tests packages (schwarz
+  21, +core/exact/expr/gpu/interchange) + apps (CD 776, correspondences 97, QD 2334); CD build; σ GPU
+  browser 5/5; @cas/schwarz browser parity 10/10 (σ + derivative). **Phase B complete** (B1 orbit-stat + B2
+  derivative modes). Remaining S5: C (engine/family breadth), D (df64 deep-zoom), E (branch-aware, uncertified).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C1 — complex leading coefficient c):**
+  the σ engine now accepts a **complex leading coefficient c** — a CD-native map QD's real-c family never
+  emits. The correctness crux: the Schwarz extension reflects the leading term to **conj(c)/z** (and
+  F'(z) to −conj(c)/z²), which equals the pre-C1 c/z ONLY when c is real — so a naive type-widen would be a
+  silent factor-of-c σ error. Confirmed against QD's canonical `adaptUnbounded` (it uses `C.scale(z, c)` /
+  `{re:c,im:0}` throughout — the family is real-c by construction). `makeUnboundedLaurentSchwarz` widens to
+  `c: number | Complex` (**backward-compatible** — every existing real-c caller and the wire keep working;
+  a number and its `[c,0]` tuple build the identical engine), normalises once, and threads conj(c) through
+  `evalF` / `evalFDeriv` plus complex division through the exterior-root polynomial and the Newton seed. The
+  GLSL twin follows: `u_c` becomes a **vec2**, with `cmul` / `cconj(u_c)` / `cdiv` (packPhi / uploadPhi pack
+  c as the vec2). CD: `SchwarzPhi.c → Complex`, `buildSchwarzPhi` drops the "c must be real" gate (the form
+  parser already reads "1+0.5i"), `_sigma` serialises a real c as a bare number (compact, byte-identical to
+  pre-C1 links) and a complex c as `[re,im]` (parse accepts either), and the wire reconstruct
+  (`schwarzPhiFromMapSpec`) now passes a complex c through too (the engine handles it; QD still emits real).
+  NET (net-first, shared package first): a CPU **boundary-reflection golden** F(z)=conj(φ(z)) on |z|=1 for a
+  complex-c domain (the pin a c/z fails) + σ=identity on ∂Ω + round-trip + F' finite-diff + a
+  number/[c,0]-equivalence case; GLSL-structure guards on the conj(c) fragments; a **complex-c row added to
+  the GPU↔CPU browser parity corpus** (σ AND |F'|/|φ'| match); CD state round-trip (real c stays a bare
+  number, complex c a pair) + a `buildSchwarzPhi` complex-c case. VERIFIED in the BUILT app (Playwright):
+  entering c = 1+0.5i is accepted (no error) and renders a **distinct** σ field (Δ=19 vs the real-c deltoid
+  — conj(c) is live), and the complex-c view round-trips through a permalink **pixel-identical** (Δ=0.00).
+  Green: full monorepo — typecheck all workspaces; node tests packages (schwarz 25) + apps (CD 778,
+  correspondences 97 [unchanged — backward-compat holds], QD 2334); CD build; σ GPU browser 5/5;
+  @cas/schwarz browser parity 12/12 (incl. complex-c σ + derivative). Follow-up (pre-existing, out of scope):
+  the one-shot σ-builder fields (c/F/poles) are not re-populated from a restored view — the render + share
+  are correct, but "Generate σ" after a restore uses the stale field. Remaining C: C2 (non-Laurent families
+  — bounded / PQD / LQD, one PR each).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2a — bounded-QD σ engine):**
+  first slice of C2 (non-Laurent families): the **bounded-QD** Schwarz engine, lifted from QD's
+  `adaptBounded` into `@cas/schwarz` (engine-first, mirroring S2a for the unbounded family). For the
+  conformal map φ: {|z|<1} → Ω onto a **bounded** domain, φ(z) = w₀ + Σⱼ Σₖ conj(A_{j,k})·u_j(z)ᵏ, the σ
+  reflection is σ(w)=conj(F(φ⁻¹(w))) with F(z)=conj(w₀)+Σⱼ Σₖ A_{j,k}/(z−z_j)ᵏ and φ⁻¹ the **interior**
+  branch |z|<1 (cold-seeded Newton near 0). Three differences from unbounded-Laurent: no leading c·z term,
+  F carries conj(w₀) instead of the c/z pole, and the inverse is the interior disk branch. **The finite-pole
+  branch math is identical to the unbounded family**, so per ADR-0007 (bounded = the second consumer) the
+  four branch helpers (branchPhi / branchPhiDeriv / branchF / branchFDeriv) were **extracted** from
+  `unbounded-laurent.ts` into a shared `branches.ts`, taking `branches` as a parameter; the unbounded engine
+  now imports them and re-exports the shared types, so the package's public surface is unchanged and the
+  extraction is **behavior-preserving** (the 19-case unbounded golden stays green before and after). NEW
+  `makeBoundedSchwarz(w₀, branches)` + `BoundedSchwarz` exported. NET: a bounded golden — the **unit disk**
+  (w₀=0, z_j=0, A=[1] ⇒ φ(z)=z) reflects as the exact inversion **σ(w)=1/conj(w)** (closed-form ground
+  truth); hand values on a single-lobe domain; the **boundary reflection F(z)=conj(φ(z)) on |z|=1** (the
+  Schwarz-extension pin ⟺ σ=identity on ∂Ω) across the disk + a complex + a two-branch domain; the interior
+  round-trip σ(φ(z₀))=conj(F(z₀)); the interior-branch inverse; and an evalFDeriv finite-difference. Green:
+  full monorepo — typecheck all workspaces; node tests packages (schwarz **31**, +6 bounded) + apps (CD 778,
+  correspondences 97, QD 2334 — all unchanged, the extraction is transparent). This is the CPU engine +
+  ground-truth foundation; the bounded family is **not yet wired** into the GPU shader, the interchange
+  wire, or CD's render — those are the next C2 slices (C2b GPU GLSL + CPU↔GPU parity; C2c interchange schema
+  + QD emit + CD reconstruct; C2d CD render / presets + cross-app golden).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2b — bounded-QD GPU σ):**
+  the GPU σ shader (`@cas/schwarz/gpu`) gains the **bounded family** via a `u_family` dispatch (0
+  unbounded-Laurent · 1 bounded) + a `u_w0` uniform — reintroducing QD's family-dispatch idea that had been
+  "specialized away". The family-specific LEADING terms are guarded so the **unbounded path stays
+  byte-identical** (each `evalPhi`/`evalPhiDeriv`/`evalF`/`evalFDeriv` is `(u_family==1) ? <bounded> :
+  <unchanged unbounded>`, and the branch accumulation order is untouched); bounded gives φ=w₀+branchPhi,
+  φ'=branchPhiDeriv, F=conj(w₀)+branchF, F'=branchFDeriv. The **inverse** is family-aware: `newtonSeedFresh`
+  seeds the interior branch z≈(w−w₀)/φ'(0) with φ'(0)=Σⱼ conj(A_{j,1}) (computed in-shader), `acceptZ` takes
+  |z|<1 (vs |z|>1), the retry ladder's push-out seed becomes a pull-in for bounded, and the tiny-z guard
+  (unbounded's c/z pole) is skipped. `packPhi`/`uploadPhi` pack `u_family` + `u_w0`; `SigmaPhi` gains
+  `family` + `w0` (and `c`/`F` become optional, defaulting for bounded). CD's shader is **untouched** — it
+  packs no `family`, so `u_family=0` and it renders exactly as before (proven: CD σ GPU browser 5/5, the
+  deltoid/pole renders unchanged). NET: the node structure guard now asserts the bounded dispatch is present
+  (`u_family`, `u_w0`, `conj(w₀)` in F, the interior-branch accept) AND that QD's remaining families still
+  did NOT ride along (no LQD/PQD/singular/β — `u_gamma`/`u_lqdBeta`/`u_alpha`/`cexp`/`blaschke`/`cpow`);
+  packPhi packs `family`/`w0`; and the **browser CPU↔GPU parity corpus gains three bounded domains** (the
+  exact-inversion disk, a single-lobe, a two-branch+centre) checked for both σ and the derivative ratio
+  against `makeBoundedSchwarz` — **18/18**, and the unbounded rows (deltoid / poles / complex-c) confirm the
+  byte-identity. Parity TOL loosened 1e-6→3e-6 to cover a bounded single-lobe interior sample that sits near
+  F's pole (|σ|≈2.5 ⇒ ~1.5e-6 absolute = ~6e-7 relative, still float32 ε; a gross bug lands ≫1e-5). Green:
+  full monorepo — typecheck all workspaces; node (schwarz **32**; CD 778, correspondences 97, QD 2334
+  unchanged). Next: C2c (interchange bounded schema + QD emit + CD reconstruct), C2d (CD render/presets +
+  cross-app golden).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2c — bounded-QD σ interchange
+  hand-off, both ends):** the bounded family crosses the **wire** — QD emits it, CD reconstructs it, and a
+  cross-app golden pins the producer↔consumer contract. **interchange 1.3.0:** a new `BoundedMap`
+  (`form:"bounded"`: w₀ + optional finite-pole `branches`) joins the `SchwarzMap.phi` union, deliberately
+  **NOT** a `MapSpec` member — a bounded φ is σ-only (its σ has a numerical inverse; it is never an
+  expr-compilable standalone map), so keeping it off `MapSpec` avoids rippling into `mapSpecToExpr`. The
+  validator's `schwarz` case validates a bounded φ **inline** (w₀ complex + branches length-capped by
+  `isBranchArray`) rather than recursing through `isMapSpec`. VERSION 1.2.0→1.3.0; per the schema's own
+  "each MINOR bump moves every stamped export to the new label" rule the **three Laurent goldens were
+  re-stamped** to 1.3.0 (byte-identical bar the embedded version — they use none of the new vocabulary),
+  and a **new bounded golden** added: a single-lobe QD (w₀=0, one branch z_j=0.3, A=[0.5], `disk:"D"`) with
+  frozen ground truth w=φ(½)=**5/17**, σ(w)=conj(F(½))=conj(0.5/0.2)=**2.5**. **QD emit:** a σ-only
+  `boundedClassicalMapSpec` helper (kept **out** of `phiToMapSpec`, so a bounded map never rides the φ /
+  quadrature-domain hand-off — it is not a MapSpec) detects the bounded-CLASSICAL family by its **unset
+  `phi.family`** tag (LQD/PQD/rational-bounded all tag it — schwarz-common's family dispatch, "gotcha #1");
+  `buildSigmaEnvelope` emits `form:"bounded"`, `disk:"D"` for it, and the `explain*` prose is corrected —
+  bounded-classical now σ-exports (no refusal), a **weighted** (log-/power-) bounded QD earns the "bounded +
+  weighted, not reconstructable yet" reason, and φ-export points bounded users at "Export σ". **CD
+  reconstruct:** `schwarzPhiFromMapSpec` returns a `family`-tagged coeffs object (unbounded reads c/F,
+  bounded reads w₀; unused slots zero-filled) and `schwarzEngineFromMapSpec` **dispatches** — bounded →
+  `makeBoundedSchwarz` (interior branch), Laurent → `makeUnboundedLaurentSchwarz` (exterior); the union
+  return type flows unchanged through the render/orbit helpers (both engines share the evaluator surface).
+  The live **import path declines the bounded render honestly** ("reconstruction ready, interior-domain
+  render coming next") — the σ field paint is exterior-oriented (Ω is OUTSIDE ∂Ω for the Laurent family; a
+  bounded Ω is INSIDE) and the GPU family switch isn't wired, so rather than paint a bounded domain
+  inside-out, the interactive view waits for C2d. NET (producer↔consumer meet on the golden): QD's
+  `exportSigmaLink` reproduces the bounded golden **byte-for-byte** (+ a `form:"bounded"`/`disk:"D"` shape
+  assertion, + a validate pass, + weighted-bounded and φ-path-null negatives); CD decodes the **same bytes**
+  and reconstructs σ(5/17)=**2.5** through its real import path (decode → envelopeToMapSpec →
+  schwarzEngineFromMapSpec → .sigma), the **interior** branch — the exterior-branch engine would miss it;
+  the interchange seatbelt gains a bounded-φ validator case (accepts bounded + branchless, rejects missing
+  w₀ / bad branches / over-cap). Latent fix surfaced by the package rebuild: CD's `schwarzGL.setPhi` read
+  `phi.F` (optional on `SigmaPhi` since C2b) unguarded — guarded (a bounded φ has no Laurent tail, so the
+  escape-degree default d=2 stands). Green: full monorepo — **typecheck** all workspaces + **lint**
+  (eslint + dep-cruiser) + **2410 tests** (interchange **35**, +1 bounded validator; QD schwarz-export +4
+  bounded-emit incl. the byte golden, schwarz-ui reason-string updated; CD importMap **11**, +1 bounded
+  reconstruct ground-truth). The bounded family is now emit + reconstruct + wire-validated end to end; the
+  remaining slice is **C2d** — CD's interior-Ω render (GPU `family` forward + the "Ω is inside ∂Ω" escape
+  orientation) + bounded presets, which makes it user-visible.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5 Phase C2d — CD interior-Ω render for
+  the bounded family):** bounded-QD σ becomes **user-visible** — an imported bounded reflection now renders,
+  navigates, permalinks, and round-trips through CD's σ peer view, on the correct INTERIOR-Ω orientation.
+  The render was exterior-oriented throughout (Ω = OUTSIDE ∂Ω, the unbounded-Laurent assumption); a bounded
+  QD uniformizes 𝔻 → Ω, so Ω is the INSIDE. **GPU:** CD's σ shader forwards `family` + `w0` through the
+  shared `@cas/schwarz/gpu` uniforms (so the σ evaluator switches to the bounded interior-branch inverse —
+  the C2b GLSL) and gains a `u_boundedOmega` uniform that flips `inOmega()` to test INSIDE the boundary
+  polygon; the mask uses a tighter `padFactor` (2.4, QD's bounded value) for the compact interior. CD's
+  shader stays byte-identical for unbounded maps (no family ⇒ `u_boundedOmega = 0`, the original test).
+  **CPU:** `renderSchwarzField` / `schwarzOrbitAt` / `schwarzEscapeAt` gain a `boundedOmega` option routed
+  through one shared `makeIsInOmega` helper (interior vs exterior in ONE place), and take a `SchwarzEngine =
+  UnboundedLaurentSchwarz | BoundedSchwarz` union (both share the evaluator surface). **Glue:** `SchwarzPhi`
+  carries `family?` + `w0?`; `schwarzEngineFromMapSpec`'s union return flows through unchanged; `main.ts`
+  derives `boundedOmega = phi.family === "bounded"` once in `enterSchwarz`, threads it through the session
+  → paint → orbit-trace, dispatches `renderSchwarzFromPhi` on the family, and **removes the C2c import
+  guard** so a bounded σ link renders instead of declining. **Serialization:** the `_sigma` codec carries
+  `fam` + `w0` (emitted ONLY for bounded, so unbounded links stay byte-identical + round-trip unchanged);
+  parse relaxes the non-zero-`c` requirement for bounded and validates `w0`, and the PNG tEXt summary reads
+  `w0=…` for bounded rather than the trivial `c=0, F=[]`. NET: CPU orientation ground truth on the exact
+  DISK (φ(z)=z, Ω = unit disk) — an interior point is Ω-iterated under `boundedOmega` but K (n=0) without it,
+  the flip is load-bearing; `renderSchwarzField` repaints on the flag; the bounded `_sigma` state round-trips
+  (fam + w₀) and an unbounded link carries neither; the CD GPU browser suite gains a bounded render (opaque,
+  and the bounded family path produces a genuinely different frame than reading the same coefficients as
+  unbounded — u_family/u_w0/u_boundedOmega live in real WebGL2, **6/6**). VERIFIED end to end in the BUILT
+  app (Playwright): pasting the bounded-lobe golden link opens the σ view in **GPU** mode, painting a full
+  512² opaque field with no console error. HONEST NOTE: the single-lobe golden (one simple pole) has
+  **trivial** σ-dynamics — σ maps Ω out of Ω in ~one step, so under the linear escape scale
+  `computeT(0)=computeT(1)=0` and its field reads near-flat; the render is correct, the domain is simple, and
+  a richer multi-pole bounded QD shows a full tiling. Latent fix carried from C2c: `schwarzGL.setPhi` guards
+  the now-optional `phi.F`. Green: full monorepo — typecheck all workspaces + lint (eslint + dep-cruiser) +
+  node **2414** (schwarzView **+2** disk-orientation, schwarzState **+2** bounded round-trip) + CD σ GPU
+  browser **6/6** (+1 bounded). DEFERRED (a separate follow-on): native bounded **authoring** — the "Generate
+  σ from φ" form's `buildSchwarzPhi` is unbounded-only (it requires a leading c), so bounded domains arrive
+  by IMPORT today; a bounded input mode + presets is the next slice. With C2a–C2d the bounded family is
+  engine + GPU + wire + render complete end to end.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (S5-C2 follow-on — native bounded-QD
+  authoring):** the C2d follow-on lands — bounded domains can now be **authored in-app**, not only imported.
+  The "Generate σ from φ" form (render/schwarzPhiForm.ts) gains a **Domain type** selector (unbounded /
+  bounded) that swaps the family-specific fields: unbounded shows `c` + Laurent `F`, bounded (S5-C2) shows
+  `w₀` (the centre φ(0)); the interior-poles field is shared (both families reflect a pole to z_j ∈ 𝔻).
+  `buildSchwarzPhi` dispatches on `fields.family` — an absent family is unbounded, so every pre-C2 caller is
+  unchanged — to a new `buildBoundedSchwarzPhi` that builds `{ family:"bounded", c:[0,0], F:[], w0, branches
+  }` from w₀ ("" ⇒ 0) and **≥1 interior pole** (a centre-only domain is a degenerate point and is rejected;
+  poles keep parsePoles's |z_j| < 1 invariant). Three **bounded presets** added, each a verifiable Ω
+  (honest-labeling): the **unit disk** (φ(z)=z, exact ground truth σ(w)=1/conj(w)), the **single lobe** (the
+  cross-app golden's φ), and a **cardioid** (φ(z)=z+0.3z², univalent on 𝔻 since φ'=1+0.6z≠0 there, a degree-2
+  boundary). main.ts wires the selector — `fill()` sets the family + w₀ and shows/hides the matching fields,
+  `generate()` dispatches on it, and switching family (or editing any field) marks the map "Custom…". NET:
+  buildSchwarzPhi bounded (the single-lobe golden φ) + buildBoundedSchwarzPhi (the disk, an empty-w₀ ⇒ 0, a
+  complex centre, and rejections for a no-pole domain / a pole outside 𝔻) + every-preset-builds now spans
+  both families; the appState opt-out gains `schwarz-family` + `schwarz-w0` (σ builder inputs travel via
+  `_sigma`, not as shared controls). VERIFIED in the BUILT app (Playwright): each of the three bounded
+  presets AND a custom second-order-pole domain renders in **GPU** mode with no error line, and the Domain
+  type toggle shows exactly the right fields (bounded ⇒ w₀ shown, c/F hidden). Green: typecheck + lint + node
+  (schwarzPhiForm **+6** bounded; appState opt-out updated). With this the bounded family is complete
+  end to end — import AND native authoring. (The single-pole presets render near-flat under escape-time-linear
+  for the same trivial-dynamics reason noted in C2d; the machinery is correct.)
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view parity & integration — Phase A:
+  control-shell parity):** begins a new arc (agreed with the user): bring the σ full-screen mode up to full
+  parity with the CD tool and add QD-explorer depth, sequenced A–F — A control-shell, B live rendering &
+  resolution (progressive draft→refine + AA/high-DPI + draggable orbit seed), C coloring/relief polish, D
+  nav/export parity, E cross-cutting integration (share/saved-views/keyboard/glossary), F σ-native depth
+  (∂Ω overlay → plane/disk/sphere views → tiling tree → analysis cards). Locked decisions: polished
+  full-screen MODE (not a co-visible peer), σ as a standalone explorer (shares CD chrome, not z²+c math),
+  full parity refactor, all four priority areas; the `(≈)` honesty and the absence of z²+c-specific tooling
+  are **preserved** by design; df64 deep-zoom stays deferred (sampling quality only). **Phase A** (chrome
+  only, behavior-preserving): the σ pane controls (index.html) move from a flat list of composite
+  `.field` cards onto CD's collapsible idiom — `<details class="control-group">` + `.control-grid` of
+  granular `.field` units, grouped **Map / Coloring / View / Export** — so σ reads like the standard planes.
+  EVERY element id is preserved (the schwarzPeerView structural guard + all main.ts wiring are untouched; the
+  Map group keeps `id="schwarz-builder"`). A persistent **view chip** lands (parity with the plots'
+  `.view-summary`): `#schwarz-view-chip`, updated in syncSchwarzViewFields() every paint, shows
+  `centre · zoom · family` (or "generate a σ to begin"). Four **`.gloss-link` "?" hooks** (schwarz-reflection,
+  riemann-map-phi, laurent-coefficients, escape-time) ride the existing document-wide gloss wiring
+  (`querySelectorAll(".gloss-link[data-term]")` → the body-level `#glossary` modal, reachable in σ mode); two
+  **new honest glossary entries** define σ (σ(w)=conj(F(φ⁻¹(w))) + the ≈ numerical-inverse caveat) and the
+  Riemann map φ (exterior/|z|>1 unbounded vs interior/|z|<1 bounded). CSS: the dead `.schwarz-builder` card
+  rules give way to `#schwarz-plot`-scoped control-group styling (a centred ≤30rem column; each σ
+  `.control-grid` a single-column stacked form since σ's labels are long). NO logic change — the σ engine,
+  render, orbit, export, and serialization paths are byte-identical; the canvas (#JCSSchwarz, 512² square) is
+  untouched. Green: typecheck + lint + node **787** (CD app; glossary **+1** σ-terms guard). VERIFIED in the
+  dev app (Playwright): the σ pane shows the four collapsible groups, the chip populates
+  (`0+0i · zoom 0.4 · unbounded`), all four gloss-links resolve, and a σ generates with no error line.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase A3 — side-panel layout):**
+  chosen with the user (the "canvas + side-panel like the main tool" option), the σ pane becomes a
+  **two-column layout** at ≥900px, replacing the previous controls-below-a-viewport-tall-canvas stack:
+  #schwarz-plot is a CSS grid — a **topbar** (the σ heading + the ↩ exit button, spanning the top), the σ
+  **canvas** in the main area, and the **controls in an always-visible sticky panel** on the right (mirrors
+  CD's plots-pane + controls-pane split, so the controls stay beside the plot). The canvas is sized
+  `min(100% of its cell, calc(100vh − 5rem))` with `aspect-ratio: 1` and centred, so the whole square σ
+  field fits the viewport without scrolling past it and the corner label/legend still pin to its edges (the
+  `.canvas-stack` stays the positioning context) — as a bonus this pinned a headless artifact where the
+  width:100%/height:auto canvas could render as a thin strip mid-layout. Below 900px it falls back to the
+  stacked column (canvas over a centred controls column). The heading + exit move into a new
+  `.schwarz-topbar` wrapper; the exit button (a desktop-only absolute `.expand-btn`) is now shown in-flow at
+  **every** width, so σ can always be left by button, not only Esc. HTML + CSS only — no logic/TS change,
+  every id preserved (schwarzPeerView green). Green: typecheck + lint + node (peer-view + glossary
+  unchanged). VERIFIED (Playwright): at 1300px the σ canvas (770²) and the 304px controls panel sit side by
+  side with the deltoid σ field rendered; at 760px it stacks.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase B — live rendering &
+  resolution):** the phase aimed squarely at the user's #1 pain (low resolution + no real interactivity),
+  in three commits. **B (render pipeline):** the σ field now renders at the displayed canvas size in device
+  pixels (`schwarzBackingSize` = CSS px × devicePixelRatio, GPU-`maxSize` capped) instead of a fixed 512²
+  upscaled — 1540² on a 770 px retina canvas, verified via Playwright — so the tiling is crisp. A
+  **progressive** paint draws a quarter-res draft during pan/zoom (scheduleSchwarzDraftPaint) then an idle
+  timer (150 ms) refines to full res, so interaction never blocks; a **field-dirty cache** re-renders the
+  field only on a view/coloring/map/escape change, so hover / inspect are overlay-only re-blits (they no
+  longer pay for a full field render). An **anti-aliasing** select (off / 2× / 3× / 4×) supersamples then
+  box-downsamples for smoother edges; the backing re-fits on resize / DPR change. The GPU renderer gained a
+  `maxSize` (min of MAX_TEXTURE_SIZE / MAX_RENDERBUFFER_SIZE). Giving the A3 canvas a definite square also
+  pinned the earlier thin-strip headless artifact. **B (escape knobs):** the escape budget (48 / 1e4), one
+  budget shared by the field and the orbit inspector, becomes live — a Render-group **iterations** +
+  **escape radius** field retune it, re-rendering the field and re-tracing the pinned orbit so its fate
+  readout still matches the pixel under it. **B (draggable seed):** the pinned inspect seed w₀ is now
+  grab-and-drag — pressing within 10 px of it drags the seed (a "move" cursor signals it) and re-traces its
+  σ-orbit in real time (an overlay-only repaint, the view unchanged), verified live (the readout followed
+  the cursor). **Persistence:** aa + maxIter + escapeR join the `_sigma` state layer (permalink / saved view
+  / PNG), omitted at their defaults so an old or default-quality link stays byte-identical; schwarzState
+  round-trips them (clamped, hostile-link hard) and the PNG stamp summarises them. The renderer defaults
+  (`?? 48` / `?? 1e4`) are untouched, so the CPU↔GPU agreement corpus is unchanged. df64 deep-zoom stays
+  deferred (sampling quality only). Green: typecheck + lint + node **790** (schwarzState **+3** render-knob
+  round-trip; appState opt-out +2) + browser **17/17** (shaders + σ render shell). Deferred from the plan
+  and NOT started: draggable map handles + live parameter scrubbing (the other two interactivity options).
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase C — coloring & render
+  polish):** two reuse-driven features, in two commits. **C1 custom gradient:** a "Custom…" colormap in the
+  σ pane, reusing CD's existing gradient editor (src/ui/gradient.ts) — the ADR-0007 second consumer of an
+  already-shared in-app widget, so NO new UI code. Selecting it reveals the stop editor; editing stops
+  rebuilds the σ colormap texture via a new `setColormapRamp` (the gradient sampled into a 256-entry RGB
+  ramp) + the legend swatch + repaints. The stops travel in `_sigma`, carried only when the custom palette
+  is active, validated on restore by the shared `parseGradientStops` (a hostile link falls back to no custom
+  stops). **C2 relief lighting:** the σ shader gains CD's shading model — `shadeWithGradient` copied verbatim
+  (Lambert + Blinn-Phong spec pow 24 ×0.4 + hemisphere ambient), fed the screen-space gradient
+  `vec2(dFdx(h),dFdy(h))·depth` of a new `fieldHeight()` (the escape/entry count, smoothed on the escaping
+  set like ν; the discrete tiling K-entry embosses as contours; interior/invalid → flat). u_lightDir is the
+  az/el spherical unit vector; a checkbox + light az/el/depth sliders drive it (depth = slider÷20, CD's
+  mapping). **Default OFF** (u_light==0) so the field is byte-identical to unlit — the CPU↔GPU agreement
+  corpus is unchanged; the shader has no byte-freeze (only a compile gate), which stays green. Lighting is
+  skipped on draft frames (dFdx relief on a low-res draft is noisy) and is GPU-only. aa/light/az/el/depth +
+  custom stops all travel in `_sigma` (permalink / saved view / PNG), omitted at defaults so old links are
+  byte-identical. Green: typecheck + lint + node **793** (schwarzState +3 custom-gradient round-trip; POLE
+  fixture carries non-default lighting; appState opt-out +5) + browser **17/17** (shaders + σ render shell).
+  VERIFIED (Playwright): "Custom…" recolors the field + shows the editor; enabling relief lighting changes
+  the field + reveals the az/el/depth sliders; both with no console error.
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase D — nav & export parity):**
+  the σ pane's navigation and image export now mirror the standard plots. **D1 nav:** the centre input becomes
+  a `.center-pair` (re `+` im `i`, the same markup CD's Parameter/Dynamical plots use), and a `copy coords`
+  button (CD's `.copy-coords`) copies the live centre + zoom at FULL precision — `center = <re>,<im>` /
+  `zoom = <z>`, with NO `c =` line since σ is a standalone explorer, not a z²+c map. Dead `.schwarz-nav-row`
+  CSS removed; the action row wraps (`flex-wrap`) now that it holds three buttons. **D2 export:** a new
+  `copyCanvasToClipboard` in hiResExport.ts (the "copy image" twin of `downloadCanvas` — same tEXt metadata
+  injected best-effort, but it rejects on browsers without the async clipboard-image API so the caller can
+  fall back) backs a new **Copy PNG** button; a **file name** input (`schwarz-export-name`, `ensurePngName`-
+  normalized, default `schwarz-sigma.png`) and an **8192** size option complete the parity with the standard
+  Export-image panel. `saveSchwarzPng` was refactored to share a `buildSchwarzExportImage` helper with the
+  copy path (one render, two sinks) and Save PNG is now the `primary` button. The file name is an export
+  setting (a property of the file, not the view), so it is opted out of SHARE_IDS alongside the other σ
+  export knobs. Green: typecheck + lint + node **2424** (appState opt-out +1) + browser **17/17**. VERIFIED
+  (Playwright, clipboard-granted): copy-coords writes full-precision `center`/`zoom` and no `c =`; the nav
+  fields mirror a panned view (6-sig-fig); the filename defaults to `schwarz-sigma.png`; the size list carries
+  8192; Copy PNG puts an `image/png` item on the clipboard with a success toast. **Phase D complete.**
+- **2026-08-09 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase E — cross-cutting integration):**
+  the last parity phase; mostly a VERIFY pass, since the reuse-driven earlier phases had already wired most of
+  it. **E1 share · saved views** was found already complete: `_sigma` flows through `readFullState` /
+  `applyFullState` (permalink + saved views + PNG all share those two functions), and B–D each extended the
+  `SigmaViewState` layer with its new knob, so `restoreSchwarzFromState` re-syncs EVERY σ control on load.
+  End-to-end Playwright confirmed a share link AND a saved view both reopen the exact window + colormap +
+  relief-light + AA=2, and that the share/save UI is reachable while σ is active — nothing to build. **E2
+  glossary** was likewise already wired: the four σ `.gloss-link` "?" buttons (σ, φ, Laurent, escape) point at
+  real GLOSSARY ids and resolve through CD's document-wide handler (pinned by glossary.test.ts since Phase A).
+  **E2 keyboard** is the one code slice: σ gains CD's plot shortcuts, adapted to its full-screen mode — because
+  only ONE view is live in σ (unlike CD's side-by-side plots that key off canvas focus), the handler acts
+  whenever a σ session is active, guarded so typing in a field / nudging a slider is never hijacked. Arrows pan
+  a quarter-window (CD's `1/(zoom·4)`), `+`/`-` zoom ×2 about the centre, `i` inspects the centre; the label
+  now reads `arrows ± i · Esc to exit`. The handler is **capture-phase** so Escape can defer to an open modal:
+  pressing Escape with the glossary open (reachable from σ's "?" links) now closes the glossary and leaves σ
+  intact, instead of exiting σ out from under it. Green: typecheck + lint + node **2424** + browser **17/17**.
+  VERIFIED (Playwright, **22/22**): every key acts (arrows/±/i), the field-focus guard holds, all four glossary
+  terms resolve, Escape closes the modal while keeping σ, and both a share link and a saved view round-trip the
+  full σ view. **Phase E complete — the A–E parity arc is done.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F0 — groundwork):** the
+  optional "σ-native depth" phase begins with docs, not code. Added [`refactor/PHASE-F.md`](PHASE-F.md) — the
+  full à-la-carte breakdown (F0 groundwork → F1 boundary overlay → F2 plane/disk/sphere views → F3 preimage
+  tree → F4 analysis cards), each a gated independently-shippable increment, ranked by value ÷ cost and
+  grounded in an inventory of QD's σ machinery (`apps/quadrature-domains/app/schwarz` + `sphere`, ~9.4k LOC)
+  against CD's existing substrate (`@cas/schwarz`, `schwarzBoundaryPoly`, `sphereView`'s camera, the `_sigma`
+  state layer). Recorded the forward-only vs σ⁻¹-dependent split that drives sequencing and a QD source map
+  for the porter. Added an **ADR-0009 addendum** ([`DECISIONS.md`](../DECISIONS.md)) pinning three standing
+  decisions so F's increments don't re-litigate them: the `(≈)` honesty rule is absolute; σ's instruments are
+  σ-native (no z²+c rays / Böttcher / matings); extraction into `@cas/schwarz` is opportunistic + math-first
+  (the three-app σ-shader merge is deferred to its own ADR). No code, no behavior change.
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F1 — ∂Ω boundary overlay):**
+  the first σ-native-depth increment, and a genuinely cheap one — the boundary polygon φ(unit circle) is
+  ALREADY computed for the in-Ω mask and lives on the live session as `poly`, so this just strokes it. A new
+  `render/schwarzBoundaryOverlay.ts` (`drawSchwarzBoundary`) maps that array to canvas pixels with
+  `plotToPixel` and strokes it as a closed loop in the σ-orbit overlay's casing+colour idiom (a light blue
+  over a dark casing, so it reads over both the deep-navy K interior and a bright Ω ramp). A **domain boundary
+  (∂Ω)** checkbox in the σ Coloring group toggles it; it repaints the OVERLAY only (`scheduleSchwarzOverlayPaint`
+  — the cached field is re-blitted, never re-rendered), and it's baked into the PNG export when on. **Default
+  off**, and it travels in `_sigma` via a new `SIGMA_OVERLAY_DEFAULTS` + a `bd` key omitted at the default, so
+  every pre-F1 link is byte-identical and the field render is untouched (overlay-only). Green: typecheck +
+  lint + node **2427** (schwarzState +3 boundary round-trip / omit / hostile-value; appState opt-out +1;
+  stamp `boundary=on/off`) + browser **17/17** (byte-identical — no shader change). VERIFIED (Playwright,
+  6/6): defaults off; toggling renders the ∂Ω stroke (canvas changes); toggling off restores the EXACT
+  boundary-free canvas (proving the field is reused, not re-rendered); and the toggle round-trips through a
+  share link. **F1 complete.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2a — view-mode shell):** the
+  scaffolding for F2's three coordinate views. A `plane · z-disk · sphere` segmented control (a small `.seg-btn`
+  pill in CD's `--accent` / `--border` tokens) sits under the σ view chip. Only the w-plane is live today, so
+  the **z-disk (F2b) and sphere (F2d) buttons are `disabled`** with "coming in F2b/F2d" titles — the segment
+  shows the roadmap without a broken view. The selected mode lives in `#schwarz-plot[data-schwarz-view]` — the
+  single hook F2b/F2d branch on, and future view-only control cards key their visibility off; a small DOM-only
+  wiring block (`setSchwarzViewMode`) keeps the attribute + button `is-active`/`aria-pressed` in sync. **No new
+  render, no module state, no `_sigma` change** — `viewMode` persistence + independent per-view pan/zoom land
+  with F2b, when a second view becomes selectable (serializing an unreachable mode now would be inert). PHASE-F.md
+  updated to match. Green: typecheck + lint + node **2427** (unchanged — pure scaffolding; the segment's buttons
+  are `type=button`, so the SHARE_IDS coverage guard ignores them) + browser **17/17** (byte-identical — no render
+  touched). VERIFIED (Playwright, 7/7): all three buttons render; plane is active + aria-pressed; z-disk + sphere
+  are disabled; the `data-schwarz-view` hook reads `plane`; clicking the disabled z-disk does not switch; clicking
+  active plane stays active. **F2a complete — the shell is ready for F2b to fill in the z-disk render.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2b-i — z-disk field render):**
+  the first NEW σ shader path, proven but not yet exposed. The z-disk view treats the fragment as the
+  uniformizing coordinate z and lifts it FORWARD `w = φ(z)` (the shader's existing `evalPhi`, no Newton
+  inverse — cleaner/faster than the w-plane), then runs the SAME escape-time on w: the z-disk is the plane's
+  σ field re-coordinatized. Added a `u_viewMode` uniform + a `fragToW(out bool offDisk)` helper (unifying the
+  two copies of the fragment→w map) to `schwarzGL`; fragments off the uniformizing domain (|z| ≤ 1 for the
+  unbounded family, |z| ≥ 1 for a bounded QD — φ is not the map there) paint a shared background literal
+  `SCHWARZ_OFF_DISK_RGB` (defined in schwarzView.ts, mirrored in the GLSL). Mirrored on the CPU path
+  (`renderSchwarzField` gains `viewMode:"z"`). **Plane mode is byte-identical** (u_viewMode defaults to 0 —
+  the six existing GPU tests + the shader-compile gate pass unchanged). The z-disk **button stays disabled**;
+  F2b-ii exposes it. Green: typecheck + lint + node **2428** (+1 CPU z-disk: off-disk centre, structured,
+  differs from plane) + browser **18/18** (+1 CPU↔GPU z-disk parity: the shader compiles with the new path;
+  the off-disk mask — a pure |z| vs 1 test, free of float drift — agrees GPU↔CPU ≥ 97%; the z-disk differs
+  from the plane). **F2b-i complete.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2b-ii — z-disk live):** wire
+  the proven z-disk render into the UI. The z-disk button is enabled; `setSchwarzViewMode` switches coordinate
+  views. Independent per-view pan/zoom via a **stash**: `schwarzView` always holds the ACTIVE window (so every
+  pan / wheel / keyboard / inspect / nav handler keeps operating on it unchanged), the inactive view lives in
+  `schwarzViews[mode]`, and the mode-switch saves the outgoing / loads the incoming window. `paintSchwarz` +
+  the PNG export pass `viewMode` to the renderers; the w-space overlays (∂Ω boundary + orbit + hover + seed +
+  keyboard-`i` inspect) are gated to the plane — in the z-disk they'd need a ψ-pullback (F2c), so they're not
+  drawn (the pinned orbit is KEPT, not cleared, so returning to the plane restores it). `viewMode` travels in
+  `_sigma` (omitted on the plane ⇒ pre-F2b links byte-identical); `center`/`zoom` now serialize the ACTIVE
+  view's window (the inactive is per-session). A new σ / reset is mode-aware. Green: typecheck + lint + node
+  **2431** (schwarzState +3: default / round-trip-z / unknown→plane; POLE fixture carries `viewMode:"z"`; stamp
+  `view=plane|z-disk`) + browser **18/18** (unchanged — F2b-i owns the shader). VERIFIED (Playwright, **9/9**):
+  starts on the plane; the z-disk button renders the φ field (differs from the plane) with its own default
+  window; panning moves the z window; switching back to the plane restores the plane window while the z window
+  is preserved in the stash; a share link reopens in the z-disk with its window. Captured the z-disk deltoid
+  (the |z|≤1 off-domain disk ringed by the 3-fold σ escape field). **F2b complete — plane · z-disk both live;
+  sphere (F2d) still to come.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2c — z-disk overlays):** the
+  w-space σ overlays now mirror into the z-disk via a **ψ-pullback**. Three pieces: (1) **∂Ω boundary** — in the
+  uniformizing coordinate z, ∂Ω = φ(unit circle) IS the unit circle |z|=1, so `drawSchwarzUnitCircle` strokes a
+  fixed circle (exact `arc` about z=0's pixel, radius = size·zoom/2 — plotToPixel is a uniform-scale affine map)
+  in the same casing+colour idiom as F1's boundary. (2) **Orbit** — `drawSchwarzOrbit` gains an optional
+  `toPlot?:(w)=>Complex|null`; in the z-disk each w-space iterate is pulled back to z via `engine.invertPhi` (ψ),
+  and a null preimage (the iterate entered K, or the inverse failed) BREAKS the polyline there — the pen lifts,
+  the dot is skipped, the seed marker draws only if w₀ maps. With `toPlot` omitted the draw is byte-identical to
+  the pre-F2c plane path (one subpath). (3) **Inspect + hover** — a shared `schwarzSeedFromPointer` maps a
+  pointer to the σ world point w₀: identity on the plane, or `z ↦ φ(z)` in the z-disk, **null off the
+  uniformizing domain** (|z| ≤ 1 unbounded / |z| ≥ 1 bounded — φ is not the map, so the click/hover/`i`-key
+  inspects nothing). Click-inspect, the hover preview, and the `i` key all route through it; the readout names
+  the φ-mapped w-seed (honest — σ acts on w). **Seed-DRAG stays w-plane-only** (the z-disk re-pins by click). The
+  PNG export bakes the z-disk overlays the same way. Green: typecheck + lint + node **2437** (+6 new
+  schwarzOverlay.test: the unit-circle arc geometry + no-op at zero radius; the toPlot pullback breaking the
+  polyline at a null iterate — 2 subpaths, 0 bridging segments — vs one connected line by identity; the null
+  iterate drops its dot; an all-null pullback draws nothing) + browser **18/18** (unchanged — F2c touches no
+  shader; the field is byte-identical). VERIFIED (Playwright, **8/8**): the z-disk ∂Ω draws the unit circle; a
+  click off the uniformizing domain (z≈0) inspects nothing and leaves no persistent field change; a click on it
+  (|z|>1) pins an orbit whose ψ-pullback persists in the settled field; the readout reads "orbit of …" (the
+  φ-mapped seed); the pinned orbit survives the view swap; the plane click-inspect path is unchanged. Captured
+  the z-disk deltoid with the unit-circle ∂Ω + a pinned escaping orbit pulled back into z. **F2c complete —
+  the z-disk is now a full peer of the plane (field + boundary + orbit inspection); sphere (F2d) still to come.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2d-i — sphere field + camera):**
+  the third σ coordinate view — the **Riemann sphere** — renders. A single-pass fragment ray-cast (no FBO),
+  mirroring CD's main-plot sphere technique verbatim: `schwarzGL` gains a `sphereRayW` (a copy of shaderBuilder's
+  `sphereRayZ`, aspect fixed at 1) + a `u_viewMode == 2` branch in `fragToW` that ray-casts the unit sphere from
+  a fixed camera at (0,0,dist) — the arcball orientation applied to the HIT (`u_sphereRot = worldToModel`), not
+  the ray — and stereographically projects `w = (x+iy)/(1−Z)` (∞ at the north pole); the SAME σ escape-time then
+  runs on w, so the sphere is the plane's field wrapped onto a ball. A silhouette miss paints the shared
+  off-domain background; a hit is Lambert+spec **ball-shaded** (world normal, shared `u_lightDir`) so it reads as
+  a lit 3-D sphere. Three camera uniforms (`u_sphereRot` mat3 · `u_sphereDist` · `u_sphereTanFov`) pushed only in
+  sphere mode; the FOV↔magnification map is a telescope zoom (distance fixed), mirroring glPlot. **Plane + z-disk
+  are byte-identical** (u_viewMode 0/1 unchanged). The camera reuses `sphereView.ts` wholesale (`makeSphereCamera`
+  / `arcballDelta` / `quatMultiply` / `quatFromAxisAngle` / `quatToMat3`). In `main.ts`: a `schwarzSphereRot` +
+  `schwarzSphereZoom` camera (separate from the flat views' center/zoom stash), sphere branches in the pointer
+  handlers (drag → arcball rotate · wheel → telescope zoom) and keyboard (arrows spin · ± zoom), the sphere button
+  **enabled per-session in a GPU renderer** (CPU refuses with a toast — the per-pixel ray-cast is GPU-only), the
+  view chip reads "Riemann sphere · zoom …", overlays + the scale bar suppressed on the ball, and Reset restores
+  the camera. A **σ-specific default orientation** tilts the shared K-facing default ~90° so the ∂Ω equator sits
+  centre-frame (K cap below, the Ω tiling wrapping toward ∞ above) instead of the featureless K hemisphere the
+  map's bounded complement shows head-on. **Orbit inspection + serialization are deferred to F2d-ii** — while on
+  the sphere `_sigma` captures the underlying w-plane view, so a share link is always a coherent flat view.
+  Green: typecheck + lint + node **2437** (unchanged — the sphere is GPU-only, so its coverage is the browser
+  corpus) + browser **19/19** (+1 F2d: the composed σ shader compiles with the sphere path; a σ ball renders
+  opaque with K-vs-Ω structure + a silhouette void; the viewport corners fall in the void; it differs from the
+  plane; and rotating the camera moves the frame). VERIFIED (Playwright, **9/9**): the sphere button is enabled
+  in a GPU session; the button + `data-schwarz-view=sphere` reflect the mode; the field renders + differs from the
+  plane; the chip reads "Riemann sphere"; dragging rotates + scrolling zooms the camera; Reset restores the
+  default; and returning to the plane leaves its window byte-identical (the sphere never touched it). Captured the
+  tilted-default deltoid sphere (K → ∂Ω → 3-fold tiling → the black ∞ cap at the north pole). **F2d-i complete —
+  plane · z-disk · sphere all render + navigate; F2d-ii adds sphere orbit inspection + `_sigma` camera round-trip.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F2d-ii — sphere inspection +
+  serialization):** the sphere becomes a full peer — overlays + `_sigma` round-trip. A new pure
+  `planeToScreenUv(w, cam)` in `sphereView.ts` is the exact INVERSE of `screenToPlane`: it projects a w-space
+  point onto the ball (`stereographicInverse` → model→world via the transpose of `worldToModel` → perspective),
+  returning null on the FAR (occluded) hemisphere. Overlays reuse it: `drawSchwarzOrbit` gains a `toPixel`
+  override (w → canvas pixel directly, null breaks the polyline at the horizon — same break logic as F2c's
+  z-pullback), and a new `drawSchwarzBoundarySphere` strokes ∂Ω over the ball (breaking where it wraps behind).
+  **Inspection**: `schwarzSeedFromPointer` ray-casts the pointer onto the sphere via `screenToPlane` (the CPU
+  mirror of the GPU raycast, so the seed matches the rendered pixel) — click-inspect, hover, and the `i` key all
+  work on the sphere now, drawing the traced orbit projected onto the ball; a click off the silhouette inspects
+  nothing. Seed-drag stays plane-only. **Serialization**: `_sigma` carries the sphere (`viewMode:"sphere"` +
+  `sq` orientation quaternion + `sz` magnification), emitted ONLY on the sphere (plane / z links byte-identical);
+  restore is GPU-guarded (a sphere link on a CPU session falls back to the plane). The arcball quaternion is now
+  RE-NORMALISED at every accumulation step so it never drifts off unit length (which also makes the serialized
+  camera round-trip exact). Green: typecheck + lint + node **2442** (+3 sphereView: `planeToScreenUv` inverts
+  `screenToPlane`, maps the front pole to the screen centre, and returns null on the occluded far cap; +2
+  schwarzState: the sphere view + camera round-trips and never leaks the camera keys onto a plane / z link, and a
+  corrupt/absent camera falls back to no-rotation + default zoom) + browser **19/19** (unchanged — F2d-ii touches
+  no shader). VERIFIED (Playwright, **9/9**): the z-disk-style ∂Ω draws on the ball; a click off the silhouette
+  inspects nothing; a click on the ball pins an orbit (readout "orbit of …") whose ψ-projection draws on the
+  sphere; clearing removes it; scrolling raises the camera magnification; and a share link reopens in sphere mode
+  with the magnification preserved. The exact quaternion round-trip is additionally pinned by decoding the real
+  share URL (`sq`/`sz` parse back exactly) and by the schwarzState unit test — a cross-page pixel-exact frame
+  match proved too SwiftShader-timing-sensitive to assert live (the minimal camera round-trip is byte-identical;
+  the ∂Ω curve, computed on the CPU in float64, shifts sub-pixel between the preset and restored φ). Captured the
+  deltoid sphere with ∂Ω stroked over the ball. **F2d complete — plane · z-disk · sphere are all full peers
+  (field + boundary + orbit inspection + `_sigma` round-trip). F2 (the multi-view explorer) is done.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F3a — σ⁻¹ engine in
+  `@cas/schwarz`):** the shared σ engine gains the multivalued Schwarz **inverse** σ⁻¹, the primitive the
+  fundamental-domain tiling is grown from (F3b `buildPreimageTree`, then the F3c CD UI). σ⁻¹(w) = φ(F⁻¹(conj(w)))
+  is a SET — F⁻¹ is many-valued — so `sigmaInverse(w): Complex[]` returns every valid preimage. Added to BOTH
+  families as an engine method (it needs the closure's F coefficients + the shared Durand–Kerner), matching how
+  `sigma` lives on the engine rather than as a free function. **Unbounded-Laurent** (`unbounded-laurent.ts`):
+  pole-free φ clears to a polynomial — conj(c)/z + Σₗ conj(F[l])·zˡ = t times z ⇒ conj(c) + Σₗ conj(F[l])·z^{l+1}
+  − t·z = 0 — solved for ALL roots by Durand–Kerner (`solveFPolynomial`, the exact all-roots path, immune to the
+  branch drift a warm Newton suffers); pole-bearing φ has finite F-poles so there is no single cleared polynomial,
+  and a ring-grid multi-start Newton (`solveFNewton`, mirroring `invertPhi`'s branch fallback) finds the distinct
+  roots. **Bounded** (`bounded.ts`): F is meromorphic on 𝔻, so `solveFInterior` sweeps interior seeds with the
+  same multi-start Newton. Both filter to the correct branch (exterior |z|>1 for the unbounded map, interior
+  |z|<1 for the bounded map), map surviving roots through φ, and **round-trip-validate σ(preimage) ≈ w** (tol
+  1e-6) before keeping them — coincident preimages merged. The round-trip is near-exact by construction: the
+  exterior/interior roots of F(z)=conj(w) satisfy σ(φ(z)) = conj(F(z)) = w whenever φ is injective on its branch
+  domain (so invertPhi(φ(z)) = z), the guard only catching a numerical branch slip. Deferred: the direct
+  all-roots clear for the pole-bearing/bounded families waits on the `@cas/core/poly` extraction (task #62,
+  pending) — until then the validated Newton sweep is the robust path (it is what QD's own σ⁻¹ does for the
+  general case). Green: typecheck + lint + node **2449** (+4 unbounded, +3 bounded). New tests mirror the QD app's
+  own σ⁻¹ goldens (`apps/quadrature-domains/app/test/schwarz.test.js`), pinning the ROBUST invariants rather than
+  a fragile exact count: the unit disk returns exactly ONE preimage = 1/conj(w) (round-trip < 1e-8, the QD
+  S1/unit-disk golden); the deltoid recovers its forward preimage exactly — φ(z₀) ∈ σ⁻¹(σ(φ(z₀))) — and every
+  returned preimage round-trips σ(σ⁻¹(w)) ≈ w; the S3a interchange golden inverts (σ⁻¹([2.5,0]) contains the
+  cusp-side [2.125,0], within the cubic's ≤3 exterior roots); and the pole-bearing (SINGLE) + two-branch (bounded
+  TWO) paths each find ≥1 preimage that round-trips. Probed counts: the deltoid yields **2 exterior preimages**
+  per node (the cleared cubic's third root is interior, correctly filtered; round-trip ~1e-14), the disk/lobe
+  exactly 1 — so the tiling branches ~2ⁿ for the deltoid, making the F3b visual budget load-bearing. **F3a
+  complete — σ⁻¹ is unit-tested (round-trip + QD goldens) for both families; F3b grows the preimage tree,
+  F3c wires the CD double-click tiling UI.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F3b —
+  `buildPreimageTree`):** the fundamental-domain tiling tree — the second half of the σ⁻¹ primitive, iterating
+  the F3a `sigmaInverse` from a seed. A new `preimage-tree.ts` exports `buildPreimageTree(seed, schwarz, opts)
+  → { generations, edges, truncatedByBudget }` as a FREE function (like `escapeTime`) over a minimal
+  `SchwarzInverse` surface (`{ sigmaInverse(w): Complex[] }`), so it serves BOTH families and any later one with
+  no per-family code. `generations[g]` holds the σ⁻ᵍ preimages (gen 0 = the seed, copied so the tree never
+  aliases the caller's point); each gen-(g+1) node carries a flat `edge {fromGen,fromIdx,toGen,toIdx}` back to
+  its parent so the F3c renderer strokes parent→child without re-deriving links. Expansion stops on any of three
+  conditions: `depth` generations reached (default 4), a generation yielding no preimages (the tiling ran dry),
+  or `visualBudget` total nodes hit (default 4096 — the deltoid branches ~2ⁿ, so a deep tree needs the cap;
+  `truncatedByBudget` is then set and the partially-filled final generation kept). A σ⁻¹ throw on any node is
+  swallowed as "no preimages" so one pathological node never aborts the whole tree. Ported verbatim (the tuple
+  form) from the QD app's `schwarz-inverse.mjs buildPreimageTree`. Green: typecheck + lint + node **2449 →
+  2459** (+10). Tests mirror the QD app's own tree goldens (`schwarz.test.js` S1 depth-structure + visual-budget)
+  and pin the structural invariants: depth D (untruncated) → D+1 generations with gen 0 = the seed (a distinct
+  copy, equal by value); `edges.length` = the non-root node count with every edge indexing valid endpoints;
+  **every edge a genuine parent→child σ⁻¹ link** (the child is one of `sigmaInverse(parent)`) that additionally
+  round-trips `σ(child) ≈ parent`; the budget cap holds `total ≤ budget` with `truncatedByBudget` set; the
+  single-lobe seed runs dry early (generations < depth+1, empty trailing generation, NOT budget-truncated);
+  depth 0 → the seed alone with no edges; omitted opts apply the (4, 4096) defaults; and a throwing stub engine
+  yields a well-formed single-node tree. Probed shapes: deltoid depth-4 grows `1,2,4,8,15` (edges 29), budget-20
+  truncates at `1,2,4,8,5` = 20, the lobe runs dry at `1,1,0`. **F3b complete — σ⁻¹ + the tiling tree are both
+  in `@cas/schwarz` and unit-tested; F3c wires the CD double-click tiling UI (seed-in-set gate + plasma-ramped
+  tree overlay + z-disk ψ-mirror + `_sigma` depth/budget).**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F3c — the CD tiling UI):**
+  the fundamental-domain tiling becomes interactive in Complex Dynamics — **double-click a point in the tiling
+  set to grow its σ⁻¹ preimage tree** over the σ field, in whichever of the three coordinate views is active.
+  A new `schwarzTreeOverlay.ts` (`drawSchwarzTree`) strokes a `buildPreimageTree` result — parent→child edges +
+  per-node dots — coloured by GENERATION with a plasma ramp ported from QD's `preimageGenColor` (bright yellow
+  seed → orange → deep purple, so the two apps' tilings read alike), over CD's dark casing so it stays legible
+  on both the navy K interior and a bright Ω ramp. Projection reuses the σ-orbit overlay's dispatch verbatim, so
+  the tiling lives coherently in all three views: the w-plane via plotToPixel, the **z-disk ψ-mirrored** (each
+  preimage pulled back to z = φ⁻¹(w)), and the **sphere** projected onto the ball (null on the occluded far cap
+  drops the node + any edge touching it). In `main.ts`: a `dblclick` handler maps the pointer to w via the
+  existing `schwarzSeedFromPointer` (plane · z-disk φ(z) · sphere raycast; null off-domain) and gates on
+  tiling-set membership — `schwarzEscapeAt(w).kind === "fundamental"` with a gate cap of `max(256, displayMaxIter·4)`
+  (QD's multiplier, so a truly-escaping seed isn't misread "interior" under a low display budget); a rejected seed
+  toasts and leaves any prior tree untouched. A successful seed drops the orbit its two synthesized single-clicks
+  pinned (matching QD — a dblclick never also pins), so the clean tiling + its `N preimages · M gens (capped?)`
+  readout stand alone. The tree is drawn UNDER the orbits every paint from w-space, so it survives pan/zoom/
+  view-switch; it is cleared on a new map. A **Tiling** control group adds depth (0–8) + a visual-budget select
+  (1024/4096/16384) that rebuild the active tree LIVE from its seed (no re-click), plus a clear button. Both params
+  travel in `_sigma` (schwarzState: `td`/`tb`, omitted at the F3b defaults 4/4096 so a pre-F3c link is byte-identical;
+  clamped 0–8 / 1–65536 on a hostile link) — the tree ITSELF is transient (like the pinned orbit, not serialized),
+  so a restored link keeps the preferred depth/budget and the user re-seeds with a double-click. The PNG export bakes
+  the tiling alongside ∂Ω + the orbit in each view. Green: typecheck + lint + node **2459 → 2466** (+5 schwarzTreeOverlay
+  — edges become moveTo→lineTo per edge, a null projection drops the node + both its edges, toPixel takes precedence,
+  empty/seed-only trees; +2 schwarzState — the tiling params round-trip, omit at their defaults, and clamp; appState
+  opt-out updated for the two new controls). VERIFIED (Playwright, **14/14**): a double-click on the deltoid's tiling
+  set seeds a 31-node depth-4 tree (readout shows, field changes); raising depth rebuilds it live (31 → 127 nodes);
+  the budget select rebuilds; the tiling ψ-mirrors into the z-disk and projects onto the sphere (surviving both view
+  switches); a share link restores depth 8 + budget 1024 but NOT the transient tree; clear removes it; and a
+  double-click off the uniformizing domain (|z|<1 in the z-disk) seeds nothing. The visual-budget CAP itself is
+  engine-unit-tested (F3b) — the deltoid tops out at 511 nodes by depth 8, under the 1024 select minimum, so it is
+  not reachable through this UI. Captured the depth-4 deltoid tiling (yellow seed → orange/purple preimage web).
+  σ⁻¹ is a numerical reconstruction, so the tiling stays `≈` (the hint reads "…preimage tree (≈)"). **F3c complete —
+  F3 (the preimage/tiling tree, M–L increment) is done end-to-end: σ⁻¹ + buildPreimageTree in `@cas/schwarz`, and the
+  CD double-click tiling UI across all three σ views with `_sigma` params.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4a-i — limit-set engine in
+  `@cas/schwarz`):** the σ **limit set** (the fractal boundary the tiling converges to) + its **box-counting
+  dimension**, the last two σ⁻¹-based kernels of the extraction thread. A new `limit-set.ts` exports
+  `sampleLimitSet(schwarz, opts)` — the **chaos game on σ⁻¹**: from a seed in K, repeatedly pick ONE preimage at
+  random; after burn-in the walk densely samples the limit set (the attractor of the IFS of σ⁻¹ branches). It
+  restarts from a fresh random Ω^c seed when σ⁻¹ dead-ends (100-restart + 20×-budget failsafes), and returns an
+  interleaved `Float64Array`. And `boxCountingDimension(points, opts)` — occupied-cell counts N(ε) over a
+  geometric ε ladder, least-squares slope of (log ε, log N) = −dim. Both free functions over the F3b
+  `SchwarzInverse` surface (family-agnostic), ported verbatim (tuple form) from QD's `schwarz-inverse.mjs`;
+  `sampleLimitSet` takes `isInOmega` + a restart `bbox` as params (the @cas engines don't carry the boundary,
+  unlike QD's monkey-patched handle). Green: typecheck + lint + node **57** (+8). Goldens pin the log-log math on
+  SYNTHETIC sets with a known dimension on a coarse (unsaturated) ε ladder — a dense line → **1.0**, a filled
+  square → **2.0**, exact (counts `8,16,32,64` / `64,256,1024,4096`) — plus the Float64Array≡tuple input path and
+  the <2-valid-scales → NaN degenerate case; and `sampleLimitSet` on the deltoid (seeded LCG) reproduces the QD
+  S3 golden's robust invariants — ≥1500 of 2000 points, all finite + `|·|<5`, a reproducible cloud (same seed →
+  identical), and a finite box-dimension in QD's broad `[−0.05, 2.5]` with ≥4 valid scales. **Honest caveat
+  (documented + tested):** box-counting is SAMPLE-DENSITY biased — at ε finer than the point spacing N(ε)
+  plateaus at the point count and flattens the slope DOWNWARD (the deltoid reads ~0.9 at 50k points, an
+  underestimate), so the dimension is a rough `≈`, never certified. **F4a-i complete — the limit-set kernels are
+  in `@cas/schwarz` + golden-tested; F4a-ii wires the CD limit-set analysis card (chaos-game overlay + `(≈)`
+  dimension readout across the three views).**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4a-ii — the CD limit-set
+  analysis card):** the σ limit set becomes an interactive analysis card in Complex Dynamics — **"sample limit
+  set"** runs the F4a-i chaos game on σ⁻¹ and paints the resulting cloud (the fractal the tiling converges to,
+  ≈ the black non-escaping set) under the other overlays, reporting its **box-counting dimension** `(≈)`. A new
+  `schwarzLimitSetOverlay.ts` (`drawSchwarzLimitSet`) fillRects one bright-cyan translucent dot per sample so
+  density accumulates along the fractal seams; projection reuses the σ-orbit / tiling dispatch verbatim, so the
+  cloud ψ-mirrors into the z-disk and projects onto the sphere (null projections dropped). In `main.ts`:
+  `computeSchwarzLimitSet` builds the SAME `isInOmega` the field uses (via `pointInPolygon` on the session's
+  boundary polygon) + a 25%-padded restart bbox, runs `sampleLimitSet` (a user point count, 2000–100000, default
+  15000) synchronously, then `boxCountingDimension` for the dimension; the readout reads `dim ≈ d.ddd (box-count ·
+  N pts)`. A Limit-set control group adds the point-count input + "sample"/"clear" buttons; the cloud is drawn
+  from w-space every paint (survives pan/zoom/view-switch), cleared on a new map, baked into the PNG export under
+  the boundary/tree/orbit, and — being a compute-on-demand analysis, not a view property — NOT serialized (like
+  the pinned orbit / tree). **Honest labeling:** the readout, the card title ("dimension (≈)"), and the hint all
+  carry `≈`, because σ⁻¹ is a numerical reconstruction AND box-counting is a rough, sample-density-biased estimate
+  — visible live in the smoke, where the deltoid reads dim ≈ 0.604 at 6k points and 0.688 at 10k (the saturation
+  plateau receding as density rises). Green: typecheck + lint + node **818 → 823** (+5 schwarzLimitSetOverlay —
+  one fillRect per on-canvas sample, a null projection drops the sample, toPixel precedence + a fully-occluded
+  ball draws nothing, off-canvas samples skipped, empty cloud a no-op; appState opt-out updated for the sample-
+  count control). VERIFIED (Playwright, **9/9**): sampling shows the `dim ≈` readout with a finite dimension +
+  point count; the cloud draws over the field; it ψ-mirrors into the z-disk and projects onto the sphere
+  (surviving both view switches); re-sampling with more points updates the readout; and clear removes it +
+  restores the field. Captured the deltoid limit set (cyan fractal dust, densest at the tiling cusps — the
+  σ⁻¹ residual set). **F4a complete — the σ limit set + its box-counting dimension are in `@cas/schwarz` and
+  live as a CD analysis card across the three σ views. This closes the σ⁻¹ "structure wave" (F3 tiling → F4a
+  limit set).** The remaining F4 cards (F4b level curves · F4c/F4e orbit families · F4d cycles · F4h
+  singularities · F4i explicit σ form — mostly cheap forward-only wins) stay à-la-carte for the next pick.
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4i — explicit σ(w) form):**
+  a forward-only analysis card showing the **closed form** of the generated map — φ(z), its Schwarz extension
+  F(z), and the reflection σ(w) — derived from CD's own φ recipe. A new pure `schwarzExplicitForm.ts`
+  (`explicitSigmaForm(phi)`) renders the per-family formulas as Unicode-math text (CD has no KaTeX, so it uses
+  the same σ / φ / conj / superscript idiom as the readouts): the unbounded-Laurent family as
+  `φ(z) = c·z + Σₗ F[l]/zˡ + branches` / `F(z) = conj(c)/z + Σₗ conj(F[l])·zˡ + branches`, the bounded family as
+  `φ(z) = w₀ + branches` / `F(z) = conj(w₀) + Σ A/(z−z_j)ᵏ`; zero coefficients + unit exponents are dropped for
+  readability, complex coefficients parenthesised, reals bare. **Honest labeling:** φ and F ARE closed-form, but
+  σ(w) = conj(F(ψ(w))) is shown symbolically (ψ = φ⁻¹) with the note that φ⁻¹ is solved numerically, so σ and
+  everything derived from it are `≈` — the card never presents a closed-form σ. A read-only "Explicit form"
+  control group (no inputs → no shared state) is populated from the session's φ each time a σ is generated.
+  Green: typecheck + lint + node **823 → 828** (+5 schwarzExplicitForm goldens — the deltoid `z + 0.5/z²` /
+  `1/z + 0.5·z²`; a complex leading c reflecting to `conj(c) = 1−0.5i` in F (the load-bearing S5-C1 sign); an
+  order-1 + order-2 finite pole; the bounded lobe with its zero centre dropped + an off-centre conj(w₀); and the
+  trivial unit disk — the numbers matching the engine-test fixtures' documented φ/F). VERIFIED (Playwright): the
+  card paints the deltoid's three lines + the ≈ note on generate. **F4i complete — the map's closed form is
+  visible, σ honestly symbolic.**
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4h — σ-singularities):** a
+  forward-only card marking where σ = conj(F(φ⁻¹)) misbehaves — its **branch points** (the cusps) and
+  **σ-poles**. A new `@cas/schwarz/singularities.ts` (`findSigmaSingularities(map, branches, opts)`, a free
+  function over a minimal `{evalPhi, evalPhiDeriv}` surface): branch points are the zeros of φ′ (critical
+  points), found by a multi-start Newton on `evalPhiDeriv` with a finite-difference φ″ (exact for holomorphic φ),
+  deduplicated + mapped through φ; σ-poles depend on the branch of φ⁻¹ — **bounded** (interior branch, poles
+  z_j ∈ 𝔻 reachable) → the σ-pole is at w = φ(z_j); **unbounded-Laurent** (exterior branch) → the interior pole
+  is never hit, so there is NO finite σ-pole (it sits at φ(∞) = ∞). This corrects QD's reflection z_j → 1/conj(z_j),
+  which lands on φ's OWN pole → ∞ and is filtered — so QD shows no finite σ-pole for these families either, while
+  computing w = φ(z_j) surfaces the real bounded pole. A CD overlay (`schwarzSingularityOverlay.ts`) draws amber
+  ○ rings (branch points) + red × marks (σ-poles), reusing the σ-overlay projection so they live in all three
+  views; a "Singularities" card lists their locations, with a display toggle that travels in `_sigma`
+  (`showSingularities`, default off) and bakes into the PNG export. **Honest labeling:** the card title, list,
+  and note all carry `≈` (σ is numerical; the branch points are found numerically). Green: typecheck + lint +
+  node **2484 → 2492** (+8: +4 @cas/schwarz — the deltoid has 0 poles + exactly 3 branch points at its cusps φ(1)=1.5,
+  φ(e^{±2πi/3})=−0.75±1.299i, all on |z|=1; the unit disk φ′≡1 has none; a bounded lobe's σ-pole is φ(0.3)≈0.165
+  where σ overflows past 1e6; an unbounded interior pole gives NO finite marker; +4 schwarzSingularityOverlay —
+  a ring per branch point + a × per pole, a null projection drops the marker, toPixel precedence, empty a no-op;
+  appState opt-out for the toggle). VERIFIED (Playwright, **8/8**): the deltoid card lists 3 branch points + 0
+  σ-poles; the toggle draws + removes the markers; they survive the z-disk + sphere view switches; and a share
+  link restores the toggle + re-lists the singularities. Captured the deltoid with its 3 cusps ringed. **F4h
+  complete — σ's singular structure (the cusps) is visible + honestly labeled.** Remaining à-la-carte F4 cards
+  (F4b level curves · F4c/F4e orbit families · F4d cycle finder · F4g domain coloring) are the next picks.
+- **2026-08-10 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4c + F4e — orbit families):**
+  one "Orbit family" card that traces a whole *family* of σ-orbits at once, two ways. A new pure
+  `schwarzOrbitFamily.ts`: **`sweepSeeds('line'|'circle', …)`** lays out evenly-spaced seeds (F4e — a circle of
+  N points, default 24, at a radius, default 1.5, around the plane-view centre; a line variant is there for the
+  future curve tool); **`canonicalSchwarzSeeds(engine, phi, isInOmega)`** returns the map's *natural* seeds
+  (F4c) — the **bounded** family's centre φ(0) = w₀, or the **unbounded** family's pole-reflection centroid
+  (empty for the pole-free deltoid, which has no natural seed); **`familyHue(i, n)`** ramps the family 0…300°
+  (warm → cool) so each orbit is distinguishable. The seeds ride the *existing* `schwarzOrbitAt` tracer, and
+  draw through the *existing* `drawSchwarzOrbit` — extended only by a new optional `color` on
+  `SchwarzOrbitStyle` (default keeps `orbitColor(kind)`), so the whole card reuses the σ-overlay projection and
+  lives in all three views. In CD: the card sweeps a circle (filtered to Ω, else a toast), or seeds the
+  canonical orbits (a toast when there are none — the honest deltoid case), reading `N orbit(s) · circle
+  sweep` / `· canonical seeds`; the family is drawn every paint (survives pan/zoom/view-switch), baked into the
+  PNG export under the pinned orbit, cleared on a new map, and — being a compute-on-demand analysis, not a view
+  property — NOT serialized (like the tree / limit set / pinned orbit; its seed-count + radius controls are
+  appState opt-outs). **Honest labeling:** the card title, readout, and hint carry `≈`, because every σ-orbit is
+  a numerical reconstruction (σ = conj(F(φ⁻¹))). Green: typecheck + lint + node **2492 → 2500** (+8
+  schwarzOrbitFamily goldens — a line's evenly-spaced + single-point-midpoint seeds, a circle's 4 cardinal
+  seeds, n = 0 → none; the bounded lobe's canonical seed is w₀ + is dropped when not in Ω; the deltoid has none;
+  familyHue spans 0°→300° with a singleton at the first hue). VERIFIED (Playwright, **7/7**): canonical on the
+  pole-free deltoid seeds no family (honest "none"); a circle sweep traces 24 orbits (`24 orbits · circle
+  sweep`) that draw over the field; the family survives the z-disk + sphere view switches; clear removes it; and
+  canonical on a bounded lobe traces the single centre orbit (`1 orbit · canonical seeds`). Captured the deltoid
+  under a 24-orbit hue-ramped sweep — the family zig-zagging through the tiling, warm seeds outermost.
+  **F4c + F4e complete — σ-orbit families (swept + canonical) join the CD analysis cards.** Remaining
+  à-la-carte F4 cards (F4b level curves · F4d cycle finder · F4g domain coloring · F4f forward image of a drawn
+  curve) are the next picks.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4b — level curves):** a
+  "Level curves" card that contours the reflection σ over Ω — the iso-**|σ|** lines (solid) + iso-**arg σ**
+  lines (dashed) — by marching squares. A new pure `@cas/schwarz/level-curves.ts` (`computeSigmaLevelCurves`,
+  a free function over the minimal `{sigma}` surface both engines expose): it samples σ ONCE per grid node,
+  then marches |σ| per magnitude level and — the load-bearing choice — draws the **phase** lines SEAM-FREE, as
+  the zero set of the smooth field `g_θ(w) = Im(σ·e^{−iθ}) = |σ|·sin(arg σ − θ)`. Its zeros are exactly
+  arg σ ≡ θ (mod π), so one level-0 march per θ = kπ/M gives the phase lines with NO reference to arg's ±π
+  branch cut — the negative-real-axis "seam" a raw-arg marcher must special-case simply never appears (proven
+  in a unit test: the identity's θ=0 contour spans the *whole* real axis, negative half included). A grid node
+  where σ = null (φ⁻¹ failed, w ∉ Ω) is invalid and every cell touching it is skipped, so the curves live only
+  where σ is defined. Magnitude levels auto-derive as a geometric ladder off the **median** |σ| (robust to a
+  bounded map's σ-pole spike). A CD overlay (`schwarzLevelCurveOverlay.ts`) strokes the w-space segments with
+  the shared σ-overlay projection (solid magnitude over dashed phase; a wrap-length span rejected), so they
+  live in all three views + bake into the PNG export; the card computes on demand over the boundary polygon's
+  padded bbox with grid + phase-line controls, and — a transient analysis, not a view property — is NOT
+  serialized (like the tree / limit set / family; its two controls are appState opt-outs). **Honest labeling:**
+  the card title, summary, and readout carry `≈` — σ is a numerical reconstruction, so the level sets are
+  estimates. Green: typecheck + lint + node **2500 → 2512** (+6 @cas/schwarz — the identity's |σ|=1 unit circle,
+  the seam-free real axis + both axes for M=2, a σ-undefined region skipped, the median ladder, a deltoid smoke;
+  +6 schwarzLevelCurveOverlay — one moveTo/lineTo per drawn segment, dashed-phase/solid-magnitude, null-projection
+  drop, toPixel precedence, wrap-length reject, empty no-op). VERIFIED (Playwright, **6/6**): drawing contours
+  the deltoid (`≈ 3,746 segs · 5 |σ| levels · 6 arg lines`) over the field; the curves survive the z-disk +
+  sphere switches; clear removes them; a bounded lobe contours too. Captured the deltoid's σ phase portrait —
+  concentric |σ| loops + arg-σ spokes converging on σ's zeros/poles, the classic circle-and-spoke signature.
+  **F4b complete — σ's level sets are visible + honestly labeled.** Remaining à-la-carte F4 cards (F4g domain
+  coloring · F4d cycle finder · F4f forward image of a drawn curve) are the next picks.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4g — domain coloring):** a new
+  σ **colour mode** — a per-pixel **phase portrait** of σ(w) itself, not an escape-time coloring. `Domain
+  coloring (≈)` joins `SCHWARZ_COLOR_MODES` (id 5); the σ shader (`schwarzGL.ts`) gains a `hsl2rgb` helper +
+  `domainColor(σ)` and, in `fieldColor()`, an early mode-5 branch: where σ is defined (w ∈ Ω, the inverse
+  converges) it evaluates σ(w) ONCE and colours the pixel **hue = arg σ**, **lightness banded by log₂|σ|** (a
+  soft shell per octave); K (σ undefined) stays a deep-indigo neutral, an invalid inverse the usual grey. It
+  reuses the existing colour-mode plumbing end-to-end — the select auto-lists it, and `colorMode` already
+  travels in the `_sigma` state layer (so a share link / saved view / PNG stamp round-trips it, like the
+  colormap; no new serialized control). The legend swaps its ramp bar for the **arg-σ hue wheel** in this mode
+  (−π red → 0 cyan → +π red) via the custom-stops path, so it never shows the unused escape-time colormap.
+  GPU-only, consistent with the other advanced modes (B1/B2) — the CPU fallback keeps its fixed ramp.
+  **Honest labeling:** the mode label + legend title carry `≈` (σ is a numerical reconstruction). Green:
+  typecheck + lint + node **2512 → 2513** (the F4g domain-mode `_sigma` round-trip; the color-modes census now
+  asserts `…, distance (4), domain (5)`). VERIFIED (Playwright, **5/5**): switching to domain coloring compiles
+  the shader cleanly (no GL errors) and repaints; the field spans the full hue wheel (all **6** of 6 hue
+  buckets, vs 3 for escape-time); the legend reads `Domain coloring (≈) · hue = arg σ`; and a bounded lobe
+  renders multi-hue too. Captured the deltoid's σ phase portrait — the full arg-σ hue wheel with log|σ| shells
+  winding around σ's three zeros/poles (the same singularities F4b's level curves mark), the deltoid K held
+  neutral. **F4g complete — σ is now legible as a phase portrait, honestly labeled.** Remaining à-la-carte F4
+  cards (F4d cycle finder · F4f forward image of a drawn curve) are the next picks.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4d — cycle finder):** a
+  "Cycles" card that finds **period-n cycles of σ** (σⁿ(w) = w). A new `@cas/schwarz/forward.ts` (`findCycles`,
+  a free function over a `{sigma, isInOmega}` surface) — ported from the QD app's schwarz-forward.mjs (ADR-0007):
+  grid-seed Ω, run Newton on G(w) = σⁿ(w) − w at each seed (QD's complex step, (σⁿ)′ via a forward x-difference —
+  exact for the holomorphic even n, a heuristic for the anti-holomorphic odd n), dedup the converged roots, then
+  trace each into its cycle. **Corrected QD's period detection** (F4h precedent): QD broke the trace one step
+  early and under-reported an n-cycle's period; this traces [w, σ(w), …] until it returns within n steps, so a
+  2-cycle reads as period 2 (pinned by a synthetic test — σ = w²−1, whose super-attracting 2-cycle {0,−1} and
+  golden-ratio fixed points are textbook). A CD overlay (`schwarzCycleOverlay.ts`) draws each cycle as its closed
+  orbit loop + point markers, one golden-angle hue per cycle, reusing the σ-overlay projection (all three views)
+  + baking into the PNG export; the card searches on demand over the boundary polygon's bbox — **padded well into
+  the exterior for the unbounded family, whose Ω is outside ∂Ω** — with a period control, and is NOT serialized
+  (a transient advisory analysis, like the tree / limit set / family / level curves; its control is an appState
+  opt-out). **Honest labeling:** the card title, summary, and readout carry `≈` and the word "advisory" — σ is
+  numerical AND this is a coarse global search, never exhaustive. Green: typecheck + lint + node **2513 → 2524**
+  (+7 @cas/schwarz forward goldens — iterateCurveForward's k+1 steps / Ω-drop / empty; findCycles on w²−1 finds
+  the golden-ratio fixed points + the {0,−1} 2-cycle at the correct period, a constant map's fixed point, and a
+  deltoid round-trip smoke; +4 schwarzCycleOverlay — an arc per point + the loop for period>1, a lone marker for
+  a fixed point, the null-projection drop, the golden-angle hue). VERIFIED (Playwright, **6/6**): a period-2
+  search on the deltoid finds its **3 σ-fixed points** (`≈ 3 cycles · 3×p1` — found via the holomorphic σ², which
+  the direct period-1 search misses: the anti-holomorphic subtlety made visible); the markers draw + survive the
+  z-disk + sphere switches; a period-4 search finds **3 fixed points + 3 genuine 4-cycles** (`≈ 6 cycles · 3×p1,
+  3×p4`); clear removes them. Captured the deltoid's three period-4 orbit loops (golden-angle hues) threading the
+  tiling with the three fixed points marked. **F4d complete — σ's periodic orbits are found + drawn, honestly
+  advisory.** The last à-la-carte F4 card (F4f forward image of a drawn curve) is the next pick.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4f — forward image of a drawn
+  curve):** a "Forward curve" card — **shift-drag a path in Ω** on the plot and its forward σ-images σ(path),
+  σ²(path), … are traced. The pure kernel is `iterateCurveForward` (the second export of `@cas/schwarz/forward.ts`
+  from F4d) — a verbatim tuple-form port of QD's schwarz-forward.mjs: apply σ to every vertex, k times, dropping a
+  vertex once it leaves Ω / σ fails (padding the tail so the output is always k+1 steps). The **shift-drag
+  interaction** rides the existing σ-canvas pointer handlers (B3's seed-drag lives alongside): a shift-pointerdown
+  starts a polyline, pointermove appends w-points (via the shared `schwarzSeedFromPointer`, so it draws in the
+  w-plane, the z-disk, or on the sphere) throttled by screen distance with a live seed-curve preview, and
+  pointerup finalises it through iterateCurveForward. A CD overlay (`schwarzForwardCurveOverlay.ts`) strokes the
+  drawn seed white + each σ-image hue-ramped (warm → cool), reusing the σ-overlay projection so the family lives
+  in all three views + bakes into the PNG export; an iterations control re-traces the last path at a new depth,
+  and it is NOT serialized (a transient analysis, like the tree / limit set / family / level curves / cycles; its
+  control is an appState opt-out). **Honest labeling:** the card title, hint, and readout carry `≈` — σ is a
+  numerical reconstruction. Green: typecheck + lint + node **2524 → 2527** (+3 schwarzForwardCurveOverlay — a
+  moveTo per curve + a lineTo per subsequent vertex, an unmappable vertex breaks the polyline, the hue ramp; the
+  iterateCurveForward kernel goldens shipped with F4d). VERIFIED (Playwright, **6/6**): a simulated shift-drag
+  across the exterior Ω traces an 11-pt path + its 5 forward images (`≈ 11-pt curve · 5 forward images`); they
+  draw + survive the z-disk + sphere switches; changing the iteration count re-traces to 8 images; clear removes
+  them. Captured the deltoid with a drawn arc (white) folding through the tiling under repeated σ, the images
+  cascading warm → cool. **F4f complete — the forward action of σ on a drawn curve is visible, honestly labeled.
+  This closes the à-la-carte F4 analysis cards (F4a–F4i all shipped).**
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (extraction — `@cas/core/poly` + `format`,
+  P1; ADR-0015):** the long-pending "extract `@cas/core/poly` from poly-helpers.mjs" (task S1a). A consumer
+  sweep found the drift ADR-0001 named — **five** codebases besides QD each re-rolling dense-polynomial
+  coefficient arithmetic around the already-shared Durand–Kerner solver, and the `subscript`/`superscript`
+  label helper drifted into `@cas/schwarz` + Complex Dynamics too. Presented a phased plan; **P1** lands the
+  foundation + the proving consumer (later phases peel the rest, need-driven — [ADR-0015](../DECISIONS.md)).
+  New **`@cas/core/poly.ts`** — `makePoly<C>(alg: ComplexAlgebra<C>)`, written once against the
+  representation-genericity keystone (serves QD's `objAlgebra {re,im}` and CD/schwarz's `tupleAlgebra [re,im]`,
+  like `durand-kerner`/`series`): `zero/one/variable/trim/add/neg/mul/scale/pow/linearPower` ported verbatim
+  from `QD.Poly` (the **degree-preserving** trim convention carried exactly — the σ⁻¹ root count is the degree)
+  + `eval` (Horner) and `monic`, the coefficient-array glue the non-QD consumers wrapped around the solver. New
+  **`@cas/core/format.ts`** — `subscript`/`superscript` (a display leaf; the second half of poly-helpers, which
+  its own header admits only co-located for load-order). **Scope boundary (ADR-0015):** float only — the
+  exact-ring poly consumers stay in `@cas/exact` (the ADR-0008 "two shapes, two engines" call, symmetric). QD's
+  `poly-helpers.mjs` is now a **byte-identical shim** over `makePoly(objAlgebra)` (`Complex.mul` uses the same
+  formula it inlined; the frozen classic `.js` twin, still vm-loaded in the legacy suite, is a live parity
+  check) + `format`. **`@cas/schwarz` is the proving second consumer** (ADR-0007): `unbounded-laurent.ts`'s
+  `exteriorRoot`/`solveFPolynomial` drop their inline Horner + own trim-loop + own monic-map for
+  `poly.eval`/`trim`/`monic`, and `singularities.ts` uses `format.subscript`. Green: typecheck + lint + build
+  (worker-bundle gate: 5 chunks present) + node — **2527 → 2543 (+16 @cas/core goldens)** (poly: hand-computed products /
+  powers / (z−z0)^m / Horner eval / monic / the load-bearing trim + degree-preserving convention / obj-vs-tuple
+  representation invariance; format: digit maps + non-digit passthrough); the 74 `@cas/schwarz` tests
+  (σ⁻¹ round-trip + QD goldens) **unchanged** — a bit-identical refactor; QD's **2334**-assertion legacy suite
+  green (the classic↔.mjs parity check confirms byte-identity). **P1 complete — `@cas/core/poly` + `format`
+  exist, QD delegates to them bit-identically, and `@cas/schwarz` rides them. P2–P3 (peel `@cas/expr/rational`
+  + the CD / correspondences float consumers) stay need-driven per ADR-0015.**

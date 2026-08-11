@@ -51,6 +51,12 @@ describe("@cas/schwarz unbounded-Laurent σ (deltoid ground truth)", () => {
     near(DELTOID.evalPhiDeriv([2, 0]), [0.875, 0]); // 1 − 1/8
   });
 
+  it("evalFDeriv = z − 1/z² (deltoid F(z) = 1/z + ½z²; S5-B2)", () => {
+    near(DELTOID.evalFDeriv([2, 0]), [1.75, 0]); // 2 − 1/4
+    near(DELTOID.evalFDeriv([0, 2]), [0.25, 2]); // 2i − 1/(2i)² = 2i + ¼
+    near(DELTOID.evalFDeriv([1, 0]), [0, 0]); // 1 − 1
+  });
+
   it("σ(φ(z₀)) = conj(F(z₀)) — the exact round-trip identity", () => {
     for (const z0 of EXTERIOR) {
       const Fz0 = DELTOID.evalF(z0);
@@ -100,6 +106,63 @@ describe("@cas/schwarz unbounded-Laurent σ (deltoid ground truth)", () => {
     expect(inK.n).toBe(0);
     const far = escapeTime(DELTOID, isInOmega, [100, 0], { maxIter: 64, escapeR: 50 });
     expect(far.kind).toBe("escaped");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// σ⁻¹ (F3a) — the multivalued Schwarz inverse used to grow the fundamental-domain tiling.
+// σ⁻¹(w) = φ(F⁻¹(conj(w))): the exterior roots z (|z|>1) of F(z)=conj(w), mapped through φ. Mirrors the
+// QD app's own σ⁻¹ goldens (apps/quadrature-domains/app/test/schwarz.test.js) which pin the ROBUST
+// invariants — degree bound, ≥1 preimage, and the exact round-trip σ(σ⁻¹(w)) ≈ w — rather than a fragile
+// exact count (the number of EXTERIOR roots varies with w even when the cleared polynomial degree is fixed).
+describe("@cas/schwarz unbounded-Laurent σ⁻¹ (deltoid preimages, F3a)", () => {
+  const contains = (set: Complex[], p: Complex, tol = 1e-6): boolean =>
+    set.some((q) => Math.hypot(q[0] - p[0], q[1] - p[1]) < tol);
+
+  it("σ⁻¹ recovers the forward preimage: φ(z₀) ∈ σ⁻¹(σ(φ(z₀))) — exact by construction", () => {
+    // z₀ exterior ⇒ w₀ = φ(z₀), s = σ(w₀) = conj(F(z₀)); then F(z₀) = conj(s), z₀ is an exterior root of
+    // F(z)=conj(s), so φ(z₀) = w₀ MUST appear in σ⁻¹(s). A rock-solid, family-agnostic membership test.
+    for (const z0 of EXTERIOR) {
+      const w0 = DELTOID.evalPhi(z0);
+      const s = DELTOID.sigma(w0);
+      expect(s, `σ null at z₀=${z0}`).not.toBeNull();
+      if (!s) continue;
+      const pre = DELTOID.sigmaInverse(s);
+      expect(pre.length, `no preimage of σ(φ(${z0}))`).toBeGreaterThanOrEqual(1);
+      expect(contains(pre, w0), `φ(${z0}) missing from σ⁻¹(σ(φ(${z0})))`).toBe(true);
+    }
+  });
+
+  it("every σ⁻¹ preimage round-trips: σ(σ⁻¹(w)) ≈ w (the branch-slip guard is exact here)", () => {
+    for (const z0 of EXTERIOR) {
+      const w = DELTOID.sigma(DELTOID.evalPhi(z0)) as Complex;
+      const pre = DELTOID.sigmaInverse(w);
+      for (const p of pre) {
+        const back = DELTOID.sigma(p);
+        expect(back, `σ null on preimage ${p}`).not.toBeNull();
+        if (back) near(back, w, 6);
+      }
+    }
+  });
+
+  it("σ⁻¹([2.5,0]) contains the cusp-side preimage [2.125,0] (the S3a interchange golden, inverted)", () => {
+    // σ([2.125,0]) = [2.5,0] (the frozen S3a golden), so [2.125,0] ∈ σ⁻¹([2.5,0]). The deltoid clears to
+    // the cubic 0.5·z³ − conj(w)·z + 1 = 0 ⇒ ≤ 3 roots, so ≤ 3 exterior preimages.
+    const pre = DELTOID.sigmaInverse([2.5, 0]);
+    expect(pre.length).toBeGreaterThanOrEqual(1);
+    expect(pre.length).toBeLessThanOrEqual(3);
+    expect(contains(pre, [2.125, 0])).toBe(true);
+  });
+
+  it("σ⁻¹ of a generic tiling point is non-empty and every preimage round-trips (branch-bearing SINGLE too)", () => {
+    // Also exercises the pole-bearing Newton path (solveFNewton) on the SINGLE domain.
+    for (const dom of [DELTOID, SINGLE]) {
+      const w = dom.sigma(dom.evalPhi([1.7, 0.9])) as Complex;
+      expect(w).not.toBeNull();
+      const pre = dom.sigmaInverse(w);
+      expect(pre.length).toBeGreaterThanOrEqual(1);
+      for (const p of pre) near(dom.sigma(p) as Complex, w, 6);
+    }
   });
 });
 
@@ -170,6 +233,22 @@ describe("@cas/schwarz unbounded-Laurent σ — pole-bearing branch term (Phase 
     }
   });
 
+  it("evalFDeriv = d/dz evalF everywhere — finite-difference golden (incl. branch principal parts; S5-B2)", () => {
+    // F is holomorphic off its poles (z = 0 and the z_j ∈ 𝔻), so the analytic F' must equal a central
+    // finite difference of evalF at every exterior probe (|z| ≥ 1.6, far from all poles). This pins the
+    // BRANCH derivative −Σ k·A/(z−z_j)^{k+1} — a dropped k factor or off-by-one power fails here.
+    const fd = (dom: UnboundedLaurentSchwarz, z: Complex, h = 1e-6): Complex => {
+      const fp = dom.evalF([z[0] + h, z[1]]);
+      const fm = dom.evalF([z[0] - h, z[1]]);
+      return [(fp[0] - fm[0]) / (2 * h), (fp[1] - fm[1]) / (2 * h)];
+    };
+    for (const dom of [DELTOID, SINGLE, HIGHER_R, TWO_R, CPLX, TWO_S]) {
+      for (const z of EXT_BRANCH) {
+        near(dom.evalFDeriv(z), fd(dom, z), 4); // central diff is O(h²); 4 digits is comfortably inside
+      }
+    }
+  });
+
   it("σ(φ(z₀)) = conj(F(z₀)) — the exact round-trip identity, with poles", () => {
     for (const dom of [SINGLE, CPLX, TWO_S]) {
       for (const z0 of EXT_BRANCH) {
@@ -197,5 +276,57 @@ describe("@cas/schwarz unbounded-Laurent σ — pole-bearing branch term (Phase 
     const bare = makeUnboundedLaurentSchwarz(1, [[0, 0], [0, 0], [0.5, 0]], []);
     near(bare.sigma([2.125, 0]) as Complex, [2.5, 0]);
     near(bare.sigma([1, 0.75]) as Complex, [0.5, -0.5]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Complex leading coefficient c (S5-C1). QD's real-c family never emits a complex c, but the engine now
+// accepts one (a CD-native map). The Schwarz extension reflects the leading term to conj(c)/z — NOT c/z —
+// so the boundary reflection identity F(z) = conj(φ(z)) on |z| = 1 is the golden that pins the conj(c):
+// a c/z here (the pre-C1 code) fails this test for any non-real c. A number and its [re,0] tuple must also
+// build the identical engine (backward-compat).
+const CPLX_C = makeUnboundedLaurentSchwarz([1, 0.5], [[0, 0], [0, 0], [0.4, 0]]);
+
+describe("@cas/schwarz unbounded-Laurent σ — complex leading coefficient c (S5-C1)", () => {
+  it("boundary reflection F(z) = conj(φ(z)) on |z| = 1 — pins conj(c) in the F extension", () => {
+    for (let k = 0; k < 24; k++) {
+      const t = (2 * Math.PI * (k + 0.5)) / 24;
+      const z: Complex = [Math.cos(t), Math.sin(t)];
+      near(CPLX_C.evalF(z), conj(CPLX_C.evalPhi(z)), 9);
+    }
+  });
+
+  it("σ = identity on ∂Ω and the round-trip σ(φ(z₀)) = conj(F(z₀)) hold with complex c", () => {
+    for (const z0 of EXTERIOR) {
+      const Fz0 = CPLX_C.evalF(z0);
+      const got = CPLX_C.sigma(CPLX_C.evalPhi(z0));
+      expect(got, `σ null at z₀=${z0}`).not.toBeNull();
+      if (got) near(got, [Fz0[0], -Fz0[1]], 7);
+    }
+    // σ fixes the boundary ∂Ω = φ(|z|=1) (the defining reflection property, requires the conj(c) F).
+    for (let k = 0; k < 12; k++) {
+      const t = (2 * Math.PI * (k + 0.5)) / 12;
+      const wOnBoundary = CPLX_C.evalPhi([Math.cos(t), Math.sin(t)]);
+      near(CPLX_C.sigma(wOnBoundary) as Complex, wOnBoundary, 6);
+    }
+  });
+
+  it("evalFDeriv = d/dz evalF with complex c — finite-difference (pins −conj(c)/z²)", () => {
+    const fd = (z: Complex, h = 1e-6): Complex => {
+      const fp = CPLX_C.evalF([z[0] + h, z[1]]);
+      const fm = CPLX_C.evalF([z[0] - h, z[1]]);
+      return [(fp[0] - fm[0]) / (2 * h), (fp[1] - fm[1]) / (2 * h)];
+    };
+    for (const z of EXTERIOR) near(CPLX_C.evalFDeriv(z), fd(z), 4);
+  });
+
+  it("a real number c and its [c, 0] tuple build the identical engine (backward-compat)", () => {
+    const asNum = makeUnboundedLaurentSchwarz(1, [[0, 0], [0, 0], [0.5, 0]]);
+    const asTuple = makeUnboundedLaurentSchwarz([1, 0], [[0, 0], [0, 0], [0.5, 0]]);
+    for (const z of EXTERIOR) {
+      near(asNum.evalPhi(z), asTuple.evalPhi(z), 12);
+      near(asNum.evalF(z), asTuple.evalF(z), 12);
+      near(asNum.evalFDeriv(z), asTuple.evalFDeriv(z), 12);
+    }
   });
 });

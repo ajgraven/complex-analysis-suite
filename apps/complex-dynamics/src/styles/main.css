@@ -509,25 +509,94 @@ h2 {
   border: 0.5px solid rgba(255, 255, 255, 0.18);
   border-radius: 5px;
 }
-/* Native σ builder (S4b-iv): a compact form to generate a Schwarz reflection from a Riemann map φ. */
-.schwarz-builder {
+/* σ side-panel layout (Phase A3): at wider widths the σ pane is a two-column grid — the canvas in the main
+   area, the controls in an always-visible sticky panel on the right (mirrors CD's plots-pane + controls-pane
+   split, so the σ controls stay beside the plot instead of below a viewport-tall canvas). Below the
+   breakpoint it falls back to the stacked column (canvas over centred controls). */
+.workspace.schwarz-active .schwarz-topbar {
   display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+.workspace.schwarz-active .schwarz-topbar h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+/* The exit control sits in the topbar in normal flow (its `.expand-btn` default is absolute + desktop-only);
+   show it at every width so σ can always be left by button, not only via Esc. */
+.workspace.schwarz-active .schwarz-topbar #schwarz-exit {
+  position: static;
+  display: inline-block;
+}
+@media (min-width: 900px) {
+  .workspace.schwarz-active #schwarz-plot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(19rem, 23vw, 26rem);
+    grid-template-areas:
+      "topbar  topbar"
+      "canvas  controls";
+    column-gap: 1rem;
+    row-gap: 0.5rem;
+    align-items: start;
+  }
+  .workspace.schwarz-active .schwarz-topbar {
+    grid-area: topbar;
+  }
+  /* Canvas cell: a square sized to the smaller of the column width or the viewport height, centred — so the
+     whole σ field is visible without scrolling past it, and the corner label/legend still pin to its edges
+     (the .canvas-stack remains the positioning context). */
+  .workspace.schwarz-active #schwarz-plot > .canvas-stack {
+    grid-area: canvas;
+    display: block;
+    width: min(100%, calc(100vh - 5rem));
+    aspect-ratio: 1 / 1;
+    margin-inline: auto;
+  }
+  .workspace.schwarz-active #schwarz-plot > .canvas-stack > canvas {
+    width: 100% !important;
+    height: 100%;
+  }
+  /* Controls cell: a fixed-width panel, sticky so it stays on screen, scrolling internally if the groups
+     exceed the viewport. */
+  .workspace.schwarz-active #schwarz-plot > .controls {
+    grid-area: controls;
+    max-width: none;
+    margin: 0;
+    position: sticky;
+    top: 0.5rem;
+    max-height: calc(100vh - 1rem);
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+}
+
+/* σ controls adopt CD's collapsible control-group idiom (Phase A): below the side-panel breakpoint they
+   stack as a centred, readable column beneath the canvas. The groups stack (the `.controls-pane >
+   .control-group + .control-group` sibling rule is scoped to the sidebar, which is hidden in σ mode), and
+   each σ `.control-grid` is a single-column form of full-width `.field`s rather than CD's side-by-side wrap
+   — σ's labels are long, so a stacked form reads cleaner while reusing the same control-group chrome. */
+#schwarz-plot .controls {
+  max-width: 30rem;
+  margin-inline: auto;
   flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  align-items: stretch;
 }
-.schwarz-builder label {
-  font-size: 0.7rem;
-  opacity: 0.85;
+#schwarz-plot .control-group + .control-group {
+  margin-top: 0.4rem;
 }
-.schwarz-builder input,
-.schwarz-builder textarea,
-.schwarz-builder select {
+#schwarz-plot .control-grid {
+  flex-direction: column;
+  align-items: stretch;
+}
+#schwarz-plot .control-grid .field > input[type="text"],
+#schwarz-plot .control-grid .field > textarea,
+#schwarz-plot .control-grid .field > select {
   width: 100%;
   box-sizing: border-box;
 }
+/* The φ builder's Generate button row (S4b-iv). */
 .schwarz-builder-actions {
   display: flex;
   gap: 0.4rem;
@@ -565,19 +634,62 @@ h2 {
   font-size: 0.66rem;
   padding: 0.1rem 0.5rem;
 }
+/* σ explicit form (F4i): the closed-form φ / F / σ as monospace equations. */
+.schwarz-formula {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.schwarz-formula-hint {
+  font-size: 0.7rem;
+  opacity: 0.7;
+  margin: 0;
+}
+.schwarz-formula-title {
+  font-size: 0.68rem;
+  opacity: 0.7;
+}
+.schwarz-formula-eq {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.schwarz-formula-note {
+  font-size: 0.66rem;
+  opacity: 0.6;
+}
+/* σ-singularity list items (F4h): monospace location + a coloured marker glyph. */
+.schwarz-sing-item {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+.schwarz-sing-branch {
+  color: #d99a2b;
+}
+.schwarz-sing-pole {
+  color: #e05555;
+}
 /* σ precise navigation (ADR-0009 item 3): a compact centre-re / centre-im / zoom row + apply/reset. */
-.schwarz-nav-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 0.3rem;
+/* σ orbit-trap shape row (S5-B1): a label+select pair shown only in "trap" color mode. Matches the
+   .field column layout so it stacks like the sibling colormap/scale controls; [hidden] must win over the
+   flex display. */
+.schwarz-subfield {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
-.schwarz-nav-row input {
-  width: 100%;
-  box-sizing: border-box;
-  min-width: 0;
+.schwarz-subfield[hidden] {
+  display: none;
 }
+
 .schwarz-nav-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.4rem;
   margin-top: 0.3rem;
 }
@@ -811,6 +923,43 @@ h2 {
 
 .view-chip-text {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* σ view-mode segmented control (F2a): plane · z-disk · sphere. A small pill of buttons; the active view is
+   accent-filled, disabled (not-yet-built) views dim. Centered under the view chip. */
+.schwarz-viewseg {
+  display: flex;
+  justify-content: center;
+  margin: 0.35rem auto 0;
+  width: fit-content;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.seg-btn {
+  appearance: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.7rem;
+  cursor: pointer;
+}
+.seg-btn:last-child {
+  border-right: none;
+}
+.seg-btn.is-active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.seg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.seg-btn:not(.is-active):not(:disabled):hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .plot-more {

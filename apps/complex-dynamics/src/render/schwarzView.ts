@@ -15,11 +15,16 @@
 import {
   escapeTime,
   pointInPolygon,
+  type BoundedSchwarz,
   type Complex,
   type EscapeKind,
   type EscapeResult,
   type UnboundedLaurentSchwarz,
 } from "@cas/schwarz";
+
+/** Either σ engine — the unbounded-Laurent (exterior branch) or bounded (interior branch) family. Both
+ *  expose the SAME evaluator surface (evalPhi/…/sigma), so the render/orbit helpers take either (S5-C2). */
+export type SchwarzEngine = UnboundedLaurentSchwarz | BoundedSchwarz;
 
 /** The complex-plane window: same center/zoom convention as GLPlot (half-width on each axis = 1/zoom). */
 export interface SchwarzView {
@@ -30,10 +35,27 @@ export interface SchwarzView {
 export interface SchwarzRenderOptions {
   maxIter?: number;
   escapeR?: number;
+  /** S5-C2: Ω is the INSIDE of ∂Ω for a bounded QD (φ: 𝔻 → Ω), vs the exterior for the unbounded-Laurent
+   *  family. Flips the in-Ω test so "fundamental" means the orbit left Ω into its complement K either way.
+   *  Absent/false ⇒ the exterior (unbounded) orientation — every pre-C2 render is unchanged. */
+  boundedOmega?: boolean;
+  /** Coordinate view: "plane" (default) treats the fragment as the world point w; "z" (F2b) treats it as the
+   *  uniformizing coordinate z and lifts w = φ(z) FORWARD (no Newton inverse), painting fragments off the
+   *  uniformizing domain SCHWARZ_OFF_DISK_RGB. "sphere" (F2d) ray-casts the Riemann sphere and stereographically
+   *  projects the hit to w — GPU-only (the CPU renderSchwarzField treats it as the plane; the sphere is only
+   *  reachable in a GPU session). The escape-time on the resulting w is identical across all three — each is the
+   *  SAME σ field, re-coordinatized. */
+  viewMode?: "plane" | "z" | "sphere";
 }
 
-/** The deltoid boundary as φ(unit circle); Ω is its EXTERIOR (the unbounded component). */
-export function schwarzBoundaryPoly(engine: UnboundedLaurentSchwarz, n = 512): Complex[] {
+/** Ω-membership for w against the boundary polygon: OUTSIDE ∂Ω for the unbounded-Laurent family, INSIDE for
+ *  a bounded QD (S5-C2). One helper so the field render and the orbit tracer share the exact same test. */
+function makeIsInOmega(poly: readonly Complex[], boundedOmega: boolean): (p: Complex) => boolean {
+  return boundedOmega ? (p: Complex) => pointInPolygon(p, poly) : (p: Complex) => !pointInPolygon(p, poly);
+}
+
+/** The deltoid boundary as φ(unit circle); Ω is its EXTERIOR (unbounded) or INTERIOR (bounded, S5-C2). */
+export function schwarzBoundaryPoly(engine: SchwarzEngine, n = 512): Complex[] {
   const pts: Complex[] = [];
   for (let k = 0; k < n; k++) {
     const t = (2 * Math.PI * k) / n;
@@ -123,14 +145,15 @@ export function formatSchwarzViewFields(view: SchwarzView): { re: string; im: st
   return { re: s(view.center[0]), im: s(view.center[1]), zoom: s(view.zoom) };
 }
 
-/** Classify one point w under σ (isInOmega = outside the boundary polygon). */
+/** Classify one point w under σ. `opts.boundedOmega` picks the in-Ω orientation: Ω = OUTSIDE the boundary
+ *  polygon (unbounded-Laurent, default) or INSIDE it (a bounded QD, S5-C2) — via the shared makeIsInOmega. */
 export function schwarzEscapeAt(
-  engine: UnboundedLaurentSchwarz,
+  engine: SchwarzEngine,
   poly: Complex[],
   w: Complex,
   opts: SchwarzRenderOptions = {},
 ): EscapeResult {
-  const isInOmega = (p: Complex): boolean => !pointInPolygon(p, poly);
+  const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
   return escapeTime(engine, isInOmega, w, { maxIter: opts.maxIter ?? 64, escapeR: opts.escapeR ?? 1e6 });
 }
 
@@ -151,14 +174,14 @@ export interface SchwarzOrbit extends EscapeResult {
  * The `kind`/`n` semantics mirror `escapeTime` exactly; only the trajectory is added.
  */
 export function schwarzOrbitAt(
-  engine: UnboundedLaurentSchwarz,
+  engine: SchwarzEngine,
   poly: Complex[],
   w0: Complex,
   opts: SchwarzRenderOptions = {},
 ): SchwarzOrbit {
   const maxIter = opts.maxIter ?? 64;
   const escapeR = opts.escapeR ?? 1e6;
-  const isInOmega = (p: Complex): boolean => !pointInPolygon(p, poly);
+  const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
   const points: Complex[] = [w0];
   if (!isInOmega(w0)) return { kind: "fundamental", n: 0, points };
   let w = w0;
@@ -202,6 +225,12 @@ const INVALID = SCHWARZ_FLAT_RGB.invalid;
 const ESCAPED = SCHWARZ_FLAT_RGB.escaped;
 const INTERIOR = SCHWARZ_FLAT_RGB.interior;
 
+/** z-disk view (F2b): the flat background for fragments OFF the uniformizing domain — |z| ≤ 1 for the
+ *  unbounded family (φ lives on 𝔻*), |z| ≥ 1 for a bounded QD (φ lives on 𝔻). φ is not the uniformizer there,
+ *  so those pixels are painted this neutral slate rather than a meaningless φ value. The GPU shader
+ *  (render/schwarzGL.ts) mirrors this literal — this is its single source. */
+export const SCHWARZ_OFF_DISK_RGB = [30, 32, 38] as const;
+
 /** deep-blue → cyan → white ramp by iteration count n (fundamental only). */
 function fundamentalColor(n: number, maxIter: number): [number, number, number] {
   const t = Math.min(1, n / Math.max(1, Math.min(32, maxIter)));
@@ -234,26 +263,41 @@ function colorFor(res: EscapeResult, maxIter: number): readonly [number, number,
  * `Uint8ClampedArray<ArrayBuffer>` buffer-variance check). Pure and synchronous; the caller sizes it.
  */
 export function renderSchwarzField(
-  engine: UnboundedLaurentSchwarz,
+  engine: SchwarzEngine,
   poly: Complex[],
   view: SchwarzView,
   size: number,
   opts: SchwarzRenderOptions = {},
 ): Uint8ClampedArray {
   const maxIter = opts.maxIter ?? 64;
-  const isInOmega = (p: Complex): boolean => !pointInPolygon(p, poly);
+  const boundedOmega = opts.boundedOmega ?? false;
+  const isInOmega = makeIsInOmega(poly, boundedOmega);
   const escapeR = opts.escapeR ?? 1e6;
+  const zDisk = opts.viewMode === "z"; // F2b: the fragment is the uniformizing z; w = φ(z) forward
   const rgba = new Uint8ClampedArray(size * size * 4);
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
-      const w = pixelToPlot(px, py, size, view);
+      const idx = (py * size + px) * 4;
+      rgba[idx + 3] = 255;
+      const p = pixelToPlot(px, py, size, view);
+      let w = p;
+      if (zDisk) {
+        // Off the uniformizing domain (|z| ≤ 1 unbounded / |z| ≥ 1 bounded) φ is not the map — paint the
+        // background and skip. Otherwise lift the fragment forward: w = φ(z).
+        const r = Math.hypot(p[0], p[1]);
+        if (boundedOmega ? r >= 1 : r <= 1) {
+          rgba[idx] = SCHWARZ_OFF_DISK_RGB[0];
+          rgba[idx + 1] = SCHWARZ_OFF_DISK_RGB[1];
+          rgba[idx + 2] = SCHWARZ_OFF_DISK_RGB[2];
+          continue;
+        }
+        w = engine.evalPhi(p);
+      }
       const res = escapeTime(engine, isInOmega, w, { maxIter, escapeR });
       const [r, g, b] = colorFor(res, maxIter);
-      const idx = (py * size + px) * 4;
       rgba[idx] = r;
       rgba[idx + 1] = g;
       rgba[idx + 2] = b;
-      rgba[idx + 3] = 255;
     }
   }
   return rgba;

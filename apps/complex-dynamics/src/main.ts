@@ -10,7 +10,7 @@ import "./styles/main.css";
 import type { Vec2 } from "./arrays";
 import { argDegrees, formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
 import { PROJECTIONS, type ProjectionMode } from "./render/projection";
-import { getMaxTextureSize, downloadCanvas } from "./hiResExport";
+import { getMaxTextureSize, downloadCanvas, copyCanvasToClipboard, ensurePngName } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
@@ -84,10 +84,10 @@ import { byId } from "./ui/dom";
 import { showToast } from "./ui/toast";
 import { GLOSSARY, CONVENTIONS, type GlossaryEntry } from "./ui/glossary";
 import { validateInputs, type FieldError } from "./ui/validate";
-import { DEFAULT_GRADIENT, type PaletteName } from "./palettes";
+import { DEFAULT_GRADIENT, sampleGradient, type GradientStop, type PaletteName } from "./palettes";
 import { describeLegend } from "./render/legend";
 import { renderLegend } from "./ui/plotLegend";
-import { parseGradientStops, setupGradientEditor } from "./ui/gradient";
+import { parseGradientStops, setupGradientEditor, type GradientEditor } from "./ui/gradient";
 import { canRecord, startRecording, downloadBlob } from "./ui/recorder";
 import { coeffsToCsv, coeffsToText, inspectToText, orbitToCsv } from "./ui/dataExport";
 import { interpolateView, type Keyframe } from "./render/keyframes";
@@ -104,6 +104,9 @@ import {
   encodeSigmaState,
   parseSigmaState,
   schwarzStampParams,
+  SIGMA_TONE_DEFAULTS,
+  SIGMA_OVERLAY_DEFAULTS,
+  SIGMA_TILING_DEFAULTS,
   type SigmaViewState,
 } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
@@ -121,6 +124,7 @@ import {
   uvToPlotFrac,
   schwarzOrbitAt,
   schwarzOrbitLabel,
+  schwarzEscapeAt,
   parseSchwarzViewInput,
   formatSchwarzViewFields,
   SCHWARZ_ZOOM_MIN,
@@ -129,16 +133,58 @@ import {
   type SchwarzOrbit,
 } from "./render/schwarzView";
 import { drawSchwarzOrbit } from "./render/schwarzOrbitOverlay";
+import { drawSchwarzTree } from "./render/schwarzTreeOverlay";
+import { drawSchwarzLimitSet } from "./render/schwarzLimitSetOverlay";
+import { drawSchwarzLevelCurves } from "./render/schwarzLevelCurveOverlay";
+import { drawSchwarzCycles } from "./render/schwarzCycleOverlay";
+import { drawSchwarzForwardCurves } from "./render/schwarzForwardCurveOverlay";
+import { explicitSigmaForm } from "./render/schwarzExplicitForm";
+import { drawSchwarzSingularities } from "./render/schwarzSingularityOverlay";
+import { sweepSeeds, canonicalSchwarzSeeds, familyHue } from "./render/schwarzOrbitFamily";
+import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
 import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
-import { makeUnboundedLaurentSchwarz } from "@cas/schwarz";
+import {
+  arcballDelta,
+  quatFromAxisAngle,
+  quatMultiply,
+  quatNormalize,
+  makeSphereCamera,
+  screenToPlane,
+  planeToScreenUv,
+  DEFAULT_ROTATION as SPHERE_DEFAULT_ROTATION,
+  DEFAULT_DISTANCE as SPHERE_DEFAULT_DISTANCE,
+  DEFAULT_FOV as SPHERE_DEFAULT_FOV,
+  type Quat,
+  type SphereCamera,
+} from "./render/sphereView";
+import {
+  makeBoundedSchwarz,
+  makeUnboundedLaurentSchwarz,
+  buildPreimageTree,
+  sampleLimitSet,
+  boxCountingDimension,
+  computeSigmaLevelCurves,
+  findCycles,
+  iterateCurveForward,
+  pointInPolygon,
+  findSigmaSingularities,
+  type PreimageTree,
+  type SigmaSingularities,
+  type SigmaLevelCurves,
+  type SchwarzCycle,
+} from "@cas/schwarz";
 import { buildSchwarzPhi, SCHWARZ_PRESETS, type SchwarzPhi } from "./render/schwarzPhiForm";
 import {
   SCHWARZ_COLORMAP_NAMES,
   SCHWARZ_SCALE_MODES,
+  SCHWARZ_COLOR_MODES,
+  SCHWARZ_TRAP_SHAPES,
   DEFAULT_SCHWARZ_COLORMAP,
   DEFAULT_SCHWARZ_SCALE,
+  DEFAULT_SCHWARZ_COLOR_MODE,
+  DEFAULT_SCHWARZ_TRAP_SHAPE,
 } from "./render/schwarzColormaps";
 import { PLACES } from "./state/places";
 import { decodeNotes, encodeNotes, type Note } from "./state/notes";
@@ -2490,7 +2536,7 @@ function init(): void {
   /** Disable export-size options the current GPU can't handle. */
   function disableUnsupportedSizes(): void {
     const max = getMaxTextureSize();
-    for (const id of ["paramExportSize", "dynExportSize"]) {
+    for (const id of ["paramExportSize", "dynExportSize", "schwarz-export-size"]) {
       const select = byId<HTMLSelectElement>(id);
       for (const option of Array.from(select.options)) {
         if (Number(option.value) > max) option.disabled = true;
@@ -2981,9 +3027,14 @@ function init(): void {
   // not a certified render. Drag to pan, scroll to zoom (about the cursor); Esc — or any control change —
   // exits and restores the normal plot underneath.
   const SCHWARZ_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.4 }; // half-width 1/zoom = 2.5
+  // F2b: the default uniformizing z-disk window — centred on the unit circle, showing |z| up to ~1.67 (the
+  // disk edge + a margin) for either family. The default per mode; each view pans/zooms independently.
+  const SCHWARZ_ZDISK_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.6 };
   // ONE escape budget for both the σ field and the orbit inspector, so a clicked point's reported fate
-  // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree).
-  const SCHWARZ_ESCAPE = { maxIter: 48, escapeR: 1e4 } as const;
+  // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree). Mutable so
+  // the Render-group iterations / escape-radius fields (B2) retune it live; defaults hold at 48 / 1e4.
+  const SCHWARZ_ESCAPE_DEFAULTS = { maxIter: 48, escapeR: 1e4 } as const;
+  const schwarzEscape: { maxIter: number; escapeR: number } = { ...SCHWARZ_ESCAPE_DEFAULTS };
   // The GPU σ renderer is built once, lazily: `undefined` = not yet tried, `null` = WebGL2 unavailable
   // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
   let schwarzGL: SchwarzGLRenderer | null | undefined;
@@ -2992,52 +3043,325 @@ function init(): void {
     | {
         engine: ReturnType<typeof schwarzEngineFromMapSpec>;
         poly: ReturnType<typeof schwarzBoundaryPoly>;
-        phi: SchwarzPhi; // the φ recipe (c, F, branches) — serialized into the σ permalink (_sigma, item 2)
-        size: number;
+        phi: SchwarzPhi; // the φ recipe (family, c, F, w0, branches) — serialized into the σ permalink (_sigma, item 2)
+        boundedOmega: boolean; // S5-C2: Ω is INSIDE ∂Ω (bounded φ) — the CPU field + orbit tracer need it
         mode: "GPU" | "CPU";
       }
     | null = null;
+  // Coordinate view: `schwarzView` ALWAYS holds the ACTIVE flat (plane/z) view's window (so every pan/zoom/
+  // inspect/nav handler keeps operating on it unchanged); the inactive flat view is stashed in `schwarzViews`
+  // and swapped in setSchwarzViewMode. The "sphere" view (F2d) has no center/zoom window — it uses a camera
+  // (schwarzSphereRot + schwarzSphereZoom) instead, and leaves the flat window untouched while it is active.
+  let schwarzViewMode: "plane" | "z" | "sphere" = "plane";
+  const schwarzViews: { plane: SchwarzView; z: SchwarzView } = {
+    plane: { ...SCHWARZ_DEFAULT_VIEW },
+    z: { ...SCHWARZ_ZDISK_DEFAULT_VIEW },
+  };
   let schwarzView: SchwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+  // σ-specific default sphere orientation: the shared SPHERE_DEFAULT_ROTATION faces the south pole (w = 0),
+  // which for σ is the featureless K cap — the whole visible hemisphere is |w| ≤ 1 ⊂ K, so the ball reads as a
+  // flat colour. Tilt it ~90° about the screen-horizontal axis so the ∂Ω equator sits centre-frame instead:
+  // the K cap below, the Ω tiling wrapping toward ∞ above. The user can still rotate anywhere from here.
+  const SCHWARZ_SPHERE_DEFAULT_ROT: Quat = quatNormalize(quatMultiply(quatFromAxisAngle([1, 0, 0], Math.PI / 2), SPHERE_DEFAULT_ROTATION));
+  // F2d sphere camera — orientation (arcball quaternion) + magnification (telescope zoom, distance fixed),
+  // separate from the flat views' center/zoom. Per-session in F2d-i (the sphere is not yet serialized into
+  // `_sigma` — a share link while on the sphere falls back to the underlying plane view); F2d-ii adds the
+  // camera to the permalink. Reset with the view / a new σ.
+  let schwarzSphereRot: Quat = SCHWARZ_SPHERE_DEFAULT_ROT;
+  let schwarzSphereZoom = 1;
+  /** The σ sphere camera resolved from the live orientation + magnification — the same fixed-distance
+   *  telescope-zoom convention the GPU render uses, so the click-inspect ray-cast and the projected overlays
+   *  land exactly where the field is drawn (F2d-ii). */
+  function schwarzSphereCam(): SphereCamera {
+    const fov = 2 * Math.atan(Math.tan(SPHERE_DEFAULT_FOV / 2) / schwarzSphereZoom);
+    return makeSphereCamera(schwarzSphereRot, SPHERE_DEFAULT_DISTANCE, fov, 1);
+  }
   let schwarzRaf = 0;
   // σ coloring (ADR-0009 item 3) — remembered for this page session so it survives σ enter/exit and a
-  // regenerate (not written to storage; a σ-view permalink that would carry it is deferred — item 2).
+  // regenerate. Also serialized into the σ-view permalink / saved view / PNG via the `_sigma` state layer
+  // (ADR-0009 item 2 — encodeSigmaState carries colormap + scale + colorMode + trapShape + tone).
   let schwarzColormapName = DEFAULT_SCHWARZ_COLORMAP;
   let schwarzScaleMode = DEFAULT_SCHWARZ_SCALE;
+  // σ-field color mode (S5-B1): what the ramp encodes — escape time (default), orbit trap, or stripe average.
+  let schwarzColorMode: string = DEFAULT_SCHWARZ_COLOR_MODE;
+  let schwarzTrapShape: string = DEFAULT_SCHWARZ_TRAP_SHAPE;
+  // σ image-space tone (S5-A3): palette rotation + gamma + vignette, part of the coloring the σ view serializes.
+  let schwarzRotation: number = SIGMA_TONE_DEFAULTS.rotation;
+  let schwarzGamma: number = SIGMA_TONE_DEFAULTS.gamma;
+  let schwarzVignette: number = SIGMA_TONE_DEFAULTS.vignette;
+  // σ custom gradient (C1): a user-editable colour ramp reusing CD's shared gradient editor (ui/gradient.ts).
+  // Active only when the colormap is "custom"; the stops travel in the σ view (`_sigma`).
+  let schwarzGradientStops: GradientStop[] = DEFAULT_GRADIENT.map((s) => ({ t: s.t, color: [...s.color] }));
+  let schwarzGradientEditor: GradientEditor | null = null;
+  // σ relief lighting (C2): a lit 3-D surface from the escape-count height field (GPU only). Default off; the
+  // depth is the slider value ÷ 20 (slider 40 → 2.0), matching CD's mapping. Travels in the σ view (`_sigma`).
+  let schwarzLight = false;
+  let schwarzLightAz = 135;
+  let schwarzLightEl = 45;
+  let schwarzLightDepth = 2.0;
+  // σ ∂Ω boundary overlay (F1): outline φ(unit circle) over the field for orientation. Overlay-only (the
+  // field render is untouched), default off, travels in the σ view (`_sigma`).
+  let schwarzShowBoundary: boolean = SIGMA_OVERLAY_DEFAULTS.showBoundary;
+  // σ-singularities (F4h): branch points (φ′=0 cusps) + σ-poles, computed from φ on each generate; a display
+  // toggle (default off, travels in `_sigma`) shows the markers + the card lists them.
+  let schwarzSingularities: SigmaSingularities | null = null;
+  let schwarzShowSingularities: boolean = SIGMA_OVERLAY_DEFAULTS.showSingularities;
+  // σ orbit family (F4e sweep · F4c canonical): a set of σ-orbits traced from a swept line/circle of seeds
+  // (hue-ramped) or the map's canonical seeds. A transient analysis (computed on demand, not serialized, like
+  // the tree / limit set); drawn from w-space every paint, cleared on a new map. The sweep circles the plane
+  // view centre.
+  let schwarzOrbitFamily: SchwarzOrbit[] | null = null;
+  let schwarzFamilyN = 24; // sweep seed count
+  let schwarzFamilyRadius = 1.5; // sweep circle radius (about the plane-view centre)
+  // σ level curves (F4b): the iso-|σ| (solid) + iso-arg-σ (dashed) lines by marching squares over Ω, computed
+  // on demand. A transient analysis (not serialized, like the tree / limit set / family); the w-space segments
+  // are re-projected every paint (so they survive pan/zoom/view-switch), cleared on a new map.
+  let schwarzLevelCurves: SigmaLevelCurves | null = null;
+  let schwarzLevelGrid = 160; // marching-squares grid samples per axis (the control)
+  let schwarzLevelPhases = 6; // phase lines through arg σ ∈ [0,π) (the control)
+  // σ periodic cycles (F4d): period-n cycles of σ, by grid-seeded Newton on σⁿ(w)=w. A coarse, advisory global
+  // search (≈); computed on demand — a transient analysis (not serialized, like the tree / limit set / family /
+  // level curves). Each cycle is drawn as its closed orbit loop + point markers, cleared on a new map.
+  let schwarzCycles: SchwarzCycle[] | null = null;
+  let schwarzCycleN = 2; // the period to search for (the control; default 2 — the first non-trivial dynamics)
+  // σ forward-curve image (F4f): a user shift-draws a polyline in Ω, and its forward σ-images σ(curve), σ²(curve),
+  // … are traced (hue-ramped). A transient analysis (not serialized). `schwarzCurveDraft` collects the polyline
+  // live during the shift-drag; on release the family is computed into `schwarzForwardCurves`.
+  let schwarzForwardCurves: Complex[][] | null = null;
+  let schwarzForwardK = 5; // number of forward iterations (the control)
+  let schwarzDrawingCurve = false; // true ⇒ a shift-drag is drawing the seed polyline
+  let schwarzCurveDraft: Complex[] = []; // the polyline being drawn (w-space)
+
+  /** The custom gradient as an even-spaced 256-entry RGB ramp for the σ colormap texture (C1). */
+  function schwarzCustomRamp(): [number, number, number][] {
+    return Array.from({ length: 256 }, (_, i) => {
+      const c = sampleGradient(schwarzGradientStops, i / 255);
+      return [c[0], c[1], c[2]] as [number, number, number];
+    });
+  }
+  /** Apply the active σ colormap to the renderer — a named palette, or the custom-gradient ramp when the
+   *  "Custom…" palette is selected. Also reveals / hides the gradient editor. */
+  function applySchwarzColormap(): void {
+    const custom = schwarzColormapName === "custom";
+    schwarzGradientEditor?.setVisible(custom);
+    if (custom) schwarzGL?.setColormapRamp(schwarzCustomRamp());
+    else schwarzGL?.setColormap(schwarzColormapName);
+  }
   // σ orbit inspection (ADR-0009 item 3): the currently-inspected orbit (w₀ = points[0]) or null. Its
   // polyline is redrawn over the field on every paint, so it stays pinned to w₀ as the view pans/zooms.
   let schwarzInspect: SchwarzOrbit | null = null;
+  // σ hover orbit-preview (S5-A2): a transient orbit under the cursor, drawn faint beneath the pinned one.
+  let schwarzHover: SchwarzOrbit | null = null;
+  // σ preimage tiling (F3c): a σ⁻¹ tree grown from a double-clicked seed in the tiling set, drawn over the
+  // field (plasma-ramped by generation) in whichever coordinate view is active. Like the pinned orbit it is
+  // a transient inspection — redrawn from w-space every paint (so it survives pan/zoom/view-switch), cleared
+  // on a new map, and NOT serialized (only its depth/budget params travel in `_sigma`). The params default to
+  // the buildPreimageTree defaults so the UI + a fresh session agree.
+  let schwarzPreimageTree: PreimageTree | null = null;
+  let schwarzTilingDepth: number = SIGMA_TILING_DEFAULTS.tilingDepth;
+  let schwarzTilingBudget: number = SIGMA_TILING_DEFAULTS.tilingBudget;
+  // σ limit set (F4a): the chaos-game cloud sampling the σ⁻¹ attractor (the fractal the tiling converges to) +
+  // its box-counting dimension. Computed on demand — a transient analysis (not serialized, like the tree). The
+  // cloud is drawn from w-space every paint, so it survives pan/zoom/view-switch; cleared on a new map.
+  let schwarzLimitSetCloud: Float64Array | null = null;
+  let schwarzLimitDim = NaN; // box-counting dimension of the current cloud (≈ — sample-density biased)
+  let schwarzLimitPoints = 15000; // chaos-game sample count (the control)
 
-  /** Paint the σ field at the current `schwarzView` (GPU → drawImage, or CPU → putImageData). */
+  // σ progressive render (B1) + resolution (B2). The field is re-rendered only when schwarzFieldDirty (a
+  // view / coloring / map / escape change); an overlay-only repaint (hover, inspect) re-blits the cached GL
+  // frame. During pan/zoom a small DRAFT is drawn for fluidity, then an idle timer refines to full res.
+  const SCHWARZ_CPU_SIZE = 256; // the CPU fallback stays coarse (per-Ω-pixel Newton is heavy)
+  let schwarzAA = 1; // supersample factor for the GPU field (1 = native device pixels; B2 wires the UI)
+  let schwarzDraft = false; // true ⇒ render a low-res draft this paint (mid pan/zoom)
+  let schwarzFieldDirty = true; // true ⇒ the field changed and must be re-rendered (else re-blit the cache)
+  let schwarzLastRenderSize = 0; // the GL canvas's current dimension, for the draw-image source rect
+  let schwarzRefineTimer = 0; // the idle-refine debounce handle
+  let schwarzCpuImage: ImageData | null = null; // cached CPU field, for overlay-only repaints
+
+  /** The σ canvas backing resolution (device pixels): the displayed CSS size × devicePixelRatio, floored at
+   *  256 and capped at the GPU's max render size — so the field is crisp on hi-DPI displays instead of a
+   *  fixed 512² upscaled (B2). */
+  function schwarzBackingSize(): number {
+    const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
+    const r = canvas.getBoundingClientRect();
+    const cssMax = Math.max(r.width, r.height) || 512;
+    const dpr = window.devicePixelRatio || 1;
+    const cap = Math.min(schwarzGL?.maxSize ?? 4096, 4096); // the GPU limit, and a perf ceiling
+    return Math.max(256, Math.min(Math.round(cssMax * dpr), cap));
+  }
+
+  /** Paint the σ field at the current `schwarzView`. GPU → render (draft or full res) then drawImage; CPU →
+   *  putImageData. The field is re-rendered only when dirty; the orbit overlays + scale bar are drawn every
+   *  paint over the (possibly cached) field. */
+  /** Reflect the active view mode into the segment (pressed button) + the `#schwarz-plot[data-schwarz-view]`
+   *  hook (F2a's DOM contract, now driven live in F2b). */
+  function syncSchwarzViewModeSeg(): void {
+    document.getElementById("schwarz-plot")?.setAttribute("data-schwarz-view", schwarzViewMode);
+    for (const [m, id] of [
+      ["plane", "schwarz-view-plane"],
+      ["z", "schwarz-view-z"],
+      ["sphere", "schwarz-view-sphere"],
+    ] as const) {
+      const btn = document.getElementById(id);
+      if (!btn) continue;
+      const active = m === schwarzViewMode;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+    }
+  }
+
+  /** Switch the σ coordinate view (F2b). `schwarzView` always holds the ACTIVE window, so this stashes the
+   *  outgoing view, loads the incoming one (each view pans/zooms independently), reflects the segment, and
+   *  repaints the field in the new mode. The orbit/boundary overlays are w-space, so paintSchwarz simply
+   *  doesn't draw them off the plane — the pinned orbit is KEPT (not cleared), so returning restores it. */
+  function setSchwarzViewMode(mode: "plane" | "z" | "sphere"): void {
+    if (mode === schwarzViewMode) return;
+    // The sphere ray-cast is GPU-only (per-pixel on the CPU would be far too slow) — refuse it in a CPU session.
+    if (mode === "sphere" && schwarzSession?.mode !== "GPU") {
+      showToast("The sphere view needs the GPU renderer (unavailable here).", "warn");
+      return;
+    }
+    // Flat views (plane/z) carry a center/zoom window in `schwarzView`; the sphere carries none, so it neither
+    // saves nor loads that window — it leaves the flat window intact for when the user switches back.
+    if (schwarzViewMode !== "sphere") schwarzViews[schwarzViewMode] = schwarzView; // stash the outgoing flat window
+    schwarzViewMode = mode;
+    if (mode !== "sphere") schwarzView = { ...schwarzViews[mode] }; // load the incoming flat window (a copy)
+    schwarzHover = null; // transient w-space preview — stale in the new coordinates
+    syncSchwarzViewModeSeg();
+    scheduleSchwarzPaint(); // re-render the field in the new mode (also mirrors the nav fields + chip)
+  }
+
   function paintSchwarz(): void {
     if (!schwarzSession) return;
-    const { engine, poly, size, mode } = schwarzSession;
+    const { engine, poly, mode, boundedOmega } = schwarzSession;
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    if (canvas.width !== size || canvas.height !== size) {
-      canvas.width = size;
-      canvas.height = size;
+    const backing = mode === "GPU" ? schwarzBackingSize() : SCHWARZ_CPU_SIZE;
+    if (canvas.width !== backing || canvas.height !== backing) {
+      canvas.width = backing;
+      canvas.height = backing;
+      schwarzFieldDirty = true; // a backing resize invalidates the cached frame
     }
     if (mode === "GPU" && schwarzGL) {
-      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
-      ctx.drawImage(schwarzGL.canvas, 0, 0);
+      // Draft mid-interaction (a quarter res, fast); full res = the backing × the AA supersample, GPU-capped.
+      const full = Math.min(schwarzGL.maxSize, Math.round(backing * schwarzAA));
+      const renderSize = schwarzDraft ? Math.max(160, Math.round(backing / 4)) : full;
+      if (schwarzFieldDirty) {
+        schwarzGL.render(schwarzView, renderSize, {
+          ...schwarzEscape,
+          scaleMode: schwarzScaleMode,
+          colorMode: schwarzColorMode,
+          trapShape: schwarzTrapShape,
+          rotation: schwarzRotation,
+          gamma: schwarzGamma,
+          vignette: schwarzVignette,
+          // Relief lighting (C2) — skipped on the draft frame (dFdx relief on a low-res draft is noisy + slow);
+          // the idle refine renders it lit.
+          light: schwarzLight && !schwarzDraft,
+          lightAz: schwarzLightAz,
+          lightEl: schwarzLightEl,
+          lightHeight: schwarzLightDepth,
+          viewMode: schwarzViewMode, // "z" ⇒ z-disk (F2b) · "sphere" ⇒ Riemann sphere (F2d) · else the w-plane
+          sphereRot: schwarzSphereRot, // F2d camera (ignored unless viewMode === "sphere")
+          sphereZoom: schwarzSphereZoom,
+        });
+        schwarzLastRenderSize = renderSize;
+      }
+      // Downscale a supersampled (or upscale a draft) GL frame into the backing; a 1:1 native frame is crisp.
+      ctx.imageSmoothingEnabled = schwarzLastRenderSize !== backing;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(schwarzGL.canvas, 0, 0, schwarzLastRenderSize, schwarzLastRenderSize, 0, 0, backing, backing);
     } else {
-      const rgba = renderSchwarzField(engine, poly, schwarzView, size, SCHWARZ_ESCAPE);
-      const img = new ImageData(size, size); // construct-then-set (mirrors renderJuliaPreview) — avoids the
-      img.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance in the DOM lib types
-      ctx.putImageData(img, 0, 0);
+      if (schwarzFieldDirty || !schwarzCpuImage || schwarzCpuImage.width !== backing) {
+        const rgba = renderSchwarzField(engine, poly, schwarzView, backing, {
+          ...schwarzEscape,
+          boundedOmega,
+          viewMode: schwarzViewMode,
+        });
+        schwarzCpuImage = new ImageData(backing, backing); // construct-then-set — avoids the
+        schwarzCpuImage.data.set(rgba); // Uint8ClampedArray<ArrayBuffer> constructor-overload variance
+      }
+      ctx.putImageData(schwarzCpuImage, 0, 0);
     }
-    // Orbit overlay on top of the field (ADR-0009 item 3) — pinned to w₀, redrawn for the current view.
-    if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, size);
-    // Scale bar (ADR-0009 item 3) — CD's own overlay helper; the σ view shares its center/zoom convention
-    // (span = 2/zoom), so it reads correctly. Last, so an orbit line never hides it (it has its own backing).
-    drawScaleBar(ctx, size, schwarzView.zoom);
-    syncSchwarzViewFields(); // keep the precise-nav fields mirroring the live view
+    // Overlays (∂Ω boundary + orbits) live in whichever coordinate the active view uses. The w-plane draws
+    // them directly; the z-disk (F2c) pulls them back into z — ∂Ω becomes the unit circle |z|=1, and each
+    // orbit iterate maps through ψ = φ⁻¹ (engine.invertPhi; null where it entered K / off the branch, which
+    // breaks the polyline). The pinned orbit is kept in state across a view switch, so it survives round-trips.
+    if (schwarzViewMode === "plane") {
+      // Limit-set cloud (F4a) — the bottom overlay layer (the fractal dust the tiling converges to).
+      if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing);
+      // σ level curves (F4b) — iso-|σ| (solid) / iso-arg (dashed) lines annotating the field, under the boundary.
+      if (schwarzLevelCurves) drawSchwarzLevelCurves(ctx, schwarzLevelCurves, schwarzView, backing);
+      // ∂Ω boundary overlay (F1) — under the orbits, over the field; `poly` is the session's mask polygon.
+      if (schwarzShowBoundary) drawSchwarzBoundary(ctx, poly, schwarzView, backing);
+      // Preimage tiling tree (F3c) — under the orbits (its dense dots shouldn't hide the traced orbit).
+      if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing);
+      // σ-singularity markers (F4h) — branch-point cusps + σ-poles.
+      if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing);
+      // Periodic cycles (F4d) — each cycle's closed orbit loop + point markers, one hue per cycle.
+      if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing);
+      // Forward-curve image (F4f) — the drawn polyline (white) + its σ-images, hue-ramped by iteration.
+      if (schwarzForwardCurves) drawSchwarzForwardCurves(ctx, schwarzForwardCurves, schwarzView, backing);
+      // Orbit family (F4e/F4c) — each member thin + hue-ramped, under the pinned orbit.
+      if (schwarzOrbitFamily)
+        for (let i = 0; i < schwarzOrbitFamily.length; i++)
+          drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length) });
+      // Orbit overlays: the transient hover preview (faint, S5-A2) under the pinned click-inspect orbit (bold).
+      if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true });
+      if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing);
+    } else if (schwarzViewMode === "z") {
+      const toZ = (w: Complex): Complex | null => engine.invertPhi(w); // ψ-pullback into the uniformizing z
+      if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing, { toPlot: toZ });
+      if (schwarzLevelCurves) drawSchwarzLevelCurves(ctx, schwarzLevelCurves, schwarzView, backing, { toPlot: toZ });
+      if (schwarzShowBoundary) drawSchwarzUnitCircle(ctx, schwarzView, backing);
+      // The tiling ψ-mirrors into the z-disk exactly like the orbit — each preimage w pulled back to z = φ⁻¹(w).
+      if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPlot: toZ });
+      if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPlot: toZ });
+      if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing, { toPlot: toZ });
+      if (schwarzForwardCurves) drawSchwarzForwardCurves(ctx, schwarzForwardCurves, schwarzView, backing, { toPlot: toZ });
+      if (schwarzOrbitFamily)
+        for (let i = 0; i < schwarzOrbitFamily.length; i++)
+          drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
+      if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPlot: toZ });
+      if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPlot: toZ });
+    } else if (schwarzViewMode === "sphere") {
+      // F2d-ii: project the w-space overlays onto the ball. Each w → its pixel via planeToScreenUv (null on
+      // the occluded far cap, which breaks the polyline / drops the marker at the horizon). ∂Ω is the same
+      // boundary poly stroked over the sphere.
+      const cam = schwarzSphereCam();
+      const toPixel = (w: Complex): [number, number] | null => {
+        const uv = planeToScreenUv(w, cam);
+        return uv ? [uv[0] * backing - 0.5, uv[1] * backing - 0.5] : null;
+      };
+      if (schwarzLimitSetCloud) drawSchwarzLimitSet(ctx, schwarzLimitSetCloud, schwarzView, backing, { toPixel });
+      if (schwarzLevelCurves) drawSchwarzLevelCurves(ctx, schwarzLevelCurves, schwarzView, backing, { toPixel });
+      if (schwarzShowBoundary) drawSchwarzBoundarySphere(ctx, poly, cam, backing);
+      // The tiling projects onto the ball with the same per-point map (null on the occluded cap drops the node).
+      if (schwarzPreimageTree) drawSchwarzTree(ctx, schwarzPreimageTree, schwarzView, backing, { toPixel });
+      if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(ctx, schwarzSingularities, schwarzView, backing, { toPixel });
+      if (schwarzCycles) drawSchwarzCycles(ctx, schwarzCycles, schwarzView, backing, { toPixel });
+      if (schwarzForwardCurves) drawSchwarzForwardCurves(ctx, schwarzForwardCurves, schwarzView, backing, { toPixel });
+      if (schwarzOrbitFamily)
+        for (let i = 0; i < schwarzOrbitFamily.length; i++)
+          drawSchwarzOrbit(ctx, schwarzOrbitFamily[i], schwarzView, backing, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
+      if (schwarzHover) drawSchwarzOrbit(ctx, schwarzHover, schwarzView, backing, { preview: true, toPixel });
+      if (schwarzInspect) drawSchwarzOrbit(ctx, schwarzInspect, schwarzView, backing, { toPixel });
+    }
+    // Scale bar (ADR-0009 item 3) — correct for the flat views (it reads the active window's zoom). The sphere
+    // has no single linear scale (stereographic distortion varies across the ball), so it carries no scale bar.
+    // Last, so an orbit line never hides it (it has its own backing).
+    if (schwarzViewMode !== "sphere") drawScaleBar(ctx, backing, schwarzView.zoom);
+    schwarzFieldDirty = false;
+    syncSchwarzViewFields(); // keep the precise-nav fields + view chip mirroring the live view
   }
 
   /** Mirror the live view into the precise-nav fields — unless the user is editing one (don't clobber a
    *  half-typed value; a paint only fires on a view change, so this is just belt-and-suspenders). */
   function syncSchwarzViewFields(): void {
+    // The persistent view chip (A2) mirrors the window regardless of focus — update it first, before the
+    // guard below that leaves the input fields alone while the user is typing into one.
+    updateSchwarzViewChip();
     const re = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
     const im = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
     const zoom = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
@@ -3050,20 +3374,116 @@ function init(): void {
     zoom.value = f.zoom;
   }
 
-  /** (Re)render the σ legend chip from the current colormap + scale mode. */
+  /** Reflect the live σ view in the persistent view chip (A2 — parity with the standard plots' `.view-summary`):
+   *  `centre · zoom · family`, or a prompt when no σ is loaded yet. */
+  function updateSchwarzViewChip(): void {
+    const chip = document.getElementById("schwarz-view-chip");
+    if (!chip) return;
+    if (!schwarzSession) {
+      chip.textContent = "generate a σ to begin";
+      return;
+    }
+    const family = schwarzSession.boundedOmega ? "bounded" : "unbounded";
+    // The sphere (F2d) has no centre/zoom window — report the camera magnification instead of a plane point.
+    if (schwarzViewMode === "sphere") {
+      chip.textContent = `Riemann sphere · zoom ${Number(schwarzSphereZoom.toPrecision(3))} · ${family}`;
+      return;
+    }
+    const f = formatSchwarzViewFields(schwarzView);
+    const centre = `${f.re}${f.im.startsWith("-") ? "" : "+"}${f.im}i`;
+    chip.textContent = `${centre} · zoom ${f.zoom} · ${family}`;
+  }
+
+  /** (Re)render the σ legend chip — title + end labels describe WHAT the ramp maps in the active color mode
+   *  (S5-B1): escape time (with the scale mode), orbit-trap closeness (with the trap shape), or the stripe
+   *  average. Keeps the legend honest when the ramp no longer encodes escape count. */
+  // F4g domain-coloring legend: the arg-σ hue wheel at s=0.9, l=0.5 (matching the shader's hsl2rgb), sampled
+  // every 60° from −π (t=0, red) through 0 (t=0.5, cyan) to +π (t=1, red).
+  const SCHWARZ_HUE_LEGEND_STOPS: readonly { t: number; color: readonly [number, number, number] }[] = [
+    { t: 0, color: [242, 13, 13] },
+    { t: 1 / 6, color: [242, 242, 13] },
+    { t: 2 / 6, color: [13, 242, 13] },
+    { t: 0.5, color: [13, 242, 242] },
+    { t: 4 / 6, color: [13, 13, 242] },
+    { t: 5 / 6, color: [242, 13, 242] },
+    { t: 1, color: [242, 13, 13] },
+  ];
   function renderSchwarzLegendChip(): void {
     const el = document.getElementById("schwarz-legend");
     if (!el) return;
-    const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
-    renderSchwarzLegend(el, { colormapName: schwarzColormapName, scaleLabel });
+    let title: string, loLabel: string, hiLabel: string;
+    if (schwarzColorMode === "trap") {
+      const shape = SCHWARZ_TRAP_SHAPES.find((m) => m.key === schwarzTrapShape)?.label ?? "Cross (axes)";
+      title = `Orbit trap · ${shape}`;
+      loLabel = "far";
+      hiLabel = "near trap";
+    } else if (schwarzColorMode === "stripe") {
+      title = "Stripe average";
+      loLabel = "low";
+      hiLabel = "high";
+    } else if (schwarzColorMode === "smooth") {
+      // S5-B2: the ramp colours the ESCAPING set by the continuous escape count (≈; the tiling is discrete).
+      title = "Smooth escape (≈)";
+      loLabel = "fast escape";
+      hiLabel = "slow escape";
+    } else if (schwarzColorMode === "distance") {
+      title = "Distance estimate (≈)";
+      loLabel = "fast escape";
+      hiLabel = "near σ-Julia";
+    } else if (schwarzColorMode === "domain") {
+      // F4g: the ramp is the arg-σ hue wheel (not the colormap), lightness banded by |σ|.
+      title = "Domain coloring (≈) · hue = arg σ";
+      loLabel = "−π";
+      hiLabel = "+π";
+    } else {
+      const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
+      title = `Escape time · ${scaleLabel}`;
+      loLabel = "in K fast";
+      hiLabel = "near ∂Ω";
+    }
+    // In domain mode the legend bar is the hue wheel (arg σ: −π red → 0 cyan → +π red), matching the shader's
+    // hsl(arg) — not the escape-time colormap, which is unused. Reuses the custom-stops ramp path.
+    const domain = schwarzColorMode === "domain";
+    renderSchwarzLegend(el, {
+      colormapName: domain ? "custom" : schwarzColormapName,
+      title,
+      loLabel,
+      hiLabel,
+      customStops: domain ? SCHWARZ_HUE_LEGEND_STOPS : schwarzColormapName === "custom" ? schwarzGradientStops : undefined,
+    });
   }
-  /** Coalesce rapid pan/zoom events into one paint per animation frame. */
-  function scheduleSchwarzPaint(): void {
+  /** rAF coalescer shared by the schedulers — at most one paint per animation frame. */
+  function schwarzScheduleFrame(): void {
     if (schwarzRaf) return;
     schwarzRaf = requestAnimationFrame(() => {
       schwarzRaf = 0;
       paintSchwarz();
     });
+  }
+  /** Schedule a σ repaint that RE-RENDERS the field at full res (view / coloring / map / escape changed). */
+  function scheduleSchwarzPaint(): void {
+    schwarzFieldDirty = true;
+    schwarzDraft = false;
+    schwarzScheduleFrame();
+  }
+  /** Schedule an OVERLAY-only repaint (hover / inspect orbit changed) — the cached field is re-blitted, not
+   *  re-rendered, so tracing an orbit never pays for a full field render. */
+  function scheduleSchwarzOverlayPaint(): void {
+    schwarzScheduleFrame();
+  }
+  /** Schedule a DRAFT field repaint (mid pan/zoom): render low-res now for fluidity, then refine to full res
+   *  once the interaction goes idle (~150 ms). */
+  function scheduleSchwarzDraftPaint(): void {
+    schwarzFieldDirty = true;
+    schwarzDraft = true;
+    schwarzScheduleFrame();
+    if (schwarzRefineTimer) clearTimeout(schwarzRefineTimer);
+    schwarzRefineTimer = window.setTimeout(() => {
+      schwarzRefineTimer = 0;
+      schwarzDraft = false;
+      schwarzFieldDirty = true; // refine ⇒ re-render at full res
+      schwarzScheduleFrame();
+    }, 150);
   }
 
   // σ orbit inspection (ADR-0009 item 3): clicking the σ canvas traces that point's orbit and draws it
@@ -3102,42 +3522,465 @@ function init(): void {
   /** Inspect the σ-orbit of w₀ (a plot point): trace it, show the readout, redraw with the overlay. */
   function setSchwarzInspect(w0: Complex): void {
     if (!schwarzSession) return;
-    schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, SCHWARZ_ESCAPE);
+    schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, {
+      ...schwarzEscape,
+      boundedOmega: schwarzSession.boundedOmega,
+    });
     renderSchwarzInspectReadout();
-    scheduleSchwarzPaint();
+    scheduleSchwarzOverlayPaint(); // the orbit is an overlay — re-blit the cached field, don't re-render it
   }
   /** Drop the inspected orbit (readout hides, overlay disappears on the next paint). */
   function clearSchwarzInspect(): void {
     if (!schwarzInspect) return;
     schwarzInspect = null;
     renderSchwarzInspectReadout();
-    scheduleSchwarzPaint();
+    scheduleSchwarzOverlayPaint();
+  }
+
+  // σ preimage tiling (F3c): double-click a point in the tiling set to grow its σ⁻¹ tree over the field. The
+  // tree is an overlay (a re-blit, not a re-render); its depth/budget are user controls that rebuild it live.
+  /** Node/generation count readout for the active tree, in the tiling control group (empty when no tree). */
+  function renderSchwarzTilingReadout(): void {
+    const box = document.getElementById("schwarz-tiling-count");
+    if (!box) return;
+    if (!schwarzPreimageTree) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    const nodes = schwarzPreimageTree.generations.reduce((s, g) => s + g.length, 0);
+    const gens = Math.max(0, schwarzPreimageTree.generations.length - 1); // generations past the seed
+    box.hidden = false;
+    box.textContent =
+      `${nodes} preimage${nodes === 1 ? "" : "s"} · ${gens} gen${gens === 1 ? "" : "s"}` +
+      (schwarzPreimageTree.truncatedByBudget ? " (capped)" : "");
+  }
+  /** Grow a σ⁻¹ tiling tree from w₀ — but only if w₀ is in the tiling SET (its σ-orbit reaches the fundamental
+   *  tile K). The gate cap is ≥256 and 4× the display budget so a truly-escaping seed isn't misread as
+   *  "interior" under a low display maxIter (mirrors QD's gate). A rejected seed toasts and leaves any prior
+   *  tree untouched (an overlay repaint isn't even scheduled). */
+  function seedSchwarzTiling(w0: Complex): void {
+    if (!schwarzSession) return;
+    const { engine, poly, boundedOmega } = schwarzSession;
+    const gate = schwarzEscapeAt(engine, poly, w0, {
+      maxIter: Math.max(256, schwarzEscape.maxIter * 4),
+      escapeR: schwarzEscape.escapeR,
+      boundedOmega,
+    });
+    if (gate.kind !== "fundamental") {
+      showToast("Double-click a point in the tiling set — its σ-orbit must reach K.", "info");
+      return;
+    }
+    schwarzPreimageTree = buildPreimageTree(w0, engine, {
+      depth: schwarzTilingDepth,
+      visualBudget: schwarzTilingBudget,
+    });
+    // A double-click is a "seed the tiling" gesture, so drop the orbit its two synthesized single-clicks pinned
+    // (matching QD, where a dblclick never also pins) — the clean tiling + its count readout stand alone.
+    schwarzInspect = null;
+    schwarzHover = null;
+    renderSchwarzInspectReadout();
+    renderSchwarzTilingReadout();
+    scheduleSchwarzOverlayPaint(); // the tree is an overlay — re-blit the cached field, don't re-render it
+  }
+  /** Rebuild the active tree from its seed with the current depth/budget (a control changed) — no re-click. */
+  function rebuildSchwarzTilingIfActive(): void {
+    if (!schwarzSession || !schwarzPreimageTree) return;
+    const seed = schwarzPreimageTree.generations[0]?.[0];
+    if (!seed) return;
+    schwarzPreimageTree = buildPreimageTree(seed, schwarzSession.engine, {
+      depth: schwarzTilingDepth,
+      visualBudget: schwarzTilingBudget,
+    });
+    renderSchwarzTilingReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the tiling tree (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzTiling(): void {
+    if (!schwarzPreimageTree) return;
+    schwarzPreimageTree = null;
+    renderSchwarzTilingReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
+  // σ limit set (F4a): the chaos game on σ⁻¹ densely samples the limit set (the fractal the tiling converges
+  // to). "Sample" computes the cloud + its box-counting dimension; the cloud draws as bright dust under the
+  // other overlays. σ⁻¹ is a numerical reconstruction, so both the set + its dimension are `≈`.
+  /** Dimension + point-count readout (honest: dim is `≈` and sample-density biased). Empty when no cloud. */
+  function renderSchwarzLimitReadout(): void {
+    const box = document.getElementById("schwarz-limit-readout");
+    if (!box) return;
+    const pts = schwarzLimitSetCloud ? schwarzLimitSetCloud.length >> 1 : 0;
+    if (!schwarzLimitSetCloud || pts === 0) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const dim = Number.isFinite(schwarzLimitDim) ? schwarzLimitDim.toFixed(3) : "—";
+    // `≈` throughout: the reconstruction is numerical AND box-counting is a rough, sample-density-biased estimate.
+    box.textContent = `dim ≈ ${dim} (box-count · ${pts.toLocaleString()} pts)`;
+  }
+  /** Sample the σ limit set by the chaos game on σ⁻¹ (schwarzLimitPoints points), then estimate its
+   *  box-counting dimension. Synchronous — a moderate point count keeps it well under a second. The restart
+   *  seeds are drawn from the boundary polygon's padded bounding box, in Ω^c = K (the same in-Ω test the field
+   *  uses). Runs only for a live session. */
+  function computeSchwarzLimitSet(): void {
+    if (!schwarzSession) return;
+    const { engine, poly, boundedOmega } = schwarzSession;
+    // The SAME Ω-membership the field / orbit tracer use: outside ∂Ω (unbounded) or inside it (bounded QD).
+    const isInOmega = (w: Complex): boolean =>
+      boundedOmega ? pointInPolygon(w, poly) : !pointInPolygon(w, poly);
+    // Restart-seed box: the boundary polygon's extent, padded 25%, so restarts land near K.
+    let minRe = Infinity, maxRe = -Infinity, minIm = Infinity, maxIm = -Infinity;
+    for (const p of poly) {
+      minRe = Math.min(minRe, p[0]); maxRe = Math.max(maxRe, p[0]);
+      minIm = Math.min(minIm, p[1]); maxIm = Math.max(maxIm, p[1]);
+    }
+    const padRe = 0.25 * (maxRe - minRe) || 1;
+    const padIm = 0.25 * (maxIm - minIm) || 1;
+    const bbox: [number, number, number, number] = [minRe - padRe, maxRe + padRe, minIm - padIm, maxIm + padIm];
+    schwarzLimitSetCloud = sampleLimitSet(engine, { n: schwarzLimitPoints, isInOmega, bbox });
+    schwarzLimitDim = boxCountingDimension(schwarzLimitSetCloud).dim;
+    renderSchwarzLimitReadout();
+    scheduleSchwarzOverlayPaint(); // the cloud is an overlay — re-blit the cached field
+  }
+  /** Drop the limit-set cloud (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzLimitSet(): void {
+    if (!schwarzLimitSetCloud) return;
+    schwarzLimitSetCloud = null;
+    schwarzLimitDim = NaN;
+    renderSchwarzLimitReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
+  // σ level curves (F4b): marching squares of |σ| (solid) + arg σ (dashed) over Ω. "Draw" contours σ over the
+  // boundary polygon's padded bbox; the w-space segments redraw under the other overlays. A transient analysis
+  // (not serialized, like the tree / limit set / family). σ is a numerical reconstruction, so the curves are `≈`.
+  /** Segment-count readout for the active curves (empty when none). */
+  function renderSchwarzLevelReadout(): void {
+    const box = document.getElementById("schwarz-level-readout");
+    if (!box) return;
+    if (!schwarzLevelCurves) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const segs = schwarzLevelCurves.magnitude.length + schwarzLevelCurves.phase.length;
+    const nLevels = schwarzLevelCurves.magnitudeLevels.length;
+    // `≈`: σ is numerical, so the curves are an estimate of the true level sets.
+    box.textContent = `≈ ${segs.toLocaleString()} segs · ${nLevels} |σ| levels · ${schwarzLevelPhases} arg lines`;
+  }
+  /** Contour σ over the boundary polygon's padded bounding box (grid + phase-line controls). Synchronous — a
+   *  moderate grid keeps it well under a second. σ = null off Ω, so cells there are skipped (curves live only
+   *  where the reflection is defined). Runs only for a live session. */
+  function computeSchwarzLevelCurves(): void {
+    if (!schwarzSession) return;
+    const { engine, poly } = schwarzSession;
+    let minRe = Infinity, maxRe = -Infinity, minIm = Infinity, maxIm = -Infinity;
+    for (const p of poly) {
+      minRe = Math.min(minRe, p[0]); maxRe = Math.max(maxRe, p[0]);
+      minIm = Math.min(minIm, p[1]); maxIm = Math.max(maxIm, p[1]);
+    }
+    const padRe = 0.5 * (maxRe - minRe) || 1; // a half-extent margin of Ω around ∂Ω to show the curves in
+    const padIm = 0.5 * (maxIm - minIm) || 1;
+    const bbox: [number, number, number, number] = [minRe - padRe, maxRe + padRe, minIm - padIm, maxIm + padIm];
+    schwarzLevelCurves = computeSigmaLevelCurves(engine, bbox, { grid: schwarzLevelGrid, phaseLines: schwarzLevelPhases });
+    renderSchwarzLevelReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the level curves (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzLevelCurves(): void {
+    if (!schwarzLevelCurves) return;
+    schwarzLevelCurves = null;
+    renderSchwarzLevelReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
+  // σ periodic cycles (F4d): grid-seeded Newton on σⁿ(w)=w over Ω. "Find" searches for the period (the
+  // control); each cycle draws as its closed orbit loop + markers. A COARSE, advisory global search — σ is
+  // numerical, so the cycles are `≈` and never exhaustive.
+  /** Cycle summary readout (grouped by period; empty when none searched). */
+  function renderSchwarzCycleReadout(): void {
+    const box = document.getElementById("schwarz-cycle-readout");
+    if (!box) return;
+    if (!schwarzCycles) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const n = schwarzCycles.length;
+    if (n === 0) {
+      box.textContent = `≈ no period-${schwarzCycleN} cycles found (advisory search)`;
+      return;
+    }
+    const byPeriod = new Map<number, number>();
+    for (const c of schwarzCycles) byPeriod.set(c.period, (byPeriod.get(c.period) ?? 0) + 1);
+    const parts = [...byPeriod.entries()].sort((a, b) => a[0] - b[0]).map(([p, ct]) => `${ct}×p${p}`);
+    box.textContent = `≈ ${n} cycle${n === 1 ? "" : "s"} · ${parts.join(", ")}`;
+  }
+  /** Search σ for period-n cycles over the boundary polygon's padded bbox. The unbounded family's Ω is the
+   *  EXTERIOR, so its seed box is padded well beyond ∂Ω (the polygon's own bbox is mostly K); a bounded QD's Ω
+   *  is the interior, so it needs little pad. Synchronous — a modest grid keeps it under a second. Advisory (`≈`). */
+  function computeSchwarzCycles(): void {
+    if (!schwarzSession) return;
+    const { engine, poly, boundedOmega } = schwarzSession;
+    const surface = {
+      sigma: (w: Complex): Complex | null => engine.sigma(w),
+      isInOmega: (w: Complex): boolean => (boundedOmega ? pointInPolygon(w, poly) : !pointInPolygon(w, poly)),
+    };
+    let minRe = Infinity, maxRe = -Infinity, minIm = Infinity, maxIm = -Infinity;
+    for (const p of poly) {
+      minRe = Math.min(minRe, p[0]); maxRe = Math.max(maxRe, p[0]);
+      minIm = Math.min(minIm, p[1]); maxIm = Math.max(maxIm, p[1]);
+    }
+    const pad = boundedOmega ? 0.1 : 0.6; // reach into the exterior Ω for the unbounded family
+    const padRe = pad * (maxRe - minRe) || 1;
+    const padIm = pad * (maxIm - minIm) || 1;
+    const bbox: [number, number, number, number] = [minRe - padRe, maxRe + padRe, minIm - padIm, maxIm + padIm];
+    schwarzCycles = findCycles(surface, schwarzCycleN, { bbox });
+    if (schwarzCycles.length === 0) showToast(`No period-${schwarzCycleN} cycles found (advisory search).`, "info");
+    renderSchwarzCycleReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the cycles (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzCycles(): void {
+    if (!schwarzCycles) return;
+    schwarzCycles = null;
+    renderSchwarzCycleReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
+  // σ forward-curve image (F4f): the user shift-draws a polyline in Ω; its forward σ-images σ(curve), σ²(curve),
+  // … are traced + drawn hue-ramped. The draft is collected live during the shift-drag (in the canvas pointer
+  // handlers); this finalises it. A transient analysis (not serialized). σ is numerical, so the images are `≈`.
+  /** Readout for the forward-curve family (empty when none). */
+  function renderSchwarzForwardReadout(): void {
+    const box = document.getElementById("schwarz-forward-readout");
+    if (!box) return;
+    if (!schwarzForwardCurves || schwarzForwardCurves.length === 0) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const seed = schwarzForwardCurves[0]?.length ?? 0;
+    const iters = schwarzForwardCurves.length - 1;
+    box.textContent = `≈ ${seed}-pt curve · ${iters} forward image${iters === 1 ? "" : "s"}`;
+  }
+  /** Finalise the drawn polyline (`schwarzCurveDraft`) into its forward-σ family (schwarzForwardK iterations).
+   *  Needs ≥ 2 points; a shorter draft clears. The σ-images ride iterateCurveForward over the field's surface. */
+  function computeSchwarzForward(): void {
+    if (!schwarzSession || schwarzCurveDraft.length < 2) {
+      schwarzForwardCurves = null;
+      renderSchwarzForwardReadout();
+      scheduleSchwarzOverlayPaint();
+      return;
+    }
+    const { engine } = schwarzSession;
+    const surface = { sigma: (w: Complex): Complex | null => engine.sigma(w), isInOmega: schwarzInOmega };
+    schwarzForwardCurves = iterateCurveForward(schwarzCurveDraft, surface, schwarzForwardK);
+    renderSchwarzForwardReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the forward-curve family + any in-progress draft (readout hides, overlay disappears next paint). */
+  function clearSchwarzForward(): void {
+    schwarzCurveDraft = [];
+    if (!schwarzForwardCurves) return;
+    schwarzForwardCurves = null;
+    renderSchwarzForwardReadout();
+    scheduleSchwarzOverlayPaint();
+  }
+
+  // σ orbit family (F4e sweep · F4c canonical): trace a set of σ-orbits + draw them hue-ramped. Reuses the
+  // orbit tracer (schwarzOrbitAt) + the orbit overlay (a colour override per member). A transient analysis.
+  /** Count readout for the active family (empty when none). */
+  function renderSchwarzFamilyReadout(label: string): void {
+    const box = document.getElementById("schwarz-family-readout");
+    if (!box) return;
+    if (!schwarzOrbitFamily || schwarzOrbitFamily.length === 0) {
+      box.hidden = true;
+      box.textContent = "";
+      return;
+    }
+    box.hidden = false;
+    const n = schwarzOrbitFamily.length;
+    box.textContent = `${n} orbit${n === 1 ? "" : "s"} · ${label}`;
+  }
+  /** The Ω-membership the field/tracer use (outside ∂Ω unbounded / inside it bounded). */
+  function schwarzInOmega(w: Complex): boolean {
+    if (!schwarzSession) return false;
+    return schwarzSession.boundedOmega
+      ? pointInPolygon(w, schwarzSession.poly)
+      : !pointInPolygon(w, schwarzSession.poly);
+  }
+  /** Trace σ-orbits from a list of w-seeds (already in Ω), sharing the field's escape budget. */
+  function traceSchwarzFamily(seeds: readonly Complex[]): SchwarzOrbit[] {
+    if (!schwarzSession) return [];
+    const { engine, poly, boundedOmega } = schwarzSession;
+    return seeds.map((w0) => schwarzOrbitAt(engine, poly, w0, { ...schwarzEscape, boundedOmega }));
+  }
+  /** F4e — sweep a circle of seeds about the plane-view centre; trace the in-Ω ones. */
+  function computeSchwarzSweep(): void {
+    if (!schwarzSession) return;
+    const wCenter = schwarzViewMode === "plane" ? schwarzView.center : schwarzViews.plane.center;
+    const seeds = sweepSeeds("circle", {
+      n: schwarzFamilyN,
+      center: [wCenter[0], wCenter[1]],
+      radius: schwarzFamilyRadius,
+    }).filter(schwarzInOmega);
+    schwarzOrbitFamily = seeds.length ? traceSchwarzFamily(seeds) : null;
+    if (!seeds.length) showToast("No sweep seeds landed in Ω — try a different radius or recentre.", "info");
+    renderSchwarzFamilyReadout("circle sweep");
+    scheduleSchwarzOverlayPaint();
+  }
+  /** F4c — trace the map's canonical seeds (bounded centre w₀; the unbounded pole centroid where it exists). */
+  function computeSchwarzCanonical(): void {
+    if (!schwarzSession) return;
+    const seeds = canonicalSchwarzSeeds(schwarzSession.engine, schwarzSession.phi, schwarzInOmega);
+    if (!seeds.length) {
+      showToast("No canonical seeds for this map — try the sweep.", "info");
+      return;
+    }
+    schwarzOrbitFamily = traceSchwarzFamily(seeds.map((s) => s.w));
+    renderSchwarzFamilyReadout("canonical seeds");
+    scheduleSchwarzOverlayPaint();
+  }
+  /** Drop the orbit family (readout hides, overlay disappears on the next paint). */
+  function clearSchwarzOrbitFamily(): void {
+    if (!schwarzOrbitFamily) return;
+    schwarzOrbitFamily = null;
+    renderSchwarzFamilyReadout("");
+    scheduleSchwarzOverlayPaint();
+  }
+
+  /** Show the generated map's closed form (F4i) — the exact φ / F + the symbolic σ (φ⁻¹ is numerical, so σ is
+   *  `≈`). Derived from the session's φ recipe; re-rendered whenever a σ is generated. Read-only text. */
+  function renderSchwarzExplicitForm(): void {
+    const box = document.getElementById("schwarz-formula");
+    if (!box) return;
+    const line = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement("div");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    if (!schwarzSession) {
+      box.replaceChildren(line("schwarz-formula-hint", "Generate a σ to see its closed form."));
+      return;
+    }
+    const f = explicitSigmaForm(schwarzSession.phi);
+    box.replaceChildren(
+      line("schwarz-formula-title", f.title),
+      line("schwarz-formula-eq", f.phi),
+      line("schwarz-formula-eq", f.F),
+      line("schwarz-formula-eq", f.sigma),
+      line("schwarz-formula-note", f.note),
+    );
+  }
+
+  // σ-singularities (F4h): branch points (φ′=0 cusps) + σ-poles, computed from the session's φ on each generate.
+  /** Recompute the singularities for the live session (cheap + deterministic) and refresh the card list. */
+  function refreshSchwarzSingularities(): void {
+    if (!schwarzSession) {
+      schwarzSingularities = null;
+    } else {
+      schwarzSingularities = findSigmaSingularities(schwarzSession.engine, schwarzSession.phi.branches ?? [], {
+        bounded: schwarzSession.boundedOmega,
+      });
+    }
+    renderSchwarzSingularitiesReadout();
+  }
+  /** List the branch points + σ-poles in the card (locations `≈`-labeled). */
+  function renderSchwarzSingularitiesReadout(): void {
+    const box = document.getElementById("schwarz-singularities-readout");
+    if (!box) return;
+    const line = (cls: string, text: string): HTMLElement => {
+      const el = document.createElement("div");
+      el.className = cls;
+      el.textContent = text;
+      return el;
+    };
+    if (!schwarzSingularities) {
+      box.replaceChildren(line("schwarz-formula-hint", "Generate a σ to find its singularities."));
+      return;
+    }
+    const { branchPoints, poles } = schwarzSingularities;
+    const at = (w: Complex): string => formatComplex(truncateComplex(w));
+    const kids: HTMLElement[] = [
+      line(
+        "schwarz-formula-title",
+        `${branchPoints.length} branch point${branchPoints.length === 1 ? "" : "s"} (φ′=0, cusps) · ` +
+          `${poles.length} σ-pole${poles.length === 1 ? "" : "s"}`,
+      ),
+    ];
+    for (const b of branchPoints) kids.push(line("schwarz-sing-item schwarz-sing-branch", `○ branch point   ${at(b.w)}`));
+    for (const p of poles) kids.push(line("schwarz-sing-item schwarz-sing-pole", `× σ-pole ${p.label} (order ${p.order})   ${at(p.w)}`));
+    kids.push(
+      line(
+        "schwarz-formula-note",
+        poles.length === 0
+          ? "This family's σ-poles sit at ∞ (none finite); the branch points are ≈ (numerical)."
+          : "Markers are ≈ (a numerical reconstruction).",
+      ),
+    );
+    box.replaceChildren(...kids);
   }
 
   /**
    * Enter the σ session for an already-built engine + its φ coefficients — the shared core of the import
-   * and native-φ paths. Decides mode + size once (GPU paints a crisp 512² in one pass; the CPU fallback
-   * stays coarse since per-Ω-pixel Newton is heavy), resets the view, and shows the canvas + label.
+   * and native-φ paths. Decides the render mode (GPU when WebGL2 is available, else the coarse CPU fallback
+   * — per-Ω-pixel Newton is heavy), resets the view, and shows the canvas + label. The GPU render resolution
+   * is chosen per-paint from the display size (B2), not fixed here.
    */
   function enterSchwarz(engine: ReturnType<typeof schwarzEngineFromMapSpec>, phi: SchwarzPhi): void {
     const poly = schwarzBoundaryPoly(engine);
+    // S5-C2: a bounded φ uniformizes 𝔻 → Ω, so Ω is the INTERIOR of ∂Ω — the CPU field/orbit tracer flip
+    // their in-Ω test (the GPU reads phi.family itself in setPhi). Absent family ⇒ the exterior orientation.
+    const boundedOmega = phi.family === "bounded";
     if (schwarzGL === undefined) schwarzGL = createSchwarzGLRenderer();
     let mode: "GPU" | "CPU" = "CPU";
-    let size = 256;
     if (schwarzGL) {
       try {
         schwarzGL.setPhi(phi, poly);
-        schwarzGL.setColormap(schwarzColormapName); // apply the current σ palette to this session
+        applySchwarzColormap(); // apply the current σ palette (named or custom gradient) to this session
         mode = "GPU";
-        size = 512;
       } catch (err) {
         console.warn("schwarzGL setPhi failed; falling back to the CPU field:", err);
       }
     }
-    schwarzSession = { engine, poly, phi, size, mode };
+    schwarzSession = { engine, poly, phi, boundedOmega, mode };
+    // A new σ starts on the w-plane, with every coordinate view at its default: both flat windows (F2b) and
+    // the sphere camera (F2d).
+    schwarzViewMode = "plane";
+    schwarzViews.plane = { ...SCHWARZ_DEFAULT_VIEW };
+    schwarzViews.z = { ...SCHWARZ_ZDISK_DEFAULT_VIEW };
     schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+    schwarzSphereRot = SCHWARZ_SPHERE_DEFAULT_ROT;
+    schwarzSphereZoom = 1;
+    syncSchwarzViewModeSeg();
     schwarzInspect = null; // a new φ ⇒ any previous orbit is stale
+    schwarzHover = null;
+    schwarzPreimageTree = null; // a new φ ⇒ any previous tiling tree is stale
+    schwarzLimitSetCloud = null; // …and any previous limit-set cloud
+    schwarzLimitDim = NaN;
+    schwarzOrbitFamily = null; // …and any previous orbit family
+    schwarzLevelCurves = null; // …and any previous level curves
+    schwarzCycles = null; // …and any previous periodic cycles
+    schwarzForwardCurves = null; // …and any previous forward-curve image
+    schwarzCurveDraft = [];
+    schwarzFieldDirty = true; // a new map ⇒ (re)render the field
+    schwarzCpuImage = null; // drop any cached CPU frame from a previous session
     renderSchwarzInspectReadout();
+    renderSchwarzTilingReadout();
+    renderSchwarzLimitReadout();
+    renderSchwarzLevelReadout();
+    renderSchwarzCycleReadout();
+    renderSchwarzForwardReadout();
+    renderSchwarzExplicitForm(); // F4i: show the generated map's closed form
+    refreshSchwarzSingularities(); // F4h: find the branch points + σ-poles of the new map
     renderSchwarzLegendChip(); // reflect the current colormap + scale in the legend
     document.querySelector(".workspace")?.classList.add("schwarz-active"); // enter σ mode → show the pane
     try {
@@ -3146,21 +3989,33 @@ function init(): void {
       // A GPU render that throws at paint time degrades the whole session to CPU, in THIS call.
       if (schwarzSession.mode === "GPU") {
         console.warn("schwarzGL render failed; falling back to the CPU field:", err);
-        schwarzSession = { engine, poly, phi, size: 256, mode: "CPU" };
+        schwarzSession = { engine, poly, phi, boundedOmega, mode: "CPU" };
+        schwarzFieldDirty = true;
         paintSchwarz();
       }
     }
+    // The sphere ray-cast is GPU-only, so its segment button is enabled only in a GPU session (a CPU fallback
+    // leaves it disabled — clicking it would otherwise toast-and-refuse). Re-evaluated per session (the GPU
+    // render can degrade to CPU in the catch above).
+    const sphereBtn = document.getElementById("schwarz-view-sphere") as HTMLButtonElement | null;
+    if (sphereBtn) sphereBtn.disabled = schwarzSession.mode !== "GPU";
     const label = byId<HTMLElement>("dyn-schwarz-label");
-    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · ↩/Esc to exit`;
+    label.textContent = `Schwarz reflection σ (≈, ${schwarzSession.mode}) · drag · scroll · arrows ± i · Esc to exit`;
   }
   /** Import path: reconstruct from an interchange schwarz map. Throws (to the caller's toast) for an
    *  unsupported φ — reconstruct BEFORE entering so a bad map never half-shows a wrong field. */
   function renderSchwarzView(spec: SchwarzMap): void {
     enterSchwarz(schwarzEngineFromMapSpec(spec), schwarzPhiFromMapSpec(spec));
   }
-  /** Native path: build the σ engine from φ coefficients (a preset or the custom form) and enter. */
+  /** Native + restore path: build the σ engine from φ coefficients (a preset, the custom form, or a
+   *  serialized σ view) and enter. Dispatches on the family — a bounded φ (S5-C2) uses the interior-branch
+   *  engine, everything else the unbounded-Laurent engine. */
   function renderSchwarzFromPhi(phi: SchwarzPhi): void {
-    enterSchwarz(makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches), phi);
+    const engine =
+      phi.family === "bounded"
+        ? makeBoundedSchwarz(phi.w0 ?? [0, 0], phi.branches)
+        : makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches);
+    enterSchwarz(engine, phi);
   }
   /**
    * Restore a σ view from a serialized `_sigma` state (permalink / saved view / PNG — ADR-0009 item 2):
@@ -3170,24 +4025,135 @@ function init(): void {
   function restoreSchwarzFromState(s: SigmaViewState): void {
     schwarzColormapName = s.colormap;
     schwarzScaleMode = s.scale;
+    schwarzColorMode = s.colorMode;
+    schwarzTrapShape = s.trapShape;
+    schwarzRotation = s.rotation;
+    schwarzGamma = s.gamma;
+    schwarzVignette = s.vignette;
+    schwarzAA = s.aa; // B2 render knobs travel with the σ view
+    schwarzEscape.maxIter = s.maxIter;
+    schwarzEscape.escapeR = s.escapeR;
+    schwarzLight = s.light; // C2 relief lighting travels with the σ view
+    schwarzLightAz = s.lightAz;
+    schwarzLightEl = s.lightEl;
+    schwarzLightDepth = s.lightHeight;
+    schwarzShowBoundary = s.showBoundary; // F1 ∂Ω overlay travels with the σ view
+    schwarzShowSingularities = s.showSingularities; // F4h singularity markers travel with the σ view
+    schwarzTilingDepth = s.tilingDepth; // F3c tiling params travel with the σ view (the tree itself does not)
+    schwarzTilingBudget = s.tilingBudget;
+    if (s.customStops) {
+      // C1: restore the custom gradient BEFORE entering, so enterSchwarz's applySchwarzColormap uses it.
+      schwarzGradientStops = s.customStops.map((st) => ({ t: st.t, color: [...st.color] }));
+      schwarzGradientEditor?.setStops(schwarzGradientStops);
+    }
     renderSchwarzFromPhi(s.phi); // build engine + enter σ (resets the view to default, applies the colormap)
-    schwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom }; // ...then restore the exact window
+    // ...then restore the exact window + coordinate view (F2b). enterSchwarz (via renderSchwarzFromPhi) reset
+    // both views to defaults + plane mode; apply the serialized mode + its window (the inactive view keeps
+    // its default — only the active window is serialized).
+    const flatWindow: SchwarzView = { center: [s.center[0], s.center[1]], zoom: s.zoom };
+    if (s.viewMode === "sphere" && schwarzSession?.mode === "GPU") {
+      // Sphere (F2d-ii): restore the camera; the serialized flat window seeds the plane stash for a later switch.
+      schwarzViewMode = "sphere";
+      schwarzView = { ...flatWindow };
+      schwarzViews.plane = { ...flatWindow };
+      if (s.sphereRot) schwarzSphereRot = quatNormalize(s.sphereRot);
+      schwarzSphereZoom = s.sphereZoom ?? 1;
+    } else {
+      // plane / z — or a sphere link on a CPU session, which can't ray-cast the sphere, so fall back to the plane.
+      schwarzViewMode = s.viewMode === "z" ? "z" : "plane";
+      schwarzView = { ...flatWindow };
+      schwarzViews[schwarzViewMode] = { ...flatWindow };
+    }
+    syncSchwarzViewModeSeg();
     const cm = document.getElementById("schwarz-colormap") as HTMLSelectElement | null;
     if (cm) cm.value = schwarzColormapName;
     const sc = document.getElementById("schwarz-scale") as HTMLSelectElement | null;
     if (sc) sc.value = schwarzScaleMode;
+    const aaEl = document.getElementById("schwarz-aa") as HTMLSelectElement | null;
+    if (aaEl) aaEl.value = String(schwarzAA);
+    const itEl = document.getElementById("schwarz-iters") as HTMLInputElement | null;
+    if (itEl) itEl.value = String(schwarzEscape.maxIter);
+    const erEl = document.getElementById("schwarz-escaper") as HTMLInputElement | null;
+    if (erEl) erEl.value = String(schwarzEscape.escapeR);
+    const lightCb = document.getElementById("schwarz-light") as HTMLInputElement | null;
+    if (lightCb) lightCb.checked = schwarzLight;
+    const lazEl = document.getElementById("schwarz-light-az") as HTMLInputElement | null;
+    if (lazEl) lazEl.value = String(schwarzLightAz);
+    const lelEl = document.getElementById("schwarz-light-el") as HTMLInputElement | null;
+    if (lelEl) lelEl.value = String(schwarzLightEl);
+    const ldpEl = document.getElementById("schwarz-light-depth") as HTMLInputElement | null;
+    if (ldpEl) ldpEl.value = String(schwarzLightDepth * 20);
+    const lcEl = document.getElementById("schwarz-light-controls");
+    if (lcEl) lcEl.hidden = !schwarzLight;
+    const bdEl = document.getElementById("schwarz-boundary") as HTMLInputElement | null;
+    if (bdEl) bdEl.checked = schwarzShowBoundary; // F1 ∂Ω overlay checkbox mirrors the restored view
+    const sgEl = document.getElementById("schwarz-singularities") as HTMLInputElement | null;
+    if (sgEl) sgEl.checked = schwarzShowSingularities; // F4h singularity-markers checkbox mirrors the restored view
+    const tdEl = document.getElementById("schwarz-tiling-depth") as HTMLInputElement | null;
+    if (tdEl) tdEl.value = String(schwarzTilingDepth); // F3c tiling controls mirror the restored view
+    const tbEl = document.getElementById("schwarz-tiling-budget") as HTMLSelectElement | null;
+    if (tbEl) tbEl.value = String(schwarzTilingBudget);
+    syncSchwarzColorModeControls();
+    syncSchwarzToneControls();
     renderSchwarzLegendChip();
     scheduleSchwarzPaint(); // paint at the restored window (also mirrors it into the nav fields)
+  }
+
+  /** Mirror the σ tone state (rotation / gamma / vignette) into their sliders. */
+  function syncSchwarzToneControls(): void {
+    const set = (id: string, v: number): void => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (el) el.value = String(v);
+    };
+    set("schwarz-rotation", schwarzRotation);
+    set("schwarz-gamma", schwarzGamma);
+    set("schwarz-vignette", schwarzVignette);
+  }
+  /** Mirror the σ color-mode + trap-shape state into their selects, and reveal the trap-shape row only in
+   *  "trap" mode (it is irrelevant to escape-time / stripe). */
+  function syncSchwarzColorModeControls(): void {
+    const md = document.getElementById("schwarz-colormode") as HTMLSelectElement | null;
+    if (md) md.value = schwarzColorMode;
+    const tp = document.getElementById("schwarz-trapshape") as HTMLSelectElement | null;
+    if (tp) tp.value = schwarzTrapShape;
+    const row = document.getElementById("schwarz-trapshape-row");
+    if (row) row.hidden = schwarzColorMode !== "trap";
   }
   /** The σ view as a serializable state (for `_sigma` + the PNG stamp). Requires an active session. */
   function currentSigmaState(): SigmaViewState | null {
     if (!schwarzSession) return null;
+    // The flat window (center/zoom) is the active view's for plane/z; for the sphere it's the UNDERLYING plane
+    // window (schwarzViews.plane, always stashed on the switch to the sphere) so a plane-switch after restoring
+    // a sphere link is sensible. The sphere additionally serializes its camera (F2d-ii: sphereRot + sphereZoom).
+    const flatView = schwarzViewMode === "sphere" ? schwarzViews.plane : schwarzView;
     return {
       phi: schwarzSession.phi,
-      center: schwarzView.center,
-      zoom: schwarzView.zoom,
+      center: flatView.center,
+      zoom: flatView.zoom,
       colormap: schwarzColormapName,
       scale: schwarzScaleMode,
+      colorMode: schwarzColorMode,
+      trapShape: schwarzTrapShape,
+      rotation: schwarzRotation,
+      gamma: schwarzGamma,
+      vignette: schwarzVignette,
+      aa: schwarzAA,
+      maxIter: schwarzEscape.maxIter,
+      escapeR: schwarzEscape.escapeR,
+      light: schwarzLight,
+      lightAz: schwarzLightAz,
+      lightEl: schwarzLightEl,
+      lightHeight: schwarzLightDepth,
+      showBoundary: schwarzShowBoundary,
+      showSingularities: schwarzShowSingularities, // F4h: the singularity-markers toggle travels with the σ view
+      tilingDepth: schwarzTilingDepth, // F3c: the tiling params travel with the σ view (the tree itself is transient)
+      tilingBudget: schwarzTilingBudget,
+      viewMode: schwarzViewMode,
+      // Sphere camera (F2d-ii) — carried only on the sphere; the copy keeps the quaternion out of shared state.
+      ...(schwarzViewMode === "sphere"
+        ? { sphereRot: [...schwarzSphereRot] as [number, number, number, number], sphereZoom: schwarzSphereZoom }
+        : {}),
+      ...(schwarzColormapName === "custom" ? { customStops: schwarzGradientStops } : {}),
     };
   }
 
@@ -3197,35 +4163,130 @@ function init(): void {
    * on-screen 512² — else falls back to the current canvas. The `cdjs:state` tEXt is the same permalink
    * `readFullState` builds, so it now carries `_sigma`; `cdjs:sigma` is a human-readable summary.
    */
-  async function saveSchwarzPng(): Promise<void> {
+  /** Render the σ export image (size + baked overlays) and its reproducibility metadata, shared by the
+   *  Save-PNG and Copy-PNG paths (D2). Returns null when there is no σ session to export. */
+  function buildSchwarzExportImage(): { canvas: HTMLCanvasElement; metadata: Record<string, string> } | null {
     const sig = currentSigmaState();
-    if (!schwarzSession || !sig) return;
+    if (!schwarzSession || !sig) return null;
+    // Export options (S5-A1): size + which overlays to bake in. The GPU path re-renders clean at `size`;
+    // the CPU fallback can only give the on-screen field (per-pixel Newton at hi-res is too slow).
+    const sizeSel = document.getElementById("schwarz-export-size") as HTMLSelectElement | null;
+    const wantScaleBar = (document.getElementById("schwarz-export-scalebar") as HTMLInputElement | null)?.checked ?? true;
+    const wantOrbit = (document.getElementById("schwarz-export-orbit") as HTMLInputElement | null)?.checked ?? false;
+    const size = Math.min(Number(sizeSel?.value) || 1024, getMaxTextureSize()); // single-pass ⇒ cap at the GPU max
     let canvas: HTMLCanvasElement;
     if (schwarzSession.mode === "GPU" && schwarzGL) {
-      const size = 1024; // hi-res single-pass GPU render, well under any WebGL2 max texture size
-      schwarzGL.render(schwarzView, size, { ...SCHWARZ_ESCAPE, scaleMode: schwarzScaleMode });
+      schwarzGL.render(schwarzView, size, {
+        ...schwarzEscape,
+        scaleMode: schwarzScaleMode,
+        colorMode: schwarzColorMode,
+        trapShape: schwarzTrapShape,
+        rotation: schwarzRotation,
+        gamma: schwarzGamma,
+        vignette: schwarzVignette,
+        light: schwarzLight, // C2: the export is a full render, so it is lit if lighting is on
+        lightAz: schwarzLightAz,
+        lightEl: schwarzLightEl,
+        lightHeight: schwarzLightDepth,
+        viewMode: schwarzViewMode, // export the active coordinate view (plane · z-disk · sphere)
+        sphereRot: schwarzSphereRot, // F2d camera (ignored unless viewMode === "sphere")
+        sphereZoom: schwarzSphereZoom,
+      });
       const out = document.createElement("canvas");
       out.width = size;
       out.height = size;
       const octx = out.getContext("2d");
-      if (!octx) return;
+      if (!octx) return null;
       octx.drawImage(schwarzGL.canvas, 0, 0);
-      drawScaleBar(octx, size, schwarzView.zoom); // keep the scale reference; omit the transient orbit overlay
+      // Bake the overlays into the export the same way paintSchwarz draws them on screen: directly on the
+      // plane, or ψ-pulled-back into the z-disk (∂Ω → the unit circle, the orbit through engine.invertPhi).
+      // (The CPU fallback below reuses the on-screen canvas, already drawn with the same gating.)
+      if (schwarzViewMode === "plane") {
+        if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size);
+        if (schwarzLevelCurves) drawSchwarzLevelCurves(octx, schwarzLevelCurves, schwarzView, size);
+        if (schwarzShowBoundary) drawSchwarzBoundary(octx, schwarzSession.poly, schwarzView, size);
+        if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size);
+        if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size);
+        if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size);
+        if (schwarzForwardCurves) drawSchwarzForwardCurves(octx, schwarzForwardCurves, schwarzView, size);
+        if (schwarzOrbitFamily)
+          for (let i = 0; i < schwarzOrbitFamily.length; i++)
+            drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length) });
+        if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size);
+      } else if (schwarzViewMode === "z") {
+        const engine = schwarzSession.engine;
+        const toZ = (w: Complex): Complex | null => engine.invertPhi(w);
+        if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPlot: toZ });
+        if (schwarzLevelCurves) drawSchwarzLevelCurves(octx, schwarzLevelCurves, schwarzView, size, { toPlot: toZ });
+        if (schwarzShowBoundary) drawSchwarzUnitCircle(octx, schwarzView, size);
+        if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPlot: toZ });
+        if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPlot: toZ });
+        if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size, { toPlot: toZ });
+        if (schwarzForwardCurves) drawSchwarzForwardCurves(octx, schwarzForwardCurves, schwarzView, size, { toPlot: toZ });
+        if (schwarzOrbitFamily)
+          for (let i = 0; i < schwarzOrbitFamily.length; i++)
+            drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPlot: toZ });
+        if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPlot: toZ });
+      } else if (schwarzViewMode === "sphere") {
+        const cam = schwarzSphereCam();
+        const toPixel = (w: Complex): [number, number] | null => {
+          const uv = planeToScreenUv(w, cam);
+          return uv ? [uv[0] * size - 0.5, uv[1] * size - 0.5] : null;
+        };
+        if (schwarzLimitSetCloud) drawSchwarzLimitSet(octx, schwarzLimitSetCloud, schwarzView, size, { toPixel });
+        if (schwarzLevelCurves) drawSchwarzLevelCurves(octx, schwarzLevelCurves, schwarzView, size, { toPixel });
+        if (schwarzShowBoundary) drawSchwarzBoundarySphere(octx, schwarzSession.poly, cam, size);
+        if (schwarzPreimageTree) drawSchwarzTree(octx, schwarzPreimageTree, schwarzView, size, { toPixel });
+        if (schwarzShowSingularities && schwarzSingularities) drawSchwarzSingularities(octx, schwarzSingularities, schwarzView, size, { toPixel });
+        if (schwarzCycles) drawSchwarzCycles(octx, schwarzCycles, schwarzView, size, { toPixel });
+        if (schwarzForwardCurves) drawSchwarzForwardCurves(octx, schwarzForwardCurves, schwarzView, size, { toPixel });
+        if (schwarzOrbitFamily)
+          for (let i = 0; i < schwarzOrbitFamily.length; i++)
+            drawSchwarzOrbit(octx, schwarzOrbitFamily[i], schwarzView, size, { preview: true, color: familyHue(i, schwarzOrbitFamily.length), toPixel });
+        if (wantOrbit && schwarzInspect) drawSchwarzOrbit(octx, schwarzInspect, schwarzView, size, { toPixel });
+      }
+      if (wantScaleBar && schwarzViewMode !== "sphere") drawScaleBar(octx, size, schwarzView.zoom); // sphere: no linear scale
       canvas = out;
       scheduleSchwarzPaint(); // the render above resized the offscreen GL canvas — repaint the on-screen 512²
     } else {
-      canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown
+      canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown (size ignored)
     }
     const metadata: Record<string, string> = {
       Software: "ComplexDynamicsJS",
       "cdjs:sigma": schwarzStampParams(sig),
       "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
     };
+    return { canvas, metadata };
+  }
+
+  /** The user's export file name (D2), `.png`-normalized; falls back to `schwarz-sigma` when blank. */
+  function schwarzExportName(): string {
+    const raw = (document.getElementById("schwarz-export-name") as HTMLInputElement | null)?.value ?? "";
+    return ensurePngName(raw.trim() || "schwarz-sigma");
+  }
+
+  async function saveSchwarzPng(): Promise<void> {
+    const img = buildSchwarzExportImage();
+    if (!img) return;
     try {
-      await downloadCanvas(canvas, "schwarz-sigma.png", metadata);
+      await downloadCanvas(img.canvas, schwarzExportName(), img.metadata);
       showToast("Saved the σ image (state embedded in the PNG).", "info");
     } catch {
       showToast("Could not save the σ image.", "warn");
+    }
+  }
+
+  /** Copy the σ export image to the clipboard (D2). Same render as Save PNG; the OS may drop the embedded
+   *  state on paste, so the toast points at Save PNG for a reproducible file, and older browsers without
+   *  the clipboard-image API fall through to the warn. */
+  async function copySchwarzPng(): Promise<void> {
+    const img = buildSchwarzExportImage();
+    if (!img) return;
+    try {
+      await copyCanvasToClipboard(img.canvas, img.metadata);
+      showToast("Copied the σ image to the clipboard.", "info");
+    } catch {
+      showToast("Couldn't copy the σ image — use Save PNG instead.", "warn");
     }
   }
 
@@ -3243,7 +4304,8 @@ function init(): void {
   // once and are no-ops unless a σ session is active — so they never interfere with the normal plot.
   {
     const canvas = byId<HTMLCanvasElement>("JCSSchwarz");
-    const clientToUv = (e: PointerEvent | WheelEvent): [number, number] => {
+    // MouseEvent covers every pointer/wheel/dblclick source (PointerEvent + WheelEvent both extend it).
+    const clientToUv = (e: MouseEvent): [number, number] => {
       const r = canvas.getBoundingClientRect();
       return [
         Math.min(1, Math.max(0, (e.clientX - r.left) / Math.max(1, r.width))),
@@ -3254,28 +4316,132 @@ function init(): void {
     let downClient: [number, number] | null = null;
     let movedSinceDown = false;
     const CLICK_TOL_PX = 4; // total travel under this ⇒ a click (inspect the orbit), not a drag (pan)
+    const SEED_GRAB_PX = 10; // press within this of the pinned orbit's seed w₀ ⇒ drag the seed, not pan (B3)
+    let draggingSeed = false; // true ⇒ the current drag moves the inspect seed, not the view
+    let schwarzForwardDrawLastUv: [number, number] | null = null; // F4f: last appended draw point (screen throttle)
+    // Is `uv` within grab range of the pinned inspect seed w₀ (measured in CSS px)? Starts a seed-drag and
+    // drives the "move" cursor. (The inverse of uvToPlotFrac maps w₀ back to its fractional screen position.)
+    const nearSchwarzSeed = (uv: [number, number]): boolean => {
+      if (!schwarzInspect || schwarzViewMode !== "plane") return false; // seed-DRAG stays w-plane-only; the z-disk re-pins by click (F2c)
+      const w = schwarzInspect.points[0];
+      const su = ((w[0] - schwarzView.center[0]) * schwarzView.zoom + 1) / 2;
+      const sv = (1 - (w[1] - schwarzView.center[1]) * schwarzView.zoom) / 2;
+      const r = canvas.getBoundingClientRect();
+      return Math.hypot((uv[0] - su) * r.width, (uv[1] - sv) * r.height) <= SEED_GRAB_PX;
+    };
+    // Map a pointer position (uv) to the σ world point w₀ whose orbit we trace: identity in the w-plane view,
+    // or z ↦ φ(z) in the z-disk (F2c), where the fragment is the uniformizing coordinate. Null when the
+    // pointer is off the uniformizing domain (|z|≤1 unbounded / |z|≥1 bounded), where φ is not the map — the
+    // caller then declines to inspect/preview. One helper so hover, click-inspect, and the `i` key agree.
+    const schwarzSeedFromPointer = (uv: [number, number]): Complex | null => {
+      if (!schwarzSession) return null;
+      // Sphere (F2d-ii): ray-cast the pointer onto the ball → the world point w it shows (null off the
+      // silhouette). screenToPlane is the CPU mirror of the GPU raycast, so the seed matches the rendered pixel.
+      if (schwarzViewMode === "sphere") return screenToPlane(uv, schwarzSphereCam());
+      const p = uvToPlotFrac(schwarzView, uv[0], uv[1]);
+      if (schwarzViewMode !== "z") return p; // plane: the fragment already IS w
+      const r = Math.hypot(p[0], p[1]);
+      if (schwarzSession.boundedOmega ? r >= 1 : r <= 1) return null; // off the uniformizing domain
+      return schwarzSession.engine.evalPhi(p); // lift the z-disk point forward: w₀ = φ(z)
+    };
+    const clearSchwarzHover = (): void => {
+      if (!schwarzHover) return;
+      schwarzHover = null;
+      scheduleSchwarzOverlayPaint();
+    };
+    // Hover orbit-preview (S5-A2): trace the orbit under the cursor and repaint (rAF-coalesced). Clears when
+    // the pointer leaves or sits off the uniformizing domain in the z-disk. Off during a drag (a pan already
+    // repaints) and on touch (no hover). In the z-disk the seed is z ↦ φ(z) and the orbit is ψ-pulled back.
+    const setSchwarzHover = (e: PointerEvent): void => {
+      if (!schwarzSession) return;
+      const w0 = schwarzSeedFromPointer(clientToUv(e));
+      if (!w0) {
+        clearSchwarzHover();
+        return;
+      }
+      schwarzHover = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, w0, {
+        ...schwarzEscape,
+        boundedOmega: schwarzSession.boundedOmega,
+      });
+      scheduleSchwarzOverlayPaint(); // hover only moves the preview orbit — re-blit the cached field
+    };
     canvas.addEventListener("pointerdown", (e) => {
       if (!schwarzSession) return;
-      lastUv = clientToUv(e);
+      const uv = clientToUv(e);
+      // F4f: shift-drag draws a polyline in Ω whose forward σ-images we trace. Intercept before pan / seed-drag.
+      if (e.shiftKey) {
+        schwarzDrawingCurve = true;
+        schwarzCurveDraft = [];
+        const w0 = schwarzSeedFromPointer(uv);
+        if (w0) schwarzCurveDraft.push(w0);
+        schwarzForwardDrawLastUv = uv;
+        schwarzForwardCurves = schwarzCurveDraft.length ? [schwarzCurveDraft.slice()] : null;
+        schwarzHover = null;
+        canvas.setPointerCapture(e.pointerId);
+        canvas.style.cursor = "crosshair";
+        scheduleSchwarzOverlayPaint();
+        return;
+      }
+      draggingSeed = nearSchwarzSeed(uv); // press on the pinned seed ⇒ drag it, not the view (B3)
+      lastUv = uv;
       downClient = [e.clientX, e.clientY];
       movedSinceDown = false;
+      schwarzHover = null; // a drag/click supersedes the hover preview
       canvas.setPointerCapture(e.pointerId);
-      canvas.style.cursor = "grabbing";
+      canvas.style.cursor = draggingSeed ? "move" : "grabbing";
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (!schwarzSession || !lastUv) return;
+      if (!schwarzSession) return;
+      if (schwarzDrawingCurve) {
+        // F4f: append points to the drawn polyline, throttled by screen distance; live-preview the seed curve.
+        const uvm = clientToUv(e);
+        const rect = canvas.getBoundingClientRect();
+        const moved =
+          !schwarzForwardDrawLastUv ||
+          Math.hypot((uvm[0] - schwarzForwardDrawLastUv[0]) * rect.width, (uvm[1] - schwarzForwardDrawLastUv[1]) * rect.height) >= 6;
+        if (moved) {
+          const w0 = schwarzSeedFromPointer(uvm);
+          if (w0) {
+            schwarzCurveDraft.push(w0);
+            schwarzForwardDrawLastUv = uvm;
+            schwarzForwardCurves = [schwarzCurveDraft.slice()];
+            scheduleSchwarzOverlayPaint();
+          }
+        }
+        return;
+      }
+      if (!lastUv) {
+        setSchwarzHover(e); // not dragging ⇒ preview the orbit under the cursor
+        canvas.style.cursor = nearSchwarzSeed(clientToUv(e)) ? "move" : "grab"; // signal a draggable seed
+        return;
+      }
       if (downClient && Math.hypot(e.clientX - downClient[0], e.clientY - downClient[1]) > CLICK_TOL_PX) {
         movedSinceDown = true; // it's a drag now — a trailing click won't inspect
       }
       const cur = clientToUv(e);
-      schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
+      if (draggingSeed) {
+        // Move the inspect seed w₀ under the cursor and re-trace its σ-orbit in real time (B3). The view is
+        // unchanged, so this is an overlay-only repaint (setSchwarzInspect) — the field is not re-rendered.
+        setSchwarzInspect(uvToPlotFrac(schwarzView, cur[0], cur[1]));
+      } else if (schwarzViewMode === "sphere") {
+        // F2d: arcball — rotate the Riemann sphere by the incremental drag, accumulated onto its orientation
+        // (pre-multiply, mirroring the main plots) and RE-NORMALISED each step so the quaternion never drifts
+        // off unit length (which would also make the serialized camera fail to round-trip exactly). The flat
+        // center/zoom window is untouched.
+        schwarzSphereRot = quatNormalize(quatMultiply(arcballDelta(lastUv, cur), schwarzSphereRot));
+        scheduleSchwarzDraftPaint(); // draft while spinning; refine to full res once it goes idle
+      } else {
+        schwarzView = panSchwarzView(schwarzView, lastUv, cur); // move the grabbed point under the cursor
+        scheduleSchwarzDraftPaint(); // draft while dragging; refine to full res once the pan goes idle
+      }
       lastUv = cur;
-      scheduleSchwarzPaint();
     });
+    canvas.addEventListener("pointerleave", clearSchwarzHover);
     const endDrag = (e: PointerEvent): void => {
       if (!lastUv) return;
       lastUv = null;
       downClient = null;
+      draggingSeed = false;
       canvas.style.cursor = "grab";
       try {
         canvas.releasePointerCapture(e.pointerId);
@@ -3284,33 +4450,158 @@ function init(): void {
       }
     };
     canvas.addEventListener("pointerup", (e) => {
-      const wasClick = lastUv !== null && !movedSinceDown;
+      if (schwarzDrawingCurve) {
+        // F4f: finish the drawn curve → trace its forward σ-images (computeSchwarzForward finalises the draft).
+        schwarzDrawingCurve = false;
+        schwarzForwardDrawLastUv = null;
+        canvas.style.cursor = "grab";
+        try {
+          canvas.releasePointerCapture(e.pointerId);
+        } catch {
+          /* pointer was not captured — fine */
+        }
+        computeSchwarzForward();
+        return;
+      }
+      const wasClick = lastUv !== null && !movedSinceDown && !draggingSeed;
       endDrag(e);
-      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor.
+      // A click (no meaningful drag) inspects the σ-orbit of the point under the cursor. schwarzSeedFromPointer
+      // gives the w-plane seed directly, or maps a z-disk click forward through φ (F2c); a z-disk click off the
+      // uniformizing domain returns null and inspects nothing.
       if (wasClick && schwarzSession) {
-        const uv = clientToUv(e);
-        setSchwarzInspect(uvToPlotFrac(schwarzView, uv[0], uv[1]));
+        const w0 = schwarzSeedFromPointer(clientToUv(e));
+        if (w0) setSchwarzInspect(w0);
       }
     });
-    canvas.addEventListener("pointercancel", endDrag);
+    canvas.addEventListener("pointercancel", (e) => {
+      if (schwarzDrawingCurve) {
+        schwarzDrawingCurve = false;
+        schwarzForwardDrawLastUv = null;
+        canvas.style.cursor = "grab";
+        computeSchwarzForward();
+        return;
+      }
+      endDrag(e);
+    });
+    // Double-click a point in the tiling set → grow its σ⁻¹ preimage tree (F3c). schwarzSeedFromPointer maps the
+    // pointer to w for the active view (plane direct · z-disk φ(z) · sphere raycast; null off-domain), and
+    // seedSchwarzTiling gates on tiling-set membership before building. The two synthesized single-clicks that
+    // precede a dblclick also pin the seed's orbit — that's fine; the tree draws over it (both are informative).
+    canvas.addEventListener("dblclick", (e) => {
+      if (!schwarzSession) return;
+      e.preventDefault();
+      const w0 = schwarzSeedFromPointer(clientToUv(e));
+      if (w0) seedSchwarzTiling(w0);
+    });
     canvas.addEventListener(
       "wheel",
       (e) => {
         if (!schwarzSession) return;
         e.preventDefault();
+        if (schwarzViewMode === "sphere") {
+          // F2d: telescope zoom — narrow/widen the sphere-camera FOV (distance fixed), clamped like the main plots.
+          const mag = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+          schwarzSphereZoom = Math.min(1e6, Math.max(0.3, schwarzSphereZoom * mag));
+          scheduleSchwarzDraftPaint();
+          return;
+        }
         const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12; // scroll up ⇒ zoom in
         const next = zoomSchwarzView(schwarzView, factor, clientToUv(e));
         next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom)); // keep the window sane
         schwarzView = next;
-        scheduleSchwarzPaint();
+        scheduleSchwarzDraftPaint(); // draft while zooming; refine to full res once the wheel goes idle
       },
       { passive: false },
     );
-    window.addEventListener("keydown", (e) => {
-      if (schwarzSession && e.key === "Escape") {
+    // σ keyboard (E2 — parity with the standard plots, adapted to σ's full-screen mode). Only ONE view is
+    // active in σ mode, so — unlike CD's side-by-side plots, which key off canvas focus — the shortcuts act
+    // whenever a σ session is live, EXCEPT while typing in a field (so the centre / zoom / filename inputs and
+    // the range sliders keep their native arrow behaviour). Esc exits (unguarded, as before); arrows pan a
+    // quarter-window; +/- zoom ×2 about the centre; i inspects the centre point. Pan/zoom draft then refine.
+    window.addEventListener(
+      "keydown",
+      (e) => {
+      if (!schwarzSession) return;
+      if (e.key === "Escape") {
+        // A modal reachable from σ (the glossary / help behind the "?" links) must close on Escape WITHOUT
+        // also exiting σ out from under it. This is a capture-phase listener, so it runs BEFORE the modal's
+        // own document-level close handler — returning here lets the event bubble on to close the modal
+        // while σ stays put. With no modal open, Escape exits σ as before.
+        if (document.querySelector(".glossary-overlay:not([hidden])")) return;
         e.preventDefault();
         exitSchwarzView();
+        return;
       }
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) {
+        return; // don't hijack typing / slider nudges
+      }
+      // F2d sphere: the arrows SPIN the ball (about the view up/right axes) and +/- zoom the camera; there is
+      // no flat pan/zoom or centre-inspect. Handle it first, then bail before the plane/z switch below.
+      if (schwarzViewMode === "sphere") {
+        const spin = (axis: [number, number, number], ang: number): void => {
+          schwarzSphereRot = quatNormalize(quatMultiply(quatFromAxisAngle(axis, ang), schwarzSphereRot));
+          scheduleSchwarzDraftPaint();
+        };
+        const zoomSphere = (mag: number): void => {
+          schwarzSphereZoom = Math.min(1e6, Math.max(0.3, schwarzSphereZoom * mag));
+          scheduleSchwarzDraftPaint();
+        };
+        const STEP = 0.15;
+        switch (e.key) {
+          case "ArrowLeft": spin([0, 1, 0], -STEP); break;
+          case "ArrowRight": spin([0, 1, 0], STEP); break;
+          case "ArrowUp": spin([1, 0, 0], -STEP); break;
+          case "ArrowDown": spin([1, 0, 0], STEP); break;
+          case "+":
+          case "=": zoomSphere(1.3); break;
+          case "-":
+          case "_": zoomSphere(1 / 1.3); break;
+          default: return;
+        }
+        e.preventDefault();
+        return;
+      }
+      const panBy = (dx: number, dy: number): void => {
+        // dx,dy are fractions of the half-window; ±0.25 ⇒ a quarter-window step = CD's 1/(zoom·4). +Im is up.
+        schwarzView = {
+          center: [schwarzView.center[0] + dx / schwarzView.zoom, schwarzView.center[1] + dy / schwarzView.zoom],
+          zoom: schwarzView.zoom,
+        };
+        scheduleSchwarzDraftPaint();
+      };
+      const zoomBy = (factor: number): void => {
+        const next = zoomSchwarzView(schwarzView, factor, [0.5, 0.5]); // about the view centre
+        next.zoom = Math.min(SCHWARZ_ZOOM_MAX, Math.max(SCHWARZ_ZOOM_MIN, next.zoom));
+        schwarzView = next;
+        scheduleSchwarzDraftPaint();
+      };
+      switch (e.key) {
+        case "ArrowLeft": panBy(-0.25, 0); break;
+        case "ArrowRight": panBy(0.25, 0); break;
+        case "ArrowUp": panBy(0, 0.25); break;
+        case "ArrowDown": panBy(0, -0.25); break;
+        case "+":
+        case "=": zoomBy(2); break;
+        case "-":
+        case "_": zoomBy(0.5); break;
+        case "i": {
+          // Inspect the view centre: its w directly on the plane, or φ(centre) in the z-disk (F2c) — a no-op
+          // when the z-disk centre sits off the uniformizing domain (e.g. z = 0 for the unbounded family).
+          const w0 = schwarzSeedFromPointer([0.5, 0.5]);
+          if (w0) setSchwarzInspect(w0);
+          break;
+        }
+        default: return;
+      }
+      e.preventDefault();
+      },
+      true, // capture: σ keys act before other handlers; Escape defers to an open modal (guard above)
+    );
+    // Re-fit the backing resolution when the display size / devicePixelRatio changes (window resize, or the
+    // A3 side-panel reflowing the canvas cell). Draft first, then the idle refine renders crisp at the new size.
+    window.addEventListener("resize", () => {
+      if (schwarzSession) scheduleSchwarzDraftPaint();
     });
   }
 
@@ -3321,12 +4612,16 @@ function init(): void {
     const openBtn = document.getElementById("schwarz-open"); // sidebar → open the σ peer view
     const exitBtn = document.getElementById("schwarz-exit"); // σ pane header → back to the plots
     const presetSel = document.getElementById("schwarz-preset") as HTMLSelectElement | null;
+    const familySel = document.getElementById("schwarz-family") as HTMLSelectElement | null; // unbounded | bounded
     const cIn = document.getElementById("schwarz-c") as HTMLInputElement | null;
     const fIn = document.getElementById("schwarz-F") as HTMLInputElement | null;
+    const w0In = document.getElementById("schwarz-w0") as HTMLInputElement | null; // bounded centre φ(0) (S5-C2)
     const polesIn = document.getElementById("schwarz-poles") as HTMLTextAreaElement | null;
+    const unbFields = document.getElementById("schwarz-fields-unbounded");
+    const bndFields = document.getElementById("schwarz-fields-bounded");
     const genBtn = document.getElementById("schwarz-generate"); // in-pane → re-render the edited φ
     const errBox = document.getElementById("schwarz-error");
-    if (openBtn && exitBtn && presetSel && cIn && fIn && polesIn && genBtn && errBox) {
+    if (openBtn && exitBtn && presetSel && familySel && cIn && fIn && w0In && polesIn && unbFields && bndFields && genBtn && errBox) {
       // Populate the preset dropdown (the leading "Custom…" option is already in the HTML).
       for (const p of SCHWARZ_PRESETS) {
         const opt = document.createElement("option");
@@ -3338,12 +4633,22 @@ function init(): void {
         errBox.textContent = msg ?? "";
         errBox.hidden = msg === null;
       };
+      // Show only the active family's fields (unbounded: c + F; bounded: w₀). Poles are shared. The σ engine
+      // is chosen from this selector, so the visible fields always match what "Generate σ" will build.
+      const syncFamily = (): void => {
+        const bounded = familySel.value === "bounded";
+        unbFields.hidden = bounded;
+        bndFields.hidden = !bounded;
+      };
       const fill = (id: string): void => {
         const p = SCHWARZ_PRESETS.find((x) => x.id === id);
         if (!p) return;
+        familySel.value = p.family ?? "unbounded";
         cIn.value = p.c;
         fIn.value = p.F;
+        w0In.value = p.w0 ?? "0";
         polesIn.value = p.poles;
+        syncFamily();
       };
       // Start on the deltoid so the pane opens showing a working example (single source: SCHWARZ_PRESETS).
       presetSel.value = "deltoid";
@@ -3353,7 +4658,8 @@ function init(): void {
       const generate = (): void => {
         document.querySelector(".workspace")?.classList.add("schwarz-active");
         try {
-          renderSchwarzFromPhi(buildSchwarzPhi({ c: cIn.value, F: fIn.value, poles: polesIn.value }));
+          const family = familySel.value === "bounded" ? "bounded" : "unbounded";
+          renderSchwarzFromPhi(buildSchwarzPhi({ family, c: cIn.value, F: fIn.value, w0: w0In.value, poles: polesIn.value }));
           setError(null);
         } catch (err) {
           setError((err as Error).message); // buildSchwarzPhi's messages are written for this line
@@ -3371,8 +4677,13 @@ function init(): void {
           setError(null);
         }
       });
+      // Switching family is a deliberate mode change ⇒ a "Custom…" φ; swap the visible fields to match.
+      familySel.addEventListener("change", () => {
+        presetSel.value = "";
+        syncFamily();
+      });
       // Hand-editing any field makes it a "Custom…" map (programmatic fill() does not fire 'input').
-      for (const el of [cIn, fIn, polesIn]) {
+      for (const el of [cIn, fIn, w0In, polesIn]) {
         el.addEventListener("input", () => {
           presetSel.value = "";
         });
@@ -3393,13 +4704,33 @@ function init(): void {
         opt.textContent = name;
         cmSel.appendChild(opt);
       }
+      const customOpt = document.createElement("option"); // C1: the user-editable gradient
+      customOpt.value = "custom";
+      customOpt.textContent = "Custom…";
+      cmSel.appendChild(customOpt);
       cmSel.value = schwarzColormapName;
       cmSel.addEventListener("change", () => {
         schwarzColormapName = cmSel.value;
-        schwarzGL?.setColormap(schwarzColormapName);
+        applySchwarzColormap(); // a named palette, or the custom-gradient ramp (also shows/hides the editor)
         renderSchwarzLegendChip(); // legend ramp follows the colormap
         scheduleSchwarzPaint();
       });
+    }
+    // The custom-gradient editor (C1) — CD's shared widget (ui/gradient.ts). Editing the stops rebuilds the
+    // σ colormap texture + legend and repaints, but only while the "Custom…" palette is active.
+    {
+      const ge = document.getElementById("schwarz-gradient-editor");
+      if (ge) {
+        schwarzGradientEditor = setupGradientEditor(ge, schwarzGradientStops, (stops) => {
+          schwarzGradientStops = stops;
+          if (schwarzColormapName === "custom") {
+            schwarzGL?.setColormapRamp(schwarzCustomRamp());
+            renderSchwarzLegendChip();
+            scheduleSchwarzPaint();
+          }
+        });
+        schwarzGradientEditor.setVisible(schwarzColormapName === "custom");
+      }
     }
     if (scSel) {
       for (const m of SCHWARZ_SCALE_MODES) {
@@ -3413,6 +4744,298 @@ function init(): void {
         schwarzScaleMode = scSel.value;
         renderSchwarzLegendChip(); // legend title shows the scale mode
         scheduleSchwarzPaint();
+      });
+    }
+    // σ-field color mode + orbit-trap shape (S5-B1). The mode picks WHAT the ramp encodes; the trap-shape
+    // row is revealed only in "trap" mode. Both travel in the σ view (`_sigma`), like the colormap + scale.
+    const mdSel = document.getElementById("schwarz-colormode") as HTMLSelectElement | null;
+    const tpSel = document.getElementById("schwarz-trapshape") as HTMLSelectElement | null;
+    if (mdSel) {
+      for (const m of SCHWARZ_COLOR_MODES) {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        opt.textContent = m.label;
+        mdSel.appendChild(opt);
+      }
+      mdSel.value = schwarzColorMode;
+      mdSel.addEventListener("change", () => {
+        schwarzColorMode = mdSel.value;
+        syncSchwarzColorModeControls(); // reveal / hide the trap-shape row
+        renderSchwarzLegendChip(); // legend now describes the active mode
+        scheduleSchwarzPaint();
+      });
+    }
+    if (tpSel) {
+      for (const m of SCHWARZ_TRAP_SHAPES) {
+        const opt = document.createElement("option");
+        opt.value = m.key;
+        opt.textContent = m.label;
+        tpSel.appendChild(opt);
+      }
+      tpSel.value = schwarzTrapShape;
+      tpSel.addEventListener("change", () => {
+        schwarzTrapShape = tpSel.value;
+        renderSchwarzLegendChip(); // legend title shows the trap shape
+        scheduleSchwarzPaint();
+      });
+    }
+    syncSchwarzColorModeControls(); // set the initial trap-shape row visibility
+  }
+
+  // σ image-space tone (S5-A3): palette rotation + gamma + vignette sliders. Each live-updates the state
+  // and repaints (rAF-coalesced); the values travel in the σ view (`_sigma`), like the colormap + scale.
+  {
+    const wire = (id: string, apply: (v: number) => void): void => {
+      const el = document.getElementById(id) as HTMLInputElement | null;
+      if (!el) return;
+      el.addEventListener("input", () => {
+        const v = Number.parseFloat(el.value);
+        if (Number.isFinite(v)) {
+          apply(v);
+          scheduleSchwarzPaint();
+        }
+      });
+    };
+    wire("schwarz-rotation", (v) => (schwarzRotation = v));
+    wire("schwarz-gamma", (v) => (schwarzGamma = v));
+    wire("schwarz-vignette", (v) => (schwarzVignette = v));
+  }
+
+  // σ relief lighting (C2): a checkbox + light az / el / depth sliders. Toggling reveals the sliders; each
+  // change repaints (full res, so the lit surface is shown). The depth slider (0–100) maps to depth ÷ 20
+  // (slider 40 → 2.0), matching CD's mapping. The values travel in the σ view (`_sigma`).
+  {
+    const lightCb = document.getElementById("schwarz-light") as HTMLInputElement | null;
+    const azIn = document.getElementById("schwarz-light-az") as HTMLInputElement | null;
+    const elIn = document.getElementById("schwarz-light-el") as HTMLInputElement | null;
+    const depthIn = document.getElementById("schwarz-light-depth") as HTMLInputElement | null;
+    const controls = document.getElementById("schwarz-light-controls");
+    const sync = (): void => {
+      schwarzLight = lightCb?.checked ?? false;
+      schwarzLightAz = Number(azIn?.value ?? 135);
+      schwarzLightEl = Number(elIn?.value ?? 45);
+      schwarzLightDepth = Number(depthIn?.value ?? 40) / 20;
+      if (controls) controls.hidden = !schwarzLight;
+      scheduleSchwarzPaint();
+    };
+    for (const el of [lightCb, azIn, elIn, depthIn]) el?.addEventListener("input", sync);
+    if (controls) controls.hidden = !schwarzLight; // initial visibility (no repaint)
+  }
+
+  // σ ∂Ω boundary overlay (F1): a display toggle. Overlay-only — it repaints the overlay layer without
+  // re-rendering the field (the boundary polygon is the session's existing mask polygon). Travels in `_sigma`.
+  {
+    const bdCb = document.getElementById("schwarz-boundary") as HTMLInputElement | null;
+    if (bdCb) {
+      bdCb.checked = schwarzShowBoundary;
+      bdCb.addEventListener("change", () => {
+        schwarzShowBoundary = bdCb.checked;
+        scheduleSchwarzOverlayPaint();
+      });
+    }
+  }
+
+  // σ-singularity markers (F4h): a display toggle for the branch-point + σ-pole markers. Overlay-only (they
+  // are computed from φ on generate). Travels in `_sigma`.
+  {
+    const sgCb = document.getElementById("schwarz-singularities") as HTMLInputElement | null;
+    if (sgCb) {
+      sgCb.checked = schwarzShowSingularities;
+      sgCb.addEventListener("change", () => {
+        schwarzShowSingularities = sgCb.checked;
+        scheduleSchwarzOverlayPaint();
+      });
+    }
+  }
+
+  // σ preimage tiling (F3c): depth (number, 0–8) + budget (select) retune the active tree LIVE (rebuilt from
+  // its seed, no re-click); the clear button removes it. Seeding is a double-click on the canvas (the dblclick
+  // handler in the interaction block). The two params travel in the σ view (`_sigma`); the tree is transient.
+  {
+    const tdIn = document.getElementById("schwarz-tiling-depth") as HTMLInputElement | null;
+    const tbSel = document.getElementById("schwarz-tiling-budget") as HTMLSelectElement | null;
+    const clearBtn = document.getElementById("schwarz-tiling-clear");
+    if (tdIn) {
+      tdIn.value = String(schwarzTilingDepth);
+      tdIn.addEventListener("change", () => {
+        const v = Math.round(Number(tdIn.value));
+        if (Number.isFinite(v)) schwarzTilingDepth = Math.max(0, Math.min(8, v));
+        tdIn.value = String(schwarzTilingDepth); // normalise / restore on a bad value
+        rebuildSchwarzTilingIfActive();
+      });
+    }
+    if (tbSel) {
+      tbSel.value = String(schwarzTilingBudget);
+      tbSel.addEventListener("change", () => {
+        const v = Math.round(Number(tbSel.value));
+        if (Number.isFinite(v) && v >= 1) schwarzTilingBudget = v;
+        rebuildSchwarzTilingIfActive();
+      });
+    }
+    clearBtn?.addEventListener("click", clearSchwarzTiling);
+  }
+
+  // σ limit set (F4a): "sample" runs the chaos game on σ⁻¹ (the point count) and shows the cloud + its
+  // box-counting dimension; "clear" removes it. A transient analysis (computed on demand, not serialized).
+  {
+    const ptsIn = document.getElementById("schwarz-limit-points") as HTMLInputElement | null;
+    const sampleBtn = document.getElementById("schwarz-limit-sample");
+    const clearBtn = document.getElementById("schwarz-limit-clear");
+    if (ptsIn) {
+      ptsIn.value = String(schwarzLimitPoints);
+      ptsIn.addEventListener("change", () => {
+        const v = Math.round(Number(ptsIn.value));
+        if (Number.isFinite(v)) schwarzLimitPoints = Math.max(2000, Math.min(100000, v));
+        ptsIn.value = String(schwarzLimitPoints); // normalise / restore on a bad value
+      });
+    }
+    sampleBtn?.addEventListener("click", computeSchwarzLimitSet);
+    clearBtn?.addEventListener("click", clearSchwarzLimitSet);
+  }
+
+  // σ orbit family (F4e sweep · F4c canonical): seed count + radius, and sweep / canonical / clear buttons.
+  {
+    const nIn = document.getElementById("schwarz-family-n") as HTMLInputElement | null;
+    const rIn = document.getElementById("schwarz-family-radius") as HTMLInputElement | null;
+    const sweepBtn = document.getElementById("schwarz-family-sweep");
+    const canonBtn = document.getElementById("schwarz-family-canonical");
+    const clearBtn = document.getElementById("schwarz-family-clear");
+    if (nIn) {
+      nIn.value = String(schwarzFamilyN);
+      nIn.addEventListener("change", () => {
+        const v = Math.round(Number(nIn.value));
+        if (Number.isFinite(v)) schwarzFamilyN = Math.max(1, Math.min(200, v));
+        nIn.value = String(schwarzFamilyN);
+      });
+    }
+    if (rIn) {
+      rIn.value = String(schwarzFamilyRadius);
+      rIn.addEventListener("change", () => {
+        const v = Number(rIn.value);
+        if (Number.isFinite(v) && v > 0) schwarzFamilyRadius = v;
+        rIn.value = String(schwarzFamilyRadius);
+      });
+    }
+    sweepBtn?.addEventListener("click", computeSchwarzSweep);
+    canonBtn?.addEventListener("click", computeSchwarzCanonical);
+    clearBtn?.addEventListener("click", clearSchwarzOrbitFamily);
+  }
+
+  // σ level curves (F4b): grid resolution + phase-line count, and draw / clear buttons. A transient analysis
+  // (computed on demand, not serialized).
+  {
+    const gridIn = document.getElementById("schwarz-level-grid") as HTMLInputElement | null;
+    const phasesIn = document.getElementById("schwarz-level-phases") as HTMLInputElement | null;
+    const drawBtn = document.getElementById("schwarz-level-draw");
+    const clearBtn = document.getElementById("schwarz-level-clear");
+    if (gridIn) {
+      gridIn.value = String(schwarzLevelGrid);
+      gridIn.addEventListener("change", () => {
+        const v = Math.round(Number(gridIn.value));
+        if (Number.isFinite(v)) schwarzLevelGrid = Math.max(24, Math.min(400, v)); // 24²…400² σ evaluations
+        gridIn.value = String(schwarzLevelGrid);
+      });
+    }
+    if (phasesIn) {
+      phasesIn.value = String(schwarzLevelPhases);
+      phasesIn.addEventListener("change", () => {
+        const v = Math.round(Number(phasesIn.value));
+        if (Number.isFinite(v)) schwarzLevelPhases = Math.max(0, Math.min(24, v));
+        phasesIn.value = String(schwarzLevelPhases);
+      });
+    }
+    drawBtn?.addEventListener("click", computeSchwarzLevelCurves);
+    clearBtn?.addEventListener("click", clearSchwarzLevelCurves);
+  }
+
+  // σ periodic cycles (F4d): the period to search + find / clear buttons. A transient advisory analysis
+  // (computed on demand, not serialized).
+  {
+    const nIn = document.getElementById("schwarz-cycle-n") as HTMLInputElement | null;
+    const findBtn = document.getElementById("schwarz-cycle-find");
+    const clearBtn = document.getElementById("schwarz-cycle-clear");
+    if (nIn) {
+      nIn.value = String(schwarzCycleN);
+      nIn.addEventListener("change", () => {
+        const v = Math.round(Number(nIn.value));
+        if (Number.isFinite(v)) schwarzCycleN = Math.max(1, Math.min(8, v)); // periods 1–8 (advisory beyond ~3)
+        nIn.value = String(schwarzCycleN);
+      });
+    }
+    findBtn?.addEventListener("click", computeSchwarzCycles);
+    clearBtn?.addEventListener("click", clearSchwarzCycles);
+  }
+
+  // σ forward-curve image (F4f): the iteration count + clear. The curve itself is shift-drawn on the canvas;
+  // changing the count re-traces the last drawn polyline. A transient analysis (not serialized).
+  {
+    const kIn = document.getElementById("schwarz-forward-k") as HTMLInputElement | null;
+    const clearBtn = document.getElementById("schwarz-forward-clear");
+    if (kIn) {
+      kIn.value = String(schwarzForwardK);
+      kIn.addEventListener("change", () => {
+        const v = Math.round(Number(kIn.value));
+        if (Number.isFinite(v)) schwarzForwardK = Math.max(1, Math.min(30, v));
+        kIn.value = String(schwarzForwardK);
+        if (schwarzCurveDraft.length >= 2) computeSchwarzForward(); // re-trace the last curve at the new depth
+      });
+    }
+    clearBtn?.addEventListener("click", clearSchwarzForward);
+  }
+
+  // σ view-mode segment (F2a shell → F2b/F2d live): the plane · z-disk · sphere buttons switch coordinate
+  // views via setSchwarzViewMode (the stash-swap / camera + repaint + DOM sync live there). The sphere button
+  // is enabled per-session in enterSchwarz (GPU only); setSchwarzViewMode also guards a non-GPU sphere click.
+  for (const [mode, id] of [
+    ["plane", "schwarz-view-plane"],
+    ["z", "schwarz-view-z"],
+    ["sphere", "schwarz-view-sphere"],
+  ] as const) {
+    document.getElementById(id)?.addEventListener("click", () => setSchwarzViewMode(mode));
+  }
+
+  // σ render controls (Phase B): AA supersample + the escape budget (iterations + escape radius). Each
+  // re-renders the field at full res; the escape budget also re-traces the pinned inspect orbit so its fate
+  // readout matches the field (they share ONE budget). The values travel in the σ view (`_sigma`).
+  {
+    const aaSel = document.getElementById("schwarz-aa") as HTMLSelectElement | null;
+    const itIn = document.getElementById("schwarz-iters") as HTMLInputElement | null;
+    const erIn = document.getElementById("schwarz-escaper") as HTMLInputElement | null;
+    if (aaSel) {
+      aaSel.value = String(schwarzAA);
+      aaSel.addEventListener("change", () => {
+        schwarzAA = Math.max(1, Math.min(4, Math.round(Number(aaSel.value) || 1)));
+        scheduleSchwarzPaint(); // full re-render at the new supersample factor
+      });
+    }
+    // The escape budget changes the FIELD (different escape counts) — full re-render, not an overlay blit;
+    // and re-trace any pinned orbit so its readout fate matches the new budget.
+    const applyEscape = (): void => {
+      if (schwarzSession && schwarzInspect) {
+        schwarzInspect = schwarzOrbitAt(schwarzSession.engine, schwarzSession.poly, schwarzInspect.points[0], {
+          ...schwarzEscape,
+          boundedOmega: schwarzSession.boundedOmega,
+        });
+        renderSchwarzInspectReadout();
+      }
+      scheduleSchwarzPaint();
+    };
+    if (itIn) {
+      itIn.value = String(schwarzEscape.maxIter);
+      itIn.addEventListener("change", () => {
+        const v = Math.round(Number(itIn.value));
+        if (Number.isFinite(v) && v >= 1) schwarzEscape.maxIter = Math.min(4096, v);
+        itIn.value = String(schwarzEscape.maxIter); // normalise / restore on a bad value
+        applyEscape();
+      });
+    }
+    if (erIn) {
+      erIn.value = String(schwarzEscape.escapeR);
+      erIn.addEventListener("change", () => {
+        const v = Number(erIn.value);
+        if (Number.isFinite(v) && v > 1) schwarzEscape.escapeR = v;
+        erIn.value = String(schwarzEscape.escapeR);
+        applyEscape();
       });
     }
   }
@@ -3442,12 +5065,32 @@ function init(): void {
         });
       }
       resetBtn.addEventListener("click", () => {
-        schwarzView = { ...SCHWARZ_DEFAULT_VIEW };
+        // Reset the ACTIVE view to its default: the sphere camera (F2d) or the flat window (plane / z-disk).
+        if (schwarzViewMode === "sphere") {
+          schwarzSphereRot = SCHWARZ_SPHERE_DEFAULT_ROT;
+          schwarzSphereZoom = 1;
+        } else {
+          schwarzView = { ...(schwarzViewMode === "z" ? SCHWARZ_ZDISK_DEFAULT_VIEW : SCHWARZ_DEFAULT_VIEW) };
+        }
         scheduleSchwarzPaint();
       });
+      // Copy the live centre + zoom at FULL precision (parity with the standard plots' copy-coords; no `c =`
+      // line — σ is a standalone explorer, not a z²+c map). Full precision, not the 6-sig-fig field mirror.
+      const copyBtn = document.getElementById("schwarz-copy-coords");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", () => {
+          const c = schwarzView.center;
+          void navigator.clipboard
+            .writeText(`center = ${c[0]},${c[1]}\nzoom = ${schwarzView.zoom}`)
+            .then(() => showToast("Coordinates copied to the clipboard.", "info"))
+            .catch(() => showToast("Couldn't access the clipboard.", "warn"));
+        });
+      }
     }
     const savePngBtn = document.getElementById("schwarz-save-png");
     if (savePngBtn) savePngBtn.addEventListener("click", () => void saveSchwarzPng()); // PNG w/ embedded state
+    const copyPngBtn = document.getElementById("schwarz-copy-png");
+    if (copyPngBtn) copyPngBtn.addEventListener("click", () => void copySchwarzPng()); // same image → clipboard (D2)
   }
 
   /**
@@ -3471,8 +5114,9 @@ function init(): void {
     }
     if (spec.form === "schwarz") {
       // σ is reconstructed NUMERICALLY (φ⁻¹ is iterative), not expr/GPU-compiled: rebuild the evaluator
-      // from sigma.phi via @cas/schwarz and paint its escape-time field on the CPU (S4a). The reconstruct
-      // can throw for a family the engine doesn't support (non-Laurent φ) — decline honestly, don't crash.
+      // from sigma.phi via @cas/schwarz and paint its escape-time field (S4a; bounded QDs since S5-C2d, on
+      // the interior branch + interior-Ω orientation). The reconstruct can throw for a family the engine
+      // doesn't support (a non-Laurent/non-bounded φ) — decline honestly, don't crash.
       try {
         renderSchwarzView(spec);
       } catch (err) {

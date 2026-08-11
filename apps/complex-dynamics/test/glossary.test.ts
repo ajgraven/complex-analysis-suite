@@ -50,6 +50,13 @@ describe("glossary", () => {
     for (const id of panel) expect(ids.has(id)).toBe(true);
   });
 
+  it("defines every term the σ pane ? links point at (Phase A)", () => {
+    // data-term ids on the gloss-link buttons inside #schwarz-plot in index.html (the σ control-group idioms).
+    const sigma = ["schwarz-reflection", "riemann-map-phi", "laurent-coefficients", "escape-time"];
+    const ids = new Set(GLOSSARY.map((e) => e.id));
+    for (const id of sigma) expect(ids.has(id)).toBe(true);
+  });
+
   it("documents the non-textbook conventions", () => {
     expect(CONVENTIONS.length).toBeGreaterThanOrEqual(4);
     const ids = CONVENTIONS.map((e) => e.id);

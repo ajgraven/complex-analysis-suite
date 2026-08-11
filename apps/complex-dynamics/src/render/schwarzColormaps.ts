@@ -81,3 +81,57 @@ export const DEFAULT_SCHWARZ_SCALE = "linear";
 export function schwarzScaleId(key: string): number {
   return SCHWARZ_SCALE_MODES.find((m) => m.key === key)?.id ?? 0;
 }
+
+// σ-field coloring modes (S5-B1): WHAT the colormap ramp encodes. "escape" is the ADR-0009 default (the
+// tiling coloured by its escape/K-entry count); "trap" and "stripe" are orbit STATISTICS accumulated over
+// the σ-orbit σⁿ(w) the engine already produces — no new map math (that is B2's derivative modes). The ids
+// are baked into the shader's fieldColor (render/schwarzGL.ts); keep them in sync. (CD's triangle-
+// inequality average is deliberately absent — it is z²+c-specific, using |c| and the quadratic relation
+// between |zₙ₊₁|, |zₙ|², |c|, which has no meaning for σ.)
+export interface SchwarzColorMode {
+  id: number;
+  key: string;
+  label: string;
+}
+export const SCHWARZ_COLOR_MODES: readonly SchwarzColorMode[] = [
+  { id: 0, key: "escape", label: "Escape time" },
+  { id: 1, key: "trap", label: "Orbit trap" },
+  { id: 2, key: "stripe", label: "Stripe average" },
+  // Derivative-dependent modes (S5-B2), on the ESCAPING set (orbits → ∞ like const·conj(w)^d). "smooth"
+  // is the continuous escape count; "distance" is the analytic distance estimate to the σ-Julia set,
+  // riding the numerically-inverted derivative |F'(z)|/|φ'(z)| — both are estimates (≈).
+  { id: 3, key: "smooth", label: "Smooth escape (≈)" },
+  { id: 4, key: "distance", label: "Distance estimate (≈)" },
+  // Domain coloring (F4g): a per-pixel phase portrait of σ(w) itself — hue = arg σ, lightness banded by
+  // log|σ| — NOT an escape-time coloring. σ is numerical, so it is `≈`. The colormap select is ignored in
+  // this mode (the hue wheel replaces the ramp).
+  { id: 5, key: "domain", label: "Domain coloring (≈)" },
+];
+export const DEFAULT_SCHWARZ_COLOR_MODE = "escape";
+
+/** Color-mode id for a key, or the escape-time default (0) for an unknown key. */
+export function schwarzColorModeId(key: string): number {
+  return SCHWARZ_COLOR_MODES.find((m) => m.key === key)?.id ?? 0;
+}
+
+// Orbit-trap shapes (S5-B1, colorMode "trap"): the set whose closest approach by the σ-orbit colours the
+// pixel. Mirrors CD's standard trap shapes (shaderBuilder.ts trapDistance); ids are baked into the σ
+// shader's trapDistance — keep them in sync.
+export interface SchwarzTrapShape {
+  id: number;
+  key: string;
+  label: string;
+}
+export const SCHWARZ_TRAP_SHAPES: readonly SchwarzTrapShape[] = [
+  { id: 0, key: "cross", label: "Cross (axes)" },
+  { id: 1, key: "point", label: "Point (origin)" },
+  { id: 2, key: "line", label: "Real axis" },
+  { id: 3, key: "circle", label: "Unit circle" },
+  { id: 4, key: "lattice", label: "Integer lattice" },
+];
+export const DEFAULT_SCHWARZ_TRAP_SHAPE = "cross";
+
+/** Trap-shape id for a key, or the cross default (0) for an unknown key. */
+export function schwarzTrapShapeId(key: string): number {
+  return SCHWARZ_TRAP_SHAPES.find((m) => m.key === key)?.id ?? 0;
+}

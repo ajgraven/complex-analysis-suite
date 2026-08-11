@@ -113,3 +113,28 @@ export async function downloadCanvas(
     URL.revokeObjectURL(url);
   }, 1000);
 }
+
+/**
+ * Encode a canvas to a PNG and place it on the system clipboard — the "copy image" twin of
+ * {@link downloadCanvas}. `metadata` is embedded best-effort (same tEXt injection), but browsers
+ * re-encode clipboard images, so the OS clipboard usually strips custom chunks: the DOWNLOAD path is
+ * the reproducible one, this is a convenience for pasting into another app. Rejects when the async
+ * Clipboard image API is unavailable (older browsers / insecure context) so the caller can fall back
+ * to a download and toast.
+ */
+export async function copyCanvasToClipboard(
+  canvas: HTMLCanvasElement,
+  metadata?: Record<string, string>,
+): Promise<void> {
+  if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
+    throw new Error("The clipboard image API is not available in this browser");
+  }
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  if (!blob) throw new Error("Failed to encode the PNG");
+  let out = blob;
+  if (metadata && Object.keys(metadata).length > 0) {
+    const stamped = injectPngText(new Uint8Array(await blob.arrayBuffer()), metadata);
+    out = new Blob([new Uint8Array(stamped)], { type: "image/png" });
+  }
+  await navigator.clipboard.write([new ClipboardItem({ "image/png": out })]);
+}

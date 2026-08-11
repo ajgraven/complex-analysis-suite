@@ -185,6 +185,24 @@ describe("importEnvelopeText — decode a link or JSON into a plottable map", ()
     expect(res.note).toMatch(/φ/);
   });
 
+  it("refuses a bounded-φ Schwarz σ (φ: 𝔻 → Ω) loudly — its branch terms aren't imported yet", () => {
+    // A bounded QD's φ is branch-based (w₀ + Σ Aⱼ,ₖ·zᵏ/(1−conj(zⱼ)·z)ᵏ), which this closed-form import
+    // doesn't build — the same shape it already declines for a pole-bearing Laurent map. Refuse, don't
+    // silently drop terms. (Bounded σ landed with S5-C2; Complex Dynamics reconstructs it numerically.)
+    const sigma = {
+      form: "schwarz",
+      phi: { form: "bounded", w0: cx(0), branches: [{ z: cx(0.5), A: [cx(0.2)] }] },
+      disk: "D",
+      inverse: "newton-dk",
+      antiholomorphic: true,
+    };
+    expect(() =>
+      importEnvelopeText(
+        JSON.stringify(envelope("schwarz-reflection", { sigma, conventions: CANONICAL })),
+      ),
+    ).toThrow(/bounded map/);
+  });
+
   it("imports a view and recovers its viewport", () => {
     const link = encodeViewLink({
       expr: "z^2",

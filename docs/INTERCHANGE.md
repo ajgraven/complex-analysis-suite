@@ -13,6 +13,14 @@ to one another. It is one half of the [map-representation keystone](ARCHITECTURE
 > "quadrature-domain" | "schwarz-reflection" | "view"`), and the deep-link codec encodes
 > **uncompressed** URL-safe base64 JSON (see §6). Exact exports:
 > [`@cas/interchange` README](../packages/interchange/README.md).
+>
+> **The schema has since grown (the live contract is `packages/interchange/src/schema.ts`, not
+> this sketch).** Per the "grow with explicit versioning" stance below: **1.1.0** added the
+> `MapSpec` `schwarz` form (a σ reflection given by its recipe — a closed-form φ + which disk it
+> uniformizes + how φ⁻¹ is taken); **1.2.0** added optional finite-pole `branches` on `LaurentMap`
+> (pole-bearing unbounded QDs); **1.3.0** added the `bounded` φ form for a `schwarz` map (bounded
+> QDs, φ: 𝔻 → Ω, `disk:"D"`). Consumers gate on MAJOR = 1, so every 1.x link still decodes. The
+> types below remain the v1.0.0 baseline for orientation.
 
 **Design stance.** Start **minimal** — only what the first hand-off (a single-valued
 Schwarz reflection, QD → CD) needs — then **grow the schema with explicit versioning**.

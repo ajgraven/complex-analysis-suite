@@ -147,9 +147,19 @@ export function importEnvelopeText(text: string): ImportedMap {
       : undefined;
 
   if (spec.form === "schwarz") {
+    const phi = spec.phi;
+    if (phi.form === "bounded") {
+      // φ: 𝔻 → Ω (a bounded quadrature domain), added to the interchange alongside the bounded σ family.
+      // Its closed form is branch-based (w₀ + Σ Aⱼ,ₖ·zᵏ/(1−conj(zⱼ)·z)ᵏ), which the plotter's import doesn't
+      // build yet — the same reason it already refuses a pole-bearing Laurent map. Refuse loudly rather than
+      // drop terms into a subtly-wrong map; Complex Dynamics, which carries @cas/schwarz, reconstructs it.
+      throw new Error(
+        "This Schwarz reflection's generating map φ is a bounded map (φ: 𝔻 → Ω), which the plotter's import doesn't represent yet. Open it in Complex Dynamics, which reconstructs σ numerically.",
+      );
+    }
     // The numerical Schwarz reflection σ isn't a closed form; plot its generating map φ, clearly labelled.
     return {
-      expr: mapSpecToExpr(spec.phi),
+      expr: mapSpecToExpr(phi),
       note: "Imported φ, the generating map — the numerical Schwarz reflection σ needs the Quadrature-Domains solver, so it is not itself plotted here.",
       source,
       viewport,
