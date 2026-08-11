@@ -40,9 +40,12 @@ const PROJECTS = [
   { name: 'expr', match: '/packages/expr/', floor: 1 },
   { name: 'gpu', match: '/packages/gpu/', floor: 1 },
   { name: 'schwarz', match: '/packages/schwarz/', floor: 1 },
+  { name: 'dynamics', match: '/packages/dynamics/', floor: 1 },
   { name: 'complex-dynamics', match: '/apps/complex-dynamics/', floor: 1 },
+  { name: 'complex-function-plotter', match: '/apps/complex-function-plotter/', floor: 1 },
   { name: 'correspondences', match: '/apps/correspondences/', floor: 1 },
   { name: 'quadrature-domains', match: '/apps/quadrature-domains/', floor: 1 },
+  { name: 'riemann-map', match: '/apps/riemann-map/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

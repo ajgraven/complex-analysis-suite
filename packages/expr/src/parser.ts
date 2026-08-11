@@ -18,7 +18,7 @@ import {
 } from "./ast";
 import { tokenize, type Token } from "./lexer";
 
-const CONSTS = new Set<ConstName>(["i", "e", "pi"]);
+const CONSTS = new Set<ConstName>(["i", "e", "pi", "tau", "phi", "γ"]);
 
 class Parser {
   private pos = 0;
@@ -106,14 +106,22 @@ class Parser {
     const tok = this.peek();
     if (tok.type === "cmp") {
       this.next();
-      return { kind: "compare", op: tok.value as CompareOp, left, right: this.parseAdditive() };
+      return {
+        kind: "compare",
+        op: tok.value as CompareOp,
+        left,
+        right: this.parseAdditive(),
+      };
     }
     return left;
   }
 
   private parseAdditive(): Node {
     let left = this.parseMultiplicative();
-    while (this.peek().type === "op" && (this.peek().value === "+" || this.peek().value === "-")) {
+    while (
+      this.peek().type === "op" &&
+      (this.peek().value === "+" || this.peek().value === "-")
+    ) {
       const op = this.next().value as ArithOp;
       left = { kind: "arith", op, left, right: this.parseMultiplicative() };
     }
@@ -122,7 +130,10 @@ class Parser {
 
   private parseMultiplicative(): Node {
     let left = this.parseUnary();
-    while (this.peek().type === "op" && (this.peek().value === "*" || this.peek().value === "/")) {
+    while (
+      this.peek().type === "op" &&
+      (this.peek().value === "*" || this.peek().value === "/")
+    ) {
       const op = this.next().value as ArithOp;
       left = { kind: "arith", op, left, right: this.parseUnary() };
     }
@@ -147,7 +158,12 @@ class Parser {
       // all of parseUnary, because `z^z^z^…` recurses through parseUnary's NON-minus branch (straight
       // back into parsePower) — and wrapping the whole of parseUnary would charge every plain operand a
       // level, halving the effective cap for parenthesis nesting.
-      return this.nested((): Node => ({ kind: "arith", op: "^", left: base, right: this.parseUnary() }));
+      return this.nested((): Node => ({
+        kind: "arith",
+        op: "^",
+        left: base,
+        right: this.parseUnary(),
+      }));
     }
     return base;
   }
@@ -158,6 +174,17 @@ class Parser {
       case "number":
         this.next();
         return { kind: "num", value: Number.parseFloat(tok.value) };
+      case "imag": {
+        // An imaginary literal `<num>i` desugars to `<num> * i` (B5). Returning it from parsePrimary makes
+        // the whole product the atomic base of any following `^`, so `2i^2` = `(2i)^2` (not `2·(i^2)`).
+        this.next();
+        return {
+          kind: "arith",
+          op: "*",
+          left: { kind: "num", value: Number.parseFloat(tok.value) },
+          right: { kind: "const", name: "i" },
+        };
+      }
       case "lparen": {
         this.next();
         const inner = this.parseExpr();
@@ -179,7 +206,8 @@ class Parser {
     if (!isCall) {
       if (name === "true") return { kind: "bool", value: true };
       if (name === "false") return { kind: "bool", value: false };
-      if (CONSTS.has(name as ConstName)) return { kind: "const", name: name as ConstName };
+      if (CONSTS.has(name as ConstName))
+        return { kind: "const", name: name as ConstName };
       return { kind: "var", name };
     }
 
@@ -193,9 +221,11 @@ class Parser {
       return { kind: "not", operand: args[0] };
     }
     if (COMPLEX_FUNCTIONS.has(name)) {
-      if (args.length !== 1) throw new ExprError(`${name}(...) takes 1 argument`, tok.pos);
+      if (args.length !== 1)
+        throw new ExprError(`${name}(...) takes 1 argument`, tok.pos);
     } else if (BINARY_FUNCTIONS.has(name)) {
-      if (args.length !== 2) throw new ExprError(`${name}(...) takes 2 arguments`, tok.pos);
+      if (args.length !== 2)
+        throw new ExprError(`${name}(...) takes 2 arguments`, tok.pos);
     } else if (name === "f") {
       if (args.length !== 2) throw new ExprError("f(...) takes 2 arguments", tok.pos);
     } else {

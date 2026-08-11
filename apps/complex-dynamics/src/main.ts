@@ -68,7 +68,7 @@ import {
   polynomialJuliaExteriorCoeffs,
   rationalExteriorCoeffs,
   mandelbrotExteriorCoeffs,
-} from "./render/uniformize";
+} from "@cas/dynamics";
 import { fToRational } from "@cas/expr/rational";
 import { computeJuliaProperties, type Extent } from "./render/juliaProperties";
 import { JuliaMetricsClient } from "./render/juliaMetricsClient";

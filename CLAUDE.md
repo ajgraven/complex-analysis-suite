@@ -48,9 +48,9 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
 11. **Deployment:** each app builds static (`base: "./"`) so its assets resolve from any path.
     **`.github/workflows/deploy-pages.yml` publishes automatically on every push to `master`**
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
-    combined Pages site** — launcher at the root, `complex-dynamics/` and `quadrature-domains/`
-    beneath it. `apps/correspondences` is **built but not published** (the launcher shows it as
-    "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
+    combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
+    `complex-function-plotter/`, and `riemann-map/` beneath it. `apps/correspondences` is **built but not
+    published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
 ## Non-negotiable guardrails
@@ -62,7 +62,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
   corpus representing both apps' needs.
 - **One dependency direction:** packages import downward only; apps import packages; no
   app imports another app; no cycles. Enforced with ESLint `no-restricted-imports`
-  (`eslint.config.js`); a `dependency-cruiser` check is a planned follow-on, not yet wired.
+  (`eslint.config.js`); a `dependency-cruiser` check is also wired — `pnpm dep:check`
+  (`depcruise packages apps`, config `.dependency-cruiser.cjs`), run inside `pnpm lint` and in CI.
 - **Honest labeling** of computed results (`=` exact, `≤` rigorous bound, `≈` estimate) —
   especially anything from the correspondence tool's straightening/surgery, which is
   exploratory and must never read as certified.
@@ -87,11 +88,13 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Three apps ride the six shared `@cas/*` packages
-(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`) — `@cas/exact`
-and `@cas/schwarz` were both extracted later than the phase plan, on the ADR-0007 second-consumer rule;
-`@cas/exact` and `@cas/schwarz` are each used by Complex-Dynamics and Correspondences. (The launcher
-consumes no packages.)
+and the parabolic-Tricorn model coordinate. Five apps ride the seven shared `@cas/*` packages
+(`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`) —
+`@cas/exact`, `@cas/schwarz`, and `@cas/dynamics` were all extracted later than the phase plan, on the
+ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by Complex-Dynamics and
+Correspondences, and `@cas/dynamics` (Böttcher exterior maps + external rays) by Complex-Dynamics and the
+Riemann-map studio. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed on
+`master` alongside the σ arc and are folded in by this merge. (The launcher consumes no packages.)
 
 **QD → CD σ hand-off (QD-HANDOFF-2 + S5, on `claude/repository-refactor-project-pg5ktu`, awaiting review):**
 Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe

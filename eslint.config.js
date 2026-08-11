@@ -18,9 +18,11 @@ import tseslint from "typescript-eslint";
 // workspace member violates the dependency rule.
 const APP_NAMES = [
   "complex-dynamics",
+  "complex-function-plotter",
   "quadrature-domains",
   "correspondences",
   "launcher",
+  "riemann-map",
 ];
 
 const noCrossAppImports = APP_NAMES.flatMap((name) => [name, `${name}/*`]).map(

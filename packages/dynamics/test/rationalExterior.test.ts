@@ -5,7 +5,7 @@
  * case. Oracle: z² + 1/z = (z³+1)/z (D=2, a₂=1, a₋₁=1).
  */
 import { describe, it, expect } from "vitest";
-import type { Complex } from "../src/complex";
+import type { Complex } from "@cas/expr";
 import { parse } from "@cas/expr/parser";
 import * as C from "@cas/expr/complexJs";
 import { fToRational } from "@cas/expr/rational";
@@ -14,7 +14,7 @@ import {
   rationalExteriorCoeffs,
   polynomialJuliaExteriorCoeffs,
   evalExterior,
-} from "../src/render/uniformize";
+} from "../src/uniformize.js";
 
 const O: Complex = [0, 0];
 const cdist = (a: Complex, b: Complex): number => Math.hypot(a[0] - b[0], a[1] - b[1]);

@@ -6,8 +6,8 @@ import {
   mandelbrotExteriorCoeffs,
   evalExterior,
   reconstructBoundary,
-} from "../src/render/uniformize";
-import type { Complex } from "../src/complex";
+} from "../src/uniformize.js";
+import type { Complex } from "@cas/expr";
 import * as C from "@cas/expr/complexJs";
 
 const mag = (z: Complex): number => Math.hypot(z[0], z[1]);

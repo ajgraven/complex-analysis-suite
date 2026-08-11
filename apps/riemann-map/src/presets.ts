@@ -1,0 +1,43 @@
+// presets.ts — a gallery of elementary conformal maps (catalog item A19).
+//
+// The building blocks a Riemann-map studio starts from: the classic textbook maps, each a valid
+// @cas/expr source. Pure data; presets.test.ts asserts every one compiles and evaluates finitely.
+export interface MapPreset {
+  readonly id: string;
+  readonly name: string;
+  /** An @cas/expr source string in `z` (and the constants i, e, pi). */
+  readonly expr: string;
+}
+
+export const MAP_PRESETS: readonly MapPreset[] = [
+  { id: "cardioid", name: "Cardioid  z + z²/2", expr: "z + z*z/2" },
+  // Families in the draggable parameter c — grab the red c handle on the disk to deform them live.
+  { id: "blaschke-c", name: "Blaschke φ_c  (z−c)/(1−c̄z)", expr: "(z - c)/(1 - conjugate(c)*z)" },
+  { id: "quadratic-c", name: "Quadratic  z² + c", expr: "z*z + c" },
+  { id: "joukowski", name: "Joukowski  z + 1/z", expr: "z + 1/z" },
+  { id: "square", name: "z²", expr: "z*z" },
+  { id: "cube", name: "z³", expr: "z*z*z" },
+  { id: "inversion", name: "1/z  (inversion)", expr: "1/z" },
+  { id: "mobius", name: "Möbius  (z−1)/(z+1)", expr: "(z - 1)/(z + 1)" },
+  { id: "cayley", name: "Cayley  (z−i)/(z+i)", expr: "(z - i)/(z + i)" },
+  { id: "blaschke", name: "Blaschke  z(z−½)/(1−½z)", expr: "z*(z - 0.5)/(1 - 0.5*z)" },
+  { id: "exp", name: "exp z", expr: "exp(z)" },
+  { id: "log", name: "log z", expr: "log(z)" },
+  { id: "sqrt", name: "√z", expr: "sqrt(z)" },
+  { id: "sin", name: "sin z", expr: "sin(z)" },
+  { id: "tan", name: "tan z", expr: "tan(z)" },
+  { id: "conjugate", name: "z̄  (anti-holomorphic)", expr: "conjugate(z)" },
+  // z²+c dynamical maps — switch to the "Julia exterior" render mode to see their filled Julia sets,
+  // capacity / external rays / dynamics stats (P2). The first three are connected; the last is a Cantor set.
+  { id: "basilica", name: "Basilica  z²−1", expr: "z*z - 1" },
+  { id: "rabbit", name: "Douady rabbit  z²−0.123+0.745i", expr: "z*z - 0.123 + 0.745*i" },
+  { id: "airplane", name: "Airplane  z²−1.7549", expr: "z*z - 1.7549" },
+  { id: "dust", name: "Cantor dust  z²+½", expr: "z*z + 0.5" },
+] as const;
+
+/** The preset id whose expression matches `expr`, or null (used to sync the picker to a typed edit). */
+export function presetIdForExpr(expr: string): string | null {
+  const norm = expr.replace(/\s+/g, "");
+  const hit = MAP_PRESETS.find((p) => p.expr.replace(/\s+/g, "") === norm);
+  return hit ? hit.id : null;
+}

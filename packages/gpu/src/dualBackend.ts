@@ -83,9 +83,15 @@ export function jsReference(source: string, samples: Sample[]): Complex[] {
  * GLSL-backend evaluation: compile the probe, render each sample to a 1×1 RGBA32F target, and read
  * back f(z, c) as (re, im). Requires a WebGL2 context with EXT_color_buffer_float (for float readback).
  */
-export function runGLSL(gl: WebGL2RenderingContext, source: string, samples: Sample[]): Complex[] {
+export function runGLSL(
+  gl: WebGL2RenderingContext,
+  source: string,
+  samples: Sample[],
+): Complex[] {
   if (!gl.getExtension("EXT_color_buffer_float")) {
-    throw new Error("EXT_color_buffer_float unavailable — cannot read back float results");
+    throw new Error(
+      "EXT_color_buffer_float unavailable — cannot read back float results",
+    );
   }
   const program = createProgram(gl, PROBE_VERTEX, buildProbeGLSL(source));
   const vao = gl.createVertexArray();
@@ -95,7 +101,11 @@ export function runGLSL(gl: WebGL2RenderingContext, source: string, samples: Sam
   try {
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([-1, -1, 3, -1, -1, 3]),
+      gl.STATIC_DRAW,
+    );
     const aPos = gl.getAttribLocation(program, "aPos");
     gl.enableVertexAttribArray(aPos);
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
@@ -167,6 +177,16 @@ export const DUAL_BACKEND_CORPUS: DualCase[] = [
   { name: "conjugate(z)^2 + c", source: "conjugate(z)^2 + c" },
   { name: "(z^2 + c)/(z - c)", source: "(z^2 + c)/(z - c)" },
   { name: "exp(z) + c", source: "exp(z) + c" },
+  { name: "sinh(z) + c", source: "sinh(z) + c" },
+  { name: "cosh(z) + c", source: "cosh(z) + c" },
+  { name: "tanh(z) + c", source: "tanh(z) + c" },
+  // Γ (Lanczos, B6): a real special-function implementation, not a base-op composition. The samples sit
+  // in the right half-plane and the reflected left, exercising both branches of cgamma. JS is float64,
+  // GLSL float32 with float32 coefficients, so its agreement is looser than the elementary maps' ~1e-7.
+  { name: "gamma(z) + c", source: "gamma(z) + c" },
+  // ζ (Borwein, B6): the critical strip (core) + the reflected left plane (via cgamma). Same float32
+  // caveat as Γ, compounded — the loosest of the corpus (the plotter badges ζ's f32 precision).
+  { name: "zeta(z) + c", source: "zeta(z) + c" },
 ];
 
 /** Deterministic (z, c) sample grid over a modest disc — no RNG (Math.random is unavailable in some
@@ -203,13 +223,24 @@ export const F_REGRESSION_CORPUS: DualCase[] = [
   // defect, and only this harness compiles. `runGLSL` leaves `uA` at its default (0,0) and
   // `makeComplexFn` defaults `a` to [0,0], so both backends evaluate at a = 0 and the map reduces to
   // z² — enough to check the value too, though not to check that `a` carries a non-zero uniform.
-  { name: "expr-glsl-01: a = a*2; z^2 + a (read-before-assign of the live parameter)", source: "a = a*2; z^2 + a" },
+  {
+    name: "expr-glsl-01: a = a*2; z^2 + a (read-before-assign of the live parameter)",
+    source: "a = a*2; z^2 + a",
+  },
 ];
 
 /** H1 (PKG-expr-B-01): an escape predicate ENDING in an assignment must coerce to bool (real-part ≠ 0), not
  *  `return <cvec>;` from a `bool escapeFn` (a GLSL type error). `fSource` is the map makeEscapeFn needs. */
-export const ESCAPE_REGRESSION_CORPUS: { name: string; source: string; fSource: string }[] = [
-  { name: "H1: x = z^2 (assignment-ending escape predicate)", source: "x = z^2", fSource: "z^2 + c" },
+export const ESCAPE_REGRESSION_CORPUS: {
+  name: string;
+  source: string;
+  fSource: string;
+}[] = [
+  {
+    name: "H1: x = z^2 (assignment-ending escape predicate)",
+    source: "x = z^2",
+    fSource: "z^2 + c",
+  },
   // expr-glsl-02: complex `==` now emits a whole-value compare (`(z == c)`, a component-wise vector
   // test yielding a scalar bool) instead of going through `cre1`.
   //
@@ -219,7 +250,11 @@ export const ESCAPE_REGRESSION_CORPUS: { name: string; source: string; fSource: 
   // case passes against the pre-fix codegen. It is a compile-and-shape guard, not a regression test
   // for the hi-limb bug; that one is pinned on the emitted string in
   // packages/expr/test/emitBodyHighs.test.ts. Catching it here would need a df64 probe builder.
-  { name: "expr-glsl-02: z == c (whole-value complex equality)", source: "z == c", fSource: "z^2 + c" },
+  {
+    name: "expr-glsl-02: z == c (whole-value complex equality)",
+    source: "z == c",
+    fSource: "z^2 + c",
+  },
 ];
 
 /** Assemble a self-contained WebGL2 fragment shader for a `bool escapeFn(z,c)` (compileEscape), writing
@@ -242,7 +277,11 @@ void main() {
 }
 
 /** JS-backend reference for an escape predicate (one boolean per sample). */
-export function jsEscapeReference(source: string, fSource: string, samples: Sample[]): boolean[] {
+export function jsEscapeReference(
+  source: string,
+  fSource: string,
+  samples: Sample[],
+): boolean[] {
   const f = makeEscapeFn(parse(source), parse(fSource));
   return samples.map((s) => f(s.z, s.c));
 }

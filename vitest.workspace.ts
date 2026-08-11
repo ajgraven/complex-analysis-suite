@@ -17,7 +17,10 @@ export default defineWorkspace([
   "./packages/expr/vitest.config.ts",
   "./packages/gpu/vitest.config.ts",
   "./packages/schwarz/vitest.config.ts",
+  "./packages/dynamics/vitest.config.ts",
   "./apps/complex-dynamics/vite.config.ts",
+  "./apps/complex-function-plotter/vite.config.ts",
   "./apps/correspondences/vite.config.ts",
   "./apps/quadrature-domains/vitest.config.ts",
+  "./apps/riemann-map/vite.config.ts",
 ]);

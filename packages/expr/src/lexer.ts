@@ -9,6 +9,7 @@ import { ExprError } from "./ast";
 
 export type TokenType =
   | "number"
+  | "imag" // an imaginary literal: digits with a trailing `i` (2i, 3.5i, 1e3i). value = the numeric part.
   | "ident"
   | "op" // + - * / ^
   | "cmp" // > < ==
@@ -27,7 +28,7 @@ export interface Token {
 
 const isDigit = (ch: string): boolean => ch >= "0" && ch <= "9";
 const isIdentStart = (ch: string): boolean =>
-  (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch === "_";
+  (ch >= "a" && ch <= "z") || (ch >= "A" && ch <= "Z") || ch === "_" || ch === "γ"; // γ = Euler–Mascheroni (B5)
 const isIdentPart = (ch: string): boolean => isIdentStart(ch) || isDigit(ch);
 
 /** Tokenize `src`, throwing {@link ExprError} on an unexpected character. */
@@ -63,7 +64,17 @@ export function tokenize(src: string): Token[] {
           while (i < src.length && isDigit(src[i])) i++;
         }
       }
-      push("number", src.slice(start, i), start);
+      const numStr = src.slice(start, i);
+      // Imaginary literal (B5): a numeric literal immediately followed by a STANDALONE `i` — `2i`, `3.5i`,
+      // `1e3i` — where the `i` isn't the start of a longer identifier (so `2im` stays `2` then `im`). The
+      // parser desugars the `imag` token to `<num> * i`, so it binds as a single unit under `^`
+      // (`2i^2 = (2i)^2`, matching Python's `2j**2`).
+      if (src[i] === "i" && !isIdentPart(src[i + 1] ?? "")) {
+        i++; // consume the `i`
+        push("imag", numStr, start);
+      } else {
+        push("number", numStr, start);
+      }
       continue;
     }
 

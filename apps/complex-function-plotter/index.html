@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Complex Function Plotting Tool</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        /* Design tokens aligned with the Complex Dynamics app: light-first, with a dark override that
+           follows the OS unless [data-theme] forces a choice. Shared palette across the two apps. */
+        --bg: #ffffff;
+        --fg: #1a1a1a;
+        --muted: #555;
+        --border: #d0d0d0;
+        --accent: #2b6cb0;
+        --accent-contrast: #ffffff;
+        --field-bg: #fafafa;
+        --radius: 6px;
+        --gap: 1rem;
+        --danger: #c0392b;
+        --warn: #b7791f;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --bg: #15171a; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3f44;
+          --accent: #4a90d9; --field-bg: #1e2125; --danger: #f08a8a; --warn: #ffce8a;
+        }
+      }
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #15171a; --fg: #e6e6e6; --muted: #9aa0a6; --border: #3a3f44;
+        --accent: #4a90d9; --field-bg: #1e2125; --danger: #f08a8a; --warn: #ffce8a;
+      }
+      :root[data-theme="light"] { color-scheme: light; }
+      * { box-sizing: border-box; }
+      [hidden] { display: none !important; } /* several display:flex/grid rules below would otherwise defeat the UA hidden rule */
+      .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+      html, body { margin: 0; height: 100%; }
+      body {
+        display: flex;
+        height: 100%;
+        font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: var(--fg);
+        background: var(--bg);
+      }
+      aside {
+        flex: 0 0 320px;
+        max-width: 82vw;
+        overflow-y: auto;
+        padding: 16px;
+        background: var(--bg);
+        border-right: 1px solid var(--border);
+        scrollbar-gutter: stable;
+      }
+      .app-bar { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+      .app-bar .titles { min-width: 0; }
+      h1 { font-size: 1rem; font-weight: 650; margin: 0 0 2px; letter-spacing: -0.01em; }
+      .sub { color: var(--muted); font-size: 0.76rem; margin: 0; }
+      .theme-toggle { flex: 0 0 auto; width: auto; padding: 5px 9px; font-size: 0.95rem; line-height: 1; }
+      .group { margin-bottom: 16px; }
+      /* CD-style accordion cards: bordered sections with a muted summary header; collapsed by default
+         except the 1–2 most-used, so the sidebar is a short list of headers instead of one long scroll. */
+      .control-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 8px; }
+      details.control-group > summary { cursor: pointer; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); user-select: none; padding: 2px 0; list-style-position: inside; }
+      details.control-group[open] > summary { margin-bottom: 8px; }
+      details.control-group > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+      .control-group > .group:last-child, .control-group > :last-child { margin-bottom: 0; }
+      label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
+      textarea, select {
+        width: 100%; font: inherit; color: var(--fg);
+        background: var(--field-bg); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 8px 10px;
+      }
+      textarea { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; resize: vertical; min-height: 42px; }
+      textarea:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+      #preview { min-height: 26px; margin-top: 8px; color: var(--fg); overflow-x: auto; }
+      #error { min-height: 18px; margin-top: 4px; color: var(--danger); font-size: 0.8rem; visibility: hidden; font-family: ui-monospace, Menlo, monospace; }
+      #precisionBadge { margin-top: 8px; padding: 6px 10px; border-radius: var(--radius); font-size: 0.74rem; line-height: 1.45; }
+      #precisionBadge.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); border: 1px solid color-mix(in srgb, var(--warn) 40%, transparent); }
+      #precisionBadge.note { color: var(--muted); background: var(--field-bg); border: 1px solid var(--border); }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      button {
+        font: inherit; cursor: pointer; color: var(--fg);
+        background: var(--field-bg); border: 1px solid var(--border);
+        border-radius: var(--radius); padding: 8px 10px;
+      }
+      button:hover { border-color: var(--accent); }
+      button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+      button.primary:hover { filter: brightness(1.06); }
+      button.danger { color: var(--danger); }
+      button.danger:hover { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+      .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      input[type="number"] { width: 100%; font: inherit; color: var(--fg); background: var(--field-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
+      input[type="number"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+      input[type="range"] { width: 100%; accent-color: var(--accent); margin: 2px 0 8px; }
+      label.check { display: flex; align-items: center; gap: 6px; text-transform: none; letter-spacing: normal; font-size: 0.8rem; color: var(--fg); margin: 0; }
+      label.check input { width: auto; accent-color: var(--accent); }
+      .subval { color: var(--muted); font-weight: 400; text-transform: none; letter-spacing: normal; }
+      .singcount { margin: 6px 0 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.76rem; color: var(--muted); }
+      details.explain { margin-top: 4px; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; background: var(--field-bg); }
+      details.explain summary { cursor: pointer; font-size: 0.8rem; color: var(--fg); }
+      details.explain p, details.explain ul { font-size: 0.76rem; color: var(--muted); margin: 8px 0 0; }
+      details.explain ul { padding-left: 18px; }
+      details.explain li { margin: 3px 0; }
+
+      .param { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-bottom: 8px; background: var(--field-bg); }
+      .param-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+      .param-name { font-family: ui-monospace, Menlo, monospace; color: var(--accent); font-size: 0.85rem; }
+      .param-val { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); }
+      .param-body { display: flex; gap: 10px; align-items: center; }
+      canvas.cpad { flex: 0 0 auto; width: 84px; height: 84px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); touch-action: none; cursor: crosshair; }
+      .param-fields { flex: 1 1 auto; display: grid; grid-template-columns: auto 1fr; gap: 5px 8px; align-items: center; }
+      .param-fields label { margin: 0; text-transform: none; letter-spacing: normal; font-size: 0.74rem; color: var(--muted); }
+      .param-fields input[type="number"] { padding: 4px 6px; }
+      .param-fields input.param-slider { grid-column: 1 / -1; margin: 2px 0 0; }
+      .param-hint { color: var(--muted); font-size: 0.72rem; margin: 2px 0 0; }
+
+      .anim-transport { display: flex; align-items: center; gap: 8px; }
+      .anim-play { flex: 0 0 auto; width: 34px; padding: 6px 0; text-align: center; }
+      .anim-scrub { flex: 1 1 auto; margin: 0; }
+      .anim-readout { flex: 0 0 auto; font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); min-width: 58px; text-align: right; }
+      .anim-cfg { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 8px; }
+      .anim-cfg label { margin: 0; text-transform: none; letter-spacing: normal; font-size: 0.74rem; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+      .anim-cfg input[type="number"] { width: 68px; padding: 4px 6px; }
+
+      .sweep-overlay { position: absolute; inset: 0; background: rgba(10, 12, 16, 0.94); display: flex; flex-direction: column; z-index: 5; }
+      .sweep-overlay[hidden] { display: none; } /* the class's display:flex would otherwise override the hidden attribute, leaving the scrim over the plot */
+      .sweep-bar { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+      .sweep-title { font-size: 0.85rem; color: var(--fg); }
+      .sweep-grid { flex: 1 1 auto; overflow: auto; padding: 14px; display: grid; grid-template-columns: repeat(var(--sweep-cols, 3), 1fr); gap: 12px; align-content: start; }
+      figure.sweep-cell { margin: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--bg); cursor: pointer; }
+      figure.sweep-cell:hover, figure.sweep-cell:focus { border-color: var(--accent); outline: none; }
+      figure.sweep-cell img { display: block; width: 100%; height: auto; }
+      figure.sweep-cell figcaption { padding: 4px 6px; font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); text-align: center; }
+
+      .legend { display: flex; gap: 14px; align-items: center; }
+      .wheel-wrap { position: relative; flex: 0 0 auto; }
+      .wheel-wrap span { position: absolute; inset: 0; display: grid; place-items: center; font-size: 0.68rem; color: var(--muted); }
+      .modbar-wrap { flex: 1 1 auto; }
+      #modbar { display: block; width: 100%; border-radius: 4px; border: 1px solid var(--border); }
+      .modbar-labels { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); margin-top: 3px; }
+
+      dl.probe { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; }
+      dl.probe dt { color: var(--muted); font-size: 0.78rem; }
+      dl.probe dd { margin: 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; overflow-x: auto; }
+
+      .hint { color: var(--muted); font-size: 0.76rem; margin-top: 8px; }
+
+      .fn-group { position: relative; }
+      .fn-head { display: flex; align-items: center; justify-content: space-between; gap: 6px 8px; flex-wrap: wrap; margin-bottom: 6px; }
+      .fn-head label { margin: 0; }
+      .fn-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+      .fn-tab { font: inherit; cursor: pointer; color: var(--muted); background: var(--field-bg); border: none; border-radius: 0; padding: 3px 10px; font-family: ui-monospace, Menlo, monospace; }
+      .fn-tab.active { background: var(--accent); color: var(--accent-contrast); }
+      .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--field-bg); border: 1px solid var(--accent); border-radius: var(--radius); overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
+      .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--fg); cursor: pointer; }
+      .ac-item.active, .ac-item:hover { background: var(--accent); color: var(--accent-contrast); }
+
+      .stage { position: relative; flex: 1 1 auto; min-width: 0; }
+      canvas#view, canvas#axes { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      canvas#view { touch-action: none; }
+      canvas#axes { pointer-events: none; }
+    </style>
+  </head>
+  <body>
+    <aside>
+      <div class="app-bar">
+        <div class="titles">
+          <h1>Complex Function Plotting Tool</h1>
+          <p class="sub">Domain coloring of w = f(z)</p>
+        </div>
+        <button type="button" id="themeToggle" class="theme-toggle" title="Color theme: auto / light / dark" aria-label="Toggle color theme">◐</button>
+      </div>
+
+      <div class="group control-group fn-group">
+        <div class="fn-head">
+          <label for="expr" id="exprLabel">Function&nbsp; f(z)</label>
+          <div class="fn-toggle" role="group" aria-label="active function">
+            <button type="button" id="fnF" class="fn-tab active" aria-pressed="true">f</button>
+            <button type="button" id="fnG" class="fn-tab" aria-pressed="false">g</button>
+          </div>
+        </div>
+        <textarea id="expr" spellcheck="false" autocapitalize="off" autocomplete="off">gamma(z)</textarea>
+        <div id="acMenu" class="ac-menu" hidden></div>
+        <div id="preview"></div>
+        <div id="error" role="alert"></div>
+        <div id="precisionBadge" role="status" hidden></div>
+        <label class="check" style="margin-top: 8px"><input type="checkbox" id="inspectInf" /> Inspect &infin; &mdash; plot f(1/z)</label>
+        <label class="check"><input type="checkbox" id="plotDeriv" /> Plot f&prime; &mdash; the derivative</label>
+      </div>
+
+      <div class="group control-group">
+        <label for="preset">Preset</label>
+        <select id="preset"></select>
+      </div>
+
+      <details class="control-group" id="paramsGroup" open hidden>
+        <summary>Parameters</summary>
+        <div id="params"></div>
+        <p class="param-hint">Drag the pad (or type) to set each parameter. The circle is |a| = 1.</p>
+      </details>
+
+      <details class="control-group" id="animGroup" open hidden>
+        <summary>Animate&nbsp; t</summary>
+        <div id="anim" class="anim">
+          <div class="anim-transport">
+            <button type="button" class="anim-play" aria-label="play">▶</button>
+            <input type="range" class="anim-scrub" aria-label="t value" />
+            <span class="anim-readout">t = 0</span>
+          </div>
+          <div class="anim-cfg">
+            <label>from <input type="number" class="anim-t0" step="0.1" value="0" /></label>
+            <label>to <input type="number" class="anim-t1" step="0.1" value="6.2832" /></label>
+            <label>speed <input type="number" class="anim-speed" step="0.1" min="0" value="1" /></label>
+            <label class="check"><input type="checkbox" class="anim-loop" checked /> loop</label>
+          </div>
+        </div>
+      </details>
+
+      <details class="control-group" id="sweepGroup" hidden>
+        <summary>Parameter sweep</summary>
+        <select id="sweepParam" aria-label="Parameter to sweep"></select>
+        <div class="row" style="margin-top: 8px">
+          <div><label for="sweepFrom">from</label><input type="number" id="sweepFrom" step="0.25" value="-2" /></div>
+          <div><label for="sweepTo">to</label><input type="number" id="sweepTo" step="0.25" value="2" /></div>
+        </div>
+        <label for="sweepSteps" style="margin-top: 8px">Steps <span class="subval" id="sweepStepsVal">9</span></label>
+        <input type="range" id="sweepSteps" min="2" max="25" step="1" value="9" />
+        <button type="button" id="sweepShow" class="primary" style="margin-top: 8px; width: 100%">Show sweep ▦</button>
+      </details>
+
+      <div class="group control-group fn-group">
+        <div class="fn-head">
+          <label id="viewLabel">View</label>
+          <div class="fn-toggle" role="group" aria-label="view">
+            <button type="button" id="view2d" class="fn-tab active" aria-pressed="true">2D</button>
+            <button type="button" id="view3d" class="fn-tab" aria-pressed="false">3D</button>
+            <button type="button" id="viewSphere" class="fn-tab" aria-pressed="false">Sphere</button>
+            <button type="button" id="viewLinked" class="fn-tab" aria-pressed="false" title="2D portrait and 3D landscape side by side, sharing the view">Linked</button>
+          </div>
+        </div>
+        <p id="sphereHint" class="param-hint" hidden>Drag to rotate &middot; scroll to dolly. The north pole is &infin;, the south pole is 0.</p>
+        <div id="surfaceControls" hidden>
+          <label for="heightMode" style="margin-top: 8px">Surface height</label>
+          <select id="heightMode">
+            <option value="0">Log |f|</option>
+            <option value="1">Linear |f|</option>
+            <option value="2">Stereographic</option>
+          </select>
+          <label for="heightScale" style="margin-top: 8px">Exaggeration <span class="subval" id="heightScaleVal"></span></label>
+          <input type="range" id="heightScale" min="0.1" max="3" step="0.1" value="1" />
+          <div class="row" style="margin-top: 8px">
+            <button type="button" id="topDown">Top-down</button>
+            <button type="button" id="resetView">Reset view</button>
+          </div>
+          <label class="check" style="margin-top: 8px"><input type="checkbox" id="specular" /> Specular highlight</label>
+        <label for="opacity" style="margin-top: 8px">Surface opacity <span class="subval" id="opacityVal"></span></label>
+        <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1" />
+          <p class="param-hint">Left-drag to pan · right-drag to orbit · scroll to zoom. Top-down matches the 2D portrait.</p>
+        </div>
+      </div>
+
+      <details class="control-group" open>
+        <summary>Coloring</summary>
+        <div class="row">
+          <div>
+            <label for="colormap">Colormap</label>
+            <select id="colormap"></select>
+          </div>
+          <div>
+            <label for="modulus">Modulus</label>
+            <select id="modulus">
+              <option value="0">Phase only</option>
+              <option value="1">Linear</option>
+              <option value="2">Rational</option>
+              <option value="3">Logarithmic</option>
+              <option value="4">Log-log</option>
+            </select>
+          </div>
+        </div>
+        <label for="cvd" style="margin-top: 10px">Colorblind preview</label>
+        <select id="cvd">
+          <option value="0">Off</option>
+          <option value="1">Protanopia</option>
+          <option value="2">Deuteranopia</option>
+          <option value="3">Tritanopia</option>
+        </select>
+        <p class="hint" style="margin-top: 6px">
+          For a colorblind-safe figure, pick the <b>Colorblind-safe</b> colormap and check it with the
+          preview above. (The DLMF four-colour map is deliberately not CVD-safe.)
+        </p>
+      </details>
+
+      <details class="control-group">
+        <summary>Enhancement</summary>
+        <label class="sr-only" for="enhance">Enhancement style</label>
+        <select id="enhance">
+          <option value="0">None (plain)</option>
+          <option value="1">Modulus rings</option>
+          <option value="2">Phase sectors</option>
+          <option value="3">Conformal grid</option>
+          <option value="4">Polar chessboard</option>
+          <option value="5">Re/Im grid</option>
+        </select>
+        <div class="row" style="margin-top: 8px">
+          <label class="check"><input type="checkbox" id="crisp" checked /> Crisp lines</label>
+          <label class="check"><input type="checkbox" id="hueSign" /> Reverse hue</label>
+        </div>
+        <label for="sectors" style="margin-top: 8px">Density <span class="subval" id="sectorsVal"></span></label>
+        <input type="range" id="sectors" min="2" max="24" step="1" value="12" />
+        <label for="hueShift">Hue rotate</label>
+        <input type="range" id="hueShift" min="0" max="360" step="1" value="0" />
+      </details>
+
+      <details class="control-group">
+        <summary>Legend</summary>
+        <div class="legend">
+          <div class="wheel-wrap"><canvas id="wheel"></canvas><span>arg&nbsp;f</span></div>
+          <div class="modbar-wrap">
+            <canvas id="modbar"></canvas>
+            <div class="modbar-labels"><span>|f| = 0</span><span>large</span></div>
+          </div>
+        </div>
+      </details>
+
+      <details class="control-group" open>
+        <summary>Cursor readout</summary>
+        <dl class="probe">
+          <dt>z</dt><dd id="pz">&mdash;</dd>
+          <dt>f(z)</dt><dd id="pfz">&mdash;</dd>
+          <dt>|f|</dt><dd id="pabs">&mdash;</dd>
+          <dt>arg&nbsp;f</dt><dd id="parg">&mdash;</dd>
+        </dl>
+      </details>
+
+      <details class="control-group">
+        <summary>Instruments</summary>
+        <label class="check"><input type="checkbox" id="markSings" /> Mark zeros &amp; poles</label>
+        <p class="singcount" id="singCount"></p>
+        <label class="check"><input type="checkbox" id="markCritical" /> Mark critical points &mdash; f&prime; = 0</label>
+        <p class="singcount" id="critCount"></p>
+        <label class="check" style="margin-top: 10px"><input type="checkbox" id="uncertainty" /> Flag unreliable regions</label>
+        <div class="row" style="margin-top: 8px">
+          <div><label for="levelAbs">|f| = c</label><input type="number" id="levelAbs" step="0.25" min="0" placeholder="off" /></div>
+          <div><label for="levelArg">arg = c&deg;</label><input type="number" id="levelArg" step="15" value="0" /></div>
+        </div>
+        <label class="check" style="margin-top: 8px"><input type="checkbox" id="levelArgOn" /> show arg = c contour</label>
+      </details>
+
+      <details class="control-group">
+        <summary>Export &amp; share</summary>
+        <div class="actions">
+          <button id="home" type="button">Reset</button>
+          <label class="export-size" style="display: inline-flex; align-items: center; gap: 4px">
+            <select id="exportSize" title="Export resolution (long edge)">
+              <option value="1000">1000&thinsp;px</option>
+              <option value="2000" selected>2000&thinsp;px</option>
+              <option value="4000">4000&thinsp;px</option>
+            </select>
+          </label>
+          <button id="savePng" type="button" class="primary">Save PNG</button>
+          <button id="copyImg" type="button">Copy image</button>
+          <button id="copyLink" type="button">Copy link</button>
+          <button id="copyTex" type="button">Copy LaTeX</button>
+        </div>
+      </details>
+
+      <details class="control-group">
+        <summary>Suite interop</summary>
+        <div class="actions interop">
+          <button id="importMap" type="button" class="primary" title="Plot a map from another suite tool (a QD Schwarz map, a saved view)">Import map…</button>
+          <button id="copyInterop" type="button" title="Copy an #s= hand-off link for the current map + view">Copy hand-off</button>
+          <button id="toDynamics" type="button" title="Open this map in Complex Dynamics">&rarr; Dynamics</button>
+        </div>
+        <p id="interopNote" class="hint" hidden></p>
+      </details>
+
+      <p class="hint">Drag to pan · scroll to zoom · move the cursor to read f(z). Hue = arg f, brightness = |f|.</p>
+
+      <details class="explain">
+        <summary>What am I looking at?</summary>
+        <p>Each pixel is coloured by <b>w = f(z)</b>: the hue is the phase (arg f), and brightness grows with the modulus |f|.</p>
+        <ul>
+          <li><b>Zero</b> — a dark point where all hues meet; the colour wheel winds once per order.</li>
+          <li><b>Pole</b> — a bright point where the hue winds the opposite way (|f| &rarr; &infin;).</li>
+          <li>The <b>conformal grid</b>'s near-square tiles mark where f preserves angles; they shear or pinch where it doesn't (e.g. at a zero or pole).</li>
+          <li><b>Grey hatching</b> (with &ldquo;Flag unreliable regions&rdquo; on) marks where the phase changes faster than a pixel &mdash; near poles and essential singularities &mdash; so it reads as an estimate, not resolved structure.</li>
+          <li>A <b>&ldquo;&approx;&rdquo; precision badge</b> appears when f uses a float32-limited special function (&zeta; strongly, &Gamma; mildly), so its fine detail reads as indicative, not certified.</li>
+        </ul>
+      </details>
+    </aside>
+
+    <main class="stage">
+      <canvas
+        id="view"
+        tabindex="0"
+        role="application"
+        aria-label="Interactive plot of w = f(z). Drag to pan or rotate; scroll or the + and - keys to zoom; arrow keys to move; press 0 or Home to reset the view."
+      ></canvas>
+      <canvas id="axes" aria-hidden="true"></canvas>
+      <div id="sweepOverlay" class="sweep-overlay" hidden>
+        <div class="sweep-bar">
+          <span id="sweepTitle" class="sweep-title"></span>
+          <button type="button" id="sweepClose">Close</button>
+        </div>
+        <div id="sweepGrid" class="sweep-grid"></div>
+      </div>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
