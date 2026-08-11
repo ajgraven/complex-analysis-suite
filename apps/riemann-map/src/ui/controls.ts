@@ -25,8 +25,9 @@ export interface Controls {
   setDiskShow(id: string): void;
   setDiskRadial(n: number): void;
   setDiskAngular(n: number): void;
-  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region` = disk-image + region source. */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean }): void;
+  setDiskLayout(id: string): void;
+  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`bottcher` = disk-image numeric sources. */
+  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
@@ -48,6 +49,7 @@ export interface Controls {
   onDiskShow(cb: (id: string) => void): void;
   onDiskRadial(cb: (n: number) => void): void;
   onDiskAngular(cb: (n: number) => void): void;
+  onDiskLayout(cb: (id: string) => void): void;
   /** Re-fit the disk pane's frame to the current disk (the "Fit" button, roadmap 1.5). */
   onFit(cb: () => void): void;
   onSavePng(cb: () => void): void;
@@ -82,6 +84,12 @@ const DISK_SHOWS = [
 const DISK_SOURCES = [
   { id: "expression", name: "Expression  φ(z)" },
   { id: "region", name: "Region  𝔻 → Ω  (numeric)" },
+  { id: "bottcher", name: "Exterior map ψ  (Böttcher)" },
+] as const;
+
+const DISK_LAYOUTS = [
+  { id: "split", name: "Two-pane (disk + image)" },
+  { id: "image", name: "Image only" },
 ] as const;
 
 /** Glossary of the notation the studio surfaces (catalog item I2) — a self-documenting reference. */
@@ -183,6 +191,7 @@ export function createControls(initialExpr: string): Controls {
   const diskShowListeners: ((id: string) => void)[] = [];
   const diskRadialListeners: ((n: number) => void)[] = [];
   const diskAngularListeners: ((n: number) => void)[] = [];
+  const diskLayoutListeners: ((id: string) => void)[] = [];
   const fitListeners: (() => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
@@ -234,13 +243,14 @@ export function createControls(initialExpr: string): Controls {
   const diskShow = labeledSelect("Show", DISK_SHOWS);
   const radial = labeledRange("Radial rings", 4, 48, 18);
   const angular = labeledRange("Angular sectors", 6, 96, 36);
+  const layout = labeledSelect("Layout", DISK_LAYOUTS);
   const cmap = labeledSelect("Colormap", COLORMAPS);
   const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
   // The region SOURCE offers only smooth domains — the forward map g: 𝔻 → Ω is stable there; polygon
   // corners need a Schwarz–Christoffel engine (roadmap 3.1).
   const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.filter((d) => !d.corners).map((d) => ({ id: d.id, name: d.name })));
-  viewGroup.el.append(mode.field, diskSource.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, cmap.field, grid.field, domain.field, regionDomain.field);
+  viewGroup.el.append(mode.field, diskSource.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, cmap.field, grid.field, domain.field, regionDomain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -365,6 +375,7 @@ export function createControls(initialExpr: string): Controls {
     angular.out.textContent = String(n);
     diskAngularListeners.forEach((cb) => cb(n));
   });
+  layout.select.addEventListener("change", () => diskLayoutListeners.forEach((cb) => cb(layout.select.value)));
   fitBtn.addEventListener("click", () => fitListeners.forEach((cb) => cb()));
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
@@ -441,15 +452,18 @@ export function createControls(initialExpr: string): Controls {
       angular.input.value = String(n);
       angular.out.textContent = String(n);
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean }): void {
+    setDiskLayout(id: string): void {
+      layout.select.value = id;
+    },
+    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; bottcher: boolean }): void {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
       domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
       regionDomain.field.style.display = v.region ? "" : "none"; // disk-image region source (smooth only)
       diskSource.field.style.display = v.disk ? "" : "none";
-      for (const f of [diskStyle.field, radial.field, angular.field]) f.style.display = v.disk ? "" : "none";
-      // interior/exterior is expression-only (a region map is 𝔻 → Ω, interior)
-      diskSide.field.style.display = v.disk && !v.region ? "" : "none";
+      for (const f of [diskStyle.field, radial.field, angular.field, layout.field]) f.style.display = v.disk ? "" : "none";
+      // interior/exterior is expression-only (region is 𝔻 → Ω interior; Böttcher is ext(𝔻) → ext(K))
+      diskSide.field.style.display = v.disk && !v.region && !v.bottcher ? "" : "none";
       // the "Show" subset field is disk-only AND line-style-only
       diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
     },
@@ -533,6 +547,9 @@ export function createControls(initialExpr: string): Controls {
     },
     onDiskAngular(cb: (n: number) => void): void {
       diskAngularListeners.push(cb);
+    },
+    onDiskLayout(cb: (id: string) => void): void {
+      diskLayoutListeners.push(cb);
     },
     onFit(cb: () => void): void {
       fitListeners.push(cb);

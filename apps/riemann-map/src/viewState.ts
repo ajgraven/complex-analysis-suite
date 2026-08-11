@@ -71,6 +71,8 @@ export interface RenderState {
   readonly diskSource?: string;
   /** Disk-image region source: the target domain Ω id (smooth presets only). Default "ellipse". */
   readonly region?: string;
+  /** Disk-image layout: "split" (disk + image, default) | "image" (image only, presentation). */
+  readonly diskLayout?: string;
 }
 
 /**

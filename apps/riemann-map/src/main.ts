@@ -198,15 +198,22 @@ function main(): void {
   let fitPending = true; // fit the disk pane to the actual pane aspect on first paint (1.5)
   let linkDirty = true;
 
+  const BOTTCHER_LOG_R = 0.9; // exterior reach for the Böttcher source (r up to e^0.9 ≈ 2.46 — near K)
   const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
   const diskSourceIsRegion = (): boolean => state.render.diskSource === "region";
-  // A region map is 𝔻 → Ω (interior); interior/exterior + the draggable c apply to the expression source.
-  const diskSide = (): DiskSide => (!diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior");
+  const diskSourceIsBottcher = (): boolean => state.render.diskSource === "bottcher";
+  const diskSourceIsNumeric = (): boolean => diskSourceIsRegion() || diskSourceIsBottcher();
+  // Region maps are 𝔻 → Ω (interior); the Böttcher map ψ is ext(𝔻) → ext(K) (exterior). Interior/exterior
+  // + the draggable c apply only to the explicit-expression source.
+  const diskSide = (): DiskSide =>
+    diskSourceIsBottcher() ? "exterior" : !diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior";
   const diskRadial = (): number => state.render.diskDensity ?? 18;
   const diskSectors = (): number => state.render.diskSectors ?? 2 * diskRadial();
   const diskStyle = (): string => state.render.diskStyle ?? "filled";
   const diskShow = (): string => state.render.diskShow ?? "both";
-  const diskMaxR = (): number => (diskSide() === "exterior" ? Math.exp(2.5) : 1); // outer radius of the disk grid
+  const diskLayout = (): string => state.render.diskLayout ?? "split";
+  const diskExtLogR = (): number => (diskSourceIsBottcher() ? BOTTCHER_LOG_R : 2.5); // exterior grid reach
+  const diskMaxR = (): number => (diskSide() === "exterior" ? Math.exp(diskExtLogR()) : 1);
   const phi = (z: Pt): Pt => {
     if (!current) return z;
     const w = current.jsFn([z[0], z[1]], cParam);
@@ -217,14 +224,39 @@ function main(): void {
     const p = regionMap.eval([w[0], w[1]]);
     return [p[0], p[1]];
   };
-  /** The φ the disk-image mode pushes forward: the explicit map, or the numerical region map g. */
-  const activePhi = (): ((z: Pt) => Pt) => (diskSourceIsRegion() ? regionPhi : phi);
-  /** φ′ at w for the active source (symbolic for φ; a central difference for the numerical g). */
+  /** The exterior Riemann map ψ(w) = γ₁·w + Σ bₖ w⁻ᵏ, from the exterior analysis (Böttcher source, 2.2). */
+  const bottcherValid = (): boolean => !!analysis && exteriorConformalValid();
+  const bottcherPsi = (w: Pt): Pt => {
+    if (!analysis) return w;
+    const lead = analysis.lead;
+    let re = lead[0] * w[0] - lead[1] * w[1]; // γ₁·w
+    let im = lead[0] * w[1] + lead[1] * w[0];
+    const den = w[0] * w[0] + w[1] * w[1];
+    if (den === 0) return [Infinity, Infinity];
+    const invRe = w[0] / den; // w⁻¹
+    const invIm = -w[1] / den;
+    let pRe = 1; // w⁻ᵏ, k = 0
+    let pIm = 0;
+    for (const b of analysis.coeffs) {
+      re += b[0] * pRe - b[1] * pIm;
+      im += b[0] * pIm + b[1] * pRe;
+      const nRe = pRe * invRe - pIm * invIm;
+      const nIm = pRe * invIm + pIm * invRe;
+      pRe = nRe;
+      pIm = nIm;
+    }
+    return [re, im];
+  };
+  /** The φ the disk-image mode pushes forward: explicit φ, the region map g, or the Böttcher map ψ. */
+  const activePhi = (): ((z: Pt) => Pt) =>
+    diskSourceIsRegion() ? regionPhi : diskSourceIsBottcher() ? bottcherPsi : phi;
+  /** φ′ at w for the active source (symbolic for φ; a central difference for the numerical maps). */
   const activeDeriv = (w: Pt): [number, number] => {
-    if (diskSourceIsRegion()) {
+    if (diskSourceIsNumeric()) {
+      const P = activePhi();
       const h = 1e-4 * Math.max(1, Math.hypot(w[0], w[1]));
-      const a = regionPhi([w[0] + h, w[1]]);
-      const b = regionPhi([w[0] - h, w[1]]);
+      const a = P([w[0] + h, w[1]]);
+      const b = P([w[0] - h, w[1]]);
       return [(a[0] - b[0]) / (2 * h), (a[1] - b[1]) / (2 * h)];
     }
     return current ? derivativeAt(current, w, cParam) : [1, 0];
@@ -298,17 +330,21 @@ function main(): void {
     const m = state.render.mode;
     const disk = modeIsDiskImage(m);
     const region = disk && diskSourceIsRegion();
+    const bottcher = disk && diskSourceIsBottcher();
     controls.setControlVisibility({
       colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
       grid: !modeIsDomain(m) && !disk, // the numeric-map + disk-image modes draw their own grid
       domain: modeIsDomain(m), // the numeric domain→disk mode's region picker
       disk, // the disk-image controls (source, style, density…)
-      region, // region source ⇒ show the region picker, hide interior/exterior
+      region, // region source ⇒ show the region picker
+      bottcher, // Böttcher source ⇒ exterior-only (hide interior/exterior with region)
     });
     rlabel.textContent = disk
       ? region
         ? "w = g(w)  ·  image of 𝔻 in Ω"
-        : "w = φ(z)  ·  image of the disk"
+        : bottcher
+          ? "w = ψ(w)  ·  ext(𝔻) → ext(K)"
+          : "w = φ(z)  ·  image of the disk"
       : modeIsDomain(m)
         ? "w = f(z)  ·  unit disk"
         : "w = φ(z)  ·  image grid";
@@ -421,7 +457,9 @@ function main(): void {
    *  the active source (explicit φ, or the numerical region map g), plus the honest univalence verdict. */
   function computeDiskImage(): void {
     const region = diskSourceIsRegion();
-    if (region ? !regionMap : !current) {
+    const bottcher = diskSourceIsBottcher();
+    const ready = bottcher ? bottcherValid() : region ? !!regionMap : !!current;
+    if (!ready) {
       diskSourceCells = [];
       diskImageCells = [];
       diskSrcLines = [];
@@ -429,12 +467,20 @@ function main(): void {
       diskUnitSrc = [];
       diskUnitImg = [];
       diskFoldReason = null;
-      controls.setAnalysis(null);
+      controls.setAnalysis(
+        bottcher
+          ? [
+              ["source", "exterior map ψ  (Böttcher)"],
+              ["needs", "a degree-≥2 polynomial with connected K — e.g. z*z − 1"],
+            ]
+          : null,
+        "Image of the disk",
+      );
       return;
     }
     const P = activePhi();
     const side = diskSide();
-    const dg = diskGrid(side, diskRadial(), diskSectors());
+    const dg = diskGrid(side, diskRadial(), diskSectors(), diskExtLogR());
     diskUnitSrc = dg.unitCircle;
     diskUnitImg = dg.unitCircle.map(P);
 
@@ -480,8 +526,8 @@ function main(): void {
     // Univalence: run the fold heuristic for the explicit source; a region Riemann map is a bijection by
     // construction, so it is univalent without a check (honest, ≈): an interior critical point φ′≈0, or a
     // self-intersecting image boundary flags a folded explicit map.
-    if (region) {
-      diskFoldReason = null;
+    if (diskSourceIsNumeric()) {
+      diskFoldReason = null; // a Riemann / Böttcher map is a bijection by construction
     } else {
       const critical = Number.isFinite(minBulk) && maxMag > 0 && minBulk < 1e-3 * maxMag;
       const boundaryFold = polylineSelfIntersects(downsample(diskUnitImg, 180), true);
@@ -489,7 +535,15 @@ function main(): void {
     }
 
     let rows: [string, string][];
-    if (region && regionMap) {
+    if (bottcher && analysis) {
+      rows = [
+        ["source", "exterior map ψ  (Böttcher)"],
+        ["ψ(w)", "γ₁·w + Σ bₖ w⁻ᵏ"],
+        ["capacity cap(K)", analysis.monic ? "= 1  (monic)" : "≈ " + fmt(analysis.capacity)],
+        ["grid", `${diskRadial()} × ${diskSectors()}  ·  rings→equipotentials, rays→external`],
+        ["univalent", "= yes  (Böttcher map)"],
+      ];
+    } else if (region && regionMap) {
       const d = domainById(regionId);
       rows = [
         ["source", "region 𝔻 → Ω  (numeric)"],
@@ -529,6 +583,7 @@ function main(): void {
     const domain = modeIsDomain(state.render.mode);
     const split = disk || domain || gridKind() !== "none";
     stage.classList.toggle("split", split);
+    stage.classList.toggle("solo", disk && diskLayout() === "image"); // image-only layout (2.4)
     leftOverlay.resize();
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
     leftOverlay.clear();
@@ -540,7 +595,7 @@ function main(): void {
       if (lineMode) leftOverlay.drawLines(diskSrcLines, 1.1);
       else leftOverlay.fillCells(diskSourceCells, 0.6);
       leftOverlay.drawLines([{ color: bCol, pts: diskUnitSrc }], 1.4);
-      if (usesC && !diskSourceIsRegion()) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
+      if (usesC && !diskSourceIsNumeric()) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
       leftOverlay.drawScaleBar();
       // Right pane: the image φ(𝔻), auto-framed, same colour key + φ(∂𝔻).
@@ -677,7 +732,7 @@ function main(): void {
       if (lineMode) ov.drawLines(diskSrcLines, 1.4);
       else ov.fillCells(diskSourceCells, 1);
       ov.drawLines([{ color: bCol, pts: diskUnitSrc }], 2);
-      if (usesC && !diskSourceIsRegion()) ov.drawHandle(cParam, "#ff5a5a", "c");
+      if (usesC && !diskSourceIsNumeric()) ov.drawHandle(cParam, "#ff5a5a", "c");
     });
     const right = makePane((ov) => {
       const b =
@@ -790,6 +845,7 @@ function main(): void {
   controls.setDiskShow(diskShow());
   controls.setDiskRadial(diskRadial());
   controls.setDiskAngular(diskSectors());
+  controls.setDiskLayout(diskLayout());
   applyModeContext(); // initial contextual disclosure
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
@@ -846,6 +902,11 @@ function main(): void {
   controls.onFit(() => {
     fitPending = true;
     schedule();
+  });
+  controls.onDiskLayout((id) => {
+    state = { ...state, render: { ...state.render, diskLayout: id } };
+    fitPending = true; // switching back to two-pane re-frames the (now narrower) disk pane
+    invalidate(false, false);
   });
   controls.onDomain((id) => {
     domainId = id;
@@ -910,15 +971,16 @@ function main(): void {
       schedule();
       return;
     }
-    // Disk-image region source: read the disk point w and its image g(w) under the forward map.
-    if (modeIsDiskImage(state.render.mode) && diskSourceIsRegion()) {
-      if (regionMap) {
-        const p = regionMap.eval([z[0], z[1]]);
+    // Disk-image numeric source: read the disk point w and its image under g (region) or ψ (Böttcher).
+    if (modeIsDiskImage(state.render.mode) && diskSourceIsNumeric()) {
+      const bott = diskSourceIsBottcher();
+      if (bott ? bottcherValid() : !!regionMap) {
+        const p = activePhi()([z[0], z[1]]);
         const rr = Math.hypot(z[0], z[1]);
         controls.setHover([
           ["w", fmtC(z[0], z[1])],
-          ["g(w)", fmtC(p[0], p[1])],
-          ["|w|", "≈ " + fmt(rr) + (rr <= 1 ? "  (in 𝔻)" : "  (outside 𝔻)")],
+          [bott ? "ψ(w)" : "g(w)", fmtC(p[0], p[1])],
+          ["|w|", "≈ " + fmt(rr) + (bott ? (rr >= 1 ? "  (ext 𝔻)" : "  (in 𝔻 — n/a)") : rr <= 1 ? "  (in 𝔻)" : "  (outside 𝔻)")],
         ]);
       }
       schedule();
@@ -956,7 +1018,7 @@ function main(): void {
   // ---- drag the family parameter c on the disk pane (1.1) -----------------
   // Registered BEFORE attachPanZoom so a grab on the c handle preempts the pan (stopImmediatePropagation).
   canvas.addEventListener("pointerdown", (e) => {
-    if (!(modeIsDiskImage(state.render.mode) && usesC && !diskSourceIsRegion())) return;
+    if (!(modeIsDiskImage(state.render.mode) && usesC && !diskSourceIsNumeric())) return;
     const r = canvas.getBoundingClientRect();
     const toWorld = (ev: { clientX: number; clientY: number }): Pt =>
       pixelToWorld(state.viewport, (ev.clientX - r.left) / r.width, 1 - (ev.clientY - r.top) / r.height, r.width / r.height);

@@ -105,15 +105,16 @@ const EXT_LOG_R = 2.5;
 const clampInt = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, Math.round(x)));
 
 /**
- * A polar grid on the unit disk (`interior`, r ∈ [0,1]) or its exterior (`exterior`, r ∈ [1, e^2.5],
+ * A polar grid on the unit disk (`interior`, r ∈ [0,1]) or its exterior (`exterior`, r ∈ [1, e^extLogR],
  * exponentially spaced). `rings` radial × `sectors` angular divisions (sectors defaults to 2·rings).
- * Returns both the quad `cells` (for the filled arg-φ′ view) and the `rings`/`spokes` polylines (for the
- * line-art view). The map φ is applied by the caller via {@link pushforwardCells} / {@link pushforward}.
+ * `extLogR` sets the exterior's outer radius (default e^2.5; a Böttcher map wants a smaller reach so the
+ * equipotentials stay near K). Returns the quad `cells` (filled arg-φ′ view) and the `rings`/`spokes`
+ * polylines (line-art view). The map φ is applied by the caller via pushforwardCells / pushforward.
  */
-export function diskGrid(side: DiskSide, rings: number, sectors?: number): DiskGrid {
+export function diskGrid(side: DiskSide, rings: number, sectors?: number, extLogR: number = EXT_LOG_R): DiskGrid {
   const R = clampInt(rings, 2, 64);
   const S = clampInt(sectors ?? 2 * R, 3, 256); // angular divisions
-  const rEdge = (k: number): number => (side === "exterior" ? Math.exp((EXT_LOG_R * k) / R) : k / R);
+  const rEdge = (k: number): number => (side === "exterior" ? Math.exp((extLogR * k) / R) : k / R);
   const polar = (r: number, t: number): Pt => [r * Math.cos(t), r * Math.sin(t)];
 
   const cells: GridCell[] = [];
