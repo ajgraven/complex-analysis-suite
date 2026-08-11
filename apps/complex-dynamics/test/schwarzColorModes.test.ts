@@ -14,9 +14,9 @@ import {
 // name never selects a mode the shader does not have.
 
 describe("SCHWARZ_COLOR_MODES", () => {
-  it("has escape (0) · trap (1) · stripe (2) · smooth (3) · distance (4), contiguous from 0", () => {
-    expect(SCHWARZ_COLOR_MODES.map((m) => m.key)).toEqual(["escape", "trap", "stripe", "smooth", "distance"]);
-    expect(SCHWARZ_COLOR_MODES.map((m) => m.id)).toEqual([0, 1, 2, 3, 4]);
+  it("has escape (0) · trap (1) · stripe (2) · smooth (3) · distance (4) · domain (5), contiguous from 0", () => {
+    expect(SCHWARZ_COLOR_MODES.map((m) => m.key)).toEqual(["escape", "trap", "stripe", "smooth", "distance", "domain"]);
+    expect(SCHWARZ_COLOR_MODES.map((m) => m.id)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
   it("defaults to escape-time (id 0)", () => {

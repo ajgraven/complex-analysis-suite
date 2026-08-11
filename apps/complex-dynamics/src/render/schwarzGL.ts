@@ -69,7 +69,7 @@ uniform int       u_modK;            // period for the cyclic mode
 uniform float     u_paletteRotation; // colormap-coordinate offset ∈[0,1) (0 = none); S5-A3 image-space tone
 uniform float     u_gamma;           // output gamma (1 = identity)
 uniform float     u_vignette;        // radial edge darkening (0 = off)
-uniform int       u_colorMode;       // 0 escape-time · 1 orbit-trap · 2 stripe-average · 3 smooth · 4 distance
+uniform int       u_colorMode;       // 0 escape · 1 trap · 2 stripe · 3 smooth · 4 distance · 5 domain-coloring (F4g)
 uniform int       u_trapType;        // orbit-trap shape: 0 cross · 1 point · 2 line · 3 circle · 4 lattice
 uniform float     u_escapeDegree;    // σ escape degree d (σ ~ const·conj(w)^d at ∞); smooth/distance (S5-B2)
 uniform int       u_light;           // relief lighting on/off (C2); 0 ⇒ the field is byte-identical to unlit
@@ -164,6 +164,22 @@ vec3 escapedColor(int n, vec2 w, float derivMag) {
   return col;
 }
 
+// F4g domain coloring (colorMode 5): a per-pixel phase portrait of σ(w). hue = arg σ (the isochromatic phase),
+// lightness gently banded by log2|σ| so each octave of |σ| reads as a soft shell. Standard compact HSL→RGB
+// (hue in turns). σ is a numerical reconstruction, so the mode is ≈.
+const float TAU = 6.28318530718;
+vec3 hsl2rgb(float h, float s, float l) {
+  vec3 hue = clamp(abs(mod(h * 6.0 + vec3(0.0, 4.0, 2.0), 6.0) - 3.0) - 1.0, 0.0, 1.0);
+  float c = (1.0 - abs(2.0 * l - 1.0)) * s;
+  return l + c * (hue - 0.5);
+}
+vec3 domainColor(vec2 s) {
+  float h = atan(s.y, s.x) / TAU + 0.5;      // arg σ ∈ (−π,π] → hue [0,1)
+  float lg = log2(length(s) + 1e-20);
+  float l = 0.5 + 0.16 * sin(TAU * lg);      // gentle |σ| shells, one soft band per octave
+  return clamp(hsl2rgb(h, 0.9, l), 0.0, 1.0);
+}
+
 // F2d sphere view: ray-cast the Riemann sphere and stereographically project the hit to the world point w.
 // A verbatim mirror of the main plots' sphereRayZ (render/shaderBuilder.ts): a FIXED camera at (0,0,dist)
 // looking down −Z, with the arcball orientation applied to the HIT (u_sphereRot = worldToModel) rather than
@@ -221,6 +237,15 @@ vec3 fieldColor() {
   bool offDisk;
   vec2 w = fragToW(offDisk);
   if (offDisk) return vec3(30.0, 32.0, 38.0) / 255.0;           // z-disk background (mirrors SCHWARZ_OFF_DISK_RGB)
+
+  if (u_colorMode == 5) {                                       // F4g domain coloring — a phase portrait of σ(w)
+    if (!inOmega(w)) return vec3(18.0, 20.0, 46.0) / 255.0;      // K — σ undefined here (deep-indigo neutral)
+    vec2 zSeedD = newtonSeedFresh(w);
+    bool okD = true;
+    vec2 sD = sigma(w, zSeedD, okD);
+    if (!okD) return vec3(80.0) / 255.0;                        // invalid (the inverse failed) — same grey as below
+    return domainColor(sD);
+  }
 
   if (!inOmega(w)) return fundamentalColor(0);                   // w₀ ∈ K ⇒ fundamental n=0 (no σ-orbit)
   vec2 zSeed = newtonSeedFresh(w);

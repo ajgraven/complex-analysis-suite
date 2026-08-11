@@ -3372,6 +3372,17 @@ function init(): void {
   /** (Re)render the σ legend chip — title + end labels describe WHAT the ramp maps in the active color mode
    *  (S5-B1): escape time (with the scale mode), orbit-trap closeness (with the trap shape), or the stripe
    *  average. Keeps the legend honest when the ramp no longer encodes escape count. */
+  // F4g domain-coloring legend: the arg-σ hue wheel at s=0.9, l=0.5 (matching the shader's hsl2rgb), sampled
+  // every 60° from −π (t=0, red) through 0 (t=0.5, cyan) to +π (t=1, red).
+  const SCHWARZ_HUE_LEGEND_STOPS: readonly { t: number; color: readonly [number, number, number] }[] = [
+    { t: 0, color: [242, 13, 13] },
+    { t: 1 / 6, color: [242, 242, 13] },
+    { t: 2 / 6, color: [13, 242, 13] },
+    { t: 0.5, color: [13, 242, 242] },
+    { t: 4 / 6, color: [13, 13, 242] },
+    { t: 5 / 6, color: [242, 13, 242] },
+    { t: 1, color: [242, 13, 13] },
+  ];
   function renderSchwarzLegendChip(): void {
     const el = document.getElementById("schwarz-legend");
     if (!el) return;
@@ -3394,18 +3405,26 @@ function init(): void {
       title = "Distance estimate (≈)";
       loLabel = "fast escape";
       hiLabel = "near σ-Julia";
+    } else if (schwarzColorMode === "domain") {
+      // F4g: the ramp is the arg-σ hue wheel (not the colormap), lightness banded by |σ|.
+      title = "Domain coloring (≈) · hue = arg σ";
+      loLabel = "−π";
+      hiLabel = "+π";
     } else {
       const scaleLabel = SCHWARZ_SCALE_MODES.find((m) => m.key === schwarzScaleMode)?.label ?? "Linear";
       title = `Escape time · ${scaleLabel}`;
       loLabel = "in K fast";
       hiLabel = "near ∂Ω";
     }
+    // In domain mode the legend bar is the hue wheel (arg σ: −π red → 0 cyan → +π red), matching the shader's
+    // hsl(arg) — not the escape-time colormap, which is unused. Reuses the custom-stops ramp path.
+    const domain = schwarzColorMode === "domain";
     renderSchwarzLegend(el, {
-      colormapName: schwarzColormapName,
+      colormapName: domain ? "custom" : schwarzColormapName,
       title,
       loLabel,
       hiLabel,
-      customStops: schwarzColormapName === "custom" ? schwarzGradientStops : undefined,
+      customStops: domain ? SCHWARZ_HUE_LEGEND_STOPS : schwarzColormapName === "custom" ? schwarzGradientStops : undefined,
     });
   }
   /** rAF coalescer shared by the schedulers — at most one paint per animation frame. */

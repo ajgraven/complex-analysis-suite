@@ -102,6 +102,10 @@ export const SCHWARZ_COLOR_MODES: readonly SchwarzColorMode[] = [
   // riding the numerically-inverted derivative |F'(z)|/|φ'(z)| — both are estimates (≈).
   { id: 3, key: "smooth", label: "Smooth escape (≈)" },
   { id: 4, key: "distance", label: "Distance estimate (≈)" },
+  // Domain coloring (F4g): a per-pixel phase portrait of σ(w) itself — hue = arg σ, lightness banded by
+  // log|σ| — NOT an escape-time coloring. σ is numerical, so it is `≈`. The colormap select is ignored in
+  // this mode (the hue wheel replaces the ramp).
+  { id: 5, key: "domain", label: "Domain coloring (≈)" },
 ];
 export const DEFAULT_SCHWARZ_COLOR_MODE = "escape";
 

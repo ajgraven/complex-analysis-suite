@@ -243,6 +243,11 @@ describe("parseSigmaState — field color mode (S5-B1)", () => {
     expect(s?.trapShape).toBe("lattice");
   });
 
+  it("round-trips the F4g domain-coloring mode (a σ-view property that travels in _sigma)", () => {
+    const s = parseSigmaState(encodeSigmaState({ ...DELTOID, colorMode: "domain" }));
+    expect(s?.colorMode).toBe("domain");
+  });
+
   it("normalises an unknown mode / trap shape to the defaults (a stale name never blanks the picker)", () => {
     const s = parseSigmaState(enc({ ...base, md: "no-such-mode", tp: "no-such-shape" }));
     expect(s?.colorMode).toBe("escape");

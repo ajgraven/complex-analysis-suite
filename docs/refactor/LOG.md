@@ -2524,3 +2524,23 @@
   concentric |σ| loops + arg-σ spokes converging on σ's zeros/poles, the classic circle-and-spoke signature.
   **F4b complete — σ's level sets are visible + honestly labeled.** Remaining à-la-carte F4 cards (F4g domain
   coloring · F4d cycle finder · F4f forward image of a drawn curve) are the next picks.
+- **2026-08-11 · branch claude/repository-refactor-project-pg5ktu (σ-view Phase F4g — domain coloring):** a new
+  σ **colour mode** — a per-pixel **phase portrait** of σ(w) itself, not an escape-time coloring. `Domain
+  coloring (≈)` joins `SCHWARZ_COLOR_MODES` (id 5); the σ shader (`schwarzGL.ts`) gains a `hsl2rgb` helper +
+  `domainColor(σ)` and, in `fieldColor()`, an early mode-5 branch: where σ is defined (w ∈ Ω, the inverse
+  converges) it evaluates σ(w) ONCE and colours the pixel **hue = arg σ**, **lightness banded by log₂|σ|** (a
+  soft shell per octave); K (σ undefined) stays a deep-indigo neutral, an invalid inverse the usual grey. It
+  reuses the existing colour-mode plumbing end-to-end — the select auto-lists it, and `colorMode` already
+  travels in the `_sigma` state layer (so a share link / saved view / PNG stamp round-trips it, like the
+  colormap; no new serialized control). The legend swaps its ramp bar for the **arg-σ hue wheel** in this mode
+  (−π red → 0 cyan → +π red) via the custom-stops path, so it never shows the unused escape-time colormap.
+  GPU-only, consistent with the other advanced modes (B1/B2) — the CPU fallback keeps its fixed ramp.
+  **Honest labeling:** the mode label + legend title carry `≈` (σ is a numerical reconstruction). Green:
+  typecheck + lint + node **2512 → 2513** (the F4g domain-mode `_sigma` round-trip; the color-modes census now
+  asserts `…, distance (4), domain (5)`). VERIFIED (Playwright, **5/5**): switching to domain coloring compiles
+  the shader cleanly (no GL errors) and repaints; the field spans the full hue wheel (all **6** of 6 hue
+  buckets, vs 3 for escape-time); the legend reads `Domain coloring (≈) · hue = arg σ`; and a bounded lobe
+  renders multi-hue too. Captured the deltoid's σ phase portrait — the full arg-σ hue wheel with log|σ| shells
+  winding around σ's three zeros/poles (the same singularities F4b's level curves mark), the deltoid K held
+  neutral. **F4g complete — σ is now legible as a phase portrait, honestly labeled.** Remaining à-la-carte F4
+  cards (F4d cycle finder · F4f forward image of a drawn curve) are the next picks.
