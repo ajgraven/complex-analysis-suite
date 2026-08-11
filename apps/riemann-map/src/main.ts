@@ -4,6 +4,7 @@
 // hover readout. P1c: render modes + colormaps. P1d (this file): the "map the grid" view — a source
 // coordinate grid on the z-plane and its pushforward φ(grid) in a linked w-plane pane (shared colour
 // key), with a linked cursor. Later: PNG export (G2) + the Möbius gauge (A20).
+import "./styles/main.css";
 import {
   DEFAULT_VIEW_STATE,
   decodeRiemannState,
@@ -14,13 +15,15 @@ import {
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
 import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, colormapCode, modeIsDynamics, modeIsDomain } from "./render/modes.js";
+import { modeCode, modeIsDynamics, modeIsDomain, modeUsesColormap } from "./render/modes.js";
+import { colormapColors } from "./render/colormaps.js";
 import { sourceGrid, pushforward, bounds, type GridKind, type GridLine, type Pt } from "./render/grid.js";
 import { Overlay2D } from "./render/overlay2d.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
 import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
 import { juliaDynamics, type DynamicsStats } from "./analysis/dynamicsStats.js";
+import { legendModel, renderLegend } from "./ui/legend.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
@@ -52,6 +55,44 @@ function fmtC(re: number, im: number): string {
 }
 const CURSOR_COLOR = "#ffffff";
 
+/** A CD-style tri-state theme toggle (auto → dark → light), persisted, driving `data-theme` on <html>. */
+function createThemeToggle(): HTMLButtonElement {
+  const KEY = "rm.theme";
+  const ORDER = ["auto", "dark", "light"] as const;
+  type Choice = (typeof ORDER)[number];
+  const LABEL: Record<Choice, string> = { auto: "Theme: auto", dark: "Theme: dark", light: "Theme: light" };
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.setAttribute("aria-label", "Toggle colour theme");
+  const read = (): Choice => {
+    let v: string | null = null;
+    try {
+      v = localStorage.getItem(KEY);
+    } catch {
+      v = null;
+    }
+    return v === "dark" || v === "light" ? v : "auto";
+  };
+  const apply = (c: Choice): void => {
+    if (c === "auto") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = c;
+    btn.textContent = LABEL[c];
+  };
+  let current = read();
+  apply(current);
+  btn.addEventListener("click", () => {
+    current = ORDER[(ORDER.indexOf(current) + 1) % ORDER.length];
+    try {
+      if (current === "auto") localStorage.removeItem(KEY);
+      else localStorage.setItem(KEY, current);
+    } catch {
+      /* storage unavailable — theme still applies for this session */
+    }
+    apply(current);
+  });
+  return btn;
+}
+
 function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
@@ -66,7 +107,7 @@ function main(): void {
   title.textContent = "Riemann Map";
   const readout = document.createElement("span");
   readout.className = "readout";
-  bar.append(title, readout);
+  bar.append(title, readout, createThemeToggle());
 
   const body = document.createElement("div");
   body.className = "body";
@@ -82,7 +123,9 @@ function main(): void {
   overlayCanvas.className = "overlay";
   const note = document.createElement("div");
   note.className = "note";
-  left.append(canvas, overlayCanvas, note);
+  const legendEl = document.createElement("div");
+  legendEl.className = "legend-chip";
+  left.append(canvas, overlayCanvas, legendEl, note);
 
   const right = document.createElement("div");
   right.className = "pane right";
@@ -191,8 +234,20 @@ function main(): void {
         rows.push(["multiplier |λ|", sup ? "= 0" : "≈ " + fmt(dynamics.cycle.multiplier)]);
       }
     }
-    controls.setAnalysis(rows);
+    controls.setAnalysis(rows, "Exterior invariants");
     controls.setExteriorExportAvailable(valid); // no ψ ⇒ no exterior-map export
+  }
+
+  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane. */
+  function applyModeContext(): void {
+    const m = state.render.mode;
+    controls.setControlVisibility({
+      colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
+      grid: !modeIsDomain(m), // the numeric-map mode draws its own conformal grid
+      domain: modeIsDomain(m), // the domain picker is only for the numeric-map mode
+    });
+    rlabel.textContent = modeIsDomain(m) ? "w = f(z)  ·  unit disk" : "w = φ(z)  ·  image grid";
+    renderLegend(legendEl, legendModel(m, state.render.palette)); // colour-key chip (A4)
   }
 
   /** The Julia-exterior mode iterates f and needs a degree ≥ 2; warn (in the plane note) when it can't. */
@@ -269,7 +324,7 @@ function main(): void {
     ];
     if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
     rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
-    controls.setAnalysis(rows);
+    controls.setAnalysis(rows, "Numerical map");
     controls.setExteriorExportAvailable(false);
   }
 
@@ -280,6 +335,7 @@ function main(): void {
     if (modeIsDomain(state.render.mode)) {
       leftOverlay.drawLines(domainSource, 1.1);
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      leftOverlay.drawScaleBar();
       stage.classList.add("split");
       if (rightPane.resize()) {
         rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
@@ -294,6 +350,7 @@ function main(): void {
     leftOverlay.drawLines(rayLines, 1.3); // external rays
     for (const p of rayLandings) leftOverlay.drawMarker(p, "rgba(255,170,70,1)");
     if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+    leftOverlay.drawScaleBar();
 
     const split = gridKind() !== "none";
     stage.classList.toggle("split", split);
@@ -309,6 +366,7 @@ function main(): void {
   function updateReadout(): void {
     const v = state.viewport;
     readout.textContent = `center ${fmtC(v.centerRe, v.centerIm)} · zoom ${fmt(v.zoom)}`;
+    controls.setViewportFields(v.centerRe, v.centerIm, v.zoom); // keep the precise-nav fields live (A5)
   }
 
   // ---- PNG export (G2): composite plane + grid at Nx, embed the view-state ---
@@ -330,7 +388,7 @@ function main(): void {
     const H = Math.max(1, Math.round(baseH * scale));
     canvas.width = W;
     canvas.height = H;
-    renderer.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
+    renderer.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
 
     const ex = document.createElement("canvas");
     ex.width = W;
@@ -380,7 +438,7 @@ function main(): void {
       }
       if (glDirty || resized) {
         if (domain) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
-        else renderer?.render(state.viewport, modeCode(state.render.mode), colormapCode(state.render.palette), current?.degree ?? 2);
+        else renderer?.render(state.viewport, modeCode(state.render.mode), current?.degree ?? 2);
         glDirty = false;
       }
       drawOverlays();
@@ -404,10 +462,12 @@ function main(): void {
   }
 
   // ---- controls ------------------------------------------------------------
+  renderer?.setColormap(colormapColors(state.render.palette)); // upload the initial ramp LUT (A6)
   controls.setMode(state.render.mode);
   controls.setColormap(state.render.palette);
   controls.setGrid(gridKind());
   controls.setDomain(domainId);
+  applyModeContext(); // initial contextual disclosure
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     applyMap();
@@ -417,6 +477,7 @@ function main(): void {
     state = { ...state, render: { ...state.render, mode: id } };
     if (modeIsDomain(id)) domainDirty = true; // (re)fit f on entering the numerical-map mode
     invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
+    applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
     refreshDynamicsNote();
     updateAnalysisPanel();
   });
@@ -428,6 +489,8 @@ function main(): void {
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };
+    renderer?.setColormap(colormapColors(id)); // re-upload the ramp LUT (A6)
+    renderLegend(legendEl, legendModel(state.render.mode, id)); // the ramp bar follows the colormap (A4)
     invalidate(true, false);
   });
   controls.onGrid((id) => {
@@ -436,6 +499,7 @@ function main(): void {
   });
   controls.onSavePng(() => void exportPng());
   controls.onResetView(() => setViewport({ ...DEFAULT_VIEW_STATE.viewport }));
+  controls.onApplyViewport((re, im, zoom) => setViewport({ centerRe: re, centerIm: im, zoom }));
   controls.onCopyExteriorMap(() => {
     if (!analysis || !exteriorConformalValid()) return; // no valid ψ ⇒ nothing to export (button is hidden too)
     const link = exteriorMapLink(analysis, { sourceExpr: state.map.expr });

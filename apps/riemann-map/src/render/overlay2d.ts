@@ -100,4 +100,49 @@ export class Overlay2D {
     ctx.fill();
     ctx.stroke();
   }
+
+  /** A bottom-left scale bar: a "nice" 1/2/5×10ⁿ world length (CD parity), with end ticks + a label
+   *  on a translucent backing so it stays legible over any shader colour. */
+  drawScaleBar(): void {
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    if (W === 0 || H === 0) return;
+    const worldW = 2 * this.halfSpan * this.aspect(); // world units across the full width
+    if (!(worldW > 0) || !Number.isFinite(worldW)) return;
+    const exp = Math.floor(Math.log10(0.22 * worldW)); // aim for ~22% of the width
+    const frac = (0.22 * worldW) / 10 ** exp;
+    const niceFrac = frac >= 5 ? 5 : frac >= 2 ? 2 : 1; // round down to 1 / 2 / 5
+    const niceLen = niceFrac * 10 ** exp;
+    const barPx = (niceLen / worldW) * W;
+    const label = exp >= -3 && exp < 4 ? String(Number(niceLen.toPrecision(2))) : `${niceFrac}e${exp}`;
+
+    const s = H;
+    const m = Math.round(s * 0.05);
+    const font = Math.max(10, Math.round(s * 0.026)) * this.dpr;
+    const tick = Math.max(3, s * 0.014);
+    const lw = Math.max(1.5, s * 0.004);
+    const pad = font * 0.5;
+    const x0 = m;
+    const y = H - m;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.font = `${font}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = "alphabetic";
+    const contentW = Math.max(barPx, ctx.measureText(label).width);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillRect(x0 - pad, y - tick - font - pad, contentW + pad * 2, tick + font + pad * 1.8);
+    ctx.strokeStyle = "#fff";
+    ctx.lineWidth = lw;
+    ctx.beginPath();
+    ctx.moveTo(x0, y);
+    ctx.lineTo(x0 + barPx, y);
+    ctx.moveTo(x0, y - tick);
+    ctx.lineTo(x0, y);
+    ctx.moveTo(x0 + barPx, y - tick);
+    ctx.lineTo(x0 + barPx, y);
+    ctx.stroke();
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, x0, y - tick - pad * 0.6);
+    ctx.restore();
+  }
 }

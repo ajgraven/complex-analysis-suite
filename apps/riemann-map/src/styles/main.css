@@ -1,0 +1,198 @@
+/* main.css — the Riemann Map studio's stylesheet, on the Complex Dynamics design system (roadmap A3).
+ *
+ * Mirrors CD's token names + component vocabulary (apps/complex-dynamics/src/styles/main.css) so the two
+ * apps read as one suite: the same --bg/--fg/--border/--field-bg/--accent/--radius tokens, the same
+ * tri-state (auto / dark / light) theme, the same button hierarchy (secondary / primary / danger) and
+ * field styling, and the collapsible `.control-group` disclosure. The layout stays the app-shell Riemann
+ * Map already uses (topbar · sidebar · linked z/w stage); only the visual language is brought onto CD's. */
+
+/* --- tokens: light (CD's palette) ------------------------------------------------------------- */
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #555;
+  --border: #d0d0d0;
+  --accent: #2b6cb0;
+  --accent-contrast: #ffffff;
+  --field-bg: #fafafa;
+  --surface: #f6f7f9; /* sidebar / topbar fill (a hair off the page bg) */
+  --danger: #c0392b;
+  --warn: #b7791f;
+  --chip-bg: rgba(15, 17, 21, 0.66); /* over-canvas label backing — dark in both themes (sits on the field) */
+  --chip-fg: #e7eaee;
+  --radius: 6px;
+  --gap: 1rem;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+/* --- tokens: dark (follow the OS unless the toggle forces light) ------------------------------ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171a;
+    --fg: #e6e6e6;
+    --muted: #9aa0a6;
+    --border: #3a3f44;
+    --accent: #4a90d9;
+    --field-bg: #1e2125;
+    --surface: #171a21;
+    --danger: #e0876b;
+    --warn: #d6a13a;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #15171a;
+  --fg: #e6e6e6;
+  --muted: #9aa0a6;
+  --border: #3a3f44;
+  --accent: #4a90d9;
+  --field-bg: #1e2125;
+  --surface: #171a21;
+  --danger: #e0876b;
+  --warn: #d6a13a;
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+/* --- app shell ------------------------------------------------------------------------------- */
+#app { height: 100%; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.5rem 0.9rem; border-bottom: 1px solid var(--border);
+  background: var(--surface); flex: 0 0 auto;
+}
+.topbar .brand { font-weight: 600; letter-spacing: -0.01em; }
+.topbar .readout { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-family: var(--mono); font-size: 0.85rem; }
+.body { flex: 1 1 auto; min-height: 0; display: flex; }
+
+/* --- sidebar --------------------------------------------------------------------------------- */
+.sidebar {
+  width: 20rem; flex: 0 0 auto; overflow-y: auto;
+  border-right: 1px solid var(--border); background: var(--surface);
+  padding: 0.9rem; display: flex; flex-direction: column; gap: 0.75rem;
+}
+.sidebar h2 {
+  margin: 0 0 0.5rem; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+}
+.sidebar section { display: flex; flex-direction: column; gap: 0.45rem; }
+
+/* --- fields, selects, inputs (CD's field styling) -------------------------------------------- */
+.sidebar select,
+.sidebar input.expr,
+.sidebar input[type="text"] {
+  width: 100%; padding: 0.35rem 0.45rem; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--field-bg); color: var(--fg);
+  font-size: 0.9rem;
+}
+.sidebar input.expr { font-family: var(--mono); }
+.field { display: flex; flex-direction: column; gap: 0.2rem; }
+.field-label { font-size: 0.72rem; color: var(--muted); }
+/* precise-nav: three compact number fields (centre re/im, zoom) side by side (A5) */
+.nav-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.4rem 0.5rem; margin-bottom: 0.45rem; }
+.nav-grid input { width: 100%; padding: 0.3rem 0.35rem; border-radius: var(--radius); border: 1px solid var(--border); background: var(--field-bg); color: var(--fg); font-family: var(--mono); font-size: 0.82rem; }
+.nav-grid input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.sidebar select:focus, .sidebar input.expr:focus { border-color: var(--accent); }
+
+/* --- buttons (CD hierarchy: calm secondary base, one .primary CTA, .danger) ------------------- */
+.buttons { display: flex; gap: 0.5rem; }
+.sidebar button {
+  flex: 1; padding: 0.4rem 0.6rem; border-radius: var(--radius); cursor: pointer; font-size: 0.88rem;
+  border: 1px solid var(--border); background: var(--field-bg); color: var(--fg);
+}
+.sidebar button:hover { border-color: var(--accent); }
+.sidebar button:disabled { opacity: 0.5; cursor: default; }
+.sidebar button:disabled:hover { border-color: var(--border); }
+.sidebar button.primary { border-color: var(--accent); background: var(--accent); color: var(--accent-contrast); }
+.sidebar button.primary:hover { filter: brightness(1.08); }
+.sidebar button.danger { color: var(--danger); }
+.sidebar button.danger:hover { border-color: var(--danger); background: var(--danger); color: #fff; }
+/* topbar icon-buttons (theme toggle) */
+.topbar button {
+  padding: 0.3rem 0.6rem; border-radius: var(--radius); cursor: pointer; font-size: 0.82rem;
+  border: 1px solid var(--border); background: var(--field-bg); color: var(--fg);
+}
+.topbar button:hover { border-color: var(--accent); }
+
+/* --- collapsible groups (CD's .control-group; used by the disclosure restructure) ------------- */
+details.control-group { border: 1px solid var(--border); border-radius: var(--radius); padding: 0.35rem 0.65rem; background: transparent; }
+details.control-group > summary {
+  cursor: pointer; user-select: none; list-style-position: inside;
+  font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600;
+}
+details.control-group > summary:hover { color: var(--fg); }
+details.control-group[open] > summary { margin-bottom: 0.55rem; }
+details.control-group .scope { font-weight: 400; letter-spacing: 0; text-transform: none; color: var(--muted); opacity: 0.8; }
+
+/* --- readouts (under-cursor + analysis: CD's tabular two-col dl) ------------------------------ */
+dl.hover { display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 0.8rem; margin: 0; }
+dl.hover dt { color: var(--muted); }
+dl.hover dd { margin: 0; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+/* the analysis panel reads as a measurement, not a control (CD's inspector accent rule) */
+.analysis-dl { border-left: 2px solid var(--accent); padding-left: 0.6rem; }
+
+.muted { color: var(--muted); font-size: 0.85rem; margin: 0; }
+.error { display: none; color: var(--danger); font-size: 0.82rem; }
+.error.visible { display: block; }
+.preview { min-height: 1.6rem; padding: 0.2rem 0; overflow-x: auto; }
+
+/* --- glossary -------------------------------------------------------------------------------- */
+.glossary > summary {
+  cursor: pointer; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600; list-style-position: inside;
+}
+.glossary > summary:hover { color: var(--fg); }
+dl.glossary-dl { margin: 0.6rem 0 0; display: flex; flex-direction: column; gap: 0.5rem; }
+dl.glossary-dl dt { color: var(--fg); font-weight: 600; font-size: 0.82rem; }
+dl.glossary-dl dd { margin: 0.1rem 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.45; }
+
+/* --- stage (linked z / w panes) -------------------------------------------------------------- */
+.stage { flex: 1 1 auto; min-width: 0; display: flex; background: var(--bg); }
+.pane { position: relative; flex: 1 1 0; min-width: 0; }
+.pane.right { display: none; border-left: 1px solid var(--border); }
+.stage.split .pane.right { display: block; }
+canvas.plane, canvas.overlay, canvas.image { position: absolute; inset: 0; width: 100%; height: 100%; }
+canvas.plane { touch-action: none; cursor: grab; }
+canvas.plane:active { cursor: grabbing; }
+canvas.overlay { pointer-events: none; }
+
+/* over-canvas chips + banner — dark backing in both themes (they sit on the shader field) */
+.panelabel {
+  position: absolute; top: 0.5rem; left: 0.6rem; z-index: 1;
+  color: var(--chip-fg); font-size: 0.75rem; background: var(--chip-bg);
+  padding: 0.1rem 0.45rem; border-radius: 5px;
+}
+/* per-plot colour legend chip (A4) — bottom-right of the z-plane, dark backing over the shader field */
+.legend-chip {
+  position: absolute; right: 0.6rem; bottom: 0.6rem; z-index: 1; pointer-events: none;
+  min-width: 8.5rem; padding: 0.4rem 0.55rem; border-radius: 6px;
+  background: var(--chip-bg); color: var(--chip-fg); font-size: 0.72rem;
+}
+.legend-chip .legend-title { font-weight: 600; margin-bottom: 0.32rem; }
+.legend-chip .legend-bar { height: 0.55rem; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.25); }
+.legend-chip .legend-scale { display: flex; justify-content: space-between; margin-top: 0.16rem; color: rgba(231, 234, 238, 0.75); font-variant-numeric: tabular-nums; }
+.legend-chip .legend-interior { display: flex; align-items: center; gap: 0.35rem; margin-top: 0.3rem; }
+.legend-chip .legend-sw { width: 0.72rem; height: 0.72rem; border-radius: 3px; border: 1px solid rgba(255, 255, 255, 0.3); }
+
+.note {
+  position: absolute; left: 50%; top: 1rem; transform: translateX(-50%);
+  max-width: 40rem; padding: 0.5rem 0.8rem; border-radius: 8px;
+  background: color-mix(in srgb, var(--warn) 22%, var(--chip-bg)); border: 1px solid var(--warn);
+  color: var(--chip-fg); display: none; z-index: 2;
+}
+.note.visible { display: block; }
