@@ -41,9 +41,11 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
 - **2D / 3D / sphere / linked (5A–5D)** — a four-way **View** toggle. **3D** lifts the flat portrait into an
   **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
   stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
-  like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). Drag to
-  orbit, scroll to dolly; **Top-down** snaps to the orthographic overhead view, which reproduces the 2D
-  portrait pixel-for-pixel (the phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
+  like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). **Left-drag
+  pans** (recenters the domain), **right-drag orbits**, and **scroll zooms the domain** — the perspective
+  framing tracks the view span so the surface fills the window at any zoom, and the mesh resolution adapts;
+  **Top-down** snaps to the orthographic overhead view, which reproduces the 2D portrait pixel-for-pixel (the
+  phase gate). Shading uses the **analytic surface normal from `f'/f`** for a
   holomorphic map (a smooth per-pixel normal; a geometric normal for Γ/ζ/anti-holomorphic), with an optional
   **specular** highlight. **Sphere** draws the extended plane ℂ∪{∞} as a literal **Riemann sphere** (F7): a
   per-fragment ray-cast of an analytic unit sphere, stereographically projected (south pole = 0, equator =
@@ -51,7 +53,8 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   to the top; drag is a quaternion **arcball**, scroll dollies. **Linked** (5D / I7) shows the flat portrait
   and the landscape **side by side** in one canvas (split viewports), both reading the **same `view`** — so
   navigating the flat pane (drag-pan / scroll-zoom / keyboard) moves the surface's domain in lock-step, while
-  a drag on the surface pane orbits it alone; the shared-view coupling is the sync (no state to reconcile).
+  a right-drag on the surface pane orbits it alone (a left-drag there pans both, like the flat pane); the
+  shared-view coupling is the sync (no state to reconcile).
   Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader ·
   sphere arcball).
 

@@ -368,6 +368,9 @@ function main(): void {
   };
 
   const redraw = (draft = false): void => {
+    // On a committed frame in a surface mode, adapt the mesh density to the current zoom (§B) — a cheap
+    // no-op when unchanged; skipped on draft frames so a zoom/drag burst never rebuilds mid-gesture.
+    if (!draft && (plot.mode === "3d" || plot.mode === "linked")) plot.reconcileMeshResolution();
     plot.draw(draft);
     if (plot.mode !== "2d") {
       // The axes / grid / markers are full-canvas 2D-projection overlays; in the 3D landscape, on the
@@ -683,6 +686,7 @@ function main(): void {
   if (resetViewBtn instanceof HTMLElement)
     resetViewBtn.addEventListener("click", () => {
       plot.resetCamera();
+      plot.view = { cx: 0, cy: 0, span: framingSpan }; // also restore the framing (pan/zoom move it in 3D)
       redraw(false);
     });
   if (specularInput instanceof HTMLInputElement) {
@@ -1154,7 +1158,7 @@ function main(): void {
       const mid = pointerMidpoint(a, b);
       const m = effMode(mid.x);
       if (m === "sphere") plot.dollySphere(factor);
-      else if (m === "3d") plot.dolly(factor);
+      else if (m === "3d") plot.zoomSpan(factor); // §B: pinch zooms the domain
       else plot.zoomAt(mid.x, mid.y, factor, twoDRect());
       redraw(true);
       return;
@@ -1237,7 +1241,7 @@ function main(): void {
       e.preventDefault();
       const m = effMode(e.clientX);
       if (m === "sphere") plot.dollySphere(Math.pow(1.0012, e.deltaY));
-      else if (m === "3d") plot.dolly(Math.pow(1.0012, e.deltaY));
+      else if (m === "3d") plot.zoomSpan(Math.pow(1.0015, e.deltaY)); // §B: scroll zooms the domain
       else plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
       redraw(true);
       window.clearTimeout(wheelCommitTimer);
@@ -1270,9 +1274,13 @@ function main(): void {
       }
     } else if (plot.mode === "3d") {
       const STEP = 0.18;
-      if (intent === "reset") plot.resetCamera();
-      else if (intent === "in") plot.dolly(0.9);
-      else if (intent === "out") plot.dolly(1 / 0.9);
+      // Reset restores the default three-quarter camera AND the framing (centre + span), since pan/zoom
+      // now move those in 3D too.
+      if (intent === "reset") {
+        plot.resetCamera();
+        plot.view = { cx: 0, cy: 0, span: framingSpan };
+      } else if (intent === "in") plot.zoomSpan(0.8); // §B: +/- zoom the domain (like 2D)
+      else if (intent === "out") plot.zoomSpan(1.25);
       // Same grab-turntable sense as the right-drag orbit (surface follows the key): "left" → +azimuth,
       // "right" → −azimuth; "up" tips the near edge up (elevation down), "down" looks more top-down.
       else if (intent === "left") plot.orbit(STEP, 0);

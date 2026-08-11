@@ -53,3 +53,19 @@ export function buildGridMesh(n: number): GridMesh {
   }
   return { uvs, indices, n: cells, vertexCount, indexCount: indices.length };
 }
+
+// Adaptive tessellation (§B): because the surface now fills the viewport at any zoom, a denser mesh when
+// zoomed in (small span) keeps fine structure near poles smooth, while a coarser one when zoomed out
+// avoids waste. Cells per side scale as √(reference span / span), clamped. `GRID_N_BASE` also seeds the
+// initial mesh, so `gridResolutionForSpan(GRID_N_SPAN_REF)` returns exactly `GRID_N_BASE`.
+export const GRID_N_BASE = 160;
+const GRID_N_SPAN_REF = 4; // the default view span → the base resolution
+const GRID_N_MIN = 96;
+const GRID_N_MAX = 384;
+
+/** Surface-mesh resolution (cells per side) appropriate to a view span — fed to {@link buildGridMesh}. */
+export function gridResolutionForSpan(span: number): number {
+  if (!(span > 0)) return GRID_N_BASE; // guard a degenerate / not-yet-set span
+  const n = Math.round(GRID_N_BASE * Math.sqrt(GRID_N_SPAN_REF / span));
+  return Math.min(GRID_N_MAX, Math.max(GRID_N_MIN, n));
+}

@@ -28,7 +28,7 @@ import {
   cameraEye,
   viewProjection,
 } from "../render3d/camera.js";
-import { buildGridMesh } from "../render3d/mesh.js";
+import { buildGridMesh, gridResolutionForSpan, GRID_N_BASE } from "../render3d/mesh.js";
 import { buildSurfaceProgram } from "../render3d/surfaceShader.js";
 import {
   type Quat,
@@ -146,6 +146,10 @@ interface SphereUniforms extends ColorUniformLocs {
 
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
 const SPHERE_FOV = (50 * Math.PI) / 180; // vertical field of view for the Riemann-sphere camera
+// 3D landscape framing (§B): the perspective eye distance = span * SURFACE_FRAMING / tan(fov/2), so the
+// surface fills a consistent share of the viewport at every zoom. Tuned so the default Γ view fills the
+// window without clipping its pole spikes.
+const SURFACE_FRAMING = 0.42;
 
 export class Plot {
   private readonly gl: WebGL2RenderingContext;
@@ -165,7 +169,9 @@ export class Plot {
   // 3D analytic-landscape path (Phase 5, 5A). A second program renders the domain grid mesh displaced
   // by the height field, reusing the same `colorAt`. Built alongside the 2D program on every `f` change;
   // `mode` selects which one `paint()` draws. The 2D path is byte-for-byte unchanged when `mode` is 2d.
-  private readonly gridN = 160;
+  // `gridN` (cells per side) adapts to the zoom (§B): {@link reconcileMeshResolution}, so a deep zoom
+  // stays smooth without a wastefully dense mesh when zoomed out.
+  private gridN = GRID_N_BASE;
   private gridUvBuffer: WebGLBuffer | null = null;
   private gridIndexBuffer: WebGLBuffer | null = null;
   private gridIndexCount = 0;
@@ -643,7 +649,16 @@ export class Plot {
     gl.enable(gl.DEPTH_TEST);
     gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg, so the surface sits in a dark scene
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    const cam: OrbitCamera = { ...this.camera, target: [this.view.cx, this.view.cy, 0] };
+    // Frame the surface to fill the viewport at ANY zoom: the perspective eye distance tracks the view
+    // span, so zooming the domain (§B) no longer shrinks the landscape to a small centred patch. The
+    // top-down ORTHO path keeps its own distance — its box is sized from `span` directly, so top-down
+    // still reproduces the 2D portrait pixel-for-pixel (the Phase-5 golden).
+    const framedDistance = (this.view.span * SURFACE_FRAMING) / Math.tan(this.camera.fov / 2);
+    const cam: OrbitCamera = {
+      ...this.camera,
+      distance: this.camera.ortho ? this.camera.distance : framedDistance,
+      target: [this.view.cx, this.view.cy, 0],
+    };
     gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, this.view.span));
     gl.uniform2f(u.uCenter, this.view.cx, this.view.cy);
     gl.uniform1f(u.uHalfSpan, this.view.span);
@@ -737,6 +752,30 @@ export class Plot {
     const sa = Math.sin(cam.azimuth);
     this.view.cx += wpp * (dxPx * sa - dyPx * ca);
     this.view.cy += wpp * (-dxPx * ca - dyPx * sa);
+  }
+
+  /** Zoom the 3D landscape by scaling the view span about its centre (§B): scrolling shows more / less
+   *  of ℂ, and the span-coupled framing keeps the surface filling the window. Same clamp as {@link zoomAt}. */
+  zoomSpan(factor: number): void {
+    this.view.span = Math.min(1e6, Math.max(1e-9, this.view.span * factor));
+  }
+
+  /** Rebuild the surface grid mesh at the zoom-appropriate resolution (§B, {@link gridResolutionForSpan});
+   *  a no-op when it already matches, so it is cheap to call on every zoom-settle. Re-uploads into the
+   *  existing buffers, so the surface VAO (which records them) stays valid — no program / VAO rebuild. */
+  reconcileMeshResolution(): void {
+    const n = gridResolutionForSpan(this.view.span);
+    if (n === this.gridN || !this.gridUvBuffer || !this.gridIndexBuffer || !this.surfaceVao) return;
+    this.gridN = n;
+    const gl = this.gl;
+    const mesh = buildGridMesh(n);
+    this.gridIndexCount = mesh.indexCount;
+    gl.bindVertexArray(this.surfaceVao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gridUvBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.uvs, gl.STATIC_DRAW);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
+    gl.bindVertexArray(null);
   }
 
   /** Snap to the exact top-down orthographic view — the landscape then equals the 2D portrait. */
