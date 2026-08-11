@@ -38,6 +38,7 @@ import { legendModel, renderLegend } from "./ui/legend.js";
 import { exteriorMapLink } from "./interchange/exteriorMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, type ConformalMap } from "./solve/lightning.js";
+import { fitForwardMap, type ForwardMap } from "./solve/forwardMap.js";
 import { injectPngText } from "./export/pngMeta.js";
 import { createControls } from "./ui/controls.js";
 
@@ -172,6 +173,9 @@ function main(): void {
   let rayLandings: Pt[] = [];
   // Numerical-Riemann-map (domain) mode (P3b): the fitted map + its source/image conformal grids.
   let domainId = domainById(state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
+  // Disk-image region source (2.1): the target Ω for the forward map g: 𝔻 → Ω (smooth domains only).
+  const SMOOTH_REGIONS = DOMAIN_PRESETS.filter((d) => !d.corners);
+  let regionId = SMOOTH_REGIONS.find((d) => d.id === state.render.region)?.id ?? SMOOTH_REGIONS[0].id;
   let domainMap: ConformalMap | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
@@ -185,15 +189,19 @@ function main(): void {
   let diskFoldReason: string | null = null; // univalence verdict (null ⇒ no fold detected)
   let cParam: [number, number] = state.map.c ? [state.map.c[0], state.map.c[1]] : [0.45, 0.2]; // family param
   let usesC = /\bc\b/.test(state.map.expr); // does φ reference the draggable c?
+  let regionMap: ForwardMap | null = null; // the forward Riemann map g: 𝔻 → Ω (region source, 2.1)
   let glDirty = true;
   let gridDirty = true;
   let domainDirty = true;
   let diskDirty = true;
+  let regionDirty = true; // (re)fit the forward map g when the region source or domain changes
   let fitPending = true; // fit the disk pane to the actual pane aspect on first paint (1.5)
   let linkDirty = true;
 
   const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
-  const diskSide = (): DiskSide => (state.render.disk === "exterior" ? "exterior" : "interior");
+  const diskSourceIsRegion = (): boolean => state.render.diskSource === "region";
+  // A region map is 𝔻 → Ω (interior); interior/exterior + the draggable c apply to the expression source.
+  const diskSide = (): DiskSide => (!diskSourceIsRegion() && state.render.disk === "exterior" ? "exterior" : "interior");
   const diskRadial = (): number => state.render.diskDensity ?? 18;
   const diskSectors = (): number => state.render.diskSectors ?? 2 * diskRadial();
   const diskStyle = (): string => state.render.diskStyle ?? "filled";
@@ -203,6 +211,23 @@ function main(): void {
     if (!current) return z;
     const w = current.jsFn([z[0], z[1]], cParam);
     return [w[0], w[1]];
+  };
+  const regionPhi = (w: Pt): Pt => {
+    if (!regionMap) return w;
+    const p = regionMap.eval([w[0], w[1]]);
+    return [p[0], p[1]];
+  };
+  /** The φ the disk-image mode pushes forward: the explicit map, or the numerical region map g. */
+  const activePhi = (): ((z: Pt) => Pt) => (diskSourceIsRegion() ? regionPhi : phi);
+  /** φ′ at w for the active source (symbolic for φ; a central difference for the numerical g). */
+  const activeDeriv = (w: Pt): [number, number] => {
+    if (diskSourceIsRegion()) {
+      const h = 1e-4 * Math.max(1, Math.hypot(w[0], w[1]));
+      const a = regionPhi([w[0] + h, w[1]]);
+      const b = regionPhi([w[0] - h, w[1]]);
+      return [(a[0] - b[0]) / (2 * h), (a[1] - b[1]) / (2 * h)];
+    }
+    return current ? derivativeAt(current, w, cParam) : [1, 0];
   };
 
   function applyMap(): void {
@@ -272,14 +297,18 @@ function main(): void {
   function applyModeContext(): void {
     const m = state.render.mode;
     const disk = modeIsDiskImage(m);
+    const region = disk && diskSourceIsRegion();
     controls.setControlVisibility({
       colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|, Julia) read it
       grid: !modeIsDomain(m) && !disk, // the numeric-map + disk-image modes draw their own grid
-      domain: modeIsDomain(m), // the domain picker is only for the numeric-map mode
-      disk, // interior/exterior + density belong to the disk-image mode
+      domain: modeIsDomain(m), // the numeric domain→disk mode's region picker
+      disk, // the disk-image controls (source, style, density…)
+      region, // region source ⇒ show the region picker, hide interior/exterior
     });
     rlabel.textContent = disk
-      ? "w = φ(z)  ·  image of the disk"
+      ? region
+        ? "w = g(w)  ·  image of 𝔻 in Ω"
+        : "w = φ(z)  ·  image of the disk"
       : modeIsDomain(m)
         ? "w = f(z)  ·  unit disk"
         : "w = φ(z)  ·  image grid";
@@ -375,10 +404,24 @@ function main(): void {
   const RING_COLOR = "rgba(130,225,255,0.9)";
   const SPOKE_COLOR = "rgba(255,180,120,0.9)";
 
-  /** Build the unit-disk polar grid (interior or exterior) and its φ-pushforward — filled cells AND the
-   *  ring/spoke line curves — plus the honest univalence verdict. */
+  /** Fit the forward Riemann map g: 𝔻 → Ω for the selected region (disk-image "region" source, 2.1).
+   *  Smooth Ω only — the forward fit is stable there; polygon corners are a Schwarz–Christoffel job (3.1). */
+  function fitRegion(): void {
+    const d = domainById(regionId);
+    if (!d) {
+      regionMap = null;
+      return;
+    }
+    const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
+    const f = fitConformalMap(boundary, DOMAIN_DEGREE); // Ω → 𝔻
+    regionMap = fitForwardMap(f, boundary, DOMAIN_DEGREE); // 𝔻 → Ω (the forward map we push the disk through)
+  }
+
+  /** Build the unit-disk polar grid and its pushforward — filled cells AND ring/spoke line curves — for
+   *  the active source (explicit φ, or the numerical region map g), plus the honest univalence verdict. */
   function computeDiskImage(): void {
-    if (!current) {
+    const region = diskSourceIsRegion();
+    if (region ? !regionMap : !current) {
       diskSourceCells = [];
       diskImageCells = [];
       diskSrcLines = [];
@@ -389,13 +432,14 @@ function main(): void {
       controls.setAnalysis(null);
       return;
     }
+    const P = activePhi();
     const side = diskSide();
     const dg = diskGrid(side, diskRadial(), diskSectors());
     diskUnitSrc = dg.unitCircle;
-    diskUnitImg = dg.unitCircle.map(phi);
+    diskUnitImg = dg.unitCircle.map(P);
 
     // Filled cells (always built — the per-cell φ′ also powers the interior critical-point check).
-    const img = pushforwardCells(dg.cells, phi);
+    const img = pushforwardCells(dg.cells, P);
     const src: FillCell[] = [];
     const imf: FillCell[] = [];
     const rMax = diskMaxR();
@@ -403,7 +447,7 @@ function main(): void {
     let minBulk = Infinity; // smallest |φ′| away from the radial boundaries (an interior φ′≈0 ⇒ a fold)
     for (let i = 0; i < dg.cells.length; i++) {
       const m = dg.cells[i].mid;
-      const d = derivativeAt(current, m, cParam);
+      const d = activeDeriv(m);
       const mag = Math.hypot(d[0], d[1]);
       if (Number.isFinite(mag) && mag > maxMag) maxMag = mag;
       const rr = Math.hypot(m[0], m[1]);
@@ -423,30 +467,50 @@ function main(): void {
     if (show !== "rays")
       for (const r of dg.rings) {
         sLines.push({ color: RING_COLOR, pts: r });
-        iLines.push({ color: RING_COLOR, pts: r.map(phi) });
+        iLines.push({ color: RING_COLOR, pts: r.map(P) });
       }
     if (show !== "circles")
       for (const s of dg.spokes) {
         sLines.push({ color: SPOKE_COLOR, pts: s });
-        iLines.push({ color: SPOKE_COLOR, pts: s.map(phi) });
+        iLines.push({ color: SPOKE_COLOR, pts: s.map(P) });
       }
     diskSrcLines = sLines;
     diskImgLines = iLines;
 
-    // Univalence (honest, ≈): an interior critical point φ′≈0, or a self-intersecting image boundary.
-    const critical = Number.isFinite(minBulk) && maxMag > 0 && minBulk < 1e-3 * maxMag;
-    const boundaryFold = polylineSelfIntersects(downsample(diskUnitImg, 180), true);
-    diskFoldReason = critical ? "φ′ ≈ 0 inside (critical point)" : boundaryFold ? "boundary self-intersects" : null;
+    // Univalence: run the fold heuristic for the explicit source; a region Riemann map is a bijection by
+    // construction, so it is univalent without a check (honest, ≈): an interior critical point φ′≈0, or a
+    // self-intersecting image boundary flags a folded explicit map.
+    if (region) {
+      diskFoldReason = null;
+    } else {
+      const critical = Number.isFinite(minBulk) && maxMag > 0 && minBulk < 1e-3 * maxMag;
+      const boundaryFold = polylineSelfIntersects(downsample(diskUnitImg, 180), true);
+      diskFoldReason = critical ? "φ′ ≈ 0 inside (critical point)" : boundaryFold ? "boundary self-intersects" : null;
+    }
 
-    const exact = current.jsDeriv ? "=" : "≈";
-    const rows: [string, string][] = [
-      ["map φ", "= " + state.map.expr],
-      ["disk", side === "exterior" ? "exterior 𝔻*  (|z| ≥ 1)" : "interior 𝔻  (|z| ≤ 1)"],
-      ["grid", `${diskRadial()} × ${diskSectors()}  (radial × angular)`],
-      ["colour", exact + " arg φ′  (local rotation)"],
-      ["univalent", diskFoldReason ? "≈ no — " + diskFoldReason : "≈ yes  (no fold detected)"],
-    ];
-    if (usesC) rows.splice(1, 0, ["c", "= " + fmtC(cParam[0], cParam[1]) + "  (drag on 𝔻)"]);
+    let rows: [string, string][];
+    if (region && regionMap) {
+      const d = domainById(regionId);
+      rows = [
+        ["source", "region 𝔻 → Ω  (numeric)"],
+        ["region Ω", d ? d.name : regionId],
+        ["method", "lightning + forward LSQ"],
+        ["degree", "= " + regionMap.degree],
+        ["boundary resid.", "≈ " + fmt(regionMap.boundaryResidual)],
+        ["grid", `${diskRadial()} × ${diskSectors()}  (radial × angular)`],
+        ["univalent", "= yes  (Riemann map, by construction)"],
+      ];
+    } else {
+      const exact = current && current.jsDeriv ? "=" : "≈";
+      rows = [
+        ["map φ", "= " + state.map.expr],
+        ["disk", side === "exterior" ? "exterior 𝔻*  (|z| ≥ 1)" : "interior 𝔻  (|z| ≤ 1)"],
+        ["grid", `${diskRadial()} × ${diskSectors()}  (radial × angular)`],
+        ["colour", exact + " arg φ′  (local rotation)"],
+        ["univalent", diskFoldReason ? "≈ no — " + diskFoldReason : "≈ yes  (no fold detected)"],
+      ];
+      if (usesC) rows.splice(1, 0, ["c", "= " + fmtC(cParam[0], cParam[1]) + "  (drag on 𝔻)"]);
+    }
     controls.setAnalysis(rows, "Image of the disk");
     controls.setExteriorExportAvailable(false);
   }
@@ -476,7 +540,7 @@ function main(): void {
       if (lineMode) leftOverlay.drawLines(diskSrcLines, 1.1);
       else leftOverlay.fillCells(diskSourceCells, 0.6);
       leftOverlay.drawLines([{ color: bCol, pts: diskUnitSrc }], 1.4);
-      if (usesC) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
+      if (usesC && !diskSourceIsRegion()) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
       leftOverlay.drawScaleBar();
       // Right pane: the image φ(𝔻), auto-framed, same colour key + φ(∂𝔻).
@@ -489,7 +553,7 @@ function main(): void {
         if (lineMode) rightPane.drawLines(diskImgLines, 1.1);
         else rightPane.fillCells(diskImageCells, 0.6);
         rightPane.drawLines([{ color: bCol, pts: diskUnitImg }], 1.4);
-        if (cursorZ) rightPane.drawMarker(phi(cursorZ), CURSOR_COLOR);
+        if (cursorZ) rightPane.drawMarker(activePhi()(cursorZ), CURSOR_COLOR);
       }
       return;
     }
@@ -613,7 +677,7 @@ function main(): void {
       if (lineMode) ov.drawLines(diskSrcLines, 1.4);
       else ov.fillCells(diskSourceCells, 1);
       ov.drawLines([{ color: bCol, pts: diskUnitSrc }], 2);
-      if (usesC) ov.drawHandle(cParam, "#ff5a5a", "c");
+      if (usesC && !diskSourceIsRegion()) ov.drawHandle(cParam, "#ff5a5a", "c");
     });
     const right = makePane((ov) => {
       const b =
@@ -663,6 +727,11 @@ function main(): void {
       if (domain && domainDirty) {
         computeDomain();
         domainDirty = false;
+      }
+      if (disk && diskSourceIsRegion() && regionDirty) {
+        fitRegion(); // (re)fit the forward map g: 𝔻 → Ω — the expensive step, only on source/domain change
+        regionDirty = false;
+        diskDirty = true;
       }
       if (disk && diskDirty) {
         computeDiskImage(); // cells live on the unit disk — independent of the canvas size
@@ -714,6 +783,8 @@ function main(): void {
   controls.setColormap(state.render.palette);
   controls.setGrid(gridKind());
   controls.setDomain(domainId);
+  controls.setRegionDomain(regionId);
+  controls.setDiskSource(state.render.diskSource ?? "expression");
   controls.setDiskSide(diskSide());
   controls.setDiskStyle(diskStyle());
   controls.setDiskShow(diskShow());
@@ -738,6 +809,14 @@ function main(): void {
     applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
     refreshDynamicsNote();
     updateAnalysisPanel();
+  });
+  controls.onDiskSource((id) => {
+    state = { ...state, render: { ...state.render, diskSource: id } };
+    if (id === "region") regionDirty = true; // (re)fit g on entering the region source
+    diskDirty = true;
+    fitPending = true; // a region map is interior-only — reframe the pane
+    applyModeContext(); // show the region picker / hide interior-exterior + the c handle
+    invalidate(false, false);
   });
   controls.onDiskSide((side) => {
     state = { ...state, render: { ...state.render, disk: side } };
@@ -771,8 +850,16 @@ function main(): void {
   controls.onDomain((id) => {
     domainId = id;
     state = { ...state, render: { ...state.render, domain: id } };
-    domainDirty = true;
+    domainDirty = true; // the numeric domain→disk mode
     invalidate(true, false);
+  });
+  controls.onRegionDomain((id) => {
+    regionId = id;
+    state = { ...state, render: { ...state.render, region: id } };
+    regionDirty = true; // (re)fit the forward map g: 𝔻 → Ω
+    diskDirty = true;
+    fitPending = true;
+    invalidate(false, false);
   });
   controls.onColormap((id) => {
     state = { ...state, render: { ...state.render, palette: id } };
@@ -823,6 +910,20 @@ function main(): void {
       schedule();
       return;
     }
+    // Disk-image region source: read the disk point w and its image g(w) under the forward map.
+    if (modeIsDiskImage(state.render.mode) && diskSourceIsRegion()) {
+      if (regionMap) {
+        const p = regionMap.eval([z[0], z[1]]);
+        const rr = Math.hypot(z[0], z[1]);
+        controls.setHover([
+          ["w", fmtC(z[0], z[1])],
+          ["g(w)", fmtC(p[0], p[1])],
+          ["|w|", "≈ " + fmt(rr) + (rr <= 1 ? "  (in 𝔻)" : "  (outside 𝔻)")],
+        ]);
+      }
+      schedule();
+      return;
+    }
     if (!current) return;
     const w = current.jsFn([z[0], z[1]], cParam);
     const d = derivativeAt(current, z, cParam);
@@ -855,7 +956,7 @@ function main(): void {
   // ---- drag the family parameter c on the disk pane (1.1) -----------------
   // Registered BEFORE attachPanZoom so a grab on the c handle preempts the pan (stopImmediatePropagation).
   canvas.addEventListener("pointerdown", (e) => {
-    if (!(modeIsDiskImage(state.render.mode) && usesC)) return;
+    if (!(modeIsDiskImage(state.render.mode) && usesC && !diskSourceIsRegion())) return;
     const r = canvas.getBoundingClientRect();
     const toWorld = (ev: { clientX: number; clientY: number }): Pt =>
       pixelToWorld(state.viewport, (ev.clientX - r.left) / r.width, 1 - (ev.clientY - r.top) / r.height, r.width / r.height);

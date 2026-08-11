@@ -67,6 +67,10 @@ export interface RenderState {
   readonly diskStyle?: string;
   /** Disk-image mode, line style: which curves — "both" (default) | "circles" | "rays". */
   readonly diskShow?: string;
+  /** Disk-image source: "expression" (φ from the editor, default) | "region" (numerical 𝔻→Ω map). */
+  readonly diskSource?: string;
+  /** Disk-image region source: the target domain Ω id (smooth presets only). Default "ellipse". */
+  readonly region?: string;
 }
 
 /**

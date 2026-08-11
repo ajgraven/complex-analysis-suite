@@ -17,14 +17,16 @@ export interface Controls {
   setColormap(id: string): void;
   setGrid(id: string): void;
   setDomain(id: string): void;
-  /** Disk-image mode: side of ∂𝔻, grid style/subset, and the radial + angular densities. */
+  setRegionDomain(id: string): void;
+  /** Disk-image mode: source (expression | region), side of ∂𝔻, grid style/subset, densities. */
+  setDiskSource(id: string): void;
   setDiskSide(id: string): void;
   setDiskStyle(id: string): void;
   setDiskShow(id: string): void;
   setDiskRadial(n: number): void;
   setDiskAngular(n: number): void;
-  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean }): void;
+  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region` = disk-image + region source. */
+  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
@@ -39,6 +41,8 @@ export interface Controls {
   onColormap(cb: (id: string) => void): void;
   onGrid(cb: (id: string) => void): void;
   onDomain(cb: (id: string) => void): void;
+  onRegionDomain(cb: (id: string) => void): void;
+  onDiskSource(cb: (id: string) => void): void;
   onDiskSide(cb: (id: string) => void): void;
   onDiskStyle(cb: (id: string) => void): void;
   onDiskShow(cb: (id: string) => void): void;
@@ -73,6 +77,11 @@ const DISK_SHOWS = [
   { id: "both", name: "Circles + rays" },
   { id: "circles", name: "Circles only" },
   { id: "rays", name: "Rays only" },
+] as const;
+
+const DISK_SOURCES = [
+  { id: "expression", name: "Expression  φ(z)" },
+  { id: "region", name: "Region  𝔻 → Ω  (numeric)" },
 ] as const;
 
 /** Glossary of the notation the studio surfaces (catalog item I2) — a self-documenting reference. */
@@ -167,6 +176,8 @@ export function createControls(initialExpr: string): Controls {
   const cmapListeners: ((id: string) => void)[] = [];
   const gridListeners: ((id: string) => void)[] = [];
   const domainListeners: ((id: string) => void)[] = [];
+  const regionDomainListeners: ((id: string) => void)[] = [];
+  const diskSourceListeners: ((id: string) => void)[] = [];
   const diskSideListeners: ((id: string) => void)[] = [];
   const diskStyleListeners: ((id: string) => void)[] = [];
   const diskShowListeners: ((id: string) => void)[] = [];
@@ -217,6 +228,7 @@ export function createControls(initialExpr: string): Controls {
   // Colormap / Grid / Domain fields below are contextual — shown only for the modes that use them.
   const viewGroup = controlGroup("View", true);
   const mode = labeledSelect("Mode", RENDER_MODES);
+  const diskSource = labeledSelect("Source", DISK_SOURCES);
   const diskSide = labeledSelect("Disk", DISK_SIDES);
   const diskStyle = labeledSelect("Grid style", DISK_STYLES);
   const diskShow = labeledSelect("Show", DISK_SHOWS);
@@ -225,7 +237,10 @@ export function createControls(initialExpr: string): Controls {
   const cmap = labeledSelect("Colormap", COLORMAPS);
   const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  viewGroup.el.append(mode.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, cmap.field, grid.field, domain.field);
+  // The region SOURCE offers only smooth domains — the forward map g: 𝔻 → Ω is stable there; polygon
+  // corners need a Schwarz–Christoffel engine (roadmap 3.1).
+  const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.filter((d) => !d.corners).map((d) => ({ id: d.id, name: d.name })));
+  viewGroup.el.append(mode.field, diskSource.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, cmap.field, grid.field, domain.field, regionDomain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -328,6 +343,8 @@ export function createControls(initialExpr: string): Controls {
   cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
   grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
   domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
+  regionDomain.select.addEventListener("change", () => regionDomainListeners.forEach((cb) => cb(regionDomain.select.value)));
+  diskSource.select.addEventListener("change", () => diskSourceListeners.forEach((cb) => cb(diskSource.select.value)));
   diskSide.select.addEventListener("change", () => diskSideListeners.forEach((cb) => cb(diskSide.select.value)));
   // "Show" (circles/rays subset) only bites in the line-art style; hide it for filled cells.
   const syncShowVisibility = (): void => {
@@ -400,6 +417,12 @@ export function createControls(initialExpr: string): Controls {
     setDomain(id: string): void {
       domain.select.value = id;
     },
+    setRegionDomain(id: string): void {
+      regionDomain.select.value = id;
+    },
+    setDiskSource(id: string): void {
+      diskSource.select.value = id;
+    },
     setDiskSide(id: string): void {
       diskSide.select.value = id;
     },
@@ -418,11 +441,15 @@ export function createControls(initialExpr: string): Controls {
       angular.input.value = String(n);
       angular.out.textContent = String(n);
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean }): void {
+    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean }): void {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
-      domain.field.style.display = v.domain ? "" : "none";
-      for (const f of [diskSide.field, diskStyle.field, radial.field, angular.field]) f.style.display = v.disk ? "" : "none";
+      domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
+      regionDomain.field.style.display = v.region ? "" : "none"; // disk-image region source (smooth only)
+      diskSource.field.style.display = v.disk ? "" : "none";
+      for (const f of [diskStyle.field, radial.field, angular.field]) f.style.display = v.disk ? "" : "none";
+      // interior/exterior is expression-only (a region map is 𝔻 → Ω, interior)
+      diskSide.field.style.display = v.disk && !v.region ? "" : "none";
       // the "Show" subset field is disk-only AND line-style-only
       diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
     },
@@ -485,6 +512,12 @@ export function createControls(initialExpr: string): Controls {
     },
     onDomain(cb: (id: string) => void): void {
       domainListeners.push(cb);
+    },
+    onRegionDomain(cb: (id: string) => void): void {
+      regionDomainListeners.push(cb);
+    },
+    onDiskSource(cb: (id: string) => void): void {
+      diskSourceListeners.push(cb);
     },
     onDiskSide(cb: (id: string) => void): void {
       diskSideListeners.push(cb);
