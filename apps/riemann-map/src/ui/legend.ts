@@ -1,10 +1,7 @@
-// legend.ts — the per-plot colour legend chip (roadmap A4). CD parity: a small corner chip keyed to the
-// current render mode + colormap, so every colouring says what it means. The ramp bar is built from the
-// SAME colormap LUT the shader samples (render/colormaps.ts), so the legend matches the picture exactly.
-// Pure model + a DOM renderer.
-import { colormapGradientCss } from "../render/colormaps.js";
+// legend.ts — the per-plot colour legend chip (roadmap A4). A small corner chip keyed to the current
+// render mode, so the colouring says what it means. Pure model + a DOM renderer.
 
-/** The phase-wheel bar (hue = arg), for the phase-family modes. */
+/** The phase-wheel bar (hue = arg), for the arg-φ′ colouring of the disk-image cells. */
 const HUE_CSS = `linear-gradient(to right, ${Array.from({ length: 7 }, (_, i) => `hsl(${(360 * i) / 6} 85% 58%)`).join(", ")})`;
 
 export interface LegendModel {
@@ -15,30 +12,11 @@ export interface LegendModel {
   readonly high?: string;
 }
 
-/** The legend for a render mode + colormap. The `ramp` modes (|φ′|, log|φ′|) use the colormap. */
-export function legendModel(modeId: string, colormapId: string): LegendModel {
-  const ramp = (): string => colormapGradientCss(colormapId);
-  switch (modeId) {
-    case "disk-image":
-      return { title: "arg φ′ — local rotation", barCss: HUE_CSS, low: "−π", high: "+π" };
-    case "phase":
-    case "phase-plain":
-      return { title: "arg φ(z)", barCss: HUE_CSS, low: "−π", high: "+π" };
-    case "conformal":
-      return { title: "phase · |φ| contours", barCss: HUE_CSS, low: "−π", high: "+π" };
-    case "checker":
-      return { title: "|φ| checker · arg hue", barCss: HUE_CSS, low: "−π", high: "+π" };
-    case "abs-deriv":
-      return { title: "|φ′| — local scale", barCss: ramp(), low: "small", high: "large" };
-    case "log-deriv":
-      return { title: "log|φ′|", barCss: ramp(), low: "small", high: "large" };
-    case "arg-deriv":
-      return { title: "arg φ′ — rotation", barCss: HUE_CSS, low: "−π", high: "+π" };
-    case "domain-map":
-      return { title: "Ω → 𝔻 conformal grid", barCss: null };
-    default:
-      return { title: modeId, barCss: null };
-  }
+/** The legend for a render mode. The disk-image cells are keyed by arg φ′ (a hue wheel); the numeric
+ *  domain map is a plain conformal grid (no colour field). */
+export function legendModel(modeId: string): LegendModel {
+  if (modeId === "domain-map") return { title: "Ω → 𝔻 conformal grid", barCss: null };
+  return { title: "arg φ′ — local rotation", barCss: HUE_CSS, low: "−π", high: "+π" };
 }
 
 /** Render the legend model into `el` (a chip container). Hides it when `m` is null. */

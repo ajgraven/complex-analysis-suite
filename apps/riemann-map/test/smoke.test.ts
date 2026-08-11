@@ -2,15 +2,13 @@ import { describe, expect, it } from "vitest";
 import { makeDurandKerner, tupleAlgebra, type ComplexTuple } from "@cas/core";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
-import { CANONICAL, SCHEMA_ID } from "@cas/interchange";
-import { COMPLEX_SINGLE_GLSL, DF64_GLSL } from "@cas/gpu/glsl";
-import { CD_TO_RM_BOTTCHER_LINK } from "@cas/interchange";
+import { CANONICAL, SCHEMA_ID, CD_TO_RM_BOTTCHER_LINK } from "@cas/interchange";
 import { importExteriorMap } from "../src/interchange/importMap.js";
 
 // P0 scaffold: prove the Riemann-map app can consume every shared package it depends on, exercising the
 // exact capabilities the plan leans on — a user map compiled+evaluated via @cas/expr, root-finding via
-// @cas/core, the GLSL stdlib via @cas/gpu, and the map hand-off via @cas/interchange (the piece most
-// specific to this tool now: RM IMPORTS another tool's conformal map rather than computing dynamics).
+// @cas/core, and the map hand-off via @cas/interchange (the piece most specific to this tool now: RM
+// IMPORTS another tool's conformal map rather than computing dynamics or rendering a GPU field).
 
 describe("riemann-map scaffold — shared-package wiring", () => {
   it("@cas/expr compiles & evaluates a user map (Joukowski z + 1/z)", () => {
@@ -35,11 +33,6 @@ describe("riemann-map scaffold — shared-package wiring", () => {
   it("@cas/interchange exposes the canonical conventions + schema id", () => {
     expect(SCHEMA_ID).toContain("interchange");
     expect(CANONICAL).toBeTruthy();
-  });
-
-  it("@cas/gpu provides the complex + df64 GLSL stdlib", () => {
-    expect(COMPLEX_SINGLE_GLSL.length).toBeGreaterThan(0);
-    expect(DF64_GLSL.length).toBeGreaterThan(0);
   });
 
   it("@cas/interchange hand-off: imports another tool's exterior map (the CD→RM golden)", () => {

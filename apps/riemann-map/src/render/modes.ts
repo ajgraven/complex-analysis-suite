@@ -1,56 +1,27 @@
-// modes.ts — the render-mode and colormap registries (catalog items C1–C4, C6).
+// modes.ts — the render-mode registry (catalog items C1–C4, C6).
 //
-// Pure id↔shader-code mapping so the UI, the view-state, and the shader agree. Each mode's `code` is
-// the `uMode` int the fragment shader switches on; colormaps drive `uColormap` for the scalar
-// (distortion) modes. Node-tested; the shader that consumes these codes is browser-tested.
+// Riemann Map is a conformal-map studio: after the domain-coloring modes were retired (C), the two
+// modes both draw a 2D-canvas picture (source pane + linked image pane), not a GLSL field —
+// `disk-image` pushes the unit disk's polar grid forward through φ, and `domain-map` fits the
+// numerical Riemann map of a chosen region. Pure id registry so the UI + the view-state agree.
 export interface RenderMode {
   readonly id: string;
   readonly name: string;
-  readonly code: number;
-  /** True if the mode reads φ′ (so it needs the derivative / distortion field). */
-  readonly usesDeriv: boolean;
-  /** True if the mode's colour comes from the colormap ramp (vs hue / checker) — drives whether the
-   *  Colormap picker is relevant (the shader reads uColormap only in modes 4, 5). */
-  readonly usesColormap: boolean;
 }
 
 export const RENDER_MODES: readonly RenderMode[] = [
-  // The primary (default) view: the image of the unit disk under φ, drawn as a pushed-forward polar
-  // grid of filled cells (code 30 — a 2D-overlay picture, not a GLSL field, so the shader never sees it).
-  { id: "disk-image", name: "Image of the disk (conformal)", code: 30, usesDeriv: false, usesColormap: false },
-  { id: "phase", name: "Phase portrait", code: 0, usesDeriv: false, usesColormap: false },
-  { id: "phase-plain", name: "Phase (flat)", code: 1, usesDeriv: false, usesColormap: false },
-  { id: "conformal", name: "Conformal grid (Wegert)", code: 2, usesDeriv: false, usesColormap: false },
-  { id: "checker", name: "Checkerboard", code: 3, usesDeriv: false, usesColormap: false },
-  { id: "abs-deriv", name: "|φ′| — scale", code: 4, usesDeriv: true, usesColormap: true },
-  { id: "log-deriv", name: "log|φ′|", code: 5, usesDeriv: true, usesColormap: true },
-  { id: "arg-deriv", name: "arg φ′ — rotation", code: 6, usesDeriv: true, usesColormap: false },
-  { id: "domain-map", name: "Riemann map: domain → disk (numeric)", code: 20, usesDeriv: false, usesColormap: false },
+  // The primary (default) view: the image of the unit disk under φ, drawn as a pushed-forward polar grid.
+  { id: "disk-image", name: "Image of the disk (conformal)" },
+  { id: "domain-map", name: "Riemann map: domain → disk (numeric)" },
 ] as const;
 
-/** The numerical-Riemann-map mode (code 20): fits f for a chosen DOMAIN, drawn as an overlay, not a
- *  GLSL field — so main clears the GL pane and skips the φ-expression pipeline for it. */
+/** The numerical-Riemann-map mode: fits f for a chosen DOMAIN, drawn as a 2D overlay (source Ω + disk). */
 export function modeIsDomain(id: string): boolean {
-  return modeCode(id) === 20;
+  return id === "domain-map";
 }
 
-/** The primary disk-image mode (code 30): pushes the unit disk's polar grid forward through φ and
- *  draws the image cells — a 2D overlay, so main clears the GL pane (as the domain mode does). */
+/** The primary disk-image mode: pushes the unit disk's polar grid forward through φ and draws the image
+ *  cells — a 2D overlay. Any non-domain mode falls back to it (it is the default view). */
 export function modeIsDiskImage(id: string): boolean {
-  return modeCode(id) === 30;
-}
-
-const modeById = new Map(RENDER_MODES.map((m) => [m.id, m]));
-
-/** `uMode` code for a mode id (falls back to the phase portrait for an unknown id). */
-export function modeCode(id: string): number {
-  return modeById.get(id)?.code ?? 0;
-}
-/** Whether the mode id reads the derivative field. */
-export function modeUsesDeriv(id: string): boolean {
-  return modeById.get(id)?.usesDeriv ?? false;
-}
-/** Whether the mode id colours from the colormap ramp (so the Colormap picker is relevant). */
-export function modeUsesColormap(id: string): boolean {
-  return modeById.get(id)?.usesColormap ?? false;
+  return id !== "domain-map";
 }

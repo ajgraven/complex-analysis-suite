@@ -7,7 +7,6 @@
 // fall back to a finite difference. Pure and DOM-free, so it unit-tests directly.
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
-import { compileF } from "@cas/expr/glsl";
 import { differentiate } from "@cas/expr/derivative";
 import { toLatex } from "@cas/expr/latex";
 import type { MapState } from "./viewState.js";
@@ -20,10 +19,6 @@ export interface CompiledMap {
   readonly jsFn: ComplexFn;
   /** Symbolic ∂φ/∂z as a JS evaluator, or null for anti-holomorphic / non-differentiable maps. */
   readonly jsDeriv: ComplexFn | null;
-  /** A GLSL function definition `cvec fFn(cvec z, cvec c){…}`, written in the abstract complex ops. */
-  readonly glslBody: string;
-  /** The GLSL `cvec dFn(cvec z, cvec c){…}` for φ′, or null (shader then finite-differences). */
-  readonly glslDerivBody: string | null;
   /** KaTeX-ready LaTeX for the map (falls back to the raw source if typesetting fails). */
   readonly latex: string;
 }
@@ -44,20 +39,15 @@ export function compileMap(state: MapState): MapResult {
   }
   try {
     const jsFn = makeComplexFn(ast);
-    const glslBody = compileF(ast);
 
     // φ′: only when φ is genuinely holomorphic. `conjugate` has no holomorphic ∂/∂z, so skip it (the
     // symbolic pass could otherwise return a misleading result); callers finite-difference instead.
     let jsDeriv: ComplexFn | null = null;
-    let glslDerivBody: string | null = null;
     if (!/conjugate/.test(state.expr)) {
       try {
-        const dAst = differentiate(ast, "z");
-        jsDeriv = makeComplexFn(dAst);
-        glslDerivBody = compileF(dAst, "dFn");
+        jsDeriv = makeComplexFn(differentiate(ast, "z"));
       } catch {
         jsDeriv = null;
-        glslDerivBody = null;
       }
     }
 
@@ -67,7 +57,7 @@ export function compileMap(state: MapState): MapResult {
     } catch {
       latex = state.expr;
     }
-    return { ok: true, map: { jsFn, jsDeriv, glslBody, glslDerivBody, latex } };
+    return { ok: true, map: { jsFn, jsDeriv, latex } };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }

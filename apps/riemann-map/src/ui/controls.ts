@@ -1,11 +1,10 @@
 // controls.ts — the sidebar: live φ editor (F5), preset gallery (A19), KaTeX preview (I1), the render
-// mode + colormap pickers (C1–C6), and the under-cursor readout (F4). DOM-only (the app's node suite
+// mode picker + disk-image controls, and the under-cursor readout (F4). DOM-only (the app's node suite
 // stays DOM-free); the pure logic it drives (compileMap, presets, modes, derivativeAt) is unit-tested.
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
 import { RENDER_MODES } from "../render/modes.js";
-import { COLORMAPS } from "../render/colormaps.js";
 import { DOMAIN_PRESETS } from "../domains.js";
 
 export interface Controls {
@@ -14,8 +13,6 @@ export interface Controls {
   setLatex(latex: string): void;
   showError(msg: string | null): void;
   setMode(id: string): void;
-  setColormap(id: string): void;
-  setGrid(id: string): void;
   setDomain(id: string): void;
   setRegionDomain(id: string): void;
   /** Disk-image mode: source (expression | region), side of ∂𝔻, grid style/subset, densities. */
@@ -26,8 +23,8 @@ export interface Controls {
   setDiskRadial(n: number): void;
   setDiskAngular(n: number): void;
   setDiskLayout(id: string): void;
-  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`bottcher` = disk-image numeric sources. */
-  setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void;
+  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`exterior`/`import` = disk-image sources. */
+  setControlVisibility(v: { domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
   /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
@@ -35,8 +32,6 @@ export interface Controls {
   setHover(rows: readonly (readonly [string, string])[] | null): void;
   onExpr(cb: (expr: string) => void): void;
   onMode(cb: (id: string) => void): void;
-  onColormap(cb: (id: string) => void): void;
-  onGrid(cb: (id: string) => void): void;
   onDomain(cb: (id: string) => void): void;
   onRegionDomain(cb: (id: string) => void): void;
   onDiskSource(cb: (id: string) => void): void;
@@ -55,12 +50,6 @@ export interface Controls {
   /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
   onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void;
 }
-
-const GRID_KINDS = [
-  { id: "none", name: "None" },
-  { id: "cartesian", name: "Cartesian grid" },
-  { id: "polar", name: "Polar grid" },
-] as const;
 
 const DISK_SIDES = [
   { id: "interior", name: "Interior  𝔻  (|z| ≤ 1)" },
@@ -174,8 +163,6 @@ function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElemen
 export function createControls(initialExpr: string): Controls {
   const exprListeners: ((expr: string) => void)[] = [];
   const modeListeners: ((id: string) => void)[] = [];
-  const cmapListeners: ((id: string) => void)[] = [];
-  const gridListeners: ((id: string) => void)[] = [];
   const domainListeners: ((id: string) => void)[] = [];
   const regionDomainListeners: ((id: string) => void)[] = [];
   const diskSourceListeners: ((id: string) => void)[] = [];
@@ -237,8 +224,6 @@ export function createControls(initialExpr: string): Controls {
   const radial = labeledRange("Radial rings", 4, 48, 18);
   const angular = labeledRange("Angular sectors", 6, 96, 36);
   const layout = labeledSelect("Layout", DISK_LAYOUTS);
-  const cmap = labeledSelect("Colormap", COLORMAPS);
-  const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
   // The region SOURCE offers only smooth domains — the forward map g: 𝔻 → Ω is stable there; polygon
   // corners need a Schwarz–Christoffel engine (roadmap 3.1).
@@ -252,7 +237,7 @@ export function createControls(initialExpr: string): Controls {
   importBtn.textContent = "Import map…";
   importBtn.title = "Paste a Complex Dynamics “Riemann Map ↗” link (#s=…) to render its exterior map";
   importField.append(importBtn);
-  viewGroup.el.append(mode.field, diskSource.field, importField, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, cmap.field, grid.field, domain.field, regionDomain.field);
+  viewGroup.el.append(mode.field, diskSource.field, importField, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, domain.field, regionDomain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -339,8 +324,6 @@ export function createControls(initialExpr: string): Controls {
     exprListeners.forEach((cb) => cb(p.expr));
   });
   mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
-  cmap.select.addEventListener("change", () => cmapListeners.forEach((cb) => cb(cmap.select.value)));
-  grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
   domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
   regionDomain.select.addEventListener("change", () => regionDomainListeners.forEach((cb) => cb(regionDomain.select.value)));
   diskSource.select.addEventListener("change", () => diskSourceListeners.forEach((cb) => cb(diskSource.select.value)));
@@ -411,12 +394,6 @@ export function createControls(initialExpr: string): Controls {
     setMode(id: string): void {
       mode.select.value = id;
     },
-    setColormap(id: string): void {
-      cmap.select.value = id;
-    },
-    setGrid(id: string): void {
-      grid.select.value = id;
-    },
     setDomain(id: string): void {
       domain.select.value = id;
     },
@@ -447,9 +424,7 @@ export function createControls(initialExpr: string): Controls {
     setDiskLayout(id: string): void {
       layout.select.value = id;
     },
-    setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void {
-      cmap.field.style.display = v.colormap ? "" : "none";
-      grid.field.style.display = v.grid ? "" : "none";
+    setControlVisibility(v: { domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void {
       domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
       regionDomain.field.style.display = v.region ? "" : "none"; // disk-image region source (smooth only)
       diskSource.field.style.display = v.disk ? "" : "none";
@@ -499,12 +474,6 @@ export function createControls(initialExpr: string): Controls {
     },
     onMode(cb: (id: string) => void): void {
       modeListeners.push(cb);
-    },
-    onColormap(cb: (id: string) => void): void {
-      cmapListeners.push(cb);
-    },
-    onGrid(cb: (id: string) => void): void {
-      gridListeners.push(cb);
     },
     onDomain(cb: (id: string) => void): void {
       domainListeners.push(cb);

@@ -1,9 +1,10 @@
 // apps/riemann-map — the research-grade Riemann-map / conformal-mapping studio.
 //
-// P1 walking skeleton. P1a: domain-coloring render + pan/zoom. P1b: live φ editor, KaTeX, presets,
-// hover readout. P1c: render modes + colormaps. P1d (this file): the "map the grid" view — a source
-// coordinate grid on the z-plane and its pushforward φ(grid) in a linked w-plane pane (shared colour
-// key), with a linked cursor. Later: PNG export (G2) + the Möbius gauge (A20).
+// A conformal-map studio: the two modes both draw a 2D-canvas picture (source pane + linked image
+// pane), not a GPU field. `disk-image` (the default) pushes the unit disk's polar grid forward through
+// φ — from the editor, a numerical region map g: 𝔻 → Ω, or an exterior map ψ imported from Complex
+// Dynamics; `domain-map` fits the numerical Riemann map of a chosen region. Live φ editor + KaTeX,
+// presets, hover readout, pan/zoom, PNG export (G2), and `#vs=` permalinks / `#s=` map hand-off.
 import "./styles/main.css";
 import {
   DEFAULT_VIEW_STATE,
@@ -13,17 +14,12 @@ import {
   type ViewportState,
 } from "./viewState.js";
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
-import { createRenderer, type Renderer } from "./render/glRenderer.js";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
-import { modeCode, modeIsDomain, modeIsDiskImage, modeUsesColormap } from "./render/modes.js";
-import { colormapColors } from "./render/colormaps.js";
+import { modeIsDomain, modeIsDiskImage } from "./render/modes.js";
 import {
-  sourceGrid,
-  pushforward,
   pushforwardCells,
   diskGrid,
   bounds,
-  type GridKind,
   type GridLine,
   type DiskSide,
   type Pt,
@@ -66,19 +62,6 @@ function evalLaurentPsi(
     pIm = nIm;
   }
   return [re, im];
-}
-/** Size the drawing buffer to the CSS box × DPR. Returns true if it changed — a resize clears the
- *  WebGL buffer, so the caller must re-render even when nothing else is dirty (else the plane blanks). */
-function resizeToDisplay(canvas: HTMLCanvasElement): boolean {
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
-  const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
-  const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-    return true;
-  }
-  return false;
 }
 function fmt(n: number): string {
   return Number.isFinite(n) ? n.toPrecision(5).replace(/\.?0+$/, "") : "∞";
@@ -180,19 +163,12 @@ function main(): void {
   body.append(controls.root, stage);
   app.append(bar, body);
 
-  // ---- renderers -----------------------------------------------------------
-  const renderer: Renderer | null = createRenderer(canvas);
-  if (!renderer) {
-    note.textContent = "WebGL2 is unavailable in this browser — the GPU domain-coloring view needs it.";
-    note.classList.add("visible");
-  }
+  // ---- 2D overlays (the panes are pure 2D canvases; `canvas` is the pan/zoom + pointer surface) ----
   const leftOverlay = new Overlay2D(overlayCanvas);
   const rightPane = new Overlay2D(imageCanvas);
 
   let current: CompiledMap | null = null;
   let cursorZ: Pt | null = null;
-  let gridSource: GridLine[] = [];
-  let gridImage: GridLine[] = [];
   // Numerical-Riemann-map (domain) mode (P3b): the fitted map + its source/image conformal grids.
   let domainId = domainById(state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
   // Disk-image region source (2.1): the target Ω for the forward map g: 𝔻 → Ω (smooth domains only).
@@ -212,8 +188,6 @@ function main(): void {
   let cParam: [number, number] = state.map.c ? [state.map.c[0], state.map.c[1]] : [0.45, 0.2]; // family param
   let usesC = /\bc\b/.test(state.map.expr); // does φ reference the draggable c?
   let regionMap: ForwardMap | null = null; // the forward Riemann map g: 𝔻 → Ω (region source, 2.1)
-  let glDirty = true;
-  let gridDirty = true;
   let domainDirty = true;
   let diskDirty = true;
   let regionDirty = true; // (re)fit the forward map g when the region source or domain changes
@@ -221,7 +195,6 @@ function main(): void {
   let linkDirty = true;
 
   const IMPORT_LOG_R = 0.9; // exterior grid reach for an imported map (r up to e^0.9 ≈ 2.46)
-  const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
   const diskSourceIsRegion = (): boolean => state.render.diskSource === "region";
   const diskSourceIsImport = (): boolean => state.render.diskSource === "import";
   const diskSourceIsNumeric = (): boolean => diskSourceIsRegion() || diskSourceIsImport();
@@ -276,26 +249,16 @@ function main(): void {
     controls.showError(null);
     controls.setLatex(compiled.map.latex);
     current = compiled.map;
-    if (renderer && renderer.setMap(compiled.map.glslBody, compiled.map.glslDerivBody)) note.classList.remove("visible");
-    updateAnalysisPanel();
   }
 
-  /** The domain-coloring render modes (phase / conformal / |φ′| / …) carry no analysis panel; the disk-image
-   *  and numeric-domain views own it (set in computeDiskImage / computeDomain). Clear it for the rest. */
-  function updateAnalysisPanel(): void {
-    if (modeIsDomain(state.render.mode) || modeIsDiskImage(state.render.mode)) return;
-    controls.setAnalysis(null);
-  }
-
-  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane. */
+  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane.
+   *  The two modes are the disk-image view (the default, for any non-domain id) and the numeric domain map. */
   function applyModeContext(): void {
     const m = state.render.mode;
     const disk = modeIsDiskImage(m);
     const region = disk && diskSourceIsRegion();
     const imported = disk && diskSourceIsImport();
     controls.setControlVisibility({
-      colormap: modeUsesColormap(m), // only the ramp modes (|φ′|, log|φ′|) read it
-      grid: !modeIsDomain(m) && !disk, // the numeric-map + disk-image modes draw their own grid
       domain: modeIsDomain(m), // the numeric domain→disk mode's region picker
       disk, // the disk-image controls (source, style, density…)
       region, // region source ⇒ show the region picker
@@ -308,17 +271,8 @@ function main(): void {
         : imported
           ? "w = ψ(w)  ·  imported exterior map"
           : "w = φ(z)  ·  image of the disk"
-      : modeIsDomain(m)
-        ? "w = f(z)  ·  unit disk"
-        : "w = φ(z)  ·  image grid";
-    renderLegend(legendEl, legendModel(m, state.render.palette)); // colour-key chip (A4)
-  }
-
-  function computeGrid(): void {
-    const v = state.viewport;
-    const aspect = canvas.height > 0 ? canvas.width / canvas.height : 1;
-    gridSource = sourceGrid(gridKind(), v.centerRe, v.centerIm, 1 / v.zoom, aspect);
-    gridImage = gridKind() !== "none" && current ? pushforward(gridSource, phi) : [];
+      : "w = f(z)  ·  unit disk";
+    renderLegend(legendEl, legendModel(m)); // colour-key chip (A4)
   }
 
   // ---- numerical Riemann map of a domain (P3b) -----------------------------
@@ -521,12 +475,12 @@ function main(): void {
   };
 
   function drawOverlays(): void {
-    // Decide split-ness FIRST, then size the left overlay: the pane's final (half) width must be in
-    // effect before resize() reads it, or a full-width buffer gets CSS-squished (the disk turns oval).
+    // Both modes are two-pane (source + linked image), so the stage is always split. Toggle split FIRST,
+    // then size the left overlay: the pane's final (half) width must be in effect before resize() reads it,
+    // or a full-width buffer gets CSS-squished (the disk turns oval).
     const disk = modeIsDiskImage(state.render.mode);
     const domain = modeIsDomain(state.render.mode);
-    const split = disk || domain || gridKind() !== "none";
-    stage.classList.toggle("split", split);
+    stage.classList.add("split");
     stage.classList.toggle("solo", disk && diskLayout() === "image"); // image-only layout (2.4)
     leftOverlay.resize();
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
@@ -568,17 +522,6 @@ function main(): void {
       }
       return;
     }
-    leftOverlay.drawLines(gridSource);
-    if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
-    leftOverlay.drawScaleBar();
-
-    if (split && rightPane.resize()) {
-      const b = bounds(gridImage);
-      if (b) rightPane.fitBounds(b);
-      rightPane.clear();
-      rightPane.drawLines(gridImage);
-      if (cursorZ) rightPane.drawMarker(phi(cursorZ), CURSOR_COLOR);
-    }
   }
 
   function updateReadout(): void {
@@ -598,51 +541,58 @@ function main(): void {
     URL.revokeObjectURL(url);
   }
 
-  async function exportPng(scale = 2): Promise<void> {
-    if (!renderer) return;
-    const baseW = canvas.width;
-    const baseH = canvas.height;
-    const W = Math.max(1, Math.round(baseW * scale));
-    const H = Math.max(1, Math.round(baseH * scale));
-    canvas.width = W;
-    canvas.height = H;
-    const disk = modeIsDiskImage(state.render.mode);
-    if (disk) renderer.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // 2D-overlay picture — no GLSL field
-    else renderer.render(state.viewport, modeCode(state.render.mode));
+  /** Numeric-domain-map export: a combined [ Ω │ disk ] plate of the region and its conformal image.
+   *  Pure 2D (offscreen canvases), mirroring {@link exportDiskPlate}. */
+  async function exportDomainPlate(scale = 2): Promise<void> {
+    const paneW = Math.max(1, Math.round((canvas.clientWidth || 600) * scale));
+    const H = Math.max(1, Math.round((canvas.clientHeight || 600) * scale));
+    const bg = `rgb(${Math.round(DOMAIN_BG[0] * 255)},${Math.round(DOMAIN_BG[1] * 255)},${Math.round(DOMAIN_BG[2] * 255)})`;
 
-    const ex = document.createElement("canvas");
-    ex.width = W;
-    ex.height = H;
-    const ctx = ex.getContext("2d");
-    if (ctx) {
-      ctx.drawImage(canvas, 0, 0);
-      // ex.width/height already set → the Overlay2D draws without a CSS-box resize.
-      if (disk) {
-        const ov = new Overlay2D(ex);
-        ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
-        ov.fillCells(diskSourceCells, 1);
-        ov.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitSrc }], 2);
-      } else if (gridKind() !== "none") {
-        const ov = new Overlay2D(ex);
-        ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
-        ov.drawLines(gridSource, 2);
+    const makePane = (draw: (ov: Overlay2D) => void): HTMLCanvasElement => {
+      const cv = document.createElement("canvas");
+      cv.width = paneW;
+      cv.height = H;
+      const c2 = cv.getContext("2d");
+      if (c2) {
+        c2.fillStyle = bg;
+        c2.fillRect(0, 0, paneW, H);
       }
-    }
-    const blob = await new Promise<Blob | null>((res) => ex.toBlob(res, "image/png"));
+      draw(new Overlay2D(cv));
+      return cv;
+    };
 
-    canvas.width = baseW; // restore the live drawing buffer
-    canvas.height = baseH;
-    glDirty = true;
-    schedule();
+    const left = makePane((ov) => {
+      ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
+      ov.drawLines(domainSource, 1.4);
+    });
+    const right = makePane((ov) => {
+      ov.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
+      ov.drawLines(domainImage, 1.4);
+    });
 
-    if (!ctx || !blob) return;
+    const plate = document.createElement("canvas");
+    plate.width = paneW * 2;
+    plate.height = H;
+    const ctx = plate.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(left, 0, 0);
+    ctx.drawImage(right, paneW, 0);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = Math.max(1, scale);
+    ctx.beginPath();
+    ctx.moveTo(paneW, 0);
+    ctx.lineTo(paneW, H);
+    ctx.stroke();
+
+    const blob = await new Promise<Blob | null>((res) => plate.toBlob(res, "image/png"));
+    if (!blob) return;
     const bytes = new Uint8Array(await blob.arrayBuffer());
     const permalink = location.origin + location.pathname + encodeRiemannState(state);
     const withMeta = injectPngText(bytes, {
       Software: "Riemann Map — Complex Analysis Suite",
       "cas:state": permalink,
     });
-    downloadBytes(withMeta, "riemann-map.png");
+    downloadBytes(withMeta, "riemann-domain-map.png");
   }
 
   /** Disk-image export (1.2): a combined [ disk │ image ] plate, so the deliverable is the IMAGE, not
@@ -715,7 +665,6 @@ function main(): void {
     if (frame) return;
     frame = window.requestAnimationFrame(() => {
       frame = 0;
-      const resized = resizeToDisplay(canvas); // a resize clears the WebGL buffer → must re-render
       const domain = modeIsDomain(state.render.mode);
       const disk = modeIsDiskImage(state.render.mode);
       if (domain && domainDirty) {
@@ -731,16 +680,7 @@ function main(): void {
         computeDiskImage(); // cells live on the unit disk — independent of the canvas size
         diskDirty = false;
       }
-      if ((gridDirty || resized) && !domain && !disk) {
-        computeGrid();
-        gridDirty = false;
-      }
-      if (glDirty || resized) {
-        if (domain || disk) renderer?.clear(DOMAIN_BG[0], DOMAIN_BG[1], DOMAIN_BG[2]); // no GLSL field — overlay only
-        else renderer?.render(state.viewport, modeCode(state.render.mode));
-        glDirty = false;
-      }
-      drawOverlays();
+      drawOverlays(); // both modes draw pure-2D overlays; the panes' dark background is CSS (no GLSL field)
       // Fit the disk pane to the ACTUAL pane aspect (now that drawOverlays has sized the overlay). 1.5.
       if (fitPending) {
         fitPending = false;
@@ -759,23 +699,20 @@ function main(): void {
       }
     });
   }
-  function invalidate(gl: boolean, gridChanged: boolean): void {
-    if (gl) glDirty = true;
-    if (gridChanged) gridDirty = true;
+  /** Mark the permalink stale and schedule a redraw. (The 2D overlays recompute from their own dirty
+   *  flags — diskDirty / domainDirty / regionDirty — set by the caller before invalidating.) */
+  function invalidate(): void {
     linkDirty = true;
     schedule();
   }
 
   function setViewport(v: ViewportState): void {
     state = { ...state, viewport: v };
-    invalidate(true, true); // grid follows the z-window
+    invalidate();
   }
 
   // ---- controls ------------------------------------------------------------
-  renderer?.setColormap(colormapColors(state.render.palette)); // upload the initial ramp LUT (A6)
   controls.setMode(state.render.mode);
-  controls.setColormap(state.render.palette);
-  controls.setGrid(gridKind());
   controls.setDomain(domainId);
   controls.setRegionDomain(regionId);
   controls.setDiskSource(state.render.diskSource ?? "expression");
@@ -791,7 +728,7 @@ function main(): void {
     usesC = /\bc\b/.test(expr); // does the new φ have a draggable parameter?
     applyMap();
     diskDirty = true; // the disk-image cells are a function of φ
-    invalidate(true, true);
+    invalidate();
   });
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
@@ -800,9 +737,8 @@ function main(): void {
       diskDirty = true; // (re)build the disk-image cells on entering
       fitPending = true; // and re-frame the disk pane
     }
-    invalidate(true, true); // the analysis panel depends on the mode
+    invalidate();
     applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
-    updateAnalysisPanel();
   });
   controls.onDiskSource((id) => {
     state = { ...state, render: { ...state.render, diskSource: id } };
@@ -810,7 +746,7 @@ function main(): void {
     diskDirty = true;
     fitPending = true; // a region map is interior-only — reframe the pane
     applyModeContext(); // show the region picker / hide interior-exterior + the c handle
-    invalidate(false, false);
+    invalidate();
   });
   // Paste an @cas/interchange "#s=" link (Complex Dynamics' "Send to Riemann Map", or a QD φ) → import it
   // as the exterior disk-image source. The deep-link path (a "#s=" hash on load) is handled at boot.
@@ -829,32 +765,32 @@ function main(): void {
     diskDirty = true;
     fitPending = true;
     applyModeContext();
-    invalidate(true, true);
+    invalidate();
   });
   controls.onDiskSide((side) => {
     state = { ...state, render: { ...state.render, disk: side } };
     diskDirty = true;
     fitPending = true; // fit the pane to the new side (interior ↔ exterior), replacing the zoom preset
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDiskStyle((id) => {
     state = { ...state, render: { ...state.render, diskStyle: id } };
-    invalidate(false, false); // both styles are already computed each rebuild — just redraw
+    invalidate(); // both styles are already computed each rebuild — just redraw
   });
   controls.onDiskShow((id) => {
     state = { ...state, render: { ...state.render, diskShow: id } };
     diskDirty = true; // the curve subset is chosen at build time
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDiskRadial((n) => {
     state = { ...state, render: { ...state.render, diskDensity: n } };
     diskDirty = true;
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDiskAngular((n) => {
     state = { ...state, render: { ...state.render, diskSectors: n } };
     diskDirty = true;
-    invalidate(false, false);
+    invalidate();
   });
   controls.onFit(() => {
     fitPending = true;
@@ -863,13 +799,13 @@ function main(): void {
   controls.onDiskLayout((id) => {
     state = { ...state, render: { ...state.render, diskLayout: id } };
     fitPending = true; // switching back to two-pane re-frames the (now narrower) disk pane
-    invalidate(false, false);
+    invalidate();
   });
   controls.onDomain((id) => {
     domainId = id;
     state = { ...state, render: { ...state.render, domain: id } };
     domainDirty = true; // the numeric domain→disk mode
-    invalidate(true, false);
+    invalidate();
   });
   controls.onRegionDomain((id) => {
     regionId = id;
@@ -877,19 +813,9 @@ function main(): void {
     regionDirty = true; // (re)fit the forward map g: 𝔻 → Ω
     diskDirty = true;
     fitPending = true;
-    invalidate(false, false);
+    invalidate();
   });
-  controls.onColormap((id) => {
-    state = { ...state, render: { ...state.render, palette: id } };
-    renderer?.setColormap(colormapColors(id)); // re-upload the ramp LUT (A6)
-    renderLegend(legendEl, legendModel(state.render.mode, id)); // the ramp bar follows the colormap (A4)
-    invalidate(true, false);
-  });
-  controls.onGrid((id) => {
-    state = { ...state, render: { ...state.render, grid: id } };
-    invalidate(false, true);
-  });
-  controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportPng()));
+  controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportDomainPlate()));
   controls.onResetView(() => {
     if (modeIsDiskImage(state.render.mode)) {
       fitPending = true; // reset = re-fit the disk pane
@@ -973,7 +899,7 @@ function main(): void {
       cParam = [cx, cy];
       state = { ...state, map: { ...state.map, c: [cx, cy] } };
       diskDirty = true;
-      invalidate(false, false);
+      invalidate();
     };
     const up = (): void => {
       window.removeEventListener("pointermove", move);
@@ -984,7 +910,7 @@ function main(): void {
   });
 
   attachPanZoom(canvas, () => state.viewport, setViewport);
-  window.addEventListener("resize", () => invalidate(true, true));
+  window.addEventListener("resize", () => invalidate());
 
   applyMap();
   schedule();
