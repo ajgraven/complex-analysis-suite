@@ -17,9 +17,12 @@ export interface Controls {
   setColormap(id: string): void;
   setGrid(id: string): void;
   setDomain(id: string): void;
-  /** Disk-image mode: which side of ∂𝔻 ("interior" | "exterior") and the radial grid density. */
+  /** Disk-image mode: side of ∂𝔻, grid style/subset, and the radial + angular densities. */
   setDiskSide(id: string): void;
-  setDiskDensity(n: number): void;
+  setDiskStyle(id: string): void;
+  setDiskShow(id: string): void;
+  setDiskRadial(n: number): void;
+  setDiskAngular(n: number): void;
   /** Show/hide mode-irrelevant controls (contextual disclosure, A1). */
   setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean }): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
@@ -37,7 +40,12 @@ export interface Controls {
   onGrid(cb: (id: string) => void): void;
   onDomain(cb: (id: string) => void): void;
   onDiskSide(cb: (id: string) => void): void;
-  onDiskDensity(cb: (n: number) => void): void;
+  onDiskStyle(cb: (id: string) => void): void;
+  onDiskShow(cb: (id: string) => void): void;
+  onDiskRadial(cb: (n: number) => void): void;
+  onDiskAngular(cb: (n: number) => void): void;
+  /** Re-fit the disk pane's frame to the current disk (the "Fit" button, roadmap 1.5). */
+  onFit(cb: () => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
   onCopyExteriorMap(cb: () => void): void;
@@ -54,6 +62,17 @@ const GRID_KINDS = [
 const DISK_SIDES = [
   { id: "interior", name: "Interior  𝔻  (|z| ≤ 1)" },
   { id: "exterior", name: "Exterior  𝔻*  (|z| ≥ 1)" },
+] as const;
+
+const DISK_STYLES = [
+  { id: "filled", name: "Filled cells (arg φ′)" },
+  { id: "lines", name: "Grid lines" },
+] as const;
+
+const DISK_SHOWS = [
+  { id: "both", name: "Circles + rays" },
+  { id: "circles", name: "Circles only" },
+  { id: "rays", name: "Rays only" },
 ] as const;
 
 /** Glossary of the notation the studio surfaces (catalog item I2) — a self-documenting reference. */
@@ -149,7 +168,11 @@ export function createControls(initialExpr: string): Controls {
   const gridListeners: ((id: string) => void)[] = [];
   const domainListeners: ((id: string) => void)[] = [];
   const diskSideListeners: ((id: string) => void)[] = [];
-  const diskDensityListeners: ((n: number) => void)[] = [];
+  const diskStyleListeners: ((id: string) => void)[] = [];
+  const diskShowListeners: ((id: string) => void)[] = [];
+  const diskRadialListeners: ((n: number) => void)[] = [];
+  const diskAngularListeners: ((n: number) => void)[] = [];
+  const fitListeners: (() => void)[] = [];
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
   const copyExtListeners: (() => void)[] = [];
@@ -195,11 +218,14 @@ export function createControls(initialExpr: string): Controls {
   const viewGroup = controlGroup("View", true);
   const mode = labeledSelect("Mode", RENDER_MODES);
   const diskSide = labeledSelect("Disk", DISK_SIDES);
-  const density = labeledRange("Grid density", 4, 40, 18);
+  const diskStyle = labeledSelect("Grid style", DISK_STYLES);
+  const diskShow = labeledSelect("Show", DISK_SHOWS);
+  const radial = labeledRange("Radial rings", 4, 48, 18);
+  const angular = labeledRange("Angular sectors", 6, 96, 36);
   const cmap = labeledSelect("Colormap", COLORMAPS);
   const grid = labeledSelect("Grid", GRID_KINDS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  viewGroup.el.append(mode.field, diskSide.field, density.field, cmap.field, grid.field, domain.field);
+  viewGroup.el.append(mode.field, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, cmap.field, grid.field, domain.field);
 
   // --- Position group (precise-nav fields, A5; collapsed by default) ---------
   const navGroup = controlGroup("Position", false);
@@ -214,7 +240,11 @@ export function createControls(initialExpr: string): Controls {
   const navApply = document.createElement("button");
   navApply.type = "button";
   navApply.textContent = "Apply";
-  navButtons.append(navApply);
+  const fitBtn = document.createElement("button");
+  fitBtn.type = "button";
+  fitBtn.textContent = "Fit";
+  fitBtn.title = "Re-frame the disk pane to the current disk";
+  navButtons.append(navApply, fitBtn);
   navGroup.el.append(navGrid, navButtons);
 
   // --- Figure / export group (collapsed by default) -------------------------
@@ -299,11 +329,26 @@ export function createControls(initialExpr: string): Controls {
   grid.select.addEventListener("change", () => gridListeners.forEach((cb) => cb(grid.select.value)));
   domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
   diskSide.select.addEventListener("change", () => diskSideListeners.forEach((cb) => cb(diskSide.select.value)));
-  density.input.addEventListener("input", () => {
-    const n = Number(density.input.value);
-    density.out.textContent = String(n);
-    diskDensityListeners.forEach((cb) => cb(n));
+  // "Show" (circles/rays subset) only bites in the line-art style; hide it for filled cells.
+  const syncShowVisibility = (): void => {
+    diskShow.field.style.display = diskStyle.select.value === "lines" ? "" : "none";
+  };
+  diskStyle.select.addEventListener("change", () => {
+    syncShowVisibility();
+    diskStyleListeners.forEach((cb) => cb(diskStyle.select.value));
   });
+  diskShow.select.addEventListener("change", () => diskShowListeners.forEach((cb) => cb(diskShow.select.value)));
+  radial.input.addEventListener("input", () => {
+    const n = Number(radial.input.value);
+    radial.out.textContent = String(n);
+    diskRadialListeners.forEach((cb) => cb(n));
+  });
+  angular.input.addEventListener("input", () => {
+    const n = Number(angular.input.value);
+    angular.out.textContent = String(n);
+    diskAngularListeners.forEach((cb) => cb(n));
+  });
+  fitBtn.addEventListener("click", () => fitListeners.forEach((cb) => cb()));
   savePng.addEventListener("click", () => savePngListeners.forEach((cb) => cb()));
   resetView.addEventListener("click", () => resetListeners.forEach((cb) => cb()));
   copyExt.addEventListener("click", () => copyExtListeners.forEach((cb) => cb()));
@@ -358,16 +403,28 @@ export function createControls(initialExpr: string): Controls {
     setDiskSide(id: string): void {
       diskSide.select.value = id;
     },
-    setDiskDensity(n: number): void {
-      density.input.value = String(n);
-      density.out.textContent = String(n);
+    setDiskStyle(id: string): void {
+      diskStyle.select.value = id;
+      syncShowVisibility();
+    },
+    setDiskShow(id: string): void {
+      diskShow.select.value = id;
+    },
+    setDiskRadial(n: number): void {
+      radial.input.value = String(n);
+      radial.out.textContent = String(n);
+    },
+    setDiskAngular(n: number): void {
+      angular.input.value = String(n);
+      angular.out.textContent = String(n);
     },
     setControlVisibility(v: { colormap: boolean; grid: boolean; domain: boolean; disk: boolean }): void {
       cmap.field.style.display = v.colormap ? "" : "none";
       grid.field.style.display = v.grid ? "" : "none";
       domain.field.style.display = v.domain ? "" : "none";
-      diskSide.field.style.display = v.disk ? "" : "none";
-      density.field.style.display = v.disk ? "" : "none";
+      for (const f of [diskSide.field, diskStyle.field, radial.field, angular.field]) f.style.display = v.disk ? "" : "none";
+      // the "Show" subset field is disk-only AND line-style-only
+      diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
     },
     setViewportFields(re: number, im: number, zoom: number): void {
       const active = document.activeElement; // don't clobber a field the user is typing into
@@ -432,8 +489,20 @@ export function createControls(initialExpr: string): Controls {
     onDiskSide(cb: (id: string) => void): void {
       diskSideListeners.push(cb);
     },
-    onDiskDensity(cb: (n: number) => void): void {
-      diskDensityListeners.push(cb);
+    onDiskStyle(cb: (id: string) => void): void {
+      diskStyleListeners.push(cb);
+    },
+    onDiskShow(cb: (id: string) => void): void {
+      diskShowListeners.push(cb);
+    },
+    onDiskRadial(cb: (n: number) => void): void {
+      diskRadialListeners.push(cb);
+    },
+    onDiskAngular(cb: (n: number) => void): void {
+      diskAngularListeners.push(cb);
+    },
+    onFit(cb: () => void): void {
+      fitListeners.push(cb);
     },
     onSavePng(cb: () => void): void {
       savePngListeners.push(cb);

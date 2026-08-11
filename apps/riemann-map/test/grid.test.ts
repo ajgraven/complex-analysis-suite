@@ -76,6 +76,20 @@ describe("disk-image grid (the primary view)", () => {
     expect(diskGrid("interior", 999).cells.length).toBe(64 * 128); // → 64 rings
   });
 
+  it("takes an independent angular count and returns ring + spoke polylines", () => {
+    const dg = diskGrid("interior", 6, 10);
+    expect(dg.cells.length).toBe(6 * 10);
+    expect(dg.rings.length).toBe(6); // interior: rings at r₁…r₆
+    expect(dg.spokes.length).toBe(10);
+    for (const ring of dg.rings) for (const [x, y] of ring) expect(Math.hypot(x, y)).toBeLessThanOrEqual(1 + 1e-9);
+  });
+
+  it("exterior includes ∂𝔻 among its rings (r runs 1 outward)", () => {
+    const dg = diskGrid("exterior", 5, 8);
+    expect(dg.rings.length).toBe(6); // k = 0…5, so the unit circle is included
+    for (const [x, y] of dg.rings[0]) expect(Math.hypot(x, y)).toBeCloseTo(1, 6);
+  });
+
   it("pushforwardCells maps every corner + midpoint through φ; cellCorners flattens them", () => {
     const dg = diskGrid("interior", 3);
     const sq = pushforwardCells(dg.cells, (z: Pt): Pt => [z[0] * z[0] - z[1] * z[1], 2 * z[0] * z[1]]); // z²

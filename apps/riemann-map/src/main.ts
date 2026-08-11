@@ -29,6 +29,7 @@ import {
   type Pt,
 } from "./render/grid.js";
 import { Overlay2D, type FillCell } from "./render/overlay2d.js";
+import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { analyzeExterior, reconstructedBoundary, type ExteriorAnalysis } from "./analysis/exterior.js";
 import { juliaExternalRays, quadraticJuliaC, DEFAULT_RAY_ANGLES } from "./analysis/rays.js";
 import { greenPotential, externalAngleQuadratic } from "./analysis/potential.js";
@@ -174,23 +175,33 @@ function main(): void {
   let domainMap: ConformalMap | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
-  // Disk-image mode (the primary view): the unit-disk polar grid and its φ-pushforward, as filled cells.
-  let diskSourceCells: FillCell[] = [];
+  // Disk-image mode (the primary view): the unit-disk polar grid and its φ-pushforward.
+  let diskSourceCells: FillCell[] = []; // filled style
   let diskImageCells: FillCell[] = [];
+  let diskSrcLines: GridLine[] = []; // line style (rings/spokes)
+  let diskImgLines: GridLine[] = [];
   let diskUnitSrc: Pt[] = []; // ∂𝔻 in the source pane
   let diskUnitImg: Pt[] = []; // φ(∂𝔻) in the image pane
+  let diskFoldReason: string | null = null; // univalence verdict (null ⇒ no fold detected)
+  let cParam: [number, number] = state.map.c ? [state.map.c[0], state.map.c[1]] : [0.45, 0.2]; // family param
+  let usesC = /\bc\b/.test(state.map.expr); // does φ reference the draggable c?
   let glDirty = true;
   let gridDirty = true;
   let domainDirty = true;
   let diskDirty = true;
+  let fitPending = true; // fit the disk pane to the actual pane aspect on first paint (1.5)
   let linkDirty = true;
 
   const gridKind = (): GridKind => (state.render.grid as GridKind) ?? "none";
   const diskSide = (): DiskSide => (state.render.disk === "exterior" ? "exterior" : "interior");
-  const diskDensity = (): number => state.render.diskDensity ?? 18;
+  const diskRadial = (): number => state.render.diskDensity ?? 18;
+  const diskSectors = (): number => state.render.diskSectors ?? 2 * diskRadial();
+  const diskStyle = (): string => state.render.diskStyle ?? "filled";
+  const diskShow = (): string => state.render.diskShow ?? "both";
+  const diskMaxR = (): number => (diskSide() === "exterior" ? Math.exp(2.5) : 1); // outer radius of the disk grid
   const phi = (z: Pt): Pt => {
     if (!current) return z;
-    const w = current.jsFn([z[0], z[1]], [0, 0]);
+    const w = current.jsFn([z[0], z[1]], cParam);
     return [w[0], w[1]];
   };
 
@@ -361,41 +372,82 @@ function main(): void {
     return { fill: `hsla(${H}, 60%, 55%, 0.5)`, edge: `hsl(${H}, 85%, 58%)` };
   }
 
-  /** Build the unit-disk polar grid (interior or exterior) and its φ-pushforward as filled cells. */
+  const RING_COLOR = "rgba(130,225,255,0.9)";
+  const SPOKE_COLOR = "rgba(255,180,120,0.9)";
+
+  /** Build the unit-disk polar grid (interior or exterior) and its φ-pushforward — filled cells AND the
+   *  ring/spoke line curves — plus the honest univalence verdict. */
   function computeDiskImage(): void {
     if (!current) {
       diskSourceCells = [];
       diskImageCells = [];
+      diskSrcLines = [];
+      diskImgLines = [];
       diskUnitSrc = [];
       diskUnitImg = [];
+      diskFoldReason = null;
       controls.setAnalysis(null);
       return;
     }
     const side = diskSide();
-    const dg = diskGrid(side, diskDensity());
+    const dg = diskGrid(side, diskRadial(), diskSectors());
+    diskUnitSrc = dg.unitCircle;
+    diskUnitImg = dg.unitCircle.map(phi);
+
+    // Filled cells (always built — the per-cell φ′ also powers the interior critical-point check).
     const img = pushforwardCells(dg.cells, phi);
     const src: FillCell[] = [];
     const imf: FillCell[] = [];
+    const rMax = diskMaxR();
+    let maxMag = 0;
+    let minBulk = Infinity; // smallest |φ′| away from the radial boundaries (an interior φ′≈0 ⇒ a fold)
     for (let i = 0; i < dg.cells.length; i++) {
-      const { fill, edge } = cellColors(derivativeAt(current, dg.cells[i].mid));
+      const m = dg.cells[i].mid;
+      const d = derivativeAt(current, m, cParam);
+      const mag = Math.hypot(d[0], d[1]);
+      if (Number.isFinite(mag) && mag > maxMag) maxMag = mag;
+      const rr = Math.hypot(m[0], m[1]);
+      const inBulk = side === "exterior" ? rr > 1.1 && rr < 0.9 * rMax : rr > 0.05 && rr < 0.9;
+      if (inBulk && Number.isFinite(mag) && mag < minBulk) minBulk = mag;
+      const { fill, edge } = cellColors(d);
       src.push({ quad: dg.cells[i].quad, fill, edge });
       imf.push({ quad: img[i].quad, fill, edge });
     }
     diskSourceCells = src;
     diskImageCells = imf;
-    diskUnitSrc = dg.unitCircle;
-    diskUnitImg = dg.unitCircle.map(phi);
-    // Honest labels: the grid + colour are computed from φ and φ′ (exact when φ has a symbolic derivative).
+
+    // Line curves (rings/spokes) for the line-art style, honoring the circles/rays subset.
+    const show = diskShow();
+    const sLines: GridLine[] = [];
+    const iLines: GridLine[] = [];
+    if (show !== "rays")
+      for (const r of dg.rings) {
+        sLines.push({ color: RING_COLOR, pts: r });
+        iLines.push({ color: RING_COLOR, pts: r.map(phi) });
+      }
+    if (show !== "circles")
+      for (const s of dg.spokes) {
+        sLines.push({ color: SPOKE_COLOR, pts: s });
+        iLines.push({ color: SPOKE_COLOR, pts: s.map(phi) });
+      }
+    diskSrcLines = sLines;
+    diskImgLines = iLines;
+
+    // Univalence (honest, ≈): an interior critical point φ′≈0, or a self-intersecting image boundary.
+    const critical = Number.isFinite(minBulk) && maxMag > 0 && minBulk < 1e-3 * maxMag;
+    const boundaryFold = polylineSelfIntersects(downsample(diskUnitImg, 180), true);
+    diskFoldReason = critical ? "φ′ ≈ 0 inside (critical point)" : boundaryFold ? "boundary self-intersects" : null;
+
     const exact = current.jsDeriv ? "=" : "≈";
-    controls.setAnalysis(
-      [
-        ["map φ", "= " + state.map.expr],
-        ["disk", side === "exterior" ? "exterior 𝔻*  (|z| ≥ 1)" : "interior 𝔻  (|z| ≤ 1)"],
-        ["cells", "= " + dg.cells.length],
-        ["colour", exact + " arg φ′  (local rotation)"],
-      ],
-      "Image of the disk",
-    );
+    const rows: [string, string][] = [
+      ["map φ", "= " + state.map.expr],
+      ["disk", side === "exterior" ? "exterior 𝔻*  (|z| ≥ 1)" : "interior 𝔻  (|z| ≤ 1)"],
+      ["grid", `${diskRadial()} × ${diskSectors()}  (radial × angular)`],
+      ["colour", exact + " arg φ′  (local rotation)"],
+      ["univalent", diskFoldReason ? "≈ no — " + diskFoldReason : "≈ yes  (no fold detected)"],
+    ];
+    if (usesC) rows.splice(1, 0, ["c", "= " + fmtC(cParam[0], cParam[1]) + "  (drag on 𝔻)"]);
+    controls.setAnalysis(rows, "Image of the disk");
     controls.setExteriorExportAvailable(false);
   }
 
@@ -417,18 +469,26 @@ function main(): void {
     leftOverlay.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
     leftOverlay.clear();
     if (disk) {
-      // Left pane: the unit disk with its polar grid (filled cells keyed by arg φ′) + ∂𝔻 on top.
-      leftOverlay.fillCells(diskSourceCells, 0.6);
-      leftOverlay.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitSrc }], 1.4);
+      const lineMode = diskStyle() === "lines";
+      // ∂𝔻 turns amber-red when a fold is detected, so a non-univalent image never reads as clean.
+      const bCol = diskFoldReason ? "rgba(255,120,90,0.98)" : "rgba(255,255,255,0.72)";
+      // Left pane: the unit disk with its polar grid + ∂𝔻, and the draggable c handle if φ uses it.
+      if (lineMode) leftOverlay.drawLines(diskSrcLines, 1.1);
+      else leftOverlay.fillCells(diskSourceCells, 0.6);
+      leftOverlay.drawLines([{ color: bCol, pts: diskUnitSrc }], 1.4);
+      if (usesC) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
       leftOverlay.drawScaleBar();
-      // Right pane: the image φ(𝔻), auto-framed, same per-cell colour key + φ(∂𝔻).
+      // Right pane: the image φ(𝔻), auto-framed, same colour key + φ(∂𝔻).
       if (rightPane.resize()) {
-        const b = bounds([{ color: "", pts: cellPts(diskImageCells) }]) ?? { minx: -1, maxx: 1, miny: -1, maxy: 1 };
+        const b =
+          (lineMode ? bounds(diskImgLines) : bounds([{ color: "", pts: cellPts(diskImageCells) }])) ??
+          ({ minx: -1, maxx: 1, miny: -1, maxy: 1 } as const);
         rightPane.fitBounds(b);
         rightPane.clear();
-        rightPane.fillCells(diskImageCells, 0.6);
-        rightPane.drawLines([{ color: "rgba(255,255,255,0.72)", pts: diskUnitImg }], 1.4);
+        if (lineMode) rightPane.drawLines(diskImgLines, 1.1);
+        else rightPane.fillCells(diskImageCells, 0.6);
+        rightPane.drawLines([{ color: bCol, pts: diskUnitImg }], 1.4);
         if (cursorZ) rightPane.drawMarker(phi(cursorZ), CURSOR_COLOR);
       }
       return;
@@ -526,6 +586,71 @@ function main(): void {
     downloadBytes(withMeta, "riemann-map.png");
   }
 
+  /** Disk-image export (1.2): a combined [ disk │ image ] plate, so the deliverable is the IMAGE, not
+   *  just the source pane. Draws to offscreen 2D canvases (the live picture is a 2D overlay, not GL). */
+  async function exportDiskPlate(scale = 2): Promise<void> {
+    const paneW = Math.max(1, Math.round((canvas.clientWidth || 600) * scale));
+    const H = Math.max(1, Math.round((canvas.clientHeight || 600) * scale));
+    const bg = `rgb(${Math.round(DOMAIN_BG[0] * 255)},${Math.round(DOMAIN_BG[1] * 255)},${Math.round(DOMAIN_BG[2] * 255)})`;
+    const lineMode = diskStyle() === "lines";
+    const bCol = diskFoldReason ? "rgba(255,120,90,0.98)" : "rgba(255,255,255,0.82)";
+
+    const makePane = (draw: (ov: Overlay2D) => void): HTMLCanvasElement => {
+      const cv = document.createElement("canvas");
+      cv.width = paneW;
+      cv.height = H;
+      const c2 = cv.getContext("2d");
+      if (c2) {
+        c2.fillStyle = bg;
+        c2.fillRect(0, 0, paneW, H);
+      }
+      draw(new Overlay2D(cv));
+      return cv;
+    };
+
+    const left = makePane((ov) => {
+      ov.setCenterSpan(state.viewport.centerRe, state.viewport.centerIm, 1 / state.viewport.zoom);
+      if (lineMode) ov.drawLines(diskSrcLines, 1.4);
+      else ov.fillCells(diskSourceCells, 1);
+      ov.drawLines([{ color: bCol, pts: diskUnitSrc }], 2);
+      if (usesC) ov.drawHandle(cParam, "#ff5a5a", "c");
+    });
+    const right = makePane((ov) => {
+      const b =
+        (lineMode ? bounds(diskImgLines) : bounds([{ color: "", pts: cellPts(diskImageCells) }])) ??
+        ({ minx: -1, maxx: 1, miny: -1, maxy: 1 } as const);
+      ov.fitBounds(b);
+      if (lineMode) ov.drawLines(diskImgLines, 1.4);
+      else ov.fillCells(diskImageCells, 1);
+      ov.drawLines([{ color: bCol, pts: diskUnitImg }], 2);
+    });
+
+    const plate = document.createElement("canvas");
+    plate.width = paneW * 2;
+    plate.height = H;
+    const ctx = plate.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(left, 0, 0);
+    ctx.drawImage(right, paneW, 0);
+    ctx.strokeStyle = "rgba(255,255,255,0.25)";
+    ctx.lineWidth = Math.max(1, scale);
+    ctx.beginPath();
+    ctx.moveTo(paneW, 0);
+    ctx.lineTo(paneW, H);
+    ctx.stroke();
+
+    const blob = await new Promise<Blob | null>((res) => plate.toBlob(res, "image/png"));
+    if (!blob) return;
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    const permalink = location.origin + location.pathname + encodeRiemannState(state);
+    const withMeta = injectPngText(
+      injectPngText(bytes, "Software", "Riemann Map — Complex Analysis Suite"),
+      "cas:state",
+      permalink,
+    );
+    downloadBytes(withMeta, "riemann-disk-image.png");
+  }
+
   // ---- unified frame (rAF-coalesced; dirty flags decide what to recompute) --
   let frame = 0;
   function schedule(): void {
@@ -553,6 +678,17 @@ function main(): void {
         glDirty = false;
       }
       drawOverlays();
+      // Fit the disk pane to the ACTUAL pane aspect (now that drawOverlays has sized the overlay). 1.5.
+      if (fitPending) {
+        fitPending = false;
+        if (modeIsDiskImage(state.render.mode)) {
+          const w = overlayCanvas.width;
+          const h = overlayCanvas.height;
+          const aspect = w > 0 && h > 0 ? w / h : 1;
+          const halfSpan = (diskMaxR() * 1.12) / Math.min(1, aspect);
+          setViewport({ centerRe: 0, centerIm: 0, zoom: 1 / halfSpan }); // schedules one more frame
+        }
+      }
       updateReadout();
       if (linkDirty) {
         history.replaceState(null, "", encodeRiemannState(state));
@@ -579,10 +715,14 @@ function main(): void {
   controls.setGrid(gridKind());
   controls.setDomain(domainId);
   controls.setDiskSide(diskSide());
-  controls.setDiskDensity(diskDensity());
+  controls.setDiskStyle(diskStyle());
+  controls.setDiskShow(diskShow());
+  controls.setDiskRadial(diskRadial());
+  controls.setDiskAngular(diskSectors());
   applyModeContext(); // initial contextual disclosure
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
+    usesC = /\bc\b/.test(expr); // does the new φ have a draggable parameter?
     applyMap();
     diskDirty = true; // the disk-image cells are a function of φ
     invalidate(true, true);
@@ -590,7 +730,10 @@ function main(): void {
   controls.onMode((id) => {
     state = { ...state, render: { ...state.render, mode: id } };
     if (modeIsDomain(id)) domainDirty = true; // (re)fit f on entering the numerical-map mode
-    if (modeIsDiskImage(id)) diskDirty = true; // (re)build the disk-image cells on entering
+    if (modeIsDiskImage(id)) {
+      diskDirty = true; // (re)build the disk-image cells on entering
+      fitPending = true; // and re-frame the disk pane
+    }
     invalidate(true, true); // the boundary overlay + analysis panel depend on the mode
     applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
     refreshDynamicsNote();
@@ -599,13 +742,31 @@ function main(): void {
   controls.onDiskSide((side) => {
     state = { ...state, render: { ...state.render, disk: side } };
     diskDirty = true;
-    // Reframe the source pane to the chosen side (interior ⇒ ½-height 1.33, exterior ⇒ ~13).
-    setViewport({ centerRe: 0, centerIm: 0, zoom: side === "exterior" ? 0.075 : 0.75 });
+    fitPending = true; // fit the pane to the new side (interior ↔ exterior), replacing the zoom preset
+    invalidate(false, false);
   });
-  controls.onDiskDensity((n) => {
+  controls.onDiskStyle((id) => {
+    state = { ...state, render: { ...state.render, diskStyle: id } };
+    invalidate(false, false); // both styles are already computed each rebuild — just redraw
+  });
+  controls.onDiskShow((id) => {
+    state = { ...state, render: { ...state.render, diskShow: id } };
+    diskDirty = true; // the curve subset is chosen at build time
+    invalidate(false, false);
+  });
+  controls.onDiskRadial((n) => {
     state = { ...state, render: { ...state.render, diskDensity: n } };
     diskDirty = true;
-    invalidate(false, false); // recompute the cells + redraw; the GL background is unchanged
+    invalidate(false, false);
+  });
+  controls.onDiskAngular((n) => {
+    state = { ...state, render: { ...state.render, diskSectors: n } };
+    diskDirty = true;
+    invalidate(false, false);
+  });
+  controls.onFit(() => {
+    fitPending = true;
+    schedule();
   });
   controls.onDomain((id) => {
     domainId = id;
@@ -623,8 +784,13 @@ function main(): void {
     state = { ...state, render: { ...state.render, grid: id } };
     invalidate(false, true);
   });
-  controls.onSavePng(() => void exportPng());
-  controls.onResetView(() => setViewport({ ...DEFAULT_VIEW_STATE.viewport }));
+  controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportPng()));
+  controls.onResetView(() => {
+    if (modeIsDiskImage(state.render.mode)) {
+      fitPending = true; // reset = re-fit the disk pane
+      schedule();
+    } else setViewport({ ...DEFAULT_VIEW_STATE.viewport });
+  });
   controls.onApplyViewport((re, im, zoom) => setViewport({ centerRe: re, centerIm: im, zoom }));
   controls.onCopyExteriorMap(() => {
     if (!analysis || !exteriorConformalValid()) return; // no valid ψ ⇒ nothing to export (button is hidden too)
@@ -658,8 +824,8 @@ function main(): void {
       return;
     }
     if (!current) return;
-    const w = current.jsFn([z[0], z[1]], [0, 0]);
-    const d = derivativeAt(current, z);
+    const w = current.jsFn([z[0], z[1]], cParam);
+    const d = derivativeAt(current, z, cParam);
     const exact = current.jsDeriv ? "= " : "≈ ";
     const rows: [string, string][] = [
       ["z", fmtC(z[0], z[1])],
@@ -684,6 +850,39 @@ function main(): void {
     cursorZ = null;
     controls.setHover(null);
     schedule();
+  });
+
+  // ---- drag the family parameter c on the disk pane (1.1) -----------------
+  // Registered BEFORE attachPanZoom so a grab on the c handle preempts the pan (stopImmediatePropagation).
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!(modeIsDiskImage(state.render.mode) && usesC)) return;
+    const r = canvas.getBoundingClientRect();
+    const toWorld = (ev: { clientX: number; clientY: number }): Pt =>
+      pixelToWorld(state.viewport, (ev.clientX - r.left) / r.width, 1 - (ev.clientY - r.top) / r.height, r.width / r.height);
+    const pxPerWorld = r.height / (2 * (1 / state.viewport.zoom));
+    const w0 = toWorld(e);
+    if (Math.hypot(w0[0] - cParam[0], w0[1] - cParam[1]) * pxPerWorld > 14) return; // not on the handle
+    e.stopImmediatePropagation(); // preempt attachPanZoom's pan for this drag
+    const move = (ev: PointerEvent): void => {
+      const w = toWorld(ev);
+      let cx = w[0];
+      let cy = w[1];
+      const rc = Math.hypot(cx, cy);
+      if (rc >= 0.995) {
+        cx *= 0.995 / rc; // keep |c| < 1 so a Blaschke automorphism stays well-defined
+        cy *= 0.995 / rc;
+      }
+      cParam = [cx, cy];
+      state = { ...state, map: { ...state.map, c: [cx, cy] } };
+      diskDirty = true;
+      invalidate(false, false);
+    };
+    const up = (): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
   });
 
   attachPanZoom(canvas, () => state.viewport, setViewport);

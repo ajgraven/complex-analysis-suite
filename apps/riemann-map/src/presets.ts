@@ -11,6 +11,9 @@ export interface MapPreset {
 
 export const MAP_PRESETS: readonly MapPreset[] = [
   { id: "cardioid", name: "Cardioid  z + z²/2", expr: "z + z*z/2" },
+  // Families in the draggable parameter c — grab the red c handle on the disk to deform them live.
+  { id: "blaschke-c", name: "Blaschke φ_c  (z−c)/(1−c̄z)", expr: "(z - c)/(1 - conjugate(c)*z)" },
+  { id: "quadratic-c", name: "Quadratic  z² + c", expr: "z*z + c" },
   { id: "joukowski", name: "Joukowski  z + 1/z", expr: "z + 1/z" },
   { id: "square", name: "z²", expr: "z*z" },
   { id: "cube", name: "z³", expr: "z*z*z" },

@@ -92,23 +92,30 @@ export interface GridCell {
 
 export interface DiskGrid {
   readonly cells: GridCell[];
+  /** Concentric-circle polylines (the "circles" curves, for line-style rendering). */
+  readonly rings: Pt[][];
+  /** Radial-ray polylines (the "rays" curves, for line-style rendering). */
+  readonly spokes: Pt[][];
   /** ∂𝔻 (the unit circle), drawn as a reference curve in both panes. */
   readonly unitCircle: Pt[];
 }
 
 /** Exponential span of the exterior grid: radii run 1 … e^EXT_LOG_R so cells stay roughly square. */
 const EXT_LOG_R = 2.5;
+const clampInt = (x: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, Math.round(x)));
 
 /**
- * A polar grid of quad cells on the unit disk (`interior`, r ∈ [0,1]) or its exterior (`exterior`,
- * r ∈ [1, e^2.5], exponentially spaced). `rings` radial × `2·rings` angular cells (clamped 2…64).
- * The map φ is applied by the caller via {@link pushforwardCells}.
+ * A polar grid on the unit disk (`interior`, r ∈ [0,1]) or its exterior (`exterior`, r ∈ [1, e^2.5],
+ * exponentially spaced). `rings` radial × `sectors` angular divisions (sectors defaults to 2·rings).
+ * Returns both the quad `cells` (for the filled arg-φ′ view) and the `rings`/`spokes` polylines (for the
+ * line-art view). The map φ is applied by the caller via {@link pushforwardCells} / {@link pushforward}.
  */
-export function diskGrid(side: DiskSide, rings: number): DiskGrid {
-  const R = Math.max(2, Math.min(64, Math.round(rings)));
-  const S = 2 * R; // angular cells — keeps cells ~square near the rim
+export function diskGrid(side: DiskSide, rings: number, sectors?: number): DiskGrid {
+  const R = clampInt(rings, 2, 64);
+  const S = clampInt(sectors ?? 2 * R, 3, 256); // angular divisions
   const rEdge = (k: number): number => (side === "exterior" ? Math.exp((EXT_LOG_R * k) / R) : k / R);
   const polar = (r: number, t: number): Pt => [r * Math.cos(t), r * Math.sin(t)];
+
   const cells: GridCell[] = [];
   for (let k = 1; k <= R; k++) {
     const r0 = rEdge(k - 1);
@@ -124,11 +131,34 @@ export function diskGrid(side: DiskSide, rings: number): DiskGrid {
       });
     }
   }
+
+  // Ring polylines at each radial edge (interior skips r=0; exterior includes ∂𝔻 at k=0), sampled
+  // finely so the image curves read smoothly where |φ′| is large.
+  const ringSamples = Math.max(96, 3 * S);
+  const rings2: Pt[][] = [];
+  for (let k = side === "exterior" ? 0 : 1; k <= R; k++) {
+    const r = rEdge(k);
+    const pts: Pt[] = [];
+    for (let m = 0; m <= ringSamples; m++) pts.push(polar(r, (2 * Math.PI * m) / ringSamples));
+    rings2.push(pts);
+  }
+  // Spoke polylines: each angular edge, straight out from r0 to rR.
+  const spokeSamples = Math.max(48, 4 * R);
+  const spokes2: Pt[][] = [];
+  const rMin = rEdge(0);
+  const rMax = rEdge(R);
+  for (let j = 0; j < S; j++) {
+    const t = (2 * Math.PI * j) / S;
+    const pts: Pt[] = [];
+    for (let m = 0; m <= spokeSamples; m++) pts.push(polar(rMin + ((rMax - rMin) * m) / spokeSamples, t));
+    spokes2.push(pts);
+  }
+
   const unitCircle: Pt[] = Array.from({ length: 361 }, (_, i): Pt => {
     const t = (2 * Math.PI * i) / 360;
     return [Math.cos(t), Math.sin(t)];
   });
-  return { cells, unitCircle };
+  return { cells, rings: rings2, spokes: spokes2, unitCircle };
 }
 
 /** Map every corner + midpoint of every cell through `f` (φ). */

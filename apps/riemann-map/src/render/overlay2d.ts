@@ -138,6 +138,27 @@ export class Overlay2D {
     ctx.stroke();
   }
 
+  /** A draggable parameter handle (a larger ringed dot + a label) at world point `p`. */
+  drawHandle(p: Pt, color: string, label: string): void {
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
+    const ctx = this.ctx;
+    const [px, py] = this.toPx(p);
+    const r = 7 * this.dpr;
+    ctx.lineWidth = 2.5 * this.dpr;
+    ctx.strokeStyle = "rgba(0,0,0,0.65)";
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+    ctx.font = `${Math.round(12 * this.dpr)}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillText(label, px + r + 3 * this.dpr + 1, py - r + 1);
+    ctx.fillStyle = "#fff";
+    ctx.fillText(label, px + r + 3 * this.dpr, py - r);
+  }
+
   /** A bottom-left scale bar: a "nice" 1/2/5×10ⁿ world length (CD parity), with end ticks + a label
    *  on a translucent backing so it stays legible over any shader colour. */
   drawScaleBar(): void {

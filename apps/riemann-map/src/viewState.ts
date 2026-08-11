@@ -33,6 +33,8 @@ export interface MapState {
   readonly vars: readonly ("z" | "c" | "a")[];
   /** True if the map is anti-holomorphic (uses `conjugate`). */
   readonly antiholomorphic: boolean;
+  /** Value of the family parameter `c` (for maps that reference it), draggable in the disk view. */
+  readonly c?: readonly [number, number];
 }
 
 /** The complex-plane viewport. `centerHi/Lo` reserve a double-float slot for later df64 deep zoom. */
@@ -57,8 +59,14 @@ export interface RenderState {
   readonly domain?: string;
   /** Disk-image mode: which side of ∂𝔻 to map — "interior" (default) | "exterior". */
   readonly disk?: string;
-  /** Disk-image mode: radial subdivisions of the polar grid (angular = 2×). Optional; default 18. */
+  /** Disk-image mode: radial subdivisions of the polar grid. Optional; default 18. */
   readonly diskDensity?: number;
+  /** Disk-image mode: angular subdivisions. Optional; defaults to 2× the radial count. */
+  readonly diskSectors?: number;
+  /** Disk-image mode: "filled" cells keyed by arg φ′ (default) | "lines" (circle/ray curves). */
+  readonly diskStyle?: string;
+  /** Disk-image mode, line style: which curves — "both" (default) | "circles" | "rays". */
+  readonly diskShow?: string;
 }
 
 /**
@@ -80,7 +88,16 @@ export type RiemannViewState = {
 export const DEFAULT_VIEW_STATE: RiemannViewState = {
   map: { expr: "z + z*z/2", vars: ["z"], antiholomorphic: false },
   viewport: { centerRe: 0, centerIm: 0, zoom: 0.75 },
-  render: { mode: "disk-image", palette: "viridis", grid: "none", disk: "interior", diskDensity: 18 },
+  render: {
+    mode: "disk-image",
+    palette: "viridis",
+    grid: "none",
+    disk: "interior",
+    diskDensity: 18,
+    diskSectors: 36,
+    diskStyle: "filled",
+    diskShow: "both",
+  },
   conventions: { area: "standard", contour: "standard" },
 };
 
