@@ -12,6 +12,7 @@
     "preview": "vite preview",
     "test": "vitest run --passWithNoTests",
     "test:watch": "vitest",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
