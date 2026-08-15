@@ -131,10 +131,14 @@ exactly as with the QD rewire).
 
 **Genesis is earned:** QD is the first consumer (existing), this app the second — the standard rule fires.
 
-**Package shape:** Flavor A (source-exported, no build), modeled on `@cas/conformal`
-(`exports: { ".": "./src/index.ts" }`, scripts `typecheck`/`test`/`lint`, dep `@cas/core: workspace:*`).
-Wire into `vitest.workspace.ts`. Convention-neutral (ADR-0006); depends only on `@cas/core` (never up into an
-app — enforced by `.dependency-cruiser.cjs` `no-package-to-app`).
+**Package shape:** **Flavor B (dist-built)**, modeled on `@cas/exact`/`@cas/core` — `exports` →
+`dist/index.js`+`dist/index.d.ts`, a `build` script (`tsc -p tsconfig.build.json`), scripts
+`typecheck`/`test`/`lint`, dep `@cas/core: workspace:*`. **Not** Flavor A as first sketched: Quadrature
+Domains consumes it in its **raw-Node** node-test runner (that's why QD's `.mjs` resolves `@cas/core` to
+`dist/index.js`), and raw Node cannot load a `.ts` source export — so a source-exported package would crash
+the QD suite. Wire into `vitest.workspace.ts` and `scripts/assert-test-census.mjs`. Convention-neutral
+(ADR-0006); depends only on `@cas/core` (never up into an app — enforced by `.dependency-cruiser.cjs`
+`no-package-to-app`).
 
 **Moves in (pure math, IIFE/`QD.*` registration → ESM `export`), taking `@cas/core` primitives directly
 (`makeDurandKerner`, `makePoly`, `makeSeries`, `subscript/superscript`, `objAlgebra`):**
@@ -210,10 +214,11 @@ none of which v1 blocks:
 
 ## 9. Scaffold & wiring
 
-**Files to create — package** (mirror `packages/conformal`): `packages/faber/package.json`,
-`tsconfig.json`, `vitest.config.ts`, `eslint.config.js`, `README.md`, `src/index.ts` (barrel, `.js`
-specifiers), `src/recurrence.ts` (F_n), `src/transform.ts` (forward), `src/inverse.ts` (reconstruction,
-later), `src/roots.ts`, `src/format.ts`, `test/*.test.ts` (ported goldens).
+**Files to create — package** (mirror `packages/exact`, Flavor-B): `packages/faber/package.json`,
+`tsconfig.json`, **`tsconfig.build.json`**, `vitest.config.ts`, `eslint.config.js`, `README.md`,
+`src/index.ts` (barrel, `.js` specifiers), `src/types.ts` (the `{c, laurent}` contract), `src/recurrence.ts`
+(F_n), `src/transform.ts` (forward), `src/roots.ts`, `src/format.ts`, `src/convergence.ts`,
+`src/inverse.ts` (reconstruction, later), `test/*.test.ts` (ported goldens).
 
 **Files to create — app** (mirror `apps/argument-principle`): `package.json` (deps `@cas/core`,
 `@cas/expr`, `@cas/faber`, `@cas/interchange`, `@cas/export`, `katex`, **`@cas/gpu` iff GPU coloring**),
@@ -223,7 +228,8 @@ later), `src/roots.ts`, `src/format.ts`, `test/*.test.ts` (ported goldens).
 `test/*.test.ts`.
 
 **Registration edits (the rest auto-discovers via `packages/*` / `apps/*` globs):**
-1. `vitest.workspace.ts` — add `./packages/faber/vitest.config.ts` **and** `./apps/faber-transform/vite.config.ts`.
+1. `vitest.workspace.ts` — add `./packages/faber/vitest.config.ts` **and** `./apps/faber-transform/vite.config.ts`;
+   `scripts/assert-test-census.mjs` — add the matching `{ name, match, floor }` project rows.
 2. `eslint.config.js` — add `"faber-transform"` to `APP_NAMES` (so the no-cross-app rule covers it).
 3. App `package.json` — `"@cas/faber": "workspace:*"` (+ the other deps).
 4. `apps/launcher/index.html` — add a card (a `.card.soon` "Coming soon" `<div>`, no `href`, until publish).
@@ -271,3 +277,20 @@ later), `src/roots.ts`, `src/format.ts`, `test/*.test.ts` (ported goldens).
 - **C. Truncation order:** **$N=32$ default, user-adjustable** up to a ~128 cap, surfacing the
   non-convergence warning as conditioning degrades.
 - **D. Faber-root overlay:** **included in v1** (M4 toggle; nearly free via `faberConvergence`).
+
+## Build progress (living record)
+
+- **M0 — `@cas/faber` genesis + QD rewire — DONE.** Created `packages/faber` (Flavor-B, dist-built):
+  `recurrence.ts` (F_n), `transform.ts` (the new forward `Φφ(f)=Σ b_nF_n`), `roots.ts` (Durand–Kerner +
+  Newton), `format.ts`, `convergence.ts`, over the `{c, laurent}` `ExteriorMap` contract; depends only on
+  `@cas/core`. 20 package tests green (the ported ζⁿ / 2·Tₙ(ζ/2) / F₂=ζ²−2 / F₆-roots / root-finder / format
+  / convergence oracles + new transform tests: `Φφ(zⁿ)=Fₙ`, disk-identity, linearity). QD's
+  `faber-analysis.mjs` is now a **thin adapter** delegating to `@cas/faber` — it keeps the `QD.FaberAnalysis`
+  surface, the "unbounded map" gate, and the `phiLaurentAtInfinity` φ→`{c,laurent}` bridge (the one piece that
+  stays QD-side). **QD suite green before AND after: 2334 passed, 0 failed.** Full workspace: **2998 tests
+  passed**, `typecheck` clean, `lint` clean (dependency-cruiser: no violations — `@cas/faber` imports only
+  `@cas/core`). Wired into `vitest.workspace.ts` + `scripts/assert-test-census.mjs` (`faber:4`). The inverse
+  transform (`inverseFaberAtPole`/`inverseFaberAtInfinity` in QD's `solver-faber.mjs`, which needs QD's
+  series-inversion `Taylor`) was **deliberately left in QD** — demand-driven (ADR-0007): it moves when the
+  reconstruction view is built, not before.
+- **M1 — App shell + Chebyshev anchor —** next.
