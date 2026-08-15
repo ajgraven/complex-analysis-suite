@@ -52,6 +52,8 @@ export interface SCMap {
   /** f: 𝔻 → polygon. */
   forward(w: C): C;
   forwardMany(ws: readonly C[]): C[];
+  /** f⁻¹: polygon → 𝔻. `z` must lie inside the polygon. Precise: ODE + Newton; fast: the lightning f fit. */
+  inverse(z: C): C;
 }
 
 export interface SCOptions {
@@ -154,6 +156,7 @@ interface LightningFit {
   prevertices: C[];
   forward: (w: C) => C;
   forwardMany: (ws: readonly C[]) => C[];
+  inverse: (z: C) => C;
   center: C;
   constant: C;
   residual: number;
@@ -185,6 +188,7 @@ function lightningFit(vertices: readonly C[], opts?: SCOptions): LightningFit {
     prevertices,
     forward,
     forwardMany: (ws) => ws.map(forward),
+    inverse: (z: C) => f.eval(csub(z, c)), // f: Ω → 𝔻 is exactly the inverse (shift into Ω-centred frame)
     center: cadd(g0, c),
     constant,
     residual: Math.max(f.boundaryResidual, g.boundaryResidual),
@@ -239,6 +243,7 @@ export function fitSchwarzChristoffel(poly: Polygon, opts?: SCOptions): SCMap {
       residual: fit.residual,
       forward: fit.forward,
       forwardMany: fit.forwardMany,
+      inverse: fit.inverse,
     };
   }
 
@@ -274,5 +279,6 @@ export function fitSchwarzChristoffel(poly: Polygon, opts?: SCOptions): SCMap {
     residual: Math.max(sol.residual, vertexError),
     forward: map.forward,
     forwardMany: map.forwardMany,
+    inverse: map.inverse,
   };
 }

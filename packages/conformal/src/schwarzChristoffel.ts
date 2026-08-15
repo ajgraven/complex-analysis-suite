@@ -29,6 +29,41 @@ const cpow = (z: C, p: number): C => {
   return [m * Math.cos(th), m * Math.sin(th)];
 };
 
+const clampDisk = (w: C): C => {
+  const r = Math.hypot(w[0], w[1]);
+  return r >= 1 ? [(w[0] / r) * (1 - 1e-12), (w[1] / r) * (1 - 1e-12)] : w;
+};
+
+/**
+ * f⁻¹ by the Driscoll–Trefethen ODE + Newton hybrid (2002, §3.3): pull the straight segment from the
+ * conformal centre f(0) = A to `z` back through dw/dτ = (z − A)/f′(w) with RK4 (a global initial guess),
+ * then Newton-refine w ← w − (f(w) − z)/f′(w) to machine precision. `z` must lie inside the polygon (the
+ * segment A → z is assumed to as well — true for polygons star-shaped from their conformal centre).
+ */
+function invertMap(z: C, center: C, forward: (w: C) => C, derivative: (w: C) => C): C {
+  const dz = csub(z, center);
+  const rhs = (w: C): C => cdiv(dz, derivative(w)); // dw/dτ (f′ is the cheap product form)
+  let w: C = [0, 0]; // f(0) = A
+  const N = 40;
+  const dt = 1 / N;
+  for (let i = 0; i < N; i++) {
+    const k1 = rhs(w);
+    const k2 = rhs([w[0] + (dt / 2) * k1[0], w[1] + (dt / 2) * k1[1]]);
+    const k3 = rhs([w[0] + (dt / 2) * k2[0], w[1] + (dt / 2) * k2[1]]);
+    const k4 = rhs([w[0] + dt * k3[0], w[1] + dt * k3[1]]);
+    w = clampDisk([
+      w[0] + (dt / 6) * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]),
+      w[1] + (dt / 6) * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]),
+    ]);
+  }
+  for (let it = 0; it < 20; it++) {
+    const diff = csub(forward(w), z);
+    if (Math.hypot(diff[0], diff[1]) < 1e-13) break;
+    w = clampDisk(csub(w, cdiv(diff, derivative(w))));
+  }
+  return w;
+}
+
 export interface SCQuadratureOptions {
   /** Gauss–Jacobi node count for the singular-endpoint panels (default 24). */
   nGaussJacobi?: number;
@@ -38,6 +73,8 @@ export interface SCQuadratureOptions {
 const resolveQ = (o?: SCQuadratureOptions) => ({ nGaussJacobi: o?.nGaussJacobi ?? 24, nGaussLegendre: o?.nGaussLegendre ?? 24 });
 
 interface Integrator {
+  /** The SC integrand ∏ⱼ(1 − t/wⱼ)^{αⱼ−1} = f′/C. */
+  full: (t: C) => C;
   sides: () => C[];
   integralToPrevertex: (k: number) => C;
   integralTo: (w: C) => C;
@@ -76,7 +113,7 @@ function makeIntegrator(prevertices: readonly C[], angles: readonly number[], q:
     }
     return integrateSegment({ full }, [0, 0], w, prevertices, q);
   };
-  return { sides, integralToPrevertex, integralTo };
+  return { full, sides, integralToPrevertex, integralTo };
 }
 
 /** The side integrals Sₖ = ∫_{wₖ}^{w_{k+1}} ∏ⱼ(1−t/wⱼ)^{αⱼ−1} dt (integrand /C), one per polygon side. */
@@ -99,6 +136,10 @@ export interface SCForwardMap {
   forward(w: C): C;
   /** f at many points. */
   forwardMany(ws: readonly C[]): C[];
+  /** f′(w) = C·∏ₖ(1 − w/wₖ)^{αₖ−1} (the cheap product form; no quadrature). */
+  derivative(w: C): C;
+  /** f⁻¹: polygon → 𝔻 by the ODE + Newton hybrid. `z` must lie inside the polygon. */
+  inverse(z: C): C;
 }
 
 export interface SCForwardOptions extends SCQuadratureOptions {
@@ -142,5 +183,7 @@ export function buildForwardMap(
   for (let k = 0; k < n - 1; k++) vertices[k + 1] = cadd(vertices[k], cmul(constant, sides[k]));
 
   const forward = (w: C): C => cadd(center, cmul(constant, integ.integralTo(w)));
-  return { prevertices, angles, constant, center, vertices, forward, forwardMany: (ws) => ws.map(forward) };
+  const derivative = (w: C): C => cmul(constant, integ.full(w));
+  const inverse = (z: C): C => invertMap(z, center, forward, derivative);
+  return { prevertices, angles, constant, center, vertices, forward, forwardMany: (ws) => ws.map(forward), derivative, inverse };
 }

@@ -6,9 +6,10 @@
 > [ADR-0018](../DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore); the
 > method-choice record is
 > [ADR-0020](../DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode).
-> **Precise mode reaches machine precision on convex + reentrant polygons; fast (lightning) mode is
-> reliable for convex/mild corners and flags `degraded` on strongly reentrant ones** (a known limitation —
-> the reentrant polygon lightning fit is deferred tuning). This document is the *how*;
+> **Precise mode reaches machine precision on convex + reentrant polygons — forward AND inverse (the
+> fast-follow Phase F is now in); fast (lightning) mode is reliable for convex/mild corners and flags
+> `degraded` on strongly reentrant ones** (a known limitation — the reentrant polygon lightning fit is
+> deferred tuning). This document is the *how*;
 > the *why* and the literature/ground-truth are in the companion
 > [`schwarz-christoffel-research-notes.md`](schwarz-christoffel-research-notes.md). Guardrails:
 > [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
@@ -33,7 +34,7 @@
 | **1 — Forward SC map, given prevertices** | ✅ done | _this commit_ | `schwarzChristoffel.ts` — SC integrand + compound side integrals + A/C recovery + forward eval; GT: regular n-gons to ≥10 digits, the square recovering conformal radius 2/K(1/√2) with corners + edge midpoint |
 | **2 — The parameter problem (general polygons)** | ✅ done | _this commit_ | `scParameterProblem.ts` — softmax gap parametrization (3 logits frozen for the gauge) + damped Gauss–Newton (finite-diff Jacobian, one `lstsqHouseholder` step each); seed pluggable (lightning wired in Phase 3). GT: scalene triangle, regular pentagon from a skewed seed, reentrant L-shape — all reproduced to ≥10 digits |
 | **3 — Two-mode API + invariants + fast mode** | ✅ done | _this commit_ | public `fitSchwarzChristoffel` (`scMap.ts`, Option A): precise (machine precision, convex+reentrant), fast (lightning; convex reliable ~3–4 digits, reentrant `degraded`-flagged), warm-start continuation, quadrilateral modulus + centre; barrel export + README; [ADR-0020](../DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode) |
-| **F (fast-follow) — inverse map** | ⬜ deferred | — | ODE+Newton (polygon→𝔻) |
+| **F (fast-follow) — inverse map** | ✅ done | _this commit_ | ODE+Newton (Driscoll–Trefethen §3.3): pull the centre→z segment back through `dw/dτ = (z−A)/f′(w)` (RK4), then Newton-refine `w ← w − (f(w)−z)/f′(w)`. Precise round-trips `f(f⁻¹(z))=z` to ≥9 digits on pentagon/square/L-shape; fast uses the lightning `f` fit |
 
 ---
 
@@ -248,8 +249,8 @@ machine minus the nonlinear solve.
 - **Precise:** forward ≥12 digits; golden corpus ≥10 digits; crowding wall detected + labeled.
 - **Fast:** instant, warm-startable, ~6–8 digits, honestly `≈`/`converged:false`.
 - **Outputs:** prevertices, A, C, modulus, center, residual — read-only on `SCMap`.
-- **ADR-0020 written** (§7). Full gate green; census raised. **No app UI, no interchange, no inverse**
-  (all deferred, by design).
+- **ADR-0020 written** (§7). Full gate green; census raised. The inverse map landed as the Phase-F
+  fast-follow; **no app UI, no interchange** (still deferred, by design).
 
 ---
 
@@ -287,8 +288,8 @@ CLAUDE.md / ARCHITECTURE.md / the package README once the engine lands.
 
 Tracked so the seams are deliberate, not forgotten:
 
-- **Inverse map** (polygon→𝔻): ODE+Newton hybrid (research-notes §3). The immediate **fast-follow**
-  (Phase F).
+- ~~**Inverse map** (polygon→𝔻): ODE+Newton hybrid (research-notes §3). The immediate **fast-follow**
+  (Phase F).~~ **Done** — see the Build-progress table.
 - **CRDT** (cross-ratio + Delaunay) for **elongated/crowded** polygons past the ~10:1 wall.
 - **Variants:** exterior maps, unbounded polygons (vertices at ∞), doubly-connected/annulus (DSCPACK
   ideas, reimplemented).

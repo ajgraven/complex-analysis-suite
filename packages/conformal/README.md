@@ -60,17 +60,18 @@ share one honestly-flagged `SCMap` (Option A):
 
 - **precise** (default) — the classical parameter-problem solve (`scParameterProblem`: softmax gap
   parametrization + damped Gauss–Newton, each step an `@cas/core` least-squares) followed by the exact SC
-  forward map (`buildForwardMap`, side integrals via compound Gauss–Jacobi quadrature). Reaches machine
-  precision on convex **and** reentrant polygons. Outputs the prevertices, the accessory constants `C = f′(0)`
-  and `A = f(0)` (conformal centre), the quadrilateral **conformal modulus**, and an honest `residual`.
+  forward map (`buildForwardMap`, side integrals via compound Gauss–Jacobi quadrature) and its **inverse**
+  (`z → w` by the Driscoll–Trefethen ODE + Newton hybrid). Reaches machine precision on convex **and**
+  reentrant polygons. Outputs the prevertices, the accessory constants `C = f′(0)` and `A = f(0)` (conformal
+  centre), the quadrilateral **conformal modulus**, and an honest `residual`.
 - **fast** — the lightning fit (Ω → 𝔻 with corner-clustered poles): instant, warm-startable, `converged:false`,
   the prevertices read off `f(vₖ)` for free. Reliable for convex/mild polygons (a few digits, honestly
   `≈`-tagged); it sets `degraded:true` when the fit is untrustworthy (strongly reentrant corners — a known
   limitation of the polygon lightning fit; use precise there). `warmStart` feeds a fast (or prior) solve into
   precise as its Gauss–Newton seed — the "drag with lightning, release to refine" continuation path.
 
-Deferred (roadmap): the inverse map (polygon → 𝔻), CRDT for elongated/crowded polygons, exterior/unbounded/
-circular-arc variants, and `@cas/interchange` serialization. See
+Deferred (roadmap): CRDT for elongated/crowded polygons, exterior/unbounded/circular-arc variants, and
+`@cas/interchange` serialization. See
 [`docs/design/schwarz-christoffel-plan.md`](../../docs/design/schwarz-christoffel-plan.md).
 
 ## Consumers

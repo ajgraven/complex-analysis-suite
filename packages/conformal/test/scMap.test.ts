@@ -58,3 +58,40 @@ describe("fitSchwarzChristoffel — fast mode (lightning)", () => {
     expect(fast.degraded).toBe(true); // honest: precise mode is the path for reentrant polygons
   });
 });
+
+describe("fitSchwarzChristoffel — inverse map (ODE + Newton)", () => {
+  const cases: { poly: C[]; pts: C[] }[] = [
+    { poly: pentagon, pts: [[0.3, 0.1], [-0.2, 0.3], [0.0, 0.4]] },
+    { poly: square, pts: [[0.5, 0.3], [-0.4, 0.6], [0.1, -0.7]] },
+    { poly: LSHAPE, pts: [[0.5, 0.5], [1.5, 0.5], [0.5, 1.5]] },
+  ];
+
+  it("precise: f(f⁻¹(z)) = z for interior points, to ≥9 digits", () => {
+    for (const { poly, pts } of cases) {
+      const m = fitSchwarzChristoffel({ vertices: poly });
+      for (const z of pts) {
+        const w = m.inverse(z);
+        expect(Math.hypot(w[0], w[1])).toBeLessThan(1.0000001); // lands in the closed disk
+        const back = m.forward(w);
+        expect(Math.hypot(back[0] - z[0], back[1] - z[1])).toBeLessThan(1e-9);
+      }
+    }
+  });
+
+  it("precise: f⁻¹(f(w)) = w for interior disk points", () => {
+    const m = fitSchwarzChristoffel({ vertices: pentagon });
+    for (const w of [[0.3, 0.1], [-0.2, 0.4], [0.0, -0.5]] as C[]) {
+      const back = m.inverse(m.forward(w));
+      expect(Math.hypot(back[0] - w[0], back[1] - w[1])).toBeLessThan(1e-9);
+    }
+  });
+
+  it("fast: the lightning inverse round-trips a convex polygon (coarse)", () => {
+    const m = fitSchwarzChristoffel({ vertices: square }, { mode: "fast" });
+    const z: C = [0.3, 0.2];
+    const w = m.inverse(z);
+    expect(Math.hypot(w[0], w[1])).toBeLessThan(1.001);
+    const back = m.forward(w);
+    expect(Math.hypot(back[0] - z[0], back[1] - z[1])).toBeLessThan(1e-2);
+  });
+});
