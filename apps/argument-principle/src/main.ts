@@ -448,9 +448,34 @@ function main(): void {
       history.replaceState(null, "", encodeArgPrincipleState(state));
     }, 200);
   }
+  // Coalesced finder refresh. Moving γ (or panning/zooming) changes the search region, so the finder must
+  // re-run — but not every pointer frame (the transcendental grid is a 64×64 sweep). Debounce it ~120 ms
+  // after the last change; `refreshPending` suppresses a stale verdict in between.
+  let refreshTimer = 0;
+  let refreshPending = false;
+  function scheduleRefresh(): void {
+    refreshPending = true;
+    if (refreshTimer) clearTimeout(refreshTimer);
+    refreshTimer = window.setTimeout(() => {
+      refreshTimer = 0;
+      refreshPending = false;
+      refreshSing();
+      schedule();
+    }, 120);
+  }
+  function cancelRefresh(): void {
+    refreshPending = false;
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = 0;
+    }
+  }
   function commit(next: ArgPrincipleViewState, refresh: boolean): void {
     state = next;
-    if (refresh) refreshSing();
+    if (refresh) {
+      refreshSing();
+      cancelRefresh(); // sing is fresh now — drop any pending debounce
+    }
     schedule();
     schedulePersist();
   }
@@ -460,6 +485,7 @@ function main(): void {
     const id = presetIdForExpr(expr);
     if (id) presetSel.value = id;
     refreshSing();
+    cancelRefresh();
     renderFormula();
     schedule();
     schedulePersist();
@@ -560,6 +586,7 @@ function main(): void {
     const cTrace = cssVar("--trace", "#8b7bf0");
 
     clearBtn.disabled = state.contour.kind !== "path" && !draftPath;
+    radius.disabled = contour.kind === "path"; // radius has no meaning for a freehand contour
 
     // The animated traversal point (E1): the same parameter t marks a point on γ and its image on f(γ).
     const showAnim = anim.on || anim.t > 0;
@@ -608,9 +635,13 @@ function main(): void {
       const swept = partialWindingTurns(wPts, anim.t);
       const full = Math.round(windingTurns(wPts));
       animEl.hidden = false;
-      animEl.innerHTML =
-        `▶ traversing γ: t = ${anim.t.toFixed(2)} · arg of f(z) swept <b>${swept.toFixed(2)}</b> turns` +
-        ` — reaches <b>${full}</b> over the full loop (that is the winding number).`;
+      if (Number.isFinite(swept) && Number.isFinite(full)) {
+        animEl.innerHTML =
+          `▶ traversing γ: t = ${anim.t.toFixed(2)} · arg of f(z) swept <b>${swept.toFixed(2)}</b> turns` +
+          ` — reaches <b>${full}</b> over the full loop (that is the winding number).`;
+      } else {
+        animEl.textContent = `▶ traversing γ: t = ${anim.t.toFixed(2)} · γ passes through a singularity — winding undefined here.`;
+      }
     } else {
       animEl.hidden = true;
     }
@@ -621,12 +652,16 @@ function main(): void {
     const turns = haveImage ? windingTurns(wPts) : NaN;
     const winding = haveImage ? Math.round(turns) : NaN;
     const reliable = haveImage && windingReliable(wPts);
+    // Never surface a NaN (a pole landing exactly on a contour sample gives a non-finite winding).
+    const windFinite = haveImage && Number.isFinite(winding);
+    const windText = windFinite ? String(winding) : "—";
+    const windTag = windFinite ? "≈" : "";
 
     if (!sing.differentiable) {
       zerosCell.set("—", "");
       polesCell.set("—", "");
       nmpCell.set("—", "");
-      windCell.set(haveImage ? String(winding) : "—", haveImage ? "≈" : "");
+      windCell.set(windText, windTag);
       status.className = "status warn";
       status.textContent = "f is not holomorphic — the argument principle does not apply (no f′).";
       return;
@@ -640,12 +675,17 @@ function main(): void {
     zerosCell.set(String(zi), eq);
     polesCell.set(String(pi), eq);
     nmpCell.set(String(nmp), eq);
-    windCell.set(haveImage ? String(winding) : "—", haveImage ? "≈" : "");
+    windCell.set(windText, windTag);
 
     if (!haveImage) {
       status.className = "status";
       status.textContent = "";
-    } else if (!reliable) {
+    } else if (refreshPending) {
+      // The finder hasn't caught up with the moved contour/view yet — don't assert agreement or a
+      // mismatch against stale counts.
+      status.className = "status";
+      status.textContent = "recomputing zeros & poles…";
+    } else if (!reliable || !windFinite) {
       status.className = "status warn";
       status.textContent = "γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
     } else if (nmp === winding) {
@@ -665,8 +705,15 @@ function main(): void {
     }
     const dt = animLast ? (ts - animLast) / 1000 : 0;
     animLast = ts;
-    anim.t = (anim.t + dt * anim.speed) % 1;
-    render();
+    const next = anim.t + dt * anim.speed;
+    if (next >= 1) {
+      anim.t = 1; // land exactly on the loop's end for one frame so the sweep reaches the full winding
+      render();
+      anim.t = next % 1;
+    } else {
+      anim.t = next;
+      render();
+    }
     animRaf = requestAnimationFrame(animFrame);
   }
   function setPlaying(on: boolean): void {
@@ -712,11 +759,13 @@ function main(): void {
     const r = Number(radius.value);
     if (Number.isFinite(r) && r > 0) {
       radiusLabel.textContent = `Radius r = ${r.toFixed(2)}`;
-      commit({ ...state, contour: { ...state.contour, radius: r } }, true);
+      commit({ ...state, contour: { ...state.contour, radius: r } }, false);
+      if (state.contour.kind === "circle") scheduleRefresh(); // radius has no effect on a freehand path
     }
   });
   resetBtn.addEventListener("click", () => {
-    commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView }, true);
+    commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView }, false);
+    scheduleRefresh();
   });
   fitBtn.addEventListener("click", () => fitImage());
   resInput.addEventListener("input", () => {
@@ -739,10 +788,14 @@ function main(): void {
 
   attachContourPlane(zCanvas, {
     getView: () => state.zView,
-    setView: (v: Viewport) => commit({ ...state, zView: v }, true),
+    setView: (v: Viewport) => {
+      commit({ ...state, zView: v }, false);
+      scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
+    },
     onHover: (world: Vec2) => {
       if (state.contour.kind !== "circle") return; // in path mode the contour is fixed until cleared
       commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false);
+      scheduleRefresh(); // the moved contour may now enclose a singularity outside the last search region
     },
     onDrawStart: (world: Vec2) => {
       draftPath = [world];

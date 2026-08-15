@@ -57,12 +57,17 @@ export function attachPanZoom(
     const v = get();
     set(zoomAboutCursor(v, fx, fyTop, aspect, v.zoom * Math.exp(-e.deltaY * ZOOM_STEP)));
   }
+  function onCtx(e: MouseEvent): void {
+    e.preventDefault(); // a right-drag pans this pane too — don't pop the context menu mid-drag
+  }
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("contextmenu", onCtx);
   return {
     detach(): void {
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("contextmenu", onCtx);
       onUp();
     },
   };

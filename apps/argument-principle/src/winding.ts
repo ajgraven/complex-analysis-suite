@@ -52,16 +52,27 @@ export function partialWindingTurns(
 ): number {
   const n = points.length;
   if (n < 2) return 0;
-  const segs = Math.floor(Math.max(0, Math.min(1, upto)) * n);
+  const wrap = (d: number): number => {
+    let x = d;
+    while (x > Math.PI) x -= 2 * Math.PI;
+    while (x < -Math.PI) x += 2 * Math.PI;
+    return x;
+  };
+  const x = Math.max(0, Math.min(1, upto)) * n;
+  const whole = Math.floor(x); // number of complete edges swept
+  const frac = x - whole; // fraction into the current edge
   let total = 0;
   let prev = angleTo(points[0], about);
-  for (let i = 1; i <= segs; i++) {
+  for (let i = 1; i <= whole; i++) {
     const a = angleTo(points[i % n], about);
-    let d = a - prev;
-    while (d > Math.PI) d -= 2 * Math.PI;
-    while (d < -Math.PI) d += 2 * Math.PI;
-    total += d;
+    total += wrap(a - prev);
     prev = a;
+  }
+  // Interpolate the current edge so the sweep is continuous and reaches the FULL winding exactly at
+  // upto = 1 (where whole = n covers every edge, including the closing one, and frac = 0).
+  if (frac > 0 && whole < n) {
+    const a = angleTo(points[(whole + 1) % n], about);
+    total += wrap(a - prev) * frac;
   }
   return total / (2 * Math.PI);
 }

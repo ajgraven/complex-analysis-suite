@@ -108,6 +108,20 @@ function isViewport(v: Record<string, unknown> | undefined): boolean {
   );
 }
 
+/** A well-formed freehand path: an array of ≥ 3 finite [x, y] vertices (defensive decode of a `path` link). */
+function isFinitePointArray(v: unknown): boolean {
+  if (!Array.isArray(v) || v.length < 3) return false;
+  for (const p of v) {
+    if (!Array.isArray(p) || p.length < 2) return false;
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return false;
+  }
+  return true;
+}
+
+/** Sampling resolution a decoded link may carry — bounded so a crafted link can't trigger a huge alloc. */
+const MIN_RESOLUTION = 3;
+const MAX_RESOLUTION = 5000;
+
 /** Structural guard: is `value` a well-formed {@link ArgPrincipleViewState}? (defensive decode). */
 export function isArgPrincipleViewState(value: unknown): value is ArgPrincipleViewState {
   if (value === null || typeof value !== "object") return false;
@@ -123,10 +137,17 @@ export function isArgPrincipleViewState(value: unknown): value is ArgPrincipleVi
   if (!ct || typeof ct.kind !== "string") return false;
   if (!Number.isFinite(ct.centerRe) || !Number.isFinite(ct.centerIm)) return false;
   if (typeof ct.radius !== "number" || !(ct.radius > 0)) return false;
+  if (ct.kind === "path" && !isFinitePointArray(ct.points)) return false;
   if (!rn || typeof rn.showDomainCurve !== "boolean" || typeof rn.showImageCurve !== "boolean") {
     return false;
   }
-  if (!Number.isFinite(rn.resolution)) return false;
+  if (
+    !Number.isFinite(rn.resolution) ||
+    (rn.resolution as number) < MIN_RESOLUTION ||
+    (rn.resolution as number) > MAX_RESOLUTION
+  ) {
+    return false;
+  }
   if (!cv || cv.area !== "standard" || cv.contour !== "standard") return false;
   return true;
 }

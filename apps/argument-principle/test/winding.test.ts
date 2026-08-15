@@ -52,11 +52,21 @@ describe("winding number (the core instrument)", () => {
     expect(windingReliable(grazing)).toBe(false);
   });
 
-  it("partialWindingTurns accumulates from the start, reaching the full winding at t=1", () => {
+  it("partialWindingTurns sweeps continuously from 0 to the full winding as t: 0 → 1", () => {
     const c = unitCircle(360);
     expect(partialWindingTurns(c, 0)).toBe(0);
-    expect(partialWindingTurns(c, 0.5)).toBeCloseTo(0.5, 2);
-    expect(partialWindingTurns(c, 1)).toBeCloseTo(windingTurns(c), 9);
+    expect(partialWindingTurns(c, 0.25)).toBeCloseTo(0.25, 3);
+    expect(partialWindingTurns(c, 0.5)).toBeCloseTo(0.5, 3);
+    expect(partialWindingTurns(c, 0.75)).toBeCloseTo(0.75, 3);
+    expect(partialWindingTurns(c, 1)).toBeCloseTo(windingTurns(c), 9); // reaches the full winding exactly
+    // continuity near the loop close: no dropped edge / jump between t=0.999 and t=1
+    expect(Math.abs(partialWindingTurns(c, 1) - partialWindingTurns(c, 0.999))).toBeLessThan(0.02);
+  });
+
+  it("partialWindingTurns tracks a doubly-wound image (z ↦ z²): half → 1, full → 2", () => {
+    const img: Vec2[] = unitCircle(360).map(([x, y]) => [x * x - y * y, 2 * x * y]);
+    expect(partialWindingTurns(img, 0.5)).toBeCloseTo(1, 2);
+    expect(partialWindingTurns(img, 1)).toBeCloseTo(2, 6);
   });
 
   it("argument principle: f = z³ − 1 winds 3 times about 0 over a radius-1.5 contour", () => {

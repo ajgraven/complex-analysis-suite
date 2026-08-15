@@ -17,7 +17,9 @@ export interface Circle {
  * the winding accumulator — the first and last points are NOT duplicated (the wrap edge closes it).
  */
 export function sampleCircle(circle: Circle, n: number): Vec2[] {
-  const count = Math.max(3, Math.floor(n));
+  // Clamp to a sane range so a hostile/garbled `resolution` (e.g. a crafted share-link) can never make
+  // this allocate billions of points — a hard backstop beneath the view-state guard and the slider cap.
+  const count = Math.min(20000, Math.max(3, Math.floor(n)));
   const pts: Vec2[] = new Array(count);
   for (let i = 0; i < count; i++) {
     const t = (2 * Math.PI * i) / count;

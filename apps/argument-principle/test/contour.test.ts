@@ -30,6 +30,10 @@ describe("contour sampling & enclosure", () => {
     expect(sampleCircle(circle, 1)).toHaveLength(3);
   });
 
+  it("sampleCircle clamps an absurd resolution instead of allocating unbounded", () => {
+    expect(sampleCircle(circle, 1e9).length).toBeLessThanOrEqual(20000);
+  });
+
   it("pointInCircle: strictly inside is true, outside/boundary is false", () => {
     expect(pointInCircle([circle.centerRe, circle.centerIm], circle)).toBe(true);
     expect(pointInCircle([10, 10], circle)).toBe(false);

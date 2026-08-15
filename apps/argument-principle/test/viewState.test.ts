@@ -40,6 +40,42 @@ describe("argument-principle view-state", () => {
     expect(isArgPrincipleViewState(null)).toBe(false);
   });
 
+  it("rejects a link whose resolution is out of range (hostile-link DoS guard)", () => {
+    const huge = encodeViewState(APP_NS, {
+      ...DEFAULT_VIEW_STATE,
+      render: { ...DEFAULT_VIEW_STATE.render, resolution: 1e9 },
+    });
+    expect(decodeArgPrincipleState(huge)).toBeNull();
+    const tiny = encodeViewState(APP_NS, {
+      ...DEFAULT_VIEW_STATE,
+      render: { ...DEFAULT_VIEW_STATE.render, resolution: 2 },
+    });
+    expect(decodeArgPrincipleState(tiny)).toBeNull();
+  });
+
+  it("rejects a path contour with malformed points, but round-trips a valid path", () => {
+    const bad = encodeViewState(APP_NS, {
+      ...DEFAULT_VIEW_STATE,
+      contour: { kind: "path", centerRe: 0, centerIm: 0, radius: 1, points: [["a", "b"], [NaN, 0], [1, 2]] },
+    });
+    expect(decodeArgPrincipleState(bad)).toBeNull();
+    const good = encodeViewState(APP_NS, {
+      ...DEFAULT_VIEW_STATE,
+      contour: {
+        kind: "path",
+        centerRe: 0,
+        centerIm: 0,
+        radius: 1,
+        points: [
+          [-1, -1],
+          [1, -1],
+          [0, 1],
+        ],
+      },
+    });
+    expect(decodeArgPrincipleState(good)?.contour.points?.length).toBe(3);
+  });
+
   it("preserves a custom contour + viewport through the permalink", () => {
     const state = {
       ...DEFAULT_VIEW_STATE,
