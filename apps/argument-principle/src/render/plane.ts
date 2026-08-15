@@ -245,6 +245,72 @@ export function drawDot(
   ctx.restore();
 }
 
+/** Draw an ✕ marker (for a zero or a pole) at a world point. */
+export function drawX(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  color: string,
+  size = 6,
+): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(x - size, y - size);
+  ctx.lineTo(x + size, y + size);
+  ctx.moveTo(x + size, y - size);
+  ctx.lineTo(x - size, y + size);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Draw a ◆ diamond marker (for a critical point) at a world point. */
+export function drawDiamond(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  color: string,
+  size = 5,
+): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.8;
+  ctx.lineJoin = "round";
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size, y);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size, y);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Draw a small order badge (e.g. "²") next to a marker when the multiplicity exceeds 1. */
+export function drawOrderBadge(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  order: number,
+  color: string,
+): void {
+  if (order <= 1) return;
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(`×${order}`, x + 8, y - 6);
+  ctx.restore();
+}
+
 function isFinitePx(p: readonly [number, number]): boolean {
   return Number.isFinite(p[0]) && Number.isFinite(p[1]);
 }

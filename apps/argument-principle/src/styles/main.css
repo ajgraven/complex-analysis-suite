@@ -7,11 +7,13 @@
   --border: #262b36;
   --text: #e7eaf2;
   --muted: #8c95a9;
-  --accent: #3bb6c0; /* contour / primary */
+  --accent: #3bb6c0; /* contour / zeros */
   --pole: #e8608f; /* origin / poles */
+  --gold: #dbb057; /* winding / critical points */
   --grid: #232a36;
   --axis: #3c4658;
   --err: #ec7a7a;
+  --ok: #6ac68e;
   color-scheme: light dark;
 }
 :root[data-theme="light"] {
@@ -23,9 +25,11 @@
   --muted: #656e83;
   --accent: #0d7a86;
   --pole: #c0356b;
+  --gold: #b07d10;
   --grid: #e7ebf3;
   --axis: #c2cad8;
   --err: #b3261e;
+  --ok: #217a4b;
 }
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
@@ -37,9 +41,11 @@
     --muted: #656e83;
     --accent: #0d7a86;
     --pole: #c0356b;
+    --gold: #b07d10;
     --grid: #e7ebf3;
     --axis: #c2cad8;
     --err: #b3261e;
+    --ok: #217a4b;
   }
 }
 
@@ -210,31 +216,75 @@ button.ghost:hover {
   border-radius: 12px;
   padding: 12px 16px;
 }
-.metric {
-  font-size: 1.05rem;
+.metrics {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
 }
-.metric b {
-  font-size: 1.35rem;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
+@media (max-width: 560px) {
+  .metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
-.sub {
+.cell {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.cell .cl {
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--muted);
-  font-size: 0.85rem;
+}
+.cell .cv {
+  font-size: 1.7rem;
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
   margin-top: 2px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.cell .cv .tag {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.status {
+  margin-top: 10px;
+  font-size: 0.9rem;
+  font-variant-numeric: tabular-nums;
+  min-height: 1.2em;
+  color: var(--muted);
+}
+.status.ok {
+  color: var(--ok);
+}
+.status.warn {
+  color: var(--pole);
 }
 .note {
   color: var(--muted);
   font-size: 0.86rem;
   margin: 10px 0 0;
-  max-width: 70ch;
+  max-width: 78ch;
 }
 .approx {
   color: var(--muted);
   font-weight: 700;
 }
-.warn {
+.key {
+  margin-left: 8px;
+  white-space: nowrap;
+}
+.key.zero {
+  color: var(--accent);
+}
+.key.pole {
   color: var(--pole);
-  font-size: 0.85rem;
+}
+.key.crit {
+  color: var(--gold);
 }

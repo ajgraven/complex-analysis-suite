@@ -1,32 +1,35 @@
 // apps/argument-principle — an educational visualizer for the argument principle.
 //
 // The theorem: the winding number of the image curve f(γ) about the origin equals the number of zeros
-// minus poles of f enclosed by the contour γ. Phase 1 makes the right-hand side LIVE — a contour that
-// follows the cursor, per-pane pan/zoom, a KaTeX formula preview, an adjustable radius, and the winding
-// read off the sampled image curve. The left-hand side (locating and counting zeros/poles) and the four
-// N − P = winding readouts arrive in Phase 2.
+// minus poles of f enclosed by the contour γ. Phase 2 makes BOTH sides visible and shows them agree:
+// the zeros/poles/critical points are located (exact rational root-finding, or a transcendental grid
+// estimate), marked in the z-plane, counted inside γ, and displayed beside the winding of f(γ) — with
+// honest `=` / `≈` labels. Phase 1 supplied the live dual view (cursor contour, pan/zoom, KaTeX).
 import "./styles/main.css";
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { toLatex } from "@cas/expr/latex";
+import type { Node } from "@cas/expr/ast";
 import type { Complex } from "@cas/expr/complex";
 import {
   DEFAULT_VIEW_STATE,
   decodeArgPrincipleState,
   encodeArgPrincipleState,
   type ArgPrincipleViewState,
-  type Viewport as ViewportState,
 } from "./viewState.js";
 import { FUNCTION_PRESETS, presetIdForExpr } from "./presets.js";
-import { sampleCircle, type Circle } from "./contour.js";
+import { sampleCircle, pointInCircle, type Circle } from "./contour.js";
 import { windingTurns, windingReliable } from "./winding.js";
 import {
   planeMap,
   drawAxes,
   drawPolyline,
   drawDot,
+  drawX,
+  drawDiamond,
+  drawOrderBadge,
   fitViewport,
   type AxisColors,
   type PlaneMap,
@@ -34,16 +37,18 @@ import {
   type Viewport,
 } from "./render/plane.js";
 import { attachPanZoom, attachContourPlane } from "./render/nav.js";
+import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 
 const C0: Complex = [0, 0];
+const NO_SING: Singularities = { zeros: [], poles: [], critical: [], differentiable: true, exact: false };
 
 interface Model {
+  readonly ast: Node | null;
   readonly f: (z: Vec2) => Vec2;
   readonly latex: string | null;
   readonly error: string | null;
 }
 
-/** Parse + compile an @cas/expr source into a CPU evaluator f: ℂ → ℂ, its LaTeX, or an error. */
 function buildModel(expr: string): Model {
   try {
     const ast = parse(expr);
@@ -55,6 +60,7 @@ function buildModel(expr: string): Model {
       latex = null;
     }
     return {
+      ast,
       f: (z: Vec2): Vec2 => {
         const zc: Complex = [z[0], z[1]];
         const w = fn(zc, C0);
@@ -64,7 +70,12 @@ function buildModel(expr: string): Model {
       error: null,
     };
   } catch (e) {
-    return { f: (): Vec2 => [NaN, NaN], latex: null, error: e instanceof Error ? e.message : String(e) };
+    return {
+      ast: null,
+      f: (): Vec2 => [NaN, NaN],
+      latex: null,
+      error: e instanceof Error ? e.message : String(e),
+    };
   }
 }
 
@@ -72,12 +83,10 @@ function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }
-
 function axisColors(): AxisColors {
   return { grid: cssVar("--grid", "#2a3140"), axis: cssVar("--axis", "#4a5468") };
 }
 
-/** A tri-state theme toggle (auto → dark → light), persisted, driving `data-theme` on <html>. */
 function createThemeToggle(onChange: () => void): HTMLButtonElement {
   const KEY = "ap.theme";
   const ORDER = ["auto", "dark", "light"] as const;
@@ -109,7 +118,7 @@ function createThemeToggle(onChange: () => void): HTMLButtonElement {
       if (current === "auto") localStorage.removeItem(KEY);
       else localStorage.setItem(KEY, current);
     } catch {
-      /* storage unavailable — theme still applies for this session */
+      /* storage unavailable */
     }
     apply(current);
     onChange();
@@ -122,13 +131,34 @@ function makeCanvas(): HTMLCanvasElement {
   c.className = "plane";
   return c;
 }
-
 function button(label: string): HTMLButtonElement {
   const b = document.createElement("button");
   b.type = "button";
   b.className = "ghost";
   b.textContent = label;
   return b;
+}
+
+interface Cell {
+  readonly root: HTMLElement;
+  set(value: string, tag: string): void;
+}
+function metricCell(label: string, accent: string): Cell {
+  const root = document.createElement("div");
+  root.className = "cell";
+  const l = document.createElement("div");
+  l.className = "cl";
+  l.textContent = label;
+  const v = document.createElement("div");
+  v.className = "cv";
+  v.style.color = accent;
+  root.append(l, v);
+  return {
+    root,
+    set(value: string, tag: string): void {
+      v.innerHTML = `${value}<span class="tag">${tag}</span>`;
+    },
+  };
 }
 
 function main(): void {
@@ -139,6 +169,7 @@ function main(): void {
   const fromLink = decodeArgPrincipleState(window.location.hash);
   let state: ArgPrincipleViewState = fromLink ?? DEFAULT_VIEW_STATE;
   let model = buildModel(state.map.expr);
+  let sing: Singularities = NO_SING;
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -148,8 +179,8 @@ function main(): void {
   brand.innerHTML = "<strong>Argument Principle</strong><span>winding = zeros − poles</span>";
   const spacer = document.createElement("div");
   spacer.className = "spacer";
-  const resetBtn = button("Reset views");
   const fitBtn = button("Fit image");
+  const resetBtn = button("Reset views");
   const themeBtn = createThemeToggle(() => schedule());
   topbar.append(brand, spacer, fitBtn, resetBtn, themeBtn);
 
@@ -166,7 +197,6 @@ function main(): void {
     presetSel.append(opt);
   }
   presetWrap.append(presetSel);
-
   const exprWrap = document.createElement("label");
   exprWrap.className = "field grow";
   exprWrap.innerHTML = "<span>f(z) =</span>";
@@ -176,7 +206,6 @@ function main(): void {
   exprInput.autocomplete = "off";
   exprInput.value = state.map.expr;
   exprWrap.append(exprInput);
-
   const radiusWrap = document.createElement("label");
   radiusWrap.className = "field";
   const radiusLabel = document.createElement("span");
@@ -188,7 +217,6 @@ function main(): void {
   radius.step = "0.01";
   radius.value = String(state.contour.radius);
   radiusWrap.append(radius);
-
   toolbar.append(presetWrap, exprWrap, radiusWrap);
 
   const formula = document.createElement("div");
@@ -203,33 +231,42 @@ function main(): void {
   zPane.className = "pane";
   const zCanvas = makeCanvas();
   const zCap = document.createElement("figcaption");
-  zCap.innerHTML = "<b>Domain</b> — z-plane · move to place γ, right-drag to pan, scroll to zoom";
+  zCap.innerHTML =
+    "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · " +
+    '<span class="key zero">✕ zero</span> <span class="key pole">✕ pole</span> ' +
+    '<span class="key crit">◆ f′=0</span>';
   zPane.append(zCanvas, zCap);
   const wPane = document.createElement("figure");
   wPane.className = "pane";
   const wCanvas = makeCanvas();
   const wCap = document.createElement("figcaption");
-  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag to pan, scroll to zoom";
+  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag pan, scroll zoom";
   wPane.append(wCanvas, wCap);
   stage.append(zPane, wPane);
 
   const readout = document.createElement("div");
   readout.className = "readout";
-  const windingEl = document.createElement("div");
-  windingEl.className = "metric";
-  const subEl = document.createElement("div");
-  subEl.className = "sub";
+  const metrics = document.createElement("div");
+  metrics.className = "metrics";
+  const zerosCell = metricCell("Zeros inside", cssVar("--accent", "#3bb6c0"));
+  const polesCell = metricCell("Poles inside", cssVar("--pole", "#e8608f"));
+  const nmpCell = metricCell("Zeros − Poles", cssVar("--text", "#e7eaf2"));
+  const windCell = metricCell("Winding of f(γ)", cssVar("--gold", "#dbb057"));
+  metrics.append(zerosCell.root, polesCell.root, nmpCell.root, windCell.root);
+  const status = document.createElement("div");
+  status.className = "status";
   const noteEl = document.createElement("p");
   noteEl.className = "note";
   noteEl.innerHTML =
-    "The winding number of f(γ) about 0 equals (zeros − poles) of f enclosed by γ. Locating and counting " +
-    'those zeros and poles arrives in Phase&nbsp;2 — for now the winding is read directly from the image ' +
-    'curve (labelled <span class="approx">≈</span>, a numerical estimate).';
-  readout.append(windingEl, subEl, noteEl);
+    "The argument principle: the winding number of f(γ) about 0 equals (zeros − poles) of f enclosed by " +
+    "γ. Counts marked <span class=\"approx\">=</span> are exact (f rational, roots found algebraically); " +
+    "<span class=\"approx\">≈</span> are numerical estimates (transcendental f, or a winding read from " +
+    "the sampled image).";
+  readout.append(metrics, status, noteEl);
 
   app.append(topbar, toolbar, formula, errEl, stage, readout);
 
-  // ---- state helpers -------------------------------------------------------
+  // ---- state + finder ------------------------------------------------------
   function currentCircle(): Circle {
     return {
       centerRe: state.contour.centerRe,
@@ -237,13 +274,33 @@ function main(): void {
       radius: state.contour.radius,
     };
   }
+  function canvasAspect(canvas: HTMLCanvasElement): number {
+    const r = canvas.getBoundingClientRect();
+    return r.height > 0 ? r.width / r.height : 1;
+  }
   function imagePoints(): Vec2[] {
     if (model.error) return [];
     return sampleCircle(currentCircle(), state.render.resolution).map((p) => model.f(p));
   }
-  function canvasAspect(canvas: HTMLCanvasElement): number {
-    const r = canvas.getBoundingClientRect();
-    return r.height > 0 ? r.width / r.height : 1;
+  /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
+   *  view and every root inside γ is covered (the transcendental grid only finds what it samples). */
+  function searchRegion(): Region {
+    const halfH = 2 / state.zView.zoom;
+    const halfW = halfH * canvasAspect(zCanvas);
+    const c = currentCircle();
+    const xMin = Math.min(state.zView.centerRe - halfW, c.centerRe - c.radius);
+    const xMax = Math.max(state.zView.centerRe + halfW, c.centerRe + c.radius);
+    const yMin = Math.min(state.zView.centerIm - halfH, c.centerIm - c.radius);
+    const yMax = Math.max(state.zView.centerIm + halfH, c.centerIm + c.radius);
+    return {
+      cx: (xMin + xMax) / 2,
+      cy: (yMin + yMax) / 2,
+      halfW: ((xMax - xMin) / 2) * 1.1,
+      halfH: ((yMax - yMin) / 2) * 1.1,
+    };
+  }
+  function refreshSing(): void {
+    sing = model.error || !model.ast ? NO_SING : findSingularities(model.ast, searchRegion());
   }
 
   let frame = 0;
@@ -262,23 +319,24 @@ function main(): void {
       history.replaceState(null, "", encodeArgPrincipleState(state));
     }, 200);
   }
-  function commit(next: ArgPrincipleViewState): void {
+  function commit(next: ArgPrincipleViewState, refresh: boolean): void {
     state = next;
+    if (refresh) refreshSing();
     schedule();
     schedulePersist();
   }
-
   function setExpr(expr: string): void {
     model = buildModel(expr);
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     const id = presetIdForExpr(expr);
     if (id) presetSel.value = id;
+    refreshSing();
     renderFormula();
     schedule();
     schedulePersist();
   }
   function fitImage(): void {
-    commit({ ...state, wView: fitViewport(imagePoints(), canvasAspect(wCanvas)) });
+    commit({ ...state, wView: fitViewport(imagePoints(), canvasAspect(wCanvas)) }, false);
   }
 
   // ---- rendering -----------------------------------------------------------
@@ -297,7 +355,7 @@ function main(): void {
         katex.render(`f(z) = ${model.latex}`, formula, { throwOnError: false, displayMode: true });
         return;
       } catch {
-        /* fall through to the plain-text form */
+        /* fall through */
       }
     }
     formula.textContent = `f(z) = ${state.map.expr}`;
@@ -328,37 +386,74 @@ function main(): void {
     const zPts = sampleCircle(circle, state.render.resolution);
     const wPts: Vec2[] = model.error ? [] : zPts.map((p) => model.f(p));
 
-    const contourColor = cssVar("--accent", "#3bb6c0");
-    const originColor = cssVar("--pole", "#e8608f");
-    const centerColor = cssVar("--muted", "#8c95a9");
+    const cZero = cssVar("--accent", "#3bb6c0");
+    const cPole = cssVar("--pole", "#e8608f");
+    const cCrit = cssVar("--gold", "#dbb057");
+    const cCenter = cssVar("--muted", "#8c95a9");
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
-        drawPolyline(ctx, map, zPts, { closed: true, color: contourColor, width: 2 });
+        drawPolyline(ctx, map, zPts, { closed: true, color: cZero, width: 2 });
       }
-      drawDot(ctx, map, [circle.centerRe, circle.centerIm], centerColor, 3);
+      for (const c of sing.critical) drawDiamond(ctx, map, c.z, cCrit);
+      for (const p of sing.poles) {
+        drawX(ctx, map, p.z, cPole);
+        drawOrderBadge(ctx, map, p.z, p.order, cPole);
+      }
+      for (const z of sing.zeros) {
+        drawX(ctx, map, z.z, cZero);
+        drawOrderBadge(ctx, map, z.z, z.order, cZero);
+      }
+      drawDot(ctx, map, [circle.centerRe, circle.centerIm], cCenter, 3);
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
-      drawDot(ctx, map, [0, 0], originColor, 5);
+      drawDot(ctx, map, [0, 0], cPole, 5);
     });
 
-    if (model.error || wPts.length < 2) {
-      windingEl.innerHTML = "Winding number: <b>—</b>";
-      subEl.textContent = model.error ? "fix the expression to continue" : "";
+    updateReadout(circle, wPts);
+  }
+
+  function updateReadout(circle: Circle, wPts: readonly Vec2[]): void {
+    const haveImage = !model.error && wPts.length > 1;
+    const turns = haveImage ? windingTurns(wPts) : NaN;
+    const winding = haveImage ? Math.round(turns) : NaN;
+    const reliable = haveImage && windingReliable(wPts);
+
+    if (!sing.differentiable) {
+      zerosCell.set("—", "");
+      polesCell.set("—", "");
+      nmpCell.set("—", "");
+      windCell.set(haveImage ? String(winding) : "—", haveImage ? "≈" : "");
+      status.className = "status warn";
+      status.textContent = "f is not holomorphic — the argument principle does not apply (no f′).";
+      return;
+    }
+
+    const inside = (p: Vec2): boolean => pointInCircle(p, circle);
+    const zi = countInside(sing.zeros, inside);
+    const pi = countInside(sing.poles, inside);
+    const nmp = zi - pi;
+    const eq = sing.exact ? "=" : "≈";
+    zerosCell.set(String(zi), eq);
+    polesCell.set(String(pi), eq);
+    nmpCell.set(String(nmp), eq);
+    windCell.set(haveImage ? String(winding) : "—", haveImage ? "≈" : "");
+
+    if (!haveImage) {
+      status.className = "status";
+      status.textContent = "";
+    } else if (!reliable) {
+      status.className = "status warn";
+      status.textContent = "γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
+    } else if (nmp === winding) {
+      status.className = "status ok";
+      status.textContent = `✓ winding ${winding} = zeros ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}`;
     } else {
-      const turns = windingTurns(wPts);
-      const wn = Math.round(turns);
-      const reliable = windingReliable(wPts);
-      windingEl.innerHTML =
-        `Winding of f(γ) about 0: <b>${wn}</b> <span class="approx">≈</span>` +
-        (reliable ? "" : ' <span class="warn">γ passes near a singularity — unreliable</span>');
-      const c = circle;
-      subEl.textContent =
-        `γ: circle at (${c.centerRe.toFixed(2)}, ${c.centerIm.toFixed(2)}), r = ${c.radius.toFixed(2)}` +
-        ` · accumulated turns: ${turns.toFixed(3)}`;
+      status.className = "status warn";
+      status.textContent = `mismatch: winding ${winding} vs zeros − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
     }
   }
 
@@ -376,24 +471,24 @@ function main(): void {
     const r = Number(radius.value);
     if (Number.isFinite(r) && r > 0) {
       radiusLabel.textContent = `Radius r = ${r.toFixed(2)}`;
-      commit({ ...state, contour: { ...state.contour, radius: r } });
+      commit({ ...state, contour: { ...state.contour, radius: r } }, true);
     }
   });
   resetBtn.addEventListener("click", () => {
-    commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView });
+    commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView }, true);
   });
   fitBtn.addEventListener("click", () => fitImage());
 
   attachContourPlane(zCanvas, {
     getView: () => state.zView,
-    setView: (v: ViewportState) => commit({ ...state, zView: v }),
+    setView: (v: Viewport) => commit({ ...state, zView: v }, true),
     onHover: (world: Vec2) =>
-      commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }),
+      commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false),
   });
   attachPanZoom(
     wCanvas,
     () => state.wView,
-    (v: ViewportState) => commit({ ...state, wView: v }),
+    (v: Viewport) => commit({ ...state, wView: v }, false),
   );
   window.addEventListener("resize", () => schedule());
 
@@ -401,9 +496,10 @@ function main(): void {
   const initialId = presetIdForExpr(state.map.expr);
   if (initialId) presetSel.value = initialId;
   radiusLabel.textContent = `Radius r = ${state.contour.radius.toFixed(2)}`;
+  refreshSing();
   renderFormula();
   render();
-  if (!fromLink) fitImage(); // a fresh session auto-frames the image; a shared link keeps its saved view
+  if (!fromLink) fitImage();
   history.replaceState(null, "", encodeArgPrincipleState(state));
 }
 
