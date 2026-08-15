@@ -20,30 +20,52 @@ function angleTo(p: Vec2, about: Vec2): number {
   return Math.atan2(p[1] - about[1], p[0] - about[0]);
 }
 
+function wrapPi(d: number): number {
+  let x = d;
+  while (x > Math.PI) x -= 2 * Math.PI;
+  while (x < -Math.PI) x += 2 * Math.PI;
+  return x;
+}
+
+/**
+ * The running net turns about `about` as a point traverses the CLOSED polyline from `points[0]`. Returns
+ * an array of length `n + 1`: entry `k` is the turns accumulated after the first `k` edges, walking
+ * `points[0] → points[1] → … → points[k]` (with the closing edge `points[n-1] → points[0]` as edge `n`).
+ * So entry `0` is `0` and entry `n` is the full {@link windingTurns}. This is the one primitive the
+ * winding readout, the traversal sweep, and the argument strip-chart all read from — sharing it keeps the
+ * "argument swept so far" and the total winding from ever diverging. Returns `[0]` for fewer than 2 points.
+ */
+export function cumulativeArg(points: readonly Vec2[], about: Vec2 = [0, 0]): number[] {
+  const n = points.length;
+  if (n < 2) return [0];
+  const out = new Array<number>(n + 1);
+  out[0] = 0;
+  let total = 0;
+  let prev = angleTo(points[0], about);
+  for (let i = 1; i <= n; i++) {
+    const a = angleTo(points[i % n], about);
+    total += wrapPi(a - prev);
+    prev = a;
+    out[i] = total / (2 * Math.PI);
+  }
+  return out;
+}
+
 /**
  * Net signed turns of the closed polyline `points` about `about`, as a real number (≈ an integer for a
  * clean loop). The list is treated as a CLOSED loop: the edge from the last point back to the first is
  * included. Returns 0 for fewer than 2 points.
  */
 export function windingTurns(points: readonly Vec2[], about: Vec2 = [0, 0]): number {
-  const n = points.length;
-  if (n < 2) return 0;
-  let total = 0;
-  let prev = angleTo(points[n - 1], about); // start from the last point so the wrap edge is counted once
-  for (let i = 0; i < n; i++) {
-    const a = angleTo(points[i], about);
-    let d = a - prev;
-    while (d > Math.PI) d -= 2 * Math.PI;
-    while (d < -Math.PI) d += 2 * Math.PI;
-    total += d;
-    prev = a;
-  }
-  return total / (2 * Math.PI);
+  const c = cumulativeArg(points, about);
+  return c[c.length - 1];
 }
 
 /**
  * Turns accumulated from the START of the loop through fraction `upto` ∈ [0,1] of its segments — the
- * "argument swept so far" as a point traverses the curve. At `upto = 1` this equals {@link windingTurns}.
+ * "argument swept so far" as a point traverses the curve. At `upto = 1` this equals {@link windingTurns}
+ * exactly (it reads the same {@link cumulativeArg} array's last entry). Linearly interpolates within the
+ * current edge so the sweep is continuous.
  */
 export function partialWindingTurns(
   points: readonly Vec2[],
@@ -52,29 +74,12 @@ export function partialWindingTurns(
 ): number {
   const n = points.length;
   if (n < 2) return 0;
-  const wrap = (d: number): number => {
-    let x = d;
-    while (x > Math.PI) x -= 2 * Math.PI;
-    while (x < -Math.PI) x += 2 * Math.PI;
-    return x;
-  };
+  const c = cumulativeArg(points, about); // length n + 1; c[n] is the full winding
   const x = Math.max(0, Math.min(1, upto)) * n;
   const whole = Math.floor(x); // number of complete edges swept
+  if (whole >= n) return c[n];
   const frac = x - whole; // fraction into the current edge
-  let total = 0;
-  let prev = angleTo(points[0], about);
-  for (let i = 1; i <= whole; i++) {
-    const a = angleTo(points[i % n], about);
-    total += wrap(a - prev);
-    prev = a;
-  }
-  // Interpolate the current edge so the sweep is continuous and reaches the FULL winding exactly at
-  // upto = 1 (where whole = n covers every edge, including the closing one, and frac = 0).
-  if (frac > 0 && whole < n) {
-    const a = angleTo(points[(whole + 1) % n], about);
-    total += wrap(a - prev) * frac;
-  }
-  return total / (2 * Math.PI);
+  return c[whole] + (c[whole + 1] - c[whole]) * frac;
 }
 
 /** The winding number (integer): {@link windingTurns} rounded to the nearest whole turn. */

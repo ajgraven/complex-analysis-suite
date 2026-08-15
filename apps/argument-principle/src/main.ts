@@ -10,14 +10,18 @@ import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
+import { differentiate } from "@cas/expr/derivative";
 import { toLatex } from "@cas/expr/latex";
 import type { Node } from "@cas/expr/ast";
 import type { Complex } from "@cas/expr/complex";
 import {
   DEFAULT_VIEW_STATE,
+  DEFAULT_TARGET,
+  DEFAULT_PEDAGOGY,
   decodeArgPrincipleState,
   encodeArgPrincipleState,
   type ArgPrincipleViewState,
+  type PedagogyState,
 } from "./viewState.js";
 import { FUNCTION_PRESETS, presetIdForExpr } from "./presets.js";
 import {
@@ -29,7 +33,7 @@ import {
   orientCCW,
   type ContourShape,
 } from "./contour.js";
-import { windingTurns, windingReliable, partialWindingTurns } from "./winding.js";
+import { windingTurns, windingReliable, partialWindingTurns, cumulativeArg } from "./winding.js";
 import {
   planeMap,
   drawAxes,
@@ -38,14 +42,21 @@ import {
   drawX,
   drawDiamond,
   drawOrderBadge,
+  drawWedge,
+  drawArrow,
+  drawPulseRing,
   fitViewport,
   type AxisColors,
   type PlaneMap,
   type Vec2,
   type Viewport,
 } from "./render/plane.js";
-import { attachPanZoom, attachContourPlane } from "./render/nav.js";
+import { drawArgGraph } from "./render/argGraph.js";
+import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
+import { attachImagePlane, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
+import { nearestRoot, isolateRadius } from "./hit.js";
+import { rootKey, diffEnclosure, type EnclosedRoot, type CrossEvent } from "./crossing.js";
 import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
 import { injectPngText } from "@cas/export";
 
@@ -55,6 +66,9 @@ const NO_SING: Singularities = { zeros: [], poles: [], critical: [], differentia
 interface Model {
   readonly ast: Node | null;
   readonly f: (z: Vec2) => Vec2;
+  /** The holomorphic derivative f′, compiled; `null` when f is non-holomorphic (no symbolic f′). The
+   *  integral view (§11 B4) and the per-root decomposition (B5) read it; the finder derives its own. */
+  readonly fp: ((z: Vec2) => Vec2) | null;
   readonly latex: string | null;
   readonly error: string | null;
 }
@@ -63,6 +77,16 @@ function buildModel(expr: string): Model {
   try {
     const ast = parse(expr);
     const fn = makeComplexFn(ast);
+    let fp: ((z: Vec2) => Vec2) | null = null;
+    try {
+      const dfn = makeComplexFn(differentiate(ast, "z"));
+      fp = (z: Vec2): Vec2 => {
+        const w = dfn([z[0], z[1]], C0);
+        return [w[0], w[1]];
+      };
+    } catch {
+      fp = null; // non-holomorphic (e.g. conjugate) — no symbolic derivative
+    }
     let latex: string | null = null;
     try {
       latex = toLatex(ast);
@@ -76,6 +100,7 @@ function buildModel(expr: string): Model {
         const w = fn(zc, C0);
         return [w[0], w[1]];
       },
+      fp,
       latex,
       error: null,
     };
@@ -83,6 +108,7 @@ function buildModel(expr: string): Model {
     return {
       ast: null,
       f: (): Vec2 => [NaN, NaN],
+      fp: null,
       latex: null,
       error: e instanceof Error ? e.message : String(e),
     };
@@ -164,6 +190,7 @@ function checkbox(label: string, checked: boolean): { root: HTMLLabelElement; in
 interface Cell {
   readonly root: HTMLElement;
   set(value: string, tag: string): void;
+  setLabel(text: string): void;
 }
 function metricCell(label: string, accent: string): Cell {
   const root = document.createElement("div");
@@ -179,6 +206,9 @@ function metricCell(label: string, accent: string): Cell {
     root,
     set(value: string, tag: string): void {
       v.innerHTML = `${value}<span class="tag">${tag}</span>`;
+    },
+    setLabel(text: string): void {
+      l.textContent = text;
     },
   };
 }
@@ -222,6 +252,17 @@ function main(): void {
   const anim = { on: false, t: 0, speed: 0.25 }; // traversal animation (transient)
   let animRaf = 0;
   let animLast = 0;
+  // §11 C6 (boundary crossing) + its pulse — all transient.
+  let prevEnclosed = new Map<string, EnclosedRoot>();
+  // Crossings are only genuine when the ROOT SET is fixed. `singKey` = the (expr@target) that `sing` was
+  // actually computed for (set in refreshSing); keying off it — not the live target — means a root-set
+  // change (new f or new target) always resets the baseline, even across the debounced finder's lag, so
+  // only γ moving over a fixed root set counts as a crossing. null on the transcendental/error path.
+  let prevStableKey: string | null = null;
+  let singKey: string | null = null;
+  let flash: { pts: Vec2[]; t0: number } | null = null;
+  let flashRaf = 0;
+  let toastTimer = 0;
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -302,10 +343,11 @@ function main(): void {
   speedWrap.append(speedLabel, speedInput);
   const domainChk = checkbox("Domain curve γ", state.render.showDomainCurve);
   const imageChk = checkbox("Image curve f(γ)", state.render.showImageCurve);
+  const decompChk = checkbox("Root vectors", ped().showDecomposition);
   const drawHint = document.createElement("span");
   drawHint.className = "hint";
-  drawHint.textContent = "Tip: left-drag on the z-plane to draw a custom contour.";
-  controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, drawHint);
+  drawHint.textContent = "Tip: click a root to isolate it · left-drag to draw a contour · hover a marker for details.";
+  controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, decompChk.root, drawHint);
 
   const formula = document.createElement("div");
   formula.className = "formula";
@@ -323,7 +365,7 @@ function main(): void {
   const zCanvas = makeCanvas();
   const zCap = document.createElement("figcaption");
   zCap.innerHTML =
-    "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · " +
+    "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · γ colored by t (matches f(γ)) · " +
     '<span class="key zero">✕ zero</span> <span class="key pole">✕ pole</span> ' +
     '<span class="key crit">◆ f′=0</span>';
   zPane.append(zCanvas, zCap);
@@ -331,9 +373,20 @@ function main(): void {
   wPane.className = "pane";
   const wCanvas = makeCanvas();
   const wCap = document.createElement("figcaption");
-  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag pan, scroll zoom";
+  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag the ● target w₀ · drag to pan, scroll to zoom";
   wPane.append(wCanvas, wCap);
   stage.append(zPane, wPane);
+
+  // A1 — the always-on argument strip-chart: accumulated turns of arg f(γ(t)) vs t.
+  const argPanel = document.createElement("figure");
+  argPanel.className = "pane arg-panel";
+  const argCanvas = document.createElement("canvas");
+  argCanvas.className = "argplot";
+  const argCap = document.createElement("figcaption");
+  argCap.innerHTML =
+    "<b>Argument</b> — accumulated turns of arg f(γ(t)) vs t · one turn = 2π · " +
+    "the curve lands on the winding number";
+  argPanel.append(argCanvas, argCap);
 
   const readout = document.createElement("div");
   readout.className = "readout";
@@ -346,6 +399,12 @@ function main(): void {
   metrics.append(zerosCell.root, polesCell.root, nmpCell.root, windCell.root);
   const status = document.createElement("div");
   status.className = "status";
+  const integralEl = document.createElement("div");
+  integralEl.className = "integral";
+  integralEl.hidden = true;
+  const decompEl = document.createElement("div");
+  decompEl.className = "decomp";
+  decompEl.hidden = true;
   const animEl = document.createElement("div");
   animEl.className = "anim";
   animEl.hidden = true;
@@ -356,7 +415,7 @@ function main(): void {
     "γ. Counts marked <span class=\"approx\">=</span> are exact (f rational, roots found algebraically); " +
     "<span class=\"approx\">≈</span> are numerical estimates (transcendental f, or a winding read from " +
     "the sampled image).";
-  readout.append(metrics, status, animEl, noteEl);
+  readout.append(metrics, status, integralEl, animEl, decompEl, noteEl);
 
   const help = document.createElement("div");
   help.className = "help-overlay";
@@ -372,10 +431,22 @@ function main(): void {
       <h3>Using the tool</h3>
       <ul>
         <li><b>f(z)</b> — pick a preset or type your own: <code>z, i, pi, sin, cos, tan, exp, log, sqrt, ^</code> and more.</li>
-        <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
+        <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>click a root</b> to isolate it; <b>hover a marker</b> for its value and order; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
         <li><b>Markers</b> — <span class="key zero">✕ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0).</li>
         <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate.</li>
-        <li><b>Traverse γ</b> — animate a point around γ and watch the argument of f(z) accumulate to the winding number.</li>
+      </ul>
+      <h3>Seeing the argument accumulate</h3>
+      <ul>
+        <li><b>Traverse γ</b> — animate a point around γ; γ and f(γ) share a colour ramp, so each arc maps to its image.</li>
+        <li><b>Argument strip</b> — the panel below plots the accumulated turns of arg f(γ(t)); it climbs and lands on the winding number (one turn = 2π). The <b>swept wedge</b> in the image plane fills each revolution.</li>
+        <li><b>∮ f′/f</b> — the analytic contour integral, computed by quadrature, converges to the same Z − P (labelled <span class="approx">≈</span>: a Riemann sum rounding to the exact count).</li>
+        <li><b>Root vectors</b> — turn on to draw the factor vector (z − root) from each enclosed zero (+1) and pole (−1); their windings sum to Z − P.</li>
+      </ul>
+      <h3>Explore</h3>
+      <ul>
+        <li><b>Isolate a root</b> — click any ✕/◆ to pin a small circle around it; the winding then equals its order. <b>Release γ</b> resumes cursor-follow.</li>
+        <li><b>Cross the boundary</b> — drag γ so a root passes through it; the count jumps ±1, flagged by a pulse and a note.</li>
+        <li><b>Target w₀</b> — drag the ● in the image plane to count <em>solutions of f(z) = w₀</em> instead of zeros (drag it back to the origin to snap to the classic case).</li>
       </ul>
       <h3>Hand-off &amp; export</h3>
       <ul>
@@ -384,7 +455,15 @@ function main(): void {
       </ul>
     </div>`;
 
-  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, readout, help);
+  // F13 root tooltip + C6 crossing toast (fixed-position overlays).
+  const tooltipEl = document.createElement("div");
+  tooltipEl.className = "root-tip";
+  tooltipEl.hidden = true;
+  const toastEl = document.createElement("div");
+  toastEl.className = "toast";
+  toastEl.hidden = true;
+
+  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help, tooltipEl, toastEl);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -411,6 +490,79 @@ function main(): void {
     if (model.error) return [];
     return contourSamples(effectiveContour(), state.render.resolution).map((p) => model.f(p));
   }
+  /** The point w₀ the winding is measured about — the origin classically; a draggable target later (D8). */
+  function aboutPoint(): Vec2 {
+    const t = state.target ?? DEFAULT_TARGET;
+    return [t.re, t.im];
+  }
+  /** The pedagogy toggles in effect (always complete — decode back-fills, DEFAULT carries them). */
+  function ped(): PedagogyState {
+    return state.pedagogy ?? DEFAULT_PEDAGOGY;
+  }
+  /** World units per pixel in the z-plane — turns a pixel hit-tolerance into a world tolerance. */
+  function zPlaneScale(): number {
+    const rect = zCanvas.getBoundingClientRect();
+    const halfH = 2 / state.zView.zoom; // BASE_HALF = 2 in plane.ts
+    return rect.height > 0 ? rect.height / (2 * halfH) : 1;
+  }
+  function wPlaneScale(): number {
+    const rect = wCanvas.getBoundingClientRect();
+    const halfH = 2 / state.wView.zoom;
+    return rect.height > 0 ? rect.height / (2 * halfH) : 1;
+  }
+  function fmtComplex(z: Vec2): string {
+    const trim = (v: number): string =>
+      (Math.abs(v) < 1e-9 ? 0 : v).toFixed(3).replace(/\.?0+$/, "") || "0";
+    const re = trim(z[0]);
+    if (Math.abs(z[1]) < 1e-9) return re;
+    const sign = z[1] < 0 ? "−" : "+";
+    return `${re} ${sign} ${trim(Math.abs(z[1]))}i`;
+  }
+  // F13 — a hover tooltip on the nearest marked root (value · order · exact/≈).
+  function updateTooltip(world: Vec2, client: { x: number; y: number }): void {
+    if (!sing.differentiable) return hideTooltip();
+    const hit = nearestRoot(world, sing, 12 / zPlaneScale());
+    if (!hit) return hideTooltip();
+    const label = hit.kind === "zero" ? "Zero" : hit.kind === "pole" ? "Pole" : "Critical point (f′ = 0)";
+    const order = hit.root.order > 1 ? ` · order ${hit.root.order}` : "";
+    const prov = sing.exact ? "exact" : "≈ estimated";
+    tooltipEl.innerHTML = `<b>${label}</b><br>z = ${fmtComplex(hit.root.z)}${order}<br><span class="prov">${prov}</span>`;
+    tooltipEl.style.left = `${client.x + 14}px`;
+    tooltipEl.style.top = `${client.y + 14}px`;
+    tooltipEl.hidden = false;
+  }
+  function hideTooltip(): void {
+    tooltipEl.hidden = true;
+  }
+  function showToast(msg: string): void {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    requestAnimationFrame(() => toastEl.classList.add("show"));
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2600);
+  }
+  // C6 — announce a boundary crossing + pulse the root(s) that crossed.
+  function announceCrossing(events: CrossEvent[], nmp: number, atOrigin: boolean): void {
+    const label = (e: CrossEvent): string => {
+      const noun = e.kind === "pole" ? "A pole" : atOrigin ? "A zero" : "A solution";
+      return `${noun} ${e.entered ? "entered" : "left"} γ`;
+    };
+    showToast(`${events.map(label).join(" · ")} — ${atOrigin ? "zeros" : "solutions"} − poles = ${nmp}`);
+    const pts = events.map((e) => e.z).filter((z) => Number.isFinite(z[0]) && Number.isFinite(z[1]));
+    if (!pts.length) return;
+    flash = { pts, t0: performance.now() };
+    if (!flashRaf) flashRaf = requestAnimationFrame(flashTick);
+  }
+  function flashTick(now: number): void {
+    if (!flash || now - flash.t0 > 1000) {
+      flash = null;
+      flashRaf = 0;
+      schedule();
+      return;
+    }
+    render();
+    flashRaf = requestAnimationFrame(flashTick);
+  }
   /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
    *  view and every root inside γ is covered (the transcendental grid only finds what it samples). */
   function searchRegion(): Region {
@@ -429,7 +581,10 @@ function main(): void {
     };
   }
   function refreshSing(): void {
-    sing = model.error || !model.ast ? NO_SING : findSingularities(model.ast, searchRegion());
+    const t = state.target ?? DEFAULT_TARGET;
+    sing = model.error || !model.ast ? NO_SING : findSingularities(model.ast, searchRegion(), [t.re, t.im]);
+    // Only the rational-exact path has a stable, region-independent root set to track crossings against.
+    singKey = sing.exact && sing.differentiable && !model.error ? `${state.map.expr}@${t.re},${t.im}` : null;
   }
 
   let frame = 0;
@@ -481,7 +636,12 @@ function main(): void {
   }
   function setExpr(expr: string): void {
     model = buildModel(expr);
-    state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
+    // A new f moves the roots, so release any pinned isolate circle (it no longer isolates the old root).
+    state = {
+      ...state,
+      map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) },
+      contour: { ...state.contour, pinned: false },
+    };
     const id = presetIdForExpr(expr);
     if (id) presetSel.value = id;
     refreshSing();
@@ -497,8 +657,11 @@ function main(): void {
    *  carries its own recipe — @cas/export). */
   function savePng(): void {
     const gap = 8;
-    const w = zCanvas.width + wCanvas.width + gap;
-    const h = Math.max(zCanvas.height, wCanvas.height);
+    const topW = zCanvas.width + wCanvas.width + gap;
+    const topH = Math.max(zCanvas.height, wCanvas.height);
+    const stripH = !argPanel.hidden && argCanvas.width > 0 ? argCanvas.height : 0;
+    const w = Math.max(topW, stripH ? argCanvas.width : 0);
+    const h = topH + (stripH ? stripH + gap : 0);
     if (w < 4 || h < 4) return;
     const off = document.createElement("canvas");
     off.width = w;
@@ -509,6 +672,7 @@ function main(): void {
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(zCanvas, 0, 0);
     ctx.drawImage(wCanvas, zCanvas.width + gap, 0);
+    if (stripH) ctx.drawImage(argCanvas, 0, topH + gap);
     off.toBlob((blob) => {
       if (!blob) return;
       void blob.arrayBuffer().then((buf) => {
@@ -576,6 +740,7 @@ function main(): void {
 
   function render(): void {
     const contour = effectiveContour();
+    const about = aboutPoint();
     const zPts = contourSamples(contour, state.render.resolution);
     const wPts: Vec2[] = model.error ? [] : zPts.map((p) => model.f(p));
 
@@ -585,7 +750,9 @@ function main(): void {
     const cCenter = cssVar("--muted", "#8c95a9");
     const cTrace = cssVar("--trace", "#8b7bf0");
 
-    clearBtn.disabled = state.contour.kind !== "path" && !draftPath;
+    const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
+    clearBtn.disabled = !(state.contour.kind === "path" || !!draftPath || pinned);
+    clearBtn.textContent = pinned ? "Release γ" : "Clear drawn curve";
     radius.disabled = contour.kind === "path"; // radius has no meaning for a freehand contour
 
     // The animated traversal point (E1): the same parameter t marks a point on γ and its image on f(γ).
@@ -593,9 +760,41 @@ function main(): void {
     const zAnim = showAnim ? contourPointAt(contour, anim.t, state.render.resolution) : null;
     const wAnim = zAnim && !model.error ? model.f(zAnim) : null;
 
+    // Roots enclosed by γ — shared by the four readouts, the analytic integral (B4), and the vectors (B5).
+    const encZeros = sing.differentiable ? sing.zeros.filter((r) => insideContour(r.z, contour)) : [];
+    const encPoles = sing.differentiable ? sing.poles.filter((r) => insideContour(r.z, contour)) : [];
+    const zCount = encZeros.reduce((s, r) => s + r.order, 0);
+    const pCount = encPoles.reduce((s, r) => s + r.order, 0);
+    const nmp = zCount - pCount;
+
+    // C6 — boundary crossings. `singKey` fixes the root set (expr + target that `sing` reflects); a change
+    // to it resets the baseline, so only γ moving over a fixed set flips membership (a real crossing). The
+    // transcendental grid's roots drift with the view, so singKey is null there and crossings are off.
+    if (singKey !== null) {
+      const cur: EnclosedRoot[] = [
+        ...encZeros.map((r) => ({ key: rootKey("zero", r.z), kind: "zero" as const, z: r.z, order: r.order })),
+        ...encPoles.map((r) => ({ key: rootKey("pole", r.z), kind: "pole" as const, z: r.z, order: r.order })),
+      ];
+      if (prevStableKey === singKey) {
+        const events = diffEnclosure(prevEnclosed, cur);
+        if (events.length) announceCrossing(events, nmp, about[0] === 0 && about[1] === 0);
+      }
+      prevEnclosed = new Map(cur.map((e) => [e.key, e]));
+      prevStableKey = singKey;
+    } else {
+      prevEnclosed = new Map();
+      prevStableKey = null;
+    }
+
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
-        drawPolyline(ctx, map, zPts, { closed: true, color: cZero, width: 2 });
+        // A2 — couple γ to f(γ)'s parameter-t ramp so a point on γ maps to the same-colored point on f(γ).
+        drawPolyline(
+          ctx,
+          map,
+          zPts,
+          ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cZero, width: 2 },
+        );
       }
       for (const c of sing.critical) drawDiamond(ctx, map, c.z, cCrit);
       for (const p of sing.poles) {
@@ -607,15 +806,61 @@ function main(): void {
         drawOrderBadge(ctx, map, z.z, z.order, cZero);
       }
       if (contour.kind === "circle") drawDot(ctx, map, [contour.centerRe, contour.centerIm], cCenter, 3);
+      // B5 — the factor vectors (z(t) − root): each enclosed zero (+1) and pole (−1) winds once as z
+      // circles γ, and the signed sum is Z − P. Drawn during traversal so the winding is watchable.
+      if (showAnim && ped().showDecomposition && zAnim) {
+        for (const r of encZeros) drawArrow(ctx, map, r.z, zAnim, cZero, false);
+        for (const r of encPoles) drawArrow(ctx, map, r.z, zAnim, cPole, true);
+      }
       if (zAnim) drawDot(ctx, map, zAnim, cTrace, 6);
+      // C6 — the crossing pulse (expanding ring on a root that just entered/left γ).
+      if (flash) {
+        const fr = (performance.now() - flash.t0) / 1000;
+        for (const p of flash.pts) drawPulseRing(ctx, map, p, fr, cCrit);
+      }
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
-      drawDot(ctx, map, [0, 0], cPole, 5);
+      drawDot(ctx, map, about, cPole, 5);
+      // D8 — a ring around the target marks it as draggable (drag to count solutions of f = w₀).
+      {
+        const tpx = map.toPx(about);
+        if (Number.isFinite(tpx[0]) && Number.isFinite(tpx[1])) {
+          ctx.save();
+          ctx.strokeStyle = cPole;
+          ctx.globalAlpha = 0.55;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(tpx[0], tpx[1], 9, 0, 2 * Math.PI);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+      // A3 — the swept-wedge about the target: a pie slice filling the current revolution, aligned to the
+      // argument-vector; a "×k" badge banks completed turns. Paired with the strip-chart, it reads as
+      // "the wedge fills one turn, the counter ticks, it fills again…".
+      if (
+        showAnim &&
+        ped().showWedge &&
+        wAnim &&
+        Number.isFinite(wAnim[0]) &&
+        Number.isFinite(wAnim[1]) &&
+        wPts.length > 1
+      ) {
+        const swept = partialWindingTurns(wPts, anim.t, about);
+        const frac = swept - Math.trunc(swept);
+        const w0 = wPts[0];
+        const startAng = Math.atan2(w0[1] - about[1], w0[0] - about[0]);
+        const scale = map.heightPx / (2 * map.halfH); // world→px (uniform)
+        const rWorld = Math.hypot(wAnim[0] - about[0], wAnim[1] - about[1]);
+        const capWorld = (0.42 * Math.min(map.widthPx, map.heightPx)) / scale;
+        const radiusWorld = Math.max(24 / scale, Math.min(rWorld, capWorld));
+        drawWedge(ctx, map, about, startAng, 2 * Math.PI * frac, radiusWorld, cTrace, Math.floor(Math.abs(swept)));
+      }
       if (wAnim && Number.isFinite(wAnim[0]) && Number.isFinite(wAnim[1])) {
-        const o = map.toPx([0, 0]);
+        const o = map.toPx(about);
         const pp = map.toPx(wAnim);
         ctx.save();
         ctx.strokeStyle = cTrace;
@@ -629,11 +874,76 @@ function main(): void {
       }
     });
 
-    updateReadout(contour, wPts);
+    // A1 — the argument strip-chart (always-on): accumulated turns of arg f(γ(t)) climbing to the winding.
+    if (ped().showArgGraph) {
+      argPanel.hidden = false;
+      const haveImg = !model.error && wPts.length > 1;
+      const turns = haveImg ? cumulativeArg(wPts, about) : [0];
+      const wn = haveImg ? Math.round(windingTurns(wPts, about)) : NaN;
+      drawArgGraph(
+        argCanvas,
+        { turns, marker: showAnim ? anim.t : null, winding: Number.isFinite(wn) ? wn : null },
+        {
+          grid: axisColors().grid,
+          axis: axisColors().axis,
+          text: cssVar("--text", "#e7eaf2"),
+          muted: cssVar("--muted", "#8c95a9"),
+          marker: cTrace,
+        },
+      );
+    } else {
+      argPanel.hidden = true;
+    }
+
+    // B4 — the analytic integral (1/2πi)∮ f′/f dz, a quadrature independent of the winding accumulation
+    // that rounds to the same Z − P. Honest `≈`: it is a Riemann sum, and the pedagogy is that it agrees.
+    const fpFn = model.fp;
+    if (ped().showIntegral && fpFn && sing.differentiable && !model.error && wPts.length > 1) {
+      const fMinusTarget = (z: Cplx): Cplx => {
+        const w = model.f(z);
+        return [w[0] - about[0], w[1] - about[1]];
+      };
+      const atOrigin = about[0] === 0 && about[1] === 0;
+      const integrand = atOrigin ? "f′/f" : "f′/(f−w₀)";
+      if (showAnim) {
+        const vpart = normalizeByTwoPiI(partialLogDerivIntegral(fMinusTarget, fpFn, zPts, anim.t))[0];
+        integralEl.hidden = false;
+        integralEl.innerHTML =
+          `<span class="approx">≈</span> (1/2πi) ∮ ${integrand} dz so far = ` +
+          `<b>${Number.isFinite(vpart) ? vpart.toFixed(3) : "—"}</b> → converging to ${nmp} = zeros − poles`;
+      } else {
+        const val = normalizeByTwoPiI(logDerivIntegral(fMinusTarget, fpFn, zPts))[0];
+        if (Number.isFinite(val)) {
+          integralEl.hidden = false;
+          integralEl.innerHTML =
+            `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
+            `<b>${val.toFixed(3)}</b> → ${Math.round(val)} = zeros − poles`;
+        } else {
+          integralEl.hidden = true;
+        }
+      }
+    } else {
+      integralEl.hidden = true;
+    }
+
+    // B5 — the decomposition note (the vectors are drawn in the z-pane above).
+    if (ped().showDecomposition && showAnim && zAnim && sing.differentiable) {
+      const eq = sing.exact ? "=" : "≈";
+      decompEl.hidden = false;
+      decompEl.innerHTML =
+        `Root vectors: each enclosed <span class="key zero">zero</span> winds +1, each ` +
+        `<span class="key pole">pole</span> −1 as z circles γ · Σ = ${zCount} − ${pCount} ` +
+        `<span class="approx">${eq}</span> ${nmp}` +
+        (sing.exact ? " (exact — f rational)" : " (illustrative — f transcendental)");
+    } else {
+      decompEl.hidden = true;
+    }
+
+    updateReadout(contour, wPts, about);
 
     if (showAnim && !model.error && wPts.length > 1) {
-      const swept = partialWindingTurns(wPts, anim.t);
-      const full = Math.round(windingTurns(wPts));
+      const swept = partialWindingTurns(wPts, anim.t, about);
+      const full = Math.round(windingTurns(wPts, about));
       animEl.hidden = false;
       if (Number.isFinite(swept) && Number.isFinite(full)) {
         animEl.innerHTML =
@@ -647,15 +957,22 @@ function main(): void {
     }
   }
 
-  function updateReadout(contour: ContourShape, wPts: readonly Vec2[]): void {
+  function updateReadout(contour: ContourShape, wPts: readonly Vec2[], about: Vec2): void {
     const haveImage = !model.error && wPts.length > 1;
-    const turns = haveImage ? windingTurns(wPts) : NaN;
+    const turns = haveImage ? windingTurns(wPts, about) : NaN;
     const winding = haveImage ? Math.round(turns) : NaN;
-    const reliable = haveImage && windingReliable(wPts);
+    const reliable = haveImage && windingReliable(wPts, about);
     // Never surface a NaN (a pole landing exactly on a contour sample gives a non-finite winding).
     const windFinite = haveImage && Number.isFinite(winding);
     const windText = windFinite ? String(winding) : "—";
     const windTag = windFinite ? "≈" : "";
+
+    // D8 — when the target w₀ ≠ 0 the counted roots are solutions of f = w₀, not zeros of f.
+    const atOrigin = about[0] === 0 && about[1] === 0;
+    const noun = atOrigin ? "zeros" : "solutions";
+    zerosCell.setLabel(atOrigin ? "Zeros inside" : "Solutions inside");
+    nmpCell.setLabel(atOrigin ? "Zeros − Poles" : "Solutions − Poles");
+    windCell.setLabel(atOrigin ? "Winding of f(γ)" : "Winding about w₀");
 
     if (!sing.differentiable) {
       zerosCell.set("—", "");
@@ -690,10 +1007,12 @@ function main(): void {
       status.textContent = "γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
     } else if (nmp === winding) {
       status.className = "status ok";
-      status.textContent = `✓ winding ${winding} = zeros ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}`;
+      status.textContent =
+        `✓ winding ${winding} = ${noun} ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}` +
+        (atOrigin ? "" : `  ·  w₀ = ${fmtComplex(about)}`);
     } else {
       status.className = "status warn";
-      status.textContent = `mismatch: winding ${winding} vs zeros − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
+      status.textContent = `mismatch: winding ${winding} vs ${noun} − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
     }
   }
 
@@ -781,9 +1100,12 @@ function main(): void {
   imageChk.input.addEventListener("change", () =>
     commit({ ...state, render: { ...state.render, showImageCurve: imageChk.input.checked } }, false),
   );
+  decompChk.input.addEventListener("change", () =>
+    commit({ ...state, pedagogy: { ...ped(), showDecomposition: decompChk.input.checked } }, false),
+  );
   clearBtn.addEventListener("click", () => {
     draftPath = null;
-    commit({ ...state, contour: { ...state.contour, kind: "circle" } }, true);
+    commit({ ...state, contour: { ...state.contour, kind: "circle", pinned: false } }, true);
   });
 
   attachContourPlane(zCanvas, {
@@ -792,10 +1114,34 @@ function main(): void {
       commit({ ...state, zView: v }, false);
       scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
     },
-    onHover: (world: Vec2) => {
-      if (state.contour.kind !== "circle") return; // in path mode the contour is fixed until cleared
+    onHover: (world: Vec2, client: { x: number; y: number }) => {
+      updateTooltip(world, client); // F13 — regardless of follow/pin/path mode
+      const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
+      if (state.contour.kind !== "circle" || pinned) return; // a path or pinned contour is fixed
       commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false);
       scheduleRefresh(); // the moved contour may now enclose a singularity outside the last search region
+    },
+    onLeave: () => hideTooltip(),
+    onClick: (world: Vec2) => {
+      // C7 — click a marked root to pin a small isolating circle around it (winding = its order); click
+      // empty space to release a pinned contour back to cursor-follow.
+      const hit = nearestRoot(world, sing, 12 / zPlaneScale());
+      if (hit) {
+        const r = isolateRadius(hit.root.z, sing, hit.root);
+        commit(
+          {
+            ...state,
+            contour: { kind: "circle", centerRe: hit.root.z[0], centerIm: hit.root.z[1], radius: r, pinned: true },
+          },
+          true,
+        );
+        const kindText = hit.kind === "critical" ? "critical point (f′=0)" : hit.kind;
+        const wind = hit.kind === "zero" ? `+${hit.root.order}` : hit.kind === "pole" ? `−${hit.root.order}` : "0";
+        showToast(`Isolated a ${kindText} · winding ${wind}`);
+      } else if (state.contour.kind === "circle" && state.contour.pinned === true) {
+        commit({ ...state, contour: { ...state.contour, pinned: false } }, true);
+        showToast("Released γ — it follows the cursor again");
+      }
     },
     onDrawStart: (world: Vec2) => {
       draftPath = [world];
@@ -823,11 +1169,23 @@ function main(): void {
       schedule();
     },
   });
-  attachPanZoom(
-    wCanvas,
-    () => state.wView,
-    (v: Viewport) => commit({ ...state, wView: v }, false),
-  );
+  attachImagePlane(wCanvas, {
+    getView: () => state.wView,
+    setView: (v: Viewport) => commit({ ...state, wView: v }, false),
+    targetPx: (): [number, number] | null => {
+      const rect = wCanvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return null;
+      return planeMap(state.wView, rect.width, rect.height).toPx(aboutPoint());
+    },
+    setTargetWorld: (world: Vec2) => {
+      // Snap back to the origin (the classic zero-counting case) when dragged close to it.
+      const snap = 8 / wPlaneScale();
+      const t =
+        Math.hypot(world[0], world[1]) < snap ? { re: 0, im: 0 } : { re: world[0], im: world[1] };
+      commit({ ...state, target: t }, false);
+      scheduleRefresh(); // the preimages of the new w₀ change
+    },
+  });
   window.addEventListener("resize", () => schedule());
 
   // ---- boot ----------------------------------------------------------------

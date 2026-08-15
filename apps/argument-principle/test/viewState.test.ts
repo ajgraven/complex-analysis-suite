@@ -3,6 +3,8 @@ import { encodeViewState } from "@cas/interchange";
 import {
   APP_NS,
   DEFAULT_VIEW_STATE,
+  DEFAULT_TARGET,
+  DEFAULT_PEDAGOGY,
   decodeArgPrincipleState,
   encodeArgPrincipleState,
   isArgPrincipleViewState,
@@ -74,6 +76,47 @@ describe("argument-principle view-state", () => {
       },
     });
     expect(decodeArgPrincipleState(good)?.contour.points?.length).toBe(3);
+  });
+
+  it("back-fills target + pedagogy on an older permalink that predates them", () => {
+    // The exact shape a pre-§11 link carried: no `target`, no `pedagogy`. It must still open, with the
+    // new fields back-filled to their defaults and every original field untouched (share-link compat).
+    const old = {
+      map: DEFAULT_VIEW_STATE.map,
+      zView: DEFAULT_VIEW_STATE.zView,
+      wView: DEFAULT_VIEW_STATE.wView,
+      contour: DEFAULT_VIEW_STATE.contour,
+      render: DEFAULT_VIEW_STATE.render,
+      conventions: DEFAULT_VIEW_STATE.conventions,
+    };
+    const restored = decodeArgPrincipleState(encodeViewState(APP_NS, old));
+    expect(restored).not.toBeNull();
+    expect(restored?.target).toEqual(DEFAULT_TARGET);
+    expect(restored?.pedagogy).toEqual(DEFAULT_PEDAGOGY);
+    expect(restored?.map.expr).toBe(DEFAULT_VIEW_STATE.map.expr);
+    expect(restored?.contour.radius).toBe(DEFAULT_VIEW_STATE.contour.radius);
+  });
+
+  it("merges a partial pedagogy block toggle-by-toggle (forward-compat for future toggles)", () => {
+    const partial = encodeViewState(APP_NS, {
+      ...DEFAULT_VIEW_STATE,
+      pedagogy: { showDecomposition: true }, // a link carrying only one toggle
+    });
+    const restored = decodeArgPrincipleState(partial);
+    expect(restored?.pedagogy?.showDecomposition).toBe(true); // the carried value wins
+    expect(restored?.pedagogy?.showArgGraph).toBe(DEFAULT_PEDAGOGY.showArgGraph); // the rest default in
+  });
+
+  it("rejects a link whose target is malformed", () => {
+    const bad = encodeViewState(APP_NS, { ...DEFAULT_VIEW_STATE, target: { re: NaN, im: 0 } });
+    expect(decodeArgPrincipleState(bad)).toBeNull();
+  });
+
+  it("preserves a carried non-default target through the permalink", () => {
+    const restored = decodeArgPrincipleState(
+      encodeArgPrincipleState({ ...DEFAULT_VIEW_STATE, target: { re: 1.5, im: -0.5 } }),
+    );
+    expect(restored?.target).toEqual({ re: 1.5, im: -0.5 });
   });
 
   it("preserves a custom contour + viewport through the permalink", () => {
