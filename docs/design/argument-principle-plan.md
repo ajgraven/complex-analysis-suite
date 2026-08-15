@@ -12,7 +12,7 @@
 > See the Build-progress record below. E3 (phase-tint background) and E4 (producer "send-to" links) remain a
 > tracked, optional backlog. A second **pedagogy enhancement arc** (§11 — argument strip-chart, the `∮ f′/f`
 > integral view, boundary-crossing / isolate interactions, and winding about a draggable target `w₀`) is
-> planned and being built next on this same branch.
+> **shipped** (Stages 0–5, [ADR-0021](../DECISIONS.md#adr-0021-argument-principle-pedagogy-arc--generalize-to-f--w-and-the-pin-interaction-model)).
 >
 > This document is the _how_. It mirrors the suite's proven runbook style
 > ([`../MIGRATION.md`](../MIGRATION.md), [`complex-function-plotter-plan.md`](complex-function-plotter-plan.md)):
@@ -351,7 +351,7 @@ parity-blocking:
 
 ---
 
-## 11. Pedagogy enhancement arc (A · B · C · D8 · F13) — planned
+## 11. Pedagogy enhancement arc (A · B · C · D8 · F13) — shipped
 
 A second construction arc, layered on the shipped tool, to teach the _mechanism_ behind the equality (why
 winding **is** the accumulated argument, and how the topological statement meets the analytic `∮ f′/f`
@@ -379,6 +379,15 @@ compat). Every new pure function ships with unit tests; the test census is bumpe
 | **3 — (C) motion + (F13)** | counting through interaction | shared `nearestRoot` hit-test; **F13** hover tooltip (value · order · `=`/`≈`); **C6** `diffEnclosure` crossing detector → transient toast + root pulse (gated to a stable root set); **C7** click-to-pin isolate (radius = fraction of nearest-other-root distance; winding = order), **Clear** unpins | browser smoke: tooltip on hover; drag γ across a root → toast + count ±1; click a double root → isolated, winding 2; `nearestRoot`/`diffEnclosure`/isolate-radius unit tests |
 | **4 — (D8) target w₀** | winding about a draggable point | flip `about` → `state.target`; drag the target dot in the w-pane; `findSolutions(ast,w₀,region)` (rational `num − w₀·den`; transcendental `f − w₀`); mark preimages in z; relabel readouts "solutions of f = w₀ − poles"; `w₀=0` reproduces today byte-for-byte | browser smoke: `z²`, `w₀=1` → 2 preimages, winding 2; `w₀→0` matches classic reading |
 | **5 — consolidate** | docs + ADR | living-record + help-overlay update; **ADR-0021** (`f=w₀` generalization + pin model); final full-workspace gate + end-to-end smoke | published-parity: PNG carries every panel; workspace green |
+
+**Build record (all on `claude/argument-principle-viz-tool-7yzwc2`, each gate green):** Stage 0 `3191dc0`
+(cumulativeArg + f′ + optional target/pedagogy state + backfill), Stage 1 `d0234c1` (A: strip-chart,
+colour-coupling, swept wedge), Stage 2 `b5fcf36` (B: ∮f′/f integral + root-vector decomposition), Stage 3
+`a49f97e` (C+F13: tooltips, boundary-crossing pulse, click-to-pin isolate), Stage 4 `e3b7545` (D8: draggable
+target w₀ + finder generalization to solutions of f = w₀, with the crossing-key fix), Stage 5 (this commit:
+help overlay, [ADR-0021](../DECISIONS.md#adr-0021-argument-principle-pedagogy-arc--generalize-to-f--w-and-the-pin-interaction-model),
+this record). 104 unit tests + a headless browser smoke per stage. Recorded in
+[ADR-0021](../DECISIONS.md#adr-0021-argument-principle-pedagogy-arc--generalize-to-f--w-and-the-pin-interaction-model).
 
 ---
 

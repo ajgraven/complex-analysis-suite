@@ -431,10 +431,22 @@ function main(): void {
       <h3>Using the tool</h3>
       <ul>
         <li><b>f(z)</b> — pick a preset or type your own: <code>z, i, pi, sin, cos, tan, exp, log, sqrt, ^</code> and more.</li>
-        <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
+        <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>click a root</b> to isolate it; <b>hover a marker</b> for its value and order; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
         <li><b>Markers</b> — <span class="key zero">✕ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0).</li>
         <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate.</li>
-        <li><b>Traverse γ</b> — animate a point around γ and watch the argument of f(z) accumulate to the winding number.</li>
+      </ul>
+      <h3>Seeing the argument accumulate</h3>
+      <ul>
+        <li><b>Traverse γ</b> — animate a point around γ; γ and f(γ) share a colour ramp, so each arc maps to its image.</li>
+        <li><b>Argument strip</b> — the panel below plots the accumulated turns of arg f(γ(t)); it climbs and lands on the winding number (one turn = 2π). The <b>swept wedge</b> in the image plane fills each revolution.</li>
+        <li><b>∮ f′/f</b> — the analytic contour integral, computed by quadrature, converges to the same Z − P (labelled <span class="approx">≈</span>: a Riemann sum rounding to the exact count).</li>
+        <li><b>Root vectors</b> — turn on to draw the factor vector (z − root) from each enclosed zero (+1) and pole (−1); their windings sum to Z − P.</li>
+      </ul>
+      <h3>Explore</h3>
+      <ul>
+        <li><b>Isolate a root</b> — click any ✕/◆ to pin a small circle around it; the winding then equals its order. <b>Release γ</b> resumes cursor-follow.</li>
+        <li><b>Cross the boundary</b> — drag γ so a root passes through it; the count jumps ±1, flagged by a pulse and a note.</li>
+        <li><b>Target w₀</b> — drag the ● in the image plane to count <em>solutions of f(z) = w₀</em> instead of zeros (drag it back to the origin to snap to the classic case).</li>
       </ul>
       <h3>Hand-off &amp; export</h3>
       <ul>
