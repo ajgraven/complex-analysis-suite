@@ -340,3 +340,68 @@ button.ghost:disabled {
 .key.crit {
   color: var(--gold);
 }
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 5vh 16px;
+  z-index: 50;
+  overflow-y: auto;
+  display: none; /* the [hidden] attribute must win — a bare display:flex would override it */
+}
+.help-overlay:not([hidden]) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.help-card {
+  position: relative;
+  max-width: 640px;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 22px 26px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.help-card h2 {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+.help-card h3 {
+  margin: 18px 0 6px;
+  font-size: 1rem;
+  color: var(--accent);
+}
+.help-card p {
+  margin: 0 0 10px;
+}
+.help-card ul {
+  margin: 0;
+  padding-left: 20px;
+}
+.help-card li {
+  margin: 6px 0;
+}
+.help-eq {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.help-card code {
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+.help-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 4px 9px;
+}

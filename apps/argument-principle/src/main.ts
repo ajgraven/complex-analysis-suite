@@ -47,6 +47,7 @@ import {
 import { attachPanZoom, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
+import { injectPngText } from "@cas/export";
 
 const C0: Complex = [0, 0];
 const NO_SING: Singularities = { zeros: [], poles: [], critical: [], differentiable: true, exact: false };
@@ -233,8 +234,11 @@ function main(): void {
   const clearBtn = button("Clear drawn curve");
   const fitBtn = button("Fit image");
   const resetBtn = button("Reset views");
+  const pngBtn = button("Save PNG");
+  const helpBtn = button("?");
+  helpBtn.setAttribute("aria-label", "Help");
   const themeBtn = createThemeToggle(() => schedule());
-  topbar.append(brand, spacer, clearBtn, fitBtn, resetBtn, themeBtn);
+  topbar.append(brand, spacer, clearBtn, fitBtn, resetBtn, pngBtn, helpBtn, themeBtn);
 
   const toolbar = document.createElement("div");
   toolbar.className = "toolbar";
@@ -354,7 +358,33 @@ function main(): void {
     "the sampled image).";
   readout.append(metrics, status, animEl, noteEl);
 
-  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, readout);
+  const help = document.createElement("div");
+  help.className = "help-overlay";
+  help.hidden = true;
+  help.innerHTML = `
+    <div class="help-card" role="dialog" aria-label="Help">
+      <button class="help-close ghost" type="button" aria-label="Close help">✕</button>
+      <h2>The Argument Principle</h2>
+      <p>For a meromorphic <em>f</em> and a closed contour <em>γ</em> passing through no zero or pole, the
+      number of times the image curve <em>f(γ)</em> winds around the origin equals the zeros minus poles of
+      <em>f</em> enclosed by <em>γ</em>, counted with multiplicity:</p>
+      <p class="help-eq">wind( f(γ), 0 ) &nbsp;=&nbsp; Z − P &nbsp;=&nbsp; (1 / 2πi) ∮<sub>γ</sub> f′/f dz</p>
+      <h3>Using the tool</h3>
+      <ul>
+        <li><b>f(z)</b> — pick a preset or type your own: <code>z, i, pi, sin, cos, tan, exp, log, sqrt, ^</code> and more.</li>
+        <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
+        <li><b>Markers</b> — <span class="key zero">✕ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0).</li>
+        <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate.</li>
+        <li><b>Traverse γ</b> — animate a point around γ and watch the argument of f(z) accumulate to the winding number.</li>
+      </ul>
+      <h3>Hand-off &amp; export</h3>
+      <ul>
+        <li>Open an <code>#s=</code> link from the <b>Complex Function Plotter</b> or <b>Complex Dynamics</b> to study their f(z) here.</li>
+        <li><b>Save PNG</b> embeds this view's permalink in the image, so a figure carries its own recipe.</li>
+      </ul>
+    </div>`;
+
+  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, readout, help);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -436,6 +466,44 @@ function main(): void {
   }
   function fitImage(): void {
     commit({ ...state, wView: fitViewport(imagePoints(), canvasAspect(wCanvas)) }, false);
+  }
+  /** Composite the two panes into a PNG with this view's permalink embedded as `tEXt` (a figure that
+   *  carries its own recipe — @cas/export). */
+  function savePng(): void {
+    const gap = 8;
+    const w = zCanvas.width + wCanvas.width + gap;
+    const h = Math.max(zCanvas.height, wCanvas.height);
+    if (w < 4 || h < 4) return;
+    const off = document.createElement("canvas");
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = cssVar("--bg", "#0f1115");
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(zCanvas, 0, 0);
+    ctx.drawImage(wCanvas, zCanvas.width + gap, 0);
+    off.toBlob((blob) => {
+      if (!blob) return;
+      void blob.arrayBuffer().then((buf) => {
+        const url = location.origin + location.pathname + encodeArgPrincipleState(state);
+        const stamped = injectPngText(new Uint8Array(buf), {
+          Software: "Argument Principle — Complex Analysis Suite",
+          "ap:url": url,
+        });
+        const ab = new ArrayBuffer(stamped.byteLength);
+        new Uint8Array(ab).set(stamped);
+        const outBlob = new Blob([ab], { type: "image/png" });
+        const dl = URL.createObjectURL(outBlob);
+        const a = document.createElement("a");
+        a.href = dl;
+        a.download = "argument-principle.png";
+        document.body.append(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(dl), 1000);
+      });
+    }, "image/png");
   }
 
   // ---- rendering -----------------------------------------------------------
@@ -617,6 +685,19 @@ function main(): void {
   speedInput.addEventListener("input", () => {
     const s = Number(speedInput.value);
     if (Number.isFinite(s) && s > 0) anim.speed = s;
+  });
+  pngBtn.addEventListener("click", () => savePng());
+  const helpClose = help.querySelector(".help-close");
+  helpBtn.addEventListener("click", () => {
+    help.hidden = false;
+  });
+  if (helpClose) {
+    helpClose.addEventListener("click", () => {
+      help.hidden = true;
+    });
+  }
+  help.addEventListener("click", (e) => {
+    if (e.target === help) help.hidden = true; // click the backdrop to dismiss
   });
   presetSel.addEventListener("change", () => {
     const p = FUNCTION_PRESETS.find((q) => q.id === presetSel.value);
