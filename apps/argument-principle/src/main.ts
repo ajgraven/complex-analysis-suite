@@ -20,7 +20,14 @@ import {
   type ArgPrincipleViewState,
 } from "./viewState.js";
 import { FUNCTION_PRESETS, presetIdForExpr } from "./presets.js";
-import { sampleCircle, pointInCircle, type Circle } from "./contour.js";
+import {
+  contourSamples,
+  insideContour,
+  contourBBox,
+  pathStats,
+  orientCCW,
+  type ContourShape,
+} from "./contour.js";
 import { windingTurns, windingReliable } from "./winding.js";
 import {
   planeMap,
@@ -139,6 +146,18 @@ function button(label: string): HTMLButtonElement {
   return b;
 }
 
+function checkbox(label: string, checked: boolean): { root: HTMLLabelElement; input: HTMLInputElement } {
+  const root = document.createElement("label");
+  root.className = "check";
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  const span = document.createElement("span");
+  span.textContent = label;
+  root.append(input, span);
+  return { root, input };
+}
+
 interface Cell {
   readonly root: HTMLElement;
   set(value: string, tag: string): void;
@@ -170,6 +189,7 @@ function main(): void {
   let state: ArgPrincipleViewState = fromLink ?? DEFAULT_VIEW_STATE;
   let model = buildModel(state.map.expr);
   let sing: Singularities = NO_SING;
+  let draftPath: Vec2[] | null = null; // the freehand path being drawn (transient, not persisted)
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -179,10 +199,11 @@ function main(): void {
   brand.innerHTML = "<strong>Argument Principle</strong><span>winding = zeros − poles</span>";
   const spacer = document.createElement("div");
   spacer.className = "spacer";
+  const clearBtn = button("Clear drawn curve");
   const fitBtn = button("Fit image");
   const resetBtn = button("Reset views");
   const themeBtn = createThemeToggle(() => schedule());
-  topbar.append(brand, spacer, fitBtn, resetBtn, themeBtn);
+  topbar.append(brand, spacer, clearBtn, fitBtn, resetBtn, themeBtn);
 
   const toolbar = document.createElement("div");
   toolbar.className = "toolbar";
@@ -218,6 +239,26 @@ function main(): void {
   radius.value = String(state.contour.radius);
   radiusWrap.append(radius);
   toolbar.append(presetWrap, exprWrap, radiusWrap);
+
+  const controls2 = document.createElement("div");
+  controls2.className = "toolbar sub";
+  const resWrap = document.createElement("label");
+  resWrap.className = "field";
+  const resLabel = document.createElement("span");
+  resWrap.append(resLabel);
+  const resInput = document.createElement("input");
+  resInput.type = "range";
+  resInput.min = "60";
+  resInput.max = "2000";
+  resInput.step = "20";
+  resInput.value = String(state.render.resolution);
+  resWrap.append(resInput);
+  const domainChk = checkbox("Domain curve γ", state.render.showDomainCurve);
+  const imageChk = checkbox("Image curve f(γ)", state.render.showImageCurve);
+  const drawHint = document.createElement("span");
+  drawHint.className = "hint";
+  drawHint.textContent = "Tip: left-drag on the z-plane to draw a custom contour.";
+  controls2.append(resWrap, domainChk.root, imageChk.root, drawHint);
 
   const formula = document.createElement("div");
   formula.className = "formula";
@@ -264,15 +305,16 @@ function main(): void {
     "the sampled image).";
   readout.append(metrics, status, noteEl);
 
-  app.append(topbar, toolbar, formula, errEl, stage, readout);
+  app.append(topbar, toolbar, controls2, formula, errEl, stage, readout);
 
   // ---- state + finder ------------------------------------------------------
-  function currentCircle(): Circle {
-    return {
-      centerRe: state.contour.centerRe,
-      centerIm: state.contour.centerIm,
-      radius: state.contour.radius,
-    };
+  /** The contour in effect: the path being drawn (if any), otherwise the committed contour. */
+  function effectiveContour(): ContourShape {
+    if (draftPath && draftPath.length >= 2) {
+      const s = pathStats(draftPath);
+      return { kind: "path", points: draftPath, centerRe: s.centerRe, centerIm: s.centerIm, radius: s.radius };
+    }
+    return state.contour;
   }
   function canvasAspect(canvas: HTMLCanvasElement): number {
     const r = canvas.getBoundingClientRect();
@@ -280,18 +322,18 @@ function main(): void {
   }
   function imagePoints(): Vec2[] {
     if (model.error) return [];
-    return sampleCircle(currentCircle(), state.render.resolution).map((p) => model.f(p));
+    return contourSamples(effectiveContour(), state.render.resolution).map((p) => model.f(p));
   }
   /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
    *  view and every root inside γ is covered (the transcendental grid only finds what it samples). */
   function searchRegion(): Region {
     const halfH = 2 / state.zView.zoom;
     const halfW = halfH * canvasAspect(zCanvas);
-    const c = currentCircle();
-    const xMin = Math.min(state.zView.centerRe - halfW, c.centerRe - c.radius);
-    const xMax = Math.max(state.zView.centerRe + halfW, c.centerRe + c.radius);
-    const yMin = Math.min(state.zView.centerIm - halfH, c.centerIm - c.radius);
-    const yMax = Math.max(state.zView.centerIm + halfH, c.centerIm + c.radius);
+    const bb = contourBBox(effectiveContour());
+    const xMin = Math.min(state.zView.centerRe - halfW, bb.minX);
+    const xMax = Math.max(state.zView.centerRe + halfW, bb.maxX);
+    const yMin = Math.min(state.zView.centerIm - halfH, bb.minY);
+    const yMax = Math.max(state.zView.centerIm + halfH, bb.maxY);
     return {
       cx: (xMin + xMax) / 2,
       cy: (yMin + yMax) / 2,
@@ -382,14 +424,16 @@ function main(): void {
   }
 
   function render(): void {
-    const circle = currentCircle();
-    const zPts = sampleCircle(circle, state.render.resolution);
+    const contour = effectiveContour();
+    const zPts = contourSamples(contour, state.render.resolution);
     const wPts: Vec2[] = model.error ? [] : zPts.map((p) => model.f(p));
 
     const cZero = cssVar("--accent", "#3bb6c0");
     const cPole = cssVar("--pole", "#e8608f");
     const cCrit = cssVar("--gold", "#dbb057");
     const cCenter = cssVar("--muted", "#8c95a9");
+
+    clearBtn.disabled = state.contour.kind !== "path" && !draftPath;
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
@@ -404,7 +448,7 @@ function main(): void {
         drawX(ctx, map, z.z, cZero);
         drawOrderBadge(ctx, map, z.z, z.order, cZero);
       }
-      drawDot(ctx, map, [circle.centerRe, circle.centerIm], cCenter, 3);
+      if (contour.kind === "circle") drawDot(ctx, map, [contour.centerRe, contour.centerIm], cCenter, 3);
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
@@ -413,10 +457,10 @@ function main(): void {
       drawDot(ctx, map, [0, 0], cPole, 5);
     });
 
-    updateReadout(circle, wPts);
+    updateReadout(contour, wPts);
   }
 
-  function updateReadout(circle: Circle, wPts: readonly Vec2[]): void {
+  function updateReadout(contour: ContourShape, wPts: readonly Vec2[]): void {
     const haveImage = !model.error && wPts.length > 1;
     const turns = haveImage ? windingTurns(wPts) : NaN;
     const winding = haveImage ? Math.round(turns) : NaN;
@@ -432,7 +476,7 @@ function main(): void {
       return;
     }
 
-    const inside = (p: Vec2): boolean => pointInCircle(p, circle);
+    const inside = (p: Vec2): boolean => insideContour(p, contour);
     const zi = countInside(sing.zeros, inside);
     const pi = countInside(sing.poles, inside);
     const nmp = zi - pi;
@@ -478,12 +522,56 @@ function main(): void {
     commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView }, true);
   });
   fitBtn.addEventListener("click", () => fitImage());
+  resInput.addEventListener("input", () => {
+    const r = Math.round(Number(resInput.value));
+    if (Number.isFinite(r) && r >= 3) {
+      resLabel.textContent = `Resolution ${r}`;
+      commit({ ...state, render: { ...state.render, resolution: r } }, false);
+    }
+  });
+  domainChk.input.addEventListener("change", () =>
+    commit({ ...state, render: { ...state.render, showDomainCurve: domainChk.input.checked } }, false),
+  );
+  imageChk.input.addEventListener("change", () =>
+    commit({ ...state, render: { ...state.render, showImageCurve: imageChk.input.checked } }, false),
+  );
+  clearBtn.addEventListener("click", () => {
+    draftPath = null;
+    commit({ ...state, contour: { ...state.contour, kind: "circle" } }, true);
+  });
 
   attachContourPlane(zCanvas, {
     getView: () => state.zView,
     setView: (v: Viewport) => commit({ ...state, zView: v }, true),
-    onHover: (world: Vec2) =>
-      commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false),
+    onHover: (world: Vec2) => {
+      if (state.contour.kind !== "circle") return; // in path mode the contour is fixed until cleared
+      commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false);
+    },
+    onDrawStart: (world: Vec2) => {
+      draftPath = [world];
+      schedule();
+    },
+    onDrawMove: (world: Vec2) => {
+      if (!draftPath) return;
+      const last = draftPath[draftPath.length - 1];
+      const minD = (2 / state.zView.zoom) * 0.008; // decimate to ~1/125 of the view height
+      if (!last || Math.hypot(world[0] - last[0], world[1] - last[1]) > minD) {
+        draftPath.push(world);
+        schedule();
+      }
+    },
+    onDrawEnd: () => {
+      if (draftPath && draftPath.length >= 3) {
+        const points = orientCCW(draftPath); // normalize to positive orientation so winding = N − P
+        const s = pathStats(points);
+        commit(
+          { ...state, contour: { kind: "path", centerRe: s.centerRe, centerIm: s.centerIm, radius: s.radius, points } },
+          true,
+        );
+      }
+      draftPath = null;
+      schedule();
+    },
   });
   attachPanZoom(
     wCanvas,
@@ -496,6 +584,7 @@ function main(): void {
   const initialId = presetIdForExpr(state.map.expr);
   if (initialId) presetSel.value = initialId;
   radiusLabel.textContent = `Radius r = ${state.contour.radius.toFixed(2)}`;
+  resLabel.textContent = `Resolution ${state.render.resolution}`;
   refreshSing();
   renderFormula();
   render();

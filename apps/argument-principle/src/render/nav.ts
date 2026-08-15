@@ -71,34 +71,53 @@ export function attachPanZoom(
 export interface ContourNav {
   getView(): Viewport;
   setView(v: Viewport): void;
-  /** Called with the world point under the cursor on a plain (non-panning) pointer move. */
+  /** Called with the world point under the cursor on a plain (non-panning, non-drawing) pointer move. */
   onHover(world: Vec2): void;
+  /** Freehand drawing (left-drag): begin a new path, extend it, and finalize it. */
+  onDrawStart(world: Vec2): void;
+  onDrawMove(world: Vec2): void;
+  onDrawEnd(): void;
 }
 
-/** The z-plane: cursor places γ, right-drag pans, wheel zooms. */
+/** The z-plane: cursor places γ, LEFT-drag draws a freehand contour, RIGHT-drag pans, wheel zooms. */
 export function attachContourPlane(canvas: HTMLCanvasElement, nav: ContourNav): NavHandle {
   let panGrab: Vec2 | null = null;
-  function onHoverMove(e: PointerEvent): void {
-    if (panGrab) return;
+  let drawing = false;
+  const worldAt = (e: { clientX: number; clientY: number }): Vec2 => {
     const { fx, fyTop, aspect } = frac(canvas, e);
-    nav.onHover(viewPxToWorld(nav.getView(), fx, fyTop, aspect));
+    return viewPxToWorld(nav.getView(), fx, fyTop, aspect);
+  };
+  function onHoverMove(e: PointerEvent): void {
+    if (panGrab || drawing) return;
+    nav.onHover(worldAt(e));
   }
   function onDown(e: PointerEvent): void {
-    if (e.button !== 2) return; // right button pans; left is reserved for freehand drawing (P2)
-    e.preventDefault();
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    panGrab = viewPxToWorld(nav.getView(), fx, fyTop, aspect);
-    window.addEventListener("pointermove", onPan);
+    if (e.button === 2) {
+      e.preventDefault();
+      panGrab = worldAt(e);
+    } else if (e.button === 0) {
+      e.preventDefault();
+      drawing = true;
+      nav.onDrawStart(worldAt(e));
+    } else {
+      return;
+    }
+    window.addEventListener("pointermove", onWindowMove);
     window.addEventListener("pointerup", onUp);
   }
-  function onPan(e: PointerEvent): void {
-    if (!panGrab) return;
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    nav.setView(panTo(nav.getView(), panGrab, fx, fyTop, aspect));
+  function onWindowMove(e: PointerEvent): void {
+    if (panGrab) {
+      const { fx, fyTop, aspect } = frac(canvas, e);
+      nav.setView(panTo(nav.getView(), panGrab, fx, fyTop, aspect));
+    } else if (drawing) {
+      nav.onDrawMove(worldAt(e));
+    }
   }
   function onUp(): void {
+    if (drawing) nav.onDrawEnd();
     panGrab = null;
-    window.removeEventListener("pointermove", onPan);
+    drawing = false;
+    window.removeEventListener("pointermove", onWindowMove);
     window.removeEventListener("pointerup", onUp);
   }
   function onWheel(e: WheelEvent): void {

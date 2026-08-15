@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { findSingularities, countInside, type Region } from "../src/singularities.js";
-import { sampleCircle, pointInCircle, type Vec2, type Circle } from "../src/contour.js";
+import { sampleCircle, pointInCircle, pointInPolygon, type Vec2, type Circle } from "../src/contour.js";
 import { windingNumber } from "../src/winding.js";
 
 function regionFor(circle: Circle): Region {
@@ -76,5 +76,54 @@ describe("finder specifics", () => {
   it("a non-holomorphic f (conjugate) reports differentiable: false", () => {
     const s = findSingularities(parse("conjugate(z)"), { cx: 0, cy: 0, halfW: 2, halfH: 2 });
     expect(s.differentiable).toBe(false);
+  });
+});
+
+/** A densely-sampled square path (side 2h, CCW) — a stand-in for a freehand contour. */
+function denseSquare(h: number, perEdge: number): Vec2[] {
+  const corners: Vec2[] = [
+    [-h, -h],
+    [h, -h],
+    [h, h],
+    [-h, h],
+  ];
+  const out: Vec2[] = [];
+  for (let i = 0; i < 4; i++) {
+    const a = corners[i];
+    const b = corners[(i + 1) % 4];
+    for (let k = 0; k < perEdge; k++) {
+      const t = k / perEdge;
+      out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+    }
+  }
+  return out;
+}
+
+describe("freehand (polygon) contour: the theorem holds for a drawn curve", () => {
+  it("a square around z³−1's three roots winds 3 = zeros enclosed", () => {
+    const square = denseSquare(1.5, 120);
+    const f = makeComplexFn(parse("z*z*z - 1"));
+    const image: Vec2[] = square.map((p) => {
+      const w = f([p[0], p[1]], [0, 0]);
+      return [w[0], w[1]];
+    });
+    const s = findSingularities(parse("z*z*z - 1"), { cx: 0, cy: 0, halfW: 2.5, halfH: 2.5 });
+    const zerosInside = countInside(s.zeros, (p) => pointInPolygon(p, square));
+    expect(windingNumber(image)).toBe(3);
+    expect(zerosInside).toBe(3);
+  });
+
+  it("a small square enclosing only the pole of z+1/z winds −1", () => {
+    const square = denseSquare(0.4, 120); // around 0; ±i are outside
+    const f = makeComplexFn(parse("z + 1/z"));
+    const image: Vec2[] = square.map((p) => {
+      const w = f([p[0], p[1]], [0, 0]);
+      return [w[0], w[1]];
+    });
+    const s = findSingularities(parse("z + 1/z"), { cx: 0, cy: 0, halfW: 1, halfH: 1 });
+    const inside = (p: Vec2): boolean => pointInPolygon(p, square);
+    const nMinusP = countInside(s.zeros, inside) - countInside(s.poles, inside);
+    expect(windingNumber(image)).toBe(-1); // one pole at 0, no zeros
+    expect(nMinusP).toBe(-1);
   });
 });

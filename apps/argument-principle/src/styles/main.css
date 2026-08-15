@@ -155,6 +155,33 @@ button.ghost:hover {
   accent-color: var(--accent);
 }
 
+.toolbar.sub {
+  padding: 8px 14px;
+  align-items: center;
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+.check input {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.82rem;
+  margin-left: auto;
+}
+button.ghost:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
 .formula {
   min-height: 1.6em;
   padding: 6px 4px 2px;
