@@ -26,7 +26,7 @@
 |---|---|---|---|
 | **0 — Gauss–Jacobi quadrature primitive** | ✅ done | _this commit_ | `gaussJacobi.ts` (Golub–Welsch GJ/GL rules) + `scQuadrature.ts` (compound `d<ℓ/(3√2)` subdivision); GT: regular-n-gon circumradii to ≥10 digits + the compound rule beating a single panel near a strong singularity |
 | **1 — Forward SC map, given prevertices** | ✅ done | _this commit_ | `schwarzChristoffel.ts` — SC integrand + compound side integrals + A/C recovery + forward eval; GT: regular n-gons to ≥10 digits, the square recovering conformal radius 2/K(1/√2) with corners + edge midpoint |
-| **2 — The parameter problem (general polygons)** | ⬜ planned | — | lightning-seeded Gauss–Newton |
+| **2 — The parameter problem (general polygons)** | ✅ done | _this commit_ | `scParameterProblem.ts` — softmax gap parametrization (3 logits frozen for the gauge) + damped Gauss–Newton (finite-diff Jacobian, one `lstsqHouseholder` step each); seed pluggable (lightning wired in Phase 3). GT: scalene triangle, regular pentagon from a skewed seed, reentrant L-shape — all reproduced to ≥10 digits |
 | **3 — Two-mode API + invariants + fast mode** | ⬜ planned | — | Option A wiring; the public surface |
 | **F (fast-follow) — inverse map** | ⬜ deferred | — | ODE+Newton (polygon→𝔻) |
 

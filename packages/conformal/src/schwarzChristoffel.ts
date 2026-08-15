@@ -1,19 +1,16 @@
-// schwarzChristoffel.ts — the forward Schwarz–Christoffel map f: 𝔻 → polygon (roadmap step E,
-// Phase 1), evaluated for a GIVEN set of prevertices. This is the whole forward machine minus the
-// nonlinear parameter solve (Phase 2): the SC integrand, its side integrals via compound
-// Gauss–Jacobi quadrature (scQuadrature.ts), recovery of the accessory constants A and C, and the
-// forward evaluator.
+// schwarzChristoffel.ts — the forward Schwarz–Christoffel map f: 𝔻 → polygon (roadmap step E),
+// plus the side-integral primitive the parameter problem (Phase 2) is built on. For a GIVEN set of
+// prevertices this is the whole forward machine:
 //
 //     f(w) = A + C · ∫₀ʷ ∏ₖ (1 − t/wₖ)^{αₖ−1} dt ,     f'(w) = C · ∏ₖ (1 − t/wₖ)^{αₖ−1}
 //
 // with prevertices wₖ ∈ ∂𝔻 and interior angles αₖ·π. Branch note: for |t| ≤ 1 each factor
 // (1 − t/wₖ) lies in the closed right half-plane (it reaches 0 only AT the prevertex), so the
 // principal branch of every factor is globally continuous on 𝔻 — the disk needs none of the
-// half-plane's branch bookkeeping. The one place a singular factor is peeled for the Gauss–Jacobi
-// panel, the remainder is taken as full(t)/(t−wₖ)^{αₖ−1}; along a straight sub-segment from wₖ the
-// argument of (t−wₖ) is constant, so the constant branch factor cancels the panel's (Δ/2)^{αₖ}
-// mapping factor exactly and integrateSegment returns the true value. Pure; node-tested against
-// closed-form regular-n-gon and square maps.
+// half-plane's branch bookkeeping. Where a singular factor is peeled for the Gauss–Jacobi panel the
+// remainder is full(t)/(t−wₖ)^{αₖ−1}; along a straight sub-segment from wₖ the argument of (t−wₖ) is
+// constant, so the constant branch factor cancels the panel's (Δ/2)^{αₖ} mapping factor exactly and
+// integrateSegment returns the true value. Pure; node-tested against closed-form n-gon and square maps.
 import type { C } from "./vandermondeArnoldi.js";
 import { integrateSegment } from "./scQuadrature.js";
 
@@ -32,6 +29,61 @@ const cpow = (z: C, p: number): C => {
   return [m * Math.cos(th), m * Math.sin(th)];
 };
 
+export interface SCQuadratureOptions {
+  /** Gauss–Jacobi node count for the singular-endpoint panels (default 24). */
+  nGaussJacobi?: number;
+  /** Gauss–Legendre node count for regular panels (default 24). */
+  nGaussLegendre?: number;
+}
+const resolveQ = (o?: SCQuadratureOptions) => ({ nGaussJacobi: o?.nGaussJacobi ?? 24, nGaussLegendre: o?.nGaussLegendre ?? 24 });
+
+interface Integrator {
+  sides: () => C[];
+  integralToPrevertex: (k: number) => C;
+  integralTo: (w: C) => C;
+}
+
+function makeIntegrator(prevertices: readonly C[], angles: readonly number[], q: Required<SCQuadratureOptions>): Integrator {
+  const n = prevertices.length;
+  // f′/C : the SC integrand ∏ⱼ (1 − t/wⱼ)^{αⱼ−1}, principal branch per factor.
+  const full = (t: C): C => {
+    let acc: C = [1, 0];
+    for (let j = 0; j < n; j++) acc = cmul(acc, cpow(csub([1, 0], cdiv(t, prevertices[j])), angles[j] - 1));
+    return acc;
+  };
+  // ∫_{wₖ}^{to} full dt with the singular endpoint at prevertex k absorbed by the Gauss–Jacobi panel.
+  const fromPrevertex = (k: number, to: C): C => {
+    const wk = prevertices[k];
+    const ek = angles[k] - 1;
+    const regular = (t: C): C => cdiv(full(t), cpow(csub(t, wk), ek));
+    const foreign = prevertices.filter((_, j) => j !== k);
+    return integrateSegment({ full, nearEndpoint: { exponent: ek, regular } }, wk, to, foreign, q);
+  };
+  // Side integral Sₖ = ∫_{wₖ}^{w_{k+1}} full dt = ∫_{wₖ}^{mid} − ∫_{w_{k+1}}^{mid} (each half single-singular).
+  const sides = (): C[] =>
+    Array.from({ length: n }, (_, k) => {
+      const kp = (k + 1) % n;
+      const mid: C = [(prevertices[k][0] + prevertices[kp][0]) / 2, (prevertices[k][1] + prevertices[kp][1]) / 2];
+      return csub(fromPrevertex(k, mid), fromPrevertex(kp, mid));
+    });
+  const integralToPrevertex = (k: number): C => {
+    const neg = fromPrevertex(k, [0, 0]); // ∫_{wₖ}^0
+    return [-neg[0], -neg[1]];
+  };
+  const integralTo = (w: C): C => {
+    for (let k = 0; k < n; k++) {
+      if (Math.hypot(w[0] - prevertices[k][0], w[1] - prevertices[k][1]) < 1e-12) return integralToPrevertex(k);
+    }
+    return integrateSegment({ full }, [0, 0], w, prevertices, q);
+  };
+  return { sides, integralToPrevertex, integralTo };
+}
+
+/** The side integrals Sₖ = ∫_{wₖ}^{w_{k+1}} ∏ⱼ(1−t/wⱼ)^{αⱼ−1} dt (integrand /C), one per polygon side. */
+export function sideIntegrals(prevertices: readonly C[], angles: readonly number[], opts?: SCQuadratureOptions): C[] {
+  return makeIntegrator(prevertices, angles, resolveQ(opts)).sides();
+}
+
 export interface SCForwardMap {
   /** Prevertices on ∂𝔻, counter-clockwise. */
   readonly prevertices: readonly C[];
@@ -49,15 +101,13 @@ export interface SCForwardMap {
   forwardMany(ws: readonly C[]): C[];
 }
 
-export interface SCForwardOptions {
+export interface SCForwardOptions extends SCQuadratureOptions {
   /** Recover C and A so f(wₖ) matches these vertex images (needs ≥ 2, ordered like the prevertices). */
   targetVertices?: readonly C[];
   /** Otherwise use this C (default [1, 0]). */
   constant?: C;
   /** …and this A (default [0, 0]). */
   center?: C;
-  nGaussJacobi?: number;
-  nGaussLegendre?: number;
 }
 
 /**
@@ -72,39 +122,9 @@ export function buildForwardMap(
 ): SCForwardMap {
   const n = prevertices.length;
   if (angles.length !== n) throw new Error(`buildForwardMap: ${n} prevertices but ${angles.length} angles`);
-  const qopts = { nGaussJacobi: opts?.nGaussJacobi ?? 24, nGaussLegendre: opts?.nGaussLegendre ?? 24 };
-
-  // f′/C : the SC integrand ∏ⱼ (1 − t/wⱼ)^{αⱼ−1}, principal branch per factor.
-  const full = (t: C): C => {
-    let acc: C = [1, 0];
-    for (let j = 0; j < n; j++) acc = cmul(acc, cpow(csub([1, 0], cdiv(t, prevertices[j])), angles[j] - 1));
-    return acc;
-  };
-
-  // ∫_{wₖ}^{to} full dt with the singular endpoint at prevertex k absorbed by the Gauss–Jacobi panel.
-  const integrateFromPrevertex = (k: number, to: C): C => {
-    const wk = prevertices[k];
-    const ek = angles[k] - 1;
-    const regular = (t: C): C => cdiv(full(t), cpow(csub(t, wk), ek));
-    const foreign = prevertices.filter((_, j) => j !== k);
-    return integrateSegment({ full, nearEndpoint: { exponent: ek, regular } }, wk, to, foreign, qopts);
-  };
-
-  // Side integral Sₖ = ∫_{wₖ}^{w_{k+1}} full dt = ∫_{wₖ}^{mid} − ∫_{w_{k+1}}^{mid} (each half single-singular).
-  const sideIntegral = (k: number): C => {
-    const kp = (k + 1) % n;
-    const mid: C = [(prevertices[k][0] + prevertices[kp][0]) / 2, (prevertices[k][1] + prevertices[kp][1]) / 2];
-    return csub(integrateFromPrevertex(k, mid), integrateFromPrevertex(kp, mid));
-  };
-
-  // I(wₖ) = ∫₀^{wₖ} full dt = − ∫_{wₖ}^0 full dt.
-  const integralToPrevertex = (k: number): C => {
-    const neg = integrateFromPrevertex(k, [0, 0]);
-    return [-neg[0], -neg[1]];
-  };
-
-  const sides = Array.from({ length: n }, (_, k) => sideIntegral(k));
-  const I0 = integralToPrevertex(0);
+  const integ = makeIntegrator(prevertices, angles, resolveQ(opts));
+  const sides = integ.sides();
+  const I0 = integ.integralToPrevertex(0);
 
   let constant: C;
   let center: C;
@@ -121,13 +141,6 @@ export function buildForwardMap(
   vertices[0] = cadd(center, cmul(constant, I0));
   for (let k = 0; k < n - 1; k++) vertices[k + 1] = cadd(vertices[k], cmul(constant, sides[k]));
 
-  const integralTo = (w: C): C => {
-    for (let k = 0; k < n; k++) {
-      if (Math.hypot(w[0] - prevertices[k][0], w[1] - prevertices[k][1]) < 1e-12) return integralToPrevertex(k);
-    }
-    return integrateSegment({ full }, [0, 0], w, prevertices, qopts);
-  };
-  const forward = (w: C): C => cadd(center, cmul(constant, integralTo(w)));
-
+  const forward = (w: C): C => cadd(center, cmul(constant, integ.integralTo(w)));
   return { prevertices, angles, constant, center, vertices, forward, forwardMany: (ws) => ws.map(forward) };
 }
