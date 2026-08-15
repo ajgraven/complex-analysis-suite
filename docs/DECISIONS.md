@@ -1793,3 +1793,65 @@ shared finder or a shared winding primitive in this step.
        unified — plotter tests green before & after.
 3. [ ] **Watch:** if either app's winding accumulator changes materially, mirror the change in the other until
        the primitive is extracted.
+
+---
+
+## ADR-0021: Argument Principle pedagogy arc — generalize to f = w₀, and the pin interaction model
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A within-app product decision for `apps/argument-principle`, layered on the shipped tool
+([ADR-0019](#adr-0019-argument-principle-as-a-separate-app)) after its pedagogy enhancement arc
+([plan §11](design/argument-principle-plan.md#11-pedagogy-enhancement-arc-a--b--c--d8--f13-planned)). It records
+two decisions that change what the tool teaches and how it is operated; it changes **no** shared package and
+**no** interchange schema.*
+
+### Context
+The shipped tool demonstrated the classic argument principle: winding of `f(γ)` about `0` = zeros − poles
+enclosed. A second construction arc added surfaces that teach the *mechanism* (an argument strip-chart, a
+swept wedge, the `∮ f′/f` integral, per-root decomposition), interaction that teaches the *discreteness* of
+the count (hover tooltips, boundary-crossing pulses, click-to-isolate), and one genuine *generalization*.
+Two of these needed a recorded decision.
+
+### Decision
+1. **Generalize the counted quantity from "zeros of f" to "solutions of f(z) = w₀."** A draggable **target
+   w₀** in the image plane makes the winding of `f(γ)` measured about `w₀`, counting **preimages of w₀**
+   inside γ (poles and critical points are target-independent). `w₀ = 0` is the classic zero-counting case,
+   reproduced exactly; dragging near the origin **snaps** back to it. This is the argument principle for level
+   sets — a route to the open-mapping theorem — and it is nearly free given the dual-plane layout: the finder
+   roots `num − w₀·den` (rational, `=`) or `|f − w₀|` (grid, `≈`), and the winding/strip/wedge/integral all
+   read the same plumbed `about = w₀` point.
+2. **Adopt a click-to-pin interaction model for isolating a root.** Clicking a marked root pins a small
+   isolating circle around it (radius = 0.4× the distance to the nearest other root) so the winding equals the
+   root's order; the contour then **does not** follow the cursor until **released** (the "Clear drawn curve"
+   button becomes **"Release γ"**; clicking empty space, or typing a new `f`, also releases). This resolves
+   the tension between "the circle follows the cursor" (the reference applet's default) and "hold a
+   configuration to study it."
+
+### Options Considered
+- **Target generalization — A (chosen):** a draggable w₀ that generalizes the count. *Pros:* a real
+  conceptual payoff (`f = w₀`, level sets, open-mapping) for a small delta; `w₀ = 0` is a strict special case
+  so nothing regresses. *Cons:* the readouts must relabel ("solutions" vs "zeros"), and the crossing detector
+  had to key off the `(expr, target)` the roots reflect, not the live target (else a target drag fakes
+  crossings across the debounced finder's lag). — **B (rejected):** keep zeros-only; simpler, but forgoes the
+  one generalization the layout makes cheap.
+- **Isolate interaction — A (chosen):** click-to-pin, explicit release. — **B (rejected):** an always-visible
+  "Pin contour" toggle; more chrome for the same effect. — **C (rejected):** no pin (cursor-follow only);
+  makes "isolate a root" impossible to hold.
+
+### Consequences
+- **App-local only.** The whole arc is `apps/argument-principle` code: no new `@cas/*` package (the ADR-0020
+  deferral stands — the finder/winding are still app-local, now a superset), no interchange schema change.
+- **Convention-safety (ADR-0006).** The new `1/2πi` normalization for the `∮ f′/f` readout lives at the app
+  edge; `@cas/core` still carries no `π`/`2πi`. The winding integer and preimage positions are
+  convention-free.
+- **Honest labelling holds.** Preimage counts are `=` (rational) / `≈` (grid) exactly as zeros were; the
+  `∮ f′/f` quadrature is `≈` even for a rational `f` (a Riemann sum that rounds to the exact count) — the
+  pedagogy is precisely that the estimates agree with the count.
+- **State compatibility.** `target` and the pedagogy toggles are optional-with-default and back-filled on
+  decode; older `#vs=` permalinks keep opening (the share-link-compat guardrail).
+
+### Action Items
+1. [x] Ship the pedagogy arc (Stages 0–4) and this ADR (Stage 5).
+2. [ ] **Deferred / exploratory:** a Rouché companion, a Nyquist (D-contour) mode, and a phase-tint
+       background remain optional backlog (plan §11 lists the full menu); none is taken now.

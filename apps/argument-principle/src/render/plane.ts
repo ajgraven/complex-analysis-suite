@@ -311,6 +311,120 @@ export function drawOrderBadge(
   ctx.restore();
 }
 
+/**
+ * Fill the angular sector swept so far about `center` (§11 A3): a pie slice from `startAngle`, opening by
+ * `sweep` radians (signed — the direction of winding), out to `radiusWorld`. Sampled in world space and
+ * mapped through `toPx`, so it lines up with the drawn argument-vector regardless of the y-flip. When one
+ * or more full revolutions have already been completed, `fullTurns` stamps a "×k" badge at the center, so
+ * the wedge reads "filling the current turn; k whole turns already banked."
+ */
+export function drawWedge(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  center: Vec2,
+  startAngle: number,
+  sweep: number,
+  radiusWorld: number,
+  color: string,
+  fullTurns = 0,
+): void {
+  const c = map.toPx(center);
+  if (!isFinitePx(c) || !(radiusWorld > 0)) return;
+  const steps = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI / 48)));
+  ctx.save();
+  if (Math.abs(sweep) > 1e-4) {
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    ctx.moveTo(c[0], c[1]);
+    for (let k = 0; k <= steps; k++) {
+      const ang = startAngle + sweep * (k / steps);
+      const p = map.toPx([center[0] + radiusWorld * Math.cos(ang), center[1] + radiusWorld * Math.sin(ang)]);
+      if (!isFinitePx(p)) continue;
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (fullTurns >= 1) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText(`×${fullTurns}`, c[0], c[1] - 12);
+  }
+  ctx.restore();
+}
+
+/**
+ * Draw an arrow from world point `from` to world point `to` (§11 B5): the factor vector (z − root) whose
+ * winding, summed over the enclosed roots, is the argument principle's Z − P. `dashed` marks a pole
+ * (a subtracted, −1 contribution).
+ */
+export function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  from: Vec2,
+  to: Vec2,
+  color: string,
+  dashed = false,
+): void {
+  const a = map.toPx(from);
+  const b = map.toPx(to);
+  if (!isFinitePx(a) || !isFinitePx(b)) return;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return;
+  const ux = dx / len;
+  const uy = dy / len;
+  const head = Math.min(9, len * 0.4);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.globalAlpha = 0.9;
+  if (dashed) ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // arrowhead at `to`
+  ctx.beginPath();
+  ctx.moveTo(b[0], b[1]);
+  ctx.lineTo(b[0] - head * ux - head * 0.5 * -uy, b[1] - head * uy - head * 0.5 * ux);
+  ctx.lineTo(b[0] - head * ux + head * 0.5 * -uy, b[1] - head * uy + head * 0.5 * ux);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * An expanding, fading ring at a world point (§11 C6): the transient pulse that flags a root which just
+ * crossed γ. `frac` ∈ [0,1] is the animation progress (0 = just crossed, 1 = faded out).
+ */
+export function drawPulseRing(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  frac: number,
+  color: string,
+): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const t = Math.max(0, Math.min(1, frac));
+  ctx.save();
+  ctx.globalAlpha = 1 - t;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 6 + t * 24, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function isFinitePx(p: readonly [number, number]): boolean {
   return Number.isFinite(p[0]) && Number.isFinite(p[1]);
 }

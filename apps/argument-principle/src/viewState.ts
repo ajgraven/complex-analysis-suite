@@ -59,6 +59,8 @@ export interface ContourState {
   readonly radius: number;
   /** Freehand path vertices in world coordinates (P2); absent for a circle. */
   readonly points?: readonly (readonly [number, number])[];
+  /** Pinned (§11 C7): the circle is fixed (isolate-a-root) and does NOT follow the cursor until released. */
+  readonly pinned?: boolean;
 }
 
 /** Render toggles + numerical resolution (the `res` slider). */
@@ -72,6 +74,45 @@ export interface RenderState {
 }
 
 /**
+ * The point w₀ the winding is measured about. The classic argument principle measures about the origin
+ * (counting zeros of f); dragging the target to w₀ ≠ 0 counts solutions of f(z) = w₀ inside γ instead
+ * (§11 D8). Optional on the wire and back-filled to the origin, so older permalinks keep opening.
+ */
+export interface TargetState {
+  readonly re: number;
+  readonly im: number;
+}
+
+/**
+ * Pedagogy render toggles (§11). Each is wired by a later stage; all are optional on the wire and
+ * back-filled from {@link DEFAULT_PEDAGOGY}, so a permalink written before a toggle existed still opens.
+ */
+export interface PedagogyState {
+  /** A2 — draw γ with the same parameter-`t` color ramp as f(γ). */
+  readonly coupleColor: boolean;
+  /** A1 — the (always-on) argument strip-chart panel. */
+  readonly showArgGraph: boolean;
+  /** A3 — the swept-wedge in the w-plane. */
+  readonly showWedge: boolean;
+  /** B4 — the running ∮ f′/f integral trace/readout. */
+  readonly showIntegral: boolean;
+  /** B5 — per-root argument-decomposition vectors (an on-demand overlay). */
+  readonly showDecomposition: boolean;
+}
+
+/** The winding target's default: the origin (the classic zero-counting argument principle). */
+export const DEFAULT_TARGET: TargetState = { re: 0, im: 0 };
+
+/** Pedagogy defaults: the always-on teaching surfaces on, the decomposition overlay off until asked. */
+export const DEFAULT_PEDAGOGY: PedagogyState = {
+  coupleColor: true,
+  showArgGraph: true,
+  showWedge: true,
+  showIntegral: true,
+  showDecomposition: false,
+};
+
+/**
  * The whole serializable view-state. A `type` (not an `interface`) so it satisfies the codec's
  * `Record<string, unknown>` constraint structurally.
  */
@@ -82,6 +123,10 @@ export type ArgPrincipleViewState = {
   readonly contour: ContourState;
   readonly render: RenderState;
   readonly conventions: ConventionTag;
+  /** The winding target w₀ (§11 D8). Optional for back-compat; back-filled to the origin on decode. */
+  readonly target?: TargetState;
+  /** Pedagogy render toggles (§11). Optional for back-compat; back-filled on decode. */
+  readonly pedagogy?: PedagogyState;
 };
 
 /**
@@ -96,6 +141,8 @@ export const DEFAULT_VIEW_STATE: ArgPrincipleViewState = {
   contour: { kind: "circle", centerRe: 0, centerIm: 0, radius: 1.5 },
   render: { showDomainCurve: true, showImageCurve: true, resolution: 300 },
   conventions: { area: "standard", contour: "standard" },
+  target: DEFAULT_TARGET,
+  pedagogy: DEFAULT_PEDAGOGY,
 };
 
 function isViewport(v: Record<string, unknown> | undefined): boolean {
@@ -121,6 +168,27 @@ function isFinitePointArray(v: unknown): boolean {
 /** Sampling resolution a decoded link may carry — bounded so a crafted link can't trigger a huge alloc. */
 const MIN_RESOLUTION = 3;
 const MAX_RESOLUTION = 5000;
+
+/** A well-formed target: absent is fine (back-filled to the origin); if present, finite re/im. */
+function isTargetState(v: unknown): boolean {
+  if (v === undefined) return true;
+  if (v === null || typeof v !== "object") return false;
+  const t = v as Record<string, unknown>;
+  return Number.isFinite(t.re) && Number.isFinite(t.im);
+}
+
+/**
+ * A well-formed pedagogy block: absent is fine (back-filled); if present it must be an object whose values
+ * are all booleans. Unknown keys are tolerated so a newer permalink carrying extra toggles still opens.
+ */
+function isPedagogyState(v: unknown): boolean {
+  if (v === undefined) return true;
+  if (v === null || typeof v !== "object") return false;
+  for (const val of Object.values(v as Record<string, unknown>)) {
+    if (typeof val !== "boolean") return false;
+  }
+  return true;
+}
 
 /** Structural guard: is `value` a well-formed {@link ArgPrincipleViewState}? (defensive decode). */
 export function isArgPrincipleViewState(value: unknown): value is ArgPrincipleViewState {
@@ -149,7 +217,23 @@ export function isArgPrincipleViewState(value: unknown): value is ArgPrincipleVi
     return false;
   }
   if (!cv || cv.area !== "standard" || cv.contour !== "standard") return false;
+  if (!isTargetState(s.target)) return false;
+  if (!isPedagogyState(s.pedagogy)) return false;
   return true;
+}
+
+/**
+ * Back-fill the optional fields ({@link TargetState}, {@link PedagogyState}) so a decoded state — including
+ * an older permalink written before these fields existed — is always complete. Preserves every field the
+ * link did carry, and merges pedagogy toggle-by-toggle so a partial (older) block still gets today's
+ * defaults for any toggle it lacks.
+ */
+export function withDefaults(state: ArgPrincipleViewState): ArgPrincipleViewState {
+  return {
+    ...state,
+    target: state.target ?? DEFAULT_TARGET,
+    pedagogy: { ...DEFAULT_PEDAGOGY, ...(state.pedagogy ?? {}) },
+  };
 }
 
 /** Encode a view-state into a `#vs=…` permalink fragment via the shared interchange codec. */
@@ -164,5 +248,5 @@ export function encodeArgPrincipleState(state: ArgPrincipleViewState): string {
 export function decodeArgPrincipleState(hashOrLink: string): ArgPrincipleViewState | null {
   const env = decodeViewState<unknown>(hashOrLink);
   if (env === null || env.app !== APP_NS) return null;
-  return isArgPrincipleViewState(env.state) ? env.state : null;
+  return isArgPrincipleViewState(env.state) ? withDefaults(env.state) : null;
 }
