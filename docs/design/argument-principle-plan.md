@@ -352,8 +352,8 @@ parity-blocking:
 | Phase | Status | Commits | Coverage |
 | --- | --- | --- | --- |
 | Plan + ADR-0019 | ✅ done | `cfcf809` | design doc + separate-app ADR |
-| 0 — Genesis (shell, `#vs=`, registration, launcher card) | ✅ done | _this commit_ | scaffold + walking skeleton: dual z/w panes, default contour + its image f(γ), live winding readout; `#vs=` codec (ns `"ap"`); the `winding.ts` + `contour.ts` primitives seeded and unit-tested; 5 test files (29 tests); 4 registration edits + launcher "Coming soon" card. `lint`/`typecheck`/`test`/`build` green. GT: `z³−1` winds 3× over a radius-1.5 γ (pinned in `winding.test.ts`) |
-| 1 — Live winding (interactivity: cursor contour, pan/zoom, KaTeX, `res` slider) | ◻ next | — | C3, V2 (cursor-follow), V4, U1 · the static skeleton already covers C1–C2, V1, M3, I1 |
-| 2 — Zeros/poles instrument (the four readouts) | ⬜ planned | — | C4, M1, M2, M4, V3, U2 · GT: `N−P = winding` on all 8 presets |
+| 0 — Genesis (shell, `#vs=`, registration, launcher card) | ✅ done | `38d55db` | scaffold + walking skeleton: dual z/w panes, default contour + its image f(γ), live winding readout; `#vs=` codec (ns `"ap"`); the `winding.ts` + `contour.ts` primitives seeded and unit-tested; 5 test files (29 tests); 4 registration edits + launcher "Coming soon" card. `lint`/`typecheck`/`test`/`build` green. GT: `z³−1` winds 3× over a radius-1.5 γ (pinned in `winding.test.ts`) |
+| 1 — Live winding (interactivity) | ✅ done | _this commit_ | C3 (KaTeX preview via `@cas/expr/latex`), V2 (cursor-follows γ), V4 (per-pane right/drag-pan + wheel-zoom + Reset/Fit), U1 (radius slider); coord authority in `plane.ts` (pan/zoom invert the draw map exactly), `nav.ts` wiring, coalesced rAF render + debounced `#vs=` persist; +`nav.test.ts` (34 tests total). GT: real-browser boot clean (Chromium) — default winding 3, KaTeX renders, hover moves γ + recomputes; `lint`/`typecheck`/`test`/`build` green |
+| 2 — Zeros/poles instrument (the four readouts) | ◻ next | — | C4, M1, M2, M4, V3, U2 · GT: `N−P = winding` on all 8 presets |
 | 3 — Hand-off, export & pedagogy | ⬜ planned | — | I2, I3, E1 (+ E3/E4 optional) · GT: cross-app hand-off golden |
 | 4 — Extract (if earned) & publish | ⬜ planned | — | ADR-0020 candidate; launcher flip + deploy `cp` |

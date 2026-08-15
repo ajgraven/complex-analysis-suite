@@ -143,6 +143,22 @@ button.ghost:hover {
   outline-offset: 1px;
 }
 
+.field input[type="range"] {
+  min-width: 160px;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.formula {
+  min-height: 1.6em;
+  padding: 6px 4px 2px;
+  color: var(--text);
+  overflow-x: auto;
+}
+.formula.dim {
+  opacity: 0.4;
+}
+
 .err {
   color: var(--err);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;

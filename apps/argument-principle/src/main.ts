@@ -1,21 +1,23 @@
 // apps/argument-principle — an educational visualizer for the argument principle.
 //
 // The theorem: the winding number of the image curve f(γ) about the origin equals the number of zeros
-// minus poles of f enclosed by the contour γ. This P0 walking skeleton proves the end-to-end chain —
-// parse a user f(z) via @cas/expr, sample a default circular contour, map it through f, draw both the
-// z-plane (γ) and w-plane (f(γ)) panes, and read off the winding number — plus the shared `#vs=`
-// permalink. Interactivity (a cursor-following contour, pan/zoom, freehand drawing, the zero/pole
-// finder and the four readouts) lands in Phases 1–2.
+// minus poles of f enclosed by the contour γ. Phase 1 makes the right-hand side LIVE — a contour that
+// follows the cursor, per-pane pan/zoom, a KaTeX formula preview, an adjustable radius, and the winding
+// read off the sampled image curve. The left-hand side (locating and counting zeros/poles) and the four
+// N − P = winding readouts arrive in Phase 2.
 import "./styles/main.css";
+import "katex/dist/katex.min.css";
+import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
+import { toLatex } from "@cas/expr/latex";
 import type { Complex } from "@cas/expr/complex";
 import {
   DEFAULT_VIEW_STATE,
   decodeArgPrincipleState,
   encodeArgPrincipleState,
   type ArgPrincipleViewState,
-  type Viewport,
+  type Viewport as ViewportState,
 } from "./viewState.js";
 import { FUNCTION_PRESETS, presetIdForExpr } from "./presets.js";
 import { sampleCircle, type Circle } from "./contour.js";
@@ -25,33 +27,44 @@ import {
   drawAxes,
   drawPolyline,
   drawDot,
+  fitViewport,
   type AxisColors,
   type PlaneMap,
   type Vec2,
+  type Viewport,
 } from "./render/plane.js";
+import { attachPanZoom, attachContourPlane } from "./render/nav.js";
 
 const C0: Complex = [0, 0];
 
-interface Compiled {
+interface Model {
   readonly f: (z: Vec2) => Vec2;
+  readonly latex: string | null;
   readonly error: string | null;
 }
 
-/** Parse + compile an @cas/expr source into a CPU evaluator f: ℂ → ℂ (or an error). */
-function compile(expr: string): Compiled {
+/** Parse + compile an @cas/expr source into a CPU evaluator f: ℂ → ℂ, its LaTeX, or an error. */
+function buildModel(expr: string): Model {
   try {
     const ast = parse(expr);
     const fn = makeComplexFn(ast);
+    let latex: string | null = null;
+    try {
+      latex = toLatex(ast);
+    } catch {
+      latex = null;
+    }
     return {
       f: (z: Vec2): Vec2 => {
         const zc: Complex = [z[0], z[1]];
         const w = fn(zc, C0);
         return [w[0], w[1]];
       },
+      latex,
       error: null,
     };
   } catch (e) {
-    return { f: (): Vec2 => [NaN, NaN], error: e instanceof Error ? e.message : String(e) };
+    return { f: (): Vec2 => [NaN, NaN], latex: null, error: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -69,11 +82,7 @@ function createThemeToggle(onChange: () => void): HTMLButtonElement {
   const KEY = "ap.theme";
   const ORDER = ["auto", "dark", "light"] as const;
   type Choice = (typeof ORDER)[number];
-  const LABEL: Record<Choice, string> = {
-    auto: "Theme: auto",
-    dark: "Theme: dark",
-    light: "Theme: light",
-  };
+  const LABEL: Record<Choice, string> = { auto: "Theme: auto", dark: "Theme: dark", light: "Theme: light" };
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "ghost";
@@ -114,13 +123,22 @@ function makeCanvas(): HTMLCanvasElement {
   return c;
 }
 
+function button(label: string): HTMLButtonElement {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "ghost";
+  b.textContent = label;
+  return b;
+}
+
 function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
   app.textContent = "";
 
-  let state: ArgPrincipleViewState =
-    decodeArgPrincipleState(window.location.hash) ?? DEFAULT_VIEW_STATE;
+  const fromLink = decodeArgPrincipleState(window.location.hash);
+  let state: ArgPrincipleViewState = fromLink ?? DEFAULT_VIEW_STATE;
+  let model = buildModel(state.map.expr);
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -130,12 +148,13 @@ function main(): void {
   brand.innerHTML = "<strong>Argument Principle</strong><span>winding = zeros − poles</span>";
   const spacer = document.createElement("div");
   spacer.className = "spacer";
-  const themeBtn = createThemeToggle(() => render());
-  topbar.append(brand, spacer, themeBtn);
+  const resetBtn = button("Reset views");
+  const fitBtn = button("Fit image");
+  const themeBtn = createThemeToggle(() => schedule());
+  topbar.append(brand, spacer, fitBtn, resetBtn, themeBtn);
 
   const toolbar = document.createElement("div");
   toolbar.className = "toolbar";
-
   const presetWrap = document.createElement("label");
   presetWrap.className = "field";
   presetWrap.innerHTML = "<span>Preset</span>";
@@ -158,11 +177,25 @@ function main(): void {
   exprInput.value = state.map.expr;
   exprWrap.append(exprInput);
 
+  const radiusWrap = document.createElement("label");
+  radiusWrap.className = "field";
+  const radiusLabel = document.createElement("span");
+  radiusWrap.append(radiusLabel);
+  const radius = document.createElement("input");
+  radius.type = "range";
+  radius.min = "0.05";
+  radius.max = "4";
+  radius.step = "0.01";
+  radius.value = String(state.contour.radius);
+  radiusWrap.append(radius);
+
+  toolbar.append(presetWrap, exprWrap, radiusWrap);
+
+  const formula = document.createElement("div");
+  formula.className = "formula";
   const errEl = document.createElement("div");
   errEl.className = "err";
   errEl.hidden = true;
-
-  toolbar.append(presetWrap, exprWrap);
 
   const stage = document.createElement("div");
   stage.className = "stage";
@@ -170,13 +203,13 @@ function main(): void {
   zPane.className = "pane";
   const zCanvas = makeCanvas();
   const zCap = document.createElement("figcaption");
-  zCap.innerHTML = "<b>Domain</b> — z-plane · contour γ";
+  zCap.innerHTML = "<b>Domain</b> — z-plane · move to place γ, right-drag to pan, scroll to zoom";
   zPane.append(zCanvas, zCap);
   const wPane = document.createElement("figure");
   wPane.className = "pane";
   const wCanvas = makeCanvas();
   const wCap = document.createElement("figcaption");
-  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ)";
+  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag to pan, scroll to zoom";
   wPane.append(wCanvas, wCap);
   stage.append(zPane, wPane);
 
@@ -184,19 +217,92 @@ function main(): void {
   readout.className = "readout";
   const windingEl = document.createElement("div");
   windingEl.className = "metric";
-  const turnsEl = document.createElement("div");
-  turnsEl.className = "sub";
+  const subEl = document.createElement("div");
+  subEl.className = "sub";
   const noteEl = document.createElement("p");
   noteEl.className = "note";
   noteEl.innerHTML =
-    "The winding number of f(γ) about 0 equals (zeros − poles) of f enclosed by γ. " +
-    "Locating and counting those zeros and poles arrives in Phase&nbsp;2 — for now the winding is read " +
-    'directly from the image curve (labelled <span class="approx">≈</span>, a numerical estimate).';
-  readout.append(windingEl, turnsEl, noteEl);
+    "The winding number of f(γ) about 0 equals (zeros − poles) of f enclosed by γ. Locating and counting " +
+    'those zeros and poles arrives in Phase&nbsp;2 — for now the winding is read directly from the image ' +
+    'curve (labelled <span class="approx">≈</span>, a numerical estimate).';
+  readout.append(windingEl, subEl, noteEl);
 
-  app.append(topbar, toolbar, errEl, stage, readout);
+  app.append(topbar, toolbar, formula, errEl, stage, readout);
+
+  // ---- state helpers -------------------------------------------------------
+  function currentCircle(): Circle {
+    return {
+      centerRe: state.contour.centerRe,
+      centerIm: state.contour.centerIm,
+      radius: state.contour.radius,
+    };
+  }
+  function imagePoints(): Vec2[] {
+    if (model.error) return [];
+    return sampleCircle(currentCircle(), state.render.resolution).map((p) => model.f(p));
+  }
+  function canvasAspect(canvas: HTMLCanvasElement): number {
+    const r = canvas.getBoundingClientRect();
+    return r.height > 0 ? r.width / r.height : 1;
+  }
+
+  let frame = 0;
+  function schedule(): void {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      render();
+    });
+  }
+  let persistTimer = 0;
+  function schedulePersist(): void {
+    if (persistTimer) clearTimeout(persistTimer);
+    persistTimer = window.setTimeout(() => {
+      persistTimer = 0;
+      history.replaceState(null, "", encodeArgPrincipleState(state));
+    }, 200);
+  }
+  function commit(next: ArgPrincipleViewState): void {
+    state = next;
+    schedule();
+    schedulePersist();
+  }
+
+  function setExpr(expr: string): void {
+    model = buildModel(expr);
+    state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
+    const id = presetIdForExpr(expr);
+    if (id) presetSel.value = id;
+    renderFormula();
+    schedule();
+    schedulePersist();
+  }
+  function fitImage(): void {
+    commit({ ...state, wView: fitViewport(imagePoints(), canvasAspect(wCanvas)) });
+  }
 
   // ---- rendering -----------------------------------------------------------
+  function renderFormula(): void {
+    if (model.error) {
+      errEl.hidden = false;
+      errEl.textContent = `Parse error: ${model.error}`;
+      formula.classList.add("dim");
+      return;
+    }
+    errEl.hidden = true;
+    errEl.textContent = "";
+    formula.classList.remove("dim");
+    if (model.latex) {
+      try {
+        katex.render(`f(z) = ${model.latex}`, formula, { throwOnError: false, displayMode: true });
+        return;
+      } catch {
+        /* fall through to the plain-text form */
+      }
+    }
+    formula.textContent = `f(z) = ${state.map.expr}`;
+  }
+
   function drawPane(
     canvas: HTMLCanvasElement,
     view: Viewport,
@@ -218,17 +324,9 @@ function main(): void {
   }
 
   function render(): void {
-    const compiled = compile(state.map.expr);
-    errEl.hidden = compiled.error === null;
-    errEl.textContent = compiled.error ? `Parse error: ${compiled.error}` : "";
-
-    const circle: Circle = {
-      centerRe: state.contour.centerRe,
-      centerIm: state.contour.centerIm,
-      radius: state.contour.radius,
-    };
+    const circle = currentCircle();
     const zPts = sampleCircle(circle, state.render.resolution);
-    const wPts: Vec2[] = compiled.error ? [] : zPts.map((p) => compiled.f(p));
+    const wPts: Vec2[] = model.error ? [] : zPts.map((p) => model.f(p));
 
     const contourColor = cssVar("--accent", "#3bb6c0");
     const originColor = cssVar("--pole", "#e8608f");
@@ -247,9 +345,9 @@ function main(): void {
       drawDot(ctx, map, [0, 0], originColor, 5);
     });
 
-    if (compiled.error || wPts.length < 2) {
-      windingEl.innerHTML = 'Winding number: <b>—</b>';
-      turnsEl.textContent = "";
+    if (model.error || wPts.length < 2) {
+      windingEl.innerHTML = "Winding number: <b>—</b>";
+      subEl.textContent = model.error ? "fix the expression to continue" : "";
     } else {
       const turns = windingTurns(wPts);
       const wn = Math.round(turns);
@@ -257,38 +355,56 @@ function main(): void {
       windingEl.innerHTML =
         `Winding of f(γ) about 0: <b>${wn}</b> <span class="approx">≈</span>` +
         (reliable ? "" : ' <span class="warn">γ passes near a singularity — unreliable</span>');
-      turnsEl.textContent = `accumulated turns: ${turns.toFixed(3)}`;
+      const c = circle;
+      subEl.textContent =
+        `γ: circle at (${c.centerRe.toFixed(2)}, ${c.centerIm.toFixed(2)}), r = ${c.radius.toFixed(2)}` +
+        ` · accumulated turns: ${turns.toFixed(3)}`;
     }
   }
 
-  function persist(): void {
-    history.replaceState(null, "", encodeArgPrincipleState(state));
-  }
-
-  function setExpr(expr: string): void {
-    state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
-    const id = presetIdForExpr(expr);
-    if (id) presetSel.value = id;
-    render();
-    persist();
-  }
-
-  // ---- wiring --------------------------------------------------------------
+  // ---- interaction wiring --------------------------------------------------
   presetSel.addEventListener("change", () => {
     const p = FUNCTION_PRESETS.find((q) => q.id === presetSel.value);
     if (p) {
       exprInput.value = p.expr;
       setExpr(p.expr);
+      fitImage();
     }
   });
   exprInput.addEventListener("input", () => setExpr(exprInput.value));
-  window.addEventListener("resize", () => render());
+  radius.addEventListener("input", () => {
+    const r = Number(radius.value);
+    if (Number.isFinite(r) && r > 0) {
+      radiusLabel.textContent = `Radius r = ${r.toFixed(2)}`;
+      commit({ ...state, contour: { ...state.contour, radius: r } });
+    }
+  });
+  resetBtn.addEventListener("click", () => {
+    commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView });
+  });
+  fitBtn.addEventListener("click", () => fitImage());
 
+  attachContourPlane(zCanvas, {
+    getView: () => state.zView,
+    setView: (v: ViewportState) => commit({ ...state, zView: v }),
+    onHover: (world: Vec2) =>
+      commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }),
+  });
+  attachPanZoom(
+    wCanvas,
+    () => state.wView,
+    (v: ViewportState) => commit({ ...state, wView: v }),
+  );
+  window.addEventListener("resize", () => schedule());
+
+  // ---- boot ----------------------------------------------------------------
   const initialId = presetIdForExpr(state.map.expr);
   if (initialId) presetSel.value = initialId;
-
+  radiusLabel.textContent = `Radius r = ${state.contour.radius.toFixed(2)}`;
+  renderFormula();
   render();
-  persist();
+  if (!fromLink) fitImage(); // a fresh session auto-frames the image; a shared link keeps its saved view
+  history.replaceState(null, "", encodeArgPrincipleState(state));
 }
 
 main();

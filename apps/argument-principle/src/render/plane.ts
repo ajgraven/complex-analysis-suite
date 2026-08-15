@@ -50,6 +50,83 @@ export function planeMap(view: Viewport, widthPx: number, heightPx: number): Pla
   };
 }
 
+// --- pure viewport helpers (the coordinate authority for both drawing and pan/zoom) ---------------
+// These invert planeMap.toPx exactly, using the same BASE_HALF and aspect, so a pan/zoom computed here
+// lines up with the drawn grid to the pixel. `fx`/`fyTop` are canvas fractions measured from the
+// top-left (fx left→right, fyTop top→bottom), matching a pointer's position within the canvas rect.
+
+export const ZOOM_MIN = 1e-3;
+export const ZOOM_MAX = 1e6;
+
+const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
+
+/** The complex-plane point under a canvas fraction (fx, fyTop) for `view`. Inverse of planeMap.toPx. */
+export function viewPxToWorld(view: Viewport, fx: number, fyTop: number, aspect: number): Vec2 {
+  const halfH = BASE_HALF / view.zoom;
+  const halfW = halfH * aspect;
+  return [view.centerRe + (2 * fx - 1) * halfW, view.centerIm + (1 - 2 * fyTop) * halfH];
+}
+
+/** New viewport that places `grabWorld` back under (fx, fyTop) at the current zoom (a pan). */
+export function panTo(
+  view: Viewport,
+  grabWorld: Vec2,
+  fx: number,
+  fyTop: number,
+  aspect: number,
+): Viewport {
+  const halfH = BASE_HALF / view.zoom;
+  const halfW = halfH * aspect;
+  return {
+    centerRe: grabWorld[0] - (2 * fx - 1) * halfW,
+    centerIm: grabWorld[1] - (1 - 2 * fyTop) * halfH,
+    zoom: view.zoom,
+  };
+}
+
+/** New viewport after zooming to `newZoom` while keeping the world point under (fx, fyTop) fixed. */
+export function zoomAboutCursor(
+  view: Viewport,
+  fx: number,
+  fyTop: number,
+  aspect: number,
+  newZoom: number,
+): Viewport {
+  const z = clamp(newZoom, ZOOM_MIN, ZOOM_MAX);
+  const world = viewPxToWorld(view, fx, fyTop, aspect);
+  const halfH = BASE_HALF / z;
+  const halfW = halfH * aspect;
+  return {
+    centerRe: world[0] - (2 * fx - 1) * halfW,
+    centerIm: world[1] - (1 - 2 * fyTop) * halfH,
+    zoom: z,
+  };
+}
+
+/** A viewport framing all finite `points` with padding (used to auto-fit the image pane). */
+export function fitViewport(points: readonly Vec2[], aspect: number, pad = 1.15): Viewport {
+  let any = false;
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const p of points) {
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) continue;
+    any = true;
+    if (p[0] < minX) minX = p[0];
+    if (p[0] > maxX) maxX = p[0];
+    if (p[1] < minY) minY = p[1];
+    if (p[1] > maxY) maxY = p[1];
+  }
+  if (!any) return { centerRe: 0, centerIm: 0, zoom: 1 };
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const halfX = Math.max((maxX - minX) / 2, 1e-6);
+  const halfY = Math.max((maxY - minY) / 2, 1e-6);
+  const halfH = Math.max(halfY, halfX / Math.max(aspect, 1e-6)) * pad;
+  return { centerRe: cx, centerIm: cy, zoom: clamp(BASE_HALF / halfH, ZOOM_MIN, ZOOM_MAX) };
+}
+
 /** A "nice" grid step (1, 2, 5 × 10ⁿ) giving roughly `target` lines across the view. */
 function niceStep(halfExtent: number, target: number): number {
   const raw = (2 * halfExtent) / Math.max(1, target);
