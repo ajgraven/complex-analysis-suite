@@ -45,6 +45,7 @@ import {
 } from "./render/plane.js";
 import { attachPanZoom, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
+import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
 
 const C0: Complex = [0, 0];
 const NO_SING: Singularities = { zeros: [], poles: [], critical: [], differentiable: true, exact: false };
@@ -185,8 +186,34 @@ function main(): void {
   if (!app) return;
   app.textContent = "";
 
-  const fromLink = decodeArgPrincipleState(window.location.hash);
-  let state: ArgPrincipleViewState = fromLink ?? DEFAULT_VIEW_STATE;
+  // A suite hand-off arrives as an `#s=` interchange link; the app's own share-links are `#vs=`.
+  const rawHash = window.location.hash;
+  let imported: ImportedMap | null = null;
+  let importError: string | null = null;
+  if (rawHash.startsWith("#s=")) {
+    try {
+      imported = importEnvelopeText(rawHash);
+    } catch (e) {
+      importError = e instanceof Error ? e.message : String(e);
+    }
+  }
+  const fromLink = imported ? null : decodeArgPrincipleState(rawHash);
+  let state: ArgPrincipleViewState = imported
+    ? {
+        ...DEFAULT_VIEW_STATE,
+        map: {
+          expr: imported.expr,
+          vars: ["z"],
+          antiholomorphic: /conjugate/.test(imported.expr),
+        },
+        ...(imported.center
+          ? {
+              zView: { centerRe: imported.center.re, centerIm: imported.center.im, zoom: DEFAULT_VIEW_STATE.zView.zoom },
+              contour: { ...DEFAULT_VIEW_STATE.contour, centerRe: imported.center.re, centerIm: imported.center.im },
+            }
+          : {}),
+      }
+    : (fromLink ?? DEFAULT_VIEW_STATE);
   let model = buildModel(state.map.expr);
   let sing: Singularities = NO_SING;
   let draftPath: Vec2[] | null = null; // the freehand path being drawn (transient, not persisted)
@@ -265,6 +292,9 @@ function main(): void {
   const errEl = document.createElement("div");
   errEl.className = "err";
   errEl.hidden = true;
+  const importNote = document.createElement("div");
+  importNote.className = "import-note";
+  importNote.hidden = true;
 
   const stage = document.createElement("div");
   stage.className = "stage";
@@ -305,7 +335,15 @@ function main(): void {
     "the sampled image).";
   readout.append(metrics, status, noteEl);
 
-  app.append(topbar, toolbar, controls2, formula, errEl, stage, readout);
+  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, readout);
+  if (imported) {
+    importNote.hidden = false;
+    importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
+  } else if (importError) {
+    importNote.hidden = false;
+    importNote.classList.add("bad");
+    importNote.textContent = `Could not import the hand-off link: ${importError}`;
+  }
 
   // ---- state + finder ------------------------------------------------------
   /** The contour in effect: the path being drawn (if any), otherwise the committed contour. */
