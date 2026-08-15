@@ -29,7 +29,7 @@ import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
-import { fitConformalMap, fitForwardMap, type ConformalMap, type ForwardMap } from "@cas/conformal";
+import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type ConformalMap } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
 import { createControls } from "./ui/controls.js";
 
@@ -194,9 +194,9 @@ function main(): void {
   let cursorZ: Pt | null = null;
   // Numerical-Riemann-map (domain) mode (P3b): the fitted map + its source/image conformal grids.
   let domainId = domainById(state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
-  // Disk-image region source (2.1): the target Ω for the forward map g: 𝔻 → Ω (smooth domains only).
-  const SMOOTH_REGIONS = DOMAIN_PRESETS.filter((d) => !d.corners);
-  let regionId = SMOOTH_REGIONS.find((d) => d.id === state.render.region)?.id ?? SMOOTH_REGIONS[0].id;
+  // Disk-image region source (2.1 / 3.1): the target Ω for the forward map g: 𝔻 → Ω. Smooth Ω uses the
+  // lightning forward map; polygon Ω uses the Schwarz–Christoffel engine (@cas/conformal).
+  let regionId = domainById(state.render.region ?? "")?.id ?? DOMAIN_PRESETS[0].id;
   let domainMap: ConformalMap | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
@@ -210,7 +210,15 @@ function main(): void {
   let diskFoldReason: string | null = null; // univalence verdict (null ⇒ no fold detected)
   let cParam: [number, number] = state.map.c ? [state.map.c[0], state.map.c[1]] : [0.45, 0.2]; // family param
   let usesC = /\bc\b/.test(state.map.expr); // does φ reference the draggable c?
-  let regionMap: ForwardMap | null = null; // the forward Riemann map g: 𝔻 → Ω (region source, 2.1)
+  // A fitted region map g: 𝔻 → Ω — either the lightning forward map (smooth Ω) or Schwarz–Christoffel
+  // (polygon Ω), behind one interface so the pushforward + info panel don't care which.
+  interface RegionMap {
+    eval(w: Pt): Pt;
+    method: string;
+    residual: number;
+    rows: readonly (readonly [string, string])[];
+  }
+  let regionMap: RegionMap | null = null; // the forward Riemann map g: 𝔻 → Ω (region source, 2.1 / 3.1)
   let domainDirty = true;
   let diskDirty = true;
   let regionDirty = true; // (re)fit the forward map g when the region source or domain changes
@@ -237,11 +245,7 @@ function main(): void {
     const w = current.jsFn([z[0], z[1]], cParam);
     return [w[0], w[1]];
   };
-  const regionPhi = (w: Pt): Pt => {
-    if (!regionMap) return w;
-    const p = regionMap.eval([w[0], w[1]]);
-    return [p[0], p[1]];
-  };
+  const regionPhi = (w: Pt): Pt => (regionMap ? regionMap.eval(w) : w);
   /** An imported exterior map ψ(w) = γ₁·w + Σ bₖ w⁻ᵏ (B): the Laurent coefficients are decoded from an
    *  interchange link (e.g. Complex Dynamics' Böttcher map of a filled Julia set), not computed here. */
   const importedValid = (): boolean => !!importedMap;
@@ -361,17 +365,45 @@ function main(): void {
   const RING_COLOR = "rgba(130,225,255,0.9)";
   const SPOKE_COLOR = "rgba(255,180,120,0.9)";
 
-  /** Fit the forward Riemann map g: 𝔻 → Ω for the selected region (disk-image "region" source, 2.1).
-   *  Smooth Ω only — the forward fit is stable there; polygon corners are a Schwarz–Christoffel job (3.1). */
+  /** Fit the forward Riemann map g: 𝔻 → Ω for the selected region (disk-image "region" source). A polygon Ω
+   *  is a Schwarz–Christoffel job (3.1) — the parameter solve gives an exact-form map that is stable at the
+   *  corners the lightning forward fit is not; a smooth Ω uses the lightning forward map (2.1). */
   function fitRegion(): void {
     const d = domainById(regionId);
     if (!d) {
       regionMap = null;
       return;
     }
+    if (d.corners) {
+      // A lower Gauss–Legendre order keeps the per-point pushforward cheap for interactive rendering.
+      const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
+      const rows: [string, string][] = [
+        ["prevertices", "= " + d.corners.length + (sc.converged ? "  (solved)" : "  (not converged)")],
+      ];
+      if (sc.modulus !== undefined) rows.push(["conf. modulus", "≈ " + fmt(sc.modulus)]);
+      regionMap = {
+        eval: (w: Pt): Pt => {
+          const p = sc.forward([w[0], w[1]]);
+          return [p[0], p[1]];
+        },
+        method: "Schwarz–Christoffel (parameter solve)",
+        residual: sc.residual,
+        rows,
+      };
+      return;
+    }
     const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
     const f = fitConformalMap(boundary, DOMAIN_DEGREE); // Ω → 𝔻
-    regionMap = fitForwardMap(f, boundary, DOMAIN_DEGREE); // 𝔻 → Ω (the forward map we push the disk through)
+    const g = fitForwardMap(f, boundary, DOMAIN_DEGREE); // 𝔻 → Ω (the forward map we push the disk through)
+    regionMap = {
+      eval: (w: Pt): Pt => {
+        const p = g.eval([w[0], w[1]]);
+        return [p[0], p[1]];
+      },
+      method: "lightning + forward LSQ",
+      residual: g.boundaryResidual,
+      rows: [["degree", "= " + g.degree]],
+    };
   }
 
   /** Build the unit-disk polar grid and its pushforward — filled cells AND ring/spoke line curves — for
@@ -470,9 +502,9 @@ function main(): void {
       rows = [
         ["source", "region 𝔻 → Ω  (numeric)"],
         ["region Ω", d ? d.name : regionId],
-        ["method", "lightning + forward LSQ"],
-        ["degree", "= " + regionMap.degree],
-        ["boundary resid.", "≈ " + fmt(regionMap.boundaryResidual)],
+        ["method", regionMap.method],
+        ...regionMap.rows.map((r): [string, string] => [r[0], r[1]]),
+        ["boundary resid.", "≈ " + fmt(regionMap.residual)],
         ["grid", `${diskRadial()} × ${diskSectors()}  (radial × angular)`],
         ["univalent", "= yes  (Riemann map, by construction)"],
       ];

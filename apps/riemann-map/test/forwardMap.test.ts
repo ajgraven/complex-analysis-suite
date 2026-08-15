@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { fitConformalMap, fitForwardMap, type C } from "@cas/conformal";
-import { DOMAIN_PRESETS, domainById, sampleDomainBoundary } from "../src/domains.js";
+import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type C } from "@cas/conformal";
+import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, pointInPolygon } from "../src/domains.js";
 
 const boundaryOf = (id: string, m: number): C[] => {
   const d = domainById(id);
@@ -45,9 +45,6 @@ describe("forward Riemann map g: 𝔻 → Ω (2.1)", () => {
     }
   });
 
-  // NB: the app drives the region source with SMOOTH domains only — the forward fit g: 𝔻 → Ω is stable
-  // there. Polygon corners make the forward fit ill-conditioned (that is the Schwarz–Christoffel case,
-  // roadmap 3.1), so we don't assert accuracy on them; we only require the smooth presets stay finite.
   it("every smooth preset produces a finite, accurate forward map", () => {
     for (const d of DOMAIN_PRESETS.filter((x) => !x.corners)) {
       const boundary = sampleDomainBoundary(d, 400);
@@ -56,6 +53,31 @@ describe("forward Riemann map g: 𝔻 → Ω (2.1)", () => {
       const p = g.eval([0.5, 0.1]);
       expect(Number.isFinite(p[0]) && Number.isFinite(p[1]), `${d.id} finite`).toBe(true);
       expect(g.boundaryResidual, `${d.id} residual`).toBeLessThan(5e-2);
+    }
+  });
+
+  // The region source now drives polygon Ω through the Schwarz–Christoffel engine (roadmap 3.1) — the
+  // parameter solve gives a map stable at the corners the lightning forward fit is not.
+  it("polygon regions: Schwarz–Christoffel reproduces the vertices and maps 𝔻 into Ω", () => {
+    for (const d of DOMAIN_PRESETS.filter((x) => x.corners)) {
+      const corners = d.corners;
+      if (!corners) continue;
+      const sc = fitSchwarzChristoffel({ vertices: corners });
+      expect(sc.converged, `${d.id} converged`).toBe(true);
+      // the forward SC map reproduces every polygon vertex
+      for (let k = 0; k < corners.length; k++) {
+        const p = sc.forward(sc.prevertices[k]);
+        expect(Math.hypot(p[0] - corners[k][0], p[1] - corners[k][1]), `${d.id} vertex ${k}`).toBeLessThan(1e-9);
+      }
+      // interior disk points land inside the polygon
+      for (const [rr, th] of [
+        [0.3, 0.7],
+        [0.6, 2.1],
+        [0.85, 4.0],
+      ]) {
+        const p = sc.forward([rr * Math.cos(th), rr * Math.sin(th)]);
+        expect(pointInPolygon([p[0], p[1]], corners), `${d.id} interior stays inside`).toBe(true);
+      }
     }
   });
 });
