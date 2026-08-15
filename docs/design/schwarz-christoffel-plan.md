@@ -24,7 +24,7 @@
 
 | Phase | Status | Commits | Coverage |
 |---|---|---|---|
-| **0 — Gauss–Jacobi quadrature primitive** | ⬜ planned | — | SC's only new numeric primitive |
+| **0 — Gauss–Jacobi quadrature primitive** | ✅ done | _this commit_ | `gaussJacobi.ts` (Golub–Welsch GJ/GL rules) + `scQuadrature.ts` (compound `d<ℓ/(3√2)` subdivision); GT: regular-n-gon circumradii to ≥10 digits + the compound rule beating a single panel near a strong singularity |
 | **1 — Forward SC map, given prevertices** | ⬜ planned | — | the symmetric golden cases (n-gons, square) |
 | **2 — The parameter problem (general polygons)** | ⬜ planned | — | lightning-seeded Gauss–Newton |
 | **3 — Two-mode API + invariants + fast mode** | ⬜ planned | — | Option A wiring; the public surface |
