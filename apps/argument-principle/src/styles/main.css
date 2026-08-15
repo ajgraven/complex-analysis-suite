@@ -10,6 +10,7 @@
   --accent: #3bb6c0; /* contour / zeros */
   --pole: #e8608f; /* origin / poles */
   --gold: #dbb057; /* winding / critical points */
+  --trace: #a08bff; /* animated traversal point */
   --grid: #232a36;
   --axis: #3c4658;
   --err: #ec7a7a;
@@ -26,6 +27,7 @@
   --accent: #0d7a86;
   --pole: #c0356b;
   --gold: #b07d10;
+  --trace: #5b4bd0;
   --grid: #e7ebf3;
   --axis: #c2cad8;
   --err: #b3261e;
@@ -305,6 +307,15 @@ button.ghost:disabled {
 }
 .status.warn {
   color: var(--pole);
+}
+.anim {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--trace);
+  font-variant-numeric: tabular-nums;
+}
+.anim b {
+  color: var(--text);
 }
 .note {
   color: var(--muted);

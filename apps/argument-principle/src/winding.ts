@@ -41,6 +41,31 @@ export function windingTurns(points: readonly Vec2[], about: Vec2 = [0, 0]): num
   return total / (2 * Math.PI);
 }
 
+/**
+ * Turns accumulated from the START of the loop through fraction `upto` ∈ [0,1] of its segments — the
+ * "argument swept so far" as a point traverses the curve. At `upto = 1` this equals {@link windingTurns}.
+ */
+export function partialWindingTurns(
+  points: readonly Vec2[],
+  upto: number,
+  about: Vec2 = [0, 0],
+): number {
+  const n = points.length;
+  if (n < 2) return 0;
+  const segs = Math.floor(Math.max(0, Math.min(1, upto)) * n);
+  let total = 0;
+  let prev = angleTo(points[0], about);
+  for (let i = 1; i <= segs; i++) {
+    const a = angleTo(points[i % n], about);
+    let d = a - prev;
+    while (d > Math.PI) d -= 2 * Math.PI;
+    while (d < -Math.PI) d += 2 * Math.PI;
+    total += d;
+    prev = a;
+  }
+  return total / (2 * Math.PI);
+}
+
 /** The winding number (integer): {@link windingTurns} rounded to the nearest whole turn. */
 export function windingNumber(points: readonly Vec2[], about: Vec2 = [0, 0]): number {
   const n = Math.round(windingTurns(points, about));

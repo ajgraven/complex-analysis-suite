@@ -6,6 +6,7 @@ import {
   contourSamples,
   insideContour,
   contourBBox,
+  contourPointAt,
   pathStats,
   signedArea,
   orientCCW,
@@ -88,6 +89,16 @@ describe("unified contour (circle | path)", () => {
     expect(s.centerRe).toBeCloseTo(0, 12);
     expect(s.centerIm).toBeCloseTo(0, 12);
     expect(s.radius).toBeCloseTo(Math.SQRT2, 12); // each corner is √2 from the centroid
+  });
+
+  it("contourPointAt walks around the circle (t=0 → (r,0), t=¼ → (0,r))", () => {
+    const c: ContourShape = { kind: "circle", centerRe: 0, centerIm: 0, radius: 1 };
+    const p0 = contourPointAt(c, 0, 360);
+    expect(p0[0]).toBeCloseTo(1, 6);
+    expect(p0[1]).toBeCloseTo(0, 6);
+    const p90 = contourPointAt(c, 0.25, 360);
+    expect(p90[0]).toBeCloseTo(0, 6);
+    expect(p90[1]).toBeCloseTo(1, 6);
   });
 
   it("orientCCW normalizes a clockwise loop (so winding = N − P holds for any drawn direction)", () => {

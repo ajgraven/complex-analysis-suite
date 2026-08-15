@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
-import { windingNumber, windingTurns, windingReliable, type Vec2 } from "../src/winding.js";
+import {
+  windingNumber,
+  windingTurns,
+  windingReliable,
+  partialWindingTurns,
+  type Vec2,
+} from "../src/winding.js";
 import { sampleCircle } from "../src/contour.js";
 
 const unitCircle = (n: number): Vec2[] =>
@@ -44,6 +50,13 @@ describe("winding number (the core instrument)", () => {
       [0, -1],
     ];
     expect(windingReliable(grazing)).toBe(false);
+  });
+
+  it("partialWindingTurns accumulates from the start, reaching the full winding at t=1", () => {
+    const c = unitCircle(360);
+    expect(partialWindingTurns(c, 0)).toBe(0);
+    expect(partialWindingTurns(c, 0.5)).toBeCloseTo(0.5, 2);
+    expect(partialWindingTurns(c, 1)).toBeCloseTo(windingTurns(c), 9);
   });
 
   it("argument principle: f = z³ − 1 winds 3 times about 0 over a radius-1.5 contour", () => {

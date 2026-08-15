@@ -107,6 +107,19 @@ export function contourBBox(c: ContourShape): { minX: number; maxX: number; minY
   };
 }
 
+/** The world point at fraction `t` ∈ [0,1) of the way around γ (linear-interpolated along the loop). */
+export function contourPointAt(c: ContourShape, t: number, resolution: number): Vec2 {
+  const pts = contourSamples(c, resolution);
+  const n = pts.length;
+  if (n === 0) return [c.centerRe, c.centerIm];
+  const f = (((t % 1) + 1) % 1) * n;
+  const i = Math.floor(f);
+  const frac = f - i;
+  const a = pts[i % n];
+  const b = pts[(i + 1) % n];
+  return [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac];
+}
+
 /** Signed area of a closed polygon (shoelace). Positive = counter-clockwise in world coords (y up). */
 export function signedArea(points: readonly Vec2[]): number {
   let a = 0;

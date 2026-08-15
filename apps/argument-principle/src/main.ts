@@ -24,11 +24,12 @@ import {
   contourSamples,
   insideContour,
   contourBBox,
+  contourPointAt,
   pathStats,
   orientCCW,
   type ContourShape,
 } from "./contour.js";
-import { windingTurns, windingReliable } from "./winding.js";
+import { windingTurns, windingReliable, partialWindingTurns } from "./winding.js";
 import {
   planeMap,
   drawAxes,
@@ -217,6 +218,9 @@ function main(): void {
   let model = buildModel(state.map.expr);
   let sing: Singularities = NO_SING;
   let draftPath: Vec2[] | null = null; // the freehand path being drawn (transient, not persisted)
+  const anim = { on: false, t: 0, speed: 0.25 }; // traversal animation (transient)
+  let animRaf = 0;
+  let animLast = 0;
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -280,12 +284,24 @@ function main(): void {
   resInput.step = "20";
   resInput.value = String(state.render.resolution);
   resWrap.append(resInput);
+  const playBtn = button("▶ Traverse γ");
+  const speedWrap = document.createElement("label");
+  speedWrap.className = "field";
+  const speedLabel = document.createElement("span");
+  speedLabel.textContent = "Speed";
+  const speedInput = document.createElement("input");
+  speedInput.type = "range";
+  speedInput.min = "0.05";
+  speedInput.max = "1";
+  speedInput.step = "0.05";
+  speedInput.value = "0.25";
+  speedWrap.append(speedLabel, speedInput);
   const domainChk = checkbox("Domain curve γ", state.render.showDomainCurve);
   const imageChk = checkbox("Image curve f(γ)", state.render.showImageCurve);
   const drawHint = document.createElement("span");
   drawHint.className = "hint";
   drawHint.textContent = "Tip: left-drag on the z-plane to draw a custom contour.";
-  controls2.append(resWrap, domainChk.root, imageChk.root, drawHint);
+  controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, drawHint);
 
   const formula = document.createElement("div");
   formula.className = "formula";
@@ -326,6 +342,9 @@ function main(): void {
   metrics.append(zerosCell.root, polesCell.root, nmpCell.root, windCell.root);
   const status = document.createElement("div");
   status.className = "status";
+  const animEl = document.createElement("div");
+  animEl.className = "anim";
+  animEl.hidden = true;
   const noteEl = document.createElement("p");
   noteEl.className = "note";
   noteEl.innerHTML =
@@ -333,7 +352,7 @@ function main(): void {
     "γ. Counts marked <span class=\"approx\">=</span> are exact (f rational, roots found algebraically); " +
     "<span class=\"approx\">≈</span> are numerical estimates (transcendental f, or a winding read from " +
     "the sampled image).";
-  readout.append(metrics, status, noteEl);
+  readout.append(metrics, status, animEl, noteEl);
 
   app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, readout);
   if (imported) {
@@ -470,8 +489,14 @@ function main(): void {
     const cPole = cssVar("--pole", "#e8608f");
     const cCrit = cssVar("--gold", "#dbb057");
     const cCenter = cssVar("--muted", "#8c95a9");
+    const cTrace = cssVar("--trace", "#8b7bf0");
 
     clearBtn.disabled = state.contour.kind !== "path" && !draftPath;
+
+    // The animated traversal point (E1): the same parameter t marks a point on γ and its image on f(γ).
+    const showAnim = anim.on || anim.t > 0;
+    const zAnim = showAnim ? contourPointAt(contour, anim.t, state.render.resolution) : null;
+    const wAnim = zAnim && !model.error ? model.f(zAnim) : null;
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
@@ -487,15 +512,40 @@ function main(): void {
         drawOrderBadge(ctx, map, z.z, z.order, cZero);
       }
       if (contour.kind === "circle") drawDot(ctx, map, [contour.centerRe, contour.centerIm], cCenter, 3);
+      if (zAnim) drawDot(ctx, map, zAnim, cTrace, 6);
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
       drawDot(ctx, map, [0, 0], cPole, 5);
+      if (wAnim && Number.isFinite(wAnim[0]) && Number.isFinite(wAnim[1])) {
+        const o = map.toPx([0, 0]);
+        const pp = map.toPx(wAnim);
+        ctx.save();
+        ctx.strokeStyle = cTrace;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(o[0], o[1]);
+        ctx.lineTo(pp[0], pp[1]); // the arg vector: origin → f(z(t))
+        ctx.stroke();
+        ctx.restore();
+        drawDot(ctx, map, wAnim, cTrace, 6);
+      }
     });
 
     updateReadout(contour, wPts);
+
+    if (showAnim && !model.error && wPts.length > 1) {
+      const swept = partialWindingTurns(wPts, anim.t);
+      const full = Math.round(windingTurns(wPts));
+      animEl.hidden = false;
+      animEl.innerHTML =
+        `▶ traversing γ: t = ${anim.t.toFixed(2)} · arg of f(z) swept <b>${swept.toFixed(2)}</b> turns` +
+        ` — reaches <b>${full}</b> over the full loop (that is the winding number).`;
+    } else {
+      animEl.hidden = true;
+    }
   }
 
   function updateReadout(contour: ContourShape, wPts: readonly Vec2[]): void {
@@ -539,7 +589,35 @@ function main(): void {
     }
   }
 
+  // ---- animation -----------------------------------------------------------
+  function animFrame(ts: number): void {
+    if (!anim.on) {
+      animRaf = 0;
+      return;
+    }
+    const dt = animLast ? (ts - animLast) / 1000 : 0;
+    animLast = ts;
+    anim.t = (anim.t + dt * anim.speed) % 1;
+    render();
+    animRaf = requestAnimationFrame(animFrame);
+  }
+  function setPlaying(on: boolean): void {
+    anim.on = on;
+    playBtn.textContent = on ? "⏸ Pause traversal" : "▶ Traverse γ";
+    if (on) {
+      animLast = 0;
+      if (!animRaf) animRaf = requestAnimationFrame(animFrame);
+    } else {
+      schedule();
+    }
+  }
+
   // ---- interaction wiring --------------------------------------------------
+  playBtn.addEventListener("click", () => setPlaying(!anim.on));
+  speedInput.addEventListener("input", () => {
+    const s = Number(speedInput.value);
+    if (Number.isFinite(s) && s > 0) anim.speed = s;
+  });
   presetSel.addEventListener("change", () => {
     const p = FUNCTION_PRESETS.find((q) => q.id === presetSel.value);
     if (p) {
