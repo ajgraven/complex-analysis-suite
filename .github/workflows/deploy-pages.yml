@@ -77,6 +77,7 @@ jobs:
           cp -r apps/quadrature-domains/dist _site/quadrature-domains
           cp -r apps/complex-function-plotter/dist _site/complex-function-plotter
           cp -r apps/riemann-map/dist        _site/riemann-map
+          cp -r apps/argument-principle/dist _site/argument-principle
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5

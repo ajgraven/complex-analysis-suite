@@ -1,0 +1,34 @@
+{
+  "name": "argument-principle",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "An educational visualizer for the argument principle: the winding number of the image curve f(γ) about the origin equals the number of zeros minus poles of f enclosed by the contour γ. A new suite app (separate app per CLAUDE.md decision 8, ADR-0019) built on the shared @cas/* packages — custom f(z) via @cas/expr, exact rational zeros/poles via @cas/core Durand–Kerner, permalinks + map hand-off via @cas/interchange, figure export via @cas/export. Renders pure-2D: a dual z-plane / w-plane view of a draggable contour and its image.",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cas/core": "workspace:*",
+    "@cas/export": "workspace:*",
+    "@cas/expr": "workspace:*",
+    "@cas/interchange": "workspace:*",
+    "katex": "^0.17.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

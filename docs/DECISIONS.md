@@ -1596,3 +1596,200 @@ Two moves, both recorded here:
    rank-deficiency policy to reconcile the `1e-300`/`1e-13` + zero-fill/throw divergence, and to preserve QD's
    `condEst`/refinement. QD is the anticipated second consumer.
 6. [ ] **Anticipated:** build Schwarz–Christoffel (roadmap step E) into `@cas/conformal` — the builder's second consumer.
+
+---
+
+## ADR-0019: Argument Principle as a separate app
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*The sixth app joins the suite, and the direct sequel to [ADR-0010](#adr-0010-complex-function-plotting-tool-as-a-separate-app)
+(plotter) and [ADR-0013](#adr-0013-the-riemann-map-tool-is-a-new-app-not-a-mode-in-an-existing-one) (Riemann map).
+It is the event [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) and the north star are measured
+against — "does each new tool build fewer primitives than the last?" — and it is the tool
+[VISION §6/§7](VISION.md#6-what-success-looks-like) named in advance (the "argument-principle applet," folded in
+opportunistically once the packages it reuses exist). The full runbook lives in
+[`design/argument-principle-plan.md`](design/argument-principle-plan.md).*
+
+### Context
+
+A sixth tool is requested: an **educational visualizer for the argument principle** — the theorem that the
+**winding number** of `f(γ)` about the origin equals the number of **zeros minus poles** of `f` enclosed by `γ`.
+Its headline is a **dual `z`-plane / `w`-plane view** with a draggable/drawable contour and a live
+`N − P = winding` readout that makes the equality visible. This is a *pedagogical* product: its value is the
+interaction (a contour the user moves and draws, a point that can traverse `γ ↔ f(γ)`) and the honest
+demonstration of a theorem, not a new rendering paradigm.
+
+The awkward fact to confront head-on: **the plotter already contains an "argument principle" instrument.**
+`apps/complex-function-plotter/src/analysis/singularities.ts` (ADR-0010, Phase 2) locates and counts zeros/poles
+by grid search → Newton refine (symbolic `f'`) → winding classification. So the fair question is whether the new
+tool should be **(A)** a new app, **(B)** an expanded mode/view *inside* the plotter (reusing that instrument), or
+**(C)** a peer view inside Complex Dynamics.
+
+The deciding fact is the same one ADR-0009/0010/0013 turned on: **what does the feature share, and what does it
+bring?** The new tool shares only *packages* (`@cas/expr` for `f`/`f'`, `@cas/core` Durand–Kerner for exact
+roots, `@cas/interchange`, `@cas/export`), pulled *downward*. It brings a distinct product surface the plotter
+does not have — a dual-plane contour-interaction UI whose meaning is winding, not phase color. The plotter's
+instrument is a **single quantitative readout on a domain-colored field**; this tool is a **dedicated dual-view
+theorem explorer**. They overlap in exactly one primitive (the winding classifier), which is an
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) *extraction* question, not a reason to merge two
+products.
+
+### Decision
+
+Build it as a **separate app, `apps/argument-principle`**, a peer to the five existing apps, riding
+`@cas/expr` + `@cas/core` + `@cas/interchange` + `@cas/export` — **pure-2D, no `@cas/gpu`** (like
+`apps/riemann-map`), listed on the launcher. Consistent with
+[CLAUDE.md decision #8](../CLAUDE.md) (separate apps + a unified menu; **no** unified single-page shell). It
+**imports** an `f(z)` handed off from the plotter or Complex Dynamics via
+[`@cas/interchange`](INTERCHANGE.md) (`mapSpecToExpr`); it is **not** a mode inside the plotter or a view inside
+CD. Ship it **built-but-unpublished** (a launcher "Coming soon" card, as `correspondences` / the plotter were)
+until the Phase-2 quality gate, then flip to published (one `cp` in `deploy-pages.yml`). Execute against the
+phase-gated plan.
+
+### Options Considered
+
+#### Option A: A new standalone app `apps/argument-principle` (this ADR)
+**Pros:** matches the suite topology (decision #8); a thin app over shared packages; the dual-plane
+contour-interaction surface is genuinely its own product with its own controls and lifecycle; publishes
+independently; the one shared primitive (winding) becomes a clean extraction (ADR-0020) rather than copied code.
+**Cons:** a sixth app to maintain; "argument principle" now names both a plotter instrument and an app, so the
+boundary must be kept honest; some UI scaffolding re-created per app (no `@cas/ui` — never extracted, ADR-0007).
+
+#### Option B: An expanded mode/view inside the Complex Function Plotter
+**Pros:** reuses the plotter's existing `singularities.ts` instrument, coloring, and input directly.
+**Cons — and why rejected:** the plotter's headline is **domain coloring** of a single `w = f(z)`; its
+argument-principle instrument is one small readout on that field. This tool's headline is a **dual `z`/`w`
+contour explorer** — a different paradigm (two linked planes, a user-manipulated contour, an animated traversal),
+with a *teaching* purpose rather than a *research-plot* one. Grafting it into the plotter would bloat the
+plotter's `main.ts`, couple two products with different audiences and interactions, and blur the plotter's clear
+"domain-coloring studio" identity. σ earned a peer view in CD because it **shares CD's escape-time engine**
+(ADR-0009); this tool shares *packages*, not the plotter's pipeline. Rejected — the same reasoning that made the
+plotter and Riemann map their own apps rather than CD modes.
+
+#### Option C: A peer view inside Complex Dynamics
+**Pros:** CD has mature 2D/GPU rendering and instruments.
+**Cons:** CD's paradigm is escape-time iteration of `f(z, c)`; the argument principle is a static
+single-evaluation instrument with no dynamics. No shared engine, a swelled `main.ts`, coupled audiences.
+Rejected for the same share-vs-bring reason as B.
+
+### Trade-off Analysis
+
+This applies the ADR-0009/0010/0013 test and gets the same answer they did: a feature that would **share** a host
+app's engine belongs *inside* it as a view; one that **brings its own** product surface and reuses only the
+**packages** (downward) belongs in its own app. The new tool reimplements **none** of the shared foundation — it
+composes `@cas/expr` (`parse` / `makeComplexFn` / `differentiate` / `fToRational`), `@cas/core`
+(`makeDurandKerner`), `@cas/interchange`, and `@cas/export` — so it is a **direct, favorable test of the north
+star**: measurably fewer new primitives than the Riemann map or the plotter, because its only genuinely new code
+is the pedagogical instrument (dual-plane UI, contour interaction, image-curve winding, point-in-contour count).
+The honest cost — a sixth app, and "argument principle" living in two places — is bounded by keeping the plotter's
+instrument to its one readout and letting this app own the dual-view exploration, with the winding primitive
+slated for extraction on the second-consumer rule (ADR-0020), not duplication.
+
+### Consequences
+
+- **Easier:** a sixth tool shipped mostly by composition (north-star confirmed); the dual-view teaching product
+  has its own home; suite interop is one `@cas/interchange` import away; pure-2D keeps it out of the WebGL
+  `browser` CI job entirely.
+- **Harder:** a sixth app to maintain; two homes for "argument principle" (the plotter's instrument and this app)
+  whose boundary must be kept honest; UI chrome is app-local (no `@cas/ui`); the `1/(2πi)` framing and any
+  phase→hue shading stay app-local and convention-tagged
+  ([ADR-0006](#adr-0006-convention-neutral-core)), never baked into packages.
+- **Follow-on ADR this anticipates:** **ADR-0020 — extract the winding / singularity primitive** on the
+  [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second-consumer rule (the plotter's
+  `singularities.ts` is the first consumer; this app the second), with the plotter refactored to consume it.
+  Recorded when it lands (plan Phase 4).
+- **Watch for:** the app drifting into the plotter's domain-coloring territory (that belongs to the plotter — keep
+  this tool's backgrounds plain/grid, a phase tint at most); and the winding classifier being *copied* rather than
+  extracted once both apps carry it.
+- **Revisit if:** this app and the plotter's instrument converge enough that one should consume the other — then
+  extract the shared piece into a package (ADR-0007 / ADR-0020), rather than merging the apps.
+
+### Action Items
+
+1. [x] Scaffold `apps/argument-principle` on the shared packages — Phase 0 Genesis: the tested, deployable
+       shell (Vite/TS, the single serializable `#vs=` view-state over `@cas/interchange` namespace `"ap"`, node
+       parity-seed tests, launcher "Coming soon" card; local `lint`/`typecheck`/`test`/`build` gate green).
+       Registered in `vitest.workspace.ts`, the test-census `PROJECTS`, and eslint `APP_NAMES`. The walking
+       skeleton already draws the dual z/w view + f(γ) image and reads off the winding number, seeding the
+       `winding.ts` / `contour.ts` primitives with unit tests.
+2. [x] Build the dual-view instrument through the phase gates (winding → zeros/poles → `N − P = winding`), per
+       [`design/argument-principle-plan.md`](design/argument-principle-plan.md). (Phases 1–2.)
+3. [x] Wire the plotter/CD → argument-principle `f(z)` hand-off through `@cas/interchange` (`mapSpecToExpr`),
+       mirroring the plotter's `importMap.ts` (plan Phase 3a).
+4. [x] Record **ADR-0020** (the winding / singularity primitive extraction decision) at the Phase-4 gate — see
+       [ADR-0020](#adr-0020-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) below.
+       The finding: the second consumer is real, but the two implementations **diverged**, so the extraction is
+       **deferred**, not taken.
+5. [x] Publish (flip the launcher card to a link + add the `deploy-pages.yml` `cp`) at the Phase-4 gate.
+
+---
+
+## ADR-0020: Defer the winding / singularity primitive extraction (second consumer noted)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*An [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) **deferral**, in the mould of
+[ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) (keep QD's `sym-core` separate) and
+[ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) Action Item 5 (defer QD's
+least-squares consolidation): the suite's pattern of **not** force-merging diverged, mature code. Anticipated
+by [ADR-0019](#adr-0019-argument-principle-as-a-separate-app) (its follow-on ADR) and the
+[argument-principle plan §4](design/argument-principle-plan.md).*
+
+### Context
+The Complex-Function-Plotter's `src/analysis/singularities.ts` (ADR-0010, Phase 2) was the suite's first
+zero/pole finder — grid-sample `|f|`, Newton-refine with the symbolic `f′`, classify by the winding of
+`arg f` around a small circle. Building the Argument-Principle tool produced a **second** consumer of that
+machinery (`apps/argument-principle/src/singularities.ts` + `winding.ts`). ADR-0007's rule is to extract a
+shared package the moment a second consumer needs it — so the extraction was evaluated here. The finding is
+that the two have **diverged**, in two ways:
+
+1. **The finder is not the same finder.** The Argument-Principle version is a *superset*: it added an **exact
+   rational path** (`@cas/expr` `fToRational` → `@cas/core` Durand–Kerner on numerator/denominator, labelled
+   `=`), **critical points** (`f′` roots), and an **AST + Region** interface returning
+   `{zeros, poles, critical, differentiable, exact}`. The plotter's takes compiled `(f, f′)` closures + a
+   `ViewBox` + aspect, is **grid-only**, and returns `{zeros, poles, differentiable}`.
+2. **The winding accumulator looks shared but its semantics diverged.** The plotter's inline `winding()`
+   returns **0** when a sample lands on a singularity (`|w| = 0`) — a deliberate robustness choice *for its
+   classifier*. The Argument-Principle `windingNumber()` accumulates unconditionally and exposes
+   trustworthiness **separately** (`windingReliable`), because it must report the true winding of a
+   user-drawn contour, not silently zero it. Forcing the plotter onto the AP primitive would change its
+   classifier's behavior at singular samples.
+
+### Decision
+**Defer the extraction.** Record the second consumer; keep both finders **app-local**. Do not extract a
+shared finder or a shared winding primitive in this step.
+
+### Options Considered
+- **A — Defer (this ADR).** *Pros:* no risk to the mature, shipped plotter; the Argument-Principle publish
+  stays a clean, isolated change; honest under ADR-0007 (extract on *real, low-risk* need). *Cons:* the
+  winding-accumulator logic now exists in two apps — a known, bounded duplication (recorded, watched).
+- **B — Extract a lowest-common `windingNumber(points)` primitive and rewire the plotter.** *Rejected now:*
+  the two winding uses have **different singular-sample semantics** (§Context.2); reconciling them means
+  giving the plotter's tuned classifier a new dependency and a behavior change, for a ~30-line dedup — risk
+  outweighs reward. It becomes attractive if a *third* consumer appears or the semantics are unified behind a
+  `windingNumber(points, { onSingular })` policy argument.
+- **C — Extract the superset finder to a package.** *Rejected:* it would burden the plotter with the
+  rational-exact / critical-point machinery it does not use, and is the premature-abstraction ADR-0007 guards
+  against. (Symmetric rule: "two engines are not *merged* without one either.")
+
+### Consequences
+- **Easier:** the publish is decoupled from a risk-bearing refactor of a shipped app; each finder stays tuned
+  to its own tool (the plotter's escape-time-adjacent instrument; the AP tool's exact-when-rational counter).
+- **Harder / owed:** the winding accumulator is duplicated across the plotter and the Argument-Principle tool
+  — a bounded, recorded cost. If either changes materially, keep them in sync by hand until extraction.
+- **Convention-safety note (ADR-0006):** a future extracted `windingNumber` *is* convention-neutral (an
+  integer count from a point list, no `π`/`2πi`), so the deferral is about *interface divergence and consumer
+  risk*, not about conventions — the primitive would be safe to share once the semantics are unified.
+- **Revisit if:** a **third** consumer needs winding / zero-pole location, **or** the plotter and AP finders
+  are deliberately unified behind a single interface (a `windingNumber(points, { onSingular })` with a
+  selectable singular-sample policy; a finder that offers both the grid and rational paths) — at which point
+  extract, with **both** apps' test suites green before and after (the standing test-guard rule).
+
+### Action Items
+1. [x] Record the second consumer and the deferral (this ADR).
+2. [ ] **Deferred:** extract a `windingNumber(points, { onSingular })` primitive (with a selectable
+       singular-sample policy) into `@cas/core` when a third consumer appears or the plotter/AP finders are
+       unified — plotter tests green before & after.
+3. [ ] **Watch:** if either app's winding accumulator changes materially, mirror the change in the other until
+       the primitive is extracted.
