@@ -46,13 +46,21 @@ export interface NavHandle {
   detach(): void;
 }
 
+export interface PanZoomOptions {
+  /** When this returns false, drag-panning is locked and the wheel zooms about the view centre instead
+   *  of the cursor (so a fixed, centred domain — e.g. the unit disk of a region map — cannot drift). */
+  panEnabled?: () => boolean;
+}
+
 /** Wire pointer-drag panning and wheel zoom (about the cursor) on `canvas`. */
 export function attachPanZoom(
   canvas: HTMLCanvasElement,
   get: () => ViewportState,
   set: (v: ViewportState) => void,
+  opts?: PanZoomOptions,
 ): NavHandle {
   let grab: [number, number] | null = null;
+  const panLocked = (): boolean => opts?.panEnabled !== undefined && !opts.panEnabled();
 
   function frac(e: { clientX: number; clientY: number }): { fx: number; fyBottom: number; aspect: number } {
     const r = canvas.getBoundingClientRect();
@@ -64,6 +72,7 @@ export function attachPanZoom(
   }
 
   function onDown(e: PointerEvent): void {
+    if (panLocked()) return; // panning disabled for this source (drag is a no-op)
     const { fx, fyBottom, aspect } = frac(e);
     grab = pixelToWorld(get(), fx, fyBottom, aspect);
     window.addEventListener("pointermove", onMove);
@@ -85,7 +94,9 @@ export function attachPanZoom(
     e.preventDefault();
     const { fx, fyBottom, aspect } = frac(e);
     const v = get();
-    set(zoomAboutCursor(v, fx, fyBottom, aspect, v.zoom * Math.exp(-e.deltaY * 0.0015)));
+    // Pan-locked ⇒ zoom about the view centre (0.5, 0.5) so the centred domain stays put.
+    const [zx, zy] = panLocked() ? [0.5, 0.5] : [fx, fyBottom];
+    set(zoomAboutCursor(v, zx, zy, aspect, v.zoom * Math.exp(-e.deltaY * 0.0015)));
   }
 
   canvas.addEventListener("pointerdown", onDown);

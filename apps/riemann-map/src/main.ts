@@ -965,7 +965,11 @@ function main(): void {
     window.addEventListener("pointerup", up);
   });
 
-  attachPanZoom(canvas, () => state.viewport, setViewport);
+  // The region source's disk pane is the fixed unit disk 𝔻 — panning it is meaningless, so lock the drag
+  // there (wheel-zoom, about the centre, stays for grid detail). Expression + import sources keep pan.
+  attachPanZoom(canvas, () => state.viewport, setViewport, {
+    panEnabled: () => !(modeIsDiskImage(state.render.mode) && diskSourceIsRegion()),
+  });
   window.addEventListener("resize", () => invalidate());
 
   applyMap();
