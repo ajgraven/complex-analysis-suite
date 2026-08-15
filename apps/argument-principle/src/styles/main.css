@@ -322,6 +322,24 @@ button.ghost:disabled {
 .status.warn {
   color: var(--pole);
 }
+.integral {
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.integral b {
+  color: var(--gold);
+}
+.decomp {
+  margin-top: 6px;
+  font-size: 0.86rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.decomp .key {
+  margin-left: 0;
+}
 .anim {
   margin-top: 8px;
   font-size: 0.9rem;

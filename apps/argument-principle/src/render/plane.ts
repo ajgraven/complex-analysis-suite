@@ -357,6 +357,50 @@ export function drawWedge(
   ctx.restore();
 }
 
+/**
+ * Draw an arrow from world point `from` to world point `to` (§11 B5): the factor vector (z − root) whose
+ * winding, summed over the enclosed roots, is the argument principle's Z − P. `dashed` marks a pole
+ * (a subtracted, −1 contribution).
+ */
+export function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  from: Vec2,
+  to: Vec2,
+  color: string,
+  dashed = false,
+): void {
+  const a = map.toPx(from);
+  const b = map.toPx(to);
+  if (!isFinitePx(a) || !isFinitePx(b)) return;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  const len = Math.hypot(dx, dy);
+  if (len < 1) return;
+  const ux = dx / len;
+  const uy = dy / len;
+  const head = Math.min(9, len * 0.4);
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = 1.6;
+  ctx.globalAlpha = 0.9;
+  if (dashed) ctx.setLineDash([5, 4]);
+  ctx.beginPath();
+  ctx.moveTo(a[0], a[1]);
+  ctx.lineTo(b[0], b[1]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // arrowhead at `to`
+  ctx.beginPath();
+  ctx.moveTo(b[0], b[1]);
+  ctx.lineTo(b[0] - head * ux - head * 0.5 * -uy, b[1] - head * uy - head * 0.5 * ux);
+  ctx.lineTo(b[0] - head * ux + head * 0.5 * -uy, b[1] - head * uy + head * 0.5 * ux);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
 function isFinitePx(p: readonly [number, number]): boolean {
   return Number.isFinite(p[0]) && Number.isFinite(p[1]);
 }

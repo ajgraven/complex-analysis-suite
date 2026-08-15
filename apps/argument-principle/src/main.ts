@@ -43,6 +43,7 @@ import {
   drawDiamond,
   drawOrderBadge,
   drawWedge,
+  drawArrow,
   fitViewport,
   type AxisColors,
   type PlaneMap,
@@ -50,6 +51,7 @@ import {
   type Viewport,
 } from "./render/plane.js";
 import { drawArgGraph } from "./render/argGraph.js";
+import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
 import { attachPanZoom, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
@@ -323,10 +325,11 @@ function main(): void {
   speedWrap.append(speedLabel, speedInput);
   const domainChk = checkbox("Domain curve γ", state.render.showDomainCurve);
   const imageChk = checkbox("Image curve f(γ)", state.render.showImageCurve);
+  const decompChk = checkbox("Root vectors", ped().showDecomposition);
   const drawHint = document.createElement("span");
   drawHint.className = "hint";
   drawHint.textContent = "Tip: left-drag on the z-plane to draw a custom contour.";
-  controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, drawHint);
+  controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, decompChk.root, drawHint);
 
   const formula = document.createElement("div");
   formula.className = "formula";
@@ -378,6 +381,12 @@ function main(): void {
   metrics.append(zerosCell.root, polesCell.root, nmpCell.root, windCell.root);
   const status = document.createElement("div");
   status.className = "status";
+  const integralEl = document.createElement("div");
+  integralEl.className = "integral";
+  integralEl.hidden = true;
+  const decompEl = document.createElement("div");
+  decompEl.className = "decomp";
+  decompEl.hidden = true;
   const animEl = document.createElement("div");
   animEl.className = "anim";
   animEl.hidden = true;
@@ -388,7 +397,7 @@ function main(): void {
     "γ. Counts marked <span class=\"approx\">=</span> are exact (f rational, roots found algebraically); " +
     "<span class=\"approx\">≈</span> are numerical estimates (transcendental f, or a winding read from " +
     "the sampled image).";
-  readout.append(metrics, status, animEl, noteEl);
+  readout.append(metrics, status, integralEl, animEl, decompEl, noteEl);
 
   const help = document.createElement("div");
   help.className = "help-overlay";
@@ -639,6 +648,13 @@ function main(): void {
     const zAnim = showAnim ? contourPointAt(contour, anim.t, state.render.resolution) : null;
     const wAnim = zAnim && !model.error ? model.f(zAnim) : null;
 
+    // Roots enclosed by γ — shared by the four readouts, the analytic integral (B4), and the vectors (B5).
+    const encZeros = sing.differentiable ? sing.zeros.filter((r) => insideContour(r.z, contour)) : [];
+    const encPoles = sing.differentiable ? sing.poles.filter((r) => insideContour(r.z, contour)) : [];
+    const zCount = encZeros.reduce((s, r) => s + r.order, 0);
+    const pCount = encPoles.reduce((s, r) => s + r.order, 0);
+    const nmp = zCount - pCount;
+
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
         // A2 — couple γ to f(γ)'s parameter-t ramp so a point on γ maps to the same-colored point on f(γ).
@@ -659,6 +675,12 @@ function main(): void {
         drawOrderBadge(ctx, map, z.z, z.order, cZero);
       }
       if (contour.kind === "circle") drawDot(ctx, map, [contour.centerRe, contour.centerIm], cCenter, 3);
+      // B5 — the factor vectors (z(t) − root): each enclosed zero (+1) and pole (−1) winds once as z
+      // circles γ, and the signed sum is Z − P. Drawn during traversal so the winding is watchable.
+      if (showAnim && ped().showDecomposition && zAnim) {
+        for (const r of encZeros) drawArrow(ctx, map, r.z, zAnim, cZero, false);
+        for (const r of encPoles) drawArrow(ctx, map, r.z, zAnim, cPole, true);
+      }
       if (zAnim) drawDot(ctx, map, zAnim, cTrace, 6);
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
@@ -721,6 +743,50 @@ function main(): void {
       );
     } else {
       argPanel.hidden = true;
+    }
+
+    // B4 — the analytic integral (1/2πi)∮ f′/f dz, a quadrature independent of the winding accumulation
+    // that rounds to the same Z − P. Honest `≈`: it is a Riemann sum, and the pedagogy is that it agrees.
+    const fpFn = model.fp;
+    if (ped().showIntegral && fpFn && sing.differentiable && !model.error && wPts.length > 1) {
+      const fMinusTarget = (z: Cplx): Cplx => {
+        const w = model.f(z);
+        return [w[0] - about[0], w[1] - about[1]];
+      };
+      const atOrigin = about[0] === 0 && about[1] === 0;
+      const integrand = atOrigin ? "f′/f" : "f′/(f−w₀)";
+      if (showAnim) {
+        const vpart = normalizeByTwoPiI(partialLogDerivIntegral(fMinusTarget, fpFn, zPts, anim.t))[0];
+        integralEl.hidden = false;
+        integralEl.innerHTML =
+          `<span class="approx">≈</span> (1/2πi) ∮ ${integrand} dz so far = ` +
+          `<b>${Number.isFinite(vpart) ? vpart.toFixed(3) : "—"}</b> → converging to ${nmp} = zeros − poles`;
+      } else {
+        const val = normalizeByTwoPiI(logDerivIntegral(fMinusTarget, fpFn, zPts))[0];
+        if (Number.isFinite(val)) {
+          integralEl.hidden = false;
+          integralEl.innerHTML =
+            `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
+            `<b>${val.toFixed(3)}</b> → ${Math.round(val)} = zeros − poles`;
+        } else {
+          integralEl.hidden = true;
+        }
+      }
+    } else {
+      integralEl.hidden = true;
+    }
+
+    // B5 — the decomposition note (the vectors are drawn in the z-pane above).
+    if (ped().showDecomposition && showAnim && zAnim && sing.differentiable) {
+      const eq = sing.exact ? "=" : "≈";
+      decompEl.hidden = false;
+      decompEl.innerHTML =
+        `Root vectors: each enclosed <span class="key zero">zero</span> winds +1, each ` +
+        `<span class="key pole">pole</span> −1 as z circles γ · Σ = ${zCount} − ${pCount} ` +
+        `<span class="approx">${eq}</span> ${nmp}` +
+        (sing.exact ? " (exact — f rational)" : " (illustrative — f transcendental)");
+    } else {
+      decompEl.hidden = true;
     }
 
     updateReadout(contour, wPts, about);
@@ -874,6 +940,9 @@ function main(): void {
   );
   imageChk.input.addEventListener("change", () =>
     commit({ ...state, render: { ...state.render, showImageCurve: imageChk.input.checked } }, false),
+  );
+  decompChk.input.addEventListener("change", () =>
+    commit({ ...state, pedagogy: { ...ped(), showDecomposition: decompChk.input.checked } }, false),
   );
   clearBtn.addEventListener("click", () => {
     draftPath = null;
