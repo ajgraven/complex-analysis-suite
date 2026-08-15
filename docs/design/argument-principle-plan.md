@@ -1,13 +1,16 @@
 # Argument Principle Tool — Construction & Implementation Plan
 
-> **Status:** **PLANNED — not yet scaffolded.** This is the runbook for the suite's **sixth** app,
-> `apps/argument-principle`: an educational visualizer for the argument principle
-> (winding number of `f(γ)` about `0` **=** zeros − poles of `f` enclosed by `γ`). The topology decision
-> — a **separate app**, not a mode inside the plotter — is recorded in
-> [ADR-0019](../DECISIONS.md#adr-0019-argument-principle-as-a-separate-app). Scope is **parity with the
-> reference applet** (`andrewgraven.com/mathvisualizations/ArgumentPrinciple/argument_principle.html`),
-> plus suite hand-off and honest labeling; a small set of enhancements (traversal animation, phase-tint
-> background) are tracked but not parity-blocking.
+> **Status:** **ALL PHASES COMPLETE (0–4) — publish-wired.** The suite's **sixth** app,
+> `apps/argument-principle`, is built: an educational visualizer for the argument principle
+> (winding number of `f(γ)` about `0` **=** zeros − poles of `f` enclosed by `γ`). Phases 0–3 shipped the
+> dual z/w view, the cursor/freehand contour, the exact-or-estimated zero/pole finder with the four
+> `N − P = winding` readouts, the animated traversal, suite hand-off, and PNG export; Phase 4 recorded the
+> primitive-extraction decision ([ADR-0020](../DECISIONS.md#adr-0020-defer-the-winding--singularity-primitive-extraction-second-consumer-noted):
+> **deferred** — the plotter/AP finders diverged) and flipped the launcher card to a live link + added the
+> `deploy-pages.yml` `cp`, so it **goes live on the next merge to `master`**. The topology decision (a
+> **separate app**, not a mode in the plotter) is [ADR-0019](../DECISIONS.md#adr-0019-argument-principle-as-a-separate-app).
+> See the Build-progress record below. E3 (phase-tint background) and E4 (producer "send-to" links) remain a
+> tracked, optional backlog.
 >
 > This document is the _how_. It mirrors the suite's proven runbook style
 > ([`../MIGRATION.md`](../MIGRATION.md), [`complex-function-plotter-plan.md`](complex-function-plotter-plan.md)):
@@ -179,8 +182,11 @@ interpretation stays in each app. That keeps the extraction on the right side of
   surface is its own app. The plotter's argument-principle readout is a small analysis instrument beside its
   domain-coloring headline; this is a dedicated _educational dual-view_ product with its own contour
   interaction. Separate app.
-- **ADR-0020 — Extract the winding / singularity primitive.** _To write at Phase 4_, only if the
-  second-consumer rule confirms it, with the plotter refactored to consume it.
+- **ADR-0020 — The winding / singularity primitive extraction decision.** _Written at Phase 4:_ **deferred.**
+  The second consumer is real, but the plotter and Argument-Principle finders diverged (AP added a
+  rational-exact path + critical points; their winding accumulators differ on singular-sample handling), so no
+  shared package is taken now — mirroring the ADR-0008 / ADR-0018 deferrals. Revisit on a third consumer or a
+  unified interface.
 - **Interchange note** — no schema change: this tool consumes the existing `expr` / `view` envelopes. If the
   E4 producer link is added, record it as a minor, additive provenance detail.
 
@@ -356,4 +362,4 @@ parity-blocking:
 | 1 — Live winding (interactivity) | ✅ done | `39b4ac6` | C3 (KaTeX preview via `@cas/expr/latex`), V2 (cursor-follows γ), V4 (per-pane right/drag-pan + wheel-zoom + Reset/Fit), U1 (radius slider); coord authority in `plane.ts` (pan/zoom invert the draw map exactly), `nav.ts` wiring, coalesced rAF render + debounced `#vs=` persist; +`nav.test.ts` (34 tests total). GT: real-browser boot clean (Chromium) — default winding 3, KaTeX renders, hover moves γ + recomputes; `lint`/`typecheck`/`test`/`build` green |
 | 2 — Zeros/poles instrument (the four readouts) | ✅ done | `794859a` `a7e9498` | **2a** `singularities.ts`: rational (exact, `fToRational`→Durand–Kerner, `=`) + transcendental (grid+Newton+winding, `≈`) finder; ✕/◆ markers + order badges; the four readouts (Zeros·Poles·N−P·Winding) counted inside γ with honest `=`/`≈` + agreement status. **2b** freehand contour (left-drag, auto-oriented CCW so winding = N−P), Clear, resolution slider, domain/image toggles. GT (`singularities.test.ts`): `N−P = winding` on all 8 presets **and** for a drawn polygon; +`contour`/`orientCCW` tests (54 total). Real-browser verified (Chromium): default 3/0/3/3 "✓", freehand draw holds the theorem |
 | 3 — Hand-off, export & pedagogy | ✅ done | `607f2aa` `c7fa962` + _this commit_ | **3a** I2 — `#s=` import (`interchange/importMap.ts` ported from the plotter) + boot banner; GT `importMap.test.ts`: consumes the real CD Böttcher golden (`(1)*z + (0.5)/z^2`, ψ(2)=2.125) + a `view` round-trip. **3b** E1 — animated γ traversal: a point marks γ↔f(γ) with an arg-vector, and an accumulator sweeps the argument to the winding number (`contourPointAt` + `partialWindingTurns`, unit-tested). **3c** I3 — Save PNG with the `#vs=` permalink embedded as `tEXt` (`@cas/export`) + a help panel. 59 tests. Real-browser verified each (import banner, live traversal, PNG metadata, help open/close). E3 (phase tint) / E4 (producer "send-to") deferred as optional |
-| 4 — Extract (if earned) & publish | ◻ next | — | ADR-0020 candidate; launcher flip + deploy `cp` |
+| 4 — Extract (if earned) & publish | ✅ done | _this commit_ | Extraction **evaluated and deferred** — [ADR-0020](../DECISIONS.md#adr-0020-defer-the-winding--singularity-primitive-extraction-second-consumer-noted): the second consumer is real, but the plotter/AP finders diverged (rational-exact + critical points; different singular-sample winding semantics), so no shared package is taken now (mirrors ADR-0008/0018 deferrals). **Published:** launcher "Coming soon" → a live `argument-principle/` link + meta copy; `cp -r apps/argument-principle/dist _site/argument-principle` in `deploy-pages.yml`. Goes live on the next merge to `master`. Full workspace gate green |
