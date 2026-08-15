@@ -25,7 +25,7 @@
 | Phase | Status | Commits | Coverage |
 |---|---|---|---|
 | **0 — Gauss–Jacobi quadrature primitive** | ✅ done | _this commit_ | `gaussJacobi.ts` (Golub–Welsch GJ/GL rules) + `scQuadrature.ts` (compound `d<ℓ/(3√2)` subdivision); GT: regular-n-gon circumradii to ≥10 digits + the compound rule beating a single panel near a strong singularity |
-| **1 — Forward SC map, given prevertices** | ⬜ planned | — | the symmetric golden cases (n-gons, square) |
+| **1 — Forward SC map, given prevertices** | ✅ done | _this commit_ | `schwarzChristoffel.ts` — SC integrand + compound side integrals + A/C recovery + forward eval; GT: regular n-gons to ≥10 digits, the square recovering conformal radius 2/K(1/√2) with corners + edge midpoint |
 | **2 — The parameter problem (general polygons)** | ⬜ planned | — | lightning-seeded Gauss–Newton |
 | **3 — Two-mode API + invariants + fast mode** | ⬜ planned | — | Option A wiring; the public surface |
 | **F (fast-follow) — inverse map** | ⬜ deferred | — | ODE+Newton (polygon→𝔻) |
