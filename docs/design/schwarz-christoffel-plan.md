@@ -1,9 +1,14 @@
 # Schwarz–Christoffel Engine — Construction & Implementation Plan
 
-> **Status: PLANNED (not started).** Roadmap **step E**: build a Schwarz–Christoffel (SC) mapping
-> engine into [`@cas/conformal`](../../packages/conformal) — the anticipated **second consumer**
-> [ADR-0018](../DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)
-> pre-committed a home for, retro-justifying that extract-ahead-of-demand. This document is the *how*;
+> **Status: v1 COMPLETE (Phases 0–3).** Roadmap **step E**: a Schwarz–Christoffel (SC) mapping engine in
+> [`@cas/conformal`](../../packages/conformal) — the **second consumer** that retro-justifies the
+> ahead-of-demand extraction of
+> [ADR-0018](../DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore); the
+> method-choice record is
+> [ADR-0020](../DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode).
+> **Precise mode reaches machine precision on convex + reentrant polygons; fast (lightning) mode is
+> reliable for convex/mild corners and flags `degraded` on strongly reentrant ones** (a known limitation —
+> the reentrant polygon lightning fit is deferred tuning). This document is the *how*;
 > the *why* and the literature/ground-truth are in the companion
 > [`schwarz-christoffel-research-notes.md`](schwarz-christoffel-research-notes.md). Guardrails:
 > [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
@@ -12,7 +17,7 @@
 > Mirrors the suite's proven runbook style ([`../MIGRATION.md`](../MIGRATION.md)): **phase gates that
 > are each shippable, a motivating win early, a ground-truth validation per phase, and test-guarded
 > shared-package changes.** Nothing here re-litigates a locked ADR; the one new decision (the method
-> choice) is flagged as **ADR-0019 to write** at the first gate (§7).
+> choice) is flagged as **ADR-0020 to write** at the first gate (§7).
 
 ---
 
@@ -27,7 +32,7 @@
 | **0 — Gauss–Jacobi quadrature primitive** | ✅ done | _this commit_ | `gaussJacobi.ts` (Golub–Welsch GJ/GL rules) + `scQuadrature.ts` (compound `d<ℓ/(3√2)` subdivision); GT: regular-n-gon circumradii to ≥10 digits + the compound rule beating a single panel near a strong singularity |
 | **1 — Forward SC map, given prevertices** | ✅ done | _this commit_ | `schwarzChristoffel.ts` — SC integrand + compound side integrals + A/C recovery + forward eval; GT: regular n-gons to ≥10 digits, the square recovering conformal radius 2/K(1/√2) with corners + edge midpoint |
 | **2 — The parameter problem (general polygons)** | ✅ done | _this commit_ | `scParameterProblem.ts` — softmax gap parametrization (3 logits frozen for the gauge) + damped Gauss–Newton (finite-diff Jacobian, one `lstsqHouseholder` step each); seed pluggable (lightning wired in Phase 3). GT: scalene triangle, regular pentagon from a skewed seed, reentrant L-shape — all reproduced to ≥10 digits |
-| **3 — Two-mode API + invariants + fast mode** | ⬜ planned | — | Option A wiring; the public surface |
+| **3 — Two-mode API + invariants + fast mode** | ✅ done | _this commit_ | public `fitSchwarzChristoffel` (`scMap.ts`, Option A): precise (machine precision, convex+reentrant), fast (lightning; convex reliable ~3–4 digits, reentrant `degraded`-flagged), warm-start continuation, quadrilateral modulus + centre; barrel export + README; [ADR-0020](../DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode) |
 | **F (fast-follow) — inverse map** | ⬜ deferred | — | ODE+Newton (polygon→𝔻) |
 
 ---
@@ -71,7 +76,7 @@ PRECISE: seed the SC parameter problem with those zₖ  →  Gauss–Newton (eac
 Natural UX (when the app wires it later): **drag with lightning, release → SC refine.** The
 representational seam — fast reports lightning's *approximate* prevertices, precise reports the
 *SC-solved* ones — is made honest by a `converged` flag and the `≈` residual (§1.5), never hidden.
-Rationale and the rejected alternative (one SC engine at two tolerances) are the ADR-0019 record (§7).
+Rationale and the rejected alternative (one SC engine at two tolerances) are the ADR-0020 record (§7).
 
 ### 1.2 The one new primitive stays in `@cas/conformal` (ADR-0007)
 
@@ -243,7 +248,7 @@ machine minus the nonlinear solve.
 - **Precise:** forward ≥12 digits; golden corpus ≥10 digits; crowding wall detected + labeled.
 - **Fast:** instant, warm-startable, ~6–8 digits, honestly `≈`/`converged:false`.
 - **Outputs:** prevertices, A, C, modulus, center, residual — read-only on `SCMap`.
-- **ADR-0019 written** (§7). Full gate green; census raised. **No app UI, no interchange, no inverse**
+- **ADR-0020 written** (§7). Full gate green; census raised. **No app UI, no interchange, no inverse**
   (all deferred, by design).
 
 ---
@@ -257,7 +262,7 @@ crowding/flags). Pause at each gate for review per the suite's runbook disciplin
 
 ---
 
-## 7. ADR to write (ADR-0019, at the Phase-1 gate)
+## 7. ADR to write (ADR-0020, at the Phase-1 gate)
 
 Record the **method choice**, since it's a real decision with rejected alternatives:
 

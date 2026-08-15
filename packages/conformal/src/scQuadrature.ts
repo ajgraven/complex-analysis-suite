@@ -37,7 +37,8 @@ export interface QuadratureOptions {
   nGaussLegendre?: number;
   /** Ill-separation threshold: subdivide when d(e) < separation·ℓ(e). Default 1/(3√2) ≈ 0.2357. */
   separation?: number;
-  /** Recursion cap on three-way subdivision (default 24). */
+  /** Recursion cap on three-way subdivision (default 10; legitimate corners need ~3, this bounds
+   *  the pathological crowded case that would otherwise blow up as 3^depth panels). */
   maxDepth?: number;
 }
 
@@ -78,7 +79,7 @@ export function integrateSegment(
   const nGJ = opts?.nGaussJacobi ?? 16;
   const nGL = opts?.nGaussLegendre ?? 16;
   const sep = opts?.separation ?? 1 / (3 * Math.SQRT2);
-  const maxDepth = opts?.maxDepth ?? 24;
+  const maxDepth = opts?.maxDepth ?? 10;
   const gl = gaussLegendre(nGL);
 
   const legendrePanel = (full: (t: C) => C, a: C, b: C): C => {

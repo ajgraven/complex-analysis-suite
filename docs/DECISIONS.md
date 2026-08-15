@@ -27,9 +27,11 @@ Format follows Michael Nygard's ADR convention.
 | [0016](#adr-0016-extract-casexport--shared-png-text-metadata--shared-glsl-snippets) | Extract `@cas/export` — shared PNG `tEXt` metadata (+ shared GLSL snippets) | Accepted |
 | [0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) | CD → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer | Accepted |
 | [0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) | Extract `@cas/conformal` ahead of demand; lift `lstsq` into `@cas/core` | Accepted |
+| [0019](#adr-0019-argument-principle-as-a-separate-app) | Argument Principle as a separate app | Accepted |
+| [0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode) | Schwarz-Christoffel engine: lightning-seeded, disk-canonical, two-mode | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All eighteen are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All twenty are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -1595,7 +1597,8 @@ Two moves, both recorded here:
 5. [ ] **Deferred:** consolidate QD's `solver.mjs` least squares onto `@cas/core` — needs a selectable
    rank-deficiency policy to reconcile the `1e-300`/`1e-13` + zero-fill/throw divergence, and to preserve QD's
    `condEst`/refinement. QD is the anticipated second consumer.
-6. [ ] **Anticipated:** build Schwarz–Christoffel (roadmap step E) into `@cas/conformal` — the builder's second consumer.
+6. [x] **Done:** build Schwarz–Christoffel (roadmap step E) into `@cas/conformal` — the builder's second consumer
+   (its method-choice record is [ADR-0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)).
 
 ---
 
@@ -1793,3 +1796,63 @@ shared finder or a shared winding primitive in this step.
        unified — plotter tests green before & after.
 3. [ ] **Watch:** if either app's winding accumulator changes materially, mirror the change in the other until
        the primitive is extracted.
+
+---
+
+## ADR-0020: Schwarz-Christoffel engine: lightning-seeded, disk-canonical, two-mode
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*The method-choice record for the Schwarz–Christoffel (SC) engine (roadmap step E), built into
+[`@cas/conformal`](../packages/conformal) — the **second consumer** that retro-justifies the
+ahead-of-demand extraction of [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore).
+Grounded in a four-thread literature + implementation survey; the full runbook and ground-truth corpus are in
+[`design/schwarz-christoffel-plan.md`](design/schwarz-christoffel-plan.md) and its research-notes companion.*
+
+### Context
+The suite already maps polygons numerically (the lightning engine in `@cas/conformal`). So SC's value is not a
+better *map* but the exact analytic *record* — prevertices, exact corner exponents, accessory constants — plus
+robustness. Four sub-decisions follow: the canonical domain, the numerical method, the two-mode structure, and
+where the one new primitive lives.
+
+### Decision
+1. **Lightning-seeded SC, disk-canonical.** Map from the unit disk 𝔻 (matches `@cas/conformal`'s existing
+   `f: Ω→𝔻` / `g: 𝔻→Ω` API and the cleanest golden cases). For `|t| ≤ 1` every factor `(1 − t/wₖ)` stays in the
+   right half-plane, so the disk needs none of the half-plane's branch bookkeeping.
+2. **Two modes, one result type (Option A).** `fast` = the lightning fit (instant, warm-startable, the SC
+   prevertices read off `f(vₖ)` for free); `precise` = the classical parameter-problem solve (softmax gap
+   parametrization + damped Gauss–Newton, each step a `@cas/core` `lstsqHouseholder`), seeded via `warmStart` by
+   a fast/prior solve — the "drag with lightning, release to refine" path. Precise reaches machine precision on
+   convex **and** reentrant polygons.
+3. **Gauss–Jacobi quadrature stays in `@cas/conformal`** (SC's only new primitive) — **not** lifted to
+   `@cas/core`, per [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need): SC is its only consumer
+   (contrast `lstsq`, which QD's near-twin justified lifting in ADR-0018).
+4. **Forward-only v1.** The inverse map, CRDT, exterior/unbounded/circular-arc variants, and interchange
+   serialization are deferred.
+
+### Options Considered
+- **A (chosen) — lightning-seeded SC reusing the substrate.** Reuses the built lightning fit + Arnoldi + `lstsq`;
+  adds only Gauss–Jacobi. Fast mode is genuinely instant; precise is machine-precision.
+- **B — one SC engine at two tolerances (loose vs tight).** *Rejected:* spends effort making a nonlinear solve
+  do the linear lightning solve's job; heavier per-frame; a worse fit for a real-time fast mode.
+- **C — skip SC, rely on lightning + AAA-LS.** *Rejected:* forfeits the exact analytic record and the meaningful
+  prevertices — the whole reason to build SC.
+
+### Consequences
+- **Delivered:** SC retro-justifies ADR-0018 (its promised second consumer); `@cas/conformal` gains its second
+  engine; the public `fitSchwarzChristoffel` exposes prevertices, `C`, `A`, the quadrilateral conformal modulus,
+  and an honest `residual`. Precise mode is the robust all-polygon workhorse (machine precision).
+- **Known limitation (honest, not hidden):** the polygon *lightning* fit (fast mode) is reliable for convex/mild
+  corners but fails on strongly **reentrant** corners — fast mode sets `degraded:true` there, and precise mode is
+  the path for reentrant polygons. Proper Gopal–Trefethen reentrant pole handling is deferred tuning.
+- **Revisit:** when the deferred roadmap lands (inverse map → CRDT → variants → interchange), and if a second
+  consumer of Gauss–Jacobi appears (then it earns a place in `@cas/core`, per ADR-0007).
+
+### Action Items
+1. [x] Gauss–Jacobi quadrature primitive (Golub–Welsch) + the compound rule (Phase 0).
+2. [x] Forward SC map for given prevertices (Phase 1); golden n-gon / square validation.
+3. [x] The parameter-problem solver (Phase 2); triangle / pentagon / L-shape to ≥10 digits.
+4. [x] The two-mode `fitSchwarzChristoffel` API + invariants + warm start (Phase 3).
+5. [ ] **Deferred (fast-follow):** the inverse map (polygon → 𝔻) by ODE + Newton.
+6. [ ] **Deferred:** CRDT (crowding), exterior/unbounded/circular-arc variants, `@cas/interchange`
+       serialization, a robust reentrant lightning fast-mode, and the Riemann-map app UI wiring.

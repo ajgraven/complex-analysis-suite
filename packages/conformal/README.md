@@ -2,8 +2,9 @@
 
 The **conformal-map builder** for the suite: given the boundary of a Jordan domain Ω, construct the
 Riemann map to (and from) the unit disk 𝔻. It is the numerical engine behind the Riemann-map studio's
-"forward numerical map 𝔻 → Ω" source, and the home the alternative conformal engines (Schwarz–Christoffel,
-AAA, zipper — roadmap Tier 3) will be built into.
+"forward numerical map 𝔻 → Ω" source, and it now also hosts the **Schwarz–Christoffel** engine for
+polygons (`fitSchwarzChristoffel`); the other alternative engines (AAA, zipper — roadmap Tier 3) are the
+future tenants.
 
 Strict TypeScript on [`@cas/core`](../core) (its Householder-QR least squares is the numerical workhorse
 the fits stand on). Convention-neutral per
@@ -29,8 +30,11 @@ import {
   arnoldiBasis, evalArnoldi, evalExpansion, cabs,   // ./vandermondeArnoldi — the stable basis
   fitConformalMap, fitSmoothConformalMap,           // ./lightning  — f: Ω → 𝔻
   fitForwardMap,                                     // ./forwardMap — g: 𝔻 → Ω
+  fitSchwarzChristoffel,                             // ./scMap      — the SC map of a polygon
+  buildForwardMap, solveParameterProblem,           // SC internals, if you want them directly
+  gaussJacobi, integrateSegment,                    // the quadrature primitives
 } from "@cas/conformal";
-import type { ArnoldiBasis, C, ConformalMap, ForwardMap } from "@cas/conformal";
+import type { ArnoldiBasis, C, ConformalMap, ForwardMap, Polygon, SCMap, SCOptions } from "@cas/conformal";
 ```
 
 The public complex type is `C = [re, im]` (tuple representation).
@@ -50,13 +54,33 @@ carries a `boundaryResidual` (maxⱼ ‖f(zⱼ)|−1‖), the honest `≈` accur
 `f` pointwise (which is fragile near corners). This is the direction the studio's primary view needs — it
 watches the disk's polar grid land on the region. Also `≈`, with its own `boundaryResidual`.
 
+**`fitSchwarzChristoffel`** — the **Schwarz–Christoffel** map `f: 𝔻 → polygon` for a bounded simple polygon
+(roadmap step E; [ADR-0020](../../docs/DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)), `f(w) = A + C·∫₀ʷ ∏ₖ(1 − t/wₖ)^{αₖ−1} dt`. Two modes
+share one honestly-flagged `SCMap` (Option A):
+
+- **precise** (default) — the classical parameter-problem solve (`scParameterProblem`: softmax gap
+  parametrization + damped Gauss–Newton, each step an `@cas/core` least-squares) followed by the exact SC
+  forward map (`buildForwardMap`, side integrals via compound Gauss–Jacobi quadrature). Reaches machine
+  precision on convex **and** reentrant polygons. Outputs the prevertices, the accessory constants `C = f′(0)`
+  and `A = f(0)` (conformal centre), the quadrilateral **conformal modulus**, and an honest `residual`.
+- **fast** — the lightning fit (Ω → 𝔻 with corner-clustered poles): instant, warm-startable, `converged:false`,
+  the prevertices read off `f(vₖ)` for free. Reliable for convex/mild polygons (a few digits, honestly
+  `≈`-tagged); it sets `degraded:true` when the fit is untrustworthy (strongly reentrant corners — a known
+  limitation of the polygon lightning fit; use precise there). `warmStart` feeds a fast (or prior) solve into
+  precise as its Gauss–Newton seed — the "drag with lightning, release to refine" continuation path.
+
+Deferred (roadmap): the inverse map (polygon → 𝔻), CRDT for elongated/crowded polygons, exterior/unbounded/
+circular-arc variants, and `@cas/interchange` serialization. See
+[`docs/design/schwarz-christoffel-plan.md`](../../docs/design/schwarz-christoffel-plan.md).
+
 ## Consumers
 
 - **Riemann Map** (`apps/riemann-map/src/main.ts`) — the forward-numerical-map source: pick a smooth region,
   fit `f` then `g`, and render the image of the disk's polar grid under `g`.
-- **Anticipated: Schwarz–Christoffel** (roadmap step E) and the other Tier-3 engines — the reason for the
-  ahead-of-demand extraction. The `corners?` parameter on `fitConformalMap` / `fitForwardMap` is already the
-  hook they plug into.
+- **Schwarz–Christoffel** (`fitSchwarzChristoffel`, roadmap step E) — the second consumer that retro-justifies
+  the ahead-of-demand extraction (ADR-0018 → [ADR-0020](../../docs/DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)). It reuses the lightning fit
+  (for the fast mode and the SC prevertex seed) and `@cas/core`'s least squares (for the Gauss–Newton step).
+- **Anticipated:** the other Tier-3 engines (AAA, zipper) — future tenants of this package.
 
 ## Tests
 
@@ -67,3 +91,11 @@ ellipse and off-centre circle staying finite, accurate, and inside Ω). The disk
 those assertions are tight; the smooth-region cases assert the `boundaryResidual` the method actually earns.
 The Riemann-map app additionally exercises the builder over its real domain-preset library in
 `apps/riemann-map/test/forwardMap.test.ts`.
+
+The Schwarz–Christoffel engine is validated against closed-form golden values: `test/gaussJacobi.test.ts`
+(known Gauss–Legendre/Jacobi rules + polynomial exactness), `test/scQuadrature.test.ts` (regular-n-gon
+integrals `(1/n)B(1/n,1−2/n)` + the compound rule beating a single panel near a singularity),
+`test/schwarzChristoffel.test.ts` (regular n-gons; the square recovering conformal radius `2/K(1/√2)`),
+`test/scParameterProblem.test.ts` (a scalene triangle, a pentagon from a skewed seed, a reentrant L-shape —
+all reproduced to ≥10 digits), and `test/scMap.test.ts` (the two-mode `fitSchwarzChristoffel` API, warm start,
+modulus, and the honest fast-mode `degraded` flag).
