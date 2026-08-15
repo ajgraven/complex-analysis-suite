@@ -311,6 +311,52 @@ export function drawOrderBadge(
   ctx.restore();
 }
 
+/**
+ * Fill the angular sector swept so far about `center` (§11 A3): a pie slice from `startAngle`, opening by
+ * `sweep` radians (signed — the direction of winding), out to `radiusWorld`. Sampled in world space and
+ * mapped through `toPx`, so it lines up with the drawn argument-vector regardless of the y-flip. When one
+ * or more full revolutions have already been completed, `fullTurns` stamps a "×k" badge at the center, so
+ * the wedge reads "filling the current turn; k whole turns already banked."
+ */
+export function drawWedge(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  center: Vec2,
+  startAngle: number,
+  sweep: number,
+  radiusWorld: number,
+  color: string,
+  fullTurns = 0,
+): void {
+  const c = map.toPx(center);
+  if (!isFinitePx(c) || !(radiusWorld > 0)) return;
+  const steps = Math.max(2, Math.ceil(Math.abs(sweep) / (Math.PI / 48)));
+  ctx.save();
+  if (Math.abs(sweep) > 1e-4) {
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath();
+    ctx.moveTo(c[0], c[1]);
+    for (let k = 0; k <= steps; k++) {
+      const ang = startAngle + sweep * (k / steps);
+      const p = map.toPx([center[0] + radiusWorld * Math.cos(ang), center[1] + radiusWorld * Math.sin(ang)]);
+      if (!isFinitePx(p)) continue;
+      ctx.lineTo(p[0], p[1]);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
+  if (fullTurns >= 1) {
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = color;
+    ctx.font = "600 12px ui-sans-serif, system-ui, sans-serif";
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    ctx.fillText(`×${fullTurns}`, c[0], c[1] - 12);
+  }
+  ctx.restore();
+}
+
 function isFinitePx(p: readonly [number, number]): boolean {
   return Number.isFinite(p[0]) && Number.isFinite(p[1]);
 }

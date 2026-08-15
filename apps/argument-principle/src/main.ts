@@ -17,9 +17,11 @@ import type { Complex } from "@cas/expr/complex";
 import {
   DEFAULT_VIEW_STATE,
   DEFAULT_TARGET,
+  DEFAULT_PEDAGOGY,
   decodeArgPrincipleState,
   encodeArgPrincipleState,
   type ArgPrincipleViewState,
+  type PedagogyState,
 } from "./viewState.js";
 import { FUNCTION_PRESETS, presetIdForExpr } from "./presets.js";
 import {
@@ -31,7 +33,7 @@ import {
   orientCCW,
   type ContourShape,
 } from "./contour.js";
-import { windingTurns, windingReliable, partialWindingTurns } from "./winding.js";
+import { windingTurns, windingReliable, partialWindingTurns, cumulativeArg } from "./winding.js";
 import {
   planeMap,
   drawAxes,
@@ -40,12 +42,14 @@ import {
   drawX,
   drawDiamond,
   drawOrderBadge,
+  drawWedge,
   fitViewport,
   type AxisColors,
   type PlaneMap,
   type Vec2,
   type Viewport,
 } from "./render/plane.js";
+import { drawArgGraph } from "./render/argGraph.js";
 import { attachPanZoom, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
@@ -340,7 +344,7 @@ function main(): void {
   const zCanvas = makeCanvas();
   const zCap = document.createElement("figcaption");
   zCap.innerHTML =
-    "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · " +
+    "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · γ colored by t (matches f(γ)) · " +
     '<span class="key zero">✕ zero</span> <span class="key pole">✕ pole</span> ' +
     '<span class="key crit">◆ f′=0</span>';
   zPane.append(zCanvas, zCap);
@@ -351,6 +355,17 @@ function main(): void {
   wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag pan, scroll zoom";
   wPane.append(wCanvas, wCap);
   stage.append(zPane, wPane);
+
+  // A1 — the always-on argument strip-chart: accumulated turns of arg f(γ(t)) vs t.
+  const argPanel = document.createElement("figure");
+  argPanel.className = "pane arg-panel";
+  const argCanvas = document.createElement("canvas");
+  argCanvas.className = "argplot";
+  const argCap = document.createElement("figcaption");
+  argCap.innerHTML =
+    "<b>Argument</b> — accumulated turns of arg f(γ(t)) vs t · one turn = 2π · " +
+    "the curve lands on the winding number";
+  argPanel.append(argCanvas, argCap);
 
   const readout = document.createElement("div");
   readout.className = "readout";
@@ -401,7 +416,7 @@ function main(): void {
       </ul>
     </div>`;
 
-  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, readout, help);
+  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -432,6 +447,10 @@ function main(): void {
   function aboutPoint(): Vec2 {
     const t = state.target ?? DEFAULT_TARGET;
     return [t.re, t.im];
+  }
+  /** The pedagogy toggles in effect (always complete — decode back-fills, DEFAULT carries them). */
+  function ped(): PedagogyState {
+    return state.pedagogy ?? DEFAULT_PEDAGOGY;
   }
   /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
    *  view and every root inside γ is covered (the transcendental grid only finds what it samples). */
@@ -519,8 +538,11 @@ function main(): void {
    *  carries its own recipe — @cas/export). */
   function savePng(): void {
     const gap = 8;
-    const w = zCanvas.width + wCanvas.width + gap;
-    const h = Math.max(zCanvas.height, wCanvas.height);
+    const topW = zCanvas.width + wCanvas.width + gap;
+    const topH = Math.max(zCanvas.height, wCanvas.height);
+    const stripH = !argPanel.hidden && argCanvas.width > 0 ? argCanvas.height : 0;
+    const w = Math.max(topW, stripH ? argCanvas.width : 0);
+    const h = topH + (stripH ? stripH + gap : 0);
     if (w < 4 || h < 4) return;
     const off = document.createElement("canvas");
     off.width = w;
@@ -531,6 +553,7 @@ function main(): void {
     ctx.fillRect(0, 0, w, h);
     ctx.drawImage(zCanvas, 0, 0);
     ctx.drawImage(wCanvas, zCanvas.width + gap, 0);
+    if (stripH) ctx.drawImage(argCanvas, 0, topH + gap);
     off.toBlob((blob) => {
       if (!blob) return;
       void blob.arrayBuffer().then((buf) => {
@@ -618,7 +641,13 @@ function main(): void {
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
-        drawPolyline(ctx, map, zPts, { closed: true, color: cZero, width: 2 });
+        // A2 — couple γ to f(γ)'s parameter-t ramp so a point on γ maps to the same-colored point on f(γ).
+        drawPolyline(
+          ctx,
+          map,
+          zPts,
+          ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cZero, width: 2 },
+        );
       }
       for (const c of sing.critical) drawDiamond(ctx, map, c.z, cCrit);
       for (const p of sing.poles) {
@@ -637,6 +666,27 @@ function main(): void {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
       drawDot(ctx, map, about, cPole, 5);
+      // A3 — the swept-wedge about the target: a pie slice filling the current revolution, aligned to the
+      // argument-vector; a "×k" badge banks completed turns. Paired with the strip-chart, it reads as
+      // "the wedge fills one turn, the counter ticks, it fills again…".
+      if (
+        showAnim &&
+        ped().showWedge &&
+        wAnim &&
+        Number.isFinite(wAnim[0]) &&
+        Number.isFinite(wAnim[1]) &&
+        wPts.length > 1
+      ) {
+        const swept = partialWindingTurns(wPts, anim.t, about);
+        const frac = swept - Math.trunc(swept);
+        const w0 = wPts[0];
+        const startAng = Math.atan2(w0[1] - about[1], w0[0] - about[0]);
+        const scale = map.heightPx / (2 * map.halfH); // world→px (uniform)
+        const rWorld = Math.hypot(wAnim[0] - about[0], wAnim[1] - about[1]);
+        const capWorld = (0.42 * Math.min(map.widthPx, map.heightPx)) / scale;
+        const radiusWorld = Math.max(24 / scale, Math.min(rWorld, capWorld));
+        drawWedge(ctx, map, about, startAng, 2 * Math.PI * frac, radiusWorld, cTrace, Math.floor(Math.abs(swept)));
+      }
       if (wAnim && Number.isFinite(wAnim[0]) && Number.isFinite(wAnim[1])) {
         const o = map.toPx(about);
         const pp = map.toPx(wAnim);
@@ -651,6 +701,27 @@ function main(): void {
         drawDot(ctx, map, wAnim, cTrace, 6);
       }
     });
+
+    // A1 — the argument strip-chart (always-on): accumulated turns of arg f(γ(t)) climbing to the winding.
+    if (ped().showArgGraph) {
+      argPanel.hidden = false;
+      const haveImg = !model.error && wPts.length > 1;
+      const turns = haveImg ? cumulativeArg(wPts, about) : [0];
+      const wn = haveImg ? Math.round(windingTurns(wPts, about)) : NaN;
+      drawArgGraph(
+        argCanvas,
+        { turns, marker: showAnim ? anim.t : null, winding: Number.isFinite(wn) ? wn : null },
+        {
+          grid: axisColors().grid,
+          axis: axisColors().axis,
+          text: cssVar("--text", "#e7eaf2"),
+          muted: cssVar("--muted", "#8c95a9"),
+          marker: cTrace,
+        },
+      );
+    } else {
+      argPanel.hidden = true;
+    }
 
     updateReadout(contour, wPts, about);
 

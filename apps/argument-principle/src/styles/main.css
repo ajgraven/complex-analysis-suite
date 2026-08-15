@@ -253,6 +253,20 @@ button.ghost:disabled {
   color: var(--text);
 }
 
+/* A1 — the argument strip-chart sits full-width below the two planes; short, fixed height. */
+.arg-panel {
+  min-height: 0;
+  flex: 0 0 auto;
+}
+.arg-panel[hidden] {
+  display: none; /* the [hidden] attribute must beat .pane's display:flex */
+}
+.arg-panel .argplot {
+  width: 100%;
+  height: 132px;
+  display: block;
+}
+
 .readout {
   background: var(--panel);
   border: 1px solid var(--border);
