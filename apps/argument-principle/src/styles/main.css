@@ -1,0 +1,224 @@
+/* apps/argument-principle — P0 shell styles. Theme-aware (auto/dark/light via data-theme on <html>). */
+
+:root {
+  --bg: #0f1115;
+  --panel: #161b24;
+  --panel-2: #1b2130;
+  --border: #262b36;
+  --text: #e7eaf2;
+  --muted: #8c95a9;
+  --accent: #3bb6c0; /* contour / primary */
+  --pole: #e8608f; /* origin / poles */
+  --grid: #232a36;
+  --axis: #3c4658;
+  --err: #ec7a7a;
+  color-scheme: light dark;
+}
+:root[data-theme="light"] {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --panel-2: #eef1f7;
+  --border: #d9dee9;
+  --text: #151a26;
+  --muted: #656e83;
+  --accent: #0d7a86;
+  --pole: #c0356b;
+  --grid: #e7ebf3;
+  --axis: #c2cad8;
+  --err: #b3261e;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #f6f7fb;
+    --panel: #ffffff;
+    --panel-2: #eef1f7;
+    --border: #d9dee9;
+    --text: #151a26;
+    --muted: #656e83;
+    --accent: #0d7a86;
+    --pole: #c0356b;
+    --grid: #e7ebf3;
+    --axis: #c2cad8;
+    --err: #b3261e;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--bg);
+  color: var(--text);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  gap: 12px;
+  padding: 14px clamp(12px, 3vw, 28px) 24px;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.brand strong {
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+.brand span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.spacer {
+  flex: 1;
+}
+button.ghost {
+  background: var(--panel);
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 11px;
+  font: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+button.ghost:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.field.grow {
+  flex: 1 1 240px;
+}
+.field > span {
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.field select,
+.field input {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.field input {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  width: 100%;
+}
+.field select:focus,
+.field input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.err {
+  color: var(--err);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  padding: 0 4px;
+}
+
+.stage {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 340px;
+}
+@media (max-width: 720px) {
+  .stage {
+    grid-template-columns: 1fr;
+  }
+}
+.pane {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  min-height: 320px;
+}
+.pane .plane {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  display: block;
+}
+.pane figcaption {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.pane figcaption b {
+  color: var(--text);
+}
+
+.readout {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+.metric {
+  font-size: 1.05rem;
+}
+.metric b {
+  font-size: 1.35rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.note {
+  color: var(--muted);
+  font-size: 0.86rem;
+  margin: 10px 0 0;
+  max-width: 70ch;
+}
+.approx {
+  color: var(--muted);
+  font-weight: 700;
+}
+.warn {
+  color: var(--pole);
+  font-size: 0.85rem;
+}

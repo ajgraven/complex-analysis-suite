@@ -25,4 +25,5 @@ export default defineWorkspace([
   "./apps/correspondences/vite.config.ts",
   "./apps/quadrature-domains/vitest.config.ts",
   "./apps/riemann-map/vite.config.ts",
+  "./apps/argument-principle/vite.config.ts",
 ]);

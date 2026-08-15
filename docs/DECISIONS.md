@@ -1707,10 +1707,12 @@ slated for extraction on the second-consumer rule (ADR-0020), not duplication.
 
 ### Action Items
 
-1. [ ] Scaffold `apps/argument-principle` on the shared packages — Phase 0 Genesis: the empty, tested, deployable
+1. [x] Scaffold `apps/argument-principle` on the shared packages — Phase 0 Genesis: the tested, deployable
        shell (Vite/TS, the single serializable `#vs=` view-state over `@cas/interchange` namespace `"ap"`, node
        parity-seed tests, launcher "Coming soon" card; local `lint`/`typecheck`/`test`/`build` gate green).
-       Register in `vitest.workspace.ts`, the test-census `PROJECTS`, and eslint `APP_NAMES`.
+       Registered in `vitest.workspace.ts`, the test-census `PROJECTS`, and eslint `APP_NAMES`. The walking
+       skeleton already draws the dual z/w view + f(γ) image and reads off the winding number, seeding the
+       `winding.ts` / `contour.ts` primitives with unit tests.
 2. [ ] Build the dual-view instrument through the phase gates (winding → zeros/poles → `N − P = winding`), per
        [`design/argument-principle-plan.md`](design/argument-principle-plan.md).
 3. [ ] Wire the plotter/CD → argument-principle `f(z)` hand-off through `@cas/interchange` (`mapSpecToExpr`),

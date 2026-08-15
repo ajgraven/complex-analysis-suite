@@ -351,9 +351,9 @@ parity-blocking:
 
 | Phase | Status | Commits | Coverage |
 | --- | --- | --- | --- |
-| Plan + ADR-0019 | ✅ done | _this commit_ | design doc + separate-app ADR |
-| 0 — Genesis (shell, `#vs=`, registration, launcher card) | ⬜ planned | — | scaffold, smoke test, five registration edits |
-| 1 — Live winding (dual view, contour, image curve) | ⬜ planned | — | C1–C3, V1–V4, M3, U1, I1 · GT: `z`/`1/z`/`z²` winding by hand |
+| Plan + ADR-0019 | ✅ done | `cfcf809` | design doc + separate-app ADR |
+| 0 — Genesis (shell, `#vs=`, registration, launcher card) | ✅ done | _this commit_ | scaffold + walking skeleton: dual z/w panes, default contour + its image f(γ), live winding readout; `#vs=` codec (ns `"ap"`); the `winding.ts` + `contour.ts` primitives seeded and unit-tested; 5 test files (29 tests); 4 registration edits + launcher "Coming soon" card. `lint`/`typecheck`/`test`/`build` green. GT: `z³−1` winds 3× over a radius-1.5 γ (pinned in `winding.test.ts`) |
+| 1 — Live winding (interactivity: cursor contour, pan/zoom, KaTeX, `res` slider) | ◻ next | — | C3, V2 (cursor-follow), V4, U1 · the static skeleton already covers C1–C2, V1, M3, I1 |
 | 2 — Zeros/poles instrument (the four readouts) | ⬜ planned | — | C4, M1, M2, M4, V3, U2 · GT: `N−P = winding` on all 8 presets |
 | 3 — Hand-off, export & pedagogy | ⬜ planned | — | I2, I3, E1 (+ E3/E4 optional) · GT: cross-app hand-off golden |
 | 4 — Extract (if earned) & publish | ⬜ planned | — | ADR-0020 candidate; launcher flip + deploy `cp` |
