@@ -33,7 +33,13 @@ import {
   orientCCW,
   type ContourShape,
 } from "./contour.js";
-import { windingTurns, windingReliable, partialWindingTurns, cumulativeArg } from "./winding.js";
+import {
+  windingTurns,
+  windingReliable,
+  partialWindingTurns,
+  cumulativeArg,
+  crossesBranchCut,
+} from "./winding.js";
 import {
   planeMap,
   drawAxes,
@@ -433,7 +439,7 @@ function main(): void {
         <li><b>f(z)</b> — pick a preset or type your own: <code>z, i, pi, sin, cos, tan, exp, log, sqrt, ^</code> and more.</li>
         <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>click a root</b> to isolate it; <b>hover a marker</b> for its value and order; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
         <li><b>Markers</b> — <span class="key zero">✕ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0).</li>
-        <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate.</li>
+        <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate. If γ crosses a <b>branch cut</b> (e.g. √z, log z), f is not single-valued and the tool says the theorem doesn't apply — the ∮ f′/f then reads a non-integer.</li>
       </ul>
       <h3>Seeing the argument accumulate</h3>
       <ul>
@@ -743,6 +749,9 @@ function main(): void {
     const about = aboutPoint();
     const zPts = contourSamples(contour, state.render.resolution);
     const wPts: Vec2[] = model.error ? [] : zPts.map((p) => model.f(p));
+    // Not-single-valued guard: if γ crosses a branch cut, f(γ) is discontinuous and the argument
+    // principle does not apply — the winding/∮ readouts must not assert a count.
+    const branchCut = wPts.length > 1 && crossesBranchCut(wPts);
 
     const cZero = cssVar("--accent", "#3bb6c0");
     const cPole = cssVar("--pole", "#e8608f");
@@ -882,7 +891,8 @@ function main(): void {
       const wn = haveImg ? Math.round(windingTurns(wPts, about)) : NaN;
       drawArgGraph(
         argCanvas,
-        { turns, marker: showAnim ? anim.t : null, winding: Number.isFinite(wn) ? wn : null },
+        // On a branch cut the total is not a winding number — don't label it as one (the cliff still shows).
+        { turns, marker: showAnim ? anim.t : null, winding: !branchCut && Number.isFinite(wn) ? wn : null },
         {
           grid: axisColors().grid,
           axis: axisColors().axis,
@@ -905,7 +915,14 @@ function main(): void {
       };
       const atOrigin = about[0] === 0 && about[1] === 0;
       const integrand = atOrigin ? "f′/f" : "f′/(f−w₀)";
-      if (showAnim) {
+      if (branchCut) {
+        // The integral is not near an integer — the tell that f is multivalued around γ.
+        const val = normalizeByTwoPiI(logDerivIntegral(fMinusTarget, fpFn, zPts))[0];
+        integralEl.hidden = false;
+        integralEl.innerHTML =
+          `<span class="approx">≈</span> (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
+          `<b>${Number.isFinite(val) ? val.toFixed(3) : "—"}</b> — not an integer: f is not single-valued around γ.`;
+      } else if (showAnim) {
         const vpart = normalizeByTwoPiI(partialLogDerivIntegral(fMinusTarget, fpFn, zPts, anim.t))[0];
         integralEl.hidden = false;
         integralEl.innerHTML =
@@ -939,7 +956,7 @@ function main(): void {
       decompEl.hidden = true;
     }
 
-    updateReadout(contour, wPts, about);
+    updateReadout(contour, wPts, about, branchCut);
 
     if (showAnim && !model.error && wPts.length > 1) {
       const swept = partialWindingTurns(wPts, anim.t, about);
@@ -957,13 +974,18 @@ function main(): void {
     }
   }
 
-  function updateReadout(contour: ContourShape, wPts: readonly Vec2[], about: Vec2): void {
+  function updateReadout(
+    contour: ContourShape,
+    wPts: readonly Vec2[],
+    about: Vec2,
+    branchCut: boolean,
+  ): void {
     const haveImage = !model.error && wPts.length > 1;
     const turns = haveImage ? windingTurns(wPts, about) : NaN;
     const winding = haveImage ? Math.round(turns) : NaN;
     const reliable = haveImage && windingReliable(wPts, about);
-    // Never surface a NaN (a pole landing exactly on a contour sample gives a non-finite winding).
-    const windFinite = haveImage && Number.isFinite(winding);
+    // Never surface a NaN (a pole on a contour sample), and never a winding across a branch cut (undefined).
+    const windFinite = haveImage && !branchCut && Number.isFinite(winding);
     const windText = windFinite ? String(winding) : "—";
     const windTag = windFinite ? "≈" : "";
 
@@ -997,6 +1019,10 @@ function main(): void {
     if (!haveImage) {
       status.className = "status";
       status.textContent = "";
+    } else if (branchCut) {
+      status.className = "status warn";
+      status.textContent =
+        "γ crosses a branch cut — f is not single-valued around this contour, so the argument principle does not apply here.";
     } else if (refreshPending) {
       // The finder hasn't caught up with the moved contour/view yet — don't assert agreement or a
       // mismatch against stale counts.
