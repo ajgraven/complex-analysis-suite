@@ -1854,5 +1854,8 @@ where the one new primitive lives.
 3. [x] The parameter-problem solver (Phase 2); triangle / pentagon / L-shape to ≥10 digits.
 4. [x] The two-mode `fitSchwarzChristoffel` API + invariants + warm start (Phase 3).
 5. [x] **Done:** the inverse map (polygon → 𝔻) by the ODE + Newton hybrid (the Phase-F fast-follow).
-6. [ ] **Deferred:** CRDT (crowding), exterior/unbounded/circular-arc variants, `@cas/interchange`
-       serialization, a robust reentrant lightning fast-mode, and the Riemann-map app UI wiring.
+6. [x] **Done:** wire the SC engine into the Riemann-map app — a polygon region source (`fitRegion` in
+       `apps/riemann-map/src/main.ts` uses `fitSchwarzChristoffel` for domains with `corners`; the region
+       picker offers the polygon presets; the info panel reports the SC method + residual).
+7. [ ] **Deferred:** CRDT (crowding), exterior/unbounded/circular-arc variants, `@cas/interchange`
+       serialization, and a robust reentrant lightning fast-mode.

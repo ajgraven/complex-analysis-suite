@@ -225,9 +225,9 @@ export function createControls(initialExpr: string): Controls {
   const angular = labeledRange("Angular sectors", 6, 96, 36);
   const layout = labeledSelect("Layout", DISK_LAYOUTS);
   const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  // The region SOURCE offers only smooth domains — the forward map g: 𝔻 → Ω is stable there; polygon
-  // corners need a Schwarz–Christoffel engine (roadmap 3.1).
-  const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.filter((d) => !d.corners).map((d) => ({ id: d.id, name: d.name })));
+  // The region SOURCE offers every domain: smooth Ω uses the lightning forward map g: 𝔻 → Ω; polygon Ω
+  // uses the Schwarz–Christoffel engine (@cas/conformal), stable at the corners (roadmap 3.1).
+  const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
   // "Import map…" action for the imported-map source (B2): paste an interchange "#s=" link (a filled
   // Julia set's exterior Riemann map, handed off from Complex Dynamics). Shown only for that source.
   const importField = document.createElement("div");

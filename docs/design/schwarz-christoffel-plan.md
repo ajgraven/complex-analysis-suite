@@ -298,8 +298,9 @@ Tracked so the seams are deliberate, not forgotten:
 - **`@cas/interchange` `form:"schwarz-christoffel"`** recipe (angles `=`, prevertices/A/C `≈`) — the
   natural next consumer; the analytic record is tailor-made for it (cf. the `form:"schwarz"` σ hand-off
   in [`SIGMA-HANDOFF.md`](SIGMA-HANDOFF.md)). Gate on a real receiving tool (ADR-0007).
-- **Riemann-map app wiring:** replace the smooth-only region source (`controls.ts:229` restricts to
-  `!d.corners`) with the SC engine so a polygon domain is first-class in the studio UI.
+- ~~**Riemann-map app wiring:** replace the smooth-only region source with the SC engine so a polygon
+  domain is first-class in the studio UI.~~ **Done** — `fitRegion` routes polygon `corners` through
+  `fitSchwarzChristoffel`; the region picker offers the polygon presets; the panel reports the SC method.
 - **Zipper / geodesic engine** (Marshall–Rohde, clean-room): the curved/**fractal** Jordan-boundary
   sibling — a *different* Tier-3 engine, not part of SC. `ConformalMaps.jl` (MIT) is the oracle.
 - **AAA-LS** pole-placement upgrade for the lightning engine's own robustness (research-notes §2, the
