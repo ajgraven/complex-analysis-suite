@@ -44,6 +44,7 @@ import {
   drawOrderBadge,
   drawWedge,
   drawArrow,
+  drawPulseRing,
   fitViewport,
   type AxisColors,
   type PlaneMap,
@@ -54,6 +55,8 @@ import { drawArgGraph } from "./render/argGraph.js";
 import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
 import { attachPanZoom, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
+import { nearestRoot, isolateRadius } from "./hit.js";
+import { rootKey, diffEnclosure, type EnclosedRoot, type CrossEvent } from "./crossing.js";
 import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
 import { injectPngText } from "@cas/export";
 
@@ -245,6 +248,12 @@ function main(): void {
   const anim = { on: false, t: 0, speed: 0.25 }; // traversal animation (transient)
   let animRaf = 0;
   let animLast = 0;
+  // §11 C6 (boundary crossing) + its pulse — all transient.
+  let prevEnclosed = new Map<string, EnclosedRoot>();
+  let prevExpr: string | null = null;
+  let flash: { pts: Vec2[]; t0: number } | null = null;
+  let flashRaf = 0;
+  let toastTimer = 0;
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -328,7 +337,7 @@ function main(): void {
   const decompChk = checkbox("Root vectors", ped().showDecomposition);
   const drawHint = document.createElement("span");
   drawHint.className = "hint";
-  drawHint.textContent = "Tip: left-drag on the z-plane to draw a custom contour.";
+  drawHint.textContent = "Tip: click a root to isolate it · left-drag to draw a contour · hover a marker for details.";
   controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, decompChk.root, drawHint);
 
   const formula = document.createElement("div");
@@ -425,7 +434,15 @@ function main(): void {
       </ul>
     </div>`;
 
-  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help);
+  // F13 root tooltip + C6 crossing toast (fixed-position overlays).
+  const tooltipEl = document.createElement("div");
+  tooltipEl.className = "root-tip";
+  tooltipEl.hidden = true;
+  const toastEl = document.createElement("div");
+  toastEl.className = "toast";
+  toastEl.hidden = true;
+
+  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help, tooltipEl, toastEl);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -460,6 +477,63 @@ function main(): void {
   /** The pedagogy toggles in effect (always complete — decode back-fills, DEFAULT carries them). */
   function ped(): PedagogyState {
     return state.pedagogy ?? DEFAULT_PEDAGOGY;
+  }
+  /** World units per pixel in the z-plane — turns a pixel hit-tolerance into a world tolerance. */
+  function zPlaneScale(): number {
+    const rect = zCanvas.getBoundingClientRect();
+    const halfH = 2 / state.zView.zoom; // BASE_HALF = 2 in plane.ts
+    return rect.height > 0 ? rect.height / (2 * halfH) : 1;
+  }
+  function fmtComplex(z: Vec2): string {
+    const trim = (v: number): string =>
+      (Math.abs(v) < 1e-9 ? 0 : v).toFixed(3).replace(/\.?0+$/, "") || "0";
+    const re = trim(z[0]);
+    if (Math.abs(z[1]) < 1e-9) return re;
+    const sign = z[1] < 0 ? "−" : "+";
+    return `${re} ${sign} ${trim(Math.abs(z[1]))}i`;
+  }
+  // F13 — a hover tooltip on the nearest marked root (value · order · exact/≈).
+  function updateTooltip(world: Vec2, client: { x: number; y: number }): void {
+    if (!sing.differentiable) return hideTooltip();
+    const hit = nearestRoot(world, sing, 12 / zPlaneScale());
+    if (!hit) return hideTooltip();
+    const label = hit.kind === "zero" ? "Zero" : hit.kind === "pole" ? "Pole" : "Critical point (f′ = 0)";
+    const order = hit.root.order > 1 ? ` · order ${hit.root.order}` : "";
+    const prov = sing.exact ? "exact" : "≈ estimated";
+    tooltipEl.innerHTML = `<b>${label}</b><br>z = ${fmtComplex(hit.root.z)}${order}<br><span class="prov">${prov}</span>`;
+    tooltipEl.style.left = `${client.x + 14}px`;
+    tooltipEl.style.top = `${client.y + 14}px`;
+    tooltipEl.hidden = false;
+  }
+  function hideTooltip(): void {
+    tooltipEl.hidden = true;
+  }
+  function showToast(msg: string): void {
+    toastEl.textContent = msg;
+    toastEl.hidden = false;
+    requestAnimationFrame(() => toastEl.classList.add("show"));
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2600);
+  }
+  // C6 — announce a boundary crossing + pulse the root(s) that crossed.
+  function announceCrossing(events: CrossEvent[], nmp: number): void {
+    const label = (e: CrossEvent): string =>
+      `${e.kind === "zero" ? "A zero" : "A pole"} ${e.entered ? "entered" : "left"} γ`;
+    showToast(`${events.map(label).join(" · ")} — zeros − poles = ${nmp}`);
+    const pts = events.map((e) => e.z).filter((z) => Number.isFinite(z[0]) && Number.isFinite(z[1]));
+    if (!pts.length) return;
+    flash = { pts, t0: performance.now() };
+    if (!flashRaf) flashRaf = requestAnimationFrame(flashTick);
+  }
+  function flashTick(now: number): void {
+    if (!flash || now - flash.t0 > 1000) {
+      flash = null;
+      flashRaf = 0;
+      schedule();
+      return;
+    }
+    render();
+    flashRaf = requestAnimationFrame(flashTick);
   }
   /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
    *  view and every root inside γ is covered (the transcendental grid only finds what it samples). */
@@ -531,7 +605,12 @@ function main(): void {
   }
   function setExpr(expr: string): void {
     model = buildModel(expr);
-    state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
+    // A new f moves the roots, so release any pinned isolate circle (it no longer isolates the old root).
+    state = {
+      ...state,
+      map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) },
+      contour: { ...state.contour, pinned: false },
+    };
     const id = presetIdForExpr(expr);
     if (id) presetSel.value = id;
     refreshSing();
@@ -640,7 +719,9 @@ function main(): void {
     const cCenter = cssVar("--muted", "#8c95a9");
     const cTrace = cssVar("--trace", "#8b7bf0");
 
-    clearBtn.disabled = state.contour.kind !== "path" && !draftPath;
+    const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
+    clearBtn.disabled = !(state.contour.kind === "path" || !!draftPath || pinned);
+    clearBtn.textContent = pinned ? "Release γ" : "Clear drawn curve";
     radius.disabled = contour.kind === "path"; // radius has no meaning for a freehand contour
 
     // The animated traversal point (E1): the same parameter t marks a point on γ and its image on f(γ).
@@ -654,6 +735,24 @@ function main(): void {
     const zCount = encZeros.reduce((s, r) => s + r.order, 0);
     const pCount = encPoles.reduce((s, r) => s + r.order, 0);
     const nmp = zCount - pCount;
+
+    // C6 — boundary crossings. Gated to the rational-exact path with an unchanged expr, so the root set is
+    // stable frame-to-frame and only γ moving flips membership (the transcendental grid's roots drift).
+    if (sing.exact && sing.differentiable && !model.error) {
+      const cur: EnclosedRoot[] = [
+        ...encZeros.map((r) => ({ key: rootKey("zero", r.z), kind: "zero" as const, z: r.z, order: r.order })),
+        ...encPoles.map((r) => ({ key: rootKey("pole", r.z), kind: "pole" as const, z: r.z, order: r.order })),
+      ];
+      if (prevExpr === state.map.expr) {
+        const events = diffEnclosure(prevEnclosed, cur);
+        if (events.length) announceCrossing(events, nmp);
+      }
+      prevEnclosed = new Map(cur.map((e) => [e.key, e]));
+      prevExpr = state.map.expr;
+    } else {
+      prevEnclosed = new Map();
+      prevExpr = null;
+    }
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
@@ -682,6 +781,11 @@ function main(): void {
         for (const r of encPoles) drawArrow(ctx, map, r.z, zAnim, cPole, true);
       }
       if (zAnim) drawDot(ctx, map, zAnim, cTrace, 6);
+      // C6 — the crossing pulse (expanding ring on a root that just entered/left γ).
+      if (flash) {
+        const fr = (performance.now() - flash.t0) / 1000;
+        for (const p of flash.pts) drawPulseRing(ctx, map, p, fr, cCrit);
+      }
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
@@ -946,7 +1050,7 @@ function main(): void {
   );
   clearBtn.addEventListener("click", () => {
     draftPath = null;
-    commit({ ...state, contour: { ...state.contour, kind: "circle" } }, true);
+    commit({ ...state, contour: { ...state.contour, kind: "circle", pinned: false } }, true);
   });
 
   attachContourPlane(zCanvas, {
@@ -955,10 +1059,34 @@ function main(): void {
       commit({ ...state, zView: v }, false);
       scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
     },
-    onHover: (world: Vec2) => {
-      if (state.contour.kind !== "circle") return; // in path mode the contour is fixed until cleared
+    onHover: (world: Vec2, client: { x: number; y: number }) => {
+      updateTooltip(world, client); // F13 — regardless of follow/pin/path mode
+      const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
+      if (state.contour.kind !== "circle" || pinned) return; // a path or pinned contour is fixed
       commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false);
       scheduleRefresh(); // the moved contour may now enclose a singularity outside the last search region
+    },
+    onLeave: () => hideTooltip(),
+    onClick: (world: Vec2) => {
+      // C7 — click a marked root to pin a small isolating circle around it (winding = its order); click
+      // empty space to release a pinned contour back to cursor-follow.
+      const hit = nearestRoot(world, sing, 12 / zPlaneScale());
+      if (hit) {
+        const r = isolateRadius(hit.root.z, sing, hit.root);
+        commit(
+          {
+            ...state,
+            contour: { kind: "circle", centerRe: hit.root.z[0], centerIm: hit.root.z[1], radius: r, pinned: true },
+          },
+          true,
+        );
+        const kindText = hit.kind === "critical" ? "critical point (f′=0)" : hit.kind;
+        const wind = hit.kind === "zero" ? `+${hit.root.order}` : hit.kind === "pole" ? `−${hit.root.order}` : "0";
+        showToast(`Isolated a ${kindText} · winding ${wind}`);
+      } else if (state.contour.kind === "circle" && state.contour.pinned === true) {
+        commit({ ...state, contour: { ...state.contour, pinned: false } }, true);
+        showToast("Released γ — it follows the cursor again");
+      }
     },
     onDrawStart: (world: Vec2) => {
       draftPath = [world];

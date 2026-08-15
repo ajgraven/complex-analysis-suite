@@ -401,6 +401,30 @@ export function drawArrow(
   ctx.restore();
 }
 
+/**
+ * An expanding, fading ring at a world point (§11 C6): the transient pulse that flags a root which just
+ * crossed γ. `frac` ∈ [0,1] is the animation progress (0 = just crossed, 1 = faded out).
+ */
+export function drawPulseRing(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  frac: number,
+  color: string,
+): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  const t = Math.max(0, Math.min(1, frac));
+  ctx.save();
+  ctx.globalAlpha = 1 - t;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.arc(x, y, 6 + t * 24, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function isFinitePx(p: readonly [number, number]): boolean {
   return Number.isFinite(p[0]) && Number.isFinite(p[1]);
 }

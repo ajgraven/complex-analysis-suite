@@ -59,6 +59,8 @@ export interface ContourState {
   readonly radius: number;
   /** Freehand path vertices in world coordinates (P2); absent for a circle. */
   readonly points?: readonly (readonly [number, number])[];
+  /** Pinned (§11 C7): the circle is fixed (isolate-a-root) and does NOT follow the cursor until released. */
+  readonly pinned?: boolean;
 }
 
 /** Render toggles + numerical resolution (the `res` slider). */
