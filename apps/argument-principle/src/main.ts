@@ -10,11 +10,13 @@ import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
+import { differentiate } from "@cas/expr/derivative";
 import { toLatex } from "@cas/expr/latex";
 import type { Node } from "@cas/expr/ast";
 import type { Complex } from "@cas/expr/complex";
 import {
   DEFAULT_VIEW_STATE,
+  DEFAULT_TARGET,
   decodeArgPrincipleState,
   encodeArgPrincipleState,
   type ArgPrincipleViewState,
@@ -55,6 +57,9 @@ const NO_SING: Singularities = { zeros: [], poles: [], critical: [], differentia
 interface Model {
   readonly ast: Node | null;
   readonly f: (z: Vec2) => Vec2;
+  /** The holomorphic derivative f′, compiled; `null` when f is non-holomorphic (no symbolic f′). The
+   *  integral view (§11 B4) and the per-root decomposition (B5) read it; the finder derives its own. */
+  readonly fp: ((z: Vec2) => Vec2) | null;
   readonly latex: string | null;
   readonly error: string | null;
 }
@@ -63,6 +68,16 @@ function buildModel(expr: string): Model {
   try {
     const ast = parse(expr);
     const fn = makeComplexFn(ast);
+    let fp: ((z: Vec2) => Vec2) | null = null;
+    try {
+      const dfn = makeComplexFn(differentiate(ast, "z"));
+      fp = (z: Vec2): Vec2 => {
+        const w = dfn([z[0], z[1]], C0);
+        return [w[0], w[1]];
+      };
+    } catch {
+      fp = null; // non-holomorphic (e.g. conjugate) — no symbolic derivative
+    }
     let latex: string | null = null;
     try {
       latex = toLatex(ast);
@@ -76,6 +91,7 @@ function buildModel(expr: string): Model {
         const w = fn(zc, C0);
         return [w[0], w[1]];
       },
+      fp,
       latex,
       error: null,
     };
@@ -83,6 +99,7 @@ function buildModel(expr: string): Model {
     return {
       ast: null,
       f: (): Vec2 => [NaN, NaN],
+      fp: null,
       latex: null,
       error: e instanceof Error ? e.message : String(e),
     };
@@ -411,6 +428,11 @@ function main(): void {
     if (model.error) return [];
     return contourSamples(effectiveContour(), state.render.resolution).map((p) => model.f(p));
   }
+  /** The point w₀ the winding is measured about — the origin classically; a draggable target later (D8). */
+  function aboutPoint(): Vec2 {
+    const t = state.target ?? DEFAULT_TARGET;
+    return [t.re, t.im];
+  }
   /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
    *  view and every root inside γ is covered (the transcendental grid only finds what it samples). */
   function searchRegion(): Region {
@@ -576,6 +598,7 @@ function main(): void {
 
   function render(): void {
     const contour = effectiveContour();
+    const about = aboutPoint();
     const zPts = contourSamples(contour, state.render.resolution);
     const wPts: Vec2[] = model.error ? [] : zPts.map((p) => model.f(p));
 
@@ -613,9 +636,9 @@ function main(): void {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
-      drawDot(ctx, map, [0, 0], cPole, 5);
+      drawDot(ctx, map, about, cPole, 5);
       if (wAnim && Number.isFinite(wAnim[0]) && Number.isFinite(wAnim[1])) {
-        const o = map.toPx([0, 0]);
+        const o = map.toPx(about);
         const pp = map.toPx(wAnim);
         ctx.save();
         ctx.strokeStyle = cTrace;
@@ -629,11 +652,11 @@ function main(): void {
       }
     });
 
-    updateReadout(contour, wPts);
+    updateReadout(contour, wPts, about);
 
     if (showAnim && !model.error && wPts.length > 1) {
-      const swept = partialWindingTurns(wPts, anim.t);
-      const full = Math.round(windingTurns(wPts));
+      const swept = partialWindingTurns(wPts, anim.t, about);
+      const full = Math.round(windingTurns(wPts, about));
       animEl.hidden = false;
       if (Number.isFinite(swept) && Number.isFinite(full)) {
         animEl.innerHTML =
@@ -647,11 +670,11 @@ function main(): void {
     }
   }
 
-  function updateReadout(contour: ContourShape, wPts: readonly Vec2[]): void {
+  function updateReadout(contour: ContourShape, wPts: readonly Vec2[], about: Vec2): void {
     const haveImage = !model.error && wPts.length > 1;
-    const turns = haveImage ? windingTurns(wPts) : NaN;
+    const turns = haveImage ? windingTurns(wPts, about) : NaN;
     const winding = haveImage ? Math.round(turns) : NaN;
-    const reliable = haveImage && windingReliable(wPts);
+    const reliable = haveImage && windingReliable(wPts, about);
     // Never surface a NaN (a pole landing exactly on a contour sample gives a non-finite winding).
     const windFinite = haveImage && Number.isFinite(winding);
     const windText = windFinite ? String(winding) : "—";

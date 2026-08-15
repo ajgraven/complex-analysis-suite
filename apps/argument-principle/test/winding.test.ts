@@ -6,6 +6,7 @@ import {
   windingTurns,
   windingReliable,
   partialWindingTurns,
+  cumulativeArg,
   type Vec2,
 } from "../src/winding.js";
 import { sampleCircle } from "../src/contour.js";
@@ -78,5 +79,43 @@ describe("winding number (the core instrument)", () => {
       return [w[0], w[1]];
     });
     expect(windingNumber(image)).toBe(3);
+  });
+});
+
+describe("cumulativeArg (the shared running-argument primitive)", () => {
+  it("starts at 0 and its last entry equals the full winding", () => {
+    const c = unitCircle(360);
+    const acc = cumulativeArg(c);
+    expect(acc).toHaveLength(361); // n + 1 entries
+    expect(acc[0]).toBe(0);
+    expect(acc[acc.length - 1]).toBeCloseTo(windingTurns(c), 12); // last entry ≡ full winding
+    expect(acc[acc.length - 1]).toBeCloseTo(1, 6);
+  });
+
+  it("rises monotonically for a CCW loop about an enclosed point", () => {
+    const acc = cumulativeArg(unitCircle(120));
+    for (let i = 1; i < acc.length; i++) {
+      expect(acc[i]).toBeGreaterThanOrEqual(acc[i - 1] - 1e-9);
+    }
+  });
+
+  it("reaches 2 for the doubly-wound image of z ↦ z², passing through 1 at the halfway mark", () => {
+    const img: Vec2[] = unitCircle(360).map(([x, y]) => [x * x - y * y, 2 * x * y]);
+    const acc = cumulativeArg(img);
+    expect(acc[acc.length - 1]).toBeCloseTo(2, 6);
+    expect(acc[180]).toBeCloseTo(1, 2); // halfway around γ → one full turn of the image
+  });
+
+  it("agrees with partialWindingTurns at every sample fraction (they share the array)", () => {
+    const c = unitCircle(200);
+    const acc = cumulativeArg(c);
+    for (const k of [0, 50, 100, 150, 200]) {
+      expect(partialWindingTurns(c, k / 200)).toBeCloseTo(acc[k], 9);
+    }
+  });
+
+  it("returns [0] for a degenerate (fewer than 2 points) curve", () => {
+    expect(cumulativeArg([])).toEqual([0]);
+    expect(cumulativeArg([[1, 1]])).toEqual([0]);
   });
 });
