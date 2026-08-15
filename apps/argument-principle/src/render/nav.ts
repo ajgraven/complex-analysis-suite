@@ -73,6 +73,81 @@ export function attachPanZoom(
   };
 }
 
+export interface ImagePlaneNav {
+  getView(): Viewport;
+  setView(v: Viewport): void;
+  /** The draggable target dot's position in canvas CSS pixels, or null to disable target dragging. */
+  targetPx(): [number, number] | null;
+  /** Drag the target to the world point under the cursor (§11 D8). */
+  setTargetWorld(world: Vec2): void;
+}
+
+/** Radius (px) within which a press on the w-plane grabs the target dot instead of panning. */
+const TARGET_HIT_PX = 11;
+
+/**
+ * The image (w) plane: drag pans, wheel zooms, and a press on the target dot drags the winding target w₀
+ * (§11 D8). A superset of {@link attachPanZoom} — it checks the target first, then falls back to panning.
+ */
+export function attachImagePlane(canvas: HTMLCanvasElement, nav: ImagePlaneNav): NavHandle {
+  let panGrab: Vec2 | null = null;
+  let draggingTarget = false;
+  const worldAt = (e: { clientX: number; clientY: number }): Vec2 => {
+    const { fx, fyTop, aspect } = frac(canvas, e);
+    return viewPxToWorld(nav.getView(), fx, fyTop, aspect);
+  };
+  function onDown(e: PointerEvent): void {
+    const tp = nav.targetPx();
+    if (tp) {
+      const r = canvas.getBoundingClientRect();
+      if (Math.hypot(e.clientX - r.left - tp[0], e.clientY - r.top - tp[1]) <= TARGET_HIT_PX) {
+        e.preventDefault();
+        draggingTarget = true;
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+        return;
+      }
+    }
+    const { fx, fyTop, aspect } = frac(canvas, e);
+    panGrab = viewPxToWorld(nav.getView(), fx, fyTop, aspect);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }
+  function onMove(e: PointerEvent): void {
+    if (draggingTarget) nav.setTargetWorld(worldAt(e));
+    else if (panGrab) {
+      const { fx, fyTop, aspect } = frac(canvas, e);
+      nav.setView(panTo(nav.getView(), panGrab, fx, fyTop, aspect));
+    }
+  }
+  function onUp(): void {
+    panGrab = null;
+    draggingTarget = false;
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+  }
+  function onWheel(e: WheelEvent): void {
+    e.preventDefault();
+    const { fx, fyTop, aspect } = frac(canvas, e);
+    const v = nav.getView();
+    nav.setView(zoomAboutCursor(v, fx, fyTop, aspect, v.zoom * Math.exp(-e.deltaY * ZOOM_STEP)));
+  }
+  function onCtx(e: MouseEvent): void {
+    e.preventDefault();
+  }
+  canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
+  canvas.addEventListener("contextmenu", onCtx);
+  return {
+    detach(): void {
+      canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("contextmenu", onCtx);
+      onUp();
+    },
+  };
+}
+
 export interface ContourNav {
   getView(): Viewport;
   setView(v: Viewport): void;

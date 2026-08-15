@@ -53,7 +53,7 @@ import {
 } from "./render/plane.js";
 import { drawArgGraph } from "./render/argGraph.js";
 import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
-import { attachPanZoom, attachContourPlane } from "./render/nav.js";
+import { attachImagePlane, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { nearestRoot, isolateRadius } from "./hit.js";
 import { rootKey, diffEnclosure, type EnclosedRoot, type CrossEvent } from "./crossing.js";
@@ -190,6 +190,7 @@ function checkbox(label: string, checked: boolean): { root: HTMLLabelElement; in
 interface Cell {
   readonly root: HTMLElement;
   set(value: string, tag: string): void;
+  setLabel(text: string): void;
 }
 function metricCell(label: string, accent: string): Cell {
   const root = document.createElement("div");
@@ -205,6 +206,9 @@ function metricCell(label: string, accent: string): Cell {
     root,
     set(value: string, tag: string): void {
       v.innerHTML = `${value}<span class="tag">${tag}</span>`;
+    },
+    setLabel(text: string): void {
+      l.textContent = text;
     },
   };
 }
@@ -250,7 +254,12 @@ function main(): void {
   let animLast = 0;
   // §11 C6 (boundary crossing) + its pulse — all transient.
   let prevEnclosed = new Map<string, EnclosedRoot>();
-  let prevExpr: string | null = null;
+  // Crossings are only genuine when the ROOT SET is fixed. `singKey` = the (expr@target) that `sing` was
+  // actually computed for (set in refreshSing); keying off it — not the live target — means a root-set
+  // change (new f or new target) always resets the baseline, even across the debounced finder's lag, so
+  // only γ moving over a fixed root set counts as a crossing. null on the transcendental/error path.
+  let prevStableKey: string | null = null;
+  let singKey: string | null = null;
   let flash: { pts: Vec2[]; t0: number } | null = null;
   let flashRaf = 0;
   let toastTimer = 0;
@@ -364,7 +373,7 @@ function main(): void {
   wPane.className = "pane";
   const wCanvas = makeCanvas();
   const wCap = document.createElement("figcaption");
-  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag pan, scroll zoom";
+  wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag the ● target w₀ · drag to pan, scroll to zoom";
   wPane.append(wCanvas, wCap);
   stage.append(zPane, wPane);
 
@@ -484,6 +493,11 @@ function main(): void {
     const halfH = 2 / state.zView.zoom; // BASE_HALF = 2 in plane.ts
     return rect.height > 0 ? rect.height / (2 * halfH) : 1;
   }
+  function wPlaneScale(): number {
+    const rect = wCanvas.getBoundingClientRect();
+    const halfH = 2 / state.wView.zoom;
+    return rect.height > 0 ? rect.height / (2 * halfH) : 1;
+  }
   function fmtComplex(z: Vec2): string {
     const trim = (v: number): string =>
       (Math.abs(v) < 1e-9 ? 0 : v).toFixed(3).replace(/\.?0+$/, "") || "0";
@@ -516,10 +530,12 @@ function main(): void {
     toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2600);
   }
   // C6 — announce a boundary crossing + pulse the root(s) that crossed.
-  function announceCrossing(events: CrossEvent[], nmp: number): void {
-    const label = (e: CrossEvent): string =>
-      `${e.kind === "zero" ? "A zero" : "A pole"} ${e.entered ? "entered" : "left"} γ`;
-    showToast(`${events.map(label).join(" · ")} — zeros − poles = ${nmp}`);
+  function announceCrossing(events: CrossEvent[], nmp: number, atOrigin: boolean): void {
+    const label = (e: CrossEvent): string => {
+      const noun = e.kind === "pole" ? "A pole" : atOrigin ? "A zero" : "A solution";
+      return `${noun} ${e.entered ? "entered" : "left"} γ`;
+    };
+    showToast(`${events.map(label).join(" · ")} — ${atOrigin ? "zeros" : "solutions"} − poles = ${nmp}`);
     const pts = events.map((e) => e.z).filter((z) => Number.isFinite(z[0]) && Number.isFinite(z[1]));
     if (!pts.length) return;
     flash = { pts, t0: performance.now() };
@@ -553,7 +569,10 @@ function main(): void {
     };
   }
   function refreshSing(): void {
-    sing = model.error || !model.ast ? NO_SING : findSingularities(model.ast, searchRegion());
+    const t = state.target ?? DEFAULT_TARGET;
+    sing = model.error || !model.ast ? NO_SING : findSingularities(model.ast, searchRegion(), [t.re, t.im]);
+    // Only the rational-exact path has a stable, region-independent root set to track crossings against.
+    singKey = sing.exact && sing.differentiable && !model.error ? `${state.map.expr}@${t.re},${t.im}` : null;
   }
 
   let frame = 0;
@@ -736,22 +755,23 @@ function main(): void {
     const pCount = encPoles.reduce((s, r) => s + r.order, 0);
     const nmp = zCount - pCount;
 
-    // C6 — boundary crossings. Gated to the rational-exact path with an unchanged expr, so the root set is
-    // stable frame-to-frame and only γ moving flips membership (the transcendental grid's roots drift).
-    if (sing.exact && sing.differentiable && !model.error) {
+    // C6 — boundary crossings. `singKey` fixes the root set (expr + target that `sing` reflects); a change
+    // to it resets the baseline, so only γ moving over a fixed set flips membership (a real crossing). The
+    // transcendental grid's roots drift with the view, so singKey is null there and crossings are off.
+    if (singKey !== null) {
       const cur: EnclosedRoot[] = [
         ...encZeros.map((r) => ({ key: rootKey("zero", r.z), kind: "zero" as const, z: r.z, order: r.order })),
         ...encPoles.map((r) => ({ key: rootKey("pole", r.z), kind: "pole" as const, z: r.z, order: r.order })),
       ];
-      if (prevExpr === state.map.expr) {
+      if (prevStableKey === singKey) {
         const events = diffEnclosure(prevEnclosed, cur);
-        if (events.length) announceCrossing(events, nmp);
+        if (events.length) announceCrossing(events, nmp, about[0] === 0 && about[1] === 0);
       }
       prevEnclosed = new Map(cur.map((e) => [e.key, e]));
-      prevExpr = state.map.expr;
+      prevStableKey = singKey;
     } else {
       prevEnclosed = new Map();
-      prevExpr = null;
+      prevStableKey = null;
     }
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
@@ -792,6 +812,20 @@ function main(): void {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
       drawDot(ctx, map, about, cPole, 5);
+      // D8 — a ring around the target marks it as draggable (drag to count solutions of f = w₀).
+      {
+        const tpx = map.toPx(about);
+        if (Number.isFinite(tpx[0]) && Number.isFinite(tpx[1])) {
+          ctx.save();
+          ctx.strokeStyle = cPole;
+          ctx.globalAlpha = 0.55;
+          ctx.lineWidth = 1.5;
+          ctx.beginPath();
+          ctx.arc(tpx[0], tpx[1], 9, 0, 2 * Math.PI);
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
       // A3 — the swept-wedge about the target: a pie slice filling the current revolution, aligned to the
       // argument-vector; a "×k" badge banks completed turns. Paired with the strip-chart, it reads as
       // "the wedge fills one turn, the counter ticks, it fills again…".
@@ -921,6 +955,13 @@ function main(): void {
     const windText = windFinite ? String(winding) : "—";
     const windTag = windFinite ? "≈" : "";
 
+    // D8 — when the target w₀ ≠ 0 the counted roots are solutions of f = w₀, not zeros of f.
+    const atOrigin = about[0] === 0 && about[1] === 0;
+    const noun = atOrigin ? "zeros" : "solutions";
+    zerosCell.setLabel(atOrigin ? "Zeros inside" : "Solutions inside");
+    nmpCell.setLabel(atOrigin ? "Zeros − Poles" : "Solutions − Poles");
+    windCell.setLabel(atOrigin ? "Winding of f(γ)" : "Winding about w₀");
+
     if (!sing.differentiable) {
       zerosCell.set("—", "");
       polesCell.set("—", "");
@@ -954,10 +995,12 @@ function main(): void {
       status.textContent = "γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
     } else if (nmp === winding) {
       status.className = "status ok";
-      status.textContent = `✓ winding ${winding} = zeros ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}`;
+      status.textContent =
+        `✓ winding ${winding} = ${noun} ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}` +
+        (atOrigin ? "" : `  ·  w₀ = ${fmtComplex(about)}`);
     } else {
       status.className = "status warn";
-      status.textContent = `mismatch: winding ${winding} vs zeros − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
+      status.textContent = `mismatch: winding ${winding} vs ${noun} − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
     }
   }
 
@@ -1114,11 +1157,23 @@ function main(): void {
       schedule();
     },
   });
-  attachPanZoom(
-    wCanvas,
-    () => state.wView,
-    (v: Viewport) => commit({ ...state, wView: v }, false),
-  );
+  attachImagePlane(wCanvas, {
+    getView: () => state.wView,
+    setView: (v: Viewport) => commit({ ...state, wView: v }, false),
+    targetPx: (): [number, number] | null => {
+      const rect = wCanvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return null;
+      return planeMap(state.wView, rect.width, rect.height).toPx(aboutPoint());
+    },
+    setTargetWorld: (world: Vec2) => {
+      // Snap back to the origin (the classic zero-counting case) when dragged close to it.
+      const snap = 8 / wPlaneScale();
+      const t =
+        Math.hypot(world[0], world[1]) < snap ? { re: 0, im: 0 } : { re: world[0], im: world[1] };
+      commit({ ...state, target: t }, false);
+      scheduleRefresh(); // the preimages of the new w₀ change
+    },
+  });
   window.addEventListener("resize", () => schedule());
 
   // ---- boot ----------------------------------------------------------------

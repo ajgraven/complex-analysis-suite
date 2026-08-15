@@ -79,6 +79,59 @@ describe("finder specifics", () => {
   });
 });
 
+describe("target w₀ ≠ 0: counting solutions of f(z) = w₀ (§11 D8)", () => {
+  it("z² = 1 has the two preimages ±1 (exact); winding about w₀ = 1 is 2", () => {
+    const s = findSingularities(parse("z*z"), { cx: 0, cy: 0, halfW: 3, halfH: 3 }, [1, 0]);
+    expect(s.exact).toBe(true);
+    const xs = s.zeros.map((r) => r.z[0]).sort((a, b) => a - b);
+    expect(s.zeros).toHaveLength(2);
+    expect(xs[0]).toBeCloseTo(-1, 6);
+    expect(xs[1]).toBeCloseTo(1, 6);
+
+    const f = makeComplexFn(parse("z*z"));
+    const image: Vec2[] = sampleCircle({ centerRe: 0, centerIm: 0, radius: 1.5 }, 512).map((p) => {
+      const w = f([p[0], p[1]], [0, 0]);
+      return [w[0], w[1]];
+    });
+    expect(windingNumber(image, [1, 0])).toBe(2); // winding about w₀ = solutions inside
+  });
+
+  it("w₀ = 0 reproduces the classic zeros exactly", () => {
+    const region: Region = { cx: 0, cy: 0, halfW: 3, halfH: 3 };
+    const dflt = findSingularities(parse("z*z*z - 1"), region);
+    const zero = findSingularities(parse("z*z*z - 1"), region, [0, 0]);
+    expect(zero.zeros.map((r) => [r.z[0], r.z[1], r.order])).toEqual(
+      dflt.zeros.map((r) => [r.z[0], r.z[1], r.order]),
+    );
+  });
+
+  it("poles are independent of the target", () => {
+    const s = findSingularities(parse("z*(z + 1)/(z - 1)"), { cx: 0, cy: 0, halfW: 3, halfH: 3 }, [0.5, 0.3]);
+    expect(s.poles).toHaveLength(1);
+    expect(s.poles[0].z[0]).toBeCloseTo(1, 6);
+    expect(s.poles[0].z[1]).toBeCloseTo(0, 6);
+  });
+
+  it("z³ − 1 = −1 collapses to a triple solution at 0; winding about −1 is 3", () => {
+    const s = findSingularities(parse("z*z*z - 1"), { cx: 0, cy: 0, halfW: 2, halfH: 2 }, [-1, 0]);
+    expect(s.zeros).toHaveLength(1);
+    expect(s.zeros[0].order).toBe(3);
+    expect(s.zeros[0].z[0]).toBeCloseTo(0, 5);
+    const f = makeComplexFn(parse("z*z*z - 1"));
+    const image: Vec2[] = sampleCircle({ centerRe: 0, centerIm: 0, radius: 1.5 }, 512).map((p) => {
+      const w = f([p[0], p[1]], [0, 0]);
+      return [w[0], w[1]];
+    });
+    expect(windingNumber(image, [-1, 0])).toBe(3);
+  });
+
+  it("transcendental target: exp(z) = e has the preimage z = 1 in view (≈)", () => {
+    const s = findSingularities(parse("exp(z)"), { cx: 1, cy: 0, halfW: 1.5, halfH: 1.5 }, [Math.E, 0]);
+    expect(s.exact).toBe(false);
+    expect(s.zeros.some((r) => Math.hypot(r.z[0] - 1, r.z[1]) < 0.05)).toBe(true);
+  });
+});
+
 /** A densely-sampled square path (side 2h, CCW) — a stand-in for a freehand contour. */
 function denseSquare(h: number, perEdge: number): Vec2[] {
   const corners: Vec2[] = [

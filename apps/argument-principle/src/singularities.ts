@@ -101,6 +101,19 @@ function cluster(roots: readonly Complex[]): Root[] {
   return out.map((o) => ({ z: [o.re, o.im] as Vec2, order: o.order }));
 }
 
+/** num − w₀·den (ascending complex coeffs): its roots are the solutions of f(z) = w₀ (§11 D8). */
+function subScaledPoly(num: readonly Complex[], den: readonly Complex[], w0: Complex): Complex[] {
+  const n = Math.max(num.length, den.length);
+  const out: Complex[] = [];
+  for (let i = 0; i < n; i++) {
+    const a = num[i] ?? [0, 0];
+    const d = den[i] ?? [0, 0];
+    const wd: Complex = [w0[0] * d[0] - w0[1] * d[1], w0[0] * d[1] + w0[1] * d[0]]; // w₀·den[i]
+    out.push([a[0] - wd[0], a[1] - wd[1]]);
+  }
+  return out;
+}
+
 /** Cancel a zero and pole coincident within tolerance (a removable singularity). */
 function cancelRemovable(zeros: Root[], poles: Root[]): void {
   for (const z of zeros) {
@@ -233,8 +246,13 @@ function gridFind(g: MapFn, gp: MapFn, region: Region, wantPoles: boolean): Grid
 
 // ---- the public finder ----------------------------------------------------------------------------
 
-/** Locate the zeros, poles, and critical points of f (given as an AST) within the search region. */
-export function findSingularities(ast: Node, region: Region): Singularities {
+/**
+ * Locate the counted roots (SOLUTIONS of f(z) = `target`), the poles, and the critical points of f (given
+ * as an AST) within the search region. `target` defaults to the origin, where the counted roots are the
+ * zeros of f — the classic argument principle. Dragging `target` to w₀ ≠ 0 counts preimages of w₀ (§11 D8);
+ * poles (f = ∞) and critical points (f′ = 0) are independent of the target.
+ */
+export function findSingularities(ast: Node, region: Region, target: Complex = C0): Singularities {
   // Need f′ either way (Newton refinement / the rational-critical numerator). Its absence means f is
   // not holomorphic, so the argument principle does not apply.
   let dAst: Node;
@@ -246,7 +264,8 @@ export function findSingularities(ast: Node, region: Region): Singularities {
 
   const rat = fToRational(ast, C0, C0);
   if (rat) {
-    const zeros = cluster(polyRoots(rat.num));
+    // Solutions of f = w₀ are the roots of num − w₀·den; poles are the roots of den (target-independent).
+    const zeros = cluster(polyRoots(subScaledPoly(rat.num, rat.den, target)));
     const poles = cluster(polyRoots(rat.den));
     cancelRemovable(zeros, poles);
     const critical = rationalCritical(dAst);
@@ -256,7 +275,20 @@ export function findSingularities(ast: Node, region: Region): Singularities {
   // Transcendental: grid finder over the region using the symbolic f′.
   const f = makeComplexFn(ast) as MapFn;
   const fp = makeComplexFn(dAst) as MapFn;
-  const { zeros, poles } = gridFind(f, fp, region, true);
+  const atOrigin = target[0] === 0 && target[1] === 0;
+  let zeros: Root[];
+  let poles: Root[];
+  if (atOrigin) {
+    ({ zeros, poles } = gridFind(f, fp, region, true)); // one pass: minima → zeros, maxima → poles
+  } else {
+    // Preimages of w₀ are minima of |f − w₀| (f′ unchanged); poles are still maxima of |f|.
+    const fShift: MapFn = (z, c): Complex => {
+      const w = f(z, c);
+      return [w[0] - target[0], w[1] - target[1]];
+    };
+    zeros = gridFind(fShift, fp, region, false).zeros;
+    poles = gridFind(f, fp, region, true).poles;
+  }
   let critical: Root[] = [];
   try {
     const fpp = makeComplexFn(differentiate(dAst, "z")) as MapFn;
