@@ -7,9 +7,11 @@ import {
   windingReliable,
   partialWindingTurns,
   cumulativeArg,
+  crossesBranchCut,
   type Vec2,
 } from "../src/winding.js";
 import { sampleCircle } from "../src/contour.js";
+import { FUNCTION_PRESETS } from "../src/presets.js";
 
 const unitCircle = (n: number): Vec2[] =>
   Array.from({ length: n }, (_, i) => {
@@ -79,6 +81,53 @@ describe("winding number (the core instrument)", () => {
       return [w[0], w[1]];
     });
     expect(windingNumber(image)).toBe(3);
+  });
+});
+
+describe("crossesBranchCut (the not-single-valued guard)", () => {
+  // The image of a contour under f, using the real @cas/expr evaluator (principal branches).
+  const imageOf = (expr: string, r: number, cx = 0, cy = 0, n = 400): Vec2[] => {
+    const f = makeComplexFn(parse(expr));
+    return Array.from({ length: n }, (_, i) => {
+      const t = (2 * Math.PI * i) / n;
+      const w = f([cx + r * Math.cos(t), cy + r * Math.sin(t)], [0, 0]);
+      return [w[0], w[1]] as Vec2;
+    });
+  };
+
+  it("flags branch-cut functions over a contour enclosing the branch point", () => {
+    expect(crossesBranchCut(imageOf("sqrt(z)", 1.5))).toBe(true);
+    expect(crossesBranchCut(imageOf("log(z)", 1.5))).toBe(true);
+    expect(crossesBranchCut(imageOf("z^0.5", 1.5))).toBe(true);
+  });
+
+  it("does NOT flag single-valued (meromorphic) images — no false positive", () => {
+    expect(crossesBranchCut(imageOf("z*z*z - 1", 1.5))).toBe(false);
+    expect(crossesBranchCut(imageOf("z*z", 1.5))).toBe(false);
+    expect(crossesBranchCut(imageOf("z^8", 1.2))).toBe(false); // high winding, wiggly but continuous
+    expect(crossesBranchCut(imageOf("z + 100", 0.5))).toBe(false); // continuous, far from origin
+    for (const p of FUNCTION_PRESETS) {
+      expect(crossesBranchCut(imageOf(p.expr, 1.5)), `preset ${p.expr}`).toBe(false);
+    }
+  });
+
+  it("does NOT flag a contour grazing a pole (magnitude blow-up, not a cut)", () => {
+    expect(crossesBranchCut(imageOf("1/(z - 1.49)", 1.5))).toBe(false);
+  });
+
+  it("returns false for a non-finite sample or a too-short curve", () => {
+    const withInf: Vec2[] = [
+      [0, 0],
+      [1, 0],
+      [Infinity, 0],
+      [0, 1],
+      [0, 0],
+      [1, 1],
+      [2, 2],
+      [3, 3],
+    ];
+    expect(crossesBranchCut(withInf)).toBe(false);
+    expect(crossesBranchCut([[0, 0], [1, 1]])).toBe(false);
   });
 });
 
