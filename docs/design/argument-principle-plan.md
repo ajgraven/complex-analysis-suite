@@ -10,7 +10,9 @@
 > `deploy-pages.yml` `cp`, so it **goes live on the next merge to `master`**. The topology decision (a
 > **separate app**, not a mode in the plotter) is [ADR-0019](../DECISIONS.md#adr-0019-argument-principle-as-a-separate-app).
 > See the Build-progress record below. E3 (phase-tint background) and E4 (producer "send-to" links) remain a
-> tracked, optional backlog.
+> tracked, optional backlog. A second **pedagogy enhancement arc** (§11 — argument strip-chart, the `∮ f′/f`
+> integral view, boundary-crossing / isolate interactions, and winding about a draggable target `w₀`) is
+> planned and being built next on this same branch.
 >
 > This document is the _how_. It mirrors the suite's proven runbook style
 > ([`../MIGRATION.md`](../MIGRATION.md), [`complex-function-plotter-plan.md`](complex-function-plotter-plan.md)):
@@ -346,6 +348,37 @@ parity-blocking:
 - **Reference behaviors (⚠ §0):** does the reference applet animate a traversal point (E1)? color the image
   curve by `t` (E2)? phase-shade backgrounds (E3)? If the animation exists in the reference, promote E1 from a
   Phase-3 enhancement to Phase-1 core.
+
+---
+
+## 11. Pedagogy enhancement arc (A · B · C · D8 · F13) — planned
+
+A second construction arc, layered on the shipped tool, to teach the _mechanism_ behind the equality (why
+winding **is** the accumulated argument, and how the topological statement meets the analytic `∮ f′/f`
+one) and to generalize past the textbook "zeros of `f`, circular contour" case. It stays **pure-2D and
+app-local** — no new `@cas/*` package (ADR-0007 posture unchanged from ADR-0020), no core `π`/`2πi`
+(ADR-0006: the `1/2πi` normalization lives at the app edge), honest `=`/`≈` labels throughout.
+
+**Confirmed decisions (Andrew, 2026-08-15):** (1) isolate-a-root is **click-to-pin** — clicking a marked
+root pins a small circle around it and suspends cursor-follow; **Clear** resumes follow. (2) the argument
+strip-chart is **always-on** (it teaches even when paused). (3) a short **ADR-0021** records the
+`f = w₀` generalization and the pin/cursor-follow interaction model.
+
+**Cross-cutting rules.** Every new serialized field (`target`, pedagogy toggles) is added
+**optional-with-default** and back-filled on decode, so old `#vs=` permalinks keep opening (share-link
+compat). Every new pure function ships with unit tests; the test census is bumped; each stage ends green on
+`lint → typecheck → test → build` and gets a headless-Chromium smoke; PNG export composites any new panel.
+
+**Dependency order:** `0 → A → B`, then `C` and `D8` on top of `0`; `F13` rides `C`'s hit-testing.
+
+| Stage | Delivers | New code (+ tests) | Gate / GT |
+|---|---|---|---|
+| **0 — Foundations** (invisible) | primitives + compat seams so later stages are small deltas | `winding.cumulativeArg` (share it into `windingTurns`/`partialWindingTurns`); compiled **f′** exposed in `buildModel`; `viewState` gains optional `target` + `pedagogy` with a decode backfill; `about` threaded through `render`/readout as a variable | workspace green; a pre-Stage-0 permalink decodes to the identical view; `cumulativeArg` endpoints equal `windingTurns` |
+| **1 — (A) argument made visible** | strip-chart + coupled colors + swept wedge | **A2** γ drawn with the f(γ) ramp (✕ glyphs carry the "zeros" color); **A1** `render/argGraph.ts` — always-on panel plotting `cumulativeArg(f(γ))` vs `t` with 2π gridlines + a traversal marker; **A3** filled swept-wedge about `about` in the w-pane; `savePng` composites the strip | browser smoke: `z³−1` strip climbs to `6π`, wedge annotates "×3", γ/f(γ) share the ramp; argGraph mapping + arg-endpoint unit tests |
+| **2 — (B) winding → integral** | the analytic side | **B4** `integral.ts` `logDerivIntegral(f,f′,zPts,upto)` partial quadrature → read out value and `/(2πi)` converging to `N−P` (labeled **`≈`**), overlaid on the strip; **B5** per-root decomposition vectors from each _enclosed_ root to `z(t)` (`Σ = N−P`) — exact per-factor for **rational** f (`=`), integer winding contributions only for transcendental | browser smoke: `∮f′/f /(2πi) → 3` for `z³−1`; residue-sum = count golden across the 8 presets |
+| **3 — (C) motion + (F13)** | counting through interaction | shared `nearestRoot` hit-test; **F13** hover tooltip (value · order · `=`/`≈`); **C6** `diffEnclosure` crossing detector → transient toast + root pulse (gated to a stable root set); **C7** click-to-pin isolate (radius = fraction of nearest-other-root distance; winding = order), **Clear** unpins | browser smoke: tooltip on hover; drag γ across a root → toast + count ±1; click a double root → isolated, winding 2; `nearestRoot`/`diffEnclosure`/isolate-radius unit tests |
+| **4 — (D8) target w₀** | winding about a draggable point | flip `about` → `state.target`; drag the target dot in the w-pane; `findSolutions(ast,w₀,region)` (rational `num − w₀·den`; transcendental `f − w₀`); mark preimages in z; relabel readouts "solutions of f = w₀ − poles"; `w₀=0` reproduces today byte-for-byte | browser smoke: `z²`, `w₀=1` → 2 preimages, winding 2; `w₀→0` matches classic reading |
+| **5 — consolidate** | docs + ADR | living-record + help-overlay update; **ADR-0021** (`f=w₀` generalization + pin model); final full-workspace gate + end-to-end smoke | published-parity: PNG carries every panel; workspace green |
 
 ---
 
