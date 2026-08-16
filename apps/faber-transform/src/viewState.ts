@@ -22,15 +22,22 @@ export interface Viewport {
   readonly zoom: number;
 }
 
-/** The input function f on the unit disk. M1: a monomial zⁿ; later: `kind:"expr"` (@cas/expr source). */
-export interface InputState {
-  readonly kind: "monomial";
-  readonly degree: number;
-}
+/**
+ * The input function f on the unit disk. Two exact families:
+ *   - monomial:  f(z) = zⁿ                     → Φφ(f) = Fₙ (polynomial, exact)
+ *   - pole:      f(z) = 1/(z−z₀)^order, |z₀|>1 → Φφ(f) = closed-form rational image (exact)
+ * (Free-form @cas/expr input with the truncated-series path arrives at M3.)
+ */
+export type InputState =
+  | { readonly kind: "monomial"; readonly degree: number }
+  | { readonly kind: "pole"; readonly re: number; readonly im: number; readonly order: number };
 
 /** Bounds so a crafted permalink can't request a runaway-degree Faber build. */
 export const MIN_DEGREE = 0;
 export const MAX_DEGREE = 40;
+/** Pole magnitude bounds: strictly outside the unit disk, and finite. */
+export const MIN_POLE_R = 1.0001;
+export const MAX_POLE_R = 1000;
 
 export type FaberViewState = {
   /** Exterior-map preset id (see presets.ts). */
@@ -65,22 +72,34 @@ function isViewport(v: Record<string, unknown> | undefined): boolean {
   );
 }
 
+/** A well-formed input block (monomial or pole). */
+function isInputState(input: Record<string, unknown> | undefined): boolean {
+  if (!input) return false;
+  if (input.kind === "monomial") {
+    const d = input.degree;
+    return (
+      Number.isFinite(d) &&
+      Number.isInteger(d) &&
+      (d as number) >= MIN_DEGREE &&
+      (d as number) <= MAX_DEGREE
+    );
+  }
+  if (input.kind === "pole") {
+    if (!Number.isFinite(input.re) || !Number.isFinite(input.im)) return false;
+    const r = Math.hypot(input.re as number, input.im as number);
+    if (!(r >= MIN_POLE_R && r <= MAX_POLE_R)) return false;
+    return input.order === 1 || input.order === 2;
+  }
+  return false;
+}
+
 /** Structural guard: is `value` a well-formed {@link FaberViewState}? (defensive decode). */
 export function isFaberViewState(value: unknown): value is FaberViewState {
   if (value === null || typeof value !== "object") return false;
   const s = value as Record<string, unknown>;
   if (typeof s.phi !== "string") return false;
   if (!Number.isFinite(s.shape)) return false;
-  const input = s.input as Record<string, unknown> | undefined;
-  if (!input || input.kind !== "monomial") return false;
-  if (
-    !Number.isFinite(input.degree) ||
-    (input.degree as number) < MIN_DEGREE ||
-    (input.degree as number) > MAX_DEGREE ||
-    !Number.isInteger(input.degree)
-  ) {
-    return false;
-  }
+  if (!isInputState(s.input as Record<string, unknown> | undefined)) return false;
   if (!isViewport(s.zView as Record<string, unknown> | undefined)) return false;
   if (!isViewport(s.wView as Record<string, unknown> | undefined)) return false;
   const cv = s.conventions as Record<string, unknown> | undefined;

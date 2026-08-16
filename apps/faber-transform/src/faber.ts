@@ -3,10 +3,23 @@
 // coloring. The app never touches the package's internals directly — everything routes through here.
 import { Complex, makePoly, objAlgebra } from "@cas/core";
 import type { Cx } from "@cas/core";
-import { faberTransform } from "@cas/faber";
-import type { ExteriorMap } from "@cas/faber";
+import { faberTransform, faberImageOfPole, evalRationalImage } from "@cas/faber";
+import type { ExteriorMap, RationalImage } from "@cas/faber";
 
 const P = makePoly(objAlgebra);
+
+export { evalRationalImage };
+export type { RationalImage };
+
+/** f(z) = 1/(z − z₀)^order — the pole input, analytic on the unit disk when |z₀| > 1. */
+export function evalPoleInput(z0: Cx, order: number, z: Cx): Cx {
+  return Complex.pow(Complex.sub(z, z0), -order);
+}
+
+/** The exact closed-form Faber image of the pole input 1/(z − z₀)^order. */
+export function poleImage(map: ExteriorMap, z0: Cx, order: number): RationalImage {
+  return faberImageOfPole(map, z0, order);
+}
 
 /** Evaluate φ(z) = c·z + Σ_{k≥0} c_k·z^{−k} for a finite-Laurent exterior map (z on 𝔻*, |z| ≥ 1). */
 export function evalPhi(map: ExteriorMap, z: Cx): Cx {

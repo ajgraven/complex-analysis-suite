@@ -125,3 +125,14 @@ header.app-head p {
   color: var(--muted);
   margin-right: 0.5rem;
 }
+
+.badge-exact {
+  display: inline-block;
+  margin-right: 0.6rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 5px;
+  background: rgba(122, 162, 247, 0.18);
+  color: var(--accent);
+  font-weight: 700;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}

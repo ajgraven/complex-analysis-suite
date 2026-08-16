@@ -16,7 +16,7 @@ describe("viewState codec", () => {
     expect(back).toEqual(DEFAULT_VIEW_STATE);
   });
 
-  it("round-trips a non-default state", () => {
+  it("round-trips a non-default monomial state", () => {
     const s = {
       ...DEFAULT_VIEW_STATE,
       phi: "ellipse",
@@ -24,6 +24,20 @@ describe("viewState codec", () => {
       input: { kind: "monomial" as const, degree: 7 },
     };
     expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("round-trips a pole input state", () => {
+    const s = {
+      ...DEFAULT_VIEW_STATE,
+      phi: "deltoid",
+      input: { kind: "pole" as const, re: 1.6, im: 0.8, order: 2 },
+    };
+    expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("guard rejects a pole inside the unit disk or with a bad order", () => {
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, input: { kind: "pole", re: 0.5, im: 0.2, order: 1 } })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, input: { kind: "pole", re: 1.6, im: 0.8, order: 3 } })).toBe(false);
   });
 
   it("rejects an absent or foreign hash", () => {

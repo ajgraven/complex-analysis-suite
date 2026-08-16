@@ -316,4 +316,16 @@ none of which v1 blocks:
   Chromium): the plotter renders Γ(z)'s domain-colored 3-D surface with zero shader-compile/link errors —
   the extracted `colorAt` works. (The plotter's own vitest-browser job needs `chrome-headless-shell`, absent
   in this sandbox; CI runs it.) Full workspace: **3018 tests**, typecheck / lint / build all green.
-- **M2 — GPU coloring + remaining presets + exact rational path —** next.
+- **M2 — presets → exact rational input → GPU renderer → pan/zoom** (author-specified order):
+  - **Step 1 — remaining presets — DONE.** Added the deltoid `z + a/(2z²)` (3 cusps at a→1) and the
+    5-cusped star `z + a/(4z⁴)`, each with a clamped amplitude slider inside the area-type univalence bound
+    `Σ n|cₙ| ≤ 1`. Preset switch reframes the right panel to `K` (via `kHalf`).
+  - **Step 2 — exact rational input path — DONE.** New `@cas/faber` `exteriorMapJet` (φ and its
+    derivatives from the Laurent) + `faberImageOfPole` / `evalRationalImage`: the exact closed-form image of
+    `1/(z−z₀)^k` (k = 1, 2), a rational function whose pole sits at `φ(z₀) ∈ Ω` outside `K`. Pinned by a
+    package test against the truncated Faber series (the generating identity) — 25 package tests. The app
+    gains a monomial/pole **input-mode toggle** (pole via polar `r>1`, `θ` so `|z₀|>1` always), an image-pole
+    marker, and a `=` (exact) badge. Verified in-browser: a double pole outside the disk maps to a double
+    pole at `φ(z₀)` in the deltoid's exterior. 20 app tests; typecheck/lint clean.
+  - **Step 3 — GPU renderer —** next (wire the app onto the extracted `@cas/gpu` `PHASE_COLORING_GLSL`).
+  - **Step 4 — pan/zoom.**
