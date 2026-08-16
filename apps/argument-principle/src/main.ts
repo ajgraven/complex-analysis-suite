@@ -300,6 +300,7 @@ function main(): void {
   let flash: { pts: Vec2[]; t0: number } | null = null;
   let flashRaf = 0;
   let toastTimer = 0;
+  let toastHideTimer = 0; // second stage: hide the toast (a11y) after its fade-out finishes
   let lastSR = ""; // last text pushed to the ARIA live region (avoid re-announcing an unchanged verdict)
 
   // ---- DOM shell -----------------------------------------------------------
@@ -384,6 +385,7 @@ function main(): void {
   resInput.value = String(state.render.resolution);
   resWrap.append(resInput);
   const playBtn = button("▶ Traverse γ");
+  const stopBtn = button("↺ Reset"); // stop the traversal AND clear its overlay (trace dot / wedge / vectors)
   const speedWrap = document.createElement("label");
   speedWrap.className = "field";
   const speedLabel = document.createElement("span");
@@ -421,7 +423,7 @@ function main(): void {
   controls.append(
     controlGroup("Function", "function", presetWrap, exprWrap),
     controlGroup("Contour", "contour", radiusWrap, drawHint),
-    controlGroup("Explore", "explore", playBtn, speedWrap, decompChk.root),
+    controlGroup("Explore", "explore", playBtn, stopBtn, speedWrap, decompChk.root),
     controlGroup("View", "view", resWrap, domainChk.root, imageChk.root),
   );
 
@@ -696,9 +698,16 @@ function main(): void {
   function showToast(msg: string): void {
     toastEl.textContent = msg;
     toastEl.hidden = false;
+    if (toastHideTimer) clearTimeout(toastHideTimer);
     requestAnimationFrame(() => toastEl.classList.add("show"));
     if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2600);
+    toastTimer = window.setTimeout(() => {
+      toastEl.classList.remove("show");
+      // Fully remove it from the a11y/DOM tree once the fade completes (opacity alone leaves it exposed).
+      toastHideTimer = window.setTimeout(() => {
+        toastEl.hidden = true;
+      }, 260);
+    }, 2600);
   }
   function prefersReducedMotion(): boolean {
     return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -730,7 +739,7 @@ function main(): void {
       schedule();
       return;
     }
-    render();
+    if (!anim.on) render(); // while traversing, animFrame already renders every frame (which draws the pulse)
     flashRaf = requestAnimationFrame(flashTick);
   }
   /** The finder's search region: the union of the z-view and the contour, padded — so every marker in
@@ -794,6 +803,13 @@ function main(): void {
       clearTimeout(refreshTimer);
       refreshTimer = 0;
     }
+  }
+  // A pan/zoom or a moved γ changes only the search REGION — which matters solely for the transcendental
+  // grid finder. The rational-exact path roots num/den globally (region-independent), so for it a view/γ
+  // change needs no re-find and must NOT blank the verdict to "recomputing…" (a flicker on the common
+  // presets). Target changes still go through scheduleRefresh directly — they alter the roots for every f.
+  function scheduleRegionRefresh(): void {
+    if (!sing.exact) scheduleRefresh();
   }
   function commit(next: ArgPrincipleViewState, refresh: boolean): void {
     state = next;
@@ -979,6 +995,7 @@ function main(): void {
 
     // The animated traversal point (E1): the same parameter t marks a point on γ and its image on f(γ).
     const showAnim = anim.on || anim.t > 0;
+    stopBtn.disabled = !showAnim; // nothing to reset when the traversal is at rest (t=0, not playing)
     const zAnim = showAnim ? contourPointAt(contour, anim.t, state.render.resolution) : null;
     const wAnim = zAnim && !model.error ? model.f(zAnim) : null;
 
@@ -1323,9 +1340,19 @@ function main(): void {
       schedule();
     }
   }
+  /** Stop the traversal and rewind to t=0 so its overlay (trace dot / swept wedge / arg-vector / root
+   *  vectors) clears — a pause keeps the frame for inspection; Reset takes it fully off. */
+  function resetTraversal(): void {
+    anim.on = false;
+    anim.t = 0;
+    animLast = 0;
+    playBtn.textContent = "▶ Traverse γ";
+    schedule(); // animFrame self-terminates on `!anim.on`; this repaints the now-clean scene
+  }
 
   // ---- interaction wiring --------------------------------------------------
   playBtn.addEventListener("click", () => setPlaying(!anim.on));
+  stopBtn.addEventListener("click", () => resetTraversal());
   speedInput.addEventListener("input", () => {
     const s = Number(speedInput.value);
     if (Number.isFinite(s) && s > 0) anim.speed = s;
@@ -1370,12 +1397,12 @@ function main(): void {
     if (Number.isFinite(r) && r > 0) {
       radiusLabel.textContent = `Radius r = ${r.toFixed(2)}`;
       commit({ ...state, contour: { ...state.contour, radius: r } }, false);
-      if (state.contour.kind === "circle") scheduleRefresh(); // radius has no effect on a freehand path
+      if (state.contour.kind === "circle") scheduleRegionRefresh(); // radius has no effect on a freehand path
     }
   });
   resetBtn.addEventListener("click", () => {
     commit({ ...state, zView: DEFAULT_VIEW_STATE.zView, wView: DEFAULT_VIEW_STATE.wView }, false);
-    scheduleRefresh();
+    scheduleRegionRefresh();
   });
   fitBtn.addEventListener("click", () => fitImage());
   resInput.addEventListener("input", () => {
@@ -1403,7 +1430,7 @@ function main(): void {
     getView: () => state.zView,
     setView: (v: Viewport) => {
       commit({ ...state, zView: v }, false);
-      scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
+      scheduleRegionRefresh(); // the search region moved with the view — re-find (transcendental only)
     },
     getMode: () => mode,
     onHover: (world: Vec2, client: { x: number; y: number }) => {
@@ -1418,6 +1445,9 @@ function main(): void {
     },
     onPlace: (world: Vec2) => {
       // Move mode — a tap places the circular contour's centre (converting from a path / releasing a pin).
+      // A tap teleports γ, so any roots between the old and new centre aren't "crossed" by the user —
+      // re-baseline instead of firing a jumble of entered/left toasts (same rule as Isolate / draw-commit).
+      suppressCrossOnce = true;
       commit(
         {
           ...state,
@@ -1425,7 +1455,7 @@ function main(): void {
         },
         false,
       );
-      scheduleRefresh(); // the moved contour may enclose a singularity outside the last search region
+      scheduleRegionRefresh(); // a moved contour may enclose a singularity outside the last search region (transcendental)
     },
     onIsolate: (world: Vec2) => {
       // Isolate mode — a tap on a marked root pins a small isolating circle (winding = its order); a tap on
