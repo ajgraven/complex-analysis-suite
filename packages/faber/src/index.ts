@@ -5,6 +5,8 @@
 //     via the three-term recurrence (recurrence.ts).
 //   - faberTransform                     : the forward transform Φφ(f)=Σ b_n F_n from f's Taylor
 //     coefficients on the unit disk (transform.ts) — NEW; not present in either app before.
+//   - weightedFaberPolynomial(s)         : the corner-suppressing weighted Faber polynomials Q_{n,m}
+//     of K = ℂ∖Ω (weighted.ts), Q_{n,m}=Σ g_j F_{n-j} from the exterior-SC corner images (Faber M3).
 //   - polynomialRoots                    : Durand–Kerner + Newton polish over @cas/core (roots.ts).
 //   - formatFaberPoly                    : a readable ζ-expression (format.ts).
 //   - faberConvergence                   : per-order roots + residual report (convergence.ts).
@@ -12,6 +14,8 @@
 export type { ExteriorMap, FaberPolynomials } from "./types.js";
 export { faberPolynomials, faberPolynomial } from "./recurrence.js";
 export { faberTransform } from "./transform.js";
+export { weightSeries, weightedFaberPolynomial, weightedFaberPolynomials } from "./weighted.js";
+export type { WeightedFaberPolynomials } from "./weighted.js";
 export { exteriorMapJet, faberImageOfPole, evalRationalImage } from "./exteriorMap.js";
 export type { RationalImage } from "./exteriorMap.js";
 export { partialFractions, faberTransformRational } from "./rational.js";

@@ -3,7 +3,7 @@
 // coloring. The app never touches the package's internals directly — everything routes through here.
 import { Complex, makePoly, objAlgebra } from "@cas/core";
 import type { Cx } from "@cas/core";
-import { faberTransform, faberImageOfPole, evalRationalImage, faberTransformRational, polynomialRoots } from "@cas/faber";
+import { faberTransform, faberImageOfPole, evalRationalImage, faberTransformRational, polynomialRoots, weightedFaberPolynomial } from "@cas/faber";
 import type { ExteriorMap, RationalImage } from "@cas/faber";
 import { parse, makeComplexFn, fToRational } from "@cas/expr";
 
@@ -193,6 +193,15 @@ export function monomialTaylor(n: number): Cx[] {
 /** Φφ(f) coefficients (ascending Cx[]) from f's Taylor coefficients on the unit disk. */
 export function transformCoeffs(map: ExteriorMap, taylor: Cx[]): Cx[] {
   return faberTransform(map, taylor);
+}
+
+/**
+ * The corner-suppressing weighted Faber polynomial Q_{n,m} for a monomial input f(z) = zⁿ on a polygonal K
+ * (M3): Φφ(zⁿ) = Fₙ, and Q_{n,m} = Σⱼ gⱼ F_{n−j} damps the corner overshoot toward the smooth-arc floor.
+ * `cornerImages` are the exterior-SC corner images wₖ = φ(zₖ) on |w| = 1 (empty ⇒ returns Fₙ unchanged).
+ */
+export function weightedMonomialCoeffs(map: ExteriorMap, cornerImages: readonly Cx[], n: number, m: number): Cx[] {
+  return weightedFaberPolynomial(map, cornerImages, n, m);
 }
 
 /** Evaluate an ascending-power complex polynomial at w by Horner. */

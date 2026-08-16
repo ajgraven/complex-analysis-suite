@@ -55,6 +55,11 @@ export const MAX_POLYGON_COORD = 2;
 export const MIN_POLYGON_EDGE = 0.03;
 /** The domain id that draws φ from `customPolygon` (the editor) rather than a preset. */
 export const CUSTOM_PHI = "custom";
+/** Corner-suppression strength m for the weighted Faber Q_{n,m} (M3): m=1 over-corrects, so the floor is 2. */
+export const MIN_SUPPRESS_M = 2;
+export const MAX_SUPPRESS_M = 8;
+/** Default suppression strength when the toggle is first turned on. */
+export const DEFAULT_SUPPRESS_M = 4;
 
 export type FaberViewState = {
   /** Exterior-map preset id (see presets.ts). */
@@ -73,6 +78,10 @@ export type FaberViewState = {
   readonly coloring?: ColoringOptions;
   /** The editor polygon (counter-clockwise `[x,y]` vertices), used as the domain when `phi === "custom"`. */
   readonly customPolygon?: readonly (readonly [number, number])[];
+  /** Corner suppression (M3): render Q_{n,m} instead of Fₙ for a monomial input on a polygonal K. */
+  readonly suppressCorners?: boolean;
+  /** Suppression strength m ∈ [2, 8] (larger = milder weight, closer to Fₙ but provably lower overshoot). */
+  readonly suppressStrength?: number;
 };
 
 /** The default view — the deltoid domain with f(z) = z³, so the right panel shows F₃ on the deltoid K. */
@@ -142,6 +151,13 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   if (s.coloring !== undefined && !isColoringOptions(s.coloring as Record<string, unknown> | undefined)) return false;
   if (s.customPolygon !== undefined && !isCustomPolygon(s.customPolygon)) return false;
   if (s.phi === CUSTOM_PHI && !isCustomPolygon(s.customPolygon)) return false; // "custom" needs a valid polygon
+  if (s.suppressCorners !== undefined && typeof s.suppressCorners !== "boolean") return false;
+  if (
+    s.suppressStrength !== undefined &&
+    !(Number.isInteger(s.suppressStrength) && (s.suppressStrength as number) >= MIN_SUPPRESS_M && (s.suppressStrength as number) <= MAX_SUPPRESS_M)
+  ) {
+    return false;
+  }
   return true;
 }
 

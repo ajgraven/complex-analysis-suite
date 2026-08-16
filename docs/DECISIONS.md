@@ -2102,5 +2102,9 @@ deferred (its Action Item 7).
        arbitrary convex/reentrant polygons.
 5. [x] **M2** adaptive truncation + corner-norm `Λₖ` annotations + draggable-vertex polygon editor +
        honest `≈`/`⚠` labeling.
-6. [ ] **Deferred (M3):** corner-**suppressing** weighted Faber polynomials `Q_{n,m}`; an optional lightning
-       fast-mode for the polygon solve; a `@cas/interchange` form for the exterior map.
+6. [x] **M3 — corner-suppressing weighted Faber `Q_{n,m}`:** `@cas/faber` `weightedFaberPolynomial`
+       (`Q_{n,m} = Σⱼ gⱼ F_{n−j}`, weight `G_m = ∏(1−w_k/φ)^{1/m}` over the SC prevertex images `w_k = 1/u_k`;
+       no new numerics — a linear combination of the existing `F_n`), an app toggle + strength slider, and a
+       before/after `|Fₙ|` vs `|Q_{n,m}|` boundary profile (paper Fig. 2). De-risked by an M0-style spike.
+7. [ ] **Still deferred:** an optional lightning fast-mode for the polygon solve; a `@cas/interchange` form
+       for the exterior map (gate on a receiving tool).

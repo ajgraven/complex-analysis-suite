@@ -106,19 +106,22 @@ deliver the core pedagogical payload with almost no new math.
   golden, mirroring `CD_TO_RM_BOTTCHER_LINK`). **Leverage:** highest of any item — `@cas/interchange`
   `form:"schwarz"`, `@cas/schwarz` (`makeBoundedSchwarz`/`makeUnboundedLaurentSchwarz`), `@cas/faber`.
 
-### T2.3 — Faber on polygonal / cornered K via the Schwarz–Christoffel engine (biggest domain-class win) — **DONE (M1a + M1b + M2)**
+### T2.3 — Faber on polygonal / cornered K via the Schwarz–Christoffel engine (biggest domain-class win) — **DONE (M1a + M1b + M2 + M3)**
 > Full implementation plan (with M0 spike results): [`faber-polygonal-sc-plan.md`](faber-polygonal-sc-plan.md).
 - **Shipped:** the app renders Faber images on cornered polygonal `K` — **M1a** regular-polygon presets
   (closed-form exterior map), **M1b** arbitrary convex **and** reentrant polygons via the new **exterior**
   Schwarz–Christoffel engine in `@cas/conformal` (`exteriorSchwarzChristoffel.ts` forward map +
   `exteriorScParameterProblem.ts` multi-seed damped Gauss–Newton solve + Laurent-at-∞ extractor), and
   **M2** adaptive Laurent truncation (geometry-aware order + tail-tolerance trim), per-corner norm
-  annotations `Λ_k = max{λ_k, 2−λ_k}` (Miña-Díaz–Rubin–Wennman 2025), and a draggable-vertex polygon
-  editor. Polygon domains are honestly `≈`-labeled; a failed/degenerate fit shows `⚠` with blank panels.
+  annotations `Λ_k = max{λ_k, 2−λ_k}` (Miña-Díaz–Rubin–Wennman 2025), a draggable-vertex polygon editor, and
+  (**M3**) the corner-**suppressing** weighted Faber polynomials `Q_{n,m}` — a toggle + strength slider that
+  renders `Q_{n,m} = Σⱼ gⱼ F_{n−j}` for a monomial input, with a before/after `|Fₙ|` vs `|Q_{n,m}|` boundary
+  profile. Polygon domains are honestly `≈`-labeled; a failed/degenerate fit shows `⚠` with blank panels.
 - **How:** the exterior SC map serves as `φ`; its Laurent jet at `∞` (built via `@cas/core makeSeries`
   generalized-binomial expansion of the D&T §4.2 integrand, closure ⇔ `Σ(1−α_k)/u_k = 0`) feeds the
-  existing Faber recurrence. Reentrant corners/cusps visibly stress convergence — flagged `degraded`.
-- **Remaining (M3, deferred):** the corner-**suppressing** weighted Faber polynomials `Q_{n,m}` toggle.
+  existing Faber recurrence. Reentrant corners/cusps visibly stress convergence — flagged `degraded`. The
+  `Q_{n,m}` weight `G_m = ∏_k (1 − w_k/φ)^{1/m}` (corner images `w_k = 1/u_k` from the SC prevertices) is a
+  finite linear combination of the same `F_n` — no new numerics (eq. 1.9, ibid.).
 - **Leverage realized:** the Riemann-map studio's SC engine in `@cas/conformal` — precisely the flagged
   synergy; the exterior variant is now a second family alongside its interior/bounded builders.
 

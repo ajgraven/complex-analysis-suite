@@ -86,6 +86,25 @@ describe("viewState codec", () => {
     expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
   });
 
+  it("round-trips the corner-suppression fields", () => {
+    const s = {
+      ...DEFAULT_VIEW_STATE,
+      phi: "square",
+      input: { kind: "monomial" as const, degree: 20 },
+      suppressCorners: true,
+      suppressStrength: 6,
+    };
+    expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("guard rejects an out-of-range or non-integer suppression strength", () => {
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressCorners: true, suppressStrength: 4 })).toBe(true);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressStrength: 1 })).toBe(false); // below MIN (m=1 over-corrects)
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressStrength: 9 })).toBe(false); // above MAX
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressStrength: 3.5 })).toBe(false); // non-integer
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressCorners: "yes" })).toBe(false);
+  });
+
   it("guard rejects a custom domain with no/short/out-of-bounds polygon", () => {
     const good: [number, number][] = [[1, 0], [-1, 1], [-1, -1]];
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: good })).toBe(true);

@@ -28,6 +28,7 @@ import {
   transformRational,
   transformRoots,
   trimTail,
+  weightedMonomialCoeffs,
 } from "./faber.js";
 import type { Rational } from "./faber.js";
 import { seriesOfExpr } from "./series.js";
@@ -46,6 +47,8 @@ import {
 import type { Vec2, Viewport } from "./render/plane.js";
 import { fillPhasePortrait, DEFAULT_COLORING } from "./render/coloring.js";
 import type { ColoringOptions } from "./render/coloring.js";
+import { computeCornerProfile, drawCornerProfile } from "./render/cornerProfile.js";
+import type { CornerProfile } from "./render/cornerProfile.js";
 import { createGpuRenderer } from "./render/gpu.js";
 import type { GpuRenderer } from "./render/gpu.js";
 import {
@@ -58,6 +61,9 @@ import {
   MAX_TRUNCATION,
   MIN_TRUNCATION,
   MAX_EXPR_LEN,
+  MIN_SUPPRESS_M,
+  MAX_SUPPRESS_M,
+  DEFAULT_SUPPRESS_M,
   decodeFaberState,
   encodeFaberState,
 } from "./viewState.js";
@@ -104,6 +110,8 @@ interface RenderModel {
   readonly badge: string;
   readonly readout: string;
   readonly error: boolean;
+  /** The M3 corner-overshoot profile along ∂K (monomial input on a polygonal K); undefined ⇒ panel hidden. */
+  readonly cornerProfile?: CornerProfile;
 }
 
 function unitCircle(samples = 256): Vec2[] {
@@ -291,6 +299,17 @@ function main(): void {
   const rootsCtl = elt("div", { class: "control control-check" });
   rootsCtl.append(rootsInput, elt("label", { for: "showroots" }, "Faber roots"));
 
+  // Corner suppression (M3): render the weighted Faber polynomial Q_{n,m} instead of Fₙ for a monomial input
+  // on a polygonal K — flattening the corner overshoot. Shown only for polygon domains + monomial input.
+  const suppressInput = elt("input", { id: "suppress", type: "checkbox" });
+  const suppressCtl = elt("div", { class: "control control-check" });
+  suppressCtl.append(suppressInput, elt("label", { for: "suppress" }, "suppress corners (Q_{n,m})"));
+
+  const mInput = elt("input", { id: "suppressm", type: "range", min: String(MIN_SUPPRESS_M), max: String(MAX_SUPPRESS_M), step: "1" });
+  const mLabel = elt("label", { for: "suppressm" }, "strength m");
+  const mCtl = elt("div", { class: "control" });
+  mCtl.append(mLabel, mInput);
+
   // Coloring style: an enhancement overlay, a modulus→lightness transfer, and (for the grid/sector
   // overlays) a density, all applied to both the GPU and CPU phase portraits.
   const enhSel = elt("select", { id: "enh" });
@@ -329,7 +348,7 @@ function main(): void {
   const crispCtl = elt("div", { class: "control control-check" });
   crispCtl.append(crispInput, elt("label", { for: "crisp" }, "crisp lines"));
 
-  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, enhCtl, modCtl, secCtl, crispCtl);
+  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, suppressCtl, mCtl, enhCtl, modCtl, secCtl, crispCtl);
   root.append(controls);
 
   // The polygon editor (shown only for the custom domain). Live drag redraws the editor; the expensive SC
@@ -346,6 +365,14 @@ function main(): void {
   const readoutBody = elt("span", {});
   readout.append(exactBadge, readoutBody);
   root.append(readout);
+
+  // The M3 corner-overshoot profile (paper Fig. 2): |Fₙ| along ∂K, with |Q_{n,m}| overlaid when suppressing.
+  // Shown only for a monomial input on a polygonal K (when computeModel attaches a cornerProfile).
+  const profileWrap = elt("div", { class: "corner-profile-wrap" });
+  const profileCaption = elt("div", { class: "corner-profile-cap" }, "Corner overshoot along ∂K — |φ⁻ⁿFₙ| → 1 on the smooth arcs, → λₖ at the corners");
+  const profileCanvas = elt("canvas", { class: "corner-profile" });
+  profileWrap.append(profileCaption, profileCanvas);
+  root.append(profileWrap);
 
   left.panel.renderer = createGpuRenderer(left.panel.gl, PANEL_BG);
   right.panel.renderer = createGpuRenderer(right.panel.gl, PANEL_BG);
@@ -372,6 +399,7 @@ function main(): void {
     let map;
     let approx: boolean;
     let cornerN: CornerNorms | undefined;
+    let cornerImages: readonly Cx[] = []; // wₖ = φ(zₖ) on |w|=1, for the M3 weighted Faber Q_{n,m}
     if (state.phi === CUSTOM_PHI && state.customPolygon) {
       const r = getCustomMap(state.customPolygon);
       domainStatus = { converged: r.converged, degraded: r.degraded };
@@ -384,11 +412,13 @@ function main(): void {
       map = r.map;
       approx = true;
       cornerN = cornerNorms(interiorAngles(state.customPolygon.map((v): [number, number] => [v[0], v[1]])));
+      cornerImages = r.cornerImages;
     } else {
       const preset = phiPresetById(state.phi);
       map = preset.build(state.shape);
       approx = preset.approximate === true;
       cornerN = preset.cornerNorms;
+      cornerImages = preset.cornerImages?.() ?? [];
       domainStatus = null;
     }
     // Polygon domains carry a TRUNCATED exterior SC series, so their φ (and everything derived from it) is
@@ -403,13 +433,26 @@ function main(): void {
 
     if (state.input.kind === "monomial") {
       const n = state.input.degree;
-      const coeffs = transformCoeffs(map, monomialTaylor(n));
+      // Corner suppression (M3): on a polygonal K, render Q_{n,m} = Σⱼ gⱼ F_{n−j} instead of Fₙ, flattening
+      // the corner overshoot. Only when the toggle is on AND the domain actually has corner images.
+      const suppress = state.suppressCorners === true && cornerImages.length > 0;
+      const m = state.suppressStrength ?? DEFAULT_SUPPRESS_M;
+      const coeffs = suppress ? weightedMonomialCoeffs(map, cornerImages, n, m) : transformCoeffs(map, monomialTaylor(n));
+      const readout = suppress
+        ? `Φφ(z^${n})(w) ≈ Q_{${n},${m}}(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}  ·  corner-suppressed weighted Faber (m = ${m})${cornerNote}`
+        : `Φφ(z^${n})(w) ${approx ? "≈" : "="} ${formatFaberPoly(coeffs, { varSym: "w" })}${domainNote}`;
+      // On a polygonal K, plot the corner-overshoot profile |Fₙ| along ∂K (and |Q_{n,m}| when suppressing).
+      const cornerProfile =
+        cornerImages.length > 0
+          ? computeCornerProfile(map, cornerImages, n, suppress ? m : null, cornerN?.maxLambda ?? 1)
+          : undefined;
       return {
         left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
-        badge: exactBadge,
-        readout: `Φφ(z^${n})(w) ${approx ? "≈" : "="} ${formatFaberPoly(coeffs, { varSym: "w" })}${domainNote}`,
+        badge: suppress ? "≈" : exactBadge,
+        readout,
         error: false,
+        cornerProfile,
       };
     }
     if (state.input.kind === "pole") {
@@ -527,6 +570,16 @@ function main(): void {
     orderCtl.style.display = kind === "pole" ? "" : "none";
     exprCtl.style.display = kind === "expr" ? "" : "none";
     truncCtl.style.display = kind === "expr" ? "" : "none";
+    // Corner suppression (M3) applies only to a monomial input on a polygonal K (one with corner images):
+    // the polygon presets + a converged custom fit. The strength slider shows only when the toggle is on.
+    const hasCorners = isCustom ? (domainStatus?.converged ?? false) : preset?.cornerImages !== undefined;
+    const showSuppress = hasCorners && kind === "monomial";
+    suppressCtl.style.display = showSuppress ? "" : "none";
+    suppressInput.checked = state.suppressCorners === true;
+    const mVal = state.suppressStrength ?? DEFAULT_SUPPRESS_M;
+    mCtl.style.display = showSuppress && state.suppressCorners === true ? "" : "none";
+    mInput.value = String(mVal);
+    mLabel.textContent = `strength m = ${mVal}`;
     if (state.input.kind === "monomial") {
       degInput.value = String(state.input.degree);
       degLabel.textContent = `degree n = ${state.input.degree}`;
@@ -547,7 +600,15 @@ function main(): void {
   }
 
   function render(): void {
-    const key = JSON.stringify({ phi: state.phi, shape: state.shape, input: state.input, showRoots: state.showRoots, customPolygon: state.customPolygon });
+    const key = JSON.stringify({
+      phi: state.phi,
+      shape: state.shape,
+      input: state.input,
+      showRoots: state.showRoots,
+      customPolygon: state.customPolygon,
+      suppressCorners: state.suppressCorners,
+      suppressStrength: state.suppressStrength,
+    });
     if (key !== modelKey || model === null) {
       model = computeModel();
       modelKey = key;
@@ -559,6 +620,12 @@ function main(): void {
     const coloring = state.coloring ?? DEFAULT_COLORING;
     paintPanel(left.panel, state.zView, model.left, coloring);
     paintPanel(right.panel, state.wView, model.right, coloring);
+    if (model.cornerProfile) {
+      profileWrap.style.display = "";
+      drawCornerProfile(profileCanvas, model.cornerProfile);
+    } else {
+      profileWrap.style.display = "none";
+    }
   }
 
   let hashTimer = 0;
@@ -670,6 +737,13 @@ function main(): void {
     commit({ ...state, input: { kind: "expr", expr: state.input.expr, N } });
   });
   rootsInput.addEventListener("change", () => commit({ ...state, showRoots: rootsInput.checked }));
+  suppressInput.addEventListener("change", () =>
+    commit({ ...state, suppressCorners: suppressInput.checked, suppressStrength: state.suppressStrength ?? DEFAULT_SUPPRESS_M }),
+  );
+  mInput.addEventListener("input", () => {
+    const m = Math.max(MIN_SUPPRESS_M, Math.min(MAX_SUPPRESS_M, Math.round(Number(mInput.value))));
+    commit({ ...state, suppressStrength: m });
+  });
 
   const withColoring = (patch: Partial<ColoringOptions>): FaberViewState => ({
     ...state,

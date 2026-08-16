@@ -4,8 +4,8 @@
 import { describe, expect, it } from "vitest";
 import type { Cx } from "@cas/core";
 import { faberPolynomials, faberTransform, polynomialRoots } from "@cas/faber";
-import { cornerNorms, polygonMap, regularPolygonMap } from "../src/polygon.js";
-import { evalPhi, monomialTaylor, transformCoeffs } from "../src/faber.js";
+import { cornerNorms, polygonMap, regularPolygonCornerImages, regularPolygonMap } from "../src/polygon.js";
+import { evalPhi, evalPoly, monomialTaylor, transformCoeffs, weightedMonomialCoeffs } from "../src/faber.js";
 import { MENU_PRESETS, phiPresetById } from "../src/presets.js";
 
 const near = (a: number, b: number, tol = 1e-9): boolean => Math.abs(a - b) < tol;
@@ -164,5 +164,63 @@ describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () 
     // Faber transform of z³ still runs on the reentrant domain.
     const roots = polynomialRoots(faberTransform(lshape.map, monomialTaylor(3)));
     expect(roots.converged).toBe(true);
+  });
+});
+
+describe("corner images & suppression seam (M3)", () => {
+  it("regular n-gon corner images are the n-th roots of unity (on |w|=1)", () => {
+    for (const n of [3, 4, 5, 6]) {
+      const w = regularPolygonCornerImages(n);
+      expect(w.length).toBe(n);
+      for (const wk of w) expect(near(cabs(wk), 1, 1e-12)).toBe(true);
+      expect(near(w[0].re, 1) && near(w[0].im, 0)).toBe(true); // w₀ = 1
+    }
+  });
+
+  it("polygonMap exposes corner images on |w|=1, one per vertex", () => {
+    const r = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]);
+    expect(r.cornerImages.length).toBe(4);
+    for (const wk of r.cornerImages) expect(near(cabs(wk), 1, 1e-9)).toBe(true);
+  });
+
+  it("polygon presets expose lazy corner images matching build()", () => {
+    for (const id of ["square", "rectangle", "lshape"]) {
+      const p = phiPresetById(id);
+      const w = p.cornerImages?.();
+      expect(w && w.length >= 3).toBe(true);
+      for (const wk of w ?? []) expect(near(cabs(wk), 1, 1e-9)).toBe(true);
+    }
+  });
+
+  it("Q_{n,m} = F_n when there are no corner images (weightedMonomialCoeffs degenerates to F_n)", () => {
+    const map = regularPolygonMap(4, 40);
+    const Fn = transformCoeffs(map, monomialTaylor(12));
+    const Q = weightedMonomialCoeffs(map, [], 12, 4);
+    expect(Q.length).toBe(Fn.length);
+    for (let i = 0; i < Fn.length; i++) {
+      expect(near(Q[i].re, Fn[i].re, 1e-10) && near(Q[i].im, Fn[i].im, 1e-10)).toBe(true);
+    }
+  });
+
+  it("suppresses the square's corner overshoot on ∂K (the M3.0 spike claim, through the app seam)", () => {
+    const map = regularPolygonMap(4, 200);
+    const w = regularPolygonCornerImages(4);
+    const n = 40;
+    const Fn = transformCoeffs(map, monomialTaylor(n));
+    const Q8 = weightedMonomialCoeffs(map, w, n, 8);
+    // Peak of |·| along ∂K = φ(unit circle).
+    const peak = (poly: Cx[]): number => {
+      let mx = 0;
+      for (let i = 0; i < 1200; i++) {
+        const th = (2 * Math.PI * i) / 1200;
+        const zeta = evalPhi(map, { re: Math.cos(th), im: Math.sin(th) });
+        mx = Math.max(mx, cabs(evalPoly(poly, zeta)));
+      }
+      return mx;
+    };
+    const fPeak = peak(Fn);
+    const qPeak = peak(Q8);
+    expect(fPeak).toBeGreaterThan(1.1); // Fₙ overshoots at the square corners (→ λ = 3/2)
+    expect(qPeak).toBeLessThan(fPeak); // Q_{n,8} flattens it toward the smooth-arc floor
   });
 });
