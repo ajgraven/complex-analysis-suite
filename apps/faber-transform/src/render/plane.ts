@@ -165,6 +165,19 @@ export function drawPolyline(
   ctx.restore();
 }
 
+/** Trace a closed world-coordinate polygon as the current path (for clipping/masking to ∂K). */
+export function tracePolygon(ctx: CanvasRenderingContext2D, map: PlaneMap, pts: readonly Vec2[]): void {
+  if (pts.length < 3) return;
+  ctx.beginPath();
+  const [x0, y0] = map.toPx(pts[0]);
+  ctx.moveTo(x0, y0);
+  for (let i = 1; i < pts.length; i++) {
+    const [x, y] = map.toPx(pts[i]);
+    ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
 /** Draw a Faber-root marker (a dark dot ringed in white) at a world point — visible over any hue. */
 export function drawRootMarker(ctx: CanvasRenderingContext2D, map: PlaneMap, w: Vec2, size = 3.5): void {
   const [x, y] = map.toPx(w);

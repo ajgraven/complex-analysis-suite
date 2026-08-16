@@ -14,6 +14,8 @@ export { faberPolynomials, faberPolynomial } from "./recurrence.js";
 export { faberTransform } from "./transform.js";
 export { exteriorMapJet, faberImageOfPole, evalRationalImage } from "./exteriorMap.js";
 export type { RationalImage } from "./exteriorMap.js";
+export { partialFractions, faberTransformRational } from "./rational.js";
+export type { InputPole } from "./rational.js";
 export { polynomialRoots } from "./roots.js";
 export type { PolynomialRootsOptions, PolynomialRootsResult } from "./roots.js";
 export { formatFaberPoly } from "./format.js";

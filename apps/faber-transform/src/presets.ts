@@ -4,6 +4,7 @@
 // clamped shape slider whose range keeps φ univalent (a valid domain).
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
+import { regularPolygonMap } from "./polygon.js";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
 
@@ -23,6 +24,18 @@ export interface PhiPreset {
   readonly shape: ShapeControl | null;
   /** World half-height framing K for the right panel's default view. */
   readonly kHalf: number;
+  /**
+   * True when K has empty 2-D interior (a slit), so there is nothing to render inside K — the image is
+   * masked to K per request 1. The interval [−2,2] is the only such preset; it is kept for the Chebyshev
+   * correctness test but hidden from the domain menu (a slit renders nothing).
+   */
+  readonly degenerate?: boolean;
+  /**
+   * True when φ is a TRUNCATED (not closed-form finite-Laurent) exterior map — the polygon domains, whose
+   * exterior SC series is cut off at a finite order. Everything derived from them is `≈`, so the app
+   * downgrades the `=` badge to `≈` for these domains (plan §6).
+   */
+  readonly approximate?: boolean;
 }
 
 export const PHI_PRESETS: readonly PhiPreset[] = [
@@ -32,6 +45,7 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
     build: () => ({ c: 1, laurent: [re(0), re(1)] }),
     shape: null,
     kHalf: 2.6,
+    degenerate: true, // K is the slit [−2,2]; nothing to render inside it (hidden from the menu)
   },
   {
     id: "ellipse",
@@ -58,11 +72,49 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
     shape: { label: "a", min: 0, max: 0.98, default: 0.85 },
     kHalf: 1.45,
   },
+  // Regular polygons (M1a): exterior Schwarz–Christoffel maps, closed-form by symmetry (prevertices = the
+  // n-th roots of unity), truncated to a finite Laurent order — hence `approximate: true`. Capacity = 1.
+  // kHalf frames each polygon's circumradius (triangle 1.369 … hexagon 1.087 at c = 1) with margin.
+  {
+    id: "triangle",
+    name: "Triangle — regular 3-gon",
+    build: () => regularPolygonMap(3),
+    shape: null,
+    kHalf: 1.81,
+    approximate: true,
+  },
+  {
+    id: "square",
+    name: "Square — regular 4-gon",
+    build: () => regularPolygonMap(4),
+    shape: null,
+    kHalf: 1.58,
+    approximate: true,
+  },
+  {
+    id: "pentagon",
+    name: "Pentagon — regular 5-gon",
+    build: () => regularPolygonMap(5),
+    shape: null,
+    kHalf: 1.49,
+    approximate: true,
+  },
+  {
+    id: "hexagon",
+    name: "Hexagon — regular 6-gon",
+    build: () => regularPolygonMap(6),
+    shape: null,
+    kHalf: 1.43,
+    approximate: true,
+  },
 ];
 
-/** Look up a preset by id, falling back to the first (interval) for an unknown id. */
+/** The presets shown in the domain menu — the non-degenerate (2-D interior) ones. */
+export const MENU_PRESETS: readonly PhiPreset[] = PHI_PRESETS.filter((p) => !p.degenerate);
+
+/** Look up a preset by id, falling back to the first non-degenerate preset for an unknown id. */
 export function phiPresetById(id: string): PhiPreset {
-  return PHI_PRESETS.find((p) => p.id === id) ?? PHI_PRESETS[0];
+  return PHI_PRESETS.find((p) => p.id === id) ?? MENU_PRESETS[0];
 }
 
 /**

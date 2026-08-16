@@ -3,11 +3,32 @@
 // coloring. The app never touches the package's internals directly — everything routes through here.
 import { Complex, makePoly, objAlgebra } from "@cas/core";
 import type { Cx } from "@cas/core";
-import { faberTransform, faberImageOfPole, evalRationalImage, polynomialRoots } from "@cas/faber";
+import { faberTransform, faberImageOfPole, evalRationalImage, faberTransformRational, polynomialRoots } from "@cas/faber";
 import type { ExteriorMap, RationalImage } from "@cas/faber";
-import { parse, makeComplexFn } from "@cas/expr";
+import { parse, makeComplexFn, fToRational } from "@cas/expr";
 
 const P = makePoly(objAlgebra);
+
+/** Decompose an @cas/expr source into a rational num/den (ascending Cx[]) of z, or null if not rational. */
+export function exprToRational(src: string): Rational | null {
+  let ast;
+  try {
+    ast = parse(src);
+  } catch {
+    return null;
+  }
+  const r = fToRational(ast, [0, 0], [0, 0]);
+  if (!r) return null;
+  return {
+    num: r.num.map((t): Cx => ({ re: t[0], im: t[1] })),
+    den: r.den.map((t): Cx => ({ re: t[0], im: t[1] })),
+  };
+}
+
+/** The exact exterior Faber transform of a rational f = num/den as a rational N(w)/D(w). */
+export function transformRational(map: ExteriorMap, r: Rational): Rational {
+  return faberTransformRational(map, r.num, r.den);
+}
 
 /** Compile a free-form f(z) from an @cas/expr source into a {re,im} evaluator, or return a parse error. */
 export function compileExprF(src: string): { fn: (z: Cx) => Cx } | { error: string } {
@@ -50,6 +71,30 @@ export function taylorViaFFT(f: (z: Cx) => Cx, N: number, radius = 0.9): Cx[] {
     b.push({ re: re * scale, im: im * scale });
   }
   return b;
+}
+
+/** Machine epsilon for IEEE-754 doubles — the balance point for the optimal FFT sampling radius. */
+const EPS = 2.220446049250313e-16;
+
+/**
+ * Taylor coefficients of f via {@link taylorViaFFT} at an **adaptive** sampling radius. A cheap probe at
+ * r = 0.9 estimates the radius of convergence R; when R is finite the true radius is used to place the
+ * sample circle at Bornemann's optimum r* = R·ε^{1/M}, which balances aliasing (∼(r/R)^M) against the
+ * roundoff amplification (∼ε·(R/r)^N) that wrecks the high-order coefficients at a fixed small radius.
+ * Because the coefficients are intrinsic to f (any circle inside |z| < R recovers them), r* may exceed 1
+ * — pushing the sample circle toward the nearest singularity, exactly where the tail decays cleanest.
+ * Entire f (R = ∞) keeps the probe radius: its coefficients decay super-geometrically already.
+ */
+export function taylorAdaptive(f: (z: Cx) => Cx, N: number): { coeffs: Cx[]; radius: number; R: number } {
+  const M = Math.max(64, 1 << Math.ceil(Math.log2(4 * (N + 1))));
+  const probe = taylorViaFFT(f, N, 0.9);
+  const R = radiusOfConvergence(probe);
+  if (!Number.isFinite(R) || R <= 1) return { coeffs: probe, radius: 0.9, R };
+  const rOpt = R * Math.pow(EPS, 1 / M);
+  // Stay strictly inside R (cap at 0.98 R so max|f| on the circle can't blow up) and never below the probe.
+  const radius = Math.min(Math.max(rOpt, 0.9), 0.98 * R);
+  if (Math.abs(radius - 0.9) < 1e-9) return { coeffs: probe, radius, R };
+  return { coeffs: taylorViaFFT(f, N, radius), radius, R };
 }
 
 /**

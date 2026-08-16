@@ -47,7 +47,14 @@ describe("φ presets", () => {
     }
   });
 
-  it("unknown id falls back to the interval preset", () => {
-    expect(phiPresetById("nope").id).toBe("interval");
+  it("unknown id falls back to the first non-degenerate (menu) preset", () => {
+    expect(phiPresetById("nope").id).toBe("ellipse");
+    expect(phiPresetById("nope").degenerate).toBeFalsy();
+  });
+
+  it("only the interval is degenerate (hidden from the menu)", () => {
+    for (const p of PHI_PRESETS) {
+      expect(Boolean(p.degenerate)).toBe(p.id === "interval");
+    }
   });
 });

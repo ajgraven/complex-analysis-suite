@@ -8,24 +8,26 @@
 import { Complex } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
-import { F_PRESETS, PHI_PRESETS, phiPresetById } from "./presets.js";
+import { F_PRESETS, MENU_PRESETS, phiPresetById } from "./presets.js";
 import {
   boundaryK,
   compileExprF,
   evalRational,
-  mapCircle,
+  exprToRational,
   monomialTaylor,
   poleImage,
   poleImageRational,
   poleInputRational,
   polynomialRational,
   radiusOfConvergence,
-  taylorViaFFT,
+  taylorAdaptive,
   transformCoeffs,
+  transformRational,
   transformRoots,
   trimTail,
 } from "./faber.js";
 import type { Rational } from "./faber.js";
+import { seriesOfExpr } from "./series.js";
 import {
   BASE_HALF,
   drawAxes,
@@ -34,11 +36,13 @@ import {
   drawRootMarker,
   panTo,
   planeMap,
+  tracePolygon,
   viewPxToWorld,
   zoomAboutCursor,
 } from "./render/plane.js";
 import type { Vec2, Viewport } from "./render/plane.js";
-import { fillPhasePortrait } from "./render/coloring.js";
+import { fillPhasePortrait, DEFAULT_COLORING } from "./render/coloring.js";
+import type { ColoringOptions } from "./render/coloring.js";
 import { createGpuRenderer } from "./render/gpu.js";
 import type { GpuRenderer } from "./render/gpu.js";
 import {
@@ -58,9 +62,9 @@ import "./styles/main.css";
 
 const AXIS_COLORS = { grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.16)" };
 const PANEL_BG: readonly [number, number, number] = [22, 24, 30];
+const STAGE_BG = "#16181f"; // must match .stage background so the masked-out region is seamless
 const K_COLOR = "rgba(255,255,255,0.75)";
 const DISK_COLOR = "rgba(255,255,255,0.55)";
-const EQUIPOTENTIAL_COLOR = "rgba(255,210,90,0.9)";
 
 interface Marker {
   readonly w: Vec2;
@@ -76,7 +80,10 @@ type Source = { readonly kind: "rational"; readonly rat: Rational } | { readonly
 
 interface PanelModel {
   readonly source: Source;
-  readonly mask: boolean;
+  /** Grey out |z| ≥ 1 (the unit-disk panel). */
+  readonly maskDisk: boolean;
+  /** Clip the render to this closed world polygon (the K-side panel → ∂K); undefined = no clip. */
+  readonly clip?: Vec2[];
   readonly curves: Curve[];
   readonly markers: Marker[];
   readonly roots: Vec2[];
@@ -144,25 +151,50 @@ function makePanel(title: string): { panel: Panel; el: HTMLElement } {
   return { panel: { gl, ov, renderer: null }, el: box };
 }
 
-function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
+function paintPanel(panel: Panel, view: Viewport, m: PanelModel, coloring: ColoringOptions): void {
   const ov = fit2d(panel.ov);
   if (!ov) return;
   const map = planeMap(view, ov.w, ov.h);
+  const ctx = ov.ctx;
   if (m.source.kind === "rational" && panel.renderer) {
-    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.mask);
-    ov.ctx.clearRect(0, 0, ov.w, ov.h); // transparent overlay above the GL portrait
+    // GPU portrait on the gl canvas behind. The overlay masks it to the clip polygon: paint the overlay
+    // background everywhere, then punch a hole inside the clip so the portrait shows through only there.
+    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.maskDisk, coloring);
+    ctx.clearRect(0, 0, ov.w, ov.h);
+    if (m.clip) {
+      ctx.save();
+      ctx.fillStyle = STAGE_BG;
+      ctx.fillRect(0, 0, ov.w, ov.h);
+      ctx.globalCompositeOperation = "destination-out";
+      tracePolygon(ctx, map, m.clip);
+      ctx.fill();
+      ctx.restore();
+    }
   } else {
+    // CPU portrait drawn on the overlay itself; then keep only the clip interior.
     const src = m.source;
     const g = src.kind === "rational" ? (w: Vec2): Cx => evalRational(src.rat, { re: w[0], im: w[1] }) : (w: Vec2): Cx => src.g({ re: w[0], im: w[1] });
-    fillPhasePortrait(ov.ctx, map, (w) => {
-      if (m.mask && w[0] * w[0] + w[1] * w[1] >= 1) return null;
-      return g(w);
-    });
+    fillPhasePortrait(
+      ctx,
+      map,
+      (w) => {
+        if (m.maskDisk && w[0] * w[0] + w[1] * w[1] >= 1) return null;
+        return g(w);
+      },
+      { coloring },
+    );
+    if (m.clip) {
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-in";
+      tracePolygon(ctx, map, m.clip);
+      ctx.fill();
+      ctx.restore();
+    }
   }
-  drawAxes(ov.ctx, map, AXIS_COLORS);
-  for (const c of m.curves) drawPolyline(ov.ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
-  for (const r of m.roots) drawRootMarker(ov.ctx, map, r);
-  for (const mk of m.markers) drawDot(ov.ctx, map, mk.w, mk.color, 4);
+  drawAxes(ctx, map, AXIS_COLORS);
+  for (const c of m.curves) drawPolyline(ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
+  for (const r of m.roots) drawRootMarker(ctx, map, r);
+  for (const mk of m.markers) drawDot(ctx, map, mk.w, mk.color, 4);
 }
 
 function main(): void {
@@ -195,7 +227,7 @@ function main(): void {
   const controls = elt("div", { class: "controls" });
 
   const phiSel = elt("select", { id: "phi" });
-  for (const p of PHI_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
+  for (const p of MENU_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
   const phiCtl = elt("div", { class: "control" });
   phiCtl.append(elt("label", { for: "phi" }, "Domain φ: 𝔻* → Ω"), phiSel);
 
@@ -248,7 +280,45 @@ function main(): void {
   const rootsCtl = elt("div", { class: "control control-check" });
   rootsCtl.append(rootsInput, elt("label", { for: "showroots" }, "Faber roots"));
 
-  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl);
+  // Coloring style: an enhancement overlay, a modulus→lightness transfer, and (for the grid/sector
+  // overlays) a density, all applied to both the GPU and CPU phase portraits.
+  const enhSel = elt("select", { id: "enh" });
+  for (const [v, name] of [
+    ["0", "none (flat hue)"],
+    ["1", "modulus rings"],
+    ["2", "phase sectors"],
+    ["3", "conformal grid"],
+    ["4", "polar chessboard"],
+    ["5", "Re/Im grid"],
+  ] as const) {
+    enhSel.append(elt("option", { value: v }, name));
+  }
+  const enhCtl = elt("div", { class: "control" });
+  enhCtl.append(elt("label", { for: "enh" }, "enhancement"), enhSel);
+
+  const modSel = elt("select", { id: "mod" });
+  for (const [v, name] of [
+    ["0", "constant"],
+    ["1", "linear"],
+    ["2", "rational"],
+    ["3", "log"],
+    ["4", "log-log"],
+  ] as const) {
+    modSel.append(elt("option", { value: v }, name));
+  }
+  const modCtl = elt("div", { class: "control" });
+  modCtl.append(elt("label", { for: "mod" }, "modulus → lightness"), modSel);
+
+  const secInput = elt("input", { id: "sectors", type: "range", min: "2", max: "24", step: "1" });
+  const secLabel = elt("label", { for: "sectors" }, "density");
+  const secCtl = elt("div", { class: "control" });
+  secCtl.append(secLabel, secInput);
+
+  const crispInput = elt("input", { id: "crisp", type: "checkbox" });
+  const crispCtl = elt("div", { class: "control control-check" });
+  crispCtl.append(crispInput, elt("label", { for: "crisp" }, "crisp lines"));
+
+  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, enhCtl, modCtl, secCtl, crispCtl);
   root.append(controls);
 
   const readout = elt("div", { class: "readout" });
@@ -267,6 +337,11 @@ function main(): void {
   function computeModel(): RenderModel {
     const preset = phiPresetById(state.phi);
     const map = preset.build(state.shape);
+    // Polygon domains carry a TRUNCATED exterior SC series, so their φ (and everything derived from it) is
+    // ≈, not exact — downgrade the `=` badge and note it (plan §6). Closed-form domains stay exact.
+    const approx = preset.approximate === true;
+    const exactBadge = approx ? "≈" : "=";
+    const domainNote = approx ? "  ·  φ: truncated Schwarz–Christoffel series (≈)" : "";
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
     const showRoots = state.showRoots !== false;
@@ -276,10 +351,10 @@ function main(): void {
       const n = state.input.degree;
       const coeffs = transformCoeffs(map, monomialTaylor(n));
       return {
-        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, mask: true, curves: [diskCurve], markers: [], roots: [] },
-        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, mask: false, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
-        badge: "=",
-        readout: `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`,
+        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
+        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
+        badge: exactBadge,
+        readout: `Φφ(z^${n})(w) ${approx ? "≈" : "="} ${formatFaberPoly(coeffs, { varSym: "w" })}${domainNote}`,
         error: false,
       };
     }
@@ -290,49 +365,70 @@ function main(): void {
       const rightRat = poleImageRational(img, order);
       const kexp = order === 1 ? "" : `^${order}`;
       return {
-        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, mask: true, curves: [diskCurve], markers: [], roots: [] },
+        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: {
           source: { kind: "rational", rat: rightRat },
-          mask: false,
+          maskDisk: false,
+          clip: kCurve.pts,
           curves: [kCurve],
           markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
           roots: rootMarks(rightRat.num),
         },
-        badge: "=",
+        badge: exactBadge,
         readout:
           `Φφ(1/(z−z₀)${kexp})(w): image pole at w = φ(z₀) = ${fmt(img.poleAt)}` +
-          (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : ""),
+          (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : "") +
+          domainNote,
         error: false,
       };
     }
     // expr
     const compiled = compileExprF(state.input.expr);
+    const blankPanel: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
     if ("error" in compiled) {
-      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, mask: false, curves: [], markers: [], roots: [] };
-      return { left: blank, right: blank, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
+      return { left: blankPanel, right: blankPanel, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
     }
+    const leftFn: PanelModel = { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] };
+
+    // Exact path when f is a rational function of z (any poles, any orders) analytic on the disk.
+    const ratIn = exprToRational(state.input.expr);
+    if (ratIn) {
+      try {
+        const image = transformRational(map, ratIn);
+        return {
+          left: leftFn,
+          right: { source: { kind: "rational", rat: image }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(image.num) },
+          badge: exactBadge,
+          readout: `Φφ(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)${domainNote}`,
+          error: false,
+        };
+      } catch (e) {
+        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: e instanceof Error ? e.message : "f is not analytic on the unit disk", error: true };
+      }
+    }
+
     const N = state.input.N;
-    const bRaw = taylorViaFFT(compiled.fn, N);
+    // Coefficients bₙ: exact power-series arithmetic when the expression is in the closed-form analytic
+    // library (exp/log/sin/…), else the adaptive-radius FFT. Both feed the SAME truncated Faber sum.
+    const exact = seriesOfExpr(state.input.expr, N);
+    const bRaw = exact ?? taylorAdaptive(compiled.fn, N).coeffs;
     const b = trimTail(bRaw); // drop the noise-dominated tail before summing
     const effN = b.length - 1;
     const poly = transformCoeffs(map, b);
     const R = radiusOfConvergence(bRaw);
-    const rightCurves: Curve[] = [kCurve];
+    // The right panel is masked to K, which sits well inside the convergence region, so the truncation is
+    // shown only where it converges fastest — R is reported but the equipotential curve is not drawn.
     let rNote: string;
-    if (!Number.isFinite(R)) {
-      rNote = "f entire — the series converges throughout";
-    } else if (R < 1) {
-      rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
-    } else {
-      if (R <= 60) rightCurves.push({ pts: mapCircle(map, R), color: EQUIPOTENTIAL_COLOR, width: 1.6, dash: [6, 5] });
-      rNote = `R ≈ ${R.toFixed(3)} — trustworthy inside the dashed equipotential Γ_R`;
-    }
-    const orderNote = effN < N ? ` (coefficients past n=${effN} are below the noise floor)` : "";
+    if (!Number.isFinite(R)) rNote = "f entire — converges throughout K";
+    else if (R < 1) rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
+    else rNote = `radius of convergence R ≈ ${R.toFixed(3)} (K sits well inside)`;
+    const coeffNote = exact ? "exact Taylor coefficients" : "coefficients by adaptive FFT sampling";
+    const orderNote = exact ? "" : effN < N ? ` (coefficients past n=${effN} below the noise floor)` : "";
     return {
-      left: { source: { kind: "fn", g: compiled.fn }, mask: true, curves: [diskCurve], markers: [], roots: [] },
-      right: { source: { kind: "rational", rat: polynomialRational(poly) }, mask: false, curves: rightCurves, markers: [], roots: rootMarks(poly) },
+      left: leftFn,
+      right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
-      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ${orderNote}   ·   ${rNote}`,
+      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ  ·  ${coeffNote}${orderNote}  ·  ${rNote}${domainNote}`,
       error: false,
     };
   }
@@ -350,6 +446,16 @@ function main(): void {
     } else {
       shapeCtl.style.display = "none";
     }
+    const col = state.coloring ?? DEFAULT_COLORING;
+    enhSel.value = String(col.enhance);
+    modSel.value = String(col.modulus);
+    secInput.value = String(col.sectors);
+    crispInput.checked = col.crisp;
+    // Density only bites on the sector/grid overlays; disable it (and crisp lines) when they don't apply.
+    const densityUsed = col.enhance >= 2;
+    secCtl.style.display = densityUsed ? "" : "none";
+    crispCtl.style.display = col.enhance !== 0 ? "" : "none";
+    secLabel.textContent = `density = ${col.sectors}`;
     modeSel.value = state.input.kind;
     const kind = state.input.kind;
     degCtl.style.display = kind === "monomial" ? "" : "none";
@@ -387,8 +493,9 @@ function main(): void {
     readoutBody.textContent = model.readout;
     syncControls();
     if (model.error) return; // keep the last good render; show the parse error
-    paintPanel(left.panel, state.zView, model.left);
-    paintPanel(right.panel, state.wView, model.right);
+    const coloring = state.coloring ?? DEFAULT_COLORING;
+    paintPanel(left.panel, state.zView, model.left, coloring);
+    paintPanel(right.panel, state.wView, model.right, coloring);
   }
 
   let hashTimer = 0;
@@ -488,6 +595,16 @@ function main(): void {
     commit({ ...state, input: { kind: "expr", expr: state.input.expr, N } });
   });
   rootsInput.addEventListener("change", () => commit({ ...state, showRoots: rootsInput.checked }));
+
+  const withColoring = (patch: Partial<ColoringOptions>): FaberViewState => ({
+    ...state,
+    coloring: { ...(state.coloring ?? DEFAULT_COLORING), ...patch },
+  });
+  enhSel.addEventListener("change", () => commit(withColoring({ enhance: Number(enhSel.value) })));
+  modSel.addEventListener("change", () => commit(withColoring({ modulus: Number(modSel.value) })));
+  secInput.addEventListener("input", () => commit(withColoring({ sectors: Math.max(2, Math.min(64, Math.round(Number(secInput.value)))) })));
+  crispInput.addEventListener("change", () => commit(withColoring({ crisp: crispInput.checked })));
+
   window.addEventListener("resize", render);
 
   history.replaceState(null, "", encodeFaberState(state));

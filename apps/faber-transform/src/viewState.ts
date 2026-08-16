@@ -6,6 +6,8 @@
 // Convention tag (ADR-0006): the exterior Faber transform is convention-neutral (no π / 2πi), but the
 // state still records a `normalization: "standard"` tag for provenance parity with the sibling apps.
 import { encodeViewState, decodeViewState } from "@cas/interchange";
+import { DEFAULT_COLORING } from "./render/coloring.js";
+import type { ColoringOptions } from "./render/coloring.js";
 
 /** App namespace for the `#vs=` permalink — guards against opening a foreign app's link. */
 export const APP_NS = "ft";
@@ -58,17 +60,20 @@ export type FaberViewState = {
   readonly conventions: ConventionTag;
   /** Scatter the transform's zeros (the Faber roots) on the right panel. Optional; defaults true. */
   readonly showRoots?: boolean;
+  /** Phase-portrait coloring style (shared with the GPU shader). Optional; back-filled with DEFAULT_COLORING. */
+  readonly coloring?: ColoringOptions;
 };
 
-/** The default view — the interval preset with f(z) = z³, so the right panel shows F₃ of [−2, 2]. */
+/** The default view — the deltoid domain with f(z) = z³, so the right panel shows F₃ on the deltoid K. */
 export const DEFAULT_VIEW_STATE: FaberViewState = {
-  phi: "interval",
-  shape: 0.5,
+  phi: "deltoid",
+  shape: 0.85,
   input: { kind: "monomial", degree: 3 },
   zView: { centerRe: 0, centerIm: 0, zoom: 1.5 },
-  wView: { centerRe: 0, centerIm: 0, zoom: 0.78 },
+  wView: { centerRe: 0, centerIm: 0, zoom: 1.18 },
   conventions: { normalization: "standard" },
   showRoots: true,
+  coloring: DEFAULT_COLORING,
 };
 
 function isViewport(v: Record<string, unknown> | undefined): boolean {
@@ -123,6 +128,20 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   const cv = s.conventions as Record<string, unknown> | undefined;
   if (!cv || cv.normalization !== "standard") return false;
   if (s.showRoots !== undefined && typeof s.showRoots !== "boolean") return false;
+  if (s.coloring !== undefined && !isColoringOptions(s.coloring as Record<string, unknown> | undefined)) return false;
+  return true;
+}
+
+/** A well-formed coloring block: finite enhancement/modulus modes in range, positive sectors/scale. */
+function isColoringOptions(c: Record<string, unknown> | undefined): boolean {
+  if (!c || typeof c !== "object") return false;
+  const enh = c.enhance;
+  const mod = c.modulus;
+  if (!Number.isInteger(enh) || (enh as number) < 0 || (enh as number) > 5) return false;
+  if (!Number.isInteger(mod) || (mod as number) < 0 || (mod as number) > 4) return false;
+  if (!Number.isFinite(c.sectors) || (c.sectors as number) <= 0 || (c.sectors as number) > 64) return false;
+  if (!Number.isFinite(c.modScale) || (c.modScale as number) <= 0) return false;
+  if (typeof c.crisp !== "boolean") return false;
   return true;
 }
 

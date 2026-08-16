@@ -58,4 +58,22 @@ describe("viewState codec", () => {
   it("guard accepts the default", () => {
     expect(isFaberViewState(DEFAULT_VIEW_STATE)).toBe(true);
   });
+
+  it("round-trips a coloring block", () => {
+    const s = {
+      ...DEFAULT_VIEW_STATE,
+      coloring: { enhance: 3, sectors: 8, crisp: true, modulus: 2, modScale: 1.5 },
+    };
+    expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("guard rejects a malformed coloring block", () => {
+    const ok = { enhance: 1, sectors: 6, crisp: false, modulus: 0, modScale: 1 };
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: ok })).toBe(true);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, enhance: 6 } })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, modulus: -1 } })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, sectors: 0 } })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, modScale: 0 } })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, crisp: "yes" } })).toBe(false);
+  });
 });
