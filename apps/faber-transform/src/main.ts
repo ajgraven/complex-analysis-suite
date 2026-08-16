@@ -20,13 +20,14 @@ import {
   poleInputRational,
   polynomialRational,
   radiusOfConvergence,
-  taylorViaFFT,
+  taylorAdaptive,
   transformCoeffs,
   transformRational,
   transformRoots,
   trimTail,
 } from "./faber.js";
 import type { Rational } from "./faber.js";
+import { seriesOfExpr } from "./series.js";
 import {
   BASE_HALF,
   drawAxes,
@@ -401,7 +402,10 @@ function main(): void {
     }
 
     const N = state.input.N;
-    const bRaw = taylorViaFFT(compiled.fn, N);
+    // Coefficients bₙ: exact power-series arithmetic when the expression is in the closed-form analytic
+    // library (exp/log/sin/…), else the adaptive-radius FFT. Both feed the SAME truncated Faber sum.
+    const exact = seriesOfExpr(state.input.expr, N);
+    const bRaw = exact ?? taylorAdaptive(compiled.fn, N).coeffs;
     const b = trimTail(bRaw); // drop the noise-dominated tail before summing
     const effN = b.length - 1;
     const poly = transformCoeffs(map, b);
@@ -412,12 +416,13 @@ function main(): void {
     if (!Number.isFinite(R)) rNote = "f entire — converges throughout K";
     else if (R < 1) rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
     else rNote = `radius of convergence R ≈ ${R.toFixed(3)} (K sits well inside)`;
-    const orderNote = effN < N ? ` (coefficients past n=${effN} below the noise floor)` : "";
+    const coeffNote = exact ? "exact Taylor coefficients" : "coefficients by adaptive FFT sampling";
+    const orderNote = exact ? "" : effN < N ? ` (coefficients past n=${effN} below the noise floor)` : "";
     return {
       left: leftFn,
       right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
-      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ${orderNote}   ·   ${rNote}`,
+      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ  ·  ${coeffNote}${orderNote}  ·  ${rNote}`,
       error: false,
     };
   }

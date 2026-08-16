@@ -73,6 +73,30 @@ export function taylorViaFFT(f: (z: Cx) => Cx, N: number, radius = 0.9): Cx[] {
   return b;
 }
 
+/** Machine epsilon for IEEE-754 doubles — the balance point for the optimal FFT sampling radius. */
+const EPS = 2.220446049250313e-16;
+
+/**
+ * Taylor coefficients of f via {@link taylorViaFFT} at an **adaptive** sampling radius. A cheap probe at
+ * r = 0.9 estimates the radius of convergence R; when R is finite the true radius is used to place the
+ * sample circle at Bornemann's optimum r* = R·ε^{1/M}, which balances aliasing (∼(r/R)^M) against the
+ * roundoff amplification (∼ε·(R/r)^N) that wrecks the high-order coefficients at a fixed small radius.
+ * Because the coefficients are intrinsic to f (any circle inside |z| < R recovers them), r* may exceed 1
+ * — pushing the sample circle toward the nearest singularity, exactly where the tail decays cleanest.
+ * Entire f (R = ∞) keeps the probe radius: its coefficients decay super-geometrically already.
+ */
+export function taylorAdaptive(f: (z: Cx) => Cx, N: number): { coeffs: Cx[]; radius: number; R: number } {
+  const M = Math.max(64, 1 << Math.ceil(Math.log2(4 * (N + 1))));
+  const probe = taylorViaFFT(f, N, 0.9);
+  const R = radiusOfConvergence(probe);
+  if (!Number.isFinite(R) || R <= 1) return { coeffs: probe, radius: 0.9, R };
+  const rOpt = R * Math.pow(EPS, 1 / M);
+  // Stay strictly inside R (cap at 0.98 R so max|f| on the circle can't blow up) and never below the probe.
+  const radius = Math.min(Math.max(rOpt, 0.9), 0.98 * R);
+  if (Math.abs(radius - 0.9) < 1e-9) return { coeffs: probe, radius, R };
+  return { coeffs: taylorViaFFT(f, N, radius), radius, R };
+}
+
 /**
  * Drop the noise-dominated tail of an FFT coefficient list: keep b₀…b_L where L is the last index whose
  * magnitude clears a relative floor. Prevents the truncated Faber sum from adding garbage — a coefficient
