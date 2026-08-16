@@ -6,9 +6,20 @@ import {
   zoomAboutCursor,
   pinchView,
   fitViewport,
+  rampColor,
   type Viewport,
   type Vec2,
 } from "../src/render/plane.js";
+
+/** Parse an `rgb(r, g, b)` string into channels, and a simple relative luminance. */
+function rgb(s: string): { r: number; g: number; b: number; lum: number } {
+  const m = /rgb\((\d+),\s*(\d+),\s*(\d+)\)/.exec(s);
+  if (!m) throw new Error(`not an rgb() colour: ${s}`);
+  const r = Number(m[1]);
+  const g = Number(m[2]);
+  const b = Number(m[3]);
+  return { r, g, b, lum: 0.2126 * r + 0.7152 * g + 0.0722 * b };
+}
 
 const VIEW: Viewport = { centerRe: 0.3, centerIm: -0.4, zoom: 1.25 };
 
@@ -87,6 +98,20 @@ describe("viewport coordinate math (pan/zoom authority)", () => {
     expect(noop.zoom).toBeCloseTo(VIEW.zoom, 12);
     expect(pinchView(VIEW, 0.5, 0.5, 0.5, 0.5, NaN, 1.6).zoom).toBeCloseTo(VIEW.zoom, 9);
     expect(pinchView(VIEW, 0.5, 0.5, 0.5, 0.5, 1e12, 1.6).zoom).toBeLessThanOrEqual(1e6);
+  });
+
+  it("rampColor is viridis: fixed dark→bright endpoints, clamped, and MONOTONIC in lightness (ADR-0023)", () => {
+    // Endpoints: dark purple at t=0, bright yellow at t=1.
+    expect(rampColor(0)).toBe("rgb(68, 1, 84)");
+    expect(rampColor(1)).toBe("rgb(253, 231, 37)");
+    // Out-of-range / non-finite t clamps to the ends (never a NaN channel).
+    expect(rampColor(-5)).toBe(rampColor(0));
+    expect(rampColor(9)).toBe(rampColor(1));
+    expect(rampColor(NaN)).toBe(rampColor(0));
+    // The accessibility property: lightness rises monotonically with t, so t is orderable in greyscale /
+    // under any CVD — the whole point of dropping the rainbow.
+    const lums = [0, 0.2, 0.4, 0.6, 0.8, 1].map((t) => rgb(rampColor(t)).lum);
+    for (let i = 1; i < lums.length; i++) expect(lums[i]).toBeGreaterThan(lums[i - 1]);
   });
 
   it("fitViewport frames a set of points (centered, all enclosed)", () => {

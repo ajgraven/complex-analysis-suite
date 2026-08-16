@@ -536,7 +536,8 @@ button.ghost:disabled {
   border-radius: 2px;
 }
 .sw-ramp {
-  background: linear-gradient(90deg, #e2483d, #e6a52a, #2fae6a, #3a9be0, #9a63d8);
+  /* viridis (ADR-0023) — matches the on-canvas t-ramp; monotonic lightness, CVD-safe */
+  background: linear-gradient(90deg, #440154, #3e4a89, #26828e, #1f9e89, #35b779, #b5de2b, #fde725);
 }
 
 /* The evidence group: the ∮ check (always present) + the traversal-time notes. */

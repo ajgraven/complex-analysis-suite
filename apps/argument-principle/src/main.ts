@@ -44,6 +44,7 @@ import {
   planeMap,
   drawAxes,
   drawPolyline,
+  drawDirectionTicks,
   drawDot,
   drawX,
   drawCircleMarker,
@@ -453,7 +454,8 @@ function main(): void {
     '<span class="lg"><span class="gl gl-pole">✕</span> pole</span>' +
     '<span class="lg"><span class="gl gl-crit">◆</span> f′=0</span>' +
     '<span class="lg"><span class="gl gl-target">●</span> target w₀</span>' +
-    '<span class="lg"><span class="sw sw-ramp"></span> hue = position t (γ ↔ f(γ))</span>';
+    '<span class="lg"><span class="sw sw-ramp"></span> colour = position t (γ ↔ f(γ))</span>' +
+    '<span class="lg"><span class="gl">▸</span> traversal direction</span>';
 
   // The evidence group: the analytic ∮ f′/f check (always present), plus the traversal-time decomposition
   // and sweep notes. `integralEl` is never hidden now — it shows a stable line or a "why not" placeholder.
@@ -873,6 +875,7 @@ function main(): void {
     const cCenter = cssVar("--muted", "#8c95a9");
     const cTrace = cssVar("--trace", "#a08bff"); // traversal point
     const cProbe = cssVar("--text", "#e7eaf2"); // §12 "one cursor" ring (neutral, distinct from the marks)
+    const cBg = cssVar("--bg", "#0f1115"); // halo behind direction arrowheads, so they read on any ramp colour
 
     // §12 "one cursor": resolve the probe to a z-point, its image f(z), and — when the probe lies within a
     // few px of γ — the parameter t of that spot on the loop, so the argument strip highlights it too.
@@ -947,6 +950,8 @@ function main(): void {
           zPts,
           ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cContour, width: 2 },
         );
+        // ADR-0023 — periodic arrowheads give the traversal direction non-chromatically (CVD/greyscale cue).
+        drawDirectionTicks(ctx, map, zPts, true, 8, cProbe, cBg);
       }
       for (const c of sing.critical) drawDiamond(ctx, map, c.z, cCrit);
       for (const p of sing.poles) {
@@ -975,6 +980,8 @@ function main(): void {
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
+        // ADR-0023 — arrowheads trace the image's winding direction (it may loop the origin several times).
+        drawDirectionTicks(ctx, map, wPts, true, 10, cProbe, cBg);
       }
       drawDot(ctx, map, about, cTarget, 5);
       // D8 — a ring around the target marks it as draggable (drag to count solutions of f = w₀).
