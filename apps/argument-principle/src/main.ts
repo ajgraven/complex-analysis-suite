@@ -232,6 +232,9 @@ function main(): void {
   let sing: Singularities = NO_SING;
   let draftPath: Vec2[] | null = null; // the freehand path being drawn (transient, not persisted)
   let mode: ContourMode = "move"; // the active contour tool (§12 / ADR-0022) — transient
+  // §12 "one cursor": the hovered (mouse) / tapped (touch) z-plane point, linked live to its image f(z)
+  // in the w-plane and — when it lies on γ — to its parameter t on the argument strip. Transient.
+  let probe: Vec2 | null = null;
   const anim = { on: false, t: 0, speed: 0.25 }; // traversal animation (transient)
   let animRaf = 0;
   let animLast = 0;
@@ -793,6 +796,24 @@ function main(): void {
     }, "image/png");
   }
 
+  // §12 "one cursor" — a hollow ring + centre dot marking the linked probe point in a plane. Deliberately
+  // a distinct shape/weight from the ○✕◆● marks so it reads as a transient cursor, not a located root.
+  function drawProbeMarker(ctx: CanvasRenderingContext2D, map: PlaneMap, world: Vec2, color: string): void {
+    const p = map.toPx(world);
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 8, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 2, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // ---- rendering -----------------------------------------------------------
   function renderFormula(): void {
     if (model.error) {
@@ -851,6 +872,34 @@ function main(): void {
     const cTarget = cssVar("--target", "#cf5691"); // ● target w₀
     const cCenter = cssVar("--muted", "#8c95a9");
     const cTrace = cssVar("--trace", "#a08bff"); // traversal point
+    const cProbe = cssVar("--text", "#e7eaf2"); // §12 "one cursor" ring (neutral, distinct from the marks)
+
+    // §12 "one cursor": resolve the probe to a z-point, its image f(z), and — when the probe lies within a
+    // few px of γ — the parameter t of that spot on the loop, so the argument strip highlights it too.
+    let probeZ: Vec2 | null = null;
+    let probeW: Vec2 | null = null;
+    let probeT: number | null = null;
+    if (probe && !model.error) {
+      probeZ = probe;
+      if (zPts.length > 1) {
+        const scale = zPlaneScale(); // px per world unit
+        let best = Infinity;
+        let bi = -1;
+        for (let i = 0; i < zPts.length; i++) {
+          const d = Math.hypot(zPts[i][0] - probe[0], zPts[i][1] - probe[1]);
+          if (d < best) {
+            best = d;
+            bi = i;
+          }
+        }
+        if (bi >= 0 && best * scale <= 10) {
+          probeZ = zPts[bi]; // snap onto γ so the link reads exactly, and expose its t
+          probeT = bi / zPts.length;
+        }
+      }
+      const w = model.f(probeZ);
+      probeW = Number.isFinite(w[0]) && Number.isFinite(w[1]) ? w : null;
+    }
 
     const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
     clearBtn.disabled = !(state.contour.kind === "path" || !!draftPath || pinned);
@@ -921,6 +970,7 @@ function main(): void {
         const fr = (performance.now() - flash.t0) / 1000;
         for (const p of flash.pts) drawPulseRing(ctx, map, p, fr, cCrit);
       }
+      if (probeZ) drawProbeMarker(ctx, map, probeZ, cProbe); // §12 "one cursor" — the linked point
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
@@ -980,6 +1030,24 @@ function main(): void {
         ctx.restore();
         drawDot(ctx, map, wAnim, cTrace, 6);
       }
+      // §12 "one cursor" — the probe's image f(z), with a dashed arg-vector from the target to it.
+      if (probeW) {
+        const o = map.toPx(about);
+        const pp = map.toPx(probeW);
+        if (Number.isFinite(pp[0]) && Number.isFinite(pp[1])) {
+          ctx.save();
+          ctx.strokeStyle = cProbe;
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 1.25;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(o[0], o[1]);
+          ctx.lineTo(pp[0], pp[1]);
+          ctx.stroke();
+          ctx.restore();
+        }
+        drawProbeMarker(ctx, map, probeW, cProbe);
+      }
     });
 
     // A1 — the argument strip-chart (always-on): accumulated turns of arg f(γ(t)) climbing to the winding.
@@ -991,13 +1059,14 @@ function main(): void {
       drawArgGraph(
         argCanvas,
         // On a branch cut the total is not a winding number — don't label it as one (the cliff still shows).
-        { turns, marker: showAnim ? anim.t : null, winding: !branchCut && Number.isFinite(wn) ? wn : null },
+        // The strip marker follows the traversal (animating) or, when idle, the linked "one cursor" on γ.
+        { turns, marker: showAnim ? anim.t : probeT, winding: !branchCut && Number.isFinite(wn) ? wn : null },
         {
           grid: axisColors().grid,
           axis: axisColors().axis,
           text: cssVar("--text", "#e7eaf2"),
           muted: cssVar("--muted", "#8c95a9"),
-          marker: cTrace,
+          marker: showAnim ? cTrace : cProbe,
         },
       );
     } else {
@@ -1245,8 +1314,16 @@ function main(): void {
       scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
     },
     getMode: () => mode,
-    onHover: (world: Vec2, client: { x: number; y: number }) => updateTooltip(world, client), // F13 tooltip only
-    onLeave: () => hideTooltip(),
+    onHover: (world: Vec2, client: { x: number; y: number }) => {
+      updateTooltip(world, client); // F13 root tooltip
+      probe = world; // §12 "one cursor": link this point to its image (and the strip when on γ)
+      schedule();
+    },
+    onLeave: () => {
+      hideTooltip();
+      probe = null;
+      schedule();
+    },
     onPlace: (world: Vec2) => {
       // Move mode — a tap places the circular contour's centre (converting from a path / releasing a pin).
       commit(
