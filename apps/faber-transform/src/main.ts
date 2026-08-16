@@ -8,7 +8,10 @@
 import { Complex } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
+import { interiorAngles } from "@cas/conformal";
 import { F_PRESETS, MENU_PRESETS, phiPresetById } from "./presets.js";
+import { cornerNorms, polygonMap, type CornerNorms, type PolygonMapResult } from "./polygon.js";
+import { createPolygonEditor } from "./render/polygonEditor.js";
 import {
   boundaryK,
   compileExprF,
@@ -46,6 +49,7 @@ import type { ColoringOptions } from "./render/coloring.js";
 import { createGpuRenderer } from "./render/gpu.js";
 import type { GpuRenderer } from "./render/gpu.js";
 import {
+  CUSTOM_PHI,
   DEFAULT_VIEW_STATE,
   MAX_DEGREE,
   MIN_DEGREE,
@@ -58,6 +62,12 @@ import {
   encodeFaberState,
 } from "./viewState.js";
 import type { FaberViewState, InputState } from "./viewState.js";
+
+/** A default editor polygon (a pentagon) when the user first switches to the custom domain. */
+const DEFAULT_CUSTOM_POLYGON: readonly (readonly [number, number])[] = Array.from({ length: 5 }, (_, k): [number, number] => {
+  const t = Math.PI / 2 + (2 * Math.PI * k) / 5;
+  return [Number((1.2 * Math.cos(t)).toFixed(3)), Number((1.2 * Math.sin(t)).toFixed(3))];
+});
 import "./styles/main.css";
 
 const AXIS_COLORS = { grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.16)" };
@@ -228,6 +238,7 @@ function main(): void {
 
   const phiSel = elt("select", { id: "phi" });
   for (const p of MENU_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
+  phiSel.append(elt("option", { value: CUSTOM_PHI }, "Custom polygon (edit)…"));
   const phiCtl = elt("div", { class: "control" });
   phiCtl.append(elt("label", { for: "phi" }, "Domain φ: 𝔻* → Ω"), phiSel);
 
@@ -321,6 +332,15 @@ function main(): void {
   controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, enhCtl, modCtl, secCtl, crispCtl);
   root.append(controls);
 
+  // The polygon editor (shown only for the custom domain). Live drag redraws the editor; the expensive SC
+  // refit + permalink write happen on release / button action (committed = true).
+  const editor = createPolygonEditor((verts, committed) => {
+    if (committed) commit({ ...state, phi: CUSTOM_PHI, customPolygon: verts });
+  });
+  const editorWrap = elt("div", { class: "poly-editor-wrap" });
+  editorWrap.append(editor.el);
+  root.append(editorWrap);
+
   const readout = elt("div", { class: "readout" });
   const exactBadge = elt("span", { class: "badge-exact" }, "=");
   const readoutBody = elt("span", {});
@@ -334,14 +354,39 @@ function main(): void {
   let model: RenderModel | null = null;
   let modelKey = "";
 
+  // Custom-polygon domain: the exterior SC fit is a nonlinear solve, so cache it per distinct polygon (an
+  // f-change reuses the same fit). `domainStatus` carries the last custom fit's converged/degraded flags
+  // for the editor's status line.
+  let customFit: { key: string; result: PolygonMapResult } | null = null;
+  let domainStatus: { converged: boolean; degraded: boolean } | null = null;
+  function getCustomMap(poly: readonly (readonly [number, number])[]): PolygonMapResult {
+    const key = JSON.stringify(poly);
+    if (!customFit || customFit.key !== key) customFit = { key, result: polygonMap(poly) };
+    return customFit.result;
+  }
+
   function computeModel(): RenderModel {
-    const preset = phiPresetById(state.phi);
-    const map = preset.build(state.shape);
+    // Resolve the domain: a closed-form/regular preset, or the editor's custom polygon (fitted).
+    let map;
+    let approx: boolean;
+    let cornerN: CornerNorms | undefined;
+    if (state.phi === CUSTOM_PHI && state.customPolygon) {
+      const r = getCustomMap(state.customPolygon);
+      map = r.map;
+      approx = true;
+      cornerN = cornerNorms(interiorAngles(state.customPolygon.map((v): [number, number] => [v[0], v[1]])));
+      domainStatus = { converged: r.converged, degraded: r.degraded };
+    } else {
+      const preset = phiPresetById(state.phi);
+      map = preset.build(state.shape);
+      approx = preset.approximate === true;
+      cornerN = preset.cornerNorms;
+      domainStatus = null;
+    }
     // Polygon domains carry a TRUNCATED exterior SC series, so their φ (and everything derived from it) is
     // ≈, not exact — downgrade the `=` badge and note it (plan §6). Closed-form domains stay exact.
-    const approx = preset.approximate === true;
     const exactBadge = approx ? "≈" : "=";
-    const cornerNote = preset.cornerNorms ? `, max corner-norm Λ = ${preset.cornerNorms.maxLambda.toFixed(2)}` : "";
+    const cornerNote = cornerN ? `, max corner-norm Λ = ${cornerN.maxLambda.toFixed(2)}` : "";
     const domainNote = approx ? `  ·  φ: truncated Schwarz–Christoffel series (≈)${cornerNote}` : "";
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
@@ -435,10 +480,11 @@ function main(): void {
   }
 
   function syncControls(): void {
-    const preset = phiPresetById(state.phi);
-    phiSel.value = preset.id;
+    const isCustom = state.phi === CUSTOM_PHI;
+    phiSel.value = state.phi;
     rootsInput.checked = state.showRoots !== false;
-    if (preset.shape) {
+    const preset = isCustom ? null : phiPresetById(state.phi);
+    if (preset?.shape) {
       shapeCtl.style.display = "";
       shapeInput.min = String(preset.shape.min);
       shapeInput.max = String(preset.shape.max);
@@ -446,6 +492,15 @@ function main(): void {
       shapeLabel.textContent = `${preset.shape.label} = ${state.shape.toFixed(2)}`;
     } else {
       shapeCtl.style.display = "none";
+    }
+    // The polygon editor is shown only for the custom domain; reflect the last fit's honesty in its status.
+    editorWrap.style.display = isCustom ? "" : "none";
+    if (isCustom && domainStatus) {
+      const { converged, degraded } = domainStatus;
+      editor.setStatus(
+        degraded ? "⚠ fit degraded (crowded corners)" : converged ? "fit ✓" : "⚠ fit did not converge",
+        degraded || !converged,
+      );
     }
     const col = state.coloring ?? DEFAULT_COLORING;
     enhSel.value = String(col.enhance);
@@ -485,7 +540,7 @@ function main(): void {
   }
 
   function render(): void {
-    const key = JSON.stringify({ phi: state.phi, shape: state.shape, input: state.input, showRoots: state.showRoots });
+    const key = JSON.stringify({ phi: state.phi, shape: state.shape, input: state.input, showRoots: state.showRoots, customPolygon: state.customPolygon });
     if (key !== modelKey || model === null) {
       model = computeModel();
       modelKey = key;
@@ -550,7 +605,19 @@ function main(): void {
   attachNav(right.panel.ov, "wView");
 
   // --- Control events -------------------------------------------------------
+  /** Frame the K-panel to a domain's boundary extent (used for the custom polygon, whose size varies). */
+  const kHalfOf = (map: Parameters<typeof boundaryK>[0]): number => {
+    let m = 0.2;
+    for (const [x, y] of boundaryK(map)) m = Math.max(m, Math.hypot(x, y));
+    return 1.35 * m;
+  };
   phiSel.addEventListener("change", () => {
+    if (phiSel.value === CUSTOM_PHI) {
+      const poly = state.customPolygon ?? DEFAULT_CUSTOM_POLYGON;
+      editor.setPolygon(poly);
+      commit({ ...state, phi: CUSTOM_PHI, customPolygon: poly, wView: { centerRe: 0, centerIm: 0, zoom: BASE_HALF / kHalfOf(getCustomMap(poly).map) } });
+      return;
+    }
     const preset = phiPresetById(phiSel.value);
     commit({
       ...state,
@@ -607,6 +674,9 @@ function main(): void {
   crispInput.addEventListener("change", () => commit(withColoring({ crisp: crispInput.checked })));
 
   window.addEventListener("resize", render);
+
+  // Load a decoded custom polygon into the editor at startup (a shared `#vs=` permalink of a custom domain).
+  if (state.phi === CUSTOM_PHI && state.customPolygon) editor.setPolygon(state.customPolygon);
 
   history.replaceState(null, "", encodeFaberState(state));
   render();

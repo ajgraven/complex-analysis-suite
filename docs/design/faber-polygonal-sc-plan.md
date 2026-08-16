@@ -136,10 +136,19 @@ Reentrant corners (αₖ>1) and a draggable editor are **M2**.
   `dampedGaussNewton` (interior + exterior), the exterior closure residual is normalized by `Σ|1−αₖ|` so the
   ‖F‖∞ tolerance means the same for both residual families, and `polygonMap` returns the fit's
   `converged`/`degraded`/`residual` (a bad fit is no longer discarded).
-- **Remaining:** a **draggable-vertex polygon editor** (let the user draw/edit an arbitrary polygon, not
-  just pick presets), serializing vertices in viewState (bounded, like the existing crafted-link guards),
-  with `kHalf` framing from the bounding box — and surfacing the fit's `converged`/`degraded` in the UI
-  (the runtime home for the honesty signal, since user polygons can fail where the fixed presets don't).
+- **Draggable-vertex polygon editor — DONE.** A "Custom polygon" domain opens an editor canvas
+  (`render/polygonEditor.ts`): drag vertices to shape K, ＋/－ vertex (the add offsets outward so the new
+  vertex is a genuine corner, not a degenerate straight one), reset. The fit runs on drag-release / button
+  (not every pointer-move), so the SC solve isn't hammered; vertices serialize in the `#vs=` permalink
+  (bounded 3–16 verts, coords ≤ 20), the K-panel frames to the fitted boundary, and the editor shows the
+  fit's `converged`/`degraded` status (the runtime home for the honesty signal). The domain is designed up
+  to similarity — the right panel renders the canonical K, exactly as the polygon presets do.
+- **Solver seed-robustness (found by the editor) — DONE.** A valid convex hexagon could stall the single
+  cold-start Gauss–Newton for some cyclic vertex orderings; the exterior solve now tries multiple seeds
+  (a side-length-proportional gap seed + the uniform cold start), keeping the lowest-residual result — every
+  cyclic rotation now converges (regression-tested).
+
+M2 is complete; **M3** (corner-suppressing weighted Faber `Q_{n,m}`, optional lightning fast-mode) remains.
 
 ### M3 — Optional polish
 Corner-**suppressing** weighted Faber `Q_{n,m}` toggle (before/after corner-overshoot demo); reconsider a

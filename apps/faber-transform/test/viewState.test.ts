@@ -76,4 +76,22 @@ describe("viewState codec", () => {
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, modScale: 0 } })).toBe(false);
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, coloring: { ...ok, crisp: "yes" } })).toBe(false);
   });
+
+  it("round-trips a custom-polygon domain", () => {
+    const s = {
+      ...DEFAULT_VIEW_STATE,
+      phi: "custom",
+      customPolygon: [[1, 0], [-0.5, 1], [-1, -0.5], [0.4, -1]] as [number, number][],
+    };
+    expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("guard rejects a custom domain with no/short/out-of-bounds polygon", () => {
+    const good: [number, number][] = [[1, 0], [-1, 1], [-1, -1]];
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: good })).toBe(true);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom" })).toBe(false); // custom needs a polygon
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1]] })).toBe(false); // < 3
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1], [999, 0]] })).toBe(false); // out of bounds
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1], [0, Infinity]] })).toBe(false);
+  });
 });

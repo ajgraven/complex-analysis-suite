@@ -46,6 +46,12 @@ export const MIN_TRUNCATION = 1;
 export const MAX_TRUNCATION = 128;
 /** Max length of a free-form expression carried in a permalink (a crafted-link safety bound). */
 export const MAX_EXPR_LEN = 256;
+/** Custom-polygon bounds (crafted-link safety + solver sanity): 3–16 vertices, coordinates in [−COORD, COORD]. */
+export const MIN_POLYGON_VERTS = 3;
+export const MAX_POLYGON_VERTS = 16;
+export const MAX_POLYGON_COORD = 20;
+/** The domain id that draws φ from `customPolygon` (the editor) rather than a preset. */
+export const CUSTOM_PHI = "custom";
 
 export type FaberViewState = {
   /** Exterior-map preset id (see presets.ts). */
@@ -62,6 +68,8 @@ export type FaberViewState = {
   readonly showRoots?: boolean;
   /** Phase-portrait coloring style (shared with the GPU shader). Optional; back-filled with DEFAULT_COLORING. */
   readonly coloring?: ColoringOptions;
+  /** The editor polygon (counter-clockwise `[x,y]` vertices), used as the domain when `phi === "custom"`. */
+  readonly customPolygon?: readonly (readonly [number, number])[];
 };
 
 /** The default view — the deltoid domain with f(z) = z³, so the right panel shows F₃ on the deltoid K. */
@@ -129,7 +137,23 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   if (!cv || cv.normalization !== "standard") return false;
   if (s.showRoots !== undefined && typeof s.showRoots !== "boolean") return false;
   if (s.coloring !== undefined && !isColoringOptions(s.coloring as Record<string, unknown> | undefined)) return false;
+  if (s.customPolygon !== undefined && !isCustomPolygon(s.customPolygon)) return false;
+  if (s.phi === CUSTOM_PHI && !isCustomPolygon(s.customPolygon)) return false; // "custom" needs a valid polygon
   return true;
+}
+
+/** A well-formed editor polygon: 3–16 finite `[x,y]` vertices within the coordinate bound. */
+function isCustomPolygon(value: unknown): value is readonly (readonly [number, number])[] {
+  if (!Array.isArray(value) || value.length < MIN_POLYGON_VERTS || value.length > MAX_POLYGON_VERTS) return false;
+  return value.every(
+    (v) =>
+      Array.isArray(v) &&
+      v.length === 2 &&
+      Number.isFinite(v[0]) &&
+      Number.isFinite(v[1]) &&
+      Math.abs(v[0]) <= MAX_POLYGON_COORD &&
+      Math.abs(v[1]) <= MAX_POLYGON_COORD,
+  );
 }
 
 /** A well-formed coloring block: finite enhancement/modulus modes in range, positive sectors/scale. */

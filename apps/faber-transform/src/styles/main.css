@@ -176,3 +176,64 @@ header.app-head p {
   font-weight: 700;
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
+
+/* --- Polygon editor (custom domain) --------------------------------------- */
+.poly-editor-wrap {
+  margin-top: 1rem;
+}
+
+.poly-editor {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.8rem;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.poly-editor-canvas {
+  width: 280px;
+  height: 240px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.poly-editor-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.poly-editor-bar button {
+  padding: 0.25rem 0.55rem;
+  background: rgba(122, 162, 247, 0.14);
+  color: var(--accent);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.poly-editor-bar button:hover {
+  background: rgba(122, 162, 247, 0.26);
+}
+
+.poly-editor-status {
+  margin-left: 0.4rem;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.poly-editor-status.warn {
+  color: #ffb454;
+}
+
+.poly-editor-hint {
+  max-width: 280px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+}

@@ -67,6 +67,20 @@ describe("solveExteriorParameterProblem — chiral polygon (orientation)", () =>
   });
 });
 
+describe("solveExteriorParameterProblem — seed robustness", () => {
+  it("converges for every cyclic rotation of a polygon (multi-seed guards against a stalled cold start)", () => {
+    // This convex hexagon stalled the single-uniform-seed solve for some vertex orderings; the
+    // side-length-proportional seed rescues it. Test all n cyclic rotations.
+    const base: C[] = [[0, 1.2], [-1.141, 0.371], [-1.165, -0.378], [-0.705, -0.971], [0.705, -0.971], [1.141, 0.371]];
+    for (let s = 0; s < base.length; s++) {
+      const rot = base.map((_, i) => base[(i + s) % base.length]);
+      const res = solveExteriorParameterProblem(rot);
+      expect(res.converged, `rotation ${s}`).toBe(true);
+      expect(res.residual).toBeLessThan(1e-10);
+    }
+  });
+});
+
 describe("fitExteriorSchwarzChristoffel — one-call public API", () => {
   it("fits a polygon in one call and reproduces its vertices with honest tags", () => {
     const quad: C[] = [[2, 0], [0.6, 1.2], [-1, 0.4], [-0.3, -1.1]];
