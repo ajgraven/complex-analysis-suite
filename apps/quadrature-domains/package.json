@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@cas/core": "workspace:*",
+    "@cas/faber": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
     "katex": "0.16.47",

@@ -13,3 +13,4 @@ export { COMPLEX_DERIVED_GLSL } from "./complexDerived.glsl.js";
 export { FULLSCREEN_VERTEX_GLSL } from "./fullscreenVertex.glsl.js";
 export { HSV2RGB_GLSL } from "./hsv2rgb.glsl.js";
 export { PLANE_FROM_FRAG_GLSL } from "./planeFromFrag.glsl.js";
+export { PHASE_COLORING_GLSL } from "./phaseColoring.glsl.js";

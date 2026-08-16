@@ -1,0 +1,16 @@
+{
+  // @cas/faber is a STRICT TypeScript package (ADR-0002). This config is the typecheck + editor +
+  // Vitest program (src + test, `noEmit` from the base); the emit is a separate `tsconfig.build.json`
+  // that compiles src -> dist. Dist-built (Flavor-B) like @cas/core / @cas/exact because the Quadrature
+  // Domains app consumes it in RAW NODE (its legacy node-test runner), which cannot load `.ts` source.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src", "test"]
+}
