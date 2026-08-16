@@ -230,7 +230,7 @@ export interface PolylineOptions {
   readonly closed?: boolean;
   readonly color?: string;
   /** Colour the segments by parameter t (0→1 along the loop) with the viridis ramp — the t-coupling cue. */
-  readonly rainbow?: boolean;
+  readonly rampByT?: boolean;
   readonly width?: number;
 }
 
@@ -248,7 +248,7 @@ export function drawPolyline(
   ctx.lineWidth = opts.width ?? 2;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
-  if (opts.rainbow) {
+  if (opts.rampByT) {
     for (let i = 0; i < last; i++) {
       const a = map.toPx(pts[i]);
       const b = map.toPx(pts[(i + 1) % n]);

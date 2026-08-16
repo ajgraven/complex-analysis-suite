@@ -1869,7 +1869,7 @@ where the one new primitive lives.
 
 *A within-app product decision for `apps/argument-principle`, layered on the shipped tool
 ([ADR-0019](#adr-0019-argument-principle-as-a-separate-app)) after its pedagogy enhancement arc
-([plan §11](design/argument-principle-plan.md#11-pedagogy-enhancement-arc-a--b--c--d8--f13-planned)). It records
+([plan §11](design/argument-principle-plan.md#11-pedagogy-enhancement-arc-a--b--c--d8--f13-shipped)). It records
 two decisions that change what the tool teaches and how it is operated; it changes **no** shared package and
 **no** interchange schema.*
 
@@ -1894,6 +1894,10 @@ Two of these needed a recorded decision.
    button becomes **"Release γ"**; clicking empty space, or typing a new `f`, also releases). This resolves
    the tension between "the circle follows the cursor" (the reference applet's default) and "hold a
    configuration to study it."
+   > **Superseded in part by [ADR-0022](#adr-0022-explicit-contour-input-modes-touch-first).** The
+   > *cursor-follow* premise here is gone: there is no follow to suspend, and isolating a root is now a
+   > **tap in the explicit "Isolate" tool**, not a click on the default-follow circle. What survives: the
+   > **"Release γ"** relabel and the release-on-empty-space / release-on-new-`f` behavior.
 
 ### Options Considered
 - **Target generalization — A (chosen):** a draggable w₀ that generalizes the count. *Pros:* a real
@@ -1930,7 +1934,7 @@ Two of these needed a recorded decision.
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
 
 *A `apps/argument-principle` interaction-model decision for the UX/accessibility redesign
-([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--in-progress)).
+([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--shipped)).
 App-local; no shared package or schema change.*
 
 ### Context
@@ -1965,8 +1969,8 @@ targets are ≥ 44px, including a labelled draggable w₀ handle.
 
 ### Action Items
 1. [x] Record the decision (this ADR); publish the wireframe.
-2. [ ] Implement in redesign **Phase 2** (mode control + pinch + target sizes), Playwright touch-emulation
-       smokes green.
+2. [x] Implemented in redesign **Phase 2** (#269) — mode control + pinch + target sizes, Playwright
+       touch-emulation smokes green.
 
 ---
 
@@ -1975,7 +1979,7 @@ targets are ≥ 44px, including a labelled draggable w₀ handle.
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
 
 *A `apps/argument-principle` visualization-accessibility decision
-([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--in-progress)).
+([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--shipped)).
 App-local; the palette lands as design tokens (a candidate to share later, not now).*
 
 ### Context

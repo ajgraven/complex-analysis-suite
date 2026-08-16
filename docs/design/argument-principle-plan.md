@@ -70,6 +70,13 @@ that ties the picture to the theorem.
 Left column = a feature of the reference applet. **Source:** `pkg` = provided by a shipped `@cas/*` package;
 `app` = small new app-local code (the suite's thin-app shape); `new` = the tool's genuinely novel instrument.
 
+> **Superseded by §12 (ADR-0022/0023):** the interaction rows below describe the *original* parity target —
+> **V2** (radius following the cursor), **V3** (left-drag to draw), **V4** (right-drag pan) — and §0's
+> parameter-`t` "rainbow." The shipped tool retired cursor-follow and the hidden gestures for an explicit
+> **`[Move γ · Draw · Isolate]`** tool + one-finger/left-drag pan + pinch-zoom, and replaced the rainbow with
+> the **viridis** CVD-safe ramp + direction arrowheads. Read these rows as the reference-parity catalog, not
+> the current UI.
+
 | # | Reference feature | How we build it | Source |
 |---|---|---|---|
 | C1 | Preset `f(z)` dropdown (8: `z²/(z²+1)`, `z³−1`, `sin(z)/z`, `exp(z)−1`, `z+1/z`, `(z−1)²(z+i)`, `tan(z)`, `z(z+1)/(z−1)`) | A `presets.ts` list of `{label, expr}`, mirroring `riemann-map/src/presets.ts` | `app` |
@@ -364,6 +371,11 @@ root pins a small circle around it and suspends cursor-follow; **Clear** resumes
 strip-chart is **always-on** (it teaches even when paused). (3) a short **ADR-0021** records the
 `f = w₀` generalization and the pin/cursor-follow interaction model.
 
+> **Note — decision (1)'s cursor-follow model was later superseded by §12 / [ADR-0022](../DECISIONS.md#adr-0022-explicit-contour-input-modes-touch-first).**
+> There is no cursor-follow; γ is placed/paned with an explicit **`[Move γ · Draw · Isolate]`** tool, and
+> isolate is a **tap in Isolate mode** (which still pins the small circle; **"Release γ"** / empty-space /
+> new-`f` release it). Decision (2), the always-on strip, is unchanged.
+
 **Cross-cutting rules.** Every new serialized field (`target`, pedagogy toggles) is added
 **optional-with-default** and back-filled on decode, so old `#vs=` permalinks keep opening (share-link
 compat). Every new pure function ships with unit tests; the test census is bumped; each stage ends green on
@@ -391,7 +403,7 @@ this record). 104 unit tests + a headless browser smoke per stage. Recorded in
 
 ---
 
-## 12. UX & accessibility redesign (touch · colour-blind · organization) — in progress
+## 12. UX & accessibility redesign (touch · colour-blind · organization) — shipped
 
 A third arc, after the pedagogy features (§11) and the branch-cut correctness guard: make the tool
 **usable on a finger, legible to colour-blind readers, and organized so every relevant indicator is visible
