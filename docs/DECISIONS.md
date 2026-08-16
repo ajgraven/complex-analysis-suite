@@ -2017,6 +2017,6 @@ WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
 
 ### Action Items
 1. [x] Record the decision (this ADR); lock the validated hexes.
-2. [ ] **Phase 1 (now):** shapes + palette tokens + ARIA live + verdict icon + reduced-motion.
-3. [ ] **Phase 4:** the non-rainbow ramp + direction ticks.
+2. [x] **Phase 1:** shapes + palette tokens + ARIA live + verdict icon + reduced-motion (#266).
+3. [x] **Phase 4:** the non-rainbow ramp (viridis, monotonic-lightness) + periodic direction arrowheads.
 4. [ ] Add a CI palette-validator check over the mark token set.

@@ -435,8 +435,12 @@ replacement trio clears **ΔE ≥ 8.3** with shape double-encoding.
    3a the equation-as-layout readout + persistent legend + Function/Contour/Explore/View groups + the
    responsive `display:contents`+`order` side-rail/sticky-bar (always-present ∮ evidence); 3b the linked
    "one cursor" — hover/tap a z-point to highlight its f(z) in the w-plane and its t on the strip._
-4. **Polish** — non-rainbow ramp + direction ticks + first-run coach + Simple/Explore density.
-   _← next up._
+4. **Polish** — non-rainbow ramp + direction ticks + first-run coach + Simple/Explore density. _✅ done:
+   4a viridis t-ramp (CVD-safe, monotonic-lightness) + periodic direction arrowheads on γ / f(γ) / the
+   strip; 4b a localStorage-gated first-run coach; 4c the Simple/Explore density switch (Explore default —
+   everything visible; Simple hides the analytic layer for a novice's first look)._
+
+The redesign is complete — all four §12 phases (perceptual, input/touch, organization, polish) have landed.
 
 Cross-cutting: test-guarded (unit + Playwright touch-emulation smokes + a CI palette-validator check on the
 token set); pure-2D and app-local; new UI state optional-with-default for `#vs=` compat.
