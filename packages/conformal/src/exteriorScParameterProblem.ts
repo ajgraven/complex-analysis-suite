@@ -76,8 +76,6 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
   const tol = opts?.tol ?? 1e-10;
   const maxIter = opts?.maxIter ?? 80;
 
-  const tSeed = logitsFromPrevertices(opts?.seedPrevertices ?? uniformPrevertices(n));
-
   // Residual F: the n−1 side-length ratios (relative to side 0) minus the polygon's, then the 2 real
   // components of the closure/no-log residue Σₖ (1−αₖ)/uₖ (division by uₖ on the unit circle = conjugate).
   // Normalize the closure residual by Σ|1−αₖ| so it is dimensionless and O(1) like the side-length ratios,
@@ -105,23 +103,52 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
   const frozen = 0;
   const free: number[] = [];
   for (let i = 0; i < n; i++) if (i !== frozen) free.push(i);
-  const logits = (y: readonly number[]): number[] => {
-    const t = tSeed.slice();
-    free.forEach((i, j) => (t[i] = y[j]));
-    return t;
-  };
+  const infNorm = (F: readonly number[]) => F.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
 
-  const gn = dampedGaussNewton((y) => residual(logits(y)), free.map((i) => tSeed[i]), { tol, maxIter });
-  const prevertices = prevertsFromLogits(logits(gn.y));
-  const finalRes = gn.residual.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
+  // Multiple seeds for robustness: damped Gauss–Newton can stall from a single cold start for some vertex
+  // orderings (a cyclic rotation of a solvable polygon), so try (a) the caller's seed if any, (b) a
+  // side-length-proportional gap seed — usually the best initial guess — and (c) the uniform cold start,
+  // keeping the lowest-residual result and stopping early once one converges.
+  const seeds: number[][] = [];
+  if (opts?.seedPrevertices) seeds.push(logitsFromPrevertices(opts.seedPrevertices));
+  seeds.push(L.map((l) => Math.log(Math.max(l, 1e-9)))); // gaps ∝ side lengths
+  seeds.push(logitsFromPrevertices(uniformPrevertices(n)));
+
+  let bestSeed = seeds[0];
+  let bestY: number[] | null = null;
+  let bestRes = Infinity;
+  let bestIters = 0;
+  for (const tSeed of seeds) {
+    const logits = (y: readonly number[]): number[] => {
+      const t = tSeed.slice();
+      free.forEach((i, j) => (t[i] = y[j]));
+      return t;
+    };
+    const gn = dampedGaussNewton((y) => residual(logits(y)), free.map((i) => tSeed[i]), { tol, maxIter });
+    const nrm = infNorm(gn.residual);
+    // Always adopt the first seed's (length-correct) result, then keep any strictly better one — so a
+    // degenerate polygon whose residual is NaN for every seed still yields a length-n−1 solution vector
+    // (NaN-valued, caught downstream) rather than an `undefined` one.
+    if (bestY === null || nrm < bestRes) {
+      bestRes = nrm;
+      bestSeed = tSeed;
+      bestY = gn.y;
+      bestIters = gn.iterations;
+    }
+    if (nrm < tol) break;
+  }
+  const bestLogits = bestSeed.slice();
+  const solutionY = bestY ?? [];
+  free.forEach((i, j) => (bestLogits[i] = solutionY[j]));
+  const prevertices = prevertsFromLogits(bestLogits);
   return {
     prevertices,
     angles,
     orderedVertices: verts,
-    converged: finalRes < tol,
+    converged: bestRes < tol,
     degraded: minGap(prevertices) < 1e-6,
-    iterations: gn.iterations,
-    residual: finalRes,
+    iterations: bestIters,
+    residual: bestRes,
   };
 }
 

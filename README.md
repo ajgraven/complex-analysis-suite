@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **five** applications riding **nine** shared `@cas/*` packages:
+It currently hosts **seven** applications riding **ten** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -18,7 +18,9 @@ It currently hosts **five** applications riding **nine** shared `@cas/*` package
 | **Quadrature Domains** (`apps/quadrature-domains`) | Solver + visualizer for (log-weighted) quadrature domains in the inverse and direct directions, plus **single-valued Schwarz-reflection dynamics**, limit sets, a Riemann-sphere view, a symbolic-elimination Algebra workspace, and a parameter-slice sweep engine                                           | Vite + JavaScript (ESM) |
 | **Correspondences** (`apps/correspondences`)       | The new tool: **anti-holomorphic correspondences / Schwarz-reflection matings**. The deltoid Schwarz reflection σ (CPU + GPU), its deleted correspondence (branch engine + orbit trees + density render), a family parameter plane, a parabolic-Tricorn model space, and an interactive **mating visualizer** | Vite + TypeScript       |
 | **Complex Function Plotter** (`apps/complex-function-plotter`) | Domain-coloring plotter for complex functions `f(z)` — phase portraits with modulus/phase enhancements and the conformal grid, a 3D modulus surface and a Riemann-sphere view, a live expression editor with named parameters, hi-res PNG export                          | Vite + TypeScript       |
-| **Riemann Map** (`apps/riemann-map`)               | Pure-2D conformal-mapping studio: the image of the unit disk under a conformal map — from the editor, a numerical region map 𝔻 → Ω by the lightning method, or an exterior (Böttcher) map imported from Complex Dynamics — plus the numerical Riemann map of a chosen domain            | Vite + TypeScript       |
+| **Riemann Map** (`apps/riemann-map`)               | Pure-2D conformal-mapping studio: the image of the unit disk under a conformal map — from the editor, a numerical region map 𝔻 → Ω by the lightning method, an exterior (Böttcher) map imported from Complex Dynamics, or a Schwarz–Christoffel polygon map — plus the numerical Riemann map of a chosen domain            | Vite + TypeScript       |
+| **Argument Principle** (`apps/argument-principle`) | Visualizes the argument principle: a closed contour and its winding image under `f(z)`, counting zeros minus poles enclosed, with a live expression editor and hi-res PNG export                                                                                                                              | Vite + TypeScript       |
+| **Faber Transform** (`apps/faber-transform`)       | Visualizer for the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K): domain-colors an analytic `f` on the unit disk beside its Faber image `Σ bₙ Fₙ` on a cornered/curved `K` — ellipse, deltoid, finite-Laurent QDs, and **arbitrary polygons** (regular presets + a draggable editor via the exterior Schwarz–Christoffel engine), with per-corner norm annotations | Vite + TypeScript       |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -82,7 +84,8 @@ pnpm format                              # Prettier --write .
 Each app is an independent static Vite build (`base: "./"`), so its assets resolve from any path.
 `.github/workflows/deploy-pages.yml` publishes on every push to `master`, gated on
 lint + typecheck + test: one combined Pages site with the launcher at the root and
-`complex-dynamics/` + `quadrature-domains/` beneath it. Correspondences is built but not yet
+`complex-dynamics/`, `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`,
+`argument-principle/`, and `faber-transform/` beneath it. Correspondences is built but not yet
 published (the launcher lists it as "Coming soon"). `ci.yml` remains the separate
 lint/typecheck/test/build gate plus a `browser` job for the WebGL2 GLSL harness. See
 [ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
@@ -103,19 +106,22 @@ complex-analysis-suite/
 │   ├── exact/                ← @cas/exact       exact polynomial arithmetic (CD + Correspondences)
 │   ├── schwarz/              ← @cas/schwarz     the Schwarz-reflection σ engine (CD + Correspondences)
 │   ├── dynamics/             ← @cas/dynamics    inverse-Böttcher exterior maps + external rays (Complex Dynamics)
-│   ├── export/               ← @cas/export      PNG tEXt reproducibility metadata (CD + plotter + Riemann Map)
-│   └── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map (Riemann Map; Schwarz–Christoffel to come)
+│   ├── export/               ← @cas/export      PNG tEXt reproducibility metadata (CD + plotter + Riemann Map + Argument Principle)
+│   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform)
+│   └── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Faber Transform)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
     ├── quadrature-domains/
     ├── correspondences/      ← the Phase-6 tool (dynamical views + the mating explorer)
     ├── complex-function-plotter/  ← domain-coloring plotter (2D portraits + 3D surface)
-    └── riemann-map/          ← pure-2D conformal-mapping studio (disk image + numeric Riemann map)
+    ├── riemann-map/          ← pure-2D conformal-mapping studio (disk image + numeric Riemann map)
+    ├── argument-principle/   ← argument-principle / winding-number visualizer
+    └── faber-transform/      ← exterior Faber-transform visualizer (curved + polygonal K)
 ```
 
-> **The nine packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, and `@cas/conformal`.
+> **The ten packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, and `@cas/faber`.
 > Packages were extracted **only as a second consumer proved it needed them**
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
 > `ui` and `quadrature` packages that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
@@ -124,7 +130,9 @@ complex-analysis-suite/
 > each waited for its second consumer. The **one exception** is `@cas/conformal` — the lightning +
 > forward-map conformal builder, carved out of the Riemann-map app *ahead* of its second consumer
 > ([ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
-> to give the coming Schwarz–Christoffel engine a home to be born into.
+> to give the Schwarz–Christoffel engine a home to be born into — since realized, with both an interior
+> (Riemann Map) and an exterior (Faber Transform) SC builder now living there. `@cas/faber`, the
+> tenth package, houses the exterior Faber-transform engine behind the Faber Transform app.
 
 > **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
 > each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately
