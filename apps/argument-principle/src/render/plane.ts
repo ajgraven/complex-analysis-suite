@@ -103,6 +103,32 @@ export function zoomAboutCursor(
   };
 }
 
+/**
+ * New viewport after a two-finger pinch (§12 / ADR-0022). Scales the zoom by `spanRatio` (current finger
+ * span ÷ start span) and keeps the content under the pinch's START midpoint fraction (m0) fixed under the
+ * CURRENT midpoint fraction (m1) — so a pinch zooms *and* a two-finger drag pans, both about the fingers.
+ * `startView` is the view captured when the second finger landed. Fractions are canvas [0,1], top-left origin.
+ */
+export function pinchView(
+  startView: Viewport,
+  m0fx: number,
+  m0fyTop: number,
+  m1fx: number,
+  m1fyTop: number,
+  spanRatio: number,
+  aspect: number,
+): Viewport {
+  const z = clamp(startView.zoom * (spanRatio > 0 && Number.isFinite(spanRatio) ? spanRatio : 1), ZOOM_MIN, ZOOM_MAX);
+  const world = viewPxToWorld(startView, m0fx, m0fyTop, aspect); // content under the pinch's start midpoint
+  const halfH = BASE_HALF / z;
+  const halfW = halfH * aspect;
+  return {
+    centerRe: world[0] - (2 * m1fx - 1) * halfW,
+    centerIm: world[1] - (1 - 2 * m1fyTop) * halfH,
+    zoom: z,
+  };
+}
+
 /** A viewport framing all finite `points` with padding (used to auto-fit the image pane). */
 export function fitViewport(points: readonly Vec2[], aspect: number, pad = 1.15): Viewport {
   let any = false;
