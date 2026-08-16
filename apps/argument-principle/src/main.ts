@@ -46,6 +46,7 @@ import {
   drawPolyline,
   drawDot,
   drawX,
+  drawCircleMarker,
   drawDiamond,
   drawOrderBadge,
   drawWedge,
@@ -63,6 +64,7 @@ import { attachImagePlane, attachContourPlane } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { nearestRoot, isolateRadius } from "./hit.js";
 import { rootKey, diffEnclosure, type EnclosedRoot, type CrossEvent } from "./crossing.js";
+import { equalitySentence, type EqualityState } from "./announce.js";
 import { importEnvelopeText, type ImportedMap } from "./interchange/importMap.js";
 import { injectPngText } from "@cas/export";
 
@@ -269,6 +271,7 @@ function main(): void {
   let flash: { pts: Vec2[]; t0: number } | null = null;
   let flashRaf = 0;
   let toastTimer = 0;
+  let lastSR = ""; // last text pushed to the ARIA live region (avoid re-announcing an unchanged verdict)
 
   // ---- DOM shell -----------------------------------------------------------
   const topbar = document.createElement("header");
@@ -372,7 +375,7 @@ function main(): void {
   const zCap = document.createElement("figcaption");
   zCap.innerHTML =
     "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · γ colored by t (matches f(γ)) · " +
-    '<span class="key zero">✕ zero</span> <span class="key pole">✕ pole</span> ' +
+    '<span class="key zero">○ zero</span> <span class="key pole">✕ pole</span> ' +
     '<span class="key crit">◆ f′=0</span>';
   zPane.append(zCanvas, zCap);
   const wPane = document.createElement("figure");
@@ -398,7 +401,7 @@ function main(): void {
   readout.className = "readout";
   const metrics = document.createElement("div");
   metrics.className = "metrics";
-  const zerosCell = metricCell("Zeros inside", cssVar("--accent", "#3bb6c0"));
+  const zerosCell = metricCell("Zeros inside", cssVar("--zero", "#4585e0"));
   const polesCell = metricCell("Poles inside", cssVar("--pole", "#e8608f"));
   const nmpCell = metricCell("Zeros − Poles", cssVar("--text", "#e7eaf2"));
   const windCell = metricCell("Winding of f(γ)", cssVar("--gold", "#dbb057"));
@@ -438,7 +441,7 @@ function main(): void {
       <ul>
         <li><b>f(z)</b> — pick a preset or type your own: <code>z, i, pi, sin, cos, tan, exp, log, sqrt, ^</code> and more.</li>
         <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>click a root</b> to isolate it; <b>hover a marker</b> for its value and order; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
-        <li><b>Markers</b> — <span class="key zero">✕ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0).</li>
+        <li><b>Markers</b> — <span class="key zero">○ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0), <span class="key" style="color:var(--target)">● target w₀</span>. Distinct shapes, so identity never depends on colour.</li>
         <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate. If γ crosses a <b>branch cut</b> (e.g. √z, log z), f is not single-valued and the tool says the theorem doesn't apply — the ∮ f′/f then reads a non-integer.</li>
       </ul>
       <h3>Seeing the argument accumulate</h3>
@@ -468,8 +471,13 @@ function main(): void {
   const toastEl = document.createElement("div");
   toastEl.className = "toast";
   toastEl.hidden = true;
+  // Screen-reader live region: the equality verdict, announced non-visually (ADR-0023).
+  const liveEl = document.createElement("div");
+  liveEl.className = "sr-only";
+  liveEl.setAttribute("role", "status");
+  liveEl.setAttribute("aria-live", "polite");
 
-  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help, tooltipEl, toastEl);
+  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help, tooltipEl, toastEl, liveEl);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -547,6 +555,17 @@ function main(): void {
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 2600);
   }
+  function prefersReducedMotion(): boolean {
+    return typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+  /** Push the equality verdict to the ARIA live region — only on change, to avoid re-announcing (ADR-0023). */
+  function announce(s: EqualityState): void {
+    const txt = equalitySentence(s);
+    if (txt !== lastSR) {
+      lastSR = txt;
+      liveEl.textContent = txt;
+    }
+  }
   // C6 — announce a boundary crossing + pulse the root(s) that crossed.
   function announceCrossing(events: CrossEvent[], nmp: number, atOrigin: boolean): void {
     const label = (e: CrossEvent): string => {
@@ -555,7 +574,7 @@ function main(): void {
     };
     showToast(`${events.map(label).join(" · ")} — ${atOrigin ? "zeros" : "solutions"} − poles = ${nmp}`);
     const pts = events.map((e) => e.z).filter((z) => Number.isFinite(z[0]) && Number.isFinite(z[1]));
-    if (!pts.length) return;
+    if (!pts.length || prefersReducedMotion()) return; // the toast still fires; the pulse is decorative motion
     flash = { pts, t0: performance.now() };
     if (!flashRaf) flashRaf = requestAnimationFrame(flashTick);
   }
@@ -753,11 +772,13 @@ function main(): void {
     // principle does not apply — the winding/∮ readouts must not assert a count.
     const branchCut = wPts.length > 1 && crossesBranchCut(wPts);
 
-    const cZero = cssVar("--accent", "#3bb6c0");
-    const cPole = cssVar("--pole", "#e8608f");
-    const cCrit = cssVar("--gold", "#dbb057");
+    const cContour = cssVar("--accent", "#3bb6c0"); // γ (UI accent), distinct from the zero mark
+    const cZero = cssVar("--zero", "#4585e0"); // ○ zeros
+    const cPole = cssVar("--pole", "#cf7b30"); // ✕ poles
+    const cCrit = cssVar("--crit", "#26a86f"); // ◆ critical points
+    const cTarget = cssVar("--target", "#cf5691"); // ● target w₀
     const cCenter = cssVar("--muted", "#8c95a9");
-    const cTrace = cssVar("--trace", "#8b7bf0");
+    const cTrace = cssVar("--trace", "#a08bff"); // traversal point
 
     const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
     clearBtn.disabled = !(state.contour.kind === "path" || !!draftPath || pinned);
@@ -802,7 +823,7 @@ function main(): void {
           ctx,
           map,
           zPts,
-          ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cZero, width: 2 },
+          ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cContour, width: 2 },
         );
       }
       for (const c of sing.critical) drawDiamond(ctx, map, c.z, cCrit);
@@ -811,7 +832,7 @@ function main(): void {
         drawOrderBadge(ctx, map, p.z, p.order, cPole);
       }
       for (const z of sing.zeros) {
-        drawX(ctx, map, z.z, cZero);
+        drawCircleMarker(ctx, map, z.z, cZero); // ○ — shape-distinct from the pole's ✕
         drawOrderBadge(ctx, map, z.z, z.order, cZero);
       }
       if (contour.kind === "circle") drawDot(ctx, map, [contour.centerRe, contour.centerIm], cCenter, 3);
@@ -832,13 +853,13 @@ function main(): void {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
       }
-      drawDot(ctx, map, about, cPole, 5);
+      drawDot(ctx, map, about, cTarget, 5);
       // D8 — a ring around the target marks it as draggable (drag to count solutions of f = w₀).
       {
         const tpx = map.toPx(about);
         if (Number.isFinite(tpx[0]) && Number.isFinite(tpx[1])) {
           ctx.save();
-          ctx.strokeStyle = cPole;
+          ctx.strokeStyle = cTarget;
           ctx.globalAlpha = 0.55;
           ctx.lineWidth = 1.5;
           ctx.beginPath();
@@ -1002,7 +1023,8 @@ function main(): void {
       nmpCell.set("—", "");
       windCell.set(windText, windTag);
       status.className = "status warn";
-      status.textContent = "f is not holomorphic — the argument principle does not apply (no f′).";
+      status.textContent = "⚠ f is not holomorphic — the argument principle does not apply (no f′).";
+      announce({ kind: "nonholomorphic" });
       return;
     }
 
@@ -1019,10 +1041,12 @@ function main(): void {
     if (!haveImage) {
       status.className = "status";
       status.textContent = "";
+      announce({ kind: "none" });
     } else if (branchCut) {
       status.className = "status warn";
       status.textContent =
-        "γ crosses a branch cut — f is not single-valued around this contour, so the argument principle does not apply here.";
+        "⚠ γ crosses a branch cut — f is not single-valued around this contour, so the argument principle does not apply here.";
+      announce({ kind: "branchcut" });
     } else if (refreshPending) {
       // The finder hasn't caught up with the moved contour/view yet — don't assert agreement or a
       // mismatch against stale counts.
@@ -1030,15 +1054,18 @@ function main(): void {
       status.textContent = "recomputing zeros & poles…";
     } else if (!reliable || !windFinite) {
       status.className = "status warn";
-      status.textContent = "γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
+      status.textContent = "⚠ γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
+      announce({ kind: "unreliable" });
     } else if (nmp === winding) {
       status.className = "status ok";
       status.textContent =
         `✓ winding ${winding} = ${noun} ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}` +
         (atOrigin ? "" : `  ·  w₀ = ${fmtComplex(about)}`);
+      announce({ kind: "ok", winding, count: zi, poles: pi, noun });
     } else {
       status.className = "status warn";
-      status.textContent = `mismatch: winding ${winding} vs ${noun} − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
+      status.textContent = `⚠ mismatch: winding ${winding} vs ${noun} − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
+      announce({ kind: "mismatch", winding, count: zi, poles: pi, noun });
     }
   }
 

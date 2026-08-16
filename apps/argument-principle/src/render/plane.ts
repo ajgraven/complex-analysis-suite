@@ -245,7 +245,26 @@ export function drawDot(
   ctx.restore();
 }
 
-/** Draw an ✕ marker (for a zero or a pole) at a world point. */
+/** Draw an ○ open-circle marker (for a zero) at a world point — shape-distinct from the pole's ✕ (§12). */
+export function drawCircleMarker(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  color: string,
+  radiusPx = 6,
+): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x, y, radiusPx, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Draw an ✕ marker (for a pole) at a world point. */
 export function drawX(
   ctx: CanvasRenderingContext2D,
   map: PlaneMap,

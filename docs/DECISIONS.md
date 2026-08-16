@@ -1922,3 +1922,101 @@ Two of these needed a recorded decision.
 1. [x] Ship the pedagogy arc (Stages 0–4) and this ADR (Stage 5).
 2. [ ] **Deferred / exploratory:** a Rouché companion, a Nyquist (D-contour) mode, and a phase-tint
        background remain optional backlog (plan §11 lists the full menu); none is taken now.
+
+---
+
+## ADR-0022: Explicit contour input modes (touch-first)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A `apps/argument-principle` interaction-model decision for the UX/accessibility redesign
+([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--in-progress)).
+App-local; no shared package or schema change.*
+
+### Context
+The tool's input is mouse-only and gesture-overloaded: a plain **hover** places the circular contour γ,
+**right-drag** pans, **wheel** zooms, **left-drag** draws a freehand γ, a **click** pins/isolates a root, and
+**hover** shows a marker tooltip. On touch this collapses — there is no hover without a press, no right-click,
+and no wheel — so the *primary* interaction (place γ) is impossible on a phone/tablet/Chromebook, the devices
+an educational tool most needs. The gesture modes are also undiscoverable (documented only in a text tip) and
+the right-drag-pan / left-drag-draw split is unintuitive on the desktop too.
+
+### Decision
+Introduce an explicit, labelled **contour-mode segmented control `[ Move γ · Draw · Isolate ]`** and **retire
+right-drag-pan and hover-follow**. Move = tap/click to place the circle; Draw = drag to sketch a freehand γ;
+Isolate = tap/click a root to pin it. Pan becomes **one-finger / left-drag** in Move mode; zoom is **wheel +
+pinch**; `touch-action: none` keeps the browser from stealing the gesture. Interaction is **pointer-type
+aware** — hover tooltips on mouse, tap-to-reveal (into the persistent legend/readout) on touch — and touch
+targets are ≥ 44px, including a labelled draggable w₀ handle.
+
+### Options Considered
+- **A — explicit modes (chosen).** The single-pointer alternative WCAG 2.5.1 wants; identical on mouse and
+  touch; makes three hidden features visible. *Cons:* a mode is state the user must set (mitigated: Move is
+  the default and covers the common case).
+- **B — keep gestures, add touch fallbacks.** Rejected: preserves the desktop mode-overload and the
+  discoverability gap, and touch gesture-disambiguation (tap-place vs drag-draw vs drag-pan) is fragile.
+- **C — a "pin contour" toggle only.** Rejected: solves isolate but not draw or touch-place.
+
+### Consequences
+- Touch/classroom devices become first-class; the desktop interaction gets simpler and discoverable.
+- `render/nav.ts` gains a mode-aware pointer layer and pinch handling; the change is app-local, pure-2D.
+- The freehand-draw and isolate features move from hidden gestures to visible modes (no capability lost).
+- **Revisit if:** a genuine stylus/precision workflow wants raw gestures back behind a preference.
+
+### Action Items
+1. [x] Record the decision (this ADR); publish the wireframe.
+2. [ ] Implement in redesign **Phase 2** (mode control + pinch + target sizes), Playwright touch-emulation
+       smokes green.
+
+---
+
+## ADR-0023: Accessible marks — validated palette, shape encoding, and a non-rainbow ramp
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A `apps/argument-principle` visualization-accessibility decision
+([plan §12](design/argument-principle-plan.md#12-ux--accessibility-redesign-touch--colour-blind--organization--in-progress)).
+App-local; the palette lands as design tokens (a candidate to share later, not now).*
+
+### Context
+Identity in the z-plane is carried largely by hue: **zeros and poles use the identical ✕ glyph**, separated
+only by colour (teal vs rose). The house CVD validator rates that pair at **ΔE ≈ 7.3–7.7 under deuteranopia**
+— the 6–8 band that is legal *only with a secondary (non-colour) encoding*, which is absent — and the
+light-theme teal falls below the chroma floor (reads gray). The rainbow parameter-`t` ramp on γ / f(γ) / the
+strip is neither CVD-safe nor perceptually ordered, and the verdict leans on green-vs-rose. This violates
+WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
+
+### Decision
+1. **Double-encode identity by shape:** **○ zero · ✕ pole · ◆ f′=0 · ● target w₀** — four distinct shapes, so
+   identity never depends on colour.
+2. **Adopt a validator-checked categorical mark palette** as tokens, snapped per light/dark mode. The
+   z-plane trio (zero/pole/f′=0) — the real adjacency set — clears **ΔE ≥ 8.3** both modes (light
+   `#2160c4 / #c9551f / #0f8f5f`; dark `#4585e0 / #cf7b30 / #26a86f`); the target `w₀` lives in the w-plane
+   (a separate adjacency context) as a rose `●`. The UI accent (teal) and traversal (violet) stay distinct
+   from the marks.
+3. **Replace the rainbow `t`-ramp** with a colour-blind-friendly, perceptually-ordered map, and
+   **double-encode direction** with periodic arrowheads along γ and f(γ) (the coupling still holds — same
+   `t`, same colour, both planes).
+4. **Verdict = icon + words, not colour alone;** an **ARIA live region** announces the equality and a root
+   table gives a text alternative; marks/lines meet ≥ 3:1; `prefers-reduced-motion` is honoured.
+
+### Options Considered
+- **A — shape + validated palette + non-rainbow ramp (chosen).** Clears every WCAG check and the validator;
+  keeps the coupling story. *Cons:* the rainbow is the app's signature look — an accepted aesthetic change.
+- **B — re-hue only (keep the ✕/✕ glyphs).** Rejected: a 6–8 ΔE pair is illegal without secondary encoding,
+  and re-hueing alone can't clear it robustly across both themes.
+- **C — texture/pattern instead of shape.** Rejected: noisier on small glyphs than distinct shapes.
+
+### Consequences
+- Colour-blind readers can tell a zero from a pole by shape *and* by a ΔE-≥-8 palette; the core result is
+  reachable by screen reader.
+- The palette is a token set (validated in CI); ADR-0006 is untouched — these are app-edge presentation
+  colours, not core constants.
+- **Convention-safety:** none — colours and shapes carry no mathematical convention.
+- **Revisit if:** a second app needs the same accessible mark set — then extract the tokens (ADR-0007 rule).
+
+### Action Items
+1. [x] Record the decision (this ADR); lock the validated hexes.
+2. [ ] **Phase 1 (now):** shapes + palette tokens + ARIA live + verdict icon + reduced-motion.
+3. [ ] **Phase 4:** the non-rainbow ramp + direction ticks.
+4. [ ] Add a CI palette-validator check over the mark token set.

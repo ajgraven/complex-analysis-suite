@@ -391,6 +391,54 @@ this record). 104 unit tests + a headless browser smoke per stage. Recorded in
 
 ---
 
+## 12. UX & accessibility redesign (touch · colour-blind · organization) — in progress
+
+A third arc, after the pedagogy features (§11) and the branch-cut correctness guard: make the tool
+**usable on a finger, legible to colour-blind readers, and organized so every relevant indicator is visible
+at once**. Grounded in WCAG 2.2 (1.4.1 use-of-colour, 1.4.11 non-text contrast, 1.4.3 text contrast, 2.5.1
+pointer gestures, 2.5.8 target size), the Pointer Events API + `touch-action`, `prefers-reduced-motion`,
+ARIA live regions, and the house dataviz palette (validator-checked). An interactive wireframe of the target
+layout is published as a private artifact (link in the PR / session).
+
+**The colour-blind finding is computed, not eyeballed.** The house CVD validator rates today's marker
+colours — teal zeros vs rose poles — at **ΔE ≈ 7.3–7.7 (deuteranopia)**, the 6–8 band that is legal *only
+with a shape/label backup*, which is absent because **zeros and poles share the identical ✕ glyph**. The
+replacement trio clears **ΔE ≥ 8.3** with shape double-encoding.
+
+### Locked decisions (Andrew, 2026-08-16)
+1. **Retire right-drag-pan and hover-follow** for an explicit contour-mode control + one-finger pan
+   ([ADR-0022](../DECISIONS.md#adr-0022-explicit-contour-input-modes-touch-first)).
+2. **Replace the rainbow parameter-`t` ramp** with a colour-blind-friendly map + direction ticks
+   ([ADR-0023](../DECISIONS.md#adr-0023-accessible-marks-validated-palette-shape-encoding-and-a-non-rainbow-ramp)).
+3. **Responsive layout:** a persistent side rail on wide screens; a sticky equality bar on narrow.
+4. **Simple / Explore density switch** — everything within a mode is visible; the mode gates novice depth.
+
+### Three workstreams
+- **Input & touch.** A labelled `[ Move γ · Draw · Isolate ]` segmented control replaces gesture-mode
+  disambiguation (the single-pointer alternative WCAG 2.5.1 wants, identical on mouse and touch); unify pan
+  to one-finger/left-drag; pinch-to-zoom + `touch-action:none`; pointer-type-aware (hover tooltip on mouse,
+  tap-to-reveal on touch); ≥44px targets and a labelled draggable w₀ handle. → ADR-0022.
+- **Perceptual accessibility.** Shape double-encoding (○ zero · ✕ pole · ◆ f′=0 · ● w₀); the validated
+  CVD-safe mark palette as tokens; a non-rainbow `t` map with periodic direction arrowheads; verdict icon +
+  words (not colour alone); marks/lines ≥ 3:1; an ARIA live region announcing the equality + a root table;
+  `prefers-reduced-motion`. → ADR-0023.
+- **Organization ("everything visible at once").** A persistent **equality readout** laid out *as the
+  equation* with the ✓/⚠ badge and its strip + ∮ evidence always present (nothing appears/vanishes); a
+  persistent **legend**; grouped, labelled controls (Function · Contour · Explore · View); the responsive
+  side-rail / sticky-bar layout; a "one cursor" linked highlight across the two planes and the strip.
+
+### Phasing (highest impact / lowest risk first)
+1. **Perceptual quick wins** — shape encoding + validated tokens + ARIA live + reduced-motion (no
+   interaction-model or layout risk). _← building now._
+2. **Input & touch** — mode control + pinch + target sizes.
+3. **Organization** — equality panel + legend + side-rail/sticky-bar + grouping + linked cursor.
+4. **Polish** — non-rainbow ramp + direction ticks + first-run coach + Simple/Explore density.
+
+Cross-cutting: test-guarded (unit + Playwright touch-emulation smokes + a CI palette-validator check on the
+token set); pure-2D and app-local; new UI state optional-with-default for `#vs=` compat.
+
+---
+
 ## Build progress (living record)
 
 > Updated as phases land, so a resumed session knows exactly where to pick up. Work lands as small, CI-green

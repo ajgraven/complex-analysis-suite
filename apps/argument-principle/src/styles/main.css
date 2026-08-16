@@ -7,10 +7,15 @@
   --border: #262b36;
   --text: #e7eaf2;
   --muted: #8c95a9;
-  --accent: #3bb6c0; /* contour / zeros */
-  --pole: #e8608f; /* origin / poles */
-  --gold: #dbb057; /* winding / critical points */
+  --accent: #3bb6c0; /* UI chrome + the γ contour */
+  /* categorical marks — shape-distinct + CVD-validated (ADR-0023); dark-mode steps */
+  --zero: #4585e0; /* ○ zero */
+  --pole: #cf7b30; /* ✕ pole */
+  --crit: #26a86f; /* ◆ f′ = 0 */
+  --target: #cf5691; /* ● target w₀ */
+  --gold: #dbb057; /* winding headline number */
   --trace: #a08bff; /* animated traversal point */
+  --warn: #e0a24c; /* status: warning (icon + words carry it too) */
   --grid: #232a36;
   --axis: #3c4658;
   --err: #ec7a7a;
@@ -25,9 +30,13 @@
   --text: #151a26;
   --muted: #656e83;
   --accent: #0d7a86;
-  --pole: #c0356b;
+  --zero: #2160c4;
+  --pole: #c9551f;
+  --crit: #0f8f5f;
+  --target: #a5347a;
   --gold: #b07d10;
   --trace: #5b4bd0;
+  --warn: #b3541a;
   --grid: #e7ebf3;
   --axis: #c2cad8;
   --err: #b3261e;
@@ -42,8 +51,13 @@
     --text: #151a26;
     --muted: #656e83;
     --accent: #0d7a86;
-    --pole: #c0356b;
+    --zero: #2160c4;
+    --pole: #c9551f;
+    --crit: #0f8f5f;
+    --target: #a5347a;
     --gold: #b07d10;
+    --trace: #5b4bd0;
+    --warn: #b3541a;
     --grid: #e7ebf3;
     --axis: #c2cad8;
     --err: #b3261e;
@@ -320,7 +334,7 @@ button.ghost:disabled {
   color: var(--ok);
 }
 .status.warn {
-  color: var(--pole);
+  color: var(--warn);
 }
 .integral {
   margin-top: 8px;
@@ -364,13 +378,26 @@ button.ghost:disabled {
   white-space: nowrap;
 }
 .key.zero {
-  color: var(--accent);
+  color: var(--zero);
 }
 .key.pole {
   color: var(--pole);
 }
 .key.crit {
-  color: var(--gold);
+  color: var(--crit);
+}
+
+/* screen-reader-only live region: the equality verdict announced non-visually (ADR-0023) */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* F13 — the hover tooltip on a marked root. */
@@ -489,4 +516,11 @@ button.ghost:disabled {
   top: 12px;
   right: 12px;
   padding: 4px 9px;
+}
+
+/* Honor reduced-motion: no toast transition; the crossing pulse is also skipped in JS (ADR-0023). */
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    transition: none;
+  }
 }
