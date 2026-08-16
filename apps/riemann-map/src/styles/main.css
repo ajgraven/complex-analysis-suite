@@ -232,7 +232,7 @@ canvas.plane { touch-action: none; cursor: grab; background: rgb(15, 18, 23); }
 canvas.plane:active { cursor: grabbing; }
 canvas.overlay { pointer-events: none; }
 
-/* over-canvas chips + banner — dark backing in both themes (they sit on the shader field) */
+/* over-canvas chips + banner — dark backing in both themes (they sit on the dark 2D field) */
 .panelabel {
   position: absolute; top: 0.5rem; left: 0.6rem; z-index: 1;
   color: var(--chip-fg); font-size: 0.75rem; background: var(--chip-bg);
@@ -251,7 +251,7 @@ canvas.overlay { pointer-events: none; }
 /* the "drag c" hint under the formula editor — the explainer style, tinted to the red c handle */
 .c-hint { border-left: 3px solid #ff5a5a; background: color-mix(in srgb, #ff5a5a 9%, var(--surface)); }
 .c-hint[hidden] { display: none; }
-/* per-plot colour legend chip (A4) — bottom-right of the z-plane, dark backing over the shader field */
+/* per-plot colour legend chip — bottom-right of the z-plane, dark backing over the dark 2D field */
 .legend-chip {
   position: absolute; right: 0.6rem; bottom: 0.6rem; z-index: 1; pointer-events: none;
   min-width: 8.5rem; padding: 0.4rem 0.55rem; border-radius: 6px;

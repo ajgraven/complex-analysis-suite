@@ -1,11 +1,11 @@
 // nav.ts — pan / zoom on the complex-plane canvas (catalog item F1, shallow).
 //
 // The coordinate math (pixel ↔ world, zoom-about-cursor) is factored into PURE, node-tested helpers;
-// only the thin event wiring touches the DOM. World y runs UP (matching gl_FragCoord.y in the shader),
-// so pointer fractions are measured from the bottom.
+// only the thin event wiring touches the DOM. World y runs UP (screen bottom = smaller y), so pointer
+// fractions are measured from the bottom.
 import type { ViewportState } from "../viewState.js";
 
-/** Zoom clamp for P1 (single-precision). df64 deep zoom (H4) widens this later. */
+/** Zoom clamp for the single-precision 2D view. */
 export const ZOOM_MIN = 1e-3;
 export const ZOOM_MAX = 1e6;
 

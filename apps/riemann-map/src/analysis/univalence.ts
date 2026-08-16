@@ -48,6 +48,7 @@ export function polylineSelfIntersects(poly: readonly Pt[], closed = false): boo
 /** Evenly sample at most `max` points from a polyline (keeps the last point). */
 export function downsample(poly: readonly Pt[], max: number): Pt[] {
   if (poly.length <= max) return poly.slice();
+  if (max < 2) return max > 0 && poly.length ? [poly[poly.length - 1]] : []; // avoid step = n/0 → NaN indices
   const step = (poly.length - 1) / (max - 1);
   return Array.from({ length: max }, (_, i) => poly[Math.round(i * step)]);
 }

@@ -1,7 +1,7 @@
 // overlay2d.ts — a thin 2D-canvas drawer for grid curves and cursor markers (catalog items D1/D2/F2).
 //
-// Used twice: over the WebGL z-plane (view synced to the shared viewport) and in the w-plane pane
-// (view auto-fit to the image grid's bounds). World→pixel mirrors the shader's convention (y up). DOM
+// Used twice: on the source (z) pane (view synced to the shared viewport) and on the image (w) pane
+// (view auto-fit to the image grid's bounds). Both panes are plain 2D canvases; world→pixel runs y up. DOM
 // only; the geometry it draws (grid.ts) is what the node suite covers.
 import type { GridLine, Pt } from "./grid.js";
 
@@ -174,7 +174,7 @@ export class Overlay2D {
   }
 
   /** A bottom-left scale bar: a "nice" 1/2/5×10ⁿ world length (CD parity), with end ticks + a label
-   *  on a translucent backing so it stays legible over any shader colour. */
+   *  on a translucent backing so it stays legible over the grid on the dark field. */
   drawScaleBar(): void {
     const W = this.canvas.width;
     const H = this.canvas.height;
@@ -188,9 +188,9 @@ export class Overlay2D {
     const barPx = (niceLen / worldW) * W;
     const label = exp >= -3 && exp < 4 ? String(Number(niceLen.toPrecision(2))) : `${niceFrac}e${exp}`;
 
-    const s = H;
+    const s = H; // H is already the device-pixel backing height, so the geometry below is in device px
     const m = Math.round(s * 0.05);
-    const font = Math.max(10, Math.round(s * 0.026)) * this.dpr;
+    const font = Math.max(10, Math.round(s * 0.026)); // do NOT re-apply this.dpr — `s` already carries it
     const tick = Math.max(3, s * 0.014);
     const lw = Math.max(1.5, s * 0.004);
     const pad = font * 0.5;
