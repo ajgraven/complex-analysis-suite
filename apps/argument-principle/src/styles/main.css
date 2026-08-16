@@ -553,6 +553,15 @@ button.ghost:disabled {
 .evidence > *[hidden] {
   display: none;
 }
+
+/* Simple/Explore density switch (§12 decision 4). "Simple" keeps the core — planes, equality, legend,
+ * strip, and the Function/Contour controls — and hides the advanced analytic layer. "Explore" (default,
+ * no attribute or data-density="explore") shows everything. */
+:root[data-density="simple"] .evidence,
+:root[data-density="simple"] .cgroup-explore,
+:root[data-density="simple"] .cgroup-view {
+  display: none;
+}
 .integral {
   font-size: 0.9rem;
   color: var(--text);

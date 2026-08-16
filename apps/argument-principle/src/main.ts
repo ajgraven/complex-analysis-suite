@@ -171,6 +171,53 @@ function createThemeToggle(onChange: () => void): HTMLButtonElement {
   return btn;
 }
 
+/**
+ * The Simple / Explore density switch (§12 decision 4). "Explore" (default) shows everything at once — the
+ * organization goal; "Simple" hides the advanced analytic layer (∮ evidence, traverse/root-vector controls,
+ * resolution/toggles) for a novice's first look, keeping the planes + equality + legend + strip. The choice
+ * rides `data-density` on <html> (CSS does the hiding) and persists per device in localStorage.
+ */
+function createDensityToggle(onChange: () => void): HTMLElement {
+  const KEY = "ap.density";
+  type Level = "simple" | "explore";
+  const read = (): Level => {
+    try {
+      return localStorage.getItem(KEY) === "simple" ? "simple" : "explore";
+    } catch {
+      return "explore";
+    }
+  };
+  const seg = document.createElement("div");
+  seg.className = "modeseg";
+  seg.setAttribute("role", "group");
+  seg.setAttribute("aria-label", "Detail level");
+  const btns = new Map<Level, HTMLButtonElement>();
+  let current = read();
+  const apply = (l: Level): void => {
+    current = l;
+    document.documentElement.dataset.density = l;
+    for (const [id, b] of btns) b.setAttribute("aria-pressed", String(id === l));
+  };
+  for (const l of ["simple", "explore"] as const) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = l === "simple" ? "Simple" : "Explore";
+    b.addEventListener("click", () => {
+      try {
+        localStorage.setItem(KEY, l);
+      } catch {
+        /* storage unavailable */
+      }
+      apply(l);
+      onChange();
+    });
+    btns.set(l, b);
+    seg.append(b);
+  }
+  apply(current);
+  return seg;
+}
+
 function makeCanvas(): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.className = "plane";
@@ -289,8 +336,9 @@ function main(): void {
   const pngBtn = button("Save PNG");
   const helpBtn = button("?");
   helpBtn.setAttribute("aria-label", "Help");
+  const densitySeg = createDensityToggle(() => schedule());
   const themeBtn = createThemeToggle(() => schedule());
-  topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, helpBtn, themeBtn);
+  topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, densitySeg, helpBtn, themeBtn);
 
   const presetWrap = document.createElement("label");
   presetWrap.className = "field";
@@ -354,10 +402,11 @@ function main(): void {
   drawHint.className = "hint";
   drawHint.textContent = "Pick a tool above, then act on the z-plane.";
 
-  // Grouped, labelled controls (§12 organization): Function · Contour · Explore · View.
-  const controlGroup = (title: string, ...children: HTMLElement[]): HTMLElement => {
+  // Grouped, labelled controls (§12 organization): Function · Contour · Explore · View. The `slug` tags
+  // each group so the Simple/Explore density switch (decision 4) can hide the advanced ones via CSS.
+  const controlGroup = (title: string, slug: string, ...children: HTMLElement[]): HTMLElement => {
     const g = document.createElement("section");
-    g.className = "cgroup";
+    g.className = `cgroup cgroup-${slug}`;
     const h = document.createElement("h2");
     h.className = "cgroup-t";
     h.textContent = title;
@@ -370,10 +419,10 @@ function main(): void {
   const controls = document.createElement("div");
   controls.className = "controls";
   controls.append(
-    controlGroup("Function", presetWrap, exprWrap),
-    controlGroup("Contour", radiusWrap, drawHint),
-    controlGroup("Explore", playBtn, speedWrap, decompChk.root),
-    controlGroup("View", resWrap, domainChk.root, imageChk.root),
+    controlGroup("Function", "function", presetWrap, exprWrap),
+    controlGroup("Contour", "contour", radiusWrap, drawHint),
+    controlGroup("Explore", "explore", playBtn, speedWrap, decompChk.root),
+    controlGroup("View", "view", resWrap, domainChk.root, imageChk.root),
   );
 
   const formula = document.createElement("div");
