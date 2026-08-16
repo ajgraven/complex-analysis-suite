@@ -306,4 +306,14 @@ none of which v1 blocks:
   console errors (bar the default-favicon 404). Wired into `vitest.workspace.ts`, `eslint.config.js`
   `APP_NAMES`, and the test-census (`faber-transform:3`). Held back from publishing (no launcher card, no
   deploy `cp` — like `correspondences`). Full workspace: **3014 tests**, typecheck / lint / build all green.
-- **M1.5 — Extract the phase-portrait shader into `@cas/gpu` —** next.
+- **M1.5 — Extract the phase-portrait shader into `@cas/gpu` — DONE.** Lifted the plotter's
+  `COLORING_GLSL` (the `colorAt` core: phase-LUT + modulus transfer + `fwidth`-antialiased enhancement +
+  level sets + uncertainty + CVD) verbatim into `@cas/gpu/glsl` as `PHASE_COLORING_GLSL` (ADR-0007:
+  `complex-function-plotter` + the Faber app). The plotter's `colorShader.ts` now re-exports it under the
+  historical name `COLORING_GLSL`, so `buildFragmentShader` and the 3-D sphere/surface shaders are
+  untouched and the assembled GLSL is byte-identical. Added a `@cas/gpu` string-shape test. **Plotter green
+  before AND after** (node 166; typecheck/lint clean) and **verified in real WebGL** (full headless
+  Chromium): the plotter renders Γ(z)'s domain-colored 3-D surface with zero shader-compile/link errors —
+  the extracted `colorAt` works. (The plotter's own vitest-browser job needs `chrome-headless-shell`, absent
+  in this sandbox; CI runs it.) Full workspace: **3018 tests**, typecheck / lint / build all green.
+- **M2 — GPU coloring + remaining presets + exact rational path —** next.
