@@ -2,7 +2,7 @@
 // monomial zⁿ must equal the Faber polynomial 2·Tₙ(w/2) (Chebyshev) — the on-screen ground truth.
 import { describe, expect, it } from "vitest";
 import type { Cx } from "@cas/core";
-import { boundaryK, evalPhi, evalPoly, monomialTaylor, transformCoeffs } from "../src/faber.js";
+import { boundaryK, evalPhi, evalPoly, monomialTaylor, transformCoeffs, transformRoots } from "../src/faber.js";
 import { phiPresetById } from "../src/presets.js";
 
 const close = (a: number, b: number, tol = 1e-10): boolean => Math.abs(a - b) < tol;
@@ -52,6 +52,20 @@ describe("faber glue — interval preset Chebyshev anchor", () => {
     expect(close(coeffs[0].re, -2)).toBe(true);
     expect(close(coeffs[1].re, 0)).toBe(true);
     expect(close(coeffs[2].re, 1)).toBe(true);
+  });
+
+  it("transformRoots of F₆ (interval) are the 6 Chebyshev roots, real in [−2,2]", () => {
+    const coeffs = transformCoeffs(map, monomialTaylor(6));
+    const roots = transformRoots(coeffs);
+    expect(roots.length).toBe(6);
+    for (const r of roots) {
+      expect(Math.abs(r.im)).toBeLessThan(1e-6);
+      expect(Math.abs(r.re)).toBeLessThanOrEqual(2 + 1e-6);
+    }
+  });
+
+  it("transformRoots of a constant numerator is empty", () => {
+    expect(transformRoots([{ re: 3, im: 0 }])).toEqual([]);
   });
 
   it("evalPoly agrees with a direct evaluation", () => {

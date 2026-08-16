@@ -22,6 +22,7 @@ import {
   radiusOfConvergence,
   taylorViaFFT,
   transformCoeffs,
+  transformRoots,
   trimTail,
 } from "./faber.js";
 import type { Rational } from "./faber.js";
@@ -30,6 +31,7 @@ import {
   drawAxes,
   drawDot,
   drawPolyline,
+  drawRootMarker,
   panTo,
   planeMap,
   viewPxToWorld,
@@ -77,6 +79,7 @@ interface PanelModel {
   readonly mask: boolean;
   readonly curves: Curve[];
   readonly markers: Marker[];
+  readonly roots: Vec2[];
 }
 interface RenderModel {
   readonly left: PanelModel;
@@ -158,6 +161,7 @@ function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
   }
   drawAxes(ov.ctx, map, AXIS_COLORS);
   for (const c of m.curves) drawPolyline(ov.ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
+  for (const r of m.roots) drawRootMarker(ov.ctx, map, r);
   for (const mk of m.markers) drawDot(ov.ctx, map, mk.w, mk.color, 4);
 }
 
@@ -240,7 +244,11 @@ function main(): void {
   const truncCtl = elt("div", { class: "control" });
   truncCtl.append(truncLabel, truncInput);
 
-  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl);
+  const rootsInput = elt("input", { id: "showroots", type: "checkbox" });
+  const rootsCtl = elt("div", { class: "control control-check" });
+  rootsCtl.append(rootsInput, elt("label", { for: "showroots" }, "Faber roots"));
+
+  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl);
   root.append(controls);
 
   const readout = elt("div", { class: "readout" });
@@ -261,13 +269,15 @@ function main(): void {
     const map = preset.build(state.shape);
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
+    const showRoots = state.showRoots !== false;
+    const rootMarks = (num: Cx[]): Vec2[] => (showRoots ? transformRoots(num).map((r): Vec2 => [r.re, r.im]) : []);
 
     if (state.input.kind === "monomial") {
       const n = state.input.degree;
       const coeffs = transformCoeffs(map, monomialTaylor(n));
       return {
-        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, mask: true, curves: [diskCurve], markers: [] },
-        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, mask: false, curves: [kCurve], markers: [] },
+        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, mask: true, curves: [diskCurve], markers: [], roots: [] },
+        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, mask: false, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
         badge: "=",
         readout: `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`,
         error: false,
@@ -277,14 +287,16 @@ function main(): void {
       const z0: Cx = { re: state.input.re, im: state.input.im };
       const order = state.input.order;
       const img = poleImage(map, z0, order);
+      const rightRat = poleImageRational(img, order);
       const kexp = order === 1 ? "" : `^${order}`;
       return {
-        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, mask: true, curves: [diskCurve], markers: [] },
+        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, mask: true, curves: [diskCurve], markers: [], roots: [] },
         right: {
-          source: { kind: "rational", rat: poleImageRational(img, order) },
+          source: { kind: "rational", rat: rightRat },
           mask: false,
           curves: [kCurve],
           markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
+          roots: rootMarks(rightRat.num),
         },
         badge: "=",
         readout:
@@ -296,7 +308,7 @@ function main(): void {
     // expr
     const compiled = compileExprF(state.input.expr);
     if ("error" in compiled) {
-      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, mask: false, curves: [], markers: [] };
+      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, mask: false, curves: [], markers: [], roots: [] };
       return { left: blank, right: blank, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
     }
     const N = state.input.N;
@@ -317,8 +329,8 @@ function main(): void {
     }
     const orderNote = effN < N ? ` (coefficients past n=${effN} are below the noise floor)` : "";
     return {
-      left: { source: { kind: "fn", g: compiled.fn }, mask: true, curves: [diskCurve], markers: [] },
-      right: { source: { kind: "rational", rat: polynomialRational(poly) }, mask: false, curves: rightCurves, markers: [] },
+      left: { source: { kind: "fn", g: compiled.fn }, mask: true, curves: [diskCurve], markers: [], roots: [] },
+      right: { source: { kind: "rational", rat: polynomialRational(poly) }, mask: false, curves: rightCurves, markers: [], roots: rootMarks(poly) },
       badge: "≈",
       readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ${orderNote}   ·   ${rNote}`,
       error: false,
@@ -328,6 +340,7 @@ function main(): void {
   function syncControls(): void {
     const preset = phiPresetById(state.phi);
     phiSel.value = preset.id;
+    rootsInput.checked = state.showRoots !== false;
     if (preset.shape) {
       shapeCtl.style.display = "";
       shapeInput.min = String(preset.shape.min);
@@ -365,7 +378,7 @@ function main(): void {
   }
 
   function render(): void {
-    const key = JSON.stringify({ phi: state.phi, shape: state.shape, input: state.input });
+    const key = JSON.stringify({ phi: state.phi, shape: state.shape, input: state.input, showRoots: state.showRoots });
     if (key !== modelKey || model === null) {
       model = computeModel();
       modelKey = key;
@@ -474,6 +487,7 @@ function main(): void {
     const N = Math.max(MIN_TRUNCATION, Math.min(MAX_TRUNCATION, Math.round(Number(truncInput.value))));
     commit({ ...state, input: { kind: "expr", expr: state.input.expr, N } });
   });
+  rootsInput.addEventListener("change", () => commit({ ...state, showRoots: rootsInput.checked }));
   window.addEventListener("resize", render);
 
   history.replaceState(null, "", encodeFaberState(state));

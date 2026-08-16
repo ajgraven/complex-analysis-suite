@@ -56,6 +56,8 @@ export type FaberViewState = {
   /** K-side (right) panel view. */
   readonly wView: Viewport;
   readonly conventions: ConventionTag;
+  /** Scatter the transform's zeros (the Faber roots) on the right panel. Optional; defaults true. */
+  readonly showRoots?: boolean;
 };
 
 /** The default view — the interval preset with f(z) = z³, so the right panel shows F₃ of [−2, 2]. */
@@ -66,6 +68,7 @@ export const DEFAULT_VIEW_STATE: FaberViewState = {
   zView: { centerRe: 0, centerIm: 0, zoom: 1.5 },
   wView: { centerRe: 0, centerIm: 0, zoom: 0.78 },
   conventions: { normalization: "standard" },
+  showRoots: true,
 };
 
 function isViewport(v: Record<string, unknown> | undefined): boolean {
@@ -119,6 +122,7 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   if (!isViewport(s.wView as Record<string, unknown> | undefined)) return false;
   const cv = s.conventions as Record<string, unknown> | undefined;
   if (!cv || cv.normalization !== "standard") return false;
+  if (s.showRoots !== undefined && typeof s.showRoots !== "boolean") return false;
   return true;
 }
 

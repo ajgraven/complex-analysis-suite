@@ -216,9 +216,14 @@ none of which v1 blocks:
   pole image inside `Γ_R`. Verified in-browser: `1/(z−2)` draws the Bernstein ellipse `Γ₂` with the series
   smooth inside and honestly diverging (rainbow) outside; `exp(z)` reads "entire" (trimmed to n≤13);
   `1/(1+z²/4)` recovers `R≈2`. 29 app tests; typecheck/lint clean.
-- **M4 — Polish, share-links, provenance.** viewState `#vs=` codec, PNG export metadata, KaTeX formula
-  readouts, glossary, **Faber-root overlay (in v1)** as a toggle. Launcher tile as **"Coming soon"**
-  (unpublished, per §12); publish only on the author's go.
+- **M4 — Polish, share-links, provenance.** viewState `#vs=` codec (shipped in M1), PNG export metadata,
+  KaTeX formula readouts, glossary. Launcher tile; publish on the author's go.
+  - **Faber-root overlay — DONE.** A "Faber roots" toggle (default on, `showRoots` in viewState) scatters
+    the zeros of the right-panel numerator — the roots of Fₙ for a monomial (the classic "roots cluster on
+    K" picture), the zeros of the truncated series for free-form f — as white-ringed markers via
+    `@cas/faber`'s `polynomialRoots`; unconverged (ill-conditioned high-degree) root-finds are dropped
+    rather than scattered. Verified in-browser: F₈'s 8 roots sit exactly on the deltoid's phase-convergence
+    points; toggling clears them. 31 app tests.
 
 ## 9. Scaffold & wiring
 

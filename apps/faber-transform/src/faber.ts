@@ -3,7 +3,7 @@
 // coloring. The app never touches the package's internals directly — everything routes through here.
 import { Complex, makePoly, objAlgebra } from "@cas/core";
 import type { Cx } from "@cas/core";
-import { faberTransform, faberImageOfPole, evalRationalImage } from "@cas/faber";
+import { faberTransform, faberImageOfPole, evalRationalImage, polynomialRoots } from "@cas/faber";
 import type { ExteriorMap, RationalImage } from "@cas/faber";
 import { parse, makeComplexFn } from "@cas/expr";
 
@@ -186,4 +186,16 @@ export function poleImageRational(img: RationalImage, order: number): Rational {
 /** Evaluate a {@link Rational} at w (the CPU-fallback path). */
 export function evalRational(r: Rational, w: Cx): Cx {
   return Complex.div(P.eval(r.num, w), P.eval(r.den, w));
+}
+
+/**
+ * The zeros of a transform's numerator polynomial — for a monomial input these are the roots of the
+ * Faber polynomial Fₙ (the classic "roots cluster on/around K" picture); for the truncated series they
+ * approximate the zeros of Φφ(f). Returns [] for a constant numerator or when Durand–Kerner did not
+ * converge (ill-conditioned high degree), so unreliable roots are never scattered.
+ */
+export function transformRoots(num: Cx[]): Cx[] {
+  if (num.length < 2) return [];
+  const r = polynomialRoots(num);
+  return r.converged ? r.roots : [];
 }

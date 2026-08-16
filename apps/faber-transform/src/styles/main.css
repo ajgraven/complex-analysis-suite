@@ -133,6 +133,22 @@ header.app-head p {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.control-check {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.control-check label {
+  color: var(--ink);
+}
+
+.control-check input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+}
+
 .readout {
   margin-top: 1rem;
   padding: 0.8rem 1rem;

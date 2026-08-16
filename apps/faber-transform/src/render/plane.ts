@@ -165,7 +165,22 @@ export function drawPolyline(
   ctx.restore();
 }
 
-/** Draw a small filled marker (a dot) at a world point (used for Faber roots later). */
+/** Draw a Faber-root marker (a dark dot ringed in white) at a world point — visible over any hue. */
+export function drawRootMarker(ctx: CanvasRenderingContext2D, map: PlaneMap, w: Vec2, size = 3.5): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, size, 0, 2 * Math.PI);
+  ctx.fillStyle = "rgba(10,10,14,0.85)";
+  ctx.fill();
+  ctx.lineWidth = 1.4;
+  ctx.strokeStyle = "rgba(255,255,255,0.92)";
+  ctx.stroke();
+  ctx.restore();
+}
+
+/** Draw a small filled marker (a dot) at a world point (used for the image pole). */
 export function drawDot(
   ctx: CanvasRenderingContext2D,
   map: PlaneMap,
