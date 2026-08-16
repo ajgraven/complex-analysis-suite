@@ -92,12 +92,15 @@ machinery:
 The shared `@cas/gpu` `PHASE_COLORING_GLSL` **already supports most of these via uniforms the app currently
 hardcodes** — exposing them is nearly free:
 
-- **4a — Coloring controls (cheap; shader-ready).** Enhancement overlays already in `colorAt`:
-  **modulus rings**, **phase sectors**, **conformal proportional grid**, **polar chessboard**,
-  **Re/Im grid** (`uEnhance`/`uSectors`/`uCrisp`); modulus→lightness transfer (`uModulus`:
-  linear/rational/log/log-log); hue rotation/reflection; **level-set contours** $|f|=c$ and $\arg f=c$
-  (`uLevelAbs`/`uLevelArg`); a CVD preview; an undersampling/uncertainty hatch. → a "Coloring" panel of
-  toggles, no new GLSL.
+- **4a — Coloring controls (cheap; shader-ready) — DONE (Phase A).** A `ColoringOptions` block now drives
+  both the GPU renderer and the CPU fallback, exposed as UI toggles: the enhancement overlay (**none /
+  modulus rings / phase sectors / conformal grid / polar chessboard / Re/Im grid**, `uEnhance`), the
+  modulus→lightness transfer (**constant / linear / rational / log / log-log**, `uModulus`/`uModScale`),
+  an overlay **density** (`uSectors`, sector/grid modes only), and **crisp-vs-shaded lines** (`uCrisp`).
+  `render/coloring.ts` ports the shaded (non-`fwidth`) GLSL branches so the two paths agree; the block
+  rides the serializable view-state (guarded + back-filled) and round-trips in the `#vs=` permalink.
+  Still hardcoded / deferred (no UI yet): hue rotation/reflection, level-set contours $|f|=c$/$\arg f=c$
+  (`uLevelAbs`/`uLevelArg`), the CVD preview, the uncertainty hatch.
 - **4b — 3-D analytic landscape.** $|\Phi_\varphi(f)|$ as height over $K$, colored by $\arg$ (the same
   `colorAt`). **Extract the plotter's `render3d/surfaceShader` into `@cas/gpu`** (ADR-0007 second consumer:
   plotter + Faber), then consume it. A rotatable surface — the natural "see the poles/zeros as
@@ -121,9 +124,9 @@ hardcodes** — exposing them is nearly free:
 
 ## 6. Suggested phasing
 
-- **Phase A — render-on-$K$ + coloring controls (4a).** Request 1, plus surfacing the enhancement / modulus
-  / level-set modes already in the shader. High value, low risk, no new math. *(◇ resolve the $K$-boundary
-  question first.)*
+- **Phase A — render-on-$K$ + coloring controls (4a) — DONE.** Request 1 (mask to $K$), plus the
+  enhancement / modulus-transfer coloring toggles surfaced from the shared shader. (Level-set contours,
+  hue rotation, CVD, and the uncertainty hatch are left in the shader for a later pass.)
 - **Phase B — arbitrary rational, exact (§2).** The `@cas/faber` order-$m$ + partial-fraction work; the
   "pole" UI mode becomes "type any rational."
 - **Phase C — 3-D surface + Riemann sphere (4b, 4c).** Extract the plotter's `render3d` into `@cas/gpu`.
