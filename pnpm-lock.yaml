@@ -234,6 +234,9 @@ importers:
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@cas/expr':
+        specifier: workspace:*
+        version: link:../../packages/expr
       '@cas/faber':
         specifier: workspace:*
         version: link:../../packages/faber

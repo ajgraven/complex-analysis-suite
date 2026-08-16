@@ -119,12 +119,18 @@ header.app-head p {
 }
 
 .control select,
-.control input[type="number"] {
+.control input[type="number"],
+.control input[type="text"] {
   background: #0f121a;
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 0.35rem 0.5rem;
+}
+
+.control-wide input[type="text"] {
+  min-width: 15rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 .readout {

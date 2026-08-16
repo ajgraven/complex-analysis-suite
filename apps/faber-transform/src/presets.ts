@@ -64,3 +64,19 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
 export function phiPresetById(id: string): PhiPreset {
   return PHI_PRESETS.find((p) => p.id === id) ?? PHI_PRESETS[0];
 }
+
+/**
+ * Curated free-form input functions f, all analytic on the closed unit disk (any singularities sit
+ * OUTSIDE |z| ≤ 1, so the Taylor series exists there). Entire functions (exp, sin) converge everywhere;
+ * the rational ones have a finite radius of convergence R (the distance to the nearest pole), which the
+ * app draws as the convergence equipotential Γ_R.
+ */
+export const F_PRESETS: readonly string[] = [
+  "exp(z)",
+  "sin(z)",
+  "1/(z - 2)",
+  "z/(1 - z/3)",
+  "exp(z)/(z - 2)",
+  "1/(1 + z^2/4)",
+  "cos(z) + z^2",
+];

@@ -144,7 +144,7 @@ export function drawPolyline(
   ctx: CanvasRenderingContext2D,
   map: PlaneMap,
   pts: readonly Vec2[],
-  opts: { color?: string; width?: number; closed?: boolean } = {},
+  opts: { color?: string; width?: number; closed?: boolean; dash?: number[] } = {},
 ): void {
   if (pts.length < 2) return;
   ctx.save();
@@ -152,6 +152,7 @@ export function drawPolyline(
   ctx.lineWidth = opts.width ?? 1.8;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+  if (opts.dash) ctx.setLineDash(opts.dash);
   ctx.beginPath();
   const [x0, y0] = map.toPx(pts[0]);
   ctx.moveTo(x0, y0);

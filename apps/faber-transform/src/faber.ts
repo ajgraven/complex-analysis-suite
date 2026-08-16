@@ -5,8 +5,97 @@ import { Complex, makePoly, objAlgebra } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { faberTransform, faberImageOfPole, evalRationalImage } from "@cas/faber";
 import type { ExteriorMap, RationalImage } from "@cas/faber";
+import { parse, makeComplexFn } from "@cas/expr";
 
 const P = makePoly(objAlgebra);
+
+/** Compile a free-form f(z) from an @cas/expr source into a {re,im} evaluator, or return a parse error. */
+export function compileExprF(src: string): { fn: (z: Cx) => Cx } | { error: string } {
+  let fnRaw: (z: [number, number], c: [number, number]) => [number, number];
+  try {
+    fnRaw = makeComplexFn(parse(src));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : String(e) };
+  }
+  const fn = (z: Cx): Cx => {
+    const r = fnRaw([z.re, z.im], [0, 0]);
+    return { re: r[0], im: r[1] };
+  };
+  return { fn };
+}
+
+/**
+ * Taylor coefficients b₀…b_N of f (analytic on the unit disk) via the DFT of samples on |z| = radius:
+ * bₙ = (1 / (M·rⁿ)) Σ_k f(r·ωᵏ) ω^{−nk}, ω = e^{2πi/M}. Sampling at r < 1 damps aliasing from the tail.
+ */
+export function taylorViaFFT(f: (z: Cx) => Cx, N: number, radius = 0.9): Cx[] {
+  const M = Math.max(64, 1 << Math.ceil(Math.log2(4 * (N + 1))));
+  const samples: Cx[] = [];
+  for (let k = 0; k < M; k++) {
+    const th = (2 * Math.PI * k) / M;
+    samples.push(f({ re: radius * Math.cos(th), im: radius * Math.sin(th) }));
+  }
+  const b: Cx[] = [];
+  for (let n = 0; n <= N; n++) {
+    let re = 0;
+    let im = 0;
+    for (let k = 0; k < M; k++) {
+      const ang = (-2 * Math.PI * n * k) / M;
+      const c = Math.cos(ang);
+      const s = Math.sin(ang);
+      re += samples[k].re * c - samples[k].im * s;
+      im += samples[k].re * s + samples[k].im * c;
+    }
+    const scale = 1 / (M * Math.pow(radius, n));
+    b.push({ re: re * scale, im: im * scale });
+  }
+  return b;
+}
+
+/**
+ * Drop the noise-dominated tail of an FFT coefficient list: keep b₀…b_L where L is the last index whose
+ * magnitude clears a relative floor. Prevents the truncated Faber sum from adding garbage — a coefficient
+ * at the ~1e-14 roundoff floor, times an Fₙ that grows geometrically, is O(1) noise (M3 numerical guard).
+ */
+export function trimTail(b: Cx[], relTol = 1e-10): Cx[] {
+  let maxAbs = 0;
+  for (const c of b) maxAbs = Math.max(maxAbs, Math.hypot(c.re, c.im));
+  if (maxAbs === 0) return b.slice(0, 1);
+  const thresh = Math.max(relTol * maxAbs, 1e-13);
+  let last = 0;
+  for (let n = 0; n < b.length; n++) if (Math.hypot(b[n].re, b[n].im) > thresh) last = n;
+  return b.slice(0, last + 1);
+}
+
+/**
+ * Estimate f's radius of convergence from the ratios |bₙ|/|bₙ₊₁| of its RELIABLE coefficients (above the
+ * FFT noise floor). Geometric decay ⇒ the ratio is ~constant ≈ R; super-geometric decay (an entire f) ⇒
+ * the ratio climbs without bound, reported as ∞. Robust where a naive |bₙ|^{1/n} is wrecked by the noise
+ * floor at high n.
+ */
+export function radiusOfConvergence(b: Cx[]): number {
+  let maxAbs = 0;
+  for (const c of b) maxAbs = Math.max(maxAbs, Math.hypot(c.re, c.im));
+  if (maxAbs === 0) return Infinity;
+  const thresh = Math.max(1e-10 * maxAbs, 1e-13);
+  // Reliable NONZERO indices (skipping the constant term). Using the index GAP in the exponent makes the
+  // estimate work for lacunary series (even/odd-only coefficients) and cancels any polynomial prefactor,
+  // so a geometric b_n ~ c·ρ^{−n} gives ρ exactly rather than a prefactor-biased value.
+  const idx: number[] = [];
+  for (let n = 1; n < b.length; n++) if (Math.hypot(b[n].re, b[n].im) > thresh) idx.push(n);
+  if (idx.length < 2) return Infinity; // coefficients hit the noise floor almost at once ⇒ ~entire
+  const gapRatio = (i: number): number => {
+    const n0 = idx[i];
+    const n1 = idx[i + 1];
+    const a = Math.hypot(b[n0].re, b[n0].im);
+    const c = Math.hypot(b[n1].re, b[n1].im);
+    return Math.pow(a / c, 1 / (n1 - n0));
+  };
+  const first = gapRatio(0);
+  const last = gapRatio(idx.length - 2);
+  if (last > 4 && last > 1.5 * first) return Infinity; // ratios climbing ⇒ super-geometric (entire)
+  return last;
+}
 
 export { evalRationalImage };
 export type { RationalImage };
@@ -33,15 +122,20 @@ export function evalPhi(map: ExteriorMap, z: Cx): Cx {
   return acc;
 }
 
-/** Sample ∂K = φ(unit circle) as a polyline (the boundary of the bounded complement K). */
-export function boundaryK(map: ExteriorMap, samples = 512): [number, number][] {
+/** φ({|z| = radius}) as a polyline. radius = 1 gives ∂K; radius = R > 1 gives the equipotential Γ_R. */
+export function mapCircle(map: ExteriorMap, radius: number, samples = 512): [number, number][] {
   const pts: [number, number][] = [];
   for (let i = 0; i <= samples; i++) {
     const theta = (2 * Math.PI * i) / samples;
-    const w = evalPhi(map, { re: Math.cos(theta), im: Math.sin(theta) });
+    const w = evalPhi(map, { re: radius * Math.cos(theta), im: radius * Math.sin(theta) });
     pts.push([w.re, w.im]);
   }
   return pts;
+}
+
+/** Sample ∂K = φ(unit circle) as a polyline (the boundary of the bounded complement K). */
+export function boundaryK(map: ExteriorMap, samples = 512): [number, number][] {
+  return mapCircle(map, 1, samples);
 }
 
 /** Taylor coefficients on the unit disk of the monomial f(z) = zⁿ (an ascending Cx[]). */

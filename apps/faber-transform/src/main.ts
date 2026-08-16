@@ -1,21 +1,28 @@
 // main.ts — the Faber transform visualizer entry point. Builds the two-panel DOM imperatively (no
 // framework, matching the sibling apps). Each panel layers a WebGL phase-portrait canvas (the shared
-// @cas/gpu colorAt) under a 2-D overlay canvas (axes, ∂𝔻/∂K, markers); a CPU phase portrait is the
-// fallback when WebGL2 is unavailable. Two exact input families: a monomial zⁿ (→ Fₙ) and a pole
-// 1/(z−z₀)^k with |z₀|>1 (→ the closed-form rational image, pole at φ(z₀)∈Ω), both labelled `=`.
+// @cas/gpu colorAt) under a 2-D overlay canvas (axes, ∂𝔻/∂K/equipotential, markers); a CPU phase
+// portrait is the fallback when WebGL2 is unavailable, and the path for free-form f. Three input
+// families: a monomial zⁿ (→ Fₙ, exact), a pole 1/(z−z₀)^k (→ closed-form rational image, exact), and
+// a free-form f(z) via @cas/expr (→ Σ_{n≤N} bₙ Fₙ, a truncated series, ≈ — with the convergence
+// equipotential Γ_R drawn).
 import { Complex } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
-import { PHI_PRESETS, phiPresetById } from "./presets.js";
+import { F_PRESETS, PHI_PRESETS, phiPresetById } from "./presets.js";
 import {
   boundaryK,
+  compileExprF,
   evalRational,
+  mapCircle,
   monomialTaylor,
   poleImage,
   poleImageRational,
   poleInputRational,
   polynomialRational,
+  radiusOfConvergence,
+  taylorViaFFT,
   transformCoeffs,
+  trimTail,
 } from "./faber.js";
 import type { Rational } from "./faber.js";
 import {
@@ -38,6 +45,9 @@ import {
   MIN_DEGREE,
   MAX_POLE_R,
   MIN_POLE_R,
+  MAX_TRUNCATION,
+  MIN_TRUNCATION,
+  MAX_EXPR_LEN,
   decodeFaberState,
   encodeFaberState,
 } from "./viewState.js";
@@ -46,13 +56,36 @@ import "./styles/main.css";
 
 const AXIS_COLORS = { grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.16)" };
 const PANEL_BG: readonly [number, number, number] = [22, 24, 30];
+const K_COLOR = "rgba(255,255,255,0.75)";
+const DISK_COLOR = "rgba(255,255,255,0.55)";
+const EQUIPOTENTIAL_COLOR = "rgba(255,210,90,0.9)";
 
 interface Marker {
   readonly w: Vec2;
   readonly color: string;
 }
+interface Curve {
+  readonly pts: Vec2[];
+  readonly color: string;
+  readonly width?: number;
+  readonly dash?: number[];
+}
+type Source = { readonly kind: "rational"; readonly rat: Rational } | { readonly kind: "fn"; readonly g: (z: Cx) => Cx };
 
-/** A closed unit-circle polyline for the left panel. */
+interface PanelModel {
+  readonly source: Source;
+  readonly mask: boolean;
+  readonly curves: Curve[];
+  readonly markers: Marker[];
+}
+interface RenderModel {
+  readonly left: PanelModel;
+  readonly right: PanelModel;
+  readonly badge: string;
+  readonly readout: string;
+  readonly error: boolean;
+}
+
 function unitCircle(samples = 256): Vec2[] {
   const pts: Vec2[] = [];
   for (let i = 0; i <= samples; i++) {
@@ -62,7 +95,6 @@ function unitCircle(samples = 256): Vec2[] {
   return pts;
 }
 
-/** Size a canvas's backing store to its CSS box and return the 2-D context + pixel size. */
 function fit2d(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
   const rect = canvas.getBoundingClientRect();
   const w = Math.max(1, Math.round(rect.width));
@@ -88,12 +120,11 @@ function elt<K extends keyof HTMLElementTagNameMap>(
 const fmt = (v: Cx): string => Complex.format(v, { digits: 4 });
 
 function defaultInput(kind: InputState["kind"]): InputState {
-  return kind === "monomial"
-    ? { kind: "monomial", degree: 3 }
-    : { kind: "pole", re: 1.6, im: 0.8, order: 1 };
+  if (kind === "monomial") return { kind: "monomial", degree: 3 };
+  if (kind === "pole") return { kind: "pole", re: 1.6, im: 0.8, order: 1 };
+  return { kind: "expr", expr: "1/(z - 2)", N: 32 };
 }
 
-/** One panel: a WebGL canvas (phase portrait) under a 2-D overlay canvas (axes / curves / markers). */
 interface Panel {
   readonly gl: HTMLCanvasElement;
   readonly ov: HTMLCanvasElement;
@@ -110,30 +141,24 @@ function makePanel(title: string): { panel: Panel; el: HTMLElement } {
   return { panel: { gl, ov, renderer: null }, el: box };
 }
 
-function paintPanel(
-  panel: Panel,
-  view: Viewport,
-  rat: Rational,
-  maskDisk: boolean,
-  overlay: Vec2[],
-  overlayColor: string,
-  markers: Marker[],
-): void {
+function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
   const ov = fit2d(panel.ov);
   if (!ov) return;
   const map = planeMap(view, ov.w, ov.h);
-  if (panel.renderer) {
-    panel.renderer.render(view, rat.num, rat.den, maskDisk);
+  if (m.source.kind === "rational" && panel.renderer) {
+    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.mask);
     ov.ctx.clearRect(0, 0, ov.w, ov.h); // transparent overlay above the GL portrait
   } else {
+    const src = m.source;
+    const g = src.kind === "rational" ? (w: Vec2): Cx => evalRational(src.rat, { re: w[0], im: w[1] }) : (w: Vec2): Cx => src.g({ re: w[0], im: w[1] });
     fillPhasePortrait(ov.ctx, map, (w) => {
-      if (maskDisk && w[0] * w[0] + w[1] * w[1] >= 1) return null;
-      return evalRational(rat, { re: w[0], im: w[1] });
+      if (m.mask && w[0] * w[0] + w[1] * w[1] >= 1) return null;
+      return g(w);
     });
   }
   drawAxes(ov.ctx, map, AXIS_COLORS);
-  drawPolyline(ov.ctx, map, overlay, { color: overlayColor, width: 1.8 });
-  for (const m of markers) drawDot(ov.ctx, map, m.w, m.color, 4);
+  for (const c of m.curves) drawPolyline(ov.ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
+  for (const mk of m.markers) drawDot(ov.ctx, map, mk.w, mk.color, 4);
 }
 
 function main(): void {
@@ -179,6 +204,7 @@ function main(): void {
   modeSel.append(
     elt("option", { value: "monomial" }, "Monomial  zⁿ"),
     elt("option", { value: "pole" }, "Pole  1/(z−z₀)ᵏ"),
+    elt("option", { value: "expr" }, "Free-form  f(z)"),
   );
   const modeCtl = elt("div", { class: "control" });
   modeCtl.append(elt("label", { for: "mode" }, "input f"), modeSel);
@@ -203,7 +229,18 @@ function main(): void {
   const orderCtl = elt("div", { class: "control" });
   orderCtl.append(elt("label", { for: "order" }, "pole order k"), orderSel);
 
-  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl);
+  const exprList = elt("datalist", { id: "fpresets" });
+  for (const s of F_PRESETS) exprList.append(elt("option", { value: s }));
+  const exprInput = elt("input", { id: "expr", type: "text", list: "fpresets", spellcheck: "false", autocomplete: "off" });
+  const exprCtl = elt("div", { class: "control control-wide" });
+  exprCtl.append(elt("label", { for: "expr" }, "f(z) ="), exprInput, exprList);
+
+  const truncInput = elt("input", { id: "trunc", type: "range", min: String(MIN_TRUNCATION), max: String(MAX_TRUNCATION), step: "1" });
+  const truncLabel = elt("label", { for: "trunc" }, "series order N");
+  const truncCtl = elt("div", { class: "control" });
+  truncCtl.append(truncLabel, truncInput);
+
+  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl);
   root.append(controls);
 
   const readout = elt("div", { class: "readout" });
@@ -212,9 +249,81 @@ function main(): void {
   readout.append(exactBadge, readoutBody);
   root.append(readout);
 
-  // GPU renderers (null ⇒ CPU fallback). Created after the panels are in the DOM (need a sized canvas).
   left.panel.renderer = createGpuRenderer(left.panel.gl, PANEL_BG);
   right.panel.renderer = createGpuRenderer(right.panel.gl, PANEL_BG);
+
+  // --- Model (depends on φ + input, NOT the views, so pan/zoom skips the recompute) -----------------
+  let model: RenderModel | null = null;
+  let modelKey = "";
+
+  function computeModel(): RenderModel {
+    const preset = phiPresetById(state.phi);
+    const map = preset.build(state.shape);
+    const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
+    const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
+
+    if (state.input.kind === "monomial") {
+      const n = state.input.degree;
+      const coeffs = transformCoeffs(map, monomialTaylor(n));
+      return {
+        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, mask: true, curves: [diskCurve], markers: [] },
+        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, mask: false, curves: [kCurve], markers: [] },
+        badge: "=",
+        readout: `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`,
+        error: false,
+      };
+    }
+    if (state.input.kind === "pole") {
+      const z0: Cx = { re: state.input.re, im: state.input.im };
+      const order = state.input.order;
+      const img = poleImage(map, z0, order);
+      const kexp = order === 1 ? "" : `^${order}`;
+      return {
+        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, mask: true, curves: [diskCurve], markers: [] },
+        right: {
+          source: { kind: "rational", rat: poleImageRational(img, order) },
+          mask: false,
+          curves: [kCurve],
+          markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
+        },
+        badge: "=",
+        readout:
+          `Φφ(1/(z−z₀)${kexp})(w): image pole at w = φ(z₀) = ${fmt(img.poleAt)}` +
+          (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : ""),
+        error: false,
+      };
+    }
+    // expr
+    const compiled = compileExprF(state.input.expr);
+    if ("error" in compiled) {
+      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, mask: false, curves: [], markers: [] };
+      return { left: blank, right: blank, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
+    }
+    const N = state.input.N;
+    const bRaw = taylorViaFFT(compiled.fn, N);
+    const b = trimTail(bRaw); // drop the noise-dominated tail before summing
+    const effN = b.length - 1;
+    const poly = transformCoeffs(map, b);
+    const R = radiusOfConvergence(bRaw);
+    const rightCurves: Curve[] = [kCurve];
+    let rNote: string;
+    if (!Number.isFinite(R)) {
+      rNote = "f entire — the series converges throughout";
+    } else if (R < 1) {
+      rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
+    } else {
+      if (R <= 60) rightCurves.push({ pts: mapCircle(map, R), color: EQUIPOTENTIAL_COLOR, width: 1.6, dash: [6, 5] });
+      rNote = `R ≈ ${R.toFixed(3)} — trustworthy inside the dashed equipotential Γ_R`;
+    }
+    const orderNote = effN < N ? ` (coefficients past n=${effN} are below the noise floor)` : "";
+    return {
+      left: { source: { kind: "fn", g: compiled.fn }, mask: true, curves: [diskCurve], markers: [] },
+      right: { source: { kind: "rational", rat: polynomialRational(poly) }, mask: false, curves: rightCurves, markers: [] },
+      badge: "≈",
+      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ${orderNote}   ·   ${rNote}`,
+      error: false,
+    };
+  }
 
   function syncControls(): void {
     const preset = phiPresetById(state.phi);
@@ -229,15 +338,17 @@ function main(): void {
       shapeCtl.style.display = "none";
     }
     modeSel.value = state.input.kind;
-    const isMono = state.input.kind === "monomial";
-    degCtl.style.display = isMono ? "" : "none";
-    rCtl.style.display = isMono ? "none" : "";
-    thCtl.style.display = isMono ? "none" : "";
-    orderCtl.style.display = isMono ? "none" : "";
+    const kind = state.input.kind;
+    degCtl.style.display = kind === "monomial" ? "" : "none";
+    rCtl.style.display = kind === "pole" ? "" : "none";
+    thCtl.style.display = kind === "pole" ? "" : "none";
+    orderCtl.style.display = kind === "pole" ? "" : "none";
+    exprCtl.style.display = kind === "expr" ? "" : "none";
+    truncCtl.style.display = kind === "expr" ? "" : "none";
     if (state.input.kind === "monomial") {
       degInput.value = String(state.input.degree);
       degLabel.textContent = `degree n = ${state.input.degree}`;
-    } else {
+    } else if (state.input.kind === "pole") {
       const { re, im, order } = state.input;
       rInput.value = String(Math.hypot(re, im));
       let th = Math.atan2(im, re);
@@ -246,52 +357,33 @@ function main(): void {
       orderSel.value = String(order);
       rLabel.textContent = `|z₀| = ${Math.hypot(re, im).toFixed(2)}`;
       thLabel.textContent = `arg z₀ = ${th.toFixed(2)}`;
+    } else {
+      if (document.activeElement !== exprInput) exprInput.value = state.input.expr;
+      truncInput.value = String(state.input.N);
+      truncLabel.textContent = `series order N = ${state.input.N}`;
     }
   }
 
   function render(): void {
-    const preset = phiPresetById(state.phi);
-    const map = preset.build(state.shape);
-
-    if (state.input.kind === "monomial") {
-      const n = state.input.degree;
-      paintPanel(left.panel, state.zView, polynomialRational(monomialTaylor(n)), true, unitCircle(), "rgba(255,255,255,0.55)", []);
-      const coeffs = transformCoeffs(map, monomialTaylor(n));
-      paintPanel(right.panel, state.wView, polynomialRational(coeffs), false, boundaryK(map), "rgba(255,255,255,0.75)", []);
-      readoutBody.textContent = `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`;
-    } else {
-      const z0: Cx = { re: state.input.re, im: state.input.im };
-      const order = state.input.order;
-      paintPanel(left.panel, state.zView, poleInputRational(z0, order), true, unitCircle(), "rgba(255,255,255,0.55)", []);
-      const img = poleImage(map, z0, order);
-      paintPanel(
-        right.panel,
-        state.wView,
-        poleImageRational(img, order),
-        false,
-        boundaryK(map),
-        "rgba(255,255,255,0.75)",
-        [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
-      );
-      const kexp = order === 1 ? "" : `^${order}`;
-      readoutBody.textContent =
-        `Φφ(1/(z−z₀)${kexp})(w): image pole at w = φ(z₀) = ${fmt(img.poleAt)}` +
-        (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : "");
+    const key = JSON.stringify({ phi: state.phi, shape: state.shape, input: state.input });
+    if (key !== modelKey || model === null) {
+      model = computeModel();
+      modelKey = key;
     }
+    exactBadge.textContent = model.badge;
+    readoutBody.textContent = model.readout;
     syncControls();
+    if (model.error) return; // keep the last good render; show the parse error
+    paintPanel(left.panel, state.zView, model.left);
+    paintPanel(right.panel, state.wView, model.right);
   }
 
-  // Update state + repaint immediately; write the permalink on a trailing debounce so a drag / slider
-  // sweep doesn't thrash history.replaceState.
   let hashTimer = 0;
   function commit(next: FaberViewState): void {
     state = next;
     render();
     if (hashTimer) window.clearTimeout(hashTimer);
-    hashTimer = window.setTimeout(
-      () => history.replaceState(null, "", encodeFaberState(state)),
-      200,
-    );
+    hashTimer = window.setTimeout(() => history.replaceState(null, "", encodeFaberState(state)), 200);
   }
 
   // --- Pan / zoom (per panel; the overlay canvas is on top and receives pointer events) --------------
@@ -299,17 +391,9 @@ function main(): void {
   const withView = (which: "zView" | "wView", vp: Viewport): FaberViewState =>
     which === "zView" ? { ...state, zView: vp } : { ...state, wView: vp };
 
-  function pointerFrac(canvas: HTMLCanvasElement, e: PointerEvent | WheelEvent): {
-    fx: number;
-    fyTop: number;
-    aspect: number;
-  } {
+  function pointerFrac(canvas: HTMLCanvasElement, e: PointerEvent | WheelEvent): { fx: number; fyTop: number; aspect: number } {
     const r = canvas.getBoundingClientRect();
-    return {
-      fx: (e.clientX - r.left) / Math.max(1, r.width),
-      fyTop: (e.clientY - r.top) / Math.max(1, r.height),
-      aspect: r.width / Math.max(1, r.height),
-    };
+    return { fx: (e.clientX - r.left) / Math.max(1, r.width), fyTop: (e.clientY - r.top) / Math.max(1, r.height), aspect: r.width / Math.max(1, r.height) };
   }
 
   function attachNav(canvas: HTMLCanvasElement, which: "zView" | "wView"): void {
@@ -344,6 +428,7 @@ function main(): void {
   attachNav(left.panel.ov, "zView");
   attachNav(right.panel.ov, "wView");
 
+  // --- Control events -------------------------------------------------------
   phiSel.addEventListener("change", () => {
     const preset = phiPresetById(phiSel.value);
     commit({
@@ -355,7 +440,8 @@ function main(): void {
   });
   shapeInput.addEventListener("input", () => commit({ ...state, shape: Number(shapeInput.value) }));
   modeSel.addEventListener("change", () => {
-    const kind = modeSel.value === "pole" ? "pole" : "monomial";
+    const k = modeSel.value;
+    const kind = k === "pole" ? "pole" : k === "expr" ? "expr" : "monomial";
     commit({ ...state, input: defaultInput(kind) });
   });
   degInput.addEventListener("input", () => {
@@ -373,6 +459,21 @@ function main(): void {
   rInput.addEventListener("input", commitPole);
   thInput.addEventListener("input", commitPole);
   orderSel.addEventListener("change", commitPole);
+
+  let exprTimer = 0;
+  function commitExpr(): void {
+    if (state.input.kind !== "expr") return;
+    const expr = exprInput.value.slice(0, MAX_EXPR_LEN);
+    const N = state.input.N;
+    if (exprTimer) window.clearTimeout(exprTimer);
+    exprTimer = window.setTimeout(() => commit({ ...state, input: { kind: "expr", expr, N } }), 180);
+  }
+  exprInput.addEventListener("input", commitExpr);
+  truncInput.addEventListener("input", () => {
+    if (state.input.kind !== "expr") return;
+    const N = Math.max(MIN_TRUNCATION, Math.min(MAX_TRUNCATION, Math.round(Number(truncInput.value))));
+    commit({ ...state, input: { kind: "expr", expr: state.input.expr, N } });
+  });
   window.addEventListener("resize", render);
 
   history.replaceState(null, "", encodeFaberState(state));

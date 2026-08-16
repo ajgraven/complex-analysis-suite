@@ -204,10 +204,18 @@ none of which v1 blocks:
   $\partial K$/$\partial\mathbb{D}$/$\Gamma_R$ overlays. Curated presets: interval, ellipse $z+m/z$ (one
   clamped slider), $k$-cusped star, general $m$-fold — each with its clamped shape control. Exact rational
   path (simple + higher poles, `=`). *Gate: preset gallery renders; rational images match closed form.*
-- **M3 — Free-form + numeric.** `@cas/expr` free-form $f$; FFT coefficient path with truncation
-  **$N=32$ default, user-adjustable up to a cap (~128)** surfacing the `polynomialRoots` non-convergence
-  warning; `≈` labeling + $\Gamma_R$ masking. Transcendental presets ($e^{1/z}$, etc.). *Gate: series vs
-  closed-form agree inside $\Gamma_R$ within tolerance on rational $f$.*
+- **M3 — Free-form + numeric — DONE.** A third **input mode**: free-form `f(z)` via `@cas/expr`
+  (`compileExprF` → JS evaluator), with a datalist of unit-disk-analytic presets and an `N` slider
+  (default 32, cap 128). The left panel CPU-renders `f`; the right panel GPU-renders the truncated series
+  `Σ_{n≤N} bₙ Fₙ`. Coefficients come from `taylorViaFFT` (DFT of samples on `|z|=0.9`); `trimTail` drops the
+  noise-dominated tail before summing (a coefficient at the ~1e-14 roundoff floor times a geometrically
+  growing `Fₙ` is O(1) garbage — the tests caught it); `radiusOfConvergence` estimates `R` from index-gap
+  coefficient ratios (robust for lacunary/even series and prefactor-unbiased), reported as `∞` for entire
+  `f`. The convergence equipotential `Γ_R = φ({|z|=R})` is drawn dashed; the `=`/`≈` badge flips to `≈`,
+  parse errors show `⚠`. **Gate met:** a package test pins `Σ bₙ Fₙ` for `1/(z−2)` against the M2 exact
+  pole image inside `Γ_R`. Verified in-browser: `1/(z−2)` draws the Bernstein ellipse `Γ₂` with the series
+  smooth inside and honestly diverging (rainbow) outside; `exp(z)` reads "entire" (trimmed to n≤13);
+  `1/(1+z²/4)` recovers `R≈2`. 29 app tests; typecheck/lint clean.
 - **M4 — Polish, share-links, provenance.** viewState `#vs=` codec, PNG export metadata, KaTeX formula
   readouts, glossary, **Faber-root overlay (in v1)** as a toggle. Launcher tile as **"Coming soon"**
   (unpublished, per §12); publish only on the author's go.

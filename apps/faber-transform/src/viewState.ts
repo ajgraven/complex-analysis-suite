@@ -23,14 +23,15 @@ export interface Viewport {
 }
 
 /**
- * The input function f on the unit disk. Two exact families:
- *   - monomial:  f(z) = zⁿ                     → Φφ(f) = Fₙ (polynomial, exact)
- *   - pole:      f(z) = 1/(z−z₀)^order, |z₀|>1 → Φφ(f) = closed-form rational image (exact)
- * (Free-form @cas/expr input with the truncated-series path arrives at M3.)
+ * The input function f on the unit disk. Three families:
+ *   - monomial:  f(z) = zⁿ                     → Φφ(f) = Fₙ (polynomial, exact `=`)
+ *   - pole:      f(z) = 1/(z−z₀)^order, |z₀|>1 → Φφ(f) = closed-form rational image (exact `=`)
+ *   - expr:      free-form f(z) via @cas/expr  → Φφ(f) ≈ Σ_{n≤N} bₙ Fₙ (truncated series, `≈`)
  */
 export type InputState =
   | { readonly kind: "monomial"; readonly degree: number }
-  | { readonly kind: "pole"; readonly re: number; readonly im: number; readonly order: number };
+  | { readonly kind: "pole"; readonly re: number; readonly im: number; readonly order: number }
+  | { readonly kind: "expr"; readonly expr: string; readonly N: number };
 
 /** Bounds so a crafted permalink can't request a runaway-degree Faber build. */
 export const MIN_DEGREE = 0;
@@ -38,6 +39,11 @@ export const MAX_DEGREE = 40;
 /** Pole magnitude bounds: strictly outside the unit disk, and finite. */
 export const MIN_POLE_R = 1.0001;
 export const MAX_POLE_R = 1000;
+/** Truncation-order bounds for the free-form series path. */
+export const MIN_TRUNCATION = 1;
+export const MAX_TRUNCATION = 128;
+/** Max length of a free-form expression carried in a permalink (a crafted-link safety bound). */
+export const MAX_EXPR_LEN = 256;
 
 export type FaberViewState = {
   /** Exterior-map preset id (see presets.ts). */
@@ -89,6 +95,15 @@ function isInputState(input: Record<string, unknown> | undefined): boolean {
     const r = Math.hypot(input.re as number, input.im as number);
     if (!(r >= MIN_POLE_R && r <= MAX_POLE_R)) return false;
     return input.order === 1 || input.order === 2;
+  }
+  if (input.kind === "expr") {
+    if (typeof input.expr !== "string" || input.expr.length === 0 || input.expr.length > MAX_EXPR_LEN) {
+      return false;
+    }
+    const n = input.N;
+    return (
+      Number.isFinite(n) && Number.isInteger(n) && (n as number) >= MIN_TRUNCATION && (n as number) <= MAX_TRUNCATION
+    );
   }
   return false;
 }
