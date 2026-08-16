@@ -1,10 +1,14 @@
 # Schwarz–Christoffel — research notes (working)
 
+> **Status (2026-08): the engine is built** — roadmap step E landed (see the
+> [build plan](schwarz-christoffel-plan.md)'s `v1 COMPLETE` banner), and the method-choice decision is now
+> [ADR-0020](../DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode).
+> The scoping notes below are preserved as the *pre-build* survey record.
+>
 > Working notes gathered while scoping the Schwarz–Christoffel (SC) engine for
-> [`@cas/conformal`](../../packages/conformal) (roadmap step E; the anticipated second consumer
-> ADR-0018 pre-committed a home for). Source: a four-thread literature + implementation survey
-> and codebase investigation, 2026-08. These feed the [build plan](schwarz-christoffel-plan.md).
-> Not yet an ADR — the method-choice ADR is written at the first gate (see the plan §7).
+> [`@cas/conformal`](../../packages/conformal) (roadmap step E; the second consumer ADR-0018 pre-committed a
+> home for). Source: a four-thread literature + implementation survey and codebase investigation, 2026-08.
+> These fed the [build plan](schwarz-christoffel-plan.md).
 
 Convention used throughout: interior angle at vertex `k` is `αₖ·π` with `αₖ ∈ (0,2)`; the SC
 exponent is `αₖ − 1`; the **turning exponent** is `βₖ = 1 − αₖ`. Convex corner ⇒ `0<αₖ<1`;

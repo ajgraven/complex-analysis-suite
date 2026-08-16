@@ -165,11 +165,16 @@ corner-clustered poles, and the forward map g: 𝔻 → Ω. Built on `@cas/core`
 least squares (`lstsqHouseholder`), lifted into the numeric kernel from RM's `solve/` in the same step.
 Convention-neutral (ADR-0006). It is **the one package extracted *before* a second consumer proved it needed
 one** — a deliberate exception to ADR-0007
-([ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)) — so the coming
-Schwarz–Christoffel engine (roadmap step E) has a home to be born into. Consumer today: the Riemann-map studio
-(its numerical region-map source). The near-twin least-squares solver in Quadrature Domains is the *anticipated*
-second consumer of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on
-rank-deficiency policy — see ADR-0018).
+([ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)) — so the
+Schwarz–Christoffel engine (roadmap step E) had a home to be born into. That engine is now **built into the
+package** as its second engine — Gauss–Jacobi quadrature (`gaussJacobi.ts`/`scQuadrature.ts`), the SC
+forward/inverse maps (`schwarzChristoffel.ts`), the parameter solver (`scParameterProblem.ts`, uniform cold start by default, warm-startable),
+and the two-mode `fitSchwarzChristoffel` surface (`scMap.ts`) — retro-justifying the ahead-of-demand extract
+([ADR-0020](DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)). Consumers
+today: the Riemann-map studio — the lightning builder for smooth region maps, and the SC engine for polygon
+(`corners`) domains. The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
+of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on rank-deficiency policy —
+see ADR-0018).
 
 ### `@cas/quadrature` — domain package *(planned — not built)*
 Would hold the Faber-transform machinery; the inverse solvers (classical/log-weighted/power,

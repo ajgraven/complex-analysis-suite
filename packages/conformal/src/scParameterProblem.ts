@@ -6,9 +6,10 @@
 // angular gaps through a softmax (ordering by construction — Trefethen 1980's constraint elimination),
 // with 3 gap-logits FROZEN at the seed to fix the 3-dim disk-automorphism gauge. The n−1 side-ratio
 // residuals are driven to zero by damped Gauss–Newton — each step a finite-difference Jacobian and one
-// @cas/core `lstsqHouseholder` least-squares solve — seeded by an explicit prevertex guess (the
-// lightning fit, wired in Phase 3) or a uniform cold start. Pure; node-tested against closed-form
-// polygons (a regular n-gon from a skewed seed; a reentrant L-shape).
+// @cas/core `lstsqHouseholder` least-squares solve. The seed defaults to a uniform cold start (robust on
+// its own); an explicit prevertex guess may be passed (Phase 3 forwards a warm-start / prior fast solve
+// here). Pure; node-tested against closed-form polygons (a regular n-gon from a skewed seed; a reentrant
+// L-shape).
 import { lstsqHouseholder } from "@cas/core";
 import type { C } from "./vandermondeArnoldi.js";
 import { sideIntegrals, type SCQuadratureOptions } from "./schwarzChristoffel.js";
@@ -47,7 +48,7 @@ export interface SCSolveResult {
 }
 
 export interface SCSolveOptions extends SCQuadratureOptions {
-  /** Initial prevertex guess (else a uniform cold start); Phase 3 passes the lightning fit here. */
+  /** Initial prevertex guess (else a uniform cold start); Phase 3 forwards a warm-start / prior fast solve here. */
   seedPrevertices?: readonly C[];
   /** Stop tolerance on ‖F‖∞ (default 1e-11). */
   tol?: number;

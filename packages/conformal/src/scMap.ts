@@ -1,13 +1,15 @@
 // scMap.ts — the public Schwarz–Christoffel surface (roadmap step E, Phase 3): fitSchwarzChristoffel,
-// wiring Option A (ADR-0019). Two modes share one honestly-flagged result type:
+// wiring Option A (ADR-0020). Two modes share one honestly-flagged result type:
 //
 //   fast    = the existing lightning engine — sample the polygon boundary, fit f: Ω → 𝔻 with
 //             corner-clustered poles, read the prevertices wₖ = f(vₖ)/|f(vₖ)| for free, and render
 //             via the lightning forward map g: 𝔻 → Ω. Instant, warm-startable, ≈-labelled; no
 //             nonlinear solve. converged: false by nature.
-//   precise = the classical parameter solve (scParameterProblem), SEEDED by the fast prevertices,
-//             then the exact SC forward map (buildForwardMap). ≥12 digits; converged when it reaches
-//             tolerance. This is the lightning-seeded SC thesis.
+//   precise = the classical parameter solve (scParameterProblem) from a uniform cold start — robust to
+//             machine precision on convex AND reentrant polygons — followed by the exact SC forward map
+//             (buildForwardMap). Passing a `warmStart` (a prior or fast solve) seeds the solve instead:
+//             the lightning-seeded "drag with lightning, release to refine" continuation path (ADR-0020).
+//             ≥12 digits; converged when it reaches tolerance.
 //
 // Outputs: prevertices, the accessory constants C (= f′(0)) and A (= f(0), the conformal centre),
 // the conformal modulus for the quadrilateral case, and an honest residual. Pure; node-tested.

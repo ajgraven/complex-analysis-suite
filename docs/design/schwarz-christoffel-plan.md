@@ -74,10 +74,17 @@ PRECISE: seed the SC parameter problem with those zₖ  →  Gauss–Newton (eac
         →  the exact SC integral map  (≥12 digits, converged, meaningful prevertices/A/C)
 ```
 
-Natural UX (when the app wires it later): **drag with lightning, release → SC refine.** The
+Natural UX (now wired in the app): **drag with lightning, release → SC refine.** The
 representational seam — fast reports lightning's *approximate* prevertices, precise reports the
 *SC-solved* ones — is made honest by a `converged` flag and the `≈` residual (§1.5), never hidden.
 Rationale and the rejected alternative (one SC engine at two tolerances) are the ADR-0020 record (§7).
+
+> **Shipped refinement (as built):** the precise mode's *default* seed is a **uniform cold start**, not
+> the lightning prevertices — the parameter solve is robust to machine precision from uniform on convex
+> **and** reentrant polygons, and cold-starting sidesteps a lightning-seed stall on strongly reentrant
+> shapes. The lightning zₖ instead feed precise **through `warmStart`** (the "release → refine"
+> continuation above), so the lightning-seeded path is opt-in rather than the default. Matches ADR-0020's
+> "seeded via `warmStart` by a fast/prior solve."
 
 ### 1.2 The one new primitive stays in `@cas/conformal` (ADR-0007)
 
