@@ -76,16 +76,26 @@ image of $1/(z-z_0)^m$ is $\sum_{j=1}^{m}$ (Bell-polynomial in $\varphi',\dots,\
 `partialFractions` helper (or lift `@cas/core`'s). This **subsumes the current pole mode** and makes the
 UI's "pole" input just a special case of "type any rational $f(z)$".
 
-## 3. Arbitrary **analytic** input (the general case)
+## 3. Arbitrary **analytic** input (the general case) — DONE
 
-The truncated-series path already handles transcendental $f$; the work here is accuracy + honesty, not new
-machinery:
-- **Coefficients:** adaptive sample radius $r\to$ push toward the nearest singularity for faster decay;
-  optionally symbolic Taylor for the standard library (`exp`, `sin`, …) to skip FFT noise entirely.
+Accuracy + honesty for the free-form path, both feeding the same truncated Faber sum $\sum_{n\le N}b_nF_n$:
+- **Exact coefficients (`src/series.ts`).** A power-series (Taylor-mode) evaluator walks the `@cas/expr` AST
+  in the ring $\mathbb{C}[[z]]/(z^{N+1})$: every node maps to a coefficient array, and
+  `exp`/`log`/`sin`/`cos`/`tan`/`sinh`/`cosh`/`tanh`/`sqrt`/powers each carry an exact recurrence, so $b_n$
+  come out exact to floating point — **no sampling, no aliasing, no noise floor**. This subsumes "symbolic
+  Taylor for the standard library" and goes further: *any composition* of the supported operations is exact
+  (e.g. `exp(z)/(z−3)` is handled in closed form, $R$ auto-detected). Returns `null` — deferring to the FFT
+  — for a construct without an exact rule (special functions, the non-analytic `re`/`im`/`abs`/`conjugate`,
+  comparisons/`if`, or a `log`/`sqrt`/reciprocal on a zero constant term).
+- **Adaptive sample radius (`taylorAdaptive`).** The FFT fallback probes at $r=0.9$, estimates $R$, and
+  re-samples at Bornemann's optimum $r^*=R\,\varepsilon^{1/M}$ — pushing the circle toward the nearest
+  singularity ($r^*$ may exceed 1), balancing aliasing $\sim(r/R)^M$ against the roundoff amplification
+  $\sim\varepsilon(R/r)^N$ that wrecks the high-order tail at a fixed small radius. Entire $f$ keeps the probe.
 - **Domain honesty:** with request 1 masking to $K$ (well inside $\Gamma_R$), the shown region is where the
-  truncation converges fastest — the `≈` is trustworthy by construction.
-- **Detect rational → route to §2** automatically (exact when `fToRational` succeeds, `≈` otherwise), so the
-  user just types $f(z)$ and gets the exact result whenever it's available.
+  truncation converges fastest — the `≈` is trustworthy by construction; the readout labels which path
+  produced the coefficients (`exact Taylor coefficients` vs `coefficients by adaptive FFT sampling`).
+- **Detect rational → route to §2** automatically (exact when `fToRational` succeeds), so the user just
+  types $f(z)$ and gets the exact rational image whenever it is available.
 
 ## 4. Visualization modes beyond domain coloring
 
@@ -130,7 +140,8 @@ hardcodes** — exposing them is nearly free:
 - **Phase B — arbitrary rational, exact (§2).** The `@cas/faber` order-$m$ + partial-fraction work; the
   "pole" UI mode becomes "type any rational."
 - **Phase C — 3-D surface + Riemann sphere (4b, 4c).** Extract the plotter's `render3d` into `@cas/gpu`.
-- **Phase D — conformal-grid transport (4e), streamlines (4f), polish.** Arbitrary-analytic accuracy (§3).
+- **Phase D — conformal-grid transport (4e), streamlines (4f), polish.** *(Arbitrary-analytic accuracy §3
+  is DONE — the exact power-series evaluator + adaptive-radius FFT landed alongside Phase A.)*
 
 ## Open decisions ◇
 
@@ -141,4 +152,6 @@ hardcodes** — exposing them is nearly free:
   → asked separately.
 - **$\Gamma_R$ once masked to $K$:** keep as a faint reference or drop.
 - **Viz priority:** which of 4a–4f first (my default: 4a now, 4b/4c next).
-- **Arbitrary analytic:** is the truncated series enough, or is symbolic/enhanced coefficient extraction wanted?
+- **Arbitrary analytic:** ~~is the truncated series enough, or is symbolic/enhanced coefficient extraction
+  wanted?~~ **Resolved (§3): both** — an exact power-series evaluator for the closed-form analytic library
+  and an adaptive-radius FFT for everything else.
