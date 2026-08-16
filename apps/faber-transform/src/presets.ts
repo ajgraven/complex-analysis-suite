@@ -133,6 +133,9 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
   polygonPreset("rectangle", "Rectangle 2 : 1", [[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 1.7),
   polygonPreset("iso-triangle", "Tall isosceles triangle", [[0, 1.4], [-0.7, -0.7], [0.7, -0.7]], 1.7),
   polygonPreset("house", "House pentagon", [[1, -0.6], [1, 0.5], [0, 1.2], [-1, 0.5], [-1, -0.6]], 1.7),
+  // Reentrant (M2): the L-shape has one corner with interior angle 3π/2 (α = 1.5) — its exterior exponent
+  // 1−α = −0.5 is singular but integrable, and adaptive truncation keeps enough terms for a sharp notch.
+  polygonPreset("lshape", "L-shape (reentrant)", [[-0.8, -0.8], [0.8, -0.8], [0.8, 0], [0, 0], [0, 0.8], [-0.8, 0.8]], 1.7),
 ];
 
 /** The presets shown in the domain menu — the non-degenerate (2-D interior) ones. */

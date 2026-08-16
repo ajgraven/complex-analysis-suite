@@ -105,7 +105,7 @@ describe("presets", () => {
 
 describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () => {
   it("builds a valid ExteriorMap for a rectangle (positive capacity, finite, drives the recurrence)", () => {
-    const result = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 60);
+    const result = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]);
     expect(result.converged).toBe(true);
     expect(result.degraded).toBe(false);
     const m = result.map;
@@ -122,9 +122,21 @@ describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () 
 
   it("registers the general-polygon presets in the menu, all approximate", () => {
     const ids = MENU_PRESETS.map((p) => p.id);
-    for (const id of ["rectangle", "iso-triangle", "house"]) {
+    for (const id of ["rectangle", "iso-triangle", "house", "lshape"]) {
       expect(ids).toContain(id);
       expect(phiPresetById(id).approximate).toBe(true);
     }
+  });
+
+  it("reentrant L-shape converges and adaptive truncation keeps more terms than a convex polygon", () => {
+    const lshape = polygonMap([[-0.8, -0.8], [0.8, -0.8], [0.8, 0], [0, 0], [0, 0.8], [-0.8, 0.8]]);
+    expect(lshape.converged).toBe(true);
+    const square = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]);
+    // The reentrant corner's slow coefficient decay ⇒ the trimmed series is materially longer.
+    expect(lshape.map.laurent.length).toBeGreaterThan(square.map.laurent.length);
+    expect(lshape.map.laurent.length).toBeGreaterThan(120);
+    // Faber transform of z³ still runs on the reentrant domain.
+    const roots = polynomialRoots(faberTransform(lshape.map, monomialTaylor(3)));
+    expect(roots.converged).toBe(true);
   });
 });

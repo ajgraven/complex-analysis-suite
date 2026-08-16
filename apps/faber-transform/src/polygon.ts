@@ -52,20 +52,44 @@ export interface PolygonMapResult {
   readonly residual: number;
 }
 
+/** Options for {@link polygonMap}. */
+export interface PolygonMapOptions {
+  /** Cap on the Laurent extraction order before adaptive trimming (default 400). */
+  readonly maxOrder?: number;
+  /** Keep coefficients until the tail falls below this fraction of the peak magnitude (default 1e-4). */
+  readonly tailTol?: number;
+  /** Always keep at least this many coefficients (Faber-degree coverage; default 48). */
+  readonly minOrder?: number;
+}
+
 /**
- * The exterior map φ: 𝔻* → Ω of an ARBITRARY bounded simple polygon (M1b), as a truncated Laurent series
+ * The exterior map φ: 𝔻* → Ω of an ARBITRARY bounded simple polygon (M1b/M2), as a truncated Laurent series
  * for the @cas/faber ExteriorMap contract. Fits the exterior Schwarz–Christoffel map (`@cas/conformal`) —
- * solving for the prevertices — then extracts φ's Laurent-at-∞ coefficients (leading c = capacity, tail
- * centred at the conformal centre, rotated so c is real). Vertices are `[x, y]` counter-clockwise. The
- * result is ≈ (numerical solve + truncated series); Faber polynomials up to degree `order` are unaffected
- * by the truncation, so low-degree images are effectively exact. The fit's `converged`/`degraded`/`residual`
- * tags are returned (not discarded) so a caller — e.g. a future polygon editor — can surface a bad fit.
+ * solving for the prevertices, reentrant corners (αₖ>1) included — then extracts φ's Laurent-at-∞
+ * coefficients (leading c = capacity, tail centred at the conformal centre, rotated so c is real). Vertices
+ * are `[x, y]` counter-clockwise.
+ *
+ * **Adaptive truncation (M2):** reentrant/sharp corners give algebraically-decaying coefficients, so the
+ * series is extracted generously and then trimmed to the last coefficient above `tailTol·max` (a sharp
+ * boundary) — convex polygons trim to a few dozen terms, an L-shape keeps a few hundred. Faber polynomials
+ * up to `minOrder` are always covered and are unaffected by the truncation, so low-degree images stay exact.
+ * The fit's `converged`/`degraded`/`residual` tags are returned so a caller (e.g. the M2 editor) can surface
+ * a bad fit.
  */
-export function polygonMap(vertices: readonly (readonly [number, number])[], order = 140): PolygonMapResult {
+export function polygonMap(vertices: readonly (readonly [number, number])[], opts?: PolygonMapOptions): PolygonMapResult {
+  const maxOrder = opts?.maxOrder ?? 400;
+  const tailTol = opts?.tailTol ?? 1e-4;
+  const minOrder = opts?.minOrder ?? 48;
   const fit = fitExteriorSchwarzChristoffel(vertices.map((v) => [v[0], v[1]] as [number, number]));
-  const { c, laurent } = exteriorMapLaurentAtInfinity(fit, order);
+  const { c, laurent } = exteriorMapLaurentAtInfinity(fit, maxOrder);
+  // Trim the slowly-decaying tail: keep up to the last index above tailTol·max, but at least minOrder.
+  const mag = laurent.map((z) => Math.hypot(z[0], z[1]));
+  const peak = Math.max(...mag, Number.MIN_VALUE);
+  let last = Math.min(minOrder, laurent.length - 1);
+  for (let k = 0; k < laurent.length; k++) if (mag[k] > tailTol * peak) last = Math.max(last, k);
+  const kept = laurent.slice(0, last + 1);
   return {
-    map: { c, laurent: laurent.map(([r, i]): Cx => ({ re: r, im: i })) },
+    map: { c, laurent: kept.map(([r, i]): Cx => ({ re: r, im: i })) },
     converged: fit.converged,
     degraded: fit.degraded,
     residual: fit.residual,
