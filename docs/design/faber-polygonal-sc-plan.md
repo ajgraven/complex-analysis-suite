@@ -148,9 +148,10 @@ Reentrant corners (αₖ>1) and a draggable editor are **M2**.
   (a side-length-proportional gap seed + the uniform cold start), keeping the lowest-residual result — every
   cyclic rotation now converges (regression-tested).
 
-M2 is complete; **M3** (corner-suppressing weighted Faber `Q_{n,m}`) is de-risked (spike below) and next.
+M2 is complete; **M3** (corner-suppressing weighted Faber `Q_{n,m}`) is DONE — engine, app toggle, and the
+before/after demo (details below).
 
-### M3 — Corner-suppressing weighted Faber `Q_{n,m}`
+### M3 — Corner-suppressing weighted Faber `Q_{n,m}` (DONE)
 
 **Construction (Miña-Díaz–Rubin–Wennman 2025, eq. 1.9–1.10).** `Q_{n,m}` = polynomial part of
 `G_m(z)·φ(z)ⁿ`, where `G_m(z) = ∏ₖ (1 − φ(zₖ)/φ(z))^{1/m}` is analytic in Ω with `G_m(∞)=1`. It has the
@@ -195,12 +196,15 @@ Gate passed: M3 rides entirely on existing primitives — no new package, no new
   through `Q_{n,m}` (badge stays `≈`, readout shows `Q_{n,m}(w) = …`); the toggle + `m` round-trip in the
   `#vs=` permalink (guarded). Browser-verified on the square (toggle → flatter K-image, `w¹²` leading term
   preserved; toggle hidden for pole/expr inputs).
-- **M3.3 — before/after demo.** Overlay `|Fₙ|` vs `|Q_{n,m}|` along `∂K` (paper Fig. 2 style), reusing the
-  M2 corner-norm annotations.
+- **M3.3 — before/after demo — DONE.** A profile panel (`render/cornerProfile.ts`) plots `|Fₙ|` along `∂K`
+  (paper Fig. 2 style) with `|Q_{n,m}|` overlaid when suppressing, plus the smooth-arc floor `y=1` and the
+  M2 corner-norm reference line `y=Λ`. Shown for a monomial input on a polygonal K; browser-verified (the
+  gray `|Fₙ|` spikes at the corners flatten toward 1 under the blue `|Q_{n,m}|`).
 
-Still `≈`-labeled (rides the truncated SC map — an approximation-quality gain, not an exactness one). The
-old "optional lightning fast-mode" is dropped from M3 (unrelated to `Q_{n,m}`, low-value now the multi-seed
-solver is robust) and left as a standalone deferred item.
+M3 is complete (Q_{n,m} engine + app toggle + before/after demo). Still `≈`-labeled (rides the truncated SC
+map — an approximation-quality gain, not an exactness one). The old "optional lightning fast-mode" was dropped
+from M3 (unrelated to `Q_{n,m}`, low-value now the multi-seed solver is robust) and left as a standalone
+deferred item. **T2.3 is now fully DONE (M1a + M1b + M2 + M3).**
 
 ## 6. Integration details & honesty guardrails
 

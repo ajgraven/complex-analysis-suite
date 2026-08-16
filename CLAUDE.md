@@ -163,9 +163,12 @@ solve, sharing the `gaussNewton.ts` driver with the interior solver + a Laurent-
 adaptive Laurent truncation, per-corner norm annotations `Λₖ = max{αₖ, 2−αₖ}`, and a draggable-vertex polygon
 editor. This is `@cas/conformal`'s **second SC family** (exterior alongside ADR-0020's interior), and Faber
 Transform is the exterior engine's sole consumer (ADR-0007). Polygon domains are honestly `≈`-labeled;
-degenerate/failed fits render `⚠` with blank panels. Plan:
-[`docs/design/faber-polygonal-sc-plan.md`](docs/design/faber-polygonal-sc-plan.md); the **M3** corner-suppressing
-weighted Faber `Q_{n,m}` toggle remains deferred.
+degenerate/failed fits render `⚠` with blank panels. **M3** adds the corner-**suppressing** weighted Faber
+polynomials `Q_{n,m}` — a `@cas/faber` engine (`weightedFaberPolynomial`, `Q_{n,m} = Σⱼ gⱼ F_{n−j}`, no new
+numerics: the weight `G_m = ∏(1−w_k/φ)^{1/m}` rides the SC prevertices `w_k = 1/u_k` and the existing `F_n`),
+an app toggle + strength slider (monomial inputs on a polygonal K), and a before/after `|Fₙ|` vs `|Q_{n,m}|`
+boundary-overshoot profile (paper Fig. 2). T2.3 is complete (M1a + M1b + M2 + M3). Plan:
+[`docs/design/faber-polygonal-sc-plan.md`](docs/design/faber-polygonal-sc-plan.md).
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),

@@ -47,6 +47,8 @@ import {
 import type { Vec2, Viewport } from "./render/plane.js";
 import { fillPhasePortrait, DEFAULT_COLORING } from "./render/coloring.js";
 import type { ColoringOptions } from "./render/coloring.js";
+import { computeCornerProfile, drawCornerProfile } from "./render/cornerProfile.js";
+import type { CornerProfile } from "./render/cornerProfile.js";
 import { createGpuRenderer } from "./render/gpu.js";
 import type { GpuRenderer } from "./render/gpu.js";
 import {
@@ -108,6 +110,8 @@ interface RenderModel {
   readonly badge: string;
   readonly readout: string;
   readonly error: boolean;
+  /** The M3 corner-overshoot profile along ∂K (monomial input on a polygonal K); undefined ⇒ panel hidden. */
+  readonly cornerProfile?: CornerProfile;
 }
 
 function unitCircle(samples = 256): Vec2[] {
@@ -362,6 +366,14 @@ function main(): void {
   readout.append(exactBadge, readoutBody);
   root.append(readout);
 
+  // The M3 corner-overshoot profile (paper Fig. 2): |Fₙ| along ∂K, with |Q_{n,m}| overlaid when suppressing.
+  // Shown only for a monomial input on a polygonal K (when computeModel attaches a cornerProfile).
+  const profileWrap = elt("div", { class: "corner-profile-wrap" });
+  const profileCaption = elt("div", { class: "corner-profile-cap" }, "Corner overshoot along ∂K — |φ⁻ⁿFₙ| → 1 on the smooth arcs, → λₖ at the corners");
+  const profileCanvas = elt("canvas", { class: "corner-profile" });
+  profileWrap.append(profileCaption, profileCanvas);
+  root.append(profileWrap);
+
   left.panel.renderer = createGpuRenderer(left.panel.gl, PANEL_BG);
   right.panel.renderer = createGpuRenderer(right.panel.gl, PANEL_BG);
 
@@ -429,12 +441,18 @@ function main(): void {
       const readout = suppress
         ? `Φφ(z^${n})(w) ≈ Q_{${n},${m}}(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}  ·  corner-suppressed weighted Faber (m = ${m})${cornerNote}`
         : `Φφ(z^${n})(w) ${approx ? "≈" : "="} ${formatFaberPoly(coeffs, { varSym: "w" })}${domainNote}`;
+      // On a polygonal K, plot the corner-overshoot profile |Fₙ| along ∂K (and |Q_{n,m}| when suppressing).
+      const cornerProfile =
+        cornerImages.length > 0
+          ? computeCornerProfile(map, cornerImages, n, suppress ? m : null, cornerN?.maxLambda ?? 1)
+          : undefined;
       return {
         left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
         badge: suppress ? "≈" : exactBadge,
         readout,
         error: false,
+        cornerProfile,
       };
     }
     if (state.input.kind === "pole") {
@@ -602,6 +620,12 @@ function main(): void {
     const coloring = state.coloring ?? DEFAULT_COLORING;
     paintPanel(left.panel, state.zView, model.left, coloring);
     paintPanel(right.panel, state.wView, model.right, coloring);
+    if (model.cornerProfile) {
+      profileWrap.style.display = "";
+      drawCornerProfile(profileCanvas, model.cornerProfile);
+    } else {
+      profileWrap.style.display = "none";
+    }
   }
 
   let hashTimer = 0;
