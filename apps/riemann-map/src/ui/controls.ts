@@ -33,6 +33,8 @@ export interface Controls {
   setExpr(expr: string): void;
   setLatex(latex: string): void;
   showError(msg: string | null): void;
+  /** Show/hide the "drag the c handle" hint under the formula editor (when φ references c). */
+  setFormulaHint(show: boolean): void;
   /** The primary chooser: "formula" | "region" | "import". */
   setVisualize(id: string): void;
   /** A region's map direction: "d2r" (𝔻→Ω) | "r2d" (Ω→𝔻). */
@@ -294,7 +296,11 @@ export function createControls(initialExpr: string): Controls {
   error.className = "error";
   const preview = document.createElement("div");
   preview.className = "preview";
-  mapSection.append(preset, exprLabel, input, error, preview);
+  const cHint = document.createElement("p");
+  cHint.className = "explainer c-hint";
+  cHint.hidden = true;
+  cHint.textContent = "This map has a parameter c — drag the red c handle on the disk to deform it live.";
+  mapSection.append(preset, exprLabel, input, error, preview, cHint);
 
   // --- region context: shape + direction ------------------------------------
   const ctxRegion = document.createElement("section");
@@ -568,6 +574,9 @@ export function createControls(initialExpr: string): Controls {
     showError(msg: string | null): void {
       error.textContent = msg ?? "";
       error.classList.toggle("visible", msg !== null);
+    },
+    setFormulaHint(show: boolean): void {
+      cHint.hidden = !show;
     },
     setVisualize(id: string): void {
       vis.set(id);

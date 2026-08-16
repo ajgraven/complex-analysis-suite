@@ -143,20 +143,34 @@ export class Overlay2D {
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
     const ctx = this.ctx;
     const [px, py] = this.toPx(p);
-    const r = 7 * this.dpr;
-    ctx.lineWidth = 2.5 * this.dpr;
-    ctx.strokeStyle = "rgba(0,0,0,0.65)";
+    const r = 9 * this.dpr;
+    // A soft coloured halo so the handle reads as "grab me" against any field.
+    ctx.save();
+    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(px, py, r + 6 * this.dpr, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+    // Solid dot with a dark contrast edge (legible on light fills) and a white inner pop ring.
+    ctx.lineWidth = 1.5 * this.dpr;
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
     ctx.fillStyle = color;
     ctx.beginPath();
     ctx.arc(px, py, r, 0, 2 * Math.PI);
     ctx.fill();
     ctx.stroke();
-    ctx.font = `${Math.round(12 * this.dpr)}px system-ui, -apple-system, sans-serif`;
+    ctx.lineWidth = 2 * this.dpr;
+    ctx.strokeStyle = "#fff";
+    ctx.beginPath();
+    ctx.arc(px, py, r - 2 * this.dpr, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.font = `600 ${Math.round(13 * this.dpr)}px system-ui, -apple-system, sans-serif`;
     ctx.textBaseline = "alphabetic";
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    ctx.fillText(label, px + r + 3 * this.dpr + 1, py - r + 1);
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+    ctx.fillText(label, px + r + 4 * this.dpr + 1, py - r + 1);
     ctx.fillStyle = "#fff";
-    ctx.fillText(label, px + r + 3 * this.dpr, py - r);
+    ctx.fillText(label, px + r + 4 * this.dpr, py - r);
   }
 
   /** A bottom-left scale bar: a "nice" 1/2/5×10ⁿ world length (CD parity), with end ticks + a label

@@ -238,6 +238,19 @@ canvas.overlay { pointer-events: none; }
   color: var(--chip-fg); font-size: 0.75rem; background: var(--chip-bg);
   padding: 0.1rem 0.45rem; border-radius: 5px;
 }
+/* live c-parameter chip on the disk pane (family maps φ(z; c)) — top-right, over the field */
+.cchip {
+  position: absolute; top: 0.5rem; right: 0.6rem; z-index: 1;
+  display: flex; align-items: center; gap: 0.4rem;
+  padding: 0.14rem 0.5rem 0.14rem 0.45rem; border-radius: 5px;
+  background: var(--chip-bg); color: var(--chip-fg); font-size: 0.75rem;
+  font-variant-numeric: tabular-nums; border-left: 3px solid #ff5a5a;
+}
+.cchip[hidden] { display: none; }
+.cchip::before { content: ""; width: 0.5rem; height: 0.5rem; border-radius: 50%; background: #ff5a5a; flex: 0 0 auto; }
+/* the "drag c" hint under the formula editor — the explainer style, tinted to the red c handle */
+.c-hint { border-left: 3px solid #ff5a5a; background: color-mix(in srgb, #ff5a5a 9%, var(--surface)); }
+.c-hint[hidden] { display: none; }
 /* per-plot colour legend chip (A4) — bottom-right of the z-plane, dark backing over the shader field */
 .legend-chip {
   position: absolute; right: 0.6rem; bottom: 0.6rem; z-index: 1; pointer-events: none;
