@@ -1,0 +1,156 @@
+# Faber on polygonal / cornered K via the Schwarz–Christoffel engine — implementation plan
+
+> Realizes feature **T2.3** of [`faber-transform-research-features.md`](faber-transform-research-features.md):
+> extend `apps/faber-transform` from closed-form finite-Laurent domains (ellipse, deltoid, star) to
+> **arbitrary polygons** `K`, using an exterior Schwarz–Christoffel map. Includes the results of the M0
+> de-risk spike (2026-08), which validated the architecture and caught an exponent-sign subtlety.
+
+## 1. The seam: everything downstream of `{c, laurent[]}` is already built
+
+The whole Faber engine is parametrized by one contract (`@cas/faber` `types.ts`):
+
+```ts
+interface ExteriorMap { c: number; laurent: readonly Cx[]; }   // φ(z) = c·z + c₀ + c₁/z + c₂/z² + …
+```
+
+The recurrence, `faberTransform`, the exact rational-image path (`faberImageOfPole` / `exteriorMapJet`),
+`polynomialRoots`, the GPU render, and the app's exact/series input modes **all** consume this struct and
+nothing else. The `types.ts` comment records the precedent: *"both Quadrature Domains (which adapts its
+solved φ via `phiLaurentAtInfinity`) and the Faber-transform app feed the same shape."* `@cas/dynamics`
+does the same for Julia sets (`rationalLaurentAtInfinity`).
+
+**So the entire task reduces to: produce a truncated `{c, laurent[]}` for the exterior conformal map of a
+polygon.** No change to `@cas/faber`.
+
+## 2. The gap
+
+`@cas/conformal`'s `fitSchwarzChristoffel` is **interior-only** (`𝔻 → bounded polygon`). Faber needs the
+**exterior** map `φ: 𝔻* → Ω`, `Ω = ℂ∖P` unbounded, `K = P` the compact polygon. That map must be built.
+
+## 3. M0 de-risk spike — findings (DONE)
+
+Regular polygons have a *closed-form* exterior map (by symmetry the prevertices are the n-th roots of
+unity — no parameter problem), so the spike validated the construction and the seam directly.
+
+### 3.1 The exterior SC map and its Laurent expansion (validated)
+
+For a polygon with prevertices `zₖ ∈ ∂𝔻` and interior angles `αₖπ`, the exterior map's derivative is
+
+```
+φ'(z) = C · ∏ₖ (1 − zₖ/z)^{1 − αₖ}
+```
+
+**The exponent is `1 − αₖ`, NOT `αₖ − 1`.** The mapped region is the *exterior* Ω, whose interior angle at
+each vertex is `(2 − αₖ)π`, giving SC exponent `(2 − αₖ) − 1 = 1 − αₖ` — sign-flipped from the interior
+engine. The spike's first run used `αₖ − 1` and failed the straight-edge + capacity checks; `1 − αₖ` passes
+to machine precision. **This is the #1 thing M1 must get right and golden-test.**
+
+A **"no-log-at-∞" side condition** `Σₖ (1 − αₖ) zₖ = 0` makes the `z⁻¹` term of `φ'` vanish, so `φ` has a
+clean simple pole `φ(z) ~ Cz` (the `ExteriorMap` normalization, capacity `= |C|`). For regular polygons it
+holds automatically (`Σ ωᵏ = 0`).
+
+**Laurent extraction is exact and cheap** — expand `φ'` as a truncated series in `1/z` and integrate,
+no FFT / no boundary sampling. For the **regular n-gon** (αₖ = (n−2)/n, so `1 − αₖ = 2/n`):
+
+```
+φ'(z) = C·(1 − z⁻ⁿ)^{2/n} = C·Σ_{m≥0} dₘ z^{−nm},   dₘ = C(2/n, m)(−1)ᵐ  [dₘ = dₘ₋₁·(m−1−2/n)/m, d₀=1]
+φ(z)  = C·z + C·Σ_{m≥1} [dₘ/(1−nm)]·z^{−(nm−1)}
+```
+
+i.e. `laurent[nm−1] = C·dₘ/(1−nm)`, all other entries 0. **This closed form IS the M1a implementation.**
+
+### 3.2 Validation results (all pass)
+
+- Rotational symmetry `φ(ωz)=ωφ(z)` exact (≤1e-15) for n=3,4,5.
+- **Straight edges** (the exponent test): image of an inter-prevertex arc is collinear to ~1.3e-4 of edge length.
+- Interior angles `(n−2)π/n` exact.
+- **Capacity golden (square):** apothem `0.84721` vs the closed form `cap(square, side s) = s·Γ(1/4)²/(4π^{3/2})`
+  (`κ₄ = 0.5901703`); with `C = 1` the traced square has **capacity `1.00000`** to 5 digits.
+- **`@cas/faber` seam:** the extracted `{c, laurent[]}` drives the real `faberPolynomials` (F₁=z, F₂, F₃),
+  `faberTransform`, `polynomialRoots`, and `faberImageOfPole` (φ(2)=2.021 for the square) correctly.
+
+The spike script (`scratchpad/sc-spike.mjs`) becomes the M1a golden corpus.
+
+### 3.3 Lightning `fast` mode is NOT free
+
+`fitConformalMap` assumes a **bounded** Jordan domain with `0 ∈ Ω` and a polynomial basis; the unbounded
+polygon exterior breaks both (`0` is inside `P`, not in `Ω`; polynomials diverge at ∞). A fast mode would
+need a reciprocal change of variable (`w = 1/(z−a)` mapping the exterior to a bounded domain) plus explicit
+∞-handling — real work. **Drop "fast-mode-first"; M1 targets the precise parameter solve.**
+
+## 4. Architecture — three components
+
+1. **Exterior SC engine** (`@cas/conformal`) — the one piece of real new numerics (M1b). For general
+   polygons: the exterior parameter problem (prevertices `zₖ` + accessory constant `C` + the `Σ(1−αₖ)zₖ=0`
+   constraint) and an exterior forward integral. Reuses `scParameterProblem`'s solver *structure* (softmax
+   gap gauge + damped Gauss–Newton, one `lstsqHouseholder` per step) and `gaussJacobi`/`scQuadrature`; only
+   the integrand and ∞-handling change. Regular polygons skip this entirely (§3.1).
+2. **Laurent-at-∞ extractor** (`@cas/conformal`) — `SCMap → {c, laurent[]}`. Expand each factor
+   `(1 − zₖ/z)^{1−αₖ} = Σⱼ C(1−αₖ, j)(−zₖ)ʲ z⁻ʲ`, multiply the `n` truncated series with `@cas/core`'s
+   `makeSeries` (the kernel `@cas/dynamics` already uses), then integrate term-by-term (`φ'` coefficient
+   `eₚ` at `z⁻ᵖ` → `φ` coefficient `−C·eₚ/(p−1)` at `z^{−(p−1)}`; `e₁ = 0` by the no-log constraint; the
+   integration constant `c₀` is the conformal-centre offset). Exact, deterministic, unit-testable.
+3. **App wiring** (`apps/faber-transform`) — a `PolygonDomain` source feeding the existing pipeline; polygon
+   presets / editor; viewState serialization; honesty flags.
+
+## 5. Milestones (each gated: typecheck / lint / test / build + goldens + browser-verify)
+
+### M1a — Regular-polygon presets, closed-form (the vertical slice; ~2–3 days, de-risked to ~0)
+Ship square / triangle / pentagon / hexagon as domains, rendered through the *unchanged* Faber pipeline.
+- Add the Laurent extractor (component 2) — start with the regular-symmetric closed form (§3.1); it is the
+  general extractor specialized to `zₖ = ωᵏ`.
+- Add a `PolygonDomain` source in the app (parallel to `PhiPreset`) yielding `{ map, meta }` where
+  `meta = { converged, degraded, residual, corners }`; build `{c, laurent[]}` from the closed form.
+- **Goldens (from the spike):** square capacity vs `Γ(1/4)²/(4π^{3/2})`; `c → 1` as `n → ∞`
+  (regular n-gon → disk); straight-edge collinearity; the `{c,laurent}`→`@cas/faber` recurrence outputs.
+- Browser-verify a Faber image renders inside the polygon (masked to `K`), roots on/inside `∂K`.
+
+### M1b — General exterior parameter solve (the crux; ~4–6 days)
+`fitExteriorSchwarzChristoffel(polygon, opts) → SCMap`-shaped result (prevertices, `C`, `converged` /
+`degraded` / `residual`, mirroring the existing `SCMap`). Convex polygons first (well-conditioned).
+- **Goldens:** capacities of a non-regular convex polygon vs an independent reference; boundary residual
+  `φ(∂𝔻)` traces the polygon to tolerance; the degenerate 2-gon → interval `[−2,2]` reproduces the existing
+  `interval` preset (`c=1`, Fₙ = 2Tₙ) as a limiting sanity anchor.
+
+### M2 — Reentrant polygons, diagnostics & UI (~3–4 days)
+Handle `αₖ > 1` (L-shape, star): **adaptive truncation** (grow `M` until the boundary residual falls below
+tol — corners give algebraically-decaying Laurent coefficients, so sharp/reentrant corners need more
+terms). Per-corner norm annotations `Λₖ = max{αₖ, 2−αₖ}` (Miña-Díaz–Rubin–Wennman 2025). Draggable-vertex
+polygon editor; serialize vertices in viewState (bounded, like the existing crafted-link guards); `kHalf`
+framing from the bounding box.
+
+### M3 — Optional polish
+Corner-**suppressing** weighted Faber `Q_{n,m}` toggle (before/after corner-overshoot demo); reconsider a
+lightning fast-mode only via the reciprocal-domain route (§3.3).
+
+## 6. Integration details & honesty guardrails
+
+- **`ExteriorMap.c` is real** — rotate the prevertices so `C` is real-positive (standard SC normalization);
+  no contract change.
+- **Everything from a polygon is `≈`** (truncated Laurent + numerical solve). The exact-rational-image path
+  still *runs* on the truncated map, but the map is approximate — so the app's `=` badge must **downgrade to
+  `≈`** for polygon domains even for rational `f`. This is the one place the existing exact/approx branch
+  needs to become domain-aware.
+- A truncated `φ` needn't be exactly univalent; the render stays meaningful, labelled `≈`.
+- **Dependency direction** stays clean: `@cas/conformal → @cas/core`; the app adds `@cas/conformal` to its
+  deps. The exterior map + extractor live in `@cas/conformal`, cohesive with the SC machinery they extend
+  (single-consumer for now, same extract-ahead judgement as ADR-0018 for `@cas/conformal` itself).
+
+## 7. Risk & effort
+
+Risk is now **concentrated entirely in M1b** (the general exterior parameter solve — classical per
+Driscoll–Trefethen Ch. 4, but a real nonlinear solver; reentrant corners are where conditioning bites in
+M2). M0 de-risked M1a to ~zero: regular polygons are closed-form and validated. **The shippable vertical
+slice (M1a) lands in ~2–3 days**; M1a–M2 total ≈ 1.5–2 weeks.
+
+## 8. References
+
+- T. A. Driscoll & L. N. Trefethen, *Schwarz–Christoffel Mapping*, Cambridge Univ. Press, 2002 — Ch. 4
+  (exterior maps): the `φ'(z) = C ∏ (1 − zₖ/z)^{1−αₖ}` formula and the exterior parameter problem.
+- E. Miña-Díaz, O. Rubin, A. Wennman, *Norms of Chebyshev and Faber polynomials on curves with corners and
+  cusps*, arXiv:2509.22588 (2025) — the corner bound `Λₖ = max{αₖ, 2−αₖ}` and corner-suppressing weighted
+  Faber polynomials `Q_{n,m}` (M2/M3).
+- Logarithmic capacity of the square: `cap = s·Γ(1/4)²/(4π^{3/2})` (κ₄ ≈ 0.5901703) — the M1a golden.
+- Existing in-repo: `docs/design/schwarz-christoffel-plan.md`, `schwarz-christoffel-research-notes.md`
+  (the interior SC engine this extends); `@cas/dynamics` `rationalLaurentAtInfinity` (the Laurent-at-∞
+  precedent).

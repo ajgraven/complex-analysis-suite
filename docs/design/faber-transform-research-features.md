@@ -107,6 +107,7 @@ deliver the core pedagogical payload with almost no new math.
   `form:"schwarz"`, `@cas/schwarz` (`makeBoundedSchwarz`/`makeUnboundedLaurentSchwarz`), `@cas/faber`.
 
 ### T2.3 — Faber on polygonal / cornered K via the Schwarz–Christoffel engine (biggest domain-class win)
+> Full implementation plan (with M0 spike results): [`faber-polygonal-sc-plan.md`](faber-polygonal-sc-plan.md).
 - **Shows:** user draws a polygon (or picks presets); the app renders Faber images on cornered `K` with
   per-corner norm annotations, and (toggle) corner-**suppressing** weighted Faber polynomials `Q_{n,m}`.
 - **Math:** use the exterior Schwarz–Christoffel map as `φ`, extract its Laurent jet at `∞`, feed the
