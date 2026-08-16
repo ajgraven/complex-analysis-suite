@@ -57,7 +57,29 @@ describe("faberImageOfPole — exact vs truncated series", () => {
     expect(close(img.terms[1], { re: jet[1].re * jet[1].re - jet[1].im * jet[1].im, im: 2 * jet[1].re * jet[1].im })).toBe(true);
   });
 
-  it("throws for unsupported pole order", () => {
-    expect(() => faberImageOfPole(interval, { re: 3, im: 0 }, 3)).toThrow();
+  it("arbitrary order (m=3,4) matches the truncated Faber series inside the convergence region", () => {
+    // Taylor coeffs of 1/(z−z₀)^m on the disk: b_n = (−1)^m·C(n+m−1, m−1)/z₀^{n+m}.
+    const binom = (a: number, b: number): number => {
+      let r = 1;
+      for (let i = 0; i < b; i++) r = (r * (a - i)) / (i + 1);
+      return r;
+    };
+    const z0 = 2.4;
+    const w: Cx = { re: 0, im: 1.3 - 1 / 1.3 }; // φ(1.3i) on the interval, inside Γ_{2.4}
+    for (const m of [3, 4]) {
+      const taylor: Cx[] = [];
+      for (let n = 0; n <= 120; n++) {
+        taylor.push({ re: Math.pow(-1, m) * binom(n + m - 1, m - 1) * Math.pow(z0, -(n + m)), im: 0 });
+      }
+      const series = P.eval(faberTransform(interval, taylor), w);
+      const exact = evalRationalImage(faberImageOfPole(interval, { re: z0, im: 0 }, m), w);
+      expect(close(series, exact, 1e-6), `m=${m}`).toBe(true);
+    }
+  });
+
+  it("throws for a non-positive-integer order", () => {
+    expect(() => faberImageOfPole(interval, { re: 3, im: 0 }, 0)).toThrow();
+    expect(() => faberImageOfPole(interval, { re: 3, im: 0 }, -1)).toThrow();
+    expect(() => faberImageOfPole(interval, { re: 3, im: 0 }, 1.5)).toThrow();
   });
 });

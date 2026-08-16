@@ -6,12 +6,15 @@ import type { Cx } from "@cas/core";
 import {
   compileExprF,
   evalPoly,
+  evalRational,
   evalRationalImage,
+  exprToRational,
   mapCircle,
   poleImage,
   radiusOfConvergence,
   taylorViaFFT,
   transformCoeffs,
+  transformRational,
   trimTail,
 } from "../src/faber.js";
 import { phiPresetById } from "../src/presets.js";
@@ -73,6 +76,26 @@ describe("mapCircle equipotential", () => {
     const pts = mapCircle(interval, 2, 4);
     expect(close(pts[0][0], 2.5) && close(pts[0][1], 0)).toBe(true); // θ = 0
     expect(close(pts[1][0], 0) && close(pts[1][1], 1.5)).toBe(true); // θ = π/2
+  });
+});
+
+describe("exprToRational + exact rational path", () => {
+  it("detects rational f, rejects transcendental", () => {
+    expect(exprToRational("(z + 1)/((z - 2)*(z - 3))")).not.toBeNull();
+    expect(exprToRational("1/(z - 2)^2")).not.toBeNull();
+    expect(exprToRational("exp(z)")).toBeNull();
+    expect(exprToRational("sin(z) + 1/(z - 2)")).toBeNull();
+  });
+
+  it("exact transform of a rational input matches the closed-form pole image", () => {
+    const r = exprToRational("1/(z - 2.5)");
+    expect(r).not.toBeNull();
+    if (!r) return;
+    const image = transformRational(interval, r); // {num, den} in w
+    const img = poleImage(interval, { re: 2.5, im: 0 }, 1);
+    const w: Cx = { re: 0.4, im: 0.5 };
+    expect(close(evalRational(image, w).re, evalRationalImage(img, w).re, 1e-7)).toBe(true);
+    expect(close(evalRational(image, w).im, evalRationalImage(img, w).im, 1e-7)).toBe(true);
   });
 });
 

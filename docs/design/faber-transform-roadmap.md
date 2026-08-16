@@ -41,7 +41,22 @@ strictly inside the convergence region, so the truncation is shown only where it
 "divergent outside $\Gamma_R$" region disappears — the $\Gamma_R$ curve's warning role is superseded (keep
 it as a faint reference, or drop it — **◇**).
 
-## 2. Arbitrary **rational** input, exactly (the near-term win)
+## 2. Arbitrary **rational** input, exactly (the near-term win) — DONE
+
+Implemented in `@cas/faber`: **`faberImageOfPole` now handles arbitrary order** (the residue formula
+`terms[k−1] = [s^{m−1}](Φ(s)^{k−1}Φ'(s))`, only truncated-series multiplies), and
+**`faberTransformRational(map, num, den)`** partial-fractions any $f=p/q$ (polynomial long division +
+clustered-root multiplicities + series-division residues) and assembles the exact rational image
+$N(w)/D(w)$, throwing if a pole is on/inside the unit disk. The app's **free-form input auto-detects a
+rational $f$** (via `@cas/expr`'s `fToRational`) and routes to this exact path (`=`), falling back to the
+truncated series (`≈`) for transcendental $f$ and to a `⚠` for a pole inside the disk. 33 `@cas/faber`
+tests (single/double/arbitrary-order poles, sums, polynomial part vs series, guards) + app tests; verified
+in-browser (`(z+1)/((z−2)(z−3))` → exact, poles at $\varphi(z_j)$ outside $K$; `1/(z−2.2)^3` → exact;
+`exp(z)` → `≈`; `1/(z−0.5)` → `⚠`).
+
+Design notes below.
+
+
 
 Generalize the exact path from "one pole" to **any rational** $f=p/q$ analytic on the disk (all poles
 $|z_j|>1$), with **no truncation** — a `=` result for the whole rational family:

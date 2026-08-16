@@ -13,6 +13,7 @@ import {
   boundaryK,
   compileExprF,
   evalRational,
+  exprToRational,
   monomialTaylor,
   poleImage,
   poleImageRational,
@@ -21,6 +22,7 @@ import {
   radiusOfConvergence,
   taylorViaFFT,
   transformCoeffs,
+  transformRational,
   transformRoots,
   trimTail,
 } from "./faber.js";
@@ -331,10 +333,29 @@ function main(): void {
     }
     // expr
     const compiled = compileExprF(state.input.expr);
+    const blankPanel: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
     if ("error" in compiled) {
-      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
-      return { left: blank, right: blank, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
+      return { left: blankPanel, right: blankPanel, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
     }
+    const leftFn: PanelModel = { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] };
+
+    // Exact path when f is a rational function of z (any poles, any orders) analytic on the disk.
+    const ratIn = exprToRational(state.input.expr);
+    if (ratIn) {
+      try {
+        const image = transformRational(map, ratIn);
+        return {
+          left: leftFn,
+          right: { source: { kind: "rational", rat: image }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(image.num) },
+          badge: "=",
+          readout: `Φφ(f)(w) = exact rational image on K  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)`,
+          error: false,
+        };
+      } catch (e) {
+        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: e instanceof Error ? e.message : "f is not analytic on the unit disk", error: true };
+      }
+    }
+
     const N = state.input.N;
     const bRaw = taylorViaFFT(compiled.fn, N);
     const b = trimTail(bRaw); // drop the noise-dominated tail before summing
@@ -349,7 +370,7 @@ function main(): void {
     else rNote = `radius of convergence R ≈ ${R.toFixed(3)} (K sits well inside)`;
     const orderNote = effN < N ? ` (coefficients past n=${effN} below the noise floor)` : "";
     return {
-      left: { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
+      left: leftFn,
       right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
       readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ${orderNote}   ·   ${rNote}`,

@@ -3,11 +3,32 @@
 // coloring. The app never touches the package's internals directly — everything routes through here.
 import { Complex, makePoly, objAlgebra } from "@cas/core";
 import type { Cx } from "@cas/core";
-import { faberTransform, faberImageOfPole, evalRationalImage, polynomialRoots } from "@cas/faber";
+import { faberTransform, faberImageOfPole, evalRationalImage, faberTransformRational, polynomialRoots } from "@cas/faber";
 import type { ExteriorMap, RationalImage } from "@cas/faber";
-import { parse, makeComplexFn } from "@cas/expr";
+import { parse, makeComplexFn, fToRational } from "@cas/expr";
 
 const P = makePoly(objAlgebra);
+
+/** Decompose an @cas/expr source into a rational num/den (ascending Cx[]) of z, or null if not rational. */
+export function exprToRational(src: string): Rational | null {
+  let ast;
+  try {
+    ast = parse(src);
+  } catch {
+    return null;
+  }
+  const r = fToRational(ast, [0, 0], [0, 0]);
+  if (!r) return null;
+  return {
+    num: r.num.map((t): Cx => ({ re: t[0], im: t[1] })),
+    den: r.den.map((t): Cx => ({ re: t[0], im: t[1] })),
+  };
+}
+
+/** The exact exterior Faber transform of a rational f = num/den as a rational N(w)/D(w). */
+export function transformRational(map: ExteriorMap, r: Rational): Rational {
+  return faberTransformRational(map, r.num, r.den);
+}
 
 /** Compile a free-form f(z) from an @cas/expr source into a {re,im} evaluator, or return a parse error. */
 export function compileExprF(src: string): { fn: (z: Cx) => Cx } | { error: string } {
