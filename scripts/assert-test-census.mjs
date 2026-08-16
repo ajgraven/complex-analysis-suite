@@ -50,6 +50,7 @@ const PROJECTS = [
   { name: 'quadrature-domains', match: '/apps/quadrature-domains/', floor: 1 },
   { name: 'riemann-map', match: '/apps/riemann-map/', floor: 1 },
   { name: 'argument-principle', match: '/apps/argument-principle/', floor: 1 },
+  { name: 'faber-transform', match: '/apps/faber-transform/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

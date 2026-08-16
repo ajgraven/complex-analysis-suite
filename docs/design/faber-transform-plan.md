@@ -293,4 +293,17 @@ none of which v1 blocks:
   transform (`inverseFaberAtPole`/`inverseFaberAtInfinity` in QD's `solver-faber.mjs`, which needs QD's
   series-inversion `Taylor`) was **deliberately left in QD** — demand-driven (ADR-0007): it moves when the
   reconstruction view is built, not before.
-- **M1 — App shell + Chebyshev anchor —** next.
+- **M1 — App shell + Chebyshev anchor — DONE.** Scaffolded `apps/faber-transform` from the
+  `argument-principle` skeleton (pure-2D, no WebGL yet): two CPU phase-portrait panels — `f(z)=zⁿ` on the
+  unit disk (masked outside |z|<1) beside `Φφ(zⁿ)=Fₙ` on the bounded complement `K`, with `∂𝔻`/`∂K`
+  overlays and a live formula readout. Curated presets: **interval** (Joukowski, the anchor) + **ellipse**
+  `z+m/z` with a clamped `m∈[0,0.95)` shape slider; a monomial-degree control; a `#vs=` permalink over
+  `@cas/interchange`. All glue routes through `src/faber.ts` over `@cas/faber`. **16 app tests green** —
+  the on-screen anchor asserts `Φφ(zⁿ)=2·Tₙ(w/2)` (with the `F₀=1≠2·T₀` subtlety pinned), `∂K` on the
+  interval segment, the ellipse semi-axes `1±m`, and the viewState round-trip/guard. **Verified in a real
+  headless Chromium**: both panels paint correct phase portraits (`Φφ(z³)=w³−3w`, `Φφ(z⁵)=w⁵−5w³+5w`), the
+  Faber roots visibly cluster inside `K`, the permalink updates, and the ellipse shape slider appears — zero
+  console errors (bar the default-favicon 404). Wired into `vitest.workspace.ts`, `eslint.config.js`
+  `APP_NAMES`, and the test-census (`faber-transform:3`). Held back from publishing (no launcher card, no
+  deploy `cp` — like `correspondences`). Full workspace: **3014 tests**, typecheck / lint / build all green.
+- **M1.5 — Extract the phase-portrait shader into `@cas/gpu` —** next.

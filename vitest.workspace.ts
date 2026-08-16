@@ -27,4 +27,5 @@ export default defineWorkspace([
   "./apps/quadrature-domains/vitest.config.ts",
   "./apps/riemann-map/vite.config.ts",
   "./apps/argument-principle/vite.config.ts",
+  "./apps/faber-transform/vite.config.ts",
 ]);

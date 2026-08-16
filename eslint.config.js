@@ -24,6 +24,7 @@ const APP_NAMES = [
   "launcher",
   "riemann-map",
   "argument-principle",
+  "faber-transform",
 ];
 
 const noCrossAppImports = APP_NAMES.flatMap((name) => [name, `${name}/*`]).map(
