@@ -2019,4 +2019,8 @@ WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
 1. [x] Record the decision (this ADR); lock the validated hexes.
 2. [x] **Phase 1:** shapes + palette tokens + ARIA live + verdict icon + reduced-motion (#266).
 3. [x] **Phase 4:** the non-rainbow ramp (viridis, monotonic-lightness) + periodic direction arrowheads.
-4. [ ] Add a CI palette-validator check over the mark token set.
+4. [x] Add a CI palette-validator check over the mark token set — `apps/argument-principle/test/palette.test.ts`
+   (+ `palette-validator.ts`): reads the ○/✕/◆ tokens from `main.css` and gates, in both themes, the OKLab
+   ΔE CVD separation (≥ 8 under Machado protan+deutan; the trio measures 8.31 dark / 8.87 light), the
+   normal-vision ΔE floor (≥ 15), the OKLCH lightness band + chroma floor, and ≥ 3:1 contrast on the plane
+   surface. Runs under `pnpm test`, so a token edit that regresses colour-blind safety fails CI.
