@@ -4,9 +4,45 @@
 // clamped shape slider whose range keeps φ univalent (a valid domain).
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
-import { regularPolygonMap } from "./polygon.js";
+import { interiorAngles } from "@cas/conformal";
+import { cornerNorms, polygonMap, regularPolygonMap, type CornerNorms } from "./polygon.js";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
+
+/** A preset for an arbitrary polygon: fit the exterior SC map once (lazily) and cache the resulting map. */
+function polygonPreset(id: string, name: string, vertices: readonly (readonly [number, number])[], kHalf: number): PhiPreset {
+  let cached: ExteriorMap | null = null;
+  return {
+    id,
+    name,
+    build: () => {
+      if (!cached) {
+        const r = polygonMap(vertices);
+        if (!r.converged) console.warn(`faber-transform: polygon "${id}" SC fit did not converge (residual ${r.residual.toExponential(2)})`);
+        cached = r.map;
+      }
+      return cached;
+    },
+    shape: null,
+    kHalf,
+    approximate: true,
+    // Corner norms from the polygon's angles alone (no fit needed) — the vertices are counter-clockwise.
+    cornerNorms: cornerNorms(interiorAngles(vertices.map((v) => [v[0], v[1]] as [number, number]))),
+  };
+}
+
+/** A regular n-gon preset (closed-form exterior map, M1a): interior angle (n−2)/n at every corner. */
+function regularPreset(id: string, name: string, n: number, kHalf: number): PhiPreset {
+  return {
+    id,
+    name,
+    build: () => regularPolygonMap(n),
+    shape: null,
+    kHalf,
+    approximate: true,
+    cornerNorms: cornerNorms(Array(n).fill((n - 2) / n)),
+  };
+}
 
 export interface ShapeControl {
   readonly label: string;
@@ -36,6 +72,8 @@ export interface PhiPreset {
    * downgrades the `=` badge to `≈` for these domains (plan §6).
    */
   readonly approximate?: boolean;
+  /** Corner-norm bounds Λₖ (polygon domains only) — the Faber-overshoot annotation shown in the readout. */
+  readonly cornerNorms?: CornerNorms;
 }
 
 export const PHI_PRESETS: readonly PhiPreset[] = [
@@ -75,38 +113,19 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
   // Regular polygons (M1a): exterior Schwarz–Christoffel maps, closed-form by symmetry (prevertices = the
   // n-th roots of unity), truncated to a finite Laurent order — hence `approximate: true`. Capacity = 1.
   // kHalf frames each polygon's circumradius (triangle 1.369 … hexagon 1.087 at c = 1) with margin.
-  {
-    id: "triangle",
-    name: "Triangle — regular 3-gon",
-    build: () => regularPolygonMap(3),
-    shape: null,
-    kHalf: 1.81,
-    approximate: true,
-  },
-  {
-    id: "square",
-    name: "Square — regular 4-gon",
-    build: () => regularPolygonMap(4),
-    shape: null,
-    kHalf: 1.58,
-    approximate: true,
-  },
-  {
-    id: "pentagon",
-    name: "Pentagon — regular 5-gon",
-    build: () => regularPolygonMap(5),
-    shape: null,
-    kHalf: 1.49,
-    approximate: true,
-  },
-  {
-    id: "hexagon",
-    name: "Hexagon — regular 6-gon",
-    build: () => regularPolygonMap(6),
-    shape: null,
-    kHalf: 1.43,
-    approximate: true,
-  },
+  regularPreset("triangle", "Triangle — regular 3-gon", 3, 1.81),
+  regularPreset("square", "Square — regular 4-gon", 4, 1.58),
+  regularPreset("pentagon", "Pentagon — regular 5-gon", 5, 1.49),
+  regularPreset("hexagon", "Hexagon — regular 6-gon", 6, 1.43),
+  // General (non-regular) polygons via the exterior parameter solve (M1b): the prevertices are solved, not
+  // symmetric. Vertices are counter-clockwise; the map is centred at its conformal centre and rotated so the
+  // capacity is real, so the rendered K is a centred/rotated copy of the shape.
+  polygonPreset("rectangle", "Rectangle 2 : 1", [[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 1.7),
+  polygonPreset("iso-triangle", "Tall isosceles triangle", [[0, 1.4], [-0.7, -0.7], [0.7, -0.7]], 1.7),
+  polygonPreset("house", "House pentagon", [[1, -0.6], [1, 0.5], [0, 1.2], [-1, 0.5], [-1, -0.6]], 1.7),
+  // Reentrant (M2): the L-shape has one corner with interior angle 3π/2 (α = 1.5) — its exterior exponent
+  // 1−α = −0.5 is singular but integrable, and adaptive truncation keeps enough terms for a sharp notch.
+  polygonPreset("lshape", "L-shape (reentrant)", [[-0.8, -0.8], [0.8, -0.8], [0.8, 0], [0, 0], [0, 0.8], [-0.8, 0.8]], 1.7),
 ];
 
 /** The presets shown in the domain menu — the non-degenerate (2-D interior) ones. */

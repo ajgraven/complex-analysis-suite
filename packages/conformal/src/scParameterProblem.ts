@@ -10,8 +10,8 @@
 // its own); an explicit prevertex guess may be passed (Phase 3 forwards a warm-start / prior fast solve
 // here). Pure; node-tested against closed-form polygons (a regular n-gon from a skewed seed; a reentrant
 // L-shape).
-import { lstsqHouseholder } from "@cas/core";
 import type { C } from "./vandermondeArnoldi.js";
+import { dampedGaussNewton } from "./gaussNewton.js";
 import { sideIntegrals, type SCQuadratureOptions } from "./schwarzChristoffel.js";
 
 const TWO_PI = 2 * Math.PI;
@@ -56,8 +56,8 @@ export interface SCSolveOptions extends SCQuadratureOptions {
   maxIter?: number;
 }
 
-/** Prevertices from softmax gap-logits: θ₀ = 0, gaps ∝ exp(tₖ) summing to 2π. */
-function prevertsFromLogits(t: readonly number[]): C[] {
+/** Prevertices from softmax gap-logits: θ₀ = 0, gaps ∝ exp(tₖ) summing to 2π. Shared with the exterior solver. */
+export function prevertsFromLogits(t: readonly number[]): C[] {
   const n = t.length;
   const mx = Math.max(...t);
   const ex = t.map((v) => Math.exp(v - mx));
@@ -72,7 +72,7 @@ function prevertsFromLogits(t: readonly number[]): C[] {
 }
 
 /** Gap-logits tₖ = log(θ_{k+1} − θₖ) of a prevertex set (the inverse of prevertsFromLogits up to shift). */
-function logitsFromPrevertices(pv: readonly C[]): number[] {
+export function logitsFromPrevertices(pv: readonly C[]): number[] {
   const n = pv.length;
   const th = pv.map((w) => Math.atan2(w[1], w[0]));
   return Array.from({ length: n }, (_, k) => {
@@ -82,7 +82,7 @@ function logitsFromPrevertices(pv: readonly C[]): number[] {
   });
 }
 
-const uniformPrevertices = (n: number): C[] =>
+export const uniformPrevertices = (n: number): C[] =>
   Array.from({ length: n }, (_, k): C => [Math.cos((TWO_PI * k) / n), Math.sin((TWO_PI * k) / n)]);
 
 /** Three spread-out gap-logit indices to freeze (fixes the disk-automorphism gauge). */
@@ -91,7 +91,7 @@ function chooseFrozen(n: number): number[] {
   return set.length === 3 ? set : [0, 1, 2];
 }
 
-function minGap(pv: readonly C[]): number {
+export function minGap(pv: readonly C[]): number {
   const n = pv.length;
   const th = pv.map((w) => Math.atan2(w[1], w[0]));
   let m = Infinity;
@@ -140,48 +140,21 @@ export function solveParameterProblem(vertices: readonly C[], opts?: SCSolveOpti
   const frozen = chooseFrozen(n);
   const free: number[] = [];
   for (let i = 0; i < n; i++) if (!frozen.includes(i)) free.push(i);
-  const nFree = free.length;
   const logits = (y: readonly number[]): number[] => {
     const t = tSeed.slice();
     free.forEach((i, j) => (t[i] = y[j]));
     return t;
   };
 
-  let y = free.map((i) => tSeed[i]);
-  let F = residual(logits(y));
-  const h = 1e-6;
-  let iter = 0;
-  for (; iter < maxIter && norm(F) >= tol; iter++) {
-    const m = F.length;
-    const J: number[][] = Array.from({ length: m }, () => new Array<number>(nFree).fill(0));
-    for (let j = 0; j < nFree; j++) {
-      const yj = y.slice();
-      yj[j] += h;
-      const Fj = residual(logits(yj));
-      for (let i = 0; i < m; i++) J[i][j] = (Fj[i] - F[i]) / h;
-    }
-    const delta = lstsqHouseholder(J, F.map((v) => -v));
-    let lam = 1;
-    let yTry = y.map((v, j) => v + lam * delta[j]);
-    let FTry = residual(logits(yTry));
-    while (norm(FTry) >= norm(F) && lam > 1e-4) {
-      lam /= 2;
-      yTry = y.map((v, j) => v + lam * delta[j]);
-      FTry = residual(logits(yTry));
-    }
-    if (norm(FTry) >= norm(F)) break; // stalled — no further descent
-    y = yTry;
-    F = FTry;
-  }
-
-  const prevertices = prevertsFromLogits(logits(y));
-  const finalRes = norm(F);
+  const gn = dampedGaussNewton((y) => residual(logits(y)), free.map((i) => tSeed[i]), { tol, maxIter });
+  const prevertices = prevertsFromLogits(logits(gn.y));
+  const finalRes = norm(gn.residual);
   return {
     prevertices,
     angles,
     converged: finalRes < tol,
     degraded: minGap(prevertices) < 1e-6,
-    iterations: iter,
+    iterations: gn.iterations,
     residual: finalRes,
   };
 }

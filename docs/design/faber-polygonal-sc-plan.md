@@ -105,19 +105,41 @@ Ship square / triangle / pentagon / hexagon as domains, rendered through the *un
   (regular n-gon → disk); straight-edge collinearity; the `{c,laurent}`→`@cas/faber` recurrence outputs.
 - Browser-verify a Faber image renders inside the polygon (masked to `K`), roots on/inside `∂K`.
 
-### M1b — General exterior parameter solve (the crux; ~4–6 days)
-`fitExteriorSchwarzChristoffel(polygon, opts) → SCMap`-shaped result (prevertices, `C`, `converged` /
-`degraded` / `residual`, mirroring the existing `SCMap`). Convex polygons first (well-conditioned).
-- **Goldens:** capacities of a non-regular convex polygon vs an independent reference; boundary residual
-  `φ(∂𝔻)` traces the polygon to tolerance; the degenerate 2-gon → interval `[−2,2]` reproduces the existing
-  `interval` preset (`c=1`, Fₙ = 2Tₙ) as a limiting sanity anchor.
+### M1b — General exterior parameter solve — DONE
+Arbitrary bounded simple polygons now work end-to-end, in three landed increments:
+- **Step 1 (`exteriorSchwarzChristoffel.ts`):** the exterior forward map via the reciprocal `u=1/z`
+  (`Ψ'(u)=C·u⁻²·∏(1−u/uₖ)^{1−αₖ}`), reusing `integrateSegment`. Validated on the regular n-gon (equal
+  sides, closure, angles, Γ(1/4) capacity).
+- **Step 2 (`exteriorScParameterProblem.ts`):** `solveExteriorParameterProblem` +
+  `fitExteriorSchwarzChristoffel` — the polygon→prevertices solve, mirroring `scParameterProblem` with the
+  closure/no-log residual `Σ(1−αₖ)/uₖ=0` appended and one gauge frozen (the exterior has only a rotation
+  gauge). Validated: convergence from a skewed seed, the square's Γ(1/4) capacity, and a **chiral**
+  quadrilateral (pinning the CW orientation).
+- **Step 3 (`exteriorMapLaurentAtInfinity` + app wiring):** the Laurent-at-∞ extractor (generalized-binomial
+  series of the SC product via `@cas/core` `makeSeries`) → `{c, laurent}`; the app's `polygonMap` fits +
+  extracts (memoized), and three general presets (rectangle, tall isosceles triangle, house pentagon) render
+  through the unchanged Faber pipeline. The extractor reproduces M1a's closed form for regular polygons.
 
-### M2 — Reentrant polygons, diagnostics & UI (~3–4 days)
-Handle `αₖ > 1` (L-shape, star): **adaptive truncation** (grow `M` until the boundary residual falls below
-tol — corners give algebraically-decaying Laurent coefficients, so sharp/reentrant corners need more
-terms). Per-corner norm annotations `Λₖ = max{αₖ, 2−αₖ}` (Miña-Díaz–Rubin–Wennman 2025). Draggable-vertex
-polygon editor; serialize vertices in viewState (bounded, like the existing crafted-link guards); `kHalf`
-framing from the bounding box.
+Reentrant corners (αₖ>1) and a draggable editor are **M2**.
+
+### M2 — Reentrant polygons, diagnostics & UI (partially DONE)
+- **Reentrant corners — DONE.** The exterior solve already handles `αₖ > 1` (exponent `1−αₖ ∈ (−1,0)` is
+  singular but integrable via the Gauss–Jacobi panel; an L-shape converges to residual ~1e-12). Added an
+  L-shape preset.
+- **Adaptive truncation — DONE.** Reentrant/sharp corners give algebraically-decaying coefficients (an
+  L-shape's `|c₁₄₀|/max ≈ 1.7e-3` vs a square's `1e-17`). `polygonMap` extracts at a geometry-aware order
+  (200 convex / 400 reentrant) then trims to the last coefficient above `tailTol·max`, keeping `≥ minOrder`
+  for Faber-degree coverage — a sharp boundary either way.
+- **Corner-norm annotations — DONE.** `cornerNorms(angles)` → `Λₖ = max{αₖ, 2−αₖ}` (Miña-Díaz–Rubin–Wennman
+  2025), shown as `max corner-norm Λ = …` in the readout on polygon domains; computed from the angles alone.
+- **Solver hygiene (review) — DONE.** The damped Gauss–Newton loop is extracted to a shared
+  `dampedGaussNewton` (interior + exterior), the exterior closure residual is normalized by `Σ|1−αₖ|` so the
+  ‖F‖∞ tolerance means the same for both residual families, and `polygonMap` returns the fit's
+  `converged`/`degraded`/`residual` (a bad fit is no longer discarded).
+- **Remaining:** a **draggable-vertex polygon editor** (let the user draw/edit an arbitrary polygon, not
+  just pick presets), serializing vertices in viewState (bounded, like the existing crafted-link guards),
+  with `kHalf` framing from the bounding box — and surfacing the fit's `converged`/`degraded` in the UI
+  (the runtime home for the honesty signal, since user polygons can fail where the fixed presets don't).
 
 ### M3 — Optional polish
 Corner-**suppressing** weighted Faber `Q_{n,m}` toggle (before/after corner-overshoot demo); reconsider a

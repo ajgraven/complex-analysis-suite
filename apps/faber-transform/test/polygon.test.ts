@@ -4,9 +4,9 @@
 import { describe, expect, it } from "vitest";
 import type { Cx } from "@cas/core";
 import { faberPolynomials, faberTransform, polynomialRoots } from "@cas/faber";
-import { regularPolygonMap } from "../src/polygon.js";
+import { cornerNorms, polygonMap, regularPolygonMap } from "../src/polygon.js";
 import { evalPhi, monomialTaylor, transformCoeffs } from "../src/faber.js";
-import { phiPresetById } from "../src/presets.js";
+import { MENU_PRESETS, phiPresetById } from "../src/presets.js";
 
 const near = (a: number, b: number, tol = 1e-9): boolean => Math.abs(a - b) < tol;
 const cabs = (z: Cx): number => Math.hypot(z.re, z.im);
@@ -92,7 +92,7 @@ describe("@cas/faber seam", () => {
 });
 
 describe("presets", () => {
-  it("exposes the four polygon presets, all flagged approximate", () => {
+  it("exposes the four regular polygon presets, all flagged approximate", () => {
     for (const id of ["triangle", "square", "pentagon", "hexagon"]) {
       const p = phiPresetById(id);
       expect(p.id).toBe(id);
@@ -100,5 +100,69 @@ describe("presets", () => {
       expect(p.shape).toBeNull();
       expect(p.build(0).c).toBe(1);
     }
+  });
+});
+
+describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () => {
+  it("builds a valid ExteriorMap for a rectangle (positive capacity, finite, drives the recurrence)", () => {
+    const result = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]);
+    expect(result.converged).toBe(true);
+    expect(result.degraded).toBe(false);
+    const m = result.map;
+    expect(m.c).toBeGreaterThan(0);
+    for (const c of m.laurent) expect(Number.isFinite(c.re) && Number.isFinite(c.im)).toBe(true);
+    // The map is rotated so c is real (a canonical orientation, like M1a's square rendering as a diamond),
+    // so the Laurent tail is genuinely complex — just require it finite and non-degenerate.
+    expect(m.laurent.some((c) => Math.hypot(c.re, c.im) > 1e-3)).toBe(true);
+    // Faber transform of z² runs and its roots sit within K (bounded).
+    const roots = polynomialRoots(faberTransform(m, monomialTaylor(2)));
+    expect(roots.converged).toBe(true);
+    expect(Math.max(...roots.roots.map(cabs))).toBeLessThan(3);
+  });
+
+  it("registers the general-polygon presets in the menu, all approximate", () => {
+    const ids = MENU_PRESETS.map((p) => p.id);
+    for (const id of ["rectangle", "iso-triangle", "house", "lshape"]) {
+      expect(ids).toContain(id);
+      expect(phiPresetById(id).approximate).toBe(true);
+    }
+  });
+
+  it("every shipped general-polygon preset's SC fit converges (no silently-degraded domain)", () => {
+    const shapes: [string, [number, number][]][] = [
+      ["rectangle", [[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]],
+      ["iso-triangle", [[0, 1.4], [-0.7, -0.7], [0.7, -0.7]]],
+      ["house", [[1, -0.6], [1, 0.5], [0, 1.2], [-1, 0.5], [-1, -0.6]]],
+      ["lshape", [[-0.8, -0.8], [0.8, -0.8], [0.8, 0], [0, 0], [0, 0.8], [-0.8, 0.8]]],
+    ];
+    for (const [name, poly] of shapes) {
+      const r = polygonMap(poly);
+      expect(r.converged, `${name} converged`).toBe(true);
+      expect(r.degraded, `${name} not degraded`).toBe(false);
+    }
+  });
+
+  it("computes corner norms Λₖ = max{αₖ, 2−αₖ} and exposes them on polygon presets", () => {
+    // Square: αₖ = 0.5 ⇒ Λ = 1.5 everywhere. Straight vertex αₖ=1 ⇒ Λ=1. Reentrant αₖ=1.5 ⇒ Λ=1.5.
+    expect(cornerNorms([0.5, 0.5, 0.5, 0.5]).maxLambda).toBeCloseTo(1.5, 12);
+    expect(cornerNorms([1, 0.5, 1.5]).lambdas).toEqual([1, 1.5, 1.5]);
+    expect(cornerNorms([1, 1, 1]).maxLambda).toBe(1); // a "straight" degenerate — no overshoot
+    // Regular hexagon: αₖ = 4/6 ⇒ Λ = (n+2)/n = 8/6.
+    expect(phiPresetById("hexagon").cornerNorms?.maxLambda).toBeCloseTo(8 / 6, 12);
+    // General polygons carry corner norms too (computed from vertices, no fit).
+    expect(phiPresetById("rectangle").cornerNorms?.maxLambda).toBeCloseTo(1.5, 6);
+    expect(phiPresetById("lshape").cornerNorms?.maxLambda).toBeCloseTo(1.5, 6); // the reentrant 3π/2 corner
+  });
+
+  it("reentrant L-shape converges and adaptive truncation keeps more terms than a convex polygon", () => {
+    const lshape = polygonMap([[-0.8, -0.8], [0.8, -0.8], [0.8, 0], [0, 0], [0, 0.8], [-0.8, 0.8]]);
+    expect(lshape.converged).toBe(true);
+    const square = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]);
+    // The reentrant corner's slow coefficient decay ⇒ the trimmed series is materially longer.
+    expect(lshape.map.laurent.length).toBeGreaterThan(square.map.laurent.length);
+    expect(lshape.map.laurent.length).toBeGreaterThan(120);
+    // Faber transform of z³ still runs on the reentrant domain.
+    const roots = polynomialRoots(faberTransform(lshape.map, monomialTaylor(3)));
+    expect(roots.converged).toBe(true);
   });
 });

@@ -15,8 +15,27 @@
 // coefficients c_k ~ k^{−1−2/n}, so the tail is small but never zero.
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
+import { exteriorMapLaurentAtInfinity, fitExteriorSchwarzChristoffel } from "@cas/conformal";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
+
+/** Per-corner Faber-norm bounds Λₖ = max{αₖ, 2−αₖ} and their max (Miña-Díaz–Rubin–Wennman 2025). */
+export interface CornerNorms {
+  /** Λₖ per corner (1 at a straight vertex, → 2 as a corner sharpens either way). */
+  readonly lambdas: readonly number[];
+  /** maxₖ Λₖ — the limsupₙ ‖Fₙ‖_∂K overshoot bound (the sharpest corner dominates). */
+  readonly maxLambda: number;
+}
+
+/**
+ * The corner-norm bounds for a polygon with interior angles `angles` (in units of π): Λₖ = max{αₖ, 2−αₖ},
+ * governing the Faber-polynomial overshoot near each corner — `limsupₙ ‖Fₙ‖_∂K ≤ maxₖ Λₖ`. A straight
+ * vertex (αₖ=1) gives 1 (no overshoot); a sharp convex (αₖ→0) or reentrant (αₖ→2) corner approaches 2.
+ */
+export function cornerNorms(angles: readonly number[]): CornerNorms {
+  const lambdas = angles.map((a) => Math.max(a, 2 - a));
+  return { lambdas, maxLambda: Math.max(...lambdas, 1) };
+}
 
 /**
  * The exterior map φ: 𝔻* → Ω of a regular n-gon (n ≥ 3), truncated to `order` Laurent blocks. Returns the
@@ -38,4 +57,62 @@ export function regularPolygonMap(n: number, order = 120, C = 1): ExteriorMap {
     laurent.push(re((C * d) / (1 - n * m)));
   }
   return { c: C, laurent };
+}
+
+/** A fitted polygon exterior map plus the exterior SC fit's honest diagnostics (for the ≈ guardrail). */
+export interface PolygonMapResult {
+  readonly map: ExteriorMap;
+  /** The parameter solve reached tolerance. */
+  readonly converged: boolean;
+  /** A prevertex-crowding wall was hit ⇒ accuracy honestly reduced. */
+  readonly degraded: boolean;
+  /** Final parameter-solve residual. */
+  readonly residual: number;
+}
+
+/** Options for {@link polygonMap}. */
+export interface PolygonMapOptions {
+  /** Cap on the Laurent extraction order before adaptive trimming (default: geometry-aware, 200 convex / 400 reentrant). */
+  readonly maxOrder?: number;
+  /** Keep coefficients until the tail falls below this fraction of the peak magnitude (default 1e-4). */
+  readonly tailTol?: number;
+  /** Always keep at least this many coefficients (Faber-degree coverage; default 48). */
+  readonly minOrder?: number;
+}
+
+/**
+ * The exterior map φ: 𝔻* → Ω of an ARBITRARY bounded simple polygon (M1b/M2), as a truncated Laurent series
+ * for the @cas/faber ExteriorMap contract. Fits the exterior Schwarz–Christoffel map (`@cas/conformal`) —
+ * solving for the prevertices, reentrant corners (αₖ>1) included — then extracts φ's Laurent-at-∞
+ * coefficients (leading c = capacity, tail centred at the conformal centre, rotated so c is real). Vertices
+ * are `[x, y]` counter-clockwise.
+ *
+ * **Adaptive truncation (M2):** reentrant/sharp corners give algebraically-decaying coefficients, so the
+ * series is extracted generously and then trimmed to the last coefficient above `tailTol·max` (a sharp
+ * boundary) — convex polygons trim to a few dozen terms, an L-shape keeps a few hundred. Faber polynomials
+ * up to `minOrder` are always covered and are unaffected by the truncation, so low-degree images stay exact.
+ * The fit's `converged`/`degraded`/`residual` tags are returned so a caller (e.g. the M2 editor) can surface
+ * a bad fit.
+ */
+export function polygonMap(vertices: readonly (readonly [number, number])[], opts?: PolygonMapOptions): PolygonMapResult {
+  const tailTol = opts?.tailTol ?? 1e-4;
+  const minOrder = opts?.minOrder ?? 48;
+  const fit = fitExteriorSchwarzChristoffel(vertices.map((v) => [v[0], v[1]] as [number, number]));
+  // Geometry-aware extraction order: convex corners give fast-decaying coefficients (≤ ~150 terms for the
+  // presets), reentrant corners decay slowly (need the full cap). Trimming below removes any excess.
+  const reentrant = fit.angles.some((a) => a > 1.0001);
+  const maxOrder = opts?.maxOrder ?? (reentrant ? 400 : 200);
+  const { c, laurent } = exteriorMapLaurentAtInfinity(fit, maxOrder);
+  // Trim the slowly-decaying tail: keep up to the last index above tailTol·max, but at least minOrder.
+  const mag = laurent.map((z) => Math.hypot(z[0], z[1]));
+  const peak = Math.max(...mag, Number.MIN_VALUE);
+  let last = Math.min(minOrder, laurent.length - 1);
+  for (let k = 0; k < laurent.length; k++) if (mag[k] > tailTol * peak) last = Math.max(last, k);
+  const kept = laurent.slice(0, last + 1);
+  return {
+    map: { c, laurent: kept.map(([r, i]): Cx => ({ re: r, im: i })) },
+    converged: fit.converged,
+    degraded: fit.degraded,
+    residual: fit.residual,
+  };
 }
