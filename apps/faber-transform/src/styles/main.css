@@ -63,12 +63,30 @@ header.app-head p {
   color: var(--muted);
 }
 
-.panel canvas {
-  display: block;
+.stage {
+  position: relative;
   width: 100%;
   aspect-ratio: 1 / 1;
   border-radius: 6px;
+  overflow: hidden;
   background: #16181f;
+}
+
+.stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.stage canvas.ov {
+  cursor: grab;
+  touch-action: none;
+}
+
+.stage canvas.ov:active {
+  cursor: grabbing;
 }
 
 .controls {

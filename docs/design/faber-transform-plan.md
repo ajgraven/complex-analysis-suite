@@ -327,5 +327,17 @@ none of which v1 blocks:
     gains a monomial/pole **input-mode toggle** (pole via polar `r>1`, `θ` so `|z₀|>1` always), an image-pole
     marker, and a `=` (exact) badge. Verified in-browser: a double pole outside the disk maps to a double
     pole at `φ(z₀)` in the deltoid's exterior. 20 app tests; typecheck/lint clean.
-  - **Step 3 — GPU renderer —** next (wire the app onto the extracted `@cas/gpu` `PHASE_COLORING_GLSL`).
-  - **Step 4 — pan/zoom.**
+  - **Step 3 — GPU renderer — DONE.** Each panel now layers a **WebGL2 phase-portrait canvas** (the shared
+    `@cas/gpu` `colorAt` — a 256×1 HSV LUT + log₂ modulus rings) under a 2-D overlay canvas (axes, ∂𝔻/∂K,
+    markers), with the CPU portrait as an automatic fallback when WebGL2 is absent. A single fragment kernel
+    evaluates any case as a rational `num(z)/den(z)` (two Horner loops, coeffs as uniforms): the monomial,
+    the Faber-image polynomial, the pole input `1/(z−z₀)^k`, and its rational image all pack into it. Added
+    `render/gpu.ts` (`createGpuRenderer`) and the `Rational` builders in `faber.ts`; the app now depends on
+    `@cas/gpu`. Verified in real WebGL (SwiftShader): both panels compile+paint with zero shader errors, and
+    `Φφ(z⁸)` over the deltoid shows all eight Faber zeros clustered on `K` at plotter-quality. 20 app tests;
+    typecheck/lint clean.
+  - **Step 4 — pan/zoom — DONE.** Independent per-panel pan (pointer drag) and zoom-about-cursor (wheel) on
+    each overlay canvas, sharing the `plane.ts` viewport helpers (`viewPxToWorld`/`panTo`/`zoomAboutCursor`);
+    the permalink write is trailing-debounced so a drag/slider sweep doesn't thrash `history`. Smooth on the
+    GPU (re-render per frame). Verified in-browser: wheel zoomed the right panel 1.18→4.97× into a single
+    Faber zero (crisp at depth), drag panned the left panel — no console errors. **M2 complete.**

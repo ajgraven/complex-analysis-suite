@@ -60,3 +60,36 @@ export function transformCoeffs(map: ExteriorMap, taylor: Cx[]): Cx[] {
 export function evalPoly(coeffs: Cx[], w: Cx): Cx {
   return P.eval(coeffs, w);
 }
+
+/** A rational function num(z)/den(z) as ascending-power coefficient arrays (the renderer's input). */
+export interface Rational {
+  readonly num: Cx[];
+  readonly den: Cx[];
+}
+
+const ONE_POLY: Cx[] = [{ re: 1, im: 0 }];
+
+/** A polynomial f as the rational f/1 (for the monomial and Faber-image polynomial cases). */
+export function polynomialRational(coeffs: Cx[]): Rational {
+  return { num: coeffs, den: ONE_POLY.slice() };
+}
+
+/** The pole input f(z) = 1/(z − z₀)^order as num/den. */
+export function poleInputRational(z0: Cx, order: number): Rational {
+  return { num: ONE_POLY.slice(), den: P.linearPower(z0, order) };
+}
+
+/** The exact rational image of the pole input, as num/den over the common denominator (w − p)^order. */
+export function poleImageRational(img: RationalImage, order: number): Rational {
+  const p = img.poleAt;
+  let num = P.zero();
+  for (let j = 1; j <= order; j++) {
+    num = P.add(num, P.scale(P.linearPower(p, order - j), img.terms[j - 1]));
+  }
+  return { num, den: P.linearPower(p, order) };
+}
+
+/** Evaluate a {@link Rational} at w (the CPU-fallback path). */
+export function evalRational(r: Rational, w: Cx): Cx {
+  return Complex.div(P.eval(r.num, w), P.eval(r.den, w));
+}

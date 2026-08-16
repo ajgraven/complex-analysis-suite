@@ -51,6 +51,48 @@ export function planeMap(view: Viewport, widthPx: number, heightPx: number): Pla
   };
 }
 
+export const ZOOM_MIN = 1e-3;
+export const ZOOM_MAX = 1e6;
+
+const clamp = (x: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, x));
+
+/** The complex-plane point under a canvas fraction (fx, fyTop) for `view`. Inverse of planeMap.toPx. */
+export function viewPxToWorld(view: Viewport, fx: number, fyTop: number, aspect: number): Vec2 {
+  const halfH = BASE_HALF / view.zoom;
+  const halfW = halfH * aspect;
+  return [view.centerRe + (2 * fx - 1) * halfW, view.centerIm + (1 - 2 * fyTop) * halfH];
+}
+
+/** New viewport that places `grabWorld` back under (fx, fyTop) at the current zoom (a pan). */
+export function panTo(view: Viewport, grabWorld: Vec2, fx: number, fyTop: number, aspect: number): Viewport {
+  const halfH = BASE_HALF / view.zoom;
+  const halfW = halfH * aspect;
+  return {
+    centerRe: grabWorld[0] - (2 * fx - 1) * halfW,
+    centerIm: grabWorld[1] - (1 - 2 * fyTop) * halfH,
+    zoom: view.zoom,
+  };
+}
+
+/** New viewport after zooming to `newZoom` while keeping the world point under (fx, fyTop) fixed. */
+export function zoomAboutCursor(
+  view: Viewport,
+  fx: number,
+  fyTop: number,
+  aspect: number,
+  newZoom: number,
+): Viewport {
+  const z = clamp(newZoom, ZOOM_MIN, ZOOM_MAX);
+  const world = viewPxToWorld(view, fx, fyTop, aspect);
+  const halfH = BASE_HALF / z;
+  const halfW = halfH * aspect;
+  return {
+    centerRe: world[0] - (2 * fx - 1) * halfW,
+    centerIm: world[1] - (1 - 2 * fyTop) * halfH,
+    zoom: z,
+  };
+}
+
 /** A "nice" grid step (1, 2, 5 × 10ⁿ) giving roughly `target` lines across the view. */
 function niceStep(halfExtent: number, target: number): number {
   const raw = (2 * halfExtent) / Math.max(1, target);

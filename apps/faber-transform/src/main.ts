@@ -1,24 +1,37 @@
 // main.ts — the Faber transform visualizer entry point. Builds the two-panel DOM imperatively (no
-// framework, matching the sibling apps) and repaints on any control change. Two exact input families:
-// a monomial zⁿ (→ Fₙ) and a pole 1/(z−z₀)^k with |z₀|>1 (→ the closed-form rational image, pole at
-// φ(z₀)∈Ω). Both are labelled `=` (exact). Free-form f + the truncated-series `≈` path arrive at M3;
-// the GPU renderer and pan/zoom follow.
+// framework, matching the sibling apps). Each panel layers a WebGL phase-portrait canvas (the shared
+// @cas/gpu colorAt) under a 2-D overlay canvas (axes, ∂𝔻/∂K, markers); a CPU phase portrait is the
+// fallback when WebGL2 is unavailable. Two exact input families: a monomial zⁿ (→ Fₙ) and a pole
+// 1/(z−z₀)^k with |z₀|>1 (→ the closed-form rational image, pole at φ(z₀)∈Ω), both labelled `=`.
 import { Complex } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
 import { PHI_PRESETS, phiPresetById } from "./presets.js";
 import {
   boundaryK,
-  evalPoleInput,
-  evalPoly,
-  evalRationalImage,
+  evalRational,
   monomialTaylor,
   poleImage,
+  poleImageRational,
+  poleInputRational,
+  polynomialRational,
   transformCoeffs,
 } from "./faber.js";
-import { BASE_HALF, drawAxes, drawDot, drawPolyline, planeMap } from "./render/plane.js";
+import type { Rational } from "./faber.js";
+import {
+  BASE_HALF,
+  drawAxes,
+  drawDot,
+  drawPolyline,
+  panTo,
+  planeMap,
+  viewPxToWorld,
+  zoomAboutCursor,
+} from "./render/plane.js";
 import type { Vec2, Viewport } from "./render/plane.js";
 import { fillPhasePortrait } from "./render/coloring.js";
+import { createGpuRenderer } from "./render/gpu.js";
+import type { GpuRenderer } from "./render/gpu.js";
 import {
   DEFAULT_VIEW_STATE,
   MAX_DEGREE,
@@ -32,6 +45,7 @@ import type { FaberViewState, InputState } from "./viewState.js";
 import "./styles/main.css";
 
 const AXIS_COLORS = { grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.16)" };
+const PANEL_BG: readonly [number, number, number] = [22, 24, 30];
 
 interface Marker {
   readonly w: Vec2;
@@ -49,9 +63,7 @@ function unitCircle(samples = 256): Vec2[] {
 }
 
 /** Size a canvas's backing store to its CSS box and return the 2-D context + pixel size. */
-function fitCanvas(
-  canvas: HTMLCanvasElement,
-): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
+function fit2d(canvas: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
   const rect = canvas.getBoundingClientRect();
   const w = Math.max(1, Math.round(rect.width));
   const h = Math.max(1, Math.round(rect.height || rect.width));
@@ -60,24 +72,6 @@ function fitCanvas(
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
   return { ctx, w, h };
-}
-
-/** Paint one panel: phase portrait of `g`, then axes, an overlay polyline (∂𝔻 or ∂K), and markers. */
-function paintPanel(
-  canvas: HTMLCanvasElement,
-  view: Viewport,
-  g: (w: Vec2) => Cx | null,
-  overlay: Vec2[],
-  overlayColor: string,
-  markers: Marker[] = [],
-): void {
-  const fit = fitCanvas(canvas);
-  if (!fit) return;
-  const map = planeMap(view, fit.w, fit.h);
-  fillPhasePortrait(fit.ctx, map, g);
-  drawAxes(fit.ctx, map, AXIS_COLORS);
-  drawPolyline(fit.ctx, map, overlay, { color: overlayColor, width: 1.8 });
-  for (const m of markers) drawDot(fit.ctx, map, m.w, m.color, 4);
 }
 
 function elt<K extends keyof HTMLElementTagNameMap>(
@@ -93,11 +87,53 @@ function elt<K extends keyof HTMLElementTagNameMap>(
 
 const fmt = (v: Cx): string => Complex.format(v, { digits: 4 });
 
-/** Default input for a mode when the user toggles into it. */
 function defaultInput(kind: InputState["kind"]): InputState {
   return kind === "monomial"
     ? { kind: "monomial", degree: 3 }
     : { kind: "pole", re: 1.6, im: 0.8, order: 1 };
+}
+
+/** One panel: a WebGL canvas (phase portrait) under a 2-D overlay canvas (axes / curves / markers). */
+interface Panel {
+  readonly gl: HTMLCanvasElement;
+  readonly ov: HTMLCanvasElement;
+  renderer: GpuRenderer | null;
+}
+
+function makePanel(title: string): { panel: Panel; el: HTMLElement } {
+  const gl = elt("canvas", { class: "gl" });
+  const ov = elt("canvas", { class: "ov" });
+  const stage = elt("div", { class: "stage" });
+  stage.append(gl, ov);
+  const box = elt("div", { class: "panel" });
+  box.append(elt("h2", {}, title), stage);
+  return { panel: { gl, ov, renderer: null }, el: box };
+}
+
+function paintPanel(
+  panel: Panel,
+  view: Viewport,
+  rat: Rational,
+  maskDisk: boolean,
+  overlay: Vec2[],
+  overlayColor: string,
+  markers: Marker[],
+): void {
+  const ov = fit2d(panel.ov);
+  if (!ov) return;
+  const map = planeMap(view, ov.w, ov.h);
+  if (panel.renderer) {
+    panel.renderer.render(view, rat.num, rat.den, maskDisk);
+    ov.ctx.clearRect(0, 0, ov.w, ov.h); // transparent overlay above the GL portrait
+  } else {
+    fillPhasePortrait(ov.ctx, map, (w) => {
+      if (maskDisk && w[0] * w[0] + w[1] * w[1] >= 1) return null;
+      return evalRational(rat, { re: w[0], im: w[1] });
+    });
+  }
+  drawAxes(ov.ctx, map, AXIS_COLORS);
+  drawPolyline(ov.ctx, map, overlay, { color: overlayColor, width: 1.8 });
+  for (const m of markers) drawDot(ov.ctx, map, m.w, m.color, 4);
 }
 
 function main(): void {
@@ -107,7 +143,6 @@ function main(): void {
   let state: FaberViewState = decodeFaberState(window.location.hash) ?? DEFAULT_VIEW_STATE;
   root.replaceChildren();
 
-  // --- Header ---------------------------------------------------------------
   const head = elt("header", { class: "app-head" });
   head.append(
     elt("h1", {}, "Faber Transform"),
@@ -121,15 +156,10 @@ function main(): void {
   );
   root.append(head);
 
-  // --- Panels ---------------------------------------------------------------
-  const leftCanvas = elt("canvas", { "aria-label": "f on the unit disk" });
-  const rightCanvas = elt("canvas", { "aria-label": "Faber transform of f on K" });
+  const left = makePanel("f(z) on the unit disk  𝔻");
+  const right = makePanel("Φφ(f)(w) on K");
   const panels = elt("div", { class: "panels" });
-  const leftPanel = elt("div", { class: "panel" });
-  leftPanel.append(elt("h2", {}, "f(z) on the unit disk  𝔻"), leftCanvas);
-  const rightPanel = elt("div", { class: "panel" });
-  rightPanel.append(elt("h2", {}, "Φφ(f)(w) on K"), rightCanvas);
-  panels.append(leftPanel, rightPanel);
+  panels.append(left.el, right.el);
   root.append(panels);
 
   // --- Controls -------------------------------------------------------------
@@ -153,13 +183,11 @@ function main(): void {
   const modeCtl = elt("div", { class: "control" });
   modeCtl.append(elt("label", { for: "mode" }, "input f"), modeSel);
 
-  // Monomial control
   const degInput = elt("input", { id: "deg", type: "range", min: String(MIN_DEGREE), max: "12", step: "1" });
   const degLabel = elt("label", { for: "deg" }, "degree n");
   const degCtl = elt("div", { class: "control" });
   degCtl.append(degLabel, degInput);
 
-  // Pole controls (polar: r > 1 keeps z₀ outside the disk; θ its angle)
   const rInput = elt("input", { id: "poleR", type: "range", min: "1.05", max: "3", step: "0.01" });
   const rLabel = elt("label", { for: "poleR" }, "|z₀|");
   const rCtl = elt("div", { class: "control" });
@@ -184,7 +212,10 @@ function main(): void {
   readout.append(exactBadge, readoutBody);
   root.append(readout);
 
-  // --- Render + sync --------------------------------------------------------
+  // GPU renderers (null ⇒ CPU fallback). Created after the panels are in the DOM (need a sized canvas).
+  left.panel.renderer = createGpuRenderer(left.panel.gl, PANEL_BG);
+  right.panel.renderer = createGpuRenderer(right.panel.gl, PANEL_BG);
+
   function syncControls(): void {
     const preset = phiPresetById(state.phi);
     phiSel.value = preset.id;
@@ -224,45 +255,20 @@ function main(): void {
 
     if (state.input.kind === "monomial") {
       const n = state.input.degree;
-      paintPanel(
-        leftCanvas,
-        state.zView,
-        (w) => {
-          const z: Cx = { re: w[0], im: w[1] };
-          if (z.re * z.re + z.im * z.im >= 1) return null;
-          return Complex.pow(z, n);
-        },
-        unitCircle(),
-        "rgba(255,255,255,0.55)",
-      );
+      paintPanel(left.panel, state.zView, polynomialRational(monomialTaylor(n)), true, unitCircle(), "rgba(255,255,255,0.55)", []);
       const coeffs = transformCoeffs(map, monomialTaylor(n));
-      paintPanel(
-        rightCanvas,
-        state.wView,
-        (w) => evalPoly(coeffs, { re: w[0], im: w[1] }),
-        boundaryK(map),
-        "rgba(255,255,255,0.75)",
-      );
+      paintPanel(right.panel, state.wView, polynomialRational(coeffs), false, boundaryK(map), "rgba(255,255,255,0.75)", []);
       readoutBody.textContent = `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`;
     } else {
       const z0: Cx = { re: state.input.re, im: state.input.im };
       const order = state.input.order;
-      paintPanel(
-        leftCanvas,
-        state.zView,
-        (w) => {
-          const z: Cx = { re: w[0], im: w[1] };
-          if (z.re * z.re + z.im * z.im >= 1) return null;
-          return evalPoleInput(z0, order, z);
-        },
-        unitCircle(),
-        "rgba(255,255,255,0.55)",
-      );
+      paintPanel(left.panel, state.zView, poleInputRational(z0, order), true, unitCircle(), "rgba(255,255,255,0.55)", []);
       const img = poleImage(map, z0, order);
       paintPanel(
-        rightCanvas,
+        right.panel,
         state.wView,
-        (w) => evalRationalImage(img, { re: w[0], im: w[1] }),
+        poleImageRational(img, order),
+        false,
         boundaryK(map),
         "rgba(255,255,255,0.75)",
         [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
@@ -275,11 +281,68 @@ function main(): void {
     syncControls();
   }
 
+  // Update state + repaint immediately; write the permalink on a trailing debounce so a drag / slider
+  // sweep doesn't thrash history.replaceState.
+  let hashTimer = 0;
   function commit(next: FaberViewState): void {
     state = next;
-    history.replaceState(null, "", encodeFaberState(state));
     render();
+    if (hashTimer) window.clearTimeout(hashTimer);
+    hashTimer = window.setTimeout(
+      () => history.replaceState(null, "", encodeFaberState(state)),
+      200,
+    );
   }
+
+  // --- Pan / zoom (per panel; the overlay canvas is on top and receives pointer events) --------------
+  const viewOf = (which: "zView" | "wView"): Viewport => (which === "zView" ? state.zView : state.wView);
+  const withView = (which: "zView" | "wView", vp: Viewport): FaberViewState =>
+    which === "zView" ? { ...state, zView: vp } : { ...state, wView: vp };
+
+  function pointerFrac(canvas: HTMLCanvasElement, e: PointerEvent | WheelEvent): {
+    fx: number;
+    fyTop: number;
+    aspect: number;
+  } {
+    const r = canvas.getBoundingClientRect();
+    return {
+      fx: (e.clientX - r.left) / Math.max(1, r.width),
+      fyTop: (e.clientY - r.top) / Math.max(1, r.height),
+      aspect: r.width / Math.max(1, r.height),
+    };
+  }
+
+  function attachNav(canvas: HTMLCanvasElement, which: "zView" | "wView"): void {
+    let grab: Vec2 | null = null;
+    canvas.addEventListener("pointerdown", (e) => {
+      const f = pointerFrac(canvas, e);
+      grab = viewPxToWorld(viewOf(which), f.fx, f.fyTop, f.aspect);
+      canvas.setPointerCapture(e.pointerId);
+    });
+    canvas.addEventListener("pointermove", (e) => {
+      if (grab === null) return;
+      const f = pointerFrac(canvas, e);
+      commit(withView(which, panTo(viewOf(which), grab, f.fx, f.fyTop, f.aspect)));
+    });
+    const end = (e: PointerEvent): void => {
+      grab = null;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+    };
+    canvas.addEventListener("pointerup", end);
+    canvas.addEventListener("pointercancel", end);
+    canvas.addEventListener(
+      "wheel",
+      (e) => {
+        e.preventDefault();
+        const f = pointerFrac(canvas, e);
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        commit(withView(which, zoomAboutCursor(viewOf(which), f.fx, f.fyTop, f.aspect, viewOf(which).zoom * factor)));
+      },
+      { passive: false },
+    );
+  }
+  attachNav(left.panel.ov, "zView");
+  attachNav(right.panel.ov, "wView");
 
   phiSel.addEventListener("change", () => {
     const preset = phiPresetById(phiSel.value);

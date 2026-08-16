@@ -237,6 +237,9 @@ importers:
       '@cas/faber':
         specifier: workspace:*
         version: link:../../packages/faber
+      '@cas/gpu':
+        specifier: workspace:*
+        version: link:../../packages/gpu
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
