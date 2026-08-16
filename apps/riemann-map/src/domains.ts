@@ -130,9 +130,9 @@ export const DOMAIN_PRESETS: readonly DomainPreset[] = [
   { id: "offdisk", name: "Off-centre disk", radius: offCentreDiskRadius(0.45, 1) },
   { id: "blob", name: "Smooth blob", radius: (t) => 1 + 0.3 * Math.cos(3 * t) },
   { id: "oval", name: "Rounded oval", radius: (t) => 1 + 0.35 * Math.cos(2 * t) },
-  polygonPreset("square", "Square (corners)", SQUARE),
-  polygonPreset("triangle", "Triangle (corners)", TRIANGLE),
-  polygonPreset("pentagon", "Pentagon (corners)", PENTAGON),
+  polygonPreset("square", "Square", SQUARE),
+  polygonPreset("triangle", "Triangle", TRIANGLE),
+  polygonPreset("pentagon", "Pentagon", PENTAGON),
 ] as const;
 
 /** The preset with this id, or undefined. */

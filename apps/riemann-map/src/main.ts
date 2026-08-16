@@ -31,7 +31,7 @@ import { importExteriorMap, type ImportedExterior } from "./interchange/importMa
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
 import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type ConformalMap } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
-import { createControls } from "./ui/controls.js";
+import { createControls, type MethodCard } from "./ui/controls.js";
 
 function initialState(): RiemannViewState {
   return decodeRiemannState(window.location.hash) ?? DEFAULT_VIEW_STATE;
@@ -171,7 +171,10 @@ function main(): void {
   note.className = "note";
   const legendEl = document.createElement("div");
   legendEl.className = "legend-chip";
-  left.append(canvas, overlayCanvas, legendEl, note);
+  const llabel = document.createElement("div");
+  llabel.className = "panelabel";
+  llabel.textContent = "z  ·  unit disk";
+  left.append(canvas, overlayCanvas, llabel, legendEl, note);
 
   const right = document.createElement("div");
   right.className = "pane right";
@@ -192,11 +195,10 @@ function main(): void {
 
   let current: CompiledMap | null = null;
   let cursorZ: Pt | null = null;
-  // Numerical-Riemann-map (domain) mode (P3b): the fitted map + its source/image conformal grids.
-  let domainId = domainById(state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
-  // Disk-image region source (2.1 / 3.1): the target Ω for the forward map g: 𝔻 → Ω. Smooth Ω uses the
-  // lightning forward map; polygon Ω uses the Schwarz–Christoffel engine (@cas/conformal).
-  let regionId = domainById(state.render.region ?? "")?.id ?? DOMAIN_PRESETS[0].id;
+  // The region Ω, shared by BOTH directions of a region's map: 𝔻→Ω (disk-image region source; smooth Ω
+  // uses the lightning forward map, polygon Ω the Schwarz–Christoffel engine) and Ω→𝔻 (numeric domain-map
+  // mode; lightning f: Ω→𝔻). One "Shape" picker drives both — so switching Direction keeps the shape.
+  let shapeId = domainById(state.render.region ?? state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
   let domainMap: ConformalMap | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
@@ -211,14 +213,18 @@ function main(): void {
   let cParam: [number, number] = state.map.c ? [state.map.c[0], state.map.c[1]] : [0.45, 0.2]; // family param
   let usesC = /\bc\b/.test(state.map.expr); // does φ reference the draggable c?
   // A fitted region map g: 𝔻 → Ω — either the lightning forward map (smooth Ω) or Schwarz–Christoffel
-  // (polygon Ω), behind one interface so the pushforward + info panel don't care which.
+  // (polygon Ω), behind one interface so the pushforward + method card don't care which.
   interface RegionMap {
     eval(w: Pt): Pt;
-    method: string;
+    engine: "sc" | "lightning";
     residual: number;
-    rows: readonly (readonly [string, string])[];
+    stats: readonly (readonly [string, string])[];
+    converged?: boolean;
   }
   let regionMap: RegionMap | null = null; // the forward Riemann map g: 𝔻 → Ω (region source, 2.1 / 3.1)
+  // Cached Method-card models, refreshed when each engine (re)fits; updateMethod() picks by view.
+  let regionCard: MethodCard | null = null; // 𝔻→Ω (region source)
+  let domainCard: MethodCard | null = null; // Ω→𝔻 (domain-map mode)
   let domainDirty = true;
   let diskDirty = true;
   let regionDirty = true; // (re)fit the forward map g when the region source or domain changes
@@ -278,28 +284,106 @@ function main(): void {
     current = compiled.map;
   }
 
-  /** Contextual disclosure (A1): show only the controls the current mode uses, and label the w-pane.
-   *  The two modes are the disk-image view (the default, for any non-domain id) and the numeric domain map. */
+  // ---- the "Visualize" + "Direction" chooser ⇄ internal (mode, diskSource) state ----
+  type Vis = "formula" | "region" | "import";
+  type Dir = "d2r" | "r2d";
+  const currentVis = (): Vis =>
+    modeIsDomain(state.render.mode)
+      ? "region"
+      : state.render.diskSource === "region"
+        ? "region"
+        : state.render.diskSource === "import"
+          ? "import"
+          : "formula";
+  const currentDir = (): Dir => (modeIsDomain(state.render.mode) ? "r2d" : "d2r");
+
+  /** Map the plain Visualize + Direction choice onto the internal (mode, diskSource) state. */
+  function setModeSource(vis: Vis, dir: Dir): void {
+    const r = state.render;
+    if (vis === "formula") state = { ...state, render: { ...r, mode: "disk-image", diskSource: "expression" } };
+    else if (vis === "import") state = { ...state, render: { ...r, mode: "disk-image", diskSource: "import" } };
+    else if (dir === "r2d") state = { ...state, render: { ...r, mode: "domain-map" } };
+    else state = { ...state, render: { ...r, mode: "disk-image", diskSource: "region" } };
+  }
+
+  /** Set the dirty flags a view change needs, refresh disclosure, and schedule a redraw. */
+  function afterViewChange(): void {
+    if (modeIsDomain(state.render.mode)) domainDirty = true;
+    else {
+      diskDirty = true;
+      fitPending = true; // reframe the disk pane for the new source
+      if (diskSourceIsRegion()) regionDirty = true;
+    }
+    applyModeContext();
+    invalidate();
+  }
+
+  // ---- the Method card (the engine that ran + its honest accuracy) ----
+  function pendingCard(): MethodCard {
+    return domainById(shapeId)?.corners
+      ? {
+          name: "Schwarz–Christoffel",
+          tag: "exact map",
+          tagKind: "sc",
+          desc: "The exact conformal map onto a polygon, built from its corner angles.",
+          stats: [["status", "solving…"]],
+          honesty: ["= exact corner angles", "≈ numerical map"],
+        }
+      : {
+          name: "Lightning solver",
+          tag: "numerical",
+          tagKind: "light",
+          desc: "A fast least-squares conformal fit for a smooth boundary.",
+          stats: [["status", "fitting…"]],
+        };
+  }
+  function importCard(): MethodCard {
+    if (!importedMap) {
+      return {
+        name: "No map loaded",
+        tag: "from a link",
+        tagKind: "light",
+        desc: "Paste a Complex Dynamics “Riemann Map ↗” link to render its exterior map here.",
+        stats: [],
+      };
+    }
+    const cap = Math.hypot(importedMap.lead[0], importedMap.lead[1]);
+    return {
+      name: "Imported exterior map",
+      tag: "from a link",
+      tagKind: "light",
+      desc: "A filled Julia set's exterior Böttcher map, handed off from Complex Dynamics.",
+      stats: [
+        ["capacity", "≈ " + fmt(cap)],
+        ["terms", importedMap.coeffs.length + " bₖ"],
+      ],
+    };
+  }
+  function updateMethod(): void {
+    const vis = currentVis();
+    if (vis === "formula") return controls.setMethod(null);
+    if (vis === "import") return controls.setMethod(importCard());
+    if (currentDir() === "r2d") return controls.setMethod(domainCard ?? pendingCard());
+    return controls.setMethod(regionCard ?? pendingCard());
+  }
+
+  /** Contextual disclosure (A1): reveal only the controls the current view uses, and label both panes. */
   function applyModeContext(): void {
-    const m = state.render.mode;
-    const disk = modeIsDiskImage(m);
-    const region = disk && diskSourceIsRegion();
-    const imported = disk && diskSourceIsImport();
-    controls.setControlVisibility({
-      domain: modeIsDomain(m), // the numeric domain→disk mode's region picker
-      disk, // the disk-image controls (source, style, density…)
-      region, // region source ⇒ show the region picker
-      exterior: imported, // an imported exterior map ⇒ exterior-only (hide interior/exterior + region)
-      import: imported, // imported source ⇒ show the "Import map…" action
-    });
-    rlabel.textContent = disk
-      ? region
-        ? "w = g(w)  ·  image of 𝔻 in Ω"
-        : imported
-          ? "w = ψ(w)  ·  imported exterior map"
-          : "w = φ(z)  ·  image of the disk"
-      : "w = f(z)  ·  unit disk";
-    renderLegend(legendEl, legendModel(m)); // colour-key chip (A4)
+    const vis = currentVis();
+    const dir = currentDir();
+    controls.setContext({ vis, dir });
+    const [ll, rl] =
+      vis === "formula"
+        ? ["Source · unit disk 𝔻", "Image · w = φ(z)"]
+        : vis === "import"
+          ? ["Source · exterior 𝔻*", "Image · ψ — exterior map"]
+          : dir === "r2d"
+            ? ["Source · region Ω", "Image · unit disk 𝔻"]
+            : ["Source · unit disk 𝔻", "Image · region Ω"];
+    llabel.textContent = ll;
+    rlabel.textContent = rl;
+    updateMethod();
+    renderLegend(legendEl, legendModel(state.render.mode)); // colour-key chip (A4)
   }
 
   // ---- numerical Riemann map of a domain (P3b) -----------------------------
@@ -313,12 +397,14 @@ function main(): void {
 
   /** Fit f: Ω → 𝔻 for the selected domain and build its source (Ω) and image (disk) conformal grids. */
   function computeDomain(): void {
-    const d = domainById(domainId);
+    const d = domainById(shapeId);
     if (!d) {
       domainMap = null;
       domainSource = [];
       domainImage = [];
+      domainCard = null;
       controls.setAnalysis(null);
+      updateMethod();
       return;
     }
     // Corner domains (polygons) cluster poles at the vertices (lightning, P3c) and sample the boundary
@@ -352,6 +438,20 @@ function main(): void {
     if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
     rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
     controls.setAnalysis(rows, "Numerical map");
+    domainCard = {
+      name: f.poles.length ? "Lightning + corner poles" : "Lightning solver",
+      tag: "numerical",
+      tagKind: "light",
+      desc: d.corners
+        ? "The Riemann map Ω → 𝔻 by the lightning fit with clustered corner poles. (Schwarz–Christoffel maps 𝔻 → Ω; the reverse here uses this fit.)"
+        : "The Riemann map Ω → 𝔻 by the lightning least-squares fit (Gopal–Trefethen).",
+      stats: [
+        ["degree", "= " + f.degree],
+        ...(f.poles.length ? [["poles", "= " + f.poles.length] as [string, string]] : []),
+        ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
+      ],
+    };
+    updateMethod();
   }
 
   // ---- the image of the disk (P4 — the primary view) -----------------------
@@ -369,41 +469,66 @@ function main(): void {
    *  is a Schwarz–Christoffel job (3.1) — the parameter solve gives an exact-form map that is stable at the
    *  corners the lightning forward fit is not; a smooth Ω uses the lightning forward map (2.1). */
   function fitRegion(): void {
-    const d = domainById(regionId);
+    const d = domainById(shapeId);
     if (!d) {
       regionMap = null;
+      regionCard = null;
+      updateMethod();
       return;
     }
     if (d.corners) {
       // A lower Gauss–Legendre order keeps the per-point pushforward cheap for interactive rendering.
       const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
-      const rows: [string, string][] = [
+      const stats: [string, string][] = [
         ["prevertices", "= " + d.corners.length + (sc.converged ? "  (solved)" : "  (not converged)")],
       ];
-      if (sc.modulus !== undefined) rows.push(["conf. modulus", "≈ " + fmt(sc.modulus)]);
+      if (sc.modulus !== undefined) stats.push(["conf. modulus", "≈ " + fmt(sc.modulus)]);
+      stats.push(["residual", "≈ " + fmt(sc.residual)]);
       regionMap = {
         eval: (w: Pt): Pt => {
           const p = sc.forward([w[0], w[1]]);
           return [p[0], p[1]];
         },
-        method: "Schwarz–Christoffel (parameter solve)",
+        engine: "sc",
         residual: sc.residual,
-        rows,
+        stats,
+        converged: sc.converged,
       };
+      regionCard = {
+        name: "Schwarz–Christoffel",
+        tag: sc.converged ? "exact map" : "check residual",
+        tagKind: "sc",
+        desc: "The exact conformal map onto a polygon, built from its corner angles — machine precision, with meaningful prevertices & accessory constants.",
+        stats,
+        honesty: ["= exact corner angles", "≈ numerical map"],
+      };
+      updateMethod();
       return;
     }
     const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
     const f = fitConformalMap(boundary, DOMAIN_DEGREE); // Ω → 𝔻
     const g = fitForwardMap(f, boundary, DOMAIN_DEGREE); // 𝔻 → Ω (the forward map we push the disk through)
+    const stats: [string, string][] = [
+      ["degree", "= " + g.degree],
+      ["boundary resid.", "≈ " + fmt(g.boundaryResidual)],
+    ];
     regionMap = {
       eval: (w: Pt): Pt => {
         const p = g.eval([w[0], w[1]]);
         return [p[0], p[1]];
       },
-      method: "lightning + forward LSQ",
+      engine: "lightning",
       residual: g.boundaryResidual,
-      rows: [["degree", "= " + g.degree]],
+      stats,
     };
+    regionCard = {
+      name: "Lightning solver",
+      tag: "numerical",
+      tagKind: "light",
+      desc: "A fast least-squares conformal fit for a smooth boundary (Gopal–Trefethen).",
+      stats,
+    };
+    updateMethod();
   }
 
   /** Build the unit-disk polar grid and its pushforward — filled cells AND ring/spoke line curves — for
@@ -498,13 +623,12 @@ function main(): void {
         ["univalent", "= yes  (exterior map, by construction)"],
       ];
     } else if (region && regionMap) {
-      const d = domainById(regionId);
+      const d = domainById(shapeId);
       rows = [
         ["source", "region 𝔻 → Ω  (numeric)"],
-        ["region Ω", d ? d.name : regionId],
-        ["method", regionMap.method],
-        ...regionMap.rows.map((r): [string, string] => [r[0], r[1]]),
-        ["boundary resid.", "≈ " + fmt(regionMap.residual)],
+        ["region Ω", d ? d.name : shapeId],
+        ["engine", regionMap.engine === "sc" ? "Schwarz–Christoffel" : "lightning"],
+        ...regionMap.stats.map((r): [string, string] => [r[0], r[1]]),
         ["grid", `${diskRadial()} × ${diskSectors()}  (radial × angular)`],
         ["univalent", "= yes  (Riemann map, by construction)"],
       ];
@@ -767,10 +891,9 @@ function main(): void {
   }
 
   // ---- controls ------------------------------------------------------------
-  controls.setMode(state.render.mode);
-  controls.setDomain(domainId);
-  controls.setRegionDomain(regionId);
-  controls.setDiskSource(state.render.diskSource ?? "expression");
+  controls.setVisualize(currentVis());
+  controls.setDirection(currentDir());
+  controls.setShape(shapeId);
   controls.setDiskSide(diskSide());
   controls.setDiskStyle(diskStyle());
   controls.setDiskShow(diskShow());
@@ -785,23 +908,13 @@ function main(): void {
     diskDirty = true; // the disk-image cells are a function of φ
     invalidate();
   });
-  controls.onMode((id) => {
-    state = { ...state, render: { ...state.render, mode: id } };
-    if (modeIsDomain(id)) domainDirty = true; // (re)fit f on entering the numerical-map mode
-    if (modeIsDiskImage(id)) {
-      diskDirty = true; // (re)build the disk-image cells on entering
-      fitPending = true; // and re-frame the disk pane
-    }
-    invalidate();
-    applyModeContext(); // show/hide mode-irrelevant controls + relabel the w-pane (A1/A8)
+  controls.onVisualize((id) => {
+    setModeSource(id as Vis, currentDir()); // formula / region / import → internal (mode, diskSource)
+    afterViewChange();
   });
-  controls.onDiskSource((id) => {
-    state = { ...state, render: { ...state.render, diskSource: id } };
-    if (id === "region") regionDirty = true; // (re)fit g on entering the region source
-    diskDirty = true;
-    fitPending = true; // a region map is interior-only — reframe the pane
-    applyModeContext(); // show the region picker / hide interior-exterior + the c handle
-    invalidate();
+  controls.onDirection((id) => {
+    setModeSource("region", id as Dir); // 𝔻→Ω (disk-image region) vs Ω→𝔻 (numeric domain-map)
+    afterViewChange();
   });
   // Paste an @cas/interchange "#s=" link (Complex Dynamics' "Send to Riemann Map", or a QD φ) → import it
   // as the exterior disk-image source. The deep-link path (a "#s=" hash on load) is handled at boot.
@@ -816,8 +929,7 @@ function main(): void {
     importedMap = m;
     // Record the coefficients in the view-state so the permalink is self-contained (survives reload).
     state = { ...state, render: { ...state.render, diskSource: "import", mode: "disk-image", imported: m } };
-    controls.setMode(state.render.mode);
-    controls.setDiskSource("import");
+    controls.setVisualize("import");
     diskDirty = true;
     fitPending = true;
     applyModeContext();
@@ -857,18 +969,17 @@ function main(): void {
     fitPending = true; // switching back to two-pane re-frames the (now narrower) disk pane
     invalidate();
   });
-  controls.onDomain((id) => {
-    domainId = id;
-    state = { ...state, render: { ...state.render, domain: id } };
-    domainDirty = true; // the numeric domain→disk mode
-    invalidate();
-  });
-  controls.onRegionDomain((id) => {
-    regionId = id;
-    state = { ...state, render: { ...state.render, region: id } };
-    regionDirty = true; // (re)fit the forward map g: 𝔻 → Ω
+  controls.onShape((id) => {
+    shapeId = id;
+    // One shape drives both directions; set both fields so a permalink + a Direction flip stay in sync.
+    state = { ...state, render: { ...state.render, region: id, domain: id } };
+    regionDirty = true; // (re)fit g: 𝔻 → Ω (region source)
+    domainDirty = true; // (re)fit f: Ω → 𝔻 (domain-map)
     diskDirty = true;
-    fitPending = true;
+    if (modeIsDiskImage(state.render.mode)) fitPending = true;
+    regionCard = null; // drop the stale card so the Method card reads "solving…" until the refit lands
+    domainCard = null;
+    updateMethod();
     invalidate();
   });
   controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportDomainPlate()));

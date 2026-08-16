@@ -99,7 +99,60 @@ body {
 }
 .sidebar input.expr { font-family: var(--mono); }
 .field { display: flex; flex-direction: column; gap: 0.2rem; }
-.field-label { font-size: 0.72rem; color: var(--muted); }
+.field-label { font-size: 0.72rem; color: var(--muted); display: flex; align-items: baseline; gap: 0.35rem; }
+/* the notation that rides alongside a plain-language label (𝔻, Ω, φ) — present, but quieter */
+.field-label .note-sym { color: var(--muted); opacity: 0.7; font-size: 0.68rem; }
+select optgroup { font-style: normal; font-weight: 600; color: var(--muted); }
+select option { font-weight: 400; color: var(--fg); }
+
+/* --- Visualize / Direction segmented controls ------------------------------------------------ */
+.seg {
+  display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 0.3rem;
+  padding: 0.25rem; background: var(--field-bg); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.seg button {
+  font: inherit; cursor: pointer; border: 1px solid transparent; background: transparent; color: var(--muted);
+  border-radius: var(--radius); padding: 0.5rem 0.35rem; display: flex; flex-direction: column;
+  align-items: center; gap: 0.15rem; line-height: 1.2; min-width: 0;
+}
+.seg button .glyph { font-size: 1.05rem; }
+.seg button .cap { font-size: 0.74rem; font-weight: 600; text-align: center; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"] {
+  background: var(--surface); color: var(--accent); border-color: var(--border);
+}
+.seg.small button { flex-direction: row; justify-content: center; padding: 0.4rem 0.3rem; }
+.seg.small button .cap { font-weight: 600; }
+.seg.small button .sym { color: var(--muted); opacity: 0.7; font-size: 0.72rem; margin-left: 0.3rem; }
+
+/* the contextual one-liner under a chooser / an inline note */
+.explainer {
+  font-size: 0.78rem; color: var(--muted); line-height: 1.45;
+  background: color-mix(in srgb, var(--accent) 8%, var(--surface));
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.6rem;
+}
+
+/* --- Method card (the engine that ran + its honest accuracy) --------------------------------- */
+.method {
+  border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius);
+  background: var(--field-bg); padding: 0.6rem 0.7rem;
+}
+.method.light { border-left-color: var(--muted); }
+.method .m-top { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+.method .m-name { font-weight: 600; font-size: 0.92rem; letter-spacing: -0.01em; }
+.method .m-tag {
+  font-size: 0.63rem; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase;
+  padding: 0.15rem 0.4rem; border-radius: 999px; white-space: nowrap;
+}
+.method .m-tag.sc { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.method .m-tag.light { color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.method .m-desc { font-size: 0.76rem; color: var(--muted); margin: 0.35rem 0 0; line-height: 1.4; }
+.method .m-stats { display: flex; flex-wrap: wrap; gap: 0.4rem 0.9rem; margin-top: 0.5rem; font-size: 0.72rem; }
+.method .m-stats div { display: flex; flex-direction: column; }
+.method .m-stats .k { color: var(--muted); opacity: 0.85; }
+.method .m-stats .v { color: var(--fg); }
+.method .honesty { font-size: 0.7rem; color: var(--muted); margin-top: 0.45rem; display: flex; flex-wrap: wrap; gap: 0.15rem 0.7rem; }
+.method .honesty .ex { color: var(--accent); font-weight: 700; }
 /* disk-grid density slider + its live value */
 .field input[type="range"] { width: 100%; accent-color: var(--accent); }
 .field-value { align-self: flex-end; margin-top: -0.15rem; font-size: 0.72rem; color: var(--muted); font-family: var(--mono); }
