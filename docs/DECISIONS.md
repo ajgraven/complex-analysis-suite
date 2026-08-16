@@ -1858,8 +1858,11 @@ where the one new primitive lives.
 6. [x] **Done:** wire the SC engine into the Riemann-map app — a polygon region source (`fitRegion` in
        `apps/riemann-map/src/main.ts` uses `fitSchwarzChristoffel` for domains with `corners`; the region
        picker offers the polygon presets; the info panel reports the SC method + residual).
-7. [ ] **Deferred:** CRDT (crowding), exterior/unbounded/circular-arc variants, `@cas/interchange`
-       serialization, and a robust reentrant lightning fast-mode.
+7. [~] **Partly done:** the **exterior** SC variant (𝔻* → Ω, bounded simple polygon) shipped for the Faber
+       Transform app — `exteriorSchwarzChristoffel.ts` + `exteriorScParameterProblem.ts` (see
+       [ADR-0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)). Still
+       **deferred:** CRDT (crowding), unbounded/circular-arc variants, `@cas/interchange` serialization, and a
+       robust reentrant lightning fast-mode.
 
 ---
 
@@ -2028,3 +2031,76 @@ WCAG 1.4.1 (use of colour) and 1.4.11 (non-text contrast).
    ΔE CVD separation (≥ 8 under Machado protan+deutan; the trio measures 8.31 dark / 8.87 light), the
    normal-vision ΔE floor (≥ 15), the OKLCH lightness band + chroma floor, and ≥ 3:1 contrast on the plane
    surface. Runs under `pnpm test`, so a token edit that regresses colour-blind safety fails CI.
+
+---
+
+## ADR-0024: Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Records, retroactively, the suite's **seventh** app — `apps/faber-transform` — its engine package
+**`@cas/faber`** (the tenth `@cas/*` package), and the **polygonal-domain** extension that gives
+[`@cas/conformal`](../packages/conformal) its second Schwarz–Christoffel family. Research context + the
+prioritized extension list: [`design/faber-transform-research-features.md`](design/faber-transform-research-features.md);
+the polygonal-SC runbook (with the M0 de-risk spike) is
+[`design/faber-polygonal-sc-plan.md`](design/faber-polygonal-sc-plan.md).*
+
+### Context
+The paper (Graven & Makarov, arXiv:2509.03777) makes the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K) the natural
+bridge between the unit disk and a bounded complement `K = ℂ∖Ω`. A separate visualizer app (per
+[decision 8](../CLAUDE.md) / [ADR-0004](#adr-0004-monorepo-topology), mirroring the Argument-Principle app of
+[ADR-0019](#adr-0019-argument-principle-as-a-separate-app)) is the right home, riding the shared packages. The
+Faber machinery itself (Faber-polynomial recurrence, exact rational images of poles/monomials, the exterior
+map's Laurent jet) is app-agnostic numerics — a package, not app glue. And the single biggest domain-class win
+(T2.3) is **polygonal K**, which needs an **exterior** Schwarz–Christoffel map (𝔻* → Ω) — a variant the interior
+SC engine of [ADR-0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode) had
+deferred (its Action Item 7).
+
+### Decision
+1. **Faber Transform is a separate app** (`apps/faber-transform`), not a mode of another tool — the same
+   separate-apps-with-hand-off topology every other tool follows (ADR-0004/ADR-0008/ADR-0019).
+2. **The Faber engine is a package, `@cas/faber`** (the tenth). Everything downstream consumes one struct —
+   `ExteriorMap = { c, laurent }`, the map's Laurent-at-∞ — so the recurrence, exact images, and render are
+   blind to *how* φ was produced (a curated closed form, or a solved SC map).
+3. **Polygonal K rides `@cas/conformal`'s exterior SC engine**, not a new package. The exterior variant
+   (`exteriorSchwarzChristoffel.ts` forward map + `exteriorScParameterProblem.ts` parameter solve) is added
+   **in-package**, sharing the extracted `gaussNewton.ts` damped-Gauss–Newton driver with the interior solver.
+   Faber Transform is its **sole** consumer, so per [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+   it stays inside `@cas/conformal` — a **second SC family** beside ADR-0020's interior/bounded builders, and a
+   second delivered consumer of the ahead-of-demand extraction of
+   [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore).
+4. **Honest labeling (guardrail).** Closed-form domains (ellipse/deltoid/finite-Laurent, regular polygons) are
+   exact `=`; solved-polygon domains are `≈`; a degenerate/self-intersecting/non-converged fit renders `⚠` with
+   blank panels rather than NaN garbage.
+
+### Options Considered
+- **A (chosen) — separate app + `@cas/faber` + exterior SC inside `@cas/conformal`.** Reuses the SC substrate;
+  adds only the exterior integrand + closure condition; keeps the one-struct contract clean.
+- **B — a new `@cas/schwarz-christoffel` (or `@cas/exterior-sc`) package.** Rejected: one consumer, so ADR-0007
+  says in-package; the exterior map shares the interior solver's machinery (softmax gaps, GN driver, quadrature).
+- **C — fold Faber into the Riemann-map or QD app.** Rejected: violates the separate-apps topology and muddies
+  two mature apps with a third tool's UI.
+
+### Consequences
+- The domain class expands from curved (ellipse/deltoid/finite-Laurent) to **arbitrary polygons** — convex and
+  reentrant — the single biggest coverage gain, with the corner theory (`Λₖ = max{αₖ, 2−αₖ}`) made visible.
+- **Exterior SC math (recorded, not hidden):** the reciprocal `u = 1/z` gives `Ψ(u) = φ(1/u): 𝔻 → Ω` with a
+  `u⁻²` pole, so the D&T §4.2 integrand is `Ψ'(u)/C = u⁻²∏(1−u/uⱼ)^{1−αⱼ}` (exponent **`1−αₖ`**, the exterior
+  region angle — sign-flipped from the interior; validated in the M0 spike). The polygon no longer closes
+  automatically: closure ⇔ `Σ(1−αₖ)/uₖ = 0` (the no-log-at-∞ condition), appended to the residual. A single
+  cold start stalled on some cyclic vertex orderings, so the solve tries multiple seeds and keeps the best.
+- **Convention-safety (ADR-0006):** none — the Faber transform is convention-neutral (no π / 2πi); the app
+  still carries a `normalization:"standard"` provenance tag for parity with its siblings.
+- **Revisit if:** a second consumer of the exterior SC engine appears (then extract per ADR-0007), or an
+  interchange `form` for the exterior map is needed (deferred — gate on a receiving tool, as ADR-0020 did).
+
+### Action Items
+1. [x] `@cas/faber` engine: Faber recurrence, exact rational images, exterior-map Laurent jets.
+2. [x] **M0** de-risk spike (exterior integrand + exponent sign + capacity goldens: `Γ(1/4)` to 5 decimals).
+3. [x] **M1a** regular-polygon presets (closed-form exterior map) through the unchanged Faber pipeline.
+4. [x] **M1b** exterior SC engine (forward map + parameter solve + Laurent-at-∞ extractor) + app wiring for
+       arbitrary convex/reentrant polygons.
+5. [x] **M2** adaptive truncation + corner-norm `Λₖ` annotations + draggable-vertex polygon editor +
+       honest `≈`/`⚠` labeling.
+6. [ ] **Deferred (M3):** corner-**suppressing** weighted Faber polynomials `Q_{n,m}`; an optional lightning
+       fast-mode for the polygon solve; a `@cas/interchange` form for the exterior map.

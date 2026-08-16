@@ -1,0 +1,86 @@
+# Faber Transform
+
+A browser visualizer for the **exterior Faber transform** Φφ: 𝒜(𝔻) → 𝒜(K). Pick an exterior conformal
+map φ: 𝔻\* → Ω (so `K = ℂ∖Ω` is the bounded complement) and an analytic input `f` on the unit disk; the
+app domain-colors `f` on the disk beside its Faber image **Φφ(f) = Σ bₙ Fₙ** on `K`. It rides the shared
+`@cas/*` packages rather than reimplementing them:
+
+- **`@cas/faber`** — the exterior Faber engine: the Faber-polynomial recurrence from φ's Laurent-at-∞ jet,
+  exact rational images of monomial / pole inputs, and the truncated-series path for free-form `f`.
+- **`@cas/conformal`** — the **exterior Schwarz–Christoffel** engine (𝔻\* → Ω for a bounded polygon), used
+  to build φ for arbitrary polygonal `K`.
+- **`@cas/core`** — complex / dense-polynomial algebra, generalized-binomial series (`makeSeries`).
+- **`@cas/expr`** — the free-form `f(z)` path (one expression → JS evaluator).
+- **`@cas/interchange`** — the `#vs=` share-link codec (app namespace `ft`).
+- **`@cas/gpu`** — the WebGL2 phase-portrait coloring shader.
+
+Motivated by **Graven & Makarov, *Quadrature Domains and the Faber Transform*, arXiv:2509.03777**.
+
+Design record: the research / extension survey
+[`docs/design/faber-transform-research-features.md`](../../docs/design/faber-transform-research-features.md),
+the base build plan [`faber-transform-plan.md`](../../docs/design/faber-transform-plan.md), and the
+polygonal-domain runbook (with the M0 de-risk spike)
+[`faber-polygonal-sc-plan.md`](../../docs/design/faber-polygonal-sc-plan.md). Architecture decision:
+[ADR-0024](../../docs/DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine).
+
+## Running
+
+From the repo root:
+
+```bash
+pnpm --filter faber-transform dev      # Vite dev server (http://localhost:5178)
+pnpm --filter faber-transform build    # static build into dist/
+pnpm --filter faber-transform test     # Vitest suite
+```
+
+Single-page Vite app, `base: "./"` so it serves from any sub-path (it publishes under
+`faber-transform/` beneath the launcher).
+
+## Domains (φ presets)
+
+| Preset | φ | Faber image labeled |
+| --- | --- | --- |
+| Interval, Ellipse, Deltoid, 5-star | closed-form Laurent maps | exact `=` |
+| Triangle / Square / Pentagon / Hexagon | **regular polygons**, closed-form exterior map (M1a) | exact `=` |
+| Rectangle, isosceles triangle, house, L-shape (reentrant) | **arbitrary polygons** via the exterior SC solve (M1b) | `≈` |
+| **Custom polygon** | a draggable-vertex editor — design `K` up to similarity (M2) | `≈` / `⚠` on a failed fit |
+
+Polygonal domains are honestly `≈`-labeled (the exterior SC map is a numerical solve); a degenerate,
+self-intersecting, or non-converged polygon renders `⚠` with blank panels rather than NaN garbage.
+
+## Inputs (f on the disk)
+
+- **Monomial** `f(z) = zⁿ` → Φφ(f) = Fₙ, the nth Faber polynomial (exact `=`).
+- **Pole** `f(z) = 1/(z − z₀)^m`, `|z₀| > 1` → closed-form rational image (exact `=`).
+- **Free-form** `f(z)` via `@cas/expr` → Σ_{n≤N} bₙ Fₙ, a truncated series (`≈`).
+
+## Source layout (`src/`)
+
+| File | Role |
+| --- | --- |
+| `main.ts` | wires the two panels, controls, domain resolution (preset vs custom polygon), the render model + status badge, the share-link |
+| `faber.ts` | the app-side adapter over `@cas/faber` — builds the Faber image for the chosen input on the chosen φ |
+| `series.ts` | the free-form truncated-series path (bₙ extraction) |
+| `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
+| `presets.ts` | the curated φ gallery (closed-form + regular + arbitrary polygons), lazily fitted and cached |
+| `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (incl. the custom-polygon bounds) |
+| `render/coloring.ts` | the phase-portrait coloring options (shared with the GPU shader) |
+| `render/gpu.ts` | the WebGL2 phase-portrait renderer for one panel, over `@cas/gpu` |
+| `render/plane.ts` | the 2D plane / axes / mask painting |
+| `render/polygonEditor.ts` | the M2 draggable-vertex polygon editor (add / remove / reset; refit on commit) |
+
+## Tests
+
+`test/` — `faber.test.ts` (the Faber image on the closed-form domains), `series.test.ts` (the truncated-series
+bₙ path), `polygon.test.ts` (the regular-polygon closed form + the exterior SC fit: capacities, corner norms,
+convergence / degradation flags, reentrant L-shape), `presets.test.ts` (every preset builds), `coloring.test.ts`
+(the coloring options), `expr.test.ts` (the free-form path), and `viewState.test.ts` (share-link round-trip +
+namespace guard + custom-polygon validation, incl. degeneracy / bounds rejection). The exterior SC numerics
+themselves are unit-tested in [`@cas/conformal`](../../packages/conformal).
+
+## Status
+
+**T2.3 (Faber on polygonal / cornered K) is DONE through M2** — regular-polygon presets (M1a), arbitrary
+convex + reentrant polygons via the exterior SC engine (M1b), and adaptive Laurent truncation + corner-norm
+annotations + the draggable editor (M2). The **M3** corner-suppressing weighted Faber polynomials `Q_{n,m}`
+remain deferred. See the [polygonal-SC plan](../../docs/design/faber-polygonal-sc-plan.md).

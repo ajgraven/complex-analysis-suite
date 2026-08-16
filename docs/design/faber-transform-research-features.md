@@ -106,17 +106,21 @@ deliver the core pedagogical payload with almost no new math.
   golden, mirroring `CD_TO_RM_BOTTCHER_LINK`). **Leverage:** highest of any item — `@cas/interchange`
   `form:"schwarz"`, `@cas/schwarz` (`makeBoundedSchwarz`/`makeUnboundedLaurentSchwarz`), `@cas/faber`.
 
-### T2.3 — Faber on polygonal / cornered K via the Schwarz–Christoffel engine (biggest domain-class win)
+### T2.3 — Faber on polygonal / cornered K via the Schwarz–Christoffel engine (biggest domain-class win) — **DONE (M1a + M1b + M2)**
 > Full implementation plan (with M0 spike results): [`faber-polygonal-sc-plan.md`](faber-polygonal-sc-plan.md).
-- **Shows:** user draws a polygon (or picks presets); the app renders Faber images on cornered `K` with
-  per-corner norm annotations, and (toggle) corner-**suppressing** weighted Faber polynomials `Q_{n,m}`.
-- **Math:** use the exterior Schwarz–Christoffel map as `φ`, extract its Laurent jet at `∞`, feed the
-  existing recurrence; overlay the sharp corner bound `Λ_k = max{λ_k, 2−λ_k}` (Miña-Díaz–Rubin–Wennman
-  2025) and the corner limit `φ⁻ⁿ Fₙ → λ_k`. Reentrant corners/cusps visibly wreck convergence.
-- **Why:** expands the domain class from ellipse/deltoid/finite-Laurent to arbitrary polygons — the single
-  biggest coverage gain — and makes the corners/cusps theory visible.
-- **Difficulty:** M (needs the **exterior** SC variant + coefficient extraction; interior SC exists).
-  **Leverage:** the Riemann-map studio's SC engine in `@cas/conformal` — precisely the flagged synergy.
+- **Shipped:** the app renders Faber images on cornered polygonal `K` — **M1a** regular-polygon presets
+  (closed-form exterior map), **M1b** arbitrary convex **and** reentrant polygons via the new **exterior**
+  Schwarz–Christoffel engine in `@cas/conformal` (`exteriorSchwarzChristoffel.ts` forward map +
+  `exteriorScParameterProblem.ts` multi-seed damped Gauss–Newton solve + Laurent-at-∞ extractor), and
+  **M2** adaptive Laurent truncation (geometry-aware order + tail-tolerance trim), per-corner norm
+  annotations `Λ_k = max{λ_k, 2−λ_k}` (Miña-Díaz–Rubin–Wennman 2025), and a draggable-vertex polygon
+  editor. Polygon domains are honestly `≈`-labeled; a failed/degenerate fit shows `⚠` with blank panels.
+- **How:** the exterior SC map serves as `φ`; its Laurent jet at `∞` (built via `@cas/core makeSeries`
+  generalized-binomial expansion of the D&T §4.2 integrand, closure ⇔ `Σ(1−α_k)/u_k = 0`) feeds the
+  existing Faber recurrence. Reentrant corners/cusps visibly stress convergence — flagged `degraded`.
+- **Remaining (M3, deferred):** the corner-**suppressing** weighted Faber polynomials `Q_{n,m}` toggle.
+- **Leverage realized:** the Riemann-map studio's SC engine in `@cas/conformal` — precisely the flagged
+  synergy; the exterior variant is now a second family alongside its interior/bounded builders.
 
 ---
 

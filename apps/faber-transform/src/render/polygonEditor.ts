@@ -1,15 +1,16 @@
 // render/polygonEditor.ts — the draggable-vertex polygon editor (M2). A small self-contained canvas where
-// the user designs the domain polygon K by dragging its vertices (add / remove / reset); `onChange` fires
-// live during a drag (committed=false) and once on release / button action (committed=true), so the host
-// can debounce the expensive Schwarz–Christoffel refit. The polygon is defined up to similarity — the
-// right panel renders its Faber transform on the canonical (centred, real-c) K, exactly as the polygon
-// PRESETS already do — so this designs the SHAPE, not an absolute placement. Vertices are `[x,y]` world
-// coordinates, kept counter-clockwise for the exterior SC solve.
-import { MAX_POLYGON_VERTS, MIN_POLYGON_VERTS } from "../viewState.js";
+// the user designs the domain polygon K by dragging its vertices (add / remove / reset). The canvas
+// redraws live during a drag, but `onChange` fires only ON COMMIT (pointer release / button action) — the
+// point to run the expensive Schwarz–Christoffel refit — so a high-frequency drag doesn't hammer the solve.
+// The polygon is defined up to similarity — the right panel renders its Faber transform on the canonical
+// (centred, real-c) K, exactly as the polygon PRESETS already do — so this designs the SHAPE, not an
+// absolute placement. Vertices are `[x,y]` world coordinates, kept counter-clockwise for the exterior SC
+// solve and clamped to the serializable coordinate bound so a shared `#vs=` link stays on-canvas.
+import { MAX_POLYGON_COORD, MAX_POLYGON_VERTS, MIN_POLYGON_VERTS } from "../viewState.js";
 
 type Vec2 = [number, number];
 
-const VIEW_HALF = 2; // world half-extent shown in the editor ([−2, 2] each axis)
+const VIEW_HALF = MAX_POLYGON_COORD + 0.3; // world half-extent shown, a margin beyond the editable bound
 const HANDLE_R = 6; // vertex handle radius (px)
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}, text?: string): HTMLElementTagNameMap[K] {
@@ -48,11 +49,11 @@ export interface PolygonEditor {
 }
 
 /**
- * Create the polygon editor. `onChange(verts, committed)` fires with the CCW vertices whenever they change:
- * `committed=false` on every pointer-move during a drag (for a live preview), `committed=true` on pointer
- * release and on the add/remove/reset buttons (the point to run the real refit + write the permalink).
+ * Create the polygon editor. `onChange(verts)` fires with the CCW vertices on COMMIT only — pointer release
+ * after a drag, and the add/remove/reset buttons — which is when the host runs the SC refit and writes the
+ * permalink. The canvas itself redraws continuously during a drag for immediate visual feedback.
  */
-export function createPolygonEditor(onChange: (verts: Vec2[], committed: boolean) => void): PolygonEditor {
+export function createPolygonEditor(onChange: (verts: Vec2[]) => void): PolygonEditor {
   let verts: Vec2[] = [];
   let dragIdx = -1;
 
@@ -132,7 +133,8 @@ export function createPolygonEditor(onChange: (verts: Vec2[], committed: boolean
     }
   }
 
-  const emit = (committed: boolean): void => onChange(toCCW(verts.map((v): Vec2 => [v[0], v[1]])), committed);
+  const emit = (): void => onChange(toCCW(verts.map((v): Vec2 => [v[0], v[1]])));
+  const clamp = (x: number): number => Math.max(-MAX_POLYGON_COORD, Math.min(MAX_POLYGON_COORD, x));
 
   function pointerPos(e: PointerEvent): Vec2 {
     const r = canvas.getBoundingClientRect();
@@ -158,16 +160,15 @@ export function createPolygonEditor(onChange: (verts: Vec2[], committed: boolean
     if (dragIdx < 0) return;
     const [px, py] = pointerPos(e);
     const w = toWorld(px, py);
-    verts[dragIdx] = [Math.max(-VIEW_HALF, Math.min(VIEW_HALF, w[0])), Math.max(-VIEW_HALF, Math.min(VIEW_HALF, w[1]))];
-    draw();
-    emit(false); // live preview
+    verts[dragIdx] = [clamp(w[0]), clamp(w[1])];
+    draw(); // live canvas feedback only; the refit runs on release
   });
   const endDrag = (e: PointerEvent): void => {
     if (dragIdx < 0) return;
     dragIdx = -1;
     if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     draw();
-    emit(true); // committed
+    emit(); // committed
   };
   canvas.addEventListener("pointerup", endDrag);
   canvas.addEventListener("pointercancel", endDrag);
@@ -201,17 +202,17 @@ export function createPolygonEditor(onChange: (verts: Vec2[], committed: boolean
     } // point outward
     const off = 0.18 * bestLen;
     verts.splice(best + 1, 0, [
-      Math.max(-VIEW_HALF, Math.min(VIEW_HALF, mid[0] + off * nx)),
-      Math.max(-VIEW_HALF, Math.min(VIEW_HALF, mid[1] + off * ny)),
+      clamp(mid[0] + off * nx),
+      clamp(mid[1] + off * ny),
     ]);
     draw();
-    emit(true);
+    emit();
   });
   delBtn.addEventListener("click", () => {
     if (verts.length <= MIN_POLYGON_VERTS) return;
     verts.pop();
     draw();
-    emit(true);
+    emit();
   });
   resetBtn.addEventListener("click", () => {
     verts = Array.from({ length: 5 }, (_, k): Vec2 => {
@@ -219,7 +220,7 @@ export function createPolygonEditor(onChange: (verts: Vec2[], committed: boolean
       return [Number((1.2 * Math.cos(t)).toFixed(3)), Number((1.2 * Math.sin(t)).toFixed(3))];
     });
     draw();
-    emit(true);
+    emit();
   });
 
   return {

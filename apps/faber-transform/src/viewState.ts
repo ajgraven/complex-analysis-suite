@@ -49,7 +49,10 @@ export const MAX_EXPR_LEN = 256;
 /** Custom-polygon bounds (crafted-link safety + solver sanity): 3–16 vertices, coordinates in [−COORD, COORD]. */
 export const MIN_POLYGON_VERTS = 3;
 export const MAX_POLYGON_VERTS = 16;
-export const MAX_POLYGON_COORD = 20;
+/** Coordinate bound — matches the editor's editable world extent, so a decoded polygon is always on-canvas. */
+export const MAX_POLYGON_COORD = 2;
+/** Consecutive vertices must be at least this far apart (rejects coincident/degenerate polygons). */
+export const MIN_POLYGON_EDGE = 0.03;
 /** The domain id that draws φ from `customPolygon` (the editor) rather than a preset. */
 export const CUSTOM_PHI = "custom";
 
@@ -142,10 +145,10 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   return true;
 }
 
-/** A well-formed editor polygon: 3–16 finite `[x,y]` vertices within the coordinate bound. */
+/** A well-formed editor polygon: 3–16 finite in-bounds `[x,y]` vertices, no two consecutive ones coincident. */
 function isCustomPolygon(value: unknown): value is readonly (readonly [number, number])[] {
   if (!Array.isArray(value) || value.length < MIN_POLYGON_VERTS || value.length > MAX_POLYGON_VERTS) return false;
-  return value.every(
+  const ok = value.every(
     (v) =>
       Array.isArray(v) &&
       v.length === 2 &&
@@ -154,6 +157,14 @@ function isCustomPolygon(value: unknown): value is readonly (readonly [number, n
       Math.abs(v[0]) <= MAX_POLYGON_COORD &&
       Math.abs(v[1]) <= MAX_POLYGON_COORD,
   );
+  if (!ok) return false;
+  // Reject coincident consecutive vertices (a degenerate polygon the exterior SC solve can't fit).
+  for (let i = 0; i < value.length; i++) {
+    const a = value[i] as [number, number];
+    const b = value[(i + 1) % value.length] as [number, number];
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) < MIN_POLYGON_EDGE) return false;
+  }
+  return true;
 }
 
 /** A well-formed coloring block: finite enhancement/modulus modes in range, positive sectors/scale. */

@@ -88,10 +88,11 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Six apps (the sixth, **Argument Principle**, ADR-0019 — it rides
-`@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`) ride the nine shared `@cas/*` packages
+and the parabolic-Tricorn model coordinate. Seven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+`@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0021 — it
+rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, and `@cas/conformal`; ADR-0024) ride the ten shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
-`@cas/export`, `@cas/conformal`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
+`@cas/export`, `@cas/conformal`, `@cas/faber`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
@@ -149,6 +150,22 @@ unbounded-Laurent family (pole-free deltoid + finite-pole QDs, complex leading `
 family (φ: 𝔻 → Ω, interior branch, interchange 1.3.0) — both importable AND authorable natively in CD's
 σ φ-form. Full per-increment detail in [`docs/refactor/LOG.md`](docs/refactor/LOG.md) and
 [`docs/design/SIGMA-HANDOFF.md`](docs/design/SIGMA-HANDOFF.md).
+
+**Faber Transform app + `@cas/faber` + polygonal K via exterior Schwarz–Christoffel (ADR-0024, T2.3 = DONE):**
+The seventh app, **Faber Transform** (`apps/faber-transform`), visualizes the exterior Faber transform
+Φφ: 𝒜(𝔻) → 𝒜(K) — an analytic `f` on the unit disk domain-colored beside its Faber image `Σ bₙ Fₙ` on the
+bounded complement `K`. Its engine is the tenth package **`@cas/faber`** (Faber-polynomial recurrence, exact
+rational images, exterior-map Laurent jets). Domain class now spans ellipse / deltoid / finite-Laurent QDs
+**and arbitrary polygons**: **M1a** regular-polygon presets (closed-form), **M1b** arbitrary convex + reentrant
+polygons via a new **exterior** Schwarz–Christoffel engine carved into `@cas/conformal`
+(`exteriorSchwarzChristoffel.ts` forward map + `exteriorScParameterProblem.ts` multi-seed damped Gauss–Newton
+solve, sharing the `gaussNewton.ts` driver with the interior solver + a Laurent-at-∞ extractor), and **M2**
+adaptive Laurent truncation, per-corner norm annotations `Λₖ = max{αₖ, 2−αₖ}`, and a draggable-vertex polygon
+editor. This is `@cas/conformal`'s **second SC family** (exterior alongside ADR-0020's interior), and Faber
+Transform is the exterior engine's sole consumer (ADR-0007). Polygon domains are honestly `≈`-labeled;
+degenerate/failed fits render `⚠` with blank panels. Plan:
+[`docs/design/faber-polygonal-sc-plan.md`](docs/design/faber-polygonal-sc-plan.md); the **M3** corner-suppressing
+weighted Faber `Q_{n,m}` toggle remains deferred.
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),

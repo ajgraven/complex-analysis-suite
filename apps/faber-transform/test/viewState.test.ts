@@ -93,5 +93,7 @@ describe("viewState codec", () => {
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1]] })).toBe(false); // < 3
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1], [999, 0]] })).toBe(false); // out of bounds
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1], [0, Infinity]] })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [1, 0], [0, 1]] })).toBe(false); // coincident vertices
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom", customPolygon: [[1, 0], [0, 1], [-1, 0], [3, 0]] })).toBe(false); // one coord > 2
   });
 });

@@ -137,10 +137,11 @@ instead of an ad-hoc JSON blob.
 > **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
 > became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
 > though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
-> The suite now ships **nine** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
-> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, and `@cas/conformal` (`@cas/exact` through
-> `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
-> extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)).
+> The suite now ships **ten** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, and `@cas/faber` (`@cas/exact`
+> through `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
+> extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore);
+> `@cas/faber` is the exterior Faber-transform engine behind the Faber Transform app, [ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)).
 > The sections are kept as design intent; each notes where the functionality actually lives today.
 
 ### `@cas/ui` — the shared UI kit *(partly built — PNG metadata shipped as `@cas/export`)*
@@ -170,18 +171,36 @@ Schwarz–Christoffel engine (roadmap step E) had a home to be born into. That e
 package** as its second engine — Gauss–Jacobi quadrature (`gaussJacobi.ts`/`scQuadrature.ts`), the SC
 forward/inverse maps (`schwarzChristoffel.ts`), the parameter solver (`scParameterProblem.ts`, uniform cold start by default, warm-startable),
 and the two-mode `fitSchwarzChristoffel` surface (`scMap.ts`) — retro-justifying the ahead-of-demand extract
-([ADR-0020](DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)). Consumers
-today: the Riemann-map studio — the lightning builder for smooth region maps, and the SC engine for polygon
-(`corners`) domains. The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
+([ADR-0020](DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)). A
+**third engine** followed — the **exterior** SC map 𝔻* → Ω for a bounded simple polygon
+(`exteriorSchwarzChristoffel.ts` forward map + Laurent-at-∞ extractor, `exteriorScParameterProblem.ts` multi-seed
+damped Gauss–Newton solve, sharing the extracted `gaussNewton.ts` driver with the interior solver) — added for
+the Faber Transform app, a second SC family beside the interior one
+([ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)).
+Consumers today: the **Riemann-map studio** — the lightning builder for smooth region maps, and the interior SC
+engine for polygon (`corners`) domains — and the **Faber Transform app** — the exterior SC engine for polygonal
+`K`. The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
 of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on rank-deficiency policy —
 see ADR-0018).
 
-### `@cas/quadrature` — domain package *(planned — not built)*
+### `@cas/faber` — the exterior Faber-transform engine *(built — ADR-0024)*
+Holds the exterior Faber transform machinery behind the Faber Transform app: the Faber-polynomial recurrence
+(from an exterior map's Laurent-at-∞ jet), exact rational images of monomial and pole inputs, and the truncated
+series path for free-form `f`. Everything consumes one struct — `ExteriorMap = { c, laurent }` — so the engine is
+blind to *how* φ was produced: a curated closed form (ellipse/deltoid/finite-Laurent QD) or a solved exterior
+Schwarz–Christoffel map for an arbitrary polygon. Built on `@cas/core` (complex/poly algebra, series);
+convention-neutral (ADR-0006: the Faber transform carries no π / 2πi). Sole consumer today: the Faber Transform
+app. This is the domain package that the never-built `@cas/quadrature` (below) *would* have partly held — the
+Faber half shipped standalone, demand-driven, when the app needed it.
+
+### `@cas/quadrature` — domain package *(planned — not built as such; Faber half shipped as `@cas/faber`)*
 Would hold the Faber-transform machinery; the inverse solvers (classical/log-weighted/power,
 bounded/unbounded, singular variants) and the direct-problem kernels; the Schwarz-reflection
-construction (`σ = f∘η∘f⁻¹`); boundary observables. **Status: never built** — the correspondence app
-builds its own σ (deltoid) rather than consuming the QD solver, so this stayed inside
-`apps/quadrature-domains`.
+construction (`σ = f∘η∘f⁻¹`); boundary observables. **Status: never built as one package** — the
+correspondence app builds its own σ (deltoid) rather than consuming the QD solver, so the solver/σ
+machinery stayed inside `apps/quadrature-domains`. The **Faber-transform half did later ship**, demand-driven,
+as the standalone **`@cas/faber`** (ADR-0024, above) when the Faber Transform app needed it — the same
+"a slice becomes a package when a consumer needs it" pattern as `@cas/export` splitting out of `@cas/ui`.
 
 ### `@cas/dynamics` — domain package *(genesis — inverse-Böttcher + external rays extracted, ADR-0014)*
 Holds the **inverse-Böttcher exterior maps** (the Laurent coefficients uniformizing the complement of a

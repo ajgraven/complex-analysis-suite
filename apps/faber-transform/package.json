@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "A visualizer for the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K). Given an exterior conformal map φ: 𝔻* → Ω (a curated univalent Laurent map, K = ℂ∖Ω the bounded complement), it domain-colors an analytic f on the unit disk beside its image Φφ(f) = Σ b_n F_n on K. A new suite app (separate app per CLAUDE.md decision 8) built on the shared @cas/* packages — the Faber engine via @cas/faber, complex/poly algebra via @cas/core, permalinks via @cas/interchange. Motivated by Graven & Makarov, arXiv:2509.03777. Renders pure-2D in M1 (GPU phase-portrait coloring arrives with the @cas/gpu shader extraction).",
+  "description": "A visualizer for the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K). Given an exterior conformal map φ: 𝔻* → Ω (a curated univalent Laurent map — ellipse, deltoid, finite-Laurent QDs — or an exterior Schwarz–Christoffel map for an arbitrary polygon; K = ℂ∖Ω the bounded complement), it domain-colors an analytic f on the unit disk beside its image Φφ(f) = Σ b_n F_n on K. A suite app (separate app per CLAUDE.md decision 8) built on the shared @cas/* packages — the Faber engine via @cas/faber, the exterior SC engine via @cas/conformal, complex/poly algebra via @cas/core, permalinks via @cas/interchange, and GPU phase-portrait coloring via @cas/gpu. Motivated by Graven & Makarov, arXiv:2509.03777.",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "scripts": {

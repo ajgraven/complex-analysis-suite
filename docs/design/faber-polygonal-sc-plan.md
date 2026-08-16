@@ -95,7 +95,7 @@ need a reciprocal change of variable (`w = 1/(z−a)` mapping the exterior to a 
 
 ## 5. Milestones (each gated: typecheck / lint / test / build + goldens + browser-verify)
 
-### M1a — Regular-polygon presets, closed-form (the vertical slice; ~2–3 days, de-risked to ~0)
+### M1a — Regular-polygon presets, closed-form (the vertical slice) — DONE
 Ship square / triangle / pentagon / hexagon as domains, rendered through the *unchanged* Faber pipeline.
 - Add the Laurent extractor (component 2) — start with the regular-symmetric closed form (§3.1); it is the
   general extractor specialized to `zₖ = ωᵏ`.
@@ -122,7 +122,7 @@ Arbitrary bounded simple polygons now work end-to-end, in three landed increment
 
 Reentrant corners (αₖ>1) and a draggable editor are **M2**.
 
-### M2 — Reentrant polygons, diagnostics & UI (partially DONE)
+### M2 — Reentrant polygons, diagnostics & UI (DONE)
 - **Reentrant corners — DONE.** The exterior solve already handles `αₖ > 1` (exponent `1−αₖ ∈ (−1,0)` is
   singular but integrable via the Gauss–Jacobi panel; an L-shape converges to residual ~1e-12). Added an
   L-shape preset.
@@ -167,12 +167,14 @@ lightning fast-mode only via the reciprocal-domain route (§3.3).
   deps. The exterior map + extractor live in `@cas/conformal`, cohesive with the SC machinery they extend
   (single-consumer for now, same extract-ahead judgement as ADR-0018 for `@cas/conformal` itself).
 
-## 7. Risk & effort
+## 7. Risk & effort (retrospective)
 
-Risk is now **concentrated entirely in M1b** (the general exterior parameter solve — classical per
-Driscoll–Trefethen Ch. 4, but a real nonlinear solver; reentrant corners are where conditioning bites in
-M2). M0 de-risked M1a to ~zero: regular polygons are closed-form and validated. **The shippable vertical
-slice (M1a) lands in ~2–3 days**; M1a–M2 total ≈ 1.5–2 weeks.
+The risk sat, as forecast, in **M1b** (the general exterior parameter solve — classical per
+Driscoll–Trefethen Ch. 4, but a real nonlinear solver; reentrant corners are where conditioning bit). M0
+de-risked M1a to ~zero: regular polygons were closed-form and validated up front. Both landed — M1a as a
+same-day vertical slice, then M1b + M2 — with the nonlinear solve made robust by the multi-seed damped
+Gauss–Newton driver (a single cold start stalled on some cyclic vertex orderings). **M3** (corner-suppressing
+weighted Faber `Q_{n,m}`, optional lightning fast-mode) remains.
 
 ## 8. References
 

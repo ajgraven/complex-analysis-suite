@@ -115,7 +115,7 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
   seeds.push(logitsFromPrevertices(uniformPrevertices(n)));
 
   let bestSeed = seeds[0];
-  let bestY: number[] = [];
+  let bestY: number[] | null = null;
   let bestRes = Infinity;
   let bestIters = 0;
   for (const tSeed of seeds) {
@@ -126,7 +126,10 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
     };
     const gn = dampedGaussNewton((y) => residual(logits(y)), free.map((i) => tSeed[i]), { tol, maxIter });
     const nrm = infNorm(gn.residual);
-    if (nrm < bestRes) {
+    // Always adopt the first seed's (length-correct) result, then keep any strictly better one — so a
+    // degenerate polygon whose residual is NaN for every seed still yields a length-n−1 solution vector
+    // (NaN-valued, caught downstream) rather than an `undefined` one.
+    if (bestY === null || nrm < bestRes) {
       bestRes = nrm;
       bestSeed = tSeed;
       bestY = gn.y;
@@ -135,7 +138,8 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
     if (nrm < tol) break;
   }
   const bestLogits = bestSeed.slice();
-  free.forEach((i, j) => (bestLogits[i] = bestY[j]));
+  const solutionY = bestY ?? [];
+  free.forEach((i, j) => (bestLogits[i] = solutionY[j]));
   const prevertices = prevertsFromLogits(bestLogits);
   return {
     prevertices,

@@ -334,8 +334,8 @@ function main(): void {
 
   // The polygon editor (shown only for the custom domain). Live drag redraws the editor; the expensive SC
   // refit + permalink write happen on release / button action (committed = true).
-  const editor = createPolygonEditor((verts, committed) => {
-    if (committed) commit({ ...state, phi: CUSTOM_PHI, customPolygon: verts });
+  const editor = createPolygonEditor((verts) => {
+    commit({ ...state, phi: CUSTOM_PHI, customPolygon: verts });
   });
   const editorWrap = elt("div", { class: "poly-editor-wrap" });
   editorWrap.append(editor.el);
@@ -365,6 +365,8 @@ function main(): void {
     return customFit.result;
   }
 
+  const blankPanel: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
+
   function computeModel(): RenderModel {
     // Resolve the domain: a closed-form/regular preset, or the editor's custom polygon (fitted).
     let map;
@@ -372,10 +374,16 @@ function main(): void {
     let cornerN: CornerNorms | undefined;
     if (state.phi === CUSTOM_PHI && state.customPolygon) {
       const r = getCustomMap(state.customPolygon);
+      domainStatus = { converged: r.converged, degraded: r.degraded };
+      // A degenerate / self-intersecting polygon drives the exterior SC solve to a non-convergent or
+      // non-finite map — don't paint garbage as an ordinary ≈ image (honesty guardrail); show a warning.
+      const finite = Number.isFinite(r.map.c) && r.map.laurent.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im));
+      if (!r.converged || !finite) {
+        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: "polygon fit failed — the domain may be degenerate or self-intersecting", error: true };
+      }
       map = r.map;
       approx = true;
       cornerN = cornerNorms(interiorAngles(state.customPolygon.map((v): [number, number] => [v[0], v[1]])));
-      domainStatus = { converged: r.converged, degraded: r.degraded };
     } else {
       const preset = phiPresetById(state.phi);
       map = preset.build(state.shape);
@@ -430,7 +438,6 @@ function main(): void {
     }
     // expr
     const compiled = compileExprF(state.input.expr);
-    const blankPanel: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
     if ("error" in compiled) {
       return { left: blankPanel, right: blankPanel, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
     }
