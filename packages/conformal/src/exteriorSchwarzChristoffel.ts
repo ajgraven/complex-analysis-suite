@@ -14,8 +14,11 @@
 // the exterior PARAMETER problem (polygon → prevertices) builds on `exteriorSideIntegrals`, and the
 // Laurent-at-∞ extractor for the Faber ExteriorMap contract expands Ψ about u = 0. Pure; node-tested
 // against the closed-form regular n-gon (M0 goldens). Convention-neutral (ADR-0006).
+import { makeSeries, tupleAlgebra } from "@cas/core";
 import type { C } from "./vandermondeArnoldi.js";
 import { integrateSegment, type QuadratureOptions } from "./scQuadrature.js";
+
+const series = makeSeries(tupleAlgebra);
 
 const cadd = (a: C, b: C): C => [a[0] + b[0], a[1] + b[1]];
 const csub = (a: C, b: C): C => [a[0] - b[0], a[1] - b[1]];
@@ -129,4 +132,50 @@ export function buildExteriorForwardMap(
   vertices[0] = base;
   for (let k = 0; k < n - 1; k++) vertices[k + 1] = cadd(vertices[k], cmul(constant, sides[k]));
   return { prevertices, angles, constant, capacity: Math.hypot(constant[0], constant[1]), vertices, sides };
+}
+
+/** The Laurent-at-∞ expansion of an exterior SC map: c = capacity, laurent[k] = c_k in φ(z) = c·z + Σ c_k z^{−k}. */
+export interface ExteriorMapLaurent {
+  /** Capacity c = |C| (leading coefficient), real ≥ 0 after rotating the domain so c is real-positive. */
+  readonly c: number;
+  /** Laurent tail c₀, c₁, …, c_order. c₀ = 0: the domain is centred at its conformal centre (a translation). */
+  readonly laurent: C[];
+}
+
+/**
+ * Extract the Laurent expansion of φ at ∞ — φ(z) = c·z + Σ_{k≥0} c_k z^{−k} — from a fitted exterior SC map,
+ * truncated to `order` (laurent indices 0…order). Via u = 1/z, Ψ(u) = φ(1/u) has Ψ'(u) = C·u^{−2}·G(u) with
+ * G(u) = ∏ₖ (1 − u/uₖ)^{1−αₖ} = Σ gₘ uᵐ (each factor a generalized-binomial series, multiplied with @cas/core's
+ * truncated series product). Integrating term-by-term gives leading |C| and c_k = −|C|·g_{k+1}/k; the u^{−1}→log
+ * term drops because g₁ = the (enforced) closure residual Σ(1−αₖ)/uₖ ≈ 0. Coefficients are rotated so c is real
+ * (the domain rotates freely); c₀ is set to 0 (centre at the conformal centre — irrelevant to the Faber structure).
+ */
+export function exteriorMapLaurentAtInfinity(map: ExteriorSCForwardMap, order: number): ExteriorMapLaurent {
+  const { prevertices, angles, constant } = map;
+  const n = prevertices.length;
+  const M = Math.max(1, Math.floor(order));
+  // G(u) = ∏ₖ (1 − u/uₖ)^{1−αₖ}, each factor a generalized-binomial series to order M+1.
+  let G: C[] = series.unit(M + 1);
+  for (let k = 0; k < n; k++) {
+    const beta = 1 - angles[k];
+    const negInv = cmul([-1, 0], cdiv(ONE, prevertices[k])); // −1/uₖ
+    const factor: C[] = new Array<C>(M + 2);
+    factor[0] = [1, 0];
+    let binom = 1; // binom(beta, m)
+    let pw: C = [1, 0]; // (−1/uₖ)^m
+    for (let m = 1; m <= M + 1; m++) {
+      binom = (binom * (beta - m + 1)) / m;
+      pw = cmul(pw, negInv);
+      factor[m] = [binom * pw[0], binom * pw[1]];
+    }
+    G = series.mul(G, factor, M + 1);
+  }
+  const cap = Math.hypot(constant[0], constant[1]); // |C| = |C_eff|
+  const laurent: C[] = new Array<C>(M + 1);
+  laurent[0] = [0, 0];
+  for (let k = 1; k <= M; k++) {
+    const g = G[k + 1] ?? [0, 0];
+    laurent[k] = [(-cap * g[0]) / k, (-cap * g[1]) / k]; // c_k = −|C|·g_{k+1}/k
+  }
+  return { c: cap, laurent };
 }

@@ -4,9 +4,9 @@
 import { describe, expect, it } from "vitest";
 import type { Cx } from "@cas/core";
 import { faberPolynomials, faberTransform, polynomialRoots } from "@cas/faber";
-import { regularPolygonMap } from "../src/polygon.js";
+import { polygonMap, regularPolygonMap } from "../src/polygon.js";
 import { evalPhi, monomialTaylor, transformCoeffs } from "../src/faber.js";
-import { phiPresetById } from "../src/presets.js";
+import { MENU_PRESETS, phiPresetById } from "../src/presets.js";
 
 const near = (a: number, b: number, tol = 1e-9): boolean => Math.abs(a - b) < tol;
 const cabs = (z: Cx): number => Math.hypot(z.re, z.im);
@@ -92,13 +92,36 @@ describe("@cas/faber seam", () => {
 });
 
 describe("presets", () => {
-  it("exposes the four polygon presets, all flagged approximate", () => {
+  it("exposes the four regular polygon presets, all flagged approximate", () => {
     for (const id of ["triangle", "square", "pentagon", "hexagon"]) {
       const p = phiPresetById(id);
       expect(p.id).toBe(id);
       expect(p.approximate).toBe(true);
       expect(p.shape).toBeNull();
       expect(p.build(0).c).toBe(1);
+    }
+  });
+});
+
+describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () => {
+  it("builds a valid ExteriorMap for a rectangle (positive capacity, finite, drives the recurrence)", () => {
+    const m = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 60);
+    expect(m.c).toBeGreaterThan(0);
+    for (const c of m.laurent) expect(Number.isFinite(c.re) && Number.isFinite(c.im)).toBe(true);
+    // The map is rotated so c is real (a canonical orientation, like M1a's square rendering as a diamond),
+    // so the Laurent tail is genuinely complex — just require it finite and non-degenerate.
+    expect(m.laurent.some((c) => Math.hypot(c.re, c.im) > 1e-3)).toBe(true);
+    // Faber transform of z² runs and its roots sit within K (bounded).
+    const roots = polynomialRoots(faberTransform(m, monomialTaylor(2)));
+    expect(roots.converged).toBe(true);
+    expect(Math.max(...roots.roots.map(cabs))).toBeLessThan(3);
+  });
+
+  it("registers the general-polygon presets in the menu, all approximate", () => {
+    const ids = MENU_PRESETS.map((p) => p.id);
+    for (const id of ["rectangle", "iso-triangle", "house"]) {
+      expect(ids).toContain(id);
+      expect(phiPresetById(id).approximate).toBe(true);
     }
   });
 });

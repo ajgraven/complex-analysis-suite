@@ -105,12 +105,22 @@ Ship square / triangle / pentagon / hexagon as domains, rendered through the *un
   (regular n-gon → disk); straight-edge collinearity; the `{c,laurent}`→`@cas/faber` recurrence outputs.
 - Browser-verify a Faber image renders inside the polygon (masked to `K`), roots on/inside `∂K`.
 
-### M1b — General exterior parameter solve (the crux; ~4–6 days)
-`fitExteriorSchwarzChristoffel(polygon, opts) → SCMap`-shaped result (prevertices, `C`, `converged` /
-`degraded` / `residual`, mirroring the existing `SCMap`). Convex polygons first (well-conditioned).
-- **Goldens:** capacities of a non-regular convex polygon vs an independent reference; boundary residual
-  `φ(∂𝔻)` traces the polygon to tolerance; the degenerate 2-gon → interval `[−2,2]` reproduces the existing
-  `interval` preset (`c=1`, Fₙ = 2Tₙ) as a limiting sanity anchor.
+### M1b — General exterior parameter solve — DONE
+Arbitrary bounded simple polygons now work end-to-end, in three landed increments:
+- **Step 1 (`exteriorSchwarzChristoffel.ts`):** the exterior forward map via the reciprocal `u=1/z`
+  (`Ψ'(u)=C·u⁻²·∏(1−u/uₖ)^{1−αₖ}`), reusing `integrateSegment`. Validated on the regular n-gon (equal
+  sides, closure, angles, Γ(1/4) capacity).
+- **Step 2 (`exteriorScParameterProblem.ts`):** `solveExteriorParameterProblem` +
+  `fitExteriorSchwarzChristoffel` — the polygon→prevertices solve, mirroring `scParameterProblem` with the
+  closure/no-log residual `Σ(1−αₖ)/uₖ=0` appended and one gauge frozen (the exterior has only a rotation
+  gauge). Validated: convergence from a skewed seed, the square's Γ(1/4) capacity, and a **chiral**
+  quadrilateral (pinning the CW orientation).
+- **Step 3 (`exteriorMapLaurentAtInfinity` + app wiring):** the Laurent-at-∞ extractor (generalized-binomial
+  series of the SC product via `@cas/core` `makeSeries`) → `{c, laurent}`; the app's `polygonMap` fits +
+  extracts (memoized), and three general presets (rectangle, tall isosceles triangle, house pentagon) render
+  through the unchanged Faber pipeline. The extractor reproduces M1a's closed form for regular polygons.
+
+Reentrant corners (αₖ>1) and a draggable editor are **M2**.
 
 ### M2 — Reentrant polygons, diagnostics & UI (~3–4 days)
 Handle `αₖ > 1` (L-shape, star): **adaptive truncation** (grow `M` until the boundary residual falls below

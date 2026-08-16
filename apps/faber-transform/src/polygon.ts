@@ -15,6 +15,7 @@
 // coefficients c_k ~ k^{−1−2/n}, so the tail is small but never zero.
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
+import { exteriorMapLaurentAtInfinity, fitExteriorSchwarzChristoffel } from "@cas/conformal";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
 
@@ -38,4 +39,18 @@ export function regularPolygonMap(n: number, order = 120, C = 1): ExteriorMap {
     laurent.push(re((C * d) / (1 - n * m)));
   }
   return { c: C, laurent };
+}
+
+/**
+ * The exterior map φ: 𝔻* → Ω of an ARBITRARY bounded simple polygon (M1b), as a truncated Laurent series
+ * for the @cas/faber ExteriorMap contract. Fits the exterior Schwarz–Christoffel map (`@cas/conformal`) —
+ * solving for the prevertices — then extracts φ's Laurent-at-∞ coefficients (leading c = capacity, tail
+ * centred at the conformal centre, rotated so c is real). Vertices are `[x, y]` counter-clockwise. The
+ * result is ≈ (numerical solve + truncated series); Faber polynomials up to degree `order` are unaffected
+ * by the truncation, so low-degree images are effectively exact.
+ */
+export function polygonMap(vertices: readonly (readonly [number, number])[], order = 140): ExteriorMap {
+  const fit = fitExteriorSchwarzChristoffel(vertices.map((v) => [v[0], v[1]] as [number, number]));
+  const { c, laurent } = exteriorMapLaurentAtInfinity(fit, order);
+  return { c, laurent: laurent.map(([r, i]): Cx => ({ re: r, im: i })) };
 }

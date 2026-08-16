@@ -4,9 +4,15 @@
 // clamped shape slider whose range keeps φ univalent (a valid domain).
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
-import { regularPolygonMap } from "./polygon.js";
+import { polygonMap, regularPolygonMap } from "./polygon.js";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
+
+/** A preset for an arbitrary polygon: fit the exterior SC map once (lazily) and cache the resulting map. */
+function polygonPreset(id: string, name: string, vertices: readonly (readonly [number, number])[], kHalf: number): PhiPreset {
+  let cached: ExteriorMap | null = null;
+  return { id, name, build: () => (cached ??= polygonMap(vertices)), shape: null, kHalf, approximate: true };
+}
 
 export interface ShapeControl {
   readonly label: string;
@@ -107,6 +113,12 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
     kHalf: 1.43,
     approximate: true,
   },
+  // General (non-regular) polygons via the exterior parameter solve (M1b): the prevertices are solved, not
+  // symmetric. Vertices are counter-clockwise; the map is centred at its conformal centre and rotated so the
+  // capacity is real, so the rendered K is a centred/rotated copy of the shape.
+  polygonPreset("rectangle", "Rectangle 2 : 1", [[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 1.7),
+  polygonPreset("iso-triangle", "Tall isosceles triangle", [[0, 1.4], [-0.7, -0.7], [0.7, -0.7]], 1.7),
+  polygonPreset("house", "House pentagon", [[1, -0.6], [1, 0.5], [0, 1.2], [-1, 0.5], [-1, -0.6]], 1.7),
 ];
 
 /** The presets shown in the domain menu — the non-degenerate (2-D interior) ones. */

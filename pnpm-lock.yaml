@@ -231,6 +231,9 @@ importers:
 
   apps/faber-transform:
     dependencies:
+      '@cas/conformal':
+        specifier: workspace:*
+        version: link:../../packages/conformal
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
