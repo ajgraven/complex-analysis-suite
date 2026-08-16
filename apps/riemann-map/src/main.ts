@@ -174,7 +174,11 @@ function main(): void {
   const llabel = document.createElement("div");
   llabel.className = "panelabel";
   llabel.textContent = "z  ·  unit disk";
-  left.append(canvas, overlayCanvas, llabel, legendEl, note);
+  // Live parameter readout for a family map φ(z; c) — updates as the c handle is dragged (top-right chip).
+  const cChip = document.createElement("div");
+  cChip.className = "cchip";
+  cChip.hidden = true;
+  left.append(canvas, overlayCanvas, llabel, cChip, legendEl, note);
 
   const right = document.createElement("div");
   right.className = "pane right";
@@ -367,6 +371,13 @@ function main(): void {
     return controls.setMethod(regionCard ?? pendingCard());
   }
 
+  /** Live c-parameter chip on the disk pane (shown for a formula φ that references the draggable c). */
+  function updateCChip(): void {
+    const show = modeIsDiskImage(state.render.mode) && usesC && !diskSourceIsNumeric();
+    cChip.hidden = !show;
+    if (show) cChip.textContent = "c = " + fmtC(cParam[0], cParam[1]);
+  }
+
   /** Contextual disclosure (A1): reveal only the controls the current view uses, and label both panes. */
   function applyModeContext(): void {
     const vis = currentVis();
@@ -383,6 +394,7 @@ function main(): void {
     llabel.textContent = ll;
     rlabel.textContent = rl;
     updateMethod();
+    updateCChip();
     renderLegend(legendEl, legendModel(state.render.mode)); // colour-key chip (A4)
   }
 
@@ -894,6 +906,7 @@ function main(): void {
   controls.setVisualize(currentVis());
   controls.setDirection(currentDir());
   controls.setShape(shapeId);
+  controls.setFormulaHint(usesC);
   controls.setDiskSide(diskSide());
   controls.setDiskStyle(diskStyle());
   controls.setDiskShow(diskShow());
@@ -904,6 +917,8 @@ function main(): void {
   controls.onExpr((expr) => {
     state = { ...state, map: { ...state.map, expr, antiholomorphic: /conjugate/.test(expr) } };
     usesC = /\bc\b/.test(expr); // does the new φ have a draggable parameter?
+    controls.setFormulaHint(usesC); // reveal the "drag c" hint iff the map references c
+    updateCChip();
     applyMap();
     diskDirty = true; // the disk-image cells are a function of φ
     invalidate();
@@ -1052,7 +1067,7 @@ function main(): void {
       pixelToWorld(state.viewport, (ev.clientX - r.left) / r.width, 1 - (ev.clientY - r.top) / r.height, r.width / r.height);
     const pxPerWorld = r.height / (2 * (1 / state.viewport.zoom));
     const w0 = toWorld(e);
-    if (Math.hypot(w0[0] - cParam[0], w0[1] - cParam[1]) * pxPerWorld > 14) return; // not on the handle
+    if (Math.hypot(w0[0] - cParam[0], w0[1] - cParam[1]) * pxPerWorld > 18) return; // not on the handle (generous hit radius)
     e.stopImmediatePropagation(); // preempt attachPanZoom's pan for this drag
     const move = (ev: PointerEvent): void => {
       const w = toWorld(ev);
@@ -1066,6 +1081,7 @@ function main(): void {
       cParam = [cx, cy];
       state = { ...state, map: { ...state.map, c: [cx, cy] } };
       diskDirty = true;
+      updateCChip(); // live-update the c chip as you drag
       invalidate();
     };
     const up = (): void => {
