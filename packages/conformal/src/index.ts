@@ -25,6 +25,8 @@ export { buildForwardMap, sideIntegrals } from "./schwarzChristoffel.js";
 export type { SCForwardMap, SCForwardOptions, SCQuadratureOptions } from "./schwarzChristoffel.js";
 export { buildExteriorForwardMap, exteriorSideIntegrals } from "./exteriorSchwarzChristoffel.js";
 export type { ExteriorSCForwardMap, ExteriorSCForwardOptions } from "./exteriorSchwarzChristoffel.js";
+export { solveExteriorParameterProblem, fitExteriorSchwarzChristoffel } from "./exteriorScParameterProblem.js";
+export type { ExtSCSolveResult, ExtSCSolveOptions, ExteriorSCMap } from "./exteriorScParameterProblem.js";
 export { solveParameterProblem, interiorAngles } from "./scParameterProblem.js";
 export type { SCSolveResult, SCSolveOptions } from "./scParameterProblem.js";
 export { gaussJacobi, gaussLegendre } from "./gaussJacobi.js";

@@ -56,8 +56,8 @@ export interface SCSolveOptions extends SCQuadratureOptions {
   maxIter?: number;
 }
 
-/** Prevertices from softmax gap-logits: θ₀ = 0, gaps ∝ exp(tₖ) summing to 2π. */
-function prevertsFromLogits(t: readonly number[]): C[] {
+/** Prevertices from softmax gap-logits: θ₀ = 0, gaps ∝ exp(tₖ) summing to 2π. Shared with the exterior solver. */
+export function prevertsFromLogits(t: readonly number[]): C[] {
   const n = t.length;
   const mx = Math.max(...t);
   const ex = t.map((v) => Math.exp(v - mx));
@@ -72,7 +72,7 @@ function prevertsFromLogits(t: readonly number[]): C[] {
 }
 
 /** Gap-logits tₖ = log(θ_{k+1} − θₖ) of a prevertex set (the inverse of prevertsFromLogits up to shift). */
-function logitsFromPrevertices(pv: readonly C[]): number[] {
+export function logitsFromPrevertices(pv: readonly C[]): number[] {
   const n = pv.length;
   const th = pv.map((w) => Math.atan2(w[1], w[0]));
   return Array.from({ length: n }, (_, k) => {
@@ -82,7 +82,7 @@ function logitsFromPrevertices(pv: readonly C[]): number[] {
   });
 }
 
-const uniformPrevertices = (n: number): C[] =>
+export const uniformPrevertices = (n: number): C[] =>
   Array.from({ length: n }, (_, k): C => [Math.cos((TWO_PI * k) / n), Math.sin((TWO_PI * k) / n)]);
 
 /** Three spread-out gap-logit indices to freeze (fixes the disk-automorphism gauge). */
@@ -91,7 +91,7 @@ function chooseFrozen(n: number): number[] {
   return set.length === 3 ? set : [0, 1, 2];
 }
 
-function minGap(pv: readonly C[]): number {
+export function minGap(pv: readonly C[]): number {
   const n = pv.length;
   const th = pv.map((w) => Math.atan2(w[1], w[0]));
   let m = Infinity;
