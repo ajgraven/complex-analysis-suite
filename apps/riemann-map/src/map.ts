@@ -1,10 +1,10 @@
 // map.ts — the executable form of a user map φ (catalog items A1 + S3).
 //
-// One parsed AST drives BOTH backends the tool needs (the keystone, ADR-0005): a JS closure for CPU
-// work (orbits, curve pushforward, invariants, tests) and a GLSL body for the per-pixel shader. When
-// φ is holomorphic we also carry its symbolic derivative φ′ (JS + GLSL) for the amplitwist readout and
-// the distortion render modes; for anti-holomorphic / non-differentiable maps φ′ is null and callers
-// fall back to a finite difference. Pure and DOM-free, so it unit-tests directly.
+// One parsed AST (from ADR-0005's keystone `@cas/expr`) drives a JS closure for the CPU work the pure-2D
+// studio needs: the disk / region grid pushforward, the hover readout, and the univalence test. When φ is
+// holomorphic we also carry its symbolic derivative φ′ for the amplitwist readout (|φ′|, arg φ′); for
+// anti-holomorphic / non-differentiable maps φ′ is null and callers fall back to a finite difference.
+// Pure and DOM-free, so it unit-tests directly. (No GLSL/shader backend — the app dropped its GPU stack.)
 import { parse } from "@cas/expr/parser";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
@@ -14,7 +14,7 @@ import type { MapState } from "./viewState.js";
 /** The JS evaluator's signature: (z, c) → w, on `[re, im]` tuples (the @cas/expr complex rep). */
 export type ComplexFn = ReturnType<typeof makeComplexFn>;
 
-/** A compiled map: the JS evaluator, the GLSL `cvec fFn(cvec z, cvec c)` body, φ′ (or null), latex. */
+/** A compiled map: the JS evaluator, its symbolic derivative φ′ (or null), and KaTeX-ready latex. */
 export interface CompiledMap {
   readonly jsFn: ComplexFn;
   /** Symbolic ∂φ/∂z as a JS evaluator, or null for anti-holomorphic / non-differentiable maps. */

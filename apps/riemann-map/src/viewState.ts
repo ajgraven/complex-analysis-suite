@@ -37,7 +37,7 @@ export interface MapState {
   readonly c?: readonly [number, number];
 }
 
-/** The complex-plane viewport. `centerHi/Lo` reserve a double-float slot for later df64 deep zoom. */
+/** The complex-plane viewport: plane centre (re, im) + zoom (larger = closer). */
 export interface ViewportState {
   /** Plane center, real part. */
   readonly centerRe: number;
@@ -63,7 +63,8 @@ export interface RenderState {
   readonly diskStyle?: string;
   /** Disk-image mode, line style: which curves — "both" (default) | "circles" | "rays". */
   readonly diskShow?: string;
-  /** Disk-image source: "expression" (φ from the editor, default) | "region" (numerical 𝔻→Ω map). */
+  /** Disk-image source: "expression" (φ from the editor, default) | "region" (numerical 𝔻→Ω map) |
+   *  "import" (an exterior map ψ decoded from a `#s=` link). */
   readonly diskSource?: string;
   /** The region Ω id, shared by both directions of a region's map (smooth or polygon). Default: first preset. */
   readonly region?: string;

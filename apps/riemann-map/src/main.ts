@@ -312,8 +312,10 @@ function main(): void {
 
   /** Set the dirty flags a view change needs, refresh disclosure, and schedule a redraw. */
   function afterViewChange(): void {
-    if (modeIsDomain(state.render.mode)) domainDirty = true;
-    else {
+    if (modeIsDomain(state.render.mode)) {
+      domainDirty = true;
+      fitPending = true; // reframe the Ω source pane on entry, symmetric with the disk-image view
+    } else {
       diskDirty = true;
       fitPending = true; // reframe the disk pane for the new source
       if (diskSourceIsRegion()) regionDirty = true;
@@ -383,6 +385,8 @@ function main(): void {
     const vis = currentVis();
     const dir = currentDir();
     controls.setContext({ vis, dir });
+    controls.setVisualize(vis); // keep both chooser widgets truthful when mode/source change indirectly
+    controls.setDirection(dir); // (e.g. formula→region re-derives the direction; the pill must follow)
     const [ll, rl] =
       vis === "formula"
         ? ["Source · unit disk 𝔻", "Image · w = φ(z)"]
@@ -875,12 +879,19 @@ function main(): void {
       // Fit the disk pane to the ACTUAL pane aspect (now that drawOverlays has sized the overlay). 1.5.
       if (fitPending) {
         fitPending = false;
+        const w = overlayCanvas.width;
+        const h = overlayCanvas.height;
+        const aspect = w > 0 && h > 0 ? w / h : 1;
         if (modeIsDiskImage(state.render.mode)) {
-          const w = overlayCanvas.width;
-          const h = overlayCanvas.height;
-          const aspect = w > 0 && h > 0 ? w / h : 1;
           const halfSpan = (diskMaxR() * 1.12) / Math.min(1, aspect);
           setViewport({ centerRe: 0, centerIm: 0, zoom: 1 / halfSpan }); // schedules one more frame
+        } else if (modeIsDomain(state.render.mode)) {
+          // Frame the source pane to the region Ω's own bounds (the numeric map's source grid).
+          const b = bounds(domainSource);
+          if (b) {
+            const halfSpan = Math.max((b.maxx - b.minx) / (2 * aspect), (b.maxy - b.miny) / 2) * 1.12 || 1;
+            setViewport({ centerRe: (b.minx + b.maxx) / 2, centerIm: (b.miny + b.maxy) / 2, zoom: 1 / halfSpan });
+          }
         }
       }
       updateReadout();
@@ -991,7 +1002,7 @@ function main(): void {
     regionDirty = true; // (re)fit g: 𝔻 → Ω (region source)
     domainDirty = true; // (re)fit f: Ω → 𝔻 (domain-map)
     diskDirty = true;
-    if (modeIsDiskImage(state.render.mode)) fitPending = true;
+    fitPending = true; // reframe for the new shape (the fit block handles both directions)
     regionCard = null; // drop the stale card so the Method card reads "solving…" until the refit lands
     domainCard = null;
     updateMethod();
