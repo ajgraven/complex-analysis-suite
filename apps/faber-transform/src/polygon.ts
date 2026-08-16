@@ -19,6 +19,24 @@ import { exteriorMapLaurentAtInfinity, fitExteriorSchwarzChristoffel } from "@ca
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
 
+/** Per-corner Faber-norm bounds Λₖ = max{αₖ, 2−αₖ} and their max (Miña-Díaz–Rubin–Wennman 2025). */
+export interface CornerNorms {
+  /** Λₖ per corner (1 at a straight vertex, → 2 as a corner sharpens either way). */
+  readonly lambdas: readonly number[];
+  /** maxₖ Λₖ — the limsupₙ ‖Fₙ‖_∂K overshoot bound (the sharpest corner dominates). */
+  readonly maxLambda: number;
+}
+
+/**
+ * The corner-norm bounds for a polygon with interior angles `angles` (in units of π): Λₖ = max{αₖ, 2−αₖ},
+ * governing the Faber-polynomial overshoot near each corner — `limsupₙ ‖Fₙ‖_∂K ≤ maxₖ Λₖ`. A straight
+ * vertex (αₖ=1) gives 1 (no overshoot); a sharp convex (αₖ→0) or reentrant (αₖ→2) corner approaches 2.
+ */
+export function cornerNorms(angles: readonly number[]): CornerNorms {
+  const lambdas = angles.map((a) => Math.max(a, 2 - a));
+  return { lambdas, maxLambda: Math.max(...lambdas, 1) };
+}
+
 /**
  * The exterior map φ: 𝔻* → Ω of a regular n-gon (n ≥ 3), truncated to `order` Laurent blocks. Returns the
  * `{c, laurent}` contract: `c = C` is the capacity (leading coefficient), `laurent[nm−1] = C·d_m/(1−nm)`,

@@ -341,7 +341,8 @@ function main(): void {
     // ≈, not exact — downgrade the `=` badge and note it (plan §6). Closed-form domains stay exact.
     const approx = preset.approximate === true;
     const exactBadge = approx ? "≈" : "=";
-    const domainNote = approx ? "  ·  φ: truncated Schwarz–Christoffel series (≈)" : "";
+    const cornerNote = preset.cornerNorms ? `, max corner-norm Λ = ${preset.cornerNorms.maxLambda.toFixed(2)}` : "";
+    const domainNote = approx ? `  ·  φ: truncated Schwarz–Christoffel series (≈)${cornerNote}` : "";
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
     const showRoots = state.showRoots !== false;

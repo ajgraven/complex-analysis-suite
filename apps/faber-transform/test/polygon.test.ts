@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { Cx } from "@cas/core";
 import { faberPolynomials, faberTransform, polynomialRoots } from "@cas/faber";
-import { polygonMap, regularPolygonMap } from "../src/polygon.js";
+import { cornerNorms, polygonMap, regularPolygonMap } from "../src/polygon.js";
 import { evalPhi, monomialTaylor, transformCoeffs } from "../src/faber.js";
 import { MENU_PRESETS, phiPresetById } from "../src/presets.js";
 
@@ -126,6 +126,18 @@ describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () 
       expect(ids).toContain(id);
       expect(phiPresetById(id).approximate).toBe(true);
     }
+  });
+
+  it("computes corner norms Λₖ = max{αₖ, 2−αₖ} and exposes them on polygon presets", () => {
+    // Square: αₖ = 0.5 ⇒ Λ = 1.5 everywhere. Straight vertex αₖ=1 ⇒ Λ=1. Reentrant αₖ=1.5 ⇒ Λ=1.5.
+    expect(cornerNorms([0.5, 0.5, 0.5, 0.5]).maxLambda).toBeCloseTo(1.5, 12);
+    expect(cornerNorms([1, 0.5, 1.5]).lambdas).toEqual([1, 1.5, 1.5]);
+    expect(cornerNorms([1, 1, 1]).maxLambda).toBe(1); // a "straight" degenerate — no overshoot
+    // Regular hexagon: αₖ = 4/6 ⇒ Λ = (n+2)/n = 8/6.
+    expect(phiPresetById("hexagon").cornerNorms?.maxLambda).toBeCloseTo(8 / 6, 12);
+    // General polygons carry corner norms too (computed from vertices, no fit).
+    expect(phiPresetById("rectangle").cornerNorms?.maxLambda).toBeCloseTo(1.5, 6);
+    expect(phiPresetById("lshape").cornerNorms?.maxLambda).toBeCloseTo(1.5, 6); // the reentrant 3π/2 corner
   });
 
   it("reentrant L-shape converges and adaptive truncation keeps more terms than a convex polygon", () => {
