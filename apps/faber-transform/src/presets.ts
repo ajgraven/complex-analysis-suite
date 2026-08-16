@@ -4,6 +4,7 @@
 // clamped shape slider whose range keeps φ univalent (a valid domain).
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
+import { regularPolygonMap } from "./polygon.js";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
 
@@ -29,6 +30,12 @@ export interface PhiPreset {
    * correctness test but hidden from the domain menu (a slit renders nothing).
    */
   readonly degenerate?: boolean;
+  /**
+   * True when φ is a TRUNCATED (not closed-form finite-Laurent) exterior map — the polygon domains, whose
+   * exterior SC series is cut off at a finite order. Everything derived from them is `≈`, so the app
+   * downgrades the `=` badge to `≈` for these domains (plan §6).
+   */
+  readonly approximate?: boolean;
 }
 
 export const PHI_PRESETS: readonly PhiPreset[] = [
@@ -64,6 +71,41 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
     build: (a: number) => ({ c: 1, laurent: [re(0), re(0), re(0), re(0), re(a / 4)] }),
     shape: { label: "a", min: 0, max: 0.98, default: 0.85 },
     kHalf: 1.45,
+  },
+  // Regular polygons (M1a): exterior Schwarz–Christoffel maps, closed-form by symmetry (prevertices = the
+  // n-th roots of unity), truncated to a finite Laurent order — hence `approximate: true`. Capacity = 1.
+  // kHalf frames each polygon's circumradius (triangle 1.369 … hexagon 1.087 at c = 1) with margin.
+  {
+    id: "triangle",
+    name: "Triangle — regular 3-gon",
+    build: () => regularPolygonMap(3),
+    shape: null,
+    kHalf: 1.81,
+    approximate: true,
+  },
+  {
+    id: "square",
+    name: "Square — regular 4-gon",
+    build: () => regularPolygonMap(4),
+    shape: null,
+    kHalf: 1.58,
+    approximate: true,
+  },
+  {
+    id: "pentagon",
+    name: "Pentagon — regular 5-gon",
+    build: () => regularPolygonMap(5),
+    shape: null,
+    kHalf: 1.49,
+    approximate: true,
+  },
+  {
+    id: "hexagon",
+    name: "Hexagon — regular 6-gon",
+    build: () => regularPolygonMap(6),
+    shape: null,
+    kHalf: 1.43,
+    approximate: true,
   },
 ];
 

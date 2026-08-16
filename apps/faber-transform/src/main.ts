@@ -337,6 +337,11 @@ function main(): void {
   function computeModel(): RenderModel {
     const preset = phiPresetById(state.phi);
     const map = preset.build(state.shape);
+    // Polygon domains carry a TRUNCATED exterior SC series, so their φ (and everything derived from it) is
+    // ≈, not exact — downgrade the `=` badge and note it (plan §6). Closed-form domains stay exact.
+    const approx = preset.approximate === true;
+    const exactBadge = approx ? "≈" : "=";
+    const domainNote = approx ? "  ·  φ: truncated Schwarz–Christoffel series (≈)" : "";
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
     const showRoots = state.showRoots !== false;
@@ -348,8 +353,8 @@ function main(): void {
       return {
         left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
-        badge: "=",
-        readout: `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`,
+        badge: exactBadge,
+        readout: `Φφ(z^${n})(w) ${approx ? "≈" : "="} ${formatFaberPoly(coeffs, { varSym: "w" })}${domainNote}`,
         error: false,
       };
     }
@@ -369,10 +374,11 @@ function main(): void {
           markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
           roots: rootMarks(rightRat.num),
         },
-        badge: "=",
+        badge: exactBadge,
         readout:
           `Φφ(1/(z−z₀)${kexp})(w): image pole at w = φ(z₀) = ${fmt(img.poleAt)}` +
-          (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : ""),
+          (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : "") +
+          domainNote,
         error: false,
       };
     }
@@ -392,8 +398,8 @@ function main(): void {
         return {
           left: leftFn,
           right: { source: { kind: "rational", rat: image }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(image.num) },
-          badge: "=",
-          readout: `Φφ(f)(w) = exact rational image on K  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)`,
+          badge: exactBadge,
+          readout: `Φφ(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)${domainNote}`,
           error: false,
         };
       } catch (e) {
@@ -422,7 +428,7 @@ function main(): void {
       left: leftFn,
       right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
-      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ  ·  ${coeffNote}${orderNote}  ·  ${rNote}`,
+      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ  ·  ${coeffNote}${orderNote}  ·  ${rNote}${domainNote}`,
       error: false,
     };
   }
