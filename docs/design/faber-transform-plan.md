@@ -224,6 +224,11 @@ none of which v1 blocks:
     `@cas/faber`'s `polynomialRoots`; unconverged (ill-conditioned high-degree) root-finds are dropped
     rather than scattered. Verified in-browser: F₈'s 8 roots sit exactly on the deltoid's phase-convergence
     points; toggling clears them. 31 app tests.
+  - **Publish — DONE.** Added a live launcher card (`apps/launcher/index.html`) and
+    `cp -r apps/faber-transform/dist _site/faber-transform` to the Pages assemble step
+    (`.github/workflows/deploy-pages.yml`) — the app now deploys with the suite at
+    `…/faber-transform/` on the next push to `master`. (The app was already in CI's build + the workspace
+    test/lint/typecheck since M1; publishing only wires the launcher link + the deploy copy.)
 
 ## 9. Scaffold & wiring
 
@@ -281,7 +286,9 @@ none of which v1 blocks:
 6. **Coloring:** phase + log-spaced modulus contours; **GPU** substrate.
 7. **Domains (v1):** interval (Joukowski), ellipse $z+m/z$, $k$-cusped star, general $m$-fold — each with one
    clamped univalent shape slider.
-8. **Deploy:** slug `faber-transform`; **built but unpublished** ("Coming soon") until the author approves.
+8. **Deploy:** slug `faber-transform`; **published** on the author's go — a live launcher card + a
+   `cp -r apps/faber-transform/dist _site/faber-transform` in the Pages assemble step (was held back
+   `correspondences`-style through M3).
 
 ### Resolved (second dialogue round)
 - **A. GPU coloring source:** **extract `colorAt`/`COLORING_GLSL` into `@cas/gpu`** (plotter = second

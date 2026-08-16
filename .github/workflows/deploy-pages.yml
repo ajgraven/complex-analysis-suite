@@ -65,7 +65,8 @@ jobs:
         run: pnpm test
 
       # Builds packages + all apps via the root script. We publish launcher + CD + QD + Complex Function
-      # Plotter + Riemann Map below; building correspondences too is harmless and keeps parity with CI.
+      # Plotter + Riemann Map + Argument Principle + Faber Transform below; building correspondences too is
+      # harmless and keeps parity with CI.
       - name: Build
         run: pnpm build
 
@@ -78,6 +79,7 @@ jobs:
           cp -r apps/complex-function-plotter/dist _site/complex-function-plotter
           cp -r apps/riemann-map/dist        _site/riemann-map
           cp -r apps/argument-principle/dist _site/argument-principle
+          cp -r apps/faber-transform/dist    _site/faber-transform
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5
