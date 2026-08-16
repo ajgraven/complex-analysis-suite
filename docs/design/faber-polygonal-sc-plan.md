@@ -186,11 +186,15 @@ Two findings that shape the UI:
 Gate passed: M3 rides entirely on existing primitives — no new package, no new numerics.
 
 #### M3 build steps
-- **M3.1 — engine (`@cas/faber`).** `weightSeries(cornerImages, m, N)` + `weightedFaberPolynomial(map,
-  cornerImages, n, m)` (the validated spike helpers), pure + unit-tested against the spike goldens.
-- **M3.2 — app wiring.** Surface `prevertices` on `PolygonMapResult`; a "suppress corners" toggle + `m`
-  slider (2–8) live for polygonal domains only; route monomial inputs through `Q_{n,m}`; round-trip the
-  toggle + `m` in the `#vs=` permalink.
+- **M3.1 — engine (`@cas/faber`) — DONE.** `weightSeries(cornerImages, m, N)` + `weightedFaberPolynomial(map,
+  cornerImages, n, m)` + a batch `weightedFaberPolynomials` (the validated spike helpers), pure + unit-tested
+  (9 tests: `g₀=1`, no-corner reduction `Q=F`, degree/leading-coeff preservation, the explicit convolution).
+- **M3.2 — app wiring — DONE.** `PolygonMapResult` and the polygon presets expose the corner images
+  `wₖ = 1/uₖ` (regular n-gon: closed-form roots of unity; arbitrary/custom: from the fit); a "suppress
+  corners" toggle + `m` slider (2–8) show for polygonal domains + monomial input only; monomial inputs route
+  through `Q_{n,m}` (badge stays `≈`, readout shows `Q_{n,m}(w) = …`); the toggle + `m` round-trip in the
+  `#vs=` permalink (guarded). Browser-verified on the square (toggle → flatter K-image, `w¹²` leading term
+  preserved; toggle hidden for pole/expr inputs).
 - **M3.3 — before/after demo.** Overlay `|Fₙ|` vs `|Q_{n,m}|` along `∂K` (paper Fig. 2 style), reusing the
   M2 corner-norm annotations.
 

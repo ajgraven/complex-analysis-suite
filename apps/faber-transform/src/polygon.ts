@@ -68,6 +68,17 @@ export interface PolygonMapResult {
   readonly degraded: boolean;
   /** Final parameter-solve residual. */
   readonly residual: number;
+  /**
+   * The corner images wₖ = φ(zₖ) on |w| = 1 — the exterior-SC prevertex reciprocals (wₖ = 1/uₖ). These
+   * drive the corner-suppressing weighted Faber polynomials Q_{n,m} (M3): `@cas/faber`'s `weightSeries`
+   * consumes exactly this set. Empty when the fit did not converge.
+   */
+  readonly cornerImages: readonly Cx[];
+}
+
+/** The corner images wₖ = φ(zₖ) of a regular n-gon: the n-th roots of unity (its closed-form prevertices). */
+export function regularPolygonCornerImages(n: number): Cx[] {
+  return Array.from({ length: n }, (_, k) => ({ re: Math.cos((2 * Math.PI * k) / n), im: Math.sin((2 * Math.PI * k) / n) }));
 }
 
 /** Options for {@link polygonMap}. */
@@ -109,10 +120,16 @@ export function polygonMap(vertices: readonly (readonly [number, number])[], opt
   let last = Math.min(minOrder, laurent.length - 1);
   for (let k = 0; k < laurent.length; k++) if (mag[k] > tailTol * peak) last = Math.max(last, k);
   const kept = laurent.slice(0, last + 1);
+  // Corner images wₖ = 1/uₖ (the prevertex reciprocals, on |w| = 1) for the M3 weighted Faber polynomials.
+  const cornerImages: Cx[] = fit.prevertices.map((u) => {
+    const d = u[0] * u[0] + u[1] * u[1]; // |u|² (= 1 on ∂𝔻); 1/u = ū/|u|²
+    return { re: u[0] / d, im: -u[1] / d };
+  });
   return {
     map: { c, laurent: kept.map(([r, i]): Cx => ({ re: r, im: i })) },
     converged: fit.converged,
     degraded: fit.degraded,
     residual: fit.residual,
+    cornerImages,
   };
 }

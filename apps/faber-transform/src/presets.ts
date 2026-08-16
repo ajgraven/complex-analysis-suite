@@ -5,24 +5,26 @@
 import type { Cx } from "@cas/core";
 import type { ExteriorMap } from "@cas/faber";
 import { interiorAngles } from "@cas/conformal";
-import { cornerNorms, polygonMap, regularPolygonMap, type CornerNorms } from "./polygon.js";
+import { cornerNorms, polygonMap, regularPolygonCornerImages, regularPolygonMap, type CornerNorms, type PolygonMapResult } from "./polygon.js";
 
 const re = (x: number): Cx => ({ re: x, im: 0 });
 
-/** A preset for an arbitrary polygon: fit the exterior SC map once (lazily) and cache the resulting map. */
+/** A preset for an arbitrary polygon: fit the exterior SC map once (lazily) and cache the whole result. */
 function polygonPreset(id: string, name: string, vertices: readonly (readonly [number, number])[], kHalf: number): PhiPreset {
-  let cached: ExteriorMap | null = null;
+  let cached: PolygonMapResult | null = null;
+  const ensure = (): PolygonMapResult => {
+    if (!cached) {
+      cached = polygonMap(vertices);
+      if (!cached.converged) console.warn(`faber-transform: polygon "${id}" SC fit did not converge (residual ${cached.residual.toExponential(2)})`);
+    }
+    return cached;
+  };
   return {
     id,
     name,
-    build: () => {
-      if (!cached) {
-        const r = polygonMap(vertices);
-        if (!r.converged) console.warn(`faber-transform: polygon "${id}" SC fit did not converge (residual ${r.residual.toExponential(2)})`);
-        cached = r.map;
-      }
-      return cached;
-    },
+    build: () => ensure().map,
+    // The M3 corner images wₖ = 1/uₖ share the same lazy fit as the map.
+    cornerImages: () => ensure().cornerImages,
     shape: null,
     kHalf,
     approximate: true,
@@ -33,10 +35,12 @@ function polygonPreset(id: string, name: string, vertices: readonly (readonly [n
 
 /** A regular n-gon preset (closed-form exterior map, M1a): interior angle (n−2)/n at every corner. */
 function regularPreset(id: string, name: string, n: number, kHalf: number): PhiPreset {
+  const images = regularPolygonCornerImages(n); // closed-form: the n-th roots of unity
   return {
     id,
     name,
     build: () => regularPolygonMap(n),
+    cornerImages: () => images,
     shape: null,
     kHalf,
     approximate: true,
@@ -74,6 +78,11 @@ export interface PhiPreset {
   readonly approximate?: boolean;
   /** Corner-norm bounds Λₖ (polygon domains only) — the Faber-overshoot annotation shown in the readout. */
   readonly cornerNorms?: CornerNorms;
+  /**
+   * The corner images wₖ = φ(zₖ) on |w| = 1 (polygon domains only), for the corner-suppressing weighted
+   * Faber polynomials Q_{n,m} (M3). Lazy — an arbitrary polygon's images share the fit with `build`.
+   */
+  readonly cornerImages?: () => readonly Cx[];
 }
 
 export const PHI_PRESETS: readonly PhiPreset[] = [
