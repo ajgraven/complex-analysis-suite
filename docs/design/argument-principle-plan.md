@@ -429,10 +429,14 @@ replacement trio clears **ΔE ≥ 8.3** with shape double-encoding.
 
 ### Phasing (highest impact / lowest risk first)
 1. **Perceptual quick wins** — shape encoding + validated tokens + ARIA live + reduced-motion (no
-   interaction-model or layout risk). _← building now._
-2. **Input & touch** — mode control + pinch + target sizes.
-3. **Organization** — equality panel + legend + side-rail/sticky-bar + grouping + linked cursor.
+   interaction-model or layout risk). _✅ done (#266)._
+2. **Input & touch** — mode control + pinch + target sizes. _✅ done (#269)._
+3. **Organization** — equality panel + legend + side-rail/sticky-bar + grouping + linked cursor. _✅ done:
+   3a the equation-as-layout readout + persistent legend + Function/Contour/Explore/View groups + the
+   responsive `display:contents`+`order` side-rail/sticky-bar (always-present ∮ evidence); 3b the linked
+   "one cursor" — hover/tap a z-point to highlight its f(z) in the w-plane and its t on the strip._
 4. **Polish** — non-rainbow ramp + direction ticks + first-run coach + Simple/Explore density.
+   _← next up._
 
 Cross-cutting: test-guarded (unit + Playwright touch-emulation smokes + a CI palette-validator check on the
 token set); pure-2D and app-local; new UI state optional-with-default for `#vs=` compat.

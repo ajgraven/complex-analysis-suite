@@ -91,8 +91,9 @@ body {
 
 .topbar {
   display: flex;
+  flex-wrap: wrap; /* actions wrap on narrow instead of forcing horizontal page scroll */
   align-items: center;
-  gap: 14px;
+  gap: 10px 14px;
 }
 .brand {
   display: flex;
@@ -161,15 +162,35 @@ button.ghost:hover {
   outline-offset: 2px;
 }
 
-.toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: end;
+/* Grouped, labelled controls (§12 organization): Function · Contour · Explore · View. */
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(208px, 1fr));
+  gap: 10px;
+}
+.cgroup {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 12px 14px;
+  padding: 10px 13px 12px;
+}
+.cgroup-t {
+  margin: 0 0 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.cgroup-b {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  align-items: end;
+}
+.cgroup-b .hint {
+  margin: 2px 0 0;
+  flex-basis: 100%;
 }
 .field {
   display: flex;
@@ -210,10 +231,6 @@ button.ghost:hover {
   accent-color: var(--accent);
 }
 
-.toolbar.sub {
-  padding: 8px 14px;
-  align-items: center;
-}
 .check {
   display: inline-flex;
   align-items: center;
@@ -239,9 +256,12 @@ button.ghost:disabled {
 
 .formula {
   min-height: 1.6em;
-  padding: 6px 4px 2px;
+  padding: 2px 4px;
   color: var(--text);
   overflow-x: auto;
+}
+.formula .katex-display {
+  margin: 0.15em 0;
 }
 .formula.dim {
   opacity: 0.4;
@@ -321,63 +341,218 @@ button.ghost:disabled {
   display: block;
 }
 
-.readout {
+/* Responsive workspace (§12 / decision 3). Mobile-first: a single column, everything linearized via
+ * `order`, with the equality bar stuck to the top. Wide screens (≥1024px) split into a main column and a
+ * persistent side rail (`.main`/`.rail` are `display:contents` until then, so their children reflow as one
+ * ordered column on narrow and as two real columns on wide). */
+.workspace {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+}
+.main,
+.rail {
+  display: contents;
+}
+.controls {
+  order: 1;
+}
+.formula {
+  order: 2;
+}
+.err {
+  order: 3;
+}
+.eqbar {
+  order: 4;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+.stage {
+  order: 5;
+}
+.arg-panel {
+  order: 6;
+}
+.legend {
+  order: 7;
+}
+.evidence {
+  order: 8;
+}
+.note {
+  order: 9;
+}
+@media (min-width: 1024px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 350px);
+    align-items: stretch;
+  }
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 12px;
+    align-self: start;
+  }
+  .eqbar {
+    position: static;
+  }
+}
+
+/* The persistent equality readout, laid out as the equation: badge · winding = zeros − poles · verdict. */
+.eqbar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
   background: var(--panel);
   border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
   border-radius: 12px;
   padding: 12px 16px;
 }
-.metrics {
+.eqbar.ok {
+  border-left-color: var(--ok);
+}
+.eqbar.warn {
+  border-left-color: var(--warn);
+}
+.eq-badge {
+  flex: none;
+  width: 1.7em;
+  height: 1.7em;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-@media (max-width: 560px) {
-  .metrics {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-.cell {
+  place-items: center;
+  border-radius: 50%;
   background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
+  color: var(--muted);
+  font-size: 1.25rem;
+  font-weight: 700;
 }
-.cell .cl {
-  font-size: 0.7rem;
+.eqbar.ok .eq-badge {
+  color: var(--ok);
+}
+.eqbar.warn .eq-badge {
+  color: var(--warn);
+}
+.eq-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.eq-expr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.eq-term {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.eq-lbl {
+  font-size: 0.68rem;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--muted);
 }
-.cell .cv {
-  font-size: 1.7rem;
-  font-weight: 650;
+.eq-n {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.eq-wind .eq-n {
+  color: var(--gold);
+}
+.eq-zero .eq-n {
+  color: var(--zero);
+}
+.eq-pole .eq-n {
+  color: var(--pole);
+}
+.eq-rel,
+.eq-op {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.eq-verdict {
+  font-size: 0.84rem;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
-  margin-top: 2px;
+}
+
+/* The persistent marker legend (§12): identity is shape + colour, always on view. */
+.legend {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 7px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 11px 15px;
+  font-size: 0.84rem;
+  color: var(--text);
+}
+.lg {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.gl {
+  font-size: 1rem;
+  line-height: 1;
+}
+.gl-zero {
+  color: var(--zero);
+}
+.gl-pole {
+  color: var(--pole);
+}
+.gl-crit {
+  color: var(--crit);
+}
+.gl-target {
+  color: var(--target);
+}
+.sw {
+  display: inline-block;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+}
+.sw-ramp {
+  background: linear-gradient(90deg, #e2483d, #e6a52a, #2fae6a, #3a9be0, #9a63d8);
+}
+
+/* The evidence group: the ∮ check (always present) + the traversal-time notes. */
+.evidence {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 15px;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
-.cell .cv .tag {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: var(--muted);
-}
-.status {
-  margin-top: 10px;
-  font-size: 0.9rem;
-  font-variant-numeric: tabular-nums;
-  min-height: 1.2em;
-  color: var(--muted);
-}
-.status.ok {
-  color: var(--ok);
-}
-.status.warn {
-  color: var(--warn);
+.evidence > *[hidden] {
+  display: none;
 }
 .integral {
-  margin-top: 8px;
   font-size: 0.9rem;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -386,7 +561,6 @@ button.ghost:disabled {
   color: var(--gold);
 }
 .decomp {
-  margin-top: 6px;
   font-size: 0.86rem;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
@@ -395,7 +569,6 @@ button.ghost:disabled {
   margin-left: 0;
 }
 .anim {
-  margin-top: 8px;
   font-size: 0.9rem;
   color: var(--trace);
   font-variant-numeric: tabular-nums;
@@ -405,9 +578,8 @@ button.ghost:disabled {
 }
 .note {
   color: var(--muted);
-  font-size: 0.86rem;
-  margin: 10px 0 0;
-  max-width: 78ch;
+  font-size: 0.82rem;
+  margin: 0;
 }
 .approx {
   color: var(--muted);

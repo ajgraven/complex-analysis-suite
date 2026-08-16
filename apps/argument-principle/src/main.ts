@@ -195,32 +195,6 @@ function checkbox(label: string, checked: boolean): { root: HTMLLabelElement; in
   return { root, input };
 }
 
-interface Cell {
-  readonly root: HTMLElement;
-  set(value: string, tag: string): void;
-  setLabel(text: string): void;
-}
-function metricCell(label: string, accent: string): Cell {
-  const root = document.createElement("div");
-  root.className = "cell";
-  const l = document.createElement("div");
-  l.className = "cl";
-  l.textContent = label;
-  const v = document.createElement("div");
-  v.className = "cv";
-  v.style.color = accent;
-  root.append(l, v);
-  return {
-    root,
-    set(value: string, tag: string): void {
-      v.innerHTML = `${value}<span class="tag">${tag}</span>`;
-    },
-    setLabel(text: string): void {
-      l.textContent = text;
-    },
-  };
-}
-
 function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
@@ -258,6 +232,9 @@ function main(): void {
   let sing: Singularities = NO_SING;
   let draftPath: Vec2[] | null = null; // the freehand path being drawn (transient, not persisted)
   let mode: ContourMode = "move"; // the active contour tool (§12 / ADR-0022) — transient
+  // §12 "one cursor": the hovered (mouse) / tapped (touch) z-plane point, linked live to its image f(z)
+  // in the w-plane and — when it lies on γ — to its parameter t on the argument strip. Transient.
+  let probe: Vec2 | null = null;
   const anim = { on: false, t: 0, speed: 0.25 }; // traversal animation (transient)
   let animRaf = 0;
   let animLast = 0;
@@ -314,8 +291,6 @@ function main(): void {
   const themeBtn = createThemeToggle(() => schedule());
   topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, helpBtn, themeBtn);
 
-  const toolbar = document.createElement("div");
-  toolbar.className = "toolbar";
   const presetWrap = document.createElement("label");
   presetWrap.className = "field";
   presetWrap.innerHTML = "<span>Preset</span>";
@@ -347,10 +322,7 @@ function main(): void {
   radius.step = "0.01";
   radius.value = String(state.contour.radius);
   radiusWrap.append(radius);
-  toolbar.append(presetWrap, exprWrap, radiusWrap);
 
-  const controls2 = document.createElement("div");
-  controls2.className = "toolbar sub";
   const resWrap = document.createElement("label");
   resWrap.className = "field";
   const resLabel = document.createElement("span");
@@ -379,8 +351,29 @@ function main(): void {
   const decompChk = checkbox("Root vectors", ped().showDecomposition);
   const drawHint = document.createElement("span");
   drawHint.className = "hint";
-  drawHint.textContent = "Tip: click a root to isolate it · left-drag to draw a contour · hover a marker for details.";
-  controls2.append(resWrap, playBtn, speedWrap, domainChk.root, imageChk.root, decompChk.root, drawHint);
+  drawHint.textContent = "Pick a tool above, then act on the z-plane.";
+
+  // Grouped, labelled controls (§12 organization): Function · Contour · Explore · View.
+  const controlGroup = (title: string, ...children: HTMLElement[]): HTMLElement => {
+    const g = document.createElement("section");
+    g.className = "cgroup";
+    const h = document.createElement("h2");
+    h.className = "cgroup-t";
+    h.textContent = title;
+    const body = document.createElement("div");
+    body.className = "cgroup-b";
+    body.append(...children);
+    g.append(h, body);
+    return g;
+  };
+  const controls = document.createElement("div");
+  controls.className = "controls";
+  controls.append(
+    controlGroup("Function", presetWrap, exprWrap),
+    controlGroup("Contour", radiusWrap, drawHint),
+    controlGroup("Explore", playBtn, speedWrap, decompChk.root),
+    controlGroup("View", resWrap, domainChk.root, imageChk.root),
+  );
 
   const formula = document.createElement("div");
   formula.className = "formula";
@@ -421,26 +414,60 @@ function main(): void {
     "the curve lands on the winding number";
   argPanel.append(argCanvas, argCap);
 
-  const readout = document.createElement("div");
-  readout.className = "readout";
-  const metrics = document.createElement("div");
-  metrics.className = "metrics";
-  const zerosCell = metricCell("Zeros inside", cssVar("--zero", "#4585e0"));
-  const polesCell = metricCell("Poles inside", cssVar("--pole", "#e8608f"));
-  const nmpCell = metricCell("Zeros − Poles", cssVar("--text", "#e7eaf2"));
-  const windCell = metricCell("Winding of f(γ)", cssVar("--gold", "#dbb057"));
-  metrics.append(zerosCell.root, polesCell.root, nmpCell.root, windCell.root);
-  const status = document.createElement("div");
-  status.className = "status";
+  // The persistent equality readout, laid out AS the equation (§12 organization). Always present — the
+  // badge + numbers + verdict update in place; nothing appears/vanishes. `updateReadout` populates it.
+  const eqbar = document.createElement("div");
+  eqbar.className = "eqbar";
+  eqbar.innerHTML =
+    '<span class="eq-badge" aria-hidden="true">·</span>' +
+    '<div class="eq-body">' +
+    '<div class="eq-expr">' +
+    '<span class="eq-term eq-wind"><span class="eq-lbl">winding</span><b class="eq-n">—</b></span>' +
+    '<span class="eq-rel">=</span>' +
+    '<span class="eq-term eq-zero"><span class="eq-lbl">zeros</span><b class="eq-n">—</b></span>' +
+    '<span class="eq-op">−</span>' +
+    '<span class="eq-term eq-pole"><span class="eq-lbl">poles</span><b class="eq-n">—</b></span>' +
+    "</div>" +
+    '<div class="eq-verdict">enter a contour to see the theorem</div>' +
+    "</div>";
+  const q = (sel: string): HTMLElement => {
+    const el = eqbar.querySelector<HTMLElement>(sel);
+    if (!el) throw new Error(`argument-principle: missing eqbar element ${sel}`);
+    return el;
+  };
+  const eqBadge = q(".eq-badge");
+  const eqRel = q(".eq-rel");
+  const eqWindLbl = q(".eq-wind .eq-lbl");
+  const eqWindNum = q(".eq-wind .eq-n");
+  const eqZeroLbl = q(".eq-zero .eq-lbl");
+  const eqZeroNum = q(".eq-zero .eq-n");
+  const eqPoleNum = q(".eq-pole .eq-n");
+  const eqVerdict = q(".eq-verdict");
+
+  // A persistent legend (§12): identity is shape + colour, so it stays visible, not buried in a caption.
+  const legend = document.createElement("div");
+  legend.className = "legend";
+  legend.setAttribute("aria-label", "Legend");
+  legend.innerHTML =
+    '<span class="lg"><span class="gl gl-zero">○</span> zero</span>' +
+    '<span class="lg"><span class="gl gl-pole">✕</span> pole</span>' +
+    '<span class="lg"><span class="gl gl-crit">◆</span> f′=0</span>' +
+    '<span class="lg"><span class="gl gl-target">●</span> target w₀</span>' +
+    '<span class="lg"><span class="sw sw-ramp"></span> hue = position t (γ ↔ f(γ))</span>';
+
+  // The evidence group: the analytic ∮ f′/f check (always present), plus the traversal-time decomposition
+  // and sweep notes. `integralEl` is never hidden now — it shows a stable line or a "why not" placeholder.
+  const evidence = document.createElement("div");
+  evidence.className = "evidence";
   const integralEl = document.createElement("div");
   integralEl.className = "integral";
-  integralEl.hidden = true;
   const decompEl = document.createElement("div");
   decompEl.className = "decomp";
   decompEl.hidden = true;
   const animEl = document.createElement("div");
   animEl.className = "anim";
   animEl.hidden = true;
+  evidence.append(integralEl, animEl, decompEl);
   const noteEl = document.createElement("p");
   noteEl.className = "note";
   noteEl.innerHTML =
@@ -448,7 +475,6 @@ function main(): void {
     "γ. Counts marked <span class=\"approx\">=</span> are exact (f rational, roots found algebraically); " +
     "<span class=\"approx\">≈</span> are numerical estimates (transcendental f, or a winding read from " +
     "the sampled image).";
-  readout.append(metrics, status, integralEl, animEl, decompEl, noteEl);
 
   const help = document.createElement("div");
   help.className = "help-overlay";
@@ -501,7 +527,20 @@ function main(): void {
   liveEl.setAttribute("role", "status");
   liveEl.setAttribute("aria-live", "polite");
 
-  app.append(topbar, importNote, toolbar, controls2, formula, errEl, stage, argPanel, readout, help, tooltipEl, toastEl, liveEl);
+  // Responsive workspace (§12 / decision 3): on wide screens the rail is a persistent side column so the
+  // equality, legend, and evidence stay visible beside the planes; on narrow screens everything linearizes
+  // and the equality bar sticks to the top (CSS `display:contents` + `order` do the reflow — see main.css).
+  const mainCol = document.createElement("div");
+  mainCol.className = "main";
+  mainCol.append(controls, formula, errEl, stage, argPanel);
+  const rail = document.createElement("aside");
+  rail.className = "rail";
+  rail.append(eqbar, legend, evidence, noteEl);
+  const workspace = document.createElement("div");
+  workspace.className = "workspace";
+  workspace.append(mainCol, rail);
+
+  app.append(topbar, importNote, workspace, help, tooltipEl, toastEl, liveEl);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -757,6 +796,24 @@ function main(): void {
     }, "image/png");
   }
 
+  // §12 "one cursor" — a hollow ring + centre dot marking the linked probe point in a plane. Deliberately
+  // a distinct shape/weight from the ○✕◆● marks so it reads as a transient cursor, not a located root.
+  function drawProbeMarker(ctx: CanvasRenderingContext2D, map: PlaneMap, world: Vec2, color: string): void {
+    const p = map.toPx(world);
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
+    ctx.save();
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 8, 0, 2 * Math.PI);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(p[0], p[1], 2, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // ---- rendering -----------------------------------------------------------
   function renderFormula(): void {
     if (model.error) {
@@ -815,6 +872,34 @@ function main(): void {
     const cTarget = cssVar("--target", "#cf5691"); // ● target w₀
     const cCenter = cssVar("--muted", "#8c95a9");
     const cTrace = cssVar("--trace", "#a08bff"); // traversal point
+    const cProbe = cssVar("--text", "#e7eaf2"); // §12 "one cursor" ring (neutral, distinct from the marks)
+
+    // §12 "one cursor": resolve the probe to a z-point, its image f(z), and — when the probe lies within a
+    // few px of γ — the parameter t of that spot on the loop, so the argument strip highlights it too.
+    let probeZ: Vec2 | null = null;
+    let probeW: Vec2 | null = null;
+    let probeT: number | null = null;
+    if (probe && !model.error) {
+      probeZ = probe;
+      if (zPts.length > 1) {
+        const scale = zPlaneScale(); // px per world unit
+        let best = Infinity;
+        let bi = -1;
+        for (let i = 0; i < zPts.length; i++) {
+          const d = Math.hypot(zPts[i][0] - probe[0], zPts[i][1] - probe[1]);
+          if (d < best) {
+            best = d;
+            bi = i;
+          }
+        }
+        if (bi >= 0 && best * scale <= 10) {
+          probeZ = zPts[bi]; // snap onto γ so the link reads exactly, and expose its t
+          probeT = bi / zPts.length;
+        }
+      }
+      const w = model.f(probeZ);
+      probeW = Number.isFinite(w[0]) && Number.isFinite(w[1]) ? w : null;
+    }
 
     const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
     clearBtn.disabled = !(state.contour.kind === "path" || !!draftPath || pinned);
@@ -885,6 +970,7 @@ function main(): void {
         const fr = (performance.now() - flash.t0) / 1000;
         for (const p of flash.pts) drawPulseRing(ctx, map, p, fr, cCrit);
       }
+      if (probeZ) drawProbeMarker(ctx, map, probeZ, cProbe); // §12 "one cursor" — the linked point
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
@@ -944,6 +1030,24 @@ function main(): void {
         ctx.restore();
         drawDot(ctx, map, wAnim, cTrace, 6);
       }
+      // §12 "one cursor" — the probe's image f(z), with a dashed arg-vector from the target to it.
+      if (probeW) {
+        const o = map.toPx(about);
+        const pp = map.toPx(probeW);
+        if (Number.isFinite(pp[0]) && Number.isFinite(pp[1])) {
+          ctx.save();
+          ctx.strokeStyle = cProbe;
+          ctx.globalAlpha = 0.5;
+          ctx.lineWidth = 1.25;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.moveTo(o[0], o[1]);
+          ctx.lineTo(pp[0], pp[1]);
+          ctx.stroke();
+          ctx.restore();
+        }
+        drawProbeMarker(ctx, map, probeW, cProbe);
+      }
     });
 
     // A1 — the argument strip-chart (always-on): accumulated turns of arg f(γ(t)) climbing to the winding.
@@ -955,13 +1059,14 @@ function main(): void {
       drawArgGraph(
         argCanvas,
         // On a branch cut the total is not a winding number — don't label it as one (the cliff still shows).
-        { turns, marker: showAnim ? anim.t : null, winding: !branchCut && Number.isFinite(wn) ? wn : null },
+        // The strip marker follows the traversal (animating) or, when idle, the linked "one cursor" on γ.
+        { turns, marker: showAnim ? anim.t : probeT, winding: !branchCut && Number.isFinite(wn) ? wn : null },
         {
           grid: axisColors().grid,
           axis: axisColors().axis,
           text: cssVar("--text", "#e7eaf2"),
           muted: cssVar("--muted", "#8c95a9"),
-          marker: cTrace,
+          marker: showAnim ? cTrace : cProbe,
         },
       );
     } else {
@@ -970,40 +1075,42 @@ function main(): void {
 
     // B4 — the analytic integral (1/2πi)∮ f′/f dz, a quadrature independent of the winding accumulation
     // that rounds to the same Z − P. Honest `≈`: it is a Riemann sum, and the pedagogy is that it agrees.
+    // §12: kept always present as evidence — it shows the value, or a plain line saying why it can't.
     const fpFn = model.fp;
-    if (ped().showIntegral && fpFn && sing.differentiable && !model.error && wPts.length > 1) {
+    if (!ped().showIntegral) {
+      integralEl.hidden = true;
+    } else if (!fpFn || !sing.differentiable) {
+      integralEl.hidden = false;
+      integralEl.innerHTML = "∮<sub>γ</sub> f′/f — the analytic check needs a holomorphic f (no symbolic f′ here).";
+    } else if (model.error || wPts.length <= 1) {
+      integralEl.hidden = false;
+      integralEl.innerHTML = "∮<sub>γ</sub> f′/f — the analytic check appears once a valid f and contour are set.";
+    } else {
       const fMinusTarget = (z: Cplx): Cplx => {
         const w = model.f(z);
         return [w[0] - about[0], w[1] - about[1]];
       };
       const atOrigin = about[0] === 0 && about[1] === 0;
       const integrand = atOrigin ? "f′/f" : "f′/(f−w₀)";
+      integralEl.hidden = false;
       if (branchCut) {
         // The integral is not near an integer — the tell that f is multivalued around γ.
         const val = normalizeByTwoPiI(logDerivIntegral(fMinusTarget, fpFn, zPts))[0];
-        integralEl.hidden = false;
         integralEl.innerHTML =
           `<span class="approx">≈</span> (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
           `<b>${Number.isFinite(val) ? val.toFixed(3) : "—"}</b> — not an integer: f is not single-valued around γ.`;
       } else if (showAnim) {
         const vpart = normalizeByTwoPiI(partialLogDerivIntegral(fMinusTarget, fpFn, zPts, anim.t))[0];
-        integralEl.hidden = false;
         integralEl.innerHTML =
           `<span class="approx">≈</span> (1/2πi) ∮ ${integrand} dz so far = ` +
           `<b>${Number.isFinite(vpart) ? vpart.toFixed(3) : "—"}</b> → converging to ${nmp} = zeros − poles`;
       } else {
         const val = normalizeByTwoPiI(logDerivIntegral(fMinusTarget, fpFn, zPts))[0];
-        if (Number.isFinite(val)) {
-          integralEl.hidden = false;
-          integralEl.innerHTML =
-            `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
-            `<b>${val.toFixed(3)}</b> → ${Math.round(val)} = zeros − poles`;
-        } else {
-          integralEl.hidden = true;
-        }
+        integralEl.innerHTML = Number.isFinite(val)
+          ? `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
+            `<b>${val.toFixed(3)}</b> → ${Math.round(val)} = zeros − poles`
+          : `∮<sub>γ</sub> ${integrand} dz — γ passes through a singularity; nudge it to read the integral.`;
       }
-    } else {
-      integralEl.hidden = true;
     }
 
     // B5 — the decomposition note (the vectors are drawn in the z-pane above).
@@ -1049,23 +1156,27 @@ function main(): void {
     const reliable = haveImage && windingReliable(wPts, about);
     // Never surface a NaN (a pole on a contour sample), and never a winding across a branch cut (undefined).
     const windFinite = haveImage && !branchCut && Number.isFinite(winding);
-    const windText = windFinite ? String(winding) : "—";
-    const windTag = windFinite ? "≈" : "";
 
     // D8 — when the target w₀ ≠ 0 the counted roots are solutions of f = w₀, not zeros of f.
     const atOrigin = about[0] === 0 && about[1] === 0;
     const noun = atOrigin ? "zeros" : "solutions";
-    zerosCell.setLabel(atOrigin ? "Zeros inside" : "Solutions inside");
-    nmpCell.setLabel(atOrigin ? "Zeros − Poles" : "Solutions − Poles");
-    windCell.setLabel(atOrigin ? "Winding of f(γ)" : "Winding about w₀");
+    eqWindLbl.textContent = atOrigin ? "winding" : "winding about w₀";
+    eqZeroLbl.textContent = noun;
+    eqWindNum.textContent = windFinite ? String(winding) : "—";
+
+    // The equality panel reads as the equation: badge · winding = zeros − poles · verdict. Always present;
+    // the relation shows `≠` on a genuine mismatch so equal-looking numbers never imply agreement falsely.
+    const setEq = (badge: string, cls: string, rel: string, verdict: string): void => {
+      eqBadge.textContent = badge;
+      eqRel.textContent = rel;
+      eqbar.className = cls ? `eqbar ${cls}` : "eqbar";
+      eqVerdict.textContent = verdict;
+    };
 
     if (!sing.differentiable) {
-      zerosCell.set("—", "");
-      polesCell.set("—", "");
-      nmpCell.set("—", "");
-      windCell.set(windText, windTag);
-      status.className = "status warn";
-      status.textContent = "⚠ f is not holomorphic — the argument principle does not apply (no f′).";
+      eqZeroNum.textContent = "—";
+      eqPoleNum.textContent = "—";
+      setEq("⚠", "warn", "=", "f is not holomorphic — the theorem does not apply (no f′)");
       announce({ kind: "nonholomorphic" });
       return;
     }
@@ -1074,39 +1185,32 @@ function main(): void {
     const zi = countInside(sing.zeros, inside);
     const pi = countInside(sing.poles, inside);
     const nmp = zi - pi;
-    const eq = sing.exact ? "=" : "≈";
-    zerosCell.set(String(zi), eq);
-    polesCell.set(String(pi), eq);
-    nmpCell.set(String(nmp), eq);
-    windCell.set(windText, windTag);
+    const prov = sing.exact ? "exact" : "estimate";
+    eqZeroNum.textContent = String(zi);
+    eqPoleNum.textContent = String(pi);
 
     if (!haveImage) {
-      status.className = "status";
-      status.textContent = "";
+      setEq("·", "", "=", "enter a contour to see the theorem");
       announce({ kind: "none" });
     } else if (branchCut) {
-      status.className = "status warn";
-      status.textContent =
-        "⚠ γ crosses a branch cut — f is not single-valued around this contour, so the argument principle does not apply here.";
+      setEq("⚠", "warn", "=", "γ crosses a branch cut — f is not single-valued around γ");
       announce({ kind: "branchcut" });
     } else if (refreshPending) {
-      // The finder hasn't caught up with the moved contour/view yet — don't assert agreement or a
-      // mismatch against stale counts.
-      status.className = "status";
-      status.textContent = "recomputing zeros & poles…";
+      // The finder hasn't caught up with the moved contour/view yet — don't assert agreement or a mismatch.
+      setEq("·", "", "=", "recomputing zeros & poles…");
     } else if (!reliable || !windFinite) {
-      status.className = "status warn";
-      status.textContent = "⚠ γ passes near a singularity — the winding estimate is unreliable; nudge γ.";
+      setEq("⚠", "warn", "≈", "γ passes near a singularity — the winding estimate is unreliable; nudge γ");
       announce({ kind: "unreliable" });
     } else if (nmp === winding) {
-      status.className = "status ok";
-      status.textContent =
-        `✓ winding ${winding} = ${noun} ${zi} − poles ${pi}  ·  accumulated turns ${turns.toFixed(3)}` +
-        (atOrigin ? "" : `  ·  w₀ = ${fmtComplex(about)}`);
+      setEq(
+        "✓",
+        "ok",
+        "=",
+        `holds (${prov}) · accumulated turns ${turns.toFixed(3)}` + (atOrigin ? "" : ` · w₀ = ${fmtComplex(about)}`),
+      );
       announce({ kind: "ok", winding, count: zi, poles: pi, noun });
     } else {
-      status.className = "status warn";
-      status.textContent = `⚠ mismatch: winding ${winding} vs ${noun} − poles ${nmp} — a root may sit near γ, or the estimate is under-resolved.`;
+      setEq("⚠", "warn", "≠", `mismatch — a root may sit near γ, or the estimate is under-resolved (${prov} count)`);
       announce({ kind: "mismatch", winding, count: zi, poles: pi, noun });
     }
   }
@@ -1210,8 +1314,16 @@ function main(): void {
       scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
     },
     getMode: () => mode,
-    onHover: (world: Vec2, client: { x: number; y: number }) => updateTooltip(world, client), // F13 tooltip only
-    onLeave: () => hideTooltip(),
+    onHover: (world: Vec2, client: { x: number; y: number }) => {
+      updateTooltip(world, client); // F13 root tooltip
+      probe = world; // §12 "one cursor": link this point to its image (and the strip when on γ)
+      schedule();
+    },
+    onLeave: () => {
+      hideTooltip();
+      probe = null;
+      schedule();
+    },
     onPlace: (world: Vec2) => {
       // Move mode — a tap places the circular contour's centre (converting from a path / releasing a pin).
       commit(
