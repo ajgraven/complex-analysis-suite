@@ -992,7 +992,10 @@ function main(): void {
     // C6 — boundary crossings. `singKey` fixes the root set (expr + target that `sing` reflects); a change
     // to it resets the baseline, so only γ moving over a fixed set flips membership (a real crossing). The
     // transcendental grid's roots drift with the view, so singKey is null there and crossings are off.
-    if (singKey !== null) {
+    // While a freehand draft is in progress, `effectiveContour()` is the tiny path near the pen — NOT γ
+    // moving over the roots — so we freeze the baseline (no false "left/entered γ") and let onDrawEnd
+    // re-baseline (via suppressCrossOnce) when the finished contour commits.
+    if (singKey !== null && !draftPath) {
       const cur: EnclosedRoot[] = [
         ...encZeros.map((r) => ({ key: rootKey("zero", r.z), kind: "zero" as const, z: r.z, order: r.order })),
         ...encPoles.map((r) => ({ key: rootKey("pole", r.z), kind: "pole" as const, z: r.z, order: r.order })),
@@ -1003,11 +1006,12 @@ function main(): void {
       }
       prevEnclosed = new Map(cur.map((e) => [e.key, e]));
       prevStableKey = singKey;
-    } else {
+    } else if (singKey === null) {
       prevEnclosed = new Map();
       prevStableKey = null;
     }
-    suppressCrossOnce = false; // one-shot: consumed by the render its Isolate tap scheduled
+    // else (drawing over a stable root set): keep the frozen baseline until the draft commits.
+    suppressCrossOnce = false; // one-shot: consumed by the render an Isolate tap / draw-commit scheduled
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
@@ -1016,7 +1020,7 @@ function main(): void {
           ctx,
           map,
           zPts,
-          ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cContour, width: 2 },
+          ped().coupleColor ? { closed: true, rampByT: true, width: 2 } : { closed: true, color: cContour, width: 2 },
         );
         // ADR-0023 — periodic arrowheads give the traversal direction non-chromatically (CVD/greyscale cue).
         drawDirectionTicks(ctx, map, zPts, true, 8, cProbe, cBg);
@@ -1047,7 +1051,7 @@ function main(): void {
     });
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
-        drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
+        drawPolyline(ctx, map, wPts, { closed: true, rampByT: true, width: 2 });
         // ADR-0023 — arrowheads trace the image's winding direction (it may loop the origin several times).
         drawDirectionTicks(ctx, map, wPts, true, 10, cProbe, cBg);
       }
@@ -1462,6 +1466,9 @@ function main(): void {
       if (draftPath && draftPath.length >= 3) {
         const points = orientCCW(draftPath); // normalize to positive orientation so winding = N − P
         const s = pathStats(points);
+        // The finished contour is a fresh γ, not the old one dragged across roots — re-baseline the
+        // crossing tracker on the next render instead of announcing every enclosed root as a crossing.
+        suppressCrossOnce = true;
         commit(
           { ...state, contour: { kind: "path", centerRe: s.centerRe, centerIm: s.centerIm, radius: s.radius, points } },
           true,
