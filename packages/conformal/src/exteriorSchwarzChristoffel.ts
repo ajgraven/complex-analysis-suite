@@ -38,6 +38,11 @@ const cpow = (z: C, p: number): C => {
 const ORIGIN: C = [0, 0];
 const ONE: C = [1, 0];
 
+// Default the quadrature to 24 nodes (matching the exterior parameter solve and the interior engine), so a
+// no-options call doesn't silently fall through to integrateSegment's coarser 16-node default — otherwise
+// the returned vertices/capacity/Laurent would be less accurate than the solve's reported residual.
+const resolveQ = (o?: QuadratureOptions): QuadratureOptions => ({ ...o, nGaussJacobi: o?.nGaussJacobi ?? 24, nGaussLegendre: o?.nGaussLegendre ?? 24 });
+
 interface ExtIntegrator {
   /** Ψ'/C : the exterior SC integrand u^{-2} ∏ⱼ (1 − u/uⱼ)^{1−αⱼ}, principal branch per factor. */
   full: (u: C) => C;
@@ -75,7 +80,7 @@ function makeExtIntegrator(prevertices: readonly C[], angles: readonly number[],
 
 /** The exterior side integrals Sₖ = ∫_{uₖ}^{u_{k+1}} u^{-2}∏ⱼ(1−u/uⱼ)^{1−αⱼ} du (integrand /C), one per side. */
 export function exteriorSideIntegrals(prevertices: readonly C[], angles: readonly number[], opts?: QuadratureOptions): C[] {
-  return makeExtIntegrator(prevertices, angles, opts ?? {}).sides();
+  return makeExtIntegrator(prevertices, angles, resolveQ(opts)).sides();
 }
 
 export interface ExteriorSCForwardMap {
@@ -115,7 +120,7 @@ export function buildExteriorForwardMap(
 ): ExteriorSCForwardMap {
   const n = prevertices.length;
   if (angles.length !== n) throw new Error(`buildExteriorForwardMap: ${n} prevertices but ${angles.length} angles`);
-  const sides = makeExtIntegrator(prevertices, angles, opts ?? {}).sides();
+  const sides = makeExtIntegrator(prevertices, angles, resolveQ(opts)).sides();
 
   let constant: C;
   let base: C;

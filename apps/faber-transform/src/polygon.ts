@@ -41,16 +41,33 @@ export function regularPolygonMap(n: number, order = 120, C = 1): ExteriorMap {
   return { c: C, laurent };
 }
 
+/** A fitted polygon exterior map plus the exterior SC fit's honest diagnostics (for the ≈ guardrail). */
+export interface PolygonMapResult {
+  readonly map: ExteriorMap;
+  /** The parameter solve reached tolerance. */
+  readonly converged: boolean;
+  /** A prevertex-crowding wall was hit ⇒ accuracy honestly reduced. */
+  readonly degraded: boolean;
+  /** Final parameter-solve residual. */
+  readonly residual: number;
+}
+
 /**
  * The exterior map φ: 𝔻* → Ω of an ARBITRARY bounded simple polygon (M1b), as a truncated Laurent series
  * for the @cas/faber ExteriorMap contract. Fits the exterior Schwarz–Christoffel map (`@cas/conformal`) —
  * solving for the prevertices — then extracts φ's Laurent-at-∞ coefficients (leading c = capacity, tail
  * centred at the conformal centre, rotated so c is real). Vertices are `[x, y]` counter-clockwise. The
  * result is ≈ (numerical solve + truncated series); Faber polynomials up to degree `order` are unaffected
- * by the truncation, so low-degree images are effectively exact.
+ * by the truncation, so low-degree images are effectively exact. The fit's `converged`/`degraded`/`residual`
+ * tags are returned (not discarded) so a caller — e.g. a future polygon editor — can surface a bad fit.
  */
-export function polygonMap(vertices: readonly (readonly [number, number])[], order = 140): ExteriorMap {
+export function polygonMap(vertices: readonly (readonly [number, number])[], order = 140): PolygonMapResult {
   const fit = fitExteriorSchwarzChristoffel(vertices.map((v) => [v[0], v[1]] as [number, number]));
   const { c, laurent } = exteriorMapLaurentAtInfinity(fit, order);
-  return { c, laurent: laurent.map(([r, i]): Cx => ({ re: r, im: i })) };
+  return {
+    map: { c, laurent: laurent.map(([r, i]): Cx => ({ re: r, im: i })) },
+    converged: fit.converged,
+    degraded: fit.degraded,
+    residual: fit.residual,
+  };
 }

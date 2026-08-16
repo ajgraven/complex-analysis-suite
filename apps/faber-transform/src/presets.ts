@@ -11,7 +11,21 @@ const re = (x: number): Cx => ({ re: x, im: 0 });
 /** A preset for an arbitrary polygon: fit the exterior SC map once (lazily) and cache the resulting map. */
 function polygonPreset(id: string, name: string, vertices: readonly (readonly [number, number])[], kHalf: number): PhiPreset {
   let cached: ExteriorMap | null = null;
-  return { id, name, build: () => (cached ??= polygonMap(vertices)), shape: null, kHalf, approximate: true };
+  return {
+    id,
+    name,
+    build: () => {
+      if (!cached) {
+        const r = polygonMap(vertices);
+        if (!r.converged) console.warn(`faber-transform: polygon "${id}" SC fit did not converge (residual ${r.residual.toExponential(2)})`);
+        cached = r.map;
+      }
+      return cached;
+    },
+    shape: null,
+    kHalf,
+    approximate: true,
+  };
 }
 
 export interface ShapeControl {

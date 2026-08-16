@@ -35,7 +35,20 @@ describe("solveExteriorParameterProblem — regular n-gon", () => {
     expect(reproErr(m.vertices, res.orderedVertices)).toBeLessThan(1e-8);
     // Circumradius-1 square: side = √2, cap = √2·κ₄ where κ₄ = Γ(1/4)²/(4π^{3/2}).
     const kappa4 = (3.625609908 * 3.625609908) / (4 * Math.pow(Math.PI, 1.5));
-    expect(Math.abs(m.capacity - Math.SQRT2 * kappa4)).toBeLessThan(1e-3);
+    expect(Math.abs(m.capacity - Math.SQRT2 * kappa4)).toBeLessThan(1e-6);
+  });
+});
+
+describe("solveExteriorParameterProblem — triangle (n=3, no special-casing)", () => {
+  it("converges for a non-equilateral triangle (the 2 free logits are pinned by the 2 closure conditions)", () => {
+    // The iso-triangle preset's vertex count — exterior n=3 has 2 free prevertex angles fixed by closure
+    // (unlike the interior solver's parameter-free n=3 branch), so it must go through the general solve.
+    const tri: C[] = [[0, 1.4], [-0.7, -0.7], [0.7, -0.7]];
+    const res = solveExteriorParameterProblem(tri);
+    expect(res.converged).toBe(true);
+    expect(res.residual).toBeLessThan(1e-10);
+    const m = buildExteriorForwardMap(res.prevertices, res.angles, { targetVertices: res.orderedVertices });
+    expect(reproErr(m.vertices, res.orderedVertices)).toBeLessThan(1e-8);
   });
 });
 

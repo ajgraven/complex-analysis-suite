@@ -47,7 +47,7 @@ describe("buildExteriorForwardMap — capacity golden", () => {
     const m = buildExteriorForwardMap(rootsOfUnity(4), regularAngles(4)); // C defaults to [1,0] ⇒ capacity 1
     expect(m.capacity).toBeCloseTo(1, 12);
     const sideLen = cabs(m.sides[0]); // |Sₖ| with |C| = 1 is the polygon side length
-    expect(Math.abs(sideLen - sideExpected)).toBeLessThan(2e-3);
+    expect(Math.abs(sideLen - sideExpected)).toBeLessThan(1e-5);
   });
 
   it("recovers C from target vertices and reproduces them exactly", () => {

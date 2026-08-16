@@ -105,7 +105,10 @@ describe("presets", () => {
 
 describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () => {
   it("builds a valid ExteriorMap for a rectangle (positive capacity, finite, drives the recurrence)", () => {
-    const m = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 60);
+    const result = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]], 60);
+    expect(result.converged).toBe(true);
+    expect(result.degraded).toBe(false);
+    const m = result.map;
     expect(m.c).toBeGreaterThan(0);
     for (const c of m.laurent) expect(Number.isFinite(c.re) && Number.isFinite(c.im)).toBe(true);
     // The map is rotated so c is real (a canonical orientation, like M1a's square rendering as a diamond),
