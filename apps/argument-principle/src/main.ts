@@ -44,6 +44,7 @@ import {
   planeMap,
   drawAxes,
   drawPolyline,
+  drawDirectionTicks,
   drawDot,
   drawX,
   drawCircleMarker,
@@ -170,6 +171,53 @@ function createThemeToggle(onChange: () => void): HTMLButtonElement {
   return btn;
 }
 
+/**
+ * The Simple / Explore density switch (§12 decision 4). "Explore" (default) shows everything at once — the
+ * organization goal; "Simple" hides the advanced analytic layer (∮ evidence, traverse/root-vector controls,
+ * resolution/toggles) for a novice's first look, keeping the planes + equality + legend + strip. The choice
+ * rides `data-density` on <html> (CSS does the hiding) and persists per device in localStorage.
+ */
+function createDensityToggle(onChange: () => void): HTMLElement {
+  const KEY = "ap.density";
+  type Level = "simple" | "explore";
+  const read = (): Level => {
+    try {
+      return localStorage.getItem(KEY) === "simple" ? "simple" : "explore";
+    } catch {
+      return "explore";
+    }
+  };
+  const seg = document.createElement("div");
+  seg.className = "modeseg";
+  seg.setAttribute("role", "group");
+  seg.setAttribute("aria-label", "Detail level");
+  const btns = new Map<Level, HTMLButtonElement>();
+  let current = read();
+  const apply = (l: Level): void => {
+    current = l;
+    document.documentElement.dataset.density = l;
+    for (const [id, b] of btns) b.setAttribute("aria-pressed", String(id === l));
+  };
+  for (const l of ["simple", "explore"] as const) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = l === "simple" ? "Simple" : "Explore";
+    b.addEventListener("click", () => {
+      try {
+        localStorage.setItem(KEY, l);
+      } catch {
+        /* storage unavailable */
+      }
+      apply(l);
+      onChange();
+    });
+    btns.set(l, b);
+    seg.append(b);
+  }
+  apply(current);
+  return seg;
+}
+
 function makeCanvas(): HTMLCanvasElement {
   const c = document.createElement("canvas");
   c.className = "plane";
@@ -288,8 +336,9 @@ function main(): void {
   const pngBtn = button("Save PNG");
   const helpBtn = button("?");
   helpBtn.setAttribute("aria-label", "Help");
+  const densitySeg = createDensityToggle(() => schedule());
   const themeBtn = createThemeToggle(() => schedule());
-  topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, helpBtn, themeBtn);
+  topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, densitySeg, helpBtn, themeBtn);
 
   const presetWrap = document.createElement("label");
   presetWrap.className = "field";
@@ -353,10 +402,11 @@ function main(): void {
   drawHint.className = "hint";
   drawHint.textContent = "Pick a tool above, then act on the z-plane.";
 
-  // Grouped, labelled controls (§12 organization): Function · Contour · Explore · View.
-  const controlGroup = (title: string, ...children: HTMLElement[]): HTMLElement => {
+  // Grouped, labelled controls (§12 organization): Function · Contour · Explore · View. The `slug` tags
+  // each group so the Simple/Explore density switch (decision 4) can hide the advanced ones via CSS.
+  const controlGroup = (title: string, slug: string, ...children: HTMLElement[]): HTMLElement => {
     const g = document.createElement("section");
-    g.className = "cgroup";
+    g.className = `cgroup cgroup-${slug}`;
     const h = document.createElement("h2");
     h.className = "cgroup-t";
     h.textContent = title;
@@ -369,10 +419,10 @@ function main(): void {
   const controls = document.createElement("div");
   controls.className = "controls";
   controls.append(
-    controlGroup("Function", presetWrap, exprWrap),
-    controlGroup("Contour", radiusWrap, drawHint),
-    controlGroup("Explore", playBtn, speedWrap, decompChk.root),
-    controlGroup("View", resWrap, domainChk.root, imageChk.root),
+    controlGroup("Function", "function", presetWrap, exprWrap),
+    controlGroup("Contour", "contour", radiusWrap, drawHint),
+    controlGroup("Explore", "explore", playBtn, speedWrap, decompChk.root),
+    controlGroup("View", "view", resWrap, domainChk.root, imageChk.root),
   );
 
   const formula = document.createElement("div");
@@ -453,7 +503,8 @@ function main(): void {
     '<span class="lg"><span class="gl gl-pole">✕</span> pole</span>' +
     '<span class="lg"><span class="gl gl-crit">◆</span> f′=0</span>' +
     '<span class="lg"><span class="gl gl-target">●</span> target w₀</span>' +
-    '<span class="lg"><span class="sw sw-ramp"></span> hue = position t (γ ↔ f(γ))</span>';
+    '<span class="lg"><span class="sw sw-ramp"></span> colour = position t (γ ↔ f(γ))</span>' +
+    '<span class="lg"><span class="gl">▸</span> traversal direction</span>';
 
   // The evidence group: the analytic ∮ f′/f check (always present), plus the traversal-time decomposition
   // and sweep notes. `integralEl` is never hidden now — it shows a stable line or a "why not" placeholder.
@@ -527,6 +578,25 @@ function main(): void {
   liveEl.setAttribute("role", "status");
   liveEl.setAttribute("aria-live", "polite");
 
+  // §12 (discoverability) — a first-run coach: a small once-only card that orients a newcomer, then gets out
+  // of the way. localStorage-gated (never nags a returning visitor); "?" re-opens the full help any time.
+  const coach = document.createElement("div");
+  coach.className = "coach-overlay";
+  coach.hidden = true;
+  coach.innerHTML = `
+    <div class="coach-card" role="dialog" aria-label="Getting started">
+      <h2>Winding = zeros − poles</h2>
+      <p>The <b>left</b> plane is the domain (a loop <b>γ</b>); the <b>right</b> is its image <b>f(γ)</b>.
+      How many times f(γ) winds around the origin equals the zeros minus poles of f inside γ — read it live
+      in the bar with the ✓ / ⚠ badge.</p>
+      <ul>
+        <li>Pick a tool — <b>Move γ</b>, <b>Draw</b>, or <b>Isolate</b> — then act on the left plane. Drag to pan, pinch or scroll to zoom.</li>
+        <li>Hover (or tap) a point to light up the <b>same point</b> on both planes and the strip.</li>
+        <li><b>Simple / Explore</b> (top bar) sets how much detail shows; <b>?</b> opens the full guide.</li>
+      </ul>
+      <div class="coach-actions"><button class="coach-go" type="button">Got it</button></div>
+    </div>`;
+
   // Responsive workspace (§12 / decision 3): on wide screens the rail is a persistent side column so the
   // equality, legend, and evidence stay visible beside the planes; on narrow screens everything linearizes
   // and the equality bar sticks to the top (CSS `display:contents` + `order` do the reflow — see main.css).
@@ -540,7 +610,7 @@ function main(): void {
   workspace.className = "workspace";
   workspace.append(mainCol, rail);
 
-  app.append(topbar, importNote, workspace, help, tooltipEl, toastEl, liveEl);
+  app.append(topbar, importNote, workspace, help, coach, tooltipEl, toastEl, liveEl);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -873,6 +943,7 @@ function main(): void {
     const cCenter = cssVar("--muted", "#8c95a9");
     const cTrace = cssVar("--trace", "#a08bff"); // traversal point
     const cProbe = cssVar("--text", "#e7eaf2"); // §12 "one cursor" ring (neutral, distinct from the marks)
+    const cBg = cssVar("--bg", "#0f1115"); // halo behind direction arrowheads, so they read on any ramp colour
 
     // §12 "one cursor": resolve the probe to a z-point, its image f(z), and — when the probe lies within a
     // few px of γ — the parameter t of that spot on the loop, so the argument strip highlights it too.
@@ -947,6 +1018,8 @@ function main(): void {
           zPts,
           ped().coupleColor ? { closed: true, rainbow: true, width: 2 } : { closed: true, color: cContour, width: 2 },
         );
+        // ADR-0023 — periodic arrowheads give the traversal direction non-chromatically (CVD/greyscale cue).
+        drawDirectionTicks(ctx, map, zPts, true, 8, cProbe, cBg);
       }
       for (const c of sing.critical) drawDiamond(ctx, map, c.z, cCrit);
       for (const p of sing.poles) {
@@ -975,6 +1048,8 @@ function main(): void {
     drawPane(wCanvas, state.wView, (ctx, map) => {
       if (state.render.showImageCurve && wPts.length > 1) {
         drawPolyline(ctx, map, wPts, { closed: true, rainbow: true, width: 2 });
+        // ADR-0023 — arrowheads trace the image's winding direction (it may loop the origin several times).
+        drawDirectionTicks(ctx, map, wPts, true, 10, cProbe, cBg);
       }
       drawDot(ctx, map, about, cTarget, 5);
       // D8 — a ring around the target marks it as draggable (drag to count solutions of f = w₀).
@@ -1264,6 +1339,19 @@ function main(): void {
   help.addEventListener("click", (e) => {
     if (e.target === help) help.hidden = true; // click the backdrop to dismiss
   });
+  // First-run coach: dismiss on "Got it" / backdrop, and remember so it never shows again.
+  const dismissCoach = (): void => {
+    coach.hidden = true;
+    try {
+      localStorage.setItem("ap.coached", "1");
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  coach.querySelector(".coach-go")?.addEventListener("click", dismissCoach);
+  coach.addEventListener("click", (e) => {
+    if (e.target === coach) dismissCoach();
+  });
   presetSel.addEventListener("change", () => {
     const p = FUNCTION_PRESETS.find((q) => q.id === presetSel.value);
     if (p) {
@@ -1413,6 +1501,12 @@ function main(): void {
   render();
   if (!fromLink) fitImage();
   history.replaceState(null, "", encodeArgPrincipleState(state));
+  // First-run coach: show once, unless a returning visitor already dismissed it.
+  try {
+    if (localStorage.getItem("ap.coached") !== "1") coach.hidden = false;
+  } catch {
+    /* storage unavailable — skip the coach rather than nag every load */
+  }
 }
 
 main();

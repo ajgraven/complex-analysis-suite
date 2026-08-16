@@ -198,10 +198,38 @@ export function drawAxes(ctx: CanvasRenderingContext2D, map: PlaneMap, colors: A
   ctx.restore();
 }
 
+// Viridis — a perceptually-uniform, colour-blind-safe sequential colormap (ADR-0023). It replaces the old
+// HSL rainbow for the parameter-t ramp on γ / f(γ) / the strip: unlike a hue sweep it is MONOTONIC in
+// lightness, so t is orderable even in greyscale or under any CVD. Ten evenly-spaced stops, sRGB-interpolated.
+const VIRIDIS: readonly (readonly [number, number, number])[] = [
+  [68, 1, 84],
+  [72, 40, 120],
+  [62, 74, 137],
+  [49, 104, 142],
+  [38, 130, 142],
+  [31, 158, 137],
+  [53, 183, 121],
+  [110, 206, 88],
+  [181, 222, 43],
+  [253, 231, 37],
+];
+
+/** The parameter-`t` ramp colour (t∈[0,1]) — viridis. Non-finite/out-of-range t clamps to the ends. */
+export function rampColor(t: number): string {
+  const tc = Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0;
+  const x = tc * (VIRIDIS.length - 1);
+  const i = Math.min(VIRIDIS.length - 2, Math.floor(x));
+  const f = x - i;
+  const a = VIRIDIS[i];
+  const b = VIRIDIS[i + 1];
+  const mix = (c0: number, c1: number): number => Math.round(c0 + (c1 - c0) * f);
+  return `rgb(${mix(a[0], b[0])}, ${mix(a[1], b[1])}, ${mix(a[2], b[2])})`;
+}
+
 export interface PolylineOptions {
   readonly closed?: boolean;
   readonly color?: string;
-  /** Rainbow the segments by parameter t (0→1 along the loop) to show traversal direction. */
+  /** Colour the segments by parameter t (0→1 along the loop) with the viridis ramp — the t-coupling cue. */
   readonly rainbow?: boolean;
   readonly width?: number;
 }
@@ -225,7 +253,7 @@ export function drawPolyline(
       const a = map.toPx(pts[i]);
       const b = map.toPx(pts[(i + 1) % n]);
       if (!isFinitePx(a) || !isFinitePx(b)) continue;
-      ctx.strokeStyle = `hsl(${Math.round((360 * i) / n)}, 85%, 55%)`;
+      ctx.strokeStyle = rampColor(i / n); // viridis by t (ADR-0023) — CVD-safe, greyscale-orderable
       ctx.beginPath();
       ctx.moveTo(a[0], a[1]);
       ctx.lineTo(b[0], b[1]);
@@ -251,6 +279,49 @@ export function drawPolyline(
     ctx.stroke();
   }
   ctx.restore();
+}
+
+/**
+ * Draw `count` arrowheads spaced evenly by parameter t along a polyline, each pointing in the direction of
+ * increasing t (ADR-0023 — a non-colour cue for the traversal orientation, so CVD/greyscale readers still
+ * see which way γ and f(γ) are traced). Each head is a `fill` triangle with a `halo` outline, so it reads on
+ * any underlying line colour. `closed` wraps the last segment back to the first.
+ */
+export function drawDirectionTicks(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  pts: readonly Vec2[],
+  closed: boolean,
+  count: number,
+  fill: string,
+  halo: string,
+  sizePx = 4.5,
+): void {
+  const n = pts.length;
+  if (n < 2 || count < 1) return;
+  const total = closed ? n : n - 1;
+  for (let k = 0; k < count; k++) {
+    const seg = Math.min(total - 1, Math.floor(((k + 0.5) / count) * total)); // offset so none sits on the seam
+    const a = map.toPx(pts[seg % n]);
+    const b = map.toPx(pts[(seg + 1) % n]);
+    if (!isFinitePx(a) || !isFinitePx(b)) continue;
+    const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+    ctx.save();
+    ctx.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+    ctx.rotate(ang);
+    ctx.beginPath();
+    ctx.moveTo(sizePx, 0);
+    ctx.lineTo(-sizePx, sizePx * 0.82);
+    ctx.lineTo(-sizePx, -sizePx * 0.82);
+    ctx.closePath();
+    ctx.lineJoin = "round";
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = halo;
+    ctx.stroke();
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.restore();
+  }
 }
 
 /** Draw a small filled marker (a dot) at a world point. */

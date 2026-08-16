@@ -536,7 +536,8 @@ button.ghost:disabled {
   border-radius: 2px;
 }
 .sw-ramp {
-  background: linear-gradient(90deg, #e2483d, #e6a52a, #2fae6a, #3a9be0, #9a63d8);
+  /* viridis (ADR-0023) — matches the on-canvas t-ramp; monotonic lightness, CVD-safe */
+  background: linear-gradient(90deg, #440154, #3e4a89, #26828e, #1f9e89, #35b779, #b5de2b, #fde725);
 }
 
 /* The evidence group: the ∮ check (always present) + the traversal-time notes. */
@@ -550,6 +551,15 @@ button.ghost:disabled {
   gap: 6px;
 }
 .evidence > *[hidden] {
+  display: none;
+}
+
+/* Simple/Explore density switch (§12 decision 4). "Simple" keeps the core — planes, equality, legend,
+ * strip, and the Function/Contour controls — and hides the advanced analytic layer. "Explore" (default,
+ * no attribute or data-density="explore") shows everything. */
+:root[data-density="simple"] .evidence,
+:root[data-density="simple"] .cgroup-explore,
+:root[data-density="simple"] .cgroup-view {
   display: none;
 }
 .integral {
@@ -728,6 +738,67 @@ button.ghost:disabled {
   top: 12px;
   right: 12px;
   padding: 4px 9px;
+}
+
+/* First-run coach (§12 discoverability) — a small once-only onboarding card. */
+.coach-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 6vh 16px;
+  z-index: 55;
+  overflow-y: auto;
+  display: none;
+}
+.coach-overlay:not([hidden]) {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.coach-card {
+  max-width: 460px;
+  width: 100%;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--accent);
+  border-radius: 14px;
+  padding: 20px 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+}
+.coach-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+}
+.coach-card p {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+.coach-card ul {
+  margin: 0 0 14px;
+  padding-left: 18px;
+}
+.coach-card li {
+  margin: 5px 0;
+  font-size: 0.9rem;
+}
+.coach-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.coach-go {
+  background: var(--accent);
+  color: var(--on-accent);
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 18px;
+  min-height: 36px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+.coach-go:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Honor reduced-motion: no toast transition; the crossing pulse is also skipped in JS (ADR-0023). */

@@ -2,8 +2,10 @@
 // of f(γ(t)) versus t as a point traverses γ. It is the pedagogical heart of "winding = argument change":
 // the curve climbs (or descends) and lands on exactly the winding number of full turns, so the reader
 // SEES the integer the image curve winds as a height. It is always-on (a confirmed decision), teaching
-// even when the traversal is paused, and it shares the same rainbow-by-t ramp as γ and f(γ) so a position
+// even when the traversal is paused, and it shares the same viridis-by-t ramp as γ and f(γ) so a position
 // on the graph maps to the same-colored arc in both planes.
+
+import { rampColor } from "./plane.js";
 //
 // The vertical unit is a TURN (one full 2π revolution of arg f). Integer gridlines are the revolutions;
 // the caption reminds that one turn is 2π. This is a plain t↔turns plot, NOT a complex plane, so it owns
@@ -154,7 +156,7 @@ export function drawArgGraph(
   }
   ctx.restore();
 
-  // The accumulated-argument curve, rainbow by t so a point here matches the same-colored arc of γ / f(γ).
+  // The accumulated-argument curve, viridis by t so a point here matches the same-colored arc of γ / f(γ).
   if (turns.length >= 2) {
     ctx.save();
     ctx.lineWidth = 2;
@@ -166,7 +168,7 @@ export function drawArgGraph(
       const x1 = L.xOfT((i + 1) / nSeg);
       const y1 = L.yOfV(turns[i + 1]);
       if (![x0, y0, x1, y1].every(Number.isFinite)) continue;
-      ctx.strokeStyle = `hsl(${Math.round((360 * i) / nSeg)}, 85%, 55%)`;
+      ctx.strokeStyle = rampColor(i / nSeg);
       ctx.beginPath();
       ctx.moveTo(x0, y0);
       ctx.lineTo(x1, y1);
