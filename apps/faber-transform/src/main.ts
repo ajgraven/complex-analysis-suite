@@ -40,7 +40,8 @@ import {
   zoomAboutCursor,
 } from "./render/plane.js";
 import type { Vec2, Viewport } from "./render/plane.js";
-import { fillPhasePortrait } from "./render/coloring.js";
+import { fillPhasePortrait, DEFAULT_COLORING } from "./render/coloring.js";
+import type { ColoringOptions } from "./render/coloring.js";
 import { createGpuRenderer } from "./render/gpu.js";
 import type { GpuRenderer } from "./render/gpu.js";
 import {
@@ -149,7 +150,7 @@ function makePanel(title: string): { panel: Panel; el: HTMLElement } {
   return { panel: { gl, ov, renderer: null }, el: box };
 }
 
-function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
+function paintPanel(panel: Panel, view: Viewport, m: PanelModel, coloring: ColoringOptions): void {
   const ov = fit2d(panel.ov);
   if (!ov) return;
   const map = planeMap(view, ov.w, ov.h);
@@ -157,7 +158,7 @@ function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
   if (m.source.kind === "rational" && panel.renderer) {
     // GPU portrait on the gl canvas behind. The overlay masks it to the clip polygon: paint the overlay
     // background everywhere, then punch a hole inside the clip so the portrait shows through only there.
-    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.maskDisk);
+    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.maskDisk, coloring);
     ctx.clearRect(0, 0, ov.w, ov.h);
     if (m.clip) {
       ctx.save();
@@ -172,10 +173,15 @@ function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
     // CPU portrait drawn on the overlay itself; then keep only the clip interior.
     const src = m.source;
     const g = src.kind === "rational" ? (w: Vec2): Cx => evalRational(src.rat, { re: w[0], im: w[1] }) : (w: Vec2): Cx => src.g({ re: w[0], im: w[1] });
-    fillPhasePortrait(ctx, map, (w) => {
-      if (m.maskDisk && w[0] * w[0] + w[1] * w[1] >= 1) return null;
-      return g(w);
-    });
+    fillPhasePortrait(
+      ctx,
+      map,
+      (w) => {
+        if (m.maskDisk && w[0] * w[0] + w[1] * w[1] >= 1) return null;
+        return g(w);
+      },
+      { coloring },
+    );
     if (m.clip) {
       ctx.save();
       ctx.globalCompositeOperation = "destination-in";
@@ -273,7 +279,45 @@ function main(): void {
   const rootsCtl = elt("div", { class: "control control-check" });
   rootsCtl.append(rootsInput, elt("label", { for: "showroots" }, "Faber roots"));
 
-  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl);
+  // Coloring style: an enhancement overlay, a modulus→lightness transfer, and (for the grid/sector
+  // overlays) a density, all applied to both the GPU and CPU phase portraits.
+  const enhSel = elt("select", { id: "enh" });
+  for (const [v, name] of [
+    ["0", "none (flat hue)"],
+    ["1", "modulus rings"],
+    ["2", "phase sectors"],
+    ["3", "conformal grid"],
+    ["4", "polar chessboard"],
+    ["5", "Re/Im grid"],
+  ] as const) {
+    enhSel.append(elt("option", { value: v }, name));
+  }
+  const enhCtl = elt("div", { class: "control" });
+  enhCtl.append(elt("label", { for: "enh" }, "enhancement"), enhSel);
+
+  const modSel = elt("select", { id: "mod" });
+  for (const [v, name] of [
+    ["0", "constant"],
+    ["1", "linear"],
+    ["2", "rational"],
+    ["3", "log"],
+    ["4", "log-log"],
+  ] as const) {
+    modSel.append(elt("option", { value: v }, name));
+  }
+  const modCtl = elt("div", { class: "control" });
+  modCtl.append(elt("label", { for: "mod" }, "modulus → lightness"), modSel);
+
+  const secInput = elt("input", { id: "sectors", type: "range", min: "2", max: "24", step: "1" });
+  const secLabel = elt("label", { for: "sectors" }, "density");
+  const secCtl = elt("div", { class: "control" });
+  secCtl.append(secLabel, secInput);
+
+  const crispInput = elt("input", { id: "crisp", type: "checkbox" });
+  const crispCtl = elt("div", { class: "control control-check" });
+  crispCtl.append(crispInput, elt("label", { for: "crisp" }, "crisp lines"));
+
+  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, enhCtl, modCtl, secCtl, crispCtl);
   root.append(controls);
 
   const readout = elt("div", { class: "readout" });
@@ -391,6 +435,16 @@ function main(): void {
     } else {
       shapeCtl.style.display = "none";
     }
+    const col = state.coloring ?? DEFAULT_COLORING;
+    enhSel.value = String(col.enhance);
+    modSel.value = String(col.modulus);
+    secInput.value = String(col.sectors);
+    crispInput.checked = col.crisp;
+    // Density only bites on the sector/grid overlays; disable it (and crisp lines) when they don't apply.
+    const densityUsed = col.enhance >= 2;
+    secCtl.style.display = densityUsed ? "" : "none";
+    crispCtl.style.display = col.enhance !== 0 ? "" : "none";
+    secLabel.textContent = `density = ${col.sectors}`;
     modeSel.value = state.input.kind;
     const kind = state.input.kind;
     degCtl.style.display = kind === "monomial" ? "" : "none";
@@ -428,8 +482,9 @@ function main(): void {
     readoutBody.textContent = model.readout;
     syncControls();
     if (model.error) return; // keep the last good render; show the parse error
-    paintPanel(left.panel, state.zView, model.left);
-    paintPanel(right.panel, state.wView, model.right);
+    const coloring = state.coloring ?? DEFAULT_COLORING;
+    paintPanel(left.panel, state.zView, model.left, coloring);
+    paintPanel(right.panel, state.wView, model.right, coloring);
   }
 
   let hashTimer = 0;
@@ -529,6 +584,16 @@ function main(): void {
     commit({ ...state, input: { kind: "expr", expr: state.input.expr, N } });
   });
   rootsInput.addEventListener("change", () => commit({ ...state, showRoots: rootsInput.checked }));
+
+  const withColoring = (patch: Partial<ColoringOptions>): FaberViewState => ({
+    ...state,
+    coloring: { ...(state.coloring ?? DEFAULT_COLORING), ...patch },
+  });
+  enhSel.addEventListener("change", () => commit(withColoring({ enhance: Number(enhSel.value) })));
+  modSel.addEventListener("change", () => commit(withColoring({ modulus: Number(modSel.value) })));
+  secInput.addEventListener("input", () => commit(withColoring({ sectors: Math.max(2, Math.min(64, Math.round(Number(secInput.value)))) })));
+  crispInput.addEventListener("change", () => commit(withColoring({ crisp: crispInput.checked })));
+
   window.addEventListener("resize", render);
 
   history.replaceState(null, "", encodeFaberState(state));

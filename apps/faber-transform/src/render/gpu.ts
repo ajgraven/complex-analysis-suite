@@ -14,6 +14,8 @@ import {
 import type { Cx } from "@cas/core";
 import { BASE_HALF } from "./plane.js";
 import type { Viewport } from "./plane.js";
+import { DEFAULT_COLORING } from "./coloring.js";
+import type { ColoringOptions } from "./coloring.js";
 
 // Max coefficient-array length: covers a Faber-image polynomial up to MAX_DEGREE (40) with margin.
 const MAXC = 48;
@@ -86,8 +88,8 @@ function packCoeffs(co: Cx[]): { arr: Float32Array; deg: number } {
 }
 
 export interface GpuRenderer {
-  /** Render num(z)/den(z) (ascending Cx[]) over `view`; `maskDisk` greys |z| ≥ 1. */
-  render(view: Viewport, num: Cx[], den: Cx[], maskDisk: boolean): void;
+  /** Render num(z)/den(z) (ascending Cx[]) over `view`; `maskDisk` greys |z| ≥ 1; `coloring` sets the style. */
+  render(view: Viewport, num: Cx[], den: Cx[], maskDisk: boolean, coloring?: ColoringOptions): void;
   dispose(): void;
 }
 
@@ -152,7 +154,7 @@ export function createGpuRenderer(
     levelArg: u("uLevelArg"),
   };
 
-  function render(view: Viewport, num: Cx[], den: Cx[], maskDisk: boolean): void {
+  function render(view: Viewport, num: Cx[], den: Cx[], maskDisk: boolean, coloring: ColoringOptions = DEFAULT_COLORING): void {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = Math.max(1, Math.round(canvas.clientWidth * dpr));
     const h = Math.max(1, Math.round(canvas.clientHeight * dpr));
@@ -180,12 +182,12 @@ export function createGpuRenderer(
     gl.uniform1i(loc.mask, maskDisk ? 1 : 0);
     gl.uniform3f(loc.bg, bg[0] / 255, bg[1] / 255, bg[2] / 255);
 
-    // Fixed coloring style: pure hue (modulus = constant lightness) with log₂ modulus contour rings.
-    gl.uniform1i(loc.modulus, 0);
-    gl.uniform1f(loc.modScale, 1);
-    gl.uniform1i(loc.enhance, 1);
-    gl.uniform1f(loc.sectors, 6);
-    gl.uniform1i(loc.crisp, 0);
+    // Coloring style from the UI (hue × modulus-lightness transfer × enhancement overlay).
+    gl.uniform1i(loc.modulus, coloring.modulus);
+    gl.uniform1f(loc.modScale, coloring.modScale);
+    gl.uniform1i(loc.enhance, coloring.enhance);
+    gl.uniform1f(loc.sectors, coloring.sectors);
+    gl.uniform1i(loc.crisp, coloring.crisp ? 1 : 0);
     gl.uniform1f(loc.hueShift, 0);
     gl.uniform1f(loc.hueSign, 1);
     gl.uniform1i(loc.cvd, 0);

@@ -1,63 +1,107 @@
-// render/coloring.ts — CPU domain coloring (phase portrait) for one panel. Hue encodes arg(g), and a
-// log-spaced sawtooth on |g| draws faint modulus contour bands (Wegert-style). Recomputed only on a
-// state change (not per frame). This is the M1 renderer; M2 moves it onto the extracted @cas/gpu
-// phase-portrait shader for speed and smooth zoom (plan §4, M1.5).
+// render/coloring.ts — CPU domain coloring (phase portrait) for one panel, and the coloring-option
+// contract shared with the GPU path. Hue encodes arg; a modulus→lightness transfer and an enhancement
+// overlay (modulus rings / phase sectors / conformal grid / polar chessboard / Re-Im grid) match the
+// shared @cas/gpu PHASE_COLORING_GLSL (the shaded, non-antialiased branches — CPU has no fwidth). Used
+// for the free-form left panel and as the no-WebGL fallback; recomputed only on a state change.
 import type { Cx } from "@cas/core";
 import type { PlaneMap } from "./plane.js";
 
-export interface ColorOptions {
-  /** Background (masked/out-of-domain) color as [r,g,b], 0..255. */
+/** Coloring controls, mirrored onto the GPU shader uniforms (and applied on the CPU path). */
+export interface ColoringOptions {
+  /** 0 none, 1 modulus rings, 2 phase sectors, 3 conformal grid, 4 polar chessboard, 5 Re/Im grid. */
+  readonly enhance: number;
+  /** Sectors per turn / grid density (modes 2–5). */
+  readonly sectors: number;
+  /** Crisp antialiased lines (GPU only) vs shaded bands. */
+  readonly crisp: boolean;
+  /** Modulus→lightness: 0 constant, 1 linear, 2 rational, 3 log, 4 log-log. */
+  readonly modulus: number;
+  /** Reference |f| for the linear / log / log-log transfers. */
+  readonly modScale: number;
+}
+
+export const DEFAULT_COLORING: ColoringOptions = {
+  enhance: 1,
+  sectors: 6,
+  crisp: false,
+  modulus: 0,
+  modScale: 1,
+};
+
+export interface ColorFillOptions {
   readonly bg?: readonly [number, number, number];
+  readonly coloring?: ColoringOptions;
 }
 
-// A branchless HSL→RGB for full-saturation hues (s = 1). h ∈ [0,1), l ∈ [0,1].
-function hslToRgb(h: number, l: number): [number, number, number] {
-  const a = 1 - Math.abs(2 * l - 1); // chroma at s=1
-  const hp = (h % 1) * 6;
-  const x = a * (1 - Math.abs((hp % 2) - 1));
-  let r = 0;
-  let g = 0;
-  let b = 0;
-  if (hp < 1) [r, g, b] = [a, x, 0];
-  else if (hp < 2) [r, g, b] = [x, a, 0];
-  else if (hp < 3) [r, g, b] = [0, a, x];
-  else if (hp < 4) [r, g, b] = [0, x, a];
-  else if (hp < 5) [r, g, b] = [x, 0, a];
-  else [r, g, b] = [a, 0, x];
-  const m = l - a / 2;
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+const TWO_PI = 2 * Math.PI;
+const frac = (v: number): number => v - Math.floor(v);
+const sawShade = (v: number, aMin: number): number => aMin + (1 - aMin) * frac(v);
+
+// Full saturation/value HSV hue wheel (matches the GPU LUT), h ∈ [0,1) → [r,g,b] in [0,1].
+function hueRgb(h: number): [number, number, number] {
+  const x = 1 - Math.abs(((h * 6) % 2) - 1);
+  const hp = h * 6;
+  if (hp < 1) return [1, x, 0];
+  if (hp < 2) return [x, 1, 0];
+  if (hp < 3) return [0, 1, x];
+  if (hp < 4) return [0, x, 1];
+  if (hp < 5) return [x, 0, 1];
+  return [1, 0, x];
 }
 
-/** The phase-portrait color of a complex value: hue = arg, lightness banded by log₂|·|. */
-export function phaseColor(v: Cx): [number, number, number] {
-  const arg = Math.atan2(v.im, v.re); // −π..π
-  const hue = (arg / (2 * Math.PI) + 1) % 1; // 0..1
-  const mag = Math.hypot(v.re, v.im);
-  let l = 0.5;
-  if (mag > 0 && Number.isFinite(mag)) {
-    const t = Math.log2(mag);
-    const frac = t - Math.floor(t); // sawtooth 0..1 across each octave
-    l = 0.42 + 0.16 * frac; // brighten toward the top of each octave → contour bands
-  } else if (!Number.isFinite(mag)) {
-    l = 0.5;
+function modulusLightness(m: number, mode: number, scale: number): number {
+  if (mode === 0) return 1;
+  if (mode === 1) return Math.min(1, Math.max(0, m / scale));
+  if (mode === 2) return m / (1 + m);
+  if (mode === 3) return Math.min(1, Math.max(0, Math.log(1 + m) / Math.log(1 + scale)));
+  return Math.min(1, Math.max(0, Math.log(1 + Math.log(1 + m)) / Math.log(1 + Math.log(1 + scale))));
+}
+
+function enhancement(re: number, im: number, m: number, arg: number, enhance: number, sectors: number): number {
+  if (enhance === 0) return 1;
+  const lm = Math.log(Math.max(m, 1e-30));
+  if (enhance === 1) return sawShade(Math.log2(Math.max(m, 1e-30)), 0.6);
+  if (enhance === 2) return sawShade(sectors * (arg / TWO_PI + 0.5), 0.6);
+  if (enhance === 3) {
+    const step = TWO_PI / sectors;
+    return sawShade(lm / step, 0.72) * sawShade(arg / step, 0.72);
   }
-  return hslToRgb(hue, l);
+  if (enhance === 4) {
+    const step = TWO_PI / sectors;
+    const par = ((Math.floor(lm / step) + Math.floor(arg / step)) % 2 + 2) % 2;
+    return 0.68 + 0.32 * par;
+  }
+  return sawShade(re, 0.7) * sawShade(im, 0.7);
+}
+
+/** The phase-portrait color of a complex value under `opts`: hue × modulus-lightness × enhancement. */
+export function phaseColor(v: Cx, opts: ColoringOptions = DEFAULT_COLORING): [number, number, number] {
+  const m = Math.hypot(v.re, v.im);
+  if (!Number.isFinite(m)) return [77, 77, 84];
+  const arg = Math.atan2(v.im, v.re);
+  const hue = (arg / TWO_PI + 1) % 1;
+  const [hr, hg, hb] = hueRgb(hue);
+  const f = Math.min(
+    1,
+    Math.max(0, modulusLightness(m, opts.modulus, opts.modScale) * enhancement(v.re, v.im, m, arg, opts.enhance, opts.sectors)),
+  );
+  return [Math.round(hr * f * 255), Math.round(hg * f * 255), Math.round(hb * f * 255)];
 }
 
 /**
  * Fill `ctx` with the phase portrait of `g` over the panel. `g(w)` returns the complex value at world
- * point `w`, or `null` when `w` is outside the panel's domain (e.g. outside the unit disk) — those
- * pixels get the background color, so the domain's shape reads at a glance.
+ * point `w`, or `null` when `w` is outside the panel's domain — those pixels get the background color.
  */
 export function fillPhasePortrait(
   ctx: CanvasRenderingContext2D,
   map: PlaneMap,
   g: (w: readonly [number, number]) => Cx | null,
-  opts: ColorOptions = {},
+  opts: ColorFillOptions = {},
 ): void {
   const { widthPx, heightPx } = map;
   if (widthPx <= 0 || heightPx <= 0) return;
   const bg = opts.bg ?? [22, 24, 30];
+  const coloring = opts.coloring ?? DEFAULT_COLORING;
   const img = ctx.createImageData(widthPx, heightPx);
   const data = img.data;
   for (let py = 0; py < heightPx; py++) {
@@ -71,7 +115,7 @@ export function fillPhasePortrait(
         data[idx + 2] = bg[2];
         data[idx + 3] = 255;
       } else {
-        const [r, g2, b] = phaseColor(val);
+        const [r, g2, b] = phaseColor(val, coloring);
         data[idx] = r;
         data[idx + 1] = g2;
         data[idx + 2] = b;
