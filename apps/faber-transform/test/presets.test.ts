@@ -16,15 +16,33 @@ describe("φ presets", () => {
     expect(map.laurent[1].re).toBeCloseTo(0.4, 12);
   });
 
-  it("every preset has a positive capacity and a shape control within a univalent range", () => {
+  it("deltoid is φ = z + a/(2z²) — a 3-cusped domain at a → 1", () => {
+    const map = phiPresetById("deltoid").build(0.9);
+    expect(map.c).toBe(1);
+    expect(map.laurent.map((c) => c.re)).toEqual([0, 0, 0.45]);
+  });
+
+  it("5-cusped star is φ = z + a/(4z⁴)", () => {
+    const map = phiPresetById("star5").build(0.8);
+    expect(map.c).toBe(1);
+    expect(map.laurent.map((c) => c.re)).toEqual([0, 0, 0, 0, 0.2]);
+  });
+
+  it("every preset has a positive capacity and a univalent-respecting shape control", () => {
     for (const p of PHI_PRESETS) {
       const map = p.build(p.shape ? p.shape.default : 0);
       expect(map.c).toBeGreaterThan(0);
+      expect(p.kHalf).toBeGreaterThan(0);
       if (p.shape) {
-        // z + m/z is univalent for |m| < 1 — the clamped range must respect that.
-        expect(p.shape.max).toBeLessThan(1);
+        // The single-term area bound Σ n|aₙ| ≤ 1 must hold across the whole clamped shape range:
+        // at the max shape value, the dominant Laurent term's n·|cₙ| stays ≤ 1 (strictly, univalent).
+        const maxMap = p.build(p.shape.max);
+        let areaSum = 0;
+        maxMap.laurent.forEach((c, n) => {
+          areaSum += n * Math.hypot(c.re, c.im);
+        });
+        expect(areaSum).toBeLessThan(1);
         expect(p.shape.min).toBeGreaterThanOrEqual(0);
-        expect(p.kHalf).toBeGreaterThan(0);
       }
     }
   });

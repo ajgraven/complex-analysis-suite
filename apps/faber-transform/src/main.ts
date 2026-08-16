@@ -8,7 +8,7 @@ import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
 import { PHI_PRESETS, phiPresetById } from "./presets.js";
 import { boundaryK, evalPoly, monomialTaylor, transformCoeffs } from "./faber.js";
-import { drawAxes, drawPolyline, planeMap } from "./render/plane.js";
+import { BASE_HALF, drawAxes, drawPolyline, planeMap } from "./render/plane.js";
 import type { Vec2, Viewport } from "./render/plane.js";
 import { fillPhasePortrait } from "./render/coloring.js";
 import {
@@ -193,7 +193,13 @@ function main(): void {
 
   phiSel.addEventListener("change", () => {
     const preset = phiPresetById(phiSel.value);
-    commit({ ...state, phi: preset.id, shape: preset.shape ? preset.shape.default : state.shape });
+    // Reframe the right panel to K's default window for the newly-selected domain.
+    commit({
+      ...state,
+      phi: preset.id,
+      shape: preset.shape ? preset.shape.default : state.shape,
+      wView: { centerRe: 0, centerIm: 0, zoom: BASE_HALF / preset.kHalf },
+    });
   });
   shapeInput.addEventListener("input", () => {
     commit({ ...state, shape: Number(shapeInput.value) });

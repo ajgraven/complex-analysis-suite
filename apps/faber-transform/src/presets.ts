@@ -41,6 +41,23 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
     shape: { label: "m", min: 0, max: 0.95, default: 0.5 },
     kHalf: 2.4,
   },
+  {
+    id: "deltoid",
+    name: "Deltoid — z + a/(2z²)",
+    // φ(z) = z + a·z^{−2}/2. The coefficient of z^{−2} is a/2, so the area-type univalence bound
+    // Σ n|aₙ| ≤ 1 reads 2·(a/2) = a ≤ 1; a → 1 is the 3-cusped deltoid (the ground-truth QD cusp case).
+    build: (a: number) => ({ c: 1, laurent: [re(0), re(0), re(a / 2)] }),
+    shape: { label: "a", min: 0, max: 0.98, default: 0.85 },
+    kHalf: 1.7,
+  },
+  {
+    id: "star5",
+    name: "5-cusped star — z + a/(4z⁴)",
+    // φ(z) = z + a·z^{−4}/4. Coefficient a/4 at n = 4 ⇒ 4·(a/4) = a ≤ 1 univalent; a → 1 gives 5 cusps.
+    build: (a: number) => ({ c: 1, laurent: [re(0), re(0), re(0), re(0), re(a / 4)] }),
+    shape: { label: "a", min: 0, max: 0.98, default: 0.85 },
+    kHalf: 1.45,
+  },
 ];
 
 /** Look up a preset by id, falling back to the first (interval) for an unknown id. */
