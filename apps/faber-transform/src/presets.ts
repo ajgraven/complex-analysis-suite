@@ -23,6 +23,12 @@ export interface PhiPreset {
   readonly shape: ShapeControl | null;
   /** World half-height framing K for the right panel's default view. */
   readonly kHalf: number;
+  /**
+   * True when K has empty 2-D interior (a slit), so there is nothing to render inside K — the image is
+   * masked to K per request 1. The interval [−2,2] is the only such preset; it is kept for the Chebyshev
+   * correctness test but hidden from the domain menu (a slit renders nothing).
+   */
+  readonly degenerate?: boolean;
 }
 
 export const PHI_PRESETS: readonly PhiPreset[] = [
@@ -32,6 +38,7 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
     build: () => ({ c: 1, laurent: [re(0), re(1)] }),
     shape: null,
     kHalf: 2.6,
+    degenerate: true, // K is the slit [−2,2]; nothing to render inside it (hidden from the menu)
   },
   {
     id: "ellipse",
@@ -60,9 +67,12 @@ export const PHI_PRESETS: readonly PhiPreset[] = [
   },
 ];
 
-/** Look up a preset by id, falling back to the first (interval) for an unknown id. */
+/** The presets shown in the domain menu — the non-degenerate (2-D interior) ones. */
+export const MENU_PRESETS: readonly PhiPreset[] = PHI_PRESETS.filter((p) => !p.degenerate);
+
+/** Look up a preset by id, falling back to the first non-degenerate preset for an unknown id. */
 export function phiPresetById(id: string): PhiPreset {
-  return PHI_PRESETS.find((p) => p.id === id) ?? PHI_PRESETS[0];
+  return PHI_PRESETS.find((p) => p.id === id) ?? MENU_PRESETS[0];
 }
 
 /**

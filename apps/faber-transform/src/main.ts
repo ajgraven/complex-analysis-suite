@@ -8,12 +8,11 @@
 import { Complex } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
-import { F_PRESETS, PHI_PRESETS, phiPresetById } from "./presets.js";
+import { F_PRESETS, MENU_PRESETS, phiPresetById } from "./presets.js";
 import {
   boundaryK,
   compileExprF,
   evalRational,
-  mapCircle,
   monomialTaylor,
   poleImage,
   poleImageRational,
@@ -34,6 +33,7 @@ import {
   drawRootMarker,
   panTo,
   planeMap,
+  tracePolygon,
   viewPxToWorld,
   zoomAboutCursor,
 } from "./render/plane.js";
@@ -58,9 +58,9 @@ import "./styles/main.css";
 
 const AXIS_COLORS = { grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.16)" };
 const PANEL_BG: readonly [number, number, number] = [22, 24, 30];
+const STAGE_BG = "#16181f"; // must match .stage background so the masked-out region is seamless
 const K_COLOR = "rgba(255,255,255,0.75)";
 const DISK_COLOR = "rgba(255,255,255,0.55)";
-const EQUIPOTENTIAL_COLOR = "rgba(255,210,90,0.9)";
 
 interface Marker {
   readonly w: Vec2;
@@ -76,7 +76,10 @@ type Source = { readonly kind: "rational"; readonly rat: Rational } | { readonly
 
 interface PanelModel {
   readonly source: Source;
-  readonly mask: boolean;
+  /** Grey out |z| ≥ 1 (the unit-disk panel). */
+  readonly maskDisk: boolean;
+  /** Clip the render to this closed world polygon (the K-side panel → ∂K); undefined = no clip. */
+  readonly clip?: Vec2[];
   readonly curves: Curve[];
   readonly markers: Marker[];
   readonly roots: Vec2[];
@@ -148,21 +151,41 @@ function paintPanel(panel: Panel, view: Viewport, m: PanelModel): void {
   const ov = fit2d(panel.ov);
   if (!ov) return;
   const map = planeMap(view, ov.w, ov.h);
+  const ctx = ov.ctx;
   if (m.source.kind === "rational" && panel.renderer) {
-    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.mask);
-    ov.ctx.clearRect(0, 0, ov.w, ov.h); // transparent overlay above the GL portrait
+    // GPU portrait on the gl canvas behind. The overlay masks it to the clip polygon: paint the overlay
+    // background everywhere, then punch a hole inside the clip so the portrait shows through only there.
+    panel.renderer.render(view, m.source.rat.num, m.source.rat.den, m.maskDisk);
+    ctx.clearRect(0, 0, ov.w, ov.h);
+    if (m.clip) {
+      ctx.save();
+      ctx.fillStyle = STAGE_BG;
+      ctx.fillRect(0, 0, ov.w, ov.h);
+      ctx.globalCompositeOperation = "destination-out";
+      tracePolygon(ctx, map, m.clip);
+      ctx.fill();
+      ctx.restore();
+    }
   } else {
+    // CPU portrait drawn on the overlay itself; then keep only the clip interior.
     const src = m.source;
     const g = src.kind === "rational" ? (w: Vec2): Cx => evalRational(src.rat, { re: w[0], im: w[1] }) : (w: Vec2): Cx => src.g({ re: w[0], im: w[1] });
-    fillPhasePortrait(ov.ctx, map, (w) => {
-      if (m.mask && w[0] * w[0] + w[1] * w[1] >= 1) return null;
+    fillPhasePortrait(ctx, map, (w) => {
+      if (m.maskDisk && w[0] * w[0] + w[1] * w[1] >= 1) return null;
       return g(w);
     });
+    if (m.clip) {
+      ctx.save();
+      ctx.globalCompositeOperation = "destination-in";
+      tracePolygon(ctx, map, m.clip);
+      ctx.fill();
+      ctx.restore();
+    }
   }
-  drawAxes(ov.ctx, map, AXIS_COLORS);
-  for (const c of m.curves) drawPolyline(ov.ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
-  for (const r of m.roots) drawRootMarker(ov.ctx, map, r);
-  for (const mk of m.markers) drawDot(ov.ctx, map, mk.w, mk.color, 4);
+  drawAxes(ctx, map, AXIS_COLORS);
+  for (const c of m.curves) drawPolyline(ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
+  for (const r of m.roots) drawRootMarker(ctx, map, r);
+  for (const mk of m.markers) drawDot(ctx, map, mk.w, mk.color, 4);
 }
 
 function main(): void {
@@ -195,7 +218,7 @@ function main(): void {
   const controls = elt("div", { class: "controls" });
 
   const phiSel = elt("select", { id: "phi" });
-  for (const p of PHI_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
+  for (const p of MENU_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
   const phiCtl = elt("div", { class: "control" });
   phiCtl.append(elt("label", { for: "phi" }, "Domain φ: 𝔻* → Ω"), phiSel);
 
@@ -276,8 +299,8 @@ function main(): void {
       const n = state.input.degree;
       const coeffs = transformCoeffs(map, monomialTaylor(n));
       return {
-        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, mask: true, curves: [diskCurve], markers: [], roots: [] },
-        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, mask: false, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
+        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
+        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
         badge: "=",
         readout: `Φφ(z^${n})(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}`,
         error: false,
@@ -290,10 +313,11 @@ function main(): void {
       const rightRat = poleImageRational(img, order);
       const kexp = order === 1 ? "" : `^${order}`;
       return {
-        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, mask: true, curves: [diskCurve], markers: [], roots: [] },
+        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: {
           source: { kind: "rational", rat: rightRat },
-          mask: false,
+          maskDisk: false,
+          clip: kCurve.pts,
           curves: [kCurve],
           markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
           roots: rootMarks(rightRat.num),
@@ -308,7 +332,7 @@ function main(): void {
     // expr
     const compiled = compileExprF(state.input.expr);
     if ("error" in compiled) {
-      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, mask: false, curves: [], markers: [], roots: [] };
+      const blank: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
       return { left: blank, right: blank, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
     }
     const N = state.input.N;
@@ -317,20 +341,16 @@ function main(): void {
     const effN = b.length - 1;
     const poly = transformCoeffs(map, b);
     const R = radiusOfConvergence(bRaw);
-    const rightCurves: Curve[] = [kCurve];
+    // The right panel is masked to K, which sits well inside the convergence region, so the truncation is
+    // shown only where it converges fastest — R is reported but the equipotential curve is not drawn.
     let rNote: string;
-    if (!Number.isFinite(R)) {
-      rNote = "f entire — the series converges throughout";
-    } else if (R < 1) {
-      rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
-    } else {
-      if (R <= 60) rightCurves.push({ pts: mapCircle(map, R), color: EQUIPOTENTIAL_COLOR, width: 1.6, dash: [6, 5] });
-      rNote = `R ≈ ${R.toFixed(3)} — trustworthy inside the dashed equipotential Γ_R`;
-    }
-    const orderNote = effN < N ? ` (coefficients past n=${effN} are below the noise floor)` : "";
+    if (!Number.isFinite(R)) rNote = "f entire — converges throughout K";
+    else if (R < 1) rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
+    else rNote = `radius of convergence R ≈ ${R.toFixed(3)} (K sits well inside)`;
+    const orderNote = effN < N ? ` (coefficients past n=${effN} below the noise floor)` : "";
     return {
-      left: { source: { kind: "fn", g: compiled.fn }, mask: true, curves: [diskCurve], markers: [], roots: [] },
-      right: { source: { kind: "rational", rat: polynomialRational(poly) }, mask: false, curves: rightCurves, markers: [], roots: rootMarks(poly) },
+      left: { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
+      right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
       readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ${orderNote}   ·   ${rNote}`,
       error: false,

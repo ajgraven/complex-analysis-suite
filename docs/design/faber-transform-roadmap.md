@@ -14,7 +14,19 @@
   `num(z)/den(z)` kernel), over the whole panel; ∂K + convergence equipotential $\Gamma_R$ overlays;
   Faber-root markers; per-panel pan/zoom.
 
-## 1. Render on the bounded complement $K$ (request 1)
+## 1. Render on the bounded complement $K$ (request 1) — DONE
+
+**Decision (author):** mask **strictly to the interior of $K$**, always; **drop $\Gamma_R$**. The right panel
+now composites a $\partial K$ clip on its overlay (fill background, punch out $\partial K$ for the GPU
+portrait / keep-inside for the CPU fallback), so $\Phi_\varphi(f)$ shows only inside $\partial K=\varphi(\{|z|=1\})$.
+The equipotential curve is gone (the render sits well inside the convergence region, so the truncation is
+where it converges fastest; $R$ is still reported in the readout text). The **interval** preset is
+degenerate under this rule ($K$ is a slit) — hidden from the domain menu (kept for the Chebyshev test), and
+the default domain is now the **deltoid**. Verified in-browser (deltoid $F_3$ inside $K$, outside masked).
+
+Design notes retained below.
+
+
 
 $\Phi_\varphi(f)\in\mathcal{A}(K)$, so the right panel should mask to $K$ rather than paint the whole
 plane. **Implementation is cheap and needs no shader change** — composite on the 2-D overlay canvas: fill

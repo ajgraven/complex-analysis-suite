@@ -60,13 +60,13 @@ export type FaberViewState = {
   readonly showRoots?: boolean;
 };
 
-/** The default view — the interval preset with f(z) = z³, so the right panel shows F₃ of [−2, 2]. */
+/** The default view — the deltoid domain with f(z) = z³, so the right panel shows F₃ on the deltoid K. */
 export const DEFAULT_VIEW_STATE: FaberViewState = {
-  phi: "interval",
-  shape: 0.5,
+  phi: "deltoid",
+  shape: 0.85,
   input: { kind: "monomial", degree: 3 },
   zView: { centerRe: 0, centerIm: 0, zoom: 1.5 },
-  wView: { centerRe: 0, centerIm: 0, zoom: 0.78 },
+  wView: { centerRe: 0, centerIm: 0, zoom: 1.18 },
   conventions: { normalization: "standard" },
   showRoots: true,
 };
