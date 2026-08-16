@@ -148,11 +148,55 @@ Reentrant corners (αₖ>1) and a draggable editor are **M2**.
   (a side-length-proportional gap seed + the uniform cold start), keeping the lowest-residual result — every
   cyclic rotation now converges (regression-tested).
 
-M2 is complete; **M3** (corner-suppressing weighted Faber `Q_{n,m}`, optional lightning fast-mode) remains.
+M2 is complete; **M3** (corner-suppressing weighted Faber `Q_{n,m}`) is de-risked (spike below) and next.
 
-### M3 — Optional polish
-Corner-**suppressing** weighted Faber `Q_{n,m}` toggle (before/after corner-overshoot demo); reconsider a
-lightning fast-mode only via the reciprocal-domain route (§3.3).
+### M3 — Corner-suppressing weighted Faber `Q_{n,m}`
+
+**Construction (Miña-Díaz–Rubin–Wennman 2025, eq. 1.9–1.10).** `Q_{n,m}` = polynomial part of
+`G_m(z)·φ(z)ⁿ`, where `G_m(z) = ∏ₖ (1 − φ(zₖ)/φ(z))^{1/m}` is analytic in Ω with `G_m(∞)=1`. It has the
+same degree `n` and leading coefficient `cap⁻ⁿ` as `Fₙ` (still a valid trial polynomial, `Wₙ ≤ ‖Q_{n,m}‖`),
+but suppresses the corner overshoot: `limsup ‖Q_{n,m}‖ → 1` as `m → ∞`. `m` is a small-integer strength knob.
+
+**Key simplification — no new numerics.** Writing `G_m = Σⱼ gⱼ·φ(z)⁻ʲ`, the polynomial part splits
+term-by-term:
+
+  **`Q_{n,m}(ζ) = Σ_{j=0}^{n} gⱼ · F_{n−j}(ζ)`**   (`F_j = 0` for `j<0`, `F₀ = 1`)
+
+— a finite linear combination of the Faber polynomials the app already builds. Every ingredient exists:
+the `F_{n−j}` from `faberPolynomials`; the `gⱼ` as a product of generalized-binomial series
+`(1 − wₖ·s)^{1/m}` (the same `@cas/core` series machinery the M1b Laurent extractor uses); and the corner
+images `wₖ = φ(zₖ)` — which **are the exterior-SC prevertices' reciprocals**, `wₖ = 1/uₖ`.
+
+#### M3.0 de-risk spike — findings (DONE)
+Built `Q_{n,m} = Σ gⱼ F_{n−j}` from `fit.prevertices` and sampled `|F_n|` / `|Q_{n,m}|` along `∂K` at `n=40`
+(`scratchpad/qnm-spike.test.ts`). All three claims confirmed:
+- **(A)** `wₖ = 1/uₖ` lies on `|w|=1` to machine precision (`max ‖1/uₖ|−1| = 0` square / `2.2e-16` L-shape) —
+  the weight is built from data the M1b solve already returns; no new solve.
+- **(B)** the convolution builds cleanly with `g₀ = 1.000` (so `G_m(∞)=1`, degree and leading coeff preserved).
+- **(C)** the corner peak is suppressed **monotonically in `m`**. `|F₄₀|` peak on `∂K`: **square 1.478**
+  (≈ `λ = 3/2`, independently confirming the eq-1.7 corner limit) → `Q,m=8` **1.093** (toward the smooth-arc
+  floor 1); **L-shape (reentrant) 1.550** → `Q,m=8` **1.324**.
+
+Two findings that shape the UI:
+1. **`m=1` makes it worse** (exponent 1 is too aggressive: square `2.001`, L-shape `7.392`) — the useful range
+   is **`m ≥ 2`**; the slider starts at 2.
+2. **Reentrant corners need larger `m`** (the L-shape only dips below `|Fₙ|` at `m ≈ 8`) — consistent with
+   reentrant being the hard case; the UI should honestly note suppression is milder there at fixed `m`.
+
+Gate passed: M3 rides entirely on existing primitives — no new package, no new numerics.
+
+#### M3 build steps
+- **M3.1 — engine (`@cas/faber`).** `weightSeries(cornerImages, m, N)` + `weightedFaberPolynomial(map,
+  cornerImages, n, m)` (the validated spike helpers), pure + unit-tested against the spike goldens.
+- **M3.2 — app wiring.** Surface `prevertices` on `PolygonMapResult`; a "suppress corners" toggle + `m`
+  slider (2–8) live for polygonal domains only; route monomial inputs through `Q_{n,m}`; round-trip the
+  toggle + `m` in the `#vs=` permalink.
+- **M3.3 — before/after demo.** Overlay `|Fₙ|` vs `|Q_{n,m}|` along `∂K` (paper Fig. 2 style), reusing the
+  M2 corner-norm annotations.
+
+Still `≈`-labeled (rides the truncated SC map — an approximation-quality gain, not an exactness one). The
+old "optional lightning fast-mode" is dropped from M3 (unrelated to `Q_{n,m}`, low-value now the multi-seed
+solver is robust) and left as a standalone deferred item.
 
 ## 6. Integration details & honesty guardrails
 
