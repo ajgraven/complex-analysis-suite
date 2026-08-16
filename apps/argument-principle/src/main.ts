@@ -60,7 +60,7 @@ import {
 } from "./render/plane.js";
 import { drawArgGraph } from "./render/argGraph.js";
 import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
-import { attachImagePlane, attachContourPlane } from "./render/nav.js";
+import { attachImagePlane, attachContourPlane, type ContourMode } from "./render/nav.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { nearestRoot, isolateRadius } from "./hit.js";
 import { rootKey, diffEnclosure, type EnclosedRoot, type CrossEvent } from "./crossing.js";
@@ -257,6 +257,7 @@ function main(): void {
   let model = buildModel(state.map.expr);
   let sing: Singularities = NO_SING;
   let draftPath: Vec2[] | null = null; // the freehand path being drawn (transient, not persisted)
+  let mode: ContourMode = "move"; // the active contour tool (§12 / ADR-0022) — transient
   const anim = { on: false, t: 0, speed: 0.25 }; // traversal animation (transient)
   let animRaf = 0;
   let animLast = 0;
@@ -268,6 +269,9 @@ function main(): void {
   // only γ moving over a fixed root set counts as a crossing. null on the transcendental/error path.
   let prevStableKey: string | null = null;
   let singKey: string | null = null;
+  // An Isolate tap re-frames γ around one root, so the *other* roots leaving γ are not a crossing the
+  // user made — suppress the crossing toast for exactly the render that tap schedules (its own toast wins).
+  let suppressCrossOnce = false;
   let flash: { pts: Vec2[]; t0: number } | null = null;
   let flashRaf = 0;
   let toastTimer = 0;
@@ -281,6 +285,26 @@ function main(): void {
   brand.innerHTML = "<strong>Argument Principle</strong><span>winding = zeros − poles</span>";
   const spacer = document.createElement("div");
   spacer.className = "spacer";
+  // Contour-tool segmented control (§12 / ADR-0022) — visible on mouse and touch alike.
+  const modeSeg = document.createElement("div");
+  modeSeg.className = "modeseg";
+  modeSeg.setAttribute("role", "group");
+  modeSeg.setAttribute("aria-label", "Contour tool");
+  const MODES: readonly { id: ContourMode; label: string }[] = [
+    { id: "move", label: "Move γ" },
+    { id: "draw", label: "Draw" },
+    { id: "isolate", label: "Isolate" },
+  ];
+  const modeBtns = new Map<ContourMode, HTMLButtonElement>();
+  for (const m of MODES) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = m.label;
+    b.setAttribute("aria-pressed", String(m.id === mode));
+    b.addEventListener("click", () => setMode(m.id));
+    modeBtns.set(m.id, b);
+    modeSeg.append(b);
+  }
   const clearBtn = button("Clear drawn curve");
   const fitBtn = button("Fit image");
   const resetBtn = button("Reset views");
@@ -288,7 +312,7 @@ function main(): void {
   const helpBtn = button("?");
   helpBtn.setAttribute("aria-label", "Help");
   const themeBtn = createThemeToggle(() => schedule());
-  topbar.append(brand, spacer, clearBtn, fitBtn, resetBtn, pngBtn, helpBtn, themeBtn);
+  topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, helpBtn, themeBtn);
 
   const toolbar = document.createElement("div");
   toolbar.className = "toolbar";
@@ -374,7 +398,7 @@ function main(): void {
   const zCanvas = makeCanvas();
   const zCap = document.createElement("figcaption");
   zCap.innerHTML =
-    "<b>Domain</b> — z-plane · move to place γ, right-drag pan, scroll zoom · γ colored by t (matches f(γ)) · " +
+    "<b>Domain</b> — z-plane · pick a tool above · drag to pan · pinch or scroll to zoom · γ colored by t (matches f(γ)) · " +
     '<span class="key zero">○ zero</span> <span class="key pole">✕ pole</span> ' +
     '<span class="key crit">◆ f′=0</span>';
   zPane.append(zCanvas, zCap);
@@ -440,7 +464,7 @@ function main(): void {
       <h3>Using the tool</h3>
       <ul>
         <li><b>f(z)</b> — pick a preset or type your own: <code>z, i, pi, sin, cos, tan, exp, log, sqrt, ^</code> and more.</li>
-        <li><b>z-plane</b> — move the cursor to place the circular contour γ; <b>click a root</b> to isolate it; <b>hover a marker</b> for its value and order; <b>left-drag</b> to draw a freehand γ; <b>right-drag</b> to pan; <b>scroll</b> to zoom.</li>
+        <li><b>z-plane tools</b> (top bar) — <b>Move γ</b>: tap to place the circular contour, drag to pan; <b>Draw</b>: drag to sketch a freehand γ; <b>Isolate</b>: tap a root to pin a circle around it. Pinch or scroll to zoom; hover a marker (mouse) or tap it (touch) for its value and order.</li>
         <li><b>Markers</b> — <span class="key zero">○ zeros</span>, <span class="key pole">✕ poles</span>, <span class="key crit">◆ critical points</span> (f′ = 0), <span class="key" style="color:var(--target)">● target w₀</span>. Distinct shapes, so identity never depends on colour.</li>
         <li><b>Readouts</b> — zeros / poles inside γ, their difference, and the winding of f(γ). <span class="approx">=</span> is exact (f rational); <span class="approx">≈</span> is a numerical estimate. If γ crosses a <b>branch cut</b> (e.g. √z, log z), f is not single-valued and the tool says the theorem doesn't apply — the ∮ f′/f then reads a non-integer.</li>
       </ul>
@@ -453,8 +477,8 @@ function main(): void {
       </ul>
       <h3>Explore</h3>
       <ul>
-        <li><b>Isolate a root</b> — click any ✕/◆ to pin a small circle around it; the winding then equals its order. <b>Release γ</b> resumes cursor-follow.</li>
-        <li><b>Cross the boundary</b> — drag γ so a root passes through it; the count jumps ±1, flagged by a pulse and a note.</li>
+        <li><b>Isolate a root</b> — in Isolate mode, tap any ○/✕/◆ to pin a small circle around it; the winding then equals its order. Tap empty space, or <b>Clear</b>, to release.</li>
+        <li><b>Cross the boundary</b> — move γ (or its radius) so a root passes through it; the count jumps ±1, flagged by a pulse and a note.</li>
         <li><b>Target w₀</b> — drag the ● in the image plane to count <em>solutions of f(z) = w₀</em> instead of zeros (drag it back to the origin to snap to the classic case).</li>
       </ul>
       <h3>Hand-off &amp; export</h3>
@@ -512,6 +536,18 @@ function main(): void {
   /** The pedagogy toggles in effect (always complete — decode back-fills, DEFAULT carries them). */
   function ped(): PedagogyState {
     return state.pedagogy ?? DEFAULT_PEDAGOGY;
+  }
+  /** Switch the contour tool (§12 / ADR-0022): reflect it on the segmented control, the cursor, the hint. */
+  function setMode(m: ContourMode): void {
+    mode = m;
+    for (const [id, b] of modeBtns) b.setAttribute("aria-pressed", String(id === m));
+    zCanvas.style.cursor = m === "draw" ? "crosshair" : m === "isolate" ? "pointer" : "grab";
+    drawHint.textContent =
+      m === "draw"
+        ? "Draw: drag on the z-plane to sketch a contour · two-finger drag to pan."
+        : m === "isolate"
+          ? "Isolate: tap a root (○ ✕ ◆) to pin a circle around it · tap empty space to release."
+          : "Move γ: tap to place the contour · drag to pan · pinch or scroll to zoom.";
   }
   /** World units per pixel in the z-plane — turns a pixel hit-tolerance into a world tolerance. */
   function zPlaneScale(): number {
@@ -807,7 +843,7 @@ function main(): void {
       ];
       if (prevStableKey === singKey) {
         const events = diffEnclosure(prevEnclosed, cur);
-        if (events.length) announceCrossing(events, nmp, about[0] === 0 && about[1] === 0);
+        if (events.length && !suppressCrossOnce) announceCrossing(events, nmp, about[0] === 0 && about[1] === 0);
       }
       prevEnclosed = new Map(cur.map((e) => [e.key, e]));
       prevStableKey = singKey;
@@ -815,6 +851,7 @@ function main(): void {
       prevEnclosed = new Map();
       prevStableKey = null;
     }
+    suppressCrossOnce = false; // one-shot: consumed by the render its Isolate tap scheduled
 
     drawPane(zCanvas, state.zView, (ctx, map) => {
       if (state.render.showDomainCurve) {
@@ -865,6 +902,11 @@ function main(): void {
           ctx.beginPath();
           ctx.arc(tpx[0], tpx[1], 9, 0, 2 * Math.PI);
           ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.fillStyle = cTarget;
+          ctx.font = "600 11px ui-sans-serif, system-ui, sans-serif";
+          ctx.textBaseline = "bottom";
+          ctx.fillText("w₀", tpx[0] + 12, tpx[1] - 8); // labelled draggable handle
           ctx.restore();
         }
       }
@@ -1167,20 +1209,27 @@ function main(): void {
       commit({ ...state, zView: v }, false);
       scheduleRefresh(); // the search region moved with the view — re-find after the pan/zoom settles
     },
-    onHover: (world: Vec2, client: { x: number; y: number }) => {
-      updateTooltip(world, client); // F13 — regardless of follow/pin/path mode
-      const pinned = state.contour.kind === "circle" && state.contour.pinned === true;
-      if (state.contour.kind !== "circle" || pinned) return; // a path or pinned contour is fixed
-      commit({ ...state, contour: { ...state.contour, centerRe: world[0], centerIm: world[1] } }, false);
-      scheduleRefresh(); // the moved contour may now enclose a singularity outside the last search region
-    },
+    getMode: () => mode,
+    onHover: (world: Vec2, client: { x: number; y: number }) => updateTooltip(world, client), // F13 tooltip only
     onLeave: () => hideTooltip(),
-    onClick: (world: Vec2) => {
-      // C7 — click a marked root to pin a small isolating circle around it (winding = its order); click
-      // empty space to release a pinned contour back to cursor-follow.
-      const hit = nearestRoot(world, sing, 12 / zPlaneScale());
+    onPlace: (world: Vec2) => {
+      // Move mode — a tap places the circular contour's centre (converting from a path / releasing a pin).
+      commit(
+        {
+          ...state,
+          contour: { kind: "circle", centerRe: world[0], centerIm: world[1], radius: state.contour.radius, pinned: false },
+        },
+        false,
+      );
+      scheduleRefresh(); // the moved contour may enclose a singularity outside the last search region
+    },
+    onIsolate: (world: Vec2) => {
+      // Isolate mode — a tap on a marked root pins a small isolating circle (winding = its order); a tap on
+      // empty space releases a pinned contour.
+      const hit = nearestRoot(world, sing, 14 / zPlaneScale());
       if (hit) {
         const r = isolateRadius(hit.root.z, sing, hit.root);
+        suppressCrossOnce = true; // the other roots leaving γ isn't a crossing the user made — see flag decl
         commit(
           {
             ...state,
@@ -1193,7 +1242,7 @@ function main(): void {
         showToast(`Isolated a ${kindText} · winding ${wind}`);
       } else if (state.contour.kind === "circle" && state.contour.pinned === true) {
         commit({ ...state, contour: { ...state.contour, pinned: false } }, true);
-        showToast("Released γ — it follows the cursor again");
+        showToast("Released γ");
       }
     },
     onDrawStart: (world: Vec2) => {
@@ -1244,6 +1293,7 @@ function main(): void {
   // ---- boot ----------------------------------------------------------------
   const initialId = presetIdForExpr(state.map.expr);
   if (initialId) presetSel.value = initialId;
+  setMode(mode); // initial cursor + hint for the default tool
   radiusLabel.textContent = `Radius r = ${state.contour.radius.toFixed(2)}`;
   resLabel.textContent = `Resolution ${state.render.resolution}`;
   refreshSing();

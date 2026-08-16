@@ -8,6 +8,7 @@
   --text: #e7eaf2;
   --muted: #8c95a9;
   --accent: #3bb6c0; /* UI chrome + the γ contour */
+  --on-accent: #06232a; /* ink on an --accent fill — dark here (this accent is light): 6.3:1 (WCAG 1.4.3) */
   /* categorical marks — shape-distinct + CVD-validated (ADR-0023); dark-mode steps */
   --zero: #4585e0; /* ○ zero */
   --pole: #cf7b30; /* ✕ pole */
@@ -30,6 +31,7 @@
   --text: #151a26;
   --muted: #656e83;
   --accent: #0d7a86;
+  --on-accent: #ffffff; /* ink on an --accent fill — white here (this accent is dark): 5.1:1 (WCAG 1.4.3) */
   --zero: #2160c4;
   --pole: #c9551f;
   --crit: #0f8f5f;
@@ -51,6 +53,7 @@
     --text: #151a26;
     --muted: #656e83;
     --accent: #0d7a86;
+    --on-accent: #ffffff;
     --zero: #2160c4;
     --pole: #c9551f;
     --crit: #0f8f5f;
@@ -113,6 +116,7 @@ button.ghost {
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 11px;
+  min-height: 36px; /* comfortable touch target (WCAG 2.5.8) */
   font: inherit;
   font-size: 0.82rem;
   cursor: pointer;
@@ -120,6 +124,41 @@ button.ghost {
 button.ghost:hover {
   border-color: var(--accent);
   color: var(--text);
+}
+
+/* Contour-tool segmented control (§12 / ADR-0022) */
+.modeseg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+.modeseg button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 6px 11px;
+  min-height: 34px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.modeseg button[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.modeseg button:hover:not([aria-pressed="true"]) {
+  color: var(--text);
+}
+.modeseg button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .toolbar {
@@ -256,6 +295,7 @@ button.ghost:disabled {
   width: 100%;
   min-height: 0;
   display: block;
+  touch-action: none; /* the pointer gestures own the canvas (pinch/pan) — don't scroll/zoom the page */
 }
 .pane figcaption {
   padding: 8px 12px;

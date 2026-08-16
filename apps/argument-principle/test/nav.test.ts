@@ -4,6 +4,7 @@ import {
   viewPxToWorld,
   panTo,
   zoomAboutCursor,
+  pinchView,
   fitViewport,
   type Viewport,
   type Vec2,
@@ -57,6 +58,35 @@ describe("viewport coordinate math (pan/zoom authority)", () => {
     const under = viewPxToWorld(panned, fx, fyTop, aspect);
     expect(under[0]).toBeCloseTo(grab[0], 9);
     expect(under[1]).toBeCloseTo(grab[1], 9);
+  });
+
+  it("pinchView zooms about the midpoint (m0 = m1), keeping that world point fixed", () => {
+    const aspect = 1.6;
+    const before = viewPxToWorld(VIEW, 0.5, 0.5, aspect);
+    const v = pinchView(VIEW, 0.5, 0.5, 0.5, 0.5, 2, aspect);
+    expect(v.zoom).toBeCloseTo(VIEW.zoom * 2, 9);
+    const after = viewPxToWorld(v, 0.5, 0.5, aspect);
+    expect(after[0]).toBeCloseTo(before[0], 9);
+    expect(after[1]).toBeCloseTo(before[1], 9);
+  });
+
+  it("pinchView pans with the midpoint when the span is unchanged (two-finger drag)", () => {
+    const aspect = 1.6;
+    const grabbed = viewPxToWorld(VIEW, 0.5, 0.5, aspect); // world under the pinch's start midpoint
+    const v = pinchView(VIEW, 0.5, 0.5, 0.62, 0.44, 1, aspect);
+    expect(v.zoom).toBeCloseTo(VIEW.zoom, 12); // span ratio 1 → no zoom
+    const under = viewPxToWorld(v, 0.62, 0.44, aspect); // that world is now under the current midpoint
+    expect(under[0]).toBeCloseTo(grabbed[0], 9);
+    expect(under[1]).toBeCloseTo(grabbed[1], 9);
+  });
+
+  it("pinchView is a no-op when nothing moves, and guards a bad span ratio", () => {
+    const noop = pinchView(VIEW, 0.4, 0.6, 0.4, 0.6, 1, 1.6);
+    expect(noop.centerRe).toBeCloseTo(VIEW.centerRe, 9);
+    expect(noop.centerIm).toBeCloseTo(VIEW.centerIm, 9);
+    expect(noop.zoom).toBeCloseTo(VIEW.zoom, 12);
+    expect(pinchView(VIEW, 0.5, 0.5, 0.5, 0.5, NaN, 1.6).zoom).toBeCloseTo(VIEW.zoom, 9);
+    expect(pinchView(VIEW, 0.5, 0.5, 0.5, 0.5, 1e12, 1.6).zoom).toBeLessThanOrEqual(1e6);
   });
 
   it("fitViewport frames a set of points (centered, all enclosed)", () => {

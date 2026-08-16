@@ -1,23 +1,38 @@
-// render/nav.ts — thin pointer/wheel wiring over the pure coordinate helpers in plane.ts.
+// render/nav.ts — pointer/touch/wheel wiring over the pure coordinate helpers in plane.ts.
 //
-// Two attachers:
-//  • attachPanZoom  — drag pans, wheel zooms (the w-plane / image pane).
-//  • attachContourPlane — the z-plane: plain pointer-move places the contour γ under the cursor,
-//    RIGHT-drag pans, wheel zooms (matching the reference applet's "circle follows the cursor;
-//    right-drag pan; scroll zoom"). Left-drag is reserved for freehand drawing (Phase 2).
-import { viewPxToWorld, panTo, zoomAboutCursor, type Viewport, type Vec2 } from "./plane.js";
+// A shared gesture core (attachGestures) tracks one or two pointers on a canvas and drives pan + pinch-zoom
+// + wheel-zoom the same way on mouse and touch (§12 / ADR-0022: touch-first, one-finger pan, pinch zoom).
+// Each plane layers its single-pointer semantics on top:
+//  • attachImagePlane — one finger drags the w₀ target (if grabbed) else pans; pinch zooms.
+//  • attachContourPlane — MODE-aware: Move = tap to place γ / drag to pan; Draw = drag to sketch;
+//    Isolate = tap a root to pin. Right-drag-pan and hover-follow are retired.
+import {
+  viewPxToWorld,
+  panTo,
+  zoomAboutCursor,
+  pinchView,
+  type Viewport,
+  type Vec2,
+} from "./plane.js";
 
 export interface NavHandle {
   detach(): void;
 }
 
-interface Frac {
-  fx: number;
-  fyTop: number;
-  aspect: number;
+export type ContourMode = "move" | "draw" | "isolate";
+
+const ZOOM_STEP = 0.0015;
+/** Pixels of pointer travel below which a press+release is a tap (place / isolate), not a drag. */
+const CLICK_TOL_PX = 5;
+/** Pixels within which a press on the w-plane grabs the target dot instead of panning. */
+const TARGET_HIT_PX = 14;
+
+interface Pt {
+  clientX: number;
+  clientY: number;
 }
 
-function frac(canvas: HTMLCanvasElement, e: { clientX: number; clientY: number }): Frac {
+function fracOf(canvas: HTMLCanvasElement, e: Pt): { fx: number; fyTop: number; aspect: number } {
   const r = canvas.getBoundingClientRect();
   return {
     fx: r.width > 0 ? (e.clientX - r.left) / r.width : 0.5,
@@ -26,49 +41,142 @@ function frac(canvas: HTMLCanvasElement, e: { clientX: number; clientY: number }
   };
 }
 
-const ZOOM_STEP = 0.0015;
-
-/** Drag-to-pan + wheel-to-zoom on `canvas` (the image pane). */
-export function attachPanZoom(
+/** Midpoint fraction + finger span (px) + aspect for a two-pointer pinch. */
+function pinchGeom(
   canvas: HTMLCanvasElement,
-  get: () => Viewport,
-  set: (v: Viewport) => void,
-): NavHandle {
-  let grab: Vec2 | null = null;
+  a: Pt,
+  b: Pt,
+): { mfx: number; mfyTop: number; span: number; aspect: number } {
+  const r = canvas.getBoundingClientRect();
+  const mx = (a.clientX + b.clientX) / 2;
+  const my = (a.clientY + b.clientY) / 2;
+  return {
+    mfx: r.width > 0 ? (mx - r.left) / r.width : 0.5,
+    mfyTop: r.height > 0 ? (my - r.top) / r.height : 0.5,
+    span: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+    aspect: r.height > 0 ? r.width / r.height : 1,
+  };
+}
+
+/**
+ * The single-pointer semantics a plane provides to the gesture core. The core owns pinch, wheel, the
+ * pointer bookkeeping, and `touch-action:none`; the plane owns what one finger does (pan / draw / drag).
+ */
+interface GestureSpec {
+  getView(): Viewport;
+  setView(v: Viewport): void;
+  /** Mouse hover with no button pressed (a tooltip). Never fires on touch (no hover there). */
+  onHover?(world: Vec2, client: { x: number; y: number }): void;
+  onLeave?(): void;
+  /** A single-pointer press begins at `world`. */
+  begin(world: Vec2, e: PointerEvent): void;
+  /** The single pointer moved; `movedPx` is the max travel since the press. */
+  move(world: Vec2, e: PointerEvent, movedPx: number): void;
+  /** The single pointer released; `movedPx` distinguishes a tap from a drag. */
+  end(world: Vec2, e: PointerEvent, movedPx: number): void;
+  /** A second finger landed (pinch begins) — abandon any single-pointer gesture in progress. */
+  cancel?(): void;
+}
+
+function attachGestures(canvas: HTMLCanvasElement, spec: GestureSpec): NavHandle {
+  const pointers = new Map<number, Pt>();
+  let singleId: number | null = null;
+  let startX = 0;
+  let startY = 0;
+  let moved = 0;
+  let pinch: { startView: Viewport; m0fx: number; m0fyTop: number; span0: number; aspect: number } | null = null;
+
+  const worldAt = (e: Pt): Vec2 => {
+    const { fx, fyTop, aspect } = fracOf(canvas, e);
+    return viewPxToWorld(spec.getView(), fx, fyTop, aspect);
+  };
+
   function onDown(e: PointerEvent): void {
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    grab = viewPxToWorld(get(), fx, fyTop, aspect);
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    e.preventDefault();
+    pointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+    if (pointers.size === 1) {
+      singleId = e.pointerId;
+      startX = e.clientX;
+      startY = e.clientY;
+      moved = 0;
+      spec.begin(worldAt(e), e);
+    } else if (pointers.size === 2) {
+      if (singleId !== null) {
+        spec.cancel?.();
+        singleId = null;
+      }
+      const [a, b] = [...pointers.values()];
+      const g = pinchGeom(canvas, a, b);
+      pinch = { startView: spec.getView(), m0fx: g.mfx, m0fyTop: g.mfyTop, span0: g.span || 1, aspect: g.aspect };
+    }
+    window.addEventListener("pointermove", onWinMove);
+    window.addEventListener("pointerup", onWinUp);
+    window.addEventListener("pointercancel", onWinUp);
   }
-  function onMove(e: PointerEvent): void {
-    if (!grab) return;
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    set(panTo(get(), grab, fx, fyTop, aspect));
+
+  function onWinMove(e: PointerEvent): void {
+    if (pointers.has(e.pointerId)) pointers.set(e.pointerId, { clientX: e.clientX, clientY: e.clientY });
+    if (pinch && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const g = pinchGeom(canvas, a, b);
+      spec.setView(pinchView(pinch.startView, pinch.m0fx, pinch.m0fyTop, g.mfx, g.mfyTop, g.span / pinch.span0, g.aspect));
+    } else if (singleId === e.pointerId) {
+      moved = Math.max(moved, Math.hypot(e.clientX - startX, e.clientY - startY));
+      spec.move(worldAt(e), e, moved);
+    }
   }
-  function onUp(): void {
-    grab = null;
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+
+  function onWinUp(e: PointerEvent): void {
+    const wasSingle = singleId === e.pointerId;
+    pointers.delete(e.pointerId);
+    if (pinch) {
+      pinch = null; // a finger lifted mid-pinch — end it; do not resume a single gesture
+      singleId = null;
+    } else if (wasSingle) {
+      spec.end(worldAt(e), e, moved);
+      singleId = null;
+    }
+    if (pointers.size === 0) {
+      window.removeEventListener("pointermove", onWinMove);
+      window.removeEventListener("pointerup", onWinUp);
+      window.removeEventListener("pointercancel", onWinUp);
+    }
+  }
+
+  function onCanvasMove(e: PointerEvent): void {
+    if (pointers.size === 0 && e.pointerType === "mouse") {
+      spec.onHover?.(worldAt(e), { x: e.clientX, y: e.clientY });
+    }
+  }
+  function onLeave(): void {
+    if (pointers.size === 0) spec.onLeave?.();
   }
   function onWheel(e: WheelEvent): void {
     e.preventDefault();
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    const v = get();
-    set(zoomAboutCursor(v, fx, fyTop, aspect, v.zoom * Math.exp(-e.deltaY * ZOOM_STEP)));
+    const { fx, fyTop, aspect } = fracOf(canvas, e);
+    const v = spec.getView();
+    spec.setView(zoomAboutCursor(v, fx, fyTop, aspect, v.zoom * Math.exp(-e.deltaY * ZOOM_STEP)));
   }
   function onCtx(e: MouseEvent): void {
-    e.preventDefault(); // a right-drag pans this pane too — don't pop the context menu mid-drag
+    e.preventDefault();
   }
+
+  canvas.style.touchAction = "none"; // keep the browser from scrolling/zooming the page under our gestures
   canvas.addEventListener("pointerdown", onDown);
+  canvas.addEventListener("pointermove", onCanvasMove);
+  canvas.addEventListener("pointerleave", onLeave);
   canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("contextmenu", onCtx);
   return {
     detach(): void {
       canvas.removeEventListener("pointerdown", onDown);
+      canvas.removeEventListener("pointermove", onCanvasMove);
+      canvas.removeEventListener("pointerleave", onLeave);
       canvas.removeEventListener("wheel", onWheel);
       canvas.removeEventListener("contextmenu", onCtx);
-      onUp();
+      window.removeEventListener("pointermove", onWinMove);
+      window.removeEventListener("pointerup", onWinUp);
+      window.removeEventListener("pointercancel", onWinUp);
     },
   };
 }
@@ -78,173 +186,108 @@ export interface ImagePlaneNav {
   setView(v: Viewport): void;
   /** The draggable target dot's position in canvas CSS pixels, or null to disable target dragging. */
   targetPx(): [number, number] | null;
-  /** Drag the target to the world point under the cursor (§11 D8). */
+  /** Drag the target w₀ to the world point under the pointer (§11 D8). */
   setTargetWorld(world: Vec2): void;
 }
 
-/** Radius (px) within which a press on the w-plane grabs the target dot instead of panning. */
-const TARGET_HIT_PX = 11;
-
-/**
- * The image (w) plane: drag pans, wheel zooms, and a press on the target dot drags the winding target w₀
- * (§11 D8). A superset of {@link attachPanZoom} — it checks the target first, then falls back to panning.
- */
+/** The image (w) plane: one finger drags the w₀ target (if grabbed) else pans; pinch / wheel zoom. */
 export function attachImagePlane(canvas: HTMLCanvasElement, nav: ImagePlaneNav): NavHandle {
-  let panGrab: Vec2 | null = null;
-  let draggingTarget = false;
-  const worldAt = (e: { clientX: number; clientY: number }): Vec2 => {
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    return viewPxToWorld(nav.getView(), fx, fyTop, aspect);
-  };
-  function onDown(e: PointerEvent): void {
-    const tp = nav.targetPx();
-    if (tp) {
+  let kind: "pan" | "target" | "idle" = "idle";
+  let grab: Vec2 | null = null;
+  return attachGestures(canvas, {
+    getView: () => nav.getView(),
+    setView: (v) => nav.setView(v),
+    begin: (world, e) => {
+      const tp = nav.targetPx();
       const r = canvas.getBoundingClientRect();
-      if (Math.hypot(e.clientX - r.left - tp[0], e.clientY - r.top - tp[1]) <= TARGET_HIT_PX) {
-        e.preventDefault();
-        draggingTarget = true;
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", onUp);
-        return;
+      if (tp && Math.hypot(e.clientX - r.left - tp[0], e.clientY - r.top - tp[1]) <= TARGET_HIT_PX) {
+        kind = "target";
+        nav.setTargetWorld(world);
+      } else {
+        kind = "pan";
+        grab = world;
       }
-    }
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    panGrab = viewPxToWorld(nav.getView(), fx, fyTop, aspect);
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
-  }
-  function onMove(e: PointerEvent): void {
-    if (draggingTarget) nav.setTargetWorld(worldAt(e));
-    else if (panGrab) {
-      const { fx, fyTop, aspect } = frac(canvas, e);
-      nav.setView(panTo(nav.getView(), panGrab, fx, fyTop, aspect));
-    }
-  }
-  function onUp(): void {
-    panGrab = null;
-    draggingTarget = false;
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
-  }
-  function onWheel(e: WheelEvent): void {
-    e.preventDefault();
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    const v = nav.getView();
-    nav.setView(zoomAboutCursor(v, fx, fyTop, aspect, v.zoom * Math.exp(-e.deltaY * ZOOM_STEP)));
-  }
-  function onCtx(e: MouseEvent): void {
-    e.preventDefault();
-  }
-  canvas.addEventListener("pointerdown", onDown);
-  canvas.addEventListener("wheel", onWheel, { passive: false });
-  canvas.addEventListener("contextmenu", onCtx);
-  return {
-    detach(): void {
-      canvas.removeEventListener("pointerdown", onDown);
-      canvas.removeEventListener("wheel", onWheel);
-      canvas.removeEventListener("contextmenu", onCtx);
-      onUp();
     },
-  };
+    move: (world, e) => {
+      if (kind === "target") nav.setTargetWorld(world);
+      else if (kind === "pan" && grab) {
+        const { fx, fyTop, aspect } = fracOf(canvas, e);
+        nav.setView(panTo(nav.getView(), grab, fx, fyTop, aspect));
+      }
+    },
+    end: () => {
+      kind = "idle";
+      grab = null;
+    },
+    cancel: () => {
+      kind = "idle";
+      grab = null;
+    },
+  });
 }
 
 export interface ContourNav {
   getView(): Viewport;
   setView(v: Viewport): void;
-  /** Called on a plain (non-panning, non-drawing) pointer move with the world point + client pixel. */
+  /** The active contour tool. */
+  getMode(): ContourMode;
+  /** Mouse hover → marker tooltip (also fired on a touch tap, for tap-to-reveal). */
   onHover(world: Vec2, client: { x: number; y: number }): void;
-  /** Pointer left the canvas — dismiss any hover affordance (F13 tooltip). */
   onLeave(): void;
-  /** A left click (press + release with negligible movement, not a drag) — used for click-to-pin (C7). */
-  onClick(world: Vec2): void;
-  /** Freehand drawing (left-drag): begin a new path, extend it, and finalize it. */
+  /** Move-mode tap: place the circular γ's centre. */
+  onPlace(world: Vec2): void;
+  /** Isolate-mode tap: pin a small circle around the nearest root (or release, on empty space). */
+  onIsolate(world: Vec2): void;
+  /** Draw-mode drag: begin / extend / finalize a freehand contour. */
   onDrawStart(world: Vec2): void;
   onDrawMove(world: Vec2): void;
   onDrawEnd(): void;
 }
 
-/** Pixels of pointer travel below which a left press+release is a click, not a freehand draw. */
-const CLICK_TOL_PX = 5;
-
-/** The z-plane: cursor places γ, LEFT-drag draws a freehand contour, RIGHT-drag pans, wheel zooms. */
+/** The z-plane: mode-aware single-finger tool (Move / Draw / Isolate) + pinch/wheel zoom. */
 export function attachContourPlane(canvas: HTMLCanvasElement, nav: ContourNav): NavHandle {
-  let panGrab: Vec2 | null = null;
-  let drawing = false;
-  let downClient: { x: number; y: number } | null = null; // start of a left press (click vs drag)
-  let moved = 0; // max pointer travel (px) since the left press
-  const worldAt = (e: { clientX: number; clientY: number }): Vec2 => {
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    return viewPxToWorld(nav.getView(), fx, fyTop, aspect);
-  };
-  function onHoverMove(e: PointerEvent): void {
-    if (panGrab || drawing) return;
-    nav.onHover(worldAt(e), { x: e.clientX, y: e.clientY });
-  }
-  function onLeave(): void {
-    if (!panGrab && !drawing) nav.onLeave();
-  }
-  function onDown(e: PointerEvent): void {
-    if (e.button === 2) {
-      e.preventDefault();
-      panGrab = worldAt(e);
-    } else if (e.button === 0) {
-      e.preventDefault();
-      drawing = true;
-      downClient = { x: e.clientX, y: e.clientY };
-      moved = 0;
-      nav.onDrawStart(worldAt(e));
-    } else {
-      return;
-    }
-    window.addEventListener("pointermove", onWindowMove);
-    window.addEventListener("pointerup", onUp);
-  }
-  function onWindowMove(e: PointerEvent): void {
-    if (panGrab) {
-      const { fx, fyTop, aspect } = frac(canvas, e);
-      nav.setView(panTo(nav.getView(), panGrab, fx, fyTop, aspect));
-    } else if (drawing) {
-      if (downClient) moved = Math.max(moved, Math.hypot(e.clientX - downClient.x, e.clientY - downClient.y));
-      nav.onDrawMove(worldAt(e));
-    }
-  }
-  function onUp(e?: PointerEvent): void {
-    if (drawing) {
-      // A left press that barely moved is a click (pin/isolate), not a freehand draw.
-      if (moved < CLICK_TOL_PX && downClient) {
-        nav.onClick(worldAt(e ?? { clientX: downClient.x, clientY: downClient.y }));
+  let kind: "pan" | "draw" | "tap" = "tap";
+  let grab: Vec2 | null = null;
+  return attachGestures(canvas, {
+    getView: () => nav.getView(),
+    setView: (v) => nav.setView(v),
+    onHover: (world, client) => nav.onHover(world, client),
+    onLeave: () => nav.onLeave(),
+    begin: (world) => {
+      if (nav.getMode() === "draw") {
+        kind = "draw";
+        nav.onDrawStart(world);
+      } else {
+        kind = "tap"; // Move / Isolate: pending — a drag pans, a tap acts
+        grab = world;
       }
-      nav.onDrawEnd();
-    }
-    panGrab = null;
-    drawing = false;
-    downClient = null;
-    moved = 0;
-    window.removeEventListener("pointermove", onWindowMove);
-    window.removeEventListener("pointerup", onUp);
-  }
-  function onWheel(e: WheelEvent): void {
-    e.preventDefault();
-    const { fx, fyTop, aspect } = frac(canvas, e);
-    const v = nav.getView();
-    nav.setView(zoomAboutCursor(v, fx, fyTop, aspect, v.zoom * Math.exp(-e.deltaY * ZOOM_STEP)));
-  }
-  function onCtx(e: MouseEvent): void {
-    e.preventDefault(); // so right-drag panning doesn't pop the context menu
-  }
-  canvas.addEventListener("pointermove", onHoverMove);
-  canvas.addEventListener("pointerleave", onLeave);
-  canvas.addEventListener("pointerdown", onDown);
-  canvas.addEventListener("wheel", onWheel, { passive: false });
-  canvas.addEventListener("contextmenu", onCtx);
-  return {
-    detach(): void {
-      canvas.removeEventListener("pointermove", onHoverMove);
-      canvas.removeEventListener("pointerleave", onLeave);
-      canvas.removeEventListener("pointerdown", onDown);
-      canvas.removeEventListener("wheel", onWheel);
-      canvas.removeEventListener("contextmenu", onCtx);
-      onUp();
     },
-  };
+    move: (world, e, movedPx) => {
+      if (kind === "draw") {
+        nav.onDrawMove(world);
+      } else {
+        if (movedPx > CLICK_TOL_PX) kind = "pan";
+        if (kind === "pan" && grab) {
+          const { fx, fyTop, aspect } = fracOf(canvas, e);
+          nav.setView(panTo(nav.getView(), grab, fx, fyTop, aspect));
+        }
+      }
+    },
+    end: (world, e, movedPx) => {
+      if (kind === "draw") {
+        nav.onDrawEnd();
+      } else if (kind === "tap" && movedPx <= CLICK_TOL_PX) {
+        if (nav.getMode() === "isolate") nav.onIsolate(world);
+        else nav.onPlace(world);
+        if (e.pointerType !== "mouse") nav.onHover(world, { x: e.clientX, y: e.clientY }); // tap-to-reveal
+      }
+      kind = "tap";
+      grab = null;
+    },
+    cancel: () => {
+      if (kind === "draw") nav.onDrawEnd();
+      kind = "tap";
+      grab = null;
+    },
+  });
 }
