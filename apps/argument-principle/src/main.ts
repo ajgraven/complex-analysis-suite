@@ -578,6 +578,25 @@ function main(): void {
   liveEl.setAttribute("role", "status");
   liveEl.setAttribute("aria-live", "polite");
 
+  // §12 (discoverability) — a first-run coach: a small once-only card that orients a newcomer, then gets out
+  // of the way. localStorage-gated (never nags a returning visitor); "?" re-opens the full help any time.
+  const coach = document.createElement("div");
+  coach.className = "coach-overlay";
+  coach.hidden = true;
+  coach.innerHTML = `
+    <div class="coach-card" role="dialog" aria-label="Getting started">
+      <h2>Winding = zeros − poles</h2>
+      <p>The <b>left</b> plane is the domain (a loop <b>γ</b>); the <b>right</b> is its image <b>f(γ)</b>.
+      How many times f(γ) winds around the origin equals the zeros minus poles of f inside γ — read it live
+      in the bar with the ✓ / ⚠ badge.</p>
+      <ul>
+        <li>Pick a tool — <b>Move γ</b>, <b>Draw</b>, or <b>Isolate</b> — then act on the left plane. Drag to pan, pinch or scroll to zoom.</li>
+        <li>Hover (or tap) a point to light up the <b>same point</b> on both planes and the strip.</li>
+        <li><b>Simple / Explore</b> (top bar) sets how much detail shows; <b>?</b> opens the full guide.</li>
+      </ul>
+      <div class="coach-actions"><button class="coach-go" type="button">Got it</button></div>
+    </div>`;
+
   // Responsive workspace (§12 / decision 3): on wide screens the rail is a persistent side column so the
   // equality, legend, and evidence stay visible beside the planes; on narrow screens everything linearizes
   // and the equality bar sticks to the top (CSS `display:contents` + `order` do the reflow — see main.css).
@@ -591,7 +610,7 @@ function main(): void {
   workspace.className = "workspace";
   workspace.append(mainCol, rail);
 
-  app.append(topbar, importNote, workspace, help, tooltipEl, toastEl, liveEl);
+  app.append(topbar, importNote, workspace, help, coach, tooltipEl, toastEl, liveEl);
   if (imported) {
     importNote.hidden = false;
     importNote.textContent = `Imported f(z) from ${imported.source}${imported.note ? ` — ${imported.note}` : ""}.`;
@@ -1320,6 +1339,19 @@ function main(): void {
   help.addEventListener("click", (e) => {
     if (e.target === help) help.hidden = true; // click the backdrop to dismiss
   });
+  // First-run coach: dismiss on "Got it" / backdrop, and remember so it never shows again.
+  const dismissCoach = (): void => {
+    coach.hidden = true;
+    try {
+      localStorage.setItem("ap.coached", "1");
+    } catch {
+      /* storage unavailable */
+    }
+  };
+  coach.querySelector(".coach-go")?.addEventListener("click", dismissCoach);
+  coach.addEventListener("click", (e) => {
+    if (e.target === coach) dismissCoach();
+  });
   presetSel.addEventListener("change", () => {
     const p = FUNCTION_PRESETS.find((q) => q.id === presetSel.value);
     if (p) {
@@ -1469,6 +1501,12 @@ function main(): void {
   render();
   if (!fromLink) fitImage();
   history.replaceState(null, "", encodeArgPrincipleState(state));
+  // First-run coach: show once, unless a returning visitor already dismissed it.
+  try {
+    if (localStorage.getItem("ap.coached") !== "1") coach.hidden = false;
+  } catch {
+    /* storage unavailable — skip the coach rather than nag every load */
+  }
 }
 
 main();
