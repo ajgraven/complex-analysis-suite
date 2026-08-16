@@ -65,7 +65,7 @@ export interface RenderState {
   readonly diskShow?: string;
   /** Disk-image source: "expression" (φ from the editor, default) | "region" (numerical 𝔻→Ω map). */
   readonly diskSource?: string;
-  /** Disk-image region source: the target domain Ω id (smooth presets only). Default "ellipse". */
+  /** The region Ω id, shared by both directions of a region's map (smooth or polygon). Default: first preset. */
   readonly region?: string;
   /** Disk-image layout: "split" (disk + image, default) | "image" (image only, presentation). */
   readonly diskLayout?: string;

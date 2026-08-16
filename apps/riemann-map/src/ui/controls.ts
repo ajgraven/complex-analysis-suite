@@ -1,47 +1,70 @@
-// controls.ts — the sidebar: live φ editor (F5), preset gallery (A19), KaTeX preview (I1), the render
-// mode picker + disk-image controls, and the under-cursor readout (F4). DOM-only (the app's node suite
-// stays DOM-free); the pure logic it drives (compileMap, presets, modes, derivativeAt) is unit-tested.
+// controls.ts — the sidebar. DOM-only (the app's node suite stays DOM-free); the pure logic it drives
+// (compileMap, presets, modes, derivativeAt) is unit-tested.
+//
+// Information architecture (redesign): a single plain-language "Visualize" chooser replaces the old
+// Mode + Source pair. It answers *what are you looking at* — a formula φ(z), a region's Riemann map, or
+// an imported map — and each choice reveals only its own controls. A region's map carries a Direction
+// toggle (𝔻→Ω / Ω→𝔻) and a grouped Shape picker (Smooth regions · Polygons — Schwarz–Christoffel), so
+// the SC engine is discoverable by browsing. A Method card names the engine that ran and its honest
+// accuracy (= exact / ≈ numerical). Notation (𝔻, Ω, φ) rides alongside the plain words, never instead.
 import katex from "katex";
 import "katex/dist/katex.min.css";
 import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
-import { RENDER_MODES } from "../render/modes.js";
 import { DOMAIN_PRESETS } from "../domains.js";
+
+/** A prominent, glanceable summary of the conformal engine that produced the current map. */
+export interface MethodCard {
+  /** Engine name, plain: "Schwarz–Christoffel", "Lightning solver", … */
+  readonly name: string;
+  /** Short kind tag shown as a pill: "exact map", "numerical", "from a link". */
+  readonly tag: string;
+  /** Visual accent for the pill/border. */
+  readonly tagKind: "sc" | "light";
+  /** One-sentence plain-language description of what the engine does. */
+  readonly desc: string;
+  /** Key readouts (prevertices, modulus, residual, …), honestly = / ≈ tagged by the caller. */
+  readonly stats: readonly (readonly [string, string])[];
+  /** Optional honesty footnote: [exact-part, approximate-part]. */
+  readonly honesty?: readonly [string, string];
+}
 
 export interface Controls {
   readonly root: HTMLElement;
   setExpr(expr: string): void;
   setLatex(latex: string): void;
   showError(msg: string | null): void;
-  setMode(id: string): void;
-  setDomain(id: string): void;
-  setRegionDomain(id: string): void;
-  /** Disk-image mode: source (expression | region), side of ∂𝔻, grid style/subset, densities. */
-  setDiskSource(id: string): void;
+  /** The primary chooser: "formula" | "region" | "import". */
+  setVisualize(id: string): void;
+  /** A region's map direction: "d2r" (𝔻→Ω) | "r2d" (Ω→𝔻). */
+  setDirection(id: string): void;
+  /** The unified shape/region preset id (drives both directions). */
+  setShape(id: string): void;
   setDiskSide(id: string): void;
   setDiskStyle(id: string): void;
   setDiskShow(id: string): void;
   setDiskRadial(n: number): void;
   setDiskAngular(n: number): void;
   setDiskLayout(id: string): void;
-  /** Show/hide mode-irrelevant controls (contextual disclosure, A1). `region`/`exterior`/`import` = disk-image sources. */
-  setControlVisibility(v: { domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void;
+  /** Contextual disclosure: reveal only the controls the current view uses (A1). */
+  setContext(ctx: { vis: string; dir: string }): void;
+  /** The Method card (engine + accuracy), or null to hide it. */
+  setMethod(card: MethodCard | null): void;
   /** Mirror the live viewport into the precise-nav fields (skips a field the user is editing). */
   setViewportFields(re: number, im: number, zoom: number): void;
-  /** Populate the analysis group (rows) under `title`, or hide it entirely when `rows` is null. */
+  /** Populate the collapsible details drawer, or hide it when `rows` is null. */
   setAnalysis(rows: readonly (readonly [string, string])[] | null, title?: string): void;
   setHover(rows: readonly (readonly [string, string])[] | null): void;
   onExpr(cb: (expr: string) => void): void;
-  onMode(cb: (id: string) => void): void;
-  onDomain(cb: (id: string) => void): void;
-  onRegionDomain(cb: (id: string) => void): void;
-  onDiskSource(cb: (id: string) => void): void;
+  onVisualize(cb: (id: string) => void): void;
+  onDirection(cb: (id: string) => void): void;
+  onShape(cb: (id: string) => void): void;
   onDiskSide(cb: (id: string) => void): void;
   onDiskStyle(cb: (id: string) => void): void;
   onDiskShow(cb: (id: string) => void): void;
   onDiskRadial(cb: (n: number) => void): void;
   onDiskAngular(cb: (n: number) => void): void;
   onDiskLayout(cb: (id: string) => void): void;
-  /** Re-fit the disk pane's frame to the current disk (the "Fit" button, roadmap 1.5). */
+  /** Re-fit the disk pane's frame to the current disk (the "Fit" button). */
   onFit(cb: () => void): void;
   onSavePng(cb: () => void): void;
   onResetView(cb: () => void): void;
@@ -50,6 +73,23 @@ export interface Controls {
   /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
   onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void;
 }
+
+interface SegItem { id: string; glyph?: string; cap: string; sym?: string }
+
+const VISUALIZE: readonly SegItem[] = [
+  { id: "formula", glyph: "ƒ", cap: "A formula", sym: "φ(z)" },
+  { id: "region", glyph: "◐→▱", cap: "A region's map", sym: "𝔻↔Ω" },
+  { id: "import", glyph: "↗", cap: "Imported", sym: "link" },
+];
+const DIRECTIONS: readonly SegItem[] = [
+  { id: "d2r", cap: "Disk → Region", sym: "𝔻→Ω" },
+  { id: "r2d", cap: "Region → Disk", sym: "Ω→𝔻" },
+];
+const VIS_EXPLAIN: Record<string, string> = {
+  formula: "Type a conformal map φ(z) and watch it bend the unit disk's grid. Values are exact (=), in closed form.",
+  region: "The conformal map between the unit disk 𝔻 and a shape Ω. Smooth shapes use the lightning solver; polygons use the exact Schwarz–Christoffel map.",
+  import: "Load a map shared from Complex Dynamics — a filled Julia set's exterior map — via a “Riemann Map ↗” link.",
+};
 
 const DISK_SIDES = [
   { id: "interior", name: "Interior  𝔻  (|z| ≤ 1)" },
@@ -67,36 +107,77 @@ const DISK_SHOWS = [
   { id: "rays", name: "Rays only" },
 ] as const;
 
-const DISK_SOURCES = [
-  { id: "expression", name: "Expression  φ(z)" },
-  { id: "region", name: "Region  𝔻 → Ω  (numeric)" },
-  { id: "import", name: "Imported map  (from a link)" },
-] as const;
-
 const DISK_LAYOUTS = [
   { id: "split", name: "Two-pane (disk + image)" },
   { id: "image", name: "Image only" },
 ] as const;
 
-/** Glossary of the notation the studio surfaces (catalog item I2) — a self-documenting reference. */
+/** Glossary of the notation the studio surfaces (I2) — a self-documenting reference. */
 const GLOSSARY: readonly (readonly [string, string])[] = [
-  ["= vs ≈", "“=” is an exact/closed-form value; “≈” is a numerical estimate (a limit or a truncated series)."],
-  ["Conformal / Riemann map φ", "An angle-preserving map. The Riemann mapping theorem uniformizes any simply-connected domain (≠ ℂ) onto the unit disk."],
-  ["Domain coloring", "A phase portrait: hue = arg φ(z), shaded bands = |φ(z)|. Reads a complex function as an image."],
-  ["Amplitwist |φ′|, arg φ′", "The local scale factor and rotation the map applies at a point (Needham’s term for the derivative’s action)."],
-  ["Filled Julia set K", "The points whose orbit under f stays bounded. Its boundary ∂K is the Julia set — the source of an imported exterior map."],
-  ["Capacity, Robin γ", "cap(K) = e^(−γ), the conformal size of K. It equals |γ₁|, the leading coefficient of ψ; = 1 exactly for a monic map."],
-  ["Exterior map ψ, bₖ", "The conformal map ext(𝔻) → ext(K), ψ(w) = γ₁·w + Σ bₖ w^(−k). Imported from Complex Dynamics as a disk-image source."],
+  ["Conformal / Riemann map φ", "An angle-preserving map. The Riemann mapping theorem sends any simply-connected region (≠ ℂ) onto the unit disk 𝔻."],
+  ["Unit disk 𝔻 · region Ω", "𝔻 = {|z| ≤ 1}, the canonical domain. Ω is the target shape (an ellipse, a square, …) the disk is mapped to and from."],
+  ["Schwarz–Christoffel", "The exact formula for the conformal map onto a polygon, built from its corner angles — with meaningful prevertices and accessory constants."],
+  ["Lightning solver", "A fast least-squares conformal fit (Gopal–Trefethen) for smooth boundaries; clusters poles at any corners."],
+  ["= vs ≈", "“=” is an exact / closed-form value; “≈” is a numerical estimate (a fit or a truncated series)."],
+  ["Amplitwist |φ′|, arg φ′", "The local scale factor and rotation the map applies at a point (Needham's term for the derivative's action)."],
+  ["Capacity, Robin γ", "cap(K) = e^(−γ), the conformal size of a set K; the leading coefficient of an imported exterior map."],
 ];
 
 const CUSTOM = "__custom__";
 
-function labeledSelect(labelText: string, options: readonly { id: string; name: string }[]): { field: HTMLLabelElement; select: HTMLSelectElement } {
+/** A segmented (radio-style) control. Returns the element + a `set(id)` that reflects the pressed state. */
+function segmented(items: readonly SegItem[], onPick: (id: string) => void, small = false): { el: HTMLDivElement; set: (id: string) => void } {
+  const el = document.createElement("div");
+  el.className = small ? "seg small" : "seg";
+  el.setAttribute("role", "group");
+  const btns = new Map<string, HTMLButtonElement>();
+  const set = (id: string): void => btns.forEach((b, k) => b.setAttribute("aria-pressed", String(k === id)));
+  for (const it of items) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-pressed", "false");
+    if (small) {
+      const cap = document.createElement("span");
+      cap.className = "cap";
+      cap.textContent = it.cap;
+      b.append(cap);
+      if (it.sym) {
+        const s = document.createElement("span");
+        s.className = "sym";
+        s.textContent = it.sym;
+        b.append(s);
+      }
+    } else {
+      const g = document.createElement("span");
+      g.className = "glyph";
+      g.textContent = it.glyph ?? "";
+      const cap = document.createElement("span");
+      cap.className = "cap";
+      cap.textContent = it.cap;
+      b.append(g, cap);
+    }
+    b.addEventListener("click", () => {
+      set(it.id);
+      onPick(it.id);
+    });
+    btns.set(it.id, b);
+    el.append(b);
+  }
+  return { el, set };
+}
+
+function labeledSelect(labelText: string, note: string, options: readonly { id: string; name: string }[]): { field: HTMLLabelElement; select: HTMLSelectElement } {
   const field = document.createElement("label");
   field.className = "field";
   const span = document.createElement("span");
   span.className = "field-label";
-  span.textContent = labelText;
+  span.append(document.createTextNode(labelText));
+  if (note) {
+    const s = document.createElement("span");
+    s.className = "note-sym";
+    s.textContent = note;
+    span.append(s);
+  }
   const select = document.createElement("select");
   for (const o of options) {
     const opt = document.createElement("option");
@@ -108,7 +189,6 @@ function labeledSelect(labelText: string, options: readonly { id: string; name: 
   return { field, select };
 }
 
-/** A compact label-over-input field (for the precise-nav numbers). */
 function labeledInput(labelText: string): { field: HTMLLabelElement; input: HTMLInputElement } {
   const field = document.createElement("label");
   field.className = "field";
@@ -124,13 +204,7 @@ function labeledInput(labelText: string): { field: HTMLLabelElement; input: HTML
   return { field, input };
 }
 
-/** A label-over-slider field (disk grid density). `out` shows the live value. */
-function labeledRange(
-  labelText: string,
-  min: number,
-  max: number,
-  value: number,
-): { field: HTMLLabelElement; input: HTMLInputElement; out: HTMLSpanElement } {
+function labeledRange(labelText: string, min: number, max: number, value: number): { field: HTMLLabelElement; input: HTMLInputElement; out: HTMLSpanElement } {
   const field = document.createElement("label");
   field.className = "field";
   const span = document.createElement("span");
@@ -149,7 +223,7 @@ function labeledRange(
   return { field, input, out };
 }
 
-/** A collapsible sidebar group (CD's `.control-group` disclosure). Returns the <details> + its summary. */
+/** A collapsible sidebar group (CD's `.control-group` disclosure). */
 function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElement; summary: HTMLElement } {
   const el = document.createElement("details");
   el.className = "control-group";
@@ -162,10 +236,9 @@ function controlGroup(titleText: string, open: boolean): { el: HTMLDetailsElemen
 
 export function createControls(initialExpr: string): Controls {
   const exprListeners: ((expr: string) => void)[] = [];
-  const modeListeners: ((id: string) => void)[] = [];
-  const domainListeners: ((id: string) => void)[] = [];
-  const regionDomainListeners: ((id: string) => void)[] = [];
-  const diskSourceListeners: ((id: string) => void)[] = [];
+  const visListeners: ((id: string) => void)[] = [];
+  const dirListeners: ((id: string) => void)[] = [];
+  const shapeListeners: ((id: string) => void)[] = [];
   const diskSideListeners: ((id: string) => void)[] = [];
   const diskStyleListeners: ((id: string) => void)[] = [];
   const diskShowListeners: ((id: string) => void)[] = [];
@@ -181,11 +254,17 @@ export function createControls(initialExpr: string): Controls {
   const root = document.createElement("aside");
   root.className = "sidebar";
 
-  // --- Map section ----------------------------------------------------------
-  const mapSection = document.createElement("section");
-  const mapTitle = document.createElement("h2");
-  mapTitle.textContent = "Map φ(z)";
+  // --- primary chooser: Visualize -------------------------------------------
+  const visWrap = document.createElement("section");
+  const visLabel = document.createElement("h2");
+  visLabel.textContent = "Visualize";
+  const vis = segmented(VISUALIZE, (id) => visListeners.forEach((cb) => cb(id)));
+  const visExplain = document.createElement("p");
+  visExplain.className = "explainer";
+  visWrap.append(visLabel, vis.el, visExplain);
 
+  // --- formula context: the φ(z) editor -------------------------------------
+  const mapSection = document.createElement("section");
   const preset = document.createElement("select");
   preset.className = "preset";
   for (const p of MAP_PRESETS) {
@@ -198,48 +277,97 @@ export function createControls(initialExpr: string): Controls {
   customOpt.value = CUSTOM;
   customOpt.textContent = "Custom…";
   preset.append(customOpt);
-
+  const exprLabel = document.createElement("span");
+  exprLabel.className = "field-label";
+  exprLabel.append(document.createTextNode("Map "));
+  const exprSym = document.createElement("span");
+  exprSym.className = "note-sym";
+  exprSym.textContent = "φ(z)";
+  exprLabel.append(exprSym);
   const input = document.createElement("input");
   input.type = "text";
   input.className = "expr";
   input.spellcheck = false;
   input.autocomplete = "off";
   input.setAttribute("aria-label", "map expression");
-
   const error = document.createElement("div");
   error.className = "error";
   const preview = document.createElement("div");
   preview.className = "preview";
-  mapSection.append(mapTitle, preset, input, error, preview);
+  mapSection.append(preset, exprLabel, input, error, preview);
 
-  // --- View group (collapsible; primary controls) ---------------------------
-  // Order leads with the disk-image knobs (the default view): Mode, then Disk side + Density. The
-  // Colormap / Grid / Domain fields below are contextual — shown only for the modes that use them.
-  const viewGroup = controlGroup("View", true);
-  const mode = labeledSelect("Mode", RENDER_MODES);
-  const diskSource = labeledSelect("Source", DISK_SOURCES);
-  const diskSide = labeledSelect("Disk", DISK_SIDES);
-  const diskStyle = labeledSelect("Grid style", DISK_STYLES);
-  const diskShow = labeledSelect("Show", DISK_SHOWS);
-  const radial = labeledRange("Radial rings", 4, 48, 18);
-  const angular = labeledRange("Angular sectors", 6, 96, 36);
-  const layout = labeledSelect("Layout", DISK_LAYOUTS);
-  const domain = labeledSelect("Domain (numeric map)", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  // The region SOURCE offers every domain: smooth Ω uses the lightning forward map g: 𝔻 → Ω; polygon Ω
-  // uses the Schwarz–Christoffel engine (@cas/conformal), stable at the corners (roadmap 3.1).
-  const regionDomain = labeledSelect("Region Ω", DOMAIN_PRESETS.map((d) => ({ id: d.id, name: d.name })));
-  // "Import map…" action for the imported-map source (B2): paste an interchange "#s=" link (a filled
-  // Julia set's exterior Riemann map, handed off from Complex Dynamics). Shown only for that source.
-  const importField = document.createElement("div");
-  importField.className = "field";
+  // --- region context: shape + direction ------------------------------------
+  const ctxRegion = document.createElement("section");
+  const smooth = DOMAIN_PRESETS.filter((d) => !d.corners);
+  const polygons = DOMAIN_PRESETS.filter((d) => d.corners);
+  const shapeField = document.createElement("label");
+  shapeField.className = "field";
+  const shapeLbl = document.createElement("span");
+  shapeLbl.className = "field-label";
+  shapeLbl.append(document.createTextNode("Shape "));
+  const shapeSym = document.createElement("span");
+  shapeSym.className = "note-sym";
+  shapeSym.textContent = "region Ω";
+  shapeLbl.append(shapeSym);
+  const shapeSel = document.createElement("select");
+  const smoothGroup = document.createElement("optgroup");
+  smoothGroup.label = "Smooth regions — Lightning";
+  for (const d of smooth) {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = d.name;
+    smoothGroup.append(o);
+  }
+  const polyGroup = document.createElement("optgroup");
+  polyGroup.label = "Polygons — Schwarz–Christoffel";
+  for (const d of polygons) {
+    const o = document.createElement("option");
+    o.value = d.id;
+    o.textContent = d.name;
+    polyGroup.append(o);
+  }
+  shapeSel.append(smoothGroup, polyGroup);
+  shapeField.append(shapeLbl, shapeSel);
+  const dirField = document.createElement("div");
+  dirField.className = "field";
+  const dirLbl = document.createElement("span");
+  dirLbl.className = "field-label";
+  dirLbl.textContent = "Direction";
+  const dir = segmented(DIRECTIONS, (id) => dirListeners.forEach((cb) => cb(id)), true);
+  dirField.append(dirLbl, dir.el);
+  ctxRegion.append(shapeField, dirField);
+
+  // --- import context -------------------------------------------------------
+  const ctxImport = document.createElement("section");
+  const importRow = document.createElement("div");
+  importRow.className = "buttons";
   const importBtn = document.createElement("button");
   importBtn.type = "button";
+  importBtn.className = "primary";
   importBtn.textContent = "Import map…";
   importBtn.title = "Paste a Complex Dynamics “Riemann Map ↗” link (#s=…) to render its exterior map";
-  importField.append(importBtn);
-  viewGroup.el.append(mode.field, diskSource.field, importField, diskSide.field, diskStyle.field, diskShow.field, radial.field, angular.field, layout.field, domain.field, regionDomain.field);
+  importRow.append(importBtn);
+  const importNote = document.createElement("p");
+  importNote.className = "explainer";
+  importNote.textContent = "Paste a “Riemann Map ↗” link from Complex Dynamics to render a filled Julia set's exterior map.";
+  ctxImport.append(importRow, importNote);
 
-  // --- Position group (precise-nav fields, A5; collapsed by default) ---------
+  // --- the Method card (engine + accuracy) ----------------------------------
+  const methodEl = document.createElement("div");
+  methodEl.className = "method";
+  methodEl.hidden = true;
+
+  // --- display controls -----------------------------------------------------
+  const displayGroup = controlGroup("Display", true);
+  const diskStyle = labeledSelect("Grid style", "", DISK_STYLES);
+  const diskShow = labeledSelect("Show", "", DISK_SHOWS);
+  const radial = labeledRange("Radial rings", 4, 48, 18);
+  const angular = labeledRange("Angular sectors", 6, 96, 36);
+  const diskSide = labeledSelect("Disk", "", DISK_SIDES);
+  const layout = labeledSelect("Layout", "", DISK_LAYOUTS);
+  displayGroup.el.append(diskStyle.field, diskShow.field, radial.field, angular.field, diskSide.field, layout.field);
+
+  // --- position (precise-nav) -----------------------------------------------
   const navGroup = controlGroup("Position", false);
   const navGrid = document.createElement("div");
   navGrid.className = "nav-grid";
@@ -259,7 +387,7 @@ export function createControls(initialExpr: string): Controls {
   navButtons.append(navApply, fitBtn);
   navGroup.el.append(navGrid, navButtons);
 
-  // --- Figure / export group (collapsed by default) -------------------------
+  // --- figure / export ------------------------------------------------------
   const figGroup = controlGroup("Figure", false);
   const buttons = document.createElement("div");
   buttons.className = "buttons";
@@ -275,23 +403,23 @@ export function createControls(initialExpr: string): Controls {
   figNote.textContent = "PNG at 2× with the view embedded (reopen to restore). Readouts: = exact · ≈ numerical.";
   figGroup.el.append(buttons, figNote);
 
-  // --- Analysis group (contextual: title + visibility track the mode, A1) ----
-  const analysisGroup = controlGroup("Analysis", true);
-  analysisGroup.el.style.display = "none"; // shown only when the mode produces analysis
+  // --- details drawer (supplementary readouts) ------------------------------
+  const analysisGroup = controlGroup("Details", false);
+  analysisGroup.el.style.display = "none";
   const analysisDl = document.createElement("dl");
   analysisDl.className = "hover analysis-dl";
   analysisGroup.el.append(analysisDl);
 
-  // --- Under-cursor group (collapsible; live readout) -----------------------
+  // --- under-cursor ---------------------------------------------------------
   const hoverGroup = controlGroup("Under cursor", true);
   const hover = document.createElement("dl");
   hover.className = "hover";
   const hoverEmpty = document.createElement("p");
   hoverEmpty.className = "muted";
-  hoverEmpty.textContent = "Hover the plane to read φ(z), φ′(z), and the local scale/rotation.";
+  hoverEmpty.textContent = "Hover the plane to read the map, its derivative, and the local scale/rotation.";
   hoverGroup.el.append(hover, hoverEmpty);
 
-  // --- Glossary group (I2; collapsed by default) ----------------------------
+  // --- glossary -------------------------------------------------------------
   const glossaryGroup = controlGroup("Glossary & notation", false);
   const glossaryDl = document.createElement("dl");
   glossaryDl.className = "glossary-dl";
@@ -304,9 +432,10 @@ export function createControls(initialExpr: string): Controls {
   }
   glossaryGroup.el.append(glossaryDl);
 
-  root.append(mapSection, viewGroup.el, navGroup.el, figGroup.el, analysisGroup.el, hoverGroup.el, glossaryGroup.el);
+  root.append(visWrap, mapSection, ctxRegion, ctxImport, methodEl, displayGroup.el, navGroup.el, figGroup.el, analysisGroup.el, hoverGroup.el, glossaryGroup.el);
 
   // --- behaviour ------------------------------------------------------------
+  let ctxVis = "formula";
   input.value = initialExpr;
   syncPreset(initialExpr);
 
@@ -323,14 +452,11 @@ export function createControls(initialExpr: string): Controls {
     input.value = p.expr;
     exprListeners.forEach((cb) => cb(p.expr));
   });
-  mode.select.addEventListener("change", () => modeListeners.forEach((cb) => cb(mode.select.value)));
-  domain.select.addEventListener("change", () => domainListeners.forEach((cb) => cb(domain.select.value)));
-  regionDomain.select.addEventListener("change", () => regionDomainListeners.forEach((cb) => cb(regionDomain.select.value)));
-  diskSource.select.addEventListener("change", () => diskSourceListeners.forEach((cb) => cb(diskSource.select.value)));
+  shapeSel.addEventListener("change", () => shapeListeners.forEach((cb) => cb(shapeSel.value)));
   diskSide.select.addEventListener("change", () => diskSideListeners.forEach((cb) => cb(diskSide.select.value)));
-  // "Show" (circles/rays subset) only bites in the line-art style; hide it for filled cells.
   const syncShowVisibility = (): void => {
-    diskShow.field.style.display = diskStyle.select.value === "lines" ? "" : "none";
+    const isDisk = ctxVis !== "region-r2d";
+    diskShow.field.style.display = isDisk && diskStyle.select.value === "lines" ? "" : "none";
   };
   diskStyle.select.addEventListener("change", () => {
     syncShowVisibility();
@@ -374,6 +500,58 @@ export function createControls(initialExpr: string): Controls {
     preset.value = presetIdForExpr(expr) ?? CUSTOM;
   }
 
+  function renderMethod(card: MethodCard | null): void {
+    methodEl.replaceChildren();
+    if (!card) {
+      methodEl.hidden = true;
+      return;
+    }
+    methodEl.hidden = false;
+    methodEl.classList.toggle("light", card.tagKind === "light");
+    const top = document.createElement("div");
+    top.className = "m-top";
+    const name = document.createElement("span");
+    name.className = "m-name";
+    name.textContent = card.name;
+    const tag = document.createElement("span");
+    tag.className = "m-tag " + card.tagKind;
+    tag.textContent = card.tag;
+    top.append(name, tag);
+    const desc = document.createElement("p");
+    desc.className = "m-desc";
+    desc.textContent = card.desc;
+    methodEl.append(top, desc);
+    if (card.stats.length) {
+      const stats = document.createElement("div");
+      stats.className = "m-stats";
+      for (const [k, v] of card.stats) {
+        const cell = document.createElement("div");
+        const kk = document.createElement("span");
+        kk.className = "k";
+        kk.textContent = k;
+        const vv = document.createElement("span");
+        vv.className = "v mono";
+        vv.textContent = v;
+        cell.append(kk, vv);
+        stats.append(cell);
+      }
+      methodEl.append(stats);
+    }
+    if (card.honesty) {
+      const h = document.createElement("div");
+      h.className = "honesty";
+      const a = document.createElement("span");
+      const ex = document.createElement("span");
+      ex.className = "ex";
+      ex.textContent = "= ";
+      a.append(ex, document.createTextNode(card.honesty[0].replace(/^=\s*/, "")));
+      const b = document.createElement("span");
+      b.textContent = card.honesty[1];
+      h.append(a, b);
+      methodEl.append(h);
+    }
+  }
+
   return {
     root,
     setExpr(expr: string): void {
@@ -391,17 +569,14 @@ export function createControls(initialExpr: string): Controls {
       error.textContent = msg ?? "";
       error.classList.toggle("visible", msg !== null);
     },
-    setMode(id: string): void {
-      mode.select.value = id;
+    setVisualize(id: string): void {
+      vis.set(id);
     },
-    setDomain(id: string): void {
-      domain.select.value = id;
+    setDirection(id: string): void {
+      dir.set(id);
     },
-    setRegionDomain(id: string): void {
-      regionDomain.select.value = id;
-    },
-    setDiskSource(id: string): void {
-      diskSource.select.value = id;
+    setShape(id: string): void {
+      shapeSel.value = id;
     },
     setDiskSide(id: string): void {
       diskSide.select.value = id;
@@ -424,28 +599,30 @@ export function createControls(initialExpr: string): Controls {
     setDiskLayout(id: string): void {
       layout.select.value = id;
     },
-    setControlVisibility(v: { domain: boolean; disk: boolean; region: boolean; exterior: boolean; import: boolean }): void {
-      domain.field.style.display = v.domain ? "" : "none"; // numeric domain→disk mode
-      regionDomain.field.style.display = v.region ? "" : "none"; // disk-image region source (smooth only)
-      diskSource.field.style.display = v.disk ? "" : "none";
-      importField.style.display = v.import ? "" : "none"; // "Import map…" — imported-map source only
-      for (const f of [diskStyle.field, radial.field, angular.field, layout.field]) f.style.display = v.disk ? "" : "none";
-      // interior/exterior is expression-only (region is 𝔻 → Ω interior; an imported map is ext(𝔻) → ext(·))
-      diskSide.field.style.display = v.disk && !v.region && !v.exterior ? "" : "none";
-      // the "Show" subset field is disk-only AND line-style-only
-      diskShow.field.style.display = v.disk && diskStyle.select.value === "lines" ? "" : "none";
+    setContext(ctx: { vis: string; dir: string }): void {
+      const isDisk = !(ctx.vis === "region" && ctx.dir === "r2d");
+      ctxVis = ctx.vis === "region" && ctx.dir === "r2d" ? "region-r2d" : ctx.vis;
+      mapSection.style.display = ctx.vis === "formula" ? "" : "none";
+      ctxRegion.style.display = ctx.vis === "region" ? "" : "none";
+      ctxImport.style.display = ctx.vis === "import" ? "" : "none";
+      displayGroup.el.style.display = isDisk ? "" : "none";
+      diskSide.field.style.display = ctx.vis === "formula" ? "" : "none";
+      visExplain.textContent = VIS_EXPLAIN[ctx.vis] ?? "";
+      syncShowVisibility();
+    },
+    setMethod(card: MethodCard | null): void {
+      renderMethod(card);
     },
     setViewportFields(re: number, im: number, zoom: number): void {
-      const active = document.activeElement; // don't clobber a field the user is typing into
+      const active = document.activeElement;
       const fmtN = (n: number): string => Number(n.toPrecision(8)).toString();
       if (active !== navRe.input) navRe.input.value = fmtN(re);
       if (active !== navIm.input) navIm.input.value = fmtN(im);
       if (active !== navZoom.input) navZoom.input.value = fmtN(zoom);
     },
-    setAnalysis(rows: readonly (readonly [string, string])[] | null, title = "Analysis"): void {
+    setAnalysis(rows: readonly (readonly [string, string])[] | null, title = "Details"): void {
       analysisDl.replaceChildren();
       const hasRows = !!(rows && rows.length);
-      // Hide the whole group when the mode produces no analysis; else title it contextually (A1).
       analysisGroup.el.style.display = hasRows ? "" : "none";
       if (!hasRows) return;
       analysisGroup.summary.textContent = title;
@@ -469,53 +646,20 @@ export function createControls(initialExpr: string): Controls {
         hover.append(dt, dd);
       }
     },
-    onExpr(cb: (expr: string) => void): void {
-      exprListeners.push(cb);
-    },
-    onMode(cb: (id: string) => void): void {
-      modeListeners.push(cb);
-    },
-    onDomain(cb: (id: string) => void): void {
-      domainListeners.push(cb);
-    },
-    onRegionDomain(cb: (id: string) => void): void {
-      regionDomainListeners.push(cb);
-    },
-    onDiskSource(cb: (id: string) => void): void {
-      diskSourceListeners.push(cb);
-    },
-    onDiskSide(cb: (id: string) => void): void {
-      diskSideListeners.push(cb);
-    },
-    onDiskStyle(cb: (id: string) => void): void {
-      diskStyleListeners.push(cb);
-    },
-    onDiskShow(cb: (id: string) => void): void {
-      diskShowListeners.push(cb);
-    },
-    onDiskRadial(cb: (n: number) => void): void {
-      diskRadialListeners.push(cb);
-    },
-    onDiskAngular(cb: (n: number) => void): void {
-      diskAngularListeners.push(cb);
-    },
-    onDiskLayout(cb: (id: string) => void): void {
-      diskLayoutListeners.push(cb);
-    },
-    onFit(cb: () => void): void {
-      fitListeners.push(cb);
-    },
-    onSavePng(cb: () => void): void {
-      savePngListeners.push(cb);
-    },
-    onResetView(cb: () => void): void {
-      resetListeners.push(cb);
-    },
-    onImportMap(cb: (link: string) => void): void {
-      importMapListeners.push(cb);
-    },
-    onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void {
-      applyViewportListeners.push(cb);
-    },
+    onExpr(cb) { exprListeners.push(cb); },
+    onVisualize(cb) { visListeners.push(cb); },
+    onDirection(cb) { dirListeners.push(cb); },
+    onShape(cb) { shapeListeners.push(cb); },
+    onDiskSide(cb) { diskSideListeners.push(cb); },
+    onDiskStyle(cb) { diskStyleListeners.push(cb); },
+    onDiskShow(cb) { diskShowListeners.push(cb); },
+    onDiskRadial(cb) { diskRadialListeners.push(cb); },
+    onDiskAngular(cb) { diskAngularListeners.push(cb); },
+    onDiskLayout(cb) { diskLayoutListeners.push(cb); },
+    onFit(cb) { fitListeners.push(cb); },
+    onSavePng(cb) { savePngListeners.push(cb); },
+    onResetView(cb) { resetListeners.push(cb); },
+    onImportMap(cb) { importMapListeners.push(cb); },
+    onApplyViewport(cb) { applyViewportListeners.push(cb); },
   };
 }
