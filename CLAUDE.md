@@ -88,15 +88,16 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Five apps ride the nine shared `@cas/*` packages
+and the parabolic-Tricorn model coordinate. Six apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+`@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`) ride the nine shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
-`@cas/export` (PNG `tEXt` reproducibility metadata) by Complex-Dynamics, the plotter, and the Riemann-map
-studio. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed on `master` alongside
-the σ arc. (The launcher consumes no packages.)
+`@cas/export` (PNG `tEXt` reproducibility metadata) by Complex-Dynamics, the plotter, the Riemann-map
+studio, and Argument-Principle. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
+on `master` alongside the σ arc. (The launcher consumes no packages.)
 
 **`@cas/export` + CD → Riemann-Map hand-off + Riemann Map goes pure-2D (merged, #257):**
 The eighth package **`@cas/export`** collapses three byte-equivalent copies of the PNG `tEXt` metadata code
