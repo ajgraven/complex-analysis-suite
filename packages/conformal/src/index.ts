@@ -27,6 +27,8 @@ export { buildExteriorForwardMap, exteriorSideIntegrals, exteriorMapLaurentAtInf
 export type { ExteriorSCForwardMap, ExteriorSCForwardOptions, ExteriorMapLaurent } from "./exteriorSchwarzChristoffel.js";
 export { solveExteriorParameterProblem, fitExteriorSchwarzChristoffel } from "./exteriorScParameterProblem.js";
 export type { ExtSCSolveResult, ExtSCSolveOptions, ExteriorSCMap } from "./exteriorScParameterProblem.js";
+export { dampedGaussNewton } from "./gaussNewton.js";
+export type { GaussNewtonResult, GaussNewtonOptions } from "./gaussNewton.js";
 export { solveParameterProblem, interiorAngles } from "./scParameterProblem.js";
 export type { SCSolveResult, SCSolveOptions } from "./scParameterProblem.js";
 export { gaussJacobi, gaussLegendre } from "./gaussJacobi.js";

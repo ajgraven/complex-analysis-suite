@@ -72,7 +72,7 @@ export interface PolygonMapResult {
 
 /** Options for {@link polygonMap}. */
 export interface PolygonMapOptions {
-  /** Cap on the Laurent extraction order before adaptive trimming (default 400). */
+  /** Cap on the Laurent extraction order before adaptive trimming (default: geometry-aware, 200 convex / 400 reentrant). */
   readonly maxOrder?: number;
   /** Keep coefficients until the tail falls below this fraction of the peak magnitude (default 1e-4). */
   readonly tailTol?: number;
@@ -95,10 +95,13 @@ export interface PolygonMapOptions {
  * a bad fit.
  */
 export function polygonMap(vertices: readonly (readonly [number, number])[], opts?: PolygonMapOptions): PolygonMapResult {
-  const maxOrder = opts?.maxOrder ?? 400;
   const tailTol = opts?.tailTol ?? 1e-4;
   const minOrder = opts?.minOrder ?? 48;
   const fit = fitExteriorSchwarzChristoffel(vertices.map((v) => [v[0], v[1]] as [number, number]));
+  // Geometry-aware extraction order: convex corners give fast-decaying coefficients (≤ ~150 terms for the
+  // presets), reentrant corners decay slowly (need the full cap). Trimming below removes any excess.
+  const reentrant = fit.angles.some((a) => a > 1.0001);
+  const maxOrder = opts?.maxOrder ?? (reentrant ? 400 : 200);
   const { c, laurent } = exteriorMapLaurentAtInfinity(fit, maxOrder);
   // Trim the slowly-decaying tail: keep up to the last index above tailTol·max, but at least minOrder.
   const mag = laurent.map((z) => Math.hypot(z[0], z[1]));

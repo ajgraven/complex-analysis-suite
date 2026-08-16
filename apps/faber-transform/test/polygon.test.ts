@@ -128,6 +128,20 @@ describe("polygonMap — arbitrary polygon via the exterior SC solve (M1b)", () 
     }
   });
 
+  it("every shipped general-polygon preset's SC fit converges (no silently-degraded domain)", () => {
+    const shapes: [string, [number, number][]][] = [
+      ["rectangle", [[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]],
+      ["iso-triangle", [[0, 1.4], [-0.7, -0.7], [0.7, -0.7]]],
+      ["house", [[1, -0.6], [1, 0.5], [0, 1.2], [-1, 0.5], [-1, -0.6]]],
+      ["lshape", [[-0.8, -0.8], [0.8, -0.8], [0.8, 0], [0, 0], [0, 0.8], [-0.8, 0.8]]],
+    ];
+    for (const [name, poly] of shapes) {
+      const r = polygonMap(poly);
+      expect(r.converged, `${name} converged`).toBe(true);
+      expect(r.degraded, `${name} not degraded`).toBe(false);
+    }
+  });
+
   it("computes corner norms Λₖ = max{αₖ, 2−αₖ} and exposes them on polygon presets", () => {
     // Square: αₖ = 0.5 ⇒ Λ = 1.5 everywhere. Straight vertex αₖ=1 ⇒ Λ=1. Reentrant αₖ=1.5 ⇒ Λ=1.5.
     expect(cornerNorms([0.5, 0.5, 0.5, 0.5]).maxLambda).toBeCloseTo(1.5, 12);

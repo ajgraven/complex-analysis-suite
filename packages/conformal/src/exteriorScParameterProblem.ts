@@ -15,9 +15,9 @@
 // CCW-traversed u-circle corresponds to that same CW polygon traversal. So an input CCW polygon is
 // reversed (keeping v₀) to the exterior CW order, with the interior angles permuted to match, before the
 // solve. Pure; node-tested against the regular n-gon (skewed seed) and a chiral convex quadrilateral.
-import { lstsqHouseholder } from "@cas/core";
 import type { C } from "./vandermondeArnoldi.js";
 import { buildExteriorForwardMap, exteriorSideIntegrals, type ExteriorSCForwardMap } from "./exteriorSchwarzChristoffel.js";
+import { dampedGaussNewton } from "./gaussNewton.js";
 import { interiorAngles, logitsFromPrevertices, minGap, prevertsFromLogits, uniformPrevertices } from "./scParameterProblem.js";
 import type { QuadratureOptions } from "./scQuadrature.js";
 
@@ -80,6 +80,9 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
 
   // Residual F: the n−1 side-length ratios (relative to side 0) minus the polygon's, then the 2 real
   // components of the closure/no-log residue Σₖ (1−αₖ)/uₖ (division by uₖ on the unit circle = conjugate).
+  // Normalize the closure residual by Σ|1−αₖ| so it is dimensionless and O(1) like the side-length ratios,
+  // making the single ‖F‖∞ tolerance mean the same thing for both residual families.
+  const closureScale = angles.reduce((s, a) => s + Math.abs(1 - a), 0) || 1;
   const residual = (t: readonly number[]): number[] => {
     const pv = prevertsFromLogits(t);
     const S = exteriorSideIntegrals(pv, angles, q);
@@ -93,59 +96,31 @@ export function solveExteriorParameterProblem(vertices: readonly C[], opts?: Ext
       cr += w * pv[k][0]; // (1−αₖ)/uₖ = (1−αₖ)·conj(uₖ); Σ … = 0 ⇔ Σ (1−αₖ)uₖ = 0
       ci += w * pv[k][1];
     }
-    F.push(cr, ci);
+    F.push(cr / closureScale, ci / closureScale);
     return F;
   };
-  const norm = (F: readonly number[]) => F.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
 
   // Freeze ONE gap-logit (the softmax shift null); the disk-exterior rotation gauge is already fixed by
   // prevertsFromLogits (u₀ at angle 0). All other logits are free.
   const frozen = 0;
   const free: number[] = [];
   for (let i = 0; i < n; i++) if (i !== frozen) free.push(i);
-  const nFree = free.length;
   const logits = (y: readonly number[]): number[] => {
     const t = tSeed.slice();
     free.forEach((i, j) => (t[i] = y[j]));
     return t;
   };
 
-  let y = free.map((i) => tSeed[i]);
-  let F = residual(logits(y));
-  const h = 1e-6;
-  let iter = 0;
-  for (; iter < maxIter && norm(F) >= tol; iter++) {
-    const m = F.length;
-    const J: number[][] = Array.from({ length: m }, () => new Array<number>(nFree).fill(0));
-    for (let j = 0; j < nFree; j++) {
-      const yj = y.slice();
-      yj[j] += h;
-      const Fj = residual(logits(yj));
-      for (let i = 0; i < m; i++) J[i][j] = (Fj[i] - F[i]) / h;
-    }
-    const delta = lstsqHouseholder(J, F.map((v) => -v));
-    let lam = 1;
-    let yTry = y.map((v, j) => v + lam * delta[j]);
-    let FTry = residual(logits(yTry));
-    while (norm(FTry) >= norm(F) && lam > 1e-4) {
-      lam /= 2;
-      yTry = y.map((v, j) => v + lam * delta[j]);
-      FTry = residual(logits(yTry));
-    }
-    if (norm(FTry) >= norm(F)) break; // stalled — no further descent
-    y = yTry;
-    F = FTry;
-  }
-
-  const prevertices = prevertsFromLogits(logits(y));
-  const finalRes = norm(F);
+  const gn = dampedGaussNewton((y) => residual(logits(y)), free.map((i) => tSeed[i]), { tol, maxIter });
+  const prevertices = prevertsFromLogits(logits(gn.y));
+  const finalRes = gn.residual.reduce((m, v) => Math.max(m, Math.abs(v)), 0);
   return {
     prevertices,
     angles,
     orderedVertices: verts,
     converged: finalRes < tol,
     degraded: minGap(prevertices) < 1e-6,
-    iterations: iter,
+    iterations: gn.iterations,
     residual: finalRes,
   };
 }

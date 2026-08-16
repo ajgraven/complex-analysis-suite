@@ -122,12 +122,24 @@ Arbitrary bounded simple polygons now work end-to-end, in three landed increment
 
 Reentrant corners (αₖ>1) and a draggable editor are **M2**.
 
-### M2 — Reentrant polygons, diagnostics & UI (~3–4 days)
-Handle `αₖ > 1` (L-shape, star): **adaptive truncation** (grow `M` until the boundary residual falls below
-tol — corners give algebraically-decaying Laurent coefficients, so sharp/reentrant corners need more
-terms). Per-corner norm annotations `Λₖ = max{αₖ, 2−αₖ}` (Miña-Díaz–Rubin–Wennman 2025). Draggable-vertex
-polygon editor; serialize vertices in viewState (bounded, like the existing crafted-link guards); `kHalf`
-framing from the bounding box.
+### M2 — Reentrant polygons, diagnostics & UI (partially DONE)
+- **Reentrant corners — DONE.** The exterior solve already handles `αₖ > 1` (exponent `1−αₖ ∈ (−1,0)` is
+  singular but integrable via the Gauss–Jacobi panel; an L-shape converges to residual ~1e-12). Added an
+  L-shape preset.
+- **Adaptive truncation — DONE.** Reentrant/sharp corners give algebraically-decaying coefficients (an
+  L-shape's `|c₁₄₀|/max ≈ 1.7e-3` vs a square's `1e-17`). `polygonMap` extracts at a geometry-aware order
+  (200 convex / 400 reentrant) then trims to the last coefficient above `tailTol·max`, keeping `≥ minOrder`
+  for Faber-degree coverage — a sharp boundary either way.
+- **Corner-norm annotations — DONE.** `cornerNorms(angles)` → `Λₖ = max{αₖ, 2−αₖ}` (Miña-Díaz–Rubin–Wennman
+  2025), shown as `max corner-norm Λ = …` in the readout on polygon domains; computed from the angles alone.
+- **Solver hygiene (review) — DONE.** The damped Gauss–Newton loop is extracted to a shared
+  `dampedGaussNewton` (interior + exterior), the exterior closure residual is normalized by `Σ|1−αₖ|` so the
+  ‖F‖∞ tolerance means the same for both residual families, and `polygonMap` returns the fit's
+  `converged`/`degraded`/`residual` (a bad fit is no longer discarded).
+- **Remaining:** a **draggable-vertex polygon editor** (let the user draw/edit an arbitrary polygon, not
+  just pick presets), serializing vertices in viewState (bounded, like the existing crafted-link guards),
+  with `kHalf` framing from the bounding box — and surfacing the fit's `converged`/`degraded` in the UI
+  (the runtime home for the honesty signal, since user polygons can fail where the fixed presets don't).
 
 ### M3 — Optional polish
 Corner-**suppressing** weighted Faber `Q_{n,m}` toggle (before/after corner-overshoot demo); reconsider a
