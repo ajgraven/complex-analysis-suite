@@ -14,11 +14,13 @@ here — this is plain complex approximation theory.
 ## Why it was extracted now (extract-*ahead*-of-demand)
 
 Every other `@cas/*` package waited for a **second consumer** before extraction
-([ADR-0007](../../docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)). This one does
-**not** — the Riemann-map app is still its only consumer today. It is a **deliberate exception**
+([ADR-0007](../../docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)). This one did
+**not** — at extraction the Riemann-map app was its only consumer. It is a **deliberate exception**
 ([ADR-0018](../../docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)):
-the next roadmap step (Schwarz–Christoffel) is a *new conformal engine*, and the choice is to give it a
-package to be born into rather than to build it inside the app and extract afterward. The seam is drawn
+the next roadmap step (Schwarz–Christoffel) was a *new conformal engine*, and the choice was to give it a
+package to be born into rather than to build it inside the app and extract afterward. That engine has since
+**landed in-package** (roadmap step E, ADR-0020) — the promised second consumer that retro-justifies the
+extraction (see [Consumers](#consumers) below). The seam is drawn
 where the mathematics already is — the builder is pure, self-contained, and node-tested — so the risk of
 a premature/wrong seam (the reason ADR-0007 exists) is low. See ADR-0018 for the full argument and the
 revisit trigger.
@@ -80,7 +82,8 @@ Deferred (roadmap): CRDT for elongated/crowded polygons, exterior/unbounded/circ
   fit `f` then `g`, and render the image of the disk's polar grid under `g`.
 - **Schwarz–Christoffel** (`fitSchwarzChristoffel`, roadmap step E) — the second consumer that retro-justifies
   the ahead-of-demand extraction (ADR-0018 → [ADR-0020](../../docs/DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)). It reuses the lightning fit
-  (for the fast mode and the SC prevertex seed) and `@cas/core`'s least squares (for the Gauss–Newton step).
+  (the fast mode, and — via `warmStart` — the optional precise seed; precise otherwise cold-starts uniformly)
+  and `@cas/core`'s least squares (for the Gauss–Newton step).
 - **Anticipated:** the other Tier-3 engines (AAA, zipper) — future tenants of this package.
 
 ## Tests

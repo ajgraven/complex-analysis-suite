@@ -109,17 +109,36 @@ dropping `@cas/dynamics`, `@cas/schwarz`, and `@cas/gpu` to render **pure-2D**. 
 `@cas/core`, `@cas/export`, `@cas/expr`, and `@cas/interchange` (ADR-0017; supersedes ADR-0014's RM-consumer
 premise, narrows ADR-0013). Cross-app golden `CD_TO_RM_BOTTCHER_LINK` pins both sides.
 
-**`@cas/conformal` + `lstsq` → `@cas/core` (step D, on `claude/riemann-map-visualization-5kal5n`):**
+**`@cas/conformal` + `lstsq` → `@cas/core` (step D, merged #259):**
 The **ninth** package **`@cas/conformal`** is carved out of the Riemann-map app — the conformal-map builder
 (the Vandermonde–Arnoldi stable basis, the lightning solver f: Ω → 𝔻, and the forward map g: 𝔻 → Ω) — with the
 real Householder-QR least-squares primitive `lstsqHouseholder` beneath it lifted into **`@cas/core`**. This is
-the suite's **first deliberate extract-*ahead*-of-demand** (ADR-0018): unlike every prior package it precedes
-its second consumer (Schwarz–Christoffel, roadmap step E) — a recorded exception to ADR-0007. Riemann Map drops
-its whole `src/solve/` directory and consumes `@cas/conformal`; it now rides `@cas/core`, `@cas/conformal`,
-`@cas/export`, `@cas/expr`, and `@cas/interchange`. Quadrature Domains' near-twin least-squares solver is
-documented as the *deferred* second consumer of core-`lstsq` — the two diverged on rank-deficiency policy
-(RM zero-fills at `1e-300`; QD throws at `1e-13`, with `condEst`-driven refinement its cusp Newton solver
-needs), so QD's solver is **not** rewired in this step.
+the suite's **first deliberate extract-*ahead*-of-demand** (ADR-0018): unlike every prior package it preceded
+its second consumer (Schwarz–Christoffel, roadmap step E — **now landed**, next paragraph) — a recorded exception
+to ADR-0007. Riemann Map drops its whole `src/solve/` directory and consumes `@cas/conformal`; it now rides
+`@cas/core`, `@cas/conformal`, `@cas/export`, `@cas/expr`, and `@cas/interchange`. Quadrature Domains' near-twin
+least-squares solver is documented as the *deferred* second consumer of core-`lstsq` — the two diverged on
+rank-deficiency policy (RM zero-fills at `1e-300`; QD throws at `1e-13`, with `condEst`-driven refinement its
+cusp Newton solver needs), so QD's solver is **not** rewired in this step.
+
+**Schwarz–Christoffel engine + Riemann-map polygon regions (step E, merged #263; pan-lock #264):**
+`@cas/conformal` gains its **second engine** — a Schwarz–Christoffel map builder (𝔻 → bounded simple polygon),
+which is the **second consumer** that retro-justifies ADR-0018's extract-ahead (ADR-0018 Action Item 6 → done).
+Its one new numeric primitive is Gauss–Jacobi quadrature (`gaussJacobi.ts` Golub–Welsch + `scQuadrature.ts`
+compound `d<ℓ/(3√2)` subdivision), kept **in-package** (ADR-0007: SC is its sole consumer). The public
+`fitSchwarzChristoffel` (`scMap.ts`) is **two-mode** (ADR-0020, method-choice record): **precise** reaches
+machine precision on convex **and** reentrant polygons — forward (`schwarzChristoffel.ts`) *and* inverse
+(ODE+Newton, Driscoll–Trefethen) — via the parameter solve (`scParameterProblem.ts`, softmax gap gauge +
+damped Gauss–Newton, each step one core `lstsqHouseholder`; uniform cold start by default, lightning-seedable
+through `warmStart`); **fast** reuses the lightning fit (instant, warm-startable, ~convex-reliable,
+`degraded`-flagged on strongly reentrant shapes). Outputs carry
+honest `converged`/`degraded`/`residual` labels (guardrail). **Riemann Map** wires it in: `fitRegion` routes
+polygon `corners` domains through the SC engine (lightning for smooth regions), the region picker offers the
+polygon presets, and the left disk-pane pan is **locked** for the region source so the fixed unit disk cannot
+drift (#264). **No new package** (SC lives inside `@cas/conformal`); **no `@cas/interchange` form yet**
+(deferred, ADR-0007 — gate on a receiving tool). Plan + literature: [`docs/design/schwarz-christoffel-plan.md`]
+(docs/design/schwarz-christoffel-plan.md) / [`schwarz-christoffel-research-notes.md`]
+(docs/design/schwarz-christoffel-research-notes.md).
 
 **QD → CD σ hand-off (QD-HANDOFF-2 + S5, on `claude/repository-refactor-project-pg5ktu`, awaiting review):**
 Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe
