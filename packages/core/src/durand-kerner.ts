@@ -117,13 +117,16 @@ export function makeDurandKerner<C>(alg: ComplexAlgebra<C>) {
           const delta = alg.div(evalMonic(zi), denom);
           ziNext = alg.sub(zi, delta);
           const dm = alg.abs(delta);
-          // `!(dm <= maxDelta)` rather than `dm > maxDelta`: a NaN delta (evalMonic overflowed to
-          // Infinity, or denom did, giving Inf/Inf) fails EVERY comparison, so the plain `>` form
-          // left maxDelta at 0 and the sweep then reported converged=true with NaN roots — a
-          // non-answer labelled certified. Negating `<=` lets NaN through, and `NaN < tol` is
-          // false, so convergence is correctly withheld. Same honest-reporting rule as the
-          // `skipped` guard below.
-          if (!(dm <= maxDelta)) maxDelta = dm;
+          // NaN-STICKY max. A non-finite delta (evalMonic and/or denom overflowed to Infinity,
+          // giving Inf/Inf = NaN) must poison maxDelta for the WHOLE remaining sweep so convergence
+          // is withheld (`NaN < tol` is false) — a NaN root is a non-answer and must never be
+          // reported as certified. `Math.max` propagates NaN from EITHER argument, so once maxDelta
+          // is NaN a later small finite dm at another root cannot reset it. (The earlier
+          // `!(dm <= maxDelta)` form only set NaN while the NaN was the running max; a subsequent
+          // finite dm satisfied `!(dm <= NaN)` and overwrote it back to a finite value, letting
+          // {NaN,…} roots slip through as converged — see the "mixed NaN + finite sweep" regression
+          // test.) Same honest-reporting rule as the `skipped` guard below.
+          maxDelta = Math.max(maxDelta, dm);
         }
 
         if (bail && !alg.isFinite(ziNext)) return null;

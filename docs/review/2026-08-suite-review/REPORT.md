@@ -30,7 +30,7 @@ roadmap, and stale documentation.
 
 | Rank | Item | Sev | Area | Fix-safety |
 |------|------|-----|------|-----------|
-| 1 | **Durand–Kerner still returns `converged:true` with a NaN root** (PR #154 fix not NaN-sticky) | HIGH | `@cas/core` | needs-review (1-line fix + new test) — [01](findings/01-core-exact.md) |
+| 1 | **Durand–Kerner still returns `converged:true` with a NaN root** (PR #154 fix not NaN-sticky) | HIGH | `@cas/core` | ✅ **FIXED** on this branch — NaN-sticky `Math.max` + regression test (negative-control-verified) — [01](findings/01-core-exact.md) |
 | 2 | **CLAUDE.md et al. say the σ hand-off is "awaiting review"** — it shipped to master (#246/#255) | HIGH | docs | **safe-now** ✅ applied — [09](findings/09-documentation-staleness.md) |
 | 3 | **GPU σ caps orbit at 512** while CPU honors maxIter→4096 (silent parity break) | MED | complex-dynamics | needs-review — [05](findings/05-complex-dynamics-dynamics.md) |
 | 4 | **Faber GPU truncates series at degree 47** while order slider reaches 128 | MED | faber-transform | needs-review — [04](findings/04-faber.md) |
@@ -210,7 +210,12 @@ CLAUDE.md). **31 edits across 16 files.** Gates re-run green afterward (all edit
 
 These need a design/behavior decision or new tests, so they were left for you:
 
-- **Durand–Kerner NaN fix** (HIGH) — 1-line change + new regression test (theme 1).
+- ~~**Durand–Kerner NaN fix** (HIGH)~~ — ✅ **done on this branch** (post-review follow-up): line
+  126 of `packages/core/src/durand-kerner.ts` is now the NaN-sticky `maxDelta = Math.max(maxDelta, dm)`
+  (identical on the finite path, so no behavior change on any converging solve), with a new
+  `test/durand-kerner.test.ts` case pinning the mixed NaN + finite-dm sweep. Verified by negative
+  control: the test fails (`converged:true` with a NaN root) against the old line and passes against
+  the fix; full gates green.
 - **Two GPU-cap parity fixes** (MED×2) — clamp N or raise the GLSL array bound; each needs a
   CPU↔GPU parity test (theme 2).
 - **`findCycles` anti-holomorphic Newton** (MED) — use the full 2×2 real Jacobian or the holomorphic

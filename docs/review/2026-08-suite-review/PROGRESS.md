@@ -94,6 +94,29 @@ Per finding: `### [SEVERITY] title` then bullets — Area · Location `path:line
 Severity ∈ CRITICAL/HIGH/MEDIUM/LOW/NIT. End each file with a "Coverage" note (what was and
 was NOT examined).
 
+## Follow-up work (post-review, user-directed)
+
+Remaining substantive items from REPORT.md, being worked in order at the user's direction.
+
+- [x] **Durand–Kerner NaN fix (HIGH)** — `packages/core/src/durand-kerner.ts:126` now
+      `maxDelta = Math.max(maxDelta, dm)` (NaN-sticky; identical on the finite path). New regression
+      test in `packages/core/test/durand-kerner.test.ts` pins the mixed NaN + finite-dm sweep;
+      negative-control-verified (fails pre-fix, passes post-fix); full gates green.
+- [ ] Consolidation #1 — `pointInPolygon` ×5 → `@cas/core/geometry.ts` (unblocks #3)
+- [ ] Consolidation #2 — `rootsMonic` (monic-Horner + DK seed/certify) ×3 → `@cas/core`
+- [ ] Consolidation #3 — SC corner-cluster ×3 → `@cas/conformal` (rides #1)
+- [ ] ADR-0020 duplicate renumber + ~10 inbound-ref sweep
+- [ ] GPU-cap parity fixes (CD σ 512→maxIter; Faber degree-47→N clamp) — each with a CPU↔GPU test
+- [ ] QD `findCycles` anti-holomorphic Newton + ≈ caveat
+- [ ] AP freehand-path vertex cap
+- [ ] Interchange nested-payload validation (`sourceDomain`/`hData`/`tilingSetHint`)
+- [ ] Bulk strip of QD's 81 stale `twin of X.js` headers (mechanical)
+- [ ] (optional) remaining LOW numerical test-gaps + M₀ relabel + QD↔`@cas/schwarz` rewire ADR
+
 ## Log
 
-- 2026-08-17: Scaffolding created; health baseline + Batch 1 launched.
+- 2026-08-17: Scaffolding created; health baseline (green) + 10 review agents (2 batches) run;
+  findings committed per-area; REPORT.md synthesized; 31 safe stale-doc/comment fixes applied
+  (gates green).
+- 2026-08-17: Follow-up — Durand–Kerner NaN certification fixed in `@cas/core` + regression test
+  (negative-control-verified).
