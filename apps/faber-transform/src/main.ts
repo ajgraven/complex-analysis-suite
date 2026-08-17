@@ -110,6 +110,12 @@ interface RenderModel {
   readonly badge: string;
   readonly readout: string;
   readonly error: boolean;
+  /**
+   * A HARD failure that must paint the (blank) panels rather than keep the last good render — a degenerate
+   * polygon fit, where leaving the previous image under a "⚠" badge would be misleading. A soft error (an
+   * expr parse error mid-typing) leaves this false so the last good render is kept.
+   */
+  readonly blank?: boolean;
   /** The M3 corner-overshoot profile along ∂K (monomial input on a polygonal K); undefined ⇒ panel hidden. */
   readonly cornerProfile?: CornerProfile;
 }
@@ -407,7 +413,7 @@ function main(): void {
       // non-finite map — don't paint garbage as an ordinary ≈ image (honesty guardrail); show a warning.
       const finite = Number.isFinite(r.map.c) && r.map.laurent.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im));
       if (!r.converged || !finite) {
-        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: "polygon fit failed — the domain may be degenerate or self-intersecting", error: true };
+        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: "polygon fit failed — the domain may be degenerate or self-intersecting", error: true, blank: true };
       }
       map = r.map;
       approx = true;
@@ -616,7 +622,9 @@ function main(): void {
     exactBadge.textContent = model.badge;
     readoutBody.textContent = model.readout;
     syncControls();
-    if (model.error) return; // keep the last good render; show the parse error
+    // A soft error (expr parse mid-typing) keeps the last good render; a hard failure (a degenerate polygon
+    // fit, `blank`) falls through to paint the blank panels so a "⚠" badge never sits over a stale image.
+    if (model.error && !model.blank) return;
     const coloring = state.coloring ?? DEFAULT_COLORING;
     paintPanel(left.panel, state.zView, model.left, coloring);
     paintPanel(right.panel, state.wView, model.right, coloring);
@@ -728,7 +736,12 @@ function main(): void {
     const expr = exprInput.value.slice(0, MAX_EXPR_LEN);
     const N = state.input.N;
     if (exprTimer) window.clearTimeout(exprTimer);
-    exprTimer = window.setTimeout(() => commit({ ...state, input: { kind: "expr", expr, N } }), 180);
+    exprTimer = window.setTimeout(() => {
+      // A mode switch (→ monomial / pole) during the debounce window wins: don't snap the input back to
+      // free-form from a stale timer.
+      if (state.input.kind !== "expr") return;
+      commit({ ...state, input: { kind: "expr", expr, N } });
+    }, 180);
   }
   exprInput.addEventListener("input", commitExpr);
   truncInput.addEventListener("input", () => {

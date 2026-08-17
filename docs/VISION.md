@@ -1,7 +1,7 @@
 # Vision & Scope
 
 > **✅ Realized.** This document is the *why*, written before the build and kept as the durable
-> rationale. The plan it motivates has since been executed: five apps now ride nine shared
+> rationale. The plan it motivates has since been executed: seven apps now ride ten shared
 > `@cas/*` packages, the QD → CD Schwarz-reflection hand-off round-trips, and the correspondence
 > tool reproduced the deltoid and grew a full mating visualizer — every item in
 > [§6 "What success looks like"](#6-what-success-looks-like) now holds. The framing below is

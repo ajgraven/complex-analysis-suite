@@ -8,12 +8,15 @@ for why extraction is demand-driven rather than up-front.
 > **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
 > inventory. What actually exists:
 >
-> - **Eight packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
->   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`** — the last four
->   later than the phase plan, on the same second-consumer rule (`@cas/exact`: Complex Dynamics and
+> - **Ten packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+>   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`,
+>   `@cas/faber`** — the middle four later than the phase plan, on the same second-consumer rule
+>   (`@cas/exact`: Complex Dynamics and
 >   Correspondences both needed exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ
 >   engine, shared by Complex Dynamics and Correspondences; `@cas/dynamics`: the inverse-Böttcher machinery,
->   ADR-0014; `@cas/export`: PNG `tEXt` metadata across three apps, ADR-0016). The **`ui` and `quadrature`**
+>   ADR-0014; `@cas/export`: PNG `tEXt` metadata across three apps, ADR-0016; `@cas/conformal`: the
+>   conformal-map builder extracted *ahead* of demand, ADR-0018; `@cas/faber`: the exterior Faber engine,
+>   ADR-0024). The **`ui` and `quadrature`**
 >   packages sketched in the layer diagram and §3 were **never extracted** — no second consumer needed the
 >   whole of either (the Correspondences app keeps its own σ-construction and parabolic-Tricorn model),
 >   though the `ui` package's PNG-metadata half did later ship as `@cas/export`. That is the

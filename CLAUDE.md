@@ -49,8 +49,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     **`.github/workflows/deploy-pages.yml` publishes automatically on every push to `master`**
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
-    `complex-function-plotter/`, and `riemann-map/` beneath it. `apps/correspondences` is **built but not
-    published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
+    `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, and `faber-transform/` beneath it.
+    `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
 ## Non-negotiable guardrails
@@ -89,8 +89,8 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
 and the parabolic-Tricorn model coordinate. Seven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
-`@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0021 — it
-rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, and `@cas/conformal`; ADR-0024) ride the ten shared `@cas/*` packages
+`@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
+rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`) ride the ten shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by

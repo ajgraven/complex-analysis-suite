@@ -139,7 +139,7 @@ complex-analysis-suite/
 > _not_ a single-page shell with a tab per tool. See
 > [ARCHITECTURE §11](docs/ARCHITECTURE.md#11-the-launcher-unified-menu-without-a-unified-shell).
 
-Each package and each app carries its own `README.md` with its API surface / feature list.
+Most packages and apps carry their own `README.md` with an API surface / feature list.
 
 ---
 
