@@ -123,7 +123,11 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       riemann-map/domains.ts delegate to them; the divergent scale/straight-vertex *policies* stay at
       each call site. Bit-identical (traced the `±bis` flip convergence); golden conformal+RM corpora
       pass unchanged.
-- [ ] ADR-0020 duplicate renumber + ~10 inbound-ref sweep
+- [x] **ADR-0020 duplicate renumber**: the two ADR-0020s (SC-engine + winding-defer) are now unique —
+      the **winding-defer** one → **ADR-0025** (fewer refs, no package-code churn; SC-engine stays the
+      canonical 0020). Renumbered the heading + a provenance note + all 14 winding-defer refs (DECISIONS
+      internal, `winding.ts`, AP plan — text + anchor slugs); SC-engine refs untouched. Also completed
+      the stale ADR-log TOC (added the missing 0022–0025 rows, fixed the "twenty-one"→"twenty-five" count).
 - [x] **GPU-cap parity fixes** (finding 05-#1 + 04-#1): **CD σ** — the shader's static orbit-loop
       bound (512) is now `SIGMA_MAX_ITER = 4096`, one shared constant used by both loops AND the input
       clamp (main.ts), so the GPU no longer caps deep points as "interior" while the CPU keeps

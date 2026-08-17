@@ -30,9 +30,13 @@ Format follows Michael Nygard's ADR convention.
 | [0019](#adr-0019-argument-principle-as-a-separate-app) | Argument Principle as a separate app | Accepted |
 | [0020](#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode) | Schwarz-Christoffel engine: lightning-seeded, disk-canonical, two-mode | Accepted |
 | [0021](#adr-0021-argument-principle-pedagogy-arc--generalize-to-f--w-and-the-pin-interaction-model) | Argument Principle pedagogy arc — generalize to f = w₀, and the pin interaction model | Accepted |
+| [0022](#adr-0022-explicit-contour-input-modes-touch-first) | Explicit contour input modes (touch-first) | Accepted |
+| [0023](#adr-0023-accessible-marks-validated-palette-shape-encoding-and-a-non-rainbow-ramp) | Accessible marks — validated palette, shape encoding, and a non-rainbow ramp | Accepted |
+| [0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine) | Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine | Accepted |
+| [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All twenty-one are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All twenty-five are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -1656,7 +1660,7 @@ phase-gated plan.
 #### Option A: A new standalone app `apps/argument-principle` (this ADR)
 **Pros:** matches the suite topology (decision #8); a thin app over shared packages; the dual-plane
 contour-interaction surface is genuinely its own product with its own controls and lifecycle; publishes
-independently; the one shared primitive (winding) becomes a clean extraction (ADR-0020) rather than copied code.
+independently; the one shared primitive (winding) becomes a clean extraction (ADR-0025) rather than copied code.
 **Cons:** a sixth app to maintain; "argument principle" now names both a plotter instrument and an app, so the
 boundary must be kept honest; some UI scaffolding re-created per app (no `@cas/ui` — never extracted, ADR-0007).
 
@@ -1688,7 +1692,7 @@ star**: measurably fewer new primitives than the Riemann map or the plotter, bec
 is the pedagogical instrument (dual-plane UI, contour interaction, image-curve winding, point-in-contour count).
 The honest cost — a sixth app, and "argument principle" living in two places — is bounded by keeping the plotter's
 instrument to its one readout and letting this app own the dual-view exploration, with the winding primitive
-slated for extraction on the second-consumer rule (ADR-0020), not duplication.
+slated for extraction on the second-consumer rule (ADR-0025), not duplication.
 
 ### Consequences
 
@@ -1699,7 +1703,7 @@ slated for extraction on the second-consumer rule (ADR-0020), not duplication.
   whose boundary must be kept honest; UI chrome is app-local (no `@cas/ui`); the `1/(2πi)` framing and any
   phase→hue shading stay app-local and convention-tagged
   ([ADR-0006](#adr-0006-convention-neutral-core)), never baked into packages.
-- **Follow-on ADR this anticipates:** **ADR-0020 — extract the winding / singularity primitive** on the
+- **Follow-on ADR this anticipates:** **ADR-0025 — extract the winding / singularity primitive** on the
   [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second-consumer rule (the plotter's
   `singularities.ts` is the first consumer; this app the second), with the plotter refactored to consume it.
   Recorded when it lands (plan Phase 4).
@@ -1707,7 +1711,7 @@ slated for extraction on the second-consumer rule (ADR-0020), not duplication.
   this tool's backgrounds plain/grid, a phase tint at most); and the winding classifier being *copied* rather than
   extracted once both apps carry it.
 - **Revisit if:** this app and the plotter's instrument converge enough that one should consume the other — then
-  extract the shared piece into a package (ADR-0007 / ADR-0020), rather than merging the apps.
+  extract the shared piece into a package (ADR-0007 / ADR-0025), rather than merging the apps.
 
 ### Action Items
 
@@ -1721,17 +1725,22 @@ slated for extraction on the second-consumer rule (ADR-0020), not duplication.
        [`design/argument-principle-plan.md`](design/argument-principle-plan.md). (Phases 1–2.)
 3. [x] Wire the plotter/CD → argument-principle `f(z)` hand-off through `@cas/interchange` (`mapSpecToExpr`),
        mirroring the plotter's `importMap.ts` (plan Phase 3a).
-4. [x] Record **ADR-0020** (the winding / singularity primitive extraction decision) at the Phase-4 gate — see
-       [ADR-0020](#adr-0020-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) below.
+4. [x] Record **ADR-0025** (the winding / singularity primitive extraction decision) at the Phase-4 gate — see
+       [ADR-0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) below.
        The finding: the second consumer is real, but the two implementations **diverged**, so the extraction is
        **deferred**, not taken.
 5. [x] Publish (flip the launcher card to a link + add the `deploy-pages.yml` `cp`) at the Phase-4 gate.
 
 ---
 
-## ADR-0020: Defer the winding / singularity primitive extraction (second consumer noted)
+## ADR-0025: Defer the winding / singularity primitive extraction (second consumer noted)
 
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+> **Renumbering note:** this ADR was originally recorded as a second `ADR-0020`, duplicating the
+> Schwarz–Christoffel engine ADR-0020 below. Renumbered to **0025** (the next free number) so every ADR
+> ID is unique. It is kept here beside its parent [ADR-0019](#adr-0019-argument-principle-as-a-separate-app)
+> — both are Argument-Principle decisions — so the number, not the file position, is authoritative.
 
 *An [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) **deferral**, in the mould of
 [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) (keep QD's `sym-core` separate) and
