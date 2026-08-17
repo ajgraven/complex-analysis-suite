@@ -102,7 +102,11 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       `maxDelta = Math.max(maxDelta, dm)` (NaN-sticky; identical on the finite path). New regression
       test in `packages/core/test/durand-kerner.test.ts` pins the mixed NaN + finite-dm sweep;
       negative-control-verified (fails pre-fix, passes post-fix); full gates green.
-- [ ] Consolidation #1 — `pointInPolygon` ×5 → `@cas/core/geometry.ts` (unblocks #3)
+- [x] **Consolidation #1 — `pointInPolygon` → `@cas/core/geometry.ts`** (unblocks #3): new
+      `geometry.ts` (canonical even-odd test, bit-identical to the blessed `@cas/schwarz` body) +
+      golden `test/geometry.test.ts`; 4 TS copies removed — `@cas/schwarz` (re-exports from core, so
+      CD + Correspondences are untouched), `@cas/conformal/scMap.ts`, `riemann-map/domains.ts`,
+      `argument-principle/contour.ts` (both re-export). QD's `{re,im}` variant left per ADR-0008.
 - [ ] Consolidation #2 — `rootsMonic` (monic-Horner + DK seed/certify) ×3 → `@cas/core`
 - [ ] Consolidation #3 — SC corner-cluster ×3 → `@cas/conformal` (rides #1)
 - [ ] ADR-0020 duplicate renumber + ~10 inbound-ref sweep

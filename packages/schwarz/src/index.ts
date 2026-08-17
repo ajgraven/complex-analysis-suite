@@ -5,7 +5,10 @@
 // are reconstructed: the classical UNBOUNDED-Laurent map (exterior branch, `makeUnboundedLaurentSchwarz`)
 // and the classical BOUNDED map (interior branch, `makeBoundedSchwarz`, S5-C2). The remaining weighted
 // families (LQD, PQD) follow as the QD app's σ machinery is lifted here.
-export { makeUnboundedLaurentSchwarz, pointInPolygon, escapeTime } from "./unbounded-laurent.js";
+export { makeUnboundedLaurentSchwarz, escapeTime } from "./unbounded-laurent.js";
+// pointInPolygon was consolidated into @cas/core (ADR-0007); re-exported here so existing consumers
+// (Complex Dynamics, Correspondences) keep importing it from @cas/schwarz unchanged.
+export { pointInPolygon } from "@cas/core";
 export type {
   Complex,
   SchwarzBranch,

@@ -312,20 +312,6 @@ export function makeUnboundedLaurentSchwarz(
   return { evalPhi, evalPhiDeriv, evalF, evalFDeriv, invertPhi, sigma, sigmaInverse };
 }
 
-/** Ray-casting point-in-polygon (even-odd rule). */
-export function pointInPolygon(w: Complex, poly: readonly Complex[]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const xi = poly[i][0];
-    const yi = poly[i][1];
-    const xj = poly[j][0];
-    const yj = poly[j][1];
-    const hit = yi > w[1] !== yj > w[1] && w[0] < ((xj - xi) * (w[1] - yi)) / (yj - yi) + xi;
-    if (hit) inside = !inside;
-  }
-  return inside;
-}
-
 export type EscapeKind = "fundamental" | "escaped" | "interior" | "invalid";
 
 export interface EscapeResult {

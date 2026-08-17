@@ -6,6 +6,8 @@
 // grid forward needs only the FORWARD map (no inverse), so it composes with P3a's solver directly. Pure
 // data + geometry; node-tested.
 
+import { pointInPolygon } from "@cas/core";
+
 export type C = [number, number];
 
 export interface DomainPreset {
@@ -41,19 +43,10 @@ function polygonRadius(vertices: readonly C[]): (t: number) => number {
   };
 }
 
-/** Even-odd point-in-polygon test (orientation-independent). */
-export function pointInPolygon(p: C, poly: readonly C[]): boolean {
-  let inside = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const yi = poly[i][1];
-    const yj = poly[j][1];
-    if (yi > p[1] !== yj > p[1]) {
-      const xcross = poly[i][0] + ((p[1] - yi) / (yj - yi)) * (poly[j][0] - poly[i][0]);
-      if (p[0] < xcross) inside = !inside;
-    }
-  }
-  return inside;
-}
+// pointInPolygon (even-odd ray cast) is the shared @cas/core geometry primitive (ADR-0007),
+// re-exported so the corner-pole outward-direction flip below and this module's consumers keep
+// using it unchanged.
+export { pointInPolygon };
 
 const nrm = (v: C): C => {
   const r = Math.hypot(v[0], v[1]) || 1;

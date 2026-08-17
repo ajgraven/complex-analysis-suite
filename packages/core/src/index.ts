@@ -16,6 +16,9 @@
 //                      inverse), shared by both apps' sphere views.
 //   - lstsq          : real overdetermined least squares by (backward-stable) Householder QR — the
 //                      numeric workhorse under overdetermined fits (the @cas/conformal builder; QD).
+//   - geometry       : convention-neutral 2D geometry (pointInPolygon even-odd test), the single
+//                      home for the copy @cas/schwarz + @cas/conformal + the Riemann-map &
+//                      Argument-Principle apps each carried (ADR-0007).
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
 export { objAlgebra, tupleAlgebra } from "./algebra.js";
@@ -29,3 +32,5 @@ export type { Poly, PolyOps } from "./poly.js";
 export { subscript, superscript } from "./format.js";
 export { planeToSphere, sphereToPlane } from "./sphere.js";
 export { lstsqHouseholder } from "./lstsq.js";
+export { pointInPolygon } from "./geometry.js";
+export type { Point2 } from "./geometry.js";

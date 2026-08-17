@@ -18,6 +18,7 @@ import { fitConformalMap } from "./lightning.js";
 import { fitForwardMap } from "./forwardMap.js";
 import { buildForwardMap } from "./schwarzChristoffel.js";
 import { interiorAngles, solveParameterProblem } from "./scParameterProblem.js";
+import { pointInPolygon } from "@cas/core";
 
 const csub = (a: C, b: C): C => [a[0] - b[0], a[1] - b[1]];
 const cadd = (a: C, b: C): C => [a[0] + b[0], a[1] + b[1]];
@@ -95,17 +96,6 @@ function areaCentroid(v: readonly C[]): C {
   }
   a *= 0.5;
   return [cx / (6 * a), cy / (6 * a)];
-}
-
-function pointInPolygon(p: C, v: readonly C[]): boolean {
-  const n = v.length;
-  let inside = false;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const [xi, yi] = v[i];
-    const [xj, yj] = v[j];
-    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
 }
 
 /** Boundary samples clustered toward the corners of each edge (better lightning corner resolution). */

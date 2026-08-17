@@ -4,6 +4,8 @@
 // (`kind:"path"`) with a ray-cast point-in-polygon test. Kept pure (no DOM) so it is unit-tested and
 // later liftable alongside the winding primitive.
 
+import { pointInPolygon } from "@cas/core";
+
 export type Vec2 = readonly [number, number];
 
 export interface Circle {
@@ -38,26 +40,9 @@ export function pointInCircle(p: Vec2, circle: Circle): boolean {
   return dx * dx + dy * dy < circle.radius * circle.radius;
 }
 
-/**
- * Ray-cast point-in-polygon (even–odd rule) for the freehand contour. The polygon is the closed loop
- * through `poly` (last vertex connects back to the first).
- */
-export function pointInPolygon(p: Vec2, poly: readonly Vec2[]): boolean {
-  let inside = false;
-  const n = poly.length;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const xi = poly[i][0];
-    const yi = poly[i][1];
-    const xj = poly[j][0];
-    const yj = poly[j][1];
-    const crosses = yi > p[1] !== yj > p[1];
-    if (crosses) {
-      const xCross = ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi;
-      if (p[0] < xCross) inside = !inside;
-    }
-  }
-  return inside;
-}
+// pointInPolygon (even-odd ray cast) is the shared @cas/core geometry primitive (ADR-0007),
+// re-exported so `contourSamples` below and this module's consumers keep using it unchanged.
+export { pointInPolygon };
 
 // ---- unified contour (circle or freehand path) ----------------------------------------------------
 
