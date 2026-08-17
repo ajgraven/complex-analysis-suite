@@ -155,6 +155,35 @@ export function domainById(id: string): DomainPreset | undefined {
   return DOMAIN_PRESETS.find((d) => d.id === id);
 }
 
+// --- editable custom polygon (Phase C) --------------------------------------------------------
+
+/** The id of the user-editable custom polygon (draggable vertices). */
+export const CUSTOM_ID = "custom";
+
+/** Ensure counter-clockwise orientation (the Schwarz–Christoffel solver's input convention). */
+export function toCCW(v: readonly (readonly [number, number])[]): C[] {
+  let a = 0;
+  for (let i = 0; i < v.length; i++) {
+    const p = v[i];
+    const q = v[(i + 1) % v.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  const copy = v.map((p): C => [p[0], p[1]]);
+  return a < 0 ? copy.reverse() : copy;
+}
+
+/** Build the editable custom-polygon domain from raw vertices (kept CCW). `radius` is a placeholder — a
+ *  polygon domain is only ever consumed through `corners` (the SC path), never through `radius`. */
+export function makeCustomDomain(vertices: readonly (readonly [number, number])[]): DomainPreset {
+  const v = toCCW(vertices);
+  return { id: CUSTOM_ID, name: "Custom polygon", radius: polygonRadius(v), corners: v };
+}
+
+/** A default seed for a fresh custom polygon (a regular pentagon). */
+export function defaultCustomPolygon(): C[] {
+  return regularPolygon(5, 1.2);
+}
+
 /** Sample ∂Ω at `m` equally-spaced angles (an open list — the caller closes it if needed). */
 export function sampleDomainBoundary(d: DomainPreset, m: number): C[] {
   return Array.from({ length: m }, (_, j): C => {

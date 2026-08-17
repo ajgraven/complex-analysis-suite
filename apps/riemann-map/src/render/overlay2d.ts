@@ -66,6 +66,22 @@ export class Overlay2D {
     return [(ndcx * 0.5 + 0.5) * W, (0.5 - ndcy * 0.5) * H];
   }
 
+  /** A page-space point (client coords) → world, under the pane's current view. Inverse of `toPx`; used to
+   *  drag a polygon vertex directly on the auto-fit image pane. */
+  clientToWorld(clientX: number, clientY: number): [number, number] {
+    const rect = this.canvas.getBoundingClientRect();
+    const ndcx = ((clientX - rect.left) / Math.max(rect.width, 1e-6) - 0.5) * 2;
+    const ndcy = (0.5 - (clientY - rect.top) / Math.max(rect.height, 1e-6)) * 2;
+    return [this.centerRe + ndcx * this.halfSpan * this.aspect(), this.centerIm + ndcy * this.halfSpan];
+  }
+
+  /** A world point → page-space (client) coords, under the pane's current view (for hit-testing handles). */
+  worldToClient(p: Pt): [number, number] {
+    const rect = this.canvas.getBoundingClientRect();
+    const [px, py] = this.toPx(p);
+    return [rect.left + (px / Math.max(this.canvas.width, 1)) * rect.width, rect.top + (py / Math.max(this.canvas.height, 1)) * rect.height];
+  }
+
   clear(): void {
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }

@@ -79,7 +79,13 @@ export interface RenderState {
     readonly app?: string;
     readonly note?: string;
   };
+  /** Phase C: the editable custom polygon's vertices (present iff region === "custom"), carried in the
+   *  view-state so a permalink reopens the exact hand-drawn shape. Clamped to ±{@link MAX_POLYGON_COORD}. */
+  readonly customPolygon?: readonly (readonly [number, number])[];
 }
+
+/** Bound on a custom polygon's vertex coordinates (keeps a shared `#vs=` link on-canvas and finite). */
+export const MAX_POLYGON_COORD = 4;
 
 /**
  * The whole serializable view-state. A `type` (not an `interface`) so it satisfies the codec's

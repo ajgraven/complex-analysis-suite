@@ -61,4 +61,20 @@ describe("riemann-map view-state (S2)", () => {
     expect(restored?.render.imported?.coeffs).toEqual([[0, 0], [0, 0], [0.5, 0]]);
     expect(restored?.render.imported?.app).toBe("complex-dynamics");
   });
+
+  it("carries a hand-drawn custom polygon through the permalink (Phase C — reopens the exact shape)", () => {
+    const verts: [number, number][] = [
+      [1, 0.2],
+      [-0.8, 1],
+      [-1, -1],
+      [1.2, -0.6],
+    ];
+    const state = {
+      ...DEFAULT_VIEW_STATE,
+      render: { ...DEFAULT_VIEW_STATE.render, region: "custom", domain: "custom", customPolygon: verts },
+    };
+    const restored = decodeRiemannState(encodeRiemannState(state));
+    expect(restored?.render.region).toBe("custom");
+    expect(restored?.render.customPolygon).toEqual(verts);
+  });
 });
