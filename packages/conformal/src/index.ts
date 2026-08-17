@@ -17,6 +17,9 @@ export { fitConformalMap, fitSmoothConformalMap } from "./lightning.js";
 export type { ConformalMap } from "./lightning.js";
 export { fitForwardMap } from "./forwardMap.js";
 export type { ForwardMap } from "./forwardMap.js";
+// Shared lightning-fit corner machinery (ADR-0007): the clustering law, the Chebyshev edge sampler,
+// and the outward-direction test — consumed internally and by the Riemann-map app's domains.ts.
+export { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "./cornerClustering.js";
 
 // Schwarz–Christoffel (roadmap step E)
 export { fitSchwarzChristoffel } from "./scMap.js";

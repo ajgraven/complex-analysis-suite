@@ -18,7 +18,7 @@ import { fitConformalMap } from "./lightning.js";
 import { fitForwardMap } from "./forwardMap.js";
 import { buildForwardMap } from "./schwarzChristoffel.js";
 import { interiorAngles, solveParameterProblem } from "./scParameterProblem.js";
-import { pointInPolygon } from "@cas/core";
+import { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "./cornerClustering.js";
 
 const csub = (a: C, b: C): C => [a[0] - b[0], a[1] - b[1]];
 const cadd = (a: C, b: C): C => [a[0] + b[0], a[1] + b[1]];
@@ -100,17 +100,7 @@ function areaCentroid(v: readonly C[]): C {
 
 /** Boundary samples clustered toward the corners of each edge (better lightning corner resolution). */
 function sampleBoundary(v: readonly C[], perEdge: number): C[] {
-  const n = v.length;
-  const out: C[] = [];
-  for (let k = 0; k < n; k++) {
-    const a = v[k];
-    const b = v[(k + 1) % n];
-    for (let i = 0; i < perEdge; i++) {
-      const t = (1 - Math.cos((Math.PI * (i + 0.5)) / perEdge)) / 2; // Chebyshev-ish, clusters at 0 and 1
-      out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
-    }
-  }
-  return out;
+  return clusteredEdgeSamples(v, perEdge, 0.5); // half-integer nodes avoid the vertices exactly
 }
 
 const poleScale = (v: readonly C[]): number => {
@@ -121,25 +111,15 @@ const poleScale = (v: readonly C[]): number => {
 /** Outward unit direction at each vertex (away from Ω), disambiguated by a point-in-polygon test. */
 function outwardDirs(v: readonly C[], scale: number): C[] {
   const n = v.length;
-  return v.map((vk, k): C => {
-    const ep = nrm(csub(v[(k - 1 + n) % n], vk));
-    const en = nrm(csub(v[(k + 1) % n], vk));
-    let d: C = [ep[0] + en[0], ep[1] + en[1]];
-    if (Math.hypot(d[0], d[1]) < 1e-9) d = [-en[1], en[0]]; // straight vertex: use a normal
-    d = nrm(d);
-    if (pointInPolygon([vk[0] + 1e-4 * scale * d[0], vk[1] + 1e-4 * scale * d[1]], v)) d = [-d[0], -d[1]];
-    return d;
-  });
+  return v.map((vk, k): C => outwardCornerDir(v[(k - 1 + n) % n], vk, v[(k + 1) % n], v, 1e-4 * scale, "normal"));
 }
 
 /** Poles clustered exponentially toward each corner, outside ∂Ω (the lightning method). */
 function cornerPoles(v: readonly C[], outward: readonly C[], scale: number, perCorner: number, sigma = 4): C[] {
   const out: C[] = [];
+  const radii = clusteredRadii(perCorner, scale, sigma);
   for (let k = 0; k < v.length; k++) {
-    for (let j = 1; j <= perCorner; j++) {
-      const rho = scale * Math.exp(-sigma * (Math.sqrt(perCorner) - Math.sqrt(j)));
-      out.push([v[k][0] + rho * outward[k][0], v[k][1] + rho * outward[k][1]]);
-    }
+    for (const rho of radii) out.push([v[k][0] + rho * outward[k][0], v[k][1] + rho * outward[k][1]]);
   }
   return out;
 }

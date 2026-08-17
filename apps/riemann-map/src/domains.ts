@@ -6,7 +6,7 @@
 // grid forward needs only the FORWARD map (no inverse), so it composes with P3a's solver directly. Pure
 // data + geometry; node-tested.
 
-import { pointInPolygon } from "@cas/core";
+import { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "@cas/conformal";
 
 export type C = [number, number];
 
@@ -43,15 +43,10 @@ function polygonRadius(vertices: readonly C[]): (t: number) => number {
   };
 }
 
-// pointInPolygon (even-odd ray cast) is the shared @cas/core geometry primitive (ADR-0007),
-// re-exported so the corner-pole outward-direction flip below and this module's consumers keep
-// using it unchanged.
-export { pointInPolygon };
+// pointInPolygon (even-odd ray cast) is the shared @cas/core geometry primitive (ADR-0007);
+// re-exported so this module's consumers (and its tests) keep importing it from here unchanged.
+export { pointInPolygon } from "@cas/core";
 
-const nrm = (v: C): C => {
-  const r = Math.hypot(v[0], v[1]) || 1;
-  return [v[0] / r, v[1] / r];
-};
 const dist = (a: C, b: C): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
 /**
@@ -59,17 +54,7 @@ const dist = (a: C, b: C): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
  * t = ½(1−cos πu) on every edge), so the least-squares fit resolves the corner singularities.
  */
 export function cornerBoundary(corners: readonly C[], perEdge = 90): C[] {
-  const pts: C[] = [];
-  const K = corners.length;
-  for (let i = 0; i < K; i++) {
-    const a = corners[i];
-    const b = corners[(i + 1) % K];
-    for (let k = 0; k < perEdge; k++) {
-      const t = 0.5 * (1 - Math.cos((Math.PI * k) / perEdge)); // clusters toward both endpoints
-      pts.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
-    }
-  }
-  return pts;
+  return clusteredEdgeSamples(corners, perEdge, 0); // offset 0: includes each edge's start vertex
 }
 
 /**
@@ -84,15 +69,10 @@ export function cornerPoles(corners: readonly C[], nPerCorner = 16, sigma = 4): 
     const w = corners[i];
     const prev = corners[(i - 1 + K) % K];
     const next = corners[(i + 1) % K];
-    const bis: C = [nrm([prev[0] - w[0], prev[1] - w[1]])[0] + nrm([next[0] - w[0], next[1] - w[1]])[0], nrm([prev[0] - w[0], prev[1] - w[1]])[1] + nrm([next[0] - w[0], next[1] - w[1]])[1]];
-    if (Math.hypot(bis[0], bis[1]) < 1e-9) continue; // straight (not a real corner)
-    let d = nrm([-bis[0], -bis[1]]); // outward = negative interior bisector…
-    const L = 0.5 * Math.min(dist(w, prev), dist(w, next));
-    if (pointInPolygon([w[0] + 0.01 * L * d[0], w[1] + 0.01 * L * d[1]], corners)) d = [-d[0], -d[1]]; // …flip if it pointed in
-    for (let k = 1; k <= nPerCorner; k++) {
-      const rho = L * Math.exp(-sigma * (Math.sqrt(nPerCorner) - Math.sqrt(k)));
-      poles.push([w[0] + rho * d[0], w[1] + rho * d[1]]);
-    }
+    const L = 0.5 * Math.min(dist(w, prev), dist(w, next)); // per-corner scale (probe step + pole spread)
+    const d = outwardCornerDir(prev, w, next, corners, 0.01 * L, "skip");
+    if (!d) continue; // straight (not a real corner)
+    for (const rho of clusteredRadii(nPerCorner, L, sigma)) poles.push([w[0] + rho * d[0], w[1] + rho * d[1]]);
   }
   return poles;
 }

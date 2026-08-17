@@ -108,7 +108,13 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       CD + Correspondences are untouched), `@cas/conformal/scMap.ts`, `riemann-map/domains.ts`,
       `argument-principle/contour.ts` (both re-export). QD's `{re,im}` variant left per ADR-0008.
 - [ ] Consolidation #2 — `rootsMonic` (monic-Horner + DK seed/certify) ×3 → `@cas/core`
-- [ ] Consolidation #3 — SC corner-cluster ×3 → `@cas/conformal` (rides #1)
+- [x] **Consolidation #3 — SC corner-cluster → `@cas/conformal`** (rode #1): new
+      `cornerClustering.ts` exports the three shared pieces — `clusteredRadii` (the
+      `scale·exp(−σ(√N−√k))` law), `clusteredEdgeSamples` (Chebyshev boundary, `offset` param), and
+      `outwardCornerDir` (bisector + `pointInPolygon` flip). scMap.ts, forwardMap.ts, and
+      riemann-map/domains.ts delegate to them; the divergent scale/straight-vertex *policies* stay at
+      each call site. Bit-identical (traced the `±bis` flip convergence); golden conformal+RM corpora
+      pass unchanged.
 - [ ] ADR-0020 duplicate renumber + ~10 inbound-ref sweep
 - [ ] GPU-cap parity fixes (CD σ 512→maxIter; Faber degree-47→N clamp) — each with a CPU↔GPU test
 - [ ] QD `findCycles` anti-holomorphic Newton + ≈ caveat
