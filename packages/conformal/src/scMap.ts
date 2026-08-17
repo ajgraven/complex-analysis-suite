@@ -16,7 +16,7 @@
 import type { C } from "./vandermondeArnoldi.js";
 import { fitConformalMap } from "./lightning.js";
 import { fitForwardMap } from "./forwardMap.js";
-import { buildForwardMap } from "./schwarzChristoffel.js";
+import { buildForwardMap, type SCInverseResult } from "./schwarzChristoffel.js";
 import { interiorAngles, solveParameterProblem } from "./scParameterProblem.js";
 import { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "./cornerClustering.js";
 
@@ -57,6 +57,10 @@ export interface SCMap {
   forwardMany(ws: readonly C[]): C[];
   /** f⁻¹: polygon → 𝔻. `z` must lie inside the polygon. Precise: ODE + Newton; fast: the lightning f fit. */
   inverse(z: C): C;
+  /** f⁻¹ with the honest convergence signal — the round-trip residual |f(w)−z| and a `converged` flag, so a
+   *  `z` outside Ω or a Newton stall is detectable rather than a silent wrong preimage. Precise: the ODE+Newton
+   *  status. Fast: the coarse lightning round-trip (typically `converged: false` — use precise to invert). */
+  inverseWithStatus(z: C): SCInverseResult;
 }
 
 export interface SCOptions {
@@ -216,6 +220,14 @@ export function fitSchwarzChristoffel(poly: Polygon, opts?: SCOptions): SCMap {
       forward: fit.forward,
       forwardMany: fit.forwardMany,
       inverse: fit.inverse,
+      // Fast is the direct lightning fit (no Newton); report the honest round-trip residual so a caller sees
+      // the coarse accuracy (typically converged:false at ~1e-2 — precise mode is the path to a true inverse).
+      inverseWithStatus: (z: C): SCInverseResult => {
+        const w = fit.inverse(z);
+        const back = fit.forward(w);
+        const residual = Math.hypot(back[0] - z[0], back[1] - z[1]);
+        return { w, converged: residual < 1e-9, residual };
+      },
     };
   }
 
@@ -252,5 +264,6 @@ export function fitSchwarzChristoffel(poly: Polygon, opts?: SCOptions): SCMap {
     forward: map.forward,
     forwardMany: map.forwardMany,
     inverse: map.inverse,
+    inverseWithStatus: map.inverseWithStatus,
   };
 }

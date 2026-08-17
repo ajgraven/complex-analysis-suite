@@ -34,13 +34,29 @@ const clampDisk = (w: C): C => {
   return r >= 1 ? [(w[0] / r) * (1 - 1e-12), (w[1] / r) * (1 - 1e-12)] : w;
 };
 
+/** The result of an inverse solve, with an honest convergence signal (guardrail: a silent wrong preimage
+ *  — from a `z` outside Ω, or a Newton stall near a corner — must be detectable, not read as exact). */
+export interface SCInverseResult {
+  /** The preimage w ∈ 𝔻 (the best iterate reached, even when `converged` is false). */
+  readonly w: C;
+  /** True iff the final forward residual |f(w) − z| fell below tolerance (1e-9). */
+  readonly converged: boolean;
+  /** The final forward residual |f(w) − z| — the honest ≈ error of the returned preimage. */
+  readonly residual: number;
+}
+
+/** Convergence tolerance for the inverse's forward residual — comfortably above the 1e-13 Newton target,
+ *  far below the coarse-fit regime, so a genuine stall (z ∉ Ω / corner) reads as `converged: false`. */
+const INVERSE_TOL = 1e-9;
+
 /**
  * f⁻¹ by the Driscoll–Trefethen ODE + Newton hybrid (2002, §3.3): pull the straight segment from the
  * conformal centre f(0) = A to `z` back through dw/dτ = (z − A)/f′(w) with RK4 (a global initial guess),
  * then Newton-refine w ← w − (f(w) − z)/f′(w) to machine precision. `z` must lie inside the polygon (the
- * segment A → z is assumed to as well — true for polygons star-shaped from their conformal centre).
+ * segment A → z is assumed to as well — true for polygons star-shaped from their conformal centre). Returns
+ * an honest `converged`/`residual` signal: a `z` outside Ω or a Newton stall leaves the residual above tol.
  */
-function invertMap(z: C, center: C, forward: (w: C) => C, derivative: (w: C) => C): C {
+function invertMap(z: C, center: C, forward: (w: C) => C, derivative: (w: C) => C): SCInverseResult {
   const dz = csub(z, center);
   const rhs = (w: C): C => cdiv(dz, derivative(w)); // dw/dτ (f′ is the cheap product form)
   let w: C = [0, 0]; // f(0) = A
@@ -61,7 +77,11 @@ function invertMap(z: C, center: C, forward: (w: C) => C, derivative: (w: C) => 
     if (Math.hypot(diff[0], diff[1]) < 1e-13) break;
     w = clampDisk(csub(w, cdiv(diff, derivative(w))));
   }
-  return w;
+  // Measure the residual on the FINAL iterate (the loop's check is pre-step, so the last step is unmeasured
+  // when it runs to the cap): this is the single honest error signal for both the early-break and stall cases.
+  const finalDiff = csub(forward(w), z);
+  const residual = Math.hypot(finalDiff[0], finalDiff[1]);
+  return { w, converged: residual < INVERSE_TOL, residual };
 }
 
 export interface SCQuadratureOptions {
@@ -140,6 +160,8 @@ export interface SCForwardMap {
   derivative(w: C): C;
   /** f⁻¹: polygon → 𝔻 by the ODE + Newton hybrid. `z` must lie inside the polygon. */
   inverse(z: C): C;
+  /** f⁻¹ with the honest convergence signal (a `z` outside Ω / a Newton stall reads as `converged: false`). */
+  inverseWithStatus(z: C): SCInverseResult;
 }
 
 export interface SCForwardOptions extends SCQuadratureOptions {
@@ -184,6 +206,7 @@ export function buildForwardMap(
 
   const forward = (w: C): C => cadd(center, cmul(constant, integ.integralTo(w)));
   const derivative = (w: C): C => cmul(constant, integ.full(w));
-  const inverse = (z: C): C => invertMap(z, center, forward, derivative);
-  return { prevertices, angles, constant, center, vertices, forward, forwardMany: (ws) => ws.map(forward), derivative, inverse };
+  const inverseWithStatus = (z: C): SCInverseResult => invertMap(z, center, forward, derivative);
+  const inverse = (z: C): C => inverseWithStatus(z).w;
+  return { prevertices, angles, constant, center, vertices, forward, forwardMany: (ws) => ws.map(forward), derivative, inverse, inverseWithStatus };
 }

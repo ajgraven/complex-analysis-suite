@@ -25,7 +25,7 @@ export { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "./corner
 export { fitSchwarzChristoffel } from "./scMap.js";
 export type { Polygon, SCMap, SCOptions } from "./scMap.js";
 export { buildForwardMap, sideIntegrals } from "./schwarzChristoffel.js";
-export type { SCForwardMap, SCForwardOptions, SCQuadratureOptions } from "./schwarzChristoffel.js";
+export type { SCForwardMap, SCForwardOptions, SCQuadratureOptions, SCInverseResult } from "./schwarzChristoffel.js";
 export { buildExteriorForwardMap, exteriorSideIntegrals, exteriorMapLaurentAtInfinity } from "./exteriorSchwarzChristoffel.js";
 export type { ExteriorSCForwardMap, ExteriorSCForwardOptions, ExteriorMapLaurent } from "./exteriorSchwarzChristoffel.js";
 export { solveExteriorParameterProblem, fitExteriorSchwarzChristoffel } from "./exteriorScParameterProblem.js";
