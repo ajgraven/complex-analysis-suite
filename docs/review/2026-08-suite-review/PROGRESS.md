@@ -146,9 +146,22 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       boundary-fixed-point case (σ|∂Ω=id) instead of reporting boundary drift as spurious cycles. Fixed
       the misleading "n=1 is typically reliable" comment, added the missing **≈ advisory** to the
       cycle-count UI, and extended the QD test with an n=2 (even-path) shape check.
-- [ ] AP freehand-path vertex cap
-- [ ] Interchange nested-payload validation (`sourceDomain`/`hData`/`tilingSetHint`)
-- [ ] Bulk strip of QD's 81 stale `twin of X.js` headers (mechanical)
+- [x] **AP freehand-path vertex cap** (self-DoS guard): `isFinitePointArray` now rejects a decoded
+      `kind:"path"` contour longer than `MAX_RESOLUTION` (5000) — the same self-DoS bound `sampleCircle`
+      already applies to circles, since `cumulativeArg`/`logDerivCumulative` iterate every vertex each
+      frame; the `MIN/MAX_RESOLUTION` consts moved above the guard so it can reference the cap. New decode
+      test pins a 5001-vertex path → null. (commit e1e3e94)
+- [x] **Interchange nested-payload validation** (interchange-validate-01): a `schwarz-reflection`'s nested
+      `sourceDomain` (a QuadratureDomain) and `tilingSetHint` were never inspected — a non-canonical
+      `sourceDomain.conventions` escaped the ADR-0006 `assertCanonicalWire` guard and the nested `Complex[]`
+      fields (`sourceDomain.boundarySamples`, `tilingSetHint.fundamentalTile`) skipped the `MAX_COEFF_LEN`
+      cap every other `Complex[]` carries. New shared `validateQuadratureDomain` (also validates the optional
+      `hData` MapSpec the top-level `quadrature-domain` case had omitted) + an `isTilingSetHint` bound; 2 new
+      tests cover the nested non-canonical-convention rejection and the over-cap `fundamentalTile`. (commit 48526c0)
+- [x] **QD stale header strip** (finding 07-#4): removed the `— twin of <name>.js (classic stays frozen)`
+      clause from all 81 `.mjs` top-of-file comments (scripted `sed`, dry-run-verified on 11 diverse cases;
+      each file's real trailing description preserved, exactly one comment line changed per file, 0 clauses
+      remaining; the 2 genuine "twin of" prose comments untouched). Comment-only, no behavior change. (commit 7cc6265)
 - [ ] (optional) remaining LOW numerical test-gaps + M₀ relabel + QD↔`@cas/schwarz` rewire ADR
 
 ## Log
@@ -158,3 +171,6 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
   (gates green).
 - 2026-08-17: Follow-up — Durand–Kerner NaN certification fixed in `@cas/core` + regression test
   (negative-control-verified).
+- 2026-08-17: Follow-up — three items landed as separate commits, full gate green (377 files / 3153 tests,
+  +3 new): AP freehand-path vertex cap (e1e3e94), interchange nested-`sourceDomain`/`tilingSetHint`
+  validation (48526c0), QD 81-file stale-header strip (7cc6265).
