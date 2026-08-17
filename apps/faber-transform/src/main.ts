@@ -60,6 +60,7 @@ import {
   MIN_POLE_R,
   MAX_TRUNCATION,
   MIN_TRUNCATION,
+  GPU_COEFF_CAP,
   MAX_EXPR_LEN,
   MIN_SUPPRESS_M,
   MAX_SUPPRESS_M,
@@ -436,6 +437,16 @@ function main(): void {
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
     const showRoots = state.showRoots !== false;
     const rootMarks = (num: Cx[]): Vec2[] => (showRoots ? transformRoots(num).map((r): Vec2 => [r.re, r.im]) : []);
+    // The GPU (and the CPU fallback, which reads the same source.rat) can only upload GPU_COEFF_CAP
+    // coefficients per array, so a rational image above that degree renders truncated. Clamp num/den so
+    // ALL paths agree (GPU · CPU · root markers · readout) and flag the truncation honestly (≈, not =).
+    const capForGpu = (rat: Rational): { rat: Rational; truncated: boolean } => {
+      if (rat.num.length <= GPU_COEFF_CAP && rat.den.length <= GPU_COEFF_CAP) return { rat, truncated: false };
+      return {
+        rat: { ...rat, num: rat.num.slice(0, GPU_COEFF_CAP), den: rat.den.slice(0, GPU_COEFF_CAP) },
+        truncated: true,
+      };
+    };
 
     if (state.input.kind === "monomial") {
       const n = state.input.degree;
@@ -497,11 +508,14 @@ function main(): void {
     if (ratIn) {
       try {
         const image = transformRational(map, ratIn);
+        const { rat, truncated } = capForGpu(image);
         return {
           left: leftFn,
-          right: { source: { kind: "rational", rat: image }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(image.num) },
-          badge: exactBadge,
-          readout: `Φφ(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)${domainNote}`,
+          right: { source: { kind: "rational", rat }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(rat.num) },
+          badge: truncated ? "≈" : exactBadge,
+          readout: truncated
+            ? `Φφ(f)(w) ≈ rational image on K, truncated to degree ${GPU_COEFF_CAP - 1} (GPU coefficient cap)  ·  ${Math.max(0, rat.den.length - 1)} image pole(s)${domainNote}`
+            : `Φφ(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)${domainNote}`,
           error: false,
         };
       } catch (e) {

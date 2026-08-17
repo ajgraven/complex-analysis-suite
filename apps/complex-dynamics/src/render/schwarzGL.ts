@@ -49,6 +49,12 @@ import { makeSphereCamera, DEFAULT_ROTATION, DEFAULT_DISTANCE, DEFAULT_FOV, type
 // through a selectable colormap texture + scale mode (ADR-0009 item 3 — parity with the standard
 // fractals; render/schwarzColormaps.ts), while the CPU fallback keeps schwarzView.ts's fixed ramp.
 // escaped (black) / interior (deep indigo) / invalid (gray) stay flat on both paths.
+
+// The σ-orbit loops below use a STATIC outer bound (GLSL-ES portability) plus a runtime `break` at
+// u_maxIter. That bound MUST be ≥ the input's max iterations, or the GPU silently classifies a point
+// whose orbit only resolves after the bound as "interior" while the CPU keeps iterating — breaking the
+// pixel-for-pixel parity asserted above. Kept equal to the input clamp (main.ts) via this one constant.
+export const SIGMA_MAX_ITER = 4096;
 export const SCHWARZ_FRAGMENT_SHADER = `#version 300 es
 precision highp float;
 precision highp int;
@@ -256,7 +262,7 @@ vec3 fieldColor() {
   float trap = 1e20;
   float avgSum = 0.0, avgCount = 0.0;
   float derivMag = 1.0;
-  for (int n = 1; n <= 512; ++n) {           // 512 ≫ any maxIter; the real bound is u_maxIter below
+  for (int n = 1; n <= ${SIGMA_MAX_ITER}; ++n) {  // static outer bound == the input's max; u_maxIter is the runtime cap
     if (n > u_maxIter) break;
     vec2 next = sigma(w, zSeed, ok);
     if (!ok) return vec3(80.0) / 255.0;                          // invalid (inverse failed)
@@ -301,7 +307,7 @@ float fieldHeight() {
   if (!inOmega(w)) return -1.0;                                   // w₀ ∈ K (n=0) — flat
   vec2 zSeed = newtonSeedFresh(w);
   bool ok = true;
-  for (int n = 1; n <= 512; ++n) {
+  for (int n = 1; n <= ${SIGMA_MAX_ITER}; ++n) {
     if (n > u_maxIter) break;
     vec2 next = sigma(w, zSeed, ok);
     if (!ok) return -1.0;                                         // invalid — flat

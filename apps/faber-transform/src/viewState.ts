@@ -41,9 +41,14 @@ export const MAX_DEGREE = 40;
 /** Pole magnitude bounds: strictly outside the unit disk, and finite. */
 export const MIN_POLE_R = 1.0001;
 export const MAX_POLE_R = 1000;
-/** Truncation-order bounds for the free-form series path. */
+/** GPU coefficient-array cap (render/gpu.ts `uNum[]`/`uDen[]` length): a Faber-image polynomial or
+ *  rational is uploaded — and thus faithfully rendered — only up to degree `GPU_COEFF_CAP − 1`. The
+ *  series truncation below and the monomial degree (`MAX_DEGREE = 40`) must fit under it, or the GPU
+ *  silently truncates while the CPU / root markers / readout do not. */
+export const GPU_COEFF_CAP = 48;
+/** Truncation-order bounds for the free-form series path (capped to what the GPU can upload). */
 export const MIN_TRUNCATION = 1;
-export const MAX_TRUNCATION = 128;
+export const MAX_TRUNCATION = GPU_COEFF_CAP - 1;
 /** Max length of a free-form expression carried in a permalink (a crafted-link safety bound). */
 export const MAX_EXPR_LEN = 256;
 /** Custom-polygon bounds (crafted-link safety + solver sanity): 3–16 vertices, coordinates in [−COORD, COORD]. */

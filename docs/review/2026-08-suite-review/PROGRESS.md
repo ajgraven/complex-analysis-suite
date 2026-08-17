@@ -124,7 +124,16 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       each call site. Bit-identical (traced the `±bis` flip convergence); golden conformal+RM corpora
       pass unchanged.
 - [ ] ADR-0020 duplicate renumber + ~10 inbound-ref sweep
-- [ ] GPU-cap parity fixes (CD σ 512→maxIter; Faber degree-47→N clamp) — each with a CPU↔GPU test
+- [x] **GPU-cap parity fixes** (finding 05-#1 + 04-#1): **CD σ** — the shader's static orbit-loop
+      bound (512) is now `SIGMA_MAX_ITER = 4096`, one shared constant used by both loops AND the input
+      clamp (main.ts), so the GPU no longer caps deep points as "interior" while the CPU keeps
+      iterating (kept the defensive static-bound+`break` idiom — a bigger constant of the same form the
+      existing 512 loop already proved compiles; the real GL shader-compile check is env-blocked locally
+      — Playwright headless-shell absent — and runs in CI's browser job). **Faber** — a single
+      `GPU_COEFF_CAP = 48` (viewState) drives the GPU `uNum/uDen` array
+      size AND `MAX_TRUNCATION` (was 128 → 47), so the series path is always fully uploadable; the
+      expr-rational path clamps num/den to the cap and honestly downgrades `=`→`≈` with a truncation
+      note when a high-degree image (e.g. `z^60`) exceeds it. Monomials (`MAX_DEGREE = 40`) already fit.
 - [ ] QD `findCycles` anti-holomorphic Newton + ≈ caveat
 - [ ] AP freehand-path vertex cap
 - [ ] Interchange nested-payload validation (`sourceDomain`/`hData`/`tilingSetHint`)
