@@ -34,9 +34,10 @@ Format follows Michael Nygard's ADR convention.
 | [0023](#adr-0023-accessible-marks-validated-palette-shape-encoding-and-a-non-rainbow-ramp) | Accessible marks — validated palette, shape encoding, and a non-rainbow ramp | Accepted |
 | [0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine) | Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine | Accepted |
 | [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
+| [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication) | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication) | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All twenty-five are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All twenty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -2117,3 +2118,116 @@ deferred (its Action Item 7).
        before/after `|Fₙ|` vs `|Q_{n,m}|` boundary profile (paper Fig. 2). De-risked by an M0-style spike.
 7. [ ] **Still deferred:** an optional lightning fast-mode for the polygon solve; a `@cas/interchange` form
        for the exterior map (gate on a receiving tool).
+
+---
+
+## ADR-0026: Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*A follow-on ADR in the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) /
+[ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) shape, recording a deliberate DEFERRAL of a
+duplication surfaced by the 2026-08 suite review: QD's `app/schwarz/schwarz-common.mjs` and `@cas/schwarz`
+implement the same classical Schwarz-reflection σ on the bounded + unbounded-Laurent families. Unlike
+[ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)'s `sym-core` (a genuine shape-mismatch
+non-merge), this subset is the SAME shape — so the merge is **deferred, not declined**.*
+
+### Context
+
+`@cas/schwarz` was extracted for the QD → CD σ hand-off
+([ADR-0009](#adr-0009-schwarz-reflection-is-a-first-class-peer-view-in-complex-dynamics)): Complex Dynamics and
+Correspondences reconstruct σ(w) = conj(F(φ⁻¹(w))) from a closed-form φ recipe to render its escape-time
+field. It reconstructs two families — the classical UNBOUNDED-Laurent (`makeUnboundedLaurentSchwarz`) and
+BOUNDED (`makeBoundedSchwarz`) maps — plus the family-agnostic σ⁻¹ machinery (`buildPreimageTree`,
+`sampleLimitSet`, `iterateCurveForward`/`findCycles`, `findSigmaSingularities`).
+
+QD's own `app/schwarz/schwarz-common.mjs` builds σ for the SAME classical families — its `boundedQD` /
+`unboundedQD` adapters and `branchSchwarzContribution` are the byte-for-byte same kernel
+`F(z) = conj(w₀) + Σⱼ Σₖ A_{j,k}/(z − z_j)ᵏ` — AND for the four weighted families the package does not have:
+`boundedLQD`, `boundedLQD_singular`, `unboundedLQD`, `unboundedLQD_singular` (plus `boundedQDRational`). It is a
+**superset**. And QD **does not depend on `@cas/schwarz`** (not in its `package.json`), so the classical subset
+is genuinely implemented twice, with no record of why.
+
+The review flagged this as reading like **forgotten duplication**. But `@cas/schwarz`'s own header already
+states the intended direction: *"The remaining weighted families (LQD, PQD) follow as the QD app's σ machinery
+is lifted here."* The intended end-state was always **consolidation** — the package grows to family parity,
+then QD consumes it — not a permanent two-engine split.
+
+### Decision
+
+**Defer the consolidation; do not partial-rewire now.** Keep `schwarz-common.mjs` as the QD-side σ engine for
+the present, and record the boundary explicitly so it is a *deliberate* deferral. When consolidation does
+happen it goes in the direction the package header names — **lift QD's weighted-family σ machinery into
+`@cas/schwarz` to reach family parity, then rewire QD to consume the complete package wholesale** — NOT a
+partial rewire of only the two classical families onto today's incomplete package.
+
+### Options Considered
+
+#### Option A: Partial rewire now — QD's `boundedQD` + `unboundedQD` onto today's `@cas/schwarz` (the review's first suggestion)
+**Pros:** kills the classical-subset duplication immediately; `@cas/schwarz` is a real, tested
+[ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) second consumer. **Cons, and why rejected:**
+it leaves QD with a **split σ engine** — two of seven families reconstructed from the TS package, the other
+five (the weighted LQD/PQD/singular families) still in `schwarz-common.mjs` — with the
+[ADR-0006](#adr-0006-convention-neutral-core-packages) convention boundary running through the middle of the
+solver's own σ code. That is harder to reason about than either pure state, and couples QD's vanilla-JS
+(`allowJs`, [ADR-0002](#adr-0002-typescript-as-the-common-language)) edge — which runs unchanged in module
+workers and the headless node suite — to the package graph for only a partial win.
+
+#### Option B: Lift QD's full σ machinery into `@cas/schwarz` NOW (reach parity, then QD consumes it)
+**Pros:** the coherent end-state; one σ engine for the suite. **Cons, and why deferred not done:** there is
+**no second consumer for the weighted families yet** — CD and Correspondences use only the unbounded-Laurent +
+bounded reconstructions. [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) is symmetric: don't
+merge without a second consumer any more than you extract without one. Lifting ~500 lines of solver-critical
+weighted-family σ (`schwarz-common.mjs:459–987`) from vanilla JS to strict TS, across the convention edge, with
+only ONE consumer (QD itself) is exactly the speculative, ahead-of-demand refactor the guardrails caution
+against — and unlike [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)'s
+deliberate extract-ahead, nothing here is blocked on it.
+
+#### Option C: Keep two engines permanently ([ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) `sym-core` style)
+**Pros:** no coupling; each side evolves freely. **Cons:** unlike `sym-core` (multivariate vs univariate — a
+real shape mismatch that may never merge), the classical subset here is the **same shape**, genuinely
+redundant. Declaring it permanent would be dishonest — `@cas/schwarz` was built anticipating the lift. So this
+is a *deferral*, not a decline.
+
+### Trade-off Analysis
+
+The honest cost is **duplication of the classical Schwarz kernel**: the bounded + unbounded-Laurent σ is
+implemented in both `schwarz-common.mjs` and `@cas/schwarz`, and a σ fix in one does not reach the other (drift
+risk). That is real debt.
+
+It is accepted *for now* because the coherent fix (Option B) has no demand yet, the cheap fix (Option A) makes
+the solver harder to reason about, and the debt is bounded and — once Action Item 2 lands — guarded: a
+differential test turns silent drift into a red build, exactly as
+[ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) did for the two ℚ(i) engines. The suite's
+north-star ("each tool builds fewer primitives than the last") is served by *recording the path to
+consolidation and guarding the interim*, not by a partial rewire that trades one kind of complexity for
+another.
+
+### Consequences
+
+- **Easier:** QD's σ engine stays self-contained vanilla JS; no convention-boundary seam inside the solver; no
+  new cross-package edge added under demand-less pressure.
+- **Harder:** two classical-σ implementations to keep correct; a reader must learn (from the header notes,
+  Action Item 1) that "the Schwarz engine" is — like "the exact engine" in
+  [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) — ambiguous.
+- **Watch for:** a second consumer wanting the weighted (LQD/PQD) σ families outside QD. That is the
+  [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) trigger to execute Option B.
+- **Revisit if** any of: (a) a second consumer needs the weighted-family σ (⇒ Option B); (b) the drift-guard
+  differential test fires (the two classical engines disagree ⇒ fix + reconsider urgency); or (c)
+  `schwarz-common.mjs` needs a substantial change to the *classical* subset (do it once, in the package, and
+  consume it — cheaper than editing both).
+
+### Action Items
+1. [x] Note the boundary on both sides — a header line in `app/schwarz/schwarz-common.mjs` and in
+       `@cas/schwarz`'s `index.ts` — stating the classical-subset duplication is a *deliberate deferral* (this
+       ADR), and that the intended consolidation direction is lift-to-parity-then-consume.
+2. [ ] Add the **differential drift-guard**: a test feeding one classical φ (e.g. the deltoid `ζ + 1/(2ζ²)` and
+       a finite-pole bounded QD) to both `schwarz-common.mjs`'s `buildSchwarzFromPhi(...).sigma` and
+       `@cas/schwarz`'s `makeUnboundedLaurentSchwarz(...).sigma`, asserting σ(w) agrees to a numerical
+       tolerance on a grid of exterior w — reconciling the `{re,im}`↔`[re,im]` layouts and the branch/seed
+       selection. Adds `@cas/schwarz` to QD's devDependencies (the
+       [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) Action-Item-4 pattern);
+       mutation-verify in both directions.
+3. [ ] When a second consumer of the weighted families appears, execute Option B (lift `schwarz-common`'s
+       weighted-family σ into `@cas/schwarz` to family parity, then rewire QD to consume the package) and
+       supersede this ADR.

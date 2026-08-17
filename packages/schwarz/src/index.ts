@@ -4,7 +4,10 @@
 // hand-off carries φ + this engine rather than a compiled σ (docs/design/SIGMA-HANDOFF.md). Two families
 // are reconstructed: the classical UNBOUNDED-Laurent map (exterior branch, `makeUnboundedLaurentSchwarz`)
 // and the classical BOUNDED map (interior branch, `makeBoundedSchwarz`, S5-C2). The remaining weighted
-// families (LQD, PQD) follow as the QD app's σ machinery is lifted here.
+// families (LQD, PQD) follow as the QD app's σ machinery is lifted here — this classical subset is
+// deliberately duplicated with QD's `app/schwarz/schwarz-common.mjs` (the superset) until a second consumer
+// of the weighted families triggers that lift; the merge is DEFERRED, not forgotten (docs/DECISIONS.md
+// ADR-0026, which also tracks a σ differential drift-guard between the two engines).
 export { makeUnboundedLaurentSchwarz, escapeTime } from "./unbounded-laurent.js";
 // pointInPolygon was consolidated into @cas/core (ADR-0007); re-exported here so existing consumers
 // (Complex Dynamics, Correspondences) keep importing it from @cas/schwarz unchanged.

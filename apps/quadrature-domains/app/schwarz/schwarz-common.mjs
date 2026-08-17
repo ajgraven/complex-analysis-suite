@@ -43,6 +43,15 @@ import _QD from '../solvers/solver.mjs';
 // "In Ω" is tested by point-in-polygon against the sampled ∂Ω of the inverse
 // solution. Cheap and unambiguous given the curve we already have.
 //
+// CONSOLIDATION NOTE (ADR-0026): the CLASSICAL bounded + unbounded-Laurent σ here (the boundedQD /
+// unboundedQD adapters + branchSchwarzContribution) is the same kernel `@cas/schwarz` reconstructs for the
+// QD → CD hand-off (makeBoundedSchwarz / makeUnboundedLaurentSchwarz). That duplication is a DELIBERATE
+// DEFERRAL, not forgotten: this file is the SUPERSET (it also carries the weighted LQD/PQD/singular +
+// rational families the package lacks), so the coherent merge is to lift THIS engine into `@cas/schwarz` to
+// family parity, then have QD consume the package — deferred until a second consumer needs the weighted
+// families (ADR-0007). See docs/DECISIONS.md ADR-0026. A σ differential drift-guard between the two engines
+// is the standing action item there.
+//
 // API (on QD.Schwarz):
 //   buildSchwarzFromPhi(phi, hData, boundaryPts)
 //     → { sigma(w, seedHint?) → {re, im, _z} | null,
