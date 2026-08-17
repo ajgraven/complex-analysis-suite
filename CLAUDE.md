@@ -150,7 +150,8 @@ drift (#264). **No new package** (SC lives inside `@cas/conformal`); **no `@cas/
 cross) join the polygon picker — the precise solve's reentrant-corner accuracy made visible. The **Ω→𝔻 direction**
 now routes polygons through the exact SC engine too (the conformal grid drawn by the FORWARD map — cheap + exact;
 the ODE `inverse` reserved for the single hover query) instead of the approximate lightning fit, so **both directions
-are exact**, honestly `=`/`≈`-labelled with mode / `degraded` / interior-angle stats. The **prevertices wₖ ↔ corners
+are exact for polygons** (smooth regions keep the lightning fit), honestly `=`/`≈`-labelled with mode / `degraded` /
+interior-angle stats. The **prevertices wₖ ↔ corners
 vₖ** correspondence is drawn colour-matched across the two panes, with interior-angle `αₖ·π` labels and hover-linking.
 Polygon **vertices are draggable** directly on whichever pane shows Ω (image pane in 𝔻→Ω, source pane in Ω→𝔻): a drag
 forks to an editable **"Custom polygon"** (named presets stay fixed), refits **fast (lightning) while dragging** and
