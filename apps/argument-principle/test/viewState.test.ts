@@ -78,6 +78,23 @@ describe("argument-principle view-state", () => {
     expect(decodeArgPrincipleState(good)?.contour.points?.length).toBe(3);
   });
 
+  it("rejects a crafted path permalink with a runaway vertex count (self-DoS guard)", () => {
+    // A hostile #vs= could carry millions of finite [x,y] vertices; cumulativeArg / logDerivCumulative
+    // iterate every vertex each frame — the self-DoS sampleCircle caps for circles. Decode must reject an
+    // over-long path (> MAX_RESOLUTION) just as it rejects malformed points.
+    const huge = encodeViewState(APP_NS, {
+      ...DEFAULT_VIEW_STATE,
+      contour: {
+        kind: "path",
+        centerRe: 0,
+        centerIm: 0,
+        radius: 1,
+        points: Array.from({ length: 5001 }, (_, i): [number, number] => [i, i]),
+      },
+    });
+    expect(decodeArgPrincipleState(huge)).toBeNull();
+  });
+
   it("back-fills target + pedagogy on an older permalink that predates them", () => {
     // The exact shape a pre-§11 link carried: no `target`, no `pedagogy`. It must still open, with the
     // new fields back-filled to their defaults and every original field untouched (share-link compat).
