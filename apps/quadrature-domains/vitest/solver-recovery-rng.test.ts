@@ -1,14 +1,14 @@
 // Review LOW (finding 07): newtonSolve's singular-Jacobian RECOVERY branch nudged the iterate with the
-// process-global, un-seedable Math.random — a non-deterministic solve branch in a research/repro tool, and
-// a flaky-test hazard for anything that trips it. The fix threads an optional `rng` through the Newton
-// options (default Math.random for back-compat). This pins that an injected rng is actually THREADED INTO
-// and CONSUMED BY the recovery branch — the contract the seed relies on.
+// process-global, un-seedable Math.random — a non-deterministic solve branch in a research/repro tool, and a
+// flaky-test hazard. Two fixes: (1) thread an optional `rng` through the Newton options (default Math.random
+// for back-compat); (2) route the recovery inner solve through the overdetermined-capable solveLeastSquares —
+// it was square-only solveLinearSystem, so for QD's overdetermined residual systems (more boundary equations
+// than φ coefficients) recovery could never complete ("not square"). This file pins both: the rng is THREADED
+// INTO the recovery branch, and recovery COMPLETES and is reproducible per seed.
 //
 // We force recovery deterministically with a stateful `jacobianFn` that returns an all-zero (⇒ singular)
-// Jacobian on its FIRST call, tripping the main `leastSquaresWithCond` "singular" throw. The recovery nudge
-// `v + (rng()−0.5)·noiseScale` then draws from the injected rng, so a spy records the draw. (The recovery's
-// own inner solve is square-only `solveLinearSystem` while QD residual systems are overdetermined, so
-// recovery does not *complete* here — but the rng is drawn before that, which is what this pins.)
+// Jacobian on its FIRST call, tripping the main `leastSquaresWithCond` "singular" throw; the recovery nudge
+// `v + (rng()−0.5)·noiseScale` then draws from the injected rng.
 import { describe, it, expect, beforeAll } from "vitest";
 
 let QD: any;
@@ -58,5 +58,25 @@ describe("newtonSolve — the singular-recovery RNG is seedable (threaded throug
     const start = perturbedStart();
     const res = QD.newtonSolve(start, diskHData, { maxIter: 3, jacobianFn: singularOnce() });
     expect(res).toBeTruthy(); // the default-RNG recovery path completes without throwing
+  });
+});
+
+describe("newtonSolve — singular recovery COMPLETES on an overdetermined system", () => {
+  it("records a recovery event (not a 'not square' abort) and is reproducible per seed", () => {
+    // QD residual Jacobians are overdetermined (more boundary equations than φ coefficients — the disk is
+    // 5×4). The recovery inner solve must therefore be a LEAST-SQUARES solve; a square-only solver dies on
+    // "not square", so recovery never records an event. This pins that recovery actually completes AND that
+    // the threaded seed makes it reproducible (the post-nudge residual is a direct rng-sensitive observable).
+    const start = perturbedStart();
+    const run = (seed: number) =>
+      QD.newtonSolve(start, diskHData, { maxIter: 6, jacobianFn: singularOnce(), rng: QD.mulberry32(seed) });
+    const a1 = run(42);
+    const a2 = run(42);
+    const b = run(7);
+
+    expect(a1.recoveryEvents?.length ?? 0).toBeGreaterThan(0); // recovery COMPLETED (least-squares inner solve)
+    const draw = (r: any) => r.recoveryEvents[0].Fnorm; // residual at the rng-nudged iterate
+    expect(draw(a1)).toBe(draw(a2)); // same seed ⇒ byte-identical recovery
+    expect(draw(a1)).not.toBe(draw(b)); // different seed ⇒ different nudge
   });
 });

@@ -178,9 +178,11 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
         not-converged, fast coarse). (3) QD `houseQR` — comment corrected to ABSOLUTE-pivot (not rcond) +
         condEst LOWER-BOUND framing; `vitest/solver-qr-singular-gate.test.ts` pins it. (4) QD Newton
         singular-recovery — threaded an optional seeded `rng` (default `Math.random`) so recovery is
-        reproducible; `vitest/solver-recovery-rng.test.ts` proves the rng threads through. **Newly surfaced
-        (noted, not fixed):** the recovery inner solve is square-only (`solveLinearSystem`) so it can't
-        *complete* for overdetermined QD systems — honest code comment added, left behavior-preserving.
+        reproducible; `vitest/solver-recovery-rng.test.ts` proves the rng threads through. **Newly surfaced,
+        then fixed** (commit 53f7046): the recovery inner solve was square-only (`solveLinearSystem`) so it
+        couldn't *complete* for overdetermined QD systems; it now routes through `solveLeastSquares` (the
+        overdetermined-capable class the main Newton step uses, identical on square systems). Red→green test +
+        QD node-suite byte-identical (2335/0 before & after).
   - [x] **QD↔`@cas/schwarz` decision ADR** (MED): wrote **ADR-0026** (defer consolidating QD's superset
         `schwarz-common.mjs` with `@cas/schwarz`'s classical subset — same shape ⇒ deferred, not declined like
         sym-core; partial-rewire rejected as a split engine; lift-to-parity-then-consume deferred to a second
@@ -202,6 +204,13 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
   ADR-0026), then a thorough self-review of the whole session. Full gate green (**380 files / 3165 tests,
   +12 new**; QD 159→162). Substantive additions: `@cas/conformal` gained an honest `inverseWithStatus`
   convergence signal (a `z∉Ω`/stall is no longer a silent wrong preimage) and a precise-mode crowding-wall
-  golden; QD Newton recovery is now seedable (`rng` option). One latent issue surfaced and documented (not
-  fixed, per posture): QD's recovery inner solve is square-only so it can't complete for overdetermined
+  golden; QD Newton recovery is now seedable (`rng` option). One latent issue surfaced and documented (fixed
+  in the follow-up below): QD's recovery inner solve was square-only so it couldn't complete for overdetermined
   systems.
+- 2026-08-17: Follow-up — **fixed the surfaced square-only recovery issue.** newtonSolve's singular-recovery
+  inner solve now uses `solveLeastSquares` (was square-only `solveLinearSystem`), so recovery completes for
+  overdetermined QD systems instead of aborting on "not square" (commit 53f7046). Confined to the recovery
+  branch (reached only after the main solve throws "singular"), so every well-conditioned solve is untouched:
+  QD node-suite byte-identical (2335 passed / 0 failed before & after), solver-family / identity-tol goldens
+  unchanged, red→green test pins recovery completion + seeded-rng determinism. Full gate green (380 files /
+  3166 tests). No correctness exposure — a recovered map still passes univalence/identity certification.

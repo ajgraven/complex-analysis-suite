@@ -602,12 +602,13 @@ function newtonSolve(phi_init, hData, options = {}) {
       try {
         const Fnudged = evalF(nudgedV);
         const Jnudged = jacobianFn(nudgedV, evalF, finiteDiffEps);
-        // NOTE: this inner solve is square-only (solveLinearSystem), unlike the main step which uses the
-        // overdetermined-capable leastSquaresWithCond above. For an overdetermined residual system (the
-        // usual QD case — more boundary equations than unknowns) this throws "not square" and recovery
-        // completes only for square systems. Left as-is (behavior-preserving); a fuller fix would route
-        // this through solveLeastSquares to match the main path. The rng nudge above is drawn regardless.
-        delta = solveLinearSystem(Jnudged, Fnudged.map(x => -x));
+        // Recovery re-solve uses the OVERDETERMINED-capable least-squares solver (solveLeastSquares), the same
+        // class the main step uses (leastSquaresWithCond) — NOT the square-only solveLinearSystem. QD residual
+        // systems are overdetermined (more boundary equations than unknowns), so the square solver threw
+        // "not square" and recovery could never complete. solveLeastSquares is identical to solveLinearSystem
+        // on square systems (so no well-conditioned solve changes) and throws "singular" only if the nudge
+        // failed to restore rank — a genuine recovery failure, caught below.
+        delta = solveLeastSquares(Jnudged, Fnudged.map(x => -x));
         v = nudgedV; F = Fnudged; Fnorm = residualNorm(F); J = Jnudged;
         // Stash recovery telemetry on the result so the UI can surface it.
         recoveryEvents.push({ iter, condEst, noiseScale, Fnorm });
