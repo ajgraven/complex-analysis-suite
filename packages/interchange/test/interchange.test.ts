@@ -253,4 +253,19 @@ describe("validatePayload — the non-MapSpec structural fields (review P2 / int
     const env = { schema: SCHEMA_ID, version: VERSION, kind: "quadrature-domain", payload: { phi: deltoidSigma, conventions: CANONICAL, boundarySamples: big }, provenance: prov };
     expect(() => validateEnvelope(env)).toThrow(/boundarySamples/);
   });
+  it("validates a schwarz-reflection's nested sourceDomain — non-canonical conventions rejected (interchange-validate-01)", () => {
+    const withSource = (sourceDomain: unknown) => ({ ...schwarzEnvelope(), payload: { ...schwarzEnvelope().payload, sourceDomain } });
+    // A nested QD's non-canonical convention tag previously escaped the ADR-0006 canonical-wire guard.
+    expect(() => validateEnvelope(withSource({ phi: deltoidSigma, conventions: { area: "normalized", contour: "suppressed-2pii" } }))).toThrow(/non-canonical/);
+    expect(() => validateEnvelope(withSource({ phi: { form: "bogus" }, conventions: CANONICAL }))).toThrow(/sourceDomain\.phi/); // malformed nested phi
+    expect(validateEnvelope(withSource({ phi: deltoidSigma, conventions: CANONICAL })).kind).toBe("schwarz-reflection"); // canonical sourceDomain passes
+    expect(validateEnvelope(withSource(undefined)).kind).toBe("schwarz-reflection"); // optional — absent is fine
+  });
+  it("rejects a schwarz-reflection whose tilingSetHint.fundamentalTile exceeds the coeff cap", () => {
+    const big = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 })); // > MAX_COEFF_LEN
+    const withHint = (tilingSetHint: unknown) => ({ ...schwarzEnvelope(), payload: { ...schwarzEnvelope().payload, tilingSetHint } });
+    expect(() => validateEnvelope(withHint({ fundamentalTile: big }))).toThrow(/tilingSetHint/);
+    expect(validateEnvelope(withHint({ fundamentalTile: [{ re: 0, im: 0 }] })).kind).toBe("schwarz-reflection"); // small tile passes
+    expect(validateEnvelope(withHint({})).kind).toBe("schwarz-reflection"); // fundamentalTile optional
+  });
 });

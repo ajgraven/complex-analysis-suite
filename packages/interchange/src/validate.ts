@@ -172,6 +172,27 @@ function isEscapeSpec(v: unknown): boolean {
   );
 }
 
+/** Validate a QuadratureDomain body — the top-level `quadrature-domain` payload AND the nested
+ *  SchwarzReflection.sourceDomain, which was previously never inspected (interchange-validate-01): a
+ *  non-canonical `sourceDomain.conventions` slipped past the ADR-0006 assertCanonicalWire guard, and its
+ *  nested Complex[] fields skipped the MAX_COEFF_LEN cap. `where` names the field for error messages. */
+function validateQuadratureDomain(qd: unknown, where: string): void {
+  if (!isObject(qd)) throw new InterchangeError(`interchange: ${where} must be an object`);
+  if (!isMapSpec(qd.phi)) throw new InterchangeError(`interchange: ${where}.phi is not a valid MapSpec`);
+  if (!isConventions(qd.conventions)) throw new InterchangeError(`interchange: ${where}.conventions is missing or invalid`);
+  assertCanonicalWire(qd.conventions, where);
+  if (qd.hData !== undefined && !isMapSpec(qd.hData))
+    throw new InterchangeError(`interchange: ${where}.hData is not a valid MapSpec`);
+  if (qd.boundarySamples !== undefined && !isComplexArray(qd.boundarySamples))
+    throw new InterchangeError(`interchange: ${where}.boundarySamples is not a bounded Complex[]`);
+}
+
+/** SchwarzReflection.tilingSetHint: an optional `{ fundamentalTile?: Complex[] }`; the nested Complex[]
+ *  previously skipped the MAX_COEFF_LEN cap that isComplexArray enforces. */
+function isTilingSetHint(v: unknown): boolean {
+  return isObject(v) && (v.fundamentalTile === undefined || isComplexArray(v.fundamentalTile));
+}
+
 function validatePayload(kind: PayloadKind, payload: unknown): void {
   if (!isObject(payload)) throw new InterchangeError(`interchange: payload for kind "${kind}" must be an object`);
   switch (kind) {
@@ -183,15 +204,16 @@ function validatePayload(kind: PayloadKind, payload: unknown): void {
       // trusted — a consumer reading escape.R got NaN as its escape radius. Validate it when present.
       if (payload.escape !== undefined && !isEscapeSpec(payload.escape))
         throw new InterchangeError("interchange: schwarz-reflection.escape is invalid (predicate ∈ {in-omega-complement, abs-gt}; R finite)");
+      // sourceDomain / tilingSetHint were previously never inspected (interchange-validate-01): a nested
+      // sourceDomain.conventions escaped the ADR-0006 canonical-wire guard and the nested Complex[] fields
+      // skipped the MAX_COEFF_LEN cap. Validate them when present.
+      if (payload.sourceDomain !== undefined)
+        validateQuadratureDomain(payload.sourceDomain, "schwarz-reflection.sourceDomain");
+      if (payload.tilingSetHint !== undefined && !isTilingSetHint(payload.tilingSetHint))
+        throw new InterchangeError("interchange: schwarz-reflection.tilingSetHint is invalid (fundamentalTile, when present, must be a bounded Complex[])");
       break;
     case "quadrature-domain":
-      if (!isMapSpec(payload.phi)) throw new InterchangeError("interchange: quadrature-domain.phi is not a valid MapSpec");
-      if (!isConventions(payload.conventions)) throw new InterchangeError("interchange: quadrature-domain.conventions is missing or invalid");
-      assertCanonicalWire(payload.conventions, "quadrature-domain");
-      // boundarySamples is optional, but when present must be a bounded Complex[] (the MAX_COEFF_LEN cap the
-      // other Complex[] fields carry — a crafted mega-array otherwise validated and slipped past the cap).
-      if (payload.boundarySamples !== undefined && !isComplexArray(payload.boundarySamples))
-        throw new InterchangeError("interchange: quadrature-domain.boundarySamples is not a bounded Complex[]");
+      validateQuadratureDomain(payload, "quadrature-domain");
       break;
     case "map":
       if (!isMapSpec(payload)) throw new InterchangeError("interchange: map payload is not a valid MapSpec");
