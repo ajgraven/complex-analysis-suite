@@ -114,6 +114,12 @@ function diskPolarLines(nSpokes: number, nRings: number, res: number): { spokes:
 }
 const CURSOR_COLOR = "#ffffff";
 
+/** A distinct hue per Schwarz–Christoffel corner index, shared by the prevertex wₖ and the corner vₖ so the
+ *  eye pairs them across the two panes. */
+function cornerHue(k: number, n: number): string {
+  return `hsl(${Math.round((360 * k) / Math.max(1, n))}, 85%, 62%)`;
+}
+
 /** A CD-style tri-state theme toggle (auto → dark → light), persisted, driving `data-theme` on <html>. */
 function createThemeToggle(): HTMLButtonElement {
   const KEY = "rm.theme";
@@ -226,6 +232,15 @@ function main(): void {
 
   let current: CompiledMap | null = null;
   let cursorZ: Pt | null = null;
+  // Phase B — the Schwarz–Christoffel corner ↔ prevertex correspondence for the active polygon (colour-
+  // matched across the two panes), plus which pair (if any) the cursor is over in the source pane.
+  interface ScCorrespondence {
+    readonly prevertices: readonly Pt[]; // wₖ on ∂𝔻
+    readonly corners: readonly Pt[]; // vₖ on ∂Ω
+    readonly angles: readonly number[]; // interior angle / π
+  }
+  let scCorr: ScCorrespondence | null = null;
+  let hoverCorner: number | null = null;
   // The region Ω, shared by BOTH directions of a region's map: 𝔻→Ω (disk-image region source; smooth Ω
   // uses the lightning forward map, polygon Ω the Schwarz–Christoffel engine) and Ω→𝔻 (numeric domain-map
   // mode; lightning f: Ω→𝔻). One "Shape" picker drives both — so switching Direction keeps the shape.
@@ -450,6 +465,7 @@ function main(): void {
       domainSource = [];
       domainImage = [];
       domainCard = null;
+      scCorr = null;
       controls.setAnalysis(null);
       updateMethod();
       return;
@@ -471,6 +487,7 @@ function main(): void {
           return [w[0], w[1]];
         },
       };
+      scCorr = { prevertices: sc.prevertices, corners: d.corners, angles: sc.angles };
       const dg = diskPolarLines(24, 6, 96);
       const outline: Pt[] = [...d.corners, d.corners[0]];
       domainSource = [
@@ -512,6 +529,7 @@ function main(): void {
     const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
     const f = fitConformalMap(boundary, DOMAIN_DEGREE);
     domainMap = f;
+    scCorr = null; // smooth Ω has no corners / prevertices
     const cg = conformalSourceGrid(d, 24, 6, 160);
     domainSource = [
       { color: BDRY, pts: cg.boundary },
@@ -565,12 +583,14 @@ function main(): void {
     if (!d) {
       regionMap = null;
       regionCard = null;
+      scCorr = null;
       updateMethod();
       return;
     }
     if (d.corners) {
       // A lower Gauss–Legendre order keeps the per-point pushforward cheap for interactive rendering.
       const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
+      scCorr = { prevertices: sc.prevertices, corners: d.corners, angles: sc.angles };
       const stats: [string, string][] = [
         ["prevertices", "= " + d.corners.length + (sc.converged ? "  (solved)" : "  (not converged)")],
         ["mode", sc.degraded ? sc.mode + " · degraded" : sc.mode],
@@ -599,6 +619,7 @@ function main(): void {
       updateMethod();
       return;
     }
+    scCorr = null; // smooth Ω has no corners / prevertices
     const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
     const f = fitConformalMap(boundary, DOMAIN_DEGREE); // Ω → 𝔻
     const g = fitForwardMap(f, boundary, DOMAIN_DEGREE); // 𝔻 → Ω (the forward map we push the disk through)
@@ -747,6 +768,38 @@ function main(): void {
     return out;
   };
 
+  /** Phase B: draw the SC prevertices wₖ as colour-matched dots on the 𝔻 pane. */
+  function drawPrevertexDots(pane: Overlay2D): void {
+    if (!scCorr) return;
+    const n = scCorr.corners.length;
+    for (let k = 0; k < n; k++) pane.drawDot(scCorr.prevertices[k], cornerHue(k, n), hoverCorner === k);
+  }
+  /** Phase B: draw the SC corners vₖ as colour-matched dots on the Ω pane, each labelled with its interior
+   *  angle αₖ·π placed just outside the corner (away from the polygon centroid). */
+  function drawCornerDots(pane: Overlay2D): void {
+    if (!scCorr) return;
+    const n = scCorr.corners.length;
+    let cx = 0;
+    let cy = 0;
+    for (const v of scCorr.corners) {
+      cx += v[0];
+      cy += v[1];
+    }
+    cx /= n || 1;
+    cy /= n || 1;
+    for (let k = 0; k < n; k++) {
+      const v = scCorr.corners[k];
+      const emph = hoverCorner === k;
+      pane.drawDot(v, cornerHue(k, n), emph);
+      // Place the angle label just INSIDE the corner (toward the centroid) so it never clips the pane edge.
+      const ux = cx - v[0];
+      const uy = cy - v[1];
+      const ul = Math.hypot(ux, uy) || 1;
+      const anchor: Pt = [v[0] + (ux / ul) * 0.16, v[1] + (uy / ul) * 0.16];
+      pane.drawLabel(anchor, fmt(scCorr.angles[k]) + "π", 0, 0, emph);
+    }
+  }
+
   function drawOverlays(): void {
     // Both modes are two-pane (source + linked image), so the stage is always split. Toggle split FIRST,
     // then size the left overlay: the pane's final (half) width must be in effect before resize() reads it,
@@ -768,6 +821,8 @@ function main(): void {
       leftOverlay.drawLines([{ color: bCol, pts: diskUnitSrc }], 1.4);
       if (usesC && !diskSourceIsNumeric()) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      // The prevertices wₖ live on the disk pane's ∂𝔻 (region source only).
+      if (diskSourceIsRegion()) drawPrevertexDots(leftOverlay);
       leftOverlay.drawScaleBar();
       // Right pane: the image φ(𝔻), auto-framed, same colour key + φ(∂𝔻).
       if (rightPane.resize()) {
@@ -780,18 +835,23 @@ function main(): void {
         else rightPane.fillCells(diskImageCells, 0.6);
         rightPane.drawLines([{ color: bCol, pts: diskUnitImg }], 1.4);
         if (cursorZ) rightPane.drawMarker(activePhi()(cursorZ), CURSOR_COLOR);
+        // The corners vₖ + interior-angle labels live on the image pane's ∂Ω (region source only).
+        if (diskSourceIsRegion()) drawCornerDots(rightPane);
       }
       return;
     }
     if (domain) {
       leftOverlay.drawLines(domainSource, 1.1);
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      // Ω is the source pane here: corners + interior-angle labels on the left, prevertices on the disk.
+      drawCornerDots(leftOverlay);
       leftOverlay.drawScaleBar();
       if (rightPane.resize()) {
         rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
         rightPane.clear();
         rightPane.drawLines(domainImage, 1.1);
         if (cursorZ && domainMap) rightPane.drawMarker(domainMap.eval([cursorZ[0], cursorZ[1]]), CURSOR_COLOR);
+        drawPrevertexDots(rightPane);
       }
       return;
     }
@@ -1100,6 +1160,22 @@ function main(): void {
     const r = canvas.getBoundingClientRect();
     const z = pixelToWorld(state.viewport, (e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height, r.width / r.height);
     cursorZ = z;
+    // SC correspondence hover-link: which corner/prevertex (if any) is under the cursor in the SOURCE pane?
+    // Ω→𝔻 the source pane shows the corners; disk-image region source shows the prevertices on ∂𝔻.
+    hoverCorner = null;
+    if (scCorr) {
+      const src = modeIsDomain(state.render.mode) ? scCorr.corners : diskSourceIsRegion() ? scCorr.prevertices : null;
+      if (src) {
+        let best = 0.05 / state.viewport.zoom; // ~grab radius in world units at the source pane's zoom
+        for (let k = 0; k < src.length; k++) {
+          const dd = Math.hypot(src[k][0] - z[0], src[k][1] - z[1]);
+          if (dd < best) {
+            best = dd;
+            hoverCorner = k;
+          }
+        }
+      }
+    }
     // Numerical-map mode: read z and its image f(z) under the fitted Riemann map (no φ′ — f is numerical).
     if (modeIsDomain(state.render.mode)) {
       if (domainMap) {
@@ -1143,6 +1219,7 @@ function main(): void {
   });
   canvas.addEventListener("pointerleave", () => {
     cursorZ = null;
+    hoverCorner = null;
     controls.setHover(null);
     schedule();
   });

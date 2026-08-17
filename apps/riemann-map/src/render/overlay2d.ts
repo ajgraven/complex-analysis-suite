@@ -138,6 +138,45 @@ export class Overlay2D {
     ctx.stroke();
   }
 
+  /** A small filled dot at world point `p` (a Schwarz–Christoffel prevertex / corner marker). `emphasize`
+   *  enlarges it and swaps the dark ring for a white one — used for the hover-linked pair. */
+  drawDot(p: Pt, color: string, emphasize = false): void {
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
+    const ctx = this.ctx;
+    const [px, py] = this.toPx(p);
+    const r = (emphasize ? 7 : 4.5) * this.dpr;
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.lineWidth = (emphasize ? 2 : 1.25) * this.dpr;
+    ctx.strokeStyle = emphasize ? "#fff" : "rgba(0,0,0,0.7)";
+    ctx.stroke();
+  }
+
+  /** A short centred text label at world point `p` (offset by (dx, dy) CSS px), on a dark backing so it
+   *  stays legible over the grid/fill. Used for the interior-angle annotations αₖ·π. */
+  drawLabel(p: Pt, text: string, dx: number, dy: number, emphasize = false): void {
+    if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
+    const ctx = this.ctx;
+    const [px0, py0] = this.toPx(p);
+    const px = px0 + dx * this.dpr;
+    const py = py0 + dy * this.dpr;
+    const font = Math.round((emphasize ? 13 : 11) * this.dpr);
+    ctx.save();
+    ctx.font = `600 ${font}px system-ui, -apple-system, sans-serif`;
+    ctx.textBaseline = "middle";
+    ctx.textAlign = "center";
+    const w = ctx.measureText(text).width;
+    const padX = 3 * this.dpr;
+    const padY = 2 * this.dpr;
+    ctx.fillStyle = "rgba(0,0,0,0.55)";
+    ctx.fillRect(px - w / 2 - padX, py - font / 2 - padY, w + 2 * padX, font + 2 * padY);
+    ctx.fillStyle = emphasize ? "#ffffff" : "rgba(236,240,255,0.9)";
+    ctx.fillText(text, px, py);
+    ctx.restore();
+  }
+
   /** A draggable parameter handle (a larger ringed dot + a label) at world point `p`. */
   drawHandle(p: Pt, color: string, label: string): void {
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
