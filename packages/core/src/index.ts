@@ -19,6 +19,9 @@
 //   - geometry       : convention-neutral 2D geometry (pointInPolygon even-odd test), the single
 //                      home for the copy @cas/schwarz + @cas/conformal + the Riemann-map &
 //                      Argument-Principle apps each carried (ADR-0007).
+//   - rootsMonic     : app-facing monic-polynomial root finding (Horner eval, trim, spiral-seeded
+//                      Durand-Kerner) — the wrapper Complex-Dynamics + Argument-Principle mirrored
+//                      around makeDurandKerner (ADR-0007). Residual policy stays caller-side.
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
 export { objAlgebra, tupleAlgebra } from "./algebra.js";
@@ -34,3 +37,4 @@ export { planeToSphere, sphereToPlane } from "./sphere.js";
 export { lstsqHouseholder } from "./lstsq.js";
 export { pointInPolygon } from "./geometry.js";
 export type { Point2 } from "./geometry.js";
+export { evalPolyHorner, trimPoly, rootsMonicClosure, rootsMonic } from "./rootsMonic.js";

@@ -107,7 +107,15 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       golden `test/geometry.test.ts`; 4 TS copies removed — `@cas/schwarz` (re-exports from core, so
       CD + Correspondences are untouched), `@cas/conformal/scMap.ts`, `riemann-map/domains.ts`,
       `argument-principle/contour.ts` (both re-export). QD's `{re,im}` variant left per ADR-0008.
-- [ ] Consolidation #2 — `rootsMonic` (monic-Horner + DK seed/certify) ×3 → `@cas/core`
+- [x] **Consolidation #2 — `rootsMonic` → `@cas/core`** (the still-open `cd-dup-05`): new
+      `rootsMonic.ts` exports `evalPolyHorner`, `trimPoly`, `rootsMonicClosure` (spiral-seeded DK,
+      raw iterates — CD's level), and `rootsMonic` (+ residual filter — AP's `polyRoots` level) +
+      golden `test/rootsMonic.test.ts`. CD `critical.ts` and AP `singularities.ts` (the verbatim
+      mirror) delegate; residual policy stays caller-side. Bit-identical (tupleAlgebra add/mul ≡
+      complexJs; div fast-path since the divisor is always the O(1) leading coeff). **Correspondences
+      left as-is** — a genuinely divergent 3rd consumer (roots-of-unity ring seed, degree-scaled
+      relative residual, deflation + d≤2 closed forms; its DK path is a d≥3 fallback, dead for the
+      shipped deltoid). Golden CD (83 files) + AP (14) corpora pass unchanged.
 - [x] **Consolidation #3 — SC corner-cluster → `@cas/conformal`** (rode #1): new
       `cornerClustering.ts` exports the three shared pieces — `clusteredRadii` (the
       `scale·exp(−σ(√N−√k))` law), `clusteredEdgeSamples` (Chebyshev boundary, `offset` param), and

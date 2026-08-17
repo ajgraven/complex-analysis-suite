@@ -20,7 +20,7 @@
  * which the `=`/`≤`/`≈` rule reserves for the first case only.
  */
 
-import { makeDurandKerner, tupleAlgebra } from "@cas/core";
+import { evalPolyHorner, trimPoly, rootsMonicClosure } from "@cas/core";
 import type { Complex } from "../complex";
 import type { Node } from "@cas/expr/ast";
 import * as C from "@cas/expr/complexJs";
@@ -146,43 +146,10 @@ export function polynomialCoeffs(fAst: Node, a: Complex, c: Complex): Complex[] 
   return coeffs;
 }
 
-/** Horner evaluation of an ascending-coefficient polynomial p (p[i] = coeff of zⁱ) at z. */
-function evalPoly(p: Complex[], z: Complex): Complex {
-  let acc: Complex = [0, 0];
-  for (let i = p.length - 1; i >= 0; i--) acc = C.add(C.mul(acc, z), p[i]);
-  return acc;
-}
-
-/** Drop near-zero high-order coefficients so a polynomial reports its true degree. */
-function trimPoly(p: Complex[]): Complex[] {
-  let n = p.length;
-  while (n > 1 && cabs(p[n - 1]) < 1e-12) n--;
-  return p.slice(0, n);
-}
-
-/**
- * Durand–Kerner (Weierstrass) simultaneous root finding for a degree-m monic polynomial, evaluated
- * through the closure `pMonic`. Returns the m iterates (converged or not — the caller certifies them
- * by residual) or null if an iterate blew up to a non-finite value. Shared by the polynomial and
- * rational critical-point finders.
- */
-// The Durand-Kerner iteration is @cas/core's generic kernel, shared with the Quadrature app.
-// Behavior here is unchanged: the same geometric-spiral seed (0.4 + 0.9i)^i, in-place
-// (Gauss-Seidel) updates, tol 1e-12 over 200 iterations, and a null return the moment an
-// iterate diverges. Only the seeding stays app-side; the iteration is the shared skeleton.
-const durandKernerKernel = makeDurandKerner(tupleAlgebra);
-
-function durandKerner(pMonic: (z: Complex) => Complex, m: number): Complex[] | null {
-  const seeds: Complex[] = [];
-  let pw: Complex = [1, 0];
-  const seed: Complex = [0.4, 0.9]; // classic off-axis spread of initial guesses
-  for (let i = 0; i < m; i++) {
-    seeds.push([pw[0], pw[1]]);
-    pw = C.mul(pw, seed);
-  }
-  const res = durandKernerKernel(pMonic, seeds, { mode: "seidel", bailOnNonFinite: true });
-  return res ? res.roots : null;
-}
+// evalPoly (Horner), trimPoly, and the (0.4 + 0.9i)^i-seeded Durand–Kerner wrapper now live in
+// @cas/core as evalPolyHorner / trimPoly / rootsMonicClosure (ADR-0007 — the copy the
+// Argument-Principle app mirrored). The residual certification stays app-side: here CD rejects the
+// whole set if any residual is O(1); AP filters per root.
 
 /**
  * All critical points (roots of f′ = 0) when f is a polynomial of degree ≥ 2, via Durand–Kerner
@@ -203,7 +170,7 @@ export function findCriticalPoints(fAst: Node, a: Complex, c: Complex): Complex[
   if (m < 1) return null; // f linear/constant ⇒ no critical points
 
   const pMonic = (z: Complex): Complex => C.div(fz(z, c), dl.lead);
-  const roots = durandKerner(pMonic, m);
+  const roots = rootsMonicClosure(pMonic, m);
   if (!roots) return null;
   // Convergence guard: Durand–Kerner returns its iterates whether or not it converged, so a clustered
   // / high-multiplicity / high-degree f′ could otherwise hand back non-converged points as "critical
@@ -245,8 +212,8 @@ export function findRationalCriticalPoints(fAst: Node, a: Complex, c: Complex): 
   if (m < 1) return null; // no finite critical points (e.g. a Möbius map, or all are at ∞)
   const lead = num[m];
   if (cabs(lead) === 0) return null;
-  const pMonic = (z: Complex): Complex => C.div(evalPoly(num, z), lead);
-  const roots = durandKerner(pMonic, m);
+  const pMonic = (z: Complex): Complex => C.div(evalPolyHorner(num, z), lead);
+  const roots = rootsMonicClosure(pMonic, m);
   if (!roots) return null;
   const fz = makeComplexFn(diffAst, a);
   const out: Complex[] = [];
