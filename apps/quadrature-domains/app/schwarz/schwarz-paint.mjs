@@ -15,7 +15,7 @@
 // here. The bodies are VERBATIM moves. `QD` is the solver global.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of schwarz/schwarz-paint.js (classic stays frozen). QD_UI factory module.
+// ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from '../ui/ui-registry.mjs';
 
 (function (global) {

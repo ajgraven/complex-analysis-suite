@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of ui.js (classic stays frozen). The QD/LQD-tab orchestrator.
+// ESM (Phase 2 port). The QD/LQD-tab orchestrator.
 import { state } from './ui-state.mjs';
 import { QD_UI } from './ui-registry.mjs';
 import { Complex } from '../core/complex.mjs';

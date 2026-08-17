@@ -44,7 +44,7 @@
 // worker-side handler.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of primary-solver-worker.js (classic stays frozen). Main-thread API; spawns a
+// ESM (Phase 2 port). Main-thread API; spawns a
 // NATIVE ES module worker (workers/solver-worker-entry.mjs) instead of the runtime-Blob
 // bundle, and falls back to the imported main-thread solver when Worker is unavailable
 // (Node tests, file://). Registers onto the QD namespace.

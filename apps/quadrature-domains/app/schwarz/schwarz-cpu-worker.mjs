@@ -45,7 +45,7 @@
 // a message handler, and Blob → object URL.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of schwarz/schwarz-cpu-worker.js (classic stays frozen). Main-thread API; spawns a
+// ESM (Phase 2 port). Main-thread API; spawns a
 // NATIVE ES module worker (workers/schwarz-worker-entry.mjs) instead of the runtime-Blob
 // bundle. isUsable() gates on Worker availability, so Node/file:// fall back to the
 // caller's in-process renderer. Registers onto the QD namespace.

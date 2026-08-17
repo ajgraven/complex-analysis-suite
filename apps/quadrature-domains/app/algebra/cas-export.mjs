@@ -28,7 +28,7 @@
 // Loads before algebra-store.js (which delegates its Mathematica export here).
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of algebra/cas-export.js (classic stays frozen). Registers QD.CASExport.
+// ESM (Phase 2 port). Registers QD.CASExport.
 import _QD from '../solvers/solver.mjs';
 
 (function () {

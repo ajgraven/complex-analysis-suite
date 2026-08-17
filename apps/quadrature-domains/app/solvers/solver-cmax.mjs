@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of solver-cmax.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-cmax.js  —  Estimate the maximum conformal radius c* for which an

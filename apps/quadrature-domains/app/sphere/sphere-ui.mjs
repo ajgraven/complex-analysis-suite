@@ -24,7 +24,7 @@
 // tooltip (#sphere-hover-tooltip) plus a sidebar mirror (#sp-hover).
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of sphere/sphere-ui.js (classic stays frozen). UI orchestrator/consumer.
+// ESM (Phase 2 port). UI orchestrator/consumer.
 import { SphereCommon } from '../sphere/sphere-common.mjs';
 import _QD from '../solvers/solver.mjs';
 const QD = _QD;

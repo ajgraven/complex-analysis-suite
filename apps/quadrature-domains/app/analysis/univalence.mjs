@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of univalence.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // univalence.js  —  Special univalence criteria for the solved Riemann map φ.

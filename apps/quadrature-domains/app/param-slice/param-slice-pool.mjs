@@ -24,7 +24,7 @@
 // φ into the next QD.newtonSolve call.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of param-slice/param-slice-pool.js (classic stays frozen). Web Worker pool; spawns
+// ESM (Phase 2 port). Web Worker pool; spawns
 // NATIVE ES module workers (workers/param-slice-worker-entry.mjs) instead of the runtime-
 // Blob bundle, with a main-thread MainThreadPool fallback. Exposes ParamSlicePool as the
 // default export (was a bare global). Imports the ParamSlice kernel it orchestrates.

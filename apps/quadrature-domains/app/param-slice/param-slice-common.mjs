@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of param-slice/param-slice-common.js (classic stays frozen). Reads the QD namespace via
+// ESM (Phase 2 port). Reads the QD namespace via
 // the solver.mjs import; exposes its API as the default export (bootstrap captures it as PS).
 import _QD from '../solvers/solver.mjs';
 // =============================================================================

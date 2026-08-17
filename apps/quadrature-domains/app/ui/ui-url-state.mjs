@@ -16,7 +16,7 @@
 // lived in ui.js — only the dependency source changed (module scope → `ui`).
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of ui-url-state.js (classic stays frozen). QD_UI factory module.
+// ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from './ui-registry.mjs';
 import { encodeViewState, decodeViewState } from '@cas/interchange';
 

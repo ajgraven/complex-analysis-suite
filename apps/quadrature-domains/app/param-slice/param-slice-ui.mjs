@@ -15,7 +15,7 @@
 // via QD_UI.loadPhiIntoQdTab, switch to QD tab.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of param-slice/param-slice-ui.js (classic stays frozen). UI orchestrator/consumer.
+// ESM (Phase 2 port). UI orchestrator/consumer.
 import { QD_UI } from '../ui/ui-registry.mjs';
 import ParamSlice from '../param-slice/param-slice-common.mjs';
 import ParamSlicePool from '../param-slice/param-slice-pool.mjs';

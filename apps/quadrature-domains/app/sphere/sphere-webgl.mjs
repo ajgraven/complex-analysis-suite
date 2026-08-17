@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of sphere/sphere-webgl.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 import { SphereCommon } from './sphere-common.mjs';
 // =============================================================================

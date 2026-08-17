@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of solver-pqd-common.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-pqd-common.js -- Shared machinery for the four power-weighted QD
