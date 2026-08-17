@@ -62,6 +62,7 @@ import {
 import { drawArgGraph } from "./render/argGraph.js";
 import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
 import { attachImagePlane, attachContourPlane, type ContourMode } from "./render/nav.js";
+import { createTooltip, type Tooltip } from "./render/tooltip.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
 import { nearestRoot, isolateRadius } from "./hit.js";
 import { rootKey, diffEnclosure, type EnclosedRoot, type CrossEvent } from "./crossing.js";
@@ -132,7 +133,7 @@ function axisColors(): AxisColors {
   return { grid: cssVar("--grid", "#2a3140"), axis: cssVar("--axis", "#4a5468") };
 }
 
-function createThemeToggle(onChange: () => void): HTMLButtonElement {
+function createThemeToggle(onChange: () => void, tip: Tooltip): HTMLButtonElement {
   const KEY = "ap.theme";
   const ORDER = ["auto", "dark", "light"] as const;
   type Choice = (typeof ORDER)[number];
@@ -141,6 +142,7 @@ function createThemeToggle(onChange: () => void): HTMLButtonElement {
   btn.type = "button";
   btn.className = "ghost";
   btn.setAttribute("aria-label", "Toggle colour theme");
+  tip.attach(btn, "theme");
   const read = (): Choice => {
     let v: string | null = null;
     try {
@@ -177,7 +179,7 @@ function createThemeToggle(onChange: () => void): HTMLButtonElement {
  * resolution/toggles) for a novice's first look, keeping the planes + equality + legend + strip. The choice
  * rides `data-density` on <html> (CSS does the hiding) and persists per device in localStorage.
  */
-function createDensityToggle(onChange: () => void): HTMLElement {
+function createDensityToggle(onChange: () => void, tip: Tooltip): HTMLElement {
   const KEY = "ap.density";
   type Level = "simple" | "explore";
   const read = (): Level => {
@@ -202,6 +204,7 @@ function createDensityToggle(onChange: () => void): HTMLElement {
     const b = document.createElement("button");
     b.type = "button";
     b.textContent = l === "simple" ? "Simple" : "Explore";
+    tip.attach(b, l);
     b.addEventListener("click", () => {
       try {
         localStorage.setItem(KEY, l);
@@ -304,6 +307,7 @@ function main(): void {
   let lastSR = ""; // last text pushed to the ARIA live region (avoid re-announcing an unchanged verdict)
 
   // ---- DOM shell -----------------------------------------------------------
+  const tip = createTooltip(); // shared accessible hover/focus tooltips for the controls
   const topbar = document.createElement("header");
   topbar.className = "topbar";
   const brand = document.createElement("div");
@@ -328,6 +332,7 @@ function main(): void {
     b.textContent = m.label;
     b.setAttribute("aria-pressed", String(m.id === mode));
     b.addEventListener("click", () => setMode(m.id));
+    tip.attach(b, m.id);
     modeBtns.set(m.id, b);
     modeSeg.append(b);
   }
@@ -337,8 +342,13 @@ function main(): void {
   const pngBtn = button("Save PNG");
   const helpBtn = button("?");
   helpBtn.setAttribute("aria-label", "Help");
-  const densitySeg = createDensityToggle(() => schedule());
-  const themeBtn = createThemeToggle(() => schedule());
+  tip.attach(clearBtn, "clear");
+  tip.attach(fitBtn, "fit");
+  tip.attach(resetBtn, "reset");
+  tip.attach(pngBtn, "png");
+  tip.attach(helpBtn, "help");
+  const densitySeg = createDensityToggle(() => schedule(), tip);
+  const themeBtn = createThemeToggle(() => schedule(), tip);
   topbar.append(brand, spacer, modeSeg, clearBtn, fitBtn, resetBtn, pngBtn, densitySeg, helpBtn, themeBtn);
 
   const presetWrap = document.createElement("label");
@@ -403,6 +413,19 @@ function main(): void {
   const drawHint = document.createElement("span");
   drawHint.className = "hint";
   drawHint.textContent = "Pick a tool above, then act on the z-plane.";
+
+  // Hover/focus tooltips for the remaining controls. Inputs attach on their wrapping <label> (focusin/out
+  // bubble from the inner control, and the label gives a comfortable hover target).
+  tip.attach(playBtn, "play");
+  tip.attach(stopBtn, "stop");
+  tip.attach(presetWrap, "preset");
+  tip.attach(exprWrap, "expr");
+  tip.attach(radiusWrap, "radius");
+  tip.attach(resWrap, "res");
+  tip.attach(speedWrap, "speed");
+  tip.attach(domainChk.root, "chkDomain");
+  tip.attach(imageChk.root, "chkImage");
+  tip.attach(decompChk.root, "chkVectors");
 
   // Grouped, labelled controls (§12 organization): Function · Contour · Explore · View. The `slug` tags
   // each group so the Simple/Explore density switch (decision 4) can hide the advanced ones via CSS.
