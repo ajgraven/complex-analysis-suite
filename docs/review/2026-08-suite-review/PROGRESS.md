@@ -58,13 +58,19 @@ caught by the current suite) — test-gap findings are therefore valuable.
 
 Sizes (source lines) noted to calibrate depth. Mega-apps get strategic (not exhaustive) reads.
 
-### Batch 1 (heavy math packages + prime consumers + docs)
-- [ ] **01 ALG** — `@cas/core` (1777) + `@cas/exact` (1318) → `findings/01-core-exact.md`
-- [ ] **02 EXPR** — `@cas/expr` (3881) + `@cas/interchange` (1155) → `findings/02-expr-interchange.md`
-- [ ] **03 CONF** — `@cas/conformal` (2503) + `apps/riemann-map` (3615) → `findings/03-conformal-riemann-map.md`
-- [ ] **04 FABER** — `@cas/faber` (1307) + `apps/faber-transform` (3680) → `findings/04-faber.md`
-- [ ] **05 CD** — `apps/complex-dynamics` (34564) + `@cas/dynamics` (998) → `findings/05-complex-dynamics-dynamics.md`
-- [ ] **09 DOCS** — all docs vs code/status, cross-ref prior review → `findings/09-documentation-staleness.md`
+### Batch 1 (heavy math packages + prime consumers + docs) — ✅ ALL COMMITTED
+- [x] **01 ALG** — `@cas/core` + `@cas/exact` → `findings/01-core-exact.md` — **1 HIGH** (Durand–Kerner still certifies NaN roots), 1 MED, 3 LOW, 1 NIT
+- [x] **02 EXPR** — `@cas/expr` + `@cas/interchange` → `findings/02-expr-interchange.md` — 2 MED, 5 LOW, 1 NIT (no π/2πi leak; keystone sound)
+- [x] **03 CONF** — `@cas/conformal` + `apps/riemann-map` → `findings/03-conformal-riemann-map.md` — 3 MED, 2 LOW, 3 NIT (engine validated vs closed forms)
+- [x] **04 FABER** — `@cas/faber` + `apps/faber-transform` → `findings/04-faber.md` — 2 MED, 4 LOW, 3 NIT (recurrence + Q_{n,m} branch verified)
+- [x] **05 CD** — `apps/complex-dynamics` + `@cas/dynamics` → `findings/05-complex-dynamics-dynamics.md` — 1 MED, 3 LOW, 3 NIT (core math re-derived, sound)
+- [x] **09 DOCS** — all docs vs code/status → `findings/09-documentation-staleness.md` — **1 HIGH** (σ hand-off "awaiting review" but shipped), 5 MED, 5 LOW, 2 NIT
+
+**Cross-cutting themes already visible (for REPORT synthesis):**
+- **GPU-uniform-cap vs CPU-limit mismatch** — recurs independently: CD σ GPU caps orbit at 512 iters vs 4096 (finding 05-#1); Faber GPU caps series at degree 47 vs 128 (finding 04-#1). Batch-2 RENDER (`@cas/gpu`) should look for more; candidate for a shared cap-negotiation note.
+- **Stale package READMEs** — conformal README lists shipped exterior-SC as "deferred" (03 + 09 corroborate); faber README omits M3 surface; expr README stale.
+- **`=` exactness over-claims** where a numerical root-find backs an "exact" label (faber 04-#3; ties to honesty guardrail).
+- **Duplicated small primitives** — expr constExp/constReal (02-#2); conformal corner-pole clustering triplicated (03-#2); CD matingEngine mul/div (05-#4). Feed to Batch-2 CONSOL.
 
 ### Batch 2 (remaining apps + cross-cutting consolidation)
 - [ ] **06 CORR** — `apps/correspondences` (4270) + `@cas/schwarz` (3250) → `findings/06-correspondences-schwarz.md`
