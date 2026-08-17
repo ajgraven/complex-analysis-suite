@@ -6,7 +6,8 @@ app domain-colors `f` on the disk beside its Faber image **Φφ(f) = Σ bₙ F�
 `@cas/*` packages rather than reimplementing them:
 
 - **`@cas/faber`** — the exterior Faber engine: the Faber-polynomial recurrence from φ's Laurent-at-∞ jet,
-  exact rational images of monomial / pole inputs, and the truncated-series path for free-form `f`.
+  exact rational images of monomial / pole inputs, the truncated-series path for free-form `f`, and the
+  corner-suppressing weighted Faber polynomials `Q_{n,m}` (M3).
 - **`@cas/conformal`** — the **exterior Schwarz–Christoffel** engine (𝔻\* → Ω for a bounded polygon), used
   to build φ for arbitrary polygonal `K`.
 - **`@cas/core`** — complex / dense-polynomial algebra, generalized-binomial series (`makeSeries`).
@@ -59,28 +60,32 @@ self-intersecting, or non-converged polygon renders `⚠` with blank panels rath
 | File | Role |
 | --- | --- |
 | `main.ts` | wires the two panels, controls, domain resolution (preset vs custom polygon), the render model + status badge, the share-link |
-| `faber.ts` | the app-side adapter over `@cas/faber` — builds the Faber image for the chosen input on the chosen φ |
+| `faber.ts` | the app-side adapter over `@cas/faber` — builds the Faber image (or `Q_{n,m}`) for the chosen input on the chosen φ |
 | `series.ts` | the free-form truncated-series path (bₙ extraction) |
-| `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
-| `presets.ts` | the curated φ gallery (closed-form + regular + arbitrary polygons), lazily fitted and cached |
-| `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (incl. the custom-polygon bounds) |
+| `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation + corner images `wₖ`), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
+| `presets.ts` | the curated φ gallery (closed-form + regular + arbitrary polygons), lazily fitted and cached (with lazy corner images for M3) |
+| `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (custom-polygon bounds + the M3 suppression fields) |
 | `render/coloring.ts` | the phase-portrait coloring options (shared with the GPU shader) |
 | `render/gpu.ts` | the WebGL2 phase-portrait renderer for one panel, over `@cas/gpu` |
 | `render/plane.ts` | the 2D plane / axes / mask painting |
 | `render/polygonEditor.ts` | the M2 draggable-vertex polygon editor (add / remove / reset; refit on commit) |
+| `render/cornerProfile.ts` | the M3 before/after corner-overshoot profile — `|Fₙ|` vs `|Q_{n,m}|` along ∂K (paper Fig. 2) |
 
 ## Tests
 
 `test/` — `faber.test.ts` (the Faber image on the closed-form domains), `series.test.ts` (the truncated-series
 bₙ path), `polygon.test.ts` (the regular-polygon closed form + the exterior SC fit: capacities, corner norms,
-convergence / degradation flags, reentrant L-shape), `presets.test.ts` (every preset builds), `coloring.test.ts`
-(the coloring options), `expr.test.ts` (the free-form path), and `viewState.test.ts` (share-link round-trip +
-namespace guard + custom-polygon validation, incl. degeneracy / bounds rejection). The exterior SC numerics
-themselves are unit-tested in [`@cas/conformal`](../../packages/conformal).
+convergence / degradation flags, reentrant L-shape, and the M3 corner-images + `Q_{n,m}` suppression seam),
+`cornerProfile.test.ts` (the M3 before/after profile compute), `presets.test.ts` (every preset builds),
+`coloring.test.ts` (the coloring options), `expr.test.ts` (the free-form path), and `viewState.test.ts`
+(share-link round-trip + namespace guard + custom-polygon validation + the M3 suppression fields). The
+exterior SC numerics and the `Q_{n,m}` engine themselves are unit-tested in
+[`@cas/conformal`](../../packages/conformal) and [`@cas/faber`](../../packages/faber).
 
 ## Status
 
-**T2.3 (Faber on polygonal / cornered K) is DONE through M2** — regular-polygon presets (M1a), arbitrary
-convex + reentrant polygons via the exterior SC engine (M1b), and adaptive Laurent truncation + corner-norm
-annotations + the draggable editor (M2). The **M3** corner-suppressing weighted Faber polynomials `Q_{n,m}`
-remain deferred. See the [polygonal-SC plan](../../docs/design/faber-polygonal-sc-plan.md).
+**T2.3 (Faber on polygonal / cornered K) is DONE (M1a + M1b + M2 + M3)** — regular-polygon presets (M1a),
+arbitrary convex + reentrant polygons via the exterior SC engine (M1b), adaptive Laurent truncation +
+corner-norm annotations + the draggable editor (M2), and the corner-suppressing weighted Faber polynomials
+`Q_{n,m}` — a "suppress corners" toggle + strength slider for monomial inputs, with a before/after boundary
+profile (M3). See the [polygonal-SC plan](../../docs/design/faber-polygonal-sc-plan.md).

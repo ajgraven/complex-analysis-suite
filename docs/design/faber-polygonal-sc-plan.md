@@ -226,7 +226,9 @@ Driscoll–Trefethen Ch. 4, but a real nonlinear solver; reentrant corners are w
 de-risked M1a to ~zero: regular polygons were closed-form and validated up front. Both landed — M1a as a
 same-day vertical slice, then M1b + M2 — with the nonlinear solve made robust by the multi-seed damped
 Gauss–Newton driver (a single cold start stalled on some cyclic vertex orderings). **M3** (corner-suppressing
-weighted Faber `Q_{n,m}`, optional lightning fast-mode) remains.
+weighted Faber `Q_{n,m}`) then landed on top — de-risked by its own M0-style spike (§5), it reused the `Fₙ`
+recurrence + the binomial-series machinery with no new numerics. The only deferred item is the optional
+lightning fast-mode for the polygon solve (unrelated to `Q_{n,m}`).
 
 ## 8. References
 
