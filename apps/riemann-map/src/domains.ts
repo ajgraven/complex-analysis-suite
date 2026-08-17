@@ -90,9 +90,49 @@ function regularPolygon(sides: number, R: number, phase = Math.PI / 2): C[] {
   });
 }
 
+/** Signed-area (shoelace) centroid — the robust interior basepoint for recentring a star-shaped polygon
+ *  (the vertex mean can fall on the boundary of a reentrant shape; the area centroid stays in the kernel). */
+function areaCentroid(v: readonly C[]): C {
+  let a = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < v.length; i++) {
+    const [x0, y0] = v[i];
+    const [x1, y1] = v[(i + 1) % v.length];
+    const cross = x0 * y1 - x1 * y0;
+    a += cross;
+    cx += (x0 + x1) * cross;
+    cy += (y0 + y1) * cross;
+  }
+  a *= 0.5;
+  return [cx / (6 * a), cy / (6 * a)];
+}
+
+/** Translate a polygon so its area centroid sits at 0 — a kernel point for these star-shaped presets, so
+ *  the ray-cast `polygonRadius` and the `conformalSourceGrid` (both anchored at 0) stay valid. */
+function recenter(v: readonly C[]): C[] {
+  const [cx, cy] = areaCentroid(v);
+  return v.map((p): C => [p[0] - cx, p[1] - cy]);
+}
+
+/** A plus/cross centred at 0 (CCW): arm half-width `a`, reach `b`. Four 90° tips + four 270° reflex
+ *  corners — a strongly reentrant shape the precise Schwarz–Christoffel solve handles at machine precision. */
+function crossPolygon(a: number, b: number): C[] {
+  return [
+    [b, -a], [b, a], [a, a], [a, b], [-a, b], [-a, a],
+    [-b, a], [-b, -a], [-a, -a], [-a, -b], [a, -b], [a, -a],
+  ];
+}
+
 const SQUARE = regularPolygon(4, Math.SQRT2, Math.PI / 4); // axis-aligned unit square, corners at (±1,±1)
 const TRIANGLE = regularPolygon(3, 1.3);
 const PENTAGON = regularPolygon(5, 1.15);
+// Reentrant presets: 0 is placed at the area centroid so each stays star-shaped about the origin. The
+// disk-image (𝔻→Ω) direction pushes the disk grid forward and needs no star-shapedness; the domain-map
+// (Ω→𝔻) source grid, cast from 0, does — hence the recentring. Both showcase the precise SC engine's
+// reentrant-corner accuracy (the lightning fit is only ~convex-reliable).
+const LSHAPE = recenter([[0, 0], [2, 0], [2, 1], [1, 1], [1, 2], [0, 2]]); // one 270° reflex corner
+const CROSS = crossPolygon(0.42, 1.2); // four 270° reflex corners
 
 function polygonPreset(id: string, name: string, vertices: C[]): DomainPreset {
   return { id, name, radius: polygonRadius(vertices), corners: vertices };
@@ -106,11 +146,42 @@ export const DOMAIN_PRESETS: readonly DomainPreset[] = [
   polygonPreset("square", "Square", SQUARE),
   polygonPreset("triangle", "Triangle", TRIANGLE),
   polygonPreset("pentagon", "Pentagon", PENTAGON),
+  polygonPreset("lshape", "L-shape (reentrant)", LSHAPE),
+  polygonPreset("cross", "Cross (reentrant)", CROSS),
 ] as const;
 
 /** The preset with this id, or undefined. */
 export function domainById(id: string): DomainPreset | undefined {
   return DOMAIN_PRESETS.find((d) => d.id === id);
+}
+
+// --- editable custom polygon (Phase C) --------------------------------------------------------
+
+/** The id of the user-editable custom polygon (draggable vertices). */
+export const CUSTOM_ID = "custom";
+
+/** Ensure counter-clockwise orientation (the Schwarz–Christoffel solver's input convention). */
+export function toCCW(v: readonly (readonly [number, number])[]): C[] {
+  let a = 0;
+  for (let i = 0; i < v.length; i++) {
+    const p = v[i];
+    const q = v[(i + 1) % v.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  const copy = v.map((p): C => [p[0], p[1]]);
+  return a < 0 ? copy.reverse() : copy;
+}
+
+/** Build the editable custom-polygon domain from raw vertices (kept CCW). `radius` is a placeholder — a
+ *  polygon domain is only ever consumed through `corners` (the SC path), never through `radius`. */
+export function makeCustomDomain(vertices: readonly (readonly [number, number])[]): DomainPreset {
+  const v = toCCW(vertices);
+  return { id: CUSTOM_ID, name: "Custom polygon", radius: polygonRadius(v), corners: v };
+}
+
+/** A default seed for a fresh custom polygon (a regular pentagon). */
+export function defaultCustomPolygon(): C[] {
+  return regularPolygon(5, 1.2);
 }
 
 /** Sample ∂Ω at `m` equally-spaced angles (an open list — the caller closes it if needed). */

@@ -10,6 +10,7 @@ import {
   DEFAULT_VIEW_STATE,
   decodeRiemannState,
   encodeRiemannState,
+  MAX_POLYGON_COORD,
   type RiemannViewState,
   type ViewportState,
 } from "./viewState.js";
@@ -28,8 +29,8 @@ import { Overlay2D, type FillCell } from "./render/overlay2d.js";
 import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
-import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
-import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type ConformalMap } from "@cas/conformal";
+import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, CUSTOM_ID, makeCustomDomain, defaultCustomPolygon, toCCW, type DomainPreset } from "./domains.js";
+import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type SCMap } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
 import { createControls, type MethodCard } from "./ui/controls.js";
 
@@ -85,7 +86,40 @@ function fmtC(re: number, im: number): string {
   if (!Number.isFinite(re) || !Number.isFinite(im)) return "∞ (undefined)";
   return `${fmt(re)} ${im >= 0 ? "+" : "−"} ${fmt(Math.abs(im))}i`;
 }
+
+/** A unit-disk polar grid as spoke + ring polylines. Pushed FORWARD through the Schwarz–Christoffel map it
+ *  becomes the conformal grid inside the polygon — the classic SC picture, and exact + cheap (no inverse).
+ *  Spokes stop just shy of ∂𝔻 so the forward map is never evaluated exactly on a corner singularity. */
+function diskPolarLines(nSpokes: number, nRings: number, res: number): { spokes: [number, number][][]; rings: [number, number][][] } {
+  const spokes: [number, number][][] = [];
+  for (let k = 0; k < nSpokes; k++) {
+    const a = (2 * Math.PI * k) / nSpokes;
+    const line: [number, number][] = [];
+    for (let i = 0; i <= res; i++) {
+      const s = 0.02 + 0.975 * (i / res);
+      line.push([s * Math.cos(a), s * Math.sin(a)]);
+    }
+    spokes.push(line);
+  }
+  const rings: [number, number][][] = [];
+  for (let i = 1; i <= nRings; i++) {
+    const t = i / (nRings + 1);
+    const ring: [number, number][] = [];
+    for (let j = 0; j <= res; j++) {
+      const p = (2 * Math.PI * j) / res;
+      ring.push([t * Math.cos(p), t * Math.sin(p)]);
+    }
+    rings.push(ring);
+  }
+  return { spokes, rings };
+}
 const CURSOR_COLOR = "#ffffff";
+
+/** A distinct hue per Schwarz–Christoffel corner index, shared by the prevertex wₖ and the corner vₖ so the
+ *  eye pairs them across the two panes. */
+function cornerHue(k: number, n: number): string {
+  return `hsl(${Math.round((360 * k) / Math.max(1, n))}, 85%, 62%)`;
+}
 
 /** A CD-style tri-state theme toggle (auto → dark → light), persisted, driving `data-theme` on <html>. */
 function createThemeToggle(): HTMLButtonElement {
@@ -199,11 +233,53 @@ function main(): void {
 
   let current: CompiledMap | null = null;
   let cursorZ: Pt | null = null;
+  // Phase B — the Schwarz–Christoffel corner ↔ prevertex correspondence for the active polygon (colour-
+  // matched across the two panes), plus which pair (if any) the cursor is over in the source pane.
+  interface ScCorrespondence {
+    readonly prevertices: readonly Pt[]; // wₖ on ∂𝔻
+    readonly corners: readonly Pt[]; // vₖ on ∂Ω
+    readonly angles: readonly number[]; // interior angle / π
+  }
+  let scCorr: ScCorrespondence | null = null;
+  let hoverCorner: number | null = null;
   // The region Ω, shared by BOTH directions of a region's map: 𝔻→Ω (disk-image region source; smooth Ω
   // uses the lightning forward map, polygon Ω the Schwarz–Christoffel engine) and Ω→𝔻 (numeric domain-map
   // mode; lightning f: Ω→𝔻). One "Shape" picker drives both — so switching Direction keeps the shape.
-  let shapeId = domainById(state.render.region ?? state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
-  let domainMap: ConformalMap | null = null;
+  // Phase C — the editable custom polygon (draggable vertices). Sanitised on decode (hostile permalinks):
+  // 3–40 finite vertices, clamped to the coordinate bound, kept counter-clockwise for the SC solver.
+  const sanitizeCustom = (raw: unknown): Pt[] | null => {
+    if (!Array.isArray(raw) || raw.length < 3 || raw.length > 40) return null;
+    const clamp = (x: number): number => Math.max(-MAX_POLYGON_COORD, Math.min(MAX_POLYGON_COORD, x));
+    const out: Pt[] = [];
+    for (const p of raw) {
+      if (!Array.isArray(p) || p.length < 2 || !Number.isFinite(p[0]) || !Number.isFinite(p[1])) return null;
+      out.push([clamp(p[0]), clamp(p[1])]);
+    }
+    return toCCW(out);
+  };
+  let customPolygon: Pt[] | null = sanitizeCustom(state.render.customPolygon);
+  let shapeId = customPolygon ? CUSTOM_ID : domainById(state.render.region ?? state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
+  /** The active domain: a synthesised custom polygon when shapeId is "custom", else the named preset. */
+  const currentDomain = (): DomainPreset | undefined =>
+    shapeId === CUSTOM_ID ? (customPolygon && customPolygon.length >= 3 ? makeCustomDomain(customPolygon) : undefined) : domainById(shapeId);
+  let scDragging = false; // true during a live vertex drag → fast (lightning) refits for instant feedback
+  let lastFastSc: SCMap | null = null; // the last fast solve, to warm-start the precise solve on release
+  /** Solve the polygon's SC map at the altitude the moment calls for: FAST (lightning) during a live vertex
+   *  drag for instant feedback, PRECISE on release — warm-started from the last fast solve (the engine's
+   *  drag-then-refine continuation, ADR-0020). */
+  const solvePolygon = (vertices: readonly Pt[]): SCMap => {
+    const vv = vertices.map((p): [number, number] => [p[0], p[1]]);
+    if (scDragging) {
+      lastFastSc = fitSchwarzChristoffel({ vertices: vv }, { mode: "fast" });
+      return lastFastSc;
+    }
+    const sc = fitSchwarzChristoffel({ vertices: vv }, { mode: "precise", nGaussLegendre: 12, warmStart: lastFastSc ?? undefined });
+    lastFastSc = null;
+    return sc;
+  };
+  // The Ω→𝔻 map for point queries (hover, linked cursor): the lightning fit for a smooth Ω, or the exact
+  // Schwarz–Christoffel inverse for a polygon. Only `.eval` is needed here, so both engines fit one shape.
+  let domainMap: { eval(z: Pt): Pt } | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
   // Disk-image mode (the primary view): the unit-disk polar grid and its φ-pushforward.
@@ -321,12 +397,13 @@ function main(): void {
       if (diskSourceIsRegion()) regionDirty = true;
     }
     applyModeContext();
+    refreshPolygonTools();
     invalidate();
   }
 
   // ---- the Method card (the engine that ran + its honest accuracy) ----
   function pendingCard(): MethodCard {
-    return domainById(shapeId)?.corners
+    return currentDomain()?.corners
       ? {
           name: "Schwarz–Christoffel",
           tag: "exact map",
@@ -366,6 +443,7 @@ function main(): void {
     };
   }
   function updateMethod(): void {
+    refreshPolygonTools();
     const vis = currentVis();
     if (vis === "formula") return controls.setMethod(null);
     if (vis === "import") return controls.setMethod(importCard());
@@ -411,59 +489,109 @@ function main(): void {
     return [Math.cos(t), Math.sin(t)];
   });
 
-  /** Fit f: Ω → 𝔻 for the selected domain and build its source (Ω) and image (disk) conformal grids. */
+  /** Fit the Ω → 𝔻 map for the selected domain and build its source (Ω) and image (disk) grids. A polygon
+   *  goes through the exact Schwarz–Christoffel engine (the same map the 𝔻 → Ω direction uses, inverted); a
+   *  smooth Ω uses the lightning least-squares fit. */
   function computeDomain(): void {
-    const d = domainById(shapeId);
+    const d = currentDomain();
     if (!d) {
       domainMap = null;
       domainSource = [];
       domainImage = [];
       domainCard = null;
+      scCorr = null;
       controls.setAnalysis(null);
       updateMethod();
       return;
     }
-    // Corner domains (polygons) cluster poles at the vertices (lightning, P3c) and sample the boundary
-    // densely near the corners; smooth domains use the polynomial-only fit (P3a).
-    const corners = d.corners;
-    const boundary = corners ? cornerBoundary(corners, 110) : sampleDomainBoundary(d, DOMAIN_SAMPLES);
-    const poles = corners ? cornerPoles(corners, 16, 4) : [];
-    const f = fitConformalMap(boundary, corners ? 24 : DOMAIN_DEGREE, poles);
-    domainMap = f;
-    const cg = conformalSourceGrid(d, 24, 6, 160);
     const BDRY = "rgba(200,208,222,0.92)";
     const SPOKE = "rgba(110,168,254,0.8)";
     const RING = "rgba(130,225,255,0.72)";
+    const DISK_BDRY = "rgba(120,130,150,0.85)"; // ∂𝔻, for reference
+
+    // A polygon Ω is a Schwarz–Christoffel job. The exact map Ω → 𝔻 is the SAME map the 𝔻 → Ω direction
+    // uses, run backwards (sc.inverse) — so hover reads an exact preimage. We DRAW the conformal grid by
+    // pushing the disk's polar grid FORWARD (cheap + exact); the ODE inverse is reserved for the single
+    // hover point. This reaches machine precision at the reentrant corners the lightning fit only approximates.
+    if (d.corners) {
+      const sc = solvePolygon(d.corners);
+      domainMap = {
+        eval: (z: Pt): Pt => {
+          const w = sc.inverseWithStatus([z[0], z[1]]).w;
+          return [w[0], w[1]];
+        },
+      };
+      scCorr = { prevertices: sc.prevertices, corners: d.corners, angles: sc.angles };
+      const dg = diskPolarLines(24, 6, 96);
+      const outline: Pt[] = [...d.corners, d.corners[0]];
+      domainSource = [
+        { color: BDRY, pts: outline },
+        ...dg.spokes.map((p) => ({ color: SPOKE, pts: sc.forwardMany(p) as Pt[] })),
+        ...dg.rings.map((p) => ({ color: RING, pts: sc.forwardMany(p) as Pt[] })),
+      ];
+      domainImage = [
+        { color: DISK_BDRY, pts: UNIT_CIRCLE },
+        ...dg.spokes.map((p) => ({ color: SPOKE, pts: p as Pt[] })),
+        ...dg.rings.map((p) => ({ color: RING, pts: p as Pt[] })),
+      ];
+      const maxAngle = Math.max(...sc.angles);
+      const rows: [string, string][] = [
+        ["engine", "Schwarz–Christoffel"],
+        ["domain", d.name],
+        ["prevertices", "= " + sc.prevertices.length],
+        ["max interior ∠", "= " + fmt(maxAngle) + "·π"],
+        ["vertex resid.", "≈ " + fmt(sc.residual)],
+      ];
+      controls.setAnalysis(rows, "Schwarz–Christoffel map");
+      domainCard = {
+        name: "Schwarz–Christoffel",
+        tag: sc.mode === "fast" ? "fast · editing" : sc.converged ? "exact inverse" : "check residual",
+        tagKind: "sc",
+        desc: "The exact conformal map Ω → 𝔻 — the same map as the 𝔻 → Ω direction, run backwards. Built from the polygon's corner angles, it reaches machine precision even at the reentrant corners the lightning fit only approximates.",
+        stats: [
+          ["prevertices", "= " + sc.prevertices.length],
+          ["mode", sc.degraded ? sc.mode + " · degraded" : sc.mode],
+          ["vertex resid.", "≈ " + fmt(sc.residual)],
+        ],
+        honesty: ["= exact corner angles", "≈ numerical map"],
+      };
+      updateMethod();
+      return;
+    }
+
+    // A smooth Ω: the polynomial-only lightning least-squares fit (P3a).
+    const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
+    const f = fitConformalMap(boundary, DOMAIN_DEGREE);
+    domainMap = f;
+    scCorr = null; // smooth Ω has no corners / prevertices
+    const cg = conformalSourceGrid(d, 24, 6, 160);
     domainSource = [
       { color: BDRY, pts: cg.boundary },
       ...cg.spokes.map((p) => ({ color: SPOKE, pts: p as Pt[] })),
       ...cg.rings.map((p) => ({ color: RING, pts: p as Pt[] })),
     ];
     domainImage = [
-      { color: "rgba(120,130,150,0.85)", pts: UNIT_CIRCLE }, // the target ∂𝔻, for reference
+      { color: DISK_BDRY, pts: UNIT_CIRCLE }, // the target ∂𝔻, for reference
       { color: BDRY, pts: f.evalMany(cg.boundary) as Pt[] },
       ...cg.spokes.map((p) => ({ color: SPOKE, pts: f.evalMany(p) as Pt[] })),
       ...cg.rings.map((p) => ({ color: RING, pts: f.evalMany(p) as Pt[] })),
     ];
     // Honest readout: the map is numerical; the boundary residual is its ≈ accuracy.
     const rows: [string, string][] = [
-      ["method", f.poles.length ? "lightning + corner poles" : "lightning (LSQ)"],
+      ["method", "lightning (LSQ)"],
       ["domain", d.name],
       ["degree", "= " + f.degree],
+      ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
+      ["f(0)", "= 0  (exact)"],
     ];
-    if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
-    rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
     controls.setAnalysis(rows, "Numerical map");
     domainCard = {
-      name: f.poles.length ? "Lightning + corner poles" : "Lightning solver",
+      name: "Lightning solver",
       tag: "numerical",
       tagKind: "light",
-      desc: d.corners
-        ? "The Riemann map Ω → 𝔻 by the lightning fit with clustered corner poles. (Schwarz–Christoffel maps 𝔻 → Ω; the reverse here uses this fit.)"
-        : "The Riemann map Ω → 𝔻 by the lightning least-squares fit (Gopal–Trefethen).",
+      desc: "The Riemann map Ω → 𝔻 by the lightning least-squares fit (Gopal–Trefethen).",
       stats: [
         ["degree", "= " + f.degree],
-        ...(f.poles.length ? [["poles", "= " + f.poles.length] as [string, string]] : []),
         ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
       ],
     };
@@ -485,18 +613,21 @@ function main(): void {
    *  is a Schwarz–Christoffel job (3.1) — the parameter solve gives an exact-form map that is stable at the
    *  corners the lightning forward fit is not; a smooth Ω uses the lightning forward map (2.1). */
   function fitRegion(): void {
-    const d = domainById(shapeId);
+    const d = currentDomain();
     if (!d) {
       regionMap = null;
       regionCard = null;
+      scCorr = null;
       updateMethod();
       return;
     }
     if (d.corners) {
-      // A lower Gauss–Legendre order keeps the per-point pushforward cheap for interactive rendering.
-      const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
+      const sc = solvePolygon(d.corners);
+      scCorr = { prevertices: sc.prevertices, corners: d.corners, angles: sc.angles };
       const stats: [string, string][] = [
-        ["prevertices", "= " + d.corners.length + (sc.converged ? "  (solved)" : "  (not converged)")],
+        ["prevertices", "= " + d.corners.length + (sc.converged ? "  (solved)" : sc.mode === "fast" ? "  (fast)" : "  (not converged)")],
+        ["mode", sc.degraded ? sc.mode + " · degraded" : sc.mode],
+        ["max interior ∠", "= " + fmt(Math.max(...sc.angles)) + "·π"],
       ];
       if (sc.modulus !== undefined) stats.push(["conf. modulus", "≈ " + fmt(sc.modulus)]);
       stats.push(["residual", "≈ " + fmt(sc.residual)]);
@@ -512,7 +643,7 @@ function main(): void {
       };
       regionCard = {
         name: "Schwarz–Christoffel",
-        tag: sc.converged ? "exact map" : "check residual",
+        tag: sc.mode === "fast" ? "fast · editing" : sc.converged ? "exact map" : "check residual",
         tagKind: "sc",
         desc: "The exact conformal map onto a polygon, built from its corner angles — machine precision, with meaningful prevertices & accessory constants.",
         stats,
@@ -521,6 +652,7 @@ function main(): void {
       updateMethod();
       return;
     }
+    scCorr = null; // smooth Ω has no corners / prevertices
     const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
     const f = fitConformalMap(boundary, DOMAIN_DEGREE); // Ω → 𝔻
     const g = fitForwardMap(f, boundary, DOMAIN_DEGREE); // 𝔻 → Ω (the forward map we push the disk through)
@@ -639,7 +771,7 @@ function main(): void {
         ["univalent", "= yes  (exterior map, by construction)"],
       ];
     } else if (region && regionMap) {
-      const d = domainById(shapeId);
+      const d = currentDomain();
       rows = [
         ["source", "region 𝔻 → Ω  (numeric)"],
         ["region Ω", d ? d.name : shapeId],
@@ -669,6 +801,38 @@ function main(): void {
     return out;
   };
 
+  /** Phase B: draw the SC prevertices wₖ as colour-matched dots on the 𝔻 pane. */
+  function drawPrevertexDots(pane: Overlay2D): void {
+    if (!scCorr) return;
+    const n = scCorr.corners.length;
+    for (let k = 0; k < n; k++) pane.drawDot(scCorr.prevertices[k], cornerHue(k, n), hoverCorner === k);
+  }
+  /** Phase B: draw the SC corners vₖ as colour-matched dots on the Ω pane, each labelled with its interior
+   *  angle αₖ·π placed just outside the corner (away from the polygon centroid). */
+  function drawCornerDots(pane: Overlay2D): void {
+    if (!scCorr) return;
+    const n = scCorr.corners.length;
+    let cx = 0;
+    let cy = 0;
+    for (const v of scCorr.corners) {
+      cx += v[0];
+      cy += v[1];
+    }
+    cx /= n || 1;
+    cy /= n || 1;
+    for (let k = 0; k < n; k++) {
+      const v = scCorr.corners[k];
+      const emph = hoverCorner === k;
+      pane.drawDot(v, cornerHue(k, n), emph);
+      // Place the angle label just INSIDE the corner (toward the centroid) so it never clips the pane edge.
+      const ux = cx - v[0];
+      const uy = cy - v[1];
+      const ul = Math.hypot(ux, uy) || 1;
+      const anchor: Pt = [v[0] + (ux / ul) * 0.16, v[1] + (uy / ul) * 0.16];
+      pane.drawLabel(anchor, fmt(scCorr.angles[k]) + "π", 0, 0, emph);
+    }
+  }
+
   function drawOverlays(): void {
     // Both modes are two-pane (source + linked image), so the stage is always split. Toggle split FIRST,
     // then size the left overlay: the pane's final (half) width must be in effect before resize() reads it,
@@ -690,30 +854,39 @@ function main(): void {
       leftOverlay.drawLines([{ color: bCol, pts: diskUnitSrc }], 1.4);
       if (usesC && !diskSourceIsNumeric()) leftOverlay.drawHandle(cParam, "#ff5a5a", "c");
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      // The prevertices wₖ live on the disk pane's ∂𝔻 (region source only).
+      if (diskSourceIsRegion()) drawPrevertexDots(leftOverlay);
       leftOverlay.drawScaleBar();
       // Right pane: the image φ(𝔻), auto-framed, same colour key + φ(∂𝔻).
       if (rightPane.resize()) {
         const b =
           (lineMode ? bounds(diskImgLines) : bounds([{ color: "", pts: cellPts(diskImageCells) }])) ??
           ({ minx: -1, maxx: 1, miny: -1, maxy: 1 } as const);
-        rightPane.fitBounds(b);
+        // Freeze the auto-fit while dragging a vertex here (Ω is this pane) so the shape doesn't slide out
+        // from under the cursor; on release it re-fits to the edited shape.
+        if (!scDragging) rightPane.fitBounds(b);
         rightPane.clear();
         if (lineMode) rightPane.drawLines(diskImgLines, 1.1);
         else rightPane.fillCells(diskImageCells, 0.6);
         rightPane.drawLines([{ color: bCol, pts: diskUnitImg }], 1.4);
         if (cursorZ) rightPane.drawMarker(activePhi()(cursorZ), CURSOR_COLOR);
+        // The corners vₖ + interior-angle labels live on the image pane's ∂Ω (region source only).
+        if (diskSourceIsRegion()) drawCornerDots(rightPane);
       }
       return;
     }
     if (domain) {
       leftOverlay.drawLines(domainSource, 1.1);
       if (cursorZ) leftOverlay.drawMarker(cursorZ, CURSOR_COLOR);
+      // Ω is the source pane here: corners + interior-angle labels on the left, prevertices on the disk.
+      drawCornerDots(leftOverlay);
       leftOverlay.drawScaleBar();
       if (rightPane.resize()) {
         rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
         rightPane.clear();
         rightPane.drawLines(domainImage, 1.1);
         if (cursorZ && domainMap) rightPane.drawMarker(domainMap.eval([cursorZ[0], cursorZ[1]]), CURSOR_COLOR);
+        drawPrevertexDots(rightPane);
       }
       return;
     }
@@ -997,13 +1170,63 @@ function main(): void {
   });
   controls.onShape((id) => {
     shapeId = id;
-    // One shape drives both directions; set both fields so a permalink + a Direction flip stay in sync.
-    state = { ...state, render: { ...state.render, region: id, domain: id } };
+    if (id === CUSTOM_ID && (!customPolygon || customPolygon.length < 3)) customPolygon = defaultCustomPolygon();
+    // One shape drives both directions; syncShapeState writes both fields (+ the custom vertices) so a
+    // permalink + a Direction flip stay in sync.
+    syncShapeState();
+    lastFastSc = null;
     regionDirty = true; // (re)fit g: 𝔻 → Ω (region source)
     domainDirty = true; // (re)fit f: Ω → 𝔻 (domain-map)
     diskDirty = true;
     fitPending = true; // reframe for the new shape (the fit block handles both directions)
     regionCard = null; // drop the stale card so the Method card reads "solving…" until the refit lands
+    domainCard = null;
+    updateMethod();
+    invalidate();
+  });
+  controls.onEditPolygon((action) => {
+    if (action === "reset") {
+      customPolygon = defaultCustomPolygon();
+      shapeId = CUSTOM_ID;
+      controls.setShape(CUSTOM_ID);
+    } else if (!ensureCustomEditable() || !customPolygon) {
+      return;
+    } else if (action === "add") {
+      if (customPolygon.length >= 16) return; // keep the precise solve interactive
+      let best = 0;
+      let bestLen = -1;
+      for (let i = 0; i < customPolygon.length; i++) {
+        const a = customPolygon[i];
+        const b = customPolygon[(i + 1) % customPolygon.length];
+        const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (len > bestLen) {
+          bestLen = len;
+          best = i;
+        }
+      }
+      const a = customPolygon[best];
+      const b = customPolygon[(best + 1) % customPolygon.length];
+      const mid: Pt = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+      const cx = customPolygon.reduce((s, v) => s + v[0], 0) / customPolygon.length;
+      const cy = customPolygon.reduce((s, v) => s + v[1], 0) / customPolygon.length;
+      let nx = -(b[1] - a[1]) / bestLen;
+      let ny = (b[0] - a[0]) / bestLen;
+      if (nx * (mid[0] - cx) + ny * (mid[1] - cy) < 0) {
+        nx = -nx;
+        ny = -ny;
+      } // offset outward so the new vertex is a genuine corner (interior angle ≠ π)
+      const off = 0.18 * bestLen;
+      const nv: Pt = [clampCoord(mid[0] + off * nx), clampCoord(mid[1] + off * ny)];
+      customPolygon = toCCW([...customPolygon.slice(0, best + 1), nv, ...customPolygon.slice(best + 1)]);
+    } else if (action === "remove") {
+      if (customPolygon.length <= 3) return;
+      customPolygon = toCCW(customPolygon.slice(0, -1));
+    }
+    lastFastSc = null;
+    syncShapeState();
+    markPolygonDirty();
+    fitPending = true; // a vertex count change can shift the bounds — reframe once
+    regionCard = null;
     domainCard = null;
     updateMethod();
     invalidate();
@@ -1022,6 +1245,24 @@ function main(): void {
     const r = canvas.getBoundingClientRect();
     const z = pixelToWorld(state.viewport, (e.clientX - r.left) / r.width, 1 - (e.clientY - r.top) / r.height, r.width / r.height);
     cursorZ = z;
+    // SC correspondence hover-link: which corner/prevertex (if any) is under the cursor in the SOURCE pane?
+    // Ω→𝔻 the source pane shows the corners; disk-image region source shows the prevertices on ∂𝔻.
+    hoverCorner = null;
+    if (scCorr) {
+      const src = modeIsDomain(state.render.mode) ? scCorr.corners : diskSourceIsRegion() ? scCorr.prevertices : null;
+      if (src) {
+        let best = 0.05 / state.viewport.zoom; // ~grab radius in world units at the source pane's zoom
+        for (let k = 0; k < src.length; k++) {
+          const dd = Math.hypot(src[k][0] - z[0], src[k][1] - z[1]);
+          if (dd < best) {
+            best = dd;
+            hoverCorner = k;
+          }
+        }
+      }
+    }
+    // A grab cursor when hovering a draggable corner on the Ω pane (Ω→𝔻; Ω is the left/source pane here).
+    canvas.style.cursor = modeIsDomain(state.render.mode) && hoverCorner !== null ? "grab" : "";
     // Numerical-map mode: read z and its image f(z) under the fitted Riemann map (no φ′ — f is numerical).
     if (modeIsDomain(state.render.mode)) {
       if (domainMap) {
@@ -1065,8 +1306,156 @@ function main(): void {
   });
   canvas.addEventListener("pointerleave", () => {
     cursorZ = null;
+    hoverCorner = null;
     controls.setHover(null);
     schedule();
+  });
+
+  // ---- Phase C: drag polygon vertices directly on the Ω pane --------------
+  const clampCoord = (x: number): number => Math.max(-MAX_POLYGON_COORD, Math.min(MAX_POLYGON_COORD, x));
+
+  /** Mirror the custom polygon (and the "custom" id) into the serializable state so a permalink is faithful. */
+  function syncShapeState(): void {
+    state = {
+      ...state,
+      render: {
+        ...state.render,
+        region: shapeId,
+        domain: shapeId,
+        customPolygon: shapeId === CUSTOM_ID && customPolygon ? customPolygon.map((p): [number, number] => [p[0], p[1]]) : undefined,
+      },
+    };
+  }
+
+  /** Every region view is a function of the polygon — flag them all dirty after an edit. */
+  function markPolygonDirty(): void {
+    regionDirty = true;
+    domainDirty = true;
+    diskDirty = true;
+  }
+
+  /** Show/hide the ＋/－/reset tools + vertex count for the active polygon shape. */
+  function refreshPolygonTools(): void {
+    const corners = currentVis() === "region" ? currentDomain()?.corners : undefined;
+    controls.setPolygonTools(!!corners, corners?.length);
+  }
+
+  /** Editing any polygon forks it to the editable "custom" shape (named presets are never mutated). */
+  function ensureCustomEditable(): boolean {
+    if (shapeId === CUSTOM_ID) return !!customPolygon;
+    const d = currentDomain();
+    if (!d?.corners) return false;
+    customPolygon = d.corners.map((p): Pt => [p[0], p[1]]);
+    shapeId = CUSTOM_ID;
+    controls.setShape(CUSTOM_ID);
+    return true;
+  }
+
+  /** Run a vertex drag: FAST (lightning) refits while moving, a PRECISE warm-started refit on release.
+   *  `getWorld` maps a pointer event to a world point in the pane being edited; `cursorEl` shows the
+   *  grabbing cursor for the duration. */
+  function runVertexDrag(k: number, getWorld: (e: PointerEvent) => Pt, cursorEl: HTMLElement): void {
+    scDragging = true;
+    cursorEl.style.cursor = "grabbing";
+    const move = (ev: PointerEvent): void => {
+      if (!customPolygon) return;
+      const w = getWorld(ev);
+      customPolygon[k] = [clampCoord(w[0]), clampCoord(w[1])];
+      markPolygonDirty();
+      syncShapeState();
+      invalidate();
+    };
+    const up = (): void => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      scDragging = false; // release → the render loop runs a precise, warm-started solve
+      cursorEl.style.cursor = "";
+      markPolygonDirty();
+      syncShapeState();
+      invalidate();
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  // Ω→𝔻 (domain-map): Ω is the LEFT pane (the pan/zoom surface). Registered before attachPanZoom so a grab
+  // on a corner preempts the pan.
+  canvas.addEventListener("pointerdown", (e) => {
+    if (!modeIsDomain(state.render.mode)) return;
+    const d = currentDomain();
+    if (!d?.corners) return;
+    const r = canvas.getBoundingClientRect();
+    const toWorld = (ev: { clientX: number; clientY: number }): Pt =>
+      pixelToWorld(state.viewport, (ev.clientX - r.left) / r.width, 1 - (ev.clientY - r.top) / r.height, r.width / r.height);
+    const w0 = toWorld(e);
+    let hit = -1;
+    let best = 0.06 / state.viewport.zoom; // world radius, ≥ the hover grab radius (0.05/zoom) so grab ⟹ drag
+    for (let k = 0; k < d.corners.length; k++) {
+      const dd = Math.hypot(d.corners[k][0] - w0[0], d.corners[k][1] - w0[1]);
+      if (dd < best) {
+        best = dd;
+        hit = k;
+      }
+    }
+    if (hit < 0) return;
+    e.stopImmediatePropagation(); // preempt the pan for this drag
+    if (!ensureCustomEditable()) return;
+    runVertexDrag(hit, toWorld, canvas);
+  });
+
+  // 𝔻→Ω (disk-image): Ω is the RIGHT (image) pane. Hit-test + drag in client space (the pane is auto-fit;
+  // its fit is frozen during the drag so the shape stays under the cursor).
+  imageCanvas.addEventListener("pointerdown", (e) => {
+    if (!(modeIsDiskImage(state.render.mode) && diskSourceIsRegion())) return;
+    const d = currentDomain();
+    if (!d?.corners) return;
+    let hit = -1;
+    let best = 14;
+    for (let k = 0; k < d.corners.length; k++) {
+      const [cx, cy] = rightPane.worldToClient(d.corners[k]);
+      const dpx = Math.hypot(cx - e.clientX, cy - e.clientY);
+      if (dpx < best) {
+        best = dpx;
+        hit = k;
+      }
+    }
+    if (hit < 0) return;
+    e.preventDefault();
+    if (!ensureCustomEditable()) return;
+    runVertexDrag(hit, (ev) => rightPane.clientToWorld(ev.clientX, ev.clientY), imageCanvas);
+  });
+
+  // Corner-hover feedback in the image (Ω) pane: a grab cursor + the linked-pair highlight.
+  imageCanvas.addEventListener("pointermove", (e) => {
+    if (scDragging) return;
+    if (!(modeIsDiskImage(state.render.mode) && diskSourceIsRegion() && scCorr)) {
+      if (imageCanvas.style.cursor) imageCanvas.style.cursor = "";
+      return;
+    }
+    let hit = -1;
+    let best = 14;
+    for (let k = 0; k < scCorr.corners.length; k++) {
+      const [cx, cy] = rightPane.worldToClient(scCorr.corners[k]);
+      const dpx = Math.hypot(cx - e.clientX, cy - e.clientY);
+      if (dpx < best) {
+        best = dpx;
+        hit = k;
+      }
+    }
+    imageCanvas.style.cursor = hit >= 0 ? "grab" : "";
+    const next = hit >= 0 ? hit : null;
+    if (next !== hoverCorner) {
+      hoverCorner = next;
+      schedule();
+    }
+  });
+  imageCanvas.addEventListener("pointerleave", () => {
+    if (scDragging) return;
+    imageCanvas.style.cursor = "";
+    if (hoverCorner !== null) {
+      hoverCorner = null;
+      schedule();
+    }
   });
 
   // ---- drag the family parameter c on the disk pane (1.1) -----------------

@@ -309,6 +309,10 @@ Tracked so the seams are deliberate, not forgotten:
 - ~~**Riemann-map app wiring:** replace the smooth-only region source with the SC engine so a polygon
   domain is first-class in the studio UI.~~ **Done** — `fitRegion` routes polygon `corners` through
   `fitSchwarzChristoffel`; the region picker offers the polygon presets; the panel reports the SC method.
+  **Deepened since (Phases A–C):** reentrant presets (L-shape, cross); the **exact inverse** wired into the
+  Ω→𝔻 direction (both directions now exact, not lightning-approximate); the **prevertex ↔ corner**
+  correspondence overlay with interior-angle labels + hover-linking; and a **draggable-vertex custom-polygon
+  editor** in the primary panes (fast-drag → precise-on-release warm-started continuation, serialized in `#vs=`).
 - **Zipper / geodesic engine** (Marshall–Rohde, clean-room): the curved/**fractal** Jordan-boundary
   sibling — a *different* Tier-3 engine, not part of SC. `ConformalMaps.jl` (MIT) is the oracle.
 - **AAA-LS** pole-placement upgrade for the lightning engine's own robustness (research-notes §2, the

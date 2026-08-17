@@ -145,6 +145,19 @@ drift (#264). **No new package** (SC lives inside `@cas/conformal`); **no `@cas/
 (docs/design/schwarz-christoffel-plan.md) / [`schwarz-christoffel-research-notes.md`]
 (docs/design/schwarz-christoffel-research-notes.md).
 
+**Riemann-map SC studio — reentrant polygons · exact both directions · prevertex viz · draggable editor
+(Phases A–C):** the app's step-E SC wiring deepens into an interactive studio. **Reentrant presets** (L-shape,
+cross) join the polygon picker — the precise solve's reentrant-corner accuracy made visible. The **Ω→𝔻 direction**
+now routes polygons through the exact SC engine too (the conformal grid drawn by the FORWARD map — cheap + exact;
+the ODE `inverse` reserved for the single hover query) instead of the approximate lightning fit, so **both directions
+are exact**, honestly `=`/`≈`-labelled with mode / `degraded` / interior-angle stats. The **prevertices wₖ ↔ corners
+vₖ** correspondence is drawn colour-matched across the two panes, with interior-angle `αₖ·π` labels and hover-linking.
+Polygon **vertices are draggable** directly on whichever pane shows Ω (image pane in 𝔻→Ω, source pane in Ω→𝔻): a drag
+forks to an editable **"Custom polygon"** (named presets stay fixed), refits **fast (lightning) while dragging** and
+**precise (warm-started) on release** (ADR-0020's drag-then-refine), with ＋/－/reset tools; the custom polygon rides
+in the `#vs=` view-state so a permalink reopens the exact hand-drawn shape. Still **no `@cas/interchange` SC form**
+(deferred, ADR-0007).
+
 **QD → CD σ hand-off (QD-HANDOFF-2 + S5, merged — σ peer view #246, σ multi-view explorer #255; interchange 1.3.0):**
 Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe
 (closed-form φ + branch of the inverse); Complex Dynamics reconstructs σ via `@cas/schwarz` and renders

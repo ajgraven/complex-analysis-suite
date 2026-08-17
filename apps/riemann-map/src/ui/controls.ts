@@ -41,6 +41,8 @@ export interface Controls {
   setDirection(id: string): void;
   /** The unified shape/region preset id (drives both directions). */
   setShape(id: string): void;
+  /** Phase C: show/hide the polygon-editing tools (＋/－ vertex, reset), and reflect the vertex count. */
+  setPolygonTools(visible: boolean, vertexCount?: number): void;
   setDiskSide(id: string): void;
   setDiskStyle(id: string): void;
   setDiskShow(id: string): void;
@@ -60,6 +62,8 @@ export interface Controls {
   onVisualize(cb: (id: string) => void): void;
   onDirection(cb: (id: string) => void): void;
   onShape(cb: (id: string) => void): void;
+  /** Phase C: a polygon-editing action from the tools row ("add" | "remove" | "reset"). */
+  onEditPolygon(cb: (action: "add" | "remove" | "reset") => void): void;
   onDiskSide(cb: (id: string) => void): void;
   onDiskStyle(cb: (id: string) => void): void;
   onDiskShow(cb: (id: string) => void): void;
@@ -241,6 +245,7 @@ export function createControls(initialExpr: string): Controls {
   const visListeners: ((id: string) => void)[] = [];
   const dirListeners: ((id: string) => void)[] = [];
   const shapeListeners: ((id: string) => void)[] = [];
+  const editPolygonListeners: ((action: "add" | "remove" | "reset") => void)[] = [];
   const diskSideListeners: ((id: string) => void)[] = [];
   const diskStyleListeners: ((id: string) => void)[] = [];
   const diskShowListeners: ((id: string) => void)[] = [];
@@ -332,8 +337,38 @@ export function createControls(initialExpr: string): Controls {
     o.textContent = d.name;
     polyGroup.append(o);
   }
+  const customPolyOpt = document.createElement("option");
+  customPolyOpt.value = "custom";
+  customPolyOpt.textContent = "Custom polygon ✎";
+  polyGroup.append(customPolyOpt);
   shapeSel.append(smoothGroup, polyGroup);
   shapeField.append(shapeLbl, shapeSel);
+  // Phase C — polygon editing: drag a corner in the Ω pane, or use these to add / remove / reset vertices.
+  const polyTools = document.createElement("div");
+  polyTools.className = "poly-tools";
+  polyTools.hidden = true;
+  const polyHint = document.createElement("p");
+  polyHint.className = "explainer";
+  polyHint.textContent = "Drag a corner in the Ω pane to reshape it — edits fork to a custom polygon.";
+  const polyBtns = document.createElement("div");
+  polyBtns.className = "buttons";
+  const mkPolyBtn = (label: string, title: string, action: "add" | "remove" | "reset"): HTMLButtonElement => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.title = title;
+    b.addEventListener("click", () => editPolygonListeners.forEach((cb) => cb(action)));
+    return b;
+  };
+  const polyCount = document.createElement("span");
+  polyCount.className = "note-sym";
+  polyBtns.append(
+    mkPolyBtn("＋ vertex", "Add a vertex on the longest edge", "add"),
+    mkPolyBtn("－ vertex", "Remove a vertex", "remove"),
+    mkPolyBtn("reset", "Reset to a regular pentagon", "reset"),
+    polyCount,
+  );
+  polyTools.append(polyHint, polyBtns);
   const dirField = document.createElement("div");
   dirField.className = "field";
   const dirLbl = document.createElement("span");
@@ -341,7 +376,7 @@ export function createControls(initialExpr: string): Controls {
   dirLbl.textContent = "Direction";
   const dir = segmented(DIRECTIONS, (id) => dirListeners.forEach((cb) => cb(id)), true);
   dirField.append(dirLbl, dir.el);
-  ctxRegion.append(shapeField, dirField);
+  ctxRegion.append(shapeField, polyTools, dirField);
 
   // --- import context -------------------------------------------------------
   const ctxImport = document.createElement("section");
@@ -587,6 +622,10 @@ export function createControls(initialExpr: string): Controls {
     setShape(id: string): void {
       shapeSel.value = id;
     },
+    setPolygonTools(visible: boolean, vertexCount?: number): void {
+      polyTools.hidden = !visible;
+      if (vertexCount !== undefined) polyCount.textContent = `${vertexCount} vertices`;
+    },
     setDiskSide(id: string): void {
       diskSide.select.value = id;
     },
@@ -659,6 +698,7 @@ export function createControls(initialExpr: string): Controls {
     onVisualize(cb) { visListeners.push(cb); },
     onDirection(cb) { dirListeners.push(cb); },
     onShape(cb) { shapeListeners.push(cb); },
+    onEditPolygon(cb) { editPolygonListeners.push(cb); },
     onDiskSide(cb) { diskSideListeners.push(cb); },
     onDiskStyle(cb) { diskStyleListeners.push(cb); },
     onDiskShow(cb) { diskShowListeners.push(cb); },
