@@ -9,7 +9,7 @@ import {
   pointInPolygon,
   type C,
 } from "../src/domains.js";
-import { fitSmoothConformalMap, fitConformalMap } from "@cas/conformal";
+import { fitSmoothConformalMap, fitConformalMap, fitSchwarzChristoffel } from "@cas/conformal";
 
 /** Winding number of a closed polyline about the origin (÷2π); ≈1 ⇒ 0 is enclosed. */
 function windingAboutOrigin(poly: readonly C[]): number {
@@ -75,5 +75,44 @@ describe("preset domains + conformal source grid (P3b)", () => {
     expect(lightning.boundaryResidual).toBeLessThan(poly.boundaryResidual / 5); // poles help a lot
     expect(lightning.boundaryResidual, "square lightning residual").toBeLessThan(1e-2);
     expect(Math.hypot(...lightning.eval([0, 0]))).toBeCloseTo(0, 12); // f(0) = 0
+  });
+});
+
+describe("reentrant polygon presets → Schwarz–Christoffel (precise)", () => {
+  const reentrant = ["lshape", "cross"] as const;
+
+  it("each is a CCW simple polygon enclosing 0 (kernel point) with a reflex corner", () => {
+    for (const id of reentrant) {
+      const d = domainById(id);
+      expect(d?.corners, id).toBeDefined();
+      if (!d?.corners) continue;
+      const v = d.corners;
+      let area2 = 0; // shoelace: > 0 ⇒ counter-clockwise (the SC solver's input convention)
+      for (let i = 0; i < v.length; i++) {
+        const a = v[i];
+        const b = v[(i + 1) % v.length];
+        area2 += a[0] * b[1] - b[0] * a[1];
+      }
+      expect(area2, `${id} orientation`).toBeGreaterThan(0);
+      expect(pointInPolygon([0, 0], v), `${id} encloses 0`).toBe(true);
+    }
+  });
+
+  it("the precise solve (at the app's nGaussLegendre=12) reproduces the corners to ≥8 digits", () => {
+    for (const id of reentrant) {
+      const d = domainById(id);
+      if (!d?.corners) throw new Error(`${id} must be a polygon preset`);
+      const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
+      expect(sc.mode).toBe("precise");
+      expect(sc.converged, `${id} converged`).toBe(true);
+      expect(Math.max(...sc.angles), `${id} has a reflex (α>1) corner`).toBeGreaterThan(1);
+      const err = Math.max(
+        ...d.corners.map((z, k) => {
+          const f = sc.forward(sc.prevertices[k]);
+          return Math.hypot(f[0] - z[0], f[1] - z[1]);
+        }),
+      );
+      expect(err, `${id} vertex reproduction`).toBeLessThan(1e-8);
+    }
   });
 });

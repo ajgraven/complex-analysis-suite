@@ -28,8 +28,8 @@ import { Overlay2D, type FillCell } from "./render/overlay2d.js";
 import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
-import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, cornerBoundary, cornerPoles } from "./domains.js";
-import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type ConformalMap } from "@cas/conformal";
+import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid } from "./domains.js";
+import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
 import { createControls, type MethodCard } from "./ui/controls.js";
 
@@ -84,6 +84,33 @@ function fmt(n: number): string {
 function fmtC(re: number, im: number): string {
   if (!Number.isFinite(re) || !Number.isFinite(im)) return "∞ (undefined)";
   return `${fmt(re)} ${im >= 0 ? "+" : "−"} ${fmt(Math.abs(im))}i`;
+}
+
+/** A unit-disk polar grid as spoke + ring polylines. Pushed FORWARD through the Schwarz–Christoffel map it
+ *  becomes the conformal grid inside the polygon — the classic SC picture, and exact + cheap (no inverse).
+ *  Spokes stop just shy of ∂𝔻 so the forward map is never evaluated exactly on a corner singularity. */
+function diskPolarLines(nSpokes: number, nRings: number, res: number): { spokes: [number, number][][]; rings: [number, number][][] } {
+  const spokes: [number, number][][] = [];
+  for (let k = 0; k < nSpokes; k++) {
+    const a = (2 * Math.PI * k) / nSpokes;
+    const line: [number, number][] = [];
+    for (let i = 0; i <= res; i++) {
+      const s = 0.02 + 0.975 * (i / res);
+      line.push([s * Math.cos(a), s * Math.sin(a)]);
+    }
+    spokes.push(line);
+  }
+  const rings: [number, number][][] = [];
+  for (let i = 1; i <= nRings; i++) {
+    const t = i / (nRings + 1);
+    const ring: [number, number][] = [];
+    for (let j = 0; j <= res; j++) {
+      const p = (2 * Math.PI * j) / res;
+      ring.push([t * Math.cos(p), t * Math.sin(p)]);
+    }
+    rings.push(ring);
+  }
+  return { spokes, rings };
 }
 const CURSOR_COLOR = "#ffffff";
 
@@ -203,7 +230,9 @@ function main(): void {
   // uses the lightning forward map, polygon Ω the Schwarz–Christoffel engine) and Ω→𝔻 (numeric domain-map
   // mode; lightning f: Ω→𝔻). One "Shape" picker drives both — so switching Direction keeps the shape.
   let shapeId = domainById(state.render.region ?? state.render.domain ?? "")?.id ?? DOMAIN_PRESETS[0].id;
-  let domainMap: ConformalMap | null = null;
+  // The Ω→𝔻 map for point queries (hover, linked cursor): the lightning fit for a smooth Ω, or the exact
+  // Schwarz–Christoffel inverse for a polygon. Only `.eval` is needed here, so both engines fit one shape.
+  let domainMap: { eval(z: Pt): Pt } | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
   // Disk-image mode (the primary view): the unit-disk polar grid and its φ-pushforward.
@@ -411,7 +440,9 @@ function main(): void {
     return [Math.cos(t), Math.sin(t)];
   });
 
-  /** Fit f: Ω → 𝔻 for the selected domain and build its source (Ω) and image (disk) conformal grids. */
+  /** Fit the Ω → 𝔻 map for the selected domain and build its source (Ω) and image (disk) grids. A polygon
+   *  goes through the exact Schwarz–Christoffel engine (the same map the 𝔻 → Ω direction uses, inverted); a
+   *  smooth Ω uses the lightning least-squares fit. */
   function computeDomain(): void {
     const d = domainById(shapeId);
     if (!d) {
@@ -423,47 +454,92 @@ function main(): void {
       updateMethod();
       return;
     }
-    // Corner domains (polygons) cluster poles at the vertices (lightning, P3c) and sample the boundary
-    // densely near the corners; smooth domains use the polynomial-only fit (P3a).
-    const corners = d.corners;
-    const boundary = corners ? cornerBoundary(corners, 110) : sampleDomainBoundary(d, DOMAIN_SAMPLES);
-    const poles = corners ? cornerPoles(corners, 16, 4) : [];
-    const f = fitConformalMap(boundary, corners ? 24 : DOMAIN_DEGREE, poles);
-    domainMap = f;
-    const cg = conformalSourceGrid(d, 24, 6, 160);
     const BDRY = "rgba(200,208,222,0.92)";
     const SPOKE = "rgba(110,168,254,0.8)";
     const RING = "rgba(130,225,255,0.72)";
+    const DISK_BDRY = "rgba(120,130,150,0.85)"; // ∂𝔻, for reference
+
+    // A polygon Ω is a Schwarz–Christoffel job. The exact map Ω → 𝔻 is the SAME map the 𝔻 → Ω direction
+    // uses, run backwards (sc.inverse) — so hover reads an exact preimage. We DRAW the conformal grid by
+    // pushing the disk's polar grid FORWARD (cheap + exact); the ODE inverse is reserved for the single
+    // hover point. This reaches machine precision at the reentrant corners the lightning fit only approximates.
+    if (d.corners) {
+      const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
+      domainMap = {
+        eval: (z: Pt): Pt => {
+          const w = sc.inverseWithStatus([z[0], z[1]]).w;
+          return [w[0], w[1]];
+        },
+      };
+      const dg = diskPolarLines(24, 6, 96);
+      const outline: Pt[] = [...d.corners, d.corners[0]];
+      domainSource = [
+        { color: BDRY, pts: outline },
+        ...dg.spokes.map((p) => ({ color: SPOKE, pts: sc.forwardMany(p) as Pt[] })),
+        ...dg.rings.map((p) => ({ color: RING, pts: sc.forwardMany(p) as Pt[] })),
+      ];
+      domainImage = [
+        { color: DISK_BDRY, pts: UNIT_CIRCLE },
+        ...dg.spokes.map((p) => ({ color: SPOKE, pts: p as Pt[] })),
+        ...dg.rings.map((p) => ({ color: RING, pts: p as Pt[] })),
+      ];
+      const maxAngle = Math.max(...sc.angles);
+      const rows: [string, string][] = [
+        ["engine", "Schwarz–Christoffel"],
+        ["domain", d.name],
+        ["prevertices", "= " + sc.prevertices.length],
+        ["max interior ∠", "= " + fmt(maxAngle) + "·π"],
+        ["vertex resid.", "≈ " + fmt(sc.residual)],
+      ];
+      controls.setAnalysis(rows, "Schwarz–Christoffel map");
+      domainCard = {
+        name: "Schwarz–Christoffel",
+        tag: sc.converged ? "exact inverse" : "check residual",
+        tagKind: "sc",
+        desc: "The exact conformal map Ω → 𝔻 — the same map as the 𝔻 → Ω direction, run backwards. Built from the polygon's corner angles, it reaches machine precision even at the reentrant corners the lightning fit only approximates.",
+        stats: [
+          ["prevertices", "= " + sc.prevertices.length],
+          ["mode", sc.degraded ? sc.mode + " · degraded" : sc.mode],
+          ["vertex resid.", "≈ " + fmt(sc.residual)],
+        ],
+        honesty: ["= exact corner angles", "≈ numerical map"],
+      };
+      updateMethod();
+      return;
+    }
+
+    // A smooth Ω: the polynomial-only lightning least-squares fit (P3a).
+    const boundary = sampleDomainBoundary(d, DOMAIN_SAMPLES);
+    const f = fitConformalMap(boundary, DOMAIN_DEGREE);
+    domainMap = f;
+    const cg = conformalSourceGrid(d, 24, 6, 160);
     domainSource = [
       { color: BDRY, pts: cg.boundary },
       ...cg.spokes.map((p) => ({ color: SPOKE, pts: p as Pt[] })),
       ...cg.rings.map((p) => ({ color: RING, pts: p as Pt[] })),
     ];
     domainImage = [
-      { color: "rgba(120,130,150,0.85)", pts: UNIT_CIRCLE }, // the target ∂𝔻, for reference
+      { color: DISK_BDRY, pts: UNIT_CIRCLE }, // the target ∂𝔻, for reference
       { color: BDRY, pts: f.evalMany(cg.boundary) as Pt[] },
       ...cg.spokes.map((p) => ({ color: SPOKE, pts: f.evalMany(p) as Pt[] })),
       ...cg.rings.map((p) => ({ color: RING, pts: f.evalMany(p) as Pt[] })),
     ];
     // Honest readout: the map is numerical; the boundary residual is its ≈ accuracy.
     const rows: [string, string][] = [
-      ["method", f.poles.length ? "lightning + corner poles" : "lightning (LSQ)"],
+      ["method", "lightning (LSQ)"],
       ["domain", d.name],
       ["degree", "= " + f.degree],
+      ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
+      ["f(0)", "= 0  (exact)"],
     ];
-    if (f.poles.length) rows.push(["poles", "= " + f.poles.length + " (clustered)"]);
-    rows.push(["boundary resid.", "≈ " + fmt(f.boundaryResidual)], ["f(0)", "= 0  (exact)"]);
     controls.setAnalysis(rows, "Numerical map");
     domainCard = {
-      name: f.poles.length ? "Lightning + corner poles" : "Lightning solver",
+      name: "Lightning solver",
       tag: "numerical",
       tagKind: "light",
-      desc: d.corners
-        ? "The Riemann map Ω → 𝔻 by the lightning fit with clustered corner poles. (Schwarz–Christoffel maps 𝔻 → Ω; the reverse here uses this fit.)"
-        : "The Riemann map Ω → 𝔻 by the lightning least-squares fit (Gopal–Trefethen).",
+      desc: "The Riemann map Ω → 𝔻 by the lightning least-squares fit (Gopal–Trefethen).",
       stats: [
         ["degree", "= " + f.degree],
-        ...(f.poles.length ? [["poles", "= " + f.poles.length] as [string, string]] : []),
         ["boundary resid.", "≈ " + fmt(f.boundaryResidual)],
       ],
     };
@@ -497,6 +573,8 @@ function main(): void {
       const sc = fitSchwarzChristoffel({ vertices: d.corners }, { nGaussLegendre: 12 });
       const stats: [string, string][] = [
         ["prevertices", "= " + d.corners.length + (sc.converged ? "  (solved)" : "  (not converged)")],
+        ["mode", sc.degraded ? sc.mode + " · degraded" : sc.mode],
+        ["max interior ∠", "= " + fmt(Math.max(...sc.angles)) + "·π"],
       ];
       if (sc.modulus !== undefined) stats.push(["conf. modulus", "≈ " + fmt(sc.modulus)]);
       stats.push(["residual", "≈ " + fmt(sc.residual)]);
