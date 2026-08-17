@@ -242,9 +242,9 @@ function main(): void {
   }
   let scCorr: ScCorrespondence | null = null;
   let hoverCorner: number | null = null;
-  // The region Ω, shared by BOTH directions of a region's map: 𝔻→Ω (disk-image region source; smooth Ω
-  // uses the lightning forward map, polygon Ω the Schwarz–Christoffel engine) and Ω→𝔻 (numeric domain-map
-  // mode; lightning f: Ω→𝔻). One "Shape" picker drives both — so switching Direction keeps the shape.
+  // The region Ω, shared by BOTH directions of a region's map: 𝔻→Ω (disk-image region source) and Ω→𝔻
+  // (numeric domain-map mode). Each direction picks its engine by shape: a smooth Ω uses the lightning fit,
+  // a polygon Ω the exact Schwarz–Christoffel engine. One "Shape" picker drives both — Direction keeps the shape.
   // Phase C — the editable custom polygon (draggable vertices). Sanitised on decode (hostile permalinks):
   // 3–40 finite vertices, clamped to the coordinate bound, kept counter-clockwise for the SC solver.
   const sanitizeCustom = (raw: unknown): Pt[] | null => {
@@ -266,16 +266,30 @@ function main(): void {
   let lastFastSc: SCMap | null = null; // the last fast solve, to warm-start the precise solve on release
   /** Solve the polygon's SC map at the altitude the moment calls for: FAST (lightning) during a live vertex
    *  drag for instant feedback, PRECISE on release — warm-started from the last fast solve (the engine's
-   *  drag-then-refine continuation, ADR-0020). */
+   *  drag-then-refine continuation, ADR-0020). NEVER throws: a degenerate polygon (a vertex dragged onto a
+   *  neighbour, or a near-zero interior angle) makes the precise parameter solve throw out of gaussJacobi;
+   *  we fall back to the non-throwing lightning fit so the studio degrades gracefully (honestly flagged
+   *  `converged: false`) instead of the render loop dying. */
   const solvePolygon = (vertices: readonly Pt[]): SCMap => {
     const vv = vertices.map((p): [number, number] => [p[0], p[1]]);
     if (scDragging) {
       lastFastSc = fitSchwarzChristoffel({ vertices: vv }, { mode: "fast" });
       return lastFastSc;
     }
-    const sc = fitSchwarzChristoffel({ vertices: vv }, { mode: "precise", nGaussLegendre: 12, warmStart: lastFastSc ?? undefined });
-    lastFastSc = null;
-    return sc;
+    try {
+      let sc = fitSchwarzChristoffel({ vertices: vv }, { mode: "precise", nGaussLegendre: 12, warmStart: lastFastSc ?? undefined });
+      if (!sc.converged && lastFastSc) {
+        // A warm start from a DEGRADED fast solve can stall the Gauss–Newton on strongly reentrant shapes;
+        // the engine's robust default there is a uniform cold start. Retry once from cold and keep the better.
+        const cold = fitSchwarzChristoffel({ vertices: vv }, { mode: "precise", nGaussLegendre: 12 });
+        if (cold.converged || cold.residual < sc.residual) sc = cold;
+      }
+      lastFastSc = null;
+      return sc;
+    } catch {
+      lastFastSc = null;
+      return fitSchwarzChristoffel({ vertices: vv }, { mode: "fast" });
+    }
   };
   // The Ω→𝔻 map for point queries (hover, linked cursor): the lightning fit for a smooth Ω, or the exact
   // Schwarz–Christoffel inverse for a polygon. Only `.eval` is needed here, so both engines fit one shape.
@@ -808,18 +822,30 @@ function main(): void {
     for (let k = 0; k < n; k++) pane.drawDot(scCorr.prevertices[k], cornerHue(k, n), hoverCorner === k);
   }
   /** Phase B: draw the SC corners vₖ as colour-matched dots on the Ω pane, each labelled with its interior
-   *  angle αₖ·π placed just outside the corner (away from the polygon centroid). */
+   *  angle αₖ·π placed just INSIDE the corner (toward the polygon's area centroid) so it never clips the
+   *  pane edge. The area centroid (not the vertex mean) is the anchor: for a reentrant shape the vertex mean
+   *  can fall on a corner (e.g. the L-shape's reflex vertex) — a zero offset that would stack the label on
+   *  the dot — or outside Ω. Falls back to the vertex mean if the polygon is (near-)degenerate. */
   function drawCornerDots(pane: Overlay2D): void {
     if (!scCorr) return;
     const n = scCorr.corners.length;
-    let cx = 0;
-    let cy = 0;
-    for (const v of scCorr.corners) {
-      cx += v[0];
-      cy += v[1];
+    let a2 = 0;
+    let sx = 0;
+    let sy = 0;
+    let mx = 0;
+    let my = 0;
+    for (let i = 0; i < n; i++) {
+      const p = scCorr.corners[i];
+      const q = scCorr.corners[(i + 1) % n];
+      const cross = p[0] * q[1] - q[0] * p[1];
+      a2 += cross;
+      sx += (p[0] + q[0]) * cross;
+      sy += (p[1] + q[1]) * cross;
+      mx += p[0];
+      my += p[1];
     }
-    cx /= n || 1;
-    cy /= n || 1;
+    const cx = Math.abs(a2) > 1e-9 ? sx / (3 * a2) : mx / (n || 1);
+    const cy = Math.abs(a2) > 1e-9 ? sy / (3 * a2) : my / (n || 1);
     for (let k = 0; k < n; k++) {
       const v = scCorr.corners[k];
       const emph = hoverCorner === k;
@@ -1368,14 +1394,19 @@ function main(): void {
     const up = (): void => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", up);
       scDragging = false; // release → the render loop runs a precise, warm-started solve
       cursorEl.style.cursor = "";
+      // Restore the CCW invariant: a drag that crossed an edge can flip the winding, and the corners are
+      // hit-tested next time against the toCCW'd order — without this a later grab would move the mirror vertex.
+      if (customPolygon) customPolygon = toCCW(customPolygon);
       markPolygonDirty();
       syncShapeState();
       invalidate();
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", up); // a cancelled pointer must not leave the drag glued on
   }
 
   // Ω→𝔻 (domain-map): Ω is the LEFT pane (the pan/zoom surface). Registered before attachPanZoom so a grab

@@ -98,6 +98,20 @@ describe("reentrant polygon presets → Schwarz–Christoffel (precise)", () => 
     }
   });
 
+  it("the fast fit tolerates a degenerate polygon the precise solve rejects (backs the no-throw fallback)", () => {
+    // A vertex dragged onto a neighbour makes the precise parameter solve throw out of gaussJacobi
+    // (interior angle → 0). The studio's solvePolygon catches this and falls back to the fast fit, which
+    // must NOT throw — pin both halves so a future engine change that breaks the assumption is caught here.
+    const coincident: C[] = [
+      [1, 1],
+      [1, 1],
+      [-1, -1],
+      [1, -1],
+    ];
+    expect(() => fitSchwarzChristoffel({ vertices: coincident }, { mode: "precise" })).toThrow();
+    expect(() => fitSchwarzChristoffel({ vertices: coincident }, { mode: "fast" })).not.toThrow();
+  });
+
   it("the precise solve (at the app's nGaussLegendre=12) reproduces the corners to ≥8 digits", () => {
     for (const id of reentrant) {
       const d = domainById(id);
