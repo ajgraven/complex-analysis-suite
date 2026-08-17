@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of observables.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // observables.js  —  Foundational analysis primitives for a solved QD map φ.
@@ -32,10 +32,13 @@ import _QD from '../solvers/solver.mjs';
 //    For BOUNDED φ the unit circle traces ∂Ω counter-clockwise (signedArea > 0);
 //    for UNBOUNDED φ (exterior map) it traces ∂Ω clockwise around the complement
 //    K, so signedArea < 0 — `area` is reported as |signedArea| (the area of K).
-//  • Complex area moments  M_k = ∬_Ω w^k dA  via Stokes,
+//  • Complex area moments  M_k = ∬_Ω w^k dA  with the STANDARD area measure dA = dx dy, via Stokes,
 //        M_k = ½ Σ_n w_n^k · conj(w_n) · φ′(z_n) · z_n · Δθ,   Δθ = 2π/N,
-//    so Re(M_0) ≈ signedArea (a built-in cross-check) and the M_k are the
-//    Hele-Shaw / QD "harmonic moments" — a cheap byproduct of the same sweep.
+//    so Re(M_0) ≈ signedArea (a built-in cross-check); for the unit disk M_0 = π (the geometric area).
+//    ⚠ CONVENTION (ADR-0006): these are the STANDARD, un-normalized geometric moments — NOT the solver's
+//    π→1-normalized "harmonic moments". They equal π × the solver's harmonic moments: the same M_0 that is
+//    π here is 1 in the pointFunctionalSystem (`qd-equations.mjs`, "area measure normalized so π→1"). Never
+//    feed these into a π→1 path without dividing by π — that is exactly the silent factor-of-π ADR-0006 guards.
 //  • Harmonic measure of ∂Ω seen from φ(0) (bounded) / ∞ (unbounded) has density
 //    w.r.t. arclength  ρ(θ) = 1/(2π·|φ′(e^{iθ})|)  (since |γ′| = |φ′| on |z|=1).
 //    ∮ ρ ds = 1 by construction; we report Σ ρ_n·|Δw_n| as a discretization-error
@@ -139,7 +142,9 @@ import _QD from '../solvers/solver.mjs';
       centroid = { re: mx / N, im: my / N };
     }
 
-    // --- complex area moments M_k = ∬_Ω w^k dA via Stokes (k = 0..4) ---------
+    // --- complex area moments M_k = ∬_Ω w^k dA via Stokes (k = 0..4) -----------
+    // STANDARD area measure dA = dx dy (M_0 = geometric area = π for the unit disk), NOT the solver's
+    // π→1-normalized harmonic moments (M_0 = 1). See the ⚠ CONVENTION note in the header (ADR-0006).
     const KMAX = 4;
     const moments = [];
     for (let k = 0; k <= KMAX; k++) {

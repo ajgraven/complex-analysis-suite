@@ -33,7 +33,7 @@ and any number of **live named parameters** (`a`, `b`, `k`, …):
   the Greek character, distinct from the Γ function) and **imaginary literals** `2i`, `3.5i`, `1e3i`
   (a number with a trailing `i`; it binds as one unit, so `2i^2 = (2i)^2`); **operators** `+ - * / ^`
   (principal-branch complex powers), comparisons `> < ==`, `if(cond,a,b)`, `not(...)`;
-- **functions** — `re im conjugate abs arg sqrt exp log sin cos tan arcsin arccos arctan arctan2 mod lambertw gamma zeta round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native; `gamma`/`zeta` are Γ/ζ — see Special functions below);
+- **functions** — `re im conjugate abs arg sqrt exp log sin cos tan sinh cosh tanh sec csc cot arcsin arccos arctan arctan2 arcsinh arccosh arctanh mod lambertw gamma zeta round floor ceil` (`conjugate` is first-class, so anti-holomorphic maps like `conjugate(z)^2 + c` are native; `gamma`/`zeta` are Γ/ζ — see Special functions below);
 - **`;`-separated statements** with local assignment; the `escape` predicate may call
   `f(z, c)`.
 
@@ -84,7 +84,7 @@ import { parse, makeComplexFn, makeEscapeFn, compileF, compileEscape } from "@ca
 | **Parse**          | `@cas/expr` / `./parser`, `./lexer`, `./ast` | `tokenize(src) → Token[]`, `parse(src) → Node`; the `Node` tagged-union AST + helpers (`referencesVar`, `isFreeParameter`, `freeParameters`, `calledFunctions`, `substitute`); `ExprError` (carries `pos`) |
 | **Evaluate (JS)**  | `./evaluate`                                 | `makeComplexFn(node, params?) → (z,c) → Complex` and `makeEscapeFn(node, params?) → (z,c) → boolean` — the float64 reference backend (`params` = a `Complex` for `a`, or a name→value map)                 |
 | **Compile (GLSL)** | `./glsl`                                     | `compileF(node, name?, opts?)` and `compileEscape(node, opts?)` — emit GLSL fragment functions (`opts.params` opts into named parameters); `glslFloat` for literals                                        |
-| **Differentiate**  | `./derivative`                               | `differentiate(node, v?) → Node` (symbolic ∂/∂v) and `newtonIteration(f, df)` (GLSL Newton step)                                                                                                           |
+| **Differentiate**  | `./derivative`                               | `differentiate(node, v?) → Node` (symbolic ∂/∂v) and `newtonIteration(fAst) → { iter, escape }` (builds the Newton-step + escape ASTs; differentiates `fAst` internally)                                                                                                           |
 | **Rational**       | `./rational`                                 | `fToRational(node, c, a)` → the rational `{num, den}`, or `null` if the map is transcendental                                                                                                              |
 | **LaTeX**          | `./latex`                                    | `toLatex(node)` — KaTeX-ready, minimal parentheses                                                                                                                                                         |
 | **Complex (JS)**   | `./complex`, `./complexJs`                   | the `Complex = [re, im]` tuple ops (`C.add · C.mul · C.exp · …`) the JS backend runs on                                                                                                                    |

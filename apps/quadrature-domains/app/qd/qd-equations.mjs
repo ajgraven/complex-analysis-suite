@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of qd-equations.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conjugate-model var scheme
 // =============================================================================
@@ -741,7 +741,9 @@ import { conjVar, latexVar } from './qd-varscheme.mjs';   // the canonical conju
   // the normalized Riemann map is a degree-n polynomial φ(z) = Σ_{k=1}^{n} w_k z^k
   // (φ(0)=0, rotation gauge w₁ = φ′(0) > 0 real). Order n ↔ degree n: testing f = w^p and
   // using ∫_Ω f dA = ∫_𝔻 f(φ)|φ′|² dA with ∫_𝔻 z^a z̄^b dA = δ_{ab}/(a+1) (area measure
-  // normalized so π→1) gives the moment identities
+  // normalized so π→1 — this is the app/domain-edge convention, ADR-0006; contrast
+  // observables.mjs's STANDARD dA = dx dy moments, where the SAME unit-disk M₀ is π, not 1)
+  // gives the moment identities
   //      p! · M_p = Σ_{a=p}^{n-1} c_a^{(p)} · w̄_{a+1},     c_a^{(p)} = [z^a]( φ(z)^p φ′(z) ),
   // for p = 0,…,n-1 (and ∫_Ω w^p dA ≡ 0 for p ≥ n automatically, since φ^p φ′ has lowest
   // z-degree p). p=0 reduces to the polynomial-image AREA formula  M₀ = Σ_k k|w_k|²; the

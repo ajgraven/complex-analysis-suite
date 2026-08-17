@@ -28,7 +28,7 @@
 // window.QD_UI.Presets.* for namespaced future readers.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of ui-presets.js (classic stays frozen). Preset data; exports the arrays
+// ESM (Phase 2 port). Preset data; exports the arrays
 // (ui-modes / ui.js consume them) and registers QD_UI.Presets.
 import { QD_UI } from './ui-registry.mjs';
 

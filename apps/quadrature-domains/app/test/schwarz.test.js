@@ -465,6 +465,10 @@ function solveAndSample(hData, opts) {
     ok('S5/cardioid: findCycles(n=1) returns an array', Array.isArray(cycles));
     ok('S5/cardioid: each cycle has period and points',
        cycles.every(c => c.period >= 1 && Array.isArray(c.points)));
+    // n=2 exercises the even (holomorphic σ²) path through the anti-holomorphic-aware 2×2 Newton.
+    const cyc2 = Schwarz.findCycles(sw, 2, { gridSize: 10 });
+    ok('S5/cardioid: findCycles(n=2) returns an array of valid cycles',
+       Array.isArray(cyc2) && cyc2.every(c => c.period >= 1 && Array.isArray(c.points)));
   }
 
   // -------- S5 / H8: sampleSweepSeeds --------

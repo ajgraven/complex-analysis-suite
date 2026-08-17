@@ -18,10 +18,14 @@ Given an exterior conformal map φ: 𝔻\* → Ω by its Laurent expansion at �
 | `polynomialRoots(coeffs, opts)` | Durand–Kerner (over `@cas/core`) + Newton polish; returns `converged:false` rather than garbage at ill-conditioned high degree. |
 | `formatFaberPoly(Fn, opts)` | A readable ζ-expression, e.g. `"ζ² − 2"`. |
 | `faberConvergence(map, N)` | Per-order `{ n, converged, residual, roots }` report. |
+| `weightedFaberPolynomial(s)` / `weightSeries` | Corner-suppressing weighted Faber polynomials `Q_{n,m} = Σⱼ gⱼ F_{n−j}` (M3, ADR-0024): the weight `G_m = ∏_k (1 − w_k/z)^{1/m}` on the SC prevertices `w_k = 1/u_k`. |
+| `faberTransformRational` / `partialFractions` | Exact rational-image path — partial-fraction the input, then map each pole/monomial via the exterior-map jet. |
+| `faberImageOfPole` / `exteriorMapJet` / `evalRationalImage` | Building blocks for the rational path (the exterior map's Laurent jet + per-pole images). |
 
 **Input contract.** The engine takes a plain `{ c, laurent }` (an `ExteriorMap`), *not* any app's
 conformal-map struct. Quadrature Domains adapts its solved φ via `phiLaurentAtInfinity`; the
-Faber-transform app passes each curated preset's closed-form Laurent.
+Faber-transform app passes each curated preset's closed-form Laurent, or — for arbitrary polygon
+domains K — a truncated **exterior** Schwarz–Christoffel Laurent (honestly `≈`-labeled).
 
 **Convention-neutral (ADR-0006).** No π / 2πi normalization lives here — those stay at each app's edge.
 

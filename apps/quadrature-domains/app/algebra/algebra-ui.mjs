@@ -80,7 +80,7 @@
 // bounded QD (hidden otherwise). All algebra is in QD.Sym/QDEquations/QDConstraints.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of algebra/algebra-ui.js (classic stays frozen). UI orchestrator/consumer.
+// ESM (Phase 2 port). UI orchestrator/consumer.
 import { state } from '../ui/ui-state.mjs';
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';

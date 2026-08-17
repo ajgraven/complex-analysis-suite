@@ -52,7 +52,7 @@ scaleInto · addMulInto`) for hot loops.
 **Representation-genericity** (`ComplexAlgebra<C>`) — the operations any complex
 representation must provide (`make · re · im · add · sub · neg · mul · div · scale · abs ·
 abs2 · isFinite`), with two reference instances so the same generic algorithm runs over
-either layout the two apps use:
+either coordinate layout (`{re,im}` object or `[re,im]` tuple) the apps use:
 
 - `objAlgebra` — over `{re, im}` (`Cx`)
 - `tupleAlgebra` — over `[re, im]` (`ComplexTuple`)
@@ -74,8 +74,10 @@ from the Riemann sphere, with a cancellation-safe inverse. Shared by both apps' 
 which is what earned it a place in the kernel (ADR-0007).
 
 **Least squares** — `lstsqHouseholder(A, b)` solves the overdetermined `min‖A·x − b‖₂` (real,
-row-major `A`, single right-hand side) by backward-stable Householder QR, zero-filling a
-rank-deficient column rather than returning `NaN`. It is the numeric workhorse under
+row-major `A`, single right-hand side) by backward-stable Householder QR, zero-filling an
+*exactly*-zero pivot column (`|pivot| < 1e-300`) rather than returning `NaN`. That guard catches only an
+exactly- or denormally-zero column, **not** numerical rank deficiency: a tiny-but-non-zero pivot is left in
+place and amplifies (there is no rcond / rank signal on the output). It is the numeric workhorse under
 [`@cas/conformal`](../conformal)'s lightning fits; it lives here
 ([ADR-0018](../../docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 because it is foundational, general-purpose linear algebra — the Quadrature app carries a near-twin

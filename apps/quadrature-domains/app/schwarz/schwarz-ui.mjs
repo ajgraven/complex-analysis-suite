@@ -36,7 +36,7 @@
 // GPU mode does an ad-hoc per-cursor escapeTime — see onMouseMove).
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of schwarz/schwarz-ui.js (classic stays frozen). UI orchestrator/consumer.
+// ESM (Phase 2 port). UI orchestrator/consumer.
 import { state } from '../ui/ui-state.mjs';
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';

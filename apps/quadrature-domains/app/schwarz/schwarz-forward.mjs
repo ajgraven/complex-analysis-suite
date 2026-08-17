@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of schwarz/schwarz-forward.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // schwarz-forward.js — Phase S5: forward-dynamics kernels.
@@ -139,10 +139,12 @@ import _QD from '../solvers/solver.mjs';
   // finite differences. Dedup converged roots in w-space; trace the cycle by
   // iterating σ from each found point.
   //
-  // Note: this is intentionally a coarse global search, not a guaranteed
-  // exhaustive enumeration. n=1 (fixed points) is typically reliable; n=2,3,…
-  // become progressively harder due to spurious convergence and basin
-  // narrowing. Caller should treat results as advisory.
+  // Note: this is intentionally a coarse global search, not a guaranteed exhaustive enumeration. σ is
+  // ANTI-holomorphic, so the Newton below uses the full 2×2 real Jacobian (a complex-derivative step
+  // would be a wrong linearization for odd periods). n=1 is special: σ fixes ∂Ω pointwise, so its
+  // fixed-point SET is the whole boundary curve (non-isolated) — the Jacobian is singular there and such
+  // seeds are dropped, so an interior n=1 result is rare. n=2,3,… get progressively harder (spurious
+  // convergence, basin narrowing). Caller should treat all results as ≈ advisory.
   // ---------------------------------------------------------------------------
   function findCycles(schwarz, n, opts) {
     opts = opts || {};
@@ -199,15 +201,25 @@ import _QD from '../solvers/solver.mjs';
           if (!sN) break;
           const diffR = sN.re - w.re, diffI = sN.im - w.im;
           if (Math.hypot(diffR, diffI) < tol) { converged = true; break; }
-          // G'(w) = (σⁿ)'(w) − 1.
-          const sNh = sigmaN({ re: w.re + h, im: w.im });
-          if (!sNh) break;
-          const fpR = (sNh.re - sN.re) / h - 1;
-          const fpI = (sNh.im - sN.im) / h - 0;       // ∂/∂x of (im − im) = 0
-          const denom = fpR * fpR + fpI * fpI;
-          if (denom < 1e-30) break;
-          const stepR = -(diffR * fpR + diffI * fpI) / denom;
-          const stepI = -(diffI * fpR - diffR * fpI) / denom;
+          // Newton on the REAL system G(w) = σⁿ(w) − w = 0. σ is ANTI-holomorphic (σ = conj(F∘ψ)), so
+          // σⁿ is holomorphic only for even n; the old single-column complex-derivative step was a wrong
+          // linearization for odd n (incl. n=1). Use the full 2×2 real Jacobian — its columns are the
+          // finite differences of G in the x- and y-directions. (For even n this reduces exactly to the
+          // former complex Newton step.)
+          const sNhx = sigmaN({ re: w.re + h, im: w.im });
+          const sNhy = sigmaN({ re: w.re, im: w.im + h });
+          if (!sNhx || !sNhy) break;
+          const J11 = (sNhx.re - sN.re) / h - 1; // ∂Gx/∂x
+          const J21 = (sNhx.im - sN.im) / h;     // ∂Gy/∂x
+          const J12 = (sNhy.re - sN.re) / h;     // ∂Gx/∂y
+          const J22 = (sNhy.im - sN.im) / h - 1; // ∂Gy/∂y
+          const det = J11 * J22 - J12 * J21;
+          // A (near-)singular Jacobian means a non-isolated root: notably the n=1 fixed-point set is the
+          // whole boundary ∂Ω (σ|∂Ω = id), singular in the tangent direction. Bail instead of reporting a
+          // boundary sample as a spurious cycle.
+          if (Math.abs(det) < 1e-30) break;
+          const stepR = -(J22 * diffR - J12 * diffI) / det;
+          const stepI = (J21 * diffR - J11 * diffI) / det;
           const nw = { re: w.re + stepR, im: w.im + stepI };
           if (!schwarz.isInOmega(nw)) break;
           w = nw;

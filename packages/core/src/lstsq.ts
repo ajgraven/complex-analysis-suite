@@ -10,6 +10,14 @@
  * Solve the overdetermined least-squares problem min‖A·x − b‖₂ by Householder QR.
  * `A` is row-major (m rows of n entries), `b` has length m, m ≥ n. Returns x (length n).
  * A rank-deficient column (zero pivot) contributes 0 to x rather than a NaN — a documented, stable choice.
+ *
+ * That zero-pivot guard is an EXACT-zero test (`|pivot| < 1e-300`, i.e. an exactly- or denormally-zero
+ * column), NOT an ill-conditioning gate. A *numerically* rank-deficient column — a tiny but non-zero
+ * pivot, say 1e-16 — is left in place and amplifies through the back-substitution (`s / d` blows up); it is
+ * neither zero-filled nor regularized. This is un-pivoted Householder QR: backward-stable and correct on a
+ * well-conditioned basis (the caller is expected to supply one — e.g. `@cas/conformal`'s Vandermonde–Arnoldi
+ * basis), but it exposes no rcond / numerical-rank / selectable-rank-policy signal. A consumer that needs
+ * one must add it — the deferred QD adopter, whose cusp-Newton solver throws at `1e-13` (ADR-0018).
  */
 export function lstsqHouseholder(Ain: readonly (readonly number[])[], bin: readonly number[]): number[] {
   const m = Ain.length;

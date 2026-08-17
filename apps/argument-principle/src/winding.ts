@@ -12,7 +12,7 @@
 //
 // This is app-local for now. Once the complex-function-plotter's `singularities.ts` (which carries the
 // same winding idea over a small circle) becomes a co-consumer, this is the ADR-0007 second-consumer
-// extraction candidate (plan §4, ADR-0020).
+// extraction candidate (plan §4, ADR-0025).
 
 export type Vec2 = readonly [number, number];
 

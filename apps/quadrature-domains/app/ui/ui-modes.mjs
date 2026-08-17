@@ -18,7 +18,7 @@
 // buildNormalization(hData) — unchanged from the original.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of ui-modes.js (classic stays frozen). QD_UI factory module.
+// ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from './ui-registry.mjs';
 import { QD_PRESETS_BOUNDED, QD_PRESETS_BOUNDED_PQD, QD_PRESETS_BOUNDED_PQD_SINGULAR, QD_PRESETS_UNBOUNDED, QD_PRESETS_UNBOUNDED_PQD, QD_PRESETS_UNBOUNDED_PQD_SINGULAR, LQD_PRESETS_BOUNDED, LQD_PRESETS_BOUNDED_SINGULAR, LQD_PRESETS_UNBOUNDED, LQD_PRESETS_UNBOUNDED_SINGULAR } from './ui-presets.mjs';
 import _QD from '../solvers/solver.mjs';

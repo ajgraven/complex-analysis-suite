@@ -34,6 +34,22 @@ describe("fitSchwarzChristoffel — precise mode", () => {
     expect(warm.converged).toBe(true);
     expect(reproErr(warm, perturbed)).toBeLessThan(1e-10);
   });
+
+  it("hits the crowding wall honestly on a strongly elongated polygon (degraded, never silently good)", () => {
+    // A 50:1 sliver crowds the prevertices exponentially (minGap ≪ 1e-6), the classic SC failure mode.
+    // The honest-labeling guardrail (ADR-0020, CLAUDE.md) must fire on the PRECISE path — the mode that is
+    // supposed to be the reentrant/hard path — not read as a clean fit. The corpus only tripped `degraded`
+    // in FAST mode before this; this pins the precise crowding wall. (On total crowding collapse the
+    // reported residual is NaN — coincident prevertices — which, crucially, still reads as degraded and
+    // NOT-converged: the ≈ accuracy tag never falsely reads small, so nothing is silently wrong.)
+    const sliver: C[] = [[0, 0], [50, 0], [50, 1], [0, 1]];
+    const m = fitSchwarzChristoffel({ vertices: sliver });
+    expect(m.mode).toBe("precise");
+    expect(m.degraded).toBe(true); // crowding wall tripped
+    expect(m.converged).toBe(false); // honest: did not reach tolerance
+    expect(m.residual < 1e-6).toBe(false); // the accuracy tag never reads as accurate (NaN or huge)
+    expect(reproErr(m, sliver) < 1e-6).toBe(false); // and the map really is wrong there — not a false alarm
+  });
 });
 
 describe("fitSchwarzChristoffel — fast mode (lightning)", () => {
@@ -93,5 +109,34 @@ describe("fitSchwarzChristoffel — inverse map (ODE + Newton)", () => {
     expect(Math.hypot(w[0], w[1])).toBeLessThan(1.001);
     const back = m.forward(w);
     expect(Math.hypot(back[0] - z[0], back[1] - z[1])).toBeLessThan(1e-2);
+  });
+
+  it("precise: inverseWithStatus reports converged=true + a tiny residual for an interior point", () => {
+    const m = fitSchwarzChristoffel({ vertices: pentagon });
+    const z: C = [0.3, 0.1];
+    const s = m.inverseWithStatus(z);
+    expect(s.converged).toBe(true);
+    expect(s.residual).toBeLessThan(1e-9);
+    // …and the plain inverse() is exactly the same preimage (the status wrapper does not change the answer).
+    expect(m.inverse(z)).toEqual(s.w);
+  });
+
+  it("precise: inverseWithStatus flags a point OUTSIDE Ω as not-converged (no silent wrong preimage)", () => {
+    // The honesty hole the finding named: f⁻¹ of a z ∉ Ω used to `return w` unconditionally. The ODE+Newton
+    // cannot drive |f(w) − z| down for an unreachable target, so the residual stays large and converged is false.
+    const m = fitSchwarzChristoffel({ vertices: square }); // the square is [-1,1]²
+    const s = m.inverseWithStatus([5, 5]); // well outside Ω
+    expect(s.converged).toBe(false);
+    expect(s.residual).toBeGreaterThan(1e-3);
+  });
+
+  it("fast: inverseWithStatus reports the coarse round-trip residual, converged ⇔ residual < tol", () => {
+    const m = fitSchwarzChristoffel({ vertices: square }, { mode: "fast" });
+    const z: C = [0.3, 0.2];
+    const s = m.inverseWithStatus(z);
+    expect(Number.isFinite(s.residual)).toBe(true);
+    expect(s.residual).toBeGreaterThanOrEqual(0);
+    expect(s.converged).toBe(s.residual < 1e-9); // the flag is exactly the residual gate — no magic value
+    expect(m.inverse(z)).toEqual(s.w); // same preimage as the plain inverse
   });
 });

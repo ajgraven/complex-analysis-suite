@@ -377,7 +377,7 @@ share link + saved views + a PNG-embedded `cdjs:state`, all via a hostile-link-h
 layers onto the `AppState` like `_z0`/`_grad`/`_proj`). Only **ADR-0009 item 4** — this doc update — remained,
 and it is now done.
 
-**S5 — polish + families (on `claude/repository-refactor-project-pg5ktu`, awaiting review).** The σ peer
+**S5 — polish + families (merged to master — σ peer view #246, σ multi-view explorer #255; interchange 1.3.0).** The σ peer
 view was then extended in reviewable slices (per-increment detail in LOG):
 - **A** — σ **export options** (size picker + scale-bar/orbit toggles), **hover** orbit-preview, and
   **image-space tone** (palette rotation + gamma + vignette, applied only when non-default so the default

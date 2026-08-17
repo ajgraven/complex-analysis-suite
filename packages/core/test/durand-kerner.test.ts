@@ -184,4 +184,25 @@ describe("makeDurandKerner (generic, both representations)", () => {
     expect(res?.converged).toBe(false); // was `true` (with NaN roots) pre-fix
     expect(res?.roots.every((z) => objAlgebra.isFinite(z))).toBe(false); // the roots really are garbage
   });
+
+  it("does not certify a NaN root when only SOME iterates diverge (mixed NaN + finite sweep)", () => {
+    // Regression for the incomplete `cd-dk-01` fix. The sibling test above diverges on EVERY root, so
+    // maxDelta ends Infinity and convergence is withheld regardless — it never exercised the subtler
+    // failure the pre-fix `!(dm <= maxDelta)` form still let through: ONE wild seed blows up (evalMonic
+    // AND denom both overflow to Infinity ⇒ Inf/Inf = NaN delta) while the OTHER seeds sit on exact
+    // roots (dm = 0). Pre-fix, the wild root at index 0 set maxDelta = NaN, but the very next root's
+    // dm = 0 satisfied `!(0 <= NaN)` and RESET maxDelta to 0 — so the sweep passed `maxDelta < tol`
+    // and returned converged=true carrying a {NaN,NaN} root (a non-answer labelled certified). The
+    // NaN-sticky `Math.max` keeps maxDelta poisoned for the rest of the sweep, so convergence is
+    // correctly withheld. Default (jacobi) mode is load-bearing: the finite dm=0 roots must read the
+    // still-finite previous z[0], not the just-NaN'd one.
+    const roots: RI[] = [[1, 0], [-1, 0], [2, 0]];
+    const dk = makeDurandKerner(objAlgebra);
+    // Seed[0] = 1e160 (wild, for the root at 2) forces the NaN; seed[1]/[2] are exact roots that follow it.
+    const seeds = [objAlgebra.make(1e160, 0), objAlgebra.make(1, 0), objAlgebra.make(-1, 0)];
+    const res = dk(evalMonicFromRoots(objAlgebra, roots), seeds, { tol: 1e-12, maxIter: 20 });
+    expect(res).not.toBeNull();
+    expect(res?.converged).toBe(false); // pre-fix: true, with a NaN root certified
+    expect(res?.roots.some((z) => !objAlgebra.isFinite(z))).toBe(true); // the wild estimate stayed non-finite
+  });
 });

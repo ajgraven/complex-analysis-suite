@@ -10,6 +10,7 @@
 import { lstsqHouseholder } from "@cas/core";
 import { type ConformalMap } from "./lightning.js";
 import { arnoldiBasis, evalExpansion, type C } from "./vandermondeArnoldi.js";
+import { clusteredRadii } from "./cornerClustering.js";
 
 const nrm = (v: C): C => {
   const r = Math.hypot(v[0], v[1]) || 1;
@@ -34,12 +35,10 @@ export interface ForwardMap {
 /** Poles for g clustered root-exponentially just OUTSIDE ∂𝔻, toward each corner preimage γ̂ (|γ̂|=1). */
 function forwardPoles(gammas: readonly C[], nPer = 12, sigma = 4, L = 1): C[] {
   const out: C[] = [];
+  const radii = clusteredRadii(nPer, L, sigma); // ρ → 0⁺ (closest to ∂𝔻) at k=1
   for (const g of gammas) {
     const gh = nrm(g);
-    for (let k = 1; k <= nPer; k++) {
-      const rho = L * Math.exp(-sigma * (Math.sqrt(nPer) - Math.sqrt(k))); // → 0⁺ (closest to ∂𝔻) as k→1
-      out.push([gh[0] * (1 + rho), gh[1] * (1 + rho)]);
-    }
+    for (const rho of radii) out.push([gh[0] * (1 + rho), gh[1] * (1 + rho)]);
   }
   return out;
 }

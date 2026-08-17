@@ -33,7 +33,7 @@
 // No external dependencies. Safe to load before / after other QD modules.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of qol.js (classic stays frozen). QD.QoL DOM helpers.
+// ESM (Phase 2 port). QD.QoL DOM helpers.
 import _QD from '../solvers/solver.mjs';
 
 (function () {

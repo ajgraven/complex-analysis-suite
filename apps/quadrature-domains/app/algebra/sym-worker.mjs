@@ -20,7 +20,7 @@
 // inside a resolved Promise — same result shape, no special-casing for callers.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of algebra/sym-worker.js (classic stays frozen). Main-thread API; spawns a
+// ESM (Phase 2 port). Main-thread API; spawns a
 // NATIVE ES module worker (workers/sym-worker-entry.mjs) instead of the runtime-Blob bundle,
 // and falls back to the imported main-thread QD.Sym.runJob when Worker is unavailable
 // (Node tests, file://). Registers QD.SymWorker.

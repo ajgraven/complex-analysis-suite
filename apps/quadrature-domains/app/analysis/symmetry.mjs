@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of symmetry.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // symmetry.js  —  Detect the symmetry group of a quadrature domain Ω from its

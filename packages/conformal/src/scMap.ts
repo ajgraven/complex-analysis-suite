@@ -16,8 +16,9 @@
 import type { C } from "./vandermondeArnoldi.js";
 import { fitConformalMap } from "./lightning.js";
 import { fitForwardMap } from "./forwardMap.js";
-import { buildForwardMap } from "./schwarzChristoffel.js";
+import { buildForwardMap, type SCInverseResult } from "./schwarzChristoffel.js";
 import { interiorAngles, solveParameterProblem } from "./scParameterProblem.js";
+import { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "./cornerClustering.js";
 
 const csub = (a: C, b: C): C => [a[0] - b[0], a[1] - b[1]];
 const cadd = (a: C, b: C): C => [a[0] + b[0], a[1] + b[1]];
@@ -56,6 +57,10 @@ export interface SCMap {
   forwardMany(ws: readonly C[]): C[];
   /** f⁻¹: polygon → 𝔻. `z` must lie inside the polygon. Precise: ODE + Newton; fast: the lightning f fit. */
   inverse(z: C): C;
+  /** f⁻¹ with the honest convergence signal — the round-trip residual |f(w)−z| and a `converged` flag, so a
+   *  `z` outside Ω or a Newton stall is detectable rather than a silent wrong preimage. Precise: the ODE+Newton
+   *  status. Fast: the coarse lightning round-trip (typically `converged: false` — use precise to invert). */
+  inverseWithStatus(z: C): SCInverseResult;
 }
 
 export interface SCOptions {
@@ -97,30 +102,9 @@ function areaCentroid(v: readonly C[]): C {
   return [cx / (6 * a), cy / (6 * a)];
 }
 
-function pointInPolygon(p: C, v: readonly C[]): boolean {
-  const n = v.length;
-  let inside = false;
-  for (let i = 0, j = n - 1; i < n; j = i++) {
-    const [xi, yi] = v[i];
-    const [xj, yj] = v[j];
-    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) inside = !inside;
-  }
-  return inside;
-}
-
 /** Boundary samples clustered toward the corners of each edge (better lightning corner resolution). */
 function sampleBoundary(v: readonly C[], perEdge: number): C[] {
-  const n = v.length;
-  const out: C[] = [];
-  for (let k = 0; k < n; k++) {
-    const a = v[k];
-    const b = v[(k + 1) % n];
-    for (let i = 0; i < perEdge; i++) {
-      const t = (1 - Math.cos((Math.PI * (i + 0.5)) / perEdge)) / 2; // Chebyshev-ish, clusters at 0 and 1
-      out.push([a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])]);
-    }
-  }
-  return out;
+  return clusteredEdgeSamples(v, perEdge, 0.5); // half-integer nodes avoid the vertices exactly
 }
 
 const poleScale = (v: readonly C[]): number => {
@@ -131,25 +115,15 @@ const poleScale = (v: readonly C[]): number => {
 /** Outward unit direction at each vertex (away from Ω), disambiguated by a point-in-polygon test. */
 function outwardDirs(v: readonly C[], scale: number): C[] {
   const n = v.length;
-  return v.map((vk, k): C => {
-    const ep = nrm(csub(v[(k - 1 + n) % n], vk));
-    const en = nrm(csub(v[(k + 1) % n], vk));
-    let d: C = [ep[0] + en[0], ep[1] + en[1]];
-    if (Math.hypot(d[0], d[1]) < 1e-9) d = [-en[1], en[0]]; // straight vertex: use a normal
-    d = nrm(d);
-    if (pointInPolygon([vk[0] + 1e-4 * scale * d[0], vk[1] + 1e-4 * scale * d[1]], v)) d = [-d[0], -d[1]];
-    return d;
-  });
+  return v.map((vk, k): C => outwardCornerDir(v[(k - 1 + n) % n], vk, v[(k + 1) % n], v, 1e-4 * scale, "normal"));
 }
 
 /** Poles clustered exponentially toward each corner, outside ∂Ω (the lightning method). */
 function cornerPoles(v: readonly C[], outward: readonly C[], scale: number, perCorner: number, sigma = 4): C[] {
   const out: C[] = [];
+  const radii = clusteredRadii(perCorner, scale, sigma);
   for (let k = 0; k < v.length; k++) {
-    for (let j = 1; j <= perCorner; j++) {
-      const rho = scale * Math.exp(-sigma * (Math.sqrt(perCorner) - Math.sqrt(j)));
-      out.push([v[k][0] + rho * outward[k][0], v[k][1] + rho * outward[k][1]]);
-    }
+    for (const rho of radii) out.push([v[k][0] + rho * outward[k][0], v[k][1] + rho * outward[k][1]]);
   }
   return out;
 }
@@ -246,6 +220,14 @@ export function fitSchwarzChristoffel(poly: Polygon, opts?: SCOptions): SCMap {
       forward: fit.forward,
       forwardMany: fit.forwardMany,
       inverse: fit.inverse,
+      // Fast is the direct lightning fit (no Newton); report the honest round-trip residual so a caller sees
+      // the coarse accuracy (typically converged:false at ~1e-2 — precise mode is the path to a true inverse).
+      inverseWithStatus: (z: C): SCInverseResult => {
+        const w = fit.inverse(z);
+        const back = fit.forward(w);
+        const residual = Math.hypot(back[0] - z[0], back[1] - z[1]);
+        return { w, converged: residual < 1e-9, residual };
+      },
     };
   }
 
@@ -282,5 +264,6 @@ export function fitSchwarzChristoffel(poly: Polygon, opts?: SCOptions): SCMap {
     forward: map.forward,
     forwardMany: map.forwardMany,
     inverse: map.inverse,
+    inverseWithStatus: map.inverseWithStatus,
   };
 }

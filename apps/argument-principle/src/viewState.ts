@@ -155,19 +155,24 @@ function isViewport(v: Record<string, unknown> | undefined): boolean {
   );
 }
 
-/** A well-formed freehand path: an array of ≥ 3 finite [x, y] vertices (defensive decode of a `path` link). */
+/** Sampling resolution a decoded link may carry — bounded so a crafted link can't trigger a huge alloc. */
+const MIN_RESOLUTION = 3;
+const MAX_RESOLUTION = 5000;
+
+/**
+ * A well-formed freehand path: 3…MAX_RESOLUTION finite [x, y] vertices. The UPPER bound is the
+ * load-bearing part of this defensive decode — without it a crafted `path` permalink could carry a
+ * multi-million-vertex array that `cumulativeArg` / `logDerivCumulative` iterate every frame (the same
+ * self-DoS `sampleCircle` caps for circles). A real freehand draw is decimated to a few hundred points.
+ */
 function isFinitePointArray(v: unknown): boolean {
-  if (!Array.isArray(v) || v.length < 3) return false;
+  if (!Array.isArray(v) || v.length < 3 || v.length > MAX_RESOLUTION) return false;
   for (const p of v) {
     if (!Array.isArray(p) || p.length < 2) return false;
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return false;
   }
   return true;
 }
-
-/** Sampling resolution a decoded link may carry — bounded so a crafted link can't trigger a huge alloc. */
-const MIN_RESOLUTION = 3;
-const MAX_RESOLUTION = 5000;
 
 /** A well-formed target: absent is fine (back-filled to the origin); if present, finite re/im. */
 function isTargetState(v: unknown): boolean {

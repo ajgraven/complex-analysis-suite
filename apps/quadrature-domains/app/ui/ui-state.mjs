@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of ui-state.js (classic stays frozen). The single source-of-truth
+// ESM (Phase 2 port). The single source-of-truth
 // state object; exported (the cross-script `state` other UI modules import) + QD_UI.state.
 import { QD_UI } from './ui-registry.mjs';
 // =============================================================================

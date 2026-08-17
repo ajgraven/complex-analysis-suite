@@ -142,7 +142,8 @@ describe("GPU deltoid shader σ algorithm ↔ CPU engine agreement", () => {
 
 // ── Parameter family φ_a(z) = z + (a/2)/z² (paramGpu.ts). The GPU classifier's sigma_a inverts φ_a with
 // the SAME cold-seed Newton, plus a |z|>1 exterior-branch guard (CORR-2): φ_a is univalent on {|z|>1} for
-// the whole window (area theorem, |a|≤√2), so a preimage inside the unit disk is the WRONG branch and
+// |a| ≤ 1 (φ_a′ = 1 − a/z³ vanishes at |z| = |a|^{1/3}; do NOT restate the old, disproven |a| ≤ √2
+// "area theorem" window — see family.ts), so a preimage inside the unit disk is the WRONG branch and
 // must count as "no exterior preimage" (bounded, not an escape) — exactly what the CPU engine signals by
 // returning null. Below we mirror the shader's inline φ_a / φ_a' / F_a + inverse in TS and assert the
 // engine and shader agree, INCLUDING on which points have no exterior preimage.
@@ -194,7 +195,7 @@ function shaderSigmaA(w: Complex, a: Complex): Complex | null {
   return conj(fSchA(z, a));
 }
 
-// The deltoid plus three off-axis members inside the univalence window |a| ≤ √2.
+// The deltoid plus three off-axis members inside the univalence window |a| ≤ 1.
 const A_VALUES: Complex[] = [
   [1, 0],
   [0.5, 0.3],

@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of solver-uqd-pqd-singular.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import { Complex } from '../core/complex.mjs';
 import { Taylor } from '../core/taylor.mjs';
 import { branchTaylorAccumulate } from './solver-taylor-common.mjs';

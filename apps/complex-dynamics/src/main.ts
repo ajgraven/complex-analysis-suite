@@ -145,7 +145,7 @@ import { sweepSeeds, canonicalSchwarzSeeds, familyHue } from "./render/schwarzOr
 import { drawSchwarzBoundary, drawSchwarzUnitCircle, drawSchwarzBoundarySphere } from "./render/schwarzBoundaryOverlay";
 import { renderSchwarzLegend } from "./render/schwarzLegend";
 import { drawScaleBar } from "./render/overlay";
-import { createSchwarzGLRenderer, type SchwarzGLRenderer } from "./render/schwarzGL";
+import { createSchwarzGLRenderer, SIGMA_MAX_ITER, type SchwarzGLRenderer } from "./render/schwarzGL";
 import {
   arcballDelta,
   quatFromAxisAngle,
@@ -2121,8 +2121,9 @@ function init(): void {
     lastConnectivity = null;
 
     if (d === null) {
-      // Rigorous (Fatou–Julia) connectivity from all critical orbits when f is a polynomial;
-      // otherwise fall back to the debounced image estimate.
+      // Critical-orbit (Fatou–Julia) connectivity when f is a polynomial: only all-escaped 'cantor'
+      // is a determination; 'connected'/'disconnected' are iteration-cap estimates (CONN_ITERS),
+      // surfaced to the user as ≈. Otherwise fall back to the debounced image estimate.
       const pc = polynomialConnectivity(
         parameterView.plot.fAst,
         parameterView.plot.escAst,
@@ -5026,7 +5027,7 @@ function init(): void {
       itIn.value = String(schwarzEscape.maxIter);
       itIn.addEventListener("change", () => {
         const v = Math.round(Number(itIn.value));
-        if (Number.isFinite(v) && v >= 1) schwarzEscape.maxIter = Math.min(4096, v);
+        if (Number.isFinite(v) && v >= 1) schwarzEscape.maxIter = Math.min(SIGMA_MAX_ITER, v);
         itIn.value = String(schwarzEscape.maxIter); // normalise / restore on a bad value
         applyEscape();
       });

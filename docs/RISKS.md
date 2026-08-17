@@ -175,7 +175,7 @@ encoded a recommended answer for each, now ratified above.
 5. **Package manager.** The plan chose **pnpm** ([ADR-0004](DECISIONS.md#adr-0004-package-manager-pnpm-workspaces)) for its strictness (which enforces the layering rule) and speed. Both apps use npm today. Confirm pnpm, or prefer npm workspaces (least change)?
 6. **Correspondence degree scope.** Start **quadratic-only** (deltoid + circle-and-cardioid, matching LLMM 2021/2023), or architect for general `d:d` (Mating I/II, and your Algebraic-QD direction) from the outset? This changes how the branch-enumeration is written.
 7. **First correspondence goal.** Reproduce *known* pictures first (deltoid — essentially already reachable), or push toward *new* families (your algebraic QDs / Shabat slices)? The plan assumes deltoid-first as validation.
-8. **Node version pin.** The plan pins **Node 20 LTS** (`.nvmrc`, `engines`). Confirm, or prefer a different baseline?
+8. **Node version pin.** **RESOLVED → Node 22 LTS** (`.nvmrc` = `22`, `engines.node >= 22`, both workflows on `node-version: 22`; locked decision 10 supersedes the earlier Node 20 baseline).
 9. **Deployment.** Keep both apps on **GitHub Pages, deployed independently** from the monorepo? (No single suite version.) Confirm.
 10. **What do you want next from me?** (a) I write nothing more and you execute this plan;
     (b) you move into **Claude Code** on the repos and I scaffold Phase 0 + the first

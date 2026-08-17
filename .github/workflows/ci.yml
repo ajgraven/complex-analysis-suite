@@ -99,7 +99,7 @@ jobs:
         run: pnpm build
 
   # Everything that needs a real WebGL2 context, in headless Chromium — the backstop the node/jsdom
-  # gate structurally can't be. Two harnesses, both under `pnpm test:browser`:
+  # gate structurally can't be. Five harnesses, all under `pnpm test:browser`:
   #
   #   · @cas/gpu — runGLSL over DUAL_BACKEND_CORPUS: executes the emitted GLSL and compares against
   #     the JS reference, catching float32 GPU-only drift (Review P4). SwiftShader (software WebGL2)
@@ -112,6 +112,9 @@ jobs:
   #     (valid as vec2, a type error as vec4) fails all four df64 compiles here while every string
   #     assertion in glslCodegen.test.ts still passes 9/9. CD is published, so that class of defect
   #     would reach users as a dead canvas.
+  #   · @cas/schwarz — CPU↔GPU σ-parity net (the reflection escape-time field agrees across backends).
+  #   · complex-function-plotter and quadrature-domains — compile AND link their real WebGL2 shaders,
+  #     the same uncompiled-shader backstop as complex-dynamics.
   #
   # Kept SEPARATE from `build` so it never slows the main gate.
   # NOT covered: apps/correspondences' shaders are still never compiled (unpublished app).

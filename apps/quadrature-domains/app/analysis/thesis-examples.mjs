@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of thesis-examples.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // thesis-examples.js  —  Curated canonical quadrature domains, each with an

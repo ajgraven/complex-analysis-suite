@@ -9,8 +9,10 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It currently unifies two mature apps (Complex Dynamics; Quadrature
-Domains) and will host a third (anti-holomorphic correspondences).
+than the last.** It now unifies seven apps — Complex Dynamics, Quadrature Domains,
+Complex Function Plotter, Riemann Map, Argument Principle, and Faber Transform, plus the
+anti-holomorphic Correspondences tool (built, not yet published) — riding ten shared
+`@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -88,7 +90,8 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (Phase 4), **`@cas/expr` + `@cas/gpu`** (Phase 5) — are done and merged. **Phase 6**
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
-and the parabolic-Tricorn model coordinate. Seven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+the parabolic-Tricorn model coordinate, and a follow-on interactive mating visualizer (`mating.html`).
+Seven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
 rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`) ride the ten shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
@@ -142,7 +145,7 @@ drift (#264). **No new package** (SC lives inside `@cas/conformal`); **no `@cas/
 (docs/design/schwarz-christoffel-plan.md) / [`schwarz-christoffel-research-notes.md`]
 (docs/design/schwarz-christoffel-research-notes.md).
 
-**QD → CD σ hand-off (QD-HANDOFF-2 + S5, on `claude/repository-refactor-project-pg5ktu`, awaiting review):**
+**QD → CD σ hand-off (QD-HANDOFF-2 + S5, merged — σ peer view #246, σ multi-view explorer #255; interchange 1.3.0):**
 Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe
 (closed-form φ + branch of the inverse); Complex Dynamics reconstructs σ via `@cas/schwarz` and renders
 its escape-time field on the GPU as a first-class **peer view** (ADR-0009), `≈`-labeled. Covers the

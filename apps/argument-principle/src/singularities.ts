@@ -13,9 +13,8 @@
 //
 // Requires a holomorphic f (f′ must exist). For a non-holomorphic f (e.g. `conjugate(z)`), there is no
 // argument principle — `differentiable` is false and the caller disables the instrument honestly.
-import { makeDurandKerner, tupleAlgebra } from "@cas/core";
+import { rootsMonic } from "@cas/core";
 import type { Node } from "@cas/expr/ast";
-import * as C from "@cas/expr/complexJs";
 import { differentiate } from "@cas/expr/derivative";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { fToRational } from "@cas/expr/rational";
@@ -50,42 +49,9 @@ export interface Region {
 const C0: Complex = [0, 0];
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
 const finite = (z: Complex): boolean => Number.isFinite(z[0]) && Number.isFinite(z[1]);
-const ROOT_RESIDUAL_TOL = 1e-6;
-const durandKernerKernel = makeDurandKerner(tupleAlgebra);
-
-// ---- shared polynomial helpers (mirrors complex-dynamics/render/critical.ts) ----------------------
-
-function evalPoly(p: readonly Complex[], z: Complex): Complex {
-  let acc: Complex = [0, 0];
-  for (let i = p.length - 1; i >= 0; i--) acc = C.add(C.mul(acc, z), p[i]);
-  return acc;
-}
-
-function trimPoly(p: readonly Complex[]): Complex[] {
-  let n = p.length;
-  while (n > 1 && cabs(p[n - 1]) < 1e-12) n--;
-  return p.slice(0, n);
-}
-
-/** Roots of a polynomial (ascending coeffs) via Durand–Kerner, certified by residual. */
-function polyRoots(coeffs: readonly Complex[]): Complex[] {
-  const p = trimPoly(coeffs);
-  const m = p.length - 1;
-  if (m < 1) return [];
-  const lead = p[m];
-  if (cabs(lead) === 0) return [];
-  const pMonic = (z: Complex): Complex => C.div(evalPoly(p, z), lead);
-  const seeds: Complex[] = [];
-  let pw: Complex = [1, 0];
-  const seed: Complex = [0.4, 0.9]; // classic off-axis geometric-spiral seed
-  for (let i = 0; i < m; i++) {
-    seeds.push([pw[0], pw[1]]);
-    pw = C.mul(pw, seed);
-  }
-  const res = durandKernerKernel(pMonic, seeds, { mode: "seidel", bailOnNonFinite: true });
-  if (!res) return [];
-  return res.roots.filter((r) => cabs(pMonic(r)) <= ROOT_RESIDUAL_TOL);
-}
+// evalPoly, trimPoly, and the residual-certified spiral-seeded Durand–Kerner (`polyRoots`) now live in
+// @cas/core as evalPolyHorner / trimPoly / rootsMonic (ADR-0007 — this file used to mirror
+// complex-dynamics/render/critical.ts). rootsMonic applies the |p(root)| ≤ 1e-6 residual filter.
 
 /** Cluster coincident roots into distinct points with multiplicity. */
 function cluster(roots: readonly Complex[]): Root[] {
@@ -265,8 +231,8 @@ export function findSingularities(ast: Node, region: Region, target: Complex = C
   const rat = fToRational(ast, C0, C0);
   if (rat) {
     // Solutions of f = w₀ are the roots of num − w₀·den; poles are the roots of den (target-independent).
-    const zeros = cluster(polyRoots(subScaledPoly(rat.num, rat.den, target)));
-    const poles = cluster(polyRoots(rat.den));
+    const zeros = cluster(rootsMonic(subScaledPoly(rat.num, rat.den, target)));
+    const poles = cluster(rootsMonic(rat.den));
     cancelRemovable(zeros, poles);
     const critical = rationalCritical(dAst);
     return { zeros, poles, critical, differentiable: true, exact: true };
@@ -303,7 +269,7 @@ export function findSingularities(ast: Node, region: Region, target: Complex = C
 function rationalCritical(dAst: Node): Root[] {
   const rat = fToRational(dAst, C0, C0);
   if (!rat) return [];
-  const roots = polyRoots(rat.num);
+  const roots = rootsMonic(rat.num);
   if (roots.length === 0) return [];
   // Keep only genuine critical points: f′(r) ≈ 0 (drops removable cancellations and poles).
   const fp = makeComplexFn(dAst) as MapFn;

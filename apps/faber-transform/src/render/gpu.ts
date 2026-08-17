@@ -16,9 +16,11 @@ import { BASE_HALF } from "./plane.js";
 import type { Viewport } from "./plane.js";
 import { DEFAULT_COLORING } from "./coloring.js";
 import type { ColoringOptions } from "./coloring.js";
+import { GPU_COEFF_CAP } from "../viewState.js";
 
-// Max coefficient-array length: covers a Faber-image polynomial up to MAX_DEGREE (40) with margin.
-const MAXC = 48;
+// Max coefficient-array length (= the state's GPU_COEFF_CAP): covers a Faber image up to MAX_DEGREE (40)
+// with margin. A polynomial/rational above degree MAXC−1 cannot be uploaded, so the render caps there.
+const MAXC = GPU_COEFF_CAP;
 
 const FRAGMENT = `#version 300 es
 precision highp float;

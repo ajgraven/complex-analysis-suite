@@ -19,7 +19,7 @@
 // / `performance` / `URL` / `console` are browser globals.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of schwarz/schwarz-features.js (classic stays frozen). QD_UI factory module.
+// ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';
 const QD = _QD;
@@ -150,7 +150,7 @@ const QD = _QD;
       const t1 = performance.now();
       sState.cycles = cycles;
       if (statusEl) statusEl.textContent =
-        cycles.length + ' cycles in ' + (t1 - t0).toFixed(0) + ' ms';
+        '≈ ' + cycles.length + ' cycles (advisory) in ' + (t1 - t0).toFixed(0) + ' ms';
       paintBoundaryOnTop();
     }, 30);
   }

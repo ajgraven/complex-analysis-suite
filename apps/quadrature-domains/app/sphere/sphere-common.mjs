@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of sphere/sphere-common.js (classic stays frozen). Depends only on
+// ESM (Phase 2 port). Depends only on
 // @cas/core (shared stereographic kernel); no QD/Complex/DOM dep. Exposes SphereCommon as a named
 // export (bootstrap captures it as SC).
 // =============================================================================

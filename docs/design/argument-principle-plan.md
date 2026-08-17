@@ -5,7 +5,7 @@
 > (winding number of `f(γ)` about `0` **=** zeros − poles of `f` enclosed by `γ`). Phases 0–3 shipped the
 > dual z/w view, the cursor/freehand contour, the exact-or-estimated zero/pole finder with the four
 > `N − P = winding` readouts, the animated traversal, suite hand-off, and PNG export; Phase 4 recorded the
-> primitive-extraction decision ([ADR-0020](../DECISIONS.md#adr-0020-defer-the-winding--singularity-primitive-extraction-second-consumer-noted):
+> primitive-extraction decision ([ADR-0025](../DECISIONS.md#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted):
 > **deferred** — the plotter/AP finders diverged) and flipped the launcher card to a live link + added the
 > `deploy-pages.yml` `cp`, so it **goes live on the next merge to `master`**. The topology decision (a
 > **separate app**, not a mode in the plotter) is [ADR-0019](../DECISIONS.md#adr-0019-argument-principle-as-a-separate-app).
@@ -174,7 +174,7 @@ per the guardrail against over-reach:
    winding from a small circle to an arbitrary contour). Prove the tool works.
 2. **Then extract, if it earns it** (Phase 4). Once both apps clearly share the primitive, move it into a
    small package (candidate `@cas/winding`, or fold into an existing package) and refactor the plotter to
-   consume it — **tests green before and after** — recorded as **ADR-0020**, the way `@cas/dynamics` and
+   consume it — **tests green before and after** — recorded as **ADR-0025**, the way `@cas/dynamics` and
    `@cas/export` were.
 
 **Convention-safety of the extracted piece:** a shared `windingNumber(samples)` and `findSingularities(f, f',
@@ -191,7 +191,7 @@ interpretation stays in each app. That keeps the extraction on the right side of
   surface is its own app. The plotter's argument-principle readout is a small analysis instrument beside its
   domain-coloring headline; this is a dedicated _educational dual-view_ product with its own contour
   interaction. Separate app.
-- **ADR-0020 — The winding / singularity primitive extraction decision.** _Written at Phase 4:_ **deferred.**
+- **ADR-0025 — The winding / singularity primitive extraction decision.** _Written at Phase 4:_ **deferred.**
   The second consumer is real, but the plotter and Argument-Principle finders diverged (AP added a
   rational-exact path + critical points; their winding accumulators differ on singular-sample handling), so no
   shared package is taken now — mirroring the ADR-0008 / ADR-0018 deferrals. Revisit on a third consumer or a
@@ -260,7 +260,7 @@ Suite interop + the polish that makes it teach.
 ### Phase 4 — Extract (if earned) & publish
 
 - Evaluate the winding/singularity primitive against the second-consumer rule; if earned, extract to a small
-  package and refactor the plotter to consume it (tests green before & after) — **ADR-0020**.
+  package and refactor the plotter to consume it (tests green before & after) — **ADR-0025**.
 - Flip the launcher "Coming soon" card to a link; add the one `cp` line to `deploy-pages.yml`.
 - **Gate / GT:** published under `/argument-principle/` in the combined Pages site; north-star confirmed —
   fewer new primitives than any prior tool.
@@ -363,7 +363,7 @@ parity-blocking:
 A second construction arc, layered on the shipped tool, to teach the _mechanism_ behind the equality (why
 winding **is** the accumulated argument, and how the topological statement meets the analytic `∮ f′/f`
 one) and to generalize past the textbook "zeros of `f`, circular contour" case. It stays **pure-2D and
-app-local** — no new `@cas/*` package (ADR-0007 posture unchanged from ADR-0020), no core `π`/`2πi`
+app-local** — no new `@cas/*` package (ADR-0007 posture unchanged from ADR-0025), no core `π`/`2πi`
 (ADR-0006: the `1/2πi` normalization lives at the app edge), honest `=`/`≈` labels throughout.
 
 **Confirmed decisions (Andrew, 2026-08-15):** (1) isolate-a-root is **click-to-pin** — clicking a marked
@@ -472,5 +472,5 @@ token set); pure-2D and app-local; new UI state optional-with-default for `#vs=`
 | 1 — Live winding (interactivity) | ✅ done | `39b4ac6` | C3 (KaTeX preview via `@cas/expr/latex`), V2 (cursor-follows γ), V4 (per-pane right/drag-pan + wheel-zoom + Reset/Fit), U1 (radius slider); coord authority in `plane.ts` (pan/zoom invert the draw map exactly), `nav.ts` wiring, coalesced rAF render + debounced `#vs=` persist; +`nav.test.ts` (34 tests total). GT: real-browser boot clean (Chromium) — default winding 3, KaTeX renders, hover moves γ + recomputes; `lint`/`typecheck`/`test`/`build` green |
 | 2 — Zeros/poles instrument (the four readouts) | ✅ done | `794859a` `a7e9498` | **2a** `singularities.ts`: rational (exact, `fToRational`→Durand–Kerner, `=`) + transcendental (grid+Newton+winding, `≈`) finder; ✕/◆ markers + order badges; the four readouts (Zeros·Poles·N−P·Winding) counted inside γ with honest `=`/`≈` + agreement status. **2b** freehand contour (left-drag, auto-oriented CCW so winding = N−P), Clear, resolution slider, domain/image toggles. GT (`singularities.test.ts`): `N−P = winding` on all 8 presets **and** for a drawn polygon; +`contour`/`orientCCW` tests (54 total). Real-browser verified (Chromium): default 3/0/3/3 "✓", freehand draw holds the theorem |
 | 3 — Hand-off, export & pedagogy | ✅ done | `607f2aa` `c7fa962` `d5467df` | **3a** I2 — `#s=` import (`interchange/importMap.ts` ported from the plotter) + boot banner; GT `importMap.test.ts`: consumes the real CD Böttcher golden (`(1)*z + (0.5)/z^2`, ψ(2)=2.125) + a `view` round-trip. **3b** E1 — animated γ traversal: a point marks γ↔f(γ) with an arg-vector, and an accumulator sweeps the argument to the winding number (`contourPointAt` + `partialWindingTurns`, unit-tested). **3c** I3 — Save PNG with the `#vs=` permalink embedded as `tEXt` (`@cas/export`) + a help panel. 59 tests. Real-browser verified each (import banner, live traversal, PNG metadata, help open/close). E3 (phase tint) / E4 (producer "send-to") deferred as optional |
-| 4 — Extract (if earned) & publish | ✅ done | `d859ba8` | Extraction **evaluated and deferred** — [ADR-0020](../DECISIONS.md#adr-0020-defer-the-winding--singularity-primitive-extraction-second-consumer-noted): the second consumer is real, but the plotter/AP finders diverged (rational-exact + critical points; different singular-sample winding semantics), so no shared package is taken now (mirrors ADR-0008/0018 deferrals). **Published:** launcher "Coming soon" → a live `argument-principle/` link + meta copy; `cp -r apps/argument-principle/dist _site/argument-principle` in `deploy-pages.yml`. Goes live on the next merge to `master`. Full workspace gate green |
+| 4 — Extract (if earned) & publish | ✅ done | `d859ba8` | Extraction **evaluated and deferred** — [ADR-0025](../DECISIONS.md#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted): the second consumer is real, but the plotter/AP finders diverged (rational-exact + critical points; different singular-sample winding semantics), so no shared package is taken now (mirrors ADR-0008/0018 deferrals). **Published:** launcher "Coming soon" → a live `argument-principle/` link + meta copy; `cp -r apps/argument-principle/dist _site/argument-principle` in `deploy-pages.yml`. Goes live on the next merge to `master`. Full workspace gate green |
 | Review fixes (`/code-review`) | ✅ done | _this commit_ | 7 findings, all fixed + verified. **Correctness:** moving γ now debounce-refreshes the finder so the counts track the contour (transcendental f no longer under-counts); the sweep readout reaches the full winding at the loop close (`partialWindingTurns` interpolates); a pole on a contour sample shows `—`, never `NaN`. **Hostile-link robustness:** the `#vs=` guard now bounds `resolution` and validates path `points`; `sampleCircle` clamps. **UX:** radius slider disabled in path mode; w-plane right-drag no longer pops the context menu. +unit tests (63 total); real-browser verified (A1 hover→"✓", A2 sweep→3, A3 "—", C1 disable). Full workspace gate green |

@@ -204,9 +204,17 @@ function residualNorm(F) {
 //   * betas   — Householder reflector scalars (length min(m,n)).
 //   * diag    — pre-reflector diagonal of R (length min(m,n)); when any
 //               entry is below `singularTol`, rank is reduced by one.
-//   * rank    — numerical rank (count of |diag[k]| ≥ singularTol).
-//   * condEst — a cheap estimate of the condition number:
-//                 max|diag[k]| / min|diag[k]| over the retained pivots.
+//   * rank    — pivot count |diag[k]| ≥ singularTol. NOTE: this is an ABSOLUTE
+//               pivot test against a fixed 1e-13 — NOT a scale-invariant numerical
+//               rank / rcond gate. It assumes O(1)-scaled Jacobians (which the QD
+//               cusp-Newton residual system is); a uniformly tiny-scaled but
+//               perfectly well-conditioned matrix (all |diag| ~ 1e-11) would
+//               spuriously read rank-deficient and make backSolve throw "singular".
+//   * condEst — a cheap LOWER-BOUND proxy for cond(R): max|diag[k]| / min|diag[k]|
+//               over the retained pivots. Being a diagonal ratio it can only
+//               under-estimate the true condition number, so condEst-keyed triggers
+//               (ILL_COND_REFINE_THRESHOLD, CENTRAL_DIFF_COND_TRIGGER) may under-fire
+//               on a genuinely ill-conditioned R whose diagonal ratio is modest.
 //
 // A and the optional rhs vector b are NOT mutated; the routine works on a
 // scratch copy.  Callers wanting the Q · b transformation only (without
@@ -499,6 +507,13 @@ function newtonSolve(phi_init, hData, options = {}) {
     jacobianMode  = 'auto',
     centralDiffEps = CENTRAL_FD_EPS,
     maxRefine      = MAX_REFINE_STEPS,
+    // Singular-Jacobian recovery RNG. The recovery branch nudges the iterate by a
+    // bounded random perturbation; by default that draws from the process-global,
+    // unseedable Math.random, which makes any solve that trips recovery
+    // non-deterministic (a research/repro hazard, and a flaky-test hazard). Pass a
+    // seeded generator — e.g. `mulberry32(seed)` from this same namespace — to make
+    // the recovery path reproducible. Defaults to Math.random for back-compat.
+    rng = Math.random,
   } = options;
 
   const template = phi_init;
@@ -583,10 +598,15 @@ function newtonSolve(phi_init, hData, options = {}) {
         if (isFinite(qrProbe.condEst)) condEst = qrProbe.condEst;
       } catch (_) { /* keep default condEst */ }
       const noiseScale = Math.max(1e-12, Math.min(1e-4, Fnorm * 1e-3 * Math.sqrt(condEst / 1e8)));
-      let nudgedV = v.map(x => x + (Math.random() - 0.5) * noiseScale);
+      let nudgedV = v.map(x => x + (rng() - 0.5) * noiseScale);
       try {
         const Fnudged = evalF(nudgedV);
         const Jnudged = jacobianFn(nudgedV, evalF, finiteDiffEps);
+        // NOTE: this inner solve is square-only (solveLinearSystem), unlike the main step which uses the
+        // overdetermined-capable leastSquaresWithCond above. For an overdetermined residual system (the
+        // usual QD case — more boundary equations than unknowns) this throws "not square" and recovery
+        // completes only for square systems. Left as-is (behavior-preserving); a fuller fix would route
+        // this through solveLeastSquares to match the main path. The rng nudge above is drawn regardless.
         delta = solveLinearSystem(Jnudged, Fnudged.map(x => -x));
         v = nudgedV; F = Fnudged; Fnorm = residualNorm(F); J = Jnudged;
         // Stash recovery telemetry on the result so the UI can surface it.

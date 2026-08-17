@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of primary-solution.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from './solver.mjs';
 // @ts-nocheck
 // =============================================================================

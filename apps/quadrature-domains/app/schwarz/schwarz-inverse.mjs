@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of schwarz/schwarz-inverse.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // schwarz-inverse.js — σ⁻¹ kernel + preimage / tile-tree builder (Phase S1).

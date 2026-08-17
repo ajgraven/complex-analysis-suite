@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of solvers/seeds/seeds-lqd.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solver.mjs';
 // =============================================================================
 // solvers/seeds/seeds-lqd.js -- Seed strategy for Family.boundedLQD (B3).

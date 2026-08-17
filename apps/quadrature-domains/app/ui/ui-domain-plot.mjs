@@ -14,7 +14,7 @@
 // the class body itself is identical to what previously lived in ui.js.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of ui-domain-plot.js (classic stays frozen). QD_UI factory module.
+// ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from './ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';
 const QD = _QD;

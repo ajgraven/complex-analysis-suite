@@ -15,7 +15,7 @@
 // install-order dependency). `Complex` / `QD` are solver globals.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of ui-pole-grid.js (classic stays frozen). QD_UI factory module.
+// ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from './ui-registry.mjs';
 import { Complex } from '../core/complex.mjs';
 import _QD from '../solvers/solver.mjs';

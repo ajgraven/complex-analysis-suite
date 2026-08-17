@@ -1,4 +1,4 @@
-// ESM (Phase 2 port) — twin of sym-core.js (classic stays frozen). Registers onto the QD namespace.
+// ESM (Phase 2 port). Registers onto the QD namespace.
 import _QD from '../solvers/solver.mjs';
 // =============================================================================
 // sym-core.js -- Exact symbolic-algebra core (QD.Sym).

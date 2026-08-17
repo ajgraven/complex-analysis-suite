@@ -67,7 +67,7 @@
 // real typeset math, text selection, and per-card hit-testing.
 // =============================================================================
 
-// ESM (Phase 2 port) — twin of algebra/algebra-canvas.js (classic stays frozen). UI orchestrator/consumer.
+// ESM (Phase 2 port). UI orchestrator/consumer.
 import _QD from '../solvers/solver.mjs';
 const QD = _QD;
 
