@@ -162,7 +162,31 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       clause from all 81 `.mjs` top-of-file comments (scripted `sed`, dry-run-verified on 11 diverse cases;
       each file's real trailing description preserved, exactly one comment line changed per file, 0 clauses
       remaining; the 2 genuine "twin of" prose comments untouched). Comment-only, no behavior change. (commit 7cc6265)
-- [ ] (optional) remaining LOW numerical test-gaps + M₀ relabel + QD↔`@cas/schwarz` rewire ADR
+- [x] **Optional bucket — all three items** (this session):
+  - [x] **M₀ relabel** (MED, ADR-0006): `observables.mjs`'s moments docstring + inline comment now loudly mark
+        them the **STANDARD geometric** area moments (unit-disk M₀ = π), **not** the solver's π→1-normalized
+        "harmonic moments" (M₀ = 1), naming the factor-of-π landmine; a cross-ref annotates the π→1 site in
+        `qd-equations.mjs`. New guard `vitest/qd-m0-convention.test.ts` pins BOTH numbers for the same unit
+        disk (geometric π via `boundaryObservables`; normalized 1 via the solver's Σ_k k|w_k|² on φ's Taylor
+        coeffs) and asserts geometric/normalized ≈ π.
+  - [x] **LOW numerical test-gaps** (4): (1) `@cas/core` `lstsq` — docstring/README now state the `1e-300`
+        guard is EXACT-zero (not rcond); 3 new tests (near-dependent column amplifies/not-zero-filled,
+        b-length throw, mildly ill-conditioned Vandermonde bounded residual). (2) `@cas/conformal` SC — added
+        an honest `inverseWithStatus` (`{w, converged, residual}`) to `SCForwardMap`/`SCMap` so a `z ∉ Ω` /
+        Newton stall is detectable (not a silent wrong preimage); goldens for the precise **crowding wall**
+        (thin sliver ⇒ `degraded===true`, not silently good) + inverse-status (interior converged, outside-Ω
+        not-converged, fast coarse). (3) QD `houseQR` — comment corrected to ABSOLUTE-pivot (not rcond) +
+        condEst LOWER-BOUND framing; `vitest/solver-qr-singular-gate.test.ts` pins it. (4) QD Newton
+        singular-recovery — threaded an optional seeded `rng` (default `Math.random`) so recovery is
+        reproducible; `vitest/solver-recovery-rng.test.ts` proves the rng threads through. **Newly surfaced
+        (noted, not fixed):** the recovery inner solve is square-only (`solveLinearSystem`) so it can't
+        *complete* for overdetermined QD systems — honest code comment added, left behavior-preserving.
+  - [x] **QD↔`@cas/schwarz` decision ADR** (MED): wrote **ADR-0026** (defer consolidating QD's superset
+        `schwarz-common.mjs` with `@cas/schwarz`'s classical subset — same shape ⇒ deferred, not declined like
+        sym-core; partial-rewire rejected as a split engine; lift-to-parity-then-consume deferred to a second
+        weighted-family consumer per ADR-0007). TOC + count updated; deliberate-deferral header notes added to
+        both `schwarz-common.mjs` and `@cas/schwarz/index.ts` (Action Item 1 done); σ differential drift-guard
+        specified as Action Item 2.
 
 ## Log
 
@@ -174,3 +198,10 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
 - 2026-08-17: Follow-up — three items landed as separate commits, full gate green (377 files / 3153 tests,
   +3 new): AP freehand-path vertex cap (e1e3e94), interchange nested-`sourceDomain`/`tilingSetHint`
   validation (48526c0), QD 81-file stale-header strip (7cc6265).
+- 2026-08-17: Follow-up — **optional bucket cleared** (M₀ relabel + guard, the 4 LOW numerical test-gaps,
+  ADR-0026), then a thorough self-review of the whole session. Full gate green (**380 files / 3165 tests,
+  +12 new**; QD 159→162). Substantive additions: `@cas/conformal` gained an honest `inverseWithStatus`
+  convergence signal (a `z∉Ω`/stall is no longer a silent wrong preimage) and a precise-mode crowding-wall
+  golden; QD Newton recovery is now seedable (`rng` option). One latent issue surfaced and documented (not
+  fixed, per posture): QD's recovery inner solve is square-only so it can't complete for overdetermined
+  systems.
