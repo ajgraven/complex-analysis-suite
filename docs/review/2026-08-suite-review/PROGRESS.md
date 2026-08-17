@@ -138,7 +138,14 @@ Remaining substantive items from REPORT.md, being worked in order at the user's 
       size AND `MAX_TRUNCATION` (was 128 → 47), so the series path is always fully uploadable; the
       expr-rational path clamps num/den to the cap and honestly downgrades `=`→`≈` with a truncation
       note when a high-degree image (e.g. `z^60`) exceeds it. Monomials (`MAX_DEGREE = 40`) already fit.
-- [ ] QD `findCycles` anti-holomorphic Newton + ≈ caveat
+- [x] **QD `findCycles` anti-holomorphic Newton** (finding 07-#2): the finder solved `σⁿ(w)=w` by
+      Newton using a single x-direction finite-difference treated as a complex derivative — exact only
+      for even n (σ is anti-holomorphic, so σⁿ is holomorphic only for even n). Replaced with the full
+      **2×2 real Jacobian** (both columns + a 2×2 solve; reduces *exactly* to the old complex step for
+      even n, verified algebraically), plus a `|det|<ε` guard that drops the n=1 non-isolated
+      boundary-fixed-point case (σ|∂Ω=id) instead of reporting boundary drift as spurious cycles. Fixed
+      the misleading "n=1 is typically reliable" comment, added the missing **≈ advisory** to the
+      cycle-count UI, and extended the QD test with an n=2 (even-path) shape check.
 - [ ] AP freehand-path vertex cap
 - [ ] Interchange nested-payload validation (`sourceDomain`/`hData`/`tilingSetHint`)
 - [ ] Bulk strip of QD's 81 stale `twin of X.js` headers (mechanical)

@@ -150,7 +150,7 @@ const QD = _QD;
       const t1 = performance.now();
       sState.cycles = cycles;
       if (statusEl) statusEl.textContent =
-        cycles.length + ' cycles in ' + (t1 - t0).toFixed(0) + ' ms';
+        '≈ ' + cycles.length + ' cycles (advisory) in ' + (t1 - t0).toFixed(0) + ' ms';
       paintBoundaryOnTop();
     }, 30);
   }
