@@ -2121,8 +2121,9 @@ function init(): void {
     lastConnectivity = null;
 
     if (d === null) {
-      // Rigorous (Fatou–Julia) connectivity from all critical orbits when f is a polynomial;
-      // otherwise fall back to the debounced image estimate.
+      // Critical-orbit (Fatou–Julia) connectivity when f is a polynomial: only all-escaped 'cantor'
+      // is a determination; 'connected'/'disconnected' are iteration-cap estimates (CONN_ITERS),
+      // surfaced to the user as ≈. Otherwise fall back to the debounced image estimate.
       const pc = polynomialConnectivity(
         parameterView.plot.fAst,
         parameterView.plot.escAst,

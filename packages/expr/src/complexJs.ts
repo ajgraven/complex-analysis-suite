@@ -175,7 +175,7 @@ function lwInftyApprox(z: Complex): Complex {
   return add(sub(lz, llz), div(llz, lz));
 }
 
-/** Principal-branch Lambert W: seeded approximation refined by 5 Halley steps. */
+/** Principal-branch Lambert W: seeded approximation refined by 5 Newton steps. */
 export function lambertw(z: Complex): Complex {
   let w = abs(z)[0] < 1.7 ? lwZeroApprox(z) : lwInftyApprox(z);
   for (let k = 0; k < 5; k++) {

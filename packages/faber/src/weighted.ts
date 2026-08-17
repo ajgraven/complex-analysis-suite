@@ -16,8 +16,9 @@
 //
 //     Q_{n,m}(ζ) = Σ_{j=0}^{n} g_j · F_{n-j}(ζ)        (F_j = 0 for j < 0, F_0 = 1).
 //
-// So Q_{n,m} is a finite linear combination of the F_n the engine already builds. The corner images
-// w_k = φ(z_k) are the exterior Schwarz–Christoffel prevertices' reciprocals (w_k = 1/u_k, |w_k| = 1);
+// So Q_{n,m} is a finite linear combination of the F_n the engine already builds. The weight rides the
+// z-plane SC prevertices w_k = 1/u_k on |w_k| = 1 (NOT φ(z_k) — under this package's φ: 𝔻*→Ω that is a
+// polygon corner on ∂K, |·| ≠ 1; the series variable is s = 1/z on 𝔻*, and G_m = ∏_k (1 − w_k·s)^{1/m});
 // the app passes them in, so @cas/faber stays blind to how they were obtained (same one-struct discipline
 // as ExteriorMap). Convention-neutral (ADR-0006); stands only on @cas/core + the F_n recurrence.
 import { makePoly, makeSeries, objAlgebra } from "@cas/core";

@@ -52,7 +52,7 @@ scaleInto · addMulInto`) for hot loops.
 **Representation-genericity** (`ComplexAlgebra<C>`) — the operations any complex
 representation must provide (`make · re · im · add · sub · neg · mul · div · scale · abs ·
 abs2 · isFinite`), with two reference instances so the same generic algorithm runs over
-either layout the two apps use:
+either coordinate layout (`{re,im}` object or `[re,im]` tuple) the apps use:
 
 - `objAlgebra` — over `{re, im}` (`Cx`)
 - `tupleAlgebra` — over `[re, im]` (`ComplexTuple`)

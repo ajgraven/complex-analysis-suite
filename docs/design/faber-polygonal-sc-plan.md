@@ -140,7 +140,7 @@ Reentrant corners (αₖ>1) and a draggable editor are **M2**.
   (`render/polygonEditor.ts`): drag vertices to shape K, ＋/－ vertex (the add offsets outward so the new
   vertex is a genuine corner, not a degenerate straight one), reset. The fit runs on drag-release / button
   (not every pointer-move), so the SC solve isn't hammered; vertices serialize in the `#vs=` permalink
-  (bounded 3–16 verts, coords ≤ 20), the K-panel frames to the fitted boundary, and the editor shows the
+  (bounded 3–16 verts, coords ≤ 2 — `MAX_POLYGON_COORD`), the K-panel frames to the fitted boundary, and the editor shows the
   fit's `converged`/`degraded` status (the runtime home for the honesty signal). The domain is designed up
   to similarity — the right panel renders the canonical K, exactly as the polygon presets do.
 - **Solver seed-robustness (found by the editor) — DONE.** A valid convex hexagon could stall the single

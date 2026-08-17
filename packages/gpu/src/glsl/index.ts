@@ -1,7 +1,8 @@
 // The GLSL source strings that compose the suite's shaders: the single- and df64-precision complex
 // stdlibs, the derived transcendentals, the df64 double-float primitives, plus the small shared
 // building blocks every renderer otherwise re-declares — the trivial fullscreen vertex program, the
-// HSV→RGB helper, and the fragment-coordinate → complex-plane viewport map. Consumers concatenate
+// HSV→RGB helper, the fragment-coordinate → complex-plane viewport map, and the phase-portrait
+// domain-coloring core (`PHASE_COLORING_GLSL`, ADR-0016). Consumers concatenate
 // these into a program (e.g. the escape-time scaffold in the Complex Dynamics app's shaderBuilder).
 // There are no JS-level dependencies between them — they compose at the GLSL level, by function name,
 // at shader-assembly time. The ordering contract is only that a snippet using `cvec` / `vec_` (e.g.

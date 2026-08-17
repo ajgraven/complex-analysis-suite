@@ -155,11 +155,54 @@ shipped (#246/#255; interchange 1.3.0) — self-contradictory within its own par
 ## Safe fixes applied in this review
 
 Per the agreed posture (**report + safe fixes**), only doc-only corrections, comment fixes, and
-obvious-and-covered items were auto-applied; each was re-verified against source before editing. See
-the commit(s) tagged `review(2026-08): apply safe stale-doc/comment fixes`. The list is maintained in
-[`PROGRESS.md`](PROGRESS.md) and appended here once applied.
+honest-labeling seams were auto-applied — each re-verified against source before editing (one agent
+line-attribution was corrected in the process: "coords ≤ 20" exists only in the Faber plan doc, not in
+CLAUDE.md). **31 edits across 16 files.** Gates re-run green afterward (all edits are comment/doc-only).
 
-_(This section is completed by the fix commit that follows this report.)_
+**Authoritative / status docs**
+- `CLAUDE.md` — intro "two mature apps → will host a third" ⟶ seven apps + Correspondences riding ten
+  packages; added the shipped **mating visualizer** to the Correspondences status; **σ hand-off header
+  "awaiting review" ⟶ merged** (#246/#255, interchange 1.3.0).
+- `README.md` — ADR range "0001…0007" ⟶ "0001…0024"; the "built `dist/`" claim softened (expr/gpu are
+  consumed from `src` `exports`).
+- `docs/ARCHITECTURE.md` — `@cas/export` "three apps" ⟶ four; §8 deploy list ⟶ the six published
+  subpaths; §11 launcher "all three apps" ⟶ all seven (+ Coming-soon card).
+- `docs/RISKS.md` — open-question #8 "Node 20 LTS" ⟶ **RESOLVED → Node 22**.
+- `docs/refactor/STATE.md` + `docs/design/SIGMA-HANDOFF.md` — σ S4b/S5 "awaiting review on branch" ⟶
+  shipped/merged.
+- `docs/design/faber-polygonal-sc-plan.md` — permalink bound "coords ≤ 20" ⟶ **≤ 2** (`MAX_POLYGON_COORD`).
+- `docs/design/schwarz-christoffel-plan.md` — "exterior maps … deferred" ⟶ "since landed" pointer.
+- `docs/DECISIONS.md` — ADR-0013 (narrowed) and ADR-0014 (RM-premise superseded) now back-reference
+  ADR-0017 in their Status lines.
+- `.github/workflows/ci.yml` — browser-job comment "Two harnesses" ⟶ **Five** (+ schwarz / plotter / QD bullets).
+
+**Package READMEs / headers**
+- `packages/conformal/README.md` — exterior SC removed from "Deferred"; Faber Transform added as its consumer.
+- `packages/expr/README.md` — added the nine hyperbolic/reciprocal-trig builtins; fixed the
+  `newtonIteration` signature (`(fAst) → {iter, escape}`).
+- `packages/faber/README.md` — added the M3 weighted-Faber + rational-image export rows; softened the
+  "closed-form Laurent" line for polygon (`≈`) domains.
+- `packages/gpu/README.md` + `src/glsl/index.ts` — documented `PHASE_COLORING_GLSL` (three ⟶ four blocks).
+- `packages/core/README.md` — "either layout the two apps use" ⟶ "either coordinate layout (`{re,im}`/`[re,im]`)".
+
+**Behavior-neutral code comments**
+- `packages/expr/src/complexJs.ts` — Lambert-W docstring "5 Halley steps" ⟶ "5 Newton steps" (the update is Newton's).
+- `packages/faber/src/weighted.ts` — rewrote the "corner images `wₖ = φ(zₖ)`" comment (they are the
+  **z-plane prevertices** `1/uₖ` on `|w|=1`, *not* `φ(zₖ)`) — prevents a maintainer "fix" that would
+  silently corrupt `Q_{n,m}`.
+- `apps/correspondences/test/gpuAgreement.test.ts` — replaced the **disproven** `|a| ≤ √2` "area-theorem"
+  univalence comment (×2) with the true `|a| ≤ 1` window (honest-labeling guardrail; the app was built to fix exactly this).
+- `apps/complex-dynamics/src/main.ts` — reworded the stale `// Rigorous` connectivity comment to match the
+  code's honest `≈` estimate (only all-escaped 'cantor' is a determination).
+
+### Safe but deliberately NOT auto-applied (left report-only to keep the diff reviewable)
+
+- **QD's 81 `// … twin of X.js (classic stays frozen)` headers** (finding 07) — a bulk mechanical strip
+  across 81 files; better as its own scripted commit on your say-so than buried in this review.
+- **The 4 app-side echoes** of the Faber corner-images comment (`presets.ts`, `faber.ts`, `main.ts`,
+  `polygon.ts`) — same wording as the package comment just fixed; a quick consistency pass.
+- AP "future-phase" narration comments (`winding.ts`/`contour.ts`/`viewState.ts`) and the CD `exportMap`
+  Böttcher-`≈` note — very-low nits; `HANDOFF.md`'s `engines>=20` is a historical changelog entry (leave).
 
 ---
 

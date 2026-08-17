@@ -1134,7 +1134,7 @@ trades a little living duplication for zero mid-phase churn across three shippin
 
 ## ADR-0013: The Riemann-map tool is a new app, not a mode in an existing one
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted — narrowed in part by ADR-0017 (RM went pure-2D)  **Date:** 2026-08  **Deciders:** Andrew
 
 *A follow-on of the kind [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
 anticipated — a topology decision, occasioned by the first substantive build of a **new** tool
@@ -1243,7 +1243,7 @@ recipe) and letting the new app own general construction, with the interchange h
 
 ## ADR-0014: Extract `@cas/dynamics` on the second-consumer rule (Riemann Map)
 
-**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+**Status:** Accepted — RM-consumer premise superseded by ADR-0017 (RM shed `@cas/dynamics`)  **Date:** 2026-08  **Deciders:** Andrew
 
 *An *extraction* follow-on in the mould of [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate),
 and the genesis of the long-planned `@cas/dynamics` domain package

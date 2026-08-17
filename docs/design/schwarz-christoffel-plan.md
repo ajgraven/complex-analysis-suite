@@ -298,8 +298,9 @@ Tracked so the seams are deliberate, not forgotten:
 - ~~**Inverse map** (polygon→𝔻): ODE+Newton hybrid (research-notes §3). The immediate **fast-follow**
   (Phase F).~~ **Done** — see the Build-progress table.
 - **CRDT** (cross-ratio + Delaunay) for **elongated/crowded** polygons past the ~10:1 wall.
-- **Variants:** exterior maps, unbounded polygons (vertices at ∞), doubly-connected/annulus (DSCPACK
-  ideas, reimplemented).
+- **Variants:** exterior maps *(since landed — the exterior SC engine shipped for Faber Transform;
+  see [`faber-polygonal-sc-plan.md`](faber-polygonal-sc-plan.md). This v1 plan predates it)*, unbounded
+  polygons (vertices at ∞), doubly-connected/annulus (DSCPACK ideas, reimplemented).
 - **Generalized SC:** circular-arc polygons (Schwarzian-ODE) — the curved-boundary bridge toward QD /
   correspondence shapes.
 - **`@cas/interchange` `form:"schwarz-christoffel"`** recipe (angles `=`, prevertices/A/C `≈`) — the

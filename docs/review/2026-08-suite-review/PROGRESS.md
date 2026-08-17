@@ -72,18 +72,19 @@ Sizes (source lines) noted to calibrate depth. Mega-apps get strategic (not exha
 - **`=` exactness over-claims** where a numerical root-find backs an "exact" label (faber 04-#3; ties to honesty guardrail).
 - **Duplicated small primitives** — expr constExp/constReal (02-#2); conformal corner-pole clustering triplicated (03-#2); CD matingEngine mul/div (05-#4). Feed to Batch-2 CONSOL.
 
-### Batch 2 (remaining apps + cross-cutting consolidation)
-- [ ] **06 CORR** — `apps/correspondences` (4270) + `@cas/schwarz` (3250) → `findings/06-correspondences-schwarz.md`
-- [ ] **07 QD** — `apps/quadrature-domains` (85266, strategic) → `findings/07-quadrature-domains.md`
-- [ ] **08 RENDER** — `apps/complex-function-plotter` (7312) + `apps/argument-principle` (5319) + `@cas/gpu` (2115) + `@cas/export` (230) + `apps/launcher` (8) → `findings/08-render-group.md`
-- [ ] **10 CONSOL** — cross-cutting duplication/consolidation hunt (real + speculative) → `findings/10-consolidation-duplication.md`
+### Batch 2 (remaining apps + cross-cutting consolidation) — ✅ ALL COMMITTED
+- [x] **06 CORR** — `apps/correspondences` + `@cas/schwarz` → `findings/06-correspondences-schwarz.md` — 1 MED, 3 LOW, 1 NIT (σ math sound; √2 comment; CD-512 cap does NOT reproduce)
+- [x] **07 QD** — `apps/quadrature-domains` (strategic) → `findings/07-quadrature-domains.md` — 3 MED, 4 LOW, 1 NIT (export convention correct; dual-M₀; anti-holo Newton; @cas/schwarz dup)
+- [x] **08 RENDER** — plotter + argument-principle + `@cas/gpu` + `@cas/export` → `findings/08-render-group.md` — 2 MED, 5 LOW, 3 NIT (AP winding math correct; path-cap gap; plotter benign)
+- [x] **10 CONSOL** — cross-cutting duplication/consolidation → `findings/10-consolidation-duplication.md` — 3 MED, 3 LOW (pointInPolygon ×5; rootsMonic ×3; SC cluster ×3)
 
-## Synthesis & fixes (orchestrator, after both batches)
+## Synthesis & fixes (orchestrator, after both batches) — ✅ DONE
 
-- [ ] Read all `findings/*.md` + health logs
-- [ ] Write `REPORT.md` (executive summary, severity-ranked findings, consolidation roadmap)
-- [ ] Apply **safe fixes only** (doc-only / typo / test-covered obvious bug); list each in REPORT
-- [ ] Commit + push; report back to user (report-only items await user triage)
+- [x] Read all `findings/*.md` + health logs
+- [x] Write `REPORT.md` (executive summary, severity-ranked findings, consolidation roadmap)
+- [x] Apply **safe fixes only** (31 edits / 16 files; doc + comment + honest-labeling) — listed in REPORT
+- [x] Verify gates green after fixes (`health/verify-*.log`)
+- [x] Commit + push; report back to user (report-only items await user triage)
 
 ## Findings-file format (each agent follows)
 

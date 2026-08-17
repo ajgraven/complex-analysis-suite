@@ -78,8 +78,9 @@ pnpm format                              # Prettier --write .
 ```
 
 > The `test`, `typecheck`, and `build` scripts build the `@cas/*` packages first — apps
-> and tests consume the packages' **built `dist/`**, so a package change is picked up only
-> after its build runs (the root scripts handle this for you).
+> and tests consume the packages' build output — source `exports` for `@cas/expr` and
+> `@cas/gpu` (no `dist/`), built `dist/` for the other eight — so a change to a `dist/`-built
+> package is picked up only after its build runs (the root scripts handle this for you).
 
 Each app is an independent static Vite build (`base: "./"`), so its assets resolve from any path.
 `.github/workflows/deploy-pages.yml` publishes on every push to `master`, gated on
@@ -155,7 +156,7 @@ the rest capture the _why_ (and remain the authoritative reasoning). Read in thi
    design, the one-directional dependency rule, what each package owns, convention
    neutrality, and the `expr` + `interchange` keystone. The _where things live_.
 3. **[docs/DECISIONS.md](docs/DECISIONS.md)** — the Architecture Decision Records
-   (ADR-0001…0007): one decision each, with context, alternatives, trade-offs, and
+   (ADR-0001…0024): one decision each, with context, alternatives, trade-offs, and
    consequences. The _why each choice_.
 4. **[docs/MIGRATION.md](docs/MIGRATION.md)** — the phase-by-phase runbook (Phases 0–6),
    now annotated with what actually shipped at each gate. The _how it was built_.

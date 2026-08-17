@@ -72,8 +72,9 @@ share one honestly-flagged `SCMap` (Option A):
   limitation of the polygon lightning fit; use precise there). `warmStart` feeds a fast (or prior) solve into
   precise as its Gauss–Newton seed — the "drag with lightning, release to refine" continuation path.
 
-Deferred (roadmap): CRDT for elongated/crowded polygons, exterior/unbounded/circular-arc variants, and
-`@cas/interchange` serialization. See
+Deferred (roadmap): CRDT for elongated/crowded polygons, unbounded/circular-arc variants, and
+`@cas/interchange` serialization. (The **exterior** SC engine has since shipped — see the Faber
+Transform consumer below.) See
 [`docs/design/schwarz-christoffel-plan.md`](../../docs/design/schwarz-christoffel-plan.md).
 
 ## Consumers
@@ -84,6 +85,9 @@ Deferred (roadmap): CRDT for elongated/crowded polygons, exterior/unbounded/circ
   the ahead-of-demand extraction (ADR-0018 → [ADR-0020](../../docs/DECISIONS.md#adr-0020-schwarz-christoffel-engine-lightning-seeded-disk-canonical-two-mode)). It reuses the lightning fit
   (the fast mode, and — via `warmStart` — the optional precise seed; precise otherwise cold-starts uniformly)
   and `@cas/core`'s least squares (for the Gauss–Newton step).
+- **Faber Transform** (`apps/faber-transform/src/polygon.ts`) — drives the **exterior** SC builder
+  (`fitExteriorSchwarzChristoffel` + `exteriorMapLaurentAtInfinity`) to get the exterior map's
+  Laurent-at-∞ jet for arbitrary convex/reentrant polygon domains K (M1b, ADR-0024, #279).
 - **Anticipated:** the other Tier-3 engines (AAA, zipper) — future tenants of this package.
 
 ## Tests

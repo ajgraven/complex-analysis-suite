@@ -14,7 +14,7 @@ for why extraction is demand-driven rather than up-front.
 >   (`@cas/exact`: Complex Dynamics and
 >   Correspondences both needed exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ
 >   engine, shared by Complex Dynamics and Correspondences; `@cas/dynamics`: the inverse-Böttcher machinery,
->   ADR-0014; `@cas/export`: PNG `tEXt` metadata across three apps, ADR-0016; `@cas/conformal`: the
+>   ADR-0014; `@cas/export`: PNG `tEXt` metadata across four apps, ADR-0016; `@cas/conformal`: the
 >   conformal-map builder extracted *ahead* of demand, ADR-0018; `@cas/faber`: the exterior Faber engine,
 >   ADR-0024). The **`ui` and `quadrature`**
 >   packages sketched in the layer diagram and §3 were **never extracted** — no second consumer needed the
@@ -324,8 +324,10 @@ tools:
   paths (`base: "./"`), so its assets resolve from any path; there is no single suite-wide version.
 - **Publishing is automated.** `.github/workflows/deploy-pages.yml` runs on every push to `master`
   (and on `workflow_dispatch`), gates on `lint` → `typecheck` → `test` → `build`, then assembles
-  **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/` and
-  `quadrature-domains/` beneath it. Note the shape — apps build independently but publish
+  **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/`,
+  `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, and
+  `faber-transform/` beneath it (`apps/correspondences` is built but **not** published). Note the
+  shape — apps build independently but publish
   *together*, as a single artifact, not as independent Pages sites.
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
   launcher lists it as a non-linking "Coming soon" card). Publishing it means adding one `cp` to
@@ -405,6 +407,6 @@ entry point, easy movement between tools, hand-off between them) at a fraction o
 cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all three apps; the shared-nav header
+The launcher is a static stub (`apps/launcher`) listing all seven apps (plus a "Coming soon" correspondences card); the shared-nav header
 remains **unbuilt** — it awaited a `@cas/ui` package that was never extracted (§3). See
 [MIGRATION](MIGRATION.md).
