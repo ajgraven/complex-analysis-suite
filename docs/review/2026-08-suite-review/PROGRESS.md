@@ -37,15 +37,21 @@ libraries.** Requested 2026-08-17 by andrew@graven.com.
   Schwarz–Christoffel, Argument Principle phases 2–4, riemann-map redesign). These newest
   areas deserve the most scrutiny.
 
-## Health baseline (orchestrator-run, background)
+## Health baseline (orchestrator-run, background) — ✅ ALL GREEN
 
-Logs in `health/`. `node_modules` was absent at start → script runs `pnpm install` first.
+Logs in `health/`. `node_modules` was absent at start → script ran `pnpm install` first.
+**Result: every CI gate passes.** So any real errors the review finds are *latent* (not
+caught by the current suite) — test-gap findings are therefore valuable.
 
-- [ ] `00-install` (pnpm install)
-- [ ] `01-typecheck` (pnpm typecheck)
-- [ ] `02-lint` (pnpm lint — eslint + dep:check + per-pkg/app)
-- [ ] `03-test` (pnpm test — vitest + census assert)
-- [ ] `04-build` (pnpm build — apps + check-built-artifacts)
+- [x] `00-install` — exit 0 (frozen lockfile OK)
+- [x] `01-typecheck` — exit 0 (22s)
+- [x] `02-lint` — exit 0 (29s; eslint + dep:check + per-pkg/app)
+- [x] `03-test` — exit 0 (104s): **375 test files, 3137 tests, all passing**; census gate OK
+      (17 projects; QD 159 / CD 83 / plotter 18 / corr 17 / expr 16 / arg-principle 14 /
+      riemann-map 12 / conformal 11 / schwarz 8 / faber-transform 8 / faber 7 / core 7 /
+      gpu 6 / dynamics 3 / exact 3 / interchange 2 / export 1). Worker-unavailable lines are
+      expected test-env stubs (main-thread fallback), not failures.
+- [x] `04-build` — exit 0 (18s; apps + check-built-artifacts)
 - [ ] Health summary folded into REPORT.md
 
 ## Review agents (each writes ONE file to `findings/`, read-only otherwise)
