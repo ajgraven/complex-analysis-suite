@@ -646,6 +646,26 @@ button.ghost:disabled {
   font-size: 0.78rem;
 }
 
+/* Accessible hover/focus tooltip on the controls (WAI-ARIA APG pattern — see render/tooltip.ts).
+   Tokens only, so the CI palette gate is untouched; z-index sits above the topbar and the marker tip. */
+.control-tip {
+  position: fixed;
+  z-index: 70;
+  pointer-events: none;
+  max-width: 260px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 9px;
+  font-size: 0.8rem;
+  line-height: 1.35;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.control-tip[hidden] {
+  display: none;
+}
+
 /* C6 — the transient boundary-crossing toast. */
 .toast {
   position: fixed;
