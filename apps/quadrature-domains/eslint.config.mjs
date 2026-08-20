@@ -53,19 +53,32 @@ const QD_GLOBALS = {
   katex: 'readonly',
 };
 
-// Kernels that are genuine script-scope globals in the classic `<script>` world
-// (complex.js / taylor.js declare them at top level; every other classic script
-// reads the bare name) but MUST be imported in real ESM — an `.mjs` module gets
-// them only via `import { Complex } from '../core/complex.mjs'`. Keeping them in
-// the `.mjs` global allowlist made `no-undef` treat a forgotten import as fine:
-// that is exactly how `solver-pqd-common.mjs` shipped `Complex.*` calls with no
-// import, throwing "ReferenceError: Complex is not defined" from the bundled
-// worker (the test harness masked it by leaking Complex onto globalThis, which
-// the production bundle has no equivalent of). Dropping them here for `.mjs` only
-// makes `no-undef` catch the missing import at author time. Verified zero
-// existing `.mjs` violations before enabling (bare Complex/Taylor references are
-// all `QD.Complex`-style member access or the defining module's own binding).
-const ESM_MUST_IMPORT = ['Complex', 'Taylor'];
+// Shared computational kernels / engine namespaces that are genuine script-scope
+// globals in the classic `<script>` world (complex.js / taylor.js declare them at
+// top level; other classic scripts read the bare name) but MUST be imported in
+// real ESM — an `.mjs` module gets them only via
+// `import { Complex } from '../core/complex.mjs'` (or reads them off the imported
+// `QD` namespace as `QD.Schwarz`). Keeping them in the `.mjs` global allowlist
+// made `no-undef` treat a forgotten import as fine: that is exactly how
+// `solver-pqd-common.mjs` shipped `Complex.*` calls with no import, throwing
+// "ReferenceError: Complex is not defined" from the bundled worker (the test
+// harness masked it by leaking Complex onto globalThis, which the production
+// bundle has no equivalent of). Dropping them from the `.mjs` allowlist makes
+// `no-undef` catch a missing import at author time.
+//
+// Verified zero existing `.mjs` violations before enabling: every bare reference
+// to these names is `QD.<name>`-style member access, an `import`, or the defining
+// module's own binding — none is a free global read.
+//
+// Deliberately NOT dropped (they ARE ambient at runtime in `.mjs`, not import
+// bugs): `QD` — the mutable namespace attached to `window.QD` and read bare in 23
+// spots; `math` / `katex` — CDN globals. Removing those would be false positives
+// (or a much larger import-refactor), not a blind-spot fix.
+const ESM_MUST_IMPORT = [
+  'Complex', 'Taylor',                                  // core/complex.mjs, core/taylor.mjs
+  'Schwarz', 'Direct', 'LqdCommon',                     // solver-side engine namespaces
+  'SphereCommon', 'Sphere', 'ParamSlice', 'ParamSlicePool', // sphere / param-slice engines
+];
 const ESM_GLOBALS = { ...QD_GLOBALS };
 for (const name of ESM_MUST_IMPORT) delete ESM_GLOBALS[name];
 
