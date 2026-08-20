@@ -53,6 +53,22 @@ const QD_GLOBALS = {
   katex: 'readonly',
 };
 
+// Kernels that are genuine script-scope globals in the classic `<script>` world
+// (complex.js / taylor.js declare them at top level; every other classic script
+// reads the bare name) but MUST be imported in real ESM — an `.mjs` module gets
+// them only via `import { Complex } from '../core/complex.mjs'`. Keeping them in
+// the `.mjs` global allowlist made `no-undef` treat a forgotten import as fine:
+// that is exactly how `solver-pqd-common.mjs` shipped `Complex.*` calls with no
+// import, throwing "ReferenceError: Complex is not defined" from the bundled
+// worker (the test harness masked it by leaking Complex onto globalThis, which
+// the production bundle has no equivalent of). Dropping them here for `.mjs` only
+// makes `no-undef` catch the missing import at author time. Verified zero
+// existing `.mjs` violations before enabling (bare Complex/Taylor references are
+// all `QD.Complex`-style member access or the defining module's own binding).
+const ESM_MUST_IMPORT = ['Complex', 'Taylor'];
+const ESM_GLOBALS = { ...QD_GLOBALS };
+for (const name of ESM_MUST_IMPORT) delete ESM_GLOBALS[name];
+
 // Shared no-unused-vars rule: ignore `_`-prefixed names, catch-block
 // exception bindings, and function args entirely. The codebase
 // deliberately uses unused args to document API shape (e.g. a
@@ -160,7 +176,7 @@ export default [
         ...browserGlobalsClean,
         ...globals.worker,
         ...globals.node,
-        ...QD_GLOBALS,
+        ...ESM_GLOBALS,                 // QD_GLOBALS minus kernels that MUST be imported in ESM
       },
     },
     rules: {
