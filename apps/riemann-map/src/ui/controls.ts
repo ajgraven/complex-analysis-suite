@@ -437,7 +437,7 @@ export function createControls(initialExpr: string): Controls {
   const fitBtn = document.createElement("button");
   fitBtn.type = "button";
   fitBtn.textContent = "Fit";
-  fitBtn.title = "Re-frame the disk pane to the current disk";
+  fitBtn.title = "Re-frame both panes — the disk pane to the current disk, the image pane back to auto-fit";
   navButtons.append(navApply, fitBtn);
   navGroup.el.append(navGrid, navButtons);
 

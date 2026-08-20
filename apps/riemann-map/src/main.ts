@@ -324,6 +324,10 @@ function main(): void {
   let regionDirty = true; // (re)fit the forward map g when the region source or domain changes
   let fitPending = true; // fit the disk pane to the actual pane aspect on first paint (1.5)
   let linkDirty = true;
+  // The right (image) pane's own view: it auto-frames to the image's bounds until the user pans/zooms it,
+  // then `imageViewport` drives it (session-only — not serialized; the "Fit" button restores auto-fit).
+  let imageViewport: ViewportState = { centerRe: 0, centerIm: 0, zoom: 1 };
+  let imageAutoFit = true;
 
   const IMPORT_LOG_R = 0.9; // exterior grid reach for an imported map (r up to e^0.9 ≈ 2.46)
   const diskSourceIsRegion = (): boolean => state.render.diskSource === "region";
@@ -859,6 +863,19 @@ function main(): void {
     }
   }
 
+  /** Frame the right (image) pane. While auto-fit is on (and no vertex drag is freezing it) it fits `target`
+   *  and mirrors the result into `imageViewport`, so a first user pan/zoom continues from the framed view;
+   *  once the user has grabbed the pane, `imageViewport` drives it. */
+  function frameImagePane(target: { minx: number; maxx: number; miny: number; maxy: number }): void {
+    if (imageAutoFit && !scDragging) {
+      rightPane.fitBounds(target);
+      const v = rightPane.view();
+      imageViewport = { centerRe: v.centerRe, centerIm: v.centerIm, zoom: 1 / v.halfSpan };
+    } else {
+      rightPane.setCenterSpan(imageViewport.centerRe, imageViewport.centerIm, 1 / imageViewport.zoom);
+    }
+  }
+
   function drawOverlays(): void {
     // Both modes are two-pane (source + linked image), so the stage is always split. Toggle split FIRST,
     // then size the left overlay: the pane's final (half) width must be in effect before resize() reads it,
@@ -888,9 +905,9 @@ function main(): void {
         const b =
           (lineMode ? bounds(diskImgLines) : bounds([{ color: "", pts: cellPts(diskImageCells) }])) ??
           ({ minx: -1, maxx: 1, miny: -1, maxy: 1 } as const);
-        // Freeze the auto-fit while dragging a vertex here (Ω is this pane) so the shape doesn't slide out
-        // from under the cursor; on release it re-fits to the edited shape.
-        if (!scDragging) rightPane.fitBounds(b);
+        // Frame from the interactive view (auto-fit to `b`, or the user's pan/zoom). A vertex drag freezes
+        // it so the shape doesn't slide out from under the cursor; on release it re-fits to the edited shape.
+        frameImagePane(b);
         rightPane.clear();
         if (lineMode) rightPane.drawLines(diskImgLines, 1.1);
         else rightPane.fillCells(diskImageCells, 0.6);
@@ -908,7 +925,7 @@ function main(): void {
       drawCornerDots(leftOverlay);
       leftOverlay.drawScaleBar();
       if (rightPane.resize()) {
-        rightPane.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
+        frameImagePane({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
         rightPane.clear();
         rightPane.drawLines(domainImage, 1.1);
         if (cursorZ && domainMap) rightPane.drawMarker(domainMap.eval([cursorZ[0], cursorZ[1]]), CURSOR_COLOR);
@@ -960,7 +977,8 @@ function main(): void {
       ov.drawLines(domainSource, 1.4);
     });
     const right = makePane((ov) => {
-      ov.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
+      if (imageAutoFit) ov.fitBounds({ minx: -1, maxx: 1, miny: -1, maxy: 1 });
+      else ov.setCenterSpan(imageViewport.centerRe, imageViewport.centerIm, 1 / imageViewport.zoom);
       ov.drawLines(domainImage, 1.4);
     });
 
@@ -1022,7 +1040,8 @@ function main(): void {
       const b =
         (lineMode ? bounds(diskImgLines) : bounds([{ color: "", pts: cellPts(diskImageCells) }])) ??
         ({ minx: -1, maxx: 1, miny: -1, maxy: 1 } as const);
-      ov.fitBounds(b);
+      if (imageAutoFit) ov.fitBounds(b);
+      else ov.setCenterSpan(imageViewport.centerRe, imageViewport.centerIm, 1 / imageViewport.zoom);
       if (lineMode) ov.drawLines(diskImgLines, 1.4);
       else ov.fillCells(diskImageCells, 1);
       ov.drawLines([{ color: bCol, pts: diskUnitImg }], 2);
@@ -1078,6 +1097,7 @@ function main(): void {
       // Fit the disk pane to the ACTUAL pane aspect (now that drawOverlays has sized the overlay). 1.5.
       if (fitPending) {
         fitPending = false;
+        imageAutoFit = true; // a reframe (mode / shape / source / side / layout / Fit) re-frames BOTH panes
         const w = overlayCanvas.width;
         const h = overlayCanvas.height;
         const aspect = w > 0 && h > 0 ? w / h : 1;
@@ -1260,9 +1280,12 @@ function main(): void {
   controls.onSavePng(() => void (modeIsDiskImage(state.render.mode) ? exportDiskPlate() : exportDomainPlate()));
   controls.onResetView(() => {
     if (modeIsDiskImage(state.render.mode)) {
-      fitPending = true; // reset = re-fit the disk pane
+      fitPending = true; // reset = re-fit the disk pane (the fitPending block also restores the image pane)
       schedule();
-    } else setViewport({ ...DEFAULT_VIEW_STATE.viewport });
+    } else {
+      imageAutoFit = true; // re-frame the image pane too (domain-map's fitPending isn't set here)
+      setViewport({ ...DEFAULT_VIEW_STATE.viewport });
+    }
   });
   controls.onApplyViewport((re, im, zoom) => setViewport({ centerRe: re, centerIm: im, zoom }));
 
@@ -1452,6 +1475,7 @@ function main(): void {
     }
     if (hit < 0) return;
     e.preventDefault();
+    e.stopImmediatePropagation(); // preempt the image pane's pan for this vertex drag
     if (!ensureCustomEditable()) return;
     runVertexDrag(hit, (ev) => rightPane.clientToWorld(ev.clientX, ev.clientY), imageCanvas);
   });
@@ -1527,6 +1551,14 @@ function main(): void {
   // there (wheel-zoom, about the centre, stays for grid detail). Expression + import sources keep pan.
   attachPanZoom(canvas, () => state.viewport, setViewport, {
     panEnabled: () => !(modeIsDiskImage(state.render.mode) && diskSourceIsRegion()),
+  });
+  // The right (image) pane is freely pan/zoomable; a grab starts a manual view (auto-fit off until "Fit").
+  // Registered AFTER the vertex-drag pointerdown above so grabbing a corner (stopImmediatePropagation)
+  // preempts the pan.
+  attachPanZoom(imageCanvas, () => imageViewport, (v) => {
+    imageViewport = v;
+    imageAutoFit = false;
+    schedule();
   });
   window.addEventListener("resize", () => invalidate());
 
