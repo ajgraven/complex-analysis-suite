@@ -44,6 +44,12 @@ export class Overlay2D {
     this.halfSpan = halfSpan;
   }
 
+  /** The pane's current view (centre + world half-height) — e.g. read back after `fitBounds` to seed an
+   *  interactive viewport so a first pan/zoom continues seamlessly from the auto-framed position. */
+  view(): { centerRe: number; centerIm: number; halfSpan: number } {
+    return { centerRe: this.centerRe, centerIm: this.centerIm, halfSpan: this.halfSpan };
+  }
+
   /** Auto-fit the view to a bounding box (with padding), given the canvas aspect. */
   fitBounds(b: { minx: number; maxx: number; miny: number; maxy: number }, padding = 1.12): void {
     const aspect = this.aspect();

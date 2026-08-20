@@ -9,7 +9,7 @@
 // accuracy (= exact / ≈ numerical). Notation (𝔻, Ω, φ) rides alongside the plain words, never instead.
 import katex from "katex";
 import "katex/dist/katex.min.css";
-import { MAP_PRESETS, presetIdForExpr } from "../presets.js";
+import { MAP_PRESETS, EXTERIOR_MAP_PRESETS, presetIdForExpr, type MapPreset } from "../presets.js";
 import { DOMAIN_PRESETS } from "../domains.js";
 
 /** A prominent, glanceable summary of the conformal engine that produced the current map. */
@@ -274,16 +274,29 @@ export function createControls(initialExpr: string): Controls {
   const mapSection = document.createElement("section");
   const preset = document.createElement("select");
   preset.className = "preset";
-  for (const p of MAP_PRESETS) {
-    const opt = document.createElement("option");
-    opt.value = p.id;
-    opt.textContent = p.name;
-    preset.append(opt);
-  }
-  const customOpt = document.createElement("option");
-  customOpt.value = CUSTOM;
-  customOpt.textContent = "Custom…";
-  preset.append(customOpt);
+  // The formula gallery follows the Disk toggle: interior 𝔻 (default) ⇄ exterior 𝔻*. `activeGallery`
+  // is the one currently offered; the picker's options and the typed-edit sync both read from it.
+  let activeGallery: readonly MapPreset[] = MAP_PRESETS;
+  const fillPresetOptions = (gallery: readonly MapPreset[]): void => {
+    preset.replaceChildren();
+    for (const p of gallery) {
+      const opt = document.createElement("option");
+      opt.value = p.id;
+      opt.textContent = p.name;
+      preset.append(opt);
+    }
+    const c = document.createElement("option");
+    c.value = CUSTOM;
+    c.textContent = "Custom…";
+    preset.append(c);
+  };
+  fillPresetOptions(activeGallery);
+  /** Point the picker at the gallery for `side` and re-sync it to the current formula. */
+  const applyGallery = (side: string): void => {
+    activeGallery = side === "exterior" ? EXTERIOR_MAP_PRESETS : MAP_PRESETS;
+    fillPresetOptions(activeGallery);
+    syncPreset(input.value);
+  };
   const exprLabel = document.createElement("span");
   exprLabel.className = "field-label";
   exprLabel.append(document.createTextNode("Map "));
@@ -424,7 +437,7 @@ export function createControls(initialExpr: string): Controls {
   const fitBtn = document.createElement("button");
   fitBtn.type = "button";
   fitBtn.textContent = "Fit";
-  fitBtn.title = "Re-frame the disk pane to the current disk";
+  fitBtn.title = "Re-frame both panes — the disk pane to the current disk, the image pane back to auto-fit";
   navButtons.append(navApply, fitBtn);
   navGroup.el.append(navGrid, navButtons);
 
@@ -488,13 +501,28 @@ export function createControls(initialExpr: string): Controls {
   });
   preset.addEventListener("change", () => {
     if (preset.value === CUSTOM) return;
-    const p = MAP_PRESETS.find((m) => m.id === preset.value);
+    const p = activeGallery.find((m) => m.id === preset.value);
     if (!p) return;
     input.value = p.expr;
     exprListeners.forEach((cb) => cb(p.expr));
   });
   shapeSel.addEventListener("change", () => shapeListeners.forEach((cb) => cb(shapeSel.value)));
-  diskSide.select.addEventListener("change", () => diskSideListeners.forEach((cb) => cb(diskSide.select.value)));
+  diskSide.select.addEventListener("change", () => {
+    const side = diskSide.select.value;
+    // Was the user looking at a stock preset (vs a hand-typed formula) before the toggle?
+    const wasStockPreset = presetIdForExpr(input.value, activeGallery) !== null;
+    diskSideListeners.forEach((cb) => cb(side));
+    applyGallery(side); // swap the offered gallery to the new side + re-sync the picker
+    // Switching sides makes the old formula meaningless (an interior map on 𝔻*, or vice-versa). If the
+    // user hadn't hand-authored anything, load the new side's canonical map so the toggle shows a real
+    // map for that side; a hand-typed custom formula is preserved untouched (picker shows "Custom…").
+    if (wasStockPreset && activeGallery.length) {
+      const first = activeGallery[0];
+      input.value = first.expr;
+      syncPreset(first.expr);
+      exprListeners.forEach((cb) => cb(first.expr));
+    }
+  });
   const syncShowVisibility = (): void => {
     const isDisk = ctxVis !== "region-r2d";
     diskShow.field.style.display = isDisk && diskStyle.select.value === "lines" ? "" : "none";
@@ -538,7 +566,7 @@ export function createControls(initialExpr: string): Controls {
   }
 
   function syncPreset(expr: string): void {
-    preset.value = presetIdForExpr(expr) ?? CUSTOM;
+    preset.value = presetIdForExpr(expr, activeGallery) ?? CUSTOM;
   }
 
   function renderMethod(card: MethodCard | null): void {
@@ -628,6 +656,7 @@ export function createControls(initialExpr: string): Controls {
     },
     setDiskSide(id: string): void {
       diskSide.select.value = id;
+      applyGallery(id); // programmatic set (boot / permalink restore): swap gallery + re-sync, no auto-load
     },
     setDiskStyle(id: string): void {
       diskStyle.select.value = id;
