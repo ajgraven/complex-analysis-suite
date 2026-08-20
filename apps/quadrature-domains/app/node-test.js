@@ -50,6 +50,10 @@ const TESTS = [
   'expr-parser',
   'define-subst',
   'cardioid-uniqueness',
+  // Runs in a spawned CLEAN realm (see the file header): catches an un-imported
+  // kernel in the worker graph — invisible to every test above, which runs after
+  // bootstrap leaks the kernels onto globalThis.
+  'worker-graph-cleanrealm',
 ];
 // Note: manifest.test (retired with asset-manifest at the flip) and the jsdom DOM tests
 // (ui-domain-plot, schwarz-ui) moved to Vitest — the latter import the .mjs in a jsdom env
@@ -94,6 +98,7 @@ const FLOORS = {
   riemann: 15, 'parse-check': 3, 'h-text-roundtrip': 15, worker: 3,
   'ui-inputs': 30, cmax: 3, observables: 5, 'sym-core': 250, 'sym-radical': 45, 'qd-equations': 60, 'qd-constraints': 16,
   'algebra-store': 220, 'cas-export': 33, 'expr-parser': 18, 'define-subst': 36, 'cardioid-uniqueness': 19,
+  'worker-graph-cleanrealm': 2,
 };
 const DEFAULT_FLOOR = 3;
 

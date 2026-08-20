@@ -1,4 +1,5 @@
 // ESM (Phase 2 port). Registers onto the QD namespace.
+import { Complex } from '../core/complex.mjs';
 import _QD from './solver.mjs';
 // =============================================================================
 // solver-pqd-common.js -- Shared machinery for the four power-weighted QD
