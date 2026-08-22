@@ -12,9 +12,11 @@ import { interiorAngles } from "@cas/conformal";
 import { F_PRESETS, MENU_PRESETS, phiPresetById } from "./presets.js";
 import { cornerNorms, polygonMap, type CornerNorms, type PolygonMapResult } from "./polygon.js";
 import { createPolygonEditor } from "./render/polygonEditor.js";
+import { rawVertexFromHandleDrag } from "./handleEdit.js";
 import {
   boundaryK,
   compileExprF,
+  evalPhi,
   evalRational,
   exprToRational,
   monomialTaylor,
@@ -44,7 +46,7 @@ import {
   viewPxToWorld,
   zoomAboutCursor,
 } from "./render/plane.js";
-import type { Vec2, Viewport } from "./render/plane.js";
+import type { Vec2, Viewport, PlaneMap } from "./render/plane.js";
 import { fillPhasePortrait, DEFAULT_COLORING } from "./render/coloring.js";
 import type { ColoringOptions } from "./render/coloring.js";
 import { computeCornerProfile, drawCornerProfile } from "./render/cornerProfile.js";
@@ -65,6 +67,7 @@ import {
   MIN_SUPPRESS_M,
   MAX_SUPPRESS_M,
   DEFAULT_SUPPRESS_M,
+  MAX_POLYGON_COORD,
   decodeFaberState,
   encodeFaberState,
 } from "./viewState.js";
@@ -120,6 +123,40 @@ interface RenderModel {
   readonly blank?: boolean;
   /** The M3 corner-overshoot profile along ∂K (monomial input on a polygonal K); undefined ⇒ panel hidden. */
   readonly cornerProfile?: CornerProfile;
+  /**
+   * Draggable vertex-handle positions (world) on the right (K) panel — the canonical corners φ(wₖ) of a
+   * CUSTOM polygon domain, for in-panel editing. Undefined for presets / a failed fit ⇒ no handles.
+   */
+  readonly rightHandles?: Vec2[];
+}
+
+const HANDLE_HIT_PX = 9; // pointer-to-handle grab radius on the K panel (px)
+
+/** Draw the draggable vertex handles (dots) at world points on the K panel; `active` is highlighted. */
+function drawHandles(ctx: CanvasRenderingContext2D, map: PlaneMap, handles: readonly Vec2[], active: number): void {
+  for (let i = 0; i < handles.length; i++) {
+    const [x, y] = map.toPx(handles[i]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, 2 * Math.PI);
+    ctx.fillStyle = i === active ? "#ffd479" : "#eaf0ff";
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(0,0,0,0.55)";
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** Canvas fraction (fx from left, fyTop from top) of a world point under `view` — inverse of viewPxToWorld. */
+function worldToFrac(view: Viewport, world: Vec2, aspect: number): { fx: number; fyTop: number } {
+  const halfH = BASE_HALF / view.zoom;
+  const halfW = halfH * aspect;
+  return {
+    fx: (world[0] - view.centerRe) / (2 * halfW) + 0.5,
+    fyTop: 0.5 - (world[1] - view.centerIm) / (2 * halfH),
+  };
 }
 
 function unitCircle(samples = 256): Vec2[] {
@@ -177,7 +214,13 @@ function makePanel(title: string): { panel: Panel; el: HTMLElement } {
   return { panel: { gl, ov, renderer: null }, el: box };
 }
 
-function paintPanel(panel: Panel, view: Viewport, m: PanelModel, coloring: ColoringOptions): void {
+function paintPanel(
+  panel: Panel,
+  view: Viewport,
+  m: PanelModel,
+  coloring: ColoringOptions,
+  overlay?: (ctx: CanvasRenderingContext2D, map: PlaneMap) => void,
+): void {
   const ov = fit2d(panel.ov);
   if (!ov) return;
   const map = planeMap(view, ov.w, ov.h);
@@ -221,6 +264,7 @@ function paintPanel(panel: Panel, view: Viewport, m: PanelModel, coloring: Color
   for (const c of m.curves) drawPolyline(ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
   for (const r of m.roots) drawRootMarker(ctx, map, r);
   for (const mk of m.markers) drawDot(ctx, map, mk.w, mk.color, 4);
+  if (overlay) overlay(ctx, map);
 }
 
 function main(): void {
@@ -255,7 +299,7 @@ function main(): void {
   for (const p of MENU_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
   phiSel.append(elt("option", { value: CUSTOM_PHI }, "Custom polygon (edit)…"));
   const phiCtl = elt("div", { class: "control" });
-  phiCtl.append(elt("label", { for: "phi" }, "Domain φ: 𝔻* → Ω"), phiSel);
+  phiCtl.append(mathElt("label", "Domain φ: 𝔻^{*} → Ω", { for: "phi" }), phiSel);
 
   const shapeInput = elt("input", { id: "shape", type: "range", step: "0.01" });
   const shapeLabel = elt("label", { for: "shape" }, "shape");
@@ -403,7 +447,9 @@ function main(): void {
     return customFit.result;
   }
 
-  const blankPanel: PanelModel = { source: { kind: "fn", g: () => ({ re: 0, im: 0 }) }, maskDisk: false, curves: [], markers: [], roots: [] };
+  // A hard-failure panel: `g` returns a non-finite value so fillPhasePortrait paints the neutral panel
+  // background (NOT a phase color) — a fit failure reads as blank, not a solid red field (arg 0 → red).
+  const blankPanel: PanelModel = { source: { kind: "fn", g: () => ({ re: NaN, im: NaN }) }, maskDisk: false, curves: [], markers: [], roots: [] };
 
   function computeModel(): RenderModel {
     // Resolve the domain: a closed-form/regular preset, or the editor's custom polygon (fitted).
@@ -411,6 +457,8 @@ function main(): void {
     let approx: boolean;
     let cornerN: CornerNorms | undefined;
     let cornerImages: readonly Cx[] = []; // wₖ = φ(zₖ) on |w|=1, for the M3 weighted Faber Q_{n,m}
+    // Draggable in-panel handles: the canonical corners φ(wₖ) of a converged CUSTOM polygon (undefined otherwise).
+    let handles: Vec2[] | undefined;
     if (state.phi === CUSTOM_PHI && state.customPolygon) {
       const r = getCustomMap(state.customPolygon);
       domainStatus = { converged: r.converged, degraded: r.degraded };
@@ -424,6 +472,11 @@ function main(): void {
       approx = true;
       cornerN = cornerNorms(interiorAngles(state.customPolygon.map((v): [number, number] => [v[0], v[1]])));
       cornerImages = r.cornerImages;
+      // Corner positions on the drawn ∂K = φ(wₖ) — the handles the user grabs to reshape the polygon.
+      handles = r.cornerImages.map((w): Vec2 => {
+        const p = evalPhi(r.map, w);
+        return [p.re, p.im];
+      });
     } else {
       const preset = phiPresetById(state.phi);
       map = preset.build(state.shape);
@@ -475,6 +528,7 @@ function main(): void {
         readout,
         error: false,
         cornerProfile,
+        rightHandles: handles,
       };
     }
     if (state.input.kind === "pole") {
@@ -499,6 +553,7 @@ function main(): void {
           (order === 1 ? `,  residue φ'(z_{0}) = ${fmt(img.terms[0])}` : "") +
           domainNote,
         error: false,
+        rightHandles: handles,
       };
     }
     // expr
@@ -522,6 +577,7 @@ function main(): void {
             ? `${PHI}(f)(w) ≈ rational image on K, truncated to degree ${GPU_COEFF_CAP - 1} (GPU coefficient cap)  ·  ${Math.max(0, rat.den.length - 1)} image pole(s)${domainNote}`
             : `${PHI}(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_{j}) ∈ Ω (outside K)${domainNote}`,
           error: false,
+          rightHandles: handles,
         };
       } catch (e) {
         return { left: blankPanel, right: blankPanel, badge: "⚠", readout: e instanceof Error ? e.message : "f is not analytic on the unit disk", error: true };
@@ -551,6 +607,7 @@ function main(): void {
       badge: "≈",
       readout: `${PHI}(f) ≈ Σ_{n≤${effN}} b_{n} F_{n}  ·  ${coeffNote}${orderNote}  ·  ${rNote}${domainNote}`,
       error: false,
+      rightHandles: handles,
     };
   }
 
@@ -639,14 +696,20 @@ function main(): void {
       modelKey = key;
     }
     exactBadge.textContent = model.badge;
+    // State-coloured badge: exact `=` green, approximate `≈` accent-blue, warning `⚠` amber.
+    exactBadge.className = "badge-exact " + (model.badge === "=" ? "is-exact" : model.badge === "⚠" ? "is-warn" : "is-approx");
     setMath(readoutBody, model.readout);
     syncControls();
     // A soft error (expr parse mid-typing) keeps the last good render; a hard failure (a degenerate polygon
     // fit, `blank`) falls through to paint the blank panels so a "⚠" badge never sits over a stale image.
     if (model.error && !model.blank) return;
     const coloring = state.coloring ?? DEFAULT_COLORING;
+    const rightHandles = model.rightHandles;
+    const handleOverlay = rightHandles
+      ? (ctx: CanvasRenderingContext2D, map: PlaneMap): void => drawHandles(ctx, map, rightHandles, -1)
+      : undefined;
     paintPanel(left.panel, state.zView, model.left, coloring);
-    paintPanel(right.panel, state.wView, model.right, coloring);
+    paintPanel(right.panel, state.wView, model.right, coloring, handleOverlay);
     if (model.cornerProfile) {
       profileWrap.style.display = "";
       drawCornerProfile(profileCanvas, model.cornerProfile);
@@ -663,6 +726,54 @@ function main(): void {
     hashTimer = window.setTimeout(() => history.replaceState(null, "", encodeFaberState(state)), 200);
   }
 
+  // --- In-panel polygon editing (custom domain): drag a corner directly on the K panel ---------------
+  // The K panel shows the CANONICAL polygon (centred/rotated/scaled by the SC fit), so a dragged corner is
+  // mapped back to the raw editor vertex via the similarity (handleEdit.ts). The SC refit runs on release
+  // (matching the separate editor's commit-on-release); the drag itself just previews a straight-edge outline.
+  /** Live preview during a handle drag: repaint the frozen K portrait with the reshaped outline + handles. */
+  function previewVertexDrag(index: number, world: Vec2): void {
+    if (!model || !model.rightHandles) return;
+    const pts = model.rightHandles.map((h, i): Vec2 => (i === index ? world : h));
+    const coloring = state.coloring ?? DEFAULT_COLORING;
+    paintPanel(right.panel, state.wView, model.right, coloring, (ctx, map) => {
+      if (pts.length >= 2) {
+        ctx.save();
+        ctx.beginPath();
+        const [x0, y0] = map.toPx(pts[0]);
+        ctx.moveTo(x0, y0);
+        for (let i = 1; i < pts.length; i++) {
+          const [x, y] = map.toPx(pts[i]);
+          ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.strokeStyle = "rgba(255,212,121,0.9)";
+        ctx.lineWidth = 1.6;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.restore();
+      }
+      drawHandles(ctx, map, pts, index);
+    });
+  }
+
+  /** Commit a handle drag: map the cursor (canonical) back to a raw vertex, refit, and sync the editor. */
+  function commitVertexDrag(index: number, world: Vec2): void {
+    if (state.phi !== CUSTOM_PHI || !state.customPolygon || !model?.rightHandles) {
+      render();
+      return;
+    }
+    const raw = state.customPolygon.map((v): Vec2 => [v[0], v[1]]);
+    const rawV = rawVertexFromHandleDrag(raw, model.rightHandles, world);
+    if (!rawV || !Number.isFinite(rawV[0]) || !Number.isFinite(rawV[1])) {
+      render(); // undetermined similarity — discard the preview
+      return;
+    }
+    const clamp = (x: number): number => Math.max(-MAX_POLYGON_COORD, Math.min(MAX_POLYGON_COORD, x));
+    const next = raw.map((v, i): [number, number] => (i === index ? [clamp(rawV[0]), clamp(rawV[1])] : [v[0], v[1]]));
+    editor.setPolygon(next); // keep the separate editor's handles in sync
+    commit({ ...state, phi: CUSTOM_PHI, customPolygon: next });
+  }
+
   // --- Pan / zoom (per panel; the overlay canvas is on top and receives pointer events) --------------
   const viewOf = (which: "zView" | "wView"): Viewport => (which === "zView" ? state.zView : state.wView);
   const withView = (which: "zView" | "wView", vp: Viewport): FaberViewState =>
@@ -673,24 +784,72 @@ function main(): void {
     return { fx: (e.clientX - r.left) / Math.max(1, r.width), fyTop: (e.clientY - r.top) / Math.max(1, r.height), aspect: r.width / Math.max(1, r.height) };
   }
 
-  function attachNav(canvas: HTMLCanvasElement, which: "zView" | "wView"): void {
+  /** Optional in-panel vertex editing (the right/K panel, custom domain): grab a handle to reshape K. */
+  interface EditHooks {
+    /** Is vertex editing live right now (custom domain, converged fit)? */
+    active: () => boolean;
+    /** Current handle world positions (the canonical K corners). */
+    handles: () => readonly Vec2[];
+    /** Live redraw while dragging handle `index` to `world`. */
+    preview: (index: number, world: Vec2) => void;
+    /** Finish the drag (refit) with handle `index` at `world`. */
+    commit: (index: number, world: Vec2) => void;
+  }
+
+  function attachNav(canvas: HTMLCanvasElement, which: "zView" | "wView", edit?: EditHooks): void {
     let grab: Vec2 | null = null;
+    let dragVertex = -1;
+    const worldAt = (f: { fx: number; fyTop: number; aspect: number }): Vec2 => viewPxToWorld(viewOf(which), f.fx, f.fyTop, f.aspect);
+    // Nearest editable handle under the cursor (within HANDLE_HIT_PX), or -1.
+    const handleAt = (f: { fx: number; fyTop: number; aspect: number }): number => {
+      if (!edit || !edit.active()) return -1;
+      const view = viewOf(which);
+      const rect = canvas.getBoundingClientRect();
+      const hs = edit.handles();
+      let best = -1;
+      let bestD = HANDLE_HIT_PX;
+      for (let i = 0; i < hs.length; i++) {
+        const { fx, fyTop } = worldToFrac(view, hs[i], f.aspect);
+        const d = Math.hypot((fx - f.fx) * rect.width, (fyTop - f.fyTop) * rect.height);
+        if (d <= bestD) {
+          bestD = d;
+          best = i;
+        }
+      }
+      return best;
+    };
     canvas.addEventListener("pointerdown", (e) => {
       const f = pointerFrac(canvas, e);
-      grab = viewPxToWorld(viewOf(which), f.fx, f.fyTop, f.aspect);
+      const hit = edit ? handleAt(f) : -1;
       canvas.setPointerCapture(e.pointerId);
+      if (edit && hit >= 0) {
+        dragVertex = hit; // grab a vertex instead of panning
+        edit.preview(hit, worldAt(f));
+        return;
+      }
+      grab = worldAt(f);
     });
     canvas.addEventListener("pointermove", (e) => {
-      if (grab === null) return;
       const f = pointerFrac(canvas, e);
+      if (dragVertex >= 0) {
+        if (edit) edit.preview(dragVertex, worldAt(f));
+        return;
+      }
+      if (grab === null) return;
       commit(withView(which, panTo(viewOf(which), grab, f.fx, f.fyTop, f.aspect)));
     });
-    const end = (e: PointerEvent): void => {
-      grab = null;
+    const end = (e: PointerEvent, doCommit: boolean): void => {
+      if (dragVertex >= 0) {
+        if (doCommit && edit) edit.commit(dragVertex, worldAt(pointerFrac(canvas, e)));
+        else render(); // aborted drag — repaint the committed model
+        dragVertex = -1;
+      } else {
+        grab = null;
+      }
       if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
     };
-    canvas.addEventListener("pointerup", end);
-    canvas.addEventListener("pointercancel", end);
+    canvas.addEventListener("pointerup", (e) => end(e, true));
+    canvas.addEventListener("pointercancel", (e) => end(e, false));
     canvas.addEventListener(
       "wheel",
       (e) => {
@@ -703,7 +862,12 @@ function main(): void {
     );
   }
   attachNav(left.panel.ov, "zView");
-  attachNav(right.panel.ov, "wView");
+  attachNav(right.panel.ov, "wView", {
+    active: () => state.phi === CUSTOM_PHI && !!model && !!model.rightHandles,
+    handles: () => model?.rightHandles ?? [],
+    preview: previewVertexDrag,
+    commit: commitVertexDrag,
+  });
 
   // --- Control events -------------------------------------------------------
   /** Frame the K-panel to a domain's boundary extent (used for the custom polygon, whose size varies). */

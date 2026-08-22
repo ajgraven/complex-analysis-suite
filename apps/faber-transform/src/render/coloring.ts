@@ -21,7 +21,7 @@ export interface ColoringOptions {
 }
 
 export const DEFAULT_COLORING: ColoringOptions = {
-  enhance: 1,
+  enhance: 0, // "none (flat hue)" — a clean phase portrait by default; overlays are opt-in
   sectors: 6,
   crisp: false,
   modulus: 0,

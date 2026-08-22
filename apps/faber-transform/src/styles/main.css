@@ -177,6 +177,20 @@ header.app-head p {
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
+/* Badge colour by result state: exact `=` green, approximate `≈` accent-blue, warning `⚠` amber. */
+.badge-exact.is-exact {
+  background: rgba(126, 231, 135, 0.16);
+  color: #7ee787;
+}
+.badge-exact.is-approx {
+  background: rgba(122, 162, 247, 0.18);
+  color: var(--accent);
+}
+.badge-exact.is-warn {
+  background: rgba(255, 180, 84, 0.18);
+  color: #ffb454;
+}
+
 /* --- Corner-overshoot profile (M3 before/after demo) ---------------------- */
 .corner-profile-wrap {
   margin-top: 0.8rem;
