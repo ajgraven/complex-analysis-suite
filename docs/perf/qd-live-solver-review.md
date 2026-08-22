@@ -288,14 +288,31 @@ floor (~300–500) from `liveSolveStep`; keep the full floor on the debounced fu
 *Symptom:* live-drag (unbounded modes — the flagship deltoid). *Impact:* High (for those
 modes). *Effort:* S. *Risk:* Low.
 
-**O4/S-warm — Pre-warm the solver workers at boot.**
+**O4/S-warm — Pre-warm the solver workers.**
+✅ **IMPLEMENTED (2026-08-22), with a measured design correction.** A new `prewarm.mjs`
+(imported by `main.mjs`) warms the **live (drag) worker lane on the user's first
+`pointerdown`** (once), via a newly-exposed `PSW.ensureLiveReady`, so the first pole/slider
+drag frame doesn't stall on a cold `new Worker(...)` + ~20-module solver-graph parse.
+Verified: the live lane is not spawned at boot and *is* spawned after the first pointerdown.
+
+*Correction to the original recommendation:* eagerly pre-warming the **primary** lane at boot
+was **dropped** — a same-session A/B showed it *regressed* time-to-first-solve by **+55–65 ms
+at 1×** (localhost) and was neutral at 4×, because the boot solve already spawns the primary
+lane, so an extra early `new Worker(...)` only competes with the app-bundle load and wins no
+overlap. The revised live-only, pointerdown-triggered warm is **boot-neutral** (bootWall
+median 297 ms vs 299 ms pre-O4; the eager version was 353 ms) and adds nothing for a visitor
+who never interacts. *Symptom:* first-drag hitch (part of live-drag). *Impact:* Low–Medium
+(first drag only; not measurable in the localhost harness, which never drags — but it removes
+the cold-spawn stall on the first drag and, on a deployed site, overlaps the live-worker
+*network* fetch with the pointerdown gesture). *Effort:* S. *Risk:* Low.
+
+Original diagnosis (for reference):
 `ensureReady()` exists (`primary-solver-worker.mjs:99`) but is **never called at boot** — the
 first `solveAndRender` pays a cold `new Worker(...)` + parse of the whole solver graph
 (`solver-graph.mjs` imports ~20 modules) before Newton starts, and the *live* lane is a
 separate worker spawned lazily on the **first pole drag** (so the first drag frame stalls on
-a cold spawn). *Fix:* call `ensureReady()` right after boot wiring (parallel with UI/URL
-restore); warm the live lane on `pointerdown`. *Symptom:* both (initial-solve; first-drag
-hitch). *Impact:* Medium. *Effort:* S. *Risk:* Low.
+a cold spawn). *(Revised per measurement above — only the live lane is warmed, on pointerdown,
+because eager boot-time warming of the primary lane hurt first-solve.)*
 
 **S2 — Compute the quadrature-identity check lazily in the multistart cascade.**
 `evalCandidate` (`solver.mjs:1514`) computes `isBoundaryUnivalent` then

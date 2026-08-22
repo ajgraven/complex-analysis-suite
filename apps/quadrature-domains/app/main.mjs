@@ -59,6 +59,10 @@ import './qd/qd-equations.mjs';
 import './qd/qd-constraints.mjs';
 import './solvers/primary-solution.mjs';
 import './solvers/primary-solver-worker.mjs';
+// O4: warm the live (drag) worker lane on the user's first pointerdown so the
+// first drag frame isn't the cold spawn. Registers a one-time listener only —
+// no boot-time spawn (that would just slow first solve). See prewarm.mjs.
+import './solvers/prewarm.mjs';
 import './core/qol.mjs';
 import './ui/ui-presets.mjs';
 import './ui/ui-state.mjs';

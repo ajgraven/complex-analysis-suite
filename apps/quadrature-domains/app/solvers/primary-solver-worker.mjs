@@ -280,6 +280,9 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     isAuxBusy: aux.isBusy,
     // Live drag-frame solve — dedicated live worker (Tier-2 pole-drag).
     liveSolve: (hData, initPhi, opts) => live.run(hData, initPhi, opts),
+    // O4 pre-warm: spawn + parse the live lane's worker graph ahead of the first
+    // drag so the first live frame doesn't pay the cold spawn. Idempotent.
+    ensureLiveReady: live.ensureReady,
     cancelLive: live.cancel,
     isLiveBusy: live.isBusy,
     // Deferred geometry/cusp/accuracy work. A newer analysis request terminates
