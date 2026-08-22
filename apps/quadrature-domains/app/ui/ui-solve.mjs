@@ -100,6 +100,15 @@ function scheduleQuickSolve() {
 // cap the per-frame sampling to keep each live frame snappy.
 const LIVE_SAMPLES = 96;
 
+// Reduced boundary-sample budget for the LIVE (drag) path's DISPLAY curve
+// (Tier-1 R2). showSolution used to resample the boundary at full state.samples
+// (500 base + up to 750 adaptive) on the main thread EVERY live frame — and,
+// because every live solve returns a fresh phi, the WeakMap boundary cache never
+// hit mid-drag. The eye can't resolve 500 points on a moving curve, so a live
+// frame draws this many base points with NO adaptive refinement; the drag-end
+// full solve (isPrimary) re-renders at full resolution.
+const LIVE_DISPLAY_SAMPLES = 160;
+
 // Idle-callback deadline (ms) for the deferred heavy analyses (symmetry /
 // critical-set / geometry classification, and boundary observables): run when
 // the main thread next goes idle, but no later than this after scheduling.
@@ -110,6 +119,17 @@ const IDLE_ANALYSIS_TIMEOUT_MS = 250;
 // can't clobber newer state. Mirrors _solveAndRenderToken for the full solve.
 let _liveSolveToken = 0;
 
+// Tier-1 O1 (coalesce-latest): serialize live-solve dispatch so at most one
+// live job is ever in flight. The live worker runs a superseded job to
+// COMPLETION before it reads the next queued message (only the main-thread
+// promise is rejected on supersede), so firing a fresh liveSolve every rAF
+// frame builds a backlog and the drawn boundary lags the cursor by
+// (queue-depth × solve-time). Instead: while a live solve is in flight, mark the
+// lane dirty and return; when it settles, re-solve once from the CURRENT DOM
+// state (the freshest pole positions), never from a stale queued frame.
+let _liveInFlight = false;
+let _liveDirty = false;
+
 // §23 transition cue: the target regime ('singular' | 'non-singular') when the
 // live drag has detected a genuine origin crossing (0's Ω-membership disagrees
 // with the current mode) and the debounced full solve is about to auto-switch —
@@ -118,6 +138,11 @@ let _liveSolveToken = 0;
 let _transitionPending = null;
 
 function quickSolveAndRender() {
+  // O1 coalesce-latest: if a live solve is still running, don't build/dispatch
+  // another (that only backs up the worker). Remember that a newer frame is
+  // pending and re-run from fresh DOM state when the in-flight solve settles.
+  if (_liveInFlight) { _liveDirty = true; return; }
+
   const built = buildHData();
   if (!built || built.error) return;
   const norm = buildNormalization(built);
@@ -174,9 +199,10 @@ function quickSolveAndRender() {
 
   const myToken = ++_liveSolveToken;
   const PSW = QD.PrimarySolverWorker;
-  // Run the live step on the dedicated live worker (cancel-and-replace per
-  // frame); fall back to a synchronous main-thread liveSolveStep when no worker
-  // is available (file:// origin, unit tests).
+  // Run the live step on the dedicated live worker (one job in flight at a time —
+  // see _liveInFlight); fall back to a synchronous main-thread liveSolveStep when
+  // no worker is available (file:// origin, unit tests).
+  _liveInFlight = true;
   const runLive = (PSW && typeof PSW.liveSolve === 'function')
     ? PSW.liveSolve(built, initPhi, liveOpts)
     : Promise.resolve().then(() => QD.liveSolveStep(built, initPhi, liveOpts));
@@ -232,15 +258,27 @@ function quickSolveAndRender() {
       attempts: [],
     };
     state.selectedSolutionIdx = 0;
-    publishPrimarySolution();
+    // O3: do NOT publishPrimarySolution() on live frames. The side cards (Faber,
+    // equation system, thesis oracle, figure-export params) are not the boundary
+    // and their subscribers do real per-frame work (innerHTML rebuilds, Faber
+    // recompute in UQD mode). Every drag gesture ends with a full solveAndRender
+    // (onPoleDragEnd / slider 'change'), which publishes authoritatively.
 
-    showSolution(sol, built, /*isPrimary=*/ false);
+    showSolution(sol, built, /*isPrimary=*/ false, { live: true });
     refreshAlternatesPanel();
-    // Live-refresh the status-panel cards (geometry / cusps / observables) so
-    // they track the drag. Throttled + accuracy-deferred (see scheduleLiveAnalysis);
-    // the drag-end full solve runs the authoritative pass.
+    // O5: status-panel analyses (geometry / cusps / observables) are the heaviest
+    // remaining live-frame cost, so they are SUPPRESSED during a drag by default —
+    // scheduleLiveAnalysis self-gates and only refreshes when a live-drawing
+    // overlay is enabled (and never respawns the analysis worker). The drag-end
+    // full solve (solveAndRender) runs the one authoritative pass.
     scheduleLiveAnalysis();
-  }).catch(() => { /* superseded / aborted live job — ignore */ });
+  }).catch(() => { /* superseded / aborted live job — ignore */ })
+    .finally(() => {
+      // O1: lane free again. If a frame arrived mid-solve, re-solve once from the
+      // now-current DOM state (coalesce-latest) via the rAF scheduler.
+      _liveInFlight = false;
+      if (_liveDirty) { _liveDirty = false; scheduleQuickSolve(); }
+    });
 }
 
 // Token that increments every time solveAndRender() is called. Used to
@@ -641,6 +679,20 @@ function scheduleSymmetry(sol, token) {
 // the drag-end full solve runs the authoritative pass via runStatusAnalyses().
 const LIVE_ANALYSIS_MS = 120;
 function scheduleLiveAnalysis() {
+  // O5: by default, DON'T run status analyses mid-drag. In the common case (no
+  // live-drawing overlay) the geometry/cusps/observables cards are side-panel
+  // text the user isn't reading frame-by-frame, and each live pass cost a
+  // main-thread card re-render + publish fan-out — and, because the analysis lane
+  // is terminateOnSupersede, a pass that didn't finish before the next request
+  // TERMINATED and respawned the analysis worker (re-importing the whole solver
+  // graph) repeatedly during a drag. The drag-end full solve runs the
+  // authoritative pass. Only refresh live when an overlay that actually draws
+  // from the analysis result (curvature / annotated phenomena) is enabled…
+  if (!(state.showCurvature || state.showPhenomena)) return;
+  // …and even then, never terminate+respawn: skip the request while a pass is
+  // still in flight (drop, don't queue), so at most one runs at a time.
+  const PSW = QD.PrimarySolverWorker;
+  if (PSW && typeof PSW.isAnalysisBusy === 'function' && PSW.isAnalysisBusy()) return;
   const now = Date.now();
   if (now - _liveAnalysisLast < LIVE_ANALYSIS_MS) return;
   _liveAnalysisLast = now;
@@ -919,6 +971,12 @@ function renderValidityBadge(sol) {
   const el = $('#sp-badge');
   if (!el) return;
   const b = qdValidityBadge(sol);
+  // Change-guard (keyed on the element so a fresh DOM — e.g. a unit-test mount —
+  // always writes): during a live drag the verdict rarely changes frame-to-frame,
+  // so skip the innerHTML write + layout when it's identical to what's shown.
+  const key = b.cls + '|' + b.text;
+  if (el.dataset.badgeKey === key) return;
+  el.dataset.badgeKey = key;
   el.innerHTML = `<span class="${b.cls}">${escapeHTML(b.text)}</span>`;
 }
 
@@ -956,10 +1014,20 @@ function reflectFamilyMode(family) {
 // true only for the primary solve — alternates being previewed pass false so
 // they don't reframe the viewport. Auto-fit happens iff (state.autoFit &&
 // isPrimary); it is NOT an "autoFit" flag despite some historical call sites.
-function showSolution(sol, hData, isPrimary) {
+function showSolution(sol, hData, isPrimary, opts) {
+  // `live` (Tier-1): true ONLY on the per-frame drag path (quickSolveAndRender).
+  // It is distinct from `isPrimary`: an alternate PREVIEW also passes
+  // isPrimary=false but must still render at full resolution with the formula, so
+  // the cheap live path keys off `live`, never off `!isPrimary`.
+  const live = !!(opts && opts.live);
   perfMark('showSolution:start');
   state.family = null;       // a fresh solution supersedes any family-sweep overlay
-  const boundary = QD.sampleBoundaryAdaptive(sol.phi, state.samples, Math.floor(state.samples * 1.5));
+  // R2: reduced DISPLAY sampling on live (drag) frames — full resolution isn't
+  // visible on a moving curve and the boundary cache never hits mid-drag (fresh
+  // phi each frame). The drag-end full solve re-renders at full res.
+  const displayBase  = live ? Math.min(state.samples, LIVE_DISPLAY_SAMPLES) : state.samples;
+  const displayExtra = live ? 0 : Math.floor(state.samples * 1.5);
+  const boundary = QD.sampleBoundaryAdaptive(sol.phi, displayBase, displayExtra);
   const boundaryPts = boundary.map(p => p.w);
   const poles = hData.poles.map(p => p.a);
   perfMark('showSolution:boundary-sampled');
@@ -981,6 +1049,19 @@ function showSolution(sol, hData, isPrimary) {
 
   if (willAutoFit) plot.fit();
   perfMark('showSolution:plot-fit');
+
+  // R1/O3: the authoritative output card — the KaTeX Riemann-map formula and the
+  // status detail lines (method / iterations / residual / degree / identity) — is
+  // the dominant per-frame main-thread cost and is unreadable while the curve is
+  // moving. On live (drag) frames update only the cheap validity badge (and only
+  // when the verdict actually changed); the drag-end full solve renders the
+  // formula + status once. Alternate PREVIEWS (isPrimary=false, live=false) fall
+  // through and render the formula in full.
+  if (live) {
+    renderValidityBadge(sol);
+    perfMark('showSolution:end');
+    return;
+  }
 
   renderRiemannMap(sol.phi);
   perfMark('showSolution:riemann-rendered');
@@ -1093,7 +1174,6 @@ function renderKatex(el, expr, display) {
 function refreshAlternatesPanel() {
   const card = $('#alternates-card');
   const list = $('#alternates-list');
-  list.innerHTML = '';
 
   const all = state.current.success
     ? [state.current.primary, ...(state.current.alternates || [])]
@@ -1102,7 +1182,15 @@ function refreshAlternatesPanel() {
   // Show the card whenever we have alternates OR a background search is
   // running, so the "searching…" spinner is visible even before any alt is
   // found. Otherwise hide it.
-  if (all.length <= 1 && !state.altSearchActive) {
+  const nothingToShow = all.length <= 1 && !state.altSearchActive;
+  // O3 fast path: during a live drag there are never alternates (alternates:[],
+  // altSearchActive:false), so avoid the per-frame innerHTML clear once the card
+  // is already hidden — the common case throughout a drag.
+  if (nothingToShow && card.classList.contains('hidden')) return;
+
+  list.innerHTML = '';
+
+  if (nothingToShow) {
     card.classList.add('hidden');
     return;
   }

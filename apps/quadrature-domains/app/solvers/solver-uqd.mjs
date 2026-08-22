@@ -48,29 +48,45 @@ import { defineFamily } from './define-family.mjs';
   // ===========================================================================
   // 1. φ evaluation
   // ===========================================================================
+  // S4: scalar re/im hot path (see evalPhi_QD). Same arithmetic — c·z, the
+  // Laurent-at-∞ tail Σ polyA[l]/z^l, and the finite-pole branch tail — with the
+  // Complex.div fast path inlined (operands are O(1), so the divScaled tail is
+  // unreachable); bit-identical on the reachable range, no per-call Complex churn.
   function evalPhi_UQD(z, phi) {
-    let result = Complex.scale(z, phi.c);
-
-    if (phi.polyA && phi.polyA.length > 0) {
-      result = Complex.add(result, phi.polyA[0]);
-      let zPow = Complex.clone(z);                      // z^1
-      for (let l = 1; l < phi.polyA.length; l++) {
-        result = Complex.add(result, Complex.div(phi.polyA[l], zPow));
-        if (l + 1 < phi.polyA.length) zPow = Complex.mul(zPow, z);
+    const zr = z.re, zi = z.im;
+    let re = zr * phi.c, im = zi * phi.c;                 // c·z
+    const polyA = phi.polyA;
+    if (polyA && polyA.length > 0) {
+      re += polyA[0].re; im += polyA[0].im;              // Laurent constant
+      let zpr = zr, zpi = zi;                            // z^l (starts z^1)
+      for (let l = 1; l < polyA.length; l++) {
+        const dd = zpr * zpr + zpi * zpi;                // polyA[l] / z^l
+        const cr = polyA[l].re, ci = polyA[l].im;
+        re += (cr * zpr + ci * zpi) / dd;
+        im += (ci * zpr - cr * zpi) / dd;
+        if (l + 1 < polyA.length) {                      // z^{l+1} = z^l·z
+          const nr = zpr * zr - zpi * zi, ni = zpr * zi + zpi * zr;
+          zpr = nr; zpi = ni;
+        }
       }
     }
-
     for (const br of phi.branches) {
-      const zjC = Complex.conj(br.z);
-      const denom = Complex.sub(Complex.ONE(), Complex.mul(zjC, z));
-      const u = Complex.div(z, denom);
-      let uPow = Complex.ONE();
+      const zjr = br.z.re, zji = -br.z.im;               // conj(z_j)
+      const dr = 1 - (zjr * zr - zji * zi);              // denom = 1 − conj(z_j)·z
+      const di = -(zjr * zi + zji * zr);
+      const dd = dr * dr + di * di;
+      const ur = (zr * dr + zi * di) / dd;               // u = z / denom
+      const ui = (zi * dr - zr * di) / dd;
+      let pr = 1, pi = 0;                                // uPow (×u before each use)
       for (const Ak of br.A) {
-        uPow = Complex.mul(uPow, u);
-        result = Complex.add(result, Complex.mul(Complex.conj(Ak), uPow));
+        const nr = pr * ur - pi * ui, ni = pr * ui + pi * ur;
+        pr = nr; pi = ni;
+        const akr = Ak.re, aki = -Ak.im;                 // conj(A_k)
+        re += akr * pr - aki * pi;
+        im += akr * pi + aki * pr;
       }
     }
-    return result;
+    return { re, im };
   }
 
   // ===========================================================================
@@ -340,19 +356,39 @@ import { defineFamily } from './define-family.mjs';
 
       for (let pIdx = 0; pIdx < testPoints.length; pIdx++) {
         const b = testPoints[pIdx];
-        for (let k = 1; k <= maxOrder; k++) {
-          let lhs = { re: 0, im: 0 };
-          for (let n = 0; n < N; n++) {
-            const s = samples[n];
-            const diff = Complex.sub(s.w, b);
-            const dPow = Complex.pow(diff, k);
-            const fVal = Complex.inv(dPow);
-            let term = Complex.mul(fVal, Complex.conj(s.w));
-            term = Complex.mul(term, s.phiPrime);
-            term = Complex.mul(term, s.z);
-            lhs = Complex.add(lhs, term);
+        const br = b.re, bi = b.im;
+        // S4: accumulate lhs[k] = -(1/N) Σ_n (1/(w−b))^k · conj(w)·φ'·z for every
+        // k in ONE allocation-free, n-outer pass — scalar re/im locals, (w−b)^{-1}
+        // raised to the kth power incrementally (no per-node Complex.pow / inv /
+        // ~6 Complex objects). Numerically the former k-outer loop up to FP
+        // summation order (b is unchanged, so identity residuals are preserved).
+        const lhsRe = new Float64Array(maxOrder + 1);   // indexed by k (1..maxOrder)
+        const lhsIm = new Float64Array(maxOrder + 1);
+        for (let n = 0; n < N; n++) {
+          const s = samples[n];
+          const wr = s.w.re, wi = s.w.im;
+          // g = conj(w) · φ' · z
+          const cr = wr, ci = -wi;
+          const pr = s.phiPrime.re, pi = s.phiPrime.im;
+          const tr = cr * pr - ci * pi, ti = cr * pi + ci * pr;
+          const zr = s.z.re, zi = s.z.im;
+          const gr = tr * zr - ti * zi, gi = tr * zi + ti * zr;
+          // dinv = 1/(w−b); w ∈ ∂Ω, b strictly interior ⇒ w ≠ b ⇒ |w−b|² > 0.
+          const dr = wr - br, di = wi - bi;
+          const dd = dr * dr + di * di;
+          const invr = dr / dd, invi = -di / dd;
+          // Σ_k dinv^k · g, dinv^k built incrementally (dinv^1 = dinv).
+          let dkr = invr, dki = invi;
+          for (let k = 1; k <= maxOrder; k++) {
+            lhsRe[k] += dkr * gr - dki * gi;
+            lhsIm[k] += dkr * gi + dki * gr;
+            const nr = dkr * invr - dki * invi, ni = dkr * invi + dki * invr;
+            dkr = nr; dki = ni;
           }
-          lhs = Complex.scale(lhs, -1 / N);
+        }
+
+        for (let k = 1; k <= maxOrder; k++) {
+          const lhs = { re: -lhsRe[k] / N, im: -lhsIm[k] / N };
 
           let rhs = { re: 0, im: 0 };
           for (const pole of hData.poles) {
