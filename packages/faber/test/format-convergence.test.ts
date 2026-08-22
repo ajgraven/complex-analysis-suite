@@ -15,6 +15,9 @@ describe("formatFaberPoly", () => {
   it("F₁ (disk) renders as \"ζ\"", () => {
     expect(formatFaberPoly(faberPolynomial(phiDisk, 1))).toBe("ζ");
   });
+  it("a custom `sup` renderer replaces the Unicode exponent (for <sup> typesetting)", () => {
+    expect(formatFaberPoly(faberPolynomial(phiJouk, 2), { varSym: "w", sup: (k) => `^{${k}}` })).toBe("w^{2} − 2");
+  });
 });
 
 describe("faberConvergence", () => {
