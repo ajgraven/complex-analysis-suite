@@ -343,19 +343,39 @@ import { defineFamily } from './define-family.mjs';
 
       for (let pIdx = 0; pIdx < testPoints.length; pIdx++) {
         const b = testPoints[pIdx];
-        for (let k = 1; k <= maxOrder; k++) {
-          let lhs = { re: 0, im: 0 };
-          for (let n = 0; n < N; n++) {
-            const s = samples[n];
-            const diff = Complex.sub(s.w, b);
-            const dPow = Complex.pow(diff, k);
-            const fVal = Complex.inv(dPow);
-            let term = Complex.mul(fVal, Complex.conj(s.w));
-            term = Complex.mul(term, s.phiPrime);
-            term = Complex.mul(term, s.z);
-            lhs = Complex.add(lhs, term);
+        const br = b.re, bi = b.im;
+        // S4: accumulate lhs[k] = -(1/N) Σ_n (1/(w−b))^k · conj(w)·φ'·z for every
+        // k in ONE allocation-free, n-outer pass — scalar re/im locals, (w−b)^{-1}
+        // raised to the kth power incrementally (no per-node Complex.pow / inv /
+        // ~6 Complex objects). Numerically the former k-outer loop up to FP
+        // summation order (b is unchanged, so identity residuals are preserved).
+        const lhsRe = new Float64Array(maxOrder + 1);   // indexed by k (1..maxOrder)
+        const lhsIm = new Float64Array(maxOrder + 1);
+        for (let n = 0; n < N; n++) {
+          const s = samples[n];
+          const wr = s.w.re, wi = s.w.im;
+          // g = conj(w) · φ' · z
+          const cr = wr, ci = -wi;
+          const pr = s.phiPrime.re, pi = s.phiPrime.im;
+          const tr = cr * pr - ci * pi, ti = cr * pi + ci * pr;
+          const zr = s.z.re, zi = s.z.im;
+          const gr = tr * zr - ti * zi, gi = tr * zi + ti * zr;
+          // dinv = 1/(w−b); w ∈ ∂Ω, b strictly interior ⇒ w ≠ b ⇒ |w−b|² > 0.
+          const dr = wr - br, di = wi - bi;
+          const dd = dr * dr + di * di;
+          const invr = dr / dd, invi = -di / dd;
+          // Σ_k dinv^k · g, dinv^k built incrementally (dinv^1 = dinv).
+          let dkr = invr, dki = invi;
+          for (let k = 1; k <= maxOrder; k++) {
+            lhsRe[k] += dkr * gr - dki * gi;
+            lhsIm[k] += dkr * gi + dki * gr;
+            const nr = dkr * invr - dki * invi, ni = dkr * invi + dki * invr;
+            dkr = nr; dki = ni;
           }
-          lhs = Complex.scale(lhs, -1 / N);
+        }
+
+        for (let k = 1; k <= maxOrder; k++) {
+          const lhs = { re: -lhsRe[k] / N, im: -lhsIm[k] / N };
 
           let rhs = { re: 0, im: 0 };
           for (const pole of hData.poles) {

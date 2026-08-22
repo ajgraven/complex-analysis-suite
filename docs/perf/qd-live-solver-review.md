@@ -348,6 +348,23 @@ refresh is wanted, drop it when `isAnalysisBusy()` so it never respawns. *Sympto
 ### Tier 3 — Broad structural wins (allocation/GC + solver internals)
 
 **S4 — Kill allocation churn in the numeric hot path.**
+🟡 **PARTIAL (2026-08-22) — verify inner loops done.** Profiling the numeric core (480 full
+solves + 16 000 warm live steps under `node --cpu-prof`) confirmed the hypothesis: GC was
+**15.4 %** of samples, and the identity-verify LHS sum-of-products loops were the top
+self-time (`evalAtN` 17.5 %, `verifyQuadratureIdentity_QD` 5.7 %) — each allocating ~5–7
+`Complex` objects *per boundary node* and calling `Complex.pow` per node. Both loops
+(bounded `solver-qd.mjs` and unbounded `solver-uqd.mjs` `evalAtN`) were rewritten to a
+single allocation-free, `n`-outer pass over scalar `re`/`im` locals with the moment power
+(`w^k` / `(w−b)^{-k}`) accumulated incrementally (no per-node `Complex.pow`). The selected
+test point `b` is unchanged, so identity residuals move only by FP summation order (~1e-15).
+**Result:** numeric-core workload **45.3 s → 32.7 s (−28 %)**, GC **15.4 % → 11.2 %**,
+`evalAtN` 17.5 % → 6.2 %, bounded verify ~−70 % (out of the top 12); heap 32.7 → 23.7 MB.
+Tests green (2342 node-test incl. the exact identity oracles + 1246 vitest / 162 files).
+
+*Remaining S4 (next):* `branchTaylorAccumulate` (now the #1 frame at ~15 %) + `Taylor.mul`/
+`truncate` (~9 %) still allocate per call; and `chooseHoleTestPoints` + `distBoundary`
+(~26 %, unbounded only) run the point-in-polygon / min-distance tests over the *full*
+verify polygon (see the coarse-polygon note below). Original diagnosis:
 `Complex` ships in-place variants (`mulInto`/`addMulInto`/…, `packages/core/src/complex.ts:97`)
 documented "for tight inner loops … to remove allocator + GC pressure" — **but the QD hot
 path uses the allocating functional variants everywhere** (`evalPhi_QD` `solver-qd.mjs:40`;

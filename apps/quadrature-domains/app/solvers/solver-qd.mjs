@@ -281,17 +281,34 @@ import { defineFamily } from './define-family.mjs';
     let maxRelDiff = 0;
     let maxAbsDiff = 0;
 
-    for (let k = 0; k <= K; k++) {
-      let lhs = { re: 0, im: 0 };
-      for (let n = 0; n < N; n++) {
-        const s = samples[n];
-        const wPow = Complex.pow(s.w, k);
-        let term = Complex.mul(wPow, Complex.conj(s.w));
-        term = Complex.mul(term, s.phiPrime);
-        term = Complex.mul(term, s.z);
-        lhs = Complex.add(lhs, term);
+    // S4: accumulate every LHS moment lhs[k] = (1/N) Σ_n w^k·conj(w)·φ'·z in ONE
+    // allocation-free, n-outer pass — scalar re/im locals, w^k built incrementally
+    // (no per-node Complex.pow, no ~5 Complex objects per node). Numerically the
+    // former k-outer loop up to FP summation order (identity residuals stay ~1e-15;
+    // the node-test oracle + golden verify tests guard this).
+    const lhsRe = new Float64Array(K + 1);
+    const lhsIm = new Float64Array(K + 1);
+    for (let n = 0; n < N; n++) {
+      const s = samples[n];
+      const wr = s.w.re, wi = s.w.im;
+      // g = conj(w) · φ' · z
+      const cr = wr, ci = -wi;                                  // conj(w)
+      const pr = s.phiPrime.re, pi = s.phiPrime.im;
+      const tr = cr * pr - ci * pi, ti = cr * pi + ci * pr;     // · φ'
+      const zr = s.z.re, zi = s.z.im;
+      const gr = tr * zr - ti * zi, gi = tr * zi + ti * zr;     // · z
+      // Σ_k w^k · g with w^k accumulated incrementally (w^0 = 1).
+      let wkr = 1, wki = 0;
+      for (let k = 0; k <= K; k++) {
+        lhsRe[k] += wkr * gr - wki * gi;
+        lhsIm[k] += wkr * gi + wki * gr;
+        const nr = wkr * wr - wki * wi, ni = wkr * wi + wki * wr;
+        wkr = nr; wki = ni;
       }
-      lhs = Complex.scale(lhs, 1 / N);
+    }
+
+    for (let k = 0; k <= K; k++) {
+      const lhs = { re: lhsRe[k] / N, im: lhsIm[k] / N };
 
       let rhs = { re: 0, im: 0 };
       for (const pole of hData.poles) {
