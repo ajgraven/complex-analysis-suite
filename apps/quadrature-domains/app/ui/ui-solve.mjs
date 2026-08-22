@@ -109,6 +109,15 @@ const LIVE_SAMPLES = 96;
 // full solve (isPrimary) re-renders at full resolution.
 const LIVE_DISPLAY_SAMPLES = 160;
 
+// S1: live identity-verify floor for UNBOUNDED families. Their verifier otherwise
+// floors the contour integral at ≥1500 nodes and adaptively climbs to 8000 —
+// overkill for a per-frame consistency check. At 750 nodes the identity is
+// machine-accurate on the measured finite-pole UQD (maxRelDiff 4.3e-11, identical
+// to the 1500 floor) at ~2× the speed and ~3.5× better tail latency; the drag-end
+// full solve re-verifies at the authoritative floor. Bounded/LQD verifiers ignore
+// this (they honor numSamples directly). See perf notes / docs/perf.
+const LIVE_VERIFY_FLOOR = 750;
+
 // Idle-callback deadline (ms) for the deferred heavy analyses (symmetry /
 // critical-set / geometry classification, and boundary observables): run when
 // the main thread next goes idle, but no later than this after scheduling.
@@ -195,6 +204,10 @@ function quickSolveAndRender() {
     newton: { ...preset.newton, maxIter: 30 },
     numSamples: Math.min(state.samples, LIVE_SAMPLES),
     wantOriginInside: isPqdAuto,
+    // S1: cheap per-frame identity check on the unbounded families (skip the
+    // adaptive climb; cap the floor). The drag-end full solve re-verifies.
+    adaptiveSamples: false,
+    minSamples: LIVE_VERIFY_FLOOR,
   };
 
   const myToken = ++_liveSolveToken;

@@ -1831,7 +1831,17 @@ function liveSolveStep(hData, initPhi, opts = {}) {
   if (!res.success) return { success: false, residual: res.residual };
   const phi = family.canonicalizePhi(res.phi);
   const univalent = isBoundaryUnivalent(phi, numSamples);
-  const identity = family.verifyQuadratureIdentity(phi, hData, { numSamples });
+  // S1: forward the live verify budget to the family verifier. For UNBOUNDED
+  // families the verifier otherwise floors the contour integral at ≥1500 nodes
+  // and adaptively climbs to 8000 — far more than a per-drag-frame consistency
+  // check needs. The live path passes adaptiveSamples:false (skip the climb) and
+  // a low minSamples floor; the drag-end full solve re-verifies authoritatively.
+  // Bounded/LQD verifiers ignore both (they already honor numSamples directly).
+  const identity = family.verifyQuadratureIdentity(phi, hData, {
+    numSamples,
+    adaptiveSamples: opts.adaptiveSamples,
+    minSamples: opts.minSamples,
+  });
   const identityOK = identity.maxRelDiff < IDENTITY_TOL;
   const originInside = opts.wantOriginInside ? originInsideOmega(phi) : undefined;
   return {

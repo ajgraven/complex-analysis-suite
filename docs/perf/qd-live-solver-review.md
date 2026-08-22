@@ -261,6 +261,23 @@ Medium–High (High in UQD mode). *Effort:* S. *Risk:* Low.
 ### Tier 2 — High-value, targeted (unbounded families + initial solve)
 
 **S1 — Lift the ≥1500-sample identity integral off the unbounded live path.**
+✅ **IMPLEMENTED (2026-08-22).** `liveSolveStep` now forwards `adaptiveSamples:false` +
+`minSamples: LIVE_VERIFY_FLOOR (750)` to the family verifier; the three unbounded verifiers
+(`solver-uqd.mjs`, `solver-uqd-pqd.mjs`, `solver-uqd-pqd-singular.mjs`) gained a `minSamples`
+option that **defaults to their existing floor** (1500 / 2000 / 4000) and their adaptive
+climb is now gated on `adaptiveSamples !== false` — so nothing changes unless the live path
+opts in (all golden/`c_max`/cusp tests stay green: 2342 node-test + full vitest).
+*Correction to the original note:* the review said this helps "the flagship deltoid," but the
+pole-free deltoid has no branches, so its live path falls to the **full** solve and never
+calls `liveSolveStep`; S1 actually helps **finite-pole unbounded** QDs (a pole drag on a
+UQD/UPQD). *Measured* (finite-pole UQD, warm live solve): identity stays machine-accurate at
+750 nodes (maxRelDiff 4.3e-11, identical to the 1500 floor — so no false validity badge),
+while per-frame worker verify drops **~2× median (4.4→2.2 ms) and ~3.5× p95 (9.1→2.6 ms)**;
+the p95 (the mid-drag jank case) is the bigger win, and it multiplies under CPU throttle.
+This is worker-side (off the main thread), so it raises the live-throughput ceiling for
+unbounded pole drags rather than showing in the main-thread long-task metric.
+
+Original diagnosis (for reference):
 For all unbounded families the identity verifier floors the sample count at 1500 (up to
 8000 adaptively): `solver-uqd.mjs:290` / `:402`, `solver-uqd-pqd.mjs:403`,
 `solver-uqd-pqd-singular.mjs:471`. `liveSolveStep` calls it (`solver.mjs:1834`) with the 96
