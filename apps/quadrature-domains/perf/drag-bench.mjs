@@ -82,6 +82,7 @@ if (slowdown > 1) await cdp.send("Emulation.setCPUThrottlingRate", { rate: slowd
 await page.goto(`${baseUrl}?dragBench=1`, { waitUntil: "load" });
 await page.waitForFunction(() => Boolean(window.QD && window.QD.PrimarySolverWorker));
 await page.evaluate(() => window.QD.PrimarySolverWorker.ensureReady());
+const hardwareConcurrency = await page.evaluate(() => navigator.hardwareConcurrency ?? null);
 
 const results = [];
 try {
@@ -129,7 +130,7 @@ console.log(JSON.stringify({
     browser: executablePath ?? "Playwright-managed Chromium",
     browserVersion: browser.version(),
     cpuSlowdown: slowdown,
-    hardwareConcurrency: results.length ? undefined : undefined,
+    hardwareConcurrency,
   },
   note: "Each step is one full PSW.solve() of a slightly-perturbed VALID domain. 'warm-start' threads the previous step's phi via opts.warmPhi (the live path's continuation reuse). Times are milliseconds.",
   results,

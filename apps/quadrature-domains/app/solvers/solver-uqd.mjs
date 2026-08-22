@@ -303,10 +303,7 @@ import { defineFamily } from './define-family.mjs';
     // then reads identity-failing and the c* estimate is cut short. ≥1500 nodes
     // (the singular siblings use ≥2000) restore machine-precision accuracy where
     // the test points are well clear of ∂Ω.
-    // The ≥1500 floor is the AUTHORITATIVE default. The live drag path passes a
-    // lower `minSamples` (with adaptiveSamples:false) so a per-frame consistency
-    // check is cheap; the drag-end full solve re-verifies at the full floor.
-    const baseN         = Math.max(options.numSamples ?? 0, options.minSamples ?? 1500);
+    const baseN         = Math.max(options.numSamples ?? 0, 1500);
     const maxOrder      = options.maxDegree ?? 3;
     const numTestPoints = options.numTestPoints ?? 3;
     // Near-cusp accuracy (#11): the integrand stays smooth and periodic, so the

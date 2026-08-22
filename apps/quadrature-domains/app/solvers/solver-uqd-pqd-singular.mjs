@@ -469,12 +469,9 @@ import { defineFamily } from './define-family.mjs';
     const hasFinitePole = !!(hData.poles && hData.poles.some(p => p.principal && p.principal.length > 0));
     const hasPolyPart   = (hData.polyPart || []).some(cc => Complex.abs(cc) > 0);
     const startFloor = (hasFinitePole && hasPolyPart) ? 4000 : 2000;
-    // The startFloor is the AUTHORITATIVE default; the live drag path passes a
-    // lower `minSamples` + adaptiveSamples:false for a cheap per-frame check.
-    let N = Math.max(options.numSamples || 0, options.minSamples ?? startFloor);
+    let N = Math.max(options.numSamples || 0, startFloor);
     let res = residualAt(N);
-    while (options.adaptiveSamples !== false &&
-           N < 16000 && Number.isFinite(res.maxRelDiff) && res.maxRelDiff > 1e-9) {
+    while (N < 16000 && Number.isFinite(res.maxRelDiff) && res.maxRelDiff > 1e-9) {
       const finer = residualAt(N * 2);
       const stillConverging = finer.maxRelDiff < res.maxRelDiff * 0.3;
       N = N * 2;

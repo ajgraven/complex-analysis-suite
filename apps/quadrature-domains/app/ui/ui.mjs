@@ -299,7 +299,15 @@ function buildNormalization(hData) {
 // of reaching into state.current directly. ui.js remains the canonical
 // writer; this is a published mirror.
 // ---------------------------------------------------------------------------
+// True once qd-customized has been dispatched and no solve has published since —
+// i.e. the side cards (Faber / equation-system / thesis) are already in their
+// "pending/invalidated" state. Reset on every publish (a solve just repopulated
+// them), so the NEXT edit re-invalidates; used by markAsCustom to coalesce the
+// per-frame re-dispatch during a drag without skipping invalidation on a fresh edit.
+let _qdCustomSincePublish = false;
+
 function publishPrimarySolution() {
+  _qdCustomSincePublish = false;            // a solve repopulated the cards
   if (!QD.PrimarySolution) return;          // tolerate missing module (test contexts)
   QD.PrimarySolution.publish(state.current);
 }
@@ -738,14 +746,18 @@ function syncPolyDegreeInput() {
 // Selecting a preset loads it; the user editing anything afterward reverts
 // the dropdown to "— custom —".
 function markAsCustom() {
-  // Idempotent (Tier-1 O3): onPoleDrag / slider input call this on EVERY frame,
-  // but "revert to custom" only changes anything the first time. Once the preset
-  // dropdown already reads "— custom —" (''), re-dispatching qd-customized just
-  // re-runs the listeners' card-clears (thesis / equations / Faber innerHTML
-  // rebuilds) for no change — so skip it and drop that per-frame cost.
+  // Coalesce repeated calls WITHIN an edit burst (Tier-1 O3): onPoleDrag / slider
+  // input call this every frame, and re-dispatching qd-customized each frame just
+  // re-greys the already-greyed side cards. But a fresh edit AFTER a solve has
+  // repopulated those cards MUST re-invalidate them (else stale Faber roots stay on
+  // the plot and the previous domain's equation system stays exportable). So gate
+  // on "already dispatched since the last publish?" — NOT on the preset value,
+  // which stays '' across solves.
   const sel = $('#preset-select');
-  if (sel && sel.value === '') return;
+  const alreadyCustom = sel ? sel.value === '' : true;
+  if (alreadyCustom && _qdCustomSincePublish) return;
   if (sel) sel.value = '';
+  _qdCustomSincePublish = true;
   // A manual edit (or a family-preset load) means we're no longer showing a
   // thesis example — ui-thesis.js listens for this to clear its oracle card.
   document.dispatchEvent(new CustomEvent('qd-customized'));

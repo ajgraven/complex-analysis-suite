@@ -261,21 +261,21 @@ Medium–High (High in UQD mode). *Effort:* S. *Risk:* Low.
 ### Tier 2 — High-value, targeted (unbounded families + initial solve)
 
 **S1 — Lift the ≥1500-sample identity integral off the unbounded live path.**
-✅ **IMPLEMENTED (2026-08-22).** `liveSolveStep` now forwards `adaptiveSamples:false` +
-`minSamples: LIVE_VERIFY_FLOOR (750)` to the family verifier; the three unbounded verifiers
-(`solver-uqd.mjs`, `solver-uqd-pqd.mjs`, `solver-uqd-pqd-singular.mjs`) gained a `minSamples`
-option that **defaults to their existing floor** (1500 / 2000 / 4000) and their adaptive
-climb is now gated on `adaptiveSamples !== false` — so nothing changes unless the live path
-opts in (all golden/`c_max`/cusp tests stay green: 2342 node-test + full vitest).
-*Correction to the original note:* the review said this helps "the flagship deltoid," but the
-pole-free deltoid has no branches, so its live path falls to the **full** solve and never
-calls `liveSolveStep`; S1 actually helps **finite-pole unbounded** QDs (a pole drag on a
-UQD/UPQD). *Measured* (finite-pole UQD, warm live solve): identity stays machine-accurate at
-750 nodes (maxRelDiff 4.3e-11, identical to the 1500 floor — so no false validity badge),
-while per-frame worker verify drops **~2× median (4.4→2.2 ms) and ~3.5× p95 (9.1→2.6 ms)**;
-the p95 (the mid-drag jank case) is the bigger win, and it multiplies under CPU throttle.
-This is worker-side (off the main thread), so it raises the live-throughput ceiling for
-unbounded pole drags rather than showing in the main-thread long-task metric.
+❌ **TRIED, then REVERTED (2026-08-22) — do not re-attempt without per-family validation.**
+The first attempt lowered the live verify floor to 750 (`LIVE_VERIFY_FLOOR`) with
+`adaptiveSamples:false`, validated only on the **non-singular finite-pole UQD** (there it was
+machine-accurate — maxRelDiff 4.3e-11 — at ~2× median / ~3.5× p95). A `/code-review` pass
+caught that the same floor is **unsafe for the other unbounded families**: the singular UPQD
+uses a ≥2000/4000 floor and *always* escalates (750 → identity-fails every frame), and
+disabling the adaptive climb makes any **near-cusp** UQD/UPQD read identity-fail during a drag
+(the node-test `§1 c=1.4 identity holds` / `§2 escalated error` cases). The user-facing harm
+was real: a false "⚠ identity not satisfied" badge on valid domains, and — worse — in PQD-auto
+modes `consistent` goes false every frame, re-firing the debounced full solve on essentially
+every rAF frame, which **defeats the O1 coalescing** for exactly those families. Reverted in
+full (verifier floors + `liveSolveStep` forwarding + `liveOpts`), restoring the original floors
+and adaptive escalation; the `§1 c=1.4` / `§2` tests pass again. **Lesson:** the unbounded
+verify floors are per-family accuracy guards; a live reduction needs validation on each family
+(singular + near-cusp), not just the one that was easy to measure.
 
 Original diagnosis (for reference):
 For all unbounded families the identity verifier floors the sample count at 1500 (up to

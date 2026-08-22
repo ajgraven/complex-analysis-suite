@@ -400,9 +400,7 @@ import { defineFamily } from './define-family.mjs';
   function verifyQuadratureIdentity_UPQD(phi, hData, options = {}) {
     // ≥1500-node contour integral (see verifyQuadratureIdentity_UQD): the peaked
     // 1/(w−b)^k integrand is grossly under-resolved at the old 600 nodes as c grows.
-    // The live drag path passes a lower `minSamples` for a cheap per-frame check;
-    // the drag-end full solve re-verifies at the full 1500 floor.
-    const N = Math.max(options.numSamples ?? 0, options.minSamples ?? 1500);
+    const N = Math.max(options.numSamples ?? 0, 1500);
     const maxOrder = options.maxDegree ?? 3;
     const numTestPoints = options.numTestPoints ?? 3;
     const alpha = phi.alpha;
