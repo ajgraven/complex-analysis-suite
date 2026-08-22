@@ -16,6 +16,7 @@ export const COMPLEX_SINGLE_GLSL = /* glsl */ `
 
 float cre1(cvec a) { return a.x; }
 float cabsf(cvec a) { return length(a); }
+float cabs2(cvec a) { return dot(a, a); } // squared magnitude |z|² (real) — the sqrt-free form for escape/threshold tests
 
 cvec cadd(cvec a, cvec b) { return a + b; }
 cvec csub(cvec a, cvec b) { return a - b; }

@@ -19,6 +19,7 @@ export const COMPLEX_DF64_GLSL = /* glsl */ `
 
 float cre1(cvec a) { return a.x; }
 float cabsf(cvec a) { return length(vec2(a.x, a.z)); }
+float cabs2(cvec a) { vec2 m = vec2(a.x, a.z); return dot(m, m); } // squared |z|² from hi limbs — sqrt-free, matches cabsf's hi-limb magnitude (escape tests near |z|~R need no df64 precision)
 
 cvec cadd(cvec a, cvec b) { return vec4(df_add(a.xy, b.xy), df_add(a.zw, b.zw)); }
 cvec csub(cvec a, cvec b) { return vec4(df_sub(a.xy, b.xy), df_sub(a.zw, b.zw)); }
