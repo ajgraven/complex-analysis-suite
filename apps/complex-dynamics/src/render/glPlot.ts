@@ -19,6 +19,7 @@ import {
   POST_FRAGMENT_SHADER,
   PERTURBATION_FRAGMENT_SHADER,
   PREVIEW_FRAGMENT_SHADER,
+  COLORIZE_FRAGMENT_SHADER,
   VERTEX_SHADER,
   type Precision,
 } from "./shaderBuilder";
@@ -113,6 +114,29 @@ interface PreviewUniforms {
   uPreviewScale: WebGLUniformLocation | null;
   uPreviewOffset: WebGLUniformLocation | null;
 }
+
+/** Uniforms for the two-pass recolour COLOURISE pass (samples the field texture). */
+interface ColorizeUniforms {
+  uField: WebGLUniformLocation | null;
+  uResolution: WebGLUniformLocation | null;
+  uMode: WebGLUniformLocation | null;
+  uN: WebGLUniformLocation | null;
+  uPalette: WebGLUniformLocation | null;
+  uGradient: WebGLUniformLocation | null;
+  uGradientOffset: WebGLUniformLocation | null;
+  uCdf: WebGLUniformLocation | null;
+  uOutline: WebGLUniformLocation | null;
+  uOutlineWidth: WebGLUniformLocation | null;
+  uEquipotential: WebGLUniformLocation | null;
+  uEquiDensity: WebGLUniformLocation | null;
+}
+
+/** Colouring modes whose per-pixel colour is a function of the scalar escape field alone (smooth,
+ *  escape, histogram, binary decomposition) — the modes the two-pass recolour path reproduces
+ *  byte-exactly at uAA == 1. See fieldAt / COLORIZE_FRAGMENT_SHADER in shaderBuilder.ts. */
+const RECOLOR_MODES = new Set([0, 1, 5, 9]);
+/** The fractal shader's field-output mode (writes fieldAt into an RGBA32F target). */
+const FIELD_MODE = 16;
 
 /** Highest degree the perturbation kernel handles for z^d + c (must match `MAX_DEGREE` in the
  *  perturbation shader). Higher-degree monic maps fall back to the df64 renderer. */
@@ -360,6 +384,23 @@ export class GLPlot {
   private cdfTex: WebGLTexture | null = null;
   /** Post-processing (vignette + gamma): a program + an offscreen scene render target. */
   private postProgram: { program: WebGLProgram; uniforms: PostUniforms } | null = null;
+  /** Two-pass recolour (cd-render Fix L): a colourise program + a cached RGBA32F escape-field target.
+   *  On an appearance-only change to a covered mode, the field is reused and only the colourise pass
+   *  re-runs — instant, no re-iteration. Built lazily (first appearance change after content changes)
+   *  and invalidated whenever content changes. `wantRecolor` flags a pending appearance-only frame
+   *  (set by scheduleRender(false)); a content re-render clears it. */
+  private colorizeProgram: { program: WebGLProgram; uniforms: ColorizeUniforms } | null = null;
+  private fieldFbo: WebGLFramebuffer | null = null;
+  private fieldTex: WebGLTexture | null = null;
+  private fieldSize = 0;
+  private fieldValid = false;
+  /** True when the pending frame is appearance-only (set by scheduleRender(false)) and may take the
+   *  recolour fast path instead of re-iterating; cleared by any content re-render. An explicit signal
+   *  rather than inferring "nothing changed" — the render loop can re-fire for reasons unrelated to a
+   *  content edit (progressive refine, collar), so a negative inference would misfire. */
+  private wantRecolor = false;
+  /** Settle timer for appearance-slider drafting on the non-recolour fallback path (see nudgeAppearanceDraft). */
+  private appearanceDraftTimer = 0;
   /** Perturbation deep-zoom program (z²+c parameter plane) + its reference-orbit texture. */
   private perturbProgram: { program: WebGLProgram; uniforms: PerturbUniforms } | null = null;
   private orbitTex: WebGLTexture | null = null;
@@ -527,6 +568,7 @@ export class GLPlot {
     this.compilePostProgram();
     this.compilePreviewProgram();
     this.compilePerturbProgram();
+    this.compileColorizeProgram();
     this.uploadGradient();
     this.applyRenderSize();
     this.ApplyPreset(preset);
@@ -602,10 +644,18 @@ export class GLPlot {
     this.cdfDirty = true;
     this.cdfSize = 0;
     this.quadBuffer = null; // the old handle died with the context; setupQuad makes a fresh one
+    // Two-pass recolour resources died with the context; drop the handles and mark the field stale.
+    this.colorizeProgram = null;
+    this.fieldFbo = null;
+    this.fieldTex = null;
+    this.fieldSize = 0;
+    this.fieldValid = false;
+    this.wantRecolor = false;
     this.setupQuad();
     this.compilePostProgram();
     this.compilePreviewProgram();
     this.compilePerturbProgram();
+    this.compileColorizeProgram();
     this.uploadGradient();
     this.rebuild();
     this.scheduleRender();
@@ -650,6 +700,24 @@ export class GLPlot {
     if (this._draft === on) return;
     this._draft = on;
     this.scheduleRender();
+  }
+
+  /**
+   * An appearance-only slider moved (palette rotation / lighting / post / outline / equipotential).
+   * When the current view can recolour (cd-render Fix L), do NOTHING here — the setter's
+   * scheduleRender(false) takes the instant, full-resolution recolour path. Otherwise (complex mode,
+   * AA ≥ 2×, lighting, sphere/projection, deep perturbation) drop to the coarse draft for the gesture
+   * and refine on settle (cd-render Fix S: appearance-slider drafting). Replaces the app-side draft
+   * pulse so the two mechanisms don't fight — drafting would otherwise suppress the recolour path.
+   */
+  nudgeAppearanceDraft(): void {
+    if (this.canRecolor()) return; // recolour handles it instantly at full resolution — no draft
+    this.setDraft(true);
+    if (this.appearanceDraftTimer) window.clearTimeout(this.appearanceDraftTimer);
+    this.appearanceDraftTimer = window.setTimeout(() => {
+      this.appearanceDraftTimer = 0;
+      this.setDraft(false);
+    }, 180);
   }
 
   /**
@@ -981,6 +1049,10 @@ export class GLPlot {
     this.accumCount = 0;
     if (invalidateContent) {
       this.cdfDirty = true; // the escape-count distribution may have changed → rebuild the CDF
+      this.fieldValid = false; // the cached escape field is stale → rebuild before the next recolour
+      this.wantRecolor = false; // content changed → must re-render, not recolour
+    } else {
+      this.wantRecolor = true; // appearance only → eligible for the recolour fast path
     }
     this.requestFrame();
   }
@@ -1574,6 +1646,34 @@ export class GLPlot {
     }
   }
 
+  /** Compile the two-pass recolour colourise program; independent of f/precision (it samples the
+   *  float field texture). Absence just disables the recolour fast path (falls back to full renders). */
+  private compileColorizeProgram(): void {
+    const gl = this.gl;
+    try {
+      const program = createProgram(gl, VERTEX_SHADER, COLORIZE_FRAGMENT_SHADER);
+      this.colorizeProgram = {
+        program,
+        uniforms: {
+          uField: gl.getUniformLocation(program, "uField"),
+          uResolution: gl.getUniformLocation(program, "uResolution"),
+          uMode: gl.getUniformLocation(program, "uMode"),
+          uN: gl.getUniformLocation(program, "uN"),
+          uPalette: gl.getUniformLocation(program, "uPalette"),
+          uGradient: gl.getUniformLocation(program, "uGradient"),
+          uGradientOffset: gl.getUniformLocation(program, "uGradientOffset"),
+          uCdf: gl.getUniformLocation(program, "uCdf"),
+          uOutline: gl.getUniformLocation(program, "uOutline"),
+          uOutlineWidth: gl.getUniformLocation(program, "uOutlineWidth"),
+          uEquipotential: gl.getUniformLocation(program, "uEquipotential"),
+          uEquiDensity: gl.getUniformLocation(program, "uEquiDensity"),
+        },
+      };
+    } catch (err) {
+      console.warn(`[${this.fractType}] colourise program failed (recolour fast path disabled):`, err);
+    }
+  }
+
   private compilePerturbProgram(): void {
     const gl = this.gl;
     try {
@@ -1885,6 +1985,129 @@ export class GLPlot {
   }
 
   /**
+   * Whether the two-pass recolour fast path applies (cd-render Fix L): the current colouring is a
+   * function of the scalar escape field alone (smooth / escape / histogram / decomposition), no
+   * supersampling (uAA == 1), a flat single/df64 view (no sphere / projection / perturbation), and
+   * lighting off (its analytic-relief variant for holomorphic maps needs a re-walk). Then an
+   * appearance-only change recolours the cached field instead of re-iterating. Byte-identical to the
+   * fused shader for these cases.
+   */
+  private canRecolor(): boolean {
+    return (
+      this.colorizeProgram !== null &&
+      this.floatExt !== null &&
+      this._aa === 1 &&
+      RECOLOR_MODES.has(this.effectiveMode()) &&
+      !this._light &&
+      !this._sphere &&
+      this._projection === 0 &&
+      !this.usePerturbation()
+    );
+  }
+
+  /** (Re)allocate the RGBA32F escape-field target (+ FBO) at `size`² for the recolour path. */
+  private ensureFieldTarget(size: number): void {
+    const gl = this.gl;
+    if (!this.fieldTex) this.fieldTex = gl.createTexture();
+    if (this.fieldSize !== size) {
+      gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA32F, size, size, 0, gl.RGBA, gl.FLOAT, null);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST); // 1:1 sampling ⇒ exact field
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this.fieldValid = false; // resized ⇒ any built field is the wrong resolution
+      this.fieldSize = size;
+    }
+    if (!this.fieldFbo) this.fieldFbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fieldFbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, this.fieldTex, 0);
+    gl.bindTexture(gl.TEXTURE_2D, null); // detach so it isn't a sampler feedback loop
+  }
+
+  /** Build the cached escape field at `size`² if stale, via the fractal shader's field-output mode.
+   *  Uses setupDraw directly (never the perturbation kernel — recolour is gated off it). Returns false
+   *  if the shader isn't ready, so the caller falls back to a normal render. Leaves the default FBO bound. */
+  private ensureField(size: number): boolean {
+    if (this.fieldValid && this.fieldSize === size) return true;
+    const gl = this.gl;
+    this.ensureFieldTarget(size);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.fieldFbo);
+    gl.viewport(0, 0, size, size);
+    const ok = this.setupDraw(size, size, FIELD_MODE);
+    if (ok) gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (!ok) return false;
+    this.fieldValid = true;
+    return true;
+  }
+
+  /** Colourise pass: sample the cached field texture and apply palette / rotation / gradient (+ the
+   *  screen-space outline / equipotential overlays) — the appearance controls, no re-iteration. The
+   *  target FBO + viewport must already be bound by the caller. */
+  private drawColorize(size: number): void {
+    const gl = this.gl;
+    const cp = this.colorizeProgram;
+    if (!cp) return;
+    const u = cp.uniforms;
+    gl.useProgram(cp.program);
+    let mode = this.effectiveMode();
+    if (mode === 5 && !this.cdfTex) mode = 1; // histogram CDF missing → smooth (mirrors setupDraw)
+    gl.activeTexture(gl.TEXTURE2); // field on unit 2 (uCdf uses 0, uGradient uses 1)
+    gl.bindTexture(gl.TEXTURE_2D, this.fieldTex);
+    gl.uniform1i(u.uField, 2);
+    if (mode === 5 && this.cdfTex) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this.cdfTex);
+      gl.uniform1i(u.uCdf, 0);
+    }
+    if (this.gradientTex) {
+      gl.activeTexture(gl.TEXTURE1);
+      gl.bindTexture(gl.TEXTURE_2D, this.gradientTex);
+      gl.uniform1i(u.uGradient, 1);
+    }
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform2f(u.uResolution, size, size);
+    gl.uniform1i(u.uMode, mode);
+    gl.uniform1i(u.uN, this.targetIterations());
+    gl.uniform1i(u.uPalette, this._palette);
+    gl.uniform1f(u.uGradientOffset, this._gradientOffset);
+    gl.uniform1i(u.uOutline, this._outline ? 1 : 0);
+    gl.uniform1f(u.uOutlineWidth, this._outlineWidth);
+    gl.uniform1i(u.uEquipotential, this._equipotential ? 1 : 0);
+    gl.uniform1f(u.uEquiDensity, this._equiDensity);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  /** Recolour the view from the cached escape field (building it once if stale) and composite through
+   *  the post pass when enabled. Returns false if the field couldn't be built (caller does a full render). */
+  private renderRecolor(): boolean {
+    const gl = this.gl;
+    this.applyRenderSize(1); // full resolution — the colourise pass is cheap, so skip the progressive ladder
+    const size = this.canvas.width;
+    if (this.effectiveMode() === 5) this.ensureCdf(size); // histogram CDF (content-derived; cached)
+    if (!this.ensureField(size)) return false;
+    if (this._post && this.postProgram) {
+      this.ensureSceneTarget(size);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, this.sceneFbo);
+      gl.viewport(0, 0, size, size);
+      this.drawColorize(size);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, size, size);
+      this.drawPost(size);
+    } else {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, size, size);
+      this.drawColorize(size);
+    }
+    // Refresh the warp source so a following pan warps the recoloured image. The collar (overscan
+    // border) is not rebuilt: the view is unchanged, so the one the last content render built still fits.
+    this.captureLastFrame(size);
+    return true;
+  }
+
+  /**
    * Draw one frame. During interaction only the coarse level is drawn; when idle
    * and the render is heavy, each frame refines one step up the ladder to full
    * resolution and schedules the next; cheap idle renders draw full immediately.
@@ -1899,6 +2122,19 @@ export class GLPlot {
       this.afterRender?.();
       return;
     }
+    // Two-pass recolour fast path (cd-render Fix L): an appearance-only change to a covered mode reuses
+    // the cached escape field and only re-runs the cheap colourise pass — no re-iteration. Checked
+    // BEFORE the temporal-accumulation path so an appearance change recolours instantly at full
+    // resolution instead of restarting a from-scratch accumulate (which would re-iterate every sample).
+    // Accumulation resumes on the next content change. Falls through to a full render if the field
+    // build fails.
+    if (this.wantRecolor && !this._draft && !this._forceFull && this.canRecolor()) {
+      if (this.renderRecolor()) {
+        this.wantRecolor = false;
+        this.afterRender?.();
+        return;
+      }
+    }
     if (
       this._accumulate &&
       !this._forceFull &&
@@ -1910,6 +2146,7 @@ export class GLPlot {
       this.afterRender?.();
       return;
     }
+    this.wantRecolor = false; // any real render below supersedes a pending appearance-only recolour
     let fraction = 1;
     let refine = false;
     if (this._forceFull) {

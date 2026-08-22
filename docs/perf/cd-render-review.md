@@ -218,3 +218,52 @@ corpus. Validation: `@cas/expr` (153) + `@cas/gpu` (45 node + 17 browser) + `com
 
 The Fix L structural two-pass recolour (P1-a) — which would make appearance changes O(pixels)
 instead of O(pixels × iterations), eliminating the draft entirely — remains the P2 follow-up.
+
+---
+
+## Update — Fix L (two-pass recolour) implemented (2026-08-22)
+
+The structural version of P1-a landed. Appearance-only changes on the covered modes now **recolour
+a cached escape-time field instead of re-iterating** — full resolution, instantly.
+
+**Architecture.** A new fractal-shader output mode (`uMode == 16`, `fieldAt`) writes the colouring
+scalars — smooth escape value *s* (= relief height), `kmax`, decomposition sign, escaped flag — into a
+persistent `RGBA32F` field texture, reusing the existing single/df64 kernels (no new precision paths).
+A new precision-independent **colourise** fullscreen pass (`COLORIZE_FRAGMENT_SHADER`) samples that
+texture and applies palette / rotation / gradient (+ the screen-space outline / equipotential overlays).
+The field is built **lazily** — on the first appearance change after a content change — then reused; a
+content change (`scheduleRender(true)`) invalidates it. An explicit `wantRecolor` flag (set by
+`scheduleRender(false)`) drives the fast path.
+
+**Scope (bounded, byte-exact).** Escape-family modes (smooth [default], escape, histogram,
+decomposition) at AA = Off [default], single + df64, no sphere / projection / perturbation. Lighting is
+**excluded** — its analytic-relief variant for holomorphic maps needs an orbit re-walk that a stored
+scalar can't reproduce — so the recolour path is gated off when lighting is on (it keeps the Fix-S
+draft path). Outline and equipotential ARE covered (screen-space derivatives of the stored height).
+Complex modes (orbit-trap, stripe, multiplier, period, …) and AA ≥ 2× keep the fused + Fix-S path.
+
+**Correctness.** A new real-WebGL2 parity test (`recolorParity.browser.test.ts`) proves a recolour is
+**byte-identical** to a full fused render of the same view (via `canvas.toDataURL()`), both on first
+recolour and on field reuse. `COLORIZE_FRAGMENT_SHADER` joins the shader compile gate; `fieldAt` rides
+the existing `buildFragmentShader` precision-sweep compile tests (single + df64).
+
+**Key subtlety.** The recolour check MUST precede the temporal-accumulation ("refine while idle") path:
+that path intercepts every render, so an appearance change would otherwise restart a from-scratch
+accumulate and re-iterate every sample. Reordered so appearance changes recolour first; accumulation
+resumes on the next content change.
+
+**Measured** (profiler; SwiftShader, counts representative):
+
+| Interaction | before Fix L | after Fix L |
+|---|---:|---:|
+| appearance: palette-rotation sweep ×8 | 40 (Fix S draft) / 140 (fused) | ~42, cheap colourise passes |
+| appearance: mode round-trip (recolour, field reused) | (full re-iterate each) | **4 draws** |
+
+The palette-sweep count is dominated by the initial idle-accumulate tail caught in the measurement
+window and per-recolour overlay repaints (a separate P3 item); the mode round-trip (4 draws for two
+recolours across both plots) is the true recolour cost — the escape field is **not** re-iterated. On a
+real GPU an appearance change on a covered view is now a single fullscreen colourise pass instead of a
+full per-pixel escape loop.
+
+**Validation:** `complex-dynamics` 827 node + (2 parity + 12 compile) browser green; `eslint` +
+`dep:check` clean.

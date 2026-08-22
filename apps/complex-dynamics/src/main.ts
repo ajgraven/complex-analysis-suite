@@ -2575,30 +2575,20 @@ function init(): void {
     updateLegends(); // the corner colour key follows the mode / palette
   }
 
-  // Appearance-slider drafting (cd-render P1-a): an appearance-only slider drag (palette rotation,
-  // lighting, post, outline, equipotential) fires a stream of `input` events, each re-rendering BOTH
-  // plots — and because escape time and colouring share one fragment pass, every tick re-iterates the
-  // whole escape field even though only a colour uniform changed (measured: ~17 draws/tick). Drop both
-  // plots to the coarse draft level for the duration of the gesture (the same machinery pan/zoom use —
-  // full iteration cap, reduced resolution) and refine back to full resolution once the slider rests.
-  // Mirrors the wheel-settle pattern in plotView.ts; keyboard-arrow slider nudges (no pointerup) settle
-  // via the same timer.
-  let appearanceDraftTimer = 0;
-  function pulseAppearanceDraft(): void {
-    parameterView.plot.setDraft(true);
-    dynamicalView.plot.setDraft(true);
-    if (appearanceDraftTimer) window.clearTimeout(appearanceDraftTimer);
-    appearanceDraftTimer = window.setTimeout(() => {
-      appearanceDraftTimer = 0;
-      parameterView.plot.setDraft(false);
-      dynamicalView.plot.setDraft(false);
-    }, 180);
-  }
-  /** Wrap an appearance-apply handler so a range-slider drag renders coarse drafts and refines on rest.
-   *  Only meaningful for continuous `<input type=range>` gestures — discrete toggles/selects apply directly. */
+  // Appearance-slider responsiveness (cd-render P1-a). An appearance-only slider drag (palette
+  // rotation, lighting, post, outline, equipotential) fires a stream of `input` events, each
+  // re-rendering BOTH plots. Each plot decides how to stay responsive: a covered view recolours the
+  // cached escape field instantly at full resolution (Fix L, two-pass recolour), and one that can't
+  // (complex mode, AA ≥ 2×, lighting, sphere/projection, deep zoom) drops to the coarse draft for the
+  // gesture and refines on rest (Fix S). nudgeAppearanceDraft encapsulates that per-plot choice so the
+  // two mechanisms don't fight; the apply then pushes the new uniform, which schedules the right frame.
+  /** Wrap an appearance-apply handler so a range-slider drag stays responsive per plot (recolour or
+   *  coarse draft). Only meaningful for continuous `<input type=range>` gestures — toggles/selects apply
+   *  directly (a covered mode still recolours instantly via the setter's scheduleRender). */
   function withAppearanceDraft(apply: () => void): () => void {
     return () => {
-      pulseAppearanceDraft();
+      parameterView.plot.nudgeAppearanceDraft();
+      dynamicalView.plot.nudgeAppearanceDraft();
       apply();
     };
   }

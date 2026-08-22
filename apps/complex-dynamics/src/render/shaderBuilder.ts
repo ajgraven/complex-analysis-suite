@@ -140,6 +140,64 @@ vec3 palette(float t) {
 `;
 
 /**
+ * Two-pass recolour COLOURISE pass (cd-render Fix L). Samples the RGBA32F field texture written by the
+ * fractal shader's `uMode == 16` field pre-pass (R = smooth escape value s / relief height, G = kmax,
+ * B = decomposition sign, A = escaped flag) and reproduces the escape-family colouring — palette /
+ * rotation / gradient (mode 1 smooth, 0 escape, 5 histogram via uCdf, 9 binary decomposition) plus the
+ * screen-space outline + equipotential overlays — WITHOUT re-iterating the escape loop. Precision-
+ * independent (it samples a float texture), so it is compiled once. Byte-identical to the fused shader
+ * at uAA == 1 for these modes; lighting is intentionally excluded (its analytic-relief variant needs a
+ * re-walk), so the recolour path is gated off when lighting is on. `uField` is bound on texture unit 2
+ * (uCdf uses 0, uGradient uses 1), matching the fractal draw's unit assignments.
+ */
+export const COLORIZE_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+uniform sampler2D uField;      // RGBA32F: R=s (height, -1 interior), G=kmax, B=decomposition sign, A=escaped
+uniform vec2 uResolution;
+uniform int uMode;
+uniform int uN;
+uniform int uPalette;
+uniform sampler2D uGradient;
+uniform float uGradientOffset;
+uniform sampler2D uCdf;        // histogram equalisation lookup (mode 5)
+uniform int uOutline;
+uniform float uOutlineWidth;
+uniform int uEquipotential;
+uniform float uEquiDensity;
+out vec4 fragColor;
+${COLOR_GLSL}
+void main() {
+  vec2 uv = gl_FragCoord.xy / uResolution;
+  vec4 F = texture(uField, uv);
+  float s = F.r, km = F.g, decompSign = F.b, escaped = F.a;
+  vec3 col;
+  if (escaped < 0.5) {
+    col = vec3(0.0);                                                       // interior
+  } else if (uMode == 5) {
+    col = palette(texture(uCdf, vec2((km + 0.5) / float(uN + 1), 0.5)).r); // histogram equalisation
+  } else if (uMode == 9) {
+    vec3 c = palette(km / float(uN));                                      // binary decomposition
+    col = (decompSign < 0.0) ? c * 0.6 : c;
+  } else if (uMode == 0) {
+    col = palette(km / float(uN));                                        // escape time
+  } else {
+    col = palette(s / float(uN));                                         // smooth (default)
+  }
+  float h = (escaped > 0.5) ? s : -1.0;
+  if (uOutline == 1 && h >= 0.0) {
+    float g = length(vec2(dFdx(h), dFdy(h)));
+    col = mix(col, vec3(0.0), clamp(g * uOutlineWidth, 0.0, 1.0));
+  }
+  if (uEquipotential == 1 && h >= 0.0) {
+    float fp = fract(h * uEquiDensity);
+    float line = smoothstep(0.0, 0.06, min(fp, 1.0 - fp));
+    col *= 0.35 + 0.65 * line;
+  }
+  fragColor = vec4(col, 1.0);
+}
+`;
+
+/**
  * Perturbation deep-zoom kernel for z²+c on the parameter plane (Phase 15). Each
  * pixel iterates a small delta δz around a CPU-computed reference orbit Z_n (supplied
  * as the RG32F texture `uOrbit`): z_n = Z_n + δz_n, δz_{n+1} = 2·Z_n·δz_n + δz_n² + δc,
@@ -899,6 +957,30 @@ ${coordinate}
   return s;
 }
 
+// Two-pass recolour FIELD pre-pass (cd-render Fix L): write the colouring scalars for the
+// escape-family modes into an RGBA32F target so an appearance change can recolour without
+// re-iterating. R = smooth escape value s (= the relief height; −1 for interior), G = kmax,
+// B = binary-decomposition sign (im(z_escape) < 0 ⇒ −1), A = escaped flag (1 exterior / 0 interior).
+// Mirrors reliefHeight's smooth formula and colorAt's smooth/escape/decomposition colouring so the
+// colourise pass reproduces them byte-for-byte at uAA == 1. One sample per pixel (no AA, no jitter).
+vec4 fieldAt(vec2 fragXY) {
+  vec2 uv = fragXY / uResolution;
+${coordinate}
+  cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
+  int kmax = 0;
+  for (int k = 0; k < uN; k++) {
+    if (escapeFn(z, cc)) break;
+    z = fFn(z, cc);
+    kmax = k + 1;
+  }
+  if (kmax == uN) return vec4(-1.0, float(kmax), 1.0, 0.0); // never escaped → interior
+  float s = float(kmax);
+  float az = cabsf(z);
+  if (az > 1.0) s = float(kmax) + 1.0 - log(log(az)) / LOG_DEGREE;
+  float decompSign = (cre1(cim(z)) < 0.0) ? -1.0 : 1.0;
+  return vec4(s, float(kmax), decompSign, 1.0);
+}
+
 // Lambertian + specular + hemisphere shading from a 2D surface slope g (the
 // height-field gradient scaled by relief depth). Shared by the screen-space relief
 // path (gradient via fwidth) and the analytic path (gradient from z/z′).
@@ -923,6 +1005,12 @@ ${sphereGuard}${projGuard}  if (uMode == 6) {
     // Histogram pre-pass: output the escape count encoded in R,G (kmax = R + 256*G).
     int k = escapeCount(fc);
     fragColor = vec4(float(k % 256) / 255.0, float(k / 256) / 255.0, 0.0, 1.0);
+    return;
+  }
+  if (uMode == 16) {
+    // Two-pass recolour field pre-pass — write the colouring scalars (see fieldAt). Rendered into an
+    // RGBA32F target; the colourise pass samples it. Gated to escape-family modes at uAA == 1.
+    fragColor = fieldAt(fc);
     return;
   }
   if (uMode == 2) {

@@ -8,6 +8,7 @@ import {
   POST_FRAGMENT_SHADER,
   PREVIEW_FRAGMENT_SHADER,
   PERTURBATION_FRAGMENT_SHADER,
+  COLORIZE_FRAGMENT_SHADER,
   buildFragmentShader,
 } from "../src/render/shaderBuilder";
 import { SCHWARZ_FRAGMENT_SHADER } from "../src/render/schwarzGL";
@@ -62,6 +63,7 @@ describe("CD's real shaders compile and link in WebGL2 (cd-shader-uncompiled-07)
       ["post", POST_FRAGMENT_SHADER],
       ["preview", PREVIEW_FRAGMENT_SHADER],
       ["perturbation", PERTURBATION_FRAGMENT_SHADER],
+      ["colorize", COLORIZE_FRAGMENT_SHADER], // two-pass recolour pass (cd-render Fix L)
     ] as const) {
       expect(() => createProgram(gl, VERTEX_SHADER, src), name).not.toThrow();
     }
