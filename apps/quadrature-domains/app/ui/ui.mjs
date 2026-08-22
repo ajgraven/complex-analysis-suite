@@ -738,7 +738,14 @@ function syncPolyDegreeInput() {
 // Selecting a preset loads it; the user editing anything afterward reverts
 // the dropdown to "— custom —".
 function markAsCustom() {
-  $('#preset-select').value = '';
+  // Idempotent (Tier-1 O3): onPoleDrag / slider input call this on EVERY frame,
+  // but "revert to custom" only changes anything the first time. Once the preset
+  // dropdown already reads "— custom —" (''), re-dispatching qd-customized just
+  // re-runs the listeners' card-clears (thesis / equations / Faber innerHTML
+  // rebuilds) for no change — so skip it and drop that per-frame cost.
+  const sel = $('#preset-select');
+  if (sel && sel.value === '') return;
+  if (sel) sel.value = '';
   // A manual edit (or a family-preset load) means we're no longer showing a
   // thesis example — ui-thesis.js listens for this to clear its oracle card.
   document.dispatchEvent(new CustomEvent('qd-customized'));

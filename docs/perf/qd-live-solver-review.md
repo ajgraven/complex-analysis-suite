@@ -53,6 +53,57 @@ obvious win — without touching the (already fast) solver math.
 
 ---
 
+## Update — Tier 1 implemented (2026-08-22)
+
+Tier 1 landed: `showSolution()` is split into a cheap live path and an authoritative
+settle path, stale live-solve jobs are coalesced, and the per-frame incidental work
+(`publishPrimarySolution`, `qd-customized`, alternates DOM) is removed from the drag. See
+the "Tier 1 — status" note under each recommendation below for the exact edits. Golden
+tests stay green (2342 node-test assertions + 1246 vitest across 162 files).
+
+Measured with a new **live-drag benchmark** (`perf/live-drag-bench.mjs`) that drives the
+*real* live path — it oscillates a residue |C| slider for a 150-frame (~2.5 s) drag and
+records the main-thread long-task time, live-cycle throughput, and per-cycle cost. (The
+stock harness measures a *preset change*, which takes the full/authoritative path and so
+does **not** exercise the live path — it's used here only to prove no regression.)
+
+**Live-drag path — before → after** (equilateral 3-point bounded QD; 150-frame slider drag):
+
+| Metric | 1× before | 1× after | 4× before | 4× after |
+|---|---|---|---|---|
+| **Main-thread long-task time** | 24.6 s | **5.2 s** | 96.3 s | **16.4 s** |
+| Wall time (ms/frame) | 27.6 s (184) | 7.6 s (50) | 99.8 s (666) | 19.3 s (129) |
+| Live cycles painted | 147 | 145 | 74 | **141** |
+| `showSolution` cost / cycle | 2.0 ms | **0.1 ms** | 10.3 ms | **0.4 ms** |
+| KaTeX renders during drag | 147 | **0** | 74 | **0** |
+| `qd-customized` dispatches | 150 | **1** | 150 | **1** |
+
+Main-thread blocking during a sustained drag drops **~4.7× (1×)** and **~5.9× (4×)**;
+per-frame `showSolution` cost drops **20–26×**; and at 4× the throughput nearly doubles
+(74 → 141 cycles) because each frame is cheap enough to actually finish. On a mid-range
+machine the scripted drag went from *effectively frozen* (666 ms/frame) to 129 ms/frame.
+
+**Full/authoritative path — no regression** (stock harness preset-change interaction):
+
+| Metric | 1× before → after | 4× before → after |
+|---|---|---|
+| settle + paint (median) | 542 → 560 ms | 2614 → **2348** ms |
+| main-thread task time | 821 → 813 ms | 4330 → **3552** ms |
+| warm solve (2-pt / triangle) | unchanged (~5–8 ms) | unchanged (~8–10 ms) |
+
+The authoritative path is unchanged-to-slightly-better (the alternates fast-path and badge
+change-guard help it too); the solver and boot numbers are unchanged.
+
+**What now dominates the live path (the clear next step):** after Tier 1, `showSolution`
+is negligible (0.1–0.4 ms/cycle) and KaTeX is gone, yet ~5 s (1×) / ~16 s (4×) of
+long-task remains across the drag. That residue is the **live status analyses** (O5,
+Tier 2 — `scheduleLiveAnalysis` posts a heavy pass every 120 ms and its completion
+re-renders the geometry/cusps/observables cards on the main thread, sometimes respawning
+the analysis worker) plus the plot render and per-frame worker-seed prep. **O5 is the
+highest-value follow-up** now that the `showSolution` cost is gone.
+
+---
+
 ## Measured evidence
 
 Environment: Chrome 141 headless, 4 logical cores. `1×` = unthrottled desktop; `4×` =
@@ -124,9 +175,19 @@ IDs: **O**rchestration, **R**ender, **S**olver, **L**oad.
 
 ### Tier 1 — Do first: split live vs. authoritative rendering (biggest win, low risk)
 
+> **✅ Status: IMPLEMENTED (2026-08-22).** All four landed in `ui-solve.mjs` + `ui.mjs`
+> (see the before/after evidence in "Update — Tier 1 implemented" above). O1 is a
+> serialize-and-coalesce flag on the live lane (`_liveInFlight` / `_liveDirty`); O2/R1 +
+> O3 are a `showSolution(sol, hData, isPrimary, { live })` split (the `live` flag is kept
+> distinct from `isPrimary` so alternate previews still render the full formula); R2 caps
+> live display sampling at `LIVE_DISPLAY_SAMPLES = 160` with no adaptive refinement;
+> `publishPrimarySolution` is dropped from live frames, `markAsCustom` is idempotent, the
+> validity badge has an element-scoped change-guard, and `refreshAlternatesPanel` early-outs
+> when nothing changed.
+
 These four together remove essentially all avoidable per-frame main-thread work. They are
 the core of the "significant, user-noticeable" improvement and are all low-risk edits
-concentrated in `ui-solve.mjs` / `ui-domain-plot.mjs`.
+concentrated in `ui-solve.mjs` / `ui.mjs`.
 
 **O1 — Coalesce-latest on the live worker lane (kills the stale-solve backlog).**
 `scheduleQuickSolve` (`ui-solve.mjs:88`) only rAF-throttles; it never checks whether the
@@ -332,9 +393,15 @@ export QD_CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome   # or 
 node apps/quadrature-domains/perf/measure.mjs --runs 5 --skip-build --profile
 node apps/quadrature-domains/perf/measure.mjs --runs 3 --skip-build --profile --cpu-slowdown 4
 
-# Drag benchmark: per-update solve over a valid-domain drag, cold vs warm-start
+# Drag benchmark: per-update SOLVE cost over a valid-domain drag, cold vs warm-start
 node apps/quadrature-domains/perf/drag-bench.mjs
 QD_CPU_SLOWDOWN=4 node apps/quadrature-domains/perf/drag-bench.mjs
+
+# Live-drag benchmark: the real per-frame LIVE path (quickSolveAndRender ->
+# showSolution(live)), driven by oscillating a residue |C| slider. Reports
+# main-thread long-task time, live-cycle throughput, KaTeX renders (0 after Tier 1).
+node apps/quadrature-domains/perf/live-drag-bench.mjs
+QD_CPU_SLOWDOWN=4 node apps/quadrature-domains/perf/live-drag-bench.mjs
 ```
 
 All numbers in this document are from Chrome 141 headless on a 4-core host; `4×` uses CDP
