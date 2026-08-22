@@ -366,17 +366,28 @@ while dropping the per-node `Math.hypot`. (A coarse-polygon subsample was tried 
 clearance and picks a `b` too close to ∂Ω → identity fails; the full-resolution scan is
 load-bearing.) `distBoundary` 4303 ms → ~17 ms (inlined).
 
-**Cumulative S4 result (verify scalar-ize + sqrt-free):** numeric-core workload
-**45.3 s → 26.5 s (−41 %)**, GC **15.4 % → ~9 %** (−57 % absolute), `evalAtN` 17.5 % → 6.2 %,
-bounded verify ~−70 %, `distBoundary` ~0; heap **32.7 → 10.2 MB**. Broad — it speeds
-initial-solve (500-sample verify × multistart) and heavy/unbounded live solves alike. Tests
-green (2342 node-test incl. the exact identity oracles; test points provably unchanged +
-1246 vitest / 162 files).
+Finally `branchTaylorAccumulate` — the single hottest frame, run inside **every** family's
+`phiTaylorAt` (per boundary node, per Newton residual eval) — was rewritten from allocating
+`Complex`/`Taylor` object arrays (`Taylor.zero`/`truncate`/`mul`-per-residue) to flat scalar
+`Float64Array` buffers with its **own** truncated convolution. This keeps it **app-local** —
+it no longer calls `@cas/core`'s shared `series.mul` (so no cross-package coordination), and
+it sidesteps the `result[i]` aliasing concern by writing fresh objects at the end (the
+caller's originals are only read). `Taylor.mul` self-time went 1371 ms → **2 ms** (inlined);
+per-node object churn is gone.
 
-*Remaining S4 (next):* `branchTaylorAccumulate` (now the #1 frame at ~15–19 %) + `Taylor.mul`/
-`truncate` (~9 %) still allocate per call — the in-place rewrite there carries a `result[i]`
-aliasing concern (shared constants) and `Taylor.mul` delegates to `@cas/core`'s `series.mul`
-(cross-package), so it is deferred pending that coordination. Original diagnosis:
+**Cumulative S4 result (verify scalar-ize + sqrt-free clearance + branch-tail convolution):**
+numeric-core workload **45.3 s → 25.1 s (−45 %)**, GC **7069 → 2583 ms (−63 %)**,
+`evalAtN` 17.5 % → 7.4 %, bounded verify ~−70 %, `distBoundary` ~0, `Taylor.mul` ~0; heap
+down. Broad — it speeds initial-solve (500-sample verify × multistart) and heavy/unbounded
+live solves alike. Tests green throughout (2342 node-test incl. the exact all-family identity
+oracles; test points provably unchanged; + 1246 vitest / 162 files).
+
+*Remaining S4 (optional, deferred):* the branch-tail scratch buffers are allocated per call
+(8 small `Float64Array`s); hoisting them to module scope would trim the last per-call
+allocation but adds mutable shared state for a marginal gain. `evalPhi_QD`/`residual_QD` still
+use functional `Complex` ops, and `@cas/core`'s `series.mul` / in-place `Complex` variants
+remain untouched (a cross-package change affecting CD et al. — coordinate before touching).
+Original diagnosis:
 `Complex` ships in-place variants (`mulInto`/`addMulInto`/…, `packages/core/src/complex.ts:97`)
 documented "for tight inner loops … to remove allocator + GC pressure" — **but the QD hot
 path uses the allocating functional variants everywhere** (`evalPhi_QD` `solver-qd.mjs:40`;
