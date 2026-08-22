@@ -1276,19 +1276,26 @@ function chooseHoleTestPoints(polygonPts, poles, opts) {
     }
     return (cr % 2) === 1;
   };
-  const distBoundary = (x, y) => {
+  // SQUARED min-distance (no per-point sqrt). The ranking and the `> 0` filter
+  // below use only the ORDER and sign of the clearance, and x↦x² is monotincreasing
+  // on [0,∞), so squaring selects the EXACT same test points while dropping the
+  // Math.hypot sqrt from these O(candidates × |polygon|) loops — the dominant
+  // cost of the unbounded verify at full boundary resolution. (S4/verify)
+  const distBoundarySq = (x, y) => {
     let mn = Infinity;
     for (const w of polygonPts) {
-      const d = Math.hypot(w.re - x, w.im - y);
+      const dx = w.re - x, dy = w.im - y;
+      const d = dx * dx + dy * dy;
       if (d < mn) mn = d;
     }
     return mn;
   };
-  const distPole = (x, y) => {
+  const distPoleSq = (x, y) => {
     let mn = Infinity;
     for (const p of (poles || [])) {
       if (!p || !p.a) continue;
-      const d = Math.hypot(p.a.re - x, p.a.im - y);
+      const dx = p.a.re - x, dy = p.a.im - y;
+      const d = dx * dx + dy * dy;
       if (d < mn) mn = d;
     }
     return mn;   // Infinity when h has no finite poles (poly-only h)
@@ -1305,7 +1312,9 @@ function chooseHoleTestPoints(polygonPts, poles, opts) {
   for (const b of cand) {
     if (origEps > 0 && Math.hypot(b.re, b.im) < origEps) continue;  // origin ∈ Ω
     if (!inside(b.re, b.im)) continue;
-    const clr = Math.min(distBoundary(b.re, b.im), distPole(b.re, b.im));
+    // Squared clearance: min(a²,b²) = (min(a,b))² for a,b ≥ 0, so this ranks and
+    // filters identically to the former min-of-distances (same points selected).
+    const clr = Math.min(distBoundarySq(b.re, b.im), distPoleSq(b.re, b.im));
     if (clr > 0) ranked.push({ b, clr });
   }
   ranked.sort((p, q) => q.clr - p.clr);

@@ -357,14 +357,26 @@ self-time (`evalAtN` 17.5 %, `verifyQuadratureIdentity_QD` 5.7 %) — each alloc
 single allocation-free, `n`-outer pass over scalar `re`/`im` locals with the moment power
 (`w^k` / `(w−b)^{-k}`) accumulated incrementally (no per-node `Complex.pow`). The selected
 test point `b` is unchanged, so identity residuals move only by FP summation order (~1e-15).
-**Result:** numeric-core workload **45.3 s → 32.7 s (−28 %)**, GC **15.4 % → 11.2 %**,
-`evalAtN` 17.5 % → 6.2 %, bounded verify ~−70 % (out of the top 12); heap 32.7 → 23.7 MB.
-Tests green (2342 node-test incl. the exact identity oracles + 1246 vitest / 162 files).
+Then the freed-up top frames — `chooseHoleTestPoints` + `distBoundary` (~26 %, unbounded
+only; point-in-polygon + min-distance over the full verify polygon) — were cut by making
+`distBoundary`/`distPole` **sqrt-free**: they feed only a ranking and a `> 0` filter, and
+`x↦x²` is monotone on `[0,∞)`, so squared clearance selects the **exact same** test points
+while dropping the per-node `Math.hypot`. (A coarse-polygon subsample was tried first and
+**reverted** — it broke large-`c`/thin domains, where a sparse boundary overestimates the
+clearance and picks a `b` too close to ∂Ω → identity fails; the full-resolution scan is
+load-bearing.) `distBoundary` 4303 ms → ~17 ms (inlined).
 
-*Remaining S4 (next):* `branchTaylorAccumulate` (now the #1 frame at ~15 %) + `Taylor.mul`/
-`truncate` (~9 %) still allocate per call; and `chooseHoleTestPoints` + `distBoundary`
-(~26 %, unbounded only) run the point-in-polygon / min-distance tests over the *full*
-verify polygon (see the coarse-polygon note below). Original diagnosis:
+**Cumulative S4 result (verify scalar-ize + sqrt-free):** numeric-core workload
+**45.3 s → 26.5 s (−41 %)**, GC **15.4 % → ~9 %** (−57 % absolute), `evalAtN` 17.5 % → 6.2 %,
+bounded verify ~−70 %, `distBoundary` ~0; heap **32.7 → 10.2 MB**. Broad — it speeds
+initial-solve (500-sample verify × multistart) and heavy/unbounded live solves alike. Tests
+green (2342 node-test incl. the exact identity oracles; test points provably unchanged +
+1246 vitest / 162 files).
+
+*Remaining S4 (next):* `branchTaylorAccumulate` (now the #1 frame at ~15–19 %) + `Taylor.mul`/
+`truncate` (~9 %) still allocate per call — the in-place rewrite there carries a `result[i]`
+aliasing concern (shared constants) and `Taylor.mul` delegates to `@cas/core`'s `series.mul`
+(cross-package), so it is deferred pending that coordination. Original diagnosis:
 `Complex` ships in-place variants (`mulInto`/`addMulInto`/…, `packages/core/src/complex.ts:97`)
 documented "for tight inner loops … to remove allocator + GC pressure" — **but the QD hot
 path uses the allocating functional variants everywhere** (`evalPhi_QD` `solver-qd.mjs:40`;
