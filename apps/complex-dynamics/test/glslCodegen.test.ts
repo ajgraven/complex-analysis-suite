@@ -56,8 +56,18 @@ describe("equality comparison (df64-safe)", () => {
     expect(code).not.toContain("cre1(");
   });
 
-  it("still emits ordering comparisons via the real-part accessor", () => {
-    expect(compileEscape(parse("abs(z) > 2"))).toContain("cre1(");
+  it("still emits general ordering comparisons via the real-part accessor", () => {
+    // A non-abs ordering (or an abs against a non-constant) keeps the cre1 hi-limb path.
+    expect(compileEscape(parse("re(z) > 2"))).toContain("cre1(");
+  });
+
+  it("lowers `abs(z) > k` (k a non-negative constant) to the sqrt-free squared-magnitude compare", () => {
+    // Escape predicate peephole: abs(z) > 2  ⟺  cabs2(z) > 4  (a, k ≥ 0 ⇒ a op k ⟺ a² op k²),
+    // dropping a per-iteration length()/sqrt from the hot loop. See @cas/expr glsl.ts. (expr-glsl-03)
+    const code = compileEscape(parse("abs(z) > 2"));
+    expect(code).toContain("cabs2(z)");
+    expect(code).toContain("4.0"); // k·k = 2² threshold
+    expect(code).not.toContain("cabs("); // NOT the old complex-abs (sqrt) form
   });
 });
 

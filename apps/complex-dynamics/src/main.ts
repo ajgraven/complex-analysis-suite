@@ -2575,6 +2575,34 @@ function init(): void {
     updateLegends(); // the corner colour key follows the mode / palette
   }
 
+  // Appearance-slider drafting (cd-render P1-a): an appearance-only slider drag (palette rotation,
+  // lighting, post, outline, equipotential) fires a stream of `input` events, each re-rendering BOTH
+  // plots — and because escape time and colouring share one fragment pass, every tick re-iterates the
+  // whole escape field even though only a colour uniform changed (measured: ~17 draws/tick). Drop both
+  // plots to the coarse draft level for the duration of the gesture (the same machinery pan/zoom use —
+  // full iteration cap, reduced resolution) and refine back to full resolution once the slider rests.
+  // Mirrors the wheel-settle pattern in plotView.ts; keyboard-arrow slider nudges (no pointerup) settle
+  // via the same timer.
+  let appearanceDraftTimer = 0;
+  function pulseAppearanceDraft(): void {
+    parameterView.plot.setDraft(true);
+    dynamicalView.plot.setDraft(true);
+    if (appearanceDraftTimer) window.clearTimeout(appearanceDraftTimer);
+    appearanceDraftTimer = window.setTimeout(() => {
+      appearanceDraftTimer = 0;
+      parameterView.plot.setDraft(false);
+      dynamicalView.plot.setDraft(false);
+    }, 180);
+  }
+  /** Wrap an appearance-apply handler so a range-slider drag renders coarse drafts and refines on rest.
+   *  Only meaningful for continuous `<input type=range>` gestures — discrete toggles/selects apply directly. */
+  function withAppearanceDraft(apply: () => void): () => void {
+    return () => {
+      pulseAppearanceDraft();
+      apply();
+    };
+  }
+
   // --- Fast deep zoom (BLA) toggle wiring: push the persisted state to both plots and keep it in
   //     sync. setBLA is a no-op away from the perturbation path, so this is safe for any f / view.
   const blaToggle = byId<HTMLInputElement>("bla-toggle");
@@ -5620,7 +5648,7 @@ function init(): void {
     byId(id).addEventListener("change", applyColoring);
   }
   byId("trap").addEventListener("change", applyTrap);
-  byId("paletteRotation").addEventListener("input", applyColoring);
+  byId("paletteRotation").addEventListener("input", withAppearanceDraft(applyColoring));
   applyColoring();
   updateDerivativeGating();
   byId("inspector-close").addEventListener("click", () => {
@@ -6304,17 +6332,20 @@ function init(): void {
   );
 
   for (const id of ["light", "lightAz", "lightEl", "lightHeight"]) {
-    byId(id).addEventListener("input", applyLighting);
+    const el = byId<HTMLInputElement>(id);
+    el.addEventListener("input", el.type === "range" ? withAppearanceDraft(applyLighting) : applyLighting);
   }
   applyLighting();
 
   for (const id of ["post", "postVignette", "postGamma"]) {
-    byId(id).addEventListener("input", applyPost);
+    const el = byId<HTMLInputElement>(id);
+    el.addEventListener("input", el.type === "range" ? withAppearanceDraft(applyPost) : applyPost);
   }
   applyPost();
 
   for (const id of ["outline", "outlineWidth"]) {
-    byId(id).addEventListener("input", applyOutline);
+    const el = byId<HTMLInputElement>(id);
+    el.addEventListener("input", el.type === "range" ? withAppearanceDraft(applyOutline) : applyOutline);
   }
   applyOutline();
 
@@ -6361,7 +6392,8 @@ function init(): void {
   });
 
   for (const id of ["equipotential", "equiDensity"]) {
-    byId(id).addEventListener("input", applyEquipotential);
+    const el = byId<HTMLInputElement>(id);
+    el.addEventListener("input", el.type === "range" ? withAppearanceDraft(applyEquipotential) : applyEquipotential);
   }
   applyEquipotential();
 

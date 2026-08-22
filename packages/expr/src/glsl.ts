@@ -100,6 +100,24 @@ function emitComplex(node: Node): string {
   }
 }
 
+/** Peephole for `abs(E) op k` / `k op abs(E)` with `op` an ordering and `k` a real, non-negative
+ *  compile-time constant: return the sqrt-free `cabs2(E) op k·k` (or the mirrored form), else null.
+ *  `cabs2` is the squared magnitude |E|² provided by both precision stdlibs. See the call site for the
+ *  correctness argument and the ≤1-ulp boundary caveat. */
+function emitAbsSquaredCompare(left: Node, op: string, right: Node): string | null {
+  const isAbs = (n: Node): n is Node & { kind: "call"; args: Node[] } =>
+    n.kind === "call" && n.name === "abs" && n.args.length === 1;
+  if (isAbs(left)) {
+    const k = constReal(right);
+    if (k !== null && k >= 0) return `(cabs2(${emitComplex(left.args[0])}) ${op} ${glslFloat(k * k)})`;
+  }
+  if (isAbs(right)) {
+    const k = constReal(left);
+    if (k !== null && k >= 0) return `(${glslFloat(k * k)} ${op} cabs2(${emitComplex(right.args[0])}))`;
+  }
+  return null;
+}
+
 /** Emit a boolean-valued node, coercing a complex value via its real part if needed. */
 function emitBool(node: Node): string {
   switch (node.kind) {
@@ -123,6 +141,15 @@ function emitBool(node: Node): string {
       // df_div / df_sqrt all return through `quickTwoSum` — so the representation is canonical and a
       // full-vector `==` is both exact and full-precision. (expr-glsl-02)
       if (node.op === "==") return `(${a} == ${b})`;
+      // Sqrt-free peephole for `abs(E) op k` (or `k op abs(E)`) with k a real, non-negative
+      // compile-time constant: since a, k ≥ 0 ⇒ (a op k ⟺ a² op k²), emit `cabs2(E) op k·k`,
+      // dropping a per-iteration `length()` (a `sqrt`) from the escape predicate `abs(z) > R` —
+      // the dominant hot loop, run for every pixel every iteration (a full df64 magnitude at deep
+      // zoom). NOT byte-identical: dot(E,E) vs length(E)² differ by ≤1 ulp, so a boundary pixel may
+      // escape ±1 iteration (escape-count goldens regenerate). Restricted to k ≥ 0 — a negative k
+      // makes `abs(E) op k` trivially true/false and squaring would flip it. (expr-glsl-03)
+      const absSq = emitAbsSquaredCompare(node.left, node.op, node.right);
+      if (absSq) return absSq;
       // Ordering compares real parts only, matching the JS evaluator (`l[0] > r[0]`). `cre1` is the
       // right accessor here: `<` / `>` on a df64 pair is decided by the hi limb except within one ulp.
       return `(cre1(${a}) ${node.op} cre1(${b}))`;
