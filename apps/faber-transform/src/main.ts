@@ -3,8 +3,8 @@
 // @cas/gpu colorAt) under a 2-D overlay canvas (axes, ∂𝔻/∂K/equipotential, markers); a CPU phase
 // portrait is the fallback when WebGL2 is unavailable, and the path for free-form f. Three input
 // families: a monomial zⁿ (→ Fₙ, exact), a pole 1/(z−z₀)^k (→ closed-form rational image, exact), and
-// a free-form f(z) via @cas/expr (→ Σ_{n≤N} bₙ Fₙ, a truncated series, ≈ — with the convergence
-// equipotential Γ_R drawn).
+// a free-form f(z) via @cas/expr (→ Σ_{n≤N} bₙ Fₙ, a truncated series, ≈ — with the radius of
+// convergence R reported; K sits well inside it, so the convergence equipotential itself is not drawn).
 import { Complex } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
@@ -75,6 +75,7 @@ const DEFAULT_CUSTOM_POLYGON: readonly (readonly [number, number])[] = Array.fro
   const t = Math.PI / 2 + (2 * Math.PI * k) / 5;
   return [Number((1.2 * Math.cos(t)).toFixed(3)), Number((1.2 * Math.sin(t)).toFixed(3))];
 });
+import { setMath, mathElt, PHI } from "./mathText.js";
 import "./styles/main.css";
 
 const AXIS_COLORS = { grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.16)" };
@@ -172,7 +173,7 @@ function makePanel(title: string): { panel: Panel; el: HTMLElement } {
   const stage = elt("div", { class: "stage" });
   stage.append(gl, ov);
   const box = elt("div", { class: "panel" });
-  box.append(elt("h2", {}, title), stage);
+  box.append(mathElt("h2", title), stage);
   return { panel: { gl, ov, renderer: null }, el: box };
 }
 
@@ -232,18 +233,17 @@ function main(): void {
   const head = elt("header", { class: "app-head" });
   head.append(
     elt("h1", {}, "Faber Transform"),
-    elt(
+    mathElt(
       "p",
-      {},
-      "The exterior Faber transform Φφ maps a function f analytic on the unit disk to Σ bₙ Fₙ, " +
+      `The exterior Faber transform ${PHI} maps a function f analytic on the unit disk to Σ b_{n} F_{n}, ` +
         "analytic on the bounded complement K = ℂ∖Ω of an unbounded domain. Left: f on the disk. " +
         "Right: its image on K.",
     ),
   );
   root.append(head);
 
-  const left = makePanel("f(z) on the unit disk  𝔻");
-  const right = makePanel("Φφ(f)(w) on K");
+  const left = makePanel("f(z) on the unit disk 𝔻");
+  const right = makePanel(`${PHI}(f)(w) on K`);
   const panels = elt("div", { class: "panels" });
   panels.append(left.el, right.el);
   root.append(panels);
@@ -310,7 +310,7 @@ function main(): void {
   // on a polygonal K — flattening the corner overshoot. Shown only for polygon domains + monomial input.
   const suppressInput = elt("input", { id: "suppress", type: "checkbox" });
   const suppressCtl = elt("div", { class: "control control-check" });
-  suppressCtl.append(suppressInput, elt("label", { for: "suppress" }, "suppress corners (Q_{n,m})"));
+  suppressCtl.append(suppressInput, mathElt("label", "suppress corners (Q_{n,m})", { for: "suppress" }));
 
   const mInput = elt("input", { id: "suppressm", type: "range", min: String(MIN_SUPPRESS_M), max: String(MAX_SUPPRESS_M), step: "1" });
   const mLabel = elt("label", { for: "suppressm" }, "strength m");
@@ -376,7 +376,11 @@ function main(): void {
   // The M3 corner-overshoot profile (paper Fig. 2): |Fₙ| along ∂K, with |Q_{n,m}| overlaid when suppressing.
   // Shown only for a monomial input on a polygonal K (when computeModel attaches a cornerProfile).
   const profileWrap = elt("div", { class: "corner-profile-wrap" });
-  const profileCaption = elt("div", { class: "corner-profile-cap" }, "Corner overshoot along ∂K — |φ⁻ⁿFₙ| → 1 on the smooth arcs, → λₖ at the corners");
+  const profileCaption = mathElt(
+    "div",
+    "Corner overshoot along ∂K — |φ^{−n}F_{n}| → 1 on the smooth arcs, → Λ_{k} at the corners",
+    { class: "corner-profile-cap" },
+  );
   const profileCanvas = elt("canvas", { class: "corner-profile" });
   profileWrap.append(profileCaption, profileCanvas);
   root.append(profileWrap);
@@ -455,9 +459,10 @@ function main(): void {
       const suppress = state.suppressCorners === true && cornerImages.length > 0;
       const m = state.suppressStrength ?? DEFAULT_SUPPRESS_M;
       const coeffs = suppress ? weightedMonomialCoeffs(map, cornerImages, n, m) : transformCoeffs(map, monomialTaylor(n));
+      const poly = formatFaberPoly(coeffs, { varSym: "w", sup: (k) => `^{${k}}` });
       const readout = suppress
-        ? `Φφ(z^${n})(w) ≈ Q_{${n},${m}}(w) = ${formatFaberPoly(coeffs, { varSym: "w" })}  ·  corner-suppressed weighted Faber (m = ${m})${cornerNote}`
-        : `Φφ(z^${n})(w) ${approx ? "≈" : "="} ${formatFaberPoly(coeffs, { varSym: "w" })}${domainNote}`;
+        ? `${PHI}(z^{${n}})(w) ≈ Q_{${n},${m}}(w) = ${poly}  ·  corner-suppressed weighted Faber (m = ${m})${cornerNote}`
+        : `${PHI}(z^{${n}})(w) ${approx ? "≈" : "="} ${poly}${domainNote}`;
       // On a polygonal K, plot the corner-overshoot profile |Fₙ| along ∂K (and |Q_{n,m}| when suppressing).
       const cornerProfile =
         cornerImages.length > 0
@@ -477,7 +482,7 @@ function main(): void {
       const order = state.input.order;
       const img = poleImage(map, z0, order);
       const rightRat = poleImageRational(img, order);
-      const kexp = order === 1 ? "" : `^${order}`;
+      const kexp = order === 1 ? "" : `^{${order}}`;
       return {
         left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: {
@@ -490,8 +495,8 @@ function main(): void {
         },
         badge: exactBadge,
         readout:
-          `Φφ(1/(z−z₀)${kexp})(w): image pole at w = φ(z₀) = ${fmt(img.poleAt)}` +
-          (order === 1 ? `,  residue φ'(z₀) = ${fmt(img.terms[0])}` : "") +
+          `${PHI}(1/(z−z_{0})${kexp})(w): image pole at w = φ(z_{0}) = ${fmt(img.poleAt)}` +
+          (order === 1 ? `,  residue φ'(z_{0}) = ${fmt(img.terms[0])}` : "") +
           domainNote,
         error: false,
       };
@@ -514,8 +519,8 @@ function main(): void {
           right: { source: { kind: "rational", rat }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(rat.num) },
           badge: truncated ? "≈" : exactBadge,
           readout: truncated
-            ? `Φφ(f)(w) ≈ rational image on K, truncated to degree ${GPU_COEFF_CAP - 1} (GPU coefficient cap)  ·  ${Math.max(0, rat.den.length - 1)} image pole(s)${domainNote}`
-            : `Φφ(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_j) ∈ Ω (outside K)${domainNote}`,
+            ? `${PHI}(f)(w) ≈ rational image on K, truncated to degree ${GPU_COEFF_CAP - 1} (GPU coefficient cap)  ·  ${Math.max(0, rat.den.length - 1)} image pole(s)${domainNote}`
+            : `${PHI}(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_{j}) ∈ Ω (outside K)${domainNote}`,
           error: false,
         };
       } catch (e) {
@@ -544,7 +549,7 @@ function main(): void {
       left: leftFn,
       right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
-      readout: `Φφ(f) ≈ Σ_{n≤${effN}} bₙ Fₙ  ·  ${coeffNote}${orderNote}  ·  ${rNote}${domainNote}`,
+      readout: `${PHI}(f) ≈ Σ_{n≤${effN}} b_{n} F_{n}  ·  ${coeffNote}${orderNote}  ·  ${rNote}${domainNote}`,
       error: false,
     };
   }
@@ -634,7 +639,7 @@ function main(): void {
       modelKey = key;
     }
     exactBadge.textContent = model.badge;
-    readoutBody.textContent = model.readout;
+    setMath(readoutBody, model.readout);
     syncControls();
     // A soft error (expr parse mid-typing) keeps the last good render; a hard failure (a degenerate polygon
     // fit, `blank`) falls through to paint the blank panels so a "⚠" badge never sits over a stale image.

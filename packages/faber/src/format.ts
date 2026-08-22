@@ -13,6 +13,11 @@ export interface FormatFaberOptions {
   digits?: number;
   /** Snap-to-zero / snap-to-integer tolerance, default 1e-9. */
   tol?: number;
+  /**
+   * How to render a power's exponent `k` (k ≥ 2). Defaults to Unicode superscripts (`ζ²`); a consumer
+   * that typesets the result with real `<sup>` markup can pass e.g. `(k) => \`^{${k}}\``.
+   */
+  sup?: (k: number) => string;
 }
 
 export function formatFaberPoly(Fn: readonly Cx[], opts: FormatFaberOptions = {}): string {
@@ -21,7 +26,7 @@ export function formatFaberPoly(Fn: readonly Cx[], opts: FormatFaberOptions = {}
   const tol = opts.tol != null ? opts.tol : 1e-9;
   if (!Fn || !Fn.length) return "0";
 
-  const sup = (k: number): string => superscript(k);
+  const sup = opts.sup ?? ((k: number): string => superscript(k));
 
   let out = "";
   let any = false;
