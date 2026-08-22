@@ -62,16 +62,40 @@ export function fitSimilarity(raw: readonly V2[], canonical: readonly V2[]): Sim
   return { aRe, aIm, bRe, bIm };
 }
 
+/** Mean fit residual of `canonicalₖ ≈ a·rawₖ + b`, and the canonical bounding-box diagonal (its scale). */
+function similarityFitError(raw: readonly V2[], canonical: readonly V2[], s: Similarity): { resid: number; extent: number } {
+  const n = Math.min(raw.length, canonical.length);
+  let resid = 0;
+  let xMin = Infinity;
+  let xMax = -Infinity;
+  let yMin = Infinity;
+  let yMax = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const cx = s.aRe * raw[i][0] - s.aIm * raw[i][1] + s.bRe;
+    const cy = s.aRe * raw[i][1] + s.aIm * raw[i][0] + s.bIm;
+    resid += Math.hypot(cx - canonical[i][0], cy - canonical[i][1]);
+    xMin = Math.min(xMin, canonical[i][0]);
+    xMax = Math.max(xMax, canonical[i][0]);
+    yMin = Math.min(yMin, canonical[i][1]);
+    yMax = Math.max(yMax, canonical[i][1]);
+  }
+  return { resid: n > 0 ? resid / n : Infinity, extent: Math.hypot(xMax - xMin, yMax - yMin) || 1 };
+}
+
 /**
  * Map a point `dragged` in CANONICAL coordinates back to a raw editor vertex — `raw = (dragged − b)/a`,
- * with (a, b) fit from the current matched corner sets. Returns null when the similarity is undetermined
- * or non-invertible (|a| ≈ 0). The caller replaces the dragged vertex with this raw point and refits.
+ * with (a, b) fit from the index-matched corner sets. Returns null when the similarity is undetermined,
+ * non-invertible (|a| ≈ 0), or — the defensive guard — when it does not actually fit the corners (mean
+ * residual > 15% of the canonical extent), which means the handle↔vertex correspondence is broken: better
+ * to refuse the drag than to move a vertex to a wild location. The caller then discards the drag.
  */
 export function rawVertexFromHandleDrag(raw: readonly V2[], canonical: readonly V2[], dragged: V2): V2 | null {
   const s = fitSimilarity(raw, canonical);
   if (!s) return null;
   const den = s.aRe * s.aRe + s.aIm * s.aIm;
   if (den < 1e-15) return null;
+  const { resid, extent } = similarityFitError(raw, canonical, s);
+  if (resid > 0.15 * extent) return null; // correspondence does not fit ⇒ refuse (defensive)
   const px = dragged[0] - s.bRe;
   const py = dragged[1] - s.bIm;
   // (px + i·py)/(aRe + i·aIm) = (px + i·py)(aRe − i·aIm)/|a|²

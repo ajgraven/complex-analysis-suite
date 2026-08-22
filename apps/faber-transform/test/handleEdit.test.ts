@@ -63,4 +63,17 @@ describe("rawVertexFromHandleDrag", () => {
   it("returns null when the similarity is undetermined", () => {
     expect(rawVertexFromHandleDrag([[0, 0]], [[0, 0]], [1, 1])).toBeNull();
   });
+
+  it("refuses the drag when the correspondence does not fit (defensive residual guard)", () => {
+    // An asymmetric triangle paired against its REVERSED index order: the best orientation-preserving
+    // similarity still leaves a large residual (~0.3 of the extent), so the guard must reject rather than
+    // map the cursor to a wild vertex. (Mirrors the class of bug that broke the in-panel editor.)
+    const tri: V2[] = [
+      [0, 0],
+      [2, 0],
+      [0, 1],
+    ];
+    const reversed = tri.slice().reverse();
+    expect(rawVertexFromHandleDrag(tri, reversed, [0.5, 0.5])).toBeNull();
+  });
 });

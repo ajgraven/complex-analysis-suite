@@ -94,4 +94,17 @@ describe("fitExteriorSchwarzChristoffel — one-call public API", () => {
     const gotSet = m.vertices.map(cabs).sort((a, b) => a - b);
     for (let i = 0; i < 4; i++) expect(Math.abs(inputSet[i] - gotSet[i])).toBeLessThan(1e-6);
   });
+
+  it("exposes orderedVertices: the input vertices in prevertex order (documented reversal, keeping v₀)", () => {
+    // Distinct-coordinate quad so the input↔prevertex correspondence is unambiguous. orderedVertices[k]
+    // is the input vertex that prevertices[k] serves — the solver reverses CCW input keeping v₀, i.e.
+    // orderedVertices = [v₀, v₃, v₂, v₁]. A consumer matches these back to the input to recover the order.
+    const quad: C[] = [[2, 0], [0.6, 1.2], [-1, 0.4], [-0.3, -1.1]];
+    const m = fitExteriorSchwarzChristoffel(quad);
+    expect(m.orderedVertices.length).toBe(quad.length);
+    const expected = [quad[0], quad[3], quad[2], quad[1]];
+    for (let k = 0; k < quad.length; k++) {
+      expect(cabs([m.orderedVertices[k][0] - expected[k][0], m.orderedVertices[k][1] - expected[k][1]])).toBeLessThan(1e-12);
+    }
+  });
 });
