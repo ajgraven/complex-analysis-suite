@@ -160,6 +160,14 @@ export interface ExteriorSCMap extends ExteriorSCForwardMap {
   readonly degraded: boolean;
   /** Final parameter-solve residual ‖F‖∞. */
   readonly residual: number;
+  /**
+   * The INPUT polygon vertices in the same (exterior CW) order as `prevertices` — i.e. `orderedVertices[k]`
+   * is the input vertex that `prevertices[k]` is the preimage of. The solver reverses the input CCW polygon
+   * to exterior order (see `toExteriorOrder`), so a consumer that needs the input↔prevertex correspondence
+   * (e.g. to reorder per-corner data back to input order) should match against this rather than assume
+   * `prevertices[k]` aligns with input vertex `k`.
+   */
+  readonly orderedVertices: readonly C[];
 }
 
 /**
@@ -175,5 +183,11 @@ export function fitExteriorSchwarzChristoffel(vertices: readonly C[], opts?: Ext
     nGaussJacobi: opts?.nGaussJacobi,
     nGaussLegendre: opts?.nGaussLegendre,
   });
-  return { ...fwd, converged: sol.converged, degraded: sol.degraded, residual: sol.residual };
+  return {
+    ...fwd,
+    converged: sol.converged,
+    degraded: sol.degraded,
+    residual: sol.residual,
+    orderedVertices: sol.orderedVertices,
+  };
 }

@@ -7,6 +7,7 @@ import { faberPolynomials, faberTransform, polynomialRoots } from "@cas/faber";
 import { cornerNorms, polygonMap, regularPolygonCornerImages, regularPolygonMap } from "../src/polygon.js";
 import { evalPhi, evalPoly, monomialTaylor, transformCoeffs, weightedMonomialCoeffs } from "../src/faber.js";
 import { MENU_PRESETS, phiPresetById } from "../src/presets.js";
+import { fitSimilarity } from "../src/handleEdit.js";
 
 const near = (a: number, b: number, tol = 1e-9): boolean => Math.abs(a - b) < tol;
 const cabs = (z: Cx): number => Math.hypot(z.re, z.im);
@@ -181,6 +182,36 @@ describe("corner images & suppression seam (M3)", () => {
     const r = polygonMap([[1, 0.5], [-1, 0.5], [-1, -0.5], [1, -0.5]]);
     expect(r.cornerImages.length).toBe(4);
     for (const wk of r.cornerImages) expect(near(cabs(wk), 1, 1e-9)).toBe(true);
+  });
+
+  it("returns corner images in INPUT-vertex order — cornerImages[i] is the image of vertices[i] (the in-panel editor's premise)", () => {
+    // Asymmetric polygon so the correspondence is unambiguous. The canonical corners φ(cornerImages[i])
+    // must be a similarity image of the input polygon IN THE SAME INDEX ORDER, so an index-aligned
+    // similarity fit has a tiny residual. Under the exterior/reversed order this residual was ~1.2 — the
+    // bug that made the in-panel editor move the wrong vertex.
+    const poly: [number, number][] = [
+      [1.4, 0.2],
+      [0.3, 1.1],
+      [-1.0, 0.6],
+      [-0.7, -0.9],
+      [0.9, -1.0],
+    ];
+    const r = polygonMap(poly);
+    expect(r.converged).toBe(true);
+    expect(r.cornerImages.length).toBe(poly.length);
+    const handles = r.cornerImages.map((w): [number, number] => {
+      const p = evalPhi(r.map, w);
+      return [p.re, p.im];
+    });
+    const s = fitSimilarity(poly, handles);
+    if (!s) throw new Error("similarity fit returned null");
+    let resid = 0;
+    for (let i = 0; i < poly.length; i++) {
+      const cx = s.aRe * poly[i][0] - s.aIm * poly[i][1] + s.bRe;
+      const cy = s.aRe * poly[i][1] + s.aIm * poly[i][0] + s.bIm;
+      resid += Math.hypot(cx - handles[i][0], cy - handles[i][1]);
+    }
+    expect(resid / poly.length).toBeLessThan(1e-2); // aligned ≈ 6e-5; a wrong order would be ~1.2
   });
 
   it("polygon presets expose lazy corner images matching build()", () => {

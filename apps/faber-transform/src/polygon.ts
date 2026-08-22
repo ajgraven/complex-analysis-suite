@@ -69,9 +69,11 @@ export interface PolygonMapResult {
   /** Final parameter-solve residual. */
   readonly residual: number;
   /**
-   * The corner images wₖ = φ(zₖ) on |w| = 1 — the exterior-SC prevertex reciprocals (wₖ = 1/uₖ). These
+   * The corner images wₖ = φ(zₖ) on |w| = 1 — the exterior-SC prevertex reciprocals (wₖ = 1/uₖ) — in
+   * INPUT-vertex order: `cornerImages[i]` is the corner image of the input polygon's vertex `i`. These
    * drive the corner-suppressing weighted Faber polynomials Q_{n,m} (M3): `@cas/faber`'s `weightSeries`
-   * consumes exactly this set. Empty when the fit did not converge.
+   * consumes exactly this set (order-agnostically); the in-panel editor relies on the per-vertex alignment.
+   * Empty when the fit did not converge.
    */
   readonly cornerImages: readonly Cx[];
 }
@@ -108,7 +110,8 @@ export interface PolygonMapOptions {
 export function polygonMap(vertices: readonly (readonly [number, number])[], opts?: PolygonMapOptions): PolygonMapResult {
   const tailTol = opts?.tailTol ?? 1e-4;
   const minOrder = opts?.minOrder ?? 48;
-  const fit = fitExteriorSchwarzChristoffel(vertices.map((v) => [v[0], v[1]] as [number, number]));
+  const input = vertices.map((v) => [v[0], v[1]] as [number, number]);
+  const fit = fitExteriorSchwarzChristoffel(input);
   // Geometry-aware extraction order: convex corners give fast-decaying coefficients (≤ ~150 terms for the
   // presets), reentrant corners decay slowly (need the full cap). Trimming below removes any excess.
   const reentrant = fit.angles.some((a) => a > 1.0001);
@@ -120,11 +123,30 @@ export function polygonMap(vertices: readonly (readonly [number, number])[], opt
   let last = Math.min(minOrder, laurent.length - 1);
   for (let k = 0; k < laurent.length; k++) if (mag[k] > tailTol * peak) last = Math.max(last, k);
   const kept = laurent.slice(0, last + 1);
-  // Corner images wₖ = 1/uₖ (the prevertex reciprocals, on |w| = 1) for the M3 weighted Faber polynomials.
-  const cornerImages: Cx[] = fit.prevertices.map((u) => {
+  // Corner images wₖ = 1/uₖ (the prevertex reciprocals, on |w| = 1), returned in INPUT-vertex order:
+  // cornerImages[i] is the corner image of vertices[i]. The exterior SC solver traverses the polygon in a
+  // reversed order (toExteriorOrder), so prevertices[k] serves the input vertex fit.orderedVertices[k];
+  // match that back to the input by nearest coordinate (vertices are distinct ⇒ unambiguous, even for a
+  // symmetric polygon). M3's weight ∏ₖ (1 − wₖ·s) uses the set and is order-agnostic; the in-panel editor's
+  // per-vertex handles rely on this alignment (cornerImages[i] ↔ vertices[i]).
+  const nearestInput = (p: readonly [number, number]): number => {
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < input.length; i++) {
+      const d = Math.hypot(input[i][0] - p[0], input[i][1] - p[1]);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+  const cornerImages: Cx[] = new Array<Cx>(fit.prevertices.length);
+  for (let k = 0; k < fit.prevertices.length; k++) {
+    const u = fit.prevertices[k];
     const d = u[0] * u[0] + u[1] * u[1]; // |u|² (= 1 on ∂𝔻); 1/u = ū/|u|²
-    return { re: u[0] / d, im: -u[1] / d };
-  });
+    cornerImages[nearestInput(fit.orderedVertices[k])] = { re: u[0] / d, im: -u[1] / d };
+  }
   return {
     map: { c, laurent: kept.map(([r, i]): Cx => ({ re: r, im: i })) },
     converged: fit.converged,
