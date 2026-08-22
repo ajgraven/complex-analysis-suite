@@ -11,7 +11,7 @@
 //   const { writeUrlState, applyUrlState } = QD_UI.installUrlState(uiCtx);
 //
 // The two returned functions are then used exactly as before: writeUrlState is
-// called after each solve / tab switch (rAF-coalesced), applyUrlState restores
+// called after each solve / tab switch (post-paint-coalesced), applyUrlState restores
 // a shared/bookmarked config on load. Bodies are identical to what previously
 // lived in ui.js — only the dependency source changed (module scope → `ui`).
 // =============================================================================
@@ -65,13 +65,15 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
     let _writeUrlScheduled = false;
     function writeUrlState() {
       // Coalesce bursts (a slider drag fires many solves) into one history write
-      // per frame.
+      // after the next paint. Encoding and replaceState can be appreciable on
+      // a complex share link; keeping them out of the solve's first frame lets
+      // the new boundary become visible as soon as it is ready.
       if (_writeUrlScheduled) return;
       _writeUrlScheduled = true;
       const raf = (typeof requestAnimationFrame === 'function')
         ? requestAnimationFrame
         : (fn) => setTimeout(() => fn(), 16);
-      raf(() => {
+      raf(() => raf(() => {
         _writeUrlScheduled = false;
         try {
           // Collect the user-meaningful inputs into a plain state object, then encode via
@@ -117,7 +119,7 @@ import { encodeViewState, decodeViewState } from '@cas/interchange';
             history.replaceState(null, '', location.pathname + location.search + hash);
           }
         } catch (e) { /* never let URL bookkeeping break the app */ }
-      });
+      }));
     }
 
     // Restore state from location.hash on load. Returns true if a hash was applied

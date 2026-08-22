@@ -19,23 +19,32 @@ to extend the app, see [CONTRIBUTING.md](CONTRIBUTING.md).
   with no build step — see the banner above.)_
 - **Single namespace** — `window.QD` holds every public function, type,
   and subsystem — modules `import` the mutable `QD` object and attach onto it.
-  ES-module consumers can also use the [`app/qd.mjs`](app/qd.mjs) barrel.
-- **Lazy-mount tabs** — Schwarz, Sphere, and Param-slice UIs mount
-  their controls only when their tab is first activated, keeping
-  startup cheap.
-- **Web Workers for heavy compute** — the Inverse-tab primary solve
-  runs on a single warm worker (P0.2); the Parameter-slice tab spawns
+  ES-module consumers can also use the [`app/core/qd.mjs`](app/core/qd.mjs) barrel.
+- **Demand-loaded features** — `main.mjs` eagerly loads only the inverse-QD
+  path. `lazy-features.mjs` imports Direct, Schwarz+Sphere, Parameter-slice,
+  and Algebra on first use, then replays tab activation after their lifecycle
+  listeners register. This keeps the initial QD bundle separate from optional
+  analysis and rendering systems.
+- **Web Workers for heavy compute** — the Inverse-tab primary solve uses a
+  lean worker entry; consolidated geometry/cusp/observables analysis loads a
+  separate deferred worker entry after a successful solve. The Parameter-slice tab spawns
   a pool of workers (one per `navigator.hardwareConcurrency` core).
   Both are **native ES-module workers** (`new Worker(new
   URL('./workers/*-entry.mjs', import.meta.url), {type:'module'})`); Vite
   bundles each worker's import graph into its own chunk.
+- **Cached 2D plot chrome** — the QD canvas caches the grid, axes, and tick
+  labels until its view, dimensions, DPR, or chrome palette changes, avoiding
+  repeated Canvas text layout on overlay/status redraws.
 - **GPU rendering for Schwarz / Sphere** — WebGL 2 fragment shaders;
   Float32 throughout. CPU fallback ships in every adapter.
 
 ## Module import graph
 
 `app/index.html` loads a single `<script type="module" src="./main.mjs">`.
-`main.mjs` side-effect-imports the whole graph, then calls `QD.Strings.apply()`.
+`main.mjs` side-effect-imports the inverse-QD graph, then calls
+`QD.Strings.apply()`. `lazy-features.mjs` owns four memoized dynamic entries:
+`lazy/direct.mjs`, `lazy/schwarz.mjs` (including Sphere),
+`lazy/param-slice.mjs`, and `lazy/algebra.mjs`.
 Modules cross-reference each other by `import`ing the mutable `QD` namespace that
 `solver.mjs` default-exports and attaching onto it. The layering below is
 conceptual (ES-module resolution handles the actual ordering):
@@ -71,7 +80,7 @@ flowchart LR
     D3[primary-solution.mjs]
     D4[primary-solver-worker.mjs]
   end
-  subgraph Tabs["Tab subsystems"]
+  subgraph Deferred["Demand-loaded feature entries"]
     E1[direct/direct-common.mjs]
     E2[schwarz/schwarz-common.mjs]
     E3[schwarz/schwarz-webgl.mjs]
@@ -99,7 +108,8 @@ flowchart LR
   end
 
   M0 --> Math
-  Vendor --> Math --> Solver --> Utility --> Tabs --> UI --> Sphere
+  Vendor --> Math --> Solver --> Utility --> UI
+  M0 -. first use .-> Deferred
 ```
 
 Registration order still matters — every solver-family module calls
@@ -108,10 +118,12 @@ Registration order still matters — every solver-family module calls
 it. The worker-thread barrel [`app/workers/solver-graph.mjs`](app/workers/solver-graph.mjs)
 also imports the solver cluster in that order for the native module workers.
 
-The diagram is illustrative, not exhaustive. The Utility layer also loads several
-page-only analysis modules not drawn above: `observables.mjs`, `symmetry.mjs`,
+The diagram is illustrative, not exhaustive. The main-thread graph also loads several
+analysis modules not drawn above: `observables.mjs`, `symmetry.mjs`,
 `thesis-examples.mjs`, `faber-analysis.mjs`, and **`ui-strings.mjs`** (imported
 before `thesis-examples.mjs`, which reads `QD.Strings.blurbs` at load).
+`analysis-worker-entry.mjs` separately imports the status-analysis subset for
+its deferred worker graph.
 `ui-strings.mjs` defines `QD.Strings` (the editable-prose source of truth); `main.mjs`
 calls its `apply()` after importing the graph to fill `[data-str*]` elements before paint.
 
@@ -134,7 +146,7 @@ calls its `apply()` after importing the graph to fill `[data-str*]` elements bef
 | Custom h(w) text | `QD.parseH`, `QD.formatH` |
 | Editable UI prose | `QD.Strings.{algebraOps, help, familyHints, hints, tooltips, notes, faber, qdEquations, algebra, oracle, blurbs, guidance, get, apply}` — single source of truth for descriptions/helptext/tooltips/blurbs (`algebraOps` carries the Algebra tab's per-control `short`/`detail` pairs); `apply()` injects static HTML into `[data-str]`/`[data-str-html]`/`[data-str-title]` elements (`ui-strings.mjs`; see `HELPTEXT.md`) |
 | Cross-tab envelope (P0.1a) | `QD.PrimarySolution.{get, hasSolution, subscribe, publish, update, clear}` |
-| Warm worker (P0.2) | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy}` |
+| Solver/analysis workers | `QD.PrimarySolverWorker.{ensureReady, solve, cancel, isBusy, searchAlternates, cancelAux, isAuxBusy, liveSolve, cancelLive, isLiveBusy, analyze, cancelAnalysis, isAnalysisBusy}` |
 | Family registry | `QD.Family.boundedQD`, `QD.Family.unboundedQD`, `QD.Family.boundedLQD`, `QD.Family.boundedLQD_singular`, `QD.Family.unboundedLQD`, `QD.Family.unboundedLQD_singular` |
 
 ## Tab → DOM ownership
@@ -160,7 +172,7 @@ QD.PrimarySolution.publish(envelope);    // ui.mjs writes after each solve
 const env = QD.PrimarySolution.get();    // snapshot read
 ```
 
-Source: [`app/primary-solution.mjs`](app/primary-solution.mjs). Envelope
+Source: [`app/solvers/primary-solution.mjs`](app/solvers/primary-solution.mjs). Envelope
 shape is the same `{ success, primary, alternates, hData, w0Used,
 cUsed, unbounded, attempts, criticalSet }` previously held on
 `state.current`. The JSDoc `@typedef PrimaryEnvelope` at the top of
@@ -168,9 +180,10 @@ that file is the source of truth.
 
 ### `QD.PrimarySolverWorker` (P0.2)
 
-Single warm Web Worker for the Inverse-tab solve. Keeps the multistart
-pipeline (50–500 ms for hard h's) off the main thread. Source:
-[`app/primary-solver-worker.mjs`](app/primary-solver-worker.mjs).
+Dedicated warm worker lanes for the Inverse tab: primary solves, background
+alternate search, live drag solves, and deferred status analysis. They keep the
+multistart pipeline (50–500 ms for hard h's) off the main thread. Source:
+[`app/solvers/primary-solver-worker.mjs`](app/solvers/primary-solver-worker.mjs).
 
 ```js
 const result = await QD.PrimarySolverWorker.solve(hData, opts);
@@ -189,7 +202,17 @@ alternate-solution search (`searchAlternates` / `cancelAux`): a second
 Worker instance from the same bundle, so a long alt-search never queues
 behind or preempts an interactive primary solve. `ui.mjs`'s
 `startBackgroundAltSearch` drives it as an async loop instead of the old
-synchronous `setTimeout` chunks (which janked the 2D plot).
+synchronous `setTimeout` chunks (which janked the 2D plot). A completed
+primary solve runs status analysis before starting this optional worker, so the
+two background lanes do not contend during the immediate post-solve period.
+
+It also hosts an **analysis lane** (`analyze` / `cancelAnalysis`) backed by
+`analysis-worker-entry.mjs`, separate from the lean solver entry. It performs
+deferred geometry, cusp, observables, accuracy, and symmetry work; a newer
+analysis terminates stale work rather than queueing it. Results are accepted
+only for the φ that was submitted. The status card receives scalar observables
+by default; boundary/curvature arrays are returned only when a visible overlay
+needs them.
 
 ### URL/hash state (B1)
 
@@ -197,7 +220,7 @@ synchronous `setTimeout` chunks (which janked the 2D plot).
 w0(mode), c, α, q, aggressiveness, tab}`, plus the Figure & export look
 (`fig`, stored as the diff from the figure defaults) and the plot viewport
 (`view` = `{cx, cy, scale}`) — into `location.hash` via `writeUrlState`
-(`history.replaceState`, rAF-coalesced) on each solve, recolour, framing, and
+(`history.replaceState`, post-paint rAF-coalesced) on each solve, recolour, framing, and
 tab switch, and restores it on load via `applyUrlState`. The h-text
 round-trips both the poles and the polynomial part (`formatH` ⇄
 `parseH`), so it alone reproduces the quadrature data; `fig`/`view` are
@@ -211,7 +234,7 @@ at `console.warn`.
 
 ### `window.QD_UI.installDomainPlot(deps)` (P0.1b)
 
-`DomainPlot` lives in [`app/ui-domain-plot.mjs`](app/ui-domain-plot.mjs)
+`DomainPlot` lives in [`app/ui/ui-domain-plot.mjs`](app/ui/ui-domain-plot.mjs)
 as a factory function, so the class can be its own module while still
 receiving the four `ui.mjs` closures it needs:
 
@@ -229,12 +252,12 @@ moving cohesive clusters into sibling factory modules, all on the same pattern:
 
 | Module | Responsibility |
 | --- | --- |
-| [`app/ui-modes.mjs`](app/ui-modes.mjs) | `MODES` descriptor table + aggressiveness `PRESETS` + `modeDescriptor`/`currentPresetList` |
-| [`app/ui-pole-grid.mjs`](app/ui-pole-grid.mjs) | `renderPolesList` / `renderPolyCoefList` (the pole + poly-coef DOM builders) |
-| [`app/ui-h-text.mjs`](app/ui-h-text.mjs) | the `#h-text` ⇄ structured-grid mirror (`parseAndApplyHText`, `refreshHText`, `modeAllowsPoly`) |
-| [`app/ui-solve.mjs`](app/ui-solve.mjs) | the solve→render→analyze pipeline (`solveAndRender`, `showSolution`, the geom/cusp/realizability analysis, alternates, background search) |
-| [`app/ui-url-state.mjs`](app/ui-url-state.mjs) | `writeUrlState` / `applyUrlState` (B1 hash serialize+restore, incl. the `fig`/`view` figure+viewport diff) |
-| [`app/ui-figure-export.mjs`](app/ui-figure-export.mjs) | the "Figure & export" card — element/colour/marker controls, style presets, PNG + clipboard export, and the one-parameter family sweep (engine in [`app/family-sweep.mjs`](app/family-sweep.mjs)) |
+| [`app/ui/ui-modes.mjs`](app/ui/ui-modes.mjs) | `MODES` descriptor table + aggressiveness `PRESETS` + `modeDescriptor`/`currentPresetList` |
+| [`app/ui/ui-pole-grid.mjs`](app/ui/ui-pole-grid.mjs) | `renderPolesList` / `renderPolyCoefList` (the pole + poly-coef DOM builders) |
+| [`app/ui/ui-h-text.mjs`](app/ui/ui-h-text.mjs) | the `#h-text` ⇄ structured-grid mirror (`parseAndApplyHText`, `refreshHText`, `modeAllowsPoly`) |
+| [`app/ui/ui-solve.mjs`](app/ui/ui-solve.mjs) | the solve→render→analyze pipeline (`solveAndRender`, `showSolution`, the geom/cusp/realizability analysis, alternates, background search) |
+| [`app/ui/ui-url-state.mjs`](app/ui/ui-url-state.mjs) | `writeUrlState` / `applyUrlState` (B1 hash serialize+restore, incl. the `fig`/`view` figure+viewport diff) |
+| [`app/ui/ui-figure-export.mjs`](app/ui/ui-figure-export.mjs) | the "Figure & export" card — element/colour/marker controls, style presets, PNG + clipboard export, and the one-parameter family sweep (engine in [`app/analysis/family-sweep.mjs`](app/analysis/family-sweep.mjs)) |
 
 `ui.mjs` builds ONE shared mutable context object, `uiCtx`, carrying the closures
 the modules need (`state`, the descriptor tables, DOM helpers, the small shared
@@ -335,11 +358,11 @@ dims) arrives via its single options argument, so the only cross-seam deps are
 
 ### `qd.mjs` ESM façade (P1.1)
 
-[`app/qd.mjs`](app/qd.mjs) re-exports the entire public `QD` surface as
+[`app/core/qd.mjs`](app/core/qd.mjs) re-exports the entire public `QD` surface as
 named ES-module exports:
 
 ```js
-import { Complex, solveInverseQD, PrimarySolution } from './qd.mjs';
+import { Complex, solveInverseQD, PrimarySolution } from './core/qd.mjs';
 ```
 
 It originated (P1.1) as the leaf of a 5-stage plan to migrate the app off
@@ -408,23 +431,24 @@ index.
 
 ## Worker bundles
 
-Both Worker subsystems (`primary-solver-worker.mjs`,
-`param-slice/param-slice-pool.mjs`) spawn **native ES-module workers**:
+The solver/analysis worker manager (`solvers/primary-solver-worker.mjs`) and
+the parameter-slice pool (`param-slice/param-slice-pool.mjs`) illustrate the
+app's **native ES-module worker** pattern:
 
 1. `new Worker(new URL('./workers/<name>-entry.mjs', import.meta.url),
    { type: 'module' })` from the main-thread twin.
-2. The `*-entry.mjs` imports the shared solver barrel
-   [`app/workers/solver-graph.mjs`](app/workers/solver-graph.mjs), so the whole
-   solver graph loads in the worker by normal ES-module resolution.
+2. Solver entries import the shared solver barrel
+   [`app/workers/solver-graph.mjs`](app/workers/solver-graph.mjs). The separate
+   `analysis-worker-entry.mjs` then imports its analysis modules, so the solver
+   lanes do not load them.
 3. The entry runs a `self`-guarded `onmessage` handler; Vite bundles each
    entry's import graph into its own chunk at `vite build`.
 
-Adding a solver file to the workers means importing it in
+Adding a solver file to solver workers means importing it in
 `workers/solver-graph.mjs` — the single place the worker-thread graph is
 assembled. Each twin keeps a `typeof Worker` guard that falls back to solving
-on the main thread (Node / no-Worker environments). A fourth module worker,
-`algebra/sym-worker.mjs`, follows the same shape for the Algebra Gröbner/solve
-ops.
+on the main thread (Node / no-Worker environments). The Schwarz CPU and Algebra
+Gröbner/solve workers follow the same lifecycle pattern with their own entries.
 
 ## Test harness
 

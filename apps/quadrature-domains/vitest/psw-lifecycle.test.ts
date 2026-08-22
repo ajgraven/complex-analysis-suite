@@ -24,6 +24,11 @@
 //                      the only way to reach the spawn-failure paths at all.
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import _QD from "../app/solvers/solver.mjs";
+import "../app/analysis/critical-set.mjs";
+import "../app/analysis/univalence.mjs";
+import "../app/analysis/cusps.mjs";
+import "../app/analysis/observables.mjs";
+import "../app/analysis/symmetry.mjs";
 import "../app/solvers/primary-solver-worker.mjs";
 import { installWorkerThreadsWorker, workerStats } from "./helpers/web-worker-shim.mjs";
 
@@ -64,7 +69,7 @@ describe("PrimarySolverWorker lifecycle (real worker path)", () => {
   });
 
   afterAll(() => {
-    for (const stop of [PSW.cancel, PSW.cancelAux, PSW.cancelLive]) {
+    for (const stop of [PSW.cancel, PSW.cancelAux, PSW.cancelLive, PSW.cancelAnalysis]) {
       try { stop(); } catch { /* ignore */ }
     }
     if (uninstall) uninstall();
@@ -178,6 +183,29 @@ describe("PrimarySolverWorker lifecycle (real worker path)", () => {
       PSW.cancelLive();
       expect(PSW._hasLiveWorker()).toBe(false);
       expect(PSW._hasWorker()).toBe(true); // untouched
+    });
+  });
+
+  describe("analysis lane", () => {
+    it("round-trips a real cardioid cusp analysis through the dedicated worker", async () => {
+      const phi = {
+        family: "boundedQD", unbounded: false, w0: { re: 0, im: 0 },
+        branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }],
+      };
+      const res = await PSW.analyze(phi, { poles: [] }, { samples: 96, observableSamples: 128 });
+      expect(PSW._hasAnalysisWorker()).toBe(true);
+      expect(res.cuspProps.notes).not.toContain("cusp analysis unavailable");
+      expect(res.cuspProps.cusps).toHaveLength(1);
+      expect(res.cuspProps.cusps[0]).toMatchObject({ orderM: 1, type: [2, 3], isCusp: true });
+    });
+
+    it("cancelAnalysis terminates only the analysis worker", async () => {
+      await PSW.analyze({ family: "boundedQD", unbounded: false, w0: { re: 0, im: 0 },
+        branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }] }] }, DISK(), { observableSamples: 128 });
+      expect(PSW._hasAnalysisWorker()).toBe(true);
+      PSW.cancelAnalysis();
+      expect(PSW._hasAnalysisWorker()).toBe(false);
+      expect(PSW._hasWorker()).toBe(true);
     });
   });
 });

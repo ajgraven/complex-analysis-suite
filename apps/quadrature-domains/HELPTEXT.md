@@ -50,7 +50,7 @@ text or are interleaved with computed values:
 | Validation errors + family external-field labels | `app/ui-modes.mjs` |
 | Live status / validity / geometry / cusp / observable lines (interleaved with numbers) | `app/ui-solve.mjs` |
 | Oracle row names (with computed values) | `app/thesis-examples.mjs` (`checkOracle`) |
-| On-canvas labels (pole `aₙ`, cusp `(p,q)`, `Fₙ roots`, tip / max-κ) | `app/ui-domain-plot.mjs` |
+| On-canvas labels (pole `aₙ`, cusp `(p,q)`, `Fₙ roots`, tip / max-κ) | `app/ui/ui-domain-plot.mjs` |
 | Copy/help affordance text + the shared `?` overlay chrome | `app/qol.mjs` |
 | Keyboard-shortcut **descriptions** | per tab, via `QD.QoL.registerShortcuts(scope, items)` — e.g. the Algebra tab's ~14 in `algebraShortcutItems()` (`app/algebra/algebra-ui.mjs`). `qol.mjs` owns the overlay, not the text. |
 

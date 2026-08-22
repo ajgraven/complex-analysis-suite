@@ -76,6 +76,12 @@ class DomainPlot {
 
     this.view = { cx: 0, cy: 0, scale: 100 };  // pixels per unit
     this.data = null;
+    // Grid, axes, and tick labels are independent of the solved domain. Keep
+    // their raster layer until a view, size, DPR, or relevant palette change.
+    // This avoids repeating text layout on overlay/status repaints.
+    this._staticLayer = null;
+    this._staticLayerKey = '';
+    this._disableStaticCache = false;
 
     // Vector-field perf: the field re-samples h(w) over the whole visible grid
     // on every repaint (no cache), which is the dominant cost while dragging /
@@ -265,9 +271,9 @@ class DomainPlot {
     });
   }
 
-  setData(d) {
+  setData(d, opts = {}) {
     this.data = d;
-    this.render();
+    if (opts.render !== false) this.render();
   }
   clear() {
     this.data = null;
@@ -380,9 +386,7 @@ class DomainPlot {
       c.fillRect(0, 0, this.cssW, this.cssH);
     }
 
-    if (this._show('showGrid')) this.drawGrid();
-    if (this._show('showTickLabels')) this.drawTickLabels();
-    if (this._show('showAxes')) this.drawAxes();
+    this.drawStaticChrome();
 
     // Vector field underlays the domain so the boundary remains crisp. Skipped
     // mid-gesture (drag / pan / zoom) — it re-samples h(w) over the whole grid
@@ -472,16 +476,21 @@ class DomainPlot {
       octx.fillRect(0, 0, off.width, off.height);
       octx.restore();
     }
-    const saved = { ctx: this.ctx, dpr: this.dpr, bgT: this._bgTransparent };
+    const saved = { ctx: this.ctx, dpr: this.dpr, bgT: this._bgTransparent, staticCache: this._disableStaticCache };
     this.ctx = octx;
     this.dpr = off.width / this.cssW;             // uniform scale; caller kept aspect
     this._bgTransparent = true;                   // bg handled above (or none wanted)
+    // Do not replace the on-screen cache with an export-sized canvas. A 4K/8K
+    // export otherwise leaves a large transparent raster retained after the
+    // download has finished.
+    this._disableStaticCache = true;
     try {
       this._renderNow();
     } finally {
       this.ctx = saved.ctx;
       this.dpr = saved.dpr;
       this._bgTransparent = saved.bgT;
+      this._disableStaticCache = saved.staticCache;
     }
     return off;
   }
@@ -496,6 +505,44 @@ class DomainPlot {
     const f = state.figure;
     const v = f ? f[key] : undefined;
     return (v === undefined || v === null) ? DEFAULT_PALETTE[key] : v;
+  }
+
+  // The fixed plot chrome is relatively expensive because Canvas text layout
+  // happens for every tick. Cache it as a transparent device-pixel layer; the
+  // domain/overlays still draw at full resolution on top every frame.
+  drawStaticChrome() {
+    const showGrid = this._show('showGrid');
+    const showTicks = this._show('showTickLabels');
+    const showAxes = this._show('showAxes');
+    if (!showGrid && !showTicks && !showAxes) return;
+    if (this._disableStaticCache) {
+      if (showGrid) this.drawGrid();
+      if (showTicks) this.drawTickLabels();
+      if (showAxes) this.drawAxes();
+      return;
+    }
+    const key = [this.cssW, this.cssH, this.dpr, this.view.cx, this.view.cy, this.view.scale,
+      showGrid, showTicks, showAxes, this._pal('grid'), this._pal('gridLabel'), this._pal('axis')].join('|');
+    if (key !== this._staticLayerKey) {
+      const layer = document.createElement('canvas');
+      layer.width = Math.max(1, Math.round(this.cssW * this.dpr));
+      layer.height = Math.max(1, Math.round(this.cssH * this.dpr));
+      const layerCtx = layer.getContext('2d');
+      if (!layerCtx) return;
+      layerCtx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      const savedCtx = this.ctx;
+      this.ctx = layerCtx;
+      try {
+        if (showGrid) this.drawGrid();
+        if (showTicks) this.drawTickLabels();
+        if (showAxes) this.drawAxes();
+      } finally {
+        this.ctx = savedCtx;
+      }
+      this._staticLayer = layer;
+      this._staticLayerKey = key;
+    }
+    if (this._staticLayer) this.ctx.drawImage(this._staticLayer, 0, 0, this.cssW, this.cssH);
   }
 
   // Univalent boundary stroke colour: the figure override if set, else default

@@ -9,7 +9,7 @@ form), `Sym.schurCohn` (exact root‑in‑disk count), `Sym.buchberger`/`normalF
 The corresponding regression lives in
 [`app/test/cardioid-uniqueness.test.js`](app/test/cardioid-uniqueness.test.js); the
 builder is `QDEquations.pointFunctionalSystem` in
-[`app/qd-equations.js`](app/qd-equations.js).
+[`app/qd/qd-equations.mjs`](app/qd/qd-equations.mjs).
 
 ## The theorem
 

@@ -36,6 +36,11 @@
 //   QD.PrimarySolverWorker.cancelAux() -> void
 //     Abort any in-flight alternate search (terminates the aux worker).
 //
+//   QD.PrimarySolverWorker.analyze(phi, hData, opts) -> Promise<status>
+//     Run geometry, cusp, observables, accuracy, and symmetry work on a
+//     dedicated deferred-analysis worker. A newer analysis terminates stale
+//     work so it cannot queue ahead of current status data.
+//
 // Fallback: if Worker / fetch fails (e.g. file:// origin), solve() runs
 // on the main thread synchronously inside a Promise.resolve().then(...) so
 // callers don't need to special-case anything. Logged once at console.warn.
@@ -45,9 +50,9 @@
 // =============================================================================
 
 // ESM (Phase 2 port). Main-thread API; spawns a
-// NATIVE ES module worker (workers/solver-worker-entry.mjs) instead of the runtime-Blob
-// bundle, and falls back to the imported main-thread solver when Worker is unavailable
-// (Node tests, file://). Registers onto the QD namespace.
+// NATIVE ES module workers (a lean solver entry plus a deferred analysis entry)
+// instead of the runtime-Blob bundle, and falls back to imported main-thread
+// functions when Worker is unavailable (Node tests, file://). Registers onto QD.
 import _QD from './solver.mjs';
 import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
@@ -56,7 +61,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
 
   // createWorkerLane -- the shared lifecycle for ONE warm ES-module Worker lane (refactor Stage C1).
   //
-  // The three lanes below (primary solve / aux alt-search / live drag-solve) were near-verbatim copies of
+  // The lanes below (primary solve / aux alt-search / live drag-solve / status analysis) were near-verbatim copies of
   // the SAME shape: `_worker/_readyPromise/_inflight/_fallback` module-lets -> _disposeWorker -> ensureReady
   // -> run (supersede-then-post-then-settle, with a main-thread fallback) -> cancel -> isBusy, plus a
   // per-lane spawn-failure latch. They differed only in: the message `kind`, the posted payload's shape, the
@@ -71,8 +76,8 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
   //
   // cfg: { messageKind, buildPost(jobId, ...args), fallback(...args), hasMessageError,
   //        crashLabel, logLabel, warnPrefix, warnSuffix, getSignal?(args) }
-  // (All three lanes spawn the SAME solver-worker-entry bundle — its URL is a shared string literal at
-  // the `new Worker` site above, not per-lane config, so Vite's static worker transform emits the chunk.)
+  // cfg additionally supplies `createWorker()`, whose body keeps the worker URL a
+  // literal so Vite can emit that entry chunk.
   function createWorkerLane(cfg) {
     /** @type {Worker|null} */
     let _worker = null;
@@ -85,10 +90,10 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     let _everWorked = false;   // set once THIS worker returns a message — tells a bundle/load failure (never
                                // worked → latch fallback) apart from a mid-run crash on a worker that worked.
 
-    function _disposeWorker() {
+    function _disposeWorker(reason = { aborted: true }) {
       if (_worker) { try { _worker.terminate(); } catch (_) { /* ignore */ } _worker = null; }
       _readyPromise = null;
-      if (_inflight) { _inflight.reject({ aborted: true }); _inflight = null; }
+      if (_inflight) { _inflight.reject(reason); _inflight = null; }
     }
 
     async function ensureReady() {
@@ -97,11 +102,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
       if (_readyPromise) { await _readyPromise; return; }
       _readyPromise = (async () => {
         if (typeof Worker === 'undefined') throw new Error('Worker unavailable in this environment');
-        // The worker URL MUST be a string LITERAL: Vite's worker-import-meta-url transform only bundles a
-        // literal first arg — a variable (was: cfg.entryUrl) is left untransformed, so the entry chunk is
-        // silently omitted from the production build and 404s at runtime (invisible to node/jsdom + vite
-        // dev; pinned by worker-url-static-literal.test.ts). All three lanes share this one entry bundle.
-        const w = new Worker(new URL('../workers/solver-worker-entry.mjs', import.meta.url), { type: 'module' });
+        const w = cfg.createWorker();
         w.addEventListener('error', (ev) => {
           const detail = formatWorkerErrorDetail(ev);
           console.error('[primary-solver ' + cfg.logLabel + '] error: ' + detail);
@@ -152,6 +153,12 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
         // Supersede any prior in-flight job before posting a new one; the previous caller's promise rejects
         // with { aborted: true, superseded: true }. The worker is REUSED (not terminated) on supersede.
         if (_inflight) {
+          if (cfg.terminateOnSupersede) {
+            // Analysis is entirely discardable once a newer solve/overlay request
+            // exists. Terminate rather than queue it ahead of current status work.
+            _disposeWorker({ aborted: true, superseded: true });
+            return run(...args);
+          }
           _inflight.reject({ aborted: true, superseded: true });
           try { _worker.removeEventListener('message', _inflight.onMessage); } catch (_) { /* ignore */ }
           _inflight = null;
@@ -190,16 +197,19 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     return { ensureReady, run, cancel, isBusy, _isFallback: () => _fallback, _hasWorker: () => _worker !== null };
   }
 
-  // The three lanes are the SAME bundle (workers/solver-worker-entry.mjs — the literal URL lives at the
-  // `new Worker` site inside createWorkerLane so Vite emits the chunk), kept as separate Worker instances
-  // so a background alt-search or a live-drag frame can never queue behind / preempt an interactive
-  // primary solve (and their spawn-failure latches stay independent — see createWorkerLane).
+  // Keep the solve lanes on their lean entry. Status analysis has its own entry so
+  // the primary solve does not parse or retain the optional analysis graph.
+  const createSolverWorker = () =>
+    new Worker(new URL('../workers/solver-worker-entry.mjs', import.meta.url), { type: 'module' });
+  const createAnalysisWorker = () =>
+    new Worker(new URL('../workers/analysis-worker-entry.mjs', import.meta.url), { type: 'module' });
 
   const primary = createWorkerLane({
     messageKind: 'solve', logLabel: 'worker', crashLabel: 'solver worker',
     hasMessageError: true,
     warnPrefix: 'Worker unavailable',
     warnSuffix: 'Falling back to main-thread solver. Serve via a local web server (e.g. `python -m http.server`) to enable.',
+    createWorker: createSolverWorker,
     buildPost: (jobId, hData, opts) => ({ kind: 'solve', jobId, hData, opts: opts || {} }),
     fallback: (hData, opts) => _QD.solveInverseQD(hData, opts || {}),
     getSignal: (args) => args[2] && args[2].signal,   // solve(hData, opts, { signal? })
@@ -211,6 +221,7 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     hasMessageError: true, // settle a structured-clone failure (reject + dispose) instead of hanging the lane
     warnPrefix: 'Aux worker unavailable',
     warnSuffix: 'Alternate search will run on the main thread.',
+    createWorker: createSolverWorker,
     buildPost: (jobId, hData, norm, known, opts) =>
       ({ kind: 'altSearch', jobId, hData, norm, known: known || [], opts: opts || {} }),
     fallback: (hData, norm, known, opts) => _QD.searchAlternates(hData, norm, known || [], opts || {}),
@@ -222,9 +233,39 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     hasMessageError: true, // settle a structured-clone failure (reject + dispose) instead of hanging the lane
     warnPrefix: 'Live worker unavailable',
     warnSuffix: 'Live drag solve will run on the main thread.',
+    createWorker: createSolverWorker,
     buildPost: (jobId, hData, initPhi, opts) =>
       ({ kind: 'liveSolve', jobId, hData, initPhi, opts: opts || {} }),
     fallback: (hData, initPhi, opts) => _QD.liveSolveStep(hData, initPhi, opts || {}),
+  });
+
+  // Status-panel analyses are materially heavier than the solve-display path.
+  // Give them a dedicated lane so their geometry/accuracy sweeps cannot block
+  // input or compete with a newly requested primary solve.
+  const analysis = createWorkerLane({
+    messageKind: 'analyze', logLabel: 'analysis worker', crashLabel: 'analysis worker',
+    hasMessageError: true,
+    warnPrefix: 'Analysis worker unavailable',
+    warnSuffix: 'Status analyses will run on the main thread.',
+    createWorker: createAnalysisWorker,
+    terminateOnSupersede: true,
+    buildPost: (jobId, phi, hData, opts) => ({ kind: 'analyze', jobId, phi, hData, opts: opts || {} }),
+    fallback: (phi, hData, opts) => {
+      const geom = _QD.classifyUnivalence ? _QD.classifyUnivalence(phi, { samples: opts?.samples, univalent: opts?.univalent }) : null;
+      const cuspProps = _QD.classifyCusps ? _QD.classifyCusps(phi, {}) : null;
+      const obs = _QD.boundaryObservables ? _QD.boundaryObservables(phi, { samples: opts?.observableSamples }) : null;
+      const acc = !opts?.live && hData && _QD.estimateAccuracy ? _QD.estimateAccuracy(phi, hData, {}) : null;
+      const symmetry = _QD.detectSymmetry ? _QD.detectSymmetry(phi) : null;
+      const observables = obs && !opts?.includeObservableSeries
+        ? (() => {
+            const summary = { ...obs };
+            delete summary.w;
+            delete summary.curvature;
+            return { obs: summary, acc, hasSeries: false };
+          })()
+        : (obs ? { obs, acc, hasSeries: true } : null);
+      return { geom, cuspProps, observables, symmetry };
+    },
   });
 
   // Expose under the QD namespace — the SAME public surface + per-lane diagnostics as before the C1 factory.
@@ -241,7 +282,12 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     liveSolve: (hData, initPhi, opts) => live.run(hData, initPhi, opts),
     cancelLive: live.cancel,
     isLiveBusy: live.isBusy,
-    // Diagnostics — one pair per lane; the three latches are independent, so a test can prove one lane's
+    // Deferred geometry/cusp/accuracy work. A newer analysis request terminates
+    // stale work rather than queueing it ahead of the current status panel.
+    analyze: (phi, hData, opts) => analysis.run(phi, hData, opts),
+    cancelAnalysis: analysis.cancel,
+    isAnalysisBusy: analysis.isBusy,
+    // Diagnostics — one pair per lane; the latches are independent, so a test can prove one lane's
     // failure leaves the others on the worker path.
     _isMainThreadFallback: primary._isFallback,
     _hasWorker: primary._hasWorker,
@@ -249,6 +295,8 @@ import { formatWorkerErrorDetail } from '../workers/worker-crash-detail.mjs';
     _hasAuxWorker: aux._hasWorker,
     _isLiveFallback: live._isFallback,
     _hasLiveWorker: live._hasWorker,
+    _isAnalysisFallback: analysis._isFallback,
+    _hasAnalysisWorker: analysis._hasWorker,
   };
 
 })();

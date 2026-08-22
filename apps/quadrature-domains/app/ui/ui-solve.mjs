@@ -68,6 +68,13 @@ const QD = _QD;
     const buildAltSearchOptions = ui.buildAltSearchOptions;
     const applyNormToOpts       = ui.applyNormToOpts;
     const publishPrimarySolution = ui.publishPrimarySolution;
+    // The production benchmark installs this array before app boot.  Keeping
+    // marks behind an absent-by-default array makes this a zero-output aid for
+    // performance investigations without changing normal UI behavior.
+    const perfMark = (name) => {
+      const marks = global.__qdPerfMarks;
+      if (Array.isArray(marks)) marks.push({ name, t: performance.now() });
+    };
 
 // ---------- Solving (debounced) ------------------------------------------
 // Debounce dropped from 250 ms → 60 ms after P0.2 moved solveAndRender off
@@ -248,6 +255,10 @@ let _solveAndRenderToken = 0;
 // supersedes any older in-flight idle callback.
 let _analysisToken = 0;
 let _liveAnalysisLast = 0;          // last live-analysis timestamp (throttle)
+// A completed solve defers alternate search until its authoritative status pass
+// settles.  If the pass is replaced (for example, an overlay is enabled), the
+// newest full pass owns this gate; stale completions cannot release it early.
+let _pendingAltAfterAnalysis = null;
 
 // solveAndRender — the main (debounced) solve pipeline. Steps:
 //   1. buildHData() + buildNormalization() from the DOM; bail on parse errors.
@@ -318,6 +329,7 @@ function solveAndRender() {
   state.altSearchToken++;
   state.altSearchActive = false;
   $('#alt-search-indicator').classList.add('hidden');
+  _pendingAltAfterAnalysis = null;
 
   const myToken = ++_solveAndRenderToken;
   // The worker preempts any prior in-flight solve when called again; on the
@@ -459,8 +471,15 @@ function solveAndRender() {
     showSolution(result.primary, built, /*isPrimary=*/true);
     refreshAlternatesPanel();
 
-    startBackgroundAltSearch(built, altNorm);
-    runStatusAnalyses();   // geometry / cusps / observables (authoritative, with accuracy)
+    // Status analysis is the first background priority. Its completion owns the
+    // alternate-search gate, including when an overlay request replaces this
+    // first analysis pass.
+    _pendingAltAfterAnalysis = { solveToken: myToken, hData: built, norm: altNorm, analysisToken: null };
+    const analysis = runStatusAnalyses();
+    if (!(analysis && typeof analysis.finally === 'function')) {
+      _pendingAltAfterAnalysis = null;
+      startBackgroundAltSearch(built, altNorm);
+    }
    } finally {
      if (myToken === _solveAndRenderToken) hideSolveBusy();
    }
@@ -498,19 +517,23 @@ function showSolveBusy() {
   }
 }
 function hideSolveBusy() {
+  perfMark('solve:busy-hide:start');
   const row = $('#solve-busy-row');
   if (row) row.classList.add('hidden');
   if (_solveElapsedTimer) { clearInterval(_solveElapsedTimer); _solveElapsedTimer = null; }
   _transitionPending = null;   // consume the §23 transition cue once the solve lands
+  perfMark('solve:busy-hide:end');
 }
 function cancelSolve() {
   const PSW = QD.PrimarySolverWorker;
   if (PSW && typeof PSW.cancel === 'function') PSW.cancel();
+  if (PSW && typeof PSW.cancelAnalysis === 'function') PSW.cancelAnalysis();
   // Bump the token so the (rejected) in-flight promise is seen as superseded.
   _solveAndRenderToken++;
   // Also stop any background alternate search tied to this solve.
   state.altSearchToken++;
   state.altSearchActive = false;
+  _pendingAltAfterAnalysis = null;
   $('#alt-search-indicator').classList.add('hidden');
   hideSolveBusy();
   setStatus({ kind: 'warn', text: 'Solve cancelled.' });
@@ -531,10 +554,62 @@ function runStatusAnalyses(opts) {
   const cur = state.current;
   if (!cur || !cur.success || !cur.primary || !cur.primary.phi) return;
   const token = ++_analysisToken;
+  const phi = cur.primary.phi;
+  // A live-drag refresh intentionally does not release a full solve's pending
+  // alternate search: its reduced pass omits authoritative accuracy data.
+  if (!(opts && opts.live) && _pendingAltAfterAnalysis &&
+      _pendingAltAfterAnalysis.solveToken === _solveAndRenderToken) {
+    _pendingAltAfterAnalysis.analysisToken = token;
+  }
+  const PSW = QD.PrimarySolverWorker;
+  if (PSW && typeof PSW.analyze === 'function') {
+    perfMark('analysis:worker:start');
+    return PSW.analyze(phi, cur.hData, {
+      samples: state.samples,
+      observableSamples: opts && opts.live ? 512 : 1024,
+      univalent: cur.primary.univalent,
+      live: !!(opts && opts.live),
+      // The status card only needs scalar observables. Keep the expensive
+      // boundary series in the worker unless an enabled overlay will draw it.
+      includeObservableSeries: !!(state.showCurvature || state.showPhenomena),
+    }).then((result) => {
+      if (token !== _analysisToken || !result) return;
+      const current = state.current;
+      // A live result can replace state.current inside the 120 ms analysis
+      // throttle. Never attach a completed worker payload to that newer φ.
+      if (current !== cur || !current.primary || current.primary.phi !== phi) return;
+      current.geomProps = result.geom || null;
+      current.cuspProps = result.cuspProps || null;
+      current.observables = result.observables || null;
+      current.symmetry = result.symmetry || null;
+      if (current.observables && current.observables.hasSeries && current.observables.obs) {
+        current.observables.obs._phiRef = phi;
+      }
+      publishPrimarySolution();
+      renderGeomProps(current.geomProps);
+      renderCusps(current.cuspProps);
+      renderObservables(current.observables);
+      // A status-card-only update needs no canvas work. Repaint only when an
+      // enabled overlay, or an actual cusp marker, changes what is visible.
+      const hasCuspMarkers = !!(current.cuspProps && current.cuspProps.cusps && current.cuspProps.cusps.length);
+      const needsOverlayPaint = state.showCurvature || state.showPhenomena || hasCuspMarkers;
+      if (needsOverlayPaint && typeof plot !== 'undefined' && plot) plot.render();
+      perfMark('analysis:worker:end');
+    }).catch((err) => {
+      if (!(err && err.aborted)) console.warn('[qd] status analysis failed:', err);
+    }).finally(() => {
+      const pending = _pendingAltAfterAnalysis;
+      if (!pending || pending.analysisToken !== token || token !== _analysisToken ||
+          pending.solveToken !== _solveAndRenderToken) return;
+      _pendingAltAfterAnalysis = null;
+      startBackgroundAltSearch(pending.hData, pending.norm);
+    });
+  }
   scheduleGeomClassification(cur.primary, token);
   scheduleCuspClassification(cur.primary, token);
   scheduleObservables(cur.primary, cur.hData, token, opts);
   scheduleSymmetry(cur.primary, token);
+  perfMark('analyses:scheduled');
 }
 
 // #9: detect the domain's symmetry group (for the annotated-phenomena overlay's
@@ -547,6 +622,7 @@ function scheduleSymmetry(sol, token) {
   if (cached && cached._phiRef === phi) return;     // already computed for this φ
   const run = () => {
     if (token !== _analysisToken) return;           // superseded by a newer analysis
+    perfMark('analysis:symmetry:start');
     let sym;
     try { sym = QD.detectSymmetry(phi); } catch (e) { return; }
     if (token !== _analysisToken) return;
@@ -554,6 +630,7 @@ function scheduleSymmetry(sol, token) {
     if (state.current) state.current.symmetry = sym;
     // Repaint so the symmetry axes (drawn from state.current.symmetry) appear.
     if (state.showPhenomena && typeof plot !== 'undefined' && plot) plot.render();
+    perfMark('analysis:symmetry:end');
   };
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
   idle(run, { timeout: IDLE_ANALYSIS_TIMEOUT_MS });
@@ -577,6 +654,7 @@ function scheduleGeomClassification(sol, token) {
   }
   const run = () => {
     if (token !== _analysisToken) return;           // superseded by a newer analysis
+    perfMark('analysis:geometry:start');
     let geom;
     try {
       geom = QD.classifyUnivalence(sol.phi, { samples: state.samples, univalent: sol.univalent });
@@ -587,6 +665,7 @@ function scheduleGeomClassification(sol, token) {
     if (token !== _analysisToken) return;
     if (state.current) { state.current.geomProps = geom; publishPrimarySolution(); }
     renderGeomProps(geom);
+    perfMark('analysis:geometry:end');
   };
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
   idle(run, { timeout: 200 });
@@ -697,6 +776,7 @@ function scheduleCuspClassification(sol, token) {
   }
   const run = () => {
     if (token !== _analysisToken) return;           // superseded by a newer analysis
+    perfMark('analysis:cusps:start');
     let res;
     try {
       res = QD.classifyCusps(sol.phi, { });
@@ -709,6 +789,7 @@ function scheduleCuspClassification(sol, token) {
     renderCusps(res);
     // Repaint so the cusp markers (drawn from state.current.cuspProps) appear.
     if (typeof plot !== 'undefined' && plot) plot.render();
+    perfMark('analysis:cusps:end');
   };
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
   idle(run, { timeout: 200 });
@@ -760,6 +841,7 @@ function scheduleObservables(sol, hData, token, opts) {
   }
   const run = () => {
     if (token !== _analysisToken) return;           // superseded by a newer analysis
+    perfMark('analysis:observables:start');
     let res;
     try {
       // Live (drag) passes use a lighter sweep and SKIP the heavy accuracy
@@ -783,6 +865,7 @@ function scheduleObservables(sol, hData, token, opts) {
     renderObservables(res);
     // Repaint so the curvature overlay (drawn from state.current.observables) appears.
     if (typeof plot !== 'undefined' && plot) plot.render();
+    perfMark('analysis:observables:end');
   };
   const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 0));
   idle(run, { timeout: IDLE_ANALYSIS_TIMEOUT_MS });
@@ -874,11 +957,17 @@ function reflectFamilyMode(family) {
 // they don't reframe the viewport. Auto-fit happens iff (state.autoFit &&
 // isPrimary); it is NOT an "autoFit" flag despite some historical call sites.
 function showSolution(sol, hData, isPrimary) {
+  perfMark('showSolution:start');
   state.family = null;       // a fresh solution supersedes any family-sweep overlay
   const boundary = QD.sampleBoundaryAdaptive(sol.phi, state.samples, Math.floor(state.samples * 1.5));
   const boundaryPts = boundary.map(p => p.w);
   const poles = hData.poles.map(p => p.a);
+  perfMark('showSolution:boundary-sampled');
 
+  // A primary auto-fit immediately redraws after calculating the new bounds.
+  // Skip the intermediate old-viewport paint so one solved result produces one
+  // canvas render instead of two.
+  const willAutoFit = state.autoFit && isPrimary;
   plot.setData({
     boundaryPts,
     poles,
@@ -887,11 +976,14 @@ function showSolution(sol, hData, isPrimary) {
     unbounded: !!sol.phi.unbounded,
     hData,
     phi: sol.phi,           // singular-LQD vector field reads q from here
-  });
+  }, { render: !willAutoFit });
+  perfMark('showSolution:plot-set-data');
 
-  if (state.autoFit && isPrimary) plot.fit();
+  if (willAutoFit) plot.fit();
+  perfMark('showSolution:plot-fit');
 
   renderRiemannMap(sol.phi);
+  perfMark('showSolution:riemann-rendered');
 
   // Build status
   const lines = [];
@@ -927,8 +1019,10 @@ function showSolution(sol, hData, isPrimary) {
                ` <span class="key">(${testClass})</span>`);
   }
   setStatus({ kind: 'raw', html: lines.join('<br>') });
+  perfMark('showSolution:status-rendered');
 
   // Try-harder button is always visible; no per-solution toggle needed.
+  perfMark('showSolution:end');
 }
 
 // Build the human-readable test-function-class string from a verifier result.
@@ -1135,7 +1229,7 @@ function startBackgroundAltSearch(hData, norm) {
       scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve,
       showSolveBusy, hideSolveBusy,   // reused by "Try harder" so it gets a timer + Cancel too
       showSolution, refreshAlternatesPanel, viewSolutionByIndex,
-      startBackgroundAltSearch, updateStatusPanelVisibility,
+      startBackgroundAltSearch, updateStatusPanelVisibility, runStatusAnalyses,
     };
   };
 })(typeof window !== 'undefined' ? window : globalThis);

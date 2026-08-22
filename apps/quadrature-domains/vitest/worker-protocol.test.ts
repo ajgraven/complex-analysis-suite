@@ -30,6 +30,16 @@ async function loadSolverEntry(): Promise<{ posted: any[]; fire: (msg: unknown) 
   return { posted, fire: (msg: unknown) => fakeSelf.onmessage!({ data: msg }), QD };
 }
 
+async function loadAnalysisEntry(): Promise<{ posted: any[]; fire: (msg: unknown) => void; QD: Record<string, any> }> {
+  vi.resetModules();
+  const posted: any[] = [];
+  const fakeSelf: FakeSelf = { onmessage: null, postMessage: (m) => posted.push(m) };
+  (globalThis as Record<string, unknown>).self = fakeSelf;
+  const QD = (await import("../app/workers/solver-graph.mjs")).default as Record<string, any>;
+  await import("../app/workers/analysis-worker-entry.mjs");
+  return { posted, fire: (msg: unknown) => fakeSelf.onmessage!({ data: msg }), QD };
+}
+
 afterEach(() => { delete (globalThis as Record<string, unknown>).self; });
 
 describe("solver-worker-entry dispatch — known kinds round-trip (invariant, C2 must preserve)", () => {
@@ -59,7 +69,38 @@ describe("solver-worker-entry dispatch — known kinds round-trip (invariant, C2
   it("a falsy message is ignored (no post)", async () => {
     const { posted, fire } = await loadSolverEntry();
     fire(null);
-    expect(posted).toHaveLength(0);
+    expect(posted).toEqual([]);
+  });
+});
+
+describe("analysis-worker-entry dispatch", () => {
+  it("analyze returns the consolidated status-panel payload", async () => {
+    const { posted, fire, QD } = await loadAnalysisEntry();
+    QD.classifyUnivalence = vi.fn(() => ({ convex: { is: true } }));
+    QD.classifyCusps = vi.fn(() => ({ cusps: [] }));
+    QD.boundaryObservables = vi.fn(() => ({ area: 1 }));
+    QD.estimateAccuracy = vi.fn(() => ({ significantDigits: 12 }));
+    QD.detectSymmetry = vi.fn(() => ({ rotationalOrder: 1 }));
+
+    fire({ kind: "analyze", jobId: 10, phi: { family: "boundedQD" }, hData: { poles: [] }, opts: { samples: 96 } });
+
+    expect(posted).toEqual([{
+      kind: "analyze", jobId: 10,
+      result: {
+        geom: { convex: { is: true } }, cuspProps: { cusps: [] },
+        observables: { obs: { area: 1 }, acc: { significantDigits: 12 }, hasSeries: false },
+        symmetry: { rotationalOrder: 1 },
+      },
+    }]);
+  });
+
+  it("a thrown analysis error becomes { kind, jobId, error:<string> }", async () => {
+    const { posted, fire, QD } = await loadAnalysisEntry();
+    QD.classifyUnivalence = () => { throw new Error("boom"); };
+    fire({ kind: "analyze", jobId: 10, phi: {}, hData: {}, opts: {} });
+    expect(posted).toHaveLength(1);
+    expect(posted[0]).toMatchObject({ kind: "analyze", jobId: 10 });
+    expect(String(posted[0].error)).toContain("boom");
   });
 });
 

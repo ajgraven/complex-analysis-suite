@@ -92,7 +92,7 @@ let renderPolesList, renderPolyCoefList;
 let modeAllowsPoly, refreshHText, setHTextMsg, parseAndApplyHText;
 let scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve, showSolveBusy, hideSolveBusy;
 let showSolution, refreshAlternatesPanel, viewSolutionByIndex;
-let startBackgroundAltSearch, updateStatusPanelVisibility;
+let startBackgroundAltSearch, updateStatusPanelVisibility, runStatusAnalyses;
 
 // MODE DESCRIPTORS (R5) + aggressiveness PRESETS live in ui-modes.js, installed
 // here (early) so MODES / modeDescriptor / currentPresetList / PRESETS resolve
@@ -862,6 +862,7 @@ function setViewMode(mode) {
   if (mode !== 'inverse' && mode !== 'direct') return;
   if (mode === state.viewMode) return;
   state.viewMode = mode;
+  if (mode === 'direct') document.dispatchEvent(new CustomEvent('qd:view-mode', { detail: { mode } }));
   // Toggle segmented-control highlight.
   document.querySelectorAll('#qd-view-toggle .seg-btn').forEach(btn => {
     QD.QoL.setSegActive(btn, btn.dataset.view === mode);
@@ -1294,11 +1295,15 @@ $('#critical-set-toggle').addEventListener('change', e => {
 });
 $('#curvature-toggle').addEventListener('change', e => {
   state.showCurvature = e.target.checked;
-  plot.render();
+  // Request the worker's full boundary series when this optional overlay is
+  // enabled after a status-card-only analysis.
+  if (state.showCurvature && typeof runStatusAnalyses === 'function') runStatusAnalyses();
+  else plot.render();
 });
 $('#phenomena-toggle')?.addEventListener('change', e => {
   state.showPhenomena = e.target.checked;
-  plot.render();
+  if (state.showPhenomena && typeof runStatusAnalyses === 'function') runStatusAnalyses();
+  else plot.render();
 });
 // Faber-roots overlay toggle. ui-faber.js keeps the card's "Plot roots" checkbox
 // in sync with this Layers toggle (and pushes the root payload onto state.faberRoots).
@@ -1534,12 +1539,12 @@ Object.assign(uiCtx, {
 ({
   scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve, showSolveBusy, hideSolveBusy,
   showSolution, refreshAlternatesPanel, viewSolutionByIndex,
-  startBackgroundAltSearch, updateStatusPanelVisibility,
+  startBackgroundAltSearch, updateStatusPanelVisibility, runStatusAnalyses,
 } = QD_UI.installSolve(uiCtx));
 Object.assign(uiCtx, {
   scheduleSolve, scheduleQuickSolve, solveAndRender, cancelSolve,
   showSolution, refreshAlternatesPanel, viewSolutionByIndex,
-  startBackgroundAltSearch, updateStatusPanelVisibility,
+  startBackgroundAltSearch, updateStatusPanelVisibility, runStatusAnalyses,
 });
 
 ({ renderPolesList, renderPolyCoefList } = QD_UI.installPoleGrid(uiCtx));
@@ -1617,8 +1622,25 @@ uiCtx.showQDSolution = function (phi, hData, opts) {
   }
 };
 
-// Algebra tab: symbolic elimination workspace (classical bounded QD) — algebra/algebra-ui.js.
-if (QD_UI && QD_UI.installAlgebra) QD_UI.installAlgebra(uiCtx);
+// Algebra tab: symbolic elimination workspace (classical bounded QD). Its
+// implementation is deferred until the tab is opened, but the mount stays in
+// this closure because it owns uiCtx.
+let algebraInstalled = false;
+function installDeferredAlgebra() {
+  if (algebraInstalled || !QD_UI || !QD_UI.installAlgebra) return;
+  QD_UI.installAlgebra(uiCtx);
+  algebraInstalled = true;
+}
+installDeferredAlgebra();
+document.addEventListener('qd:feature-loaded', (event) => {
+  const feature = event.detail && event.detail.feature;
+  if (feature === 'algebra') installDeferredAlgebra();
+  if (feature === 'direct' && state.viewMode === 'direct' && QD.Direct && QD.Direct._mountUI) {
+    QD.Direct._mountUI();
+    state.directMounted = true;
+    if (QD.Direct._activate) QD.Direct._activate();
+  }
+});
 
 // Initial structured-grid render (relocated from just after the plot setup, so
 // the let-bound renderers + modeAllowsPoly exist by the time it runs).

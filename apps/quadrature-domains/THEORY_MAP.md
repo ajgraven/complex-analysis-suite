@@ -22,7 +22,7 @@ satisfies
 where Φ_φ⁻¹ is the inverse Faber transform and `f^#(z) = conj(f(1/conj(z)))`.
 
 **Code.** The forward + inverse Faber primitives live in
-[`app/solver-faber.mjs`](app/solver-faber.mjs):
+[`app/solvers/solver-faber.mjs`](app/solvers/solver-faber.mjs):
 
 | Symbol | Where | Maps to |
 | --- | --- | --- |
@@ -35,7 +35,7 @@ unbounded* QD are read off φ's Laurent expansion at ∞ (φ is the exterior map
 `c·F_{n+1}(ζ) = (ζ − c₀)·Fₙ(ζ) − Σ_{k=1}^{n} c_k·F_{n−k}(ζ) − n·cₙ` — used by the
 **Faber-polynomials analysis card** (display + root plot). Oracles: disk ⇒ F_n = ζ^n,
 interval [−2,2] ⇒ F_n = 2·T_n(ζ/2) (Chebyshev). Code in
-[`app/faber-analysis.mjs`](app/faber-analysis.mjs):
+[`app/analysis/faber-analysis.mjs`](app/analysis/faber-analysis.mjs):
 
 | Symbol | Where | Maps to |
 | --- | --- | --- |
@@ -84,12 +84,12 @@ inventory (`system.w0Fixed`); the UI defaults it to the centroid of the poles.
 
 | Block | Symbol | Where |
 | --- | --- | --- |
-| Exact symbolic core (Rational/Gaussian/MPoly/RatFn/**FRatFn** + power series, Lagrange reversion) | `QD.Sym` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Generate `{(●), (★), gauge}` as cleared `MPoly = 0` (conjugate model over ℚ(i)) | `QDEquations.generateClassicalBounded` | [`app/qd-equations.mjs`](app/qd-equations.mjs) |
-| Real/imaginary-split representation (`z_j = x_j+i y_j`, …) | `QDEquations.reimSplit` | `app/qd-equations.mjs` |
-| Correctness oracle — every equation ≈0 at the numeric solution | `QDEquations.residualAtSolution` / `residualReimAtSolution` | `app/qd-equations.mjs` |
-| LaTeX / CAS-agnostic export for display + reduction | `QDEquations.systemToLatex` / `systemToExport` | `app/qd-equations.mjs` |
-| Display card (`#qd-equations-card`, classical bounded QD only) | `QD_UI.installQdEquations` | [`app/ui-qd-equations.mjs`](app/ui-qd-equations.mjs) |
+| Exact symbolic core (Rational/Gaussian/MPoly/RatFn/**FRatFn** + power series, Lagrange reversion) | `QD.Sym` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Generate `{(●), (★), gauge}` as cleared `MPoly = 0` (conjugate model over ℚ(i)) | `QDEquations.generateClassicalBounded` | [`app/qd/qd-equations.mjs`](app/qd/qd-equations.mjs) |
+| Real/imaginary-split representation (`z_j = x_j+i y_j`, …) | `QDEquations.reimSplit` | `app/qd/qd-equations.mjs` |
+| Correctness oracle — every equation ≈0 at the numeric solution | `QDEquations.residualAtSolution` / `residualReimAtSolution` | `app/qd/qd-equations.mjs` |
+| LaTeX / CAS-agnostic export for display + reduction | `QDEquations.systemToLatex` / `systemToExport` | `app/qd/qd-equations.mjs` |
+| Display card (`#qd-equations-card`, classical bounded QD only) | `QD_UI.installQdEquations` | [`app/ui/ui-qd-equations.mjs`](app/ui/ui-qd-equations.mjs) |
 
 The (★) block uses the **forward** form `C_{j,s} = Σ_{k=s}^{m_j} (k/s)·A_{j,k}·[t^k] φ̃_j(t)^s`
 (the dual of the inverse-Faber statement above) — only `seriesPow`, no compositional inverse — and a
@@ -105,37 +105,37 @@ see arXiv:2001.09431 for the RCTD-of-QDs method this anticipates.
 
 | Object | Symbol | Where |
 | --- | --- | --- |
-| Sylvester resultant / discriminant (fraction-free Bareiss) | `QD.Sym.resultant` / `discriminant` / `mpolyDet` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Monomial orders (lex/grlex/grevlex + block/elimination) + normal form + S-poly | `QD.Sym.monomialOrder` / `eliminationOrder` / `normalForm` / `sPoly` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Gröbner basis (Buchberger over ℚ(i): Gebauer–Möller + sugar; bit-packed kernel + content removal; reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Signature-based Gröbner (GVW, POT; bit-identical, fewer S-pairs) — opt-in `buchberger(…,{signature:true})` | `QD.Sym.buchbergerSig` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Linear-substitution preprocessing (strip degree-1-with-constant-coeff variables, lift back) | `QD.Sym.linearReduce` (in `solveZeroDim`'s `preprocess` step) | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Zero-dim toolkit: standard monomials / quotient dimension / solution count | `QD.Sym.standardMonomials` / `isZeroDimensional` / `quotientDimension` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| FGLM (grevlex→lex) + shape-lemma numeric solving, with a Möller–Stetter **eigenvalue** fallback for non-shape-position ideals | `QD.Sym.fglm` / `solveZeroDim` / `solveByEigenvalues` / `multiplicationMatrix`; `QD.AlgebraStore.dimension` / `solve` | [`app/sym-core.mjs`](app/sym-core.mjs) |
+| Sylvester resultant / discriminant (fraction-free Bareiss) | `QD.Sym.resultant` / `discriminant` / `mpolyDet` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Monomial orders (lex/grlex/grevlex + block/elimination) + normal form + S-poly | `QD.Sym.monomialOrder` / `eliminationOrder` / `normalForm` / `sPoly` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Gröbner basis (Buchberger over ℚ(i): Gebauer–Möller + sugar; bit-packed kernel + content removal; reduced) + saturation `I:f^∞` | `QD.Sym.buchberger` / `reduceGroebner` / `saturate` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Signature-based Gröbner (GVW, POT; bit-identical, fewer S-pairs) — opt-in `buchberger(…,{signature:true})` | `QD.Sym.buchbergerSig` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Linear-substitution preprocessing (strip degree-1-with-constant-coeff variables, lift back) | `QD.Sym.linearReduce` (in `solveZeroDim`'s `preprocess` step) | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Zero-dim toolkit: standard monomials / quotient dimension / solution count | `QD.Sym.standardMonomials` / `isZeroDimensional` / `quotientDimension` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| FGLM (grevlex→lex) + shape-lemma numeric solving, with a Möller–Stetter **eigenvalue** fallback for non-shape-position ideals | `QD.Sym.fglm` / `solveZeroDim` / `solveByEigenvalues` / `multiplicationMatrix`; `QD.AlgebraStore.dimension` / `solve` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
 | Off-main-thread Gröbner/solve (Web Worker, progress + cancel) | `QD.SymWorker` (via `Sym.runJob` / `MPoly.fromTermList`); `AlgebraStore.groebnerAsync` / `solveAsync` / `dimensionAsync` | [`app/algebra/sym-worker.mjs`](app/algebra/sym-worker.mjs) |
 | Reality assumption (assert variables real → an appended labeled column; v̄→v post-conjugation) | `AlgebraStore.assumeReal(vars)` (or `seedFromSystem(…, {realVars, bakeAssumptions})` for the compact path) | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
-| Auto-reality: real-axis symmetry of h (w↦w̄) ⇒ assume all base vars real (the 478→118 collapse) | `QD.QDEquations.realAxisSymmetry(hData)` → Algebra "Auto" button | [`app/qd-equations.mjs`](app/qd-equations.mjs) |
+| Auto-reality: real-axis symmetry of h (w↦w̄) ⇒ assume all base vars real (the 478→118 collapse) | `QD.QDEquations.realAxisSymmetry(hData)` → Algebra "Auto" button | [`app/qd/qd-equations.mjs`](app/qd/qd-equations.mjs) |
 | Audit-trail reductions (each appends a labeled column; column 0 = original): fix one/several values (exact ℚ(i), each also fixing the conjugate) + auto-propagate the linear cascade, fix φ(0)=w₀ | `AlgebraStore.substituteValue` / `substituteValues` / `reducePropagate` / `fixW0` | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
-| Triangular decomposition (Wu pseudo-elimination) — alternative eliminator; exhibits free vars / no-solution | `QD.Sym.pseudoRemainder` / `triangularize`; `AlgebraStore.triangularize` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| Radical polynomial factorization (monomial + variable-separable via the mixed-partial test + univariate via verified numeric roots) → case-split a variety V(p)=⋃V(fᵢ) | `QD.Sym.factor`; `AlgebraStore.factorOf` / `applyFactor` ("Attempt to factor" → a `case fₖ=0` column) | [`app/sym-core.mjs`](app/sym-core.mjs) |
+| Triangular decomposition (Wu pseudo-elimination) — alternative eliminator; exhibits free vars / no-solution | `QD.Sym.pseudoRemainder` / `triangularize`; `AlgebraStore.triangularize` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| Radical polynomial factorization (monomial + variable-separable via the mixed-partial test + univariate via verified numeric roots) → case-split a variety V(p)=⋃V(fᵢ) | `QD.Sym.factor`; `AlgebraStore.factorOf` / `applyFactor` ("Attempt to factor" → a `case fₖ=0` column) | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
 | Export a column / node / all columns as paste-ready Mathematica (Wolfram-Language list) | `AlgebraStore.mathematicaColumn` / `mathematicaNode` / `mathematicaAll` | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
-| Certified REAL-solution count (= #quadrature domains) via the Hermite trace form (signature=#real, rank=#complex; exact inertia over ℚ) | `QD.Sym.realSolutionCount` (`_rationalInertia`) | [`app/sym-core.mjs`](app/sym-core.mjs) |
+| Certified REAL-solution count (= #quadrature domains) via the Hermite trace form (signature=#real, rank=#complex; exact inertia over ℚ) | `QD.Sym.realSolutionCount` (`_rationalInertia`) | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
 | Existence / uniqueness verdict over the real (reim) system, known parameters pinned; explicit real solutions; semi-autonomous reduce+solve | `AlgebraStore.currentReimSystem` / `classify` / `solveReal`; Algebra "Existence / uniqueness" + "★ Auto-reduce & solve" | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
 | Certified univalence verdict (authoritative): regime (inconsistent / positive-dim ⇒ "fix the gauge" / zero-dim) + EXACT local fold (Schur–Cohn) + EXACT boundary-simple (real double-point count) + gauge quotient + numeric cross-check → # GENUINE quadrature domains | Algebra "Certify univalence" (`doCertifyUnivalence`) | [`app/algebra/algebra-ui.mjs`](app/algebra/algebra-ui.mjs) |
-| EXACT count of a ℚ(i) polynomial's roots inside the unit disk (Hermitian Schur–Cohn matrix `C=A·Aᴴ−B·Bᴴ` + exact inertia; the local φ′≠0-in-𝔻 fold test) | `Sym.schurCohn` (+ `_hermitianInertia`); UI `schurCohnFold` | [`app/sym-core.mjs`](app/sym-core.mjs) |
-| EXACT boundary injectivity: # real circle double points of φ(∂𝔻) (reim divided difference + circle quadrics → `realSolutionCount`; 0 ⇔ simple) | `QDConstraints.phiDividedDifference` / `boundaryDoublePointCount`; UI `boundarySimpleExact` | [`app/qd-constraints.mjs`](app/qd-constraints.mjs) |
-| Same quadrature domain up to the rotation gauge (canonicalize φ′(0)>0 real, then compare) — the gauge quotient in the verdict | `sameDomain` / `canonicalizeByRotation` | [`app/solver.mjs`](app/solver.mjs) |
-| Univariate resolvent χ_v(x)=det(x·I−M_v) + discriminant/degeneracy (cusp = repeated root) | `Sym.resolvent`; `AlgebraStore.resolventOf`; Algebra "Resolvent / discriminant" | [`app/sym-core.mjs`](app/sym-core.mjs) / [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
+| EXACT count of a ℚ(i) polynomial's roots inside the unit disk (Hermitian Schur–Cohn matrix `C=A·Aᴴ−B·Bᴴ` + exact inertia; the local φ′≠0-in-𝔻 fold test) | `Sym.schurCohn` (+ `_hermitianInertia`); UI `schurCohnFold` | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) |
+| EXACT boundary injectivity: # real circle double points of φ(∂𝔻) (reim divided difference + circle quadrics → `realSolutionCount`; 0 ⇔ simple) | `QDConstraints.phiDividedDifference` / `boundaryDoublePointCount`; UI `boundarySimpleExact` | [`app/qd/qd-constraints.mjs`](app/qd/qd-constraints.mjs) |
+| Same quadrature domain up to the rotation gauge (canonicalize φ′(0)>0 real, then compare) — the gauge quotient in the verdict | `sameDomain` / `canonicalizeByRotation` | [`app/solvers/solver.mjs`](app/solvers/solver.mjs) |
+| Univariate resolvent χ_v(x)=det(x·I−M_v) + discriminant/degeneracy (cusp = repeated root) | `Sym.resolvent`; `AlgebraStore.resolventOf`; Algebra "Resolvent / discriminant" | [`app/sym/sym-core.mjs`](app/sym/sym-core.mjs) / [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
 | Spurious-component detection: factor the positive-dim system, suggest a one-click pin/split | `AlgebraStore.spuriousFactors`; positive-dim verdict actions | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
 | Numeric-oracle cross-check of a genuine QD (residual vs the regenerated original system; `sameDomain` to the numeric solver) | UI `crossCheckPhis` (reuses `QDEquations.residualAtSolution`) | [`app/algebra/algebra-ui.mjs`](app/algebra/algebra-ui.mjs) |
-| Interior point-functional QD system ∫f dA = Σ_p M_p f⁽ᵖ⁾(0) (Aharonov–Shapiro; degree-n map ↔ order-n functional, p!M_p = Σ [zᵃ](φᵖφ′)·w̄_{a+1}; order 2 reproduces the cardioid uniqueness) | `QDEquations.pointFunctionalSystem(data, {order})`; `AHARONOV_SHAPIRO.md` | [`app/qd-equations.mjs`](app/qd-equations.mjs) |
+| Interior point-functional QD system ∫f dA = Σ_p M_p f⁽ᵖ⁾(0) (Aharonov–Shapiro; degree-n map ↔ order-n functional, p!M_p = Σ [zᵃ](φᵖφ′)·w̄_{a+1}; order 2 reproduces the cardioid uniqueness) | `QDEquations.pointFunctionalSystem(data, {order})`; `AHARONOV_SHAPIRO.md` | [`app/qd/qd-equations.mjs`](app/qd/qd-equations.mjs) |
 | Fixed φ(0)=w₀ remembered + substituted into later constraints (e.g. star form φ−w₀) | `AlgebraStore` `w0Fixed` / `seedFromSystem` (from `system.w0Fixed`) | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
 | Gröbner workspace op (selected/all equality nodes) | `QD.AlgebraStore.groebner` | [`app/algebra/algebra-store.mjs`](app/algebra/algebra-store.mjs) |
-| φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd-constraints.mjs`](app/qd-constraints.mjs) |
-| convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd-constraints.mjs` |
-| local univalence φ′≠0 in 𝔻 (Schur–Cohn) + saturation witness | `QDConstraints.localUnivalence` | `app/qd-constraints.mjs` |
-| geometric border (discriminant of the on-circle polynomial) | `QDConstraints.geometricBorder` | `app/qd-constraints.mjs` |
-| global boundary injectivity `(φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂)` | `QDConstraints.injectivity` | `app/qd-constraints.mjs` |
+| φ, φ′, φ″ at a generic boundary point ζ | `QDConstraints.phiData` (reuses `phiSeriesAt` at ζ) | [`app/qd/qd-constraints.mjs`](app/qd/qd-constraints.mjs) |
+| convex `Re(1+ζφ″/φ′)>0`, star `Re(ζφ′/(φ−w₀))>0`, spiral (∃λ) | `QDConstraints.convexIneq` / `starIneq` / `spiralIneq` | `app/qd/qd-constraints.mjs` |
+| local univalence φ′≠0 in 𝔻 (Schur–Cohn) + saturation witness | `QDConstraints.localUnivalence` | `app/qd/qd-constraints.mjs` |
+| geometric border (discriminant of the on-circle polynomial) | `QDConstraints.geometricBorder` | `app/qd/qd-constraints.mjs` |
+| global boundary injectivity `(φ(ζ₁)−φ(ζ₂))/(ζ₁−ζ₂)` | `QDConstraints.injectivity` | `app/qd/qd-constraints.mjs` |
 | equation-DAG store / SVG-KaTeX canvas / tab | `QD.AlgebraStore` / `QD.AlgebraCanvas` / `QD_UI.installAlgebra` | [`app/algebra/`](app/algebra/) |
 
 Inequalities use the Hermitian numerator `Re(N/D) ∝ N·D̄ + N̄·D` (conjugate-variable bar); the circle
@@ -166,9 +166,9 @@ shared LQD machinery used by all four LQD families.
 **Statement.** Ω ∈ QD₀(α/(w−w₀)) iff `0 < α ≤ π²`, with explicit form
 `Ω = {|ln(w/w₀)|² < α}`; double-point at α = π².
 
-**Code.** [`app/solver-lqd.mjs`](app/solver-lqd.mjs); presets that exercise
+**Code.** [`app/solvers/solver-lqd.mjs`](app/solvers/solver-lqd.mjs); presets that exercise
 the bound at `LQD_PRESETS_BOUNDED` in
-[`app/ui-presets.mjs`](app/ui-presets.mjs:88).
+[`app/ui/ui-presets.mjs`](app/ui/ui-presets.mjs:88).
 
 Tests covering the closed-form solutions live in
 [`app/node-test.js`](app/node-test.js) (search for `Thm 5.3.2`).
@@ -244,7 +244,7 @@ adapters and per-family translations.
 univalence. Zeros near `|z| = 1` predict imminent failure as
 parameters vary.
 
-**Code.** [`app/critical-set.mjs`](app/critical-set.mjs); UI overlay in
+**Code.** [`app/analysis/critical-set.mjs`](app/analysis/critical-set.mjs); UI overlay in
 the inverse-tab plot. Severity classifier maps `|z|` to colours
 (critical / near / safe).
 
@@ -252,18 +252,18 @@ the inverse-tab plot. Severity classifier maps `|z|` to colours
 free gauge; as `c` grows the domain grows until `c*` — usually a **cusp** (a zero
 of φ′ migrates onto `|z| = 1`, then the boundary self-overlaps), occasionally a
 **fold** (the branch ends with φ′ still non-vanishing). `c*` is found
-automatically by [`app/solver-cmax.mjs`](app/solver-cmax.mjs)
+automatically by [`app/solvers/solver-cmax.mjs`](app/solvers/solver-cmax.mjs)
 (`QD.estimateMaxConformalRadius`) with a **two-regime gate**: away from the cusp it
 requires a genuine QD (univalent **and** the quadrature identity holds); near the
 cusp the complement (hole) thins until the identity verifier can no longer place
 interior test points, so it switches to the geometric cusp criterion
-`g = max|z|` over φ′ zeros ([`QD.findCriticalPoints`](app/critical-set.mjs), valid
+`g = max|z|` over φ′ zeros ([`QD.findCriticalPoints`](app/analysis/critical-set.mjs), valid
 while `g < 1`). Returns `mechanism: 'cusp' | 'fold'`, `critAtMax`, and a
 `confidence ∈ [0,1]` (mechanism cleanliness × bracket tightness). UI: the
 **Estimate max c** button in the inverse tab's `#c-card`.
 
 The identity verifier's interior test points come from
-[`QD.chooseHoleTestPoints`](app/solver.mjs) — inside the hole (even-odd ray-cast),
+[`QD.chooseHoleTestPoints`](app/solvers/solver.mjs) — inside the hole (even-odd ray-cast),
 ranked by clearance from both ∂Ω and h's poles. The naive `centroid + 0.18·maxDev`
 placement it replaced drifted onto a pole as `c` grew, giving a spurious 100%
 identity error and the old c\* under-estimate (HANDOFF).

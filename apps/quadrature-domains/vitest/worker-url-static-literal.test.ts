@@ -44,10 +44,13 @@ describe("QD worker URLs are static string literals (Vite bundling — P0 regres
     ).toEqual([]);
   });
 
-  it("primary-solver-worker spawns from the literal '../workers/solver-worker-entry.mjs'", () => {
+  it("primary-solver-worker keeps literal solve and analysis worker entries", () => {
     const src = readFileSync(join(APP_DIR, "solvers", "primary-solver-worker.mjs"), "utf8");
     expect(src).toMatch(
       /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*['"]\.\.\/workers\/solver-worker-entry\.mjs['"]\s*,\s*import\.meta\.url\s*\)/
+    );
+    expect(src).toMatch(
+      /new\s+Worker\s*\(\s*new\s+URL\s*\(\s*['"]\.\.\/workers\/analysis-worker-entry\.mjs['"]\s*,\s*import\.meta\.url\s*\)/
     );
   });
 });

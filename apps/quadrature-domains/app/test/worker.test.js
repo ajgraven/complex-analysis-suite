@@ -21,6 +21,9 @@ module.exports = async function run() {
     ok('PrimarySolverWorker: has liveSolve()', typeof PSW.liveSolve === 'function');
     ok('PrimarySolverWorker: has cancelLive()', typeof PSW.cancelLive === 'function');
     ok('PrimarySolverWorker: has isLiveBusy()', typeof PSW.isLiveBusy === 'function');
+    ok('PrimarySolverWorker: has analyze()', typeof PSW.analyze === 'function');
+    ok('PrimarySolverWorker: has cancelAnalysis()', typeof PSW.cancelAnalysis === 'function');
+    ok('PrimarySolverWorker: has isAnalysisBusy()', typeof PSW.isAnalysisBusy === 'function');
     // Functional: in the Node fallback (no Worker), liveSolve resolves via the
     // main-thread QD.liveSolveStep. Warm-start from a solved disk φ.
     if (typeof PSW.liveSolve === 'function') {
@@ -34,6 +37,14 @@ module.exports = async function run() {
            !!res && res.success === true && res.univalent === true,
            res ? (res.error || '') : 'no result');
       }
+    }
+    if (typeof PSW.analyze === 'function') {
+      const phi = { family: 'boundedQD', unbounded: false, w0: { re: 0, im: 0 },
+        branches: [{ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }, { re: 0.5, im: 0 }] }] };
+      const res = await PSW.analyze(phi, { poles: [] }, { samples: 96, observableSamples: 128 });
+      ok('PrimarySolverWorker: analyze fallback returns the cardioid cusp',
+         !!res && !!res.cuspProps && res.cuspProps.cusps.length === 1,
+         res && res.cuspProps && res.cuspProps.notes ? res.cuspProps.notes.join('; ') : 'no cusp result');
     }
   }
 

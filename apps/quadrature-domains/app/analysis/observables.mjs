@@ -7,8 +7,8 @@ import _QD from '../solvers/solver.mjs';
 // on (Hele-Shaw growth, harmonic measure / capacity, DLA, the geometry card).
 // Everything is computed from a φ that is ALREADY solved — no new solver math,
 // no new families — by sweeping the unit circle and reading φ, φ′, φ″ off the
-// family-agnostic Taylor evaluator. Pure + DOM-free; loaded page-side only (like
-// critical-set.js / cusps.js / univalence.js), never bundled into the Workers.
+// family-agnostic Taylor evaluator. Pure + DOM-free; loaded page-side and by
+// the deferred status-analysis worker, never by the primary solve worker.
 //
 // API
 //   QD.boundaryObservables(phi, { samples = 1024 }) → {

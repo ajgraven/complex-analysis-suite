@@ -1,8 +1,10 @@
 # Quadrature Domain Solver — Handoff
 
-This is the canonical pick-up-where-we-left-off reference after `/compact`.
-Captures architecture, math conventions, recent work, file layout, known
-limitations, and gotchas.
+This is the historical engineering journal for the app. It captures architecture,
+math conventions, work logs, former file layouts, known limitations, and gotchas
+at the time each entry was written. For current architecture, commands, file paths,
+and test guidance, use [README.md](README.md), [ARCHITECTURE.md](ARCHITECTURE.md),
+and [CONTRIBUTING.md](CONTRIBUTING.md).
 
 The user is **Andrew Graven**, the thesis author. He's an expert on the
 math; lean on the codebase + this handoff for engineering context, but ask

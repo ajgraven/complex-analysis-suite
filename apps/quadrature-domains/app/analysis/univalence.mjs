@@ -42,8 +42,8 @@ import _QD from '../solvers/solver.mjs';
 //
 // Reuses QD.phiTaylorAt(z, phi, 2) → [a0, a1, a2] with φ = a0, φ′ = a1,
 // φ″ = 2·a2 (the standard Taylor convention; see critical-set.js).  No new
-// numeric primitives.  Pure + DOM-free; loaded page-side only (like
-// critical-set.js), not bundled into the solver Workers.
+// numeric primitives. Pure + DOM-free; loaded page-side and by the deferred
+// status-analysis worker (not by the primary solve worker).
 // =============================================================================
 
 (function (global) {

@@ -1,38 +1,14 @@
 // @ts-check
 // =============================================================================
-// qd.mjs -- ES-module façade over the classic-script QD namespace.
+// qd.mjs -- named-export façade over the live QD namespace.
 //
-// The app's solver, math, and UI files are loaded as classic <script> tags
-// because (a) the param-slice and primary-solver Workers fetch raw .js
-// sources and concatenate them into a Blob at runtime — a pattern that
-// pre-dates native module workers, and (b) it keeps the no-build-step
-// guarantee. Native ESM is, however, far more pleasant for go-to-definition,
-// for downstream tooling (bundlers, type-checkers), and for any external
-// consumer that wants `import { Complex, solveInverseQD } from './qd.mjs'`.
+// The app is an ESM/Vite graph rooted at main.mjs. Many modules retain IIFE
+// bodies for namespace compatibility, so solver.mjs publishes the shared QD
+// object on globalThis while modules attach their APIs. This façade lets an
+// ESM consumer import that established surface with named exports.
 //
-// This module re-exports the public QD surface as named ESM exports. It is
-// the migration bridgehead, not a port: consumers can adopt ESM at their
-// own pace by switching `window.QD.solveInverseQD(...)` to
-// `import { solveInverseQD } from './qd.mjs'`.
-//
-// Load order: this module assumes the classic <script> tags have run and
-// populated `window.QD`. In `index.html` add `<script type="module"
-// src="qd.mjs"></script>` AFTER the existing script block if you want any
-// inline module-script consumer to find it.
-//
-// Migration plan (suggested staging):
-//   1. (NOW) This façade — no risk to existing flow.
-//   2. (LATER) Convert leaf modules (complex.js, taylor.js, primary-solution.js)
-//      to dual exports: keep the existing IIFE branch AND add an `export`
-//      block for ESM imports. Both populate the same shapes.
-//   3. (LATER) Convert solver-*.js families, paying attention to family-
-//      registration order; the Family registry needs an explicit `init()`
-//      call once all family files have imported.
-//   4. (LATER) Rework the Worker pool to use `new Worker(new URL('./worker.mjs',
-//      import.meta.url), { type: 'module' })` and let the worker import the
-//      same modules natively — drops the runtime Blob bundling.
-//   5. (LATER) UI files (ui.js, schwarz-ui.js, …) — these can stay last since
-//      they have the most DOM coupling and the fewest cross-imports.
+// Import it only after the solver graph has initialized (for example, from a
+// later application module or an external module loaded after main.mjs).
 // =============================================================================
 
 const _global = (typeof window !== 'undefined') ? window
@@ -41,8 +17,7 @@ const _QD = _global.QD;
 
 if (!_QD) {
   throw new Error(
-    'qd.mjs: window.QD is undefined. Load the classic-script QD bundle ' +
-    '(complex.js, solver.js, family files, …) BEFORE importing this module.'
+    'qd.mjs: QD is undefined. Load the ESM solver graph before importing this façade.'
   );
 }
 

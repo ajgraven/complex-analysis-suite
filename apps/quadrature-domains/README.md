@@ -16,6 +16,10 @@ Faber-transform approach to both problems from Andrew Graven's PhD thesis,
 > **ES-module-only** (`index.html` → `main.mjs`, native module workers). The only remaining
 > account of the pre-monorepo *standalone* (no-build) app is the collapsed **Historical** note
 > under "Running the app".
+>
+> **Startup loading:** the inverse-QD solver is the initial module graph.
+> Direct mode, Schwarz dynamics/Sphere, Parameter slice, and Algebra download
+> on first use, so opening the app does not require their optional code.
 
 > **Navigation:** [ARCHITECTURE.md](ARCHITECTURE.md) — module import
 > graph, namespace map, cross-tab contracts.
@@ -60,10 +64,20 @@ unbounded-Laurent, or arbitrary expression) and computes the corresponding
 ```
 pnpm --filter quadrature-domains dev       # Vite dev server (HMR)
 pnpm --filter quadrature-domains build     # static build into dist/
+pnpm --filter quadrature-domains perf:measure  # repeatable local Chrome baseline
 ```
 
 Vite serves and bundles the app (ES modules, native module Web Workers, `vite-plugin-pwa`
 for the service worker + cache-busting), and it imports the shared `@cas/core` kernel.
+
+### Performance measurement
+
+`perf:measure` builds, serves, and measures the production app in local Chrome.
+It reports cold boot/transfer/page heap, warm worker solves, and a real preset
+interaction; it does not impose machine-independent budgets. Use `--runs 7`
+for a steadier median, `--skip-build` after an unchanged production build, and
+`QD_CHROME_PATH` to select a Chromium executable. The report covers page heap;
+worker heap is intentionally not exposed by Chrome's page metrics.
 
 <details><summary><b>Historical: the pre-monorepo standalone app</b> (retained for provenance)</summary>
 
@@ -105,17 +119,17 @@ builds and publishes each app's `dist/`.
 ### Headless tests
 
 ```
-cd app
-node node-test.js     # covers all families, the Direct tab, the critical-set
-                      # kernel, Riemann sphere, Schwarz dynamics, and the
-                      # parameter-slice / param-sweep machinery. The runner
-                      # prints the live pass/fail tally on exit (the source of
-                      # truth for the test count — counts are intentionally not
-                      # duplicated in prose, which drifts).
+pnpm --filter quadrature-domains test   # QD's app/node-test.js kernel suite
+pnpm test                               # root gate: builds shared packages, then runs all Vitest projects
+pnpm test:browser                       # root browser gate, including QD (Chromium)
 ```
 
-The Node test suite optionally uses npm `mathjs` (run `npm install mathjs`
-in `app/` once); the parser tests skip cleanly if it isn't installed.
+The QD Node suite covers all families, the Direct tab, the critical-set kernel,
+Riemann sphere, Schwarz dynamics, and parameter-slice machinery. It reports the
+live pass/fail tally on exit; counts are intentionally not duplicated in prose.
+The root gate is the complete suite check, including the QD Vitest specifications.
+The browser project is separate because it requires Chromium and exercises the
+real application boot path.
 
 `app/test.html` is an in-browser test page with small per-test
 visualizations, complementary to the headless runner.
@@ -130,12 +144,15 @@ visualizations, complementary to the headless runner.
     ├── index.html                     entry point (tab bar, sidebars, canvas)
     ├── style.css
     │
-    ├── main.mjs                       page entry: side-effect-imports the whole module
-    │                                  graph, then runs QD.Strings.apply()
+    ├── main.mjs                       initial inverse-QD entry, then runs QD.Strings.apply()
+    ├── lazy-features.mjs              demand-loads Direct, Schwarz/Sphere, Parameter-slice, Algebra
+    ├── lazy/                          ordered side-effect entry modules for those optional features
+    ├── workers/analysis-worker-entry.mjs deferred geometry/cusp/observables worker entry
     │
     │  The former flat app/*.mjs were grouped into the six folders below by the E2
     │  folderization (refactor Phase 5). main.mjs, workers/solver-graph.mjs, and
-    │  test/bootstrap.js hold the hand-maintained load ORDER; the folders are by KIND.
+    │  test/bootstrap.js hold the hand-maintained eager load ORDER; lazy/*.mjs holds
+    │  the order for optional feature graphs. The folders are by KIND.
     │
     ├── core/                          convention-neutral primitives + shared infra
     │   ├── complex.mjs                {re, im} complex arithmetic (thin re-export of @cas/core)
@@ -160,7 +177,8 @@ visualizations, complementary to the headless runner.
     │   ├── solver-continuation.mjs    parameter-continuation driver
     │   ├── solver-taylor-common.mjs   shared truncated-series helpers for the families
     │   ├── primary-solution.mjs       primary-solution envelope model
-    │   ├── primary-solver-worker.mjs  warm Inverse-tab solve worker (3 lanes) + main-thread fallback
+    │   ├── primary-solver-worker.mjs  warm Inverse-tab worker manager (three lean solve lanes +
+    │   │                              one deferred analysis lane) + main-thread fallback
     │   ├── define-family.mjs          Family-shell factory (shared 17-key skeleton)
     │   └── seeds/                     per-family multistart seed banks
     │
@@ -285,6 +303,7 @@ visualizations, complementary to the headless runner.
     ├── workers/                       native ES-module worker entries + shared solver barrel
     │   ├── solver-graph.mjs           side-effect barrel: the solver cluster as ESM
     │   ├── solver-worker-entry.mjs    Inverse-tab primary-solve worker thread
+    │   ├── analysis-worker-entry.mjs  deferred status-analysis worker thread
     │   ├── param-slice-worker-entry.mjs   param-sweep pool worker thread
     │   ├── schwarz-worker-entry.mjs   Schwarz CPU-field worker thread
     │   └── sym-worker-entry.mjs       Algebra Gröbner/solve worker thread

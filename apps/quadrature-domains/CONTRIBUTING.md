@@ -7,11 +7,12 @@ result.
 
 ## Ground rules
 
-- **ES modules, Vite-built.** Every app module is a native `.mjs` file
-  imported (directly or transitively) by [`app/main.mjs`](app/main.mjs),
-  which `app/index.html` loads as `<script type="module">`. Run the dev
-  server with `pnpm --filter quadrature-domains dev` (Vite + HMR); `pnpm
-  --filter quadrature-domains build` emits a static `dist/`.
+- **ES modules, Vite-built.** Every app module is a native `.mjs` file in an
+  eager graph from [`app/main.mjs`](app/main.mjs), a demand-loaded feature
+  entry under `app/lazy/`, or a native worker entry. `app/index.html` loads
+  `main.mjs` as `<script type="module">`. Run the dev server with `pnpm
+  --filter quadrature-domains dev` (Vite + HMR); `pnpm --filter
+  quadrature-domains build` emits a static `dist/`.
 - **`'use strict'` semantics via modules.** Modules are strict by default.
   Many files keep their historical `(function (global) { … })(globalThis)`
   IIFE and attach onto the shared `QD` namespace, but the module *boundary*
@@ -29,7 +30,7 @@ Each inverse family lives in one `solver-*.mjs` file that `import`s
 `solver.mjs` and registers onto the shared `QD` namespace at load
 (import order matters; see
 [ARCHITECTURE.md](ARCHITECTURE.md#script-load-order)). Use
-[`app/solver-qd.mjs`](app/solver-qd.mjs) as the template — it has
+[`app/solvers/solver-qd.mjs`](app/solvers/solver-qd.mjs) as the template — it has
 the simplest variant.
 
 A family file populates a `QD.Family.X` object with these methods (all
@@ -54,7 +55,7 @@ bottom of the file. The dispatcher walks `familyDispatchOrder`
 family is more specific than `boundedQD`.
 
 For LQD-style families, the shared Blaschke / r# machinery in
-[`app/solver-lqd-common.mjs`](app/solver-lqd-common.mjs) is reusable —
+[`app/solvers/solver-lqd-common.mjs`](app/solvers/solver-lqd-common.mjs) is reusable —
 read it via `const LqdCommon = QD.LqdCommon;` at the top of your module.
 
 ### Seed strategy (A6/B3 split — applied to all 10 families)
@@ -62,7 +63,7 @@ read it via `const LqdCommon = QD.LqdCommon;` at the top of your module.
 Every family's multistart seed strategy lives outside the math kernel
 in `app/solvers/seeds/seeds-<familyTag>.mjs` and attaches to
 `QD.Seeds.<familyTag> = { initialGuess, perturbedInitialGuess,
-diverseInitialGuess? }`. The kernel (`app/solver-<familyTag>.mjs`)
+diverseInitialGuess? }`. The kernel (`app/solvers/solver-<familyTag>.mjs`)
 dereferences those at top level (`const initialGuess_X =
 QD.Seeds.<familyTag>.initialGuess;`) so the rest of the file stays
 pure-math, and internal callers (continuation loops, the Family entry)
@@ -72,7 +73,7 @@ To add a seeds file for a new family, follow the same pattern:
 
 1. Create `app/solvers/seeds/seeds-<familyTag>.mjs`. `import` `solver.mjs`
    and attach `QD.Seeds.<familyTag> = { initialGuess, … }`.
-2. In `app/solver-<familyTag>.mjs`, `import` the seeds module BEFORE it
+2. In `app/solvers/solver-<familyTag>.mjs`, `import` the seeds module BEFORE it
    reads `QD.Seeds.<familyTag>` (the import runs the attach as a side
    effect).
 3. Dereference at the top of the solver file via
@@ -98,7 +99,7 @@ import order. See `solver-uqd-lqd.mjs` / `seeds-uqd-lqd.mjs` for an example.
 
 New families should use the schema runtime rather than hand-writing
 pack/unpack. See `SCHEMA_LQDS` in
-[`app/solver-lqd-singular.mjs:273`](app/solver-lqd-singular.mjs) for the
+[`app/solvers/solver-lqd-singular.mjs:273`](app/solvers/solver-lqd-singular.mjs) for the
 canonical example. The schema is a list of `{ key, kind, ... }` entries
 describing each parameter slot; `QD.packPhiBySchema` / `unpackPhiBySchema`
 do the rest. Clamps (e.g. disk-interior) go in the schema entry, not
@@ -107,7 +108,7 @@ the residual.
 ### Tests for the new family
 
 Add a `runFamilyBattery` block in
-[`app/test/solvers.test.js`](app/test/solvers.test.js) — search for the
+[`app/test/solvers-1.test.js`](app/test/solvers-1.test.js) — search for the
 existing calls to copy the pattern. (`runFamilyBattery`, `ok`, `solveInverseQD`,
 etc. are installed on `global` by `app/test/bootstrap.js`; see "Test harness"
 below.) Each preset gets: solve success, family tag, boundary univalence,
@@ -236,21 +237,25 @@ run at load.
 
 ## Worker pool conventions
 
-Two Worker subsystems today:
+The solver/analysis manager and parameter-slice pool are the two worker
+subsystems maintained here:
 
-- [`app/primary-solver-worker.mjs`](app/primary-solver-worker.mjs) —
-  single warm worker for the Inverse-tab solve.
+- [`app/solvers/primary-solver-worker.mjs`](app/solvers/primary-solver-worker.mjs)
+  — dedicated warm lanes for primary solve, alternate search, live drag solve,
+  and deferred analysis. The status-analysis lane uses
+  `workers/analysis-worker-entry.mjs`; the three solve lanes use the lean
+  `workers/solver-worker-entry.mjs`.
 - [`app/param-slice/param-slice-pool.mjs`](app/param-slice/param-slice-pool.mjs)
   — pool of N workers for parameter sweeps.
 
 Both spawn **native ES-module workers** — `new Worker(new
 URL('./workers/<name>-entry.mjs', import.meta.url), {type:'module'})` — and
-Vite bundles each entry's import graph into its own chunk. The worker-thread
-side imports the shared solver barrel
-[`app/workers/solver-graph.mjs`](app/workers/solver-graph.mjs), so adding a
-new solver file only means importing it there (the test bootstrap imports the
-same graph). Each main-thread twin keeps a `typeof Worker` guard that falls
-back to solving on the main thread (Node / no-Worker environments).
+Vite bundles each entry's import graph into its own chunk. Solver entries
+import the shared [`app/workers/solver-graph.mjs`](app/workers/solver-graph.mjs),
+so adding a new solver file means importing it there (the test bootstrap imports
+the same graph). The analysis entry imports that barrel plus its own analysis
+modules. Each main-thread twin keeps a `typeof Worker` guard that falls back to
+solving on the main thread (Node / no-Worker environments).
 
 ## Style
 

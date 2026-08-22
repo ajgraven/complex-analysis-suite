@@ -3,9 +3,19 @@
 > **✅ DONE — this now documents the COMPLETED port** of the Quadrature app from classic `<script>`
 > globals to native ES modules ([MIGRATION.md Phase 2](../../docs/MIGRATION.md#phase-2--quadrature-domains-onto-vite-still-all-javascript)).
 > The app is **ESM-only**: `index.html` → `main.mjs`, native module workers, vite-plugin-pwa, and the
-> classic `.js` graph is **deleted** (git history keeps it as provenance). Full root gate green
-> (lint/typecheck 0, `vite build` ok, 77 test files / 712 tests). Retained as the record of *how* the
-> parallel-graph flip was done. **Next: Phase 3 — extract `@cas/core`.**
+> classic `.js` graph is **deleted** (git history keeps it as provenance). Retained as the record of *how* the
+> parallel-graph flip was done. `@cas/core` has since been extracted; use the app README and CONTRIBUTING guide
+> for current commands and validation rather than the historical counts below.
+>
+> **Current loading note (post-migration):** `main.mjs` now retains only the
+> inverse-QD startup graph. `lazy-features.mjs` dynamically loads Direct,
+> Schwarz/Sphere, Parameter-slice, and Algebra on first use; the historical
+> references below to one eager page graph describe the completed migration,
+> not the current bundle boundary.
+>
+> **Historical-record boundary:** except for the two notices above, this file is a chronological migration log.
+> Its former paths, branch names, test totals, and transitional scaffolding describe the state at that step and
+> are deliberately not current operational instructions.
 
 ## Why this is not a mechanical swap
 
@@ -72,7 +82,7 @@ that `app/node-test.js` awaits before the run loop.
   fallback. The native round-trip is browser-only, so it is validated in three headless layers:
   the fallback surface + a functional `liveSolve` in `worker.test.js`; `vitest/worker-entry.test.ts`
   (each entry's whole import graph loads in real Node ESM + wires QD/the pool factory); and
-  `vite build` via `workers-build-check.html` (Rollup bundles all three module workers + the solver
+  `vite build` via `workers-build-check.html` (Rollup bundles the worker entries + the solver
   graph into their own chunks). The live in-browser worker round-trip is a **flip** spot-check. QD
   gained a `build` script (ADR-0003; `pnpm build` now covers both apps). Batch transform:
   `scratchpad/port-workers.mjs`.

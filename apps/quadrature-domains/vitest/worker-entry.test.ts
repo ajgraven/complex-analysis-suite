@@ -25,6 +25,16 @@ describe("native module-worker graphs load headlessly", () => {
     expect(mod).toBeDefined();
   });
 
+  it("deferred analysis worker entry wires every status analyzer", async () => {
+    await import("../app/workers/analysis-worker-entry.mjs");
+    const { default: QD } = await import("../app/workers/solver-graph.mjs");
+    expect(typeof QD.findCriticalPoints).toBe("function");
+    expect(typeof QD.classifyUnivalence).toBe("function");
+    expect(typeof QD.classifyCusps).toBe("function");
+    expect(typeof QD.boundaryObservables).toBe("function");
+    expect(typeof QD.detectSymmetry).toBe("function");
+  });
+
   it("schwarz worker entry wires the Schwarz kernel onto QD", async () => {
     await import("../app/workers/schwarz-worker-entry.mjs");
     const { default: QD } = await import("../app/workers/solver-graph.mjs");

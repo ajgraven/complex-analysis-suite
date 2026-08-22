@@ -57,8 +57,7 @@ import _QD from '../solvers/solver.mjs';
 //
 // Reuses QD.findCriticalPoints (zeros of φ′, app/critical-set.js), QD.phiTaylorAt
 // (exact Taylor coeffs, family-agnostic), QD.evalPhi, and QD.Complex. Pure +
-// DOM-free; loaded page-side only (like critical-set.js / univalence.js), not
-// bundled into the solver Workers.
+// DOM-free; loaded page-side and by the deferred status-analysis worker.
 // =============================================================================
 
 (function (global) {
