@@ -1,8 +1,8 @@
 # Faber Transform
 
-A browser visualizer for the **exterior Faber transform** Φφ: 𝒜(𝔻) → 𝒜(K). Pick an exterior conformal
+A browser visualizer for the **exterior Faber transform** Φ<sub>φ</sub>: 𝒜(𝔻) → 𝒜(K). Pick an exterior conformal
 map φ: 𝔻\* → Ω (so `K = ℂ∖Ω` is the bounded complement) and an analytic input `f` on the unit disk; the
-app domain-colors `f` on the disk beside its Faber image **Φφ(f) = Σ bₙ Fₙ** on `K`. It rides the shared
+app domain-colors `f` on the disk beside its Faber image **Φ<sub>φ</sub>(f) = Σ bₙ Fₙ** on `K`. It rides the shared
 `@cas/*` packages rather than reimplementing them:
 
 - **`@cas/faber`** — the exterior Faber engine: the Faber-polynomial recurrence from φ's Laurent-at-∞ jet,
@@ -51,7 +51,7 @@ self-intersecting, or non-converged polygon renders `⚠` with blank panels rath
 
 ## Inputs (f on the disk)
 
-- **Monomial** `f(z) = zⁿ` → Φφ(f) = Fₙ, the nth Faber polynomial (exact `=`).
+- **Monomial** `f(z) = zⁿ` → Φ<sub>φ</sub>(f) = Fₙ, the nth Faber polynomial (exact `=`).
 - **Pole** `f(z) = 1/(z − z₀)^m`, `|z₀| > 1` → closed-form rational image (exact `=`).
 - **Free-form** `f(z)` via `@cas/expr` → Σ_{n≤N} bₙ Fₙ, a truncated series (`≈`).
 
@@ -65,6 +65,7 @@ self-intersecting, or non-converged polygon renders `⚠` with blank panels rath
 | `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation + corner images `wₖ`), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
 | `presets.ts` | the curated φ gallery (closed-form + regular + arbitrary polygons), lazily fitted and cached (with lazy corner images for M3) |
 | `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (custom-polygon bounds + the M3 suppression fields) |
+| `mathText.ts` | inline-math renderer — turns `_{…}`/`^{…}` markup into real `<sub>`/`<sup>` DOM (text nodes only, no `innerHTML`), so the header, panel titles, readout, and the corner-profile caption typeset Φᵩ / zⁿ / Qₙ,ₘ / Σ-bounds properly |
 | `render/coloring.ts` | the phase-portrait coloring options (shared with the GPU shader) |
 | `render/gpu.ts` | the WebGL2 phase-portrait renderer for one panel, over `@cas/gpu` |
 | `render/plane.ts` | the 2D plane / axes / mask painting |
