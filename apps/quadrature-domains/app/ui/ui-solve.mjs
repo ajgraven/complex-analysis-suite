@@ -266,9 +266,11 @@ function quickSolveAndRender() {
 
     showSolution(sol, built, /*isPrimary=*/ false, { live: true });
     refreshAlternatesPanel();
-    // Live-refresh the status-panel cards (geometry / cusps / observables) so
-    // they track the drag. Throttled + accuracy-deferred (see scheduleLiveAnalysis);
-    // the drag-end full solve runs the authoritative pass.
+    // O5: status-panel analyses (geometry / cusps / observables) are the heaviest
+    // remaining live-frame cost, so they are SUPPRESSED during a drag by default —
+    // scheduleLiveAnalysis self-gates and only refreshes when a live-drawing
+    // overlay is enabled (and never respawns the analysis worker). The drag-end
+    // full solve (solveAndRender) runs the one authoritative pass.
     scheduleLiveAnalysis();
   }).catch(() => { /* superseded / aborted live job — ignore */ })
     .finally(() => {
@@ -677,6 +679,20 @@ function scheduleSymmetry(sol, token) {
 // the drag-end full solve runs the authoritative pass via runStatusAnalyses().
 const LIVE_ANALYSIS_MS = 120;
 function scheduleLiveAnalysis() {
+  // O5: by default, DON'T run status analyses mid-drag. In the common case (no
+  // live-drawing overlay) the geometry/cusps/observables cards are side-panel
+  // text the user isn't reading frame-by-frame, and each live pass cost a
+  // main-thread card re-render + publish fan-out — and, because the analysis lane
+  // is terminateOnSupersede, a pass that didn't finish before the next request
+  // TERMINATED and respawned the analysis worker (re-importing the whole solver
+  // graph) repeatedly during a drag. The drag-end full solve runs the
+  // authoritative pass. Only refresh live when an overlay that actually draws
+  // from the analysis result (curvature / annotated phenomena) is enabled…
+  if (!(state.showCurvature || state.showPhenomena)) return;
+  // …and even then, never terminate+respawn: skip the request while a pass is
+  // still in flight (drop, don't queue), so at most one runs at a time.
+  const PSW = QD.PrimarySolverWorker;
+  if (PSW && typeof PSW.isAnalysisBusy === 'function' && PSW.isAnalysisBusy()) return;
   const now = Date.now();
   if (now - _liveAnalysisLast < LIVE_ANALYSIS_MS) return;
   _liveAnalysisLast = now;

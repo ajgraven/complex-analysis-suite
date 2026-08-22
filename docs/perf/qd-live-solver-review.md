@@ -94,13 +94,32 @@ machine the scripted drag went from *effectively frozen* (666 ms/frame) to 129 m
 The authoritative path is unchanged-to-slightly-better (the alternates fast-path and badge
 change-guard help it too); the solver and boot numbers are unchanged.
 
-**What now dominates the live path (the clear next step):** after Tier 1, `showSolution`
-is negligible (0.1–0.4 ms/cycle) and KaTeX is gone, yet ~5 s (1×) / ~16 s (4×) of
-long-task remains across the drag. That residue is the **live status analyses** (O5,
-Tier 2 — `scheduleLiveAnalysis` posts a heavy pass every 120 ms and its completion
-re-renders the geometry/cusps/observables cards on the main thread, sometimes respawning
-the analysis worker) plus the plot render and per-frame worker-seed prep. **O5 is the
-highest-value follow-up** now that the `showSolution` cost is gone.
+**What dominated the live path after Tier 1:** `showSolution` was negligible
+(0.1–0.4 ms/cycle) and KaTeX was gone, yet ~5 s (1×) / ~16 s (4×) of long-task remained
+across the drag. That residue was the **live status analyses** — `scheduleLiveAnalysis`
+posted a heavy pass every 120 ms whose completion re-rendered the geometry/cusps/observables
+cards on the main thread, and (because the analysis lane is `terminateOnSupersede`) a pass
+that didn't finish before the next request **terminated and respawned the analysis worker**,
+re-importing the whole solver graph, repeatedly mid-drag.
+
+### Update — Tier 2 O5 implemented (2026-08-22)
+
+`scheduleLiveAnalysis` now suppresses live analyses during a drag by default: it returns
+early unless a live-drawing overlay (curvature / annotated phenomena) is enabled, and even
+then it drops the request while a pass is in flight (`isAnalysisBusy()`) so the analysis
+worker is never terminated+respawned mid-drag. The drag-end full solve runs the one
+authoritative pass. This removes essentially all remaining live-path main-thread work:
+
+| Main-thread long-task time (150-frame slider drag) | Before | +Tier 1 | +Tier 1 + O5 |
+|---|---|---|---|
+| 1× | 24.6 s | 5.2 s | **~0 s** |
+| 4× | 96.3 s | 16.4 s | **0.1 s** |
+
+The scripted drag now runs at ~50 fps (≈19–20 ms/frame) with near-zero blocking even under
+4× throttle. *Caveat (honest labeling):* with no overlay enabled, the geometry/cusp/observable
+cards (and cusp markers) freeze during a drag and refresh on release — consistent with how
+the Riemann formula already defers to drag-end; overlay users keep a throttled, non-respawning
+live refresh. Tests stay green (2342 node-test + 35 targeted vitest).
 
 ---
 
@@ -278,7 +297,10 @@ Every successful candidate's univalence is checked at the full `state.samples` (
 gate (~96–128) during the cascade, full re-verify on the selected primary. *Symptom:*
 initial-solve. *Impact:* Low–Medium. *Effort:* S. *Risk:* Low–Medium.
 
-**O5 — Suppress live status analyses during an active drag.**
+**O5 — Suppress live status analyses during an active drag.** ✅ **IMPLEMENTED (2026-08-22)** —
+`scheduleLiveAnalysis` now early-returns unless a live-drawing overlay is on, and drops the
+request while `isAnalysisBusy()` (never respawns). Removed the remaining ~5 s/~16 s (1×/4×)
+of live-drag long-task; see "Update — Tier 2 O5 implemented" above.
 `scheduleLiveAnalysis` (`ui-solve.mjs:642`, every 120 ms) posts a "materially heavier"
 status pass to the analysis lane, which has `terminateOnSupersede:true`
 (`primary-solver-worker.mjs:251`) — so a pass that doesn't finish before the next request
