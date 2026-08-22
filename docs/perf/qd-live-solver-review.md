@@ -375,12 +375,29 @@ it sidesteps the `result[i]` aliasing concern by writing fresh objects at the en
 caller's originals are only read). `Taylor.mul` self-time went 1371 ms → **2 ms** (inlined);
 per-node object churn is gone.
 
-**Cumulative S4 result (verify scalar-ize + sqrt-free clearance + branch-tail convolution):**
-numeric-core workload **45.3 s → 25.1 s (−45 %)**, GC **7069 → 2583 ms (−63 %)**,
-`evalAtN` 17.5 % → 7.4 %, bounded verify ~−70 %, `distBoundary` ~0, `Taylor.mul` ~0; heap
-down. Broad — it speeds initial-solve (500-sample verify × multistart) and heavy/unbounded
-live solves alike. Tests green throughout (2342 node-test incl. the exact all-family identity
-oracles; test points provably unchanged; + 1246 vitest / 162 files).
+Then the two φ-evaluation kernels `evalPhi_QD` / `evalPhi_UQD` — called per boundary sample
+in every verify AND per pole in every residual eval, formerly ~5+4·|A| `Complex` allocations
+each — were rewritten to scalar `re`/`im` (Complex.div fast path inlined; the residual `sub`
+inlined too). This alone was **−27 %** on the whole numeric core: `evalPhi_QD` 1092 → 263 ms
+(−76 %), `evalPhi_UQD` −74 %, `residual_QD`/`_UQD` ~−45 %.
+
+**A note on `@cas/core` (the shared-core option):** before doing the above I investigated
+modifying `@cas/core` itself. There is **no safe, high-value change to make there** for QD:
+its `Complex` ops are already minimal per-operation (the allocation is inherent to the
+*functional* API, and complete in-place variants — `mulInto`/`addMulInto`/… — already exist),
+and `series.mul` is generic over the complex algebra (so not trivially allocation-free) **and**
+shared with Complex-Dynamics **and** already bypassed by QD's hottest kernel after the
+branch-tail rewrite. So the win was captured **app-locally** (QD kernels stop calling core's
+allocating `Complex`), with **zero cross-package blast radius** — no CD/other-app risk.
+
+**Cumulative S4 result (verify scalar-ize + sqrt-free clearance + branch-tail convolution +
+φ-eval scalar-ize):** numeric-core workload **45.3 s → 18.6 s (−59 %)**, GC
+**7069 → 1595 ms (−77 %)**, `evalAtN` 17.5 % → 5.7 %, bounded verify ~−80 %, `evalPhi_QD`
+−76 %, `distBoundary`/`Taylor.mul` ~0; heap 32.7 → 10.4 MB. Broad — speeds initial-solve
+(500-sample verify × multistart) and heavy/unbounded live solves alike. Tests green throughout
+(2342 node-test incl. the exact all-family identity/residual oracles + 1246 vitest / 162 files).
+The dominant remaining frame is now `branchTaylorAccumulate` itself (inherent allocation-free
+scalar series compute); further gains there would be algorithmic, not allocation.
 
 *Remaining S4 (optional, deferred):* the branch-tail scratch buffers are allocated per call
 (8 small `Float64Array`s); hoisting them to module scope would trim the last per-call

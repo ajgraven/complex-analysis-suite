@@ -48,29 +48,45 @@ import { defineFamily } from './define-family.mjs';
   // ===========================================================================
   // 1. φ evaluation
   // ===========================================================================
+  // S4: scalar re/im hot path (see evalPhi_QD). Same arithmetic — c·z, the
+  // Laurent-at-∞ tail Σ polyA[l]/z^l, and the finite-pole branch tail — with the
+  // Complex.div fast path inlined (operands are O(1), so the divScaled tail is
+  // unreachable); bit-identical on the reachable range, no per-call Complex churn.
   function evalPhi_UQD(z, phi) {
-    let result = Complex.scale(z, phi.c);
-
-    if (phi.polyA && phi.polyA.length > 0) {
-      result = Complex.add(result, phi.polyA[0]);
-      let zPow = Complex.clone(z);                      // z^1
-      for (let l = 1; l < phi.polyA.length; l++) {
-        result = Complex.add(result, Complex.div(phi.polyA[l], zPow));
-        if (l + 1 < phi.polyA.length) zPow = Complex.mul(zPow, z);
+    const zr = z.re, zi = z.im;
+    let re = zr * phi.c, im = zi * phi.c;                 // c·z
+    const polyA = phi.polyA;
+    if (polyA && polyA.length > 0) {
+      re += polyA[0].re; im += polyA[0].im;              // Laurent constant
+      let zpr = zr, zpi = zi;                            // z^l (starts z^1)
+      for (let l = 1; l < polyA.length; l++) {
+        const dd = zpr * zpr + zpi * zpi;                // polyA[l] / z^l
+        const cr = polyA[l].re, ci = polyA[l].im;
+        re += (cr * zpr + ci * zpi) / dd;
+        im += (ci * zpr - cr * zpi) / dd;
+        if (l + 1 < polyA.length) {                      // z^{l+1} = z^l·z
+          const nr = zpr * zr - zpi * zi, ni = zpr * zi + zpi * zr;
+          zpr = nr; zpi = ni;
+        }
       }
     }
-
     for (const br of phi.branches) {
-      const zjC = Complex.conj(br.z);
-      const denom = Complex.sub(Complex.ONE(), Complex.mul(zjC, z));
-      const u = Complex.div(z, denom);
-      let uPow = Complex.ONE();
+      const zjr = br.z.re, zji = -br.z.im;               // conj(z_j)
+      const dr = 1 - (zjr * zr - zji * zi);              // denom = 1 − conj(z_j)·z
+      const di = -(zjr * zi + zji * zr);
+      const dd = dr * dr + di * di;
+      const ur = (zr * dr + zi * di) / dd;               // u = z / denom
+      const ui = (zi * dr - zr * di) / dd;
+      let pr = 1, pi = 0;                                // uPow (×u before each use)
       for (const Ak of br.A) {
-        uPow = Complex.mul(uPow, u);
-        result = Complex.add(result, Complex.mul(Complex.conj(Ak), uPow));
+        const nr = pr * ur - pi * ui, ni = pr * ui + pi * ur;
+        pr = nr; pi = ni;
+        const akr = Ak.re, aki = -Ak.im;                 // conj(A_k)
+        re += akr * pr - aki * pi;
+        im += akr * pi + aki * pr;
       }
     }
-    return result;
+    return { re, im };
   }
 
   // ===========================================================================

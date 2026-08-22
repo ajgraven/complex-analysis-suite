@@ -37,19 +37,31 @@ import { defineFamily } from './define-family.mjs';
   // 1. φ evaluation
   // ===========================================================================
   //   φ(z) = w_0 + Σ_j Σ_k conj(A_{j,k}) · z^k / (1 - conj(z_j) z)^k
+  // S4: scalar re/im hot path — this runs per boundary sample in every verify AND
+  // per pole in every residual eval, so the former ~5+4·|A| Complex allocations per
+  // call were a top GC source. Same arithmetic (Complex.div fast path inlined; the
+  // divScaled tail is unreachable here — denom = 1 − conj(z_j)·z is O(1)), so the
+  // returned value is bit-identical on the reachable range.
   function evalPhi_QD(z, phi) {
-    let result = Complex.clone(phi.w0);
+    const zr = z.re, zi = z.im;
+    let re = phi.w0.re, im = phi.w0.im;
     for (const br of phi.branches) {
-      const zjC = Complex.conj(br.z);
-      const denom = Complex.sub(Complex.ONE(), Complex.mul(zjC, z));
-      const u = Complex.div(z, denom);
-      let uPow = Complex.ONE();
+      const zjr = br.z.re, zji = -br.z.im;                 // conj(z_j)
+      const dr = 1 - (zjr * zr - zji * zi);                // denom = 1 − conj(z_j)·z
+      const di = -(zjr * zi + zji * zr);
+      const dd = dr * dr + di * di;
+      const ur = (zr * dr + zi * di) / dd;                 // u = z / denom
+      const ui = (zi * dr - zr * di) / dd;
+      let pr = 1, pi = 0;                                  // uPow (×u before each use)
       for (const Ak of br.A) {
-        uPow = Complex.mul(uPow, u);
-        result = Complex.add(result, Complex.mul(Complex.conj(Ak), uPow));
+        const nr = pr * ur - pi * ui, ni = pr * ui + pi * ur;
+        pr = nr; pi = ni;                                  // uPow ·= u
+        const akr = Ak.re, aki = -Ak.im;                   // conj(A_k)
+        re += akr * pr - aki * pi;                         // result += conj(A_k)·uPow
+        im += akr * pi + aki * pr;
       }
     }
-    return result;
+    return { re, im };
   }
 
   // ===========================================================================
@@ -95,16 +107,15 @@ import { defineFamily } from './define-family.mjs';
     // (●) φ(z_j) = a_j
     for (let j = 0; j < hData.poles.length; j++) {
       const phiZj = evalPhi_QD(phi.branches[j].z, phi);
-      const diff = Complex.sub(phiZj, hData.poles[j].a);
-      out.push(diff.re, diff.im);
+      const a = hData.poles[j].a;
+      out.push(phiZj.re - a.re, phiZj.im - a.im);
     }
     // (★) A_{j,k} = target
     const target = computeTargetA_QD(phi, hData);
     for (let j = 0; j < hData.poles.length; j++) {
       const A = phi.branches[j].A;
       for (let k = 0; k < A.length; k++) {
-        const diff = Complex.sub(A[k], target[j][k]);
-        out.push(diff.re, diff.im);
+        out.push(A[k].re - target[j][k].re, A[k].im - target[j][k].im);
       }
     }
     // Gauge: Σ Im(A_{j,1}) = 0
