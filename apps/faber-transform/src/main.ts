@@ -5,7 +5,7 @@
 // families: a monomial zⁿ (→ Fₙ, exact), a pole 1/(z−z₀)^k (→ closed-form rational image, exact), and
 // a free-form f(z) via @cas/expr (→ Σ_{n≤N} bₙ Fₙ, a truncated series, ≈ — with the radius of
 // convergence R reported; K sits well inside it, so the convergence equipotential itself is not drawn).
-import { Complex } from "@cas/core";
+import { Complex, orientCCW } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { formatFaberPoly } from "@cas/faber";
 import { interiorAngles } from "@cas/conformal";
@@ -773,7 +773,11 @@ function main(): void {
       return;
     }
     const clamp = (x: number): number => Math.max(-MAX_POLYGON_COORD, Math.min(MAX_POLYGON_COORD, x));
-    const next = raw.map((v, i): [number, number] => (i === index ? [clamp(rawV[0]), clamp(rawV[1])] : [v[0], v[1]]));
+    const moved = raw.map((v, i): [number, number] => (i === index ? [clamp(rawV[0]), clamp(rawV[1])] : [v[0], v[1]]));
+    // Normalize to CCW exactly as the sidebar editor's emit() does: a reflex-inducing drag can flip the
+    // loop's orientation, which the exterior SC solver would then reject as a spurious ⚠-blank (the sidebar
+    // silently auto-repairs it, so the two edit paths must agree). @cas/core's shared orientCCW, ADR-0007.
+    const next = orientCCW(moved);
     editor.setPolygon(next); // keep the separate editor's handles in sync
     commit({ ...state, phi: CUSTOM_PHI, customPolygon: next });
   }

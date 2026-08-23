@@ -107,28 +107,13 @@ export function contourPointAt(c: ContourShape, t: number, resolution: number): 
   return [a[0] + (b[0] - a[0]) * frac, a[1] + (b[1] - a[1]) * frac];
 }
 
-/** Signed area of a closed polygon (shoelace). Positive = counter-clockwise in world coords (y up). */
-export function signedArea(points: readonly Vec2[]): number {
-  let a = 0;
-  const n = points.length;
-  for (let i = 0; i < n; i++) {
-    const p = points[i];
-    const q = points[(i + 1) % n];
-    a += p[0] * q[1] - q[0] * p[1];
-  }
-  return a / 2;
-}
-
-/**
- * Return `points` oriented counter-clockwise (positively), reversing a clockwise loop. The argument
- * principle — winding of f(γ) = zeros − poles — holds for a POSITIVELY oriented γ; a freehand contour
- * may be drawn either way (and screen-y is flipped from world-y), so we normalize it here.
- */
-export function orientCCW(points: readonly Vec2[]): Vec2[] {
-  const pts = points.map((p) => [p[0], p[1]] as Vec2);
-  if (signedArea(pts) < 0) pts.reverse();
-  return pts;
-}
+// `signedArea` / `orientCCW` (shoelace polygon orientation) now live in `@cas/core/geometry` — the Faber
+// app's polygon editor became the second consumer, so they were lifted on the ADR-0007 rule. Re-exported
+// here so this module stays the argument principle's contour-geometry surface. The argument principle —
+// winding of f(γ) = zeros − poles — holds only for a POSITIVELY oriented γ, and a freehand contour may be
+// drawn either way (screen-y is flipped from world-y), so `main.ts` normalizes the drawn path through
+// `orientCCW` before counting.
+export { signedArea, orientCCW } from "@cas/core";
 
 /** Centroid + mean radius of a drawn path (the circle to fall back to when the drawing is cleared). */
 export function pathStats(points: readonly Vec2[]): { centerRe: number; centerIm: number; radius: number } {
