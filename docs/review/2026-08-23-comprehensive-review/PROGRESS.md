@@ -68,10 +68,18 @@ findings below are *latent* (not caught by the current suite).
 - [x] **A10 AP-PLOTTER** — `apps/argument-principle` + `apps/complex-function-plotter` → `findings/A10-ap-plotter.md` — 1 MED (mapSpecToExpr/envelopeToMapSpec triplicated CD+plotter+AP and ALREADY DIVERGED — CD copy missing empty-denominator guard + pole-Laurent refusal ⇒ CD yields NaN/silent-wrong where others fail loudly; real ADR-0007 case), 2 LOW (B4 analytic readout no reliability gate; per-frame cumulativeArg recompute), 2 NIT. Cores unchanged since prior review.
 - [x] **A11 DOCS** — all docs incl. algebra-review/* + ADR bodies vs current code → `findings/A11-docs.md` — 3 LOW (README:159 ADR cap "…0024" should be …0026; riemann-map exterior-disk gallery #288 undocumented everywhere + RM has no README; refactor/STATE.md only partially current), 2 NIT (broken LOG.md link; ALGEBRA_MODULE.md import path drift). Docs in very good shape; algebra docs well-maintained; ADR-log integrity repaired.
 
-## Synthesis & report (orchestrator, after batches)
-- [ ] Read all `findings/*.md` + health logs
-- [ ] Write `REPORT.md` (exec summary, severity-ranked findings, consolidation roadmap, perf roadmap)
-- [ ] Commit + push; present prioritized list to user
+## Synthesis & report (orchestrator, after batches) — ✅ DONE
+- [x] Read all `findings/*.md` (A0–A11) + health logs
+- [x] Write `REPORT.md` (exec summary, severity-ranked findings, consolidation roadmap, perf roadmap)
+- [x] Commit + push; present prioritized list to user
+
+## Final tally
+- **0 CRITICAL · 0 HIGH · 6 MEDIUM · ~23 LOW · ~15 NIT.** All findings latent (suite green).
+- **6 MEDIUM:** (1) mapSpecToExpr triplication+divergence [A10]; (2) QD live/authoritative race [A2];
+  (3) CD fieldAt periodicity early-out dropped [A1]; (4) Berlekamp–Zassenhaus uncapped 2ʳ, main-thread [A3];
+  (5) GLSL peephole no in-package test [A6]; (6) constExp/constReal duplicate const-folder [A6].
+- Both big Aug-22 perf rewrites' numeric cores re-derived CORRECT; df64/BLA + sym-core (coverage gaps) sound.
+- Report: `REPORT.md`. Per-area detail: `findings/A0–A11`.
 
 ## Findings-file format
 Per finding: `### [SEVERITY] title` then bullets — Area · Location `path:line` · Type
