@@ -341,6 +341,18 @@ function failureGuidance(mode) {
 }
 
 function solveAndRender() {
+  // WP5b (review MED / A2): make the authoritative solve the guaranteed LAST writer of state.current.
+  // The live lane (_liveSolveToken) and this authoritative lane (_solveAndRenderToken) use separate tokens
+  // and neither invalidated the other, so an in-flight live solve — or the trailing O1 `.finally` re-solve
+  // fired after a multi-frame drag — could land AFTER the authoritative settle and leave the shown solution
+  // as a cheap `method:'live'` result (reduced-sample identity verify, LIVE_DISPLAY_SAMPLES boundary). Near
+  // a validity boundary that can surface a less-certified verdict as the settled one. Invalidate the live
+  // lane here (this covers every authoritative trigger — drag-end scheduleSolve, slider changes, …): bump
+  // the token so any in-flight live `.then` bails at its `myToken !== _liveSolveToken` guard, and clear the
+  // dirty flag so the live `.finally` (~line 280) does not schedule one more live solve behind us.
+  _liveSolveToken++;
+  _liveDirty = false;
+
   const built = buildHData();
   if (!built) {
     setStatus({ kind: 'err', text: 'No poles entered.' });
