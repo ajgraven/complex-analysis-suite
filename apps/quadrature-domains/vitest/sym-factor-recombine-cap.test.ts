@@ -46,4 +46,23 @@ describe("sym-core factor — Berlekamp–Zassenhaus recombination cap", () => {
     expect(fr.status).toBe("irreducible");
     expect((fr.caps || []).length).toBe(0); // a real certificate, not a cap
   });
+
+  it("a reducible poly whose NORM has >20 modular factors still factors (no count-cap over-reject)", () => {
+    // ∏ₖ(x²+k), k=1..8 — a plainly reducible degree-16 product. `_recombine` runs on the norm N = b·b̄
+    // (degree 2·16 = 32), which splits into r=24 factors mod p — past the earlier RECOMBINE_MAX_FACTORS=20
+    // count cap, which WRONGLY reported this trivially-reducible product as 'undetermined'. It recombines at
+    // small subset sizes in well under the wall-clock budget, so it must factor cleanly. Over ℚ(i) only x²+1
+    // and x²+4 split (√1, √4 ∈ ℚ ⇒ 2 linear factors each); x²+k for k∈{2,3,5,6,7,8} stays irreducible
+    // (i√k ∉ ℚ(i)) ⇒ 2+2+6 = 10 factors. Guards the WP5c count-cap → deadline change.
+    let P = I(1);
+    for (let k = 1; k <= 8; k++) P = P.mul(V("x").pow(2).add(I(k)));
+    const t0 = Date.now();
+    const fr = S.factor(P);
+    const ms = Date.now() - t0;
+    expect(fr.ok).toBe(true);
+    expect(fr.status).toBe("reducible");
+    expect((fr.caps || []).length).toBe(0); // factored outright, never capped
+    expect(fr.factors.length).toBe(10); // (x²+1),(x²+4) → 2 linear each; the other six stay irreducible quadratics
+    expect(ms).toBeLessThan(4000); // and promptly, nowhere near the deadline
+  });
 });
