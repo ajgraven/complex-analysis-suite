@@ -35,3 +35,21 @@ complex interactive paths or cosmetic renames — none is a correctness issue:
 
 QD `sym-core`/`schwarz-common` merges (ADR-0008/0026), plotter↔AP winding/finder (ADR-0025), lstsq
 twins (ADR-0018). The exterior-SC engine sharing the interior driver is by design, not duplication.
+
+## Self-review (post-implementation)
+
+A second pass re-audited the WP1–8 diff with five independent agents (expr, interchange, exact,
+CD-render, QD/robustness/docs) against a correctly-rounded / byte-parity / neg-control bar. Four
+rounds of fixes landed; test count 3232 → **3234**, all gates green throughout.
+
+| Round | Commit(s) | What landed |
+|-------|-----------|-------------|
+| **1** | `14bbd56` | **QD factoring regression.** WP5c's `RECOMBINE_MAX_FACTORS=20` count cap rejected genuinely reducible polys whose norm (deg 2·deg) splits into >20 modular factors (e.g. `∏ₖ(x²+k)`, r=24, recombining in <100 ms). Replaced with a lazy `_combinations` generator + a 2000 ms wall-clock deadline (machine-fair regardless of per-trial cost); `x⁴⁰−2` still caps promptly. Regression test added. Also README ADR range 0026→0027. |
+| **2** | `d04c7ed` | **CD σ-view exit ordering** — `exitSchwarzView()` now runs AFTER the (now-throwing) `mapSpecToExpr`, so a refused non-schwarz import leaves the σ view + state intact (agent-B behavior regression). **Escape-defaults consolidation** — `main.ts` imports the shared `SCHWARZ_ESCAPE_DEFAULTS` (was a silent duplicate). Comment currency (`ast.ts`, `shaderBuilder.ts`, plotter/AP design-plan ADR-0027 facade notes). |
+| **3** | `a88d41e` | **Plotter `decodeState` clamps** — colormap bound `63` (assumed a nonexistent 64-row atlas) → the real LUT height (6); sectors floor `1`→`2`. Fail-soft regression test added. |
+| **4** | `c56041e` | **`@cas/exact` `Frac.toNumber`** — corrected an over-claiming "full double precision" comment (it is ≤2 ULP, matching the fast path) and documented the unreachable ½·MIN_VALUE tie boundary. A proposed subnormal-rewrite was implemented, then measured against a sticky-bit reference over ~1.6M REDUCED fractions (incl. 216k that fire the subnormal chunk): byte-for-byte identical on every reachable input and does not fix its own cited reproducer — so reverted as inert. |
+
+Everything else the agents reviewed came back clean: expr fold-parity + the `arccosh` split-radical
+branch-cut fix (independently recomputed), the interchange extraction's byte-for-byte output parity +
+guard superset + no-cycle, the CD periodicity early-out (real-GLSL parity), the exact `Frac` normal/
+overflow ranges (≤2 ULP), and every touched doc's currency.
