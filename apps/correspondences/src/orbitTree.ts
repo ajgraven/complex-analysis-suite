@@ -38,6 +38,7 @@ export function expandOrbitTree(
   const maxDepth = opts.maxDepth ?? 12;
   const maxNodes = opts.maxNodes ?? 4000;
   const escapeR = opts.escapeR ?? 40;
+  const escapeR2 = escapeR * escapeR; // sqrt-free escape test in this innermost density-render loop (WP8 / A7)
 
   const nodes: OrbitNode[] = [{ point: seed, label: -1, depth: 0, parent: -1 }];
   const queue: number[] = [0];
@@ -46,7 +47,7 @@ export function expandOrbitTree(
     const i = queue[head++];
     const node = nodes[i];
     if (node.depth >= maxDepth) continue;
-    if (Math.hypot(node.point[0], node.point[1]) > escapeR) continue; // escaped → leaf
+    if (node.point[0] * node.point[0] + node.point[1] * node.point[1] > escapeR2) continue; // escaped → leaf
     // Order the branches by argument so `label` is stable and geometric. In place, and without the
     // {p, arg} wrappers this used to allocate: `corr.branches` hands back a fresh array each call,
     // and this is the innermost loop of the whole density render — accumulateBand calls it once per

@@ -396,8 +396,9 @@ allocating `Complex`), with **zero cross-package blast radius** — no CD/other-
 −76 %, `distBoundary`/`Taylor.mul` ~0; heap 32.7 → 10.4 MB. Broad — speeds initial-solve
 (500-sample verify × multistart) and heavy/unbounded live solves alike. Tests green throughout
 (2342 node-test incl. the exact all-family identity/residual oracles + 1246 vitest / 162 files).
-The dominant remaining frame is now `branchTaylorAccumulate` itself (inherent allocation-free
-scalar series compute); further gains there would be algorithmic, not allocation.
+The dominant remaining frame is now `branchTaylorAccumulate` itself (per-term-allocation-free
+scalar series compute — it still allocates 8 small `Float64Array` scratch buffers per call, see
+the deferred item below); further gains there would be algorithmic, not per-term allocation.
 
 *Remaining S4 (optional, deferred):* the branch-tail scratch buffers are allocated per call
 (8 small `Float64Array`s); hoisting them to module scope would trim the last per-call

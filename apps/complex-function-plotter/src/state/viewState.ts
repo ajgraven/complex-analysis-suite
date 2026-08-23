@@ -139,6 +139,12 @@ export function decodeState(hashOrLink: string): PlotterState | null {
   if (!s || typeof s.expr !== "string") return null;
   const num = (v: unknown, fallback: number): number =>
     typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  // A stale/hand-edited `#vs=` link must fail SOFT, not render garbage (this file's stated intent). `num`
+  // guarantees finiteness but not RANGE, so a few fields were left unclamped, unlike the sibling
+  // cleanV3d/cleanParams blocks: `span ≤ 0` flips/degenerates the viewport, and out-of-range
+  // colormap/sectors index past their tables. Clamp them here (WP8 / A10).
+  const clampNum = (v: unknown, fallback: number, lo: number, hi: number): number =>
+    Math.min(hi, Math.max(lo, num(v, fallback)));
   const str = (v: unknown, fallback: string): string =>
     typeof v === "string" ? v : fallback;
   // Reconstruct the two slots (A7). A pre-A7 link carries only `expr`, which becomes slot f.
@@ -152,11 +158,11 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     active,
     cx: num(s.cx, 0),
     cy: num(s.cy, 0),
-    span: num(s.span, 2),
-    colormap: num(s.colormap, 0),
+    span: clampNum(s.span, 2, 1e-9, 1e6), // matches the live zoomAt clamp; span ≤ 0 flips the viewport
+    colormap: clampNum(s.colormap, 0, 0, 63), // atlas row index — bound so it can't run past the LUT
     modulus: num(s.modulus, 2),
     enhance: num(s.enhance, 0),
-    sectors: num(s.sectors, 12),
+    sectors: clampNum(s.sectors, 12, 1, 256), // positive sector count
     crisp: num(s.crisp, 1),
     hueShift: num(s.hueShift, 0),
     hueSign: num(s.hueSign, 1),
