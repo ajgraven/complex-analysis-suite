@@ -57,7 +57,7 @@ findings below are *latent* (not caught by the current suite).
 - [ ] **A1 CD-RENDER** — `apps/complex-dynamics/src/render/*` perf rewrite (#294) → `findings/A1-cd-render-perf.md`
 - [ ] **A2 QD-SOLVER** — QD live-solver perf (#292) + solvers/workers/ui-solve → `findings/A2-qd-solver-perf.md`
 - [x] **A3 QD-ALGEBRA** — `sym/sym-core.mjs` + `algebra/*` (coverage gap) → `findings/A3-qd-algebra-symcore.md` — 1 MED (Berlekamp–Zassenhaus uncapped 2ʳ recombination, main-thread reachable), 2 LOW. Core exceptionally solid; no new duplication.
-- [ ] **A4 FABER** — `apps/faber-transform/*` + `@cas/faber` churn (#293/#295/#296) → `findings/A4-faber.md`
+- [x] **A4 FABER** — `apps/faber-transform/*` + `@cas/faber` churn (#293/#295/#296) → `findings/A4-faber.md` — 4 LOW (corner-image comment fix only partial: 6 sites incl. weighted.ts:50 still stale; in-panel drag skips toCCW normalization → spurious ⚠; residual guard silent no-op on degraded fits), 1 NIT. #296 wrong-vertex fix verified CORRECT & COMPLETE; GPU/CPU cap parity intact; math sound.
 - [ ] **A5 RIEMANN-SC** — `apps/riemann-map/*` + `@cas/conformal` churn (#285/#286/#288) → `findings/A5-riemann-sc.md`
 - [x] **A6 CORE-PKGS** — `@cas/core` `@cas/exact` `@cas/expr` `@cas/interchange` fresh pass → `findings/A6-core-pkgs.md` — 2 MED (new GLSL peephole has no in-package codegen test; constExp/constReal duplicate const-folder still not hoisted), 5 LOW, 2 NIT. Keystone solid; all prior fixes correctly landed; ADR-0006 neutrality holds.
 
