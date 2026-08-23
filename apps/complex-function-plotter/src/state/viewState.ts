@@ -7,6 +7,7 @@
 import { encodeViewState, decodeViewState } from "@cas/interchange";
 import { DEFAULT_ANIM, type AnimConfig } from "../ui/animate.js";
 import { DEFAULT_CAMERA } from "../render3d/camera.js";
+import { COLORMAPS } from "../render/colormaps.js";
 
 export const APP_NS = "cfp";
 
@@ -159,10 +160,10 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     cx: num(s.cx, 0),
     cy: num(s.cy, 0),
     span: clampNum(s.span, 2, 1e-9, 1e6), // matches the live zoomAt clamp; span ≤ 0 flips the viewport
-    colormap: clampNum(s.colormap, 0, 0, 63), // atlas row index — bound so it can't run past the LUT
+    colormap: clampNum(s.colormap, 0, 0, COLORMAPS.length - 1), // atlas row index — bound to the real LUT height (6 rows)
     modulus: num(s.modulus, 2),
     enhance: num(s.enhance, 0),
-    sectors: clampNum(s.sectors, 12, 1, 256), // positive sector count
+    sectors: clampNum(s.sectors, 12, 2, 256), // sector count — floor 2 matches the live guard (slider min)
     crisp: num(s.crisp, 1),
     hueShift: num(s.hueShift, 0),
     hueSign: num(s.hueSign, 1),
