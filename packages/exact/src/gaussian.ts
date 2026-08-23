@@ -94,11 +94,17 @@ export class Frac {
     const d = Number(this.d);
     if (Number.isFinite(n) && Number.isFinite(d)) return n / d; // unchanged for everything in range
     // One side overflows a double. Reduce EACH side INDEPENDENTLY to a ~60-bit mantissa (> the double's 53)
-    // plus a binary exponent, so the ratio keeps full double precision no matter how the two magnitudes
-    // compare, then divide the mantissas and recombine the exponents. The old form shifted BOTH sides by the
-    // SAME amount: correct only for a ratio near 1, but for a large ratio it truncated the SMALLER side to a
-    // few bits (a ~2^-13 error) and, once it hit zero, reported Infinity/0 for a representable ratio in
-    // ~[2^1000, 2^1024). WP7 / A6.
+    // plus a binary exponent, so all 53 bits of the ratio stay meaningful no matter how the two magnitudes
+    // compare — accurate to ≤ 2 ULP (the two `Number()` roundings plus the divide), matching the fast path's
+    // own `Number(n)/Number(d)` on large operands; NOT correctly-rounded — then divide the mantissas and
+    // recombine the exponents. The old form shifted BOTH sides by the SAME amount: correct only for a ratio
+    // near 1, but for a large ratio it truncated the SMALLER side to a few bits (a ~2^-13 error) and, once it
+    // hit zero, reported Infinity/0 for a representable ratio in ~[2^1000, 2^1024). (One boundary the ≤ 2-ULP
+    // window leaves imperfect: a ratio within a ULP of the ½·MIN_VALUE rounding tie can round to 0 instead of
+    // MIN_VALUE — the sub-60-bit residual that breaks the tie is truncated here exactly as on the fast path.
+    // Correctly rounding it would need a sticky bit through the full BigInt, unwarranted for a boundary no
+    // caller reaches; NB a normalize-q + single-subnormal-multiply rewrite does NOT recover it — the residual
+    // is already gone by then.) WP7 / A6.
     const KEEP = 60;
     const neg = this.n < 0n;
     const a = neg ? -this.n : this.n; // Frac normalizes the sign onto the numerator, d > 0
