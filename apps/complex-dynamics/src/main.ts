@@ -5149,7 +5149,15 @@ function init(): void {
     }
     exitSchwarzView(); // importing a standard (non-σ) map returns from the σ peer view to the plots
     const st = readFullState();
-    st.inpf = mapSpecToExpr(spec);
+    // mapSpecToExpr throws for a shape with no expr closed form — a degenerate 0/0 rational or a
+    // pole-bearing Laurent map (the guards @cas/interchange now shares across CD / plotter / AP, ADR-0027).
+    // Fail loudly with a toast rather than build a NaN / silently-wrong map (or crash the import).
+    try {
+      st.inpf = mapSpecToExpr(spec);
+    } catch (err) {
+      showToast(`Imported a ${env.kind}, but this map can't be built: ${(err as Error).message}`, "info");
+      return true;
+    }
     applyFullState(st);
     showToast(`Imported a ${env.kind} map from ${env.provenance.app}.`, "info");
     return true;

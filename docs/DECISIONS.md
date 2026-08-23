@@ -35,9 +35,10 @@ Format follows Michael Nygard's ADR convention.
 | [0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine) | Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine | Accepted |
 | [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
 | [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication) | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication) | Accepted |
+| [0027](#adr-0027-extract-mapspectoexpr-into-casinterchange) | Extract the `MapSpec` → `@cas/expr` converter into `@cas/interchange` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All twenty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All twenty-seven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -2231,3 +2232,51 @@ another.
 3. [ ] When a second consumer of the weighted families appears, execute Option B (lift `schwarz-common`'s
        weighted-family σ into `@cas/schwarz` to family parity, then rewire QD to consume the package) and
        supersede this ADR.
+
+---
+
+## ADR-0027: Extract `mapSpecToExpr` into `@cas/interchange`
+
+**Status:** Accepted (2026-08-23) · a follow-on decision, of the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+"extract on a second consumer" kind (here the second and third consumers were already present — and drifting).
+
+**Context.** The import side of every map hand-off turns an `@cas/interchange` `MapSpec` / `Envelope` into a
+source string in the `@cas/expr` grammar (imaginary unit `i`, powers `^`), which the receiving app then
+compiles through the shared `expr` pipeline. Six functions do this — `coeffExpr`, `polyExpr`, `rationalExpr`,
+`laurentExpr`, `mapSpecToExpr`, `envelopeToMapSpec` — and they had been **copy-ported into three apps**
+(Complex Dynamics, the Complex-Function Plotter, Argument Principle), because the dependency rule
+(ARCHITECTURE §4) forbids one app importing another. Each app's header openly noted the copy.
+
+The 2026-08-23 suite review found the three copies had **already diverged in a correctness-relevant way**:
+the plotter and Argument-Principle copies had grown two guards — a refusal of a rational map with an
+empty / identically-zero denominator (a 0/0 map), and a refusal of a pole-bearing Laurent map (finite-pole
+`branches`) — that Complex Dynamics' ancestor copy never received. So the *same* interchange payload
+imported into CD produced a `NaN` (0/0) or a silently-wrong map (the finite-pole branches dropped) where
+the other two failed loudly. This is exactly the drift ADR-0007 exists to prevent: three consumers of one
+identical bridge, maintained in parallel, one now behind on a correctness fix — and it violates the
+honest-labeling guardrail (fail loudly, never emit a subtly-wrong map).
+
+**Decision.** Extract the six functions into a single `@cas/interchange` module (`mapSpecToExpr.ts`,
+exported from the package index), **unifying the two guards** so every consumer gets the loud-failure
+behavior. The three apps delegate: CD re-exports it beside its CD-specific `@cas/schwarz` σ-reconstruction
+helpers (which stay local); the plotter and AP keep their app-specific outer glue (`importEnvelopeText`) and
+re-export the shared converter as their interchange-import facade.
+
+`@cas/interchange` is the home (not `@cas/expr`) because it already **owns** `MapSpec` / `Envelope` and all
+three consumers already depend on it. The converter's output is *text in the `@cas/expr` grammar*, not an
+`@cas/expr` AST, so `@cas/interchange` stays independent of `@cas/expr` — no package import, no dependency
+cycle; the two are coupled only by that documented string grammar. (Putting it in `@cas/expr` would instead
+require `@cas/expr` → `@cas/interchange` for the `MapSpec` type, the wrong direction for a
+serialization → executable layering.)
+
+**Consequences.**
+- **CD picks up the guards it lacked** — a degenerate 0/0 rational or a pole-bearing Laurent now throws;
+  CD's `main.ts` import path catches and surfaces a toast (fails loudly) instead of building a NaN /
+  silently-wrong map. This is a behavior change for exactly those degenerate payloads, and is the fix.
+- A cross-consumer golden (`packages/interchange/test/mapSpecToExpr.test.ts`) pins the emitted grammar and
+  the three refusals (degenerate denominator, pole-bearing Laurent, schwarz), so a future guard change
+  lands in one place with one test. Each app's existing import/interop tests stay green.
+- A future map form (or a fourth consumer) extends one shared converter, not three drifting copies.
+
+**Not in scope.** The `@cas/interchange`-side SC form (still deferred, ADR-0007 — gate on a receiving tool)
+and Riemann Map's *separate* CD → RM Böttcher `LaurentMap` converter (a different converter, left as-is).
