@@ -2231,3 +2231,105 @@ another.
 3. [ ] When a second consumer of the weighted families appears, execute Option B (lift `schwarz-common`'s
        weighted-family σ into `@cas/schwarz` to family parity, then rewire QD to consume the package) and
        supersede this ADR.
+
+---
+
+## ADR-0027: Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Records the decision to add a true multi-sheeted **Riemann-surface** view to
+`apps/complex-function-plotter`, the **method choice** (parametrize-by-w first, algebraic triangulation
+and z-grid continuation deferred), and — in the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+shape — keeping the new branch/inverse machinery **in-app** with no package extraction and no new
+[ADR-0005](#adr-0005-expr--interchange-are-the-keystone) multivalued interchange form. The full plan is
+[`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md).*
+
+### Context
+
+The plotter renders 2D domain coloring, a single-sheet analytic **landscape** (height = `|f|`), and a
+domain **Riemann sphere** — all principal-branch. It cannot show a function's **true Riemann surface**
+(multiple sheets glued across branch cuts), which is the natural next view for the multivalued primitives
+users type (√, ⁿ√, `z^{p/q}`, log, inverse trig). The obstacle is that `@cas/expr` is single-valued
+end-to-end ([ADR-0005](#adr-0005-expr--interchange-are-the-keystone) deferred multivalued `expr`), and a
+naive height field paints a **spurious vertical wall** at a branch cut that reads as real structure.
+
+There is no single algorithm that turns an arbitrary user expression into a correct Riemann surface; the
+literature (Trott/Wolfram, Wegert, Nieser–Poelke–Polthier/Kranich) is a *ladder* of methods matched to
+function class. See [`docs/design/riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md).
+
+### Decision
+
+Add a **`riemann` render mode** to the plotter, built on the existing 3D stack (camera, mesh, `colorAt`).
+Ship the **parametrize-by-w** method first: for a recognized invertible primitive `w = A·P(α z+β)+B`
+(P ∈ {sqrt, log, arcsin, arccos, arctan} or a fractional power), sample the value plane `W`, plot
+`(Re g(W), Im g(W), charisma(W))` with `z = g(W)` and color `colorAt(A·W+B)`. The sheets glue
+automatically, so the mode **never performs — and never depends on — globally-consistent sheet
+continuation through branch collisions**, the exploratory, never-certified problem the repo flags in
+[`RISKS.md`](RISKS.md) §3 and `apps/correspondences/src/orbitTree.ts`.
+
+Keep the inverse registry + branch-point detection **in the app** (`src/riemann/`), reusing `@cas/expr`
+for both backends; **extract nothing** and add **no interchange form** until a second consumer exists
+([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) is symmetric). Every result is honestly
+labeled: exact glued topology, `≈` sampled values, a badge for finite sheet-count truncation, and the mode
+is *only offered* when the map is a recognized primitive (else "principal-branch only").
+
+### Options Considered
+
+#### Option A: Parametrize-by-w first (chosen)
+**Pros:** textbook-correct surfaces for the canonical multivalued primitives; reuses `compileF` /
+`makeComplexFn` with zero new numeric code (the inverse is just another expression); sheets glue with no
+branch-tracking; sidesteps the never-certified continuation problem entirely; coloring + height are affine
+in the mesh UV, so they interpolate exactly. **Cons:** needs a symbolically-known single-valued inverse —
+does not cover composites with no global inverse (e.g. `log(sin(√z))`), which fall back to the labeled
+principal-branch views.
+
+#### Option B: Algebraic-curve triangulation now (Kranich proximity gluing)
+**Pros:** the most general single method for the whole *algebraic* sublanguage as one glued surface; the
+exact tools exist (`@cas/exact` `discriminant`, `@cas/core` `rootsMonic`). **Cons, and why deferred:**
+substantially heavier (AST→`P(z,w)=0` reduction, per-vertex root-finding, adaptive subdivision, Web-Worker
+mesh caching); WebGL loses geometry-shader parallelism; visible holes near ramification at low depth. High
+value but wrong first step — it is M2, gated on its own approval.
+
+#### Option C: Multi-sheet stacking by z-grid analytic continuation
+**Pros:** covers some composites over the z-plane. **Cons, and why rejected as the lead:** it *requires*
+nearest-value / phase-unwrap continuation, whose failure modes (a branch point inside a cell, silent
+cut-healing that violates true monodromy) are exactly [`RISKS.md`](RISKS.md) §3 — strictly weaker and
+riskier than Option A wherever an inverse exists. Reserved, `≈`-only, for the M3 monodromy explorer.
+
+#### Option D: A separate `apps/riemann-surface`
+**Pros:** clean slate. **Cons:** the request is explicitly an addition *to the plotter*; a new app would
+duplicate the entire render/expr/coloring/permalink stack it already shares — against the north-star
+("each new tool builds fewer primitives from scratch").
+
+### Trade-off Analysis
+
+Option A delivers the headline capability at the lowest risk and the highest reuse, and it is the only
+option that structurally cannot produce the misleading, uncertified output the guardrails forbid. B is the
+right *second* method (broadest algebraic coverage) but is a large, independent build. C's continuation is
+the genuinely hard, exploratory core the suite has deliberately never certified; confining it to a labeled
+M3 explorer keeps the honest-labeling guardrail intact. In-app machinery honors ADR-0007 symmetry (no
+extraction without a second consumer) and leaves the clean extraction seams (`render3d/`, a `@cas/branch`)
+for when one appears.
+
+### Consequences
+
+- **Easier:** the plotter gains true Riemann surfaces reusing its whole stack; a permalink additively
+  carries the new mode; the two later methods (B, C) have a recorded home and rationale.
+- **Harder:** a second inverse/branch consumer will want `src/riemann/` extracted (the anticipated
+  ADR-0007 trigger, like the `mat4.ts` "third consumer" note for `render3d/`); until then the machinery is
+  app-local by design.
+- **Revisit if** any of: (a) a receiving tool needs a serializable multivalued map (⇒ design the
+  [ADR-0005](#adr-0005-expr--interchange-are-the-keystone) branch-aware interchange); (b) a second consumer
+  needs the inverse registry / branch detection (⇒ extract `@cas/branch`); (c) M2/M3 are approved (⇒
+  follow-on ADRs for the algebraic engine and any `@cas/core`/`@cas/exact` primitive they pull).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md) +
+       [`riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md) and this ADR at the
+       M0 gate.
+2. [ ] Land M0 (spike) + M1 (parametrize-by-w mode) test-guarded on
+       `claude/riemann-surface-rendering-fvybo6`; keep the existing top-down-3D≡2D golden green.
+3. [ ] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
+       `P(z,w)=0` engine and any shared primitive it needs — then M3 (monodromy explorer, `≈`-labeled).
+4. [ ] On a second consumer of `src/riemann/`, extract `@cas/branch` and supersede this ADR's in-app note.
