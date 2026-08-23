@@ -130,6 +130,7 @@ import {
   formatSchwarzViewFields,
   SCHWARZ_ZOOM_MIN,
   SCHWARZ_ZOOM_MAX,
+  SCHWARZ_ESCAPE_DEFAULTS,
   type SchwarzView,
   type SchwarzOrbit,
 } from "./render/schwarzView";
@@ -3053,8 +3054,8 @@ function init(): void {
   const SCHWARZ_ZDISK_DEFAULT_VIEW: SchwarzView = { center: [0, 0], zoom: 0.6 };
   // ONE escape budget for both the σ field and the orbit inspector, so a clicked point's reported fate
   // matches the pixel under it (the GPU/CPU field renders and the CPU orbit tracer must agree). Mutable so
-  // the Render-group iterations / escape-radius fields (B2) retune it live; defaults hold at 48 / 1e4.
-  const SCHWARZ_ESCAPE_DEFAULTS = { maxIter: 48, escapeR: 1e4 } as const;
+  // the Render-group iterations / escape-radius fields (B2) retune it live; seeded from the shared
+  // SCHWARZ_ESCAPE_DEFAULTS (48 / 1e4) that schwarzView/schwarzGL fall back to, so all three stay in lockstep.
   const schwarzEscape: { maxIter: number; escapeR: number } = { ...SCHWARZ_ESCAPE_DEFAULTS };
   // The GPU σ renderer is built once, lazily: `undefined` = not yet tried, `null` = WebGL2 unavailable
   // (permanently CPU). It owns a private offscreen canvas whose result we drawImage onto #JCSSchwarz.
@@ -5147,17 +5148,21 @@ function init(): void {
       showToast(`Reconstructed the Schwarz reflection σ from ${env.provenance.app} — opened the σ view (≈).`, "info");
       return true;
     }
-    exitSchwarzView(); // importing a standard (non-σ) map returns from the σ peer view to the plots
-    const st = readFullState();
     // mapSpecToExpr throws for a shape with no expr closed form — a degenerate 0/0 rational or a
     // pole-bearing Laurent map (the guards @cas/interchange now shares across CD / plotter / AP, ADR-0027).
-    // Fail loudly with a toast rather than build a NaN / silently-wrong map (or crash the import).
+    // Fail loudly with a toast rather than build a NaN / silently-wrong map (or crash the import). Convert
+    // FIRST — it is pure text generation — so a refusal returns with the σ peer view (and all state) intact,
+    // instead of exiting the view for an import that then fails.
+    let inpf: string;
     try {
-      st.inpf = mapSpecToExpr(spec);
+      inpf = mapSpecToExpr(spec);
     } catch (err) {
       showToast(`Imported a ${env.kind}, but this map can't be built: ${(err as Error).message}`, "info");
       return true;
     }
+    exitSchwarzView(); // importing a standard (non-σ) map returns from the σ peer view to the plots
+    const st = readFullState();
+    st.inpf = inpf;
     applyFullState(st);
     showToast(`Imported a ${env.kind} map from ${env.provenance.app}.`, "info");
     return true;

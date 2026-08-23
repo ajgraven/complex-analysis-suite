@@ -326,10 +326,11 @@ export function nodeIsBool(node: Node): boolean {
  * predicate both backends must decide identically — it gates the GLSL exact-`intPow` fold
  * ({@link ./glsl} `emitPow`) AND the JS/GLSL derivative power-rule fold ({@link ./derivative} `diffPow`),
  * both of which need "is this a compile-time real constant, and what is its value?". It lived as two
- * byte-identical copies (`glsl.ts` `constReal`, `derivative.ts` `constExp`); a future language constant
+ * logically identical copies (`glsl.ts` `constReal`, `derivative.ts` `constExp`); a future language constant
  * added to one copy but not the other would silently desync the two backends' fold decisions on exactly
  * the constant-exponent forms this decides — the same class of divergence `nodeIsBool` was hoisted here to
- * prevent. `i` is imaginary ⇒ not a real constant; a call / var / compare / if / bool / seq ⇒ null.
+ * prevent. `i` is imaginary ⇒ not a real constant; any other form (var / call / compare / if / bool / assign
+ * / seq) ⇒ null.
  */
 export function constReal(node: Node): number | null {
   switch (node.kind) {

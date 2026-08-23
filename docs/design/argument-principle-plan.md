@@ -146,9 +146,10 @@ pattern Complex Dynamics and Correspondences already use.
 ## 3. Suite interoperability
 
 The suite's second pillar is hand-off. Both the plotter and Complex Dynamics already **emit** an `f(z)` as an
-`@cas/interchange` envelope (`form:"expr"` / `"view"`), and the plotter's `mapSpecToExpr` already turns any
+`@cas/interchange` envelope (`form:"expr"` / `"view"`), and the shared `mapSpecToExpr` already turns any
 `rational` / `laurent` / `expr` `MapSpec` into an `@cas/expr` source string. So "study this function's zeros
-and poles" is a one-import path:
+and poles" is a one-import path (the `mapSpecToExpr` / `envelopeToMapSpec` converter was later hoisted into
+`@cas/interchange` per ADR-0027; each app's `interchange/importMap.ts` is now a thin facade re-exporting it):
 
 - **Consumer (this tool).** On load, check `window.location.hash` for a `#s=` link → `decodeLink` /
   `importEnvelopeText` → `mapSpecToExpr` → compile and count. Mirror
