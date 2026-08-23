@@ -59,13 +59,13 @@ findings below are *latent* (not caught by the current suite).
 - [x] **A3 QD-ALGEBRA** — `sym/sym-core.mjs` + `algebra/*` (coverage gap) → `findings/A3-qd-algebra-symcore.md` — 1 MED (Berlekamp–Zassenhaus uncapped 2ʳ recombination, main-thread reachable), 2 LOW. Core exceptionally solid; no new duplication.
 - [ ] **A4 FABER** — `apps/faber-transform/*` + `@cas/faber` churn (#293/#295/#296) → `findings/A4-faber.md`
 - [ ] **A5 RIEMANN-SC** — `apps/riemann-map/*` + `@cas/conformal` churn (#285/#286/#288) → `findings/A5-riemann-sc.md`
-- [ ] **A6 CORE-PKGS** — `@cas/core` `@cas/exact` `@cas/expr` `@cas/interchange` fresh pass → `findings/A6-core-pkgs.md`
+- [x] **A6 CORE-PKGS** — `@cas/core` `@cas/exact` `@cas/expr` `@cas/interchange` fresh pass → `findings/A6-core-pkgs.md` — 2 MED (new GLSL peephole has no in-package codegen test; constExp/constReal duplicate const-folder still not hoisted), 5 LOW, 2 NIT. Keystone solid; all prior fixes correctly landed; ADR-0006 neutrality holds.
 
 ### Batch 2 — remaining apps/packages + cross-cutting
 - [ ] **A7 CONSOLIDATION** — whole-suite duplication + perf anti-patterns + verify landed consolidations → `findings/A7-consolidation-perf.md`
 - [ ] **A8 CD-INTERNALS** — CD df64 (`glPlot`/`bla`) + Julia/σ overlays + `@cas/dynamics` + state/ui (coverage gap) → `findings/A8-cd-internals.md`
 - [ ] **A9 CORR-SCHWARZ-GPU** — `apps/correspondences` + `@cas/schwarz` + `@cas/gpu` + `@cas/export` → `findings/A9-corr-schwarz-gpu.md`
-- [ ] **A10 AP-PLOTTER** — `apps/argument-principle` + `apps/complex-function-plotter` → `findings/A10-ap-plotter.md`
+- [x] **A10 AP-PLOTTER** — `apps/argument-principle` + `apps/complex-function-plotter` → `findings/A10-ap-plotter.md` — 1 MED (mapSpecToExpr/envelopeToMapSpec triplicated CD+plotter+AP and ALREADY DIVERGED — CD copy missing empty-denominator guard + pole-Laurent refusal ⇒ CD yields NaN/silent-wrong where others fail loudly; real ADR-0007 case), 2 LOW (B4 analytic readout no reliability gate; per-frame cumulativeArg recompute), 2 NIT. Cores unchanged since prior review.
 - [ ] **A11 DOCS** — all docs incl. algebra-review/* + ADR bodies vs current code → `findings/A11-docs.md`
 
 ## Synthesis & report (orchestrator, after batches)
