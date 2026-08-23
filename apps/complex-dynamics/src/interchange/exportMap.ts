@@ -67,8 +67,8 @@ export function bottcherMapEnvelope(ex: BottcherExport, opts: BottcherMapOpts = 
       appVersion: opts.appVersion ?? APP_VERSION,
       createdAt: opts.createdAt ?? new Date().toISOString(),
       note:
-        `Exterior Riemann map ψ(w)=γ₁·w+Σbₖw⁻ᵏ${of}${at}: capacity γ₁ exact, ` +
-        `tail truncated to ${ex.coeffs.length} estimated bₖ (≈).`,
+        `Exterior Riemann map ψ(w)=γ₁·w+Σbₖw⁻ᵏ${of}${at}: capacity γ₁ and coefficients bₖ exact, ` +
+        `tail truncated to ${ex.coeffs.length} terms, so the reconstructed boundary is an estimate (≈).`,
     },
   };
 }

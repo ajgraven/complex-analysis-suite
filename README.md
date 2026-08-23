@@ -156,7 +156,7 @@ the rest capture the _why_ (and remain the authoritative reasoning). Read in thi
    design, the one-directional dependency rule, what each package owns, convention
    neutrality, and the `expr` + `interchange` keystone. The _where things live_.
 3. **[docs/DECISIONS.md](docs/DECISIONS.md)** — the Architecture Decision Records
-   (ADR-0001…0024): one decision each, with context, alternatives, trade-offs, and
+   (ADR-0001…0026): one decision each, with context, alternatives, trade-offs, and
    consequences. The _why each choice_.
 4. **[docs/MIGRATION.md](docs/MIGRATION.md)** — the phase-by-phase runbook (Phases 0–6),
    now annotated with what actually shipped at each gate. The _how it was built_.

@@ -198,7 +198,7 @@ export function transformCoeffs(map: ExteriorMap, taylor: Cx[]): Cx[] {
 /**
  * The corner-suppressing weighted Faber polynomial Q_{n,m} for a monomial input f(z) = zⁿ on a polygonal K
  * (M3): Φφ(zⁿ) = Fₙ, and Q_{n,m} = Σⱼ gⱼ F_{n−j} damps the corner overshoot toward the smooth-arc floor.
- * `cornerImages` are the exterior-SC corner images wₖ = φ(zₖ) on |w| = 1 (empty ⇒ returns Fₙ unchanged).
+ * `cornerImages` are the exterior-SC z-plane prevertices wₖ = 1/uₖ on |w| = 1 (NOT φ(zₖ); empty ⇒ returns Fₙ unchanged).
  */
 export function weightedMonomialCoeffs(map: ExteriorMap, cornerImages: readonly Cx[], n: number, m: number): Cx[] {
   return weightedFaberPolynomial(map, cornerImages, n, m);

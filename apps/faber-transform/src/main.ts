@@ -456,7 +456,7 @@ function main(): void {
     let map;
     let approx: boolean;
     let cornerN: CornerNorms | undefined;
-    let cornerImages: readonly Cx[] = []; // wₖ = φ(zₖ) on |w|=1, for the M3 weighted Faber Q_{n,m}
+    let cornerImages: readonly Cx[] = []; // wₖ = 1/uₖ on |w|=1 (z-plane prevertices, NOT φ(zₖ)), for the M3 weighted Faber Q_{n,m}
     // Draggable in-panel handles: the canonical corners φ(wₖ) of a converged CUSTOM polygon (undefined otherwise).
     let handles: Vec2[] | undefined;
     if (state.phi === CUSTOM_PHI && state.customPolygon) {

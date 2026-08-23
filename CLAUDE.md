@@ -157,7 +157,9 @@ Polygon **vertices are draggable** directly on whichever pane shows Ω (image pa
 forks to an editable **"Custom polygon"** (named presets stay fixed), refits **fast (lightning) while dragging** and
 **precise (warm-started) on release** (ADR-0020's drag-then-refine), with ＋/－/reset tools; the custom polygon rides
 in the `#vs=` view-state so a permalink reopens the exact hand-drawn shape. Still **no `@cas/interchange` SC form**
-(deferred, ADR-0007).
+(deferred, ADR-0007). A follow-on **exterior-disk preset gallery** (#288) adds closed-form univalent maps
+ψ: 𝔻\* = {|z|≥1} → the exterior of a compact `K` (Joukowski / vertical-slit / ellipse / deltoid / star) shown in
+an interactive pan/drag/zoom **image pane**. (See [`apps/riemann-map/README.md`](apps/riemann-map/README.md).)
 
 **QD → CD σ hand-off (QD-HANDOFF-2 + S5, merged — σ peer view #246, σ multi-view explorer #255; interchange 1.3.0):**
 Quadrature Domains exports its Schwarz reflection σ as a `@cas/interchange` `form:"schwarz"` recipe

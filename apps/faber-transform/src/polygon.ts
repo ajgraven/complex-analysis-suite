@@ -69,8 +69,9 @@ export interface PolygonMapResult {
   /** Final parameter-solve residual. */
   readonly residual: number;
   /**
-   * The corner images wₖ = φ(zₖ) on |w| = 1 — the exterior-SC prevertex reciprocals (wₖ = 1/uₖ) — in
-   * INPUT-vertex order: `cornerImages[i]` is the corner image of the input polygon's vertex `i`. These
+   * The z-plane SC prevertices wₖ = 1/uₖ on |w| = 1 (NOT φ(zₖ); under φ: 𝔻*→Ω a prevertex maps to a
+   * corner on ∂K) — in INPUT-vertex order: `cornerImages[i]` is the prevertex of the input polygon's
+   * vertex `i` (the name is legacy; the values are prevertices). These
    * drive the corner-suppressing weighted Faber polynomials Q_{n,m} (M3): `@cas/faber`'s `weightSeries`
    * consumes exactly this set (order-agnostically); the in-panel editor relies on the per-vertex alignment.
    * Empty when the fit did not converge.
@@ -78,7 +79,7 @@ export interface PolygonMapResult {
   readonly cornerImages: readonly Cx[];
 }
 
-/** The corner images wₖ = φ(zₖ) of a regular n-gon: the n-th roots of unity (its closed-form prevertices). */
+/** The z-plane prevertices wₖ = 1/uₖ of a regular n-gon: the n-th roots of unity (closed-form; NOT φ(zₖ)). */
 export function regularPolygonCornerImages(n: number): Cx[] {
   return Array.from({ length: n }, (_, k) => ({ re: Math.cos((2 * Math.PI * k) / n), im: Math.sin((2 * Math.PI * k) / n) }));
 }

@@ -79,7 +79,7 @@ export interface PhiPreset {
   /** Corner-norm bounds Λₖ (polygon domains only) — the Faber-overshoot annotation shown in the readout. */
   readonly cornerNorms?: CornerNorms;
   /**
-   * The corner images wₖ = φ(zₖ) on |w| = 1 (polygon domains only), for the corner-suppressing weighted
+   * The z-plane SC prevertices wₖ = 1/uₖ on |w| = 1 (polygon domains only; NOT φ(zₖ)), for the corner-suppressing weighted
    * Faber polynomials Q_{n,m} (M3). Lazy — an arbitrary polygon's images share the fit with `build`.
    */
   readonly cornerImages?: () => readonly Cx[];

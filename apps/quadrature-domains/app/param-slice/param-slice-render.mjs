@@ -5,6 +5,9 @@
 // Exposes QD_UI.installParamSliceRender(psCtx); param-slice-ui.js captures
 // runAdaptive2D into an IIFE-local binding so startRun calls it unchanged.
 //
+// Flip to true to re-enable the per-pass timing logs (kept out of the shipped console by default).
+const DEBUG_TIMING = false;
+//
 // runAdaptive2D drives the progressive quadtree sweep: a coarse stride pass then
 // stride/2 refinement passes (subdividing only cells whose corners disagree),
 // each dispatched to the worker pool and painted as it lands, finished by a
@@ -257,7 +260,7 @@ import ParamSlice from '../param-slice/param-slice-common.mjs';
     paintAtStride(startStride);
     paintImage();
     onProgress(cellsDone, totalCellsAtFineGrid);
-    console.log(`[param-slice] coarse pass: ${coarsePoints.length} samples in ${((performance.now()-t0)/1000).toFixed(2)}s`);
+    if (DEBUG_TIMING) console.log(`[param-slice] coarse pass: ${coarsePoints.length} samples in ${((performance.now()-t0)/1000).toFixed(2)}s`);
 
     // --- Refinement passes: stride/2 down to 1.
     while (stride > 1) {
@@ -292,7 +295,7 @@ import ParamSlice from '../param-slice/param-slice-common.mjs';
       paintAtStride(halfStride);
       paintImage();
       onProgress(cellsDone, totalCellsAtFineGrid);
-      console.log(`[param-slice] stride=${halfStride}: ${newPoints.length} samples in ${((performance.now()-tLevel)/1000).toFixed(2)}s`);
+      if (DEBUG_TIMING) console.log(`[param-slice] stride=${halfStride}: ${newPoints.length} samples in ${((performance.now()-tLevel)/1000).toFixed(2)}s`);
       stride = halfStride;
     }
 
@@ -337,7 +340,7 @@ import ParamSlice from '../param-slice/param-slice-common.mjs';
         }
       }
       if (filled > 0) {
-        console.log(`[param-slice] coverage-fill: ${filled} orphan pixel${filled === 1 ? '' : 's'} painted from nearest neighbour.`);
+        if (DEBUG_TIMING) console.log(`[param-slice] coverage-fill: ${filled} orphan pixel${filled === 1 ? '' : 's'} painted from nearest neighbour.`);
       }
     }
   }
