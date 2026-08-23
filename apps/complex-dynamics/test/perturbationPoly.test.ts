@@ -216,6 +216,32 @@ describe("perturbMultibrot — the GPU-mirrored traversal", () => {
     expect(checked).toBeGreaterThan(15);
   });
 
+  it("honors a custom pixel escape radius² (WP7 / A8) — matches a naive loop with the same bailout", () => {
+    // The oracle must reproduce the shader's single-step path for escapeR ≠ 4 (the divergence-guard families
+    // pass uPerturbEscape2 ≠ 4), so it now takes an escape2 param — previously it hardcoded 4.
+    const center: Complex = [1.2, 0.6]; // |c| > 1 ⇒ fast escape, off-boundary ⇒ exact agreement
+    const N = 800;
+    const dc: Complex = [1e-3, -0.5e-3];
+    const point: Complex = [center[0] + dc[0], center[1] + dc[1]];
+    const orbit = orbitToComplex(computeMultibrotOrbitDD(dd(0), dd(0), dd(center[0]), dd(center[1]), 2, N));
+    // Naive z²+c per-pixel escape time (Z₀ = 0) with a configurable bailout².
+    const naive = (esc2: number): number => {
+      let z: Complex = [0, 0];
+      for (let k = 0; k < N; k++) {
+        if (z[0] * z[0] + z[1] * z[1] > esc2) return k;
+        z = [z[0] * z[0] - z[1] * z[1] + point[0], 2 * z[0] * z[1] + point[1]];
+      }
+      return N;
+    };
+    const r4 = perturbMultibrot(orbit, 2, dc, [0, 0], N); // default 4
+    const r4b = perturbMultibrot(orbit, 2, dc, [0, 0], N, 4); // explicit 4
+    const rBig = perturbMultibrot(orbit, 2, dc, [0, 0], N, 1e8); // large radius
+    expect(r4.iters).toBe(r4b.iters); // default === explicit 4 (no behavior change for existing callers)
+    expect(Math.abs(r4.iters - naive(4))).toBeLessThanOrEqual(1);
+    expect(Math.abs(rBig.iters - naive(1e8))).toBeLessThanOrEqual(1);
+    expect(rBig.iters).toBeGreaterThan(r4.iters); // a bigger escape radius ⇒ strictly later escape (honored)
+  });
+
   // Away from the razor-thin boundary, perturbation and naive iteration agree exactly (a chaotic
   // near-∂M pixel amplifies the two implementations' f64 rounding into a large escape-count gap — the
   // reason perturbation "glitches" exist — so exact agreement is only expected off the boundary; the

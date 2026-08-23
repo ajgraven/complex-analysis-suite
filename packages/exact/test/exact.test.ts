@@ -39,6 +39,14 @@ describe("Frac (ℚ over BigInt)", () => {
       ).toBe(true);
     });
 
+    it("evaluates a LARGE representable ratio in the ~[2^1000, 2^1024) window (WP7 / A6)", () => {
+      // 2^2436 / 3^900: coprime, both sides overflow a double, but the ratio ≈ 2^1010 ≈ 8e303 is finite.
+      // The old KEEP_BITS = 1000 shifted 3^900 (1426 bits) away to 0 → a wrong Infinity; 1023 keeps it finite.
+      const got = Frac.of(2n ** 2436n, 3n ** 900n).toNumber();
+      expect(Number.isFinite(got)).toBe(true);
+      expect(close(got, Math.exp(2436 * Math.LN2 - 900 * Math.log(3)))).toBe(true);
+    });
+
     it("Gauss.toTuple inherits the fix", () => {
       const g = new Gauss(Frac.of(HUGE, 3n * HUGE + 1n), Frac.of(HUGE, 2n * HUGE + 1n));
       const [re, im] = g.toTuple();

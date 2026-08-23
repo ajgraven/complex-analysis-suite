@@ -93,21 +93,33 @@ export class Frac {
     const n = Number(this.n);
     const d = Number(this.d);
     if (Number.isFinite(n) && Number.isFinite(d)) return n / d; // unchanged for everything in range
-    // Shift both sides right by the SAME number of bits until the larger fits in a double. The shift
-    // is exact in binary and common to both, so the quotient is unchanged except for the truncated
-    // low bits — a relative error below 2^-1000. If one side shifts away to 0 the true ratio really
-    // did overflow or underflow the double range, and 0 / Infinity is then the right answer.
-    const KEEP_BITS = 1000; // 2^1000 ≈ 1.07e301, comfortably inside the double range
+    // One side overflows a double. Reduce EACH side INDEPENDENTLY to a ~60-bit mantissa (> the double's 53)
+    // plus a binary exponent, so the ratio keeps full double precision no matter how the two magnitudes
+    // compare, then divide the mantissas and recombine the exponents. The old form shifted BOTH sides by the
+    // SAME amount: correct only for a ratio near 1, but for a large ratio it truncated the SMALLER side to a
+    // few bits (a ~2^-13 error) and, once it hit zero, reported Infinity/0 for a representable ratio in
+    // ~[2^1000, 2^1024). WP7 / A6.
+    const KEEP = 60;
     const neg = this.n < 0n;
-    let a = neg ? -this.n : this.n; // Frac normalizes the sign onto the numerator, d > 0
-    let b = this.d;
-    const shift = Math.max(a.toString(2).length, b.toString(2).length) - KEEP_BITS;
-    if (shift > 0) {
-      const s = BigInt(shift);
-      a >>= s;
-      b >>= s;
+    const a = neg ? -this.n : this.n; // Frac normalizes the sign onto the numerator, d > 0
+    const b = this.d;
+    const ea = Math.max(0, a.toString(2).length - KEEP);
+    const eb = Math.max(0, b.toString(2).length - KEEP);
+    const ma = Number(ea > 0 ? a >> BigInt(ea) : a); // ≤ KEEP bits ⇒ finite, full mantissa
+    const mb = Number(eb > 0 ? b >> BigInt(eb) : b);
+    let q = ma / mb; // O(1)-scale, full precision
+    let e = ea - eb; // net power of two to reapply
+    // Scale by 2^e in bounded chunks so an intermediate never over/underflows when the true result is in
+    // range (and correctly reaches ±Infinity / 0 exactly when the ratio genuinely does).
+    while (e > 1023 && q !== 0) {
+      q *= 2 ** 1023;
+      e -= 1023;
     }
-    const q = Number(a) / Number(b);
+    while (e < -1074 && q !== 0) {
+      q *= 2 ** -1074;
+      e += 1074;
+    }
+    q *= 2 ** e;
     return neg ? -q : q;
   }
 }

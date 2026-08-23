@@ -48,7 +48,7 @@ cvec csinh(cvec a) { return cmul(vec_(0.5, 0.0), csub(cexp(a), cexp(cneg(a)))); 
 cvec ccosh(cvec a) { return cmul(vec_(0.5, 0.0), cadd(cexp(a), cexp(cneg(a)))); }
 cvec ctanh(cvec a) { return cdiv(csinh(a), ccosh(a)); }
 cvec carcsinh(cvec a) { return clog(cadd(a, csqrt(cadd(cmul(a, a), vec_(1.0, 0.0))))); }
-cvec carccosh(cvec a) { return clog(cadd(a, csqrt(csub(cmul(a, a), vec_(1.0, 0.0))))); }
+cvec carccosh(cvec a) { return clog(cadd(a, cmul(csqrt(csub(a, vec_(1.0, 0.0))), csqrt(cadd(a, vec_(1.0, 0.0)))))); } // √(a−1)·√(a+1): principal branch (Re≥0 on the cut), matches JS arccosh
 cvec carctanh(cvec a) {
   return cmul(vec_(0.5, 0.0), csub(clog(cadd(vec_(1.0, 0.0), a)), clog(csub(vec_(1.0, 0.0), a))));
 }
