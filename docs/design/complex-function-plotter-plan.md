@@ -191,7 +191,9 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
   downloads at the right dims with `Software` + `cfp:url` tEXt, the clipboard copy carries the same, and the
   live view restores. (Export is the bare GL figure — axes/legend overlays aren't composited; a later polish.)
 - **✅ 6B, suite interop, is landed (K7/K8).** `interchange/importMap.ts` (K7) — ported from CD's
-  `mapSpecToExpr` + `envelopeToMapSpec`, minus the `@cas/schwarz` engine — decodes an `#s=` link or JSON
+  `mapSpecToExpr` + `envelopeToMapSpec`, minus the `@cas/schwarz` engine (the shared `mapSpecToExpr` /
+  `envelopeToMapSpec` converter was later hoisted into `@cas/interchange` per ADR-0027; this file is now a
+  thin facade re-exporting it) — decodes an `#s=` link or JSON
   Envelope into an `@cas/expr` source: a QD `quadrature-domain` φ, a `view`'s map, a bare `map`, or the
   rational/Laurent/expr forms directly. Two shapes it **refuses loudly rather than mis-render**: a `schwarz`
   σ (numerical inverse — the plotter instead plots its generating **φ** with an honest note) and a

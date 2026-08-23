@@ -40,6 +40,7 @@ import {
 } from "@cas/schwarz/gpu";
 import type { Complex } from "@cas/schwarz";
 import type { SchwarzView, SchwarzRenderOptions } from "./schwarzView";
+import { SCHWARZ_ESCAPE_DEFAULTS } from "./schwarzView";
 import { makeSphereCamera, DEFAULT_ROTATION, DEFAULT_DISTANCE, DEFAULT_FOV, type Quat } from "./sphereView";
 
 // The escape-time + coloring shell around the shared σ evaluator. The CLASSIFICATION mirrors
@@ -519,8 +520,8 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     ctx.uniform2f(uCenter, view.center[0], view.center[1]);
     ctx.uniform1f(uZoom, view.zoom);
     ctx.uniform1f(uSize, size);
-    ctx.uniform1i(uMaxIter, opts.maxIter ?? 48);
-    ctx.uniform1f(uEscapeR, opts.escapeR ?? 1e4);
+    ctx.uniform1i(uMaxIter, opts.maxIter ?? SCHWARZ_ESCAPE_DEFAULTS.maxIter);
+    ctx.uniform1f(uEscapeR, opts.escapeR ?? SCHWARZ_ESCAPE_DEFAULTS.escapeR);
     uploadPhi(ctx, program, packed);
 
     ctx.uniform1i(uScaleMode, schwarzScaleId(opts.scaleMode ?? DEFAULT_SCHWARZ_SCALE));

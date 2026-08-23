@@ -181,6 +181,11 @@ function validateQuadratureDomain(qd: unknown, where: string): void {
   if (!isMapSpec(qd.phi)) throw new InterchangeError(`interchange: ${where}.phi is not a valid MapSpec`);
   if (!isConventions(qd.conventions)) throw new InterchangeError(`interchange: ${where}.conventions is missing or invalid`);
   assertCanonicalWire(qd.conventions, where);
+  // `bounded` (non-optional) and `weight` (enum) were declared but never validated (WP8 / A6): a
+  // present-yet-garbage value passed and a consumer read `qd.bounded` / `qd.weight` as junk.
+  if (typeof qd.bounded !== "boolean") throw new InterchangeError(`interchange: ${where}.bounded must be a boolean`);
+  if (qd.weight !== undefined && qd.weight !== "unweighted" && qd.weight !== "log" && qd.weight !== "power")
+    throw new InterchangeError(`interchange: ${where}.weight must be one of unweighted | log | power`);
   if (qd.hData !== undefined && !isMapSpec(qd.hData))
     throw new InterchangeError(`interchange: ${where}.hData is not a valid MapSpec`);
   if (qd.boundarySamples !== undefined && !isComplexArray(qd.boundarySamples))
@@ -225,6 +230,11 @@ function validatePayload(kind: PayloadKind, payload: unknown): void {
       // as undefined/NaN. Enforce the structural contract the docs promise.
       if (!isViewport(payload.viewport))
         throw new InterchangeError("interchange: view.viewport is missing or invalid (needs center:Complex, zoom:number)");
+      // c is optional but was never validated when present (WP8 / A6): a consumer reading payload.c.re got
+      // undefined/NaN. Same "present-yet-malformed optional field is trusted" pattern the escape/viewport
+      // fixes closed.
+      if (payload.c !== undefined && !isComplex(payload.c))
+        throw new InterchangeError("interchange: view.c, when present, must be a Complex");
       break;
   }
 }

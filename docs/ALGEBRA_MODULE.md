@@ -218,7 +218,7 @@ Separate from the QD engine, `@cas/exact` is the suite's **shared** exact-arithm
 and `apps/complex-dynamics` (dynatomic / Gleason / multiplier "Component data", #17).
 
 **Relationship to the QD engine (important).** `@cas/exact` and the QD `sym-core.mjs` are **independent**
-exact stacks — `sym-core.mjs` imports only `./solver.mjs` and does not build on `@cas/exact`. The QD Algebra
+exact stacks — `sym-core.mjs` imports only `../solvers/solver.mjs` and does not build on `@cas/exact`. The QD Algebra
 module predates the package and carries its own, far larger engine; `@cas/exact` is the leaner, shared kernel
 for the *other* apps' cross-app exact needs. They share the mathematics (ℚ(i), exact polynomials, Bareiss
 resultants) but not code — a future consolidation is conceivable but has not been done.

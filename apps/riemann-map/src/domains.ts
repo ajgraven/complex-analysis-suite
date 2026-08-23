@@ -7,8 +7,39 @@
 // data + geometry; node-tested.
 
 import { clusteredRadii, clusteredEdgeSamples, outwardCornerDir } from "@cas/conformal";
+import { polylineSelfIntersects } from "./analysis/univalence.js";
 
 export type C = [number, number];
+
+/** Whether a polygon is a SIMPLE (non-self-intersecting, non-degenerate) Jordan polygon — the precondition
+ *  for a conformal map to exist. Returns a user-facing reason when it is NOT (a bowtie / edge crossing, or a
+ *  collinear / near-zero-area shape a drag can produce), else null. Lets the studio flag a hand-dragged
+ *  custom polygon honestly instead of presenting a plausible-looking wrong map (WP6 / A5). */
+export function polygonNonSimpleReason(v: readonly C[]): string | null {
+  if (v.length < 3) return "a polygon needs at least 3 vertices";
+  // Shoelace (signed) area + bounding box, so the near-zero-area test is scale-free.
+  let a2 = 0;
+  let minX = Infinity,
+    minY = Infinity,
+    maxX = -Infinity,
+    maxY = -Infinity;
+  for (let i = 0; i < v.length; i++) {
+    const [x0, y0] = v[i];
+    const [x1, y1] = v[(i + 1) % v.length];
+    a2 += x0 * y1 - x1 * y0;
+    minX = Math.min(minX, x0);
+    maxX = Math.max(maxX, x0);
+    minY = Math.min(minY, y0);
+    maxY = Math.max(maxY, y0);
+  }
+  const area = Math.abs(a2) / 2;
+  const span = Math.max(maxX - minX, maxY - minY) || 1;
+  // Check self-intersection first: a crossing (bowtie) is the more informative diagnosis, and a symmetric
+  // bowtie also has ~zero SIGNED area (the lobes cancel), so it would otherwise be mislabeled "near-zero".
+  if (polylineSelfIntersects(v, true)) return "the polygon is self-intersecting (not a simple Jordan polygon)";
+  if (area < 1e-9 * span * span) return "the polygon is collinear or has near-zero area";
+  return null;
+}
 
 export interface DomainPreset {
   readonly id: string;

@@ -1225,10 +1225,18 @@ function main(): void {
           `<b>${Number.isFinite(vpart) ? vpart.toFixed(3) : "—"}</b> → converging to ${nmp} = zeros − poles`;
       } else {
         const val = normalizeByTwoPiI(logDerivIntegral(fMinusTarget, fpFn, zPts))[0];
-        integralEl.innerHTML = Number.isFinite(val)
-          ? `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
-            `<b>${val.toFixed(3)}</b> → ${Math.round(val)} = zeros − poles`
-          : `∮<sub>γ</sub> ${integrand} dz — γ passes through a singularity; nudge it to read the integral.`;
+        // Gate the "→ N = zeros − poles" claim on the SAME reliability the verdict panel uses (WP6 / A10):
+        // when γ grazes a singularity the trapezoidal f′/f sum is ill-conditioned, so round(val) can
+        // disagree with the count the panel (correctly) flags ⚠ unreliable. Don't assert the equality then —
+        // show the raw value and the same "nudge γ" guidance instead of a contradicting integer.
+        const b4Reliable = windingReliable(wPts, about);
+        integralEl.innerHTML = !Number.isFinite(val)
+          ? `∮<sub>γ</sub> ${integrand} dz — γ passes through a singularity; nudge it to read the integral.`
+          : b4Reliable
+            ? `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
+              `<b>${val.toFixed(3)}</b> → ${Math.round(val)} = zeros − poles`
+            : `<span class="approx">≈</span> analytic check: (1/2πi) ∮<sub>γ</sub> ${integrand} dz = ` +
+              `<b>${val.toFixed(3)}</b> — γ passes near a singularity; the estimate is unreliable, nudge γ.`;
       }
     }
 

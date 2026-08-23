@@ -11,7 +11,7 @@
  */
 
 import type { Node, ConstName } from "./ast";
-import { ExprError, referencesVar, nodeIsBool } from "./ast";
+import { ExprError, referencesVar, nodeIsBool, constReal } from "./ast";
 import { TAU, PHI, EGAMMA } from "./complexJs";
 
 /** Function-call names for unary complex builtins → GLSL stdlib names. */
@@ -100,20 +100,30 @@ function emitComplex(node: Node): string {
   }
 }
 
+/** Largest finite value representable in a GLSL 32-bit `float`. A literal above this rounds to `Inf`
+ *  when the shader compiles, so `cabs2(E) > Inf` would be permanently false and the escape test would
+ *  never fire. The compared magnitude `k·k` is a float32 literal in both builds (df64 `cabs2` returns
+ *  a hi-limb `float`), so the guard applies regardless of precision. */
+const FLOAT32_MAX = 3.4028234663852886e38;
+
 /** Peephole for `abs(E) op k` / `k op abs(E)` with `op` an ordering and `k` a real, non-negative
  *  compile-time constant: return the sqrt-free `cabs2(E) op k·k` (or the mirrored form), else null.
  *  `cabs2` is the squared magnitude |E|² provided by both precision stdlibs. See the call site for the
- *  correctness argument and the ≤1-ulp boundary caveat. */
+ *  correctness argument and the ≤1-ulp boundary caveat. Declines (returns null → the caller emits the
+ *  non-squared `cre1(cabsf(E)) op k` form) when `k·k` would overflow float32, so a gigantic escape
+ *  radius (k ≳ 1.8e19) keeps the working sqrt comparison the original `length()` form had. */
 function emitAbsSquaredCompare(left: Node, op: string, right: Node): string | null {
   const isAbs = (n: Node): n is Node & { kind: "call"; args: Node[] } =>
     n.kind === "call" && n.name === "abs" && n.args.length === 1;
   if (isAbs(left)) {
     const k = constReal(right);
-    if (k !== null && k >= 0) return `(cabs2(${emitComplex(left.args[0])}) ${op} ${glslFloat(k * k)})`;
+    if (k !== null && k >= 0 && k * k <= FLOAT32_MAX)
+      return `(cabs2(${emitComplex(left.args[0])}) ${op} ${glslFloat(k * k)})`;
   }
   if (isAbs(right)) {
     const k = constReal(left);
-    if (k !== null && k >= 0) return `(${glslFloat(k * k)} ${op} cabs2(${emitComplex(right.args[0])}))`;
+    if (k !== null && k >= 0 && k * k <= FLOAT32_MAX)
+      return `(${glslFloat(k * k)} ${op} cabs2(${emitComplex(right.args[0])}))`;
   }
   return null;
 }
@@ -148,6 +158,12 @@ function emitBool(node: Node): string {
       // zoom). NOT byte-identical: dot(E,E) vs length(E)² differ by ≤1 ulp, so a boundary pixel may
       // escape ±1 iteration (escape-count goldens regenerate). Restricted to k ≥ 0 — a negative k
       // makes `abs(E) op k` trivially true/false and squaring would flip it. (expr-glsl-03)
+      //
+      // Reach: this fires for EVERY `abs(E) op const` comparison `emitBool` sees, not only the escape
+      // predicate — so any `if(abs(z) op k, …)` inside `f` gets the same sqrt-free lowering (and the
+      // ≤1-ulp boundary shift), and consumers that route user conditionals through `compileF` (e.g. the
+      // plotter) inherit both for free. `emitAbsSquaredCompare` declines (→ the `cre1` sqrt form below)
+      // when `k·k` would overflow float32, so a gigantic constant threshold does not break the test.
       const absSq = emitAbsSquaredCompare(node.left, node.op, node.right);
       if (absSq) return absSq;
       // Ordering compares real parts only, matching the JS evaluator (`l[0] > r[0]`). `cre1` is the
@@ -168,56 +184,11 @@ function emitArith(op: string, left: Node, right: Node): string {
   return `${fn}(${emitComplex(left)}, ${emitComplex(right)})`;
 }
 
-/**
- * Evaluate a VARIABLE-FREE real-valued constant node (or null). Lets emitPow fold a constant integer
- * exponent that isn't a bare numeric literal — `z^(1+1)`, `z^(4/2)`, `z^(pi/pi+1)` — to the exact
- * repeated-multiply path, MATCHING the JS backend (which lowers on the runtime `im===0 &&
- * Number.isInteger` test). Otherwise GLSL routes it through cpow's principal branch and silently
- * disagrees with the CPU reference across the negative-real axis.
- */
-function constReal(node: Node): number | null {
-  switch (node.kind) {
-    case "num":
-      return node.value;
-    case "const":
-      // 'i' is imaginary ⇒ not a real constant; the rest fold to their real values.
-      return node.name === "e"
-        ? Math.E
-        : node.name === "pi"
-          ? Math.PI
-          : node.name === "tau"
-            ? TAU
-            : node.name === "phi"
-              ? PHI
-              : node.name === "γ"
-                ? EGAMMA
-                : null;
-    case "neg": {
-      const v = constReal(node.operand);
-      return v === null ? null : -v;
-    }
-    case "arith": {
-      const l = constReal(node.left);
-      const r = constReal(node.right);
-      if (l === null || r === null) return null;
-      switch (node.op) {
-        case "+":
-          return l + r;
-        case "-":
-          return l - r;
-        case "*":
-          return l * r;
-        case "/":
-          return r === 0 ? null : l / r;
-        case "^":
-          return Math.pow(l, r);
-      }
-      return null;
-    }
-    default:
-      return null; // var / call / compare / if / bool / not ⇒ not a compile-time real constant
-  }
-}
+// `constReal` (the compile-time real-constant folder that gates the exact-`intPow` fold below and, in
+// derivative.ts, the power-rule fold) is shared from ast.ts so the two backends can never disagree on the
+// fold decision. See its docstring there. It folds `z^(1+1)`, `z^(4/2)`, `z^(pi/pi+1)` etc. to the exact
+// repeated-multiply path, matching the JS backend; otherwise GLSL routes through cpow's principal branch
+// and silently disagrees with the CPU reference across the negative-real axis.
 
 /** Lower `^`: a CONSTANT integer exponent (|n| ≤ 1024) → exact integer power; otherwise `cpow`. */
 function emitPow(base: Node, exp: Node): string {

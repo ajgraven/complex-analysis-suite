@@ -315,7 +315,7 @@ function main(): void {
   const modeCtl = elt("div", { class: "control" });
   modeCtl.append(elt("label", { for: "mode" }, "input f"), modeSel);
 
-  const degInput = elt("input", { id: "deg", type: "range", min: String(MIN_DEGREE), max: "12", step: "1" });
+  const degInput = elt("input", { id: "deg", type: "range", min: String(MIN_DEGREE), max: String(MAX_DEGREE), step: "1" });
   const degLabel = elt("label", { for: "deg" }, "degree n");
   const degCtl = elt("div", { class: "control" });
   degCtl.append(degLabel, degInput);
@@ -456,7 +456,7 @@ function main(): void {
     let map;
     let approx: boolean;
     let cornerN: CornerNorms | undefined;
-    let cornerImages: readonly Cx[] = []; // wₖ = φ(zₖ) on |w|=1, for the M3 weighted Faber Q_{n,m}
+    let cornerImages: readonly Cx[] = []; // wₖ = 1/uₖ on |w|=1 (z-plane prevertices, NOT φ(zₖ)), for the M3 weighted Faber Q_{n,m}
     // Draggable in-panel handles: the canonical corners φ(wₖ) of a converged CUSTOM polygon (undefined otherwise).
     let handles: Vec2[] | undefined;
     if (state.phi === CUSTOM_PHI && state.customPolygon) {
@@ -464,7 +464,11 @@ function main(): void {
       domainStatus = { converged: r.converged, degraded: r.degraded };
       // A degenerate / self-intersecting polygon drives the exterior SC solve to a non-convergent or
       // non-finite map — don't paint garbage as an ordinary ≈ image (honesty guardrail); show a warning.
-      const finite = Number.isFinite(r.map.c) && r.map.laurent.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im));
+      // Require c > 0 (positive logarithmic capacity), not just finite: faberPolynomials / transformCoeffs /
+      // weightedMonomialCoeffs throw for c ≤ 0 and (unlike the rational branch) aren't wrapped in try/catch, so
+      // a converged-but-c≤0 fit would throw out of render() instead of taking the ⚠-blank path (WP8 / A4).
+      const finite =
+        Number.isFinite(r.map.c) && r.map.c > 0 && r.map.laurent.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im));
       if (!r.converged || !finite) {
         return { left: blankPanel, right: blankPanel, badge: "⚠", readout: "polygon fit failed — the domain may be degenerate or self-intersecting", error: true, blank: true };
       }

@@ -52,9 +52,14 @@ export function equals(a: Angle, b: Angle): boolean {
   return a.p === b.p && a.q === b.q; // both reduced ⇒ structural equality suffices
 }
 
-/** Compare two angles as numbers without floating point: sign of a − b. */
+/** Compare two angles as numbers without floating point: sign of a − b. Uses a BigInt cross product:
+ *  p < q for each angle, but the PRODUCT `a.p·b.q` overflows 2⁵³ once the denominators reach ~10⁸ (e.g. an
+ *  external angle 1/(2²⁷−1), reachable from the unbounded spider-angle / core-entropy input), where
+ *  `Math.sign` of the float difference rounds two ~2⁵⁴ products to the same value and MISORDERS the angles
+ *  — a silent wrong ordering that corrupts the arc classification / core-entropy result. BigInt is exact. */
 export function compare(a: Angle, b: Angle): number {
-  return Math.sign(a.p * b.q - b.p * a.q);
+  const d = BigInt(a.p) * BigInt(b.q) - BigInt(b.p) * BigInt(a.q);
+  return d > 0n ? 1 : d < 0n ? -1 : 0;
 }
 
 /**

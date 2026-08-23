@@ -90,6 +90,9 @@ export interface ParamEscapeResult {
   n: number;
 }
 
+// Library default for a bare criticalEscape() call. NOTE: the APP passes paramPlane's
+// DEFAULT_PARAM_OPTIONS.maxIter = 48 (CPU classifyParamBand + GPU renderParamPlane), so 48 — not this 64 —
+// is what a user sees; this 64 is exercised only by unit tests that omit opts (WP8 / A9, two-defaults note).
 const DEFAULT_MAX_ITER = 64;
 const DEFAULT_ESCAPE_R = 1e3; // σ_a ≈ (a/2)w̄² near ∞ squares each step, so this is reached in a few steps
 

@@ -263,6 +263,58 @@ describe("ui-solve orchestration — auto-escalation", () => {
   });
 });
 
+describe("ui-solve orchestration — live vs authoritative race (WP5b / review A2)", () => {
+  it("an in-flight live solve resolving AFTER solveAndRender does NOT clobber state.current with a live result", async () => {
+    // Drive the rAF-scheduled live lane synchronously.
+    const origRaf = globalThis.requestAnimationFrame;
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      cb(0);
+      return 1;
+    }) as typeof globalThis.requestAnimationFrame;
+    const origSelectFamily = QD.selectFamily;
+    try {
+      const phi = { family: "pqd-bounded", unbounded: false, branches: [], w0: { re: 0, im: 0 } };
+      QD.selectFamily = vi.fn(() => ({ initialGuess: () => phi }));
+
+      const liveD = deferred();
+      const authD = deferred();
+      const liveSolve = vi.fn(() => liveD.promise);
+      const solve = vi.fn(() => authD.promise);
+      QD.PrimarySolverWorker = { liveSolve, solve, cancel: vi.fn() };
+
+      const ctx = makeCtx();
+      ctx.state.samples = 500;
+      const api = QD_UI.installSolve(ctx) as any;
+
+      api.scheduleQuickSolve(); // live lane dispatched (live token 1), left in flight
+      expect(liveSolve).toHaveBeenCalledTimes(1);
+
+      api.solveAndRender(); // authoritative solve starts → WP5b bumps the live token to 2
+      expect(solve).toHaveBeenCalledTimes(1);
+
+      // The live solve now settles successfully — but it was superseded by the authoritative solve.
+      liveD.resolve({
+        success: true,
+        phi,
+        univalent: true,
+        identity: 1,
+        identityOK: true,
+        residual: 0,
+        iterations: 3,
+      });
+      await flush();
+
+      // Its `.then` guard (myToken !== _liveSolveToken) must have bailed BEFORE writing state.current, so
+      // the cheap method:'live' / LIVE_DISPLAY_SAMPLES result never lands. The authoritative solve (still
+      // pending) stays the sole writer. Pre-fix, state.current.primary.method would be 'live'.
+      expect(ctx.state.current == null || ctx.state.current.primary?.method !== "live").toBe(true);
+    } finally {
+      globalThis.requestAnimationFrame = origRaf;
+      QD.selectFamily = origSelectFamily;
+    }
+  });
+});
+
 describe("ui-solve orchestration — cancelSolve", () => {
   it("cancels the worker, bumps the alt-search token, hides busy, and reports cancelled", () => {
     const cancel = vi.fn();

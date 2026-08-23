@@ -7,6 +7,7 @@ import {
   cornerBoundary,
   cornerPoles,
   pointInPolygon,
+  polygonNonSimpleReason,
   type C,
 } from "../src/domains.js";
 import { fitSmoothConformalMap, fitConformalMap, fitSchwarzChristoffel } from "@cas/conformal";
@@ -128,5 +129,41 @@ describe("reentrant polygon presets → Schwarz–Christoffel (precise)", () => 
       );
       expect(err, `${id} vertex reproduction`).toBeLessThan(1e-8);
     }
+  });
+});
+
+describe("polygonNonSimpleReason — flags non-simple / degenerate polygons (WP6 / A5)", () => {
+  it("accepts a simple polygon (returns null)", () => {
+    const square: C[] = [
+      [-1, -1],
+      [1, -1],
+      [1, 1],
+      [-1, 1],
+    ];
+    expect(polygonNonSimpleReason(square)).toBeNull();
+  });
+
+  it("flags a self-intersecting bowtie", () => {
+    // Crossed quad: edges (0→1) and (2→3) cross.
+    const bowtie: C[] = [
+      [-1, -1],
+      [1, 1],
+      [1, -1],
+      [-1, 1],
+    ];
+    const reason = polygonNonSimpleReason(bowtie);
+    expect(reason).toBeTruthy();
+    expect(reason).toMatch(/self-intersect/i);
+  });
+
+  it("flags a collinear / near-zero-area triple", () => {
+    const collinear: C[] = [
+      [0, 0],
+      [1, 0],
+      [2, 0],
+    ];
+    const reason = polygonNonSimpleReason(collinear);
+    expect(reason).toBeTruthy();
+    expect(reason).toMatch(/collinear|near-zero/i);
   });
 });

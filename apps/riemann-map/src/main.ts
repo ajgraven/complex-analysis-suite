@@ -29,7 +29,7 @@ import { Overlay2D, type FillCell } from "./render/overlay2d.js";
 import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
-import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, CUSTOM_ID, makeCustomDomain, defaultCustomPolygon, toCCW, type DomainPreset } from "./domains.js";
+import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, CUSTOM_ID, makeCustomDomain, defaultCustomPolygon, toCCW, polygonNonSimpleReason, type DomainPreset } from "./domains.js";
 import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type SCMap } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
 import { createControls, type MethodCard } from "./ui/controls.js";
@@ -293,7 +293,10 @@ function main(): void {
   };
   // The Ω→𝔻 map for point queries (hover, linked cursor): the lightning fit for a smooth Ω, or the exact
   // Schwarz–Christoffel inverse for a polygon. Only `.eval` is needed here, so both engines fit one shape.
-  let domainMap: { eval(z: Pt): Pt } | null = null;
+  // `evalStatus` (SC polygons only) also reports whether the exact inverse actually converged and landed in
+  // the disk — so the hover can flag a query outside Ω / a Newton stall rather than show a wrong preimage
+  // under the "exact inverse" label (WP6 / A5). Formula regions omit it (their forward eval is unconditional).
+  let domainMap: { eval(z: Pt): Pt; evalStatus?(z: Pt): { w: Pt; ok: boolean } } | null = null;
   let domainSource: GridLine[] = [];
   let domainImage: GridLine[] = [];
   // Disk-image mode (the primary view): the unit-disk polar grid and its φ-pushforward.
@@ -530,15 +533,18 @@ function main(): void {
     // A polygon Ω is a Schwarz–Christoffel job. The exact map Ω → 𝔻 is the SAME map the 𝔻 → Ω direction
     // uses, run backwards (sc.inverse) — so hover reads an exact preimage. We DRAW the conformal grid by
     // pushing the disk's polar grid FORWARD (cheap + exact); the ODE inverse is reserved for the single
-    // hover point. This reaches machine precision at the reentrant corners the lightning fit only approximates.
+    // hover point. This reaches ≈ machine precision (subject to the interactive quadrature order) at the
+    // reentrant corners the lightning fit only approximates.
     if (d.corners) {
       const sc = solvePolygon(d.corners);
-      domainMap = {
-        eval: (z: Pt): Pt => {
-          const w = sc.inverseWithStatus([z[0], z[1]]).w;
-          return [w[0], w[1]];
-        },
+      const evalStatus = (z: Pt): { w: Pt; ok: boolean } => {
+        const st = sc.inverseWithStatus([z[0], z[1]]);
+        const w: Pt = [st.w[0], st.w[1]];
+        // A converged inverse landing in the closed disk is a genuine exact preimage; a Newton stall
+        // (!converged) or |w| > 1 (z ∉ Ω, an extrapolated preimage) is NOT — surface that to the hover.
+        return { w, ok: st.converged && Math.hypot(w[0], w[1]) <= 1 + 1e-6 };
       };
+      domainMap = { eval: (z: Pt): Pt => evalStatus(z).w, evalStatus };
       scCorr = { prevertices: sc.prevertices, corners: d.corners, angles: sc.angles };
       const dg = diskPolarLines(24, 6, 96);
       const outline: Pt[] = [...d.corners, d.corners[0]];
@@ -561,11 +567,14 @@ function main(): void {
         ["vertex resid.", "≈ " + fmt(sc.residual)],
       ];
       controls.setAnalysis(rows, "Schwarz–Christoffel map");
+      const nonSimple = polygonNonSimpleReason(d.corners);
       domainCard = {
         name: "Schwarz–Christoffel",
-        tag: sc.mode === "fast" ? "fast · editing" : sc.converged ? "exact inverse" : "check residual",
+        tag: nonSimple ? "⚠ non-simple polygon" : sc.mode === "fast" ? "fast · editing" : sc.converged ? "exact inverse" : "check residual",
         tagKind: "sc",
-        desc: "The exact conformal map Ω → 𝔻 — the same map as the 𝔻 → Ω direction, run backwards. Built from the polygon's corner angles, it reaches machine precision even at the reentrant corners the lightning fit only approximates.",
+        desc: nonSimple
+          ? `⚠ ${nonSimple} — a non-simple polygon has no conformal map, so the picture below is not meaningful. Drag a vertex to make the outline simple.`
+          : "The exact conformal map Ω → 𝔻 — the same map as the 𝔻 → Ω direction, run backwards. Built from the polygon's corner angles, it reaches ≈ machine precision (subject to the interactive quadrature order) even at the reentrant corners the lightning fit only approximates — see the vertex residual.",
         stats: [
           ["prevertices", "= " + sc.prevertices.length],
           ["mode", sc.degraded ? sc.mode + " · degraded" : sc.mode],
@@ -663,7 +672,7 @@ function main(): void {
         name: "Schwarz–Christoffel",
         tag: sc.mode === "fast" ? "fast · editing" : sc.converged ? "exact map" : "check residual",
         tagKind: "sc",
-        desc: "The exact conformal map onto a polygon, built from its corner angles — machine precision, with meaningful prevertices & accessory constants.",
+        desc: "The exact conformal map onto a polygon, built from its corner angles — ≈ machine precision (subject to the interactive quadrature order; see the vertex residual), with meaningful prevertices & accessory constants.",
         stats,
         honesty: ["= exact corner angles", "≈ numerical map"],
       };
@@ -1315,11 +1324,17 @@ function main(): void {
     // Numerical-map mode: read z and its image f(z) under the fitted Riemann map (no φ′ — f is numerical).
     if (modeIsDomain(state.render.mode)) {
       if (domainMap) {
-        const w = domainMap.eval([z[0], z[1]]);
+        const st = domainMap.evalStatus
+          ? domainMap.evalStatus([z[0], z[1]])
+          : { w: domainMap.eval([z[0], z[1]]), ok: true };
+        const w = st.w;
+        // ⚠ when the exact SC inverse didn't converge or the point is outside Ω — don't dress a wrong
+        // preimage as an "exact inverse" (WP6 / A5).
+        const mark = st.ok ? "≈ " : "⚠ ";
         controls.setHover([
           ["z", fmtC(z[0], z[1])],
-          ["f(z)", fmtC(w[0], w[1])],
-          ["|f(z)|", "≈ " + fmt(Math.hypot(w[0], w[1]))],
+          ["f(z)", (st.ok ? "" : "⚠ ") + fmtC(w[0], w[1])],
+          ["|f(z)|", mark + fmt(Math.hypot(w[0], w[1]))],
         ]);
       }
       schedule();

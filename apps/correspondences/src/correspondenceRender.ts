@@ -24,7 +24,9 @@ export interface DensityOptions {
 
 // Denser sampling + a tighter escape radius (the view only shows |w| ≲ 3, so nodes past ~6 are
 // off-screen waste) concentrate the point cloud where it is seen — fewer holes, less speckle.
-export const DEFAULT_DENSITY: DensityOptions = { seedGrid: 64, maxDepth: 18, maxNodes: 220, escapeR: 6 };
+// maxDepth 9 is effective: the 2:2 deleted correspondence doubles per level, so the maxNodes = 220 cap binds
+// at depth ≈ 8 (2⁸−1 = 255 > 220) — the old 18 was dead configuration (WP8 / A9).
+export const DEFAULT_DENSITY: DensityOptions = { seedGrid: 64, maxDepth: 9, maxNodes: 220, escapeR: 6 };
 
 // Bilinear splat: each point deposits its unit weight across the four surrounding pixels by fractional
 // position, instead of rounding to one pixel. This antialiases the cloud — the single biggest cure for

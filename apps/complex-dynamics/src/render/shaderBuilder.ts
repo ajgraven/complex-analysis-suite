@@ -641,7 +641,7 @@ bool inMainCardioidOrBulb(float x, float y) {
     ? "\n  bool pPeriod = (uMode == 0 || uMode == 1 || uMode == 5 || uMode == 7 || uMode == 8 || uMode == 9);\n  cvec pRef = z; int pCount = 0;"
     : "";
   const periodStep = periodicityCheck
-    ? "\n    if (pPeriod) {\n      cvec pd = csub(z, pRef); if (dot(pd, pd) < 1e-12 * max(1.0, dot(z, z))) { kmax = uN; break; } // squared form of cabsf(z-pRef) < 1e-6·max(1,|z|): in a cycle ⇒ interior, two sqrts/iter avoided\n      pCount += 1; if (pCount > 20) { pCount = 0; pRef = z; } // refresh the reference point\n    }"
+    ? "\n    if (pPeriod) {\n      cvec pd = csub(z, pRef); if (cabs2(pd) < 1e-12 * max(1.0, cabs2(z))) { kmax = uN; break; } // squared form of cabsf(z-pRef) < 1e-6·max(1,|z|): in a cycle ⇒ interior, two sqrts/iter avoided (cabs2 is dot(a,a) in the single-precision build — the only build this path is emitted in)\n      pCount += 1; if (pCount > 20) { pCount = 0; pRef = z; } // refresh the reference point\n    }"
     : "";
 
   // Interior distance estimate (uMode 15), Mandelbrot/parameter plane, z²+c: carve the flat
@@ -967,11 +967,11 @@ vec4 fieldAt(vec2 fragXY) {
   vec2 uv = fragXY / uResolution;
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
-  int kmax = 0;
+  int kmax = 0;${periodInit}
   for (int k = 0; k < uN; k++) {
     if (escapeFn(z, cc)) break;
     z = fFn(z, cc);
-    kmax = k + 1;
+    kmax = k + 1;${periodStep}
   }
   if (kmax == uN) return vec4(-1.0, float(kmax), 1.0, 0.0); // never escaped → interior
   float s = float(kmax);

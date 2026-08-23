@@ -2191,17 +2191,42 @@ import _QD from '../solvers/solver.mjs';
     return _henselTree(g, left, p, K).concat(_henselTree(h, right, p, K));
   }
   // ---- subset recombination of the lifted factors into true ℤ irreducibles ----
-  function _combinations(n, k) {                               // index k-subsets of [0,n)
-    const out = []; const idx = []; (function rec(start) {
-      if (idx.length === k) { out.push(idx.slice()); return; }
-      for (let i = start; i < n; i++) { idx.push(i); rec(i + 1); idx.pop(); }
-    })(0); return out;
+  function* _combinations(n, k) {                             // lazily yield index k-subsets of [0,n)
+    const idx = [];                                           // generator: never materializes the C(n,k) array,
+    function* rec(start) {                                    // so the wall-clock deadline below — not memory — bounds it.
+      if (idx.length === k) { yield idx; return; }            // `idx` is reused: the consumer copies it (new Set) before
+      for (let i = start; i < n; i++) { idx.push(i); yield* rec(i + 1); idx.pop(); } // the generator advances.
+    }
+    yield* rec(0);
   }
+  // Zassenhaus subset recombination is worst-case exponential: an input whose r lifted modular factors do NOT
+  // recombine into a true factor at a small subset size — an irreducible poly, or one splitting into a few
+  // large pieces — climbs through Σ_k C(r,k) → 2^r subset products before it settles. A sparse high-degree poly
+  // like x^40 − 2 (irreducible over ℚ by Eisenstein, yet splitting into many small factors mod p) hits exactly
+  // this, on a NORM N = b·b̄ of degree 2·deg with a huge Hensel modulus (≈1 ms per subset-product trial). Bound
+  // the WALL-CLOCK the search may spend — the honest gauge of "freezing the tab", and the one measure that
+  // stays machine-fair whether a trial is cheap (low-degree norm) or dear (degree-80). NOT the modular-factor
+  // COUNT r: `_recombine` runs on that degree-2·deg norm, so a genuinely reducible poly can split into many
+  // SMALL pieces (large r) yet find each factor cheaply at size 1–2 and reset — an r cap wrongly rejected those
+  // (e.g. ∏ₖ(x²+k) → r=24, factors in <100 ms). With `_combinations` lazy this deadline alone bounds work;
+  // on expiry throw the file's "use CAS export" signal (marked `recombineCap` so `_qiFactor` surfaces it
+  // HONESTLY as undetermined, never a false irreducibility) rather than freezing the tab. This is the one spot
+  // that otherwise breaks the file's cap-and-throw discipline. (2026-08-23 review MED / A3.)
+  const RECOMBINE_DEADLINE_MS = 2000; // wall-clock budget for the exponential subset search before "undetermined"
+                                      // (real factorizations settle in <100 ms; this only trips the 2^r pathologies)
+  function _recombineCapError(msg) { const e = new Error(msg); e.recombineCap = true; return e; }
   function _recombine(B, lifted, M) {                          // B monic over ℤ; lifted: monic factors mod M
-    const factors = []; let remaining = lifted.slice(); let Bcur = _ipTrim(B.slice()); let size = 1;
+    const factors = []; let remaining = lifted.slice(); let Bcur = _ipTrim(B.slice()); let size = 1; let trials = 0;
+    const t0 = Date.now();
     while (remaining.length > 0 && size <= remaining.length) {
       let found = false;
       for (const idx of _combinations(remaining.length, size)) {
+        // Check the wall-clock every 64 trials (Date.now is ~free next to a subset-product + division). Absolute
+        // deadline ⇒ the throw lands ≤ deadline + one 64-trial interval on ANY machine, so the test's <4 s holds.
+        if ((++trials & 63) === 0 && Date.now() - t0 > RECOMBINE_DEADLINE_MS) {
+          throw _recombineCapError('factorOverQ: subset recombination exceeded ' + RECOMBINE_DEADLINE_MS
+            + ' ms; the factorization is too large for the interactive solver — use CAS export.');
+        }
         let prod = [1n]; for (const j of idx) prod = _pmMul(prod, remaining[j], M);
         const cand = _balanced(prod, M);                      // monic integer candidate
         const quo = _ipDivExactMonic(Bcur, cand);
@@ -2296,7 +2321,10 @@ import _QD from '../solvers/solver.mjs';
       if (univariateGCD(b, bbar, v).degreeIn(v) > 0) continue;            // N(b) not square-free ⇒ bump s
       const N = b.mul(bbar);                                              // norm ∈ ℚ[x] (im parts vanish)
       let ratFactors;
-      try { ratFactors = _factorOverQ(N, v); } catch (e) { continue; }
+      // A recombination-cap hit is a genuine "too large" signal, NOT a bad-shift retry: re-throw it so it
+      // reaches factor()'s try/catch and surfaces as HONEST `undetermined` (never a false irreducibility,
+      // which is what returning [work] below would produce). Other errors (a bad shift) still bump s.
+      try { ratFactors = _factorOverQ(N, v); } catch (e) { if (e && e.recombineCap) throw e; continue; }
       if (!ratFactors.length) continue;
       const factors = [];
       for (const q of ratFactors) {

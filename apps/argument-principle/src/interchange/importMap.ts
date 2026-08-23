@@ -2,107 +2,24 @@
  * Import side of the suite hand-off: turn an `@cas/interchange` map Envelope — an f(z) handed off from
  * the Complex-Function Plotter or Complex Dynamics (an `expr` / `view` map), a uniformizing map φ from
  * Quadrature Domains, or a bare rational / Laurent map — into an `@cas/expr` source string this tool can
- * study for its zeros, poles, and winding. A `schwarz` σ is a NUMERICAL inverse and not expr-compilable,
- * so its generating map φ is imported instead, honestly labelled.
- *
- * Ported from the Complex-Function-Plotter's `interchange/importMap.ts` (apps can't import each other —
- * ARCHITECTURE §4; the wire types are the shared contract). Coefficients render with `i`, `^`, `*`, `/`
- * so they parse in the same `@cas/expr` every app shares.
+ * study for its zeros, poles, and winding. The MapSpec -> expr converter (`mapSpecToExpr` /
+ * `envelopeToMapSpec`, incl. the degenerate-denominator / pole-bearing-Laurent / schwarz refusals) now
+ * lives in `@cas/interchange` (ADR-0027, shared with the plotter and Complex Dynamics); this module keeps
+ * only the outer glue — decode the payload, and redirect a numerical `schwarz` σ to its generating map φ,
+ * honestly labelled.
  */
 import {
   decodeLink,
   validateEnvelope,
+  mapSpecToExpr,
+  envelopeToMapSpec,
   type Complex,
-  type Envelope,
-  type MapSpec,
-  type QuadratureDomain,
-  type SchwarzReflection,
   type View,
 } from "@cas/interchange";
 
-const isZero = (z: Complex): boolean => z.re === 0 && z.im === 0;
-
-/** A complex coefficient as a parenthesised expr atom (safe to multiply / divide against). */
-function coeffExpr(z: Complex): string {
-  const { re, im } = z;
-  if (im === 0) return `(${re})`;
-  if (re === 0) return `(${im}*i)`;
-  return `(${re}${im < 0 ? "" : "+"}${im}*i)`;
-}
-
-/** Polynomial Σ coeffs[k]·v^k (ascending coefficients). */
-function polyExpr(coeffs: readonly Complex[], v: string): string {
-  const terms: string[] = [];
-  coeffs.forEach((cf, k) => {
-    if (isZero(cf)) return;
-    const c = coeffExpr(cf);
-    terms.push(k === 0 ? c : k === 1 ? `${c}*${v}` : `${c}*${v}^${k}`);
-  });
-  return terms.length ? terms.join(" + ") : "(0)";
-}
-
-function rationalExpr(num: readonly Complex[], den: readonly Complex[], v: string): string {
-  const p = polyExpr(num, v);
-  if (den.length === 1 && den[0].re === 1 && den[0].im === 0) return p; // unit denominator ⇒ pure polynomial
-  if (den.length === 0 || den.every(isZero)) {
-    throw new Error(
-      "This rational map has an empty or identically-zero denominator (division by zero) — refusing to build a degenerate map.",
-    );
-  }
-  return `(${p}) / (${polyExpr(den, v)})`;
-}
-
-function laurentExpr(c: Complex, F: readonly Complex[], v: string): string {
-  const terms: string[] = [];
-  if (!isZero(c)) terms.push(`${coeffExpr(c)}*${v}`);
-  F.forEach((fl, l) => {
-    if (isZero(fl)) return;
-    terms.push(l === 0 ? coeffExpr(fl) : `${coeffExpr(fl)}/${v}^${l}`);
-  });
-  return terms.length ? terms.join(" + ") : "(0)";
-}
-
-/**
- * Convert an interchange MapSpec into an `@cas/expr` source string. An anti-holomorphic closed form acts
- * on `conj(z)`, so it is built on `conjugate(z)`. Throws for shapes with no closed form (a numerical
- * `schwarz` σ, a pole-bearing Laurent map, a degenerate 0/0 rational).
- */
-export function mapSpecToExpr(m: MapSpec): string {
-  const v = m.antiholomorphic ? "conjugate(z)" : "z";
-  switch (m.form) {
-    case "rational":
-      return rationalExpr(m.num, m.den, v);
-    case "laurent":
-      if (m.branches && m.branches.length > 0) {
-        throw new Error(
-          "This Laurent map carries finite-pole branches (a pole-bearing quadrature domain), which this tool's import doesn't represent yet.",
-        );
-      }
-      return laurentExpr(m.c, m.F, v);
-    case "expr":
-      return m.expr;
-    case "schwarz":
-      throw new Error(
-        "A schwarz-form map isn't expr-compilable — its inverse is numerical. Import its generating map φ instead.",
-      );
-  }
-}
-
-/** The renderable map inside an interchange envelope, by kind (ported from CD's `envelopeToMapSpec`). */
-export function envelopeToMapSpec(env: Envelope): MapSpec | null {
-  switch (env.kind) {
-    case "quadrature-domain":
-      return (env.payload as QuadratureDomain).phi;
-    case "schwarz-reflection":
-      return (env.payload as SchwarzReflection).sigma;
-    case "view":
-      return (env.payload as View).map;
-    case "map":
-      return env.payload as MapSpec;
-    default:
-      return null;
-  }
-}
+// Re-export the shared converter so this module stays the app's single interchange-import facade
+// (existing tests import mapSpecToExpr / envelopeToMapSpec from here).
+export { mapSpecToExpr, envelopeToMapSpec } from "@cas/interchange";
 
 /** The result of importing an interchange text: the `@cas/expr` source, an honest note about what was
  *  imported, the source app, and a viewport center to restore for a `view`. */

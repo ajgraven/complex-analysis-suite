@@ -18,7 +18,7 @@
  * per-step iteration within each BLA's radius, so the (conservative) radius is provably safe.
  */
 import type { Complex } from "../complex";
-import { multibrotStep, polyStep } from "./perturbationPoly";
+import { multibrotStep, polyStep, binomial } from "./perturbationPoly";
 
 export interface BLA {
   /** δz_{m+l} = a·δz_m + b·δc. */
@@ -41,14 +41,6 @@ const cmul = (p: Complex, q: Complex): Complex => [
 const cadd = (p: Complex, q: Complex): Complex => [p[0] + q[0], p[1] + q[1]];
 const cscale = (p: Complex, s: number): Complex => [p[0] * s, p[1] * s];
 const cabs = (p: Complex): number => Math.hypot(p[0], p[1]);
-
-/** Binomial coefficient C(n, k), exact for the small degrees used here. */
-function binom(n: number, k: number): number {
-  if (k < 0 || k > n) return 0;
-  let c = 1;
-  for (let j = 1; j <= k; j++) c = (c * (n - j + 1)) / j;
-  return Math.round(c);
-}
 
 /** Single-step BLA at reference iterate Z_m for z^d + c: A = f′(Z) = d·Z^{d−1}, B = 1. The radius
  *  bounds where the dropped nonlinear terms stay below `EPS` relative to the linear term A·δz. The
@@ -77,7 +69,7 @@ function singleStepPoly(Zm: Complex, coeffs: Complex[], dcCoeff: Complex): BLA {
   const ck: Complex[] = [[0, 0]]; // ck[0] unused
   for (let k = 1; k <= d; k++) {
     let s: Complex = [0, 0];
-    for (let j = k; j <= d; j++) s = cadd(s, cscale(cmul(coeffs[j], zPow[j - k]), binom(j, k)));
+    for (let j = k; j <= d; j++) s = cadd(s, cscale(cmul(coeffs[j], zPow[j - k]), binomial(j, k)));
     ck.push(s);
   }
   const a = ck[1]; // A = P′(Z)

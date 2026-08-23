@@ -13,6 +13,14 @@
 export * from "./schema.js";
 export { InterchangeError, isComplex, isConventions, isMapSpec, isEnvelopeOfKind, validateEnvelope } from "./validate.js";
 export { encodeLink, decodeLink } from "./codec.js";
+export {
+  coeffExpr,
+  polyExpr,
+  rationalExpr,
+  laurentExpr,
+  mapSpecToExpr,
+  envelopeToMapSpec,
+} from "./mapSpecToExpr.js";
 export { encodeViewState, decodeViewState, VIEWSTATE_VERSION } from "./viewstate.js";
 export type { ViewStateEnvelope } from "./viewstate.js";
 export {

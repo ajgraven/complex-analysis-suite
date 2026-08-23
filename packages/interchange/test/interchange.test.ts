@@ -250,15 +250,15 @@ describe("validatePayload — the non-MapSpec structural fields (review P2 / int
   });
   it("rejects a quadrature-domain with an over-cap boundarySamples array", () => {
     const big = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 })); // > MAX_COEFF_LEN
-    const env = { schema: SCHEMA_ID, version: VERSION, kind: "quadrature-domain", payload: { phi: deltoidSigma, conventions: CANONICAL, boundarySamples: big }, provenance: prov };
+    const env = { schema: SCHEMA_ID, version: VERSION, kind: "quadrature-domain", payload: { phi: deltoidSigma, bounded: false, conventions: CANONICAL, boundarySamples: big }, provenance: prov };
     expect(() => validateEnvelope(env)).toThrow(/boundarySamples/);
   });
   it("validates a schwarz-reflection's nested sourceDomain — non-canonical conventions rejected (interchange-validate-01)", () => {
     const withSource = (sourceDomain: unknown) => ({ ...schwarzEnvelope(), payload: { ...schwarzEnvelope().payload, sourceDomain } });
     // A nested QD's non-canonical convention tag previously escaped the ADR-0006 canonical-wire guard.
-    expect(() => validateEnvelope(withSource({ phi: deltoidSigma, conventions: { area: "normalized", contour: "suppressed-2pii" } }))).toThrow(/non-canonical/);
-    expect(() => validateEnvelope(withSource({ phi: { form: "bogus" }, conventions: CANONICAL }))).toThrow(/sourceDomain\.phi/); // malformed nested phi
-    expect(validateEnvelope(withSource({ phi: deltoidSigma, conventions: CANONICAL })).kind).toBe("schwarz-reflection"); // canonical sourceDomain passes
+    expect(() => validateEnvelope(withSource({ phi: deltoidSigma, bounded: false, conventions: { area: "normalized", contour: "suppressed-2pii" } }))).toThrow(/non-canonical/);
+    expect(() => validateEnvelope(withSource({ phi: { form: "bogus" }, bounded: false, conventions: CANONICAL }))).toThrow(/sourceDomain\.phi/); // malformed nested phi
+    expect(validateEnvelope(withSource({ phi: deltoidSigma, bounded: false, conventions: CANONICAL })).kind).toBe("schwarz-reflection"); // canonical sourceDomain passes
     expect(validateEnvelope(withSource(undefined)).kind).toBe("schwarz-reflection"); // optional — absent is fine
   });
   it("rejects a schwarz-reflection whose tilingSetHint.fundamentalTile exceeds the coeff cap", () => {
@@ -267,5 +267,35 @@ describe("validatePayload — the non-MapSpec structural fields (review P2 / int
     expect(() => validateEnvelope(withHint({ fundamentalTile: big }))).toThrow(/tilingSetHint/);
     expect(validateEnvelope(withHint({ fundamentalTile: [{ re: 0, im: 0 }] })).kind).toBe("schwarz-reflection"); // small tile passes
     expect(validateEnvelope(withHint({})).kind).toBe("schwarz-reflection"); // fundamentalTile optional
+  });
+});
+
+describe("validateEnvelope — newly-validated declared fields (WP8 / A6)", () => {
+  const qdEnvelope = (extra: Record<string, unknown>): unknown => ({
+    schema: SCHEMA_ID,
+    version: VERSION,
+    kind: "quadrature-domain",
+    payload: { phi: deltoidSigma, bounded: false, conventions: CANONICAL, ...extra },
+    provenance: { app: "quadrature-domains", appVersion: "0.1.0", createdAt: "2026-07-06T00:00:00Z" },
+  });
+  const viewEnvelope = (extra: Record<string, unknown>): unknown => ({
+    schema: SCHEMA_ID,
+    version: VERSION,
+    kind: "view",
+    payload: { map: deltoidSigma, viewport: { center: { re: 0, im: 0 }, zoom: 1 }, ...extra },
+    provenance: { app: "complex-dynamics", appVersion: "0.1.0", createdAt: "2026-07-06T00:00:00Z" },
+  });
+
+  it("rejects a quadrature-domain with a non-boolean `bounded`", () => {
+    expect(() => validateEnvelope(qdEnvelope({ bounded: "yes" }))).toThrow(/bounded/);
+  });
+  it("rejects a quadrature-domain with an out-of-enum `weight`", () => {
+    expect(() => validateEnvelope(qdEnvelope({ weight: "quadratic" }))).toThrow(/weight/);
+    expect(validateEnvelope(qdEnvelope({ weight: "log" })).kind).toBe("quadrature-domain"); // valid enum passes
+  });
+  it("rejects a view whose optional `c` is present but malformed", () => {
+    expect(() => validateEnvelope(viewEnvelope({ c: { re: "x", im: 0 } }))).toThrow(/view\.c/);
+    expect(validateEnvelope(viewEnvelope({ c: { re: 1, im: 2 } })).kind).toBe("view"); // valid Complex passes
+    expect(validateEnvelope(viewEnvelope({})).kind).toBe("view"); // c optional
   });
 });

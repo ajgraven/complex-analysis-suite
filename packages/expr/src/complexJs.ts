@@ -69,7 +69,15 @@ export const sqrt = (z: Complex): Complex => {
   return [re0, z[1] < 0 ? -im0 : im0];
 };
 
-/** Principal power z^w = exp(w · log z). Integer real exponents use repeated multiply. */
+/**
+ * Principal power z^w = exp(w · log z). Integer real exponents use repeated multiply.
+ *
+ * JS↔GLSL parity note (WP7 / A6): this promotes to exact `intPow` at RUNTIME (any integer-valued `w[0]`),
+ * whereas the GLSL backend folds only a COMPILE-TIME-constant exponent (`emitPow` via `constReal`). So a
+ * bare parameter `a` bound to an integer (e.g. `z^a`, a = 2) runs exact `intPow` on the CPU overlay but
+ * `cpow`'s principal branch on the GPU — the two disagree across the negative-real axis, growing with |a|.
+ * Hosts that want them identical should feed integer-valued parameters as folded literals for the `^` path.
+ */
 export const pow = (z: Complex, w: Complex): Complex => {
   if (w[1] === 0 && Number.isInteger(w[0]) && Math.abs(w[0]) <= 1024) {
     return intPow(z, w[0]); // exact binary exponentiation up to the GLSL fast-path cap
@@ -125,8 +133,11 @@ export const tanh = (z: Complex): Complex => div(sinh(z), cosh(z));
 
 /** arcsinh(z) = log(z + sqrt(z² + 1)) (principal branch). */
 export const arcsinh = (z: Complex): Complex => log(add(z, sqrt(add(mul(z, z), ONE))));
-/** arccosh(z) = log(z + sqrt(z² − 1)) (principal branch). */
-export const arccosh = (z: Complex): Complex => log(add(z, sqrt(sub(mul(z, z), ONE))));
+/** arccosh(z) = log(z + √(z−1)·√(z+1)) (principal branch, C99/DLMF). The naive `√(z²−1)` form takes the
+ *  reflected branch on the cut (−∞, −1] (e.g. arccosh(−2) → −1.317 + πi, Re < 0), so the split-radical
+ *  form is used to keep Re ≥ 0 there. Matches the GLSL twin `carccosh`. */
+export const arccosh = (z: Complex): Complex =>
+  log(add(z, mul(sqrt(sub(z, ONE)), sqrt(add(z, ONE)))));
 /** arctanh(z) = ½·(log(1 + z) − log(1 − z)) (principal branch). */
 export const arctanh = (z: Complex): Complex =>
   mul(HALF, sub(log(add(ONE, z)), log(sub(ONE, z))));
