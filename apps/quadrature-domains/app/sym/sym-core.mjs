@@ -2197,11 +2197,30 @@ import _QD from '../solvers/solver.mjs';
       for (let i = start; i < n; i++) { idx.push(i); rec(i + 1); idx.pop(); }
     })(0); return out;
   }
+  // Zassenhaus subset recombination is worst-case exponential: an input with r lifted modular factors
+  // that is irreducible over ℤ (or splits into few large pieces) tries Σ_k C(r,k) = 2^r subset products
+  // before it settles. A sparse high-degree poly like x^40 − 2 (irreducible over ℚ by Eisenstein, yet
+  // splitting into many small factors mod p) hits exactly this. Cap it — both the r that bounds 2^r and
+  // the total subset-product attempts — and throw the file's "use CAS export" signal (marked
+  // `recombineCap` so `_qiFactor` can surface it HONESTLY as undetermined, never a false irreducibility)
+  // rather than freezing the tab. This is the one spot that otherwise breaks the file's cap-and-throw
+  // discipline. (2026-08-23 review MED / A3.)
+  const RECOMBINE_MAX_FACTORS = 20;    // 2^r blows up past this — and the C(r,⌊r/2⌋) index array with it
+  const RECOMBINE_MAX_TRIALS = 200000; // hard cap on subset-product attempts (bounds the r≤cap worst case)
+  function _recombineCapError(msg) { const e = new Error(msg); e.recombineCap = true; return e; }
   function _recombine(B, lifted, M) {                          // B monic over ℤ; lifted: monic factors mod M
-    const factors = []; let remaining = lifted.slice(); let Bcur = _ipTrim(B.slice()); let size = 1;
+    if (lifted.length > RECOMBINE_MAX_FACTORS) {
+      throw _recombineCapError('factorOverQ: ' + lifted.length + ' modular factors to recombine exceeds the cap ('
+        + RECOMBINE_MAX_FACTORS + '); the subset recombination is exponential (2^' + lifted.length + ') — use CAS export.');
+    }
+    const factors = []; let remaining = lifted.slice(); let Bcur = _ipTrim(B.slice()); let size = 1; let trials = 0;
     while (remaining.length > 0 && size <= remaining.length) {
       let found = false;
       for (const idx of _combinations(remaining.length, size)) {
+        if (++trials > RECOMBINE_MAX_TRIALS) {
+          throw _recombineCapError('factorOverQ: subset recombination exceeded ' + RECOMBINE_MAX_TRIALS
+            + ' trials; the factorization is too large — use CAS export.');
+        }
         let prod = [1n]; for (const j of idx) prod = _pmMul(prod, remaining[j], M);
         const cand = _balanced(prod, M);                      // monic integer candidate
         const quo = _ipDivExactMonic(Bcur, cand);
@@ -2296,7 +2315,10 @@ import _QD from '../solvers/solver.mjs';
       if (univariateGCD(b, bbar, v).degreeIn(v) > 0) continue;            // N(b) not square-free ⇒ bump s
       const N = b.mul(bbar);                                              // norm ∈ ℚ[x] (im parts vanish)
       let ratFactors;
-      try { ratFactors = _factorOverQ(N, v); } catch (e) { continue; }
+      // A recombination-cap hit is a genuine "too large" signal, NOT a bad-shift retry: re-throw it so it
+      // reaches factor()'s try/catch and surfaces as HONEST `undetermined` (never a false irreducibility,
+      // which is what returning [work] below would produce). Other errors (a bad shift) still bump s.
+      try { ratFactors = _factorOverQ(N, v); } catch (e) { if (e && e.recombineCap) throw e; continue; }
       if (!ratFactors.length) continue;
       const factors = [];
       for (const q of ratFactors) {
