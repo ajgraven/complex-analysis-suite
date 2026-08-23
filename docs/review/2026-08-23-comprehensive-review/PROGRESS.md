@@ -56,7 +56,7 @@ findings below are *latent* (not caught by the current suite).
 ### Batch 1 — churn + coverage-gap hotspots
 - [ ] **A1 CD-RENDER** — `apps/complex-dynamics/src/render/*` perf rewrite (#294) → `findings/A1-cd-render-perf.md`
 - [ ] **A2 QD-SOLVER** — QD live-solver perf (#292) + solvers/workers/ui-solve → `findings/A2-qd-solver-perf.md`
-- [ ] **A3 QD-ALGEBRA** — `sym/sym-core.mjs` + `algebra/*` (coverage gap) → `findings/A3-qd-algebra-symcore.md`
+- [x] **A3 QD-ALGEBRA** — `sym/sym-core.mjs` + `algebra/*` (coverage gap) → `findings/A3-qd-algebra-symcore.md` — 1 MED (Berlekamp–Zassenhaus uncapped 2ʳ recombination, main-thread reachable), 2 LOW. Core exceptionally solid; no new duplication.
 - [ ] **A4 FABER** — `apps/faber-transform/*` + `@cas/faber` churn (#293/#295/#296) → `findings/A4-faber.md`
 - [ ] **A5 RIEMANN-SC** — `apps/riemann-map/*` + `@cas/conformal` churn (#285/#286/#288) → `findings/A5-riemann-sc.md`
 - [ ] **A6 CORE-PKGS** — `@cas/core` `@cas/exact` `@cas/expr` `@cas/interchange` fresh pass → `findings/A6-core-pkgs.md`
