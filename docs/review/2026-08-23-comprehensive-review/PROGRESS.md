@@ -36,15 +36,19 @@ re-report fixed issues.** Priorities this round:
 
 Shared reviewer brief: `AGENT_BRIEF.md` (in this dir).
 
-## Health baseline (orchestrator-run, background) — ⏳ RUNNING
+## Health baseline (orchestrator-run, background) — ✅ ALL GREEN (HEAD 300c775)
 
-Logs in `health/` (00-summary, 01-typecheck, 02-lint, 03-test, 04-build). `pnpm install`
-(frozen lockfile) already succeeded.
+Logs in `health/`. `pnpm install` (frozen lockfile) succeeded. Every CI gate passes ⇒ all
+findings below are *latent* (not caught by the current suite).
 
-- [ ] `01-typecheck`
-- [ ] `02-lint` (eslint + dep:check + per-pkg/app)
-- [ ] `03-test` (Vitest + census gate)
-- [ ] `04-build`
+- [x] `01-typecheck` — exit 0
+- [x] `02-lint` — exit 0 (eslint + dep:check + per-pkg/app)
+- [x] `03-test` — exit 0: **383 test files / 3197 tests passing** (~112s); census gate OK (17
+      projects; QD 162 / CD 83 / plotter 18 / corr 17 / expr 16 / arg-principle 15 / RM 12 /
+      conformal 11 / faber-transform 10 / core 9 / schwarz 8 / faber 7 / gpu 6 / dynamics 3 /
+      exact 3 / interchange 2 / export 1). jsdom getContext/worker-unavailable lines are
+      expected test-env stubs, not failures.
+- [x] `04-build` — exit 0 (apps + check-built-artifacts)
 - [ ] Baseline result folded into REPORT.md
 
 ## Review agents (each writes ONE file to `findings/`, read-only otherwise)
