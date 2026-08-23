@@ -967,11 +967,11 @@ vec4 fieldAt(vec2 fragXY) {
   vec2 uv = fragXY / uResolution;
 ${coordinate}
   cvec cc = (uFractType == 1) ? z : vec_(uC.x, uC.y);
-  int kmax = 0;
+  int kmax = 0;${periodInit}
   for (int k = 0; k < uN; k++) {
     if (escapeFn(z, cc)) break;
     z = fFn(z, cc);
-    kmax = k + 1;
+    kmax = k + 1;${periodStep}
   }
   if (kmax == uN) return vec4(-1.0, float(kmax), 1.0, 0.0); // never escaped → interior
   float s = float(kmax);
