@@ -193,10 +193,18 @@ modes it is restricted to: interior stays interior, exterior orbits never trip i
 non-negative compile-time constant) to `cabs2(E) op k·k`, dropping a `length()`/`sqrt` from the
 escape test every pixel every iteration (a full df64 magnitude at deep zoom). New `cabs2`
 (squared magnitude, real) added to both precision stdlibs. NOT byte-identical — a boundary pixel
-may escape ±1 iteration; the codegen assertion in `glslCodegen.test.ts` was updated to expect the
-squared form, and the full corpus (including `escapeRadius`, `underIteration`, `juliaImageMetrics`
-pixel-area, and the GLSL↔JS dual-backend browser harness) stays green, confirming no
-user-visible drift.
+may escape ±1 iteration; the full corpus (including `escapeRadius`, `underIteration`,
+`juliaImageMetrics` pixel-area, and the GLSL↔JS dual-backend browser harness) stays green,
+confirming no user-visible drift.
+
+**Reach & guard (2026-08-23 review follow-up).** The peephole fires in `emitBool` for **every**
+`abs(E) op const` comparison, not only CD's escape predicate — so any `if(abs(z) op k, …)` inside
+`f`, and any consumer that routes user conditionals through `compileF` (notably the **plotter**),
+inherits both the sqrt-free speedup and the ≤1-ulp boundary shift (the plotter renders continuous
+domain-coloring, so a sub-pixel branch flip is extremely unlikely to move a golden). `emitBool`
+now also declines the fold when `k·k` would overflow float32 (k ≳ 1.8e19), falling back to the
+`cabsf` sqrt form so a gigantic escape radius keeps working. Pinned by
+`packages/expr/test/glslPeephole.test.ts` (in the package that owns the transform).
 
 **P1-a (Fix S) · Appearance-slider drafting** (`main.ts`). Palette-rotation, lighting, post,
 outline, and equipotential range-slider drags now drop both plots to the coarse draft level for
