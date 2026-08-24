@@ -1,6 +1,6 @@
 # Complex-Potential Studio — implementation plan
 
-> Adds an **eighth app**, `apps/complex-potential` — an interactive realization of the
+> Adds an **eighth app**, `apps/2d-electrostatics` (label **"2D Electrostatics"**) — an interactive realization of the
 > author's paper *"Complex Analysis as Two-Dimensional Electrostatics and Hydrodynamics"*
 > (Graven, May 2026). The user builds a complex potential `W(z) = φ + iψ` by dropping and
 > dragging **charges / sources / sinks / vortices / doublets / a uniform background**, sees it
@@ -23,7 +23,7 @@
 > Work lands as small, CI-green commits on branch `claude/analysis-suite-app-ideas-2th42x`.
 > Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
 > [`../DECISIONS.md`](../DECISIONS.md) / [`../RISKS.md`](../RISKS.md). New decisions recorded as
-> **ADR-0032** (the app + hybrid framing + convention-at-edge + M4-lives-here) and **ADR-0033**
+> **ADR-0033** (the app + hybrid framing + convention-at-edge + M4-lives-here) and **ADR-0034**
 > (the `@cas/interchange` `ConformalMap` + `flow` forms).
 
 ---
@@ -47,6 +47,11 @@
 
 A complex-potential app is *additive composition + a new render mode*, not a new engine.
 
+- **The shared browser shell** (`@cas/ui`, ADR-0032 — chartered + adopted suite-wide on `master` since
+  this plan was drafted): `mountCanvas` (accessible render+overlay+live-region), `runWithFatalBoundary`
+  (WebGL2-aware fatal banner + boot-overlay removal), `createComputeClient` (worker offload), and
+  `mountNavHeader` over the `SUITE_APPS` registry. This new app **adopts the shell from day one** and
+  **registers itself in `packages/ui/src/apps.ts`** — it does not hand-roll its own UI primitives.
 - **Expression → GLSL and → JS closures** (`@cas/expr`): `compileF`/`makeComplexFn` emit the dual
   backend; `differentiate` gives `W'` symbolically. `W` is a first-class executable expression.
 - **The GPU substrate** (`@cas/gpu`): `PHASE_COLORING_GLSL`, `COMPLEX_*_GLSL`, `PLANE_FROM_FRAG_GLSL`,
@@ -114,7 +119,7 @@ Elementary terms (app-edge normalization, §3.3):
 Field **strength is encoded by brightness/opacity, never by arrow length or line spacing** (the one
 lesson shared by Falstad and PhET — it fixes the near-singularity blob), with a legend + hover readout.
 
-### 3.3 Conventions (ADR-0006-aligned, ADR-0032)
+### 3.3 Conventions (ADR-0006-aligned, ADR-0033)
 
 Adopt the paper's normalizations **at the app/domain edge**, exactly as the QD app does — `∮ dz/z = 1`
 (absorbs `1/2πi`) and `dA = dx dy/π` (absorbs `1/π`) — so residues, flux/circulation, charge, and
@@ -129,7 +134,7 @@ streamlines, charge/flux ↔ source strength, `Im` residue ↔ circulation/vorte
 legend, and readouts only. This is the paper's parallel Electrostatic / Fluid-Dynamical interpretations,
 and is a differentiator none of the surveyed single-domain tools offer.
 
-### 3.5 The theorem gallery (hybrid framing, ADR-0032)
+### 3.5 The theorem gallery (hybrid framing, ADR-0033)
 
 A first-class tab that turns the paper's dictionary into guided, live pictures layered on the sandbox.
 Each entry is an overlay + a short honest caption. Entries attach to the milestone that first supports
@@ -201,7 +206,7 @@ bookkeeping the Kutta condition later *chooses*).
   (Baddoo–Trefethen) on the existing `lstsqHouseholder` stack (`≈`).
 *Ground truth:* the golden capacity table (§7); arcsine law on `[−1,1]`.
 
-### M4 — Hele-Shaw "twisting" showpiece *(deferred; lives in this app, imports from QD — ADR-0032)*
+### M4 — Hele-Shaw "twisting" showpiece *(deferred; lives in this app, imports from QD — ADR-0033)*
 
 Time-step the **Polubarinova–Galin** equation `Re[ġ · conj(g')] = Re c₀` on `|w|=1` with a **complex
 source** `c₀ = q+iγ` (rational/Laurent `g(w,t)`): spiral equipotentials `Re W = q log|z−a| − γ arg(z−a)`,
@@ -218,14 +223,16 @@ never certified (RISKS §3 discipline).
 
 ## 5. Package touch-points & dependencies
 
-- **M0–M1:** `@cas/expr`, `@cas/gpu`, `@cas/core`, `@cas/interchange`, `@cas/export`. New code is
+- **M0–M1:** `@cas/ui`, `@cas/expr`, `@cas/gpu`, `@cas/core`, `@cas/interchange`, `@cas/export`. New code is
   app-local: the **singularity data model**, the flow shaders, the sensor/probe UI, the Jobard–Lefer
   placement, the gallery scaffold. **No new package** (ADR-0007 — extract only on a second consumer).
+  Wiring: register in `packages/ui/src/apps.ts` (`SUITE_APPS`), `vitest.workspace.ts`, the census
+  `PROJECTS` list (`scripts/assert-test-census.mjs`), a launcher card, and the `deploy-pages.yml` `cp`.
 - **M2:** add `@cas/conformal`. **M3:** add `@cas/faber`. **M4:** add `@cas/schwarz`.
 - Dependency direction respected (app imports packages; no app imports another app — QD hand-off is via
   `@cas/interchange` goldens, not a cross-app import).
 
-## 6. Interchange delta (interchange → 1.4.0, ADR-0033) — lands in M2
+## 6. Interchange delta (interchange → 1.4.0, ADR-0034) — lands in M2
 
 - **`ConformalMap`** variant of `MapSpec` (kind stays `"map"`): engine tag
   (`lightning|sc-interior|sc-exterior`), polygon, prevertices `wₖ`, interior angles `αₖ`, constant `C`,
@@ -256,8 +263,9 @@ never certified (RISKS §3 discipline).
 
 ## 8. Open items / risks
 
-- **Naming.** App dir proposed `apps/complex-potential`, launcher title "Complex Potential"
-  (subtitle "Field · Flow · Electrostatics"). Adjustable on approval.
+- **Naming (decided).** App dir / id `apps/2d-electrostatics`, launcher + nav label **"2D Electrostatics"**,
+  badge "Electrostatics" (subtitle "Fields · Flow · Potential theory"). The hydrodynamic lens rides the
+  same app under the two-lens toggle.
 - **Multi-valued `ψ`.** Handled on the GPU by contouring `ψ/(2π/N)`; the CPU streamline placer must skip
   branch-cut edges (`|Δψ| > π·strength`). Flagged so it isn't rediscovered.
 - **Near-singularity integration.** Fixed-step RK4 breaks where `|v|` spans orders of magnitude; switch
