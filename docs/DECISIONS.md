@@ -482,7 +482,7 @@ is loud.
 ### Action Items
 
 1. [x] Document the canonical interchange convention in [INTERCHANGE.md](INTERCHANGE.md).
-2. [ ] Add a test asserting `core` contains no `π`/`2πi` normalization constants. — enforced **by construction** (the kernel carries no normalization constants) rather than by a dedicated guard test.
+2. [x] Add a test asserting `core` contains no `π`/`2πi` normalization constants. — `packages/core/test/convention-neutral.test.ts` (a source scan banning `Math.PI` / bare `π` / π-derived normalization literals, with a `convention-ok` escape hatch for genuine geometric π). Previously "by construction"; now a red build. Makes RISKS.md §2 mitigation #1 ("a CI test asserts…") true rather than aspirational.
 3. [x] Implement per-app conversion shims at the interchange boundary.
 
 ---
