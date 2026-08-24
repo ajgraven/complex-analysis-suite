@@ -35,6 +35,22 @@ describe("viewState codec", () => {
     expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
   });
 
+  it("round-trips a custom-formula (symbolic φ) domain", () => {
+    const s = {
+      ...DEFAULT_VIEW_STATE,
+      phi: "custom-formula",
+      phiExpr: "z + 0.3/z^2 + 0.1/z^4",
+    };
+    expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("guard requires a φ formula string for the custom-formula domain, and bounds its length", () => {
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom-formula" })).toBe(false); // no phiExpr
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom-formula", phiExpr: "" })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phiExpr: "z".repeat(300) })).toBe(false); // over MAX_EXPR_LEN
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, phi: "custom-formula", phiExpr: "z + 1/z" })).toBe(true);
+  });
+
   it("guard rejects a pole inside the unit disk or with a bad order", () => {
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, input: { kind: "pole", re: 0.5, im: 0.2, order: 1 } })).toBe(false);
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, input: { kind: "pole", re: 1.6, im: 0.8, order: 3 } })).toBe(false);
