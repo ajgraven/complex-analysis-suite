@@ -7,7 +7,7 @@ import { createProgram } from "@cas/gpu/shader";
 import { buildFragmentShader, VERTEX_SHADER } from "../src/render/colorShader.js";
 import { buildSurfaceProgram } from "../src/render3d/surfaceShader.js";
 import { buildSphereFragment } from "../src/render3d/sphereShader.js";
-import { buildRiemannProgram } from "../src/render3d/riemannSurface.js";
+import { buildRiemannProgram, buildCurveProgram } from "../src/render3d/riemannSurface.js";
 import { detectRiemannForm } from "../src/riemann/inverse.js";
 
 // COMPILES + LINKS THE PLOTTER'S REAL SHADERS IN A REAL WebGL2 CONTEXT (Track B: close the "app GLSL
@@ -118,6 +118,14 @@ describe("the plotter's real shaders compile + link in WebGL2 (Track B)", () => 
       compileF(form.wFromT, "gWFn"),
     );
     expect(() => createProgram(gl, prog.vertex, prog.fragment), "riemann").not.toThrow();
+  });
+
+  it("the algebraic-curve program (M2a) builds + links", () => {
+    // Function-independent (the sheet values are baked into the mesh attributes), so one program serves
+    // every algebraic curve; just prove it compiles + links against a live WebGL2 context.
+    const gl = context();
+    const prog = buildCurveProgram();
+    expect(() => createProgram(gl, prog.vertex, prog.fragment), "curve").not.toThrow();
   });
 
   it("builds the surface with NO f' (geometric-normal branch) for a differentiable f too", () => {

@@ -27,6 +27,34 @@ precision highp float;
 precision highp int;`;
 
 /**
+ * The shared Riemann fragment: colour the interpolated value `vW` with the exact same `colorAt` as every
+ * other view, shaded by a geometric (screen-space) normal. Used by both the parametric (M1) and the baked
+ * algebraic-curve (M2) programs — they differ only in the vertex stage (how `vPos` / `vW` are produced).
+ */
+const RIEMANN_FRAGMENT = `${VERTEX_HEAD}
+${COMPLEX_SINGLE_GLSL}
+${COMPLEX_DERIVED_GLSL}
+${COLORING_GLSL}
+uniform vec3  uLightDir;
+uniform float uShaded;   // 1 = shade; 0 = flat (parity switch, kept for future top-down)
+uniform float uOpacity;  // surface alpha (1 = opaque)
+in vec2 vW;
+in vec3 vPos;
+out vec4 fragColor;
+
+void main() {
+  vec3 base = colorAt(vW);
+  // Geometric normal from the surface point's screen-space derivatives, oriented up (+Z). The self-
+  // intersections of the projected sheets are a 4D→3D artifact, so a per-face normal is the honest shade.
+  vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos)));
+  if (n.z < 0.0) n = -n;
+  vec3 L = normalize(uLightDir);
+  float diffuse = 0.35 + 0.65 * clamp(0.5 + 0.5 * dot(n, L), 0.0, 1.0); // wrap Lambert (soft terminator)
+  vec3 col = base * mix(1.0, diffuse, uShaded);                          // hue-preserving multiply
+  fragColor = vec4(min(col, vec3(1.0)), uOpacity);
+}`;
+
+/**
  * Assemble the `{ vertex, fragment }` GLSL for the Riemann-surface program from the compiled position map
  * `gZFn` and value map `gWFn` bodies (from `@cas/expr` `compileF(..., "gZFn")` / `"gWFn"`). Both are
  * functions of the formal `z`, which this shader binds to the uniformizer `t`.
@@ -62,28 +90,34 @@ void main() {
   gl_Position = uVP * vec4(p, 1.0);
 }`;
 
-  const fragment = `${VERTEX_HEAD}
+  return { vertex, fragment: RIEMANN_FRAGMENT };
+}
+
+/**
+ * Assemble the `{ vertex, fragment }` GLSL for the **baked algebraic-curve** program (M2a, ADR-0028). The
+ * geometry is a CPU/worker-built triangle soup (see `../riemann/curveMesh.ts`): each vertex carries its
+ * world `(Re z, Im z)` in `aPos` and its sheet value `w` in `aW`. The charisma height (`Re w` / `Im w`) is
+ * applied here so it stays a live uniform (no mesh rebuild on a height-axis / exaggeration change). No
+ * `gZFn`/`gWFn` — the sheet values are baked, so the program is function-independent.
+ */
+export function buildCurveProgram(): { vertex: string; fragment: string } {
+  const vertex = `${VERTEX_HEAD}
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
-${COLORING_GLSL}
-uniform vec3  uLightDir;
-uniform float uShaded;   // 1 = shade; 0 = flat (parity switch, kept for future top-down)
-uniform float uOpacity;  // surface alpha (1 = opaque)
-in vec2 vW;
-in vec3 vPos;
-out vec4 fragColor;
+uniform mat4  uVP;            // view-projection (camera)
+uniform int   uHeightSource;  // 0 = Re w (algebraic sheets), 1 = Im w
+uniform float uHeightScale;   // user height exaggeration
+in vec2 aPos;                 // world (Re z, Im z)
+in vec2 aW;                   // the sheet value w (baked per vertex)
+out vec2 vW;
+out vec3 vPos;
 
 void main() {
-  vec3 base = colorAt(vW);
-  // Geometric normal from the surface point's screen-space derivatives, oriented up (+Z). The self-
-  // intersections of the projected sheets are a 4D→3D artifact, so a per-face normal is the honest shade.
-  vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos)));
-  if (n.z < 0.0) n = -n;
-  vec3 L = normalize(uLightDir);
-  float diffuse = 0.35 + 0.65 * clamp(0.5 + 0.5 * dot(n, L), 0.0, 1.0); // wrap Lambert (soft terminator)
-  vec3 col = base * mix(1.0, diffuse, uShaded);                          // hue-preserving multiply
-  fragColor = vec4(min(col, vec3(1.0)), uOpacity);
+  float h = (uHeightSource == 1 ? cre1(cim(aW)) : cre1(cre(aW))) * uHeightScale;
+  vec3 p = vec3(aPos.x, aPos.y, h);
+  vW = aW;
+  vPos = p;
+  gl_Position = uVP * vec4(p, 1.0);
 }`;
-
-  return { vertex, fragment };
+  return { vertex, fragment: RIEMANN_FRAGMENT };
 }

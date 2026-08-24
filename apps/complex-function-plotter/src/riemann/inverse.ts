@@ -222,8 +222,9 @@ const NAMED_PRIMS = new Set(["sqrt", "log", "arcsin", "arccos", "arctan"]);
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
-/** Recover `p/q` (lowest terms, q > 1) from a real exponent, or null (integer / irrational). */
-function asRational(r: number): { p: number; q: number } | null {
+/** Recover `p/q` (lowest terms, q > 1) from a real exponent, or null (integer / irrational). Exported so
+ *  the algebraic-curve recognizer (M2, ADR-0028) reuses the same fractional-exponent parsing. */
+export function asRational(r: number): { p: number; q: number } | null {
   if (!Number.isFinite(r)) return null;
   for (let q = 2; q <= 64; q++) {
     const p = Math.round(r * q);
