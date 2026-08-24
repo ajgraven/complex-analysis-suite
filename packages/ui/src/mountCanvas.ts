@@ -104,6 +104,7 @@ function applyCanvasA11y(
       if (onKeyDown) overlay.removeEventListener("keydown", onKeyDown);
       overlay.removeAttribute("role");
       overlay.removeAttribute("aria-label");
+      if (interactive) overlay.removeAttribute("tabindex"); // reverse the tabIndex we set (never for img)
       status.remove();
     },
   };

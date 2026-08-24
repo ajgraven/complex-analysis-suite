@@ -41,6 +41,11 @@ export function showFatalBanner(message: string, opts: FatalBoundaryOptions = {}
   }
   banner.textContent = message;
   banner.hidden = false;
+  // A fatal banner MUST show. Clearing the `hidden` attribute doesn't override a stylesheet that hides the
+  // element another way — e.g. the plotter's `#error` is `visibility: hidden` in CSS and only revealed by
+  // an inline `visibility` — so force it visible inline (which also puts it back in the a11y tree so
+  // `role="alert"` fires).
+  banner.style.visibility = "visible";
 }
 
 /**

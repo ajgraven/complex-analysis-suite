@@ -40,8 +40,10 @@ The Dynamics app uses standard conventions. If shared code mixes them, an area c
 `π×` wrong, or a contour integral `2πi×` wrong, and nothing crashes.
 
 **Mitigations (all three, defense in depth):**
-1. `core` and the foundation packages are **convention-free** — a CI test asserts no
+1. **`@cas/core` is convention-free** — a CI test (`packages/core/test/convention-neutral.test.ts`) asserts no
    `π`/`2πi` normalization constants live there ([ADR-0006](DECISIONS.md#adr-0006-convention-neutral-core-packages)).
+   The scan is scoped to `@cas/core`; `@cas/expr`/`@cas/gpu` legitimately carry geometric/trig `π` (user
+   formulas, shader math) and are not in scope.
 2. Conversions happen at **app/domain edges**, in one place per app.
 3. The `interchange` format is **canonical (standard) and convention-tagged**, so a
    mis-conversion at a hand-off boundary is loud, not silent ([INTERCHANGE §3](INTERCHANGE.md#3-numbers-maps-and-conventions)).

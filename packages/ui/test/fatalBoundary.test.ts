@@ -72,4 +72,16 @@ describe("runWithFatalBoundary", () => {
     expect(existing.textContent).toBe("hello");
     expect(existing.hidden).toBe(false);
   });
+
+  it("forces a CSS-hidden banner visible (the plotter's #error is visibility:hidden)", () => {
+    // Clearing the `hidden` attribute alone can't override a stylesheet `visibility:hidden` — so a fatal
+    // banner would stay invisible. showFatalBanner must set inline visibility.
+    const banner = document.createElement("div");
+    banner.id = "error";
+    banner.style.visibility = "hidden"; // stands in for the app's CSS rule
+    document.body.appendChild(banner);
+    showFatalBanner("boom", { bannerId: "error" });
+    expect(banner.style.visibility).toBe("visible");
+    expect(banner.textContent).toBe("boom");
+  });
 });

@@ -11,7 +11,7 @@ complex-dynamics visualization tools** that share common packages and hand data 
 one another. North-star property: **each new tool builds fewer primitives from scratch
 than the last.** It now unifies seven apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, and Faber Transform, plus the
-anti-holomorphic Correspondences tool (built, not yet published) — riding ten shared
+anti-holomorphic Correspondences tool (built, not yet published) — riding eleven shared
 `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
@@ -93,9 +93,9 @@ its deleted correspondence (branch engine + orbit trees + density render), the f
 the parabolic-Tricorn model coordinate, and a follow-on interactive mating visualizer (`mating.html`).
 Seven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
-rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`) ride the ten shared `@cas/*` packages
+rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`) ride the eleven shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
-`@cas/export`, `@cas/conformal`, `@cas/faber`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
+`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
@@ -194,6 +194,23 @@ finite-pole tail = `≈`), a transcendental φ falls back to `taylorViaFFT` (`�
 rotated to the real-positive capacity gauge, and an area-theorem check (`Σ k·|cₖ| ≤ c`) honestly flags a
 possibly non-univalent φ. Everything downstream (Faber images, ∂K, rendering) reuses the existing
 `ExteriorMap` pipeline unchanged.
+
+**`@cas/ui` — the shared browser shell (ADR-0028, U0–U6):** the **eleventh** package, and the suite's first
+extract-*ahead*-of-adoption of a **product** (not math) layer, prompted by a UX review that found the newer apps
+inherited the math rigor but not the product shell. `@cas/ui` collects four primitives ported from Complex
+Dynamics' proven patterns — `mountCanvas`/`attachCanvasA11y` (accessible canvas: focusable `role="application"`
+overlay + keyboard, or `role="img"` for a static view), `runWithFatalBoundary`/`showFatalBanner` (init inside a
+WebGL2-aware fatal-error boundary), `createComputeClient` (worker-offload + coalescing + sync fallback + busy
+state), and `mountNavHeader` (back-to-launcher + sibling nav + a deferred "send to" hand-off picker) — plus the
+`SUITE_APPS` registry. It is the first package whose tests run under **jsdom**. Adopted app-by-app: **CD** (the
+fatal boundary + `JuliaMetricsClient` on `createComputeClient`), **faber-transform**, **correspondences** (both
+pages), **riemann-map**, **argument-principle**, and the **plotter** — closing each app's a11y / fatal-error UX
+findings. **QD is deliberately NOT a consumer** (allowJs/vanilla and already product-mature; it took `@cas/schwarz`
+as a devDependency only, for the ADR-0026 σ drift-guard). Still open: **U7** (wire the nav header's hand-off
+picker to `@cas/interchange`'s known map kinds — the one place cross-app interop becomes user-visible) and **U8**
+(an optional non-blocking axe/pa11y CI job). Two correctness guards also landed this arc: a **convention-neutral**
+scan over `@cas/core` (ADR-0006 AI-2) and a **Schwarz σ differential** guard between QD's engine and `@cas/schwarz`
+(ADR-0026 AI-2).
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),

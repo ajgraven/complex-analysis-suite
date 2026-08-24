@@ -39,7 +39,7 @@ Format follows Michael Nygard's ADR convention.
 | [0028](#adr-0028-extract-casui-ahead-of-adoption-port-cds-product-shell) | Extract `@cas/ui` ahead of adoption — the shared browser shell | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All twenty-seven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All twenty-eight are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -2389,7 +2389,8 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
 
 1. [x] Charter ADR-0028 (this record).
 2. [x] Scaffold `packages/ui` (source-exports; jsdom vitest env) with the four primitives + `SUITE_APPS`.
-3. [x] jsdom unit tests for all four primitives (20 tests); typecheck + lint + dependency-cruiser green.
+3. [x] jsdom unit tests for all four primitives (30 tests as of U6 — the U0 scaffold's 20 grew as U1–U6
+   hardened the primitives); typecheck + lint + dependency-cruiser green.
 4. [x] Register in `vitest.workspace.ts` + the test-census `PROJECTS` (a `ui` bucket).
 5. [x] **U1:** adopt in Complex Dynamics **first**, as a *behavior-identical refactor* onto the shared versions —
    proving the API against the app it was ported from. Adopted the two primitives that are clean drop-ins:

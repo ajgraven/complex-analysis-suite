@@ -35,6 +35,7 @@ const state: MatingState = { theta: null, orbit: null };
 let panels: PanelUI[] = [];
 let readout: HTMLElement | null = null;
 let orbitToken = 0; // bumping this cancels any in-flight orbit animation
+let kbTheta = 0; // the keyboard's current angle, kept across an orbit (which clears state.theta)
 
 // M5 — the unmating/folding viewer (a 4th, independent canvas with a scrub slider + play/pause)
 let foldT = 0;
@@ -198,10 +199,13 @@ function build(): void {
         if (a.kind === "pan" && a.dx !== 0) {
           orbitToken++; // moving cancels any running orbit, matching the pointer path
           state.orbit = null;
-          state.theta = ((((state.theta ?? 0) + a.dx * THETA_STEP) % TAU) + TAU) % TAU;
+          // Resume from the shared hover angle if one is set, else from the last keyboard angle (an orbit
+          // clears state.theta, so without kbTheta the next nudge would jump back to 0°).
+          kbTheta = ((((state.theta ?? kbTheta) + a.dx * THETA_STEP) % TAU) + TAU) % TAU;
+          state.theta = kbTheta;
           render();
         } else if (a.kind === "commit") {
-          startOrbit(state.theta ?? 0);
+          startOrbit(state.theta ?? kbTheta);
         }
       },
     });

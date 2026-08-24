@@ -49,6 +49,8 @@ import {
   tracePolygon,
   viewPxToWorld,
   zoomAboutCursor,
+  ZOOM_MIN,
+  ZOOM_MAX,
 } from "./render/plane.js";
 import type { Vec2, Viewport, PlaneMap } from "./render/plane.js";
 import { matchedBoundaryDots, transplantGrid, transplantResidual } from "./render/correspondence.js";
@@ -1109,7 +1111,10 @@ function main(): void {
             }),
           );
         } else if (a.kind === "zoom") {
-          commit(withView(which, { ...v, zoom: v.zoom * (a.direction > 0 ? 1.25 : 1 / 1.25) }));
+          // Clamp to the same bounds the wheel path enforces (via zoomAboutCursor) — an unbounded keyboard
+          // zoom could otherwise run to Infinity and NaN the view.
+          const z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.zoom * (a.direction > 0 ? 1.25 : 1 / 1.25)));
+          commit(withView(which, { ...v, zoom: z }));
         }
       },
     });

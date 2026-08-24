@@ -164,9 +164,11 @@ describe("attachCanvasA11y (existing canvas)", () => {
     c.appendChild(ov);
     const seen: CanvasKeyAction[] = [];
     const a = attachCanvasA11y(ov, { label: "x", onKey: (k) => seen.push(k) });
+    expect(ov.tabIndex).toBe(0);
     a.destroy();
     expect(ov.getAttribute("role")).toBeNull();
     expect(ov.getAttribute("aria-label")).toBeNull();
+    expect(ov.hasAttribute("tabindex")).toBe(false); // reversed exactly what it added
     expect(c.querySelector('[role="status"]')).toBeNull();
     press(ov, "ArrowRight");
     expect(seen).toHaveLength(0);

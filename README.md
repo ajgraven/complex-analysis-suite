@@ -121,12 +121,14 @@ complex-analysis-suite/
     └── faber-transform/      ← exterior Faber-transform visualizer (curved + polygonal K)
 ```
 
-> **The ten packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, and `@cas/faber`.
+> **The eleven packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, and `@cas/ui`.
 > Packages were extracted **only as a second consumer proved it needed them**
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
-> `ui` and `quadrature` packages that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
-> fully materialized (the `ui` package's PNG-metadata half did ship, as `@cas/export`), and why
+> `quadrature` package that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
+> fully materialized; the `ui` target split in two — its PNG-metadata half shipped as `@cas/export`, and the
+> browser-shell primitives (canvas a11y, fatal boundary, off-thread compute, nav header) were later extracted
+> as **`@cas/ui`** *ahead* of adoption ([ADR-0028](docs/DECISIONS.md#adr-0028-extract-casui-ahead-of-adoption-port-cds-product-shell)). And why
 > `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` appeared *later* than the phase plan:
 > each waited for its second consumer. The **one exception** is `@cas/conformal` — the lightning +
 > forward-map conformal builder, carved out of the Riemann-map app *ahead* of its second consumer
