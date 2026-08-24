@@ -48,7 +48,7 @@ import {
   zoomAboutCursor,
 } from "./render/plane.js";
 import type { Vec2, Viewport, PlaneMap } from "./render/plane.js";
-import { fillPhasePortrait, DEFAULT_COLORING } from "./render/coloring.js";
+import { fillPhasePortrait, phaseColor, DEFAULT_COLORING } from "./render/coloring.js";
 import type { ColoringOptions } from "./render/coloring.js";
 import { computeCornerProfile, drawCornerProfile } from "./render/cornerProfile.js";
 import type { CornerProfile } from "./render/cornerProfile.js";
@@ -116,7 +116,12 @@ interface RenderModel {
   readonly left: PanelModel;
   readonly right: PanelModel;
   readonly badge: string;
-  readonly readout: string;
+  /** Caption under the left panel — the input, e.g. `f(z) = z³` (mathText markup). */
+  readonly inputCaption: string;
+  /** Caption under the right panel — the transform, e.g. `Φᵩ(f)(w) = w³ − 1.275` (mathText markup). */
+  readonly outputCaption: string;
+  /** Domain / result facts shown as chips below the panels (mathText markup; a `⚠` marks a warning chip). */
+  readonly domainChips?: readonly string[];
   readonly error: boolean;
   /**
    * A HARD failure that must paint the (blank) panels rather than keep the last good render — a degenerate
@@ -194,6 +199,60 @@ function elt<K extends keyof HTMLElementTagNameMap>(
 }
 
 const fmt = (v: Cx): string => Complex.format(v, { digits: 4 });
+
+/** A labeled control group: a small uppercase title over a flex-wrap body of the given controls. */
+function ctrlGroup(title: string, kids: readonly HTMLElement[], cls = ""): HTMLElement {
+  const g = elt("div", { class: `ctrl-group ${cls}`.trim() });
+  g.append(mathElt("div", title, { class: "group-title" }));
+  const body = elt("div", { class: "group-body" });
+  body.append(...kids);
+  g.append(body);
+  return g;
+}
+
+/** Draw the phase-portrait colour key (hue = arg, brightness = |·|) using the app's own phaseColor. */
+function drawColorKey(canvas: HTMLCanvasElement): void {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const S = 54;
+  canvas.width = Math.round(S * dpr);
+  canvas.height = Math.round(S * dpr);
+  canvas.style.width = `${S}px`;
+  canvas.style.height = `${S}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const n = canvas.width;
+  const img = ctx.createImageData(n, n);
+  const c = n / 2;
+  const R = c - dpr;
+  const opts: ColoringOptions = { enhance: 0, sectors: 6, crisp: false, modulus: 1, modScale: 1 };
+  for (let py = 0; py < n; py++) {
+    for (let px = 0; px < n; px++) {
+      const dx = px - c + 0.5;
+      const dy = -(py - c + 0.5); // world y is up
+      const rr = Math.hypot(dx, dy) / R;
+      const idx = 4 * (py * n + px);
+      if (rr > 1) {
+        img.data[idx + 3] = 0;
+        continue;
+      }
+      const th = Math.atan2(dy, dx);
+      const [r, g, b] = phaseColor({ re: rr * Math.cos(th), im: rr * Math.sin(th) }, opts);
+      img.data[idx] = r;
+      img.data[idx + 1] = g;
+      img.data[idx + 2] = b;
+      img.data[idx + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
+/** Render the domain/result chips into `container` (mathText markup; a `⚠` in the text marks a warning chip). */
+function renderChips(container: HTMLElement, chips: readonly string[]): void {
+  container.replaceChildren();
+  for (const c of chips) {
+    container.append(mathElt("span", c, { class: c.includes("⚠") ? "chip warn" : "chip" }));
+  }
+}
 
 function defaultInput(kind: InputState["kind"]): InputState {
   if (kind === "monomial") return { kind: "monomial", degree: 3 };
@@ -289,21 +348,38 @@ function main(): void {
   );
   root.append(head);
 
-  const left = makePanel("f(z) on the unit disk 𝔻");
-  const right = makePanel(`${PHI}(f)(w) on K`);
-  const panels = elt("div", { class: "panels" });
-  panels.append(left.el, right.el);
-  root.append(panels);
+  const left = makePanel("f on the unit disk 𝔻");
+  left.el.classList.add("side-left");
+  const leftCaption = elt("div", { class: "caption" });
+  left.el.append(leftCaption);
+
+  const right = makePanel(`${PHI}(f) on K = ℂ∖Ω`);
+  right.el.classList.add("side-right");
+  const rightCaption = elt("div", { class: "caption" });
+  const exactBadge = elt("span", { class: "badge-exact" }, "=");
+  const outCaption = elt("span", {});
+  rightCaption.append(exactBadge, outCaption);
+  right.el.append(rightCaption);
+
+  // The centre connector between the panels: the operator Φᵩ ▶ and a phase-portrait colour key drawn from
+  // the app's own phaseColor (so it matches the plots). Rotates to a horizontal divider on narrow screens.
+  const connector = elt("div", { class: "connector" });
+  const colorKey = elt("canvas", { class: "color-key" });
+  connector.append(
+    mathElt("div", PHI, { class: "op" }),
+    elt("div", { class: "op-arrow" }, "▶"),
+    colorKey,
+    mathElt("div", "hue = arg", { class: "key-cap" }),
+    mathElt("div", "val = |·|", { class: "key-cap" }),
+  );
 
   // --- Controls -------------------------------------------------------------
-  const controls = elt("div", { class: "controls" });
-
   const phiSel = elt("select", { id: "phi" });
   for (const p of MENU_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
   phiSel.append(elt("option", { value: CUSTOM_PHI }, "Custom polygon (edit)…"));
   phiSel.append(elt("option", { value: CUSTOM_FORMULA }, "Custom φ (formula)…"));
   const phiCtl = elt("div", { class: "control" });
-  phiCtl.append(mathElt("label", "Domain φ: 𝔻^{*} → Ω", { for: "phi" }), phiSel);
+  phiCtl.append(mathElt("label", "map φ", { for: "phi" }), phiSel);
 
   // The custom-formula domain: a symbolic exterior map φ(z) = c·z + Σ cₖ z⁻ᵏ typed by the user (a simple
   // pole at ∞). Shown only when the domain is "Custom φ (formula)…". Mirrors the free-form f(z) field.
@@ -326,7 +402,7 @@ function main(): void {
     elt("option", { value: "expr" }, "Free-form  f(z)"),
   );
   const modeCtl = elt("div", { class: "control" });
-  modeCtl.append(elt("label", { for: "mode" }, "input f"), modeSel);
+  modeCtl.append(elt("label", { for: "mode" }, "family"), modeSel);
 
   const degInput = elt("input", { id: "deg", type: "range", min: String(MIN_DEGREE), max: String(MAX_DEGREE), step: "1" });
   const degLabel = elt("label", { for: "deg" }, "degree n");
@@ -412,8 +488,21 @@ function main(): void {
   const crispCtl = elt("div", { class: "control control-check" });
   crispCtl.append(crispInput, elt("label", { for: "crisp" }, "crisp lines"));
 
-  controls.append(phiCtl, phiExprCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, suppressCtl, mCtl, enhCtl, modCtl, secCtl, crispCtl);
-  root.append(controls);
+  // Workspace: each panel with the controls that shape it beneath — input-f under the left panel, the
+  // domain (φ / K) under the right — and the Φᵩ connector + colour key between them.
+  const inputGroup = ctrlGroup("Input  f", [modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, suppressCtl, mCtl], "for-left");
+  const domainGroup = ctrlGroup("Domain  K   ·   φ: 𝔻^{*} → Ω", [phiCtl, shapeCtl, phiExprCtl], "for-right");
+  const workspace = elt("div", { class: "workspace" });
+  workspace.append(left.el, connector, right.el, inputGroup, domainGroup);
+  root.append(workspace);
+
+  // Domain / result facts as chips (populated in render).
+  const domainInfo = elt("div", { class: "domain-info" });
+  root.append(domainInfo);
+
+  // Coloring affects BOTH panels, so it's a full-width group below.
+  const coloringGroup = ctrlGroup("Coloring", [enhCtl, modCtl, secCtl, crispCtl], "for-full");
+  root.append(coloringGroup);
 
   // The polygon editor (shown only for the custom domain). Live drag redraws the editor; the expensive SC
   // refit + permalink write happen on release / button action (committed = true).
@@ -423,12 +512,6 @@ function main(): void {
   const editorWrap = elt("div", { class: "poly-editor-wrap" });
   editorWrap.append(editor.el);
   root.append(editorWrap);
-
-  const readout = elt("div", { class: "readout" });
-  const exactBadge = elt("span", { class: "badge-exact" }, "=");
-  const readoutBody = elt("span", {});
-  readout.append(exactBadge, readoutBody);
-  root.append(readout);
 
   // The M3 corner-overshoot profile (paper Fig. 2): |Fₙ| along ∂K, with |Q_{n,m}| overlaid when suppressing.
   // Shown only for a monomial input on a polygonal K (when computeModel attaches a cornerProfile).
@@ -444,6 +527,7 @@ function main(): void {
 
   left.panel.renderer = createGpuRenderer(left.panel.gl, PANEL_BG);
   right.panel.renderer = createGpuRenderer(right.panel.gl, PANEL_BG);
+  drawColorKey(colorKey); // static legend; hue = arg, brightness = |·|
 
   // --- Model (depends on φ + input, NOT the views, so pan/zoom skips the recompute) -----------------
   let model: RenderModel | null = null;
@@ -472,22 +556,22 @@ function main(): void {
     let cornerImages: readonly Cx[] = []; // wₖ = 1/uₖ on |w|=1 (z-plane prevertices, NOT φ(zₖ)), for the M3 weighted Faber Q_{n,m}
     // Draggable in-panel handles: the canonical corners φ(wₖ) of a converged CUSTOM polygon (undefined otherwise).
     let handles: Vec2[] | undefined;
-    // The ≈-note describing WHY a domain is approximate, and a univalence caveat (custom-formula only).
-    let approxNote = "truncated Schwarz–Christoffel series (≈)";
-    let univNote = "";
+    // Domain facts shown as chips below the panels (name, capacity, exact/≈, corner-norm, univalence).
+    let domainName = "";
+    let univalent: boolean | null = null;
     if (state.phi === CUSTOM_FORMULA) {
       const built = buildPhiFromExpr(state.phiExpr ?? "");
       domainStatus = null;
       if ("error" in built) {
-        // Soft error (like an f(z) parse error): keep the last good render, show the message inline (no blank).
-        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: `φ error: ${built.error}`, error: true };
+        // Soft error (like an f(z) parse error): keep the last good render, show the message in the caption.
+        return { left: blankPanel, right: blankPanel, badge: "⚠", inputCaption: "", outputCaption: `⚠ φ error: ${built.error}`, error: true };
       }
       map = built.map;
       approx = !built.exact;
       cornerN = undefined;
       cornerImages = [];
-      approxNote = "truncated Laurent series (≈)";
-      univNote = univalentByAreaBound(built.map) ? "" : "  ·  ⚠ φ may not be univalent — K's boundary could self-intersect";
+      domainName = "custom φ";
+      univalent = univalentByAreaBound(built.map);
     } else if (state.phi === CUSTOM_PHI && state.customPolygon) {
       const r = getCustomMap(state.customPolygon);
       domainStatus = { converged: r.converged, degraded: r.degraded };
@@ -499,7 +583,7 @@ function main(): void {
       const finite =
         Number.isFinite(r.map.c) && r.map.c > 0 && r.map.laurent.every((z) => Number.isFinite(z.re) && Number.isFinite(z.im));
       if (!r.converged || !finite) {
-        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: "polygon fit failed — the domain may be degenerate or self-intersecting", error: true, blank: true };
+        return { left: blankPanel, right: blankPanel, badge: "⚠", inputCaption: "", outputCaption: "⚠ polygon fit failed — the domain may be degenerate or self-intersecting", error: true, blank: true };
       }
       map = r.map;
       approx = true;
@@ -510,6 +594,7 @@ function main(): void {
         const p = evalPhi(r.map, w);
         return [p.re, p.im];
       });
+      domainName = "custom polygon";
     } else {
       const preset = phiPresetById(state.phi);
       map = preset.build(state.shape);
@@ -517,19 +602,21 @@ function main(): void {
       cornerN = preset.cornerNorms;
       cornerImages = preset.cornerImages?.() ?? [];
       domainStatus = null;
+      domainName = preset.name.split(" — ")[0]; // short label (drop the closed-form after the em dash)
     }
-    // Polygon domains carry a TRUNCATED exterior SC series, so their φ (and everything derived from it) is
-    // ≈, not exact — downgrade the `=` badge and note it (plan §6). Closed-form domains stay exact.
-    const exactBadge = approx ? "≈" : "=";
-    const cornerNote = cornerN ? `, max corner-norm Λ = ${cornerN.maxLambda.toFixed(2)}` : "";
-    const domainNote = (approx ? `  ·  φ: ${approxNote}${cornerNote}` : "") + univNote;
+    // Polygon / formula domains carry a TRUNCATED series, so their φ (and everything from it) is ≈ not exact.
+    const exactSym = approx ? "≈" : "=";
+    // Base domain-info chips; the input branches append result-specific ones (poles, coefficient source, …).
+    const domainChips: string[] = [domainName, `capacity c = ${Number(map.c.toPrecision(4))}`, approx ? "φ ≈ (truncated)" : "φ exact"];
+    if (cornerN) domainChips.push(`max corner-norm Λ = ${cornerN.maxLambda.toFixed(2)}`);
+    if (univalent !== null) domainChips.push(univalent ? "univalent ✓" : "⚠ may not be univalent");
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
     const showRoots = state.showRoots !== false;
     const rootMarks = (num: Cx[]): Vec2[] => (showRoots ? transformRoots(num).map((r): Vec2 => [r.re, r.im]) : []);
     // The GPU (and the CPU fallback, which reads the same source.rat) can only upload GPU_COEFF_CAP
     // coefficients per array, so a rational image above that degree renders truncated. Clamp num/den so
-    // ALL paths agree (GPU · CPU · root markers · readout) and flag the truncation honestly (≈, not =).
+    // ALL paths agree (GPU · CPU · root markers · caption) and flag the truncation honestly (≈, not =).
     const capForGpu = (rat: Rational): { rat: Rational; truncated: boolean } => {
       if (rat.num.length <= GPU_COEFF_CAP && rat.den.length <= GPU_COEFF_CAP) return { rat, truncated: false };
       return {
@@ -546,9 +633,11 @@ function main(): void {
       const m = state.suppressStrength ?? DEFAULT_SUPPRESS_M;
       const coeffs = suppress ? weightedMonomialCoeffs(map, cornerImages, n, m) : transformCoeffs(map, monomialTaylor(n));
       const poly = formatFaberPoly(coeffs, { varSym: "w", sup: (k) => `^{${k}}` });
-      const readout = suppress
-        ? `${PHI}(z^{${n}})(w) ≈ Q_{${n},${m}}(w) = ${poly}  ·  corner-suppressed weighted Faber (m = ${m})${cornerNote}`
-        : `${PHI}(z^{${n}})(w) ${approx ? "≈" : "="} ${poly}${domainNote}`;
+      const inputCaption = `f(z) = ${n === 0 ? "1" : n === 1 ? "z" : `z^{${n}}`}`;
+      const outputCaption = suppress
+        ? `${PHI}(f)(w) ≈ Q_{${n},${m}}(w) = ${poly}`
+        : `${PHI}(f)(w) ${exactSym} ${poly}`;
+      const chips = suppress ? [...domainChips, `corner-suppressed Q_{${n},${m}} (m = ${m})`] : domainChips;
       // On a polygonal K, plot the corner-overshoot profile |Fₙ| along ∂K (and |Q_{n,m}| when suppressing).
       const cornerProfile =
         cornerImages.length > 0
@@ -557,8 +646,10 @@ function main(): void {
       return {
         left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
         right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
-        badge: suppress ? "≈" : exactBadge,
-        readout,
+        badge: suppress ? "≈" : exactSym,
+        inputCaption,
+        outputCaption,
+        domainChips: chips,
         error: false,
         cornerProfile,
         rightHandles: handles,
@@ -580,11 +671,12 @@ function main(): void {
           markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
           roots: rootMarks(rightRat.num),
         },
-        badge: exactBadge,
-        readout:
-          `${PHI}(1/(z−z_{0})${kexp})(w): image pole at w = φ(z_{0}) = ${fmt(img.poleAt)}` +
-          (order === 1 ? `,  residue φ'(z_{0}) = ${fmt(img.terms[0])}` : "") +
-          domainNote,
+        badge: exactSym,
+        inputCaption: `f(z) = 1/(z − z_{0})${kexp}   ·   z_{0} = ${fmt(z0)}`,
+        outputCaption:
+          `${PHI}(f)(w): image pole at w = φ(z_{0}) = ${fmt(img.poleAt)}` +
+          (order === 1 ? `,  residue φ'(z_{0}) = ${fmt(img.terms[0])}` : ""),
+        domainChips,
         error: false,
         rightHandles: handles,
       };
@@ -592,7 +684,7 @@ function main(): void {
     // expr
     const compiled = compileExprF(state.input.expr);
     if ("error" in compiled) {
-      return { left: blankPanel, right: blankPanel, badge: "⚠", readout: `parse error: ${compiled.error}`, error: true };
+      return { left: blankPanel, right: blankPanel, badge: "⚠", inputCaption: `f(z) = ${state.input.expr}`, outputCaption: `⚠ parse error: ${compiled.error}`, error: true };
     }
     const leftFn: PanelModel = { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] };
 
@@ -605,15 +697,17 @@ function main(): void {
         return {
           left: leftFn,
           right: { source: { kind: "rational", rat }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(rat.num) },
-          badge: truncated ? "≈" : exactBadge,
-          readout: truncated
-            ? `${PHI}(f)(w) ≈ rational image on K, truncated to degree ${GPU_COEFF_CAP - 1} (GPU coefficient cap)  ·  ${Math.max(0, rat.den.length - 1)} image pole(s)${domainNote}`
-            : `${PHI}(f)(w) ${approx ? "≈" : "="} ${approx ? "rational image on K" : "exact rational image on K"}  ·  ${Math.max(0, image.den.length - 1)} image pole(s) at φ(z_{j}) ∈ Ω (outside K)${domainNote}`,
+          badge: truncated ? "≈" : exactSym,
+          inputCaption: `f(z) = ${state.input.expr}`,
+          outputCaption: truncated
+            ? `${PHI}(f)(w) ≈ rational image on K, truncated to degree ${GPU_COEFF_CAP - 1} (GPU cap)`
+            : `${PHI}(f)(w) ${exactSym} ${approx ? "rational image on K" : "exact rational image on K"}`,
+          domainChips: [...domainChips, `${Math.max(0, (truncated ? rat.den.length : image.den.length) - 1)} image pole(s) at φ(z_{j}) ∈ Ω`],
           error: false,
           rightHandles: handles,
         };
       } catch (e) {
-        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: e instanceof Error ? e.message : "f is not analytic on the unit disk", error: true };
+        return { left: blankPanel, right: blankPanel, badge: "⚠", inputCaption: `f(z) = ${state.input.expr}`, outputCaption: `⚠ ${e instanceof Error ? e.message : "f is not analytic on the unit disk"}`, error: true };
       }
     }
 
@@ -633,12 +727,14 @@ function main(): void {
     else if (R < 1) rNote = `⚠ R ≈ ${R.toFixed(3)} < 1: f looks singular inside the unit disk`;
     else rNote = `radius of convergence R ≈ ${R.toFixed(3)} (K sits well inside)`;
     const coeffNote = exact ? "exact Taylor coefficients" : "coefficients by adaptive FFT sampling";
-    const orderNote = exact ? "" : effN < N ? ` (coefficients past n=${effN} below the noise floor)` : "";
+    const orderNote = exact ? "" : effN < N ? ` (past n=${effN} below the noise floor)` : "";
     return {
       left: leftFn,
       right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
       badge: "≈",
-      readout: `${PHI}(f) ≈ Σ_{n≤${effN}} b_{n} F_{n}  ·  ${coeffNote}${orderNote}  ·  ${rNote}${domainNote}`,
+      inputCaption: `f(z) = ${state.input.expr}`,
+      outputCaption: `${PHI}(f) ≈ Σ_{n≤${effN}} b_{n} F_{n}`,
+      domainChips: [...domainChips, `${coeffNote}${orderNote}`, rNote],
       error: false,
       rightHandles: handles,
     };
@@ -733,10 +829,12 @@ function main(): void {
       model = computeModel();
       modelKey = key;
     }
+    setMath(leftCaption, model.inputCaption);
+    setMath(outCaption, model.outputCaption);
     exactBadge.textContent = model.badge;
     // State-coloured badge: exact `=` green, approximate `≈` accent-blue, warning `⚠` amber.
     exactBadge.className = "badge-exact " + (model.badge === "=" ? "is-exact" : model.badge === "⚠" ? "is-warn" : "is-approx");
-    setMath(readoutBody, model.readout);
+    renderChips(domainInfo, model.domainChips ?? []);
     syncControls();
     // A soft error (expr parse mid-typing) keeps the last good render; a hard failure (a degenerate polygon
     // fit, `blank`) falls through to paint the blank panels so a "⚠" badge never sits over a stale image.
