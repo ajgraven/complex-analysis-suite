@@ -457,6 +457,12 @@ function main(): void {
   let monodromyOn = false;
   let loopPoints: Complex[] | null = null;
   let lastLoop: Complex[] | null = null;
+  // Estimated branch (ramification) points over the surface's base plane (M3.4), drawn on the base-plane
+  // pane and counted in the badge. Recomputed on a formula / sheet-count / view change while in Riemann mode.
+  let branchPts: Complex[] = [];
+  const recomputeBranchPoints = (): void => {
+    branchPts = plot.mode === "riemann" ? plot.riemannBranchPoints() : [];
+  };
   const drawRiemannLink = (): void => {
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
@@ -504,6 +510,23 @@ function main(): void {
       ctx.strokeStyle = "rgba(150,200,255,0.9)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
+    }
+    // Branch-point markers (M3.4): amber ⊕ where sheets merge — the ramification the monodromy loops encircle.
+    if (branchPts.length) {
+      ctx.strokeStyle = "rgba(245,180,90,0.95)";
+      ctx.lineWidth = 1.25;
+      for (const b of branchPts) {
+        const px = sx(b[0]);
+        const py = sy(b[1]);
+        if (px < 0 || px > halfW || py < 0 || py > cssH) continue;
+        ctx.beginPath();
+        ctx.arc(px, py, 4.5, 0, 2 * Math.PI);
+        ctx.moveTo(px - 6.5, py);
+        ctx.lineTo(px + 6.5, py);
+        ctx.moveTo(px, py - 6.5);
+        ctx.lineTo(px, py + 6.5);
+        ctx.stroke();
+      }
     }
     if (linkedZ) {
       const px = sx(linkedZ[0]);
@@ -823,9 +846,11 @@ function main(): void {
     // finite parametric forms and the finite algebraic curves render all their sheets.
     if (riemannSheetsRow instanceof HTMLElement)
       riemannSheetsRow.hidden = !d || d.sheetKind !== "infinite";
+    // Branch-point count (M3.4): estimated ramification over the surface — `≈`, from a sheet-separation scan.
+    const bp = d ? ` · ≈${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}` : "";
     if (riemannInfo instanceof HTMLElement)
       riemannInfo.textContent = d
-        ? `${d.label} · ${d.monodromy}. Cut: ${d.branchNote}.` +
+        ? `${d.label} · ${d.monodromy}${bp}. Cut: ${d.branchNote}.` +
           (d.capped ? " ⚠ budget capped — surface incomplete." : "")
         : "Not a recognized surface — showing principal-branch views only.";
   };
@@ -861,9 +886,11 @@ function main(): void {
     if (pbranchDt instanceof HTMLElement) pbranchDt.hidden = !inRiemann;
     if (pbranch instanceof HTMLElement) pbranch.hidden = !inRiemann;
     if (riemannProbeHint instanceof HTMLElement) riemannProbeHint.hidden = !inRiemann;
+    branchPts = [];
     if (m === "riemann") {
       plot.reframeRiemann(); // build the curve mesh over the current view / refresh the parametric framing
       if (plot.riemannLinked) plot.frameRiemannBaseView(); // frame the base-plane pane on the surface (M3.2)
+      recomputeBranchPoints(); // estimate ramification for the markers + badge count (M3.4)
       syncRiemannControls();
     }
     redraw(false);
@@ -891,7 +918,10 @@ function main(): void {
         : "Riemann surface: for invertible primitives (√, ⁿ√, log, arcsin, …) and single-radical algebraic maps (√(z²−1), …)";
     }
     if (plot.mode === "riemann" && !ok) setView("2d");
-    else if (plot.mode === "riemann") syncRiemannControls();
+    else if (plot.mode === "riemann") {
+      recomputeBranchPoints(); // the surface changed — re-estimate ramification (M3.4)
+      syncRiemannControls();
+    }
   };
 
   // Riemann-surface controls (ADR-0027): charisma axis, sheets shown (infinite families), exaggeration

@@ -31,6 +31,7 @@ import {
   type RiemannHit,
 } from "../riemann/pickMesh.js";
 import { computeMonodromy, type MonodromyResult } from "../riemann/monodromy.js";
+import { findBranchPoints } from "../riemann/branchPoints.js";
 import {
   type Vec3,
   add3,
@@ -1405,6 +1406,30 @@ export class Plot {
   computeRiemannMonodromy(loop: Complex[]): MonodromyResult | null {
     if (!this.riemannAvailable()) return null;
     return computeMonodromy((z) => this.riemannSheetsAt(z), loop);
+  }
+
+  /** Estimate the branch (ramification) points over the region the surface covers (M3.4): where the sheets
+   *  merge. `≈` — a scan of the sheet separation (mesh-limited on the parametric path). Empty when no surface
+   *  is active. The scan box is the curve's z-view, or the parametric surface's base-plane extent. */
+  riemannBranchPoints(grid = 40): Complex[] {
+    if (!this.riemannAvailable()) return [];
+    let box: { xmin: number; xmax: number; ymin: number; ymax: number };
+    if (this.riemannKindV === "param" && this.riemannXYBounds) {
+      const b = this.riemannXYBounds;
+      const padX = (b.maxx - b.minx) * 0.08 + 1e-6;
+      const padY = (b.maxy - b.miny) * 0.08 + 1e-6;
+      box = { xmin: b.minx - padX, xmax: b.maxx + padX, ymin: b.miny - padY, ymax: b.maxy + padY };
+    } else {
+      const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
+      const halfX = this.view.span * aspect;
+      box = {
+        xmin: this.view.cx - halfX,
+        xmax: this.view.cx + halfX,
+        ymin: this.view.cy - this.view.span,
+        ymax: this.view.cy + this.view.span,
+      };
+    }
+    return findBranchPoints((z) => this.riemannSheetsAt(z), box, { grid });
   }
 
   // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------

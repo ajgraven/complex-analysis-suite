@@ -73,7 +73,11 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**
   (`k / N` — which of the `N` sheets over this `z`; near a branch point `N` honestly drops as they merge),
   all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,
-  **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa). An
+  **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa),
+  with **branch-point markers** (M3.4, amber ⊕ where the sheets merge, `≈`, also counted in the badge). A
+  **Monodromy explorer** (M3.3, opt-in) lets you drag a closed loop on the base plane and reads back the
+  estimated sheet **permutation** in cycle notation (√z → 2-cycle, z^(1/3) → 3-cycle) — an uncertified
+  estimate, quarantined from the badge, permalink, and exports (RISKS §3). An
   opt-in **Monodromy explorer** (M3.3) lets you drag a closed loop on the base plane and estimates how the
   sheets permute around it (e.g. a loop around `0` swaps √z's two sheets — a 2-cycle), reported in cycle
   notation. Analytic continuation around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so

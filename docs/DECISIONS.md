@@ -2529,4 +2529,7 @@ the height law identical to the shader, so pick and picture agree.
        flags) + `Plot.riemannSheetsAt`/`computeRiemannMonodromy` (exact for curves, census for parametric) +
        an opt-in loop-drag on the base pane. `≈`, low-confidence-flagged, and **quarantined** from the badge,
        permalink, and exports (RISKS §3). 10 node tests incl. the real √(z²−1) curve. Gate green.
-5. [ ] M3.4 (colour/legibility polish, + branch-point markers moved from M3.2) — deferred, unordered.
+5. [x] M3.4 (legibility polish) — **branch-point markers** (moved from M3.2): a uniform sheet-separation
+       scan (`riemann/branchPoints.ts`), drawn on the base-plane pane + counted in the badge, `≈`. Per-sheet
+       tint and cut-shadow were **considered and declined** on honesty grounds (global sheet identity is what
+       monodromy permutes; a cut is a choice, not an invariant — the branch *points* are the invariant mark).
