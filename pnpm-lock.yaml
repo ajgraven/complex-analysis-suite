@@ -252,6 +252,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0

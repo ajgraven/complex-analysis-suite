@@ -7,8 +7,14 @@
 // already product-mature — ADR-0002 / ADR-0008 precedent). Adoption is app-by-app (U1 CD → U6), so U0
 // ships the package and its tests with no app touched.
 
-export { mountCanvas } from "./mountCanvas.js";
-export type { MountCanvasOptions, MountedCanvas, CanvasKeyAction } from "./mountCanvas.js";
+export { mountCanvas, attachCanvasA11y } from "./mountCanvas.js";
+export type {
+  MountCanvasOptions,
+  MountedCanvas,
+  AttachCanvasOptions,
+  AttachedCanvas,
+  CanvasKeyAction,
+} from "./mountCanvas.js";
 
 export { runWithFatalBoundary, showFatalBanner } from "./fatalBoundary.js";
 export type { FatalBoundaryOptions } from "./fatalBoundary.js";

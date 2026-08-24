@@ -2326,9 +2326,12 @@ app-by-app.** It is the eleventh `@cas/*` package, source-exports model (like `@
 and the **first with a real DOM surface** (its tests run under jsdom — the first non-node package environment;
 the DOM libs are already in `tsconfig.base.json`). Four primitives, each a straight port of a CD reference:
 
-1. **`mountCanvas`** — the accessible-canvas pattern (`apps/complex-dynamics/index.html:194-200`): an
-   `aria-hidden` render canvas beneath a focusable `role="application"` overlay with a descriptive `aria-label`,
-   a keyboard map (arrows pan, ± zoom, Enter/Space commit), and an `aria-live` status region.
+1. **`mountCanvas`** / **`attachCanvasA11y`** — the accessible-canvas pattern (`apps/complex-dynamics/index.html:194-200`):
+   an `aria-hidden` render canvas beneath a focusable `role="application"` overlay with a descriptive `aria-label`,
+   a keyboard map (arrows pan, ± zoom, Enter/Space commit), and an `aria-live` status region. Two entry points share
+   ONE implementation: `mountCanvas` builds the DOM; `attachCanvasA11y` applies the same contract to a canvas an app
+   already built and lays out itself (added in U2 — Faber builds its own `gl`+`ov` panes, and a fresh mount would
+   fight its CSS).
 2. **`runWithFatalBoundary` / `showFatalBanner`** — CD's init boundary (`main.ts:6876-6892`, `showFatalBanner`
    at `:260-266`): try/catch/finally, WebGL2-aware copy, boot-overlay removal; **creates** the banner if the app
    has none (fixing the white-screen).
@@ -2397,8 +2400,15 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    two-plot HTML (converting it to a JS mount is not behavior-neutral) and a nav header is a new feature — both
    fit later apps / a deliberate rollout better than a behavior-identical CD refactor. Full CD suite green before
    and after (84 files / 833 tests).
-6. [ ] **U2–U6:** adopt in riemann-map, argument-principle, faber-transform, correspondences, and the plotter, one
-   PR each, each closing that app's specific audit findings.
+6. [ ] **U2–U6:** adopt in the five TS apps, one PR each, each closing that app's specific audit findings.
+   **faber-transform DONE (U2):** wrapped its entry in `runWithFatalBoundary` (it had no error element — an init
+   throw white-screened into the empty `<div id="app">`) and gave both render panes accessibility + keyboard via
+   `attachCanvasA11y` (arrows pan / ± zoom the viewport, distinct `aria-label`s, the `gl` layer marked
+   `aria-hidden`). Proving `mountCanvas` against Faber surfaced that apps build their own canvas + layout, so the
+   primitive gained `attachCanvasA11y` (an attach mode over the shared code path) rather than forcing a fresh mount
+   — the U2 analogue of U1's worker-recovery discovery. Verified with a headless-Chromium smoke (roles/labels/live
+   region present, no fatal banner, ArrowUp pans + `+` zooms the permalink, no console errors) plus the primitive's
+   jsdom tests. **Remaining:** riemann-map, argument-principle, correspondences, the plotter.
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just

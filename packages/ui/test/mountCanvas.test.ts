@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { mountCanvas, type CanvasKeyAction } from "../src/mountCanvas.js";
+import { mountCanvas, attachCanvasA11y, type CanvasKeyAction } from "../src/mountCanvas.js";
 
 // jsdom. Asserts the CD accessibility contract the mount ports: an aria-hidden render canvas beneath a
 // focusable role=application overlay carrying the aria-label, a keyboard map → actions, and a live region.
@@ -73,6 +73,57 @@ describe("mountCanvas", () => {
     m.destroy();
     expect(c.querySelector(".cas-canvas")).toBeNull();
     press(overlay, "ArrowRight");
+    expect(seen).toHaveLength(0);
+  });
+});
+
+describe("attachCanvasA11y (existing canvas)", () => {
+  it("applies the a11y contract to an app-built canvas without replacing it", () => {
+    const c = container();
+    // An app that lays out its own render+overlay pair (like Faber's gl/ov).
+    const stage = document.createElement("div");
+    const gl = document.createElement("canvas");
+    const ov = document.createElement("canvas");
+    stage.append(gl, ov);
+    c.appendChild(stage);
+
+    const seen: CanvasKeyAction[] = [];
+    const a = attachCanvasA11y(ov, { label: "Domain: f on the unit disk", render: gl, onKey: (k) => seen.push(k) });
+
+    // Same node — not replaced.
+    expect(a.overlay).toBe(ov);
+    expect(stage.contains(ov)).toBe(true);
+    expect(ov.getAttribute("role")).toBe("application");
+    expect(ov.tabIndex).toBe(0);
+    expect(ov.getAttribute("aria-label")).toBe("Domain: f on the unit disk");
+    // The render canvas behind is hidden from the screen reader.
+    expect(gl.getAttribute("aria-hidden")).toBe("true");
+    // Live region lands in the overlay's parent by default.
+    expect(stage.querySelector('[role="status"][aria-live="polite"]')).not.toBeNull();
+
+    // Keyboard is wired.
+    press(ov, "ArrowUp");
+    press(ov, "-");
+    expect(seen).toEqual([
+      { kind: "pan", dx: 0, dy: -1 },
+      { kind: "zoom", direction: -1 },
+    ]);
+
+    a.announce("recomputed");
+    expect(stage.querySelector('[role="status"]')?.textContent).toBe("recomputed");
+  });
+
+  it("destroy reverts what it added and stops handling keys", () => {
+    const c = container();
+    const ov = document.createElement("canvas");
+    c.appendChild(ov);
+    const seen: CanvasKeyAction[] = [];
+    const a = attachCanvasA11y(ov, { label: "x", onKey: (k) => seen.push(k) });
+    a.destroy();
+    expect(ov.getAttribute("role")).toBeNull();
+    expect(ov.getAttribute("aria-label")).toBeNull();
+    expect(c.querySelector('[role="status"]')).toBeNull();
+    press(ov, "ArrowRight");
     expect(seen).toHaveLength(0);
   });
 });
