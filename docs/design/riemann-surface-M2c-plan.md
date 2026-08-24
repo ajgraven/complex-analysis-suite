@@ -90,7 +90,10 @@ For a bivariate polynomial `F(w, z) = Σₖ aₖ(z)·wᵏ` (degree `n = deg_w F`
 - **`src/render/plot.ts`** — a third `riemannKind: "implicit"` that reuses the **curve** render path
   (`buildCurveMesh` + `buildCurveProgram` — no new shader); `riemannSheetsAt` routes to the root-solver;
   `compileSource` dispatch tries M1 → M2 radical → **M2c implicit**.
-- **`main.ts` / `index.html`** — the input affordance (§6) + honest badge; auto-select + view gating.
+- **`main.ts` / `index.html`** — a dedicated **implicit-mode toggle** + its own `F(w,z)` box (§6): entering
+  implicit mode switches to and pins the Riemann view and disables the inapplicable view tabs; leaving it
+  restores the `f(z)` slot + views. Honest badge (label · `n` sheets · `≈`). New permalink field for the
+  implicit source (back-compatible).
 - **No new package** for the engine (stays in `src/riemann/`, ADR-0007). **New dependencies:** `@cas/core`
   (`rootsMonic`) — required; `@cas/exact` (`discriminant`) — only if M2c.2 is built.
 
@@ -112,27 +115,34 @@ For a bivariate polynomial `F(w, z) = Σₖ aₖ(z)·wᵏ` (degree `n = deg_w F`
 
 - **M2c.0 spike** — `implicitPoly.ts` + a `rootsMonic` `sheetsAt`; render `w³−w−z` through the existing
   `curveMesh`/Plot. Adds `@cas/core`. Exit: green + findings; **pause**.
-- **M2c.1 deliverable** — input UX (§6), dispatch, degree/leading-coeff handling, decline rules, honest
-  badge, auto-select, all M3 tools verified to carry over, node + browser tests. Exit: full gate green;
-  `w³−w−z`, `w²−(z³−z)`, a quintic render correctly; **pause for review**.
+- **M2c.1 deliverable** — the dedicated implicit-mode toggle + `F(w,z)` box + view pinning/gating (§6),
+  dispatch, degree/leading-coeff handling, decline rules, honest badge, permalink field, all M3 tools verified
+  to carry over, node + browser tests. Exit: full gate green; `w³−w−z`, `w²−(z³−z)`, a quintic render
+  correctly; **pause for review**.
 - **M2c.2 exact branch locus (optional)** — `@cas/exact discriminant` for Gaussian-rational `F`, `=`-labeled;
   falls back to the `≈` scan otherwise. Exit: full gate green; **pause**.
 
-## 6. The one open decision — input UX (needs your call before M2c.0)
+## 6. Input UX — DECIDED: a dedicated implicit-mode toggle (Option C)
 
-How does the user enter `F(w, z) = 0`? Three options; I recommend **A**.
+**Decision (approved):** enter `F(w, z) = 0` through a **dedicated "Implicit `F(w,z)=0`" mode** — its own
+input box and an explicit toggle, kept distinct from the ordinary `f(z)` slots because an implicit relation is
+a *different kind of object* (not a function). This is the most discoverable and the most honest about the
+mode switch; it costs the most new UI, which is accepted.
 
-- **A — auto-detect `w` (recommended).** Any formula that references `w` is read as implicit `F(w,z)=0`
-  (`w` is otherwise unused — the plotter's maps are `f(z)`). Type `w^3 - w - z` and the Riemann view appears;
-  the 2D/3D/sphere/linked tabs (which need a single-valued `f(z)`) are **disabled with a note** ("implicit
-  relation — Riemann view only"). Lowest friction, discoverable, no new controls. Cost: the view-gating logic.
-- **B — explicit `= 0` equation.** Enter `w^3 - w - z = 0` (a compare-node the parser already supports);
-  detected as implicit. Most mathematically explicit; slightly more to type; same view-gating.
-- **C — a dedicated "Implicit F(w,z)=0" mode toggle** with its own box. Most discoverable as a distinct mode;
-  most new UI; clearest that it's a different kind of object.
+Concretely:
+- A toggle (alongside the `f` / `g` slot buttons, or in the Riemann controls) switches the input into
+  **implicit mode**: the box now reads `F(w, z)` (an implied `= 0`), typeset as `F(w,z) = 0`, with its own
+  placeholder/preset (`w^3 - w - z`, `w^2 - (z^3 - z)`, a quintic).
+- In implicit mode the only meaningful view is **Riemann** (the 2D/3D/sphere/linked tabs render a single-valued
+  `f(z)` and don't apply) — so entering implicit mode **switches to and pins the Riemann view**, and the other
+  view tabs are disabled with a short note. Leaving implicit mode restores the ordinary `f(z)` slot + views.
+- The implicit source round-trips in the permalink as its own field (back-compatible via `cleanV3d`/state),
+  distinct from `exprF`/`exprG`, so a shared implicit figure reopens in implicit mode.
 
-All three share the same engine; only the front door differs. My recommendation is **A** (least UI, and the
-presence of `w` is an unambiguous, honest signal), with the inapplicable view tabs clearly disabled.
+The two alternatives considered and **not** chosen: **(A)** auto-detect any formula referencing `w` (lowest
+friction, but silently repurposes the box), and **(B)** an explicit `… = 0` equation in the ordinary box
+(uses the parser's compare node, but blurs the function/relation distinction). Both share the same engine; the
+dedicated mode was preferred for clarity.
 
 ## 7. Risks & mitigations
 
