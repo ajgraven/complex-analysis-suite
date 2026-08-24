@@ -2222,13 +2222,19 @@ another.
 1. [x] Note the boundary on both sides — a header line in `app/schwarz/schwarz-common.mjs` and in
        `@cas/schwarz`'s `index.ts` — stating the classical-subset duplication is a *deliberate deferral* (this
        ADR), and that the intended consolidation direction is lift-to-parity-then-consume.
-2. [ ] Add the **differential drift-guard**: a test feeding one classical φ (e.g. the deltoid `ζ + 1/(2ζ²)` and
-       a finite-pole bounded QD) to both `schwarz-common.mjs`'s `buildSchwarzFromPhi(...).sigma` and
-       `@cas/schwarz`'s `makeUnboundedLaurentSchwarz(...).sigma`, asserting σ(w) agrees to a numerical
-       tolerance on a grid of exterior w — reconciling the `{re,im}`↔`[re,im]` layouts and the branch/seed
-       selection. Adds `@cas/schwarz` to QD's devDependencies (the
+2. [x] Add the **differential drift-guard**: `apps/quadrature-domains/vitest/schwarz-differential.test.ts`
+       feeds three classical φ — the deltoid `ζ + 1/(2ζ²)` (unbounded pole-free), a single-exterior-pole
+       unbounded QD, and a finite-pole bounded QD — to both `schwarz-common.mjs`'s
+       `buildSchwarzFromPhi(...).sigma` and `@cas/schwarz`'s `makeUnboundedLaurentSchwarz`/`makeBoundedSchwarz`
+       `.sigma`, reconciling the `{re,im}`↔`[re,im]` layouts. Branch/seed ambiguity is sidestepped by
+       generating each grid `w = φ(z)` from a known preimage z (exterior for unbounded, interior for
+       bounded), the branch each engine's accept-z predicate selects. Because σ is float Newton on both
+       sides (so a pure A-vs-B check would pass on JOINT drift), every point is a three-way comparison
+       against an INDEPENDENT `@cas/core` reference σ, itself pinned to the hand-derived
+       `interchange/goldens.ts` (w₀, σ(w₀)) values. Adds `@cas/schwarz` to QD's devDependencies (the
        [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) Action-Item-4 pattern);
-       mutation-verify in both directions.
+       mutation-verified red on a perturbation to either engine. This lands the "guarded interim" the
+       Trade-off Analysis above promised.
 3. [ ] When a second consumer of the weighted families appears, execute Option B (lift `schwarz-common`'s
        weighted-family σ into `@cas/schwarz` to family parity, then rewire QD to consume the package) and
        supersede this ADR.

@@ -302,6 +302,9 @@ importers:
       '@cas/exact':
         specifier: workspace:*
         version: link:../../packages/exact
+      '@cas/schwarz':
+        specifier: workspace:*
+        version: link:../../packages/schwarz
       eslint:
         specifier: ^9.39.4
         version: 9.39.4
