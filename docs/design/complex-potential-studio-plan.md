@@ -34,7 +34,7 @@
 
 | Milestone | Status | Coverage |
 |---|---|---|
-| **M0 — holomorphic-field render spike** | ☐ approved, not started | `W` from superposed closed-form singularities → `@cas/expr` → GPU domain-color of `W'` + adaptive `φ`/`ψ` contours; GLSL↔JS dual-backend parity. |
+| **M0 — holomorphic-field render spike** | ✅ done (1 item deferred) | Scaffold on the `@cas/ui` shell; the closed-form field model `src/field.ts` (uniform + monopoles `c=q+iγ` + doublets) with node ground-truth tests (source/vortex/doublet/superposition/spiral-pitch); a WebGL2 fragment shader (`src/render/fieldShader.ts`, assembled from `@cas/gpu/glsl`) domain-coloring `E=W'` + the adaptive `φ`/`ψ` contour net (2π/N spacing → branch-jump-free). **Verified in live headless-Chromium WebGL2** — shader compiles/links, correct physics (radial-source / circular-vortex streamlines, order-2 doublet, no cut artifact). Registered in `vitest.workspace.ts` + census. **Deferred:** the formal GLSL↔JS `@cas/gpu/dual-backend` browser parity test (a browser-vitest lane) — render parity is so far pinned by structure + the JS ground-truth corpus + a live-render check. |
 | **M1 — superposition sandbox** | ☐ approved, not started | drop/drag palette, complex `c = q+iγ`, two-lens toggle, sensor puck, flux/circulation probes, even-spaced streamlines + optional motion, presets, `#vs=` permalink + PNG export, first theorem-gallery entries. |
 | **M1 gate** | ☐ | full repo gate green (lint + dep:check, typecheck, test, build all apps + browser WebGL2); launcher card added; **pause for review.** |
 | M2 — conformal transplant | ⛔ deferred | Joukowski / Kármán–Trefftz airfoils (two-pane, Kutta→lift) + interior/exterior SC; **opens the `ConformalMap` interchange form.** |
