@@ -2435,3 +2435,93 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
        `@cas/exact` resultants; still zero new deps.
 4. [ ] When (and only when) approved, land M2c (implicit `F(w,z)=0` input) — the first consumer of
        `@cas/core` per-vertex root-solving + `@cas/exact` discriminant here; follow-on ADR (plan §9).
+
+---
+
+## ADR-0029: Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0027](#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+and [ADR-0028](#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing). Turns the
+Riemann view from a **renderer** into something **interrogable**: read the multi-sheeted value under the
+cursor (M3.1), see the branch/cut structure beside the surface on a linked base plane (M3.2), and trace how a
+loop permutes the sheets (M3.3, monodromy). Records the pick method, the local-branch-ordinal readout, the
+reuse of the linked-view scaffold, and — critically — the confinement of the `≈`/uncertified monodromy
+explorer. Full plan: [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md).*
+
+### Context
+
+M1 (ADR-0027) and M2 (ADR-0028) render the surface but leave it **mute**: no way to ask "what value is *this*
+point", no spatial link to the base plane, no way to watch a loop swap sheets — the three things a Riemann
+surface is *for*. The plotter already has a value inspector (catalog H1) for the 2D portrait and the 3D
+landscape, but the landscape's pick (`render3d/pick.ts`) ray-marches a **single-valued** height field
+`z = h(re, im)`; a Riemann surface stacks sheets over the same base point, so that pick cannot be reused. The
+subtle piece is monodromy: analytic continuation around a loop is exactly the never-certified operation the
+repo flags ([RISKS](RISKS.md) §3).
+
+### Decision
+
+Ship **M3** as three gated, app-local milestones, **no new packages** (ADR-0007 — reads existing geometry),
+in the approved order **M3.1 + M3.2, then M3.3**:
+
+- **M3.1 — multi-sheet hover-pick.** One uniform CPU **pick mesh** for both render paths: per vertex
+  `xy = (Re z, Im z)`, `w` (value), and a **height basis** `hb` (the uniformizer `t` for the M1 parametric
+  path, the value `w` for the M2 curve path) — so world height `= (heightSource? hb.im : hb.re)·heightScale`
+  matches the shader's law and survives a height-axis/exaggeration change without a rebuild. A pure-geometry
+  ray-cast (Möller–Trumbore, nearest hit, double-sided) returns the on-surface `z`/`w`; a point-in-triangle
+  **sheet census** at that `z` gives `N` distinct sheet values and the hovered sheet's **local ordinal** `k`.
+  Report `z`, `w`, `|w|`, `arg w`, and `k / N` — all `≈`.
+- **M3.2 — linked base-plane pane.** Reuse the `paintLinked` split-viewport scaffold to pair the flat base
+  plane with the surface, hover-linked, with branch-point markers.
+- **M3.3 — monodromy explorer.** Opt-in loop drag + nearest-match continuation + a permutation readout —
+  `≈`, uncertified, low-confidence-flagged, and **quarantined** from the badge, the permalink, and every
+  export (RISKS §3).
+
+### Options Considered
+
+#### Option A: Uniform triangle-mesh pick + local branch ordinal (chosen)
+**Pros:** one pick path serves both the parametric and the baked-curve surfaces; a real depth-sorted ray-cast
+picks the sheet the eye actually sees (self-occlusion honest); the branch ordinal `k / N` is well-defined at a
+point and exactly computable from the drawn mesh; near a branch point `N` honestly drops as sheets merge. No
+continuation, so **no RISKS §3 exposure** in M3.1/M3.2. **Cons:** the ordinal is *local*, not a global sheet
+identity — but a global one does not exist without fixing monodromy (M3.3), so claiming one would be
+dishonest; labeled accordingly.
+
+#### Option B: Reuse the height-field ray-march (`pick.ts`)
+**Cons, why rejected:** the march assumes a single-valued `h(re, im)` — precisely what a Riemann surface is
+not. It would silently return one sheet's height and mislabel overlapping sheets. Multi-valuedness is the
+whole subject; the pick must respect it.
+
+#### Option C: Assign global sheet numbers now
+**Cons, why rejected:** global numbering *is* the monodromy representation — the thing M3.3 explores and that
+RISKS §3 says is never certified. Baking a global integer into a hover readout would present uncertified
+structure as fact. Deferred and confined to the opt-in M3.3 explorer.
+
+### Trade-off Analysis
+
+M3.1/M3.2 are pure geometry over geometry that already exists — maximal usefulness at minimal risk and zero
+new primitives (north-star). M3.3 is the one place the plan buys a genuinely subtle capability (monodromy) at
+the cost of certification, and fences it: opt-in, `≈`, and unable to write into any durable/exported artifact.
+The uniform pick mesh (a single `hb` height-basis field) avoids branching the pick per render path and keeps
+the height law identical to the shader, so pick and picture agree.
+
+### Consequences
+
+- **Easier:** the Riemann view gains the value inspector the other views have; the base-plane link gives
+  spatial context for free from `paintLinked`; monodromy has a home that cannot contaminate the rest.
+- **Harder:** the M2 curve arrays must be cached for the pick (were upload-and-discard); a large mesh makes
+  the census O(triangles) per hover (throttled; a spatial index is a later optimization). M3.3 carries a
+  standing honesty burden (its output is never certified).
+- **Revisit if** any of: (a) a second consumer needs `src/riemann/pickMesh.ts` (⇒ extract, per ADR-0027
+  Action Item 4); (b) M2c lands (implicit `F(w,z)=0`) — the pick mesh already takes an arbitrary `sheetsAt`,
+  so it should carry over; (c) a receiving tool needs the monodromy data serialized (⇒ ADR-0005 branch-aware
+  interchange — and only with the RISKS §3 labeling intact).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md) + this ADR.
+2. [ ] Land M3.1 (hover-pick) — `riemann/pickMesh.ts` + `Plot.pickRiemann` + readout; node tests; both
+       render paths; existing tests (incl. top-down-3D≡2D) kept green. **Pause for review.**
+3. [ ] Land M3.2 (linked base-plane pane) — reuse `paintLinked`; hover-linking + branch markers. **Pause.**
+4. [ ] Land M3.3 (monodromy explorer) — opt-in, `≈`, confined to its panel (RISKS §3). **Pause.**
+5. [ ] M3.4 (colour/legibility polish) — deferred, unordered; fold in when useful.
