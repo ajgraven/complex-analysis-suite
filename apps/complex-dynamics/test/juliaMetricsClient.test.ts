@@ -11,7 +11,8 @@ class MockWorker {
   posted: JuliaMetricsMessage[] = [];
   onmessage: ((e: MessageEvent) => void) | null = null;
   onerror: ((e: unknown) => void) | null = null;
-  constructor(_url: URL | string, _opts?: unknown) {
+  constructor() {
+    // The client calls `new Worker(url, { type: "module" })`; JS ignores the extra constructor args here.
     MockWorker.instances.push(this);
   }
   postMessage(m: JuliaMetricsMessage): void {
