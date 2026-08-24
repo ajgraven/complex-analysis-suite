@@ -34,7 +34,6 @@ import {
   type ContourShape,
 } from "./contour.js";
 import {
-  windingTurns,
   windingReliable,
   partialWindingTurns,
   cumulativeArg,
@@ -974,6 +973,16 @@ function main(): void {
     // principle does not apply — the winding/∮ readouts must not assert a count.
     const branchCut = wPts.length > 1 && crossesBranchCut(wPts);
 
+    // The winding accumulation is frame-constant (wPts + about), yet windingTurns() rebuilds the whole
+    // cumulativeArg array on every call and windingReliable() re-walks the contour — so derive the shared
+    // pieces ONCE here and reuse them across the strip-chart, integral, equation, and animation readouts
+    // rather than re-computing them 4–6× per frame (A10 perf). `cumArg` also feeds the strip-chart directly,
+    // and `totalTurns` is its last entry (the full winding), so the two can never diverge.
+    const haveWinding = !model.error && wPts.length > 1;
+    const cumArg = haveWinding ? cumulativeArg(wPts, about) : [0];
+    const totalTurns = cumArg[cumArg.length - 1];
+    const windReliable = haveWinding && windingReliable(wPts, about);
+
     const cContour = cssVar("--accent", "#3bb6c0"); // γ (UI accent), distinct from the zero mark
     const cZero = cssVar("--zero", "#4585e0"); // ○ zeros
     const cPole = cssVar("--pole", "#cf7b30"); // ✕ poles
@@ -1172,9 +1181,8 @@ function main(): void {
     // A1 — the argument strip-chart (always-on): accumulated turns of arg f(γ(t)) climbing to the winding.
     if (ped().showArgGraph) {
       argPanel.hidden = false;
-      const haveImg = !model.error && wPts.length > 1;
-      const turns = haveImg ? cumulativeArg(wPts, about) : [0];
-      const wn = haveImg ? Math.round(windingTurns(wPts, about)) : NaN;
+      const turns = cumArg; // the shared accumulation (see the frame-constant block above)
+      const wn = haveWinding ? Math.round(totalTurns) : NaN;
       drawArgGraph(
         argCanvas,
         // On a branch cut the total is not a winding number — don't label it as one (the cliff still shows).
@@ -1229,7 +1237,7 @@ function main(): void {
         // when γ grazes a singularity the trapezoidal f′/f sum is ill-conditioned, so round(val) can
         // disagree with the count the panel (correctly) flags ⚠ unreliable. Don't assert the equality then —
         // show the raw value and the same "nudge γ" guidance instead of a contradicting integer.
-        const b4Reliable = windingReliable(wPts, about);
+        const b4Reliable = windReliable;
         integralEl.innerHTML = !Number.isFinite(val)
           ? `∮<sub>γ</sub> ${integrand} dz — γ passes through a singularity; nudge it to read the integral.`
           : b4Reliable
@@ -1253,11 +1261,11 @@ function main(): void {
       decompEl.hidden = true;
     }
 
-    updateReadout(contour, wPts, about, branchCut);
+    updateReadout(contour, about, branchCut, haveWinding, totalTurns, windReliable);
 
     if (showAnim && !model.error && wPts.length > 1) {
       const swept = partialWindingTurns(wPts, anim.t, about);
-      const full = Math.round(windingTurns(wPts, about));
+      const full = Math.round(totalTurns);
       animEl.hidden = false;
       if (Number.isFinite(swept) && Number.isFinite(full)) {
         animEl.innerHTML =
@@ -1273,14 +1281,15 @@ function main(): void {
 
   function updateReadout(
     contour: ContourShape,
-    wPts: readonly Vec2[],
     about: Vec2,
     branchCut: boolean,
+    haveImage: boolean,
+    totalTurns: number,
+    reliable: boolean,
   ): void {
-    const haveImage = !model.error && wPts.length > 1;
-    const turns = haveImage ? windingTurns(wPts, about) : NaN;
+    // The winding accumulation + reliability are computed once in render() and threaded in (A10 perf).
+    const turns = haveImage ? totalTurns : NaN;
     const winding = haveImage ? Math.round(turns) : NaN;
-    const reliable = haveImage && windingReliable(wPts, about);
     // Never surface a NaN (a pole on a contour sample), and never a winding across a branch cut (undefined).
     const windFinite = haveImage && !branchCut && Number.isFinite(winding);
 

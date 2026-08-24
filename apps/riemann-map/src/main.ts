@@ -737,27 +737,43 @@ function main(): void {
     diskUnitSrc = dg.unitCircle;
     diskUnitImg = dg.unitCircle.map(P);
 
-    // Filled cells (always built — the per-cell φ′ also powers the interior critical-point check).
-    const img = pushforwardCells(dg.cells, P);
-    const src: FillCell[] = [];
-    const imf: FillCell[] = [];
-    const rMax = diskMaxR();
+    // The per-cell φ′ powers two things: the filled-cell colours AND the interior critical-point fold check.
+    // The filled cells are only DRAWN in the filled style, and the fold check runs only for an EXPLICIT
+    // source (a numeric region / imported map is univalent by construction). So skip the pushforward +
+    // FillCell build whenever the filled style isn't shown, and skip the whole per-cell sweep when neither
+    // consumer wants it (line style + numeric source) — otherwise it is dead work on every rebuild, including
+    // each frame of an SC vertex drag (A5 perf). A style toggle now marks diskDirty (see onDiskStyle), so the
+    // style that wasn't built is rebuilt on switch.
+    const lineMode = diskStyle() === "lines";
+    const buildFilled = !lineMode; // filled cells are only drawn (fillCells) in the filled style
+    const needFold = !diskSourceIsNumeric(); // the fold heuristic below consumes minBulk / maxMag
     let maxMag = 0;
     let minBulk = Infinity; // smallest |φ′| away from the radial boundaries (an interior φ′≈0 ⇒ a fold)
-    for (let i = 0; i < dg.cells.length; i++) {
-      const m = dg.cells[i].mid;
-      const d = activeDeriv(m);
-      const mag = Math.hypot(d[0], d[1]);
-      if (Number.isFinite(mag) && mag > maxMag) maxMag = mag;
-      const rr = Math.hypot(m[0], m[1]);
-      const inBulk = side === "exterior" ? rr > 1.1 && rr < 0.9 * rMax : rr > 0.05 && rr < 0.9;
-      if (inBulk && Number.isFinite(mag) && mag < minBulk) minBulk = mag;
-      const { fill, edge } = cellColors(d);
-      src.push({ quad: dg.cells[i].quad, fill, edge });
-      imf.push({ quad: img[i].quad, fill, edge });
+    if (buildFilled || needFold) {
+      const img = buildFilled ? pushforwardCells(dg.cells, P) : null;
+      const src: FillCell[] = [];
+      const imf: FillCell[] = [];
+      const rMax = diskMaxR();
+      for (let i = 0; i < dg.cells.length; i++) {
+        const m = dg.cells[i].mid;
+        const d = activeDeriv(m);
+        const mag = Math.hypot(d[0], d[1]);
+        if (Number.isFinite(mag) && mag > maxMag) maxMag = mag;
+        const rr = Math.hypot(m[0], m[1]);
+        const inBulk = side === "exterior" ? rr > 1.1 && rr < 0.9 * rMax : rr > 0.05 && rr < 0.9;
+        if (inBulk && Number.isFinite(mag) && mag < minBulk) minBulk = mag;
+        if (buildFilled && img) {
+          const { fill, edge } = cellColors(d);
+          src.push({ quad: dg.cells[i].quad, fill, edge });
+          imf.push({ quad: img[i].quad, fill, edge });
+        }
+      }
+      diskSourceCells = src;
+      diskImageCells = imf;
+    } else {
+      diskSourceCells = [];
+      diskImageCells = [];
     }
-    diskSourceCells = src;
-    diskImageCells = imf;
 
     // Line curves (rings/spokes) for the line-art style, honoring the circles/rays subset.
     const show = diskShow();
@@ -1197,7 +1213,8 @@ function main(): void {
   });
   controls.onDiskStyle((id) => {
     state = { ...state, render: { ...state.render, diskStyle: id } };
-    invalidate(); // both styles are already computed each rebuild — just redraw
+    diskDirty = true; // computeDiskImage now builds only the shown style's cells — rebuild for the new one
+    invalidate();
   });
   controls.onDiskShow((id) => {
     state = { ...state, render: { ...state.render, diskShow: id } };

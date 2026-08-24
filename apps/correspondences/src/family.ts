@@ -105,12 +105,13 @@ function escapeToInfinity(
   maxIter: number,
   escapeR: number,
 ): number {
-  let w = w0;
+  const escapeR2 = escapeR * escapeR; // compare squared magnitudes — no per-step sqrt (the suite-wide
+  let w = w0; //                          sqrt-free escape pattern; tupleAlgebra.abs2 is z[0]²+z[1]²)
   for (let n = 1; n <= maxIter; n++) {
     const next = schwarz.sigma(w);
     if (!next) return maxIter;
     w = next;
-    if (!A.isFinite(w) || A.abs(w) > escapeR) return n;
+    if (!A.isFinite(w) || A.abs2(w) > escapeR2) return n;
   }
   return maxIter;
 }
