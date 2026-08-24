@@ -2332,4 +2332,88 @@ for when one appears.
        `claude/riemann-surface-rendering-fvybo6`; keep the existing top-down-3D≡2D golden green.
 3. [ ] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
        `P(z,w)=0` engine and any shared primitive it needs — then M3 (monodromy explorer, `≈`-labeled).
+       *(M2a approved + recorded as [ADR-0028](#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)*
 4. [ ] On a second consumer of `src/riemann/`, extract `@cas/branch` and supersede this ADR's in-app note.
+
+---
+
+## ADR-0028: Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0027](#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+(anticipated in its Action Item 3). Extends the plotter's Riemann view from single invertible primitives to
+**algebraic** functions via the Nieser–Poelke–Polthier / Kranich proximity-gluing algorithm, scoped this pass
+to the **single-radical class** `w = R(z)^(p/q)` (R rational, constant coefficients). Records the method, the
+scope, the roots-of-unity sheet specialization, the new `@cas/core` dependency, and the deferral of
+`@cas/exact`-based elimination (M2b) and multivalued interchange (ADR-0005). Full plan:
+[`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md).*
+
+### Context
+
+M1 (ADR-0027) renders the true Riemann surface for one invertible primitive of an **affine** inner
+(`A·P(αz+β)+B`). It declines algebraic composites — `sqrt(z^2−1)`, `sqrt(z^3−z)`, `(z^2−1)^(1/3)`,
+`sqrt((z−1)/(z+1))` — whose surfaces are the classical multi-sheeted objects. The literature's
+web-implementable method is NPP/Kranich (research notes §2.2): triangulate the z-domain, enumerate the `n`
+sheets per vertex, proximity-stitch, and adaptively subdivide near the branch locus (leaving holes at
+ramification points so cuts never render as walls). The suite already has the general tools it needs at
+scale — `@cas/exact` `resultant`/`discriminant` and `@cas/core` `rootsMonic` — but the **single-radical**
+subclass does not need them for the sheets: the `q` sheets of `R(z)^(p/q)` are elementary (`q`-th
+powers/roots of `R(z)`).
+
+### Decision
+
+Ship **M2a** — `w = R(z)^(p/q)` with R a rational function of z and constant (rational-expressible)
+coefficients — as a **`curve` kind** of the existing `riemann` mode. Sheets are the `q` distinct values of
+`R(z)^(p/q)` (roots-of-unity specialization, **no per-vertex polynomial solve**); the mesh is built by NPP
+proximity gluing on a Web Worker and cached; branch points (zeros of R and its poles, via `@cas/core`
+`rootsMonic` on the `@cas/expr fToRational` numerator/denominator) drive adaptive subdivision + ramification
+holes, with a local near-degeneracy backstop and a badged triangle-budget cap. Height = `Re w`, color =
+shared `colorAt`. **Dispatch prefers M1's exact parametric surface**; the curve path takes only maps M1
+declines. Keep everything **in-app** (ADR-0007); pull **`@cas/core`** only; leave **`@cas/exact`** for M2b.
+
+### Options Considered
+
+#### Option A: M2a single-radical, sheets as roots of unity (chosen)
+**Pros:** the `q` sheets are elementary (no iterative root solve → fast, robust, no convergence/conditioning
+failure per vertex); no symbolic elimination, so **no spurious "conjugate" branches**; covers the headline
+algebraic cases (elliptic `sqrt(z^3−z)`, `sqrt(z^2−1)`, cube roots of rationals); needs only `@cas/core`
+for branch-point location. **Cons:** does not cover radical *sums* (`√z + √(z−1)`), which have genuinely
+coupled sheets — deferred to M2b.
+
+#### Option B: General `P(z,w)=0` now (per-vertex `rootsMonic`, `@cas/exact` elimination)
+**Pros:** one method for all algebraic composites. **Cons, why deferred:** radical **sums** need iterated
+`@cas/exact` resultants to build `P`, which introduce spurious branches that must be filtered by continuity
+from the principal sheet — real complexity and higher-degree `P` (more per-vertex solving, worse
+conditioning). High value but the wrong first step; it is M2b, gated on its own approval.
+
+#### Option C: A `@cas/riemann` / `@cas/branch` package now
+**Pros:** a home for the mesh + branch machinery. **Cons:** ADR-0007 is symmetric — no second consumer yet.
+Keep it in `src/riemann/`; the `mat4.ts`-style "second consumer triggers extraction" note already stands
+(ADR-0027).
+
+### Trade-off Analysis
+
+M2a is the maximal robust subset: it delivers real algebraic surfaces at low risk because the sheet values
+are closed-form, sidestepping both the root-conditioning and the spurious-branch problems that make the
+general curve hard. Reusing `@cas/core` (not re-implementing a solver) honors the north-star; deferring
+`@cas/exact` avoids pulling the heavy exact-elimination path before radical sums (M2b) actually need it. The
+M1-preferred dispatch keeps the cheapest exact path for the primitives M1 already nails.
+
+### Consequences
+
+- **Easier:** the plotter gains the classical algebraic Riemann surfaces reusing M1's mode/camera/coloring;
+  the general path (M2b) has a recorded home and rationale.
+- **Harder:** a `curve` mesh is heavier than M1's parametric grid (worker + cache); a budget cap bounds it
+  (badged). Radical sums remain declined until M2b.
+- **Revisit if** any of: (a) M2b/M2c approved (⇒ `@cas/exact` elimination + spurious-branch filter, or an
+  implicit-input mode — follow-on ADR); (b) a second consumer needs `src/riemann/` (⇒ extract, per
+  ADR-0027 Action Item 4); (c) a receiving tool needs a serializable multivalued map (⇒ ADR-0005
+  branch-aware interchange).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md) + this ADR.
+2. [ ] Land M2.0 (spike, `sqrt(z^2−1)`, zero new deps) then M2.1 (full `R(z)^(p/q)`, +`@cas/core`),
+       test-guarded; keep all existing tests (incl. top-down-3D≡2D) green; pause for review at the M2.1 gate.
+3. [ ] When (and only when) approved, land M2b (radical sums via `@cas/exact` resultants + spurious-branch
+       filter) and/or M2c (implicit `P(z,w)=0` input) — follow-on ADR.
