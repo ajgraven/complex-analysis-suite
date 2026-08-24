@@ -133,6 +133,31 @@ describe("attachCanvasA11y (existing canvas)", () => {
     expect(c.querySelector('[role="status"]')?.textContent).toBe("recomputed");
   });
 
+  it('role:"application" without onKey names + focuses but adds no key listener (app owns keyboard)', () => {
+    const c = container();
+    const cv = document.createElement("canvas");
+    c.appendChild(cv);
+    // The app's own keydown handler — must be the only one that fires.
+    const appKeys: string[] = [];
+    cv.addEventListener("keydown", (e) => appKeys.push(e.key));
+    const a = attachCanvasA11y(cv, { label: "plot view (app-driven keyboard)" }); // role defaults to application
+    expect(cv.getAttribute("role")).toBe("application");
+    expect(cv.tabIndex).toBe(0);
+    press(cv, "ArrowRight");
+    expect(appKeys).toEqual(["ArrowRight"]); // reached the app; our layer added nothing that swallowed it
+    a.destroy();
+  });
+
+  it("names a canvas not yet attached to the DOM (live region falls back to body)", () => {
+    const cv = document.createElement("canvas"); // detached
+    const a = attachCanvasA11y(cv, { label: "detached view", role: "img" });
+    expect(cv.getAttribute("role")).toBe("img");
+    expect(cv.querySelector("*")).toBeNull(); // never appended a child INTO the canvas
+    expect(document.body.querySelector('[role="status"]')).not.toBeNull();
+    a.destroy();
+    expect(document.body.querySelector('[role="status"]')).toBeNull();
+  });
+
   it("destroy reverts what it added and stops handling keys", () => {
     const c = container();
     const ov = document.createElement("canvas");

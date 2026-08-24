@@ -2402,7 +2402,7 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    two-plot HTML (converting it to a JS mount is not behavior-neutral) and a nav header is a new feature — both
    fit later apps / a deliberate rollout better than a behavior-identical CD refactor. Full CD suite green before
    and after (84 files / 833 tests).
-6. [ ] **U2–U6:** adopt in the five TS apps, one PR each, each closing that app's specific audit findings.
+6. [x] **U2–U6:** adopt in the five TS apps, one PR each, each closing that app's specific audit findings.
    **faber-transform DONE (U2):** wrapped its entry in `runWithFatalBoundary` (it had no error element — an init
    throw white-screened into the empty `<div id="app">`) and gave both render panes accessibility + keyboard via
    `attachCanvasA11y` (arrows pan / ± zoom the viewport, distinct `aria-label`s, the `gl` layer marked
@@ -2426,7 +2426,18 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    covered it — the adoptions have converged). Verified with a headless-Chromium smoke (both panes
    application+focusable+labelled, overlay aria-hidden, keyboard `+` zooms the permalink, no fatal banner, no console
    errors); riemann-map's 60 tests stay green (nav.test.ts unaffected by the transitive @cas/ui import).
-   **Remaining:** argument-principle, the plotter.
+   **argument-principle + plotter DONE (U5+U6, batched):** both `main()`s wrapped in `runWithFatalBoundary`
+   (arg-principle had no error element; the plotter reuses its existing `#error` banner — the wrap now catches
+   init throws OUTSIDE its inner Plot try/catch that previously white-screened). arg-principle's three panes
+   (z-plane, w-plane, argument strip) named `role="img"` (mouse-interactive, keyboard deferred — its contour
+   drawing is the least keyboard-natural interaction). The plotter's `#view` was ALREADY fully accessible in
+   static HTML (role/tabindex/label + its own `keyToNav` keyboard, `#axes` aria-hidden), so U6 added only the
+   boundary. Two small primitive refinements fell out: `attachCanvasA11y` skips its keydown listener when no
+   `onKey` is given (a `role="application"` canvas whose app owns keyboard — the plotter — just needs the
+   name), and the live region falls back to `<body>` so naming a not-yet-attached canvas never appends into
+   it. Both verified with a headless-Chromium smoke (arg-principle: 3 img-labelled panes, no fatal banner;
+   plotter: `#view` a11y intact, no error shown; no console errors either); their 15 + 18 tests stay green.
+   **This completes the app rollout (U1–U6).**
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just

@@ -21,6 +21,7 @@
 // The ∞-inspector (plot f(1/z)) and export (Phase 6) round it out.
 import "katex/dist/katex.min.css";
 import katex from "katex";
+import { runWithFatalBoundary } from "@cas/ui";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
 import {
@@ -1423,4 +1424,13 @@ function main(): void {
   if (initial.v3d.mode !== "2d") setView(initial.v3d.mode);
 }
 
-main();
+// Run inside @cas/ui's fatal-error boundary (ADR-0028, U6). The plotter already catches a WebGL2/Plot
+// construction failure into #error, and its #view canvas is already fully accessible (role/tabindex/label
+// + its own keyboard in the static HTML), so this adds only the general case: an uncaught init throw
+// OUTSIDE that inner try (decode, control wiring, …) now surfaces in the same #error banner instead of
+// white-screening.
+runWithFatalBoundary(main, {
+  bannerId: "error",
+  onError: (e) => console.error("Failed to initialize the plotter:", e),
+  genericMessage: "Something went wrong starting the plotter. See the browser console for details.",
+});

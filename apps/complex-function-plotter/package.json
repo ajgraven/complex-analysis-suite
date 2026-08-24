@@ -21,6 +21,7 @@
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
+    "@cas/ui": "workspace:*",
     "katex": "^0.17.0"
   },
   "devDependencies": {

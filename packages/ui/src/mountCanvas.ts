@@ -55,10 +55,12 @@ function applyCanvasA11y(
   styleVisuallyHidden(status);
   liveHost.appendChild(status);
 
+  // Wire keyboard only for an interactive surface that WANTS our key map. A `role="application"` canvas
+  // whose app owns its own keydown (e.g. the plotter's `#view`) passes no `onKey` — it gets the name +
+  // focusability without a second listener.
   let onKeyDown: ((ev: KeyboardEvent) => void) | null = null;
-  if (interactive) {
+  if (interactive && onKey) {
     onKeyDown = (ev: KeyboardEvent): void => {
-      if (!onKey) return;
       let action: CanvasKeyAction | null = null;
       switch (ev.key) {
         case "ArrowLeft":
@@ -204,7 +206,9 @@ export function attachCanvasA11y(
 ): AttachedCanvas {
   const doc = opts.doc ?? overlay.ownerDocument;
   if (opts.render) opts.render.setAttribute("aria-hidden", "true");
-  const host = opts.liveRegionHost ?? overlay.parentElement ?? overlay;
+  // A canvas can't hold child elements, so never append the live region INTO the overlay: prefer its
+  // parent, then <body> (for a canvas named before it's attached), and only fall back to the overlay.
+  const host = opts.liveRegionHost ?? overlay.parentElement ?? doc.body ?? overlay;
   const a11y = applyCanvasA11y(doc, overlay, host, opts.role ?? "application", opts.label, opts.onKey);
   return {
     overlay,

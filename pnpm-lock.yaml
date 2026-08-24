@@ -56,6 +56,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       katex:
         specifier: ^0.17.0
         version: 0.17.0
@@ -163,6 +166,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       katex:
         specifier: ^0.17.0
         version: 0.17.0
