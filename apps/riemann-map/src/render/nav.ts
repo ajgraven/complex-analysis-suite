@@ -3,6 +3,7 @@
 // The coordinate math (pixel ↔ world, zoom-about-cursor) is factored into PURE, node-tested helpers;
 // only the thin event wiring touches the DOM. World y runs UP (screen bottom = smaller y), so pointer
 // fractions are measured from the bottom.
+import { attachCanvasA11y } from "@cas/ui";
 import type { ViewportState } from "../viewState.js";
 
 /** Zoom clamp for the single-precision 2D view. */
@@ -50,7 +51,18 @@ export interface PanZoomOptions {
   /** When this returns false, drag-panning is locked and the wheel zooms about the view centre instead
    *  of the cursor (so a fixed, centred domain — e.g. the unit disk of a region map — cannot drift). */
   panEnabled?: () => boolean;
+  /** When set, also apply @cas/ui's accessible-canvas contract (ADR-0028): `role="application"` + this
+   *  `aria-label`, and keyboard pan/zoom (arrows pan, +/− zoom about centre) mirroring the pointer/wheel
+   *  behaviour, including the same pan-lock. */
+  a11yLabel?: string;
+  /** A decorative overlay canvas drawn on top of `canvas` to mark `aria-hidden` (so only the interactive
+   *  base canvas is named). */
+  overlayCanvas?: HTMLCanvasElement;
 }
+
+/** Keyboard step as a fraction of the visible half-span (pan) and the per-press zoom factor. */
+const KEY_PAN_FRAC = 0.15;
+const KEY_ZOOM = 1.25;
 
 /** Wire pointer-drag panning and wheel zoom (about the cursor) on `canvas`. */
 export function attachPanZoom(
@@ -102,10 +114,39 @@ export function attachPanZoom(
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("wheel", onWheel, { passive: false });
 
+  // Keyboard pan/zoom over the SAME get/set, mirroring the pointer/wheel handlers (incl. pan-lock), plus
+  // the screen-reader name — so the pane is operable and announced without a mouse (ADR-0028, U4).
+  let a11y: { destroy(): void } | null = null;
+  if (opts?.a11yLabel !== undefined) {
+    a11y = attachCanvasA11y(canvas, {
+      label: opts.a11yLabel,
+      render: opts.overlayCanvas,
+      onKey: (action) => {
+        const v = get();
+        const r = canvas.getBoundingClientRect();
+        const aspect = r.height > 0 ? r.width / r.height : 1;
+        if (action.kind === "pan") {
+          if (panLocked()) return; // keyboard pan respects the same lock as drag
+          const hs = halfSpan(v);
+          // World y runs UP: ArrowUp (dy = −1) raises centreIm.
+          set({
+            ...v,
+            centerRe: v.centerRe + action.dx * hs * aspect * KEY_PAN_FRAC,
+            centerIm: v.centerIm - action.dy * hs * KEY_PAN_FRAC,
+          });
+        } else if (action.kind === "zoom") {
+          // Zoom about the view centre — the keyboard has no cursor.
+          set(zoomAboutCursor(v, 0.5, 0.5, aspect, v.zoom * (action.direction > 0 ? KEY_ZOOM : 1 / KEY_ZOOM)));
+        }
+      },
+    });
+  }
+
   return {
     detach(): void {
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("wheel", onWheel);
+      a11y?.destroy();
       onUp();
     },
   };

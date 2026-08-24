@@ -15,6 +15,7 @@ import {
   type ViewportState,
 } from "./viewState.js";
 import { compileMap, derivativeAt, type CompiledMap } from "./map.js";
+import { runWithFatalBoundary } from "@cas/ui";
 import { attachPanZoom, pixelToWorld } from "./render/nav.js";
 import { modeIsDomain, modeIsDiskImage } from "./render/modes.js";
 import {
@@ -1583,19 +1584,32 @@ function main(): void {
   // there (wheel-zoom, about the centre, stays for grid detail). Expression + import sources keep pan.
   attachPanZoom(canvas, () => state.viewport, setViewport, {
     panEnabled: () => !(modeIsDiskImage(state.render.mode) && diskSourceIsRegion()),
+    a11yLabel:
+      "Left pane: the source domain (the unit disk 𝔻 or a chosen region) — arrow keys pan, + and − zoom",
+    overlayCanvas,
   });
   // The right (image) pane is freely pan/zoomable; a grab starts a manual view (auto-fit off until "Fit").
   // Registered AFTER the vertex-drag pointerdown above so grabbing a corner (stopImmediatePropagation)
   // preempts the pan.
-  attachPanZoom(imageCanvas, () => imageViewport, (v) => {
-    imageViewport = v;
-    imageAutoFit = false;
-    schedule();
-  });
+  attachPanZoom(
+    imageCanvas,
+    () => imageViewport,
+    (v) => {
+      imageViewport = v;
+      imageAutoFit = false;
+      schedule();
+    },
+    { a11yLabel: "Right pane: the conformal image w = φ(z) — arrow keys pan, + and − zoom" },
+  );
   window.addEventListener("resize", () => invalidate());
 
   applyMap();
   schedule();
 }
 
-main();
+// Run inside @cas/ui's fatal-error boundary (ADR-0028, U4): the studio boots into a bare <div id="app">
+// with no error element, so an uncaught main() throw white-screened; now it surfaces a role=alert banner.
+runWithFatalBoundary(main, {
+  onError: (e) => console.error("Failed to initialize the Riemann Map studio:", e),
+  genericMessage: "Something went wrong starting the Riemann Map studio. See the browser console for details.",
+});

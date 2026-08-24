@@ -2418,8 +2418,15 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    `"application"` (which lies to assistive tech that keyboard is handled) — so `attachCanvasA11y` gained a
    `role: "application" | "img"` option (the U3 discovery, with a jsdom test). Verified with a headless-Chromium
    smoke over BOTH pages (static views img+labelled+not-focusable; panels application+focusable; ArrowRight moves
-   θ to 2°; no fatal banner; no console errors); correspondences' 97 tests stay green. **Remaining:** riemann-map,
-   argument-principle, the plotter.
+   θ to 2°; no fatal banner; no console errors); correspondences' 97 tests stay green. **riemann-map DONE (U4):**
+   `main()` wrapped in `runWithFatalBoundary`; both pan/zoom panes made accessible + keyboard-operable by enriching
+   the app's own `attachPanZoom` (nav.ts) with an optional `a11yLabel` — so the keyboard pan/zoom rides the SAME
+   `get`/`set`/pan-lock as the pointer path, and both panes get it from one integration point. The left pane's
+   decorative overlay canvas is marked `aria-hidden`. No new primitive gap surfaced (the attach + `role` API already
+   covered it — the adoptions have converged). Verified with a headless-Chromium smoke (both panes
+   application+focusable+labelled, overlay aria-hidden, keyboard `+` zooms the permalink, no fatal banner, no console
+   errors); riemann-map's 60 tests stay green (nav.test.ts unaffected by the transitive @cas/ui import).
+   **Remaining:** argument-principle, the plotter.
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just
