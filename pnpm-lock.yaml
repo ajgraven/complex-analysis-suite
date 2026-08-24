@@ -56,6 +56,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       katex:
         specifier: ^0.17.0
         version: 0.17.0
@@ -108,6 +111,9 @@ importers:
       '@cas/schwarz':
         specifier: workspace:*
         version: link:../../packages/schwarz
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       driver.js:
         specifier: ^1.5.0
         version: 1.6.0
@@ -166,6 +172,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       katex:
         specifier: ^0.17.0
         version: 0.17.0
@@ -212,6 +221,9 @@ importers:
       '@cas/schwarz':
         specifier: workspace:*
         version: link:../../packages/schwarz
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0
@@ -255,6 +267,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0
@@ -308,6 +323,9 @@ importers:
       '@cas/exact':
         specifier: workspace:*
         version: link:../../packages/exact
+      '@cas/schwarz':
+        specifier: workspace:*
+        version: link:../../packages/schwarz
       eslint:
         specifier: ^9.39.4
         version: 9.39.4
@@ -341,6 +359,9 @@ importers:
       '@cas/interchange':
         specifier: workspace:*
         version: link:../../packages/interchange
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       katex:
         specifier: ^0.17.0
         version: 0.17.0
@@ -563,6 +584,27 @@ importers:
       eslint:
         specifier: ^9.17.0
         version: 9.39.4
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+      typescript-eslint:
+        specifier: ^8.18.0
+        version: 8.62.1(eslint@9.39.4)(typescript@5.9.3)
+      vitest:
+        specifier: ^2.1.4
+        version: 2.1.9(@types/node@26.1.1)(@vitest/browser@2.1.9)(jsdom@26.1.0)(msw@2.15.0(@types/node@26.1.1)(typescript@5.9.3))(terser@5.48.0)
+
+  packages/ui:
+    devDependencies:
+      '@eslint/js':
+        specifier: ^9.17.0
+        version: 9.39.4
+      eslint:
+        specifier: ^9.17.0
+        version: 9.39.4
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3
@@ -2108,6 +2150,7 @@ packages:
   eslint@9.39.4:
     resolution: {integrity: sha512-XoMjdBOwe/esVgEvLmNsD3IRHkm7fbKIUGvrleloJXUZgDHig2IPWNniv+GwjyJXzuNqVjlr5+4yVUZjycJwfQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+    deprecated: This version is no longer supported. Please see https://eslint.org/version-support for other options.
     hasBin: true
     peerDependencies:
       jiti: '*'

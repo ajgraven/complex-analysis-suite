@@ -2,6 +2,7 @@
 // hover any panel to sync the equator angle θ across all three; click to trace the shared doubling orbit
 // θ ↦ −2θ (the degree-2 equator map that both z̄² and the group's Nielsen map realise on the circle).
 // Each panel's static base is drawn once to an offscreen canvas; pointer events only blit + overlay.
+import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import {
   drawFold,
   drawPanel,
@@ -14,6 +15,8 @@ import {
 
 const SIZE = 380;
 const FOLD_SIZE = 460;
+const TAU = 2 * Math.PI;
+const THETA_STEP = TAU / 180; // ~2° per arrow-key press (keyboard equivalent of dragging the equator angle)
 const SPACES: Space[] = ["map", "group", "sigma"];
 const LABELS: Record<Space, [string, string]> = {
   map: ["z̄²", "map side"],
@@ -32,6 +35,7 @@ const state: MatingState = { theta: null, orbit: null };
 let panels: PanelUI[] = [];
 let readout: HTMLElement | null = null;
 let orbitToken = 0; // bumping this cancels any in-flight orbit animation
+let kbTheta = 0; // the keyboard's current angle, kept across an orbit (which clears state.theta)
 
 // M5 — the unmating/folding viewer (a 4th, independent canvas with a scrub slider + play/pause)
 let foldT = 0;
@@ -187,12 +191,37 @@ function build(): void {
       e.preventDefault();
       startOrbit(pointerTheta(p, e));
     });
+    // Keyboard equivalent of the pointer interaction (ADR-0028, U3): ←/→ move the shared equator angle θ,
+    // Enter/Space traces its θ ↦ −2θ orbit. The angle is synced across all three panels, so any panel drives it.
+    attachCanvasA11y(p.canvas, {
+      label: `Mating equator, ${LABELS[p.space][1]} (${LABELS[p.space][0]}) — left/right arrows move the angle θ, Enter traces its orbit`,
+      onKey: (a) => {
+        if (a.kind === "pan" && a.dx !== 0) {
+          orbitToken++; // moving cancels any running orbit, matching the pointer path
+          state.orbit = null;
+          // Resume from the shared hover angle if one is set, else from the last keyboard angle (an orbit
+          // clears state.theta, so without kbTheta the next nudge would jump back to 0°).
+          kbTheta = ((((state.theta ?? kbTheta) + a.dx * THETA_STEP) % TAU) + TAU) % TAU;
+          state.theta = kbTheta;
+          render();
+        } else if (a.kind === "commit") {
+          startOrbit(state.theta ?? kbTheta);
+        }
+      },
+    });
   }
   render();
 
   // M5 fold viewer
   const foldCanvas = document.getElementById("mate-fold");
-  if (foldCanvas instanceof HTMLCanvasElement) foldCtx = foldCanvas.getContext("2d");
+  if (foldCanvas instanceof HTMLCanvasElement) {
+    foldCtx = foldCanvas.getContext("2d");
+    // Slider/button-driven animation, not pointer-interactive — name it for a screen reader (role="img").
+    attachCanvasA11y(foldCanvas, {
+      role: "img",
+      label: "The conformal-mating fold animation — scrubbed by the slider below",
+    });
+  }
   const slider = document.getElementById("fold-slider");
   foldSlider = slider instanceof HTMLInputElement ? slider : null;
   const btn = document.getElementById("fold-play");
@@ -210,4 +239,9 @@ function build(): void {
   renderFold();
 }
 
-build();
+// Run inside @cas/ui's fatal-error boundary (ADR-0028, U3): mating.html boots into a bare <div id="app">
+// with no error element, so an uncaught build() throw white-screened; now it surfaces a role=alert banner.
+runWithFatalBoundary(build, {
+  onError: (e) => console.error("Failed to initialize the mating explorer:", e),
+  genericMessage: "Something went wrong starting the mating explorer. See the browser console for details.",
+});

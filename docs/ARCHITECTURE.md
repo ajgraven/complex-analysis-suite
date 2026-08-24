@@ -8,18 +8,23 @@ for why extraction is demand-driven rather than up-front.
 > **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
 > inventory. What actually exists:
 >
-> - **Ten packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+> - **Eleven packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
 >   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`,
->   `@cas/faber`** — the middle four later than the phase plan, on the same second-consumer rule
+>   `@cas/faber`, `@cas/ui`** — the middle four later than the phase plan, on the same second-consumer rule
 >   (`@cas/exact`: Complex Dynamics and
 >   Correspondences both needed exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ
 >   engine, shared by Complex Dynamics and Correspondences; `@cas/dynamics`: the inverse-Böttcher machinery,
 >   ADR-0014; `@cas/export`: PNG `tEXt` metadata across four apps, ADR-0016; `@cas/conformal`: the
 >   conformal-map builder extracted *ahead* of demand, ADR-0018; `@cas/faber`: the exterior Faber engine,
->   ADR-0024). The **`ui` and `quadrature`**
->   packages sketched in the layer diagram and §3 were **never extracted** — no second consumer needed the
->   whole of either (the Correspondences app keeps its own σ-construction and parabolic-Tricorn model),
->   though the `ui` package's PNG-metadata half did later ship as `@cas/export`. That is the
+>   ADR-0024; and an **eleventh**, **`@cas/ui`** — the shared **browser shell** (canvas a11y, a fatal-error
+>   boundary, an off-thread compute client, a nav header) — extracted *ahead* of app adoption after a UX review
+>   proved the demand across the apps, ADR-0032). The **`quadrature`** package sketched in the layer diagram and
+>   §3 was **never extracted** — no second consumer needed the whole of it (the Correspondences app keeps its own
+>   σ-construction and parabolic-Tricorn model). Note `@cas/ui` is a **narrower** scope than the KaTeX/theming UI
+>   kit sketched in §3 below: that kit's PNG-metadata half had earlier shipped as `@cas/export`, and the rest
+>   remains app-local — so the several "`@cas/ui` was never extracted" statements later in this document are
+>   **superseded by [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)** and
+>   describe that *would-be UI kit*, not the shell that now exists. That is the
 >   [ADR-0007](DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need) demand-driven rule working
 >   as intended, not an unfinished migration.
 > - **`@cas/core` shipped leaner** than §3 describes: it holds complex arithmetic, the
@@ -134,24 +139,33 @@ in [INTERCHANGE.md](INTERCHANGE.md). This is what makes "pass off a Schwarz refl
 from the Quadrature tool to the Dynamics tool" a one-line, type-checked operation
 instead of an ad-hoc JSON blob.
 
-> Of the three packages below, **`@cas/quadrature` was never extracted** and **`@cas/ui` only partly**
-> (its PNG-metadata half shipped as `@cas/export`, ADR-0016; the rest stayed app-local) — the demand-driven
+> Of the three packages below, **`@cas/quadrature` was never extracted**, while **`@cas/ui`** eventually was —
+> but as a narrower **browser shell** (ADR-0032), not the KaTeX/theming kit sketched here, whose PNG-metadata
+> half had shipped as `@cas/export` (ADR-0016) with the rest staying app-local — the demand-driven
 > rule (extract only when a second consumer needs it, ADR-0007) fired for them selectively — while
 > **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
 > became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
 > though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
-> The suite now ships **ten** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
-> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, and `@cas/faber` (`@cas/exact`
+> The suite now ships **eleven** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, and `@cas/ui` (`@cas/exact`
 > through `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
 > extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore);
-> `@cas/faber` is the exterior Faber-transform engine behind the Faber Transform app, [ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)).
+> `@cas/faber` is the exterior Faber-transform engine behind the Faber Transform app, [ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine);
+> `@cas/ui` is the shared **browser shell** — the canvas-a11y / fatal-boundary / off-thread-compute / nav-header primitives — extracted *ahead* of app adoption, [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)).
 > The sections are kept as design intent; each notes where the functionality actually lives today.
 
-### `@cas/ui` — the shared UI kit *(partly built — PNG metadata shipped as `@cas/export`)*
+### `@cas/ui` — the shared UI kit *(this section = the would-be **KaTeX/theming** kit; the `@cas/ui` PACKAGE now exists as a narrower browser shell — ADR-0032)*
+> **Note (ADR-0032):** the `@cas/ui` **package** was extracted as the **browser shell** — canvas
+> accessibility, a fatal-error boundary, an off-thread compute client, and a suite nav header — a *different,
+> narrower* scope than the KaTeX/inspector/theming kit this section sketches. The kit below remains
+> app-local (except the two halves already shared out, noted next). Read the rest of this section as the
+> original design intent for that kit, not the state of the package.
+
 Would hold KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider
 pads; the glossary framework; share-link serialization and reproducibility-metadata PNG embedding;
-theming. **Status: only the PNG-metadata half shipped** — as **`@cas/export`** (ADR-0016), when three
-apps each carried a byte-equivalent copy. The KaTeX / inspector / theming UI helpers remain app-local;
+theming. **Status: the PNG-metadata half shipped** — as **`@cas/export`** (ADR-0016), when three
+apps each carried a byte-equivalent copy — and the a11y / fatal-boundary / compute / nav-header primitives
+now live in **`@cas/ui`** (ADR-0032). The KaTeX / inspector / theming UI helpers remain app-local;
 the versioned `#vs=` **view-state codec** is shared into `@cas/interchange`.
 
 ### `@cas/export` — figure-export primitives *(built — ADR-0016)*
@@ -392,11 +406,12 @@ This is realized in two cheap, additive pieces:
    and a link to each. It sits at the suite's top-level GitHub Pages URL with each published app
    under a subpath beneath it — one combined deploy, not independent per-app sites (see §8). This
    is the "menu to select between apps."
-2. **A shared navigation header (later, not built).** A small component that would be promoted into
-   a shared `@cas/ui` package (never extracted — §3) and rendered by each app, offering a dropdown to jump to the sibling
-   apps (and, where a hand-off is meaningful, a "send this to <app>" action that uses the
-   [interchange](INTERCHANGE.md) deep-link codec). This makes cross-navigation available
-   *inside* each app without merging them.
+2. **A shared navigation header (the primitive is built; app wiring is the open U7).** A small component,
+   `mountNavHeader`, now lives in the extracted **`@cas/ui`** package ([ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell))
+   with the `SUITE_APPS` registry — offering back-to-launcher + a jump to the sibling apps and, where a hand-off
+   is meaningful, a "send this to <app>" action over the [interchange](INTERCHANGE.md) deep-link codec. It is
+   **not yet rendered by the apps** — that adoption (and wiring the hand-off picker to the known map kinds) is
+   ADR-0032's remaining **U7**. This makes cross-navigation available *inside* each app without merging them.
 
 **Why not a unified shell.** A single-page shell that hosts every tool as a tab would
 have to own cross-tool routing, a shared global state store, and a merged build — a
@@ -407,6 +422,7 @@ entry point, easy movement between tools, hand-off between them) at a fraction o
 cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all seven apps (plus a "Coming soon" correspondences card); the shared-nav header
-remains **unbuilt** — it awaited a `@cas/ui` package that was never extracted (§3). See
-[MIGRATION](MIGRATION.md).
+The launcher is a static stub (`apps/launcher`) listing all seven apps (plus a "Coming soon" correspondences card); the shared-nav header's
+component (`mountNavHeader`) now lives in the extracted `@cas/ui` package (ADR-0032, §3) but is **not yet rendered
+by the apps** — that adoption (and wiring its "send this to <app>" hand-off picker to the interchange codec) is
+ADR-0032's remaining **U7**. See [MIGRATION](MIGRATION.md).

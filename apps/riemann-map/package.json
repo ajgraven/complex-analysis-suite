@@ -21,6 +21,7 @@
     "@cas/export": "workspace:*",
     "@cas/expr": "workspace:*",
     "@cas/interchange": "workspace:*",
+    "@cas/ui": "workspace:*",
     "katex": "^0.17.0"
   },
   "devDependencies": {

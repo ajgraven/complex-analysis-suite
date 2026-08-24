@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **seven** applications riding **ten** shared `@cas/*` packages:
+It currently hosts **seven** applications riding **eleven** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -50,10 +50,13 @@ What's **deferred / exploratory** (by design, not omission):
   `d:d`) beyond the deltoid.
 - **QD Schwarz df64 deep-zoom** (the df64 substrate exists in `@cas/gpu`; wiring it into
   the Quadrature app's Schwarz renderer is not yet done).
-- The **`ui` / `quadrature` / `dynamics`** packages sketched in
-  [ARCHITECTURE.md](docs/ARCHITECTURE.md) were **never extracted** — no second consumer
-  ever needed them, which is exactly what [ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
-  prescribes. The Correspondences app kept its σ-construction and Tricorn model local.
+- The broad **`quadrature` / `dynamics`** *domain* packages sketched in
+  [ARCHITECTURE.md](docs/ARCHITECTURE.md) were **never extracted** whole — no second consumer
+  needed all of either, which is exactly what [ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)
+  prescribes (the Correspondences app kept its σ-construction and Tricorn model local; the narrower
+  inverse-Böttcher slice *did* ship as `@cas/dynamics`, ADR-0014). The would-be **`ui`** kit split too:
+  its PNG-metadata half shipped as `@cas/export`, and the browser-shell primitives were later extracted as
+  **`@cas/ui`** ([ADR-0032](docs/DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)).
 
 ---
 
@@ -121,12 +124,14 @@ complex-analysis-suite/
     └── faber-transform/      ← exterior Faber-transform visualizer (curved + polygonal K)
 ```
 
-> **The ten packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, and `@cas/faber`.
+> **The eleven packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, and `@cas/ui`.
 > Packages were extracted **only as a second consumer proved it needed them**
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
-> `ui` and `quadrature` packages that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
-> fully materialized (the `ui` package's PNG-metadata half did ship, as `@cas/export`), and why
+> `quadrature` package that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
+> fully materialized; the `ui` target split in two — its PNG-metadata half shipped as `@cas/export`, and the
+> browser-shell primitives (canvas a11y, fatal boundary, off-thread compute, nav header) were later extracted
+> as **`@cas/ui`** *ahead* of adoption ([ADR-0032](docs/DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)). And why
 > `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` appeared *later* than the phase plan:
 > each waited for its second consumer. The **one exception** is `@cas/conformal` — the lightning +
 > forward-map conformal builder, carved out of the Riemann-map app *ahead* of its second consumer

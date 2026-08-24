@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@cas/exact": "workspace:*",
+    "@cas/schwarz": "workspace:*",
     "eslint": "^9.39.4",
     "globals": "^15.15.0",
     "jsdom": "^26.1.0",

@@ -1,0 +1,14 @@
+{
+  // @cas/ui is strict TypeScript with a DOM surface (the base tsconfig already provides the DOM libs).
+  // SOURCE-exports model: no emit — consumers (Vite/Vitest) resolve src/*.ts directly. Mirrors
+  // @cas/schwarz's rigor.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src", "test"]
+}

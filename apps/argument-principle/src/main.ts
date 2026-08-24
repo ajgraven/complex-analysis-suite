@@ -60,6 +60,7 @@ import {
 } from "./render/plane.js";
 import { drawArgGraph } from "./render/argGraph.js";
 import { logDerivIntegral, partialLogDerivIntegral, normalizeByTwoPiI, type Cplx } from "./integral.js";
+import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import { attachImagePlane, attachContourPlane, type ContourMode } from "./render/nav.js";
 import { createTooltip, type Tooltip } from "./render/tooltip.js";
 import { findSingularities, countInside, type Region, type Singularities } from "./singularities.js";
@@ -469,12 +470,23 @@ function main(): void {
     '<span class="key zero">○ zero</span> <span class="key pole">✕ pole</span> ' +
     '<span class="key crit">◆ f′=0</span>';
   zPane.append(zCanvas, zCap);
+  // Name each pane for a screen reader (ADR-0028, U5). These are mouse-interactive (draw/pan/drag) but not
+  // yet keyboard-driven, so role="img" — the honest choice (role="application" would claim keyboard support
+  // the canvas doesn't have). Keyboard operability of the contour tools is a deferred follow-on.
+  attachCanvasA11y(zCanvas, {
+    role: "img",
+    label: "Domain, the z-plane: the contour γ, with the map's zeros, poles, and critical points",
+  });
   const wPane = document.createElement("figure");
   wPane.className = "pane";
   const wCanvas = makeCanvas();
   const wCap = document.createElement("figcaption");
   wCap.innerHTML = "<b>Image</b> — w = f(z) · f(γ) · drag the ● target w₀ · drag to pan, scroll to zoom";
   wPane.append(wCanvas, wCap);
+  attachCanvasA11y(wCanvas, {
+    role: "img",
+    label: "Image, the w-plane: the image curve f(γ) and its winding number about the origin",
+  });
   stage.append(zPane, wPane);
 
   // A1 — the always-on argument strip-chart: accumulated turns of arg f(γ(t)) vs t.
@@ -487,6 +499,10 @@ function main(): void {
     "<b>Argument</b> — accumulated turns of arg f(γ(t)) vs t · one turn = 2π · " +
     "the curve lands on the winding number";
   argPanel.append(argCanvas, argCap);
+  attachCanvasA11y(argCanvas, {
+    role: "img",
+    label: "The accumulated argument of f along the contour versus t; one turn is 2π, landing on the winding number",
+  });
 
   // The persistent equality readout, laid out AS the equation (§12 organization). Always present — the
   // badge + numbers + verdict update in place; nothing appears/vanishes. `updateReadout` populates it.
@@ -1586,4 +1602,10 @@ function main(): void {
   }
 }
 
-main();
+// Run inside @cas/ui's fatal-error boundary (ADR-0028, U5): the explorer boots into a bare <div id="app">
+// with no error element, so an uncaught main() throw white-screened; now it surfaces a role=alert banner.
+runWithFatalBoundary(main, {
+  onError: (e) => console.error("Failed to initialize the Argument Principle explorer:", e),
+  genericMessage:
+    "Something went wrong starting the Argument Principle explorer. See the browser console for details.",
+});

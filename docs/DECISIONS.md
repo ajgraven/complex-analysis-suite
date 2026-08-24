@@ -36,9 +36,14 @@ Format follows Michael Nygard's ADR convention.
 | [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
 | [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication) | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication) | Accepted |
 | [0027](#adr-0027-extract-mapspectoexpr-into-casinterchange) | Extract the `MapSpec` → `@cas/expr` converter into `@cas/interchange` | Accepted |
+| [0028](#adr-0028-riemann-surface-mode-in-the-plotter--parametrize-by-w-branch-machinery-in-app) | Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app | Accepted |
+| [0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing) | Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing) | Accepted |
+| [0030](#adr-0030-riemann-surface-exploration-tools-m3--hover-pick-linked-base-plane-monodromy) | Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy) | Accepted |
+| [0031](#adr-0031-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer) | Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer | Accepted |
+| [0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell) | Extract `@cas/ui` ahead of adoption; port CD's product shell | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All twenty-seven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All thirty-two are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -482,7 +487,7 @@ is loud.
 ### Action Items
 
 1. [x] Document the canonical interchange convention in [INTERCHANGE.md](INTERCHANGE.md).
-2. [ ] Add a test asserting `core` contains no `π`/`2πi` normalization constants. — enforced **by construction** (the kernel carries no normalization constants) rather than by a dedicated guard test.
+2. [x] Add a test asserting `core` contains no `π`/`2πi` normalization constants. — `packages/core/test/convention-neutral.test.ts` (a source scan banning `Math.PI` / bare `π` / π-derived normalization literals, with a `convention-ok` escape hatch for genuine geometric π). Previously "by construction"; now a red build. Makes RISKS.md §2 mitigation #1 ("a CI test asserts…") true rather than aspirational.
 3. [x] Implement per-app conversion shims at the interchange boundary.
 
 ---
@@ -2222,13 +2227,19 @@ another.
 1. [x] Note the boundary on both sides — a header line in `app/schwarz/schwarz-common.mjs` and in
        `@cas/schwarz`'s `index.ts` — stating the classical-subset duplication is a *deliberate deferral* (this
        ADR), and that the intended consolidation direction is lift-to-parity-then-consume.
-2. [ ] Add the **differential drift-guard**: a test feeding one classical φ (e.g. the deltoid `ζ + 1/(2ζ²)` and
-       a finite-pole bounded QD) to both `schwarz-common.mjs`'s `buildSchwarzFromPhi(...).sigma` and
-       `@cas/schwarz`'s `makeUnboundedLaurentSchwarz(...).sigma`, asserting σ(w) agrees to a numerical
-       tolerance on a grid of exterior w — reconciling the `{re,im}`↔`[re,im]` layouts and the branch/seed
-       selection. Adds `@cas/schwarz` to QD's devDependencies (the
+2. [x] Add the **differential drift-guard**: `apps/quadrature-domains/vitest/schwarz-differential.test.ts`
+       feeds three classical φ — the deltoid `ζ + 1/(2ζ²)` (unbounded pole-free), a single-exterior-pole
+       unbounded QD, and a finite-pole bounded QD — to both `schwarz-common.mjs`'s
+       `buildSchwarzFromPhi(...).sigma` and `@cas/schwarz`'s `makeUnboundedLaurentSchwarz`/`makeBoundedSchwarz`
+       `.sigma`, reconciling the `{re,im}`↔`[re,im]` layouts. Branch/seed ambiguity is sidestepped by
+       generating each grid `w = φ(z)` from a known preimage z (exterior for unbounded, interior for
+       bounded), the branch each engine's accept-z predicate selects. Because σ is float Newton on both
+       sides (so a pure A-vs-B check would pass on JOINT drift), every point is a three-way comparison
+       against an INDEPENDENT `@cas/core` reference σ, itself pinned to the hand-derived
+       `interchange/goldens.ts` (w₀, σ(w₀)) values. Adds `@cas/schwarz` to QD's devDependencies (the
        [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) Action-Item-4 pattern);
-       mutation-verify in both directions.
+       mutation-verified red on a perturbation to either engine. This lands the "guarded interim" the
+       Trade-off Analysis above promised.
 3. [ ] When a second consumer of the weighted families appears, execute Option B (lift `schwarz-common`'s
        weighted-family σ into `@cas/schwarz` to family parity, then rewire QD to consume the package) and
        supersede this ADR.
@@ -2667,3 +2678,159 @@ now is exactly the demand ADR-0029 §9 foresaw. The degree cap + honest labels (
        `@cas/core`. All M3 tools carry over via `riemannSheetsAt`. Node + browser tests.
 3. [x] Land M2c.2 — exact branch locus (`implicitExact.ts`, `@cas/exact` `discriminant`), `=`-labeled, with
        the `≈` scan as the fall-back for float coefficients. Node tests.
+
+---
+
+## ADR-0032: Extract `@cas/ui` ahead of adoption; port CD's product shell
+
+**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need), of the same shape as [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) but *milder* (the second-consumer bar is met many times over; only app-by-app **adoption** is deferred).
+
+### Context
+
+Every prior `@cas/*` package extracted the suite's *mathematics*. A 2026-08 cross-cutting UX review found the
+suite's quality is **bimodal**: the two founder apps (Complex Dynamics, Quadrature Domains) are product-mature —
+real keyboard a11y, WebGL fallbacks, `role="alert"` error banners, worker-offloaded solves — while the five
+newer TS apps (riemann-map, argument-principle, faber-transform, correspondences, and to a lesser degree the
+plotter) inherited the math rigor but **not** the product shell:
+
+- **A11y (finding #2):** six of seven apps expose a bare `<canvas>` a screen reader cannot see; the four newest
+  have **zero** keyboard handlers. Only CD is keyboard-operable.
+- **Error UX (finding #3):** the newest apps have **no** fatal-error element — an uncaught `init` throw
+  white-screens into an empty `<div id="app">`.
+- **Threading (finding #4):** faber / correspondences / riemann-map run heavy solves **synchronously** on the
+  main thread with no worker and no busy indicator — a hard input freezes the tab (correspondences even comments
+  the hazard).
+- **Navigation (finding #1) + interop:** navigation is one-way — once inside an app the only way back to the
+  launcher or across to a sibling is the browser back button; and the celebrated cross-app hand-off is 3
+  hard-coded `window.open` buttons with no discovery (`@cas/interchange` is a hub in the docs, three bilateral
+  wires in the UI).
+
+The root cause is structural: the extract-on-second-consumer rule ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need))
+was invoked constantly for math and **never once** for the shell, so the planned `@cas/ui` (VISION §6, ARCHITECTURE
+§11, decision #8) stayed deferred while each new app re-implemented — or simply omitted — a11y / error UX /
+threading / nav. Complex Dynamics already contains a **proven** implementation of all four.
+
+### Decision
+
+**Charter `@cas/ui` now — the suite's shared browser shell — by consolidating CD's proven patterns, then adopt it
+app-by-app.** It is the eleventh `@cas/*` package, source-exports model (like `@cas/schwarz` / `@cas/conformal`),
+and the **first with a real DOM surface** (its tests run under jsdom — the first non-node package environment;
+the DOM libs are already in `tsconfig.base.json`). Four primitives, each a straight port of a CD reference:
+
+1. **`mountCanvas`** / **`attachCanvasA11y`** — the accessible-canvas pattern (`apps/complex-dynamics/index.html:194-200`):
+   an `aria-hidden` render canvas beneath a focusable `role="application"` overlay with a descriptive `aria-label`,
+   a keyboard map (arrows pan, ± zoom, Enter/Space commit), and an `aria-live` status region. Two entry points share
+   ONE implementation: `mountCanvas` builds the DOM; `attachCanvasA11y` applies the same contract to a canvas an app
+   already built and lays out itself (added in U2 — Faber builds its own `gl`+`ov` panes, and a fresh mount would
+   fight its CSS). `attachCanvasA11y` takes a `role`: `"application"` (interactive — focusable, keyboard wired) or
+   `"img"` (a static visualization — named but not focusable, no keyboard; added in U3 for Correspondences' static
+   views, since `role="application"` on a non-interactive canvas is an a11y anti-pattern).
+2. **`runWithFatalBoundary` / `showFatalBanner`** — CD's init boundary (`main.ts:6876-6892`, `showFatalBanner`
+   at `:260-266`): try/catch/finally, WebGL2-aware copy, boot-overlay removal; **creates** the banner if the app
+   has none (fixing the white-screen).
+3. **`createComputeClient`** — a generalization of `render/juliaMetricsClient.ts`: worker-offload with request
+   coalescing + stale-response drop, a synchronous fallback, and an `onBusy` affordance.
+4. **`mountNavHeader`** (+ the `SUITE_APPS` registry, seeded from the launcher as **data**, not imports) —
+   back-to-launcher + sibling links, plus an optional "Send to…" hand-off picker.
+
+**Why this is a (mild) ADR-0007 exception.** [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)
+extracted `@cas/conformal` with **zero** consumers. Here the demand is **proven across five to seven apps** by the
+UX audit — so this is *not* extract-ahead-of-demand; it is extract-from-one-reference-implementation (CD) **ahead
+of app-by-app adoption**. The only ADR-0007 tension is that the pattern lives in *one* app today rather than
+having independently reappeared in two — but "would a second consumer want this?" is already answered six times.
+The extract-ahead is retro-justified as each app adopts (Action Items 6–11), exactly as ADR-0018 AI-6 retro-justified
+its builder when Schwarz–Christoffel landed.
+
+**Scope boundary — QD is deliberately NOT a consumer.** Quadrature Domains is `allowJs`/vanilla
+([ADR-0002](#adr-0002-typescript-as-the-common-language)), large, and *already* product-mature (the audit's
+top half). Forcing it onto a strict-TS shell buys nothing and violates the ADR-0002 / [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)
+precedent of leaving QD's mature surface in place. `@cas/ui` targets the **six TS apps**.
+
+**Dependency direction.** `@cas/ui` is a leaf UI package. In U0 it has **no** `@cas/*` runtime dependency (the
+nav picker is caller-driven — the app supplies `accepts`/`hrefFor`); the `@cas/interchange` edge is added at U7
+when the picker consults the known map kinds. App ids/labels are **data** in `apps.ts`, never imports, so
+`no-package-to-app` and `no-cross-app` hold (dependency-cruiser confirms: clean).
+
+### Options Considered
+
+- **A — charter `@cas/ui` now, adopt app-by-app (this ADR).** *Pros:* one source of truth for the shell; each new
+  app stops re-omitting it; consolidates CD's proven code rather than inventing. *Cons:* an extract-ahead-of-adoption
+  (softens ADR-0007 — recorded, milder than ADR-0018).
+- **B — per-app triage, extract only on the 2nd independent repetition.** *Rejected:* the reference already exists
+  (CD) and six apps already need it, so waiting means each app hand-rolls (or re-omits) the shell first and is
+  re-seamed later — the build-then-migrate waste [VISION §5](VISION.md#5-the-strategic-thesis) rejects.
+- **C — keep omitting (status quo).** *Rejected:* it is the finding.
+- **D — big-bang: adopt across all six apps in one change.** *Rejected:* violates working-software-per-step; a
+  regression in one app blocks all. Adoption is one PR per app with a behavior-identical gate.
+
+### Consequences
+
+- **Easier:** every TS app can gain accessibility, a graceful failure, off-thread compute, and suite navigation by
+  consuming a tested package instead of re-implementing (or skipping) each; the interop hand-off finally gets a
+  discovery surface (U7).
+- **Harder / owed:** an extract-ahead to be retro-justified by real adoption (U1–U6); the worker primitive's
+  serialization boundary genuinely differs per app, so U0 ships the fallback + coalescing + busy state and each app
+  wires its worker at adoption; a11y/perf remain **not** CI-enforced (a later, separate axe/pa11y job).
+- **First DOM package:** `@cas/ui` introduces the jsdom test environment; its tests assert the a11y wiring
+  (roles/labels/keyboard) and the sync-fallback path — the WebGL/worker paths are verified in-browser at adoption.
+- **Revisit:** if adoption stalls after U1 (CD only), ADR-0007's symmetric "don't split without two" would invite
+  folding the shell back; the U1 CD refactor (behavior-identical) is the first retro-justification.
+
+### Action Items
+
+1. [x] Charter ADR-0032 (this record).
+2. [x] Scaffold `packages/ui` (source-exports; jsdom vitest env) with the four primitives + `SUITE_APPS`.
+3. [x] jsdom unit tests for all four primitives (30 tests as of U6 — the U0 scaffold's 20 grew as U1–U6
+   hardened the primitives); typecheck + lint + dependency-cruiser green.
+4. [x] Register in `vitest.workspace.ts` + the test-census `PROJECTS` (a `ui` bucket).
+5. [x] **U1:** adopt in Complex Dynamics **first**, as a *behavior-identical refactor* onto the shared versions —
+   proving the API against the app it was ported from. Adopted the two primitives that are clean drop-ins:
+   `runWithFatalBoundary` (replacing CD's inline `showFatalBanner` + init try/catch/finally, same `#webgl-error`
+   banner and copy) and `createComputeClient` (CD's `JuliaMetricsClient` is now a thin adapter — its send-side
+   coalescing test passes before and after). Proving `createComputeClient` against CD surfaced a behavior the U0
+   primitive lacked — recovering the in-flight request when the worker dies (`cd-metricsworker-01`) — which was
+   folded INTO the shared primitive (with its own worker-path tests), exactly what "prove against the app it came
+   from" is for. `mountCanvas` and `mountNavHeader` are **not** adopted in CD here: CD's canvas is static
+   two-plot HTML (converting it to a JS mount is not behavior-neutral) and a nav header is a new feature — both
+   fit later apps / a deliberate rollout better than a behavior-identical CD refactor. Full CD suite green before
+   and after (84 files / 833 tests).
+6. [x] **U2–U6:** adopt in the five TS apps, one PR each, each closing that app's specific audit findings.
+   **faber-transform DONE (U2):** wrapped its entry in `runWithFatalBoundary` (it had no error element — an init
+   throw white-screened into the empty `<div id="app">`) and gave both render panes accessibility + keyboard via
+   `attachCanvasA11y` (arrows pan / ± zoom the viewport, distinct `aria-label`s, the `gl` layer marked
+   `aria-hidden`). Proving `mountCanvas` against Faber surfaced that apps build their own canvas + layout, so the
+   primitive gained `attachCanvasA11y` (an attach mode over the shared code path) rather than forcing a fresh mount
+   — the U2 analogue of U1's worker-recovery discovery. Verified with a headless-Chromium smoke (roles/labels/live
+   region present, no fatal banner, ArrowUp pans + `+` zooms the permalink, no console errors) plus the primitive's
+   jsdom tests. **correspondences DONE (U3):** both entrypoints (`main.ts`, `mating.html`'s `matingMain.ts`)
+   wrapped in `runWithFatalBoundary` (both booted into a bare `<div id="app">`); the four STATIC views on the
+   main page named with `role="img"` labels; the three interactive mating panels given `role="application"` +
+   keyboard (←/→ move the shared equator angle θ, Enter traces its θ↦−2θ orbit) and the fold viewer `role="img"`.
+   Proving against correspondences surfaced that a NON-interactive visualization must be `role="img"`, not
+   `"application"` (which lies to assistive tech that keyboard is handled) — so `attachCanvasA11y` gained a
+   `role: "application" | "img"` option (the U3 discovery, with a jsdom test). Verified with a headless-Chromium
+   smoke over BOTH pages (static views img+labelled+not-focusable; panels application+focusable; ArrowRight moves
+   θ to 2°; no fatal banner; no console errors); correspondences' 97 tests stay green. **riemann-map DONE (U4):**
+   `main()` wrapped in `runWithFatalBoundary`; both pan/zoom panes made accessible + keyboard-operable by enriching
+   the app's own `attachPanZoom` (nav.ts) with an optional `a11yLabel` — so the keyboard pan/zoom rides the SAME
+   `get`/`set`/pan-lock as the pointer path, and both panes get it from one integration point. The left pane's
+   decorative overlay canvas is marked `aria-hidden`. No new primitive gap surfaced (the attach + `role` API already
+   covered it — the adoptions have converged). Verified with a headless-Chromium smoke (both panes
+   application+focusable+labelled, overlay aria-hidden, keyboard `+` zooms the permalink, no fatal banner, no console
+   errors); riemann-map's 60 tests stay green (nav.test.ts unaffected by the transitive @cas/ui import).
+   **argument-principle + plotter DONE (U5+U6, batched):** both `main()`s wrapped in `runWithFatalBoundary`
+   (arg-principle had no error element; the plotter reuses its existing `#error` banner — the wrap now catches
+   init throws OUTSIDE its inner Plot try/catch that previously white-screened). arg-principle's three panes
+   (z-plane, w-plane, argument strip) named `role="img"` (mouse-interactive, keyboard deferred — its contour
+   drawing is the least keyboard-natural interaction). The plotter's `#view` was ALREADY fully accessible in
+   static HTML (role/tabindex/label + its own `keyToNav` keyboard, `#axes` aria-hidden), so U6 added only the
+   boundary. Two small primitive refinements fell out: `attachCanvasA11y` skips its keydown listener when no
+   `onKey` is given (a `role="application"` canvas whose app owns keyboard — the plotter — just needs the
+   name), and the live region falls back to `<body>` so naming a not-yet-attached canvas never appends into
+   it. Both verified with a headless-Chromium smoke (arg-principle: 3 img-labelled panes, no fatal banner;
+   plotter: `#view` a11y intact, no error shown; no console errors either); their 15 + 18 tests stay green.
+   **This completes the app rollout (U1–U6).**
+7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
+   (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
+8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just
+   introduced-once-and-forgotten.

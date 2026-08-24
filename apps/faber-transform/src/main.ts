@@ -7,6 +7,7 @@
 // convergence R reported; K sits well inside it, so the convergence equipotential itself is not drawn).
 import { Complex, orientCCW } from "@cas/core";
 import type { Cx } from "@cas/core";
+import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import { formatFaberPoly } from "@cas/faber";
 import { interiorAngles } from "@cas/conformal";
 import { F_PRESETS, MENU_PRESETS, phiPresetById } from "./presets.js";
@@ -48,6 +49,8 @@ import {
   tracePolygon,
   viewPxToWorld,
   zoomAboutCursor,
+  ZOOM_MIN,
+  ZOOM_MAX,
 } from "./render/plane.js";
 import type { Vec2, Viewport, PlaneMap } from "./render/plane.js";
 import { matchedBoundaryDots, transplantGrid, transplantResidual } from "./render/correspondence.js";
@@ -299,6 +302,9 @@ interface Panel {
 function makePanel(title: string): { panel: Panel; el: HTMLElement } {
   const gl = elt("canvas", { class: "gl" });
   const ov = elt("canvas", { class: "ov" });
+  // The GPU render layer sits behind the interactive `ov` overlay; hide it from the screen reader so only
+  // the overlay (named + keyboard-operable via attachCanvasA11y in attachNav) is announced (ADR-0028, U2).
+  gl.setAttribute("aria-hidden", "true");
   const stage = elt("div", { class: "stage" });
   stage.append(gl, ov);
   const box = elt("div", { class: "panel" });
@@ -1018,7 +1024,12 @@ function main(): void {
     commit: (index: number, world: Vec2) => void;
   }
 
-  function attachNav(canvas: HTMLCanvasElement, which: "zView" | "wView", edit?: EditHooks): void {
+  function attachNav(
+    canvas: HTMLCanvasElement,
+    which: "zView" | "wView",
+    label: string,
+    edit?: EditHooks,
+  ): void {
     let grab: Vec2 | null = null;
     let dragVertex = -1;
     const worldAt = (f: { fx: number; fyTop: number; aspect: number }): Vec2 => viewPxToWorld(viewOf(which), f.fx, f.fyTop, f.aspect);
@@ -1082,14 +1093,44 @@ function main(): void {
       },
       { passive: false },
     );
+
+    // Keyboard operability + screen-reader name (ADR-0028, U2): arrows pan, +/− zoom about centre — the
+    // same viewport ops the pointer/wheel drive above, so a keyboard-only user gets the pane too. The
+    // aria-label names the visualization for assistive tech (the gl layer behind is aria-hidden).
+    attachCanvasA11y(canvas, {
+      label,
+      onKey: (a) => {
+        const v = viewOf(which);
+        if (a.kind === "pan") {
+          const step = (BASE_HALF / v.zoom) * 0.15;
+          commit(
+            withView(which, {
+              ...v,
+              centerRe: v.centerRe + a.dx * step,
+              centerIm: v.centerIm - a.dy * step,
+            }),
+          );
+        } else if (a.kind === "zoom") {
+          // Clamp to the same bounds the wheel path enforces (via zoomAboutCursor) — an unbounded keyboard
+          // zoom could otherwise run to Infinity and NaN the view.
+          const z = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v.zoom * (a.direction > 0 ? 1.25 : 1 / 1.25)));
+          commit(withView(which, { ...v, zoom: z }));
+        }
+      },
+    });
   }
-  attachNav(left.panel.ov, "zView");
-  attachNav(right.panel.ov, "wView", {
-    active: () => state.phi === CUSTOM_PHI && !!model && !!model.rightHandles,
-    handles: () => model?.rightHandles ?? [],
-    preview: previewVertexDrag,
-    commit: commitVertexDrag,
-  });
+  attachNav(left.panel.ov, "zView", "Domain: the function f on the unit disk — arrow keys pan, + and − zoom");
+  attachNav(
+    right.panel.ov,
+    "wView",
+    "Image: the Faber transform of f on the compact set K — arrow keys pan, + and − zoom",
+    {
+      active: () => state.phi === CUSTOM_PHI && !!model && !!model.rightHandles,
+      handles: () => model?.rightHandles ?? [],
+      preview: previewVertexDrag,
+      commit: commitVertexDrag,
+    },
+  );
 
   // --- Control events -------------------------------------------------------
   /** Frame the K-panel to a domain's boundary extent (used for the custom polygon, whose size varies). */
@@ -1205,4 +1246,13 @@ function main(): void {
   render();
 }
 
-if (typeof document !== "undefined") main();
+// Run init inside @cas/ui's shared fatal-error boundary (ADR-0028, U2): an uncaught init throw used to
+// white-screen into the empty <div id="app"> — now it surfaces a role=alert banner instead. (WebGL is not
+// fatal here — createGpuRenderer falls back to a CPU portrait — so this guards unexpected init failures.)
+if (typeof document !== "undefined") {
+  runWithFatalBoundary(main, {
+    onError: (e) => console.error("Failed to initialize the Faber transform visualizer:", e),
+    genericMessage:
+      "Something went wrong starting the Faber transform visualizer. See the browser console for details.",
+  });
+}
