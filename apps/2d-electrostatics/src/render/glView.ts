@@ -31,7 +31,13 @@ interface Uniforms {
   doubletPos: WebGLUniformLocation | null;
   doubletMu: WebGLUniformLocation | null;
   modScale: WebGLUniformLocation | null;
+  equiSpacing: WebGLUniformLocation | null;
+  streamSpacing: WebGLUniformLocation | null;
 }
+
+// Contour spacing Δφ / Δψ. A 2π/N step keeps the log-term branch jumps (multiples of 2π for
+// integer-ish strengths) an integer number of intervals, so no spurious contour crosses the cut.
+const CONTOUR_SPACING = (2 * Math.PI) / 16;
 
 /** A reference field magnitude for the |E|→lightness transfer, from the strongest coefficient so the
  *  portrait is well-exposed regardless of the chosen strengths (never zero → no divide-by-zero). */
@@ -70,6 +76,8 @@ export function createFieldRenderer(gl: WebGL2RenderingContext): FieldRenderer {
     doubletPos: gl.getUniformLocation(program, "uDoubletPos"),
     doubletMu: gl.getUniformLocation(program, "uDoubletMu"),
     modScale: gl.getUniformLocation(program, "uModScale"),
+    equiSpacing: gl.getUniformLocation(program, "uEquiSpacing"),
+    streamSpacing: gl.getUniformLocation(program, "uStreamSpacing"),
   };
 
   // Reusable scratch arrays sized to the shader's uniform-array capacity.
@@ -113,6 +121,8 @@ export function createFieldRenderer(gl: WebGL2RenderingContext): FieldRenderer {
       gl.uniform2fv(u.doubletPos, doubletPos);
       gl.uniform2fv(u.doubletMu, doubletMu);
       gl.uniform1f(u.modScale, referenceScale(field));
+      gl.uniform1f(u.equiSpacing, CONTOUR_SPACING);
+      gl.uniform1f(u.streamSpacing, CONTOUR_SPACING);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindVertexArray(null);
     },

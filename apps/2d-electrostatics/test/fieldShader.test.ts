@@ -23,6 +23,14 @@ describe("field fragment shader assembly", () => {
     expect(FIELD_FRAGMENT_SHADER).toContain("cdiv(cneg(uDoubletMu[i]), cmul(d, d))");
   });
 
+  it("computes the potential W and its φ/ψ contour families", () => {
+    expect(FIELD_FRAGMENT_SHADER).toContain("cvec potentialW(cvec z)");
+    expect(FIELD_FRAGMENT_SHADER).toContain("cmul(uMonoCoef[i], clog(csub(z, uMonoPos[i])))"); // c·log(z−a)
+    expect(FIELD_FRAGMENT_SHADER).toContain("float contour(float v)"); // fwidth-antialiased contour
+    expect(FIELD_FRAGMENT_SHADER).toContain("uEquiSpacing");
+    expect(FIELD_FRAGMENT_SHADER).toContain("uStreamSpacing");
+  });
+
   it("bakes the uniform-array capacity from MAX_SINGULARITIES", () => {
     expect(MAX_SINGULARITIES).toBeGreaterThan(0);
     expect(FIELD_FRAGMENT_SHADER).toContain(`#define MAX_SING ${MAX_SINGULARITIES}`);

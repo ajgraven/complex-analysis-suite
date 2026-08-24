@@ -41,6 +41,8 @@ uniform vec2  uDoubletPos[MAX_SING];
 uniform vec2  uDoubletMu[MAX_SING];  // μ (complex)
 
 uniform float uModScale;     // reference |E| for the bounded magnitude→lightness transfer
+uniform float uEquiSpacing;  // Δφ between equipotentials (Re W). Use 2π/N so log branch jumps land clean.
+uniform float uStreamSpacing;// Δψ between streamlines / field lines (Im W). Same 2π/N discipline.
 
 // E(z) = W'(z) = uniform + Σ c/(z−a) + Σ −μ/(z−a)². Mirrors fieldE() in ../field.ts exactly.
 cvec fieldE(cvec z) {
@@ -57,6 +59,31 @@ cvec fieldE(cvec z) {
   return e;
 }
 
+// The complex potential W(z) = φ + iψ = uniform·z + Σ c·log(z−a) + Σ μ/(z−a). Multivalued through the
+// log terms; the contour() below is fed W/spacing with spacing = 2π/N so a 2π branch jump is an
+// integer number of intervals and leaves no spurious contour across the cut.
+cvec potentialW(cvec z) {
+  cvec w = cmul(uUniform, z);
+  for (int i = 0; i < MAX_SING; i++) {
+    if (i >= uMonoCount) break;
+    w = cadd(w, cmul(uMonoCoef[i], clog(csub(z, uMonoPos[i]))));  // c·log(z−a)
+  }
+  for (int i = 0; i < MAX_SING; i++) {
+    if (i >= uDoubletCount) break;
+    w = cadd(w, cdiv(uDoubletMu[i], csub(z, uDoubletPos[i])));    // μ/(z−a)
+  }
+  return w;
+}
+
+// Antialiased "on a contour line" factor for a field whose lines sit at integer values of v. fwidth
+// gives a screen-space width, so lines stay ~1px wide at any zoom and dissolve (rather than alias)
+// where the field varies fastest — near the singularities. (The @cas/gpu gridLine idiom, local copy.)
+float contour(float v) {
+  float d = abs(v - floor(v + 0.5));
+  float w = fwidth(v) * 1.2 + 1e-6;
+  return 1.0 - smoothstep(0.0, w, d);
+}
+
 void main() {
   cvec z = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
   cvec e = fieldE(z);
@@ -66,6 +93,17 @@ void main() {
   // clipping — the "encode strength by brightness, not arrow length" lesson, in shader form.
   float hue = fract(cre1(carg(e)) * 0.15915494309189535 + 1.0); // arg/2π
   float val = m / (m + uModScale);
-  outColor = vec4(hsv2rgb(vec3(hue, 0.82, val)), 1.0);
+  vec3 col = hsv2rgb(vec3(hue, 0.82, val));
+
+  // Overlay the two orthogonal contour families of W = φ + iψ: equipotentials (φ = Re W) as a quiet
+  // darkened line, streamlines / field lines (ψ = Im W) as a bright ink — distinct visual channels,
+  // since the two families are mathematically orthogonal and geometry alone can't separate them.
+  cvec w = potentialW(z);
+  float equi = contour(cre1(cre(w)) / uEquiSpacing);
+  float stream = contour(cre1(cim(w)) / uStreamSpacing);
+  col = mix(col, col * 0.45, 0.55 * equi);
+  col = mix(col, vec3(0.97), 0.85 * stream);
+
+  outColor = vec4(col, 1.0);
 }
 `;
