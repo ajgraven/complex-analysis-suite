@@ -31,18 +31,23 @@ function styleVisuallyHidden(el: HTMLElement): void {
   el.style.whiteSpace = "nowrap";
 }
 
-// The single shared implementation: give `overlay` the focusable role + label + keyboard map, and append
-// a polite live region to `liveHost`. Returns announce + a teardown that reverses exactly what it added.
+// The single shared implementation. Sets `role` + label, appends a polite live region to `liveHost`, and
+// — for an INTERACTIVE (`role="application"`) surface only — makes it focusable and wires the keyboard map.
+// A static visualization (`role="img"`) is named but not focusable and drives no keyboard: giving a
+// non-interactive canvas `role="application"` is an a11y anti-pattern (it tells assistive tech the element
+// handles keyboard when it does not). Returns announce + a teardown that reverses exactly what it added.
 function applyCanvasA11y(
   doc: Document,
   overlay: HTMLCanvasElement,
   liveHost: HTMLElement,
+  role: "application" | "img",
   label: string,
   onKey?: (action: CanvasKeyAction, ev: KeyboardEvent) => void,
 ): { announce: (message: string) => void; teardown: () => void } {
-  overlay.tabIndex = 0;
-  overlay.setAttribute("role", "application");
+  const interactive = role === "application";
+  overlay.setAttribute("role", role);
   overlay.setAttribute("aria-label", label);
+  if (interactive) overlay.tabIndex = 0;
 
   const status = doc.createElement("div");
   status.setAttribute("role", "status");
@@ -50,48 +55,51 @@ function applyCanvasA11y(
   styleVisuallyHidden(status);
   liveHost.appendChild(status);
 
-  const onKeyDown = (ev: KeyboardEvent): void => {
-    if (!onKey) return;
-    let action: CanvasKeyAction | null = null;
-    switch (ev.key) {
-      case "ArrowLeft":
-        action = { kind: "pan", dx: -PAN_STEP, dy: 0 };
-        break;
-      case "ArrowRight":
-        action = { kind: "pan", dx: PAN_STEP, dy: 0 };
-        break;
-      case "ArrowUp":
-        action = { kind: "pan", dx: 0, dy: -PAN_STEP };
-        break;
-      case "ArrowDown":
-        action = { kind: "pan", dx: 0, dy: PAN_STEP };
-        break;
-      case "+":
-      case "=":
-        action = { kind: "zoom", direction: 1 };
-        break;
-      case "-":
-      case "_":
-        action = { kind: "zoom", direction: -1 };
-        break;
-      case "Enter":
-      case " ":
-        action = { kind: "commit" };
-        break;
-      default:
-        return;
-    }
-    ev.preventDefault();
-    onKey(action, ev);
-  };
-  overlay.addEventListener("keydown", onKeyDown);
+  let onKeyDown: ((ev: KeyboardEvent) => void) | null = null;
+  if (interactive) {
+    onKeyDown = (ev: KeyboardEvent): void => {
+      if (!onKey) return;
+      let action: CanvasKeyAction | null = null;
+      switch (ev.key) {
+        case "ArrowLeft":
+          action = { kind: "pan", dx: -PAN_STEP, dy: 0 };
+          break;
+        case "ArrowRight":
+          action = { kind: "pan", dx: PAN_STEP, dy: 0 };
+          break;
+        case "ArrowUp":
+          action = { kind: "pan", dx: 0, dy: -PAN_STEP };
+          break;
+        case "ArrowDown":
+          action = { kind: "pan", dx: 0, dy: PAN_STEP };
+          break;
+        case "+":
+        case "=":
+          action = { kind: "zoom", direction: 1 };
+          break;
+        case "-":
+        case "_":
+          action = { kind: "zoom", direction: -1 };
+          break;
+        case "Enter":
+        case " ":
+          action = { kind: "commit" };
+          break;
+        default:
+          return;
+      }
+      ev.preventDefault();
+      onKey(action, ev);
+    };
+    overlay.addEventListener("keydown", onKeyDown);
+  }
 
   return {
     announce: (message: string): void => {
       status.textContent = message;
     },
     teardown: (): void => {
-      overlay.removeEventListener("keydown", onKeyDown);
+      if (onKeyDown) overlay.removeEventListener("keydown", onKeyDown);
       overlay.removeAttribute("role");
       overlay.removeAttribute("aria-label");
       status.remove();
@@ -148,7 +156,7 @@ export function mountCanvas(container: HTMLElement, opts: MountCanvasOptions): M
   if (useOverlay) root.appendChild(overlay);
   container.appendChild(root);
 
-  const a11y = applyCanvasA11y(doc, overlay, root, opts.label, opts.onKey);
+  const a11y = applyCanvasA11y(doc, overlay, root, "application", opts.label, opts.onKey);
 
   return {
     render,
@@ -163,9 +171,12 @@ export function mountCanvas(container: HTMLElement, opts: MountCanvasOptions): M
 }
 
 export interface AttachCanvasOptions {
-  /** `aria-label` for the surface — describe the plot AND its keyboard map. */
+  /** `aria-label` for the surface — describe the plot (and, when interactive, its keyboard map). */
   readonly label: string;
-  /** Keyboard action handler (arrows/±/Enter/Space → actions). Omit for a non-interactive surface. */
+  /** ARIA role: `"application"` (default) for a keyboard-interactive surface — focusable, keyboard wired;
+   *  `"img"` for a STATIC visualization — named for a screen reader, not focusable, no keyboard. */
+  readonly role?: "application" | "img";
+  /** Keyboard action handler (arrows/±/Enter/Space → actions). Ignored when `role` is `"img"`. */
   readonly onKey?: (action: CanvasKeyAction, ev: KeyboardEvent) => void;
   /** A render canvas behind the overlay to mark `aria-hidden` (so a screen reader names only the overlay). */
   readonly render?: HTMLCanvasElement;
@@ -194,7 +205,7 @@ export function attachCanvasA11y(
   const doc = opts.doc ?? overlay.ownerDocument;
   if (opts.render) opts.render.setAttribute("aria-hidden", "true");
   const host = opts.liveRegionHost ?? overlay.parentElement ?? overlay;
-  const a11y = applyCanvasA11y(doc, overlay, host, opts.label, opts.onKey);
+  const a11y = applyCanvasA11y(doc, overlay, host, opts.role ?? "application", opts.label, opts.onKey);
   return {
     overlay,
     announce: a11y.announce,

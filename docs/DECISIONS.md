@@ -2331,7 +2331,9 @@ the DOM libs are already in `tsconfig.base.json`). Four primitives, each a strai
    a keyboard map (arrows pan, ± zoom, Enter/Space commit), and an `aria-live` status region. Two entry points share
    ONE implementation: `mountCanvas` builds the DOM; `attachCanvasA11y` applies the same contract to a canvas an app
    already built and lays out itself (added in U2 — Faber builds its own `gl`+`ov` panes, and a fresh mount would
-   fight its CSS).
+   fight its CSS). `attachCanvasA11y` takes a `role`: `"application"` (interactive — focusable, keyboard wired) or
+   `"img"` (a static visualization — named but not focusable, no keyboard; added in U3 for Correspondences' static
+   views, since `role="application"` on a non-interactive canvas is an a11y anti-pattern).
 2. **`runWithFatalBoundary` / `showFatalBanner`** — CD's init boundary (`main.ts:6876-6892`, `showFatalBanner`
    at `:260-266`): try/catch/finally, WebGL2-aware copy, boot-overlay removal; **creates** the banner if the app
    has none (fixing the white-screen).
@@ -2408,7 +2410,16 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    primitive gained `attachCanvasA11y` (an attach mode over the shared code path) rather than forcing a fresh mount
    — the U2 analogue of U1's worker-recovery discovery. Verified with a headless-Chromium smoke (roles/labels/live
    region present, no fatal banner, ArrowUp pans + `+` zooms the permalink, no console errors) plus the primitive's
-   jsdom tests. **Remaining:** riemann-map, argument-principle, correspondences, the plotter.
+   jsdom tests. **correspondences DONE (U3):** both entrypoints (`main.ts`, `mating.html`'s `matingMain.ts`)
+   wrapped in `runWithFatalBoundary` (both booted into a bare `<div id="app">`); the four STATIC views on the
+   main page named with `role="img"` labels; the three interactive mating panels given `role="application"` +
+   keyboard (←/→ move the shared equator angle θ, Enter traces its θ↦−2θ orbit) and the fold viewer `role="img"`.
+   Proving against correspondences surfaced that a NON-interactive visualization must be `role="img"`, not
+   `"application"` (which lies to assistive tech that keyboard is handled) — so `attachCanvasA11y` gained a
+   `role: "application" | "img"` option (the U3 discovery, with a jsdom test). Verified with a headless-Chromium
+   smoke over BOTH pages (static views img+labelled+not-focusable; panels application+focusable; ArrowRight moves
+   θ to 2°; no fatal banner; no console errors); correspondences' 97 tests stay green. **Remaining:** riemann-map,
+   argument-principle, the plotter.
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just

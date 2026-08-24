@@ -113,6 +113,26 @@ describe("attachCanvasA11y (existing canvas)", () => {
     expect(stage.querySelector('[role="status"]')?.textContent).toBe("recomputed");
   });
 
+  it('role:"img" names a static visualization without making it focusable or keyboard-driven', () => {
+    const c = container();
+    const cv = document.createElement("canvas");
+    c.appendChild(cv);
+    const seen: CanvasKeyAction[] = [];
+    const a = attachCanvasA11y(cv, {
+      label: "The deltoid Schwarz reflection σ — escape-time field",
+      role: "img",
+      onKey: (k) => seen.push(k), // ignored in img mode
+    });
+    expect(cv.getAttribute("role")).toBe("img");
+    expect(cv.getAttribute("aria-label")).toBe("The deltoid Schwarz reflection σ — escape-time field");
+    expect(cv.hasAttribute("tabindex")).toBe(false); // not focusable
+    press(cv, "ArrowRight");
+    expect(seen).toHaveLength(0); // no keyboard wired
+    // announce still works (a static view may re-render and want to notify).
+    a.announce("recomputed");
+    expect(c.querySelector('[role="status"]')?.textContent).toBe("recomputed");
+  });
+
   it("destroy reverts what it added and stops handling keys", () => {
     const c = container();
     const ov = document.createElement("canvas");

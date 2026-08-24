@@ -4,6 +4,7 @@
 // the family PARAMETER plane φ_a = z + a/(2z²) coloured by critical-orbit escape (Milestone C — GPU, CPU
 // fallback), and the model space (the Tricorn z̄² + c, via @cas/expr). All rest on the verified
 // src/deltoid.ts / src/correspondence.ts / src/family.ts / src/tricorn.ts math.
+import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import { DEFAULT_VIEW, renderBand } from "./render.js";
 import { createDeltoidRenderer } from "./gpu.js";
 import { accumulateBand, densityToImage, DEFAULT_DENSITY } from "./correspondenceRender.js";
@@ -279,6 +280,25 @@ function setExactScaffold(): void {
 function mount(): void {
   const s = shell();
   if (!s) return;
+  // Name each static view for a screen reader (ADR-0028, U3). These are computed once and painted — no
+  // interaction — so role="img", not "application" (⚠ EXPLORATORY tool: the labels stay descriptive, never
+  // asserting the straightening is certified; RISKS §3).
+  attachCanvasA11y(s.sigma, {
+    role: "img",
+    label: "The deltoid Schwarz reflection σ, as an escape-time field over the complex plane",
+  });
+  attachCanvasA11y(s.corr, {
+    role: "img",
+    label: "The deleted correspondence's orbit-tree density for the deltoid",
+  });
+  attachCanvasA11y(s.param, {
+    role: "img",
+    label: "The family parameter plane φ_a = z + a/(2z²), coloured by critical-orbit escape",
+  });
+  attachCanvasA11y(s.tric, {
+    role: "img",
+    label: "The model space: the Tricorn (z̄² + c), the anti-holomorphic parameter plane",
+  });
   renderSigma(s.sigma);
   renderCorrespondence(s.corr);
   renderParamPlane(s.param);
@@ -286,4 +306,9 @@ function mount(): void {
   setExactScaffold();
 }
 
-mount();
+// Run inside @cas/ui's fatal-error boundary (ADR-0028, U3): the app boots into a bare <div id="app"> with
+// no error element, so an uncaught mount() throw white-screened; now it surfaces a role=alert banner.
+runWithFatalBoundary(mount, {
+  onError: (e) => console.error("Failed to initialize the correspondences tool:", e),
+  genericMessage: "Something went wrong starting the correspondences tool. See the browser console for details.",
+});
