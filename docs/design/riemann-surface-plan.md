@@ -26,7 +26,7 @@
 
 | Milestone | Status | Coverage |
 |---|---|---|
-| **M0 — parametrize-by-w de-risk spike** | ⏳ in progress | inverse registry + `riemannSurface.ts` shader; CPU↔GPU parity for √z (Re-w interlock) and log z (Im-w helicoid) via `makeComplexFn`; shader links in a live WebGL2 context |
+| **M0 — parametrize-by-w de-risk spike** | ✅ done | `src/riemann/inverse.ts` registry + `src/render3d/riemannSurface.ts` shader. Node: 22 tests — recognition/rejection, inverse geometry satisfies each primitive's defining equation (w²=z, eʷ=z, sin w=z, wᵍ=zᵖ) via `makeComplexFn`, √z two-sheet ±Re-w interlock, log Im-w helicoid (z=1 at h=0 and 2π), affine wraps. Browser: the parametrize-by-w program builds+links in live WebGL2 for √, ⁿ√, `z^(p/q)`, arcsin/arccos/arctan, affine forms. Findings: architecture holds unchanged — retained as M1's foundation (not throwaway) |
 | **M1 — parametrize-by-w Riemann-surface mode** | ⏳ pending | new `Plot.mode "riemann"` + `paintRiemann`; inverse registry (√, ⁿ√, `z^(p/q)`, log, arcsin/arccos, arctan + affine wrap); height-source (Re w / Im w); sheet-count control (badged truncation); coloring parity + enhanced portraits; camera orbit/dolly; auto-detect + honest badge; permalink extension; node + browser tests |
 | **M1 gate** | ⏳ pending | full gate green (typecheck · lint +dep:check · test · build + browser goldens); existing tests incl. top-down-3D≡2D unchanged; pushed; **pause for review** |
 | M2 — algebraic-curve surfaces (Kranich proximity gluing) | ⛔ deferred | later, separately-approved |

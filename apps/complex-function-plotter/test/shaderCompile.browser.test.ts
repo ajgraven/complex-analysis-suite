@@ -7,6 +7,8 @@ import { createProgram } from "@cas/gpu/shader";
 import { buildFragmentShader, VERTEX_SHADER } from "../src/render/colorShader.js";
 import { buildSurfaceProgram } from "../src/render3d/surfaceShader.js";
 import { buildSphereFragment } from "../src/render3d/sphereShader.js";
+import { buildRiemannProgram } from "../src/render3d/riemannSurface.js";
+import { detectRiemannForm } from "../src/riemann/inverse.js";
 
 // COMPILES + LINKS THE PLOTTER'S REAL SHADERS IN A REAL WebGL2 CONTEXT (Track B: close the "app GLSL
 // never compiled in CI" gap). Until this file the plotter had ZERO shader coverage in CI — the node
@@ -90,6 +92,32 @@ describe("the plotter's real shaders compile + link in WebGL2 (Track B)", () => 
     const surf = buildSurfaceProgram(fGlsl, names, fpGlsl);
     expect(() => createProgram(gl, surf.vertex, surf.fragment), "surface").not.toThrow();
     expect(() => createProgram(gl, VERTEX_SHADER, buildSphereFragment(fGlsl, names)), "sphere").not.toThrow();
+  });
+
+  // The Riemann-surface mode (ADR-0027): the invertible primitives whose parametrize-by-w program must
+  // build + link. Each is a recognized RiemannForm whose gZFn/gWFn compile through the same @cas/expr path.
+  const RIEMANN_CORPUS = [
+    "sqrt(z)",
+    "log(z)",
+    "z^(1/3)",
+    "z^(2/3)",
+    "arcsin(z)",
+    "arccos(z)",
+    "arctan(z)",
+    "2*sqrt(z)+1",
+    "sqrt(2*z+1)",
+    "(1+i)*log(z)",
+  ];
+  it.each(RIEMANN_CORPUS)("Riemann-surface program builds for %s", (src) => {
+    const gl = context();
+    const form = detectRiemannForm(parse(src));
+    expect(form, src).not.toBeNull();
+    if (!form) return;
+    const prog = buildRiemannProgram(
+      compileF(form.zFromT, "gZFn"),
+      compileF(form.wFromT, "gWFn"),
+    );
+    expect(() => createProgram(gl, prog.vertex, prog.fragment), "riemann").not.toThrow();
   });
 
   it("builds the surface with NO f' (geometric-normal branch) for a differentiable f too", () => {

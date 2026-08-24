@@ -1,0 +1,85 @@
+/**
+ * The Riemann-surface program (ADR-0027, parametrize-by-w). The **same grid mesh** as the analytic
+ * landscape is reinterpreted over the primitive's **value plane** (the uniformizer `t`): the vertex shader
+ * maps each grid UV to a `t` in the current `t`-window, evaluates the position `z = gZFn(t)` and the
+ * function value `w = gWFn(t)` (both compiled by `@cas/expr` `compileF` from the ASTs the inverse registry
+ * builds — see `../riemann/inverse.ts`), places the vertex at world `(Re z, Im z, charisma)` with the
+ * **charisma** height = `Re w` or `Im w`, and passes `w` to the fragment. The fragment colours it with the
+ * **exact same `colorAt`** as every other view (so colormaps / enhancements carry over for free) and shades
+ * it with a geometric (screen-space) normal.
+ *
+ * Because `w = A·V + B` is affine in `t` and `t` is affine in the grid UV, `w` (hence the colour and the
+ * height) interpolates *exactly* across each triangle; only the `xy` position is the curved surface. And
+ * because the `t`-domain is a single connected sheet, the surface's sheets glue automatically — no
+ * branch-tracking, no cut to heal. `gZFn` / `gWFn` reference no live parameters (the affine constants are
+ * baked), so the program declares no `uParam_*` uniforms.
+ */
+import { COMPLEX_SINGLE_GLSL, COMPLEX_DERIVED_GLSL } from "@cas/gpu/glsl";
+import { COLORING_GLSL } from "../render/colorShader.js";
+
+// `highp int` in both stages (uHeightSource is an int uniform present only in the vertex here, but pin the
+// precision anyway for parity with the surface program and to avoid a stage-default mismatch if it moves).
+const VERTEX_HEAD = `#version 300 es
+precision highp float;
+precision highp int;`;
+
+/**
+ * Assemble the `{ vertex, fragment }` GLSL for the Riemann-surface program from the compiled position map
+ * `gZFn` and value map `gWFn` bodies (from `@cas/expr` `compileF(..., "gZFn")` / `"gWFn"`). Both are
+ * functions of the formal `z`, which this shader binds to the uniformizer `t`.
+ */
+export function buildRiemannProgram(
+  gZGlsl: string,
+  gWGlsl: string,
+): { vertex: string; fragment: string } {
+  const vertex = `${VERTEX_HEAD}
+${COMPLEX_SINGLE_GLSL}
+${COMPLEX_DERIVED_GLSL}
+uniform mat4  uVP;            // view-projection (camera)
+uniform vec2  uTCenter;       // centre of the t-window (value plane), usually (0,0)
+uniform vec2  uTHalf;         // half-extents of the t-window (halfX, halfY)
+uniform int   uHeightSource;  // 0 = Re w (algebraic ramp), 1 = Im w (log helicoid)
+uniform float uHeightScale;   // user height exaggeration
+${gZGlsl}
+${gWGlsl}
+in vec2 aUV;                  // grid UV in [0,1]²
+out vec2 vW;                  // the function value w (affine in UV ⇒ exact interpolation)
+out vec3 vPos;                // world (Re z, Im z, height) — for the geometric normal
+
+void main() {
+  cvec t = vec_(uTCenter.x + (aUV.x - 0.5) * 2.0 * uTHalf.x,
+                uTCenter.y + (aUV.y - 0.5) * 2.0 * uTHalf.y);
+  cvec z = gZFn(t, vec_(0.0, 0.0));
+  cvec w = gWFn(t, vec_(0.0, 0.0));
+  float h = (uHeightSource == 1 ? cre1(cim(w)) : cre1(cre(w))) * uHeightScale;
+  vec3 p = vec3(cre1(cre(z)), cre1(cim(z)), h);
+  vW = w;
+  vPos = p;
+  gl_Position = uVP * vec4(p, 1.0);
+}`;
+
+  const fragment = `${VERTEX_HEAD}
+${COMPLEX_SINGLE_GLSL}
+${COMPLEX_DERIVED_GLSL}
+${COLORING_GLSL}
+uniform vec3  uLightDir;
+uniform float uShaded;   // 1 = shade; 0 = flat (parity switch, kept for future top-down)
+uniform float uOpacity;  // surface alpha (1 = opaque)
+in vec2 vW;
+in vec3 vPos;
+out vec4 fragColor;
+
+void main() {
+  vec3 base = colorAt(vW);
+  // Geometric normal from the surface point's screen-space derivatives, oriented up (+Z). The self-
+  // intersections of the projected sheets are a 4D→3D artifact, so a per-face normal is the honest shade.
+  vec3 n = normalize(cross(dFdx(vPos), dFdy(vPos)));
+  if (n.z < 0.0) n = -n;
+  vec3 L = normalize(uLightDir);
+  float diffuse = 0.35 + 0.65 * clamp(0.5 + 0.5 * dot(n, L), 0.0, 1.0); // wrap Lambert (soft terminator)
+  vec3 col = base * mix(1.0, diffuse, uShaded);                          // hue-preserving multiply
+  fragColor = vec4(min(col, vec3(1.0)), uOpacity);
+}`;
+
+  return { vertex, fragment };
+}
