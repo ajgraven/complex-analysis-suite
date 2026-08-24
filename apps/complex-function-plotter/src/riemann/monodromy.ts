@@ -34,6 +34,22 @@ export interface MonodromyResult {
   lowConfidence: boolean;
   /** How many points the closed loop was resampled to. */
   samples: number;
+  /** Per tracked sheet `k`, its continuation path along the loop: `{ z (base point), w (sheet value) }`.
+   *  Lifted onto the 3D surface by the caller so the monodromy is visible where the sheets actually live. */
+  paths: { z: Complex; w: Complex }[][];
+}
+
+/** The most frequent value among `counts` that is ≥ 2 (a robust sheet count), or 0 if none qualify. */
+function modeCountAtLeast2(counts: readonly number[]): number {
+  const freq = new Map<number, number>();
+  for (const c of counts) if (c >= 2) freq.set(c, (freq.get(c) ?? 0) + 1);
+  let best = 0;
+  let bestFreq = 0;
+  for (const [c, f] of freq) if (f > bestFreq || (f === bestFreq && c < best)) {
+    best = c;
+    bestFreq = f;
+  }
+  return best;
 }
 
 const dist = (a: Complex, b: Complex): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
@@ -145,33 +161,65 @@ function cyclesOf(perm: readonly number[]): number[][] {
 export function computeMonodromy(
   sheetsAt: (z: Complex) => Complex[],
   loop: readonly Complex[],
-  opts: { samples?: number } = {},
+  opts: { samples?: number; expected?: number } = {},
 ): MonodromyResult | null {
   const samples = Math.max(16, Math.floor(opts.samples ?? 256));
-  const path = resampleClosedLoop(loop, samples);
+  let path = resampleClosedLoop(loop, samples);
   if (path.length < 3) return null;
-  const s0 = distinctSheets(sheetsAt(path[0]));
-  const N = s0.length;
-  if (N < 2) return null;
 
+  // Census every loop point once, then pick a robust sheet count N and a CLEAN start point. The census can
+  // wobble (an extra near-duplicate, or a merge near a branch point); starting on a wobble used to poison N
+  // and give an "ambiguous" result. Prefer the caller's known count (`expected`); else the modal count.
+  let census = path.map((p) => distinctSheets(sheetsAt(p)));
+  const S = path.length - 1; // distinct loop points (path[S] === path[0])
+  const counts = census.slice(0, S).map((c) => c.length);
+  const mode = modeCountAtLeast2(counts);
+  const N =
+    opts.expected && opts.expected >= 2 && counts.includes(opts.expected) ? opts.expected : mode;
+  if (N < 2) return null; // fewer than two sheets anywhere — nothing to permute
+  // Start where the loop actually resolves N sheets (keep index 0 when it already does — so a clean
+  // enumerator never rotates and the reported permutation is start-stable for the tests).
+  const start = counts[0] === N ? 0 : counts.indexOf(N);
+  if (start < 0) return null;
+  if (start !== 0) {
+    const rot = <T>(arr: T[]): T[] => {
+      const r = [...arr.slice(start, S), ...arr.slice(0, start)];
+      r.push(r[0]);
+      return r;
+    };
+    path = rot(path);
+    census = rot(census);
+  }
+
+  const s0: Complex[] = census[0].slice(0, N).map((v) => [v[0], v[1]]);
   const track: Complex[] = s0.map((v) => [v[0], v[1]]);
+  const paths: { z: Complex; w: Complex }[][] = s0.map((v) => [
+    { z: path[0], w: [v[0], v[1]] as Complex },
+  ]);
   let gapMin = Infinity;
   let maxJumpRatio = 0;
   let countDrift = false;
   for (let i = 1; i < path.length; i++) {
-    const cur = distinctSheets(sheetsAt(path[i]));
-    if (cur.length !== N) countDrift = true;
+    const cur = census[i];
     if (cur.length < 2) {
-      countDrift = true;
-      continue; // sheets merged (a branch point on the loop) — skip; the flags will mark it unreliable
+      countDrift = true; // sheets merged (near a branch point) — carry the tracks forward
+      for (let k = 0; k < N; k++) paths[k].push({ z: path[i], w: [track[k][0], track[k][1]] as Complex });
+      continue;
     }
-    const gap = minPairwise(cur);
-    gapMin = Math.min(gapMin, gap);
+    if (cur.length < N) countDrift = true; // genuinely fewer sheets resolved (a near-branch pass)
+    const prev = track.map((v) => [v[0], v[1]] as Complex);
     for (let k = 0; k < N; k++) {
-      const { idx, d } = nearest(cur, track[k]);
-      if (gap > 1e-12) maxJumpRatio = Math.max(maxJumpRatio, d / gap);
+      const { idx } = nearest(cur, track[k]);
       if (idx >= 0) track[k] = cur[idx];
     }
+    // Gauge separation + step size on the TRACKED sheets (immune to a spurious extra in the raw census).
+    const gap = minPairwise(track);
+    if (gap > 1e-12) {
+      gapMin = Math.min(gapMin, gap);
+      for (let k = 0; k < N; k++)
+        maxJumpRatio = Math.max(maxJumpRatio, nearest([prev[k]], track[k]).d / gap);
+    }
+    for (let k = 0; k < N; k++) paths[k].push({ z: path[i], w: [track[k][0], track[k][1]] as Complex });
   }
 
   const permutation = track.map((v) => nearest(s0, v).idx);
@@ -189,5 +237,6 @@ export function computeMonodromy(
     maxJumpRatio,
     lowConfidence,
     samples,
+    paths,
   };
 }

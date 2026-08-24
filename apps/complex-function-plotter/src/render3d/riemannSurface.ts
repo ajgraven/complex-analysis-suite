@@ -121,3 +121,21 @@ void main() {
 }`;
   return { vertex, fragment: RIEMANN_FRAGMENT };
 }
+
+/**
+ * A minimal solid-colour line program (M3.3 monodromy lift): draws world-space polylines — the loop's
+ * per-sheet continuation paths lifted ONTO the surface — through the same camera `uVP`, one flat colour
+ * (`uColor`) per sheet. No lighting, no `colorAt`; the height is baked into `aPos` by the caller so each
+ * path sits exactly on the drawn surface.
+ */
+export function buildLineProgram(): { vertex: string; fragment: string } {
+  const vertex = `${VERTEX_HEAD}
+uniform mat4 uVP;
+in vec3 aPos;   // world (Re z, Im z, surface height)
+void main() { gl_Position = uVP * vec4(aPos, 1.0); }`;
+  const fragment = `${VERTEX_HEAD}
+uniform vec3 uColor;
+out vec4 outColor;
+void main() { outColor = vec4(uColor, 1.0); }`;
+  return { vertex, fragment };
+}

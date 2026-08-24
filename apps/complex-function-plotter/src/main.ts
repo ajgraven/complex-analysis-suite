@@ -1034,6 +1034,7 @@ function main(): void {
         if (riemannMonodromyInput instanceof HTMLInputElement) riemannMonodromyInput.checked = false;
         loopPoints = null;
         lastLoop = null;
+        plot.setRiemannLoop(null); // clear the lifted paths on the surface
         showMonodromy(null);
       }
       linkedZ = null;
@@ -1051,6 +1052,7 @@ function main(): void {
       }
       loopPoints = null;
       lastLoop = null;
+      plot.setRiemannLoop(null); // clear any lifted paths on the surface (on: fresh start / off: hide)
       showMonodromy(null); // placeholder hint (on) / hidden (off)
       redraw(false);
     });
@@ -1597,12 +1599,14 @@ function main(): void {
     loopPoints = null;
     if (!loop || loop.length < 4) {
       lastLoop = null; // too short to be a loop — discard
+      plot.setRiemannLoop(null); // clear any lifted paths on the surface
       showMonodromy(null);
       redraw(false);
       return;
     }
     lastLoop = loop;
     const res = plot.computeRiemannMonodromy(loop);
+    plot.setRiemannLoop(res); // lift the per-sheet continuation paths onto the 3D surface (M3.3)
     if (!res && monodromyResult instanceof HTMLElement) {
       monodromyResult.hidden = false;
       monodromyResult.textContent =
@@ -1677,6 +1681,7 @@ function main(): void {
     ) {
       loopPoints = [plot.screenToWorld(e.clientX, e.clientY, twoDRect())];
       lastLoop = null;
+      plot.setRiemannLoop(null); // starting a new loop — drop the previous lifted paths
       drawRiemannLink();
       return;
     }
