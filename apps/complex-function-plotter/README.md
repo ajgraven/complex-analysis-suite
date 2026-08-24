@@ -1,7 +1,8 @@
 # Complex Function Plotting Tool
 
 A research-grade browser tool for visualizing a single complex map **w = f(z)** — 2D domain
-coloring and enhanced phase portraits, a 3D analytic-landscape surface and Riemann sphere,
+coloring and enhanced phase portraits, a 3D analytic-landscape surface, a Riemann sphere, a true
+multi-sheeted **Riemann surface** (for invertible primitives and single-radical algebraic maps),
 quantitative instruments, and honest labeling. It rides the shared `@cas/*` packages rather than
 reimplementing them:
 
@@ -38,7 +39,7 @@ Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publi
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-- **2D / 3D / sphere / linked (5A–5D)** — a four-way **View** toggle. **3D** lifts the flat portrait into an
+- **2D / 3D / sphere / linked / Riemann (5A–5D + ADR-0028)** — a five-way **View** toggle. **3D** lifts the flat portrait into an
   **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
   stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
   like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). **Left-drag
@@ -54,9 +55,42 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   and the landscape **side by side** in one canvas (split viewports), both reading the **same `view`** — so
   navigating the flat pane (drag-pan / scroll-zoom / keyboard) moves the surface's domain in lock-step, while
   a right-drag on the surface pane orbits it alone (a left-drag there pans both, like the flat pane); the
-  shared-view coupling is the sync (no state to reconcile).
-  Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader ·
-  sphere arcball).
+  shared-view coupling is the sync (no state to reconcile). **Riemann** (ADR-0028) draws the true
+  multi-sheeted **Riemann surface** when the active map is a recognized invertible primitive — √, ⁿ√,
+  `z^(p/q)`, log, arcsin/arccos/arctan, plus affine wraps `A·P(αz+β)+B` — by the **parametrize-by-w**
+  method: it samples the value plane (the uniformizer `t`), positions each vertex at `(Re g(t), Im g(t))`
+  from the single-valued inverse `z = g(t)`, and lifts it by the **charisma** height (Re w → interlocking
+  algebraic sheets, Im w → the log helicoid), coloured by the same `colorAt`. The sheets **glue across the
+  branch cut with no false cliff** (and none of the never-certified continuation of RISKS §3); a
+  sheet-count control truncates the infinite (log / inverse-trig) families, and an honest badge names the
+  form, its monodromy, and where the principal cut lies. It also handles **single-radical algebraic** maps
+  `R(z)^(p/q)` with `R` rational (ADR-0029) — `√(z²−1)`, `√(z³−z)`, `(z²−1)^(1/3)`, `√((z−1)/(z+1))` — that
+  the parametric path declines: a CPU-built **proximity-glued mesh** (Nieser–Poelke–Polthier / Kranich)
+  over the z-view stitches the `q` sheets and drops ramification cells as small **holes** at the branch
+  points (never a wall), badged if the triangle budget is hit. An **Implicit surface — F(w,z)=0** toggle
+  (M2c, ADR-0031) covers the **general algebraic curve** entered by its defining bivariate polynomial —
+  including the ones with no radical form (`w³ − w − z`, a quintic): the sheets are the per-vertex roots of
+  `F(·,z)=0` (`@cas/core` `rootsMonic`), so the whole mesh + exploration stack carries over, and the branch
+  locus is **exact** for Gaussian-rational `F` (roots of `disc_w F` via `@cas/exact`, badged `=` vs the `≈`
+  scan). It's its own mode (own box), pinning the Riemann view. The tab is offered only for a recognized
+  surface; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
+  exact. **Hovering the surface** ray-casts its sheets (M3.1, ADR-0030) and reads the point the eye actually
+  touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**
+  (`k / N` — which of the `N` sheets over this `z`; near a branch point `N` honestly drops as they merge),
+  all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,
+  **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa),
+  with **branch-point markers** (M3.4, amber ⊕ where the sheets merge, `≈`, also counted in the badge). A
+  **Monodromy explorer** (M3.3, opt-in) lets you drag a closed loop on the base plane and reads back the
+  estimated sheet **permutation** in cycle notation (√z → 2-cycle, z^(1/3) → 3-cycle) — an uncertified
+  estimate, quarantined from the badge, permalink, and exports (RISKS §3). An
+  opt-in **Monodromy explorer** (M3.3) lets you drag a closed loop on the base plane and estimates how the
+  sheets permute around it (e.g. a loop around `0` swaps √z's two sheets — a 2-cycle), reported in cycle
+  notation. Analytic continuation around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so
+  it is honestly `≈`, flags low confidence near a branch point, and is kept out of the badge, permalink, and
+  every export. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
+  (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`), the NPP mesh (`riemann/curveMesh.ts`), and the
+  hover-pick (`riemann/pickMesh.ts`).
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The
@@ -96,7 +130,9 @@ Plus the Phase-2 research tool:
   reverse controls.
 - **Instruments** — a live cursor readout (`z, f(z), |f|, arg f`) — a **value inspector** that in 3D
   ray-casts the cursor against the height field to read the point actually **on the surface** under it
-  (height + self-occlusion accounted for), not its base-plane shadow; **zeros & poles located, counted,
+  (height + self-occlusion accounted for), not its base-plane shadow, and on the **Riemann surface**
+  ray-casts its stacked sheets to read the front-most one — adding a **sheet** ordinal `k / N` (M3.1);
+  **zeros & poles located, counted,
   and ordered** via the argument principle (marked, honestly labeled `≈`); **critical points** where
   **f′ = 0** (H6), found by running that same finder on f′ and marked with diamonds; user-set **level sets**
   (`|f| = c`, `arg f = c`); an **∞-inspector** (5C/F8) that plots **f(1/z)** so the origin shows the map's

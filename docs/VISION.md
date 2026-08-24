@@ -162,7 +162,7 @@ necessary.
   `export`, and `conformal` already exist.
   *(As built: `ui` was not extracted for a long time — no second consumer forced it. It was finally
   extracted as `@cas/ui`, the shared **browser shell** (canvas a11y, a fatal-error boundary, an
-  off-thread compute client, a suite nav header), in [ADR-0028](DECISIONS.md#adr-0028-extract-casui-ahead-of-adoption-port-cds-product-shell)
+  off-thread compute client, a suite nav header), in [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)
   — an extract-*ahead*-of-adoption, since the demand was already proven across the apps by a UX review.
   See ADR-0007 and the "As built" note atop [ARCHITECTURE.md](ARCHITECTURE.md).)*
 

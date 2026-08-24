@@ -195,7 +195,7 @@ rotated to the real-positive capacity gauge, and an area-theorem check (`Σ k·|
 possibly non-univalent φ. Everything downstream (Faber images, ∂K, rendering) reuses the existing
 `ExteriorMap` pipeline unchanged.
 
-**`@cas/ui` — the shared browser shell (ADR-0028, U0–U6):** the **eleventh** package, and the suite's first
+**`@cas/ui` — the shared browser shell (ADR-0032, U0–U6):** the **eleventh** package, and the suite's first
 extract-*ahead*-of-adoption of a **product** (not math) layer, prompted by a UX review that found the newer apps
 inherited the math rigor but not the product shell. `@cas/ui` collects four primitives ported from Complex
 Dynamics' proven patterns — `mountCanvas`/`attachCanvasA11y` (accessible canvas: focusable `role="application"`

@@ -15,10 +15,13 @@
 // (ui/sweep.ts: a grid of thumbnails across one parameter's range, click a cell to jump), share-links
 // (#vs= via @cas/interchange), and PNG export. The Phase-4 special functions Γ / ζ are in the language;
 // when the active map calls one, an honest float32 precision badge (ui/precision.ts) labels the picture
-// `≈`. A View toggle (2D / 3D / Sphere) swaps the flat portrait for the Phase-5 analytic **landscape**
-// (a height surface, orbit/dolly, coloured by the same colorAt so top-down = the 2D portrait) or the
-// **Riemann sphere** (a ray-cast of ℂ∪{∞}, arcball-rotated, so ∞ is the north pole) — all in render3d/.
-// The ∞-inspector (plot f(1/z)) and export (Phase 6) round it out.
+// `≈`. A View toggle (2D / 3D / Sphere / Linked / Riemann) swaps the flat portrait for the Phase-5
+// analytic **landscape** (a height surface, orbit/dolly, coloured by the same colorAt so top-down = the
+// 2D portrait), the **Riemann sphere** (a ray-cast of ℂ∪{∞}, arcball-rotated, so ∞ is the north pole), or
+// the true multi-sheeted **Riemann surface** (ADR-0028, `riemann/` + `render3d/riemannSurface.ts`): for a
+// recognized invertible primitive (√, ⁿ√, z^(p/q), log, arcsin/arccos/arctan + affine wraps) it renders
+// the parametrize-by-w surface, its sheets glued across the branch cut. The ∞-inspector (plot f(1/z)) and
+// export (Phase 6) round it out.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { runWithFatalBoundary } from "@cas/ui";
@@ -100,6 +103,7 @@ const DEFAULTS: PlotterState = {
   hueSign: 1,
   params: {},
   anim: { ...DEFAULT_ANIM },
+  implicit: "", // ordinary f(z) mode (M2c implicit mode off)
   v3d: { ...DEFAULT_V3D, mode: "3d", heightMode: 1 }, // 3D landscape, linear-|f| height
 };
 
@@ -183,8 +187,21 @@ function main(): void {
   const view3d = byId("view3d");
   const viewSphere = byId("viewSphere");
   const viewLinked = byId("viewLinked");
+  const viewRiemann = byId("viewRiemann");
   const sphereHint = byId("sphereHint");
   const surfaceControls = byId("surfaceControls");
+  const riemannControls = byId("riemannControls");
+  const riemannInfo = byId("riemannInfo");
+  const riemannHeightSel = byId("riemannHeight");
+  const riemannSheetsInput = byId("riemannSheets");
+  const riemannSheetsVal = byId("riemannSheetsVal");
+  const riemannSheetsRow = byId("riemannSheetsRow");
+  const riemannExag = byId("riemannExag");
+  const riemannExagVal = byId("riemannExagVal");
+  const riemannLinkedInput = byId("riemannLinked");
+  const riemannMonodromyInput = byId("riemannMonodromy");
+  const monodromyResult = byId("monodromyResult");
+  const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
   const heightScaleVal = byId("heightScaleVal");
@@ -206,6 +223,7 @@ function main(): void {
   const critCount = byId("critCount");
   const inspectInfInput = byId("inspectInf");
   const plotDerivInput = byId("plotDeriv");
+  const implicitModeInput = byId("implicitMode");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -226,6 +244,9 @@ function main(): void {
   const pfz = byId("pfz");
   const pabs = byId("pabs");
   const parg = byId("parg");
+  const pbranch = byId("pbranch");
+  const pbranchDt = byId("pbranchDt");
+  const riemannProbeHint = byId("riemannProbeHint");
   if (
     !(canvas instanceof HTMLCanvasElement) ||
     !(axesCanvas instanceof HTMLCanvasElement)
@@ -273,16 +294,30 @@ function main(): void {
   // the surface the right half, so a client pixel is measured against the flat pane's rect (`twoDRect`) and
   // the effective interaction (`effMode`) depends on which half the cursor is in.
   const canvasRect = (): DOMRect => canvas.getBoundingClientRect();
+  // The flat-portrait pane rect — the whole canvas in 2D, the LEFT half in the linked view and in the
+  // Riemann view's base-plane pane (M3.2).
+  const splitLeft = (): boolean =>
+    plot.mode === "linked" || (plot.mode === "riemann" && plot.riemannLinked);
   const twoDRect = (): DOMRect | ReturnType<typeof leftHalf> =>
-    plot.mode === "linked" ? leftHalf(canvasRect()) : canvasRect();
+    splitLeft() ? leftHalf(canvasRect()) : canvasRect();
   // The surface pane's rect — the whole canvas in 3D, the right half in the linked view — for the 3D pick.
   const threeDRect = (): DOMRect | ReturnType<typeof rightHalf> =>
     plot.mode === "linked" ? rightHalf(canvasRect()) : canvasRect();
-  const effMode = (clientX: number): "2d" | "3d" | "sphere" => {
+  // The Riemann surface pane rect — the whole canvas in the plain Riemann view, the RIGHT half when the
+  // base-plane pane is on — for the hover-pick.
+  const riemannPaneRect = (): DOMRect | ReturnType<typeof rightHalf> =>
+    plot.riemannLinked ? rightHalf(canvasRect()) : canvasRect();
+  const effMode = (clientX: number): "2d" | "3d" | "sphere" | "riemann" => {
     const m = plot.mode;
     if (m === "linked") return isLeftHalf(clientX, canvasRect()) ? "2d" : "3d";
-    return m;
+    if (m === "riemann" && plot.riemannLinked)
+      return isLeftHalf(clientX, canvasRect()) ? "2d" : "riemann";
+    return m; // "2d" | "3d" | "sphere" | "riemann"
   };
+  // Drag / wheel / pinch act on the surface everywhere in the Riemann view (both panes orbit/dolly it);
+  // only hover is pane-specific. Elsewhere this is just `effMode`.
+  const navMode = (clientX: number): "2d" | "3d" | "sphere" | "riemann" =>
+    plot.mode === "riemann" ? "riemann" : effMode(clientX);
 
   // Two function slots (catalog A7). One expression box edits the ACTIVE slot; a toggle switches which
   // slot is active (and therefore plotted). Both persist in the share-link.
@@ -301,6 +336,10 @@ function main(): void {
   let markCritical = false;
   let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
   let plotDerivative = false; // derivative overlay (H9): plot f′(z). Transient (not persisted).
+  // Implicit-surface mode (M2c, ADR-0031): the dedicated `F(w,z)=0` mode. `implicitSrc` is its own source,
+  // kept separate from the f/g slots; `implicitMode` gates the box + views. Persisted via `state.implicit`.
+  let implicitMode = initial.implicit.trim().length > 0;
+  let implicitSrc = implicitMode ? initial.implicit : "w^3 - w - z";
   // Keep the parsed f (and its z-derivative, when holomorphic) so the CPU instruments can be rebuilt
   // with the current parameter values baked in — without re-parsing — whenever a parameter moves.
   let fAst: Node | null = null;
@@ -357,6 +396,7 @@ function main(): void {
     hueSign: plot.color.hueSign,
     params: plot.paramsRecord(),
     anim: { ...animConfig },
+    implicit: implicitMode ? implicitSrc : "",
     v3d: {
       mode: plot.mode,
       azimuth: plot.camera.azimuth,
@@ -367,6 +407,9 @@ function main(): void {
       heightScale: plot.heightScale,
       specular: plot.specular,
       opacity: plot.opacity,
+      riemannHeight: plot.riemannHeightSource,
+      riemannSheets: plot.riemannSheets,
+      riemannLinked: plot.riemannLinked,
     },
   });
 
@@ -414,13 +457,129 @@ function main(): void {
     return gridResolutionForField(maxJump, span * Math.max(1, aspect));
   };
 
+  // The base point last read on the Riemann surface (or hovered on the base plane), drawn as a crosshair on
+  // the linked base-plane pane (M3.2) so you can see which base point the touched sheet sits over.
+  let linkedZ: Complex | null = null;
+  // Monodromy explorer (M3.3): draw a closed loop on the base plane; `loopPoints` accumulates it during the
+  // drag, `lastLoop` holds the finished loop for the overlay. The result is transient (never persisted).
+  let monodromyOn = false;
+  let loopPoints: Complex[] | null = null;
+  let lastLoop: Complex[] | null = null;
+  // Estimated branch (ramification) points over the surface's base plane (M3.4), drawn on the base-plane
+  // pane and counted in the badge. Recomputed on a formula / sheet-count / view change while in Riemann mode.
+  let branchPts: Complex[] = [];
+  let branchExact = false; // true when the markers are the EXACT discriminant locus (M2c.2), else the ≈ scan
+  const recomputeBranchPoints = (): void => {
+    if (plot.mode !== "riemann") {
+      branchPts = [];
+      branchExact = false;
+      return;
+    }
+    const exact = plot.riemannBranchPointsExact(); // M2c.2: exact locus for a Gaussian-rational implicit F
+    if (exact) {
+      branchPts = exact;
+      branchExact = true;
+    } else {
+      branchPts = plot.riemannBranchPoints();
+      branchExact = false;
+    }
+  };
+  const drawRiemannLink = (): void => {
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.max(1, Math.round(cssW * d));
+    const H = Math.max(1, Math.round(cssH * d));
+    if (axesCanvas.width !== W || axesCanvas.height !== H) {
+      axesCanvas.width = W;
+      axesCanvas.height = H;
+    }
+    const ctx = axesCanvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.setTransform(d, 0, 0, d, 0, 0); // draw in CSS pixels
+    const halfW = cssW / 2;
+    const v = plot.view;
+    const aspect = cssH > 0 ? halfW / cssH : 1;
+    const xmin = v.cx - v.span * aspect;
+    const xmax = v.cx + v.span * aspect;
+    const ymin = v.cy - v.span;
+    const ymax = v.cy + v.span;
+    const sx = (wx: number): number => ((wx - xmin) / (xmax - xmin)) * halfW;
+    const sy = (wy: number): number => ((ymax - wy) / (ymax - ymin)) * cssH;
+    ctx.strokeStyle = "rgba(150,165,190,0.28)"; // the pane divider
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(halfW, 0);
+    ctx.lineTo(halfW, cssH);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(165,180,205,0.85)";
+    ctx.font = "11px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("base plane (z)", 6, 6);
+    // Monodromy loop (M3.3): the in-progress drag, else the finished loop — a filled, outlined polyline.
+    const loop = loopPoints ?? lastLoop;
+    if (loop && loop.length >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(sx(loop[0][0]), sy(loop[0][1]));
+      for (let i = 1; i < loop.length; i++) ctx.lineTo(sx(loop[i][0]), sy(loop[i][1]));
+      if (!loopPoints) ctx.closePath(); // a finished loop is closed; an in-progress one stays open
+      ctx.fillStyle = "rgba(120,180,255,0.12)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(150,200,255,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    // Branch-point markers (M3.4): amber ⊕ where sheets merge — the ramification the monodromy loops encircle.
+    if (branchPts.length) {
+      ctx.strokeStyle = "rgba(245,180,90,0.95)";
+      ctx.lineWidth = 1.25;
+      for (const b of branchPts) {
+        const px = sx(b[0]);
+        const py = sy(b[1]);
+        if (px < 0 || px > halfW || py < 0 || py > cssH) continue;
+        ctx.beginPath();
+        ctx.arc(px, py, 4.5, 0, 2 * Math.PI);
+        ctx.moveTo(px - 6.5, py);
+        ctx.lineTo(px + 6.5, py);
+        ctx.moveTo(px, py - 6.5);
+        ctx.lineTo(px, py + 6.5);
+        ctx.stroke();
+      }
+    }
+    if (linkedZ) {
+      const px = sx(linkedZ[0]);
+      const py = sy(linkedZ[1]);
+      if (px >= 0 && px <= halfW && py >= 0 && py <= cssH) {
+        ctx.strokeStyle = "rgba(245,248,255,0.92)";
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(px - 7, py);
+        ctx.lineTo(px + 7, py);
+        ctx.moveTo(px, py - 7);
+        ctx.lineTo(px, py + 7);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  };
+
   const redraw = (draft = false): void => {
     // On a committed frame in a surface mode, adapt the mesh density to the field + zoom (§B / poles) — a
     // cheap no-op when unchanged; skipped on draft frames so a zoom/drag burst never rebuilds mid-gesture.
     if (!draft && (plot.mode === "3d" || plot.mode === "linked"))
       plot.reconcileMeshResolution(surfaceResolutionTarget());
     plot.draw(draft);
-    if (plot.mode !== "2d") {
+    if (plot.mode === "riemann" && plot.riemannLinked) {
+      // The linked Riemann view: the base-plane pane gets a light overlay (divider + label + the
+      // hover-link crosshair) on its left half; the surface half stands alone (M3.2).
+      drawRiemannLink();
+    } else if (plot.mode !== "2d") {
       // The axes / grid / markers are full-canvas 2D-projection overlays; in the 3D landscape, on the
       // sphere, AND in the linked view they'd be wrong (in linked mode drawAxes spans the whole canvas
       // and would bleed across the surface half), so clear the overlay and let the surface stand alone.
@@ -487,7 +646,8 @@ function main(): void {
   const renderPreview = (src: string): void => {
     if (!(previewEl instanceof HTMLElement)) return;
     try {
-      katex.render(`w = ${toLatex(parse(src))}`, previewEl, {
+      const body = implicitMode ? `${toLatex(parse(src))} = 0` : `w = ${toLatex(parse(src))}`;
+      katex.render(body, previewEl, {
         throwOnError: false,
         displayMode: false,
       });
@@ -645,6 +805,7 @@ function main(): void {
       updateFns(src);
       updatePrecisionBadge();
       syncParamsUI();
+      updateRiemannAvail(); // enable/disable the Riemann tab for this map (ADR-0028)
       recomputeSings();
       redraw(false);
       return true;
@@ -686,16 +847,76 @@ function main(): void {
   // View toggle 2D / 3D landscape / Sphere (Phase 5). Each mode swaps the pointer interaction (pan+zoom /
   // orbit+dolly / arcball+dolly — handled in the pointer code) and shows its own controls.
   const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
-  const setView = (m: "2d" | "3d" | "sphere" | "linked"): void => {
+  // Reflect the Riemann-surface controls + honest badge for the current recognized form (ADR-0028). The
+  // sheet-count row shows only for infinite-sheeted families (log / inverse trig); finite ones (√, z^(p/q))
+  // render all their sheets. The info line is the honest label: form + monodromy + where the principal cut
+  // is (the surface glues it), or a "principal-branch only" note when the map isn't a recognized primitive.
+  const syncRiemannControls = (): void => {
+    const d = plot.riemannDescriptor();
+    if (riemannHeightSel instanceof HTMLSelectElement)
+      riemannHeightSel.value = String(plot.riemannHeightSource);
+    if (riemannSheetsInput instanceof HTMLInputElement)
+      riemannSheetsInput.value = String(plot.riemannSheets);
+    if (riemannSheetsVal instanceof HTMLElement)
+      riemannSheetsVal.textContent = String(plot.riemannSheets);
+    if (riemannExag instanceof HTMLInputElement) riemannExag.value = String(plot.heightScale);
+    if (riemannExagVal instanceof HTMLElement)
+      riemannExagVal.textContent = String(plot.heightScale);
+    if (riemannLinkedInput instanceof HTMLInputElement)
+      riemannLinkedInput.checked = plot.riemannLinked;
+    // The sheet-count control applies only to infinite-sheeted parametric families (log / inverse trig);
+    // finite parametric forms and the finite algebraic curves render all their sheets.
+    if (riemannSheetsRow instanceof HTMLElement)
+      riemannSheetsRow.hidden = !d || d.sheetKind !== "infinite";
+    // Branch-point count: the exact discriminant locus (M2c.2, `=`) when available, else the M3.4 scan (`≈`).
+    const bp = d
+      ? ` · ${branchExact ? "=" : "≈"}${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}`
+      : "";
+    if (riemannInfo instanceof HTMLElement)
+      riemannInfo.textContent = d
+        ? `${d.label} · ${d.monodromy}${bp}. Cut: ${d.branchNote}.` +
+          (d.capped ? " ⚠ budget capped — surface incomplete." : "")
+        : "Not a recognized surface — showing principal-branch views only.";
+  };
+
+  const setView = (m: "2d" | "3d" | "sphere" | "linked" | "riemann"): void => {
+    // The Riemann surface exists only for a recognized invertible primitive; fall back to 2D otherwise so
+    // the button (or a restored link) never lands on a blank surface.
+    if (m === "riemann" && !plot.riemannAvailable()) m = "2d";
     plot.mode = m;
     setPressed(view2d, m === "2d");
     setPressed(view3d, m === "3d");
     setPressed(viewSphere, m === "sphere");
     setPressed(viewLinked, m === "linked");
+    setPressed(viewRiemann, m === "riemann");
     // The surface height controls apply whenever a surface is on screen — the 3D view or the linked pane.
     if (surfaceControls instanceof HTMLElement)
       surfaceControls.hidden = m !== "3d" && m !== "linked";
     if (sphereHint instanceof HTMLElement) sphereHint.hidden = m !== "sphere";
+    if (riemannControls instanceof HTMLElement) riemannControls.hidden = m !== "riemann";
+    // The cursor readout is pane-specific — reset it on any view switch. The sheet row + Riemann hint
+    // (M3.1) show only in the Riemann view; f(z)/|f|/arg f then read the picked sheet's value.
+    for (const el of [pz, pfz, pabs, parg, pbranch]) if (el instanceof HTMLElement) el.textContent = "—";
+    linkedZ = null;
+    loopPoints = null;
+    lastLoop = null; // a stale monodromy loop doesn't belong to the new view
+    if (monodromyResult instanceof HTMLElement) {
+      monodromyResult.hidden = !(m === "riemann" && monodromyOn);
+      if (m === "riemann" && monodromyOn)
+        monodromyResult.textContent =
+          "Drag a closed loop on the base plane to estimate its monodromy.";
+    }
+    const inRiemann = m === "riemann";
+    if (pbranchDt instanceof HTMLElement) pbranchDt.hidden = !inRiemann;
+    if (pbranch instanceof HTMLElement) pbranch.hidden = !inRiemann;
+    if (riemannProbeHint instanceof HTMLElement) riemannProbeHint.hidden = !inRiemann;
+    branchPts = [];
+    if (m === "riemann") {
+      plot.reframeRiemann(); // build the curve mesh over the current view / refresh the parametric framing
+      if (plot.riemannLinked) plot.frameRiemannBaseView(); // frame the base-plane pane on the surface (M3.2)
+      recomputeBranchPoints(); // estimate ramification for the markers + badge count (M3.4)
+      syncRiemannControls();
+    }
     redraw(false);
   };
   if (view2d instanceof HTMLElement)
@@ -706,6 +927,139 @@ function main(): void {
     viewSphere.addEventListener("click", () => setView("sphere"));
   if (viewLinked instanceof HTMLElement)
     viewLinked.addEventListener("click", () => setView("linked"));
+  if (viewRiemann instanceof HTMLElement)
+    viewRiemann.addEventListener("click", () => setView("riemann"));
+
+  // Enable the Riemann tab only for a recognized invertible primitive, and drop out of Riemann mode if the
+  // active map stops being one. Called on every formula change (from applyExpr).
+  const updateRiemannAvail = (): void => {
+    const ok = plot.riemannAvailable();
+    if (viewRiemann instanceof HTMLButtonElement) {
+      viewRiemann.disabled = !ok;
+      const label = plot.riemannDescriptor()?.label;
+      viewRiemann.title = ok
+        ? `True Riemann surface${label ? `: ${label}` : ""}`
+        : "Riemann surface: for invertible primitives (√, ⁿ√, log, arcsin, …) and single-radical algebraic maps (√(z²−1), …)";
+    }
+    // Drop out of a blank Riemann view only in ORDINARY mode; in implicit mode the Riemann view is pinned
+    // (the other tabs are disabled), so an invalid F(w,z) stays on Riemann showing the error badge, not the
+    // f(z) 2D plot.
+    if (!implicitMode && plot.mode === "riemann" && !ok) setView("2d");
+    else if (plot.mode === "riemann") {
+      recomputeBranchPoints(); // the surface changed — re-estimate ramification (M3.4)
+      syncRiemannControls();
+    }
+  };
+
+  // Implicit-surface mode (M2c, ADR-0031): a dedicated `F(w,z)=0` mode with its own box, distinct from the
+  // f/g slots. Entering it pins the Riemann view and disables the tabs / f-only controls that don't apply;
+  // leaving it restores the ordinary f(z) map + views.
+  const updateViewTabsForImplicit = (): void => {
+    for (const b of [view2d, view3d, viewSphere, viewLinked])
+      if (b instanceof HTMLButtonElement) {
+        b.disabled = implicitMode;
+        b.title = implicitMode ? "Disabled in implicit F(w,z)=0 mode — Riemann view only" : "";
+      }
+  };
+  // Recompile + refresh the implicit surface for the current `implicitSrc` (used on entry and on each edit).
+  const applyImplicit = (): void => {
+    plot.setImplicitSource(implicitSrc);
+    setError(
+      plot.implicitInvalid()
+        ? "Implicit F(w, z): need a bivariate polynomial in w, z (deg_w ≥ 2, constant coefficients)."
+        : "",
+    );
+    renderPreview(implicitSrc);
+    updateRiemannAvail();
+    redraw(false);
+  };
+  const setImplicitMode = (on: boolean): void => {
+    implicitMode = on;
+    if (implicitModeInput instanceof HTMLInputElement) implicitModeInput.checked = on;
+    // f(z)-only controls don't apply to an implicit relation.
+    for (const el of [fnF, fnG, inspectInfInput, plotDerivInput, presetSel])
+      if (
+        el instanceof HTMLButtonElement ||
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLSelectElement
+      )
+        el.disabled = on;
+    if (exprLabel instanceof HTMLElement)
+      exprLabel.textContent = on ? "Surface  F(w, z) = 0" : `Function  ${active}(z)`;
+    setExprBox(on ? implicitSrc : exprs[active]);
+    updateViewTabsForImplicit();
+    if (on) {
+      applyImplicit();
+      setView("riemann"); // the only view that renders an implicit relation
+    } else {
+      plot.setImplicitSource(null);
+      applyExpr(exprs[active]); // restore the f(z) surface + instruments
+      setView("2d");
+    }
+  };
+  if (implicitModeInput instanceof HTMLInputElement)
+    implicitModeInput.addEventListener("change", () => setImplicitMode(implicitModeInput.checked));
+
+  // Riemann-surface controls (ADR-0028): charisma axis, sheets shown (infinite families), exaggeration
+  // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
+  if (riemannHeightSel instanceof HTMLSelectElement)
+    riemannHeightSel.addEventListener("change", () => {
+      plot.riemannHeightSource = Number(riemannHeightSel.value) === 1 ? 1 : 0;
+      plot.reframeRiemannLight(); // charisma axis is a shader uniform — no mesh rebuild
+      redraw(false);
+    });
+  if (riemannSheetsInput instanceof HTMLInputElement)
+    riemannSheetsInput.addEventListener("input", () => {
+      plot.riemannSheets = Number(riemannSheetsInput.value);
+      if (riemannSheetsVal instanceof HTMLElement)
+        riemannSheetsVal.textContent = riemannSheetsInput.value;
+      plot.reframeRiemann();
+      redraw(false);
+    });
+  if (riemannExag instanceof HTMLInputElement)
+    riemannExag.addEventListener("input", () => {
+      plot.heightScale = Number(riemannExag.value);
+      if (riemannExagVal instanceof HTMLElement) riemannExagVal.textContent = riemannExag.value;
+      plot.reframeRiemannLight(); // exaggeration is a shader uniform — no mesh rebuild
+      redraw(false);
+    });
+  // Linked base-plane pane (M3.2): split the Riemann view with the flat base plane, hover-linked.
+  if (riemannLinkedInput instanceof HTMLInputElement)
+    riemannLinkedInput.addEventListener("change", () => {
+      plot.riemannLinked = riemannLinkedInput.checked;
+      if (plot.riemannLinked) plot.frameRiemannBaseView(); // frame the base pane on the surface's z-extent
+      else if (monodromyOn) {
+        // the monodromy explorer needs the base pane to draw a loop on — turn it off with the pane
+        monodromyOn = false;
+        if (riemannMonodromyInput instanceof HTMLInputElement) riemannMonodromyInput.checked = false;
+        loopPoints = null;
+        lastLoop = null;
+        showMonodromy(null);
+      }
+      linkedZ = null;
+      redraw(false);
+    });
+  // Monodromy explorer (M3.3): drag a closed loop on the base plane; the sheets' permutation is estimated
+  // (≈, uncertified — RISKS §3). Needs the base-plane pane, so turning it on turns that on too.
+  if (riemannMonodromyInput instanceof HTMLInputElement)
+    riemannMonodromyInput.addEventListener("change", () => {
+      monodromyOn = riemannMonodromyInput.checked;
+      if (monodromyOn) {
+        plot.riemannLinked = true;
+        if (riemannLinkedInput instanceof HTMLInputElement) riemannLinkedInput.checked = true;
+        plot.frameRiemannBaseView();
+      }
+      loopPoints = null;
+      lastLoop = null;
+      showMonodromy(null); // placeholder hint (on) / hidden (off)
+      redraw(false);
+    });
+  if (riemannReset instanceof HTMLElement)
+    riemannReset.addEventListener("click", () => {
+      plot.resetCamera();
+      plot.resetRiemann();
+      redraw(false);
+    });
   if (heightModeSel instanceof HTMLSelectElement) {
     heightModeSel.value = String(plot.heightMode);
     heightModeSel.addEventListener("change", () => {
@@ -786,7 +1140,7 @@ function main(): void {
   const FN_NAMES = [...COMPLEX_FUNCTIONS, ...BINARY_FUNCTIONS, "f", "if", "not"];
   const acCandidates = (): Candidate[] => {
     const fns: Candidate[] = FN_NAMES.map((name) => ({ name, fn: true }));
-    const bare = ["z", "c", "i", "e", "pi", "tau", "phi", "γ", ...plot.paramNames()];
+    const bare = ["z", "c", "w", "i", "e", "pi", "tau", "phi", "γ", ...plot.paramNames()];
     const names: Candidate[] = [...new Set(bare)].map((name) => ({ name, fn: false }));
     return [...fns, ...names];
   };
@@ -796,8 +1150,13 @@ function main(): void {
   ) {
     // On accept, the value changed programmatically (no input event) — re-run the app's handling.
     createAutocomplete(exprInput, acMenu, acCandidates, () => {
-      exprs[active] = exprInput.value;
-      applyExpr(exprInput.value);
+      if (implicitMode) {
+        implicitSrc = exprInput.value;
+        applyImplicit();
+      } else {
+        exprs[active] = exprInput.value;
+        applyExpr(exprInput.value);
+      }
     });
   }
 
@@ -961,6 +1320,12 @@ function main(): void {
     exprInput.addEventListener("input", () => {
       window.clearTimeout(exprTimer);
       exprTimer = window.setTimeout(() => {
+        if (implicitMode) {
+          // Implicit mode: the box holds `F(w,z)`; edits drive the implicit surface (M2c).
+          implicitSrc = exprInput.value;
+          applyImplicit();
+          return;
+        }
         // Only a parseable expression is written back to the active slot (and thus to currentState /
         // the share-link): a half-typed, invalid formula stays visible in the box but never gets
         // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
@@ -1171,6 +1536,83 @@ function main(): void {
   const updateProbe3d = (clientX: number, clientY: number): void =>
     renderProbe(plot.pickSurface(clientX, clientY, surfaceHeight, threeDRect()));
 
+  const setBranchText = (text: string): void => {
+    if (pbranch instanceof HTMLElement) pbranch.textContent = text;
+  };
+  // Multi-sheet hover-pick (M3.1): ray-cast the Riemann surface under the cursor and read the point on the
+  // sheet the eye sees — z, the sheet's value w (= f(z) on that branch), |w|, arg w, and the local sheet
+  // ordinal. All `≈` (barycentric-interpolated from a finite mesh), matching how the surface is drawn. The
+  // Riemann view uses the whole canvas, so the pick measures against the full canvas rect.
+  const updateProbeRiemann = (clientX: number, clientY: number): void => {
+    const hit = plot.pickRiemann(clientX, clientY, riemannPaneRect());
+    if (!hit) {
+      renderProbe(null);
+      setBranchText("—");
+      if (plot.riemannLinked) {
+        linkedZ = null;
+        drawRiemannLink();
+      }
+      return;
+    }
+    if (pz instanceof HTMLElement) pz.textContent = fmtComplex(hit.z);
+    if (pfz instanceof HTMLElement) pfz.textContent = "≈ " + fmtComplex(hit.w);
+    if (pabs instanceof HTMLElement) pabs.textContent = "≈ " + fmtNum(Math.hypot(hit.w[0], hit.w[1]));
+    if (parg instanceof HTMLElement) parg.textContent = "≈ " + fmtNum(Math.atan2(hit.w[1], hit.w[0]));
+    setBranchText(`${hit.sheetIndex} / ${hit.sheetCount}`);
+    if (plot.riemannLinked) {
+      linkedZ = hit.z; // mark the touched sheet's base point on the base-plane pane
+      drawRiemannLink();
+    }
+  };
+
+  // Monodromy explorer (M3.3): show the estimated sheet permutation for the drawn loop. Always labeled an
+  // uncertified estimate (RISKS §3); a low-confidence flag warns when the loop ran near a branch point.
+  const showMonodromy = (res: ReturnType<typeof plot.computeRiemannMonodromy>): void => {
+    if (!(monodromyResult instanceof HTMLElement)) return;
+    if (!res) {
+      monodromyResult.hidden = !monodromyOn;
+      if (monodromyOn)
+        monodromyResult.textContent =
+          "Drag a closed loop on the base plane to estimate its monodromy.";
+      return;
+    }
+    monodromyResult.hidden = false;
+    const nontrivial = res.cycles.filter((c) => c.length > 1);
+    const cyc = !res.isPermutation
+      ? "ambiguous (no clean permutation)"
+      : nontrivial.length === 0
+        ? "identity — no sheet swap"
+        : nontrivial.map((c) => `(${c.map((k) => k + 1).join(" ")})`).join("");
+    const shape =
+      res.isPermutation && nontrivial.length === 1 && nontrivial[0].length === res.sheetCount
+        ? ` · ${res.sheetCount}-cycle`
+        : "";
+    const conf = res.lowConfidence
+      ? " · ⚠ low confidence (near a branch point / under-resolved)"
+      : "";
+    monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).`;
+  };
+  const finalizeLoop = (): void => {
+    const loop = loopPoints;
+    loopPoints = null;
+    if (!loop || loop.length < 4) {
+      lastLoop = null; // too short to be a loop — discard
+      showMonodromy(null);
+      redraw(false);
+      return;
+    }
+    lastLoop = loop;
+    const res = plot.computeRiemannMonodromy(loop);
+    if (!res && monodromyResult instanceof HTMLElement) {
+      monodromyResult.hidden = false;
+      monodromyResult.textContent =
+        "≈ no monodromy — fewer than two sheets over the loop's start.";
+    } else {
+      showMonodromy(res);
+    }
+    redraw(false);
+  };
+
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
   // operations for a mouse-free / accessible path (L7).
@@ -1196,8 +1638,9 @@ function main(): void {
   // one finger, so the survivor keeps dragging. `pan3d` (left mouse button) pans the 3D landscape; the
   // default (right button / touch / pinch-survivor) orbits it.
   const seedDrag = (clientX: number, clientY: number, pan3d = false): void => {
-    const m = effMode(clientX);
+    const m = navMode(clientX); // in the Riemann view a drag orbits the surface from either pane
     if (m === "sphere") sphereLast = canvasUv(clientX, clientY);
+    else if (m === "riemann") orbitLast = { x: clientX, y: clientY }; // orbit only (no domain pan)
     else if (m === "3d") {
       if (pan3d) panLast = { x: clientX, y: clientY };
       else orbitLast = { x: clientX, y: clientY };
@@ -1215,13 +1658,26 @@ function main(): void {
       /* a synthetic / already-released pointer can't be captured — harmless */
     }
     if (activePointers.size >= 2) {
-      // A second finger begins a pinch: abandon any single-pointer drag and seed the pinch span.
+      // A second finger begins a pinch: abandon any single-pointer drag / loop and seed the pinch span.
       grabWorld = null;
       orbitLast = null;
       panLast = null;
       sphereLast = null;
+      loopPoints = null;
       const [a, b] = twoPointers();
       pinchPrev = pointerDistance(a, b);
+      return;
+    }
+    // Monodromy explorer (M3.3): a drag on the base-plane pane traces a loop instead of orbiting.
+    if (
+      monodromyOn &&
+      plot.mode === "riemann" &&
+      plot.riemannLinked &&
+      isLeftHalf(e.clientX, canvasRect())
+    ) {
+      loopPoints = [plot.screenToWorld(e.clientX, e.clientY, twoDRect())];
+      lastLoop = null;
+      drawRiemannLink();
       return;
     }
     // Left mouse button pans the 3D landscape; the right button (or touch / pen) orbits it — the familiar
@@ -1238,11 +1694,18 @@ function main(): void {
       const factor = pinchFactor(pinchPrev, dist);
       pinchPrev = dist;
       const mid = pointerMidpoint(a, b);
-      const m = effMode(mid.x);
+      const m = navMode(mid.x);
       if (m === "sphere") plot.dollySphere(factor);
+      else if (m === "riemann") plot.dollyRiemann(factor); // pinch dollies the surface camera
       else if (m === "3d") plot.zoomSpan(factor); // §B: pinch zooms the domain
       else plot.zoomAt(mid.x, mid.y, factor, twoDRect());
       redraw(true);
+      return;
+    }
+    if (loopPoints) {
+      // Monodromy loop drag (M3.3): accumulate base points and redraw the loop overlay (no WebGL repaint).
+      loopPoints.push(plot.screenToWorld(e.clientX, e.clientY, twoDRect()));
+      drawRiemannLink();
       return;
     }
     if (sphereLast) {
@@ -1273,10 +1736,19 @@ function main(): void {
       redraw(true);
     } else {
       // Idle hover (no drag): update the value inspector for the pane under the cursor. 2D reads the
-      // screen→world point; 3D picks the point on the surface; the sphere has no readout.
+      // screen→world point; 3D picks the point on the surface; the Riemann surface ray-casts its sheets
+      // (M3.1); the sphere has no pick, so blank the readout there rather than leaving stale values.
       const m = effMode(e.clientX);
-      if (m === "2d") updateProbe(e.clientX, e.clientY);
+      if (m === "riemann") updateProbeRiemann(e.clientX, e.clientY);
+      else if (plot.mode === "riemann" && plot.riemannLinked && m === "2d") {
+        // The base-plane pane of the linked Riemann view: the principal readout + the hover-link crosshair.
+        updateProbe(e.clientX, e.clientY);
+        setBranchText("—");
+        linkedZ = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
+        drawRiemannLink();
+      } else if (m === "2d") updateProbe(e.clientX, e.clientY);
       else if (m === "3d") updateProbe3d(e.clientX, e.clientY);
+      else renderProbe(null);
     }
   });
   const endDrag = (e: PointerEvent): void => {
@@ -1292,6 +1764,10 @@ function main(): void {
       sphereLast = null;
       const survivor = activePointers.values().next().value as Pt;
       seedDrag(survivor.x, survivor.y);
+      return;
+    }
+    if (loopPoints) {
+      finalizeLoop(); // close the monodromy loop and estimate its permutation (M3.3)
       return;
     }
     if (sphereLast) {
@@ -1325,8 +1801,9 @@ function main(): void {
     "wheel",
     (e) => {
       e.preventDefault();
-      const m = effMode(e.clientX);
+      const m = navMode(e.clientX);
       if (m === "sphere") plot.dollySphere(Math.pow(1.0012, e.deltaY));
+      else if (m === "riemann") plot.dollyRiemann(Math.pow(1.0015, e.deltaY));
       else if (m === "3d") plot.zoomSpan(Math.pow(1.0015, e.deltaY)); // §B: scroll zooms the domain
       else plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
       redraw(true);
@@ -1369,6 +1846,17 @@ function main(): void {
       else if (intent === "out") plot.zoomSpan(1.25);
       // Same grab-turntable sense as the right-drag orbit (surface follows the key): "left" → +azimuth,
       // "right" → −azimuth; "up" tips the near edge up (elevation down), "down" looks more top-down.
+      else if (intent === "left") plot.orbit(STEP, 0);
+      else if (intent === "right") plot.orbit(-STEP, 0);
+      else if (intent === "up") plot.orbit(0, -STEP);
+      else plot.orbit(0, STEP);
+    } else if (plot.mode === "riemann") {
+      const STEP = 0.18;
+      if (intent === "reset") {
+        plot.resetCamera();
+        plot.resetRiemann();
+      } else if (intent === "in") plot.dollyRiemann(0.85);
+      else if (intent === "out") plot.dollyRiemann(1 / 0.85);
       else if (intent === "left") plot.orbit(STEP, 0);
       else if (intent === "right") plot.orbit(-STEP, 0);
       else if (intent === "up") plot.orbit(0, -STEP);
@@ -1419,9 +1907,20 @@ function main(): void {
     redraw(false);
   }
 
+  // Restore Riemann-surface settings from the share-link (setActive seeded the form's defaults; the link's
+  // saved choices override them). Safe when the active map isn't a recognized primitive (reframe no-ops).
+  plot.riemannHeightSource = initial.v3d.riemannHeight === 1 ? 1 : 0;
+  plot.riemannSheets = initial.v3d.riemannSheets;
+  plot.riemannLinked = initial.v3d.riemannLinked;
+  plot.reframeRiemann();
+
   // Restore the saved render mode last (now that setView + its controls exist). The camera / height were
-  // applied above, so a shared 3D landscape / linked figure reopens exactly as it was framed.
+  // applied above, so a shared 3D landscape / linked / Riemann figure reopens exactly as it was framed.
   if (initial.v3d.mode !== "2d") setView(initial.v3d.mode);
+
+  // A shared implicit-surface link (M2c) reopens in implicit mode with its `F(w,z)` source (this pins the
+  // Riemann view, overriding the mode restore above).
+  if (implicitMode) setImplicitMode(true);
 }
 
 // Run inside @cas/ui's fatal-error boundary (ADR-0028, U6). The plotter already catches a WebGL2/Plot

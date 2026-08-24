@@ -189,6 +189,7 @@
         <div id="precisionBadge" role="status" hidden></div>
         <label class="check" style="margin-top: 8px"><input type="checkbox" id="inspectInf" /> Inspect &infin; &mdash; plot f(1/z)</label>
         <label class="check"><input type="checkbox" id="plotDeriv" /> Plot f&prime; &mdash; the derivative</label>
+        <label class="check"><input type="checkbox" id="implicitMode" /> Implicit surface &mdash; F(w,&nbsp;z) = 0</label>
       </div>
 
       <div class="group control-group">
@@ -239,6 +240,7 @@
             <button type="button" id="view3d" class="fn-tab" aria-pressed="false">3D</button>
             <button type="button" id="viewSphere" class="fn-tab" aria-pressed="false">Sphere</button>
             <button type="button" id="viewLinked" class="fn-tab" aria-pressed="false" title="2D portrait and 3D landscape side by side, sharing the view">Linked</button>
+            <button type="button" id="viewRiemann" class="fn-tab" aria-pressed="false" title="True multi-sheeted Riemann surface — available for invertible primitives (√, ⁿ√, log, arcsin, arctan, …)">Riemann</button>
           </div>
         </div>
         <p id="sphereHint" class="param-hint" hidden>Drag to rotate &middot; scroll to dolly. The north pole is &infin;, the south pole is 0.</p>
@@ -259,6 +261,27 @@
         <label for="opacity" style="margin-top: 8px">Surface opacity <span class="subval" id="opacityVal"></span></label>
         <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="1" />
           <p class="param-hint">Left-drag to pan · right-drag to orbit · scroll to zoom. Top-down matches the 2D portrait.</p>
+        </div>
+        <div id="riemannControls" hidden>
+          <p id="riemannInfo" class="param-hint"></p>
+          <label for="riemannHeight" style="margin-top: 8px">Height (charisma axis)</label>
+          <select id="riemannHeight">
+            <option value="0">Re w (algebraic sheets)</option>
+            <option value="1">Im w (log helicoid)</option>
+          </select>
+          <div id="riemannSheetsRow">
+            <label for="riemannSheets" style="margin-top: 8px">Sheets shown <span class="subval" id="riemannSheetsVal"></span></label>
+            <input type="range" id="riemannSheets" min="1" max="8" step="1" value="3" />
+          </div>
+          <label for="riemannExag" style="margin-top: 8px">Exaggeration <span class="subval" id="riemannExagVal"></span></label>
+          <input type="range" id="riemannExag" min="0.1" max="3" step="0.1" value="1" />
+          <label class="check" style="margin-top: 8px"><input type="checkbox" id="riemannLinked" /> Base-plane pane</label>
+          <label class="check" style="margin-top: 8px"><input type="checkbox" id="riemannMonodromy" /> Monodromy explorer <b>&asymp;</b></label>
+          <p id="monodromyResult" class="param-hint" hidden></p>
+          <div class="row" style="margin-top: 8px">
+            <button type="button" id="riemannReset">Reset view</button>
+          </div>
+          <p class="param-hint">Drag to orbit &middot; scroll to zoom. The sheets glue across the branch cut &mdash; no false cliff. Values are <b>&asymp;</b>; the glued topology is exact.</p>
         </div>
       </div>
 
@@ -332,7 +355,9 @@
           <dt>f(z)</dt><dd id="pfz">&mdash;</dd>
           <dt>|f|</dt><dd id="pabs">&mdash;</dd>
           <dt>arg&nbsp;f</dt><dd id="parg">&mdash;</dd>
+          <dt id="pbranchDt" hidden>sheet</dt><dd id="pbranch" hidden>&mdash;</dd>
         </dl>
+        <p class="param-hint" id="riemannProbeHint" hidden>On the Riemann surface, <b>f(z)</b> is the value of the sheet under the cursor; <b>sheet</b> is its local order (of the sheets over this z) &mdash; <b>&asymp;</b>.</p>
       </details>
 
       <details class="control-group">

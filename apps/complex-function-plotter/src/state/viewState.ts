@@ -15,7 +15,7 @@ export const APP_NS = "cfp";
  *  so a shared landscape / linked figure reopens as it was framed. The sphere's arcball rotation is
  *  interactive-only and not persisted — a sphere link reopens in sphere mode at the default orientation. */
 export interface View3dState {
-  mode: "2d" | "3d" | "sphere" | "linked";
+  mode: "2d" | "3d" | "sphere" | "linked" | "riemann";
   azimuth: number;
   elevation: number;
   distance: number;
@@ -24,6 +24,13 @@ export interface View3dState {
   heightScale: number;
   specular: boolean;
   opacity: number;
+  /** Riemann-surface mode (ADR-0028): charisma axis (0 = Re w, 1 = Im w) and sheets shown (infinite
+   *  families). Absent on a pre-Riemann link → decode to the defaults, so old links still open. */
+  riemannHeight: number;
+  riemannSheets: number;
+  /** Riemann linked base-plane pane (M3.2, ADR-0030): split the Riemann view with the flat base plane.
+   *  Absent on an older link → decodes to `false`. */
+  riemannLinked: boolean;
 }
 
 /** The default 3D-view state: 2D mode with the default orbit camera and a log-height surface. */
@@ -37,6 +44,9 @@ export const DEFAULT_V3D: View3dState = {
   heightScale: 1,
   specular: false,
   opacity: 1,
+  riemannHeight: 0,
+  riemannSheets: 3,
+  riemannLinked: false,
 };
 
 export interface PlotterState extends Record<string, unknown> {
@@ -63,6 +73,9 @@ export interface PlotterState extends Record<string, unknown> {
   /** Animation-variable `t` transport config (catalog G2). Playback state is not persisted — a loaded
    *  link opens paused at the saved `t` (which travels in `params`). */
   anim: AnimConfig;
+  /** Implicit-surface source `F(w,z)` (M2c, ADR-0031) when the dedicated implicit mode is active; empty
+   *  string = ordinary `f(z)` mode. Absent on an older link → decodes to `""`, so old links still open. */
+  implicit: string;
   /** Render mode + 3D camera/height (catalog F5–F7), so a shared landscape / linked / sphere figure
    *  reopens in its view. Absent on a pre-3D-persist link → decodes to the 2D default. */
   v3d: View3dState;
@@ -108,7 +121,9 @@ function cleanV3d(raw: unknown): View3dState {
     typeof v === "number" && Number.isFinite(v) ? v : d;
   const boolOr = (v: unknown, d: boolean): boolean => (typeof v === "boolean" ? v : d);
   const mode =
-    o.mode === "3d" || o.mode === "sphere" || o.mode === "linked" ? o.mode : "2d";
+    o.mode === "3d" || o.mode === "sphere" || o.mode === "linked" || o.mode === "riemann"
+      ? o.mode
+      : "2d";
   return {
     mode,
     azimuth: numOr(o.azimuth, DEFAULT_CAMERA.azimuth),
@@ -120,6 +135,9 @@ function cleanV3d(raw: unknown): View3dState {
     heightScale: Math.min(3, Math.max(0.1, numOr(o.heightScale, 1))),
     specular: boolOr(o.specular, false),
     opacity: Math.min(1, Math.max(0.1, numOr(o.opacity, 1))),
+    riemannHeight: numOr(o.riemannHeight, 0) === 1 ? 1 : 0,
+    riemannSheets: Math.min(8, Math.max(1, Math.round(numOr(o.riemannSheets, 3)))),
+    riemannLinked: boolOr(o.riemannLinked, false),
   };
 }
 
@@ -169,6 +187,7 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     hueSign: num(s.hueSign, 1),
     params: cleanParams(s.params),
     anim: cleanAnim(s.anim),
+    implicit: str(s.implicit, ""),
     v3d: cleanV3d(s.v3d),
   };
 }

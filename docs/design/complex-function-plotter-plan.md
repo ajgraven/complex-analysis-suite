@@ -251,8 +251,11 @@ _site/complex-function-plotter` line is added to `deploy-pages.yml`; the plotter
   `complex-function-plotter`; dev port `5176`.
 - **Mathematical scope:** **principal-branch only** — elementary holo/meromorphic + hyperbolics +
   anti-holomorphic (`conjugate`) + a staged special-function set (Γ, ζ first). **No** multivalued /
-  branch-cut / Riemann-surface machinery (that stays a roadmap item tied to a future `@cas/expr`
-  multivalued phase, ADR-0005).
+  branch-cut evaluation in `@cas/expr` (that stays a roadmap item tied to a future multivalued phase,
+  ADR-0005). *Update: a true multi-sheeted **Riemann-surface view** later landed via the parametrize-by-w
+  method ([ADR-0028](../DECISIONS.md#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app),
+  [`riemann-surface-plan.md`](riemann-surface-plan.md)), which sidesteps multivalued expr by inverting
+  known primitives; the serializable multivalued interchange form is still deferred.*
 - **Representations:** 2D domain coloring first; then a 3D analytic-landscape surface + Riemann
   sphere. **Hand-rolled on `@cas/gpu`** — no 3D framework.
 - **Priorities:** real-time interactivity + publication-quality export are core; **df64 deep-zoom is
@@ -535,7 +538,7 @@ Parked, but each has a known home so pulling it in is cheap:
 | G3 cursor-`c` · G5 param-path · G6 homotopy · G7 video capture                                                  | P3/P5             | G7 = video export (deferred per priorities)         |
 | A6 MathLive editor · A8 composition/iteration                                                                   | P3                | input depth                                         |
 | I5 bookmarks · I6 linked z↔w · I8 A/B split · I9 inset sphere                                                   | P2/P5             | I6 is a strong differentiator to pull forward       |
-| F9 Re/Im surfaces · F10 sphere-of-f · F11 ray-marched surface · F12 Riemann surfaces                            | P5                | F12 needs multivalued expr (out of scope)           |
+| F9 Re/Im surfaces · F10 sphere-of-f · F11 ray-marched surface · ~~F12 Riemann surfaces~~ ✅                       | P5                | F12 ✅ landed via parametrize-by-w (ADR-0028) — no multivalued expr needed |
 | B7 erf/Airy/ψ/Bessel · B8 θ/℘/elliptic                                                                          | P4+               | same 5-table checklist; B8 hard numerics            |
 | K4 legend export · K5 hybrid raster+vector · K6 CSV grid · K10 print+citation                                   | P6                | K5 = honest raster+vector                           |
 
