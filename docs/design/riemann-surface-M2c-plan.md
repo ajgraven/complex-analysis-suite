@@ -1,0 +1,157 @@
+# Riemann surfaces M2c — implicit algebraic surfaces `F(w, z) = 0` — implementation plan
+
+> **Status: proposed — awaiting approval.** Extends the Complex Function Plotter's **Riemann** view from
+> functions the user can *name* (M1 primitives, M2a/M2b radical expressions) to the **general algebraic curve**
+> entered **implicitly** as a bivariate complex polynomial `F(w, z) = 0` — e.g. `w³ − w − z` (the classic
+> cusp/fold) or `w² − (z³ − z)` (an elliptic curve, the same surface `√(z³−z)` draws, now from its defining
+> equation). This is the natural home for the `@cas/*` machinery M2a/M2b deliberately did **not** need:
+> per-vertex root-solving (**`@cas/core` `rootsMonic`**) and, optionally, the exact branch locus
+> (**`@cas/exact` `discriminant`**). Specced originally in
+> [`riemann-surface-M2-plan.md`](riemann-surface-M2-plan.md#9-m2c--implicit-fw-z--0-input-requested-deferred) §9
+> and [ADR-0028](../DECISIONS.md#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
+> Action Item 4. A new decision (the dependency additions + the input-mode UX) will be recorded as **ADR-0030**,
+> drafted on approval. Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
+> [`../DECISIONS.md`](../DECISIONS.md).
+
+---
+
+## Build progress (living record)
+
+> To be filled as milestones land, on branch `claude/riemann-surface-rendering-fvybo6` (or a fresh branch if
+> the current PR has merged). Nothing is built until this plan is approved.
+
+| Milestone | Status | Coverage |
+|---|---|---|
+| **M2c.0 — spike** | ⛔ not started | `w³ − w − z` end-to-end: coefficient extraction → per-vertex `rootsMonic` → existing `curveMesh` → render. Proves the pipeline + the reuse claim. |
+| **M2c.1 — the deliverable** | ⛔ not started | input UX, dispatch, degree/leading-coeff handling, decline rules, honest badges, hover-pick / linked / monodromy / branch-marker carry-over, tests + goldens. |
+| **M2c.2 — exact branch locus (optional)** | ⛔ not started | `@cas/exact discriminant` for Gaussian-rational `F` → ramification labeled `=` (vs. the `≈` scan). |
+
+---
+
+## 1. The seam: what M2/M3 already provide (the reuse claim)
+
+M2c is mostly **plumbing into an engine that already exists**. The whole M2/M3 stack is parametrized by a
+single enumerator:
+
+```ts
+// curveMesh.ts, pickMesh.ts, monodromy.ts, branchPoints.ts all consume this shape:
+sheetsAt: (z: Complex) => Complex[]      // the sheet values over a base point
+```
+
+- **`buildCurveMesh({ sheetsAt, sheetCount }, view)`** — NPP proximity gluing, adaptive subdivision,
+  ramification holes, budget cap. **Unchanged.**
+- **`Plot.riemannSheetsAt(z)`** already dispatches: exact for the radical curve path, mesh census for the
+  parametric path. M2c adds a third source — the **root-solve** enumerator — behind the same method, so the
+  **baked-curve render, the M3.1 hover-pick, the M3.2 linked pane, the M3.3 monodromy explorer, and the M3.4
+  branch-point markers all carry over for free.**
+
+So M2c's real new work is narrow: (a) turn a typed `F(w, z)` into per-vertex coefficient lists, (b) solve
+them, (c) wire the input + dispatch + honest labels. Crucially — unlike building `P(z,w)` from radical sums
+by resultants (M2b's rejected Option B) — a **directly-entered `F` has no spurious branches**: every root of
+`F(·, z)` is a genuine sheet. M2c is therefore *cleaner* than the general elimination path, not harder.
+
+## 2. The gap M2c fills
+
+M1/M2a/M2b render every algebraic surface the user can write as a **radical expression**. But most algebraic
+curves have **no radical form** (by Abel–Ruffini, a general quintic `w⁵ + z·w + z = 0` has no expression in
+radicals) — yet their Riemann surfaces are perfectly concrete. M2c lets the user enter the curve *by its
+defining equation*, covering the whole class.
+
+## 3. The method
+
+For a bivariate polynomial `F(w, z) = Σₖ aₖ(z)·wᵏ` (degree `n = deg_w F`):
+
+1. **Coefficient extraction (new, app-local).** Expand the parsed `F` AST into powers of `w`, collecting a
+   coefficient AST `aₖ(z)` for each `k = 0 … n`. (`@cas/expr` has `fToRational` for one variable but no
+   bivariate collector, so this is a small new `implicitPoly.ts` — an expand-and-collect over `+ − ×` and
+   non-negative integer powers of `w`/`z` with constant coefficients. Anything else — division by `w`,
+   transcendental, fractional power — makes it decline and fall back.)
+2. **Per-vertex roots (`@cas/core`).** At each z-vertex, evaluate the coefficients `aₖ(z)` numerically
+   (`makeComplexFn`), then `rootsMonic([aₙ, …, a₀])` → the `n` residual-certified roots = the `n` sheet
+   values. This is the `sheetsAt` the existing mesh consumes.
+3. **Leading-coefficient zeros.** Where `aₙ(z) = 0` the degree drops and a root escapes to ∞ — a pole/branch
+   at infinity. Those vertices yield fewer finite roots; the mesh's existing **local-degeneracy + `wCap`**
+   backstop drops them as holes (never a wall), exactly as for the radical paths.
+4. **Branch locus.** The local-degeneracy test already resolves ramification (sheets colliding), so M2c.0/.1
+   need **no discriminant**. M2c.2 (optional) adds the **exact** locus `disc_w F(z) = 0` via `@cas/exact`
+   `discriminant` (Gaussian-rational `F` only) to seed subdivision and label the branch points `=` instead of
+   the M3.4 `≈` scan.
+5. **Height + colour + everything else:** identical to M2 (charisma height, shared `colorAt`, orbit camera),
+   and all of M3's exploration tools ride along via `riemannSheetsAt`.
+
+## 4. Architecture & components (app-local first, ADR-0007)
+
+- **`src/riemann/implicitPoly.ts`** *(new)* — `parseImplicit(ast): { coeffs: Node[]; degreeW: number } | null`:
+  expand/collect `F` into coefficient ASTs in `w` (constants only, like M1/M2); decline non-polynomial or
+  parametric input.
+- **`src/riemann/implicitCurve.ts`** *(new)* — `detectImplicitCurve(ast): ImplicitCurve | null`: recognizes
+  an implicit `F(w,z)` (see §6 input decision), builds the `rootsMonic`-backed `sheetsAt`, reports `sheetCount
+  = deg_w F` and a label. Declines degree < 2 or > a cap (legibility/perf).
+- **`src/render/plot.ts`** — a third `riemannKind: "implicit"` that reuses the **curve** render path
+  (`buildCurveMesh` + `buildCurveProgram` — no new shader); `riemannSheetsAt` routes to the root-solver;
+  `compileSource` dispatch tries M1 → M2 radical → **M2c implicit**.
+- **`main.ts` / `index.html`** — the input affordance (§6) + honest badge; auto-select + view gating.
+- **No new package** for the engine (stays in `src/riemann/`, ADR-0007). **New dependencies:** `@cas/core`
+  (`rootsMonic`) — required; `@cas/exact` (`discriminant`) — only if M2c.2 is built.
+
+### 4.1 Convention neutrality (ADR-0006) / honest labeling (guardrail)
+- No π/2πi normalization enters `@cas/*`.
+- **Roots `≈`** (residual-certified `rootsMonic`); **sheet count `n = deg_w F` exact**; **branch locus `≈`**
+  (M3.4 scan) or **`=`** (M2c.2 discriminant). **Genus / connectivity are NOT claimed** (a visualizer, not a
+  topology certifier — RISKS §3). Holes / budget cap / degree cap stay badged.
+
+### 4.2 Dependency direction, testing, census
+- **Adds `@cas/core` (and optionally `@cas/exact`) to the plotter** — the *first* consumers there, exactly as
+  ADR-0028 §9 anticipated. `pnpm dep:check` stays green (packages import downward; no app→app; no cycles).
+- **Node tests:** coefficient extraction (`w³−w−z` → `[−z, −1, 0, 1]`), roots satisfy `F(root, z) ≈ 0`,
+  `w²−(z³−z)` reproduces the ±√(z³−z) sheet set, decline rules, leading-coeff-zero holes; (M2c.2) discriminant
+  of `w²−(z³−z)` = `4(z³−z)` up to units. **Browser goldens:** `w³−w−z` renders non-blank through the real
+  Plot. Existing tests (incl. top-down-3D≡2D) stay green; census floor kept.
+
+## 5. Milestones (each gated: `typecheck · lint (+dep:check) · test · build` + browser goldens)
+
+- **M2c.0 spike** — `implicitPoly.ts` + a `rootsMonic` `sheetsAt`; render `w³−w−z` through the existing
+  `curveMesh`/Plot. Adds `@cas/core`. Exit: green + findings; **pause**.
+- **M2c.1 deliverable** — input UX (§6), dispatch, degree/leading-coeff handling, decline rules, honest
+  badge, auto-select, all M3 tools verified to carry over, node + browser tests. Exit: full gate green;
+  `w³−w−z`, `w²−(z³−z)`, a quintic render correctly; **pause for review**.
+- **M2c.2 exact branch locus (optional)** — `@cas/exact discriminant` for Gaussian-rational `F`, `=`-labeled;
+  falls back to the `≈` scan otherwise. Exit: full gate green; **pause**.
+
+## 6. The one open decision — input UX (needs your call before M2c.0)
+
+How does the user enter `F(w, z) = 0`? Three options; I recommend **A**.
+
+- **A — auto-detect `w` (recommended).** Any formula that references `w` is read as implicit `F(w,z)=0`
+  (`w` is otherwise unused — the plotter's maps are `f(z)`). Type `w^3 - w - z` and the Riemann view appears;
+  the 2D/3D/sphere/linked tabs (which need a single-valued `f(z)`) are **disabled with a note** ("implicit
+  relation — Riemann view only"). Lowest friction, discoverable, no new controls. Cost: the view-gating logic.
+- **B — explicit `= 0` equation.** Enter `w^3 - w - z = 0` (a compare-node the parser already supports);
+  detected as implicit. Most mathematically explicit; slightly more to type; same view-gating.
+- **C — a dedicated "Implicit F(w,z)=0" mode toggle** with its own box. Most discoverable as a distinct mode;
+  most new UI; clearest that it's a different kind of object.
+
+All three share the same engine; only the front door differs. My recommendation is **A** (least UI, and the
+presence of `w` is an unambiguous, honest signal), with the inapplicable view tabs clearly disabled.
+
+## 7. Risks & mitigations
+
+- **Per-vertex root conditioning / ordering** → `rootsMonic` residual filtering; NPP nearest-match stitch
+  already tolerates unordered roots; local-degeneracy backstop + `wCap` for near-branch/∞.
+- **Leading-coefficient zeros (degree drop)** → detected per vertex; dropped as holes (badged), never walls.
+- **High degree = perf + clutter** → a degree cap (badged), matching the M2 sheet cap philosophy.
+- **New dependencies** → `@cas/core`/`@cas/exact` are existing, tested packages; this is the anticipated
+  first-consumer moment, not new primitives (north-star preserved).
+- **Over-claiming topology** → genus/connectivity never claimed; honest `≈`/`=` labels throughout (RISKS §3).
+
+## 8. ADR
+
+**ADR-0030 (to be written on approval):** the implicit `F(w,z)=0` input mode, the `@cas/core` (+ optional
+`@cas/exact`) dependency additions to the plotter (ADR-0028 §9 realized), the reuse of the M2 curve
+render/mesh + M3 exploration stack via the `sheetsAt` seam, and the input-UX decision from §6.
+
+## 9. References
+
+[`riemann-surface-M2-plan.md`](riemann-surface-M2-plan.md) §9, [`riemann-surface-research-notes.md`](riemann-surface-research-notes.md)
+§2–§3 (NPP gluing, branch points), ADR-0008 (`@cas/exact` resultant/discriminant), ADR-0015 (`@cas/core`
+`rootsMonic`), and [`../RISKS.md`](../RISKS.md) §3 (no certified topology).
