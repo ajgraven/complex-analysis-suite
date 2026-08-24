@@ -29,4 +29,5 @@ export default defineWorkspace([
   "./apps/riemann-map/vite.config.ts",
   "./apps/argument-principle/vite.config.ts",
   "./apps/faber-transform/vite.config.ts",
+  "./apps/2d-electrostatics/vite.config.ts",
 ]);
