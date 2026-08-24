@@ -113,6 +113,21 @@ describe("viewState codec", () => {
     expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
   });
 
+  it("round-trips the overlay toggles (boundary correspondence + transplant grid)", () => {
+    const s = {
+      ...DEFAULT_VIEW_STATE,
+      boundaryCorr: true,
+      transplant: true,
+    };
+    expect(decodeFaberState(encodeFaberState(s))).toEqual(s);
+  });
+
+  it("guard rejects non-boolean overlay toggles", () => {
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, boundaryCorr: true, transplant: false })).toBe(true);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, boundaryCorr: "yes" })).toBe(false);
+    expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, transplant: 1 })).toBe(false);
+  });
+
   it("guard rejects an out-of-range or non-integer suppression strength", () => {
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressCorners: true, suppressStrength: 4 })).toBe(true);
     expect(isFaberViewState({ ...DEFAULT_VIEW_STATE, suppressStrength: 1 })).toBe(false); // below MIN (m=1 over-corrects)

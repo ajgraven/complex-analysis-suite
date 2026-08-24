@@ -70,11 +70,27 @@ result state: `=` exact (green), `≈` approximate (blue), `⚠` failed fit (amb
 - **Pole** `f(z) = 1/(z − z₀)^m`, `|z₀| > 1` → closed-form rational image (exact `=`).
 - **Free-form** `f(z)` via `@cas/expr` → Σ_{n≤N} bₙ Fₙ, a truncated series (`≈`).
 
+## Overlays (Coloring group)
+
+Two opt-in overlays make the geometry of φ (and of the Faber transform built on it) explicit:
+
+- **∂𝔻 ↔ ∂K correspondence** — tints the unit circle and ∂K by the boundary angle θ (a shared hue ramp),
+  with a dozen matched dots at even θ. A point `e^{iθ}` on ∂𝔻 and its image `φ(e^{iθ})` on ∂K carry the same
+  colour, so where the boundary goes reads at a glance. Works for any input.
+- **transplant grid `Fₙ∘φ ≈ zⁿ`** (monomial input) — carries the disk's exterior polar grid through φ:
+  circles `|z| = r` become the equipotentials `φ({|z|=r})` of `K`, and the `n` rays `arg z = 2πk/n` become
+  `K`'s external rays landing at the `n` points where `arg Fₙ ≈ 0`. This draws the defining property that Fₙ
+  transplants `zⁿ` to `K`; a chip reports the honest residual `max|Fₙ∘φ − zⁿ|` on a circle `|z| = R > 1`
+  (which → 0 as `R` grows, since the identity is exact only at ∞).
+
+A compact header schematic (`𝔻 (f) —Φ`<sub>φ</sub>`⟶ K (Φ`<sub>φ</sub>`f)`) names the two panels and the
+operator between them.
+
 ## Source layout (`src/`)
 
 | File | Role |
 | --- | --- |
-| `main.ts` | wires the two panels (each captioned with its live expression — `f(z) = …` on the left, `Φᵩ(f)(w) = …` on the right), the per-panel control groups (Input f under the left, Domain K under the right, Coloring full-width), the Φᵩ connector + phase-portrait colour key, the domain-info chips + status badge, domain resolution (preset vs custom polygon vs custom φ formula), and the share-link |
+| `main.ts` | wires the header + orienting schematic, the two panels (each captioned with its live expression — `f(z) = …` on the left, `Φᵩ(f)(w) = …` on the right), the per-panel control groups (Input f under the left, Domain K under the right, Coloring full-width — including the two correspondence overlay toggles), the Φᵩ connector + phase-portrait colour key, the domain-info chips + status badge, domain resolution (preset vs custom polygon vs custom φ formula), and the share-link |
 | `faber.ts` | the app-side adapter over `@cas/faber` — builds the Faber image (or `Q_{n,m}`) for the chosen input on the chosen φ |
 | `series.ts` | the free-form truncated-series path (bₙ extraction) |
 | `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation + corner images `wₖ`), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
@@ -83,6 +99,7 @@ result state: `=` exact (green), `≈` approximate (blue), `⚠` failed fit (amb
 | `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (custom-polygon bounds, the `phiExpr` formula, and the M3 suppression fields) |
 | `mathText.ts` | inline-math renderer — turns `_{…}`/`^{…}` markup into real `<sub>`/`<sup>` DOM (text nodes only, no `innerHTML`), so the header, panel titles, per-panel captions, domain chips, and the corner-profile caption typeset Φᵩ / zⁿ / Qₙ,ₘ / Σ-bounds properly |
 | `handleEdit.ts` | the pure math for in-panel vertex editing — recovers the raw↔canonical similarity from the matched corner sets and inverts it, mapping a corner dragged on the K panel back to the raw editor vertex |
+| `render/correspondence.ts` | the pure geometry behind the two overlays — matched ∂𝔻/∂K boundary dots, the φ-transplanted polar grid (rings + `n` rays), and the honest `max|Fₙ∘φ − zⁿ|` transplant residual |
 | `render/coloring.ts` | the phase-portrait coloring options (shared with the GPU shader) |
 | `render/gpu.ts` | the WebGL2 phase-portrait renderer for one panel, over `@cas/gpu` |
 | `render/plane.ts` | the 2D plane / axes / mask painting |
@@ -98,8 +115,10 @@ convergence / degradation flags, reentrant L-shape, and the M3 corner-images + `
 `coloring.test.ts` (the coloring options), `expr.test.ts` (the free-form path), `viewState.test.ts`
 (share-link round-trip + namespace guard + custom-polygon validation + the M3 suppression fields),
 `mathText.test.ts` (the inline-math tokenizer), `handleEdit.test.ts` (the in-panel drag
-similarity-inversion math), and `symbolicPhi.test.ts` (the custom-φ formula extraction — exact rational
-Laurent, the FFT fallback, leading-term rejections, complex-γ normalization, and the univalence bound). The
+similarity-inversion math), `symbolicPhi.test.ts` (the custom-φ formula extraction — exact rational
+Laurent, the FFT fallback, leading-term rejections, complex-γ normalization, and the univalence bound), and
+`correspondence.test.ts` (the overlay geometry — matched boundary dots, the transplant grid ray/ring counts,
+and the transplant residual decaying with radius). The
 exterior SC numerics and the `Q_{n,m}` engine themselves are unit-tested in
 [`@cas/conformal`](../../packages/conformal) and [`@cas/faber`](../../packages/faber).
 

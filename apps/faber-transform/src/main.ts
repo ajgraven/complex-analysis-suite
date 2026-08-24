@@ -39,6 +39,8 @@ import {
   BASE_HALF,
   drawAxes,
   drawDot,
+  drawHuePolyline,
+  drawOutlinedDot,
   drawPolyline,
   drawRootMarker,
   panTo,
@@ -48,6 +50,7 @@ import {
   zoomAboutCursor,
 } from "./render/plane.js";
 import type { Vec2, Viewport, PlaneMap } from "./render/plane.js";
+import { matchedBoundaryDots, transplantGrid, transplantResidual } from "./render/correspondence.js";
 import { fillPhasePortrait, phaseColor, DEFAULT_COLORING } from "./render/coloring.js";
 import type { ColoringOptions } from "./render/coloring.js";
 import { computeCornerProfile, drawCornerProfile } from "./render/cornerProfile.js";
@@ -93,13 +96,24 @@ const DISK_COLOR = "rgba(255,255,255,0.55)";
 interface Marker {
   readonly w: Vec2;
   readonly color: string;
+  /** Draw with a dark outline (a correspondence dot over the portrait) instead of a plain filled dot. */
+  readonly outlined?: boolean;
 }
 interface Curve {
   readonly pts: Vec2[];
   readonly color: string;
   readonly width?: number;
   readonly dash?: number[];
+  /** Tint by boundary parameter θ (a hue ramp) instead of the flat `color` — the correspondence overlay. */
+  readonly hue?: boolean;
 }
+
+/** Transplant-grid line styling: dashed equipotential rings, accent external rays, gold for the k=0 ray. */
+const TRANSPLANT_RING = "rgba(255,255,255,0.32)";
+const TRANSPLANT_RAY = "rgba(122,162,247,0.62)";
+const TRANSPLANT_RAY0 = "rgba(255,212,121,0.92)";
+/** Correspondence dot colour from its hue ∈ [0,1) (matches drawHuePolyline's ramp). */
+const corrColor = (hue: number): string => `hsl(${(hue * 360).toFixed(1)}, 92%, 62%)`;
 type Source = { readonly kind: "rational"; readonly rat: Rational } | { readonly kind: "fn"; readonly g: (z: Cx) => Cx };
 
 interface PanelModel {
@@ -246,6 +260,22 @@ function drawColorKey(canvas: HTMLCanvasElement): void {
   ctx.putImageData(img, 0, 0);
 }
 
+/**
+ * A compact header schematic: the disk 𝔻 (carrying f) — Φφ ⟶ — the bounded complement K (carrying Φφ f).
+ * Purely decorative-but-orienting: it names the two panels and the operator between them at a glance.
+ */
+function makeSchematic(): HTMLElement {
+  const wrap = elt("div", { class: "schematic", role: "img", "aria-label": "f on the disk D, mapped by the Faber transform to its image on K" });
+  const disk = elt("div", { class: "sch-shape sch-disk" });
+  disk.append(mathElt("span", "𝔻", { class: "sch-tag" }), mathElt("span", "f", { class: "sch-fn" }));
+  const op = elt("div", { class: "sch-op" });
+  op.append(mathElt("span", PHI, { class: "sch-phi" }), elt("span", { class: "sch-arrow" }, "⟶"));
+  const k = elt("div", { class: "sch-shape sch-k" });
+  k.append(mathElt("span", "K", { class: "sch-tag" }), mathElt("span", `${PHI}f`, { class: "sch-fn" }));
+  wrap.append(disk, op, k);
+  return wrap;
+}
+
 /** Render the domain/result chips into `container` (mathText markup; a `⚠` in the text marks a warning chip). */
 function renderChips(container: HTMLElement, chips: readonly string[]): void {
   container.replaceChildren();
@@ -323,9 +353,15 @@ function paintPanel(
     }
   }
   drawAxes(ctx, map, AXIS_COLORS);
-  for (const c of m.curves) drawPolyline(ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
+  for (const c of m.curves) {
+    if (c.hue) drawHuePolyline(ctx, map, c.pts, { width: c.width ?? 2.4 });
+    else drawPolyline(ctx, map, c.pts, { color: c.color, width: c.width ?? 1.8, dash: c.dash });
+  }
   for (const r of m.roots) drawRootMarker(ctx, map, r);
-  for (const mk of m.markers) drawDot(ctx, map, mk.w, mk.color, 4);
+  for (const mk of m.markers) {
+    if (mk.outlined) drawOutlinedDot(ctx, map, mk.w, mk.color);
+    else drawDot(ctx, map, mk.w, mk.color, 4);
+  }
   if (overlay) overlay(ctx, map);
 }
 
@@ -337,7 +373,8 @@ function main(): void {
   root.replaceChildren();
 
   const head = elt("header", { class: "app-head" });
-  head.append(
+  const headText = elt("div", { class: "head-text" });
+  headText.append(
     elt("h1", {}, "Faber Transform"),
     mathElt(
       "p",
@@ -346,6 +383,7 @@ function main(): void {
         "Right: its image on K.",
     ),
   );
+  head.append(headText, makeSchematic());
   root.append(head);
 
   const left = makePanel("f on the unit disk 𝔻");
@@ -488,6 +526,17 @@ function main(): void {
   const crispCtl = elt("div", { class: "control control-check" });
   crispCtl.append(crispInput, elt("label", { for: "crisp" }, "crisp lines"));
 
+  // Boundary correspondence: hue-match ∂𝔻 and ∂K by θ (φ: e^{iθ} ↦ φ(e^{iθ})). Applies to any input.
+  const bndryInput = elt("input", { id: "bndry", type: "checkbox" });
+  const bndryCtl = elt("div", { class: "control control-check" });
+  bndryCtl.append(bndryInput, mathElt("label", "∂𝔻 ↔ ∂K correspondence", { for: "bndry" }));
+
+  // Transplant grid (monomial input): the disk's exterior polar grid carried through φ — the Fₙ∘φ ≈ zⁿ
+  // property drawn as K's external rays + equipotentials. Shown only for a monomial f.
+  const transplantInput = elt("input", { id: "transplant", type: "checkbox" });
+  const transplantCtl = elt("div", { class: "control control-check" });
+  transplantCtl.append(transplantInput, mathElt("label", "transplant grid (F_{n}∘φ ≈ z^{n})", { for: "transplant" }));
+
   // Workspace: each panel with the controls that shape it beneath — input-f under the left panel, the
   // domain (φ / K) under the right — and the Φᵩ connector + colour key between them.
   const inputGroup = ctrlGroup("Input  f", [modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, suppressCtl, mCtl], "for-left");
@@ -501,7 +550,7 @@ function main(): void {
   root.append(domainInfo);
 
   // Coloring affects BOTH panels, so it's a full-width group below.
-  const coloringGroup = ctrlGroup("Coloring", [enhCtl, modCtl, secCtl, crispCtl], "for-full");
+  const coloringGroup = ctrlGroup("Coloring", [enhCtl, modCtl, secCtl, crispCtl, bndryCtl, transplantCtl], "for-full");
   root.append(coloringGroup);
 
   // The polygon editor (shown only for the custom domain). Live drag redraws the editor; the expensive SC
@@ -610,8 +659,14 @@ function main(): void {
     const domainChips: string[] = [domainName, `capacity c = ${Number(map.c.toPrecision(4))}`, approx ? "φ ≈ (truncated)" : "φ exact"];
     if (cornerN) domainChips.push(`max corner-norm Λ = ${cornerN.maxLambda.toFixed(2)}`);
     if (univalent !== null) domainChips.push(univalent ? "univalent ✓" : "⚠ may not be univalent");
-    const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
-    const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
+    // Boundary correspondence overlay (input-independent): tint ∂𝔻 / ∂K by θ and drop matched dots at
+    // even angles, so a point e^{iθ} and its image φ(e^{iθ}) read as the same colour across the panels.
+    const hueBoundary = state.boundaryCorr === true;
+    const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR, hue: hueBoundary };
+    const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR, hue: hueBoundary };
+    const corr = hueBoundary ? matchedBoundaryDots(map, 12) : null;
+    const leftCorr: Marker[] = corr ? corr.disk.map((d): Marker => ({ w: d.w, color: corrColor(d.hue), outlined: true })) : [];
+    const rightCorr: Marker[] = corr ? corr.k.map((d): Marker => ({ w: d.w, color: corrColor(d.hue), outlined: true })) : [];
     const showRoots = state.showRoots !== false;
     const rootMarks = (num: Cx[]): Vec2[] => (showRoots ? transformRoots(num).map((r): Vec2 => [r.re, r.im]) : []);
     // The GPU (and the CPU fallback, which reads the same source.rat) can only upload GPU_COEFF_CAP
@@ -637,15 +692,36 @@ function main(): void {
       const outputCaption = suppress
         ? `${PHI}(f)(w) ≈ Q_{${n},${m}}(w) = ${poly}`
         : `${PHI}(f)(w) ${exactSym} ${poly}`;
-      const chips = suppress ? [...domainChips, `corner-suppressed Q_{${n},${m}} (m = ${m})`] : domainChips;
+      let chips = suppress ? [...domainChips, `corner-suppressed Q_{${n},${m}} (m = ${m})`] : domainChips;
+      // Transplant overlay (Fₙ∘φ ≈ zⁿ): carry the disk's exterior polar grid through φ to K's external rays
+      // + equipotentials, and report the honest residual max|Fₙ∘φ − zⁿ| on |z|=R (→ 0 as R grows).
+      const diskGrid: Curve[] = [];
+      const kGrid: Curve[] = [];
+      if (state.transplant === true) {
+        const tg = transplantGrid(map, n);
+        for (const ring of tg.rings) {
+          diskGrid.push({ pts: ring.disk, color: TRANSPLANT_RING, width: 1, dash: [4, 4] });
+          kGrid.push({ pts: ring.k, color: TRANSPLANT_RING, width: 1, dash: [4, 4] });
+        }
+        tg.rays.forEach((ray, i) => {
+          const color = i === 0 ? TRANSPLANT_RAY0 : TRANSPLANT_RAY;
+          const width = i === 0 ? 1.8 : 1;
+          diskGrid.push({ pts: ray.disk, color, width });
+          kGrid.push({ pts: ray.k, color, width });
+        });
+        const faberCoeffs = suppress ? transformCoeffs(map, monomialTaylor(n)) : coeffs;
+        const resid = transplantResidual(faberCoeffs, map, n, 1.6);
+        const residTxt = !Number.isFinite(resid) ? "—" : resid < 1e-3 ? resid.toExponential(1) : resid.toFixed(3);
+        chips = [...chips, `F_{${n}}∘φ = z^{${n}} + O(1/z)`, `max resid ${residTxt} on |z|=1.6`];
+      }
       // On a polygonal K, plot the corner-overshoot profile |Fₙ| along ∂K (and |Q_{n,m}| when suppressing).
       const cornerProfile =
         cornerImages.length > 0
           ? computeCornerProfile(map, cornerImages, n, suppress ? m : null, cornerN?.maxLambda ?? 1)
           : undefined;
       return {
-        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
-        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(coeffs) },
+        left: { source: { kind: "rational", rat: polynomialRational(monomialTaylor(n)) }, maskDisk: true, curves: [...diskGrid, diskCurve], markers: leftCorr, roots: [] },
+        right: { source: { kind: "rational", rat: polynomialRational(coeffs) }, maskDisk: false, clip: kCurve.pts, curves: [...kGrid, kCurve], markers: rightCorr, roots: rootMarks(coeffs) },
         badge: suppress ? "≈" : exactSym,
         inputCaption,
         outputCaption,
@@ -662,13 +738,13 @@ function main(): void {
       const rightRat = poleImageRational(img, order);
       const kexp = order === 1 ? "" : `^{${order}}`;
       return {
-        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] },
+        left: { source: { kind: "rational", rat: poleInputRational(z0, order) }, maskDisk: true, curves: [diskCurve], markers: leftCorr, roots: [] },
         right: {
           source: { kind: "rational", rat: rightRat },
           maskDisk: false,
           clip: kCurve.pts,
           curves: [kCurve],
-          markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }],
+          markers: [{ w: [img.poleAt.re, img.poleAt.im], color: "#ffffff" }, ...rightCorr],
           roots: rootMarks(rightRat.num),
         },
         badge: exactSym,
@@ -686,7 +762,7 @@ function main(): void {
     if ("error" in compiled) {
       return { left: blankPanel, right: blankPanel, badge: "⚠", inputCaption: `f(z) = ${state.input.expr}`, outputCaption: `⚠ parse error: ${compiled.error}`, error: true };
     }
-    const leftFn: PanelModel = { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: [], roots: [] };
+    const leftFn: PanelModel = { source: { kind: "fn", g: compiled.fn }, maskDisk: true, curves: [diskCurve], markers: leftCorr, roots: [] };
 
     // Exact path when f is a rational function of z (any poles, any orders) analytic on the disk.
     const ratIn = exprToRational(state.input.expr);
@@ -696,7 +772,7 @@ function main(): void {
         const { rat, truncated } = capForGpu(image);
         return {
           left: leftFn,
-          right: { source: { kind: "rational", rat }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(rat.num) },
+          right: { source: { kind: "rational", rat }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: rightCorr, roots: rootMarks(rat.num) },
           badge: truncated ? "≈" : exactSym,
           inputCaption: `f(z) = ${state.input.expr}`,
           outputCaption: truncated
@@ -730,7 +806,7 @@ function main(): void {
     const orderNote = exact ? "" : effN < N ? ` (past n=${effN} below the noise floor)` : "";
     return {
       left: leftFn,
-      right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: [], roots: rootMarks(poly) },
+      right: { source: { kind: "rational", rat: polynomialRational(poly) }, maskDisk: false, clip: kCurve.pts, curves: [kCurve], markers: rightCorr, roots: rootMarks(poly) },
       badge: "≈",
       inputCaption: `f(z) = ${state.input.expr}`,
       outputCaption: `${PHI}(f) ≈ Σ_{n≤${effN}} b_{n} F_{n}`,
@@ -777,8 +853,12 @@ function main(): void {
     secCtl.style.display = densityUsed ? "" : "none";
     crispCtl.style.display = col.enhance !== 0 ? "" : "none";
     secLabel.textContent = `density = ${col.sectors}`;
+    bndryInput.checked = state.boundaryCorr === true;
     modeSel.value = state.input.kind;
     const kind = state.input.kind;
+    // The transplant grid (Fₙ∘φ ≈ zⁿ) is defined for a monomial input only.
+    transplantCtl.style.display = kind === "monomial" ? "" : "none";
+    transplantInput.checked = state.transplant === true;
     degCtl.style.display = kind === "monomial" ? "" : "none";
     rCtl.style.display = kind === "pole" ? "" : "none";
     thCtl.style.display = kind === "pole" ? "" : "none";
@@ -824,6 +904,8 @@ function main(): void {
       phiExpr: state.phiExpr,
       suppressCorners: state.suppressCorners,
       suppressStrength: state.suppressStrength,
+      boundaryCorr: state.boundaryCorr,
+      transplant: state.transplant,
     });
     if (key !== modelKey || model === null) {
       model = computeModel();
@@ -1111,6 +1193,8 @@ function main(): void {
   modSel.addEventListener("change", () => commit(withColoring({ modulus: Number(modSel.value) })));
   secInput.addEventListener("input", () => commit(withColoring({ sectors: Math.max(2, Math.min(64, Math.round(Number(secInput.value)))) })));
   crispInput.addEventListener("change", () => commit(withColoring({ crisp: crispInput.checked })));
+  bndryInput.addEventListener("change", () => commit({ ...state, boundaryCorr: bndryInput.checked }));
+  transplantInput.addEventListener("change", () => commit({ ...state, transplant: transplantInput.checked }));
 
   window.addEventListener("resize", render);
 

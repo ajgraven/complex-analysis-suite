@@ -93,6 +93,10 @@ export type FaberViewState = {
   readonly suppressCorners?: boolean;
   /** Suppression strength m ∈ [2, 8] (larger = milder weight, closer to Fₙ but provably lower overshoot). */
   readonly suppressStrength?: number;
+  /** Boundary-correspondence overlay: hue-match ∂𝔻 ↔ ∂K by θ and drop matched dots. Optional; default off. */
+  readonly boundaryCorr?: boolean;
+  /** Transplant grid overlay (monomial input): the φ-image of the disk's polar grid (Fₙ∘φ ≈ zⁿ). Default off. */
+  readonly transplant?: boolean;
 };
 
 /** The default view — the deltoid domain with f(z) = z³, so the right panel shows F₃ on the deltoid K. */
@@ -171,6 +175,8 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   ) {
     return false;
   }
+  if (s.boundaryCorr !== undefined && typeof s.boundaryCorr !== "boolean") return false;
+  if (s.transplant !== undefined && typeof s.transplant !== "boolean") return false;
   return true;
 }
 
