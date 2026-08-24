@@ -17,6 +17,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cas/core": "workspace:*",
+    "@cas/exact": "workspace:*",
     "@cas/export": "workspace:*",
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",

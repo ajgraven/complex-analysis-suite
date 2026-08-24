@@ -67,7 +67,12 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   `R(z)^(p/q)` with `R` rational (ADR-0028) — `√(z²−1)`, `√(z³−z)`, `(z²−1)^(1/3)`, `√((z−1)/(z+1))` — that
   the parametric path declines: a CPU-built **proximity-glued mesh** (Nieser–Poelke–Polthier / Kranich)
   over the z-view stitches the `q` sheets and drops ramification cells as small **holes** at the branch
-  points (never a wall), badged if the triangle budget is hit. The tab is offered only for a recognized
+  points (never a wall), badged if the triangle budget is hit. An **Implicit surface — F(w,z)=0** toggle
+  (M2c, ADR-0030) covers the **general algebraic curve** entered by its defining bivariate polynomial —
+  including the ones with no radical form (`w³ − w − z`, a quintic): the sheets are the per-vertex roots of
+  `F(·,z)=0` (`@cas/core` `rootsMonic`), so the whole mesh + exploration stack carries over, and the branch
+  locus is **exact** for Gaussian-rational `F` (roots of `disc_w F` via `@cas/exact`, badged `=` vs the `≈`
+  scan). It's its own mode (own box), pinning the Riemann view. The tab is offered only for a recognized
   surface; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
   exact. **Hovering the surface** ray-casts its sheets (M3.1, ADR-0029) and reads the point the eye actually
   touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**

@@ -90,6 +90,19 @@ function renderCurve(src: string): HTMLCanvasElement {
   return canvas;
 }
 
+/** Render an implicit `F(w,z)=0` Riemann surface (M2c, ADR-0030) through the real Plot. */
+function renderImplicit(src: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, "z"); // the f(z) box is unused in implicit mode
+  plot.setImplicitSource(src);
+  if (plot.riemannModeKind() !== "implicit") throw new Error(`not a valid implicit curve: ${src}`);
+  plot.mode = "riemann";
+  plot.view = { cx: 0, cy: 0, span: 2 };
+  plot.reframeRiemann();
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
 /** Render the linked Riemann view (M3.2, ADR-0029): the flat base plane beside the surface. */
 function renderRiemannLinked(src: string): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
@@ -161,6 +174,11 @@ describe("plotter render-consistency goldens (Track B)", () => {
 
   it("renders a non-blank √(z³−z) (elliptic) surface", () => {
     expect(variance(fingerprint(renderCurve("sqrt(z^3 - z)"), N))).toBeGreaterThan(50);
+  });
+
+  // The implicit F(w,z)=0 mode (M2c, ADR-0030): a per-vertex root-solve surface renders real structure.
+  it("renders a non-blank implicit w³ − w − z surface", () => {
+    expect(variance(fingerprint(renderImplicit("w^3 - w - z"), N))).toBeGreaterThan(50);
   });
 
   // The linked base-plane pane (M3.2, ADR-0029): the split renders real structure in BOTH panes, and the

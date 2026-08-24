@@ -26,6 +26,7 @@ const S: PlotterState = {
   hueSign: -1,
   params: { a: [1.5, 0], b: [-0.25, 0.75] },
   anim: { t0: 0, t1: 1, speed: 0.5, loop: false },
+  implicit: "w^3 - w - z",
   v3d: {
     mode: "3d",
     azimuth: -1.2,
@@ -76,6 +77,7 @@ describe("share-link view state", () => {
       hueSign: 1,
       params: {},
       anim: DEFAULT_ANIM,
+      implicit: "",
       v3d: DEFAULT_V3D,
     });
   });

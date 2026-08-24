@@ -2533,3 +2533,88 @@ the height law identical to the shader, so pick and picture agree.
        scan (`riemann/branchPoints.ts`), drawn on the base-plane pane + counted in the badge, `≈`. Per-sheet
        tint and cut-shadow were **considered and declined** on honesty grounds (global sheet identity is what
        monodromy permutes; a cut is a choice, not an invariant — the branch *points* are the invariant mark).
+
+---
+
+## ADR-0030: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0028](#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
+(anticipated in its Action Item 4 / plan §9) and [ADR-0029](#adr-0029-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+Extends the plotter's Riemann view from algebraic functions the user can *name* as radicals (M2a/M2b) to the
+**general algebraic curve entered implicitly** as a bivariate complex polynomial `F(w,z)=0` — including the
+curves with no radical form. Records the dedicated input-mode UX, the reuse of the M2 mesh + M3 exploration
+stack through the `sheetsAt` seam, and the dependency additions (`@cas/core` `rootsMonic`; `@cas/exact`
+`discriminant`) — the plotter's first consumers of both. Full plan:
+[`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md).*
+
+### Context
+
+M1 (ADR-0027) and M2a/M2b (ADR-0028) render every algebraic surface expressible as a **radical**. But by
+Abel–Ruffini most algebraic curves (a general quintic `w⁵ + z·w + z = 0`) have no radical form, while their
+Riemann surfaces are perfectly concrete. The whole M2/M3 stack is parametrized by ONE seam —
+`sheetsAt: (z) => Complex[]` (the sheet values over a base point) — consumed unchanged by `buildCurveMesh`,
+the M3.1 pick, the M3.3 monodromy, and the M3.4 branch scan. So covering the general curve needs only a new
+`sheetsAt` source, not a new engine. And because `F` is entered **directly**, there are **no spurious
+branches** (the problem that made building `P(z,w)` from radical sums by resultants the wrong first step in
+ADR-0028's Option B): every root of `F(·,z)` is a genuine sheet.
+
+### Decision
+
+Ship **M2c** — an implicit `F(w,z)=0` bivariate-polynomial input (constant Gaussian/complex coefficients) as
+a **new `implicit` kind** of the `riemann` mode, in a **dedicated input mode** (its own box + toggle, distinct
+from the `f`/`g` slots, since an implicit relation is not a function; entering it pins the Riemann view and
+disables the inapplicable tabs). A small app-local generic **bivariate expander** (`implicitPoly.ts`, over a
+pluggable scalar ring) extracts the `w`-coefficients; `detectImplicitCurve` (`implicitCurve.ts`) builds a
+`sheetsAt` that Horner-evaluates each `aₖ(z)` and solves the ascending list with **`@cas/core` `rootsMonic`**
+per vertex (a leading-coefficient zero drops the degree ⇒ fewer sheets ⇒ a mesh hole, never a wall). The whole
+M2 render/mesh + M3 exploration stack rides along unchanged via `riemannSheetsAt`. **M2c.2** adds the **exact**
+branch locus (`implicitExact.ts`): for Gaussian-rational `F`, the roots of `disc_w F` via **`@cas/exact`
+`discriminant`** — the locus `=`, coordinates `≈` — badged as `=K branch points`, falling back to the M3.4
+`≈` scan for float coefficients. Keep the engine **in-app** (ADR-0007 — no second consumer); add **`@cas/core`
+and `@cas/exact`** as dependencies (the plotter's first).
+
+### Options Considered
+
+#### Option A: Dedicated implicit mode + per-vertex `rootsMonic` + exact discriminant (chosen)
+**Pros:** covers the whole algebraic-curve class; reuses the entire M2/M3 stack through the `sheetsAt` seam
+(minimal new code); no spurious branches (direct `F`); the dedicated mode is honest that an implicit relation
+isn't a function; the exact discriminant gives a `=` branch locus where the radicals' local scan was `≈`.
+**Cons:** adds two dependencies (accepted — the anticipated first-consumer moment); per-vertex root-solving is
+heavier than the radicals' closed form (bounded by a degree cap, badged).
+
+#### Option B: Auto-detect `w` in the ordinary box, or an `= 0` equation (input-UX alternatives)
+**Cons, why not:** both silently overload the `f(z)` box / blur the function-vs-relation distinction. The
+dedicated mode was chosen for clarity (plan §6); all three share the same engine, so this is a front-door
+choice only.
+
+#### Option C: Emit `F(w,z)` from the radical recognizer via `@cas/exact` resultant elimination
+**Cons:** an internal unification (make M2a/M2b share the implicit engine) that would reintroduce the spurious
+branches ADR-0028 avoided; not needed for the user-facing implicit input. Left as a possible later refactor.
+
+### Trade-off Analysis
+
+M2c is the maximal-coverage step at low marginal cost: the `sheetsAt` seam means the surface, hover-pick,
+linked pane, monodromy, and branch markers all work the moment the root-solve enumerator exists. Reusing
+`@cas/core`/`@cas/exact` (not re-implementing a solver or a discriminant) honors the north-star; pulling them
+now is exactly the demand ADR-0028 §9 foresaw. The degree cap + honest labels (`≈` roots, exact sheet count,
+`=`/`≈` branch locus, no topology claims) keep it within the guardrails.
+
+### Consequences
+
+- **Easier:** the plotter renders the general algebraic Riemann surface, reusing all of M2/M3; the exact
+  branch locus is available for Gaussian-rational curves.
+- **Harder:** two new dependencies; per-vertex solving is heavier (degree cap, badged); the exact path is
+  limited to Gaussian-rational `F` (float coefficients fall back to the `≈` scan — badged honestly).
+- **Revisit if** any of: (a) a second consumer needs `src/riemann/implicit*.ts` (⇒ extract, ADR-0007);
+  (b) a receiving tool needs the implicit map serialized (⇒ ADR-0005 branch-aware interchange); (c) the
+  radical recognizer is unified onto the implicit engine (Option C — its own follow-on).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md) + this ADR.
+2. [x] Land M2c.0 + M2c.1 — `implicitPoly.ts` (generic bivariate expander) + `implicitCurve.ts` (`rootsMonic`
+       `sheetsAt`) + the dedicated implicit mode (toggle, box, view pinning, permalink field); adds
+       `@cas/core`. All M3 tools carry over via `riemannSheetsAt`. Node + browser tests.
+3. [x] Land M2c.2 — exact branch locus (`implicitExact.ts`, `@cas/exact` `discriminant`), `=`-labeled, with
+       the `≈` scan as the fall-back for float coefficients. Node tests.

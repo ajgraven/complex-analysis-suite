@@ -1,6 +1,6 @@
 # Riemann surfaces M2c — implicit algebraic surfaces `F(w, z) = 0` — implementation plan
 
-> **Status: proposed — awaiting approval.** Extends the Complex Function Plotter's **Riemann** view from
+> **Status: built (M2c.0–M2c.2 complete).** Extends the Complex Function Plotter's **Riemann** view from
 > functions the user can *name* (M1 primitives, M2a/M2b radical expressions) to the **general algebraic curve**
 > entered **implicitly** as a bivariate complex polynomial `F(w, z) = 0` — e.g. `w³ − w − z` (the classic
 > cusp/fold) or `w² − (z³ − z)` (an elliptic curve, the same surface `√(z³−z)` draws, now from its defining
@@ -22,9 +22,9 @@
 
 | Milestone | Status | Coverage |
 |---|---|---|
-| **M2c.0 — spike** | ⛔ not started | `w³ − w − z` end-to-end: coefficient extraction → per-vertex `rootsMonic` → existing `curveMesh` → render. Proves the pipeline + the reuse claim. |
-| **M2c.1 — the deliverable** | ⛔ not started | input UX, dispatch, degree/leading-coeff handling, decline rules, honest badges, hover-pick / linked / monodromy / branch-marker carry-over, tests + goldens. |
-| **M2c.2 — exact branch locus (optional)** | ⛔ not started | `@cas/exact discriminant` for Gaussian-rational `F` → ramification labeled `=` (vs. the `≈` scan). |
+| **M2c.0 + M2c.1 — engine + dedicated implicit mode** | ✅ done | `src/riemann/implicitPoly.ts` — a **generic bivariate expander** over a pluggable scalar ring (`+ − ×`, division by a constant, non-negative integer powers; declines transcendental / fractional-power / `w`-dependent-power / parametric input). `src/riemann/implicitCurve.ts` — `detectImplicitCurve` builds `sheetsAt(z)` = the `deg_w F` roots of `F(·,z)=0` via **`@cas/core` `rootsMonic`** (a leading-coeff zero drops the degree ⇒ a hole; no spurious branches). `Plot` — a third `riemannKindV: "implicit"` reusing the **curve** render/mesh path (`activeCurveSpec`), `setImplicitSource`, `riemannSheetsAt` implicit branch (so the M3.1 pick / M3.2 linked / M3.3 monodromy / M3.4 markers all carry over). `main.ts`/`index.html` — the **dedicated "Implicit surface — F(w,z)=0" toggle**: its own box, `F(w,z)=0` KaTeX, the Riemann view pinned + other tabs disabled, honest error badge, permalink field (`state.implicit`, back-compat). **Adds `@cas/core`.** Node: 8 tests (extraction, decline rules, roots satisfy `F=0`, `w²−(z³−z)` = ±√(z³−z), leading-coeff hole). Browser: `w³−w−z` renders non-blank through the real Plot. |
+| **M2c.2 — exact branch locus** | ✅ done | `src/riemann/implicitExact.ts` — `exactBranchLocus` = the roots of **`disc_w F`** via **`@cas/exact` `discriminant`** (Bareiss over ℚ(i)) for Gaussian-rational `F`; the locus `=`, coordinates `≈` (`rootsMonic`). `Plot.riemannBranchPointsExact()` + `main.ts` prefers it over the M3.4 `≈` scan (badge shows `=K` vs `≈K`), falling back for float coefficients. **Adds `@cas/exact`.** Node: 6 tests (`w²−(z³−z)`→{0,±1}, `w³−w−z`→±2/(3√3), Gaussian `i·z`→{0}, floats decline). |
+| **M2c gate** | ✅ green · pushed | full repo gate green — typecheck · lint (+dep:check, `@cas/core`/`@cas/exact` edges added) · build (all apps) · browser goldens (+1 implicit). |
 
 ---
 
@@ -156,9 +156,10 @@ dedicated mode was preferred for clarity.
 
 ## 8. ADR
 
-**ADR-0030 (to be written on approval):** the implicit `F(w,z)=0` input mode, the `@cas/core` (+ optional
-`@cas/exact`) dependency additions to the plotter (ADR-0028 §9 realized), the reuse of the M2 curve
-render/mesh + M3 exploration stack via the `sheetsAt` seam, and the input-UX decision from §6.
+[ADR-0030](../DECISIONS.md#adr-0030-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer)
+(Accepted): the implicit `F(w,z)=0` input mode, the `@cas/core` + `@cas/exact` dependency additions to the
+plotter (ADR-0028 §9 realized), the reuse of the M2 curve render/mesh + M3 exploration stack via the
+`sheetsAt` seam, and the dedicated-mode input-UX decision from §6.
 
 ## 9. References
 

@@ -72,6 +72,9 @@ export interface PlotterState extends Record<string, unknown> {
   /** Animation-variable `t` transport config (catalog G2). Playback state is not persisted — a loaded
    *  link opens paused at the saved `t` (which travels in `params`). */
   anim: AnimConfig;
+  /** Implicit-surface source `F(w,z)` (M2c, ADR-0030) when the dedicated implicit mode is active; empty
+   *  string = ordinary `f(z)` mode. Absent on an older link → decodes to `""`, so old links still open. */
+  implicit: string;
   /** Render mode + 3D camera/height (catalog F5–F7), so a shared landscape / linked / sphere figure
    *  reopens in its view. Absent on a pre-3D-persist link → decodes to the 2D default. */
   v3d: View3dState;
@@ -177,6 +180,7 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     hueSign: num(s.hueSign, 1),
     params: cleanParams(s.params),
     anim: cleanAnim(s.anim),
+    implicit: str(s.implicit, ""),
     v3d: cleanV3d(s.v3d),
   };
 }

@@ -148,6 +148,12 @@ importers:
 
   apps/complex-function-plotter:
     dependencies:
+      '@cas/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@cas/exact':
+        specifier: workspace:*
+        version: link:../../packages/exact
       '@cas/export':
         specifier: workspace:*
         version: link:../../packages/export

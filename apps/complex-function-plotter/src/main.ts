@@ -102,6 +102,7 @@ const DEFAULTS: PlotterState = {
   hueSign: 1,
   params: {},
   anim: { ...DEFAULT_ANIM },
+  implicit: "", // ordinary f(z) mode (M2c implicit mode off)
   v3d: { ...DEFAULT_V3D, mode: "3d", heightMode: 1 }, // 3D landscape, linear-|f| height
 };
 
@@ -221,6 +222,7 @@ function main(): void {
   const critCount = byId("critCount");
   const inspectInfInput = byId("inspectInf");
   const plotDerivInput = byId("plotDeriv");
+  const implicitModeInput = byId("implicitMode");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -333,6 +335,10 @@ function main(): void {
   let markCritical = false;
   let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
   let plotDerivative = false; // derivative overlay (H9): plot f′(z). Transient (not persisted).
+  // Implicit-surface mode (M2c, ADR-0030): the dedicated `F(w,z)=0` mode. `implicitSrc` is its own source,
+  // kept separate from the f/g slots; `implicitMode` gates the box + views. Persisted via `state.implicit`.
+  let implicitMode = initial.implicit.trim().length > 0;
+  let implicitSrc = implicitMode ? initial.implicit : "w^3 - w - z";
   // Keep the parsed f (and its z-derivative, when holomorphic) so the CPU instruments can be rebuilt
   // with the current parameter values baked in — without re-parsing — whenever a parameter moves.
   let fAst: Node | null = null;
@@ -389,6 +395,7 @@ function main(): void {
     hueSign: plot.color.hueSign,
     params: plot.paramsRecord(),
     anim: { ...animConfig },
+    implicit: implicitMode ? implicitSrc : "",
     v3d: {
       mode: plot.mode,
       azimuth: plot.camera.azimuth,
@@ -460,8 +467,21 @@ function main(): void {
   // Estimated branch (ramification) points over the surface's base plane (M3.4), drawn on the base-plane
   // pane and counted in the badge. Recomputed on a formula / sheet-count / view change while in Riemann mode.
   let branchPts: Complex[] = [];
+  let branchExact = false; // true when the markers are the EXACT discriminant locus (M2c.2), else the ≈ scan
   const recomputeBranchPoints = (): void => {
-    branchPts = plot.mode === "riemann" ? plot.riemannBranchPoints() : [];
+    if (plot.mode !== "riemann") {
+      branchPts = [];
+      branchExact = false;
+      return;
+    }
+    const exact = plot.riemannBranchPointsExact(); // M2c.2: exact locus for a Gaussian-rational implicit F
+    if (exact) {
+      branchPts = exact;
+      branchExact = true;
+    } else {
+      branchPts = plot.riemannBranchPoints();
+      branchExact = false;
+    }
   };
   const drawRiemannLink = (): void => {
     const cssW = canvas.clientWidth;
@@ -625,7 +645,8 @@ function main(): void {
   const renderPreview = (src: string): void => {
     if (!(previewEl instanceof HTMLElement)) return;
     try {
-      katex.render(`w = ${toLatex(parse(src))}`, previewEl, {
+      const body = implicitMode ? `${toLatex(parse(src))} = 0` : `w = ${toLatex(parse(src))}`;
+      katex.render(body, previewEl, {
         throwOnError: false,
         displayMode: false,
       });
@@ -846,8 +867,10 @@ function main(): void {
     // finite parametric forms and the finite algebraic curves render all their sheets.
     if (riemannSheetsRow instanceof HTMLElement)
       riemannSheetsRow.hidden = !d || d.sheetKind !== "infinite";
-    // Branch-point count (M3.4): estimated ramification over the surface — `≈`, from a sheet-separation scan.
-    const bp = d ? ` · ≈${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}` : "";
+    // Branch-point count: the exact discriminant locus (M2c.2, `=`) when available, else the M3.4 scan (`≈`).
+    const bp = d
+      ? ` · ${branchExact ? "=" : "≈"}${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}`
+      : "";
     if (riemannInfo instanceof HTMLElement)
       riemannInfo.textContent = d
         ? `${d.label} · ${d.monodromy}${bp}. Cut: ${d.branchNote}.` +
@@ -917,12 +940,64 @@ function main(): void {
         ? `True Riemann surface${label ? `: ${label}` : ""}`
         : "Riemann surface: for invertible primitives (√, ⁿ√, log, arcsin, …) and single-radical algebraic maps (√(z²−1), …)";
     }
-    if (plot.mode === "riemann" && !ok) setView("2d");
+    // Drop out of a blank Riemann view only in ORDINARY mode; in implicit mode the Riemann view is pinned
+    // (the other tabs are disabled), so an invalid F(w,z) stays on Riemann showing the error badge, not the
+    // f(z) 2D plot.
+    if (!implicitMode && plot.mode === "riemann" && !ok) setView("2d");
     else if (plot.mode === "riemann") {
       recomputeBranchPoints(); // the surface changed — re-estimate ramification (M3.4)
       syncRiemannControls();
     }
   };
+
+  // Implicit-surface mode (M2c, ADR-0030): a dedicated `F(w,z)=0` mode with its own box, distinct from the
+  // f/g slots. Entering it pins the Riemann view and disables the tabs / f-only controls that don't apply;
+  // leaving it restores the ordinary f(z) map + views.
+  const updateViewTabsForImplicit = (): void => {
+    for (const b of [view2d, view3d, viewSphere, viewLinked])
+      if (b instanceof HTMLButtonElement) {
+        b.disabled = implicitMode;
+        b.title = implicitMode ? "Disabled in implicit F(w,z)=0 mode — Riemann view only" : "";
+      }
+  };
+  // Recompile + refresh the implicit surface for the current `implicitSrc` (used on entry and on each edit).
+  const applyImplicit = (): void => {
+    plot.setImplicitSource(implicitSrc);
+    setError(
+      plot.implicitInvalid()
+        ? "Implicit F(w, z): need a bivariate polynomial in w, z (deg_w ≥ 2, constant coefficients)."
+        : "",
+    );
+    renderPreview(implicitSrc);
+    updateRiemannAvail();
+    redraw(false);
+  };
+  const setImplicitMode = (on: boolean): void => {
+    implicitMode = on;
+    if (implicitModeInput instanceof HTMLInputElement) implicitModeInput.checked = on;
+    // f(z)-only controls don't apply to an implicit relation.
+    for (const el of [fnF, fnG, inspectInfInput, plotDerivInput, presetSel])
+      if (
+        el instanceof HTMLButtonElement ||
+        el instanceof HTMLInputElement ||
+        el instanceof HTMLSelectElement
+      )
+        el.disabled = on;
+    if (exprLabel instanceof HTMLElement)
+      exprLabel.textContent = on ? "Surface  F(w, z) = 0" : `Function  ${active}(z)`;
+    setExprBox(on ? implicitSrc : exprs[active]);
+    updateViewTabsForImplicit();
+    if (on) {
+      applyImplicit();
+      setView("riemann"); // the only view that renders an implicit relation
+    } else {
+      plot.setImplicitSource(null);
+      applyExpr(exprs[active]); // restore the f(z) surface + instruments
+      setView("2d");
+    }
+  };
+  if (implicitModeInput instanceof HTMLInputElement)
+    implicitModeInput.addEventListener("change", () => setImplicitMode(implicitModeInput.checked));
 
   // Riemann-surface controls (ADR-0027): charisma axis, sheets shown (infinite families), exaggeration
   // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
@@ -1064,7 +1139,7 @@ function main(): void {
   const FN_NAMES = [...COMPLEX_FUNCTIONS, ...BINARY_FUNCTIONS, "f", "if", "not"];
   const acCandidates = (): Candidate[] => {
     const fns: Candidate[] = FN_NAMES.map((name) => ({ name, fn: true }));
-    const bare = ["z", "c", "i", "e", "pi", "tau", "phi", "γ", ...plot.paramNames()];
+    const bare = ["z", "c", "w", "i", "e", "pi", "tau", "phi", "γ", ...plot.paramNames()];
     const names: Candidate[] = [...new Set(bare)].map((name) => ({ name, fn: false }));
     return [...fns, ...names];
   };
@@ -1074,8 +1149,13 @@ function main(): void {
   ) {
     // On accept, the value changed programmatically (no input event) — re-run the app's handling.
     createAutocomplete(exprInput, acMenu, acCandidates, () => {
-      exprs[active] = exprInput.value;
-      applyExpr(exprInput.value);
+      if (implicitMode) {
+        implicitSrc = exprInput.value;
+        applyImplicit();
+      } else {
+        exprs[active] = exprInput.value;
+        applyExpr(exprInput.value);
+      }
     });
   }
 
@@ -1239,6 +1319,12 @@ function main(): void {
     exprInput.addEventListener("input", () => {
       window.clearTimeout(exprTimer);
       exprTimer = window.setTimeout(() => {
+        if (implicitMode) {
+          // Implicit mode: the box holds `F(w,z)`; edits drive the implicit surface (M2c).
+          implicitSrc = exprInput.value;
+          applyImplicit();
+          return;
+        }
         // Only a parseable expression is written back to the active slot (and thus to currentState /
         // the share-link): a half-typed, invalid formula stays visible in the box but never gets
         // persisted, so a later committed redraw (a pan, "Copy link") can't bake a broken map into the
@@ -1830,6 +1916,10 @@ function main(): void {
   // Restore the saved render mode last (now that setView + its controls exist). The camera / height were
   // applied above, so a shared 3D landscape / linked / Riemann figure reopens exactly as it was framed.
   if (initial.v3d.mode !== "2d") setView(initial.v3d.mode);
+
+  // A shared implicit-surface link (M2c) reopens in implicit mode with its `F(w,z)` source (this pins the
+  // Riemann view, overriding the mode restore above).
+  if (implicitMode) setImplicitMode(true);
 }
 
 main();

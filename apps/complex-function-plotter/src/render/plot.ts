@@ -20,6 +20,8 @@ import { makeComplexFn } from "@cas/expr/evaluate";
 import type { Complex } from "@cas/expr/complex";
 import { detectRiemannForm, type RiemannForm } from "../riemann/inverse.js";
 import { detectAlgebraicCurve, type AlgebraicCurve } from "../riemann/algebraicCurve.js";
+import { detectImplicitCurve, type ImplicitCurve } from "../riemann/implicitCurve.js";
+import { exactBranchLocus } from "../riemann/implicitExact.js";
 import { buildCurveMesh } from "../riemann/curveMesh.js";
 import { buildRiemannProgram, buildCurveProgram } from "../render3d/riemannSurface.js";
 import {
@@ -271,7 +273,13 @@ export class Plot {
   // algebraic map `w = R(z)^(p/q)`, the surface is a CPU-built baked mesh (NPP proximity gluing over the
   // z-view) rendered by the function-independent curve program. `riemannKindV` records which path is live.
   private riemannCurve: AlgebraicCurve | null = null;
-  private riemannKindV: "param" | "curve" | null = null;
+  // Implicit-curve path (ADR-0030, M2c). When an implicit `F(w,z)=0` source is set (the dedicated implicit
+  // mode), the surface is the same baked curve mesh, but its sheet values are the per-vertex roots of
+  // `F(·,z)=0` (`@cas/core rootsMonic`) rather than radical branch values. It drives the surface in place of
+  // the f(z)-derived forms; `implicitSrc` null = ordinary mode.
+  private riemannImplicit: ImplicitCurve | null = null;
+  private implicitSrc: string | null = null;
+  private riemannKindV: "param" | "curve" | "implicit" | null = null;
   private curveProgram: WebGLProgram | null = null;
   private curveUniforms: CurveUniforms | null = null;
   private curveVao: WebGLVertexArrayObject | null = null;
@@ -404,22 +412,36 @@ export class Plot {
     // The algebraic-curve path (ADR-0028) is consulted only when the M1 parametric form declines, so
     // single primitives keep the cheaper, exact parametric surface.
     this.riemannCurve = this.riemannForm ? null : detectAlgebraicCurve(ast);
-    this.riemannKindV = this.riemannForm ? "param" : this.riemannCurve ? "curve" : null;
+    // Implicit F(w,z)=0 mode (ADR-0030, M2c): when an implicit source is set it DRIVES the Riemann surface;
+    // the f(z)-derived forms are ignored for the surface (f still compiles for the hidden 2D/3D/sphere
+    // programs). An invalid implicit source shows nothing (no silent fall-back to the f(z) surface).
+    this.riemannImplicit = this.recognizeImplicit();
+    this.riemannKindV = this.implicitSrc
+      ? this.riemannImplicit
+        ? "implicit"
+        : null
+      : this.riemannForm
+        ? "param"
+        : this.riemannCurve
+          ? "curve"
+          : null;
     if (this.riemannForm) {
       this.gzGlsl = compileF(this.riemannForm.zFromT, "gZFn");
       this.gwGlsl = compileF(this.riemannForm.wFromT, "gWFn");
-      // Reset the charisma axis / sheet count to the form's defaults only when the PRIMITIVE changes, so an
-      // edit within the same family (log(z) → log(2z)) keeps the user's chosen axis and sheet count.
-      if (this.riemannForm.primitive !== prevPrim) {
-        this.riemannHeightSource = this.riemannForm.heightSource === "im" ? 1 : 0;
-        this.riemannSheets = this.riemannForm.sheetCount;
-      }
     } else {
       this.gzGlsl = null;
       this.gwGlsl = null;
-      // Entering the curve path (from a non-curve state) defaults to Re-w charisma; a curve→curve edit
-      // keeps the user's chosen axis.
-      if (this.riemannCurve && prevKind !== "curve") this.riemannHeightSource = 0;
+    }
+    // Charisma-axis defaults: on a new PRIMITIVE (param), or on entering a finite algebraic path (curve /
+    // implicit); an edit within the same family keeps the user's chosen axis.
+    if (this.riemannKindV === "param" && this.riemannForm && this.riemannForm.primitive !== prevPrim) {
+      this.riemannHeightSource = this.riemannForm.heightSource === "im" ? 1 : 0;
+      this.riemannSheets = this.riemannForm.sheetCount;
+    } else if (
+      (this.riemannKindV === "curve" || this.riemannKindV === "implicit") &&
+      prevKind !== this.riemannKindV
+    ) {
+      this.riemannHeightSource = 0;
     }
     // Compile the per-combo sheet evaluators (principal; the root-of-unity factors are baked into each AST).
     this.curveSheetFns = this.riemannCurve
@@ -809,15 +831,16 @@ export class Plot {
    *  so this need not rerun on a height-axis / exaggeration change (only the framing does — see
    *  {@link reframeRiemann}). */
   private rebuildCurveMesh(): void {
-    if (this.riemannKindV !== "curve" || !this.riemannCurve || !this.curvePosBuffer || !this.curveWBuffer)
-      return;
+    const spec = this.activeCurveSpec(); // radical curve (M2a/M2b) or implicit curve (M2c)
+    if (!spec || !this.curvePosBuffer || !this.curveWBuffer) return;
     const gl = this.gl;
     const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
-    const fns = this.curveSheetFns;
-    const mesh = buildCurveMesh(
-      { sheetsAt: (z) => fns.map((f) => f(z, [0, 0])), sheetCount: fns.length },
-      { cx: this.view.cx, cy: this.view.cy, span: this.view.span, aspect },
-    );
+    const mesh = buildCurveMesh(spec, {
+      cx: this.view.cx,
+      cy: this.view.cy,
+      span: this.view.span,
+      aspect,
+    });
     this.curveTriCount = mesh.triangleCount;
     this.curveHoles = mesh.droppedTriangles;
     this.curveCapped = mesh.capped;
@@ -1118,7 +1141,8 @@ export class Plot {
     vw: number = this.canvas.width,
     vh: number = this.canvas.height,
   ): void {
-    if (this.riemannKindV === "curve") this.paintRiemannCurve(vx, vy, vw, vh);
+    if (this.riemannKindV === "curve" || this.riemannKindV === "implicit")
+      this.paintRiemannCurve(vx, vy, vw, vh);
     else this.paintRiemannParam(vx, vy, vw, vh);
   }
 
@@ -1231,15 +1255,21 @@ export class Plot {
   }
 
   // --- Riemann-surface controls (ADR-0027 / ADR-0028) ---------------------------------------------
-  /** Whether the active map has a renderable Riemann surface — an M1 invertible primitive OR an M2a
-   *  single-radical algebraic curve — so the Riemann-surface mode is offered. */
+  /** Whether the active map has a renderable Riemann surface — in implicit mode (M2c) a valid `F(w,z)=0`,
+   *  otherwise an M1 invertible primitive OR an M2 algebraic curve — so the Riemann-surface mode is offered. */
   riemannAvailable(): boolean {
+    if (this.implicitSrc) return this.riemannImplicit !== null;
     return this.riemannForm !== null || this.riemannCurve !== null;
   }
 
-  /** Which Riemann path is live for the active map: parametric (M1), baked curve (M2a), or none. */
-  riemannModeKind(): "param" | "curve" | null {
+  /** Which Riemann path is live: parametric (M1), baked radical curve (M2a/b), implicit curve (M2c), or none. */
+  riemannModeKind(): "param" | "curve" | "implicit" | null {
     return this.riemannKindV;
+  }
+
+  /** Whether an implicit source is set but did not parse as a valid `F(w,z)` polynomial — for a honest badge. */
+  implicitInvalid(): boolean {
+    return this.implicitSrc !== null && this.riemannImplicit === null;
   }
 
   /** The parametric (M1) form, or null (curve / none). */
@@ -1257,6 +1287,18 @@ export class Plot {
     holes: number;
     capped: boolean;
   } | null {
+    // Implicit mode (M2c) drives the surface exclusively; never fall through to an f(z)-derived descriptor.
+    if (this.implicitSrc) {
+      if (this.riemannKindV !== "implicit" || !this.riemannImplicit) return null;
+      return {
+        label: this.riemannImplicit.label,
+        monodromy: `${this.riemannImplicit.degreeW} sheets`,
+        branchNote: "roots of F(w,z)=0; sheets glue across the cut, ramification points are small holes",
+        sheetKind: "finite",
+        holes: this.curveHoles,
+        capped: this.curveCapped,
+      };
+    }
     if (this.riemannForm) {
       const f = this.riemannForm;
       return {
@@ -1286,7 +1328,7 @@ export class Plot {
   /** Re-frame the Riemann camera, rebuilding the curve mesh over the current z-view when the curve path is
    *  live (use on a view / formula change or mode entry). Safe to call when no surface is active. */
   reframeRiemann(): void {
-    if (this.riemannKindV === "curve") this.rebuildCurveMesh();
+    if (this.riemannKindV === "curve" || this.riemannKindV === "implicit") this.rebuildCurveMesh();
     else {
       this.updateRiemannFraming();
       this.paramPickDirty = true; // the t-window (sheet count) may have changed — re-sample the pick mesh
@@ -1313,7 +1355,7 @@ export class Plot {
   /** Cheap re-frame after a height-axis / exaggeration change: the curve mesh is unchanged (charisma is a
    *  shader uniform), so only the framing is recomputed — no mesh rebuild, so a height slider stays smooth. */
   reframeRiemannLight(): void {
-    if (this.riemannKindV === "curve") this.frameCurve();
+    if (this.riemannKindV === "curve" || this.riemannKindV === "implicit") this.frameCurve();
     else this.updateRiemannFraming();
   }
 
@@ -1325,6 +1367,56 @@ export class Plot {
   /** Reset the Riemann orbit camera to its framed default distance (the surface fitted to the viewport). */
   resetRiemann(): void {
     this.riemannDist = this.riemannBaseDist;
+  }
+
+  /** Parse + recognize the current implicit source (M2c), or null (no source / not a valid `F(w,z)` poly). */
+  private recognizeImplicit(): ImplicitCurve | null {
+    if (!this.implicitSrc) return null;
+    try {
+      return detectImplicitCurve(parse(this.implicitSrc));
+    } catch {
+      return null;
+    }
+  }
+
+  /** The active baked-curve sheet spec: the radical curve (M2a/M2b) or the implicit curve (M2c), or null. */
+  private activeCurveSpec(): { sheetsAt: (z: Complex) => Complex[]; sheetCount: number } | null {
+    if (this.riemannKindV === "implicit" && this.riemannImplicit)
+      return { sheetsAt: this.riemannImplicit.sheetsAt, sheetCount: this.riemannImplicit.degreeW };
+    if (this.riemannKindV === "curve" && this.curveSheetFns.length)
+      return {
+        sheetsAt: (z) => this.curveSheetFns.map((f) => f(z, [0, 0])),
+        sheetCount: this.curveSheetFns.length,
+      };
+    return null;
+  }
+
+  /**
+   * Set (or clear, with null) the implicit `F(w,z)=0` source (M2c, ADR-0030). A non-null source enters
+   * implicit mode — the surface becomes the per-vertex root-solve curve of `F` (`@cas/core rootsMonic`) in
+   * place of the f(z)-derived forms; null reverts. Re-recognizes + rebuilds the mesh/framing. Safe to call
+   * outside the Riemann view.
+   */
+  setImplicitSource(src: string | null): void {
+    this.implicitSrc = src && src.trim() ? src : null;
+    const prevKind = this.riemannKindV;
+    this.riemannImplicit = this.recognizeImplicit();
+    this.riemannKindV = this.implicitSrc
+      ? this.riemannImplicit
+        ? "implicit"
+        : null
+      : this.riemannForm
+        ? "param"
+        : this.riemannCurve
+          ? "curve"
+          : null;
+    if (
+      (this.riemannKindV === "curve" || this.riemannKindV === "implicit") &&
+      prevKind !== this.riemannKindV
+    )
+      this.riemannHeightSource = 0;
+    this.paramPickDirty = true;
+    this.reframeRiemann();
   }
 
   /** The CPU pick mesh for the live Riemann path (M3.1): the cached curve soup, or the lazily-sampled
@@ -1393,6 +1485,7 @@ export class Plot {
   /** The set of sheet values over a base point `z` — **exact** for an algebraic curve (evaluate every branch
    *  combo), a **mesh census** for a parametric primitive. The enumerator behind the monodromy explorer. */
   riemannSheetsAt(z: Complex): Complex[] {
+    if (this.riemannKindV === "implicit" && this.riemannImplicit) return this.riemannImplicit.sheetsAt(z);
     if (this.riemannKindV === "curve") return this.curveSheetFns.map((f) => f(z, [0, 0]));
     const mesh = this.currentRiemannPickMesh();
     return mesh ? sheetsOverZ(mesh, z[0], z[1]) : [];
@@ -1430,6 +1523,18 @@ export class Plot {
       };
     }
     return findBranchPoints((z) => this.riemannSheetsAt(z), box, { grid });
+  }
+
+  /** The **exact** branch locus (M2c.2) for an implicit `F(w,z)=0` with Gaussian-rational coefficients — the
+   *  roots of `disc_w F` (`@cas/exact`). Null when not applicable (not implicit mode, or a float coefficient),
+   *  so the caller falls back to the `≈` sheet-separation scan. Coordinates are `≈`; the locus is `=`. */
+  riemannBranchPointsExact(): Complex[] | null {
+    if (this.riemannKindV !== "implicit" || !this.implicitSrc) return null;
+    try {
+      return exactBranchLocus(parse(this.implicitSrc));
+    } catch {
+      return null;
+    }
   }
 
   // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------
