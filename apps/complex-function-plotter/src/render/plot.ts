@@ -26,9 +26,11 @@ import {
   buildParamPickMesh,
   pickMeshFromCurve,
   pickRiemannSurface,
+  sheetsOverZ,
   type PickMesh,
   type RiemannHit,
 } from "../riemann/pickMesh.js";
+import { computeMonodromy, type MonodromyResult } from "../riemann/monodromy.js";
 import {
   type Vec3,
   add3,
@@ -1385,6 +1387,24 @@ export class Plot {
       add3(fwd, add3(scale3(right, ndcX * tan * aspect), scale3(up, ndcY * tan))),
     );
     return pickRiemannSurface(mesh, { origin: eye, dir }, this.riemannHeightSource, this.heightScale);
+  }
+
+  /** The set of sheet values over a base point `z` — **exact** for an algebraic curve (evaluate every branch
+   *  combo), a **mesh census** for a parametric primitive. The enumerator behind the monodromy explorer. */
+  riemannSheetsAt(z: Complex): Complex[] {
+    if (this.riemannKindV === "curve") return this.curveSheetFns.map((f) => f(z, [0, 0]));
+    const mesh = this.currentRiemannPickMesh();
+    return mesh ? sheetsOverZ(mesh, z[0], z[1]) : [];
+  }
+
+  /**
+   * Estimate the monodromy of a base-plane loop (M3.3, ADR-0029): how the sheets permute after continuing
+   * around it. **An estimate, never certified** (RISKS §3) — the caller keeps the result out of the badge,
+   * the permalink, and every export. Null when no surface is active or the loop has fewer than two sheets.
+   */
+  computeRiemannMonodromy(loop: Complex[]): MonodromyResult | null {
+    if (!this.riemannAvailable()) return null;
+    return computeMonodromy((z) => this.riemannSheetsAt(z), loop);
   }
 
   // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------

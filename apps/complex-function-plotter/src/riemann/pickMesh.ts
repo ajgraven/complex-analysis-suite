@@ -135,8 +135,9 @@ function sheetLess(a: Complex, b: Complex): number {
 /**
  * Census the distinct sheet values lying over base point `z` in `mesh`: interpolate `w` in every triangle
  * whose xy-projection contains `z`, cluster near-equal values, and return them in the stable local order.
+ * Also the parametric-path sheet enumerator for the monodromy explorer (M3.3).
  */
-function sheetsOverZ(mesh: PickMesh, zx: number, zy: number): Complex[] {
+export function sheetsOverZ(mesh: PickMesh, zx: number, zy: number): Complex[] {
   const { xy, w, triangleCount } = mesh;
   const raw: Complex[] = [];
   for (let tri = 0; tri < triangleCount; tri++) {

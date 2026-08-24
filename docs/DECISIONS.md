@@ -2525,5 +2525,8 @@ the height law identical to the shader, so pick and picture agree.
 3. [x] Land M3.2 (linked base-plane pane) — a "Base-plane pane" toggle (not a new mode); reuse `paintLinked`;
        bidirectional hover-linking (crosshair). **Branch markers deferred to M3.4** (branch-point *location*
        pairs with the polish). Browser golden added; gate green. **Paused for review.**
-4. [ ] Land M3.3 (monodromy explorer) — opt-in, `≈`, confined to its panel (RISKS §3). **Pause.**
+4. [x] Land M3.3 (monodromy explorer) — `riemann/monodromy.ts` (nearest-match continuation + confidence
+       flags) + `Plot.riemannSheetsAt`/`computeRiemannMonodromy` (exact for curves, census for parametric) +
+       an opt-in loop-drag on the base pane. `≈`, low-confidence-flagged, and **quarantined** from the badge,
+       permalink, and exports (RISKS §3). 10 node tests incl. the real √(z²−1) curve. Gate green.
 5. [ ] M3.4 (colour/legibility polish, + branch-point markers moved from M3.2) — deferred, unordered.

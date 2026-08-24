@@ -73,7 +73,12 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**
   (`k / N` — which of the `N` sheets over this `z`; near a branch point `N` honestly drops as they merge),
   all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,
-  **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa). Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa). An
+  opt-in **Monodromy explorer** (M3.3) lets you drag a closed loop on the base plane and estimates how the
+  sheets permute around it (e.g. a loop around `0` swaps √z's two sheets — a 2-cycle), reported in cycle
+  notation. Analytic continuation around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so
+  it is honestly `≈`, flags low confidence near a branch point, and is kept out of the badge, permalink, and
+  every export. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
   shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
   (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`), the NPP mesh (`riemann/curveMesh.ts`), and the
   hover-pick (`riemann/pickMesh.ts`).

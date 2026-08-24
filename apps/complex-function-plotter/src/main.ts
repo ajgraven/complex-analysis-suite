@@ -197,6 +197,8 @@ function main(): void {
   const riemannExag = byId("riemannExag");
   const riemannExagVal = byId("riemannExagVal");
   const riemannLinkedInput = byId("riemannLinked");
+  const riemannMonodromyInput = byId("riemannMonodromy");
+  const monodromyResult = byId("monodromyResult");
   const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
@@ -450,6 +452,11 @@ function main(): void {
   // The base point last read on the Riemann surface (or hovered on the base plane), drawn as a crosshair on
   // the linked base-plane pane (M3.2) so you can see which base point the touched sheet sits over.
   let linkedZ: Complex | null = null;
+  // Monodromy explorer (M3.3): draw a closed loop on the base plane; `loopPoints` accumulates it during the
+  // drag, `lastLoop` holds the finished loop for the overlay. The result is transient (never persisted).
+  let monodromyOn = false;
+  let loopPoints: Complex[] | null = null;
+  let lastLoop: Complex[] | null = null;
   const drawRiemannLink = (): void => {
     const cssW = canvas.clientWidth;
     const cssH = canvas.clientHeight;
@@ -485,6 +492,19 @@ function main(): void {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("base plane (z)", 6, 6);
+    // Monodromy loop (M3.3): the in-progress drag, else the finished loop — a filled, outlined polyline.
+    const loop = loopPoints ?? lastLoop;
+    if (loop && loop.length >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(sx(loop[0][0]), sy(loop[0][1]));
+      for (let i = 1; i < loop.length; i++) ctx.lineTo(sx(loop[i][0]), sy(loop[i][1]));
+      if (!loopPoints) ctx.closePath(); // a finished loop is closed; an in-progress one stays open
+      ctx.fillStyle = "rgba(120,180,255,0.12)";
+      ctx.fill();
+      ctx.strokeStyle = "rgba(150,200,255,0.9)";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
     if (linkedZ) {
       const px = sx(linkedZ[0]);
       const py = sy(linkedZ[1]);
@@ -829,6 +849,14 @@ function main(): void {
     // (M3.1) show only in the Riemann view; f(z)/|f|/arg f then read the picked sheet's value.
     for (const el of [pz, pfz, pabs, parg, pbranch]) if (el instanceof HTMLElement) el.textContent = "—";
     linkedZ = null;
+    loopPoints = null;
+    lastLoop = null; // a stale monodromy loop doesn't belong to the new view
+    if (monodromyResult instanceof HTMLElement) {
+      monodromyResult.hidden = !(m === "riemann" && monodromyOn);
+      if (m === "riemann" && monodromyOn)
+        monodromyResult.textContent =
+          "Drag a closed loop on the base plane to estimate its monodromy.";
+    }
     const inRiemann = m === "riemann";
     if (pbranchDt instanceof HTMLElement) pbranchDt.hidden = !inRiemann;
     if (pbranch instanceof HTMLElement) pbranch.hidden = !inRiemann;
@@ -894,7 +922,30 @@ function main(): void {
     riemannLinkedInput.addEventListener("change", () => {
       plot.riemannLinked = riemannLinkedInput.checked;
       if (plot.riemannLinked) plot.frameRiemannBaseView(); // frame the base pane on the surface's z-extent
+      else if (monodromyOn) {
+        // the monodromy explorer needs the base pane to draw a loop on — turn it off with the pane
+        monodromyOn = false;
+        if (riemannMonodromyInput instanceof HTMLInputElement) riemannMonodromyInput.checked = false;
+        loopPoints = null;
+        lastLoop = null;
+        showMonodromy(null);
+      }
       linkedZ = null;
+      redraw(false);
+    });
+  // Monodromy explorer (M3.3): drag a closed loop on the base plane; the sheets' permutation is estimated
+  // (≈, uncertified — RISKS §3). Needs the base-plane pane, so turning it on turns that on too.
+  if (riemannMonodromyInput instanceof HTMLInputElement)
+    riemannMonodromyInput.addEventListener("change", () => {
+      monodromyOn = riemannMonodromyInput.checked;
+      if (monodromyOn) {
+        plot.riemannLinked = true;
+        if (riemannLinkedInput instanceof HTMLInputElement) riemannLinkedInput.checked = true;
+        plot.frameRiemannBaseView();
+      }
+      loopPoints = null;
+      lastLoop = null;
+      showMonodromy(null); // placeholder hint (on) / hidden (off)
       redraw(false);
     });
   if (riemannReset instanceof HTMLElement)
@@ -1397,6 +1448,54 @@ function main(): void {
     }
   };
 
+  // Monodromy explorer (M3.3): show the estimated sheet permutation for the drawn loop. Always labeled an
+  // uncertified estimate (RISKS §3); a low-confidence flag warns when the loop ran near a branch point.
+  const showMonodromy = (res: ReturnType<typeof plot.computeRiemannMonodromy>): void => {
+    if (!(monodromyResult instanceof HTMLElement)) return;
+    if (!res) {
+      monodromyResult.hidden = !monodromyOn;
+      if (monodromyOn)
+        monodromyResult.textContent =
+          "Drag a closed loop on the base plane to estimate its monodromy.";
+      return;
+    }
+    monodromyResult.hidden = false;
+    const nontrivial = res.cycles.filter((c) => c.length > 1);
+    const cyc = !res.isPermutation
+      ? "ambiguous (no clean permutation)"
+      : nontrivial.length === 0
+        ? "identity — no sheet swap"
+        : nontrivial.map((c) => `(${c.map((k) => k + 1).join(" ")})`).join("");
+    const shape =
+      res.isPermutation && nontrivial.length === 1 && nontrivial[0].length === res.sheetCount
+        ? ` · ${res.sheetCount}-cycle`
+        : "";
+    const conf = res.lowConfidence
+      ? " · ⚠ low confidence (near a branch point / under-resolved)"
+      : "";
+    monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).`;
+  };
+  const finalizeLoop = (): void => {
+    const loop = loopPoints;
+    loopPoints = null;
+    if (!loop || loop.length < 4) {
+      lastLoop = null; // too short to be a loop — discard
+      showMonodromy(null);
+      redraw(false);
+      return;
+    }
+    lastLoop = loop;
+    const res = plot.computeRiemannMonodromy(loop);
+    if (!res && monodromyResult instanceof HTMLElement) {
+      monodromyResult.hidden = false;
+      monodromyResult.textContent =
+        "≈ no monodromy — fewer than two sheets over the loop's start.";
+    } else {
+      showMonodromy(res);
+    }
+    redraw(false);
+  };
+
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
   // operations for a mouse-free / accessible path (L7).
@@ -1442,13 +1541,26 @@ function main(): void {
       /* a synthetic / already-released pointer can't be captured — harmless */
     }
     if (activePointers.size >= 2) {
-      // A second finger begins a pinch: abandon any single-pointer drag and seed the pinch span.
+      // A second finger begins a pinch: abandon any single-pointer drag / loop and seed the pinch span.
       grabWorld = null;
       orbitLast = null;
       panLast = null;
       sphereLast = null;
+      loopPoints = null;
       const [a, b] = twoPointers();
       pinchPrev = pointerDistance(a, b);
+      return;
+    }
+    // Monodromy explorer (M3.3): a drag on the base-plane pane traces a loop instead of orbiting.
+    if (
+      monodromyOn &&
+      plot.mode === "riemann" &&
+      plot.riemannLinked &&
+      isLeftHalf(e.clientX, canvasRect())
+    ) {
+      loopPoints = [plot.screenToWorld(e.clientX, e.clientY, twoDRect())];
+      lastLoop = null;
+      drawRiemannLink();
       return;
     }
     // Left mouse button pans the 3D landscape; the right button (or touch / pen) orbits it — the familiar
@@ -1471,6 +1583,12 @@ function main(): void {
       else if (m === "3d") plot.zoomSpan(factor); // §B: pinch zooms the domain
       else plot.zoomAt(mid.x, mid.y, factor, twoDRect());
       redraw(true);
+      return;
+    }
+    if (loopPoints) {
+      // Monodromy loop drag (M3.3): accumulate base points and redraw the loop overlay (no WebGL repaint).
+      loopPoints.push(plot.screenToWorld(e.clientX, e.clientY, twoDRect()));
+      drawRiemannLink();
       return;
     }
     if (sphereLast) {
@@ -1529,6 +1647,10 @@ function main(): void {
       sphereLast = null;
       const survivor = activePointers.values().next().value as Pt;
       seedDrag(survivor.x, survivor.y);
+      return;
+    }
+    if (loopPoints) {
+      finalizeLoop(); // close the monodromy loop and estimate its permutation (M3.3)
       return;
     }
     if (sphereLast) {
