@@ -117,7 +117,9 @@ describe("detectRiemannForm — affine wrappers place points correctly", () => {
     expect(close(evalStr("sqrt(2*z+1)", [4, 0]), [3, 0])).toBe(true);
   });
 
-  it("the two √z sheets meet over z=1 at opposite heights (Re-w charisma)", () => {
+  it("the two √z sheets meet over z=1 at opposite Re-t heights (t = w for √)", () => {
+    // The shader lifts by the uniformizer t (= the value w for √). t = ±1 map to the same z = 1 at
+    // heights ±1 — the two sheets. wFromT is checked here because t = w for √, so Re w = Re t.
     const form = detectRiemannForm(parse("sqrt(z)"));
     expect(form).not.toBeNull();
     if (!form) return;
@@ -125,13 +127,12 @@ describe("detectRiemannForm — affine wrappers place points correctly", () => {
     const zMinus = at(form.zFromT, [-1, 0]);
     expect(close(zPlus, [1, 0])).toBe(true);
     expect(close(zMinus, [1, 0])).toBe(true); // same z
-    const wPlus = at(form.wFromT, [1, 0]);
-    const wMinus = at(form.wFromT, [-1, 0]);
-    expect(wPlus[0]).toBeCloseTo(1, 6); // height = Re w = +1
-    expect(wMinus[0]).toBeCloseTo(-1, 6); // height = Re w = −1  (the other sheet)
+    // t = +1 → height Re t = +1 (and w = t = +1); t = −1 → height −1 (the other sheet).
+    expect(at(form.wFromT, [1, 0])[0]).toBeCloseTo(1, 6);
+    expect(at(form.wFromT, [-1, 0])[0]).toBeCloseTo(-1, 6);
   });
 
-  it("log helicoid: same z=1 at heights 0 and 2π (Im-w charisma)", () => {
+  it("log helicoid: same z=1 at Im-t heights 0 and 2π (t = w for log)", () => {
     const form = detectRiemannForm(parse("log(z)"));
     expect(form).not.toBeNull();
     if (!form) return;
@@ -139,8 +140,28 @@ describe("detectRiemannForm — affine wrappers place points correctly", () => {
     const z1 = at(form.zFromT, [0, 2 * Math.PI]);
     expect(close(z0, [1, 0])).toBe(true);
     expect(close(z1, [1, 0], 1e-5)).toBe(true); // e^{2πi} = 1
+    // t = w for log, so Im w = Im t: the two turns sit at heights 0 and 2π.
     expect(at(form.wFromT, [0, 0])[1]).toBeCloseTo(0, 6);
     expect(at(form.wFromT, [0, 2 * Math.PI])[1]).toBeCloseTo(2 * Math.PI, 6);
+  });
+
+  it("pow window bounds the corner |z| = |t|^q for high roots (no giant lobes / overflow)", () => {
+    const cases: [string, number][] = [
+      ["sqrt(z)", 2],
+      ["z^(1/3)", 3],
+      ["z^(1/6)", 6],
+      ["z^(1/8)", 8],
+      ["z^(1/20)", 20],
+    ];
+    for (const [src, q] of cases) {
+      const form = detectRiemannForm(parse(src));
+      expect(form, src).not.toBeNull();
+      if (!form) continue;
+      const cornerT = form.window(3).halfX * Math.SQRT2; // |t| at a square corner
+      const cornerZ = Math.pow(cornerT, q); // |z| = |t|^q there
+      expect(cornerZ, `${src} corner |z|`).toBeLessThan(12);
+      expect(cornerZ, `${src} corner |z|`).toBeGreaterThan(3); // still a useful region
+    }
   });
 });
 

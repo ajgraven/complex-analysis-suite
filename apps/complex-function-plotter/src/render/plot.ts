@@ -324,12 +324,17 @@ export class Plot {
     // Riemann-surface mode (ADR-0027): recognize the plotted map as an invertible primitive and compile
     // its parametrize-by-w position/value maps. `null` (the common case) leaves the mode unavailable. The
     // maps reference no live parameters (affine constants are baked), so they compile with no params.
+    const prevPrim = this.riemannForm?.primitive;
     this.riemannForm = detectRiemannForm(ast);
     if (this.riemannForm) {
       this.gzGlsl = compileF(this.riemannForm.zFromT, "gZFn");
       this.gwGlsl = compileF(this.riemannForm.wFromT, "gWFn");
-      this.riemannHeightSource = this.riemannForm.heightSource === "im" ? 1 : 0;
-      this.riemannSheets = this.riemannForm.sheetCount;
+      // Reset the charisma axis / sheet count to the form's defaults only when the PRIMITIVE changes, so an
+      // edit within the same family (log(z) → log(2z)) keeps the user's chosen axis and sheet count.
+      if (this.riemannForm.primitive !== prevPrim) {
+        this.riemannHeightSource = this.riemannForm.heightSource === "im" ? 1 : 0;
+        this.riemannSheets = this.riemannForm.sheetCount;
+      }
     } else {
       this.gzGlsl = null;
       this.gwGlsl = null;
@@ -601,7 +606,6 @@ export class Plot {
     const form = this.riemannForm;
     if (!form) return;
     const zc = makeComplexFn(form.zFromT, {});
-    const wc = makeComplexFn(form.wFromT, {});
     const { halfX, halfY } = this.riemannWindow();
     const N = 15;
     let minx = Infinity,
@@ -614,18 +618,16 @@ export class Plot {
       const ti = -halfY + (2 * halfY * j) / (N - 1);
       for (let i = 0; i < N; i++) {
         const tr = -halfX + (2 * halfX * i) / (N - 1);
-        let z: Complex, w: Complex;
+        // Charisma height comes from the uniformizer t (bounded by the window), matching the shader.
+        const h = (this.riemannHeightSource === 1 ? ti : tr) * this.heightScale;
+        let z: Complex;
         try {
           z = zc([tr, ti], [0, 0]);
-          w = wc([tr, ti], [0, 0]);
         } catch {
           continue;
         }
-        const h = (this.riemannHeightSource === 1 ? w[1] : w[0]) * this.heightScale;
-        if (!Number.isFinite(z[0]) || !Number.isFinite(z[1]) || !Number.isFinite(h)) continue;
-        // Skip pole-adjacent blow-ups so a few huge samples don't wreck the framing: a pole in the
-        // POSITION (tan/arctan/log window edges) or in the VALUE/height (e.g. z^(-1/2), w = 1/t near 0).
-        if (Math.hypot(z[0], z[1]) > 1e3 || Math.abs(h) > 1e3) continue;
+        if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) continue;
+        if (Math.hypot(z[0], z[1]) > 1e3) continue; // skip pole-adjacent position blow-ups (tan/log edges)
         minx = Math.min(minx, z[0]);
         maxx = Math.max(maxx, z[0]);
         miny = Math.min(miny, z[1]);
@@ -645,7 +647,12 @@ export class Plot {
     const cz = (minh + maxh) / 2;
     const radius = Math.max((maxx - minx) / 2, (maxy - miny) / 2, (maxh - minh) / 2, 0.5);
     this.riemannTarget = [cx, cy, cz];
-    this.riemannBaseDist = (1.35 * radius) / Math.tan(this.camera.fov / 2);
+    // Clamp the framing distance to a sane envelope (a defensive backstop; with the t-based height and the
+    // sheet-aware pow window the radius is already bounded).
+    this.riemannBaseDist = Math.min(
+      1e4,
+      Math.max(0.1, (1.35 * radius) / Math.tan(this.camera.fov / 2)),
+    );
     this.riemannDist = this.riemannBaseDist;
   }
 

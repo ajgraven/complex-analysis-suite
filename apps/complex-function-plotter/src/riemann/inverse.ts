@@ -384,8 +384,15 @@ function windowFor(core: Core): (sheets: number) => { halfX: number; halfY: numb
   switch (core.prim) {
     case "sqrt":
       return () => ({ halfX: 2.2, halfY: 2.2 });
-    case "pow":
-      return () => ({ halfX: 2.2, halfY: 2.2 });
+    case "pow": {
+      // z = t^q, so a square-window corner (|t| ≈ half·√2) maps to |t|^q in z. A fixed half-extent would
+      // send high roots (large q) to enormous — even float-overflowing — coordinates and giant corner
+      // lobes; size the window so the corner stays ≤ ~Z_MAX in |z|. Z_MAX = 9.7 keeps q = 2 at the
+      // familiar ≈ 2.2 half-extent while q = 64 shrinks to ≈ 0.73.
+      const Z_MAX = 9.7;
+      const half = Math.pow(Z_MAX, 1 / core.q) / Math.SQRT2;
+      return () => ({ halfX: half, halfY: half });
+    }
     case "log":
       // Re t = ln|u| ∈ [−3, 3]; Im t = arg + 2πk spans N sheets vertically → the helicoid.
       return (n) => ({ halfX: 3, halfY: Math.PI * Math.max(1, n) });
@@ -440,7 +447,7 @@ export function detectRiemannForm(ast: Node): RiemannForm | null {
       ? `principal cut on (−∞, 0]; ${core.q} sheets glue across it`
       : meta.branch,
     monodromy: isPow
-      ? `${core.q} sheets${core.p !== 1 ? ` · phase winds ${core.p}×` : ""} · ${core.q}-cycle`
+      ? `${core.q} sheets${Math.abs(core.p) !== 1 ? ` · phase winds ${Math.abs(core.p)}×` : ""} · ${core.q}-cycle`
       : meta.mono,
   };
 }

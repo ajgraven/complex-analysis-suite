@@ -4,15 +4,18 @@
  * maps each grid UV to a `t` in the current `t`-window, evaluates the position `z = gZFn(t)` and the
  * function value `w = gWFn(t)` (both compiled by `@cas/expr` `compileF` from the ASTs the inverse registry
  * builds — see `../riemann/inverse.ts`), places the vertex at world `(Re z, Im z, charisma)` with the
- * **charisma** height = `Re w` or `Im w`, and passes `w` to the fragment. The fragment colours it with the
+ * **charisma** height = `Re t` or `Im t` — of the **uniformizer `t`**, not the value `w`: `t` separates
+ * the sheets and stays bounded by the `t`-window, whereas `w = t^p` for a fractional power would blow the
+ * height up as `|t|^p`. `w` is passed to the fragment only for colour. The fragment colours with the
  * **exact same `colorAt`** as every other view (so colormaps / enhancements carry over for free) and shades
  * it with a geometric (screen-space) normal.
  *
- * Because `w = A·V + B` is affine in `t` and `t` is affine in the grid UV, `w` (hence the colour and the
- * height) interpolates *exactly* across each triangle; only the `xy` position is the curved surface. And
- * because the `t`-domain is a single connected sheet, the surface's sheets glue automatically — no
- * branch-tracking, no cut to heal. `gZFn` / `gWFn` reference no live parameters (the affine constants are
- * baked), so the program declares no `uParam_*` uniforms.
+ * `w` is affine in `t` for the named primitives (`w = A·t + B`) and `t` is affine in the grid UV, so the
+ * colour interpolates *exactly* across each triangle there (approximately for `z^(p/q)`, `p≥2`, where
+ * `w = t^p`); only the `xy` position is the curved surface. Because the `t`-domain is a single connected
+ * sheet, the surface's sheets glue automatically — no branch-tracking, no cut to heal. `gZFn` / `gWFn`
+ * reference no live parameters (the affine constants are baked), so the program declares no `uParam_*`
+ * uniforms.
  */
 import { COMPLEX_SINGLE_GLSL, COMPLEX_DERIVED_GLSL } from "@cas/gpu/glsl";
 import { COLORING_GLSL } from "../render/colorShader.js";
@@ -51,7 +54,8 @@ void main() {
                 uTCenter.y + (aUV.y - 0.5) * 2.0 * uTHalf.y);
   cvec z = gZFn(t, vec_(0.0, 0.0));
   cvec w = gWFn(t, vec_(0.0, 0.0));
-  float h = (uHeightSource == 1 ? cre1(cim(w)) : cre1(cre(w))) * uHeightScale;
+  // Charisma from the UNIFORMIZER t (bounded, separates sheets), not w — w = t^p would blow up as |t|^p.
+  float h = (uHeightSource == 1 ? cre1(cim(t)) : cre1(cre(t))) * uHeightScale;
   vec3 p = vec3(cre1(cre(z)), cre1(cim(z)), h);
   vW = w;
   vPos = p;

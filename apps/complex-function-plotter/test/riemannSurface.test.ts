@@ -34,7 +34,8 @@ describe("buildRiemannProgram — vertex", () => {
   it("passes the value w and the world position to the fragment", () => {
     expect(vertex).toContain("out vec2 vW;");
     expect(vertex).toContain("out vec3 vPos;");
-    expect(vertex).toContain("uHeightSource == 1 ? cre1(cim(w)) : cre1(cre(w))"); // Im w vs Re w
+    // Charisma from the uniformizer t (bounded), not w — Im t vs Re t.
+    expect(vertex).toContain("uHeightSource == 1 ? cre1(cim(t)) : cre1(cre(t))");
   });
 });
 

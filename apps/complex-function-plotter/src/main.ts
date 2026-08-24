@@ -1366,10 +1366,12 @@ function main(): void {
       redraw(true);
     } else {
       // Idle hover (no drag): update the value inspector for the pane under the cursor. 2D reads the
-      // screen→world point; 3D picks the point on the surface; the sphere has no readout.
+      // screen→world point; 3D picks the point on the surface; the sphere and the Riemann surface have no
+      // pick yet, so blank the readout there rather than leaving stale 2D values.
       const m = effMode(e.clientX);
       if (m === "2d") updateProbe(e.clientX, e.clientY);
       else if (m === "3d") updateProbe3d(e.clientX, e.clientY);
+      else renderProbe(null);
     }
   });
   const endDrag = (e: PointerEvent): void => {
