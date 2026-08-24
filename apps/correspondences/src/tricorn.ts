@@ -30,9 +30,10 @@ export const DEFAULT_TRICORN_OPTIONS = { maxIter: 64, escapeR: 2 };
 /** Escape time of the critical orbit (from z=0) of z ↦ z̄² + c. maxIter ⟹ c is in the Tricorn. */
 export function tricornEscape(c: Complex, maxIter = DEFAULT_TRICORN_OPTIONS.maxIter, escapeR = DEFAULT_TRICORN_OPTIONS.escapeR): number {
   let z: Complex = [0, 0];
+  const escapeR2 = escapeR * escapeR; // sqrt-free escape test in the per-pixel×per-iteration hot loop (WP8 / A7)
   for (let n = 1; n <= maxIter; n++) {
     z = tricornMap(z, c);
-    if (!Number.isFinite(z[0]) || Math.hypot(z[0], z[1]) > escapeR) return n;
+    if (!Number.isFinite(z[0]) || z[0] * z[0] + z[1] * z[1] > escapeR2) return n;
   }
   return maxIter;
 }

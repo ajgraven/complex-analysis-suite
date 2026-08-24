@@ -1,5 +1,5 @@
 /**
- * Recognizer for **algebraic** Riemann surfaces (M2a + M2b, ADR-0028): arithmetic combinations
+ * Recognizer for **algebraic** Riemann surfaces (M2a + M2b, ADR-0029): arithmetic combinations
  * (`+ − × ÷`, integer powers) of radical terms `Rᵢ(z)^(pᵢ/qᵢ)` with each `Rᵢ` a rational function of `z`
  * and constant coefficients — the class the M1 parametrize-by-w recognizer declines. This covers a single
  * radical (`√(z²−1)`, `(z²−1)^(1/3)` — M2a) and **sums / products / ratios** of radicals (`√z + √(z−1)`,

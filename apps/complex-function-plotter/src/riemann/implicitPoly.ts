@@ -1,5 +1,5 @@
 /**
- * Bivariate-polynomial coefficient extraction for the implicit Riemann surfaces (M2c, ADR-0030). The user
+ * Bivariate-polynomial coefficient extraction for the implicit Riemann surfaces (M2c, ADR-0031). The user
  * enters `F(w, z) = 0` — a bivariate complex polynomial — and this expands it into its coefficients in `w`:
  * `F = Σₖ aₖ(z)·wᵏ`, each `aₖ(z)` a polynomial in `z`. Two consumers share ONE generic expander over a
  * pluggable scalar ring:

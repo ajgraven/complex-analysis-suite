@@ -1,14 +1,14 @@
 # Riemann surfaces M2 — algebraic-curve surfaces (single-radical class) — implementation plan
 
 > Extends the Complex Function Plotter's **Riemann** view (M1, [`riemann-surface-plan.md`](riemann-surface-plan.md),
-> [ADR-0027](../DECISIONS.md#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app))
+> [ADR-0028](../DECISIONS.md#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app))
 > from single invertible primitives to **algebraic** functions — the class M1 declines because no single
 > global inverse exists. M2 renders the true multi-sheeted surface by the **Nieser–Poelke–Polthier /
 > Kranich** proximity-gluing algorithm over a triangulated z-domain (research notes §2.2). Delivered:
 > **M2a** (single-radical `w = R(z)^(p/q)`, R rational) **and M2b** (arithmetic combinations of radicals —
 > sums / products / ratios — via root-of-unity branch injection). **M2c** — a direct implicit `F(w,z)=0`
 > (bivariate complex polynomial) input mode — is requested for later and specced in §9.
-> New decision recorded as [ADR-0028](../DECISIONS.md#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).
+> New decision recorded as [ADR-0029](../DECISIONS.md#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).
 > Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
 > [`../DECISIONS.md`](../DECISIONS.md).
 
@@ -81,7 +81,7 @@ location for robust handling of rational radicands (poles) and cleaner subdivisi
 ## 4. Architecture & components (app-local first, ADR-0007)
 
 > **As built (M2a + M2b):** the components below match the code, with these refinements found during the
-> build (see the progress table + ADR-0028): `detectAlgebraicCurve` returns **one `sheetExpr` AST per branch
+> build (see the progress table + ADR-0029): `detectAlgebraicCurve` returns **one `sheetExpr` AST per branch
 > combo** (root-of-unity injection) rather than `(p,q)` + a solver; `curveMesh` takes a `sheetsAt` spec (not
 > `{R,p,q}`); **no Web Worker** (sync mesh-gen is fast enough) and **no `@cas/core`/`@cas/exact`** (the local
 > degeneracy test + `wCap` resolve branch points). Those two remain the M2c tools (§9).
@@ -162,7 +162,7 @@ goldens + a headless render check.
 
 ## 7. ADR
 
-[ADR-0028](../DECISIONS.md#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing):
+[ADR-0029](../DECISIONS.md#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing):
 the algebraic-curve method (NPP proximity gluing), the M2a single-radical scope + the roots-of-unity sheet
 specialization (vs. general per-vertex root-solving, deferred to M2b), the `@cas/core` dependency, and the
 continued deferral of `@cas/exact`-based elimination (M2b) and multivalued interchange (ADR-0005).

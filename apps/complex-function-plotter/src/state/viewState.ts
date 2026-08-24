@@ -7,6 +7,7 @@
 import { encodeViewState, decodeViewState } from "@cas/interchange";
 import { DEFAULT_ANIM, type AnimConfig } from "../ui/animate.js";
 import { DEFAULT_CAMERA } from "../render3d/camera.js";
+import { COLORMAPS } from "../render/colormaps.js";
 
 export const APP_NS = "cfp";
 
@@ -23,11 +24,11 @@ export interface View3dState {
   heightScale: number;
   specular: boolean;
   opacity: number;
-  /** Riemann-surface mode (ADR-0027): charisma axis (0 = Re w, 1 = Im w) and sheets shown (infinite
+  /** Riemann-surface mode (ADR-0028): charisma axis (0 = Re w, 1 = Im w) and sheets shown (infinite
    *  families). Absent on a pre-Riemann link → decode to the defaults, so old links still open. */
   riemannHeight: number;
   riemannSheets: number;
-  /** Riemann linked base-plane pane (M3.2, ADR-0029): split the Riemann view with the flat base plane.
+  /** Riemann linked base-plane pane (M3.2, ADR-0030): split the Riemann view with the flat base plane.
    *  Absent on an older link → decodes to `false`. */
   riemannLinked: boolean;
 }
@@ -72,7 +73,7 @@ export interface PlotterState extends Record<string, unknown> {
   /** Animation-variable `t` transport config (catalog G2). Playback state is not persisted — a loaded
    *  link opens paused at the saved `t` (which travels in `params`). */
   anim: AnimConfig;
-  /** Implicit-surface source `F(w,z)` (M2c, ADR-0030) when the dedicated implicit mode is active; empty
+  /** Implicit-surface source `F(w,z)` (M2c, ADR-0031) when the dedicated implicit mode is active; empty
    *  string = ordinary `f(z)` mode. Absent on an older link → decodes to `""`, so old links still open. */
   implicit: string;
   /** Render mode + 3D camera/height (catalog F5–F7), so a shared landscape / linked / sphere figure
@@ -157,6 +158,12 @@ export function decodeState(hashOrLink: string): PlotterState | null {
   if (!s || typeof s.expr !== "string") return null;
   const num = (v: unknown, fallback: number): number =>
     typeof v === "number" && Number.isFinite(v) ? v : fallback;
+  // A stale/hand-edited `#vs=` link must fail SOFT, not render garbage (this file's stated intent). `num`
+  // guarantees finiteness but not RANGE, so a few fields were left unclamped, unlike the sibling
+  // cleanV3d/cleanParams blocks: `span ≤ 0` flips/degenerates the viewport, and out-of-range
+  // colormap/sectors index past their tables. Clamp them here (WP8 / A10).
+  const clampNum = (v: unknown, fallback: number, lo: number, hi: number): number =>
+    Math.min(hi, Math.max(lo, num(v, fallback)));
   const str = (v: unknown, fallback: string): string =>
     typeof v === "string" ? v : fallback;
   // Reconstruct the two slots (A7). A pre-A7 link carries only `expr`, which becomes slot f.
@@ -170,11 +177,11 @@ export function decodeState(hashOrLink: string): PlotterState | null {
     active,
     cx: num(s.cx, 0),
     cy: num(s.cy, 0),
-    span: num(s.span, 2),
-    colormap: num(s.colormap, 0),
+    span: clampNum(s.span, 2, 1e-9, 1e6), // matches the live zoomAt clamp; span ≤ 0 flips the viewport
+    colormap: clampNum(s.colormap, 0, 0, COLORMAPS.length - 1), // atlas row index — bound to the real LUT height (6 rows)
     modulus: num(s.modulus, 2),
     enhance: num(s.enhance, 0),
-    sectors: num(s.sectors, 12),
+    sectors: clampNum(s.sectors, 12, 2, 256), // sector count — floor 2 matches the live guard (slider min)
     crisp: num(s.crisp, 1),
     hueShift: num(s.hueShift, 0),
     hueSign: num(s.hueSign, 1),

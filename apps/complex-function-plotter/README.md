@@ -39,7 +39,7 @@ Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publi
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-- **2D / 3D / sphere / linked / Riemann (5A–5D + ADR-0027)** — a five-way **View** toggle. **3D** lifts the flat portrait into an
+- **2D / 3D / sphere / linked / Riemann (5A–5D + ADR-0028)** — a five-way **View** toggle. **3D** lifts the flat portrait into an
   **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
   stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
   like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). **Left-drag
@@ -55,7 +55,7 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   and the landscape **side by side** in one canvas (split viewports), both reading the **same `view`** — so
   navigating the flat pane (drag-pan / scroll-zoom / keyboard) moves the surface's domain in lock-step, while
   a right-drag on the surface pane orbits it alone (a left-drag there pans both, like the flat pane); the
-  shared-view coupling is the sync (no state to reconcile). **Riemann** (ADR-0027) draws the true
+  shared-view coupling is the sync (no state to reconcile). **Riemann** (ADR-0028) draws the true
   multi-sheeted **Riemann surface** when the active map is a recognized invertible primitive — √, ⁿ√,
   `z^(p/q)`, log, arcsin/arccos/arctan, plus affine wraps `A·P(αz+β)+B` — by the **parametrize-by-w**
   method: it samples the value plane (the uniformizer `t`), positions each vertex at `(Re g(t), Im g(t))`
@@ -64,17 +64,17 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   branch cut with no false cliff** (and none of the never-certified continuation of RISKS §3); a
   sheet-count control truncates the infinite (log / inverse-trig) families, and an honest badge names the
   form, its monodromy, and where the principal cut lies. It also handles **single-radical algebraic** maps
-  `R(z)^(p/q)` with `R` rational (ADR-0028) — `√(z²−1)`, `√(z³−z)`, `(z²−1)^(1/3)`, `√((z−1)/(z+1))` — that
+  `R(z)^(p/q)` with `R` rational (ADR-0029) — `√(z²−1)`, `√(z³−z)`, `(z²−1)^(1/3)`, `√((z−1)/(z+1))` — that
   the parametric path declines: a CPU-built **proximity-glued mesh** (Nieser–Poelke–Polthier / Kranich)
   over the z-view stitches the `q` sheets and drops ramification cells as small **holes** at the branch
   points (never a wall), badged if the triangle budget is hit. An **Implicit surface — F(w,z)=0** toggle
-  (M2c, ADR-0030) covers the **general algebraic curve** entered by its defining bivariate polynomial —
+  (M2c, ADR-0031) covers the **general algebraic curve** entered by its defining bivariate polynomial —
   including the ones with no radical form (`w³ − w − z`, a quintic): the sheets are the per-vertex roots of
   `F(·,z)=0` (`@cas/core` `rootsMonic`), so the whole mesh + exploration stack carries over, and the branch
   locus is **exact** for Gaussian-rational `F` (roots of `disc_w F` via `@cas/exact`, badged `=` vs the `≈`
   scan). It's its own mode (own box), pinning the Riemann view. The tab is offered only for a recognized
   surface; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
-  exact. **Hovering the surface** ray-casts its sheets (M3.1, ADR-0029) and reads the point the eye actually
+  exact. **Hovering the surface** ray-casts its sheets (M3.1, ADR-0030) and reads the point the eye actually
   touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**
   (`k / N` — which of the `N` sheets over this `z`; near a branch point `N` honestly drops as they merge),
   all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,

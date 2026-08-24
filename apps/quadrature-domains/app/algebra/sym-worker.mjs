@@ -10,7 +10,10 @@
 // API (QD.SymWorker):
 //   ensureReady() -> Promise<void>                       lazy-create the worker
 //   run(op, payload, { onProgress?, signal? }) -> Promise<result>
-//       op ∈ {'groebner','solveZeroDim','dimension'}; payload/result are SERIALIZED
+//       op ∈ the full QD.Sym.runJob dispatch set (see `runJob` in sym-core.mjs — currently
+//         groebner, solveZeroDim, solveRealCertified, shapeFromMoments, parametricRealCount1D,
+//         minimalPrimes, triangularDecomposition, dimension, classify, saturate, eliminate,
+//         triangularize, resolvent, factor); payload/result are SERIALIZED
 //       (term lists, plain objects) exactly as QD.Sym.runJob expects/returns.
 //   cancel() -> void                                     abort the in-flight job
 //   isBusy() -> bool

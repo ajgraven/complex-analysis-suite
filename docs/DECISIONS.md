@@ -35,9 +35,10 @@ Format follows Michael Nygard's ADR convention.
 | [0024](#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine) | Faber Transform app + `@cas/faber` + polygonal K via the exterior SC engine | Accepted |
 | [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
 | [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication) | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication) | Accepted |
+| [0027](#adr-0027-extract-mapspectoexpr-into-casinterchange) | Extract the `MapSpec` → `@cas/expr` converter into `@cas/interchange` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All twenty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All twenty-seven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -2234,7 +2235,55 @@ another.
 
 ---
 
-## ADR-0027: Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app
+## ADR-0027: Extract `mapSpecToExpr` into `@cas/interchange`
+
+**Status:** Accepted (2026-08-23) · a follow-on decision, of the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+"extract on a second consumer" kind (here the second and third consumers were already present — and drifting).
+
+**Context.** The import side of every map hand-off turns an `@cas/interchange` `MapSpec` / `Envelope` into a
+source string in the `@cas/expr` grammar (imaginary unit `i`, powers `^`), which the receiving app then
+compiles through the shared `expr` pipeline. Six functions do this — `coeffExpr`, `polyExpr`, `rationalExpr`,
+`laurentExpr`, `mapSpecToExpr`, `envelopeToMapSpec` — and they had been **copy-ported into three apps**
+(Complex Dynamics, the Complex-Function Plotter, Argument Principle), because the dependency rule
+(ARCHITECTURE §4) forbids one app importing another. Each app's header openly noted the copy.
+
+The 2026-08-23 suite review found the three copies had **already diverged in a correctness-relevant way**:
+the plotter and Argument-Principle copies had grown two guards — a refusal of a rational map with an
+empty / identically-zero denominator (a 0/0 map), and a refusal of a pole-bearing Laurent map (finite-pole
+`branches`) — that Complex Dynamics' ancestor copy never received. So the *same* interchange payload
+imported into CD produced a `NaN` (0/0) or a silently-wrong map (the finite-pole branches dropped) where
+the other two failed loudly. This is exactly the drift ADR-0007 exists to prevent: three consumers of one
+identical bridge, maintained in parallel, one now behind on a correctness fix — and it violates the
+honest-labeling guardrail (fail loudly, never emit a subtly-wrong map).
+
+**Decision.** Extract the six functions into a single `@cas/interchange` module (`mapSpecToExpr.ts`,
+exported from the package index), **unifying the two guards** so every consumer gets the loud-failure
+behavior. The three apps delegate: CD re-exports it beside its CD-specific `@cas/schwarz` σ-reconstruction
+helpers (which stay local); the plotter and AP keep their app-specific outer glue (`importEnvelopeText`) and
+re-export the shared converter as their interchange-import facade.
+
+`@cas/interchange` is the home (not `@cas/expr`) because it already **owns** `MapSpec` / `Envelope` and all
+three consumers already depend on it. The converter's output is *text in the `@cas/expr` grammar*, not an
+`@cas/expr` AST, so `@cas/interchange` stays independent of `@cas/expr` — no package import, no dependency
+cycle; the two are coupled only by that documented string grammar. (Putting it in `@cas/expr` would instead
+require `@cas/expr` → `@cas/interchange` for the `MapSpec` type, the wrong direction for a
+serialization → executable layering.)
+
+**Consequences.**
+- **CD picks up the guards it lacked** — a degenerate 0/0 rational or a pole-bearing Laurent now throws;
+  CD's `main.ts` import path catches and surfaces a toast (fails loudly) instead of building a NaN /
+  silently-wrong map. This is a behavior change for exactly those degenerate payloads, and is the fix.
+- A cross-consumer golden (`packages/interchange/test/mapSpecToExpr.test.ts`) pins the emitted grammar and
+  the three refusals (degenerate denominator, pole-bearing Laurent, schwarz), so a future guard change
+  lands in one place with one test. Each app's existing import/interop tests stay green.
+- A future map form (or a fourth consumer) extends one shared converter, not three drifting copies.
+
+**Not in scope.** The `@cas/interchange`-side SC form (still deferred, ADR-0007 — gate on a receiving tool)
+and Riemann Map's *separate* CD → RM Böttcher `LaurentMap` converter (a different converter, left as-is).
+
+---
+
+## ADR-0028: Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app
 
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
 
@@ -2332,16 +2381,16 @@ for when one appears.
        `claude/riemann-surface-rendering-fvybo6`; keep the existing top-down-3D≡2D golden green.
 3. [ ] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
        `P(z,w)=0` engine and any shared primitive it needs — then M3 (monodromy explorer, `≈`-labeled).
-       *(M2a approved + recorded as [ADR-0028](#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)*
+       *(M2a approved + recorded as [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)*
 4. [ ] On a second consumer of `src/riemann/`, extract `@cas/branch` and supersede this ADR's in-app note.
 
 ---
 
-## ADR-0028: Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing)
+## ADR-0029: Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing)
 
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
 
-*Follow-on to [ADR-0027](#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+*Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
 (anticipated in its Action Item 3). Extends the plotter's Riemann view from single invertible primitives to
 **algebraic** functions via the Nieser–Poelke–Polthier / Kranich proximity-gluing algorithm, scoped this pass
 to the **single-radical class** `w = R(z)^(p/q)` (R rational, constant coefficients). Records the method, the
@@ -2351,7 +2400,7 @@ scope, the roots-of-unity sheet specialization, the new `@cas/core` dependency, 
 
 ### Context
 
-M1 (ADR-0027) renders the true Riemann surface for one invertible primitive of an **affine** inner
+M1 (ADR-0028) renders the true Riemann surface for one invertible primitive of an **affine** inner
 (`A·P(αz+β)+B`). It declines algebraic composites — `sqrt(z^2−1)`, `sqrt(z^3−z)`, `(z^2−1)^(1/3)`,
 `sqrt((z−1)/(z+1))` — whose surfaces are the classical multi-sheeted objects. The literature's
 web-implementable method is NPP/Kranich (research notes §2.2): triangulate the z-domain, enumerate the `n`
@@ -2406,7 +2455,7 @@ conditioning). High value but the wrong first step; it is M2b, gated on its own 
 #### Option C: A `@cas/riemann` / `@cas/branch` package now
 **Pros:** a home for the mesh + branch machinery. **Cons:** ADR-0007 is symmetric — no second consumer yet.
 Keep it in `src/riemann/`; the `mat4.ts`-style "second consumer triggers extraction" note already stands
-(ADR-0027).
+(ADR-0028).
 
 ### Trade-off Analysis
 
@@ -2424,7 +2473,7 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
   (badged). Radical sums remain declined until M2b.
 - **Revisit if** any of: (a) M2b/M2c approved (⇒ `@cas/exact` elimination + spurious-branch filter, or an
   implicit-input mode — follow-on ADR); (b) a second consumer needs `src/riemann/` (⇒ extract, per
-  ADR-0027 Action Item 4); (c) a receiving tool needs a serializable multivalued map (⇒ ADR-0005
+  ADR-0028 Action Item 4); (c) a receiving tool needs a serializable multivalued map (⇒ ADR-0005
   branch-aware interchange).
 
 ### Action Items
@@ -2438,12 +2487,12 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
 
 ---
 
-## ADR-0029: Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy)
+## ADR-0030: Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy)
 
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
 
-*Follow-on to [ADR-0027](#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
-and [ADR-0028](#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing). Turns the
+*Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+and [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing). Turns the
 Riemann view from a **renderer** into something **interrogable**: read the multi-sheeted value under the
 cursor (M3.1), see the branch/cut structure beside the surface on a linked base plane (M3.2), and trace how a
 loop permutes the sheets (M3.3, monodromy). Records the pick method, the local-branch-ordinal readout, the
@@ -2452,7 +2501,7 @@ explorer. Full plan: [`docs/design/riemann-surface-M3-plan.md`](design/riemann-s
 
 ### Context
 
-M1 (ADR-0027) and M2 (ADR-0028) render the surface but leave it **mute**: no way to ask "what value is *this*
+M1 (ADR-0028) and M2 (ADR-0029) render the surface but leave it **mute**: no way to ask "what value is *this*
 point", no spatial link to the base plane, no way to watch a loop swap sheets — the three things a Riemann
 surface is *for*. The plotter already has a value inspector (catalog H1) for the 2D portrait and the 3D
 landscape, but the landscape's pick (`render3d/pick.ts`) ray-marches a **single-valued** height field
@@ -2513,7 +2562,7 @@ the height law identical to the shader, so pick and picture agree.
 - **Harder:** the M2 curve arrays must be cached for the pick (were upload-and-discard); a large mesh makes
   the census O(triangles) per hover (throttled; a spatial index is a later optimization). M3.3 carries a
   standing honesty burden (its output is never certified).
-- **Revisit if** any of: (a) a second consumer needs `src/riemann/pickMesh.ts` (⇒ extract, per ADR-0027
+- **Revisit if** any of: (a) a second consumer needs `src/riemann/pickMesh.ts` (⇒ extract, per ADR-0028
   Action Item 4); (b) M2c lands (implicit `F(w,z)=0`) — the pick mesh already takes an arbitrary `sheetsAt`,
   so it should carry over; (c) a receiving tool needs the monodromy data serialized (⇒ ADR-0005 branch-aware
   interchange — and only with the RISKS §3 labeling intact).
@@ -2536,12 +2585,12 @@ the height law identical to the shader, so pick and picture agree.
 
 ---
 
-## ADR-0030: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
+## ADR-0031: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
 
 **Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
 
-*Follow-on to [ADR-0028](#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
-(anticipated in its Action Item 4 / plan §9) and [ADR-0029](#adr-0029-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+*Follow-on to [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
+(anticipated in its Action Item 4 / plan §9) and [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
 Extends the plotter's Riemann view from algebraic functions the user can *name* as radicals (M2a/M2b) to the
 **general algebraic curve entered implicitly** as a bivariate complex polynomial `F(w,z)=0` — including the
 curves with no radical form. Records the dedicated input-mode UX, the reuse of the M2 mesh + M3 exploration
@@ -2551,14 +2600,14 @@ stack through the `sheetsAt` seam, and the dependency additions (`@cas/core` `ro
 
 ### Context
 
-M1 (ADR-0027) and M2a/M2b (ADR-0028) render every algebraic surface expressible as a **radical**. But by
+M1 (ADR-0028) and M2a/M2b (ADR-0029) render every algebraic surface expressible as a **radical**. But by
 Abel–Ruffini most algebraic curves (a general quintic `w⁵ + z·w + z = 0`) have no radical form, while their
 Riemann surfaces are perfectly concrete. The whole M2/M3 stack is parametrized by ONE seam —
 `sheetsAt: (z) => Complex[]` (the sheet values over a base point) — consumed unchanged by `buildCurveMesh`,
 the M3.1 pick, the M3.3 monodromy, and the M3.4 branch scan. So covering the general curve needs only a new
 `sheetsAt` source, not a new engine. And because `F` is entered **directly**, there are **no spurious
 branches** (the problem that made building `P(z,w)` from radical sums by resultants the wrong first step in
-ADR-0028's Option B): every root of `F(·,z)` is a genuine sheet.
+ADR-0029's Option B): every root of `F(·,z)` is a genuine sheet.
 
 ### Decision
 
@@ -2591,14 +2640,14 @@ choice only.
 
 #### Option C: Emit `F(w,z)` from the radical recognizer via `@cas/exact` resultant elimination
 **Cons:** an internal unification (make M2a/M2b share the implicit engine) that would reintroduce the spurious
-branches ADR-0028 avoided; not needed for the user-facing implicit input. Left as a possible later refactor.
+branches ADR-0029 avoided; not needed for the user-facing implicit input. Left as a possible later refactor.
 
 ### Trade-off Analysis
 
 M2c is the maximal-coverage step at low marginal cost: the `sheetsAt` seam means the surface, hover-pick,
 linked pane, monodromy, and branch markers all work the moment the root-solve enumerator exists. Reusing
 `@cas/core`/`@cas/exact` (not re-implementing a solver or a discriminant) honors the north-star; pulling them
-now is exactly the demand ADR-0028 §9 foresaw. The degree cap + honest labels (`≈` roots, exact sheet count,
+now is exactly the demand ADR-0029 §9 foresaw. The degree cap + honest labels (`≈` roots, exact sheet count,
 `=`/`≈` branch locus, no topology claims) keep it within the guardrails.
 
 ### Consequences

@@ -174,7 +174,7 @@ interface SphereUniforms extends ColorUniformLocs {
   uLightDir: WebGLUniformLocation | null;
 }
 
-/** The Riemann-surface uniforms (ADR-0027), on top of the shared {@link ColorUniformLocs}. */
+/** The Riemann-surface uniforms (ADR-0028), on top of the shared {@link ColorUniformLocs}. */
 interface RiemannUniforms extends ColorUniformLocs {
   uVP: WebGLUniformLocation | null;
   uTCenter: WebGLUniformLocation | null;
@@ -186,7 +186,7 @@ interface RiemannUniforms extends ColorUniformLocs {
   uOpacity: WebGLUniformLocation | null;
 }
 
-/** The algebraic-curve uniforms (ADR-0028): the baked-mesh program has no t-window (positions are baked). */
+/** The algebraic-curve uniforms (ADR-0029): the baked-mesh program has no t-window (positions are baked). */
 interface CurveUniforms extends ColorUniformLocs {
   uVP: WebGLUniformLocation | null;
   uHeightSource: WebGLUniformLocation | null;
@@ -241,7 +241,7 @@ export class Plot {
   private sphereRotation: Quat = DEFAULT_ROTATION;
   private sphereDist = SPHERE_DIST_DEFAULT;
 
-  // Riemann-surface path (ADR-0027). A fourth program renders the true multi-sheeted surface of a
+  // Riemann-surface path (ADR-0028). A fourth program renders the true multi-sheeted surface of a
   // recognized invertible primitive (√, ⁿ√, z^(p/q), log, arcsin/arccos/arctan + affine wraps) by the
   // parametrize-by-w method: the same grid mesh is reinterpreted over the value plane (uniformizer `t`),
   // positioned by `z = gZFn(t)`, coloured by the shared `colorAt`, lifted by the Re/Im-w charisma. Built
@@ -261,7 +261,7 @@ export class Plot {
   riemannHeightSource = 0;
   /** How many sheets to render for an infinite-sheeted primitive (log / inverse trig); finite ones ignore it. */
   riemannSheets = 3;
-  /** Linked base-plane pane (M3.2, ADR-0029): split the Riemann view — the flat base plane beside the
+  /** Linked base-plane pane (M3.2, ADR-0030): split the Riemann view — the flat base plane beside the
    *  surface, hover-linked. The base plane reads {@link view} (the curve mesh is built over it; for the
    *  parametric path {@link view} is framed to the surface's base-plane extent when this turns on). */
   riemannLinked = false;
@@ -269,11 +269,11 @@ export class Plot {
    *  base-plane pane's {@link view} so it shows the region the surface actually covers. */
   private riemannXYBounds: { minx: number; maxx: number; miny: number; maxy: number } | null = null;
 
-  // Algebraic-curve path (ADR-0028, M2a). When the active map is NOT an M1 primitive but IS a single-radical
+  // Algebraic-curve path (ADR-0029, M2a). When the active map is NOT an M1 primitive but IS a single-radical
   // algebraic map `w = R(z)^(p/q)`, the surface is a CPU-built baked mesh (NPP proximity gluing over the
   // z-view) rendered by the function-independent curve program. `riemannKindV` records which path is live.
   private riemannCurve: AlgebraicCurve | null = null;
-  // Implicit-curve path (ADR-0030, M2c). When an implicit `F(w,z)=0` source is set (the dedicated implicit
+  // Implicit-curve path (ADR-0031, M2c). When an implicit `F(w,z)=0` source is set (the dedicated implicit
   // mode), the surface is the same baked curve mesh, but its sheet values are the per-vertex roots of
   // `F(·,z)=0` (`@cas/core rootsMonic`) rather than radical branch values. It drives the surface in place of
   // the f(z)-derived forms; `implicitSrc` null = ordinary mode.
@@ -302,7 +302,7 @@ export class Plot {
     maxImW: number;
   } | null = null;
 
-  // Multi-sheet hover-pick (M3.1, ADR-0029). The curve arrays are cached from the last `buildCurveMesh` (they
+  // Multi-sheet hover-pick (M3.1, ADR-0030). The curve arrays are cached from the last `buildCurveMesh` (they
   // were upload-and-discard before) so the pick can ray-cast the same triangles. The parametric pick mesh is
   // sampled lazily (`paramPickDirty`) — only when a hover actually needs it — and reused until the form /
   // t-window changes (a height-axis / exaggeration change does NOT dirty it: height is recomputed at pick
@@ -403,16 +403,16 @@ export class Plot {
       nextValues.set(n, this.paramValues.get(n) ?? [...NEW_PARAM_DEFAULT]);
     this.paramNamesList = names;
     this.paramValues = nextValues;
-    // Riemann-surface mode (ADR-0027): recognize the plotted map as an invertible primitive and compile
+    // Riemann-surface mode (ADR-0028): recognize the plotted map as an invertible primitive and compile
     // its parametrize-by-w position/value maps. `null` (the common case) leaves the mode unavailable. The
     // maps reference no live parameters (affine constants are baked), so they compile with no params.
     const prevPrim = this.riemannForm?.primitive;
     const prevKind = this.riemannKindV;
     this.riemannForm = detectRiemannForm(ast);
-    // The algebraic-curve path (ADR-0028) is consulted only when the M1 parametric form declines, so
+    // The algebraic-curve path (ADR-0029) is consulted only when the M1 parametric form declines, so
     // single primitives keep the cheaper, exact parametric surface.
     this.riemannCurve = this.riemannForm ? null : detectAlgebraicCurve(ast);
-    // Implicit F(w,z)=0 mode (ADR-0030, M2c): when an implicit source is set it DRIVES the Riemann surface;
+    // Implicit F(w,z)=0 mode (ADR-0031, M2c): when an implicit source is set it DRIVES the Riemann surface;
     // the f(z)-derived forms are ignored for the surface (f still compiles for the hidden 2D/3D/sphere
     // programs). An invalid implicit source shows nothing (no silent fall-back to the f(z) surface).
     this.riemannImplicit = this.recognizeImplicit();
@@ -649,7 +649,7 @@ export class Plot {
     this.sphereVao = svao;
   }
 
-  /** Build the Riemann-surface program (ADR-0027) for the current recognized form, its uniforms, and its
+  /** Build the Riemann-surface program (ADR-0028) for the current recognized form, its uniforms, and its
    *  VAO (the shared grid buffers bound to `aUV` + the index buffer). A no-op that clears the program when
    *  the active map isn't a recognized primitive. Called from {@link rebuildProgram}. */
   private rebuildRiemannProgram(): void {
@@ -775,7 +775,7 @@ export class Plot {
     this.riemannDist = this.riemannBaseDist;
   }
 
-  /** Create the algebraic-curve GPU resources once (ADR-0028): the function-independent baked-mesh program,
+  /** Create the algebraic-curve GPU resources once (ADR-0029): the function-independent baked-mesh program,
    *  its attribute buffers (`aPos` world xy, `aW` sheet value), and its VAO. Called from
    *  {@link initGpuResources} (also on a context restore). The mesh itself is (re)built by
    *  {@link rebuildCurveMesh}. */
@@ -825,7 +825,7 @@ export class Plot {
     this.curveVao = vao;
   }
 
-  /** (Re)build the algebraic-curve mesh (ADR-0028) for the current map + z-view, upload it to the attribute
+  /** (Re)build the algebraic-curve mesh (ADR-0029) for the current map + z-view, upload it to the attribute
    *  buffers, and frame the orbit camera on it. A no-op unless the active map is a recognized curve (and the
    *  GPU buffers exist). The z-window is the current {@link view}; the charisma height is applied in-shader,
    *  so this need not rerun on a height-axis / exaggeration change (only the framing does — see
@@ -1162,7 +1162,7 @@ export class Plot {
     gl.disable(gl.SCISSOR_TEST);
   }
 
-  /** Draw the parametric (M1, ADR-0027) surface: the grid mesh reinterpreted over the value plane,
+  /** Draw the parametric (M1, ADR-0028) surface: the grid mesh reinterpreted over the value plane,
    *  positioned by `z = gZFn(t)`, lifted by the Re/Im-t charisma, coloured by the shared `colorAt`, through
    *  an orbit camera framed on the surface. A no-op (dark clear) when no parametric form is active. */
   private paintRiemannParam(
@@ -1210,7 +1210,7 @@ export class Plot {
     gl.disable(gl.DEPTH_TEST);
   }
 
-  /** Draw the baked algebraic-curve surface (M2a, ADR-0028): the CPU-built triangle soup (world xy +
+  /** Draw the baked algebraic-curve surface (M2a, ADR-0029): the CPU-built triangle soup (world xy +
    *  per-vertex sheet value), lifted in-shader by the Re/Im-w charisma, coloured by the shared `colorAt`,
    *  through the same orbit camera. A no-op (dark clear) when no curve is active or the mesh is empty. */
   private paintRiemannCurve(
@@ -1254,7 +1254,7 @@ export class Plot {
     gl.disable(gl.DEPTH_TEST);
   }
 
-  // --- Riemann-surface controls (ADR-0027 / ADR-0028) ---------------------------------------------
+  // --- Riemann-surface controls (ADR-0028 / ADR-0029) ---------------------------------------------
   /** Whether the active map has a renderable Riemann surface — in implicit mode (M2c) a valid `F(w,z)=0`,
    *  otherwise an M1 invertible primitive OR an M2 algebraic curve — so the Riemann-surface mode is offered. */
   riemannAvailable(): boolean {
@@ -1392,7 +1392,7 @@ export class Plot {
   }
 
   /**
-   * Set (or clear, with null) the implicit `F(w,z)=0` source (M2c, ADR-0030). A non-null source enters
+   * Set (or clear, with null) the implicit `F(w,z)=0` source (M2c, ADR-0031). A non-null source enters
    * implicit mode — the surface becomes the per-vertex root-solve curve of `F` (`@cas/core rootsMonic`) in
    * place of the f(z)-derived forms; null reverts. Re-recognizes + rebuilds the mesh/framing. Safe to call
    * outside the Riemann view.
@@ -1455,7 +1455,7 @@ export class Plot {
   }
 
   /**
-   * Multi-sheet hover-pick (M3.1, ADR-0029): the on-surface point under a client pixel — its base point `z`,
+   * Multi-sheet hover-pick (M3.1, ADR-0030): the on-surface point under a client pixel — its base point `z`,
    * the value `w` on the front-most sheet, and the local sheet census (`sheetIndex` of `sheetCount`) over
    * that `z`. Ray-casts the drawn triangles through the same framed camera as the paint, so self-occlusion is
    * honoured (the eye's sheet, not a base-plane shadow). Null over empty scene / when no surface is active.
@@ -1492,7 +1492,7 @@ export class Plot {
   }
 
   /**
-   * Estimate the monodromy of a base-plane loop (M3.3, ADR-0029): how the sheets permute after continuing
+   * Estimate the monodromy of a base-plane loop (M3.3, ADR-0030): how the sheets permute after continuing
    * around it. **An estimate, never certified** (RISKS §3) — the caller keeps the result out of the badge,
    * the permalink, and every export. Null when no surface is active or the loop has fewer than two sheets.
    */

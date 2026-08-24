@@ -1,5 +1,5 @@
 /**
- * The Riemann-surface program (ADR-0027, parametrize-by-w). The **same grid mesh** as the analytic
+ * The Riemann-surface program (ADR-0028, parametrize-by-w). The **same grid mesh** as the analytic
  * landscape is reinterpreted over the primitive's **value plane** (the uniformizer `t`): the vertex shader
  * maps each grid UV to a `t` in the current `t`-window, evaluates the position `z = gZFn(t)` and the
  * function value `w = gWFn(t)` (both compiled by `@cas/expr` `compileF` from the ASTs the inverse registry
@@ -94,7 +94,7 @@ void main() {
 }
 
 /**
- * Assemble the `{ vertex, fragment }` GLSL for the **baked algebraic-curve** program (M2a, ADR-0028). The
+ * Assemble the `{ vertex, fragment }` GLSL for the **baked algebraic-curve** program (M2a, ADR-0029). The
  * geometry is a CPU/worker-built triangle soup (see `../riemann/curveMesh.ts`): each vertex carries its
  * world `(Re z, Im z)` in `aPos` and its sheet value `w` in `aW`. The charisma height (`Re w` / `Im w`) is
  * applied here so it stays a live uniform (no mesh rebuild on a height-axis / exaggeration change). No

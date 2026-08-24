@@ -8,6 +8,7 @@ import {
   type PlotterState,
 } from "../src/state/viewState.js";
 import { DEFAULT_ANIM } from "../src/ui/animate.js";
+import { COLORMAPS } from "../src/render/colormaps.js";
 
 const S: PlotterState = {
   expr: "a*z*(1-z)+b", // = the active (f) slot
@@ -115,6 +116,24 @@ describe("share-link view state", () => {
     // Absent on an older link → decodes to false (M3.2 back-compat).
     const old = decodeState(encodeViewState(APP_NS, { expr: "sqrt(z)", v3d: { mode: "riemann" } }));
     expect(old?.v3d.riemannLinked).toBe(false);
+  });
+
+  it("clamps out-of-range scalar fields to their live ranges (fail-soft)", () => {
+    // A stale / hand-edited #vs= link must fail SOFT: span ≤ 0 flips the viewport, colormap indexes the
+    // atlas LUT (6 rows), sectors has a live floor of 2. Guards the WP8 clamps — in particular the colormap
+    // bound tracks the REAL LUT height (regression: it was a bogus 63, assuming a 64-row atlas that never existed).
+    const lo = decodeState(
+      encodeViewState(APP_NS, { expr: "z", span: 0, colormap: -5, sectors: 1 }),
+    );
+    expect(lo?.span).toBe(1e-9); // clamped up off the ≤ 0 singularity
+    expect(lo?.colormap).toBe(0);
+    expect(lo?.sectors).toBe(2); // floor matches the live guard / slider min
+    const hi = decodeState(
+      encodeViewState(APP_NS, { expr: "z", span: 1e12, colormap: 999, sectors: 100000 }),
+    );
+    expect(hi?.span).toBe(1e6);
+    expect(hi?.colormap).toBe(COLORMAPS.length - 1); // never past the real LUT height
+    expect(hi?.sectors).toBe(256);
   });
 
   it("round-trips the f/g slots, and a g-active link plots g", () => {

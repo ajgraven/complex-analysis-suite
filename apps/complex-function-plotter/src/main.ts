@@ -18,7 +18,7 @@
 // `≈`. A View toggle (2D / 3D / Sphere / Linked / Riemann) swaps the flat portrait for the Phase-5
 // analytic **landscape** (a height surface, orbit/dolly, coloured by the same colorAt so top-down = the
 // 2D portrait), the **Riemann sphere** (a ray-cast of ℂ∪{∞}, arcball-rotated, so ∞ is the north pole), or
-// the true multi-sheeted **Riemann surface** (ADR-0027, `riemann/` + `render3d/riemannSurface.ts`): for a
+// the true multi-sheeted **Riemann surface** (ADR-0028, `riemann/` + `render3d/riemannSurface.ts`): for a
 // recognized invertible primitive (√, ⁿ√, z^(p/q), log, arcsin/arccos/arctan + affine wraps) it renders
 // the parametrize-by-w surface, its sheets glued across the branch cut. The ∞-inspector (plot f(1/z)) and
 // export (Phase 6) round it out.
@@ -335,7 +335,7 @@ function main(): void {
   let markCritical = false;
   let inspectInfinity = false; // ∞-inspector (F8): plot f(1/z). Transient (not persisted).
   let plotDerivative = false; // derivative overlay (H9): plot f′(z). Transient (not persisted).
-  // Implicit-surface mode (M2c, ADR-0030): the dedicated `F(w,z)=0` mode. `implicitSrc` is its own source,
+  // Implicit-surface mode (M2c, ADR-0031): the dedicated `F(w,z)=0` mode. `implicitSrc` is its own source,
   // kept separate from the f/g slots; `implicitMode` gates the box + views. Persisted via `state.implicit`.
   let implicitMode = initial.implicit.trim().length > 0;
   let implicitSrc = implicitMode ? initial.implicit : "w^3 - w - z";
@@ -804,7 +804,7 @@ function main(): void {
       updateFns(src);
       updatePrecisionBadge();
       syncParamsUI();
-      updateRiemannAvail(); // enable/disable the Riemann tab for this map (ADR-0027)
+      updateRiemannAvail(); // enable/disable the Riemann tab for this map (ADR-0028)
       recomputeSings();
       redraw(false);
       return true;
@@ -846,7 +846,7 @@ function main(): void {
   // View toggle 2D / 3D landscape / Sphere (Phase 5). Each mode swaps the pointer interaction (pan+zoom /
   // orbit+dolly / arcball+dolly — handled in the pointer code) and shows its own controls.
   const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
-  // Reflect the Riemann-surface controls + honest badge for the current recognized form (ADR-0027). The
+  // Reflect the Riemann-surface controls + honest badge for the current recognized form (ADR-0028). The
   // sheet-count row shows only for infinite-sheeted families (log / inverse trig); finite ones (√, z^(p/q))
   // render all their sheets. The info line is the honest label: form + monodromy + where the principal cut
   // is (the surface glues it), or a "principal-branch only" note when the map isn't a recognized primitive.
@@ -950,7 +950,7 @@ function main(): void {
     }
   };
 
-  // Implicit-surface mode (M2c, ADR-0030): a dedicated `F(w,z)=0` mode with its own box, distinct from the
+  // Implicit-surface mode (M2c, ADR-0031): a dedicated `F(w,z)=0` mode with its own box, distinct from the
   // f/g slots. Entering it pins the Riemann view and disables the tabs / f-only controls that don't apply;
   // leaving it restores the ordinary f(z) map + views.
   const updateViewTabsForImplicit = (): void => {
@@ -999,7 +999,7 @@ function main(): void {
   if (implicitModeInput instanceof HTMLInputElement)
     implicitModeInput.addEventListener("change", () => setImplicitMode(implicitModeInput.checked));
 
-  // Riemann-surface controls (ADR-0027): charisma axis, sheets shown (infinite families), exaggeration
+  // Riemann-surface controls (ADR-0028): charisma axis, sheets shown (infinite families), exaggeration
   // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
   if (riemannHeightSel instanceof HTMLSelectElement)
     riemannHeightSel.addEventListener("change", () => {

@@ -37,3 +37,33 @@ export function pointInPolygon(p: Point2, poly: readonly Point2[]): boolean {
   }
   return inside;
 }
+
+/**
+ * Signed area of a closed polygon via the shoelace formula, in world coordinates (y up): positive ⇒
+ * counter-clockwise, negative ⇒ clockwise, ~0 ⇒ degenerate (collinear / self-cancelling). `poly` is a
+ * closed loop (the last vertex joins the first); the result is the TRUE signed area — half the shoelace sum.
+ */
+export function signedArea(poly: readonly Point2[]): number {
+  let a = 0;
+  const n = poly.length;
+  for (let i = 0; i < n; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % n];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return a / 2;
+}
+
+/**
+ * Return `poly` oriented counter-clockwise (positive {@link signedArea}), reversing a clockwise loop. Always
+ * a fresh array of fresh `[x, y]` tuples, so the caller's input is never mutated; a degenerate (zero-area)
+ * loop is returned in its given order. Consumers that require a positively-oriented polygon — the argument
+ * principle's winding = zeros − poles, the exterior Schwarz–Christoffel solver's input convention — normalize
+ * a freehand / hand-dragged loop through here. Consolidated from the Argument-Principle app's `contour.ts`
+ * and the Faber app's `polygonEditor.ts` on the ADR-0007 second-consumer rule.
+ */
+export function orientCCW(poly: readonly Point2[]): [number, number][] {
+  const pts: [number, number][] = poly.map((p) => [p[0], p[1]]);
+  if (signedArea(pts) < 0) pts.reverse();
+  return pts;
+}

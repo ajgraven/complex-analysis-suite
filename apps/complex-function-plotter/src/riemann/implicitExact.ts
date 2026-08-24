@@ -1,5 +1,5 @@
 /**
- * Exact branch locus for implicit `F(w,z)=0` surfaces (M2c.2, ADR-0030) — the plotter's first consumer of
+ * Exact branch locus for implicit `F(w,z)=0` surfaces (M2c.2, ADR-0031) — the plotter's first consumer of
  * `@cas/exact`. Where the M3.4 marker scan *estimates* the ramification (`≈`), this computes it exactly when
  * the polynomial has Gaussian-rational coefficients: the branch points are the roots of the **discriminant**
  * `disc_w F(z)` (the exact zero locus of "F has a repeated w-root"), a `@cas/exact` fraction-free (Bareiss)

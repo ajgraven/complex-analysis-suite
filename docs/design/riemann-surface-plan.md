@@ -8,7 +8,7 @@
 > *how*; the *why* + the literature/ground-truth corpus are in the companion
 > [`riemann-surface-research-notes.md`](riemann-surface-research-notes.md). The new decision (the mode +
 > the two-method choice + keeping the machinery in-app) is recorded as
-> [ADR-0027](../DECISIONS.md#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app).
+> [ADR-0028](../DECISIONS.md#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app).
 > Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
 > [`../DECISIONS.md`](../DECISIONS.md).
 >
@@ -181,7 +181,7 @@ goldens + a visual/headless render check.
 
 ## 7. ADR to write
 
-[ADR-0027](../DECISIONS.md#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app):
+[ADR-0028](../DECISIONS.md#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app):
 the Riemann-surface mode, the parametrize-by-w-first method choice (vs. algebraic triangulation vs.
 z-grid continuation), keeping the branch machinery in-app under ADR-0007, and the continued deferral of
 multivalued interchange (ADR-0005). Recorded at the M0 gate.

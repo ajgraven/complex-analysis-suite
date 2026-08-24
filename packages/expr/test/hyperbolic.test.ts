@@ -48,6 +48,14 @@ describe("hyperbolic / reciprocal-trig builtins (B3)", () => {
     near(evalAt("cosh(arccosh(z))", [2, 0.5]), [2, 0.5], 8); // Re > 1 keeps us on the principal branch
   });
 
+  it("arccosh takes the C99/DLMF principal branch on the cut (−∞, −1] — Re ≥ 0 (WP7 / A6)", () => {
+    // The naive log(z + √(z²−1)) form gives −1.31696 + πi here (Re < 0, the reflected branch); the
+    // split-radical log(z + √(z−1)·√(z+1)) form gives the principal +1.31696 + πi (mpmath).
+    near(evalAt("arccosh(z)", [-2, 0]), [1.3169578969248166, Math.PI], 10);
+    // cosh∘arccosh still round-trips (both branches satisfy it, but the value above must be the principal one).
+    near(evalAt("cosh(arccosh(z))", [-2, 0]), [-2, 0], 10);
+  });
+
   it("are reciprocals of the circular functions", () => {
     for (const z of pts) {
       near(evalAt("sec(z) * cos(z)", z), [1, 0]);

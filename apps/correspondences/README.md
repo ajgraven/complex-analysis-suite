@@ -90,7 +90,7 @@ mating **drawing layer**.
 
 | File                            | Role                                                                                                                                                        |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `deltoid.ts`                    | the σ engine: `evalPhi · invertPhi` (cold-seed Newton + exact Durand–Kerner fallback) `· sigma · escapeTime`; tests pin the identity `σ(φ(z)) = conj(F(z))` |
+| `deltoid.ts`                    | the deltoid instance `φ(z)=z+1/(2z²)` (`DELTOID_C`/`DELTOID_F`/`DELTOID`), boundary sampler `deltoidBoundary`, and the `@cas/schwarz` engine re-exports its consumers import; the σ engine (`evalPhi · invertPhi · sigma · escapeTime`) + the `σ(φ(z)) = conj(F(z))` round-trip test now live in `@cas/schwarz` |
 | `render.ts` / `gpu.ts`          | σ dynamical-plane renderers (CPU band / WebGL2 shader)                                                                                                      |
 | `correspondence.ts`             | the deleted correspondence: η, algebraic deflation of `φ(w) = φ(η(z))`, exact d ≤ 2 / Durand–Kerner d > 2                                                   |
 | `orbitTree.ts`                  | breadth-first multivalued orbit-tree iteration with (deterministic, non-continuation) branch labels                                                         |

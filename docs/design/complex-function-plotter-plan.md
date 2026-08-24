@@ -191,7 +191,9 @@ via Playwright — `chromium.launch({ executablePath: "/opt/pw-browsers/chromium
   downloads at the right dims with `Software` + `cfp:url` tEXt, the clipboard copy carries the same, and the
   live view restores. (Export is the bare GL figure — axes/legend overlays aren't composited; a later polish.)
 - **✅ 6B, suite interop, is landed (K7/K8).** `interchange/importMap.ts` (K7) — ported from CD's
-  `mapSpecToExpr` + `envelopeToMapSpec`, minus the `@cas/schwarz` engine — decodes an `#s=` link or JSON
+  `mapSpecToExpr` + `envelopeToMapSpec`, minus the `@cas/schwarz` engine (the shared `mapSpecToExpr` /
+  `envelopeToMapSpec` converter was later hoisted into `@cas/interchange` per ADR-0027; this file is now a
+  thin facade re-exporting it) — decodes an `#s=` link or JSON
   Envelope into an `@cas/expr` source: a QD `quadrature-domain` φ, a `view`'s map, a bare `map`, or the
   rational/Laurent/expr forms directly. Two shapes it **refuses loudly rather than mis-render**: a `schwarz`
   σ (numerical inverse — the plotter instead plots its generating **φ** with an honest note) and a
@@ -251,7 +253,7 @@ _site/complex-function-plotter` line is added to `deploy-pages.yml`; the plotter
   anti-holomorphic (`conjugate`) + a staged special-function set (Γ, ζ first). **No** multivalued /
   branch-cut evaluation in `@cas/expr` (that stays a roadmap item tied to a future multivalued phase,
   ADR-0005). *Update: a true multi-sheeted **Riemann-surface view** later landed via the parametrize-by-w
-  method ([ADR-0027](../DECISIONS.md#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app),
+  method ([ADR-0028](../DECISIONS.md#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app),
   [`riemann-surface-plan.md`](riemann-surface-plan.md)), which sidesteps multivalued expr by inverting
   known primitives; the serializable multivalued interchange form is still deferred.*
 - **Representations:** 2D domain coloring first; then a 3D analytic-landscape surface + Riemann
@@ -536,7 +538,7 @@ Parked, but each has a known home so pulling it in is cheap:
 | G3 cursor-`c` · G5 param-path · G6 homotopy · G7 video capture                                                  | P3/P5             | G7 = video export (deferred per priorities)         |
 | A6 MathLive editor · A8 composition/iteration                                                                   | P3                | input depth                                         |
 | I5 bookmarks · I6 linked z↔w · I8 A/B split · I9 inset sphere                                                   | P2/P5             | I6 is a strong differentiator to pull forward       |
-| F9 Re/Im surfaces · F10 sphere-of-f · F11 ray-marched surface · ~~F12 Riemann surfaces~~ ✅                       | P5                | F12 ✅ landed via parametrize-by-w (ADR-0027) — no multivalued expr needed |
+| F9 Re/Im surfaces · F10 sphere-of-f · F11 ray-marched surface · ~~F12 Riemann surfaces~~ ✅                       | P5                | F12 ✅ landed via parametrize-by-w (ADR-0028) — no multivalued expr needed |
 | B7 erf/Airy/ψ/Bessel · B8 θ/℘/elliptic                                                                          | P4+               | same 5-table checklist; B8 hard numerics            |
 | K4 legend export · K5 hybrid raster+vector · K6 CSV grid · K10 print+citation                                   | P6                | K5 = honest raster+vector                           |
 

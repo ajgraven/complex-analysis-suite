@@ -46,6 +46,30 @@ describe("two-pass recolour parity (cd-render Fix L)", () => {
     expect(fused.length).toBeGreaterThan(1000);
   });
 
+  it("recolour parity holds for a high-iteration, interior-heavy view (periodicity early-out active)", () => {
+    // WP5a (review MED / A1): fieldAt now carries the SAME periodicity early-out colorAt has, so an
+    // interior pixel bails onto its attracting cycle (kmax = uN) instead of iterating to the full cap.
+    // This is the regime where the early-out fires most — deep inside the main cardioid, ~every pixel is
+    // interior — at a high iteration cap. z²+c has divergence-escape ⇒ periodicityBailout is on, and the
+    // field/fused paths must still agree BYTE-for-byte (the early-out is shared, so parity is by
+    // construction). A pre-fix fieldAt (no early-out) would still match here, but a periodicity
+    // false-positive would diverge the two — this pins that they don't.
+    const res = 128;
+    const canvas = makeCanvas(res);
+    const plot = new GLPlot(canvas, dynPresets.mandelbrot, "dyn", res);
+    plot.center = [-0.2, 0]; // deep in the main cardioid (period-1 interior)
+    plot.zoom = 8; // viewport half-width ≈ √2/8 ≈ 0.18 ⇒ frame is entirely cardioid interior
+    plot.n = "2000"; // high cap: the early-out saves ~thousands of iterations per interior pixel
+    plot.setForceFullRender(true);
+    plot.render();
+    const fused = canvas.toDataURL();
+    plot.setForceFullRender(false);
+    plot.setGradientRotation(0);
+    plot.render(); // recolour via the cached field (built by fieldAt, with the early-out)
+    expect(canvas.toDataURL()).toBe(fused);
+    expect(fused.length).toBeGreaterThan(1000);
+  });
+
   it("a second recolour (field reused, not rebuilt) is still byte-identical", () => {
     const res = 128;
     const canvas = makeCanvas(res);

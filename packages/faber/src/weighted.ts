@@ -47,7 +47,8 @@ function binomialFactor(w: Cx, m: number, N: number): Cx[] {
 
 /**
  * The weight series g₀…g_N: the ascending coefficients of G_m(z) = ∏_k (1 − w_k·s)^{1/m} as a power series
- * in s = 1/φ(z), where `cornerImages` are the corner images w_k = φ(z_k) (|w_k| = 1). g₀ = 1 always
+ * in s = 1/φ(z), where `cornerImages` are the z-plane SC prevertices w_k = 1/u_k on |w_k| = 1 (NOT
+ * φ(z_k) — under this package's φ: 𝔻*→Ω, φ(prevertex) is a corner on ∂K, |·| ≠ 1). g₀ = 1 always
  * (G_m(∞) = 1). Pure. Feed to {@link weightedFaberPolynomial}; with no corners it is the unit series (⇒ Q = F).
  */
 export function weightSeries(cornerImages: readonly Cx[], m: number, N: number): Cx[] {

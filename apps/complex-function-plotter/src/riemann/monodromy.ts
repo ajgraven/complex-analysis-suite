@@ -1,5 +1,5 @@
 /**
- * The monodromy explorer's continuation engine (M3.3, ADR-0029) — the ONE place the plotter performs
+ * The monodromy explorer's continuation engine (M3.3, ADR-0030) — the ONE place the plotter performs
  * analytic continuation around a loop, which [`docs/RISKS.md`](../../../../docs/RISKS.md) §3 flags as
  * **never certified**. So everything here is an **estimate** and is fenced accordingly: the result is `≈`,
  * carries explicit low-confidence flags, and is quarantined by its caller from the badge, the permalink, and

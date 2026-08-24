@@ -1,5 +1,5 @@
 /**
- * Branch-point finder for the Riemann view's legibility polish (M3.4, ADR-0029). Branch (ramification)
+ * Branch-point finder for the Riemann view's legibility polish (M3.4, ADR-0030). Branch (ramification)
  * points are where the sheets **merge** — the defining feature of a multi-sheeted surface — so marking them
  * on the base plane tells you where the loops that permute sheets (the monodromy explorer, M3.3) have to go.
  *

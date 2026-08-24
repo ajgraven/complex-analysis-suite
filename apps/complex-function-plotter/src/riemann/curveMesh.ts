@@ -1,5 +1,5 @@
 /**
- * The algebraic-curve Riemann-surface mesh (M2a + M2b, ADR-0028) by **Nieser–Poelke–Polthier / Kranich
+ * The algebraic-curve Riemann-surface mesh (M2a + M2b, ADR-0029) by **Nieser–Poelke–Polthier / Kranich
  * proximity gluing** (research notes §2.2). The surface is built over a triangulated z-domain: at each
  * vertex the `q` sheet values come from the recognizer (`spec.sheetsAt` — for a single radical the `q`
  * values of `R^(p/q)`, for a combination of radicals the `∏qᵢ` branch combos; both elementary, no root

@@ -121,6 +121,12 @@ export function zoomSchwarzView(view: SchwarzView, factor: number, anchorUv: [nu
 export const SCHWARZ_ZOOM_MIN = 0.02;
 export const SCHWARZ_ZOOM_MAX = 1e6;
 
+/** Shared σ escape defaults, so the CPU (this module) and GPU (schwarzGL) paths — documented to agree
+ *  pixel-for-pixel — cannot drift on their FALLBACK values. Both matched the app's state clamps at 48 / 1e4
+ *  (schwarzState.ts); the CPU library defaults were the outlier at 64 / 1e6. Production passes a shared opts
+ *  object to both, so this only aligns the (previously divergent) omit-opts path. WP7 / A8 (prior #52). */
+export const SCHWARZ_ESCAPE_DEFAULTS = { maxIter: 48, escapeR: 1e4 } as const;
+
 /** Parse center-re / center-im / zoom field strings into a view; any unparseable field keeps `fallback`'s
  *  value, and zoom is clamped to [SCHWARZ_ZOOM_MIN, SCHWARZ_ZOOM_MAX]. Never throws. */
 export function parseSchwarzViewInput(
@@ -154,7 +160,7 @@ export function schwarzEscapeAt(
   opts: SchwarzRenderOptions = {},
 ): EscapeResult {
   const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
-  return escapeTime(engine, isInOmega, w, { maxIter: opts.maxIter ?? 64, escapeR: opts.escapeR ?? 1e6 });
+  return escapeTime(engine, isInOmega, w, { maxIter: opts.maxIter ?? SCHWARZ_ESCAPE_DEFAULTS.maxIter, escapeR: opts.escapeR ?? SCHWARZ_ESCAPE_DEFAULTS.escapeR });
 }
 
 /** A traced σ-orbit: the same classification `schwarzEscapeAt` gives, plus the trajectory that produced
@@ -179,8 +185,8 @@ export function schwarzOrbitAt(
   w0: Complex,
   opts: SchwarzRenderOptions = {},
 ): SchwarzOrbit {
-  const maxIter = opts.maxIter ?? 64;
-  const escapeR = opts.escapeR ?? 1e6;
+  const maxIter = opts.maxIter ?? SCHWARZ_ESCAPE_DEFAULTS.maxIter;
+  const escapeR = opts.escapeR ?? SCHWARZ_ESCAPE_DEFAULTS.escapeR;
   const isInOmega = makeIsInOmega(poly, opts.boundedOmega ?? false);
   const points: Complex[] = [w0];
   if (!isInOmega(w0)) return { kind: "fundamental", n: 0, points };
@@ -269,10 +275,10 @@ export function renderSchwarzField(
   size: number,
   opts: SchwarzRenderOptions = {},
 ): Uint8ClampedArray {
-  const maxIter = opts.maxIter ?? 64;
+  const maxIter = opts.maxIter ?? SCHWARZ_ESCAPE_DEFAULTS.maxIter;
   const boundedOmega = opts.boundedOmega ?? false;
   const isInOmega = makeIsInOmega(poly, boundedOmega);
-  const escapeR = opts.escapeR ?? 1e6;
+  const escapeR = opts.escapeR ?? SCHWARZ_ESCAPE_DEFAULTS.escapeR;
   const zDisk = opts.viewMode === "z"; // F2b: the fragment is the uniformizing z; w = φ(z) forward
   const rgba = new Uint8ClampedArray(size * size * 4);
   for (let py = 0; py < size; py++) {

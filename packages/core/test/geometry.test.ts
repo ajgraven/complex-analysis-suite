@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pointInPolygon, type Point2 } from "../src/index.js";
+import { pointInPolygon, signedArea, orientCCW, type Point2 } from "../src/index.js";
 
 // Golden corpus for the shared even-odd point-in-polygon test, consolidated into @cas/core from
 // @cas/schwarz (the prior blessed export), @cas/conformal, the Riemann-map app, and the
@@ -91,5 +91,48 @@ describe("pointInPolygon (even-odd ray cast)", () => {
         ],
       ),
     ).toBe(false);
+  });
+});
+
+// signedArea / orientCCW — shoelace orientation, consolidated into @cas/core from the Argument-Principle
+// app's contour.ts and the Faber app's polygonEditor.ts (ADR-0007). Pins sign convention (CCW > 0),
+// the true-area magnitude (half the shoelace sum), input-immutability, and idempotence.
+describe("signedArea / orientCCW", () => {
+  const CCW_SQUARE: Point2[] = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
+  const CW_SQUARE: Point2[] = [
+    [0, 0],
+    [0, 1],
+    [1, 1],
+    [1, 0],
+  ];
+
+  it("signedArea is +1 for a CCW unit square, −1 for its CW reverse (true signed area, not 2×)", () => {
+    expect(signedArea(CCW_SQUARE)).toBeCloseTo(1, 12);
+    expect(signedArea(CW_SQUARE)).toBeCloseTo(-1, 12);
+  });
+
+  it("signedArea is ~0 for a degenerate (collinear) loop", () => {
+    expect(signedArea([[0, 0], [1, 1], [2, 2]])).toBeCloseTo(0, 12);
+  });
+
+  it("orientCCW reverses a clockwise loop and leaves a CCW loop's winding positive", () => {
+    expect(signedArea(orientCCW(CW_SQUARE))).toBeGreaterThan(0);
+    expect(signedArea(orientCCW(CCW_SQUARE))).toBeGreaterThan(0);
+    expect(orientCCW(CCW_SQUARE)).toEqual(CCW_SQUARE); // already CCW ⇒ same vertex order
+  });
+
+  it("orientCCW never mutates its input and returns fresh tuples", () => {
+    const input: Point2[] = CW_SQUARE.map((p) => [p[0], p[1]] as const);
+    const snapshot = input.map((p) => [p[0], p[1]]);
+    const out = orientCCW(input);
+    expect(input).toEqual(snapshot); // input untouched (not reversed in place)
+    expect(out).not.toBe(input as unknown);
+    (out[0] as number[])[0] = 999; // mutating the result must not reach back into the input
+    expect(input).toEqual(snapshot);
   });
 });

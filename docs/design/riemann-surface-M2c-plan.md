@@ -8,8 +8,8 @@
 > per-vertex root-solving (**`@cas/core` `rootsMonic`**) and, optionally, the exact branch locus
 > (**`@cas/exact` `discriminant`**). Specced originally in
 > [`riemann-surface-M2-plan.md`](riemann-surface-M2-plan.md#9-m2c--implicit-fw-z--0-input-requested-deferred) §9
-> and [ADR-0028](../DECISIONS.md#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
-> Action Item 4. A new decision (the dependency additions + the input-mode UX) will be recorded as **ADR-0030**,
+> and [ADR-0029](../DECISIONS.md#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
+> Action Item 4. A new decision (the dependency additions + the input-mode UX) will be recorded as **ADR-0031**,
 > drafted on approval. Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
 > [`../DECISIONS.md`](../DECISIONS.md).
 
@@ -105,7 +105,7 @@ For a bivariate polynomial `F(w, z) = Σₖ aₖ(z)·wᵏ` (degree `n = deg_w F`
 
 ### 4.2 Dependency direction, testing, census
 - **Adds `@cas/core` (and optionally `@cas/exact`) to the plotter** — the *first* consumers there, exactly as
-  ADR-0028 §9 anticipated. `pnpm dep:check` stays green (packages import downward; no app→app; no cycles).
+  ADR-0029 §9 anticipated. `pnpm dep:check` stays green (packages import downward; no app→app; no cycles).
 - **Node tests:** coefficient extraction (`w³−w−z` → `[−z, −1, 0, 1]`), roots satisfy `F(root, z) ≈ 0`,
   `w²−(z³−z)` reproduces the ±√(z³−z) sheet set, decline rules, leading-coeff-zero holes; (M2c.2) discriminant
   of `w²−(z³−z)` = `4(z³−z)` up to units. **Browser goldens:** `w³−w−z` renders non-blank through the real
@@ -156,9 +156,9 @@ dedicated mode was preferred for clarity.
 
 ## 8. ADR
 
-[ADR-0030](../DECISIONS.md#adr-0030-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer)
+[ADR-0031](../DECISIONS.md#adr-0031-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer)
 (Accepted): the implicit `F(w,z)=0` input mode, the `@cas/core` + `@cas/exact` dependency additions to the
-plotter (ADR-0028 §9 realized), the reuse of the M2 curve render/mesh + M3 exploration stack via the
+plotter (ADR-0029 §9 realized), the reuse of the M2 curve render/mesh + M3 exploration stack via the
 `sheetsAt` seam, and the dedicated-mode input-UX decision from §6.
 
 ## 9. References

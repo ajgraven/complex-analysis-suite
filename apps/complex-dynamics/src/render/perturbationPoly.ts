@@ -140,6 +140,11 @@ export function perturbMultibrot(
   cAdd: Complex,
   dz0: Complex,
   maxIter: number,
+  // The PIXEL escape radius² — defaults to 4 but the shipped shader uses `uPerturbEscape2` (probeEscapeRadius2,
+  // *not* always 4: the |z|>10⁴ divergence-guard families). Pass it so this ground-truth oracle matches the GPU
+  // single-step path for escapeR ≠ 4 too (WP7 / A8; mirrors the traverseBLA `escape2` fix). The reference-orbit
+  // truncation above stays at |Z|²>4 by design — the exact Zhuoran rebase continues correctly past it.
+  escape2 = 4,
 ): MultibrotResult {
   const refMax = orbit.length - 1;
   const Z0 = orbit[0];
@@ -149,7 +154,7 @@ export function perturbMultibrot(
   let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
   for (let k = 0; k < maxIter; k++) {
     z = [Z[0] + dz[0], Z[1] + dz[1]];
-    if (z[0] * z[0] + z[1] * z[1] > BAILOUT2) return { iters: k, escaped: true, z };
+    if (z[0] * z[0] + z[1] * z[1] > escape2) return { iters: k, escaped: true, z };
     dz = multibrotStep(Z, dz, degree, cAdd);
     m++;
     Z = orbit[Math.min(m, refMax)];
@@ -316,6 +321,7 @@ export function perturbPoly(
   cAdd: Complex,
   dz0: Complex,
   maxIter: number,
+  escape2 = 4, // pixel escape radius²; see perturbMultibrot (WP7 / A8). Reference-orbit truncation stays |Z|²>4.
 ): MultibrotResult {
   const refMax = orbit.length - 1;
   const Z0 = orbit[0];
@@ -325,7 +331,7 @@ export function perturbPoly(
   let z: Complex = [Z[0] + dz[0], Z[1] + dz[1]];
   for (let k = 0; k < maxIter; k++) {
     z = [Z[0] + dz[0], Z[1] + dz[1]];
-    if (z[0] * z[0] + z[1] * z[1] > BAILOUT2) return { iters: k, escaped: true, z };
+    if (z[0] * z[0] + z[1] * z[1] > escape2) return { iters: k, escaped: true, z };
     dz = polyStep(Z, dz, coeffs, dcCoeff, cAdd);
     m++;
     Z = orbit[Math.min(m, refMax)];

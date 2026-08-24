@@ -1,5 +1,5 @@
 /**
- * The multi-sheet hover-pick for the Riemann view (M3.1, ADR-0029). The 3D-landscape pick
+ * The multi-sheet hover-pick for the Riemann view (M3.1, ADR-0030). The 3D-landscape pick
  * (`render3d/pick.ts`) ray-marches a **single-valued** height field `z = h(re, im)`; a Riemann surface
  * stacks sheets over the same base point, so that pick cannot see the sheet the eye actually touches. This
  * module ray-casts the **drawn triangles** instead, so a hover reads the front-most sheet under the cursor.

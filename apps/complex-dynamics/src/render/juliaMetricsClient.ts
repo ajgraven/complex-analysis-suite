@@ -33,6 +33,8 @@ export class JuliaMetricsClient {
   private reqId = 0;
   private cb: ((m: JuliaImageMetrics) => void) | null = null;
   private last: JuliaMetricsRequest | null = null;
+  private inFlight = false; // a worker request is posted and awaiting its response
+  private pending: JuliaMetricsRequest | null = null; // latest request that arrived mid-flight (coalesced)
 
   constructor() {
     try {
@@ -41,9 +43,11 @@ export class JuliaMetricsClient {
           type: "module",
         });
         this.worker.onmessage = (e: MessageEvent<JuliaMetricsResponse>): void => {
-          // Only the latest request paints; stale or errored responses are dropped.
-          if (e.data.reqId !== this.reqId || !e.data.metrics || !this.cb) return;
-          this.cb(e.data.metrics);
+          if (e.data.reqId !== this.reqId) return; // a superseded response (defensive; coalescing keeps one in flight)
+          this.inFlight = false;
+          // Only the latest request paints; an errored (metrics-less) response still frees the lane.
+          if (e.data.metrics && this.cb) this.cb(e.data.metrics);
+          this.flushPending(); // post the coalesced latest request that arrived while this one was in flight
         };
         this.worker.onerror = (): void => this.disableWorker(); // load/runtime failure → fall back
       }
@@ -54,11 +58,36 @@ export class JuliaMetricsClient {
 
   /** Compute metrics for `req`; `cb` fires with the latest result (worker async, or sync fallback). */
   request(req: JuliaMetricsRequest, cb: (m: JuliaImageMetrics) => void): void {
-    const id = ++this.reqId;
     this.cb = cb;
     this.last = req;
-    if (this.worker) this.worker.postMessage({ reqId: id, ...req } satisfies JuliaMetricsMessage);
-    else cb(runSync(req));
+    if (!this.worker) {
+      cb(runSync(req));
+      return;
+    }
+    if (this.inFlight) {
+      // A worker request is already out — don't flood its queue behind superseded work. Keep only the
+      // LATEST and post it once the current response returns (send-side coalescing, matching the QD
+      // live-solver's single-in-flight lane). The response-side stale-drop still guards anything queued.
+      this.pending = req;
+      return;
+    }
+    this.postToWorker(req);
+  }
+
+  /** Post one request to the worker and mark the lane busy. */
+  private postToWorker(req: JuliaMetricsRequest): void {
+    if (!this.worker) return;
+    const id = ++this.reqId;
+    this.inFlight = true;
+    this.worker.postMessage({ reqId: id, ...req } satisfies JuliaMetricsMessage);
+  }
+
+  /** After a response frees the lane, send the coalesced latest request (if one arrived mid-flight). */
+  private flushPending(): void {
+    if (!this.worker || !this.pending) return;
+    const p = this.pending;
+    this.pending = null;
+    this.postToWorker(p);
   }
 
   /**
@@ -75,6 +104,8 @@ export class JuliaMetricsClient {
   private disableWorker(): void {
     const w = this.worker;
     this.worker = null;
+    this.inFlight = false;
+    this.pending = null; // the sync fallback below re-runs `this.last`, which already supersedes any pending
     if (w) {
       w.onmessage = null;
       w.onerror = null;

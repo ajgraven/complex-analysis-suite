@@ -8,7 +8,9 @@
 // so the whole interior quadrature machine (integrateSegment) applies verbatim — only the integrand
 // changes: the exterior exponent is 1 − αₖ (the exterior region's angle is (2 − αₖ)π, sign-flipped from the
 // interior α − 1; validated in the M0 spike), plus the u^{-2} pole, which enters `full` and is listed as a
-// foreign singularity so panels stay clear of it. φ(z) ~ C·z at ∞ ⇒ capacity(P) = |C|.
+// foreign singularity so panels stay clear of it. φ(z) ~ −C·z at ∞ ⇒ capacity(P) = |C| (the leading
+// coefficient is −C: Ψ'(u)=C·full(u), full≈u⁻² near 0 ⇒ Ψ(u)≈−C·u⁻¹, z=1/u ⇒ φ(z)~−C·z; the Laurent
+// extractor rotates −C to +|C|, so capacity is |C| either way).
 //
 // This module is the forward side of M1b (given prevertices → polygon vertices, capacity, side integrals);
 // the exterior PARAMETER problem (polygon → prevertices) builds on `exteriorSideIntegrals`, and the
@@ -88,7 +90,7 @@ export interface ExteriorSCForwardMap {
   readonly prevertices: readonly C[];
   /** Interior angles / π (αₖ) of the polygon. */
   readonly angles: readonly number[];
-  /** The accessory constant C (φ(z) ~ C·z at ∞). */
+  /** The accessory constant C (φ(z) ~ −C·z at ∞; capacity = |C|). */
   readonly constant: C;
   /** Logarithmic capacity of the polygon, cap(P) = |C|. */
   readonly capacity: number;

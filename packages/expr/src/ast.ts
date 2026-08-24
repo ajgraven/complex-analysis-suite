@@ -5,6 +5,8 @@
  * {@link ./evaluate} / {@link ./glsl} for the two backends.
  */
 
+import { TAU, PHI, EGAMMA } from "./complexJs";
+
 /** Arithmetic operators (binary). `^` is right-associative; the rest left. */
 export type ArithOp = "+" | "-" | "*" | "/" | "^";
 /** Comparison operators, producing a boolean. */
@@ -316,5 +318,59 @@ export function nodeIsBool(node: Node): boolean {
       return nodeIsBool(node.stmts[node.stmts.length - 1]);
     default:
       return false;
+  }
+}
+
+/**
+ * Fold a VARIABLE-FREE node to its real constant value (or null if it isn't one). This is the second
+ * predicate both backends must decide identically — it gates the GLSL exact-`intPow` fold
+ * ({@link ./glsl} `emitPow`) AND the JS/GLSL derivative power-rule fold ({@link ./derivative} `diffPow`),
+ * both of which need "is this a compile-time real constant, and what is its value?". It lived as two
+ * logically identical copies (`glsl.ts` `constReal`, `derivative.ts` `constExp`); a future language constant
+ * added to one copy but not the other would silently desync the two backends' fold decisions on exactly
+ * the constant-exponent forms this decides — the same class of divergence `nodeIsBool` was hoisted here to
+ * prevent. `i` is imaginary ⇒ not a real constant; any other form (var / call / compare / if / bool / assign
+ * / seq) ⇒ null.
+ */
+export function constReal(node: Node): number | null {
+  switch (node.kind) {
+    case "num":
+      return node.value;
+    case "const":
+      return node.name === "e"
+        ? Math.E
+        : node.name === "pi"
+          ? Math.PI
+          : node.name === "tau"
+            ? TAU
+            : node.name === "phi"
+              ? PHI
+              : node.name === "γ"
+                ? EGAMMA
+                : null; // 'i' is imaginary ⇒ not a real constant
+    case "neg": {
+      const x = constReal(node.operand);
+      return x === null ? null : -x;
+    }
+    case "arith": {
+      const l = constReal(node.left);
+      const r = constReal(node.right);
+      if (l === null || r === null) return null;
+      switch (node.op) {
+        case "+":
+          return l + r;
+        case "-":
+          return l - r;
+        case "*":
+          return l * r;
+        case "/":
+          return r === 0 ? null : l / r;
+        case "^":
+          return Math.pow(l, r);
+      }
+      return null;
+    }
+    default:
+      return null; // var / call / compare / if / bool / not / seq ⇒ not a compile-time real constant
   }
 }

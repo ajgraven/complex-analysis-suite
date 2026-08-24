@@ -94,7 +94,7 @@ describe("the plotter's real shaders compile + link in WebGL2 (Track B)", () => 
     expect(() => createProgram(gl, VERTEX_SHADER, buildSphereFragment(fGlsl, names)), "sphere").not.toThrow();
   });
 
-  // The Riemann-surface mode (ADR-0027): the invertible primitives whose parametrize-by-w program must
+  // The Riemann-surface mode (ADR-0028): the invertible primitives whose parametrize-by-w program must
   // build + link. Each is a recognized RiemannForm whose gZFn/gWFn compile through the same @cas/expr path.
   const RIEMANN_CORPUS = [
     "sqrt(z)",

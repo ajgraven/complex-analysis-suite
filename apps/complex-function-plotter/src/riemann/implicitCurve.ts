@@ -1,5 +1,5 @@
 /**
- * Recognizer for **implicit** algebraic Riemann surfaces (M2c, ADR-0030): a bivariate complex polynomial
+ * Recognizer for **implicit** algebraic Riemann surfaces (M2c, ADR-0031): a bivariate complex polynomial
  * `F(w, z) = 0` entered directly, covering the general algebraic curve — including the ones with no radical
  * form (`w³ − w − z`, a quintic). Unlike the radical recognizer (M2a/M2b), the sheets here are the roots of
  * `F(·, z) = 0`, solved per vertex, so this is the plotter's first consumer of `@cas/core` `rootsMonic`.

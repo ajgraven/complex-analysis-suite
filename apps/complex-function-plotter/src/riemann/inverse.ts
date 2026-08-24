@@ -1,5 +1,5 @@
 /**
- * The inverse registry for the Riemann-surface mode (ADR-0027, parametrize-by-w). Given a parsed map
+ * The inverse registry for the Riemann-surface mode (ADR-0028, parametrize-by-w). Given a parsed map
  * `w = f(z)`, {@link detectRiemannForm} recognizes the class `w = A · P(α·z + β) + B` for a core primitive
  * `P` with a single-valued inverse (√, log, arcsin, arccos, arctan) or a fractional power `z^(p/q)`, and
  * returns a {@link RiemannForm}: the surface is parametrized by a **uniformizer** `t` over its value plane,
@@ -26,7 +26,7 @@ import { TAU, PHI, EGAMMA } from "@cas/expr/complexJs";
 /** Which real part of the value carries the vertical (sheet-separating) axis — the "charisma" coordinate. */
 export type HeightSource = "re" | "im";
 
-/** A recognized, invertible primitive form of the active map (ADR-0027). */
+/** A recognized, invertible primitive form of the active map (ADR-0028). */
 export interface RiemannForm {
   /** Short human label for the badge, e.g. `√z`, `log z`, `z^(1/3)`, `arctan z`, or an affine variant. */
   label: string;
@@ -223,7 +223,7 @@ const NAMED_PRIMS = new Set(["sqrt", "log", "arcsin", "arccos", "arctan"]);
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
 /** Recover `p/q` (lowest terms, q > 1) from a real exponent, or null (integer / irrational). Exported so
- *  the algebraic-curve recognizer (M2, ADR-0028) reuses the same fractional-exponent parsing. */
+ *  the algebraic-curve recognizer (M2, ADR-0029) reuses the same fractional-exponent parsing. */
 export function asRational(r: number): { p: number; q: number } | null {
   if (!Number.isFinite(r)) return null;
   for (let q = 2; q <= 64; q++) {
@@ -418,7 +418,7 @@ function labelFor(core: Core, A: Cx, B: Cx): string {
 }
 
 /**
- * Recognize `w = f(z)` as an invertible-primitive Riemann form (ADR-0027), or return null (the caller then
+ * Recognize `w = f(z)` as an invertible-primitive Riemann form (ADR-0028), or return null (the caller then
  * offers only the principal-branch views). `ast` is the parsed active map.
  */
 export function detectRiemannForm(ast: Node): RiemannForm | null {

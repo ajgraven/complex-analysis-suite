@@ -12,8 +12,7 @@
  */
 
 import type { Node } from "./ast";
-import { ExprError } from "./ast";
-import { TAU, PHI, EGAMMA } from "./complexJs";
+import { ExprError, constReal } from "./ast";
 
 const num = (value: number): Node => ({ kind: "num", value });
 const isNum = (n: Node, v: number): boolean => n.kind === "num" && n.value === v;
@@ -92,58 +91,15 @@ function diffArith(op: string, left: Node, right: Node, v: string): Node {
   }
 }
 
-/** Fold a variable-free exponent node to a constant real (or null). Lets diffPow apply the power rule
- *  k·u^(k-1)·u' for a constant exponent written as `neg(num)` (`z^(-2)`), `4/2`, `pi/pi`, etc. — not just
- *  a bare literal — avoiding the general rule's spurious `w'·log(u)` = 0·log(u) = NaN at the pole. `i` is
- *  imaginary ⇒ not a real constant. Mirrors glsl.ts's constReal. */
-function constExp(node: Node): number | null {
-  switch (node.kind) {
-    case "num":
-      return node.value;
-    case "const":
-      return node.name === "e"
-        ? Math.E
-        : node.name === "pi"
-          ? Math.PI
-          : node.name === "tau"
-            ? TAU
-            : node.name === "phi"
-              ? PHI
-              : node.name === "γ"
-                ? EGAMMA
-                : null;
-    case "neg": {
-      const x = constExp(node.operand);
-      return x === null ? null : -x;
-    }
-    case "arith": {
-      const l = constExp(node.left);
-      const r = constExp(node.right);
-      if (l === null || r === null) return null;
-      switch (node.op) {
-        case "+":
-          return l + r;
-        case "-":
-          return l - r;
-        case "*":
-          return l * r;
-        case "/":
-          return r === 0 ? null : l / r;
-        case "^":
-          return Math.pow(l, r);
-      }
-      return null;
-    }
-    default:
-      return null; // var / call / compare / if / bool / not ⇒ not a compile-time real constant
-  }
-}
-
 function diffPow(base: Node, exp: Node, v: string): Node {
   const db = differentiate(base, v);
-  const k = constExp(exp);
+  // Fold a variable-free exponent to a constant real via the shared `constReal` (ast.ts), so the power
+  // rule k·u^(k-1)·u' applies for a constant exponent written as `neg(num)` (`z^(-2)`), `4/2`, `pi/pi`,
+  // etc. — not just a bare literal — avoiding the general rule's spurious `w'·log(u)` = 0·log(u) = NaN at
+  // the pole. Shared with glsl.ts's exact-`intPow` fold so the two backends agree on the fold decision.
+  const k = constReal(exp);
   if (k !== null) {
-    // d(u^k) = k·u^(k-1)·u' for a CONSTANT k. We FOLD the exponent (constExp) instead of only matching a
+    // d(u^k) = k·u^(k-1)·u' for a CONSTANT k. We FOLD the exponent (constReal) instead of only matching a
     // bare `num`, so a NEGATIVE or arithmetic constant exponent — `z^(-2)` parses as neg(num 2), `z^(4/2)`,
     // etc. — takes this branch too. The general rule below would otherwise emit w'·log(u) = 0·log(u),
     // which is NaN at the pole u=0 (0·(−∞)); the power rule gives the correct pole (∞) and drops the log.

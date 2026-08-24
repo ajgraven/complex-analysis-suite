@@ -2,15 +2,15 @@
 
 > Extends the Complex Function Plotter's **Riemann** view (M1 parametric primitives + M2 algebraic curves,
 > [`riemann-surface-plan.md`](riemann-surface-plan.md) / [`riemann-surface-M2-plan.md`](riemann-surface-M2-plan.md),
-> [ADR-0027](../DECISIONS.md#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app) /
-> [ADR-0028](../DECISIONS.md#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing))
+> [ADR-0028](../DECISIONS.md#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app) /
+> [ADR-0029](../DECISIONS.md#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing))
 > from **rendering** the surface to **exploring** it: read the multi-sheeted value under the cursor
 > (**M3.1**), see the branch point / cut structure on a linked base-plane pane (**M3.2**), and trace how a
 > loop in the base plane permutes the sheets (**M3.3**, the monodromy explorer — honestly `≈`, opt-in, and
 > confined so the never-certified continuation-through-collisions problem [`../RISKS.md`](../RISKS.md) §3
 > never leaks into the rest of the tool). Colour polish (**M3.4**) is foldable anywhere and is **not** in
 > this pass's ordering. New decision recorded as
-> [ADR-0029](../DECISIONS.md#adr-0029-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+> [ADR-0030](../DECISIONS.md#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
 > Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
 > [`../DECISIONS.md`](../DECISIONS.md).
 >
@@ -202,7 +202,7 @@ Each gate: **`pnpm typecheck` · `pnpm lint` (+`dep:check`) · `pnpm test` · `p
 
 ## 9. ADR
 
-[ADR-0029](../DECISIONS.md#adr-0029-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy):
+[ADR-0030](../DECISIONS.md#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy):
 the M3 exploration tools — the uniform pick-mesh + triangle ray-cast (vs. reusing the single-valued
 height-field march), the local-branch-ordinal readout (vs. a global sheet number), reuse of `paintLinked`
 for the base-plane pane, and the confinement of the `≈`/uncertified monodromy explorer (RISKS §3). No new

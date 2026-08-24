@@ -6,6 +6,7 @@
 // (centred, real-c) K, exactly as the polygon PRESETS already do — so this designs the SHAPE, not an
 // absolute placement. Vertices are `[x,y]` world coordinates, kept counter-clockwise for the exterior SC
 // solve and clamped to the serializable coordinate bound so a shared `#vs=` link stays on-canvas.
+import { orientCCW } from "@cas/core";
 import { MAX_POLYGON_COORD, MAX_POLYGON_VERTS, MIN_POLYGON_VERTS } from "../viewState.js";
 
 type Vec2 = [number, number];
@@ -20,21 +21,8 @@ function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string,
   return e;
 }
 
-/** Signed area × 2 (shoelace); > 0 ⇒ counter-clockwise. */
-function signedArea2(v: readonly Vec2[]): number {
-  let a = 0;
-  for (let i = 0; i < v.length; i++) {
-    const p = v[i];
-    const q = v[(i + 1) % v.length];
-    a += p[0] * q[1] - q[0] * p[1];
-  }
-  return a;
-}
-
-/** Ensure counter-clockwise orientation (the exterior SC solver's input convention). */
-function toCCW(v: Vec2[]): Vec2[] {
-  return signedArea2(v) < 0 ? v.slice().reverse() : v;
-}
+// CCW orientation (the exterior SC solver's input convention) via `@cas/core`'s shared shoelace
+// `orientCCW` — the Argument-Principle contour editor is the other consumer (ADR-0007).
 
 export interface PolygonEditor {
   /** The editor's root element (insert into the DOM). */
@@ -133,7 +121,7 @@ export function createPolygonEditor(onChange: (verts: Vec2[]) => void): PolygonE
     }
   }
 
-  const emit = (): void => onChange(toCCW(verts.map((v): Vec2 => [v[0], v[1]])));
+  const emit = (): void => onChange(orientCCW(verts.map((v): Vec2 => [v[0], v[1]])));
   const clamp = (x: number): number => Math.max(-MAX_POLYGON_COORD, Math.min(MAX_POLYGON_COORD, x));
 
   function pointerPos(e: PointerEvent): Vec2 {

@@ -66,7 +66,7 @@ function render(src: string, mode: "2d" | "3d", topDown = false): HTMLCanvasElem
   return canvas;
 }
 
-/** Render a Riemann surface (ADR-0027) through the real Plot at a fixed charisma / sheet count. */
+/** Render a Riemann surface (ADR-0028) through the real Plot at a fixed charisma / sheet count. */
 function renderRiemann(src: string, heightSource = 0, sheets?: number): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const plot = new Plot(canvas, src);
@@ -79,7 +79,7 @@ function renderRiemann(src: string, heightSource = 0, sheets?: number): HTMLCanv
   return canvas;
 }
 
-/** Render an algebraic-curve Riemann surface (M2a, ADR-0028) through the real Plot. */
+/** Render an algebraic-curve Riemann surface (M2a, ADR-0029) through the real Plot. */
 function renderCurve(src: string): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const plot = new Plot(canvas, src);
@@ -90,7 +90,7 @@ function renderCurve(src: string): HTMLCanvasElement {
   return canvas;
 }
 
-/** Render an implicit `F(w,z)=0` Riemann surface (M2c, ADR-0030) through the real Plot. */
+/** Render an implicit `F(w,z)=0` Riemann surface (M2c, ADR-0031) through the real Plot. */
 function renderImplicit(src: string): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const plot = new Plot(canvas, "z"); // the f(z) box is unused in implicit mode
@@ -103,7 +103,7 @@ function renderImplicit(src: string): HTMLCanvasElement {
   return canvas;
 }
 
-/** Render the linked Riemann view (M3.2, ADR-0029): the flat base plane beside the surface. */
+/** Render the linked Riemann view (M3.2, ADR-0030): the flat base plane beside the surface. */
 function renderRiemannLinked(src: string): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
   const plot = new Plot(canvas, src);
@@ -151,7 +151,7 @@ describe("plotter render-consistency goldens (Track B)", () => {
     expect(meanAbs(portrait, landscape)).toBeLessThan(6);
   });
 
-  // The Riemann-surface mode (ADR-0027): the parametrize-by-w surface renders real, phase-coloured
+  // The Riemann-surface mode (ADR-0028): the parametrize-by-w surface renders real, phase-coloured
   // structure (not a blank clear), and the charisma axis actually changes the surface.
   it("renders a non-blank √z Riemann surface", () => {
     expect(variance(fingerprint(renderRiemann("sqrt(z)"), N))).toBeGreaterThan(50);
@@ -167,7 +167,7 @@ describe("plotter render-consistency goldens (Track B)", () => {
     expect(meanAbs(reW, imW)).toBeGreaterThan(3);
   });
 
-  // The algebraic-curve mode (M2a, ADR-0028): baked NPP meshes render real structure through the real Plot.
+  // The algebraic-curve mode (M2a, ADR-0029): baked NPP meshes render real structure through the real Plot.
   it("renders a non-blank √(z²−1) algebraic-curve surface", () => {
     expect(variance(fingerprint(renderCurve("sqrt(z^2 - 1)"), N))).toBeGreaterThan(50);
   });
@@ -176,12 +176,12 @@ describe("plotter render-consistency goldens (Track B)", () => {
     expect(variance(fingerprint(renderCurve("sqrt(z^3 - z)"), N))).toBeGreaterThan(50);
   });
 
-  // The implicit F(w,z)=0 mode (M2c, ADR-0030): a per-vertex root-solve surface renders real structure.
+  // The implicit F(w,z)=0 mode (M2c, ADR-0031): a per-vertex root-solve surface renders real structure.
   it("renders a non-blank implicit w³ − w − z surface", () => {
     expect(variance(fingerprint(renderImplicit("w^3 - w - z"), N))).toBeGreaterThan(50);
   });
 
-  // The linked base-plane pane (M3.2, ADR-0029): the split renders real structure in BOTH panes, and the
+  // The linked base-plane pane (M3.2, ADR-0030): the split renders real structure in BOTH panes, and the
   // base-plane pane makes the image differ from the surface-only render.
   it("the linked Riemann view renders a non-blank base-plane pane beside the surface", () => {
     const linked = renderRiemannLinked("sqrt(z)");

@@ -129,6 +129,25 @@ describe("CD consume interchange map (Phase 4 C3)", () => {
     expect(spec?.form).toBe("schwarz"); // the recipe is surfaced (not null, not silently dropped)
   });
 
+  // 2026-08-23 review MED #1 (ADR-0027): the MapSpec→expr converter is now shared in @cas/interchange
+  // with the loud-failure guards CD's old ancestor copy LACKED. CD previously emitted a NaN (0/0 rational)
+  // or a silently-wrong map (pole-bearing Laurent — the finite-pole branches were dropped); it now rejects
+  // both LOUDLY, matching the plotter / Argument-Principle behavior (main.ts catches → toast, no crash).
+  it("rejects a degenerate 0/0 rational and a pole-bearing Laurent (the shared-guard fix)", () => {
+    expect(() => mapSpecToExpr({ form: "rational", num: [{ re: 1, im: 0 }], den: [] })).toThrow(/denominator/i);
+    expect(() =>
+      mapSpecToExpr({ form: "rational", num: [{ re: 1, im: 0 }], den: [{ re: 0, im: 0 }] }),
+    ).toThrow(/denominator|zero/i);
+    expect(() =>
+      mapSpecToExpr({
+        form: "laurent",
+        c: { re: 1, im: 0 },
+        F: [{ re: 0, im: 0 }],
+        branches: [{ z: { re: 0.5, im: 0 }, A: [{ re: 1, im: 0 }] }],
+      }),
+    ).toThrow(/branch|pole/i);
+  });
+
   // S4a (SIGMA-HANDOFF, the approved end-state): CD RECONSTRUCTS σ from the golden's recipe, rather than
   // declining it. σ is not expr-compilable (numerical inverse), so it is rebuilt from sigma.phi via
   // @cas/schwarz — and the reconstructed σ(w₀) reproduces the frozen golden value END TO END through CD's

@@ -4,7 +4,7 @@ import { compileF } from "@cas/expr/glsl";
 import { detectRiemannForm } from "../src/riemann/inverse.js";
 import { buildRiemannProgram } from "../src/render3d/riemannSurface.js";
 
-// The Riemann-surface program (ADR-0027) GLSL assembly — the string shape. Whether it actually compiles
+// The Riemann-surface program (ADR-0028) GLSL assembly — the string shape. Whether it actually compiles
 // and links is proven in shaderCompile.browser.test.ts against a live WebGL2 context.
 
 /** Build the program the plotter's rebuildRiemannProgram will build for a source string. */
