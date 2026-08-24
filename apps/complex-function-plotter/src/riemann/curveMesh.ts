@@ -1,7 +1,8 @@
 /**
- * The algebraic-curve Riemann-surface mesh (M2a, ADR-0028) by **Nieser–Poelke–Polthier / Kranich proximity
- * gluing** (research notes §2.2). For `w = R(z)^(p/q)` the surface is built over a triangulated z-domain:
- * at each vertex the `q` sheet values are the `q` distinct values of `R(z)^(p/q)` (elementary — no root
+ * The algebraic-curve Riemann-surface mesh (M2a + M2b, ADR-0028) by **Nieser–Poelke–Polthier / Kranich
+ * proximity gluing** (research notes §2.2). The surface is built over a triangulated z-domain: at each
+ * vertex the `q` sheet values come from the recognizer (`spec.sheetsAt` — for a single radical the `q`
+ * values of `R^(p/q)`, for a combination of radicals the `∏qᵢ` branch combos; both elementary, no root
  * solve); each domain triangle is stitched into `q` surface triangles by matching, for each sheet at the
  * anchor corner, the **nearest** sheet value at the other two corners. Where a branch point sits inside a
  * cell the sheets collide (separation → 0) so the nearest-match becomes a large jump; such triangles are
@@ -20,11 +21,11 @@
 import type { Complex } from "@cas/expr/complex";
 
 export interface CurveSpec {
-  /** The radicand evaluator `R(z)` (`makeComplexFn` of the recognized rational radicand). */
-  R: (z: Complex, c: Complex) => Complex;
-  /** `w = R^(p/q)`, lowest terms, `q ≥ 2`. */
-  p: number;
-  q: number;
+  /** The `q` sheet values of the surface at a point `z` (from the recognizer's per-combo evaluators). A
+   *  vertex whose result has the wrong length or a non-finite value is treated as degenerate (a hole). */
+  sheetsAt: (z: Complex) => Complex[];
+  /** The expected sheet count `q` (= number of branch combos). */
+  sheetCount: number;
 }
 
 /** The world rectangle to build over (matches the plot view: half-width = span·aspect, half-height = span). */
@@ -120,7 +121,7 @@ export function buildCurveMesh(
   const maxDepth = Math.max(0, Math.floor(opts.subdivideDepth ?? 3));
   const maxTriangles = opts.maxTriangles ?? 600_000;
   const wCap = opts.wCap ?? 1e3;
-  const { p, q } = spec;
+  const q = spec.sheetCount;
   const halfW = view.span * view.aspect;
   const halfH = view.span;
   const x0 = view.cx - halfW;
@@ -134,14 +135,17 @@ export function buildCurveMesh(
   let capped = false;
 
   const vertAt = (x: number, y: number): Vert => {
-    let r: Complex;
+    let s: Complex[];
     try {
-      r = spec.R([x, y], [0, 0]);
+      s = spec.sheetsAt([x, y]);
     } catch {
-      r = [NaN, NaN];
+      s = [];
     }
-    const s = Number.isFinite(r[0]) && Number.isFinite(r[1]) ? sheetsOf(r, p, q) : [];
-    return { x, y, s, sep: s.length ? minSeparation(s) : 0 };
+    // All q sheet values must be present and finite; otherwise the vertex is degenerate (a hole near a
+    // pole / a missing branch), so triangles touching it are subdivided and ultimately dropped.
+    if (s.length !== q || s.some((w) => !Number.isFinite(w[0]) || !Number.isFinite(w[1])))
+      return { x, y, s: [], sep: 0 };
+    return { x, y, s, sep: minSeparation(s) };
   };
   const mid = (a: Vert, b: Vert): Vert => vertAt((a.x + b.x) / 2, (a.y + b.y) / 2);
 

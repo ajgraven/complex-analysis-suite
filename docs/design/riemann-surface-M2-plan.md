@@ -4,9 +4,10 @@
 > [ADR-0027](../DECISIONS.md#adr-0027-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app))
 > from single invertible primitives to **algebraic** functions — the class M1 declines because no single
 > global inverse exists. M2 renders the true multi-sheeted surface by the **Nieser–Poelke–Polthier /
-> Kranich** proximity-gluing algorithm over a triangulated z-domain (research notes §2.2). Approved scope
-> for this pass: **M2a — the single-radical class `w = R(z)^(p/q)`** (R a rational function, constant
-> coefficients); radical *sums* (M2b) and an implicit-`P(z,w)=0` input mode (M2c) are specced but deferred.
+> Kranich** proximity-gluing algorithm over a triangulated z-domain (research notes §2.2). Delivered:
+> **M2a** (single-radical `w = R(z)^(p/q)`, R rational) **and M2b** (arithmetic combinations of radicals —
+> sums / products / ratios — via root-of-unity branch injection). **M2c** — a direct implicit `F(w,z)=0`
+> (bivariate complex polynomial) input mode — is requested for later and specced in §9.
 > New decision recorded as [ADR-0028](../DECISIONS.md#adr-0028-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).
 > Guardrails: [`../../CLAUDE.md`](../../CLAUDE.md) → [`../ARCHITECTURE.md`](../ARCHITECTURE.md) /
 > [`../DECISIONS.md`](../DECISIONS.md).
@@ -22,8 +23,8 @@
 | **M2.0 — algebraic-curve spike** | ✅ done | `src/riemann/algebraicCurve.ts` (recognizer) + `src/riemann/curveMesh.ts` (NPP proximity-gluing mesh: `sheetsOf` = the q values of `R^(p/q)`; nearest-match stitch; local near-degeneracy → holes; triangle-budget cap) + `buildCurveProgram` (baked-mesh shader, shared fragment). Node: 9 tests — recognition/decline, `sheetsOf` satisfies `w^q=r^p`, `sqrt(z^2−1)` mesh is two-sheet with holes at ±1, all kept triangles on-sheet (max edge < 0.6, no cut-jump), budget cap badged. Browser: the curve program builds+links in live WebGL2. Findings: NPP proximity gluing works as-is; local degeneracy test alone resolves branch points for polynomial radicands (no deps). Retained as M2.1's foundation. Render-through-Plot + screenshots land at M2.1 (same staging as M0→M1). |
 | **M2.1 — R(z)^(p/q) engine (M2a)** | ✅ done | `algebraicCurve.ts` recognition (R rational via `@cas/expr fToRational`); `curveMesh.ts` with **local-degeneracy-driven adaptive subdivision** + ramification holes + triangle-budget cap; `buildCurveProgram` baked-mesh render; `Plot.riemannKind` dispatch (**M1 param preferred**, curve when M1 declines) + curve VBO/framing + `paintRiemannCurve`; `main.ts` auto-select + unified `riemannDescriptor` badge (holes/`⚠ capped` surfaced); mesh rebuilt over the current z-view on mode entry. **No new package deps** — branch points of this class are zeros/poles of R, caught by the local degeneracy test + `wCap` (so `@cas/core rootsMonic` proved unnecessary; it/`@cas/exact` are the M2b tools). **Sync** mesh-gen (fast enough for M2a grids; Web Worker deferred). Node: recognition/decline, `w^q=r^p`, mesh (two-sheet, holes, on-sheet continuity, budget cap). Browser: curve program links; `√(z²−1)` / `√(z³−z)` render non-blank through the real Plot. Verified in the app (screenshots). |
 | **M2.1 gate** | ✅ green · pushed | full repo gate green — lint (+dep:check, no new edges) · **386 files / 3234 tests** · build (all apps); browser goldens pass; existing tests (incl. top-down-3D≡2D) unchanged. Pushed. **Paused for review before M2b/M2c.** |
-| M2b — radical sums (`√z + √(z−1)`) via `@cas/exact` resultants + spurious-branch filter | ⛔ deferred | later, separately-approved |
-| M2c — implicit `P(z,w)=0` input mode | ⛔ deferred | later, separately-approved |
+| **M2b — radical sums / products / ratios** | ✅ done | `√z + √(z−1)` (4 sheets), `√(z²−1) + z^(1/3)` (6), `1/√z`, `2·√(z²−1)`, shared-radical dedup. **Not** via `@cas/exact` resultants — instead **root-of-unity branch injection**: the k-th branch of `Rᵢ^(pᵢ/qᵢ)` is its principal value × `ωᵢ^{pᵢk}`, so every sheet is the principal expression with a constant factor at each radical node; `detectAlgebraicCurve` enumerates all `∏qᵢ` combos (cap 16, structurally-equal radicals deduped) as ASTs, reusing `makeComplexFn`. Exact, spurious-branch-free, **still no new deps**. The `curveMesh` was generalized to a `sheetsAt` spec (subsumes M2a). |
+| M2c — implicit `F(w,z)=0` input mode (bivariate complex polynomial) | ⛔ deferred | requested for later; see §9 |
 
 ---
 
@@ -79,10 +80,16 @@ location for robust handling of rational radicands (poles) and cleaner subdivisi
 
 ## 4. Architecture & components (app-local first, ADR-0007)
 
-- **`src/riemann/algebraicCurve.ts`** — `detectAlgebraicCurve(ast): AlgebraicCurve | null`: recognizes
-  `sqrt(R)` / `R^(p/q)` with R a rational function of z and no live parameters; returns the radicand
-  evaluator source, `(p, q)`, and (M2.1) the branch points from `fToRational` + `rootsMonic`. Declines
-  transcendental/parametric maps (→ fall back to M1 / principal-branch).
+> **As built (M2a + M2b):** the components below match the code, with these refinements found during the
+> build (see the progress table + ADR-0028): `detectAlgebraicCurve` returns **one `sheetExpr` AST per branch
+> combo** (root-of-unity injection) rather than `(p,q)` + a solver; `curveMesh` takes a `sheetsAt` spec (not
+> `{R,p,q}`); **no Web Worker** (sync mesh-gen is fast enough) and **no `@cas/core`/`@cas/exact`** (the local
+> degeneracy test + `wCap` resolve branch points). Those two remain the M2c tools (§9).
+
+- **`src/riemann/algebraicCurve.ts`** — `detectAlgebraicCurve(ast): AlgebraicCurve | null`: recognizes an
+  arithmetic combination (`+ − × ÷`, integer powers) of radicals `Rᵢ^(pᵢ/qᵢ)` (each `Rᵢ` rational, no live
+  parameters); structurally dedups shared radicals, enumerates the `∏qᵢ` branch combos (cap 16) as
+  `sheetExprs` ASTs. Declines transcendental / nested / parametric maps (→ fall back to M1 / principal).
 - **`src/riemann/curveMesh.ts`** — pure NPP mesh builder (triangulate / sheets / proximity-stitch /
   subdivide / holes / budget cap); returns `{ positions: Float32Array, values: Float32Array, indices:
   Uint32Array, meta }`. Unit-tested headless.
@@ -134,8 +141,12 @@ goldens + a headless render check.
   branch points, subdivision + holes + budget cap, dispatch + auto-select, honest badges, node + browser
   tests. Exit: full gate green + goldens; `sqrt(z^2−1)` / `sqrt(z^3−z)` / `(z^2−1)^(1/3)` /
   `sqrt((z−1)/(z+1))` render correctly; **pause for review**.
-- **M2b / M2c — deferred.** Radical sums via `@cas/exact` iterated resultants + spurious-branch filter;
-  implicit `P(z,w)=0` input. Separate approval; follow-on ADR.
+- **M2b — done (radical sums / products / ratios).** Root-of-unity branch injection (§4 As-built),
+  generalizing the recognizer + `curveMesh` `sheetsAt` spec; no resultants, no new deps. Exit: full gate
+  green + goldens; `√z + √(z−1)` (4 sheets), `√(z²−1) + z^(1/3)` (6) render correctly.
+- **M2c — deferred (requested).** A direct implicit `F(w,z)=0` (bivariate complex polynomial) input mode —
+  the first place per-vertex root-solving (`@cas/core`) and exact discriminant (`@cas/exact`) are actually
+  needed. Specced in §9; separate approval + follow-on ADR.
 
 ## 6. Risks & mitigations
 
@@ -161,3 +172,26 @@ continued deferral of `@cas/exact`-based elimination (M2b) and multivalued inter
 See [`riemann-surface-research-notes.md`](riemann-surface-research-notes.md) §2.2 (Nieser–Poelke–Polthier /
 Kranich proximity gluing, adaptive subdivision at `disc_w P = 0`, Re-w height) and §3 (branch points as
 zeros/poles of the radicand).
+
+## 9. M2c — implicit `F(w, z) = 0` input (requested; deferred)
+
+A future want: let the user enter an **implicit bivariate complex polynomial** `F(w, z) = 0` directly and
+render its Riemann surface — the general algebraic curve, beyond what any radical expression can name (e.g.
+`w^3 − w − z = 0`). This is the natural home for the `@cas/*` machinery M2a/M2b did **not** need:
+
+- **New input affordance:** an "implicit `F(w,z)=0`" entry mode (a second box, or an `=0` right-hand side),
+  parsed as a polynomial in the two variables `w`, `z` (constant / Gaussian-rational coefficients).
+- **Sheets = all roots per vertex:** at each z-vertex, solve `F(·, z) = 0` for all `n = deg_w F` roots via
+  **`@cas/core` `rootsMonic`** (residual-certified) — the general case where the roots are genuinely coupled
+  (no closed form), so the root-of-unity shortcut does not apply. Feed them to the existing `curveMesh`
+  `sheetsAt` spec unchanged — the NPP proximity gluing, subdivision, holes, and render all carry over.
+- **Exact branch locus:** `disc_w F(z)` via **`@cas/exact`** (Bareiss) gives the exact ramification locus
+  to seed subdivision (labeled `=`), improving on the local-degeneracy backstop for high-degree curves.
+- **Honest labeling:** roots `≈` (residual-certified); branch locus `=`; holes / budget cap badged; `n`
+  from `deg_w F`. Genus / connectivity are *not* claimed (a viz, not a topology certifier — RISKS §3).
+- **Bridge from M2a/M2b:** the radical recognizer could optionally *emit* an `F(w,z)` (via `@cas/exact`
+  resultant elimination) so both paths share the implicit engine — but that is an internal unification, not
+  required for the user-facing implicit mode.
+
+Deferred pending approval; it warrants its own ADR (the `@cas/core` + `@cas/exact` dependency additions and
+the input-mode UX) and is the recommended next algebraic step after M3.

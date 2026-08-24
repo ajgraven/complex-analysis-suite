@@ -252,6 +252,7 @@ export class Plot {
   private curveVao: WebGLVertexArrayObject | null = null;
   private curvePosBuffer: WebGLBuffer | null = null;
   private curveWBuffer: WebGLBuffer | null = null;
+  private curveSheetFns: ((z: Complex, c: Complex) => Complex)[] = []; // one per branch combo (principal)
   private curveTriCount = 0;
   private curveHoles = 0;
   private curveCapped = false;
@@ -385,6 +386,10 @@ export class Plot {
       // keeps the user's chosen axis.
       if (this.riemannCurve && prevKind !== "curve") this.riemannHeightSource = 0;
     }
+    // Compile the per-combo sheet evaluators (principal; the root-of-unity factors are baked into each AST).
+    this.curveSheetFns = this.riemannCurve
+      ? this.riemannCurve.sheetExprs.map((e) => makeComplexFn(e, {}))
+      : [];
     return glsl;
   }
 
@@ -770,9 +775,9 @@ export class Plot {
       return;
     const gl = this.gl;
     const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
-    const R = makeComplexFn(this.riemannCurve.radicand, {});
+    const fns = this.curveSheetFns;
     const mesh = buildCurveMesh(
-      { R, p: this.riemannCurve.p, q: this.riemannCurve.q },
+      { sheetsAt: (z) => fns.map((f) => f(z, [0, 0])), sheetCount: fns.length },
       { cx: this.view.cx, cy: this.view.cy, span: this.view.span, aspect },
     );
     this.curveTriCount = mesh.triangleCount;
@@ -1195,7 +1200,8 @@ export class Plot {
       const c = this.riemannCurve;
       return {
         label: c.label,
-        monodromy: `${c.q} sheets${c.p !== 1 ? ` · phase winds ${Math.abs(c.p)}×` : ""} (algebraic)`,
+        monodromy:
+          `${c.sheetCount} sheets` + (c.radicalCount > 1 ? ` · ${c.radicalCount} radicals` : ""),
         branchNote: "sheets glue across the cut; ramification points are small holes",
         sheetKind: "finite",
         holes: this.curveHoles,

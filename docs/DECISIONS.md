@@ -2376,8 +2376,17 @@ declines. Keep everything **in-app** (ADR-0007); pull **`@cas/core`** only; leav
 > exactly the zeros/poles of R, which the mesh's *local* degeneracy test (`minSep → 0`) and the `wCap` catch
 > directly — so `@cas/core rootsMonic` proved unnecessary and was not pulled. Adaptive subdivision is driven
 > by the local test (no precomputed branch-point list); mesh-gen is synchronous (fast enough for M2a grids;
-> the Web Worker is deferred). `@cas/core` / `@cas/exact` remain the M2b tools. This strengthens the
-> north-star (zero new primitives) and does not change the decision, only its dependency footprint.
+> the Web Worker is deferred). This strengthens the north-star (zero new primitives) and does not change the
+> decision, only its dependency footprint.
+>
+> **Update (M2b as built):** radical **sums / products / ratios** (`√z + √(z−1)`, `√(z²−1) + z^(1/3)`,
+> `1/√z`, `2·√(z²−1)`) shipped **without `@cas/exact` resultants** — via **root-of-unity branch injection**:
+> the k-th branch of `Rᵢ^(pᵢ/qᵢ)` is its principal value × `ωᵢ^{pᵢk}`, so every sheet is the principal
+> expression with a constant factor at each (structurally-deduped) radical node. `detectAlgebraicCurve`
+> enumerates all `∏qᵢ` combos (cap 16) as ASTs reusing `makeComplexFn`; `curveMesh` was generalized to a
+> `sheetsAt` spec that subsumes M2a. Exact, spurious-branch-free, **still no new deps.** `@cas/core` /
+> `@cas/exact` are now reserved for **M2c** (a direct implicit `F(w,z)=0` input — genuinely coupled roots
+> need per-vertex solving + an exact discriminant), specced in the plan §9.
 
 ### Options Considered
 
@@ -2420,7 +2429,9 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
 
 ### Action Items
 1. [x] Write [`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md) + this ADR.
-2. [ ] Land M2.0 (spike, `sqrt(z^2−1)`, zero new deps) then M2.1 (full `R(z)^(p/q)`, +`@cas/core`),
-       test-guarded; keep all existing tests (incl. top-down-3D≡2D) green; pause for review at the M2.1 gate.
-3. [ ] When (and only when) approved, land M2b (radical sums via `@cas/exact` resultants + spurious-branch
-       filter) and/or M2c (implicit `P(z,w)=0` input) — follow-on ADR.
+2. [x] Land M2.0 (spike, `sqrt(z^2−1)`) then M2.1 (full `R(z)^(p/q)`) — both **zero new deps** (local
+       degeneracy + `wCap`); existing tests (incl. top-down-3D≡2D) kept green.
+3. [x] Land M2b (radical sums / products / ratios) — via **root-of-unity branch injection**, not
+       `@cas/exact` resultants; still zero new deps.
+4. [ ] When (and only when) approved, land M2c (implicit `F(w,z)=0` input) — the first consumer of
+       `@cas/core` per-vertex root-solving + `@cas/exact` discriminant here; follow-on ADR (plan §9).
