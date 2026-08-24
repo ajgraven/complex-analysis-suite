@@ -22,7 +22,22 @@ import { detectRiemannForm, type RiemannForm } from "../riemann/inverse.js";
 import { detectAlgebraicCurve, type AlgebraicCurve } from "../riemann/algebraicCurve.js";
 import { buildCurveMesh } from "../riemann/curveMesh.js";
 import { buildRiemannProgram, buildCurveProgram } from "../render3d/riemannSurface.js";
-import type { Vec3 } from "../render3d/mat4.js";
+import {
+  buildParamPickMesh,
+  pickMeshFromCurve,
+  pickRiemannSurface,
+  type PickMesh,
+  type RiemannHit,
+} from "../riemann/pickMesh.js";
+import {
+  type Vec3,
+  add3,
+  sub3,
+  scale3,
+  cross3,
+  normalize3,
+  length3,
+} from "../render3d/mat4.js";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
 import { injectPngText } from "@cas/export";
@@ -268,6 +283,16 @@ export class Plot {
     minImW: number;
     maxImW: number;
   } | null = null;
+
+  // Multi-sheet hover-pick (M3.1, ADR-0029). The curve arrays are cached from the last `buildCurveMesh` (they
+  // were upload-and-discard before) so the pick can ray-cast the same triangles. The parametric pick mesh is
+  // sampled lazily (`paramPickDirty`) — only when a hover actually needs it — and reused until the form /
+  // t-window changes (a height-axis / exaggeration change does NOT dirty it: height is recomputed at pick
+  // time from the stored uniformizer basis, matching the shader).
+  private curvePickPositions: Float32Array | null = null;
+  private curvePickValues: Float32Array | null = null;
+  private paramPickMesh: PickMesh | null = null;
+  private paramPickDirty = true;
 
   /** Which view `paint()` draws. `linked` renders the 2D portrait and the 3D landscape side by side
    *  (split viewports), both reading the same `view`, so navigating either keeps them in sync (I7). */
@@ -605,6 +630,8 @@ export class Plot {
       gl.deleteVertexArray(this.riemannVao);
       this.riemannVao = null;
     }
+    this.paramPickMesh = null; // the form changed — the hover-pick mesh (M3.1) must be re-sampled
+    this.paramPickDirty = true;
     if (!this.riemannForm || !this.gzGlsl || !this.gwGlsl) return;
     const src = buildRiemannProgram(this.gzGlsl, this.gwGlsl);
     const program = createProgram(gl, src.vertex, src.fragment);
@@ -783,6 +810,8 @@ export class Plot {
     this.curveTriCount = mesh.triangleCount;
     this.curveHoles = mesh.droppedTriangles;
     this.curveCapped = mesh.capped;
+    this.curvePickPositions = mesh.positions; // cache for the hover-pick ray-cast (M3.1)
+    this.curvePickValues = mesh.values;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.curvePosBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.DYNAMIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.curveWBuffer);
@@ -1077,12 +1106,7 @@ export class Plot {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.riemannProgram || !u || !this.riemannVao) return;
     const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
-    const cam: OrbitCamera = {
-      ...this.camera,
-      ortho: false, // the surface has genuine 3D relief; always perspective
-      distance: this.riemannDist,
-      target: this.riemannTarget,
-    };
+    const cam = this.riemannCamera(); // perspective, framed on the surface (shared with the hover-pick)
     const { halfX, halfY } = this.riemannWindow();
     gl.useProgram(this.riemannProgram);
     gl.bindVertexArray(this.riemannVao);
@@ -1125,12 +1149,7 @@ export class Plot {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.curveProgram || !u || !this.curveVao || this.curveTriCount === 0) return;
     const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
-    const cam: OrbitCamera = {
-      ...this.camera,
-      ortho: false,
-      distance: this.riemannDist,
-      target: this.riemannTarget,
-    };
+    const cam = this.riemannCamera(); // perspective, framed on the surface (shared with the hover-pick)
     gl.useProgram(this.curveProgram);
     gl.bindVertexArray(this.curveVao);
     gl.activeTexture(gl.TEXTURE0);
@@ -1215,7 +1234,10 @@ export class Plot {
    *  live (use on a view / formula change or mode entry). Safe to call when no surface is active. */
   reframeRiemann(): void {
     if (this.riemannKindV === "curve") this.rebuildCurveMesh();
-    else this.updateRiemannFraming();
+    else {
+      this.updateRiemannFraming();
+      this.paramPickDirty = true; // the t-window (sheet count) may have changed — re-sample the pick mesh
+    }
   }
 
   /** Cheap re-frame after a height-axis / exaggeration change: the curve mesh is unchanged (charisma is a
@@ -1233,6 +1255,69 @@ export class Plot {
   /** Reset the Riemann orbit camera to its framed default distance (the surface fitted to the viewport). */
   resetRiemann(): void {
     this.riemannDist = this.riemannBaseDist;
+  }
+
+  /** The CPU pick mesh for the live Riemann path (M3.1): the cached curve soup, or the lazily-sampled
+   *  parametric grid (built on first use after a form / t-window change), or null (no surface active). */
+  private currentRiemannPickMesh(): PickMesh | null {
+    if (this.riemannKindV === "curve") {
+      return this.curvePickPositions && this.curvePickValues
+        ? pickMeshFromCurve(this.curvePickPositions, this.curvePickValues)
+        : null;
+    }
+    if (this.riemannKindV === "param" && this.riemannForm) {
+      if (this.paramPickDirty || !this.paramPickMesh) {
+        const zFn = makeComplexFn(this.riemannForm.zFromT, {});
+        const wFn = makeComplexFn(this.riemannForm.wFromT, {});
+        this.paramPickMesh = buildParamPickMesh(
+          (t) => zFn(t, [0, 0]),
+          (t) => wFn(t, [0, 0]),
+          this.riemannWindow(),
+        );
+        this.paramPickDirty = false;
+      }
+      return this.paramPickMesh;
+    }
+    return null;
+  }
+
+  /** The Riemann orbit camera (perspective; framed on the surface) — shared by the paint and the pick so
+   *  the hover lands on exactly what's drawn. */
+  private riemannCamera(): OrbitCamera {
+    return {
+      ...this.camera,
+      ortho: false,
+      distance: this.riemannDist,
+      target: this.riemannTarget,
+    };
+  }
+
+  /**
+   * Multi-sheet hover-pick (M3.1, ADR-0029): the on-surface point under a client pixel — its base point `z`,
+   * the value `w` on the front-most sheet, and the local sheet census (`sheetIndex` of `sheetCount`) over
+   * that `z`. Ray-casts the drawn triangles through the same framed camera as the paint, so self-occlusion is
+   * honoured (the eye's sheet, not a base-plane shadow). Null over empty scene / when no surface is active.
+   */
+  pickRiemann(clientX: number, clientY: number, vp?: ViewportRect): RiemannHit | null {
+    const mesh = this.currentRiemannPickMesh();
+    if (!mesh || mesh.triangleCount === 0) return null;
+    const r = this.rect(vp);
+    if (r.width <= 0 || r.height <= 0) return null;
+    const ndcX = ((clientX - r.left) / r.width) * 2 - 1;
+    const ndcY = 1 - ((clientY - r.top) / r.height) * 2;
+    const cam = this.riemannCamera();
+    const eye = cameraEye(cam);
+    const fwd = normalize3(sub3(cam.target, eye));
+    let right = cross3(fwd, [0, 0, 1]);
+    if (length3(right) < 1e-6) right = [1, 0, 0]; // looking straight down the height axis
+    right = normalize3(right);
+    const up = normalize3(cross3(right, fwd));
+    const tan = Math.tan(cam.fov / 2);
+    const aspect = r.width / r.height;
+    const dir = normalize3(
+      add3(fwd, add3(scale3(right, ndcX * tan * aspect), scale3(up, ndcY * tan))),
+    );
+    return pickRiemannSurface(mesh, { origin: eye, dir }, this.riemannHeightSource, this.heightScale);
   }
 
   // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------

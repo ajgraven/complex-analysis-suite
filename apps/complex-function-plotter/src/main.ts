@@ -238,6 +238,9 @@ function main(): void {
   const pfz = byId("pfz");
   const pabs = byId("pabs");
   const parg = byId("parg");
+  const pbranch = byId("pbranch");
+  const pbranchDt = byId("pbranchDt");
+  const riemannProbeHint = byId("riemannProbeHint");
   if (
     !(canvas instanceof HTMLCanvasElement) ||
     !(axesCanvas instanceof HTMLCanvasElement)
@@ -742,6 +745,13 @@ function main(): void {
       surfaceControls.hidden = m !== "3d" && m !== "linked";
     if (sphereHint instanceof HTMLElement) sphereHint.hidden = m !== "sphere";
     if (riemannControls instanceof HTMLElement) riemannControls.hidden = m !== "riemann";
+    // The cursor readout is pane-specific — reset it on any view switch. The sheet row + Riemann hint
+    // (M3.1) show only in the Riemann view; f(z)/|f|/arg f then read the picked sheet's value.
+    for (const el of [pz, pfz, pabs, parg, pbranch]) if (el instanceof HTMLElement) el.textContent = "—";
+    const inRiemann = m === "riemann";
+    if (pbranchDt instanceof HTMLElement) pbranchDt.hidden = !inRiemann;
+    if (pbranch instanceof HTMLElement) pbranch.hidden = !inRiemann;
+    if (riemannProbeHint instanceof HTMLElement) riemannProbeHint.hidden = !inRiemann;
     if (m === "riemann") {
       plot.reframeRiemann(); // build the curve mesh over the current view / refresh the parametric framing
       syncRiemannControls();
@@ -1268,6 +1278,27 @@ function main(): void {
   const updateProbe3d = (clientX: number, clientY: number): void =>
     renderProbe(plot.pickSurface(clientX, clientY, surfaceHeight, threeDRect()));
 
+  const setBranchText = (text: string): void => {
+    if (pbranch instanceof HTMLElement) pbranch.textContent = text;
+  };
+  // Multi-sheet hover-pick (M3.1): ray-cast the Riemann surface under the cursor and read the point on the
+  // sheet the eye sees — z, the sheet's value w (= f(z) on that branch), |w|, arg w, and the local sheet
+  // ordinal. All `≈` (barycentric-interpolated from a finite mesh), matching how the surface is drawn. The
+  // Riemann view uses the whole canvas, so the pick measures against the full canvas rect.
+  const updateProbeRiemann = (clientX: number, clientY: number): void => {
+    const hit = plot.pickRiemann(clientX, clientY, canvasRect());
+    if (!hit) {
+      renderProbe(null);
+      setBranchText("—");
+      return;
+    }
+    if (pz instanceof HTMLElement) pz.textContent = fmtComplex(hit.z);
+    if (pfz instanceof HTMLElement) pfz.textContent = "≈ " + fmtComplex(hit.w);
+    if (pabs instanceof HTMLElement) pabs.textContent = "≈ " + fmtNum(Math.hypot(hit.w[0], hit.w[1]));
+    if (parg instanceof HTMLElement) parg.textContent = "≈ " + fmtNum(Math.atan2(hit.w[1], hit.w[0]));
+    setBranchText(`${hit.sheetIndex} / ${hit.sheetCount}`);
+  };
+
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
   // operations for a mouse-free / accessible path (L7).
@@ -1372,11 +1403,12 @@ function main(): void {
       redraw(true);
     } else {
       // Idle hover (no drag): update the value inspector for the pane under the cursor. 2D reads the
-      // screen→world point; 3D picks the point on the surface; the sphere and the Riemann surface have no
-      // pick yet, so blank the readout there rather than leaving stale 2D values.
+      // screen→world point; 3D picks the point on the surface; the Riemann surface ray-casts its sheets
+      // (M3.1); the sphere has no pick, so blank the readout there rather than leaving stale values.
       const m = effMode(e.clientX);
       if (m === "2d") updateProbe(e.clientX, e.clientY);
       else if (m === "3d") updateProbe3d(e.clientX, e.clientY);
+      else if (m === "riemann") updateProbeRiemann(e.clientX, e.clientY);
       else renderProbe(null);
     }
   });
