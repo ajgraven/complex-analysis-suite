@@ -36,6 +36,7 @@ Format follows Michael Nygard's ADR convention.
 | [0025](#adr-0025-defer-the-winding--singularity-primitive-extraction-second-consumer-noted) | Defer the winding / singularity primitive extraction (renumbered from a duplicate 0020) | Accepted |
 | [0026](#adr-0026-defer-consolidating-qds-schwarz-engine-with-casschwarz-classical-subset-duplication) | Defer consolidating QD's Schwarz engine with `@cas/schwarz` (classical-subset duplication) | Accepted |
 | [0027](#adr-0027-extract-mapspectoexpr-into-casinterchange) | Extract the `MapSpec` → `@cas/expr` converter into `@cas/interchange` | Accepted |
+| [0028](#adr-0028-extract-casui-ahead-of-adoption-port-cds-product-shell) | Extract `@cas/ui` ahead of adoption — the shared browser shell | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
 > All twenty-seven are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
@@ -2286,3 +2287,110 @@ serialization → executable layering.)
 
 **Not in scope.** The `@cas/interchange`-side SC form (still deferred, ADR-0007 — gate on a receiving tool)
 and Riemann Map's *separate* CD → RM Böttcher `LaurentMap` converter (a different converter, left as-is).
+
+---
+
+## ADR-0028: Extract `@cas/ui` ahead of adoption; port CD's product shell
+
+**Status:** Accepted — a **deliberate exception** to [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need), of the same shape as [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) but *milder* (the second-consumer bar is met many times over; only app-by-app **adoption** is deferred).
+
+### Context
+
+Every prior `@cas/*` package extracted the suite's *mathematics*. A 2026-08 cross-cutting UX review found the
+suite's quality is **bimodal**: the two founder apps (Complex Dynamics, Quadrature Domains) are product-mature —
+real keyboard a11y, WebGL fallbacks, `role="alert"` error banners, worker-offloaded solves — while the five
+newer TS apps (riemann-map, argument-principle, faber-transform, correspondences, and to a lesser degree the
+plotter) inherited the math rigor but **not** the product shell:
+
+- **A11y (finding #2):** six of seven apps expose a bare `<canvas>` a screen reader cannot see; the four newest
+  have **zero** keyboard handlers. Only CD is keyboard-operable.
+- **Error UX (finding #3):** the newest apps have **no** fatal-error element — an uncaught `init` throw
+  white-screens into an empty `<div id="app">`.
+- **Threading (finding #4):** faber / correspondences / riemann-map run heavy solves **synchronously** on the
+  main thread with no worker and no busy indicator — a hard input freezes the tab (correspondences even comments
+  the hazard).
+- **Navigation (finding #1) + interop:** navigation is one-way — once inside an app the only way back to the
+  launcher or across to a sibling is the browser back button; and the celebrated cross-app hand-off is 3
+  hard-coded `window.open` buttons with no discovery (`@cas/interchange` is a hub in the docs, three bilateral
+  wires in the UI).
+
+The root cause is structural: the extract-on-second-consumer rule ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need))
+was invoked constantly for math and **never once** for the shell, so the planned `@cas/ui` (VISION §6, ARCHITECTURE
+§11, decision #8) stayed deferred while each new app re-implemented — or simply omitted — a11y / error UX /
+threading / nav. Complex Dynamics already contains a **proven** implementation of all four.
+
+### Decision
+
+**Charter `@cas/ui` now — the suite's shared browser shell — by consolidating CD's proven patterns, then adopt it
+app-by-app.** It is the eleventh `@cas/*` package, source-exports model (like `@cas/schwarz` / `@cas/conformal`),
+and the **first with a real DOM surface** (its tests run under jsdom — the first non-node package environment;
+the DOM libs are already in `tsconfig.base.json`). Four primitives, each a straight port of a CD reference:
+
+1. **`mountCanvas`** — the accessible-canvas pattern (`apps/complex-dynamics/index.html:194-200`): an
+   `aria-hidden` render canvas beneath a focusable `role="application"` overlay with a descriptive `aria-label`,
+   a keyboard map (arrows pan, ± zoom, Enter/Space commit), and an `aria-live` status region.
+2. **`runWithFatalBoundary` / `showFatalBanner`** — CD's init boundary (`main.ts:6876-6892`, `showFatalBanner`
+   at `:260-266`): try/catch/finally, WebGL2-aware copy, boot-overlay removal; **creates** the banner if the app
+   has none (fixing the white-screen).
+3. **`createComputeClient`** — a generalization of `render/juliaMetricsClient.ts`: worker-offload with request
+   coalescing + stale-response drop, a synchronous fallback, and an `onBusy` affordance.
+4. **`mountNavHeader`** (+ the `SUITE_APPS` registry, seeded from the launcher as **data**, not imports) —
+   back-to-launcher + sibling links, plus an optional "Send to…" hand-off picker.
+
+**Why this is a (mild) ADR-0007 exception.** [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore)
+extracted `@cas/conformal` with **zero** consumers. Here the demand is **proven across five to seven apps** by the
+UX audit — so this is *not* extract-ahead-of-demand; it is extract-from-one-reference-implementation (CD) **ahead
+of app-by-app adoption**. The only ADR-0007 tension is that the pattern lives in *one* app today rather than
+having independently reappeared in two — but "would a second consumer want this?" is already answered six times.
+The extract-ahead is retro-justified as each app adopts (Action Items 6–11), exactly as ADR-0018 AI-6 retro-justified
+its builder when Schwarz–Christoffel landed.
+
+**Scope boundary — QD is deliberately NOT a consumer.** Quadrature Domains is `allowJs`/vanilla
+([ADR-0002](#adr-0002-typescript-as-the-common-language)), large, and *already* product-mature (the audit's
+top half). Forcing it onto a strict-TS shell buys nothing and violates the ADR-0002 / [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)
+precedent of leaving QD's mature surface in place. `@cas/ui` targets the **six TS apps**.
+
+**Dependency direction.** `@cas/ui` is a leaf UI package. In U0 it has **no** `@cas/*` runtime dependency (the
+nav picker is caller-driven — the app supplies `accepts`/`hrefFor`); the `@cas/interchange` edge is added at U7
+when the picker consults the known map kinds. App ids/labels are **data** in `apps.ts`, never imports, so
+`no-package-to-app` and `no-cross-app` hold (dependency-cruiser confirms: clean).
+
+### Options Considered
+
+- **A — charter `@cas/ui` now, adopt app-by-app (this ADR).** *Pros:* one source of truth for the shell; each new
+  app stops re-omitting it; consolidates CD's proven code rather than inventing. *Cons:* an extract-ahead-of-adoption
+  (softens ADR-0007 — recorded, milder than ADR-0018).
+- **B — per-app triage, extract only on the 2nd independent repetition.** *Rejected:* the reference already exists
+  (CD) and six apps already need it, so waiting means each app hand-rolls (or re-omits) the shell first and is
+  re-seamed later — the build-then-migrate waste [VISION §5](VISION.md#5-the-strategic-thesis) rejects.
+- **C — keep omitting (status quo).** *Rejected:* it is the finding.
+- **D — big-bang: adopt across all six apps in one change.** *Rejected:* violates working-software-per-step; a
+  regression in one app blocks all. Adoption is one PR per app with a behavior-identical gate.
+
+### Consequences
+
+- **Easier:** every TS app can gain accessibility, a graceful failure, off-thread compute, and suite navigation by
+  consuming a tested package instead of re-implementing (or skipping) each; the interop hand-off finally gets a
+  discovery surface (U7).
+- **Harder / owed:** an extract-ahead to be retro-justified by real adoption (U1–U6); the worker primitive's
+  serialization boundary genuinely differs per app, so U0 ships the fallback + coalescing + busy state and each app
+  wires its worker at adoption; a11y/perf remain **not** CI-enforced (a later, separate axe/pa11y job).
+- **First DOM package:** `@cas/ui` introduces the jsdom test environment; its tests assert the a11y wiring
+  (roles/labels/keyboard) and the sync-fallback path — the WebGL/worker paths are verified in-browser at adoption.
+- **Revisit:** if adoption stalls after U1 (CD only), ADR-0007's symmetric "don't split without two" would invite
+  folding the shell back; the U1 CD refactor (behavior-identical) is the first retro-justification.
+
+### Action Items
+
+1. [x] Charter ADR-0028 (this record).
+2. [x] Scaffold `packages/ui` (source-exports; jsdom vitest env) with the four primitives + `SUITE_APPS`.
+3. [x] jsdom unit tests for all four primitives (20 tests); typecheck + lint + dependency-cruiser green.
+4. [x] Register in `vitest.workspace.ts` + the test-census `PROJECTS` (a `ui` bucket).
+5. [ ] **U1:** adopt in Complex Dynamics **first**, as a *behavior-identical refactor* onto the shared versions —
+   proving the API against the app it was ported from.
+6. [ ] **U2–U6:** adopt in riemann-map, argument-principle, faber-transform, correspondences, and the plotter, one
+   PR each, each closing that app's specific audit findings.
+7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
+   (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
+8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just
+   introduced-once-and-forgotten.
