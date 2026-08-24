@@ -83,6 +83,14 @@ describe("buildPhiFromExpr — transcendental FFT fallback (≈)", () => {
   it("rejects a transcendental map with no simple pole at ∞ (exp(z))", () => {
     expect("error" in buildPhiFromExpr("exp(z)")).toBe(true);
   });
+
+  it("accepts a transcendental map with a COMPLEX leading term (γ compared, not |γ|)", () => {
+    // (1+i)·z + exp(1/z) − 1: a valid exterior map; the pole-at-∞ guard must compare against the complex
+    // leading coefficient, not its magnitude, or it would wrongly reject this.
+    const { map, exact } = ok(buildPhiFromExpr("(1 + i)*z + exp(1/z) - 1"));
+    expect(exact).toBe(false);
+    expect(near(map.c, Math.SQRT2, 1e-6)).toBe(true); // |1+i| = √2, rotated to real-positive capacity
+  });
 });
 
 describe("univalentByAreaBound", () => {
