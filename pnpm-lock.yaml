@@ -108,6 +108,9 @@ importers:
       '@cas/schwarz':
         specifier: workspace:*
         version: link:../../packages/schwarz
+      '@cas/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       driver.js:
         specifier: ^1.5.0
         version: 1.6.0

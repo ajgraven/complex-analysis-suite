@@ -2386,8 +2386,17 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
 2. [x] Scaffold `packages/ui` (source-exports; jsdom vitest env) with the four primitives + `SUITE_APPS`.
 3. [x] jsdom unit tests for all four primitives (20 tests); typecheck + lint + dependency-cruiser green.
 4. [x] Register in `vitest.workspace.ts` + the test-census `PROJECTS` (a `ui` bucket).
-5. [ ] **U1:** adopt in Complex Dynamics **first**, as a *behavior-identical refactor* onto the shared versions —
-   proving the API against the app it was ported from.
+5. [x] **U1:** adopt in Complex Dynamics **first**, as a *behavior-identical refactor* onto the shared versions —
+   proving the API against the app it was ported from. Adopted the two primitives that are clean drop-ins:
+   `runWithFatalBoundary` (replacing CD's inline `showFatalBanner` + init try/catch/finally, same `#webgl-error`
+   banner and copy) and `createComputeClient` (CD's `JuliaMetricsClient` is now a thin adapter — its send-side
+   coalescing test passes before and after). Proving `createComputeClient` against CD surfaced a behavior the U0
+   primitive lacked — recovering the in-flight request when the worker dies (`cd-metricsworker-01`) — which was
+   folded INTO the shared primitive (with its own worker-path tests), exactly what "prove against the app it came
+   from" is for. `mountCanvas` and `mountNavHeader` are **not** adopted in CD here: CD's canvas is static
+   two-plot HTML (converting it to a JS mount is not behavior-neutral) and a nav header is a new feature — both
+   fit later apps / a deliberate rollout better than a behavior-identical CD refactor. Full CD suite green before
+   and after (84 files / 833 tests).
 6. [ ] **U2–U6:** adopt in riemann-map, argument-principle, faber-transform, correspondences, and the plotter, one
    PR each, each closing that app's specific audit findings.
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds

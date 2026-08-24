@@ -110,6 +110,7 @@ import {
   type SigmaViewState,
 } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
+import { runWithFatalBoundary } from "@cas/ui";
 import {
   envelopeToMapSpec,
   mapSpecToExpr,
@@ -256,15 +257,6 @@ const TRAPS: Record<string, number> = {
   circle: 3,
   lattice: 4,
 };
-
-/** Show the WebGL2-unavailable banner (or a generic init error) and stop. */
-function showFatalBanner(message: string): void {
-  const banner = document.getElementById("webgl-error");
-  if (banner) {
-    banner.textContent = message;
-    banner.hidden = false;
-  }
-}
 
 /** Format a plot coordinate as a complex number for the hover readout. */
 function formatCoord([x, y]: Vec2): string {
@@ -6874,19 +6866,16 @@ function init(): void {
   }
 }
 
-try {
-  init();
-} catch (err) {
-  console.error("Failed to initialize the visualizer:", err);
-  const webglMissing = err instanceof Error && /WebGL2/i.test(err.message);
-  showFatalBanner(
-    webglMissing
-      ? "This visualizer needs WebGL2, which isn't available in your browser. " +
-          "Try a recent version of Chrome, Firefox, Edge, or Safari 15+, and make sure " +
-          "hardware acceleration is enabled."
-      : "Something went wrong starting the visualizer. See the browser console for details.",
-  );
-} finally {
-  // Remove the boot overlay whether init succeeded or threw (on failure the fatal banner shows).
-  document.getElementById("boot-loading")?.remove();
-}
+// Run init inside @cas/ui's shared fatal-error boundary (ADR-0028, U1): a throw shows the WebGL2-aware
+// banner in #webgl-error and the boot overlay is always removed — the same behavior this file used to
+// implement inline, now the shell primitive every app shares.
+runWithFatalBoundary(init, {
+  bannerId: "webgl-error",
+  bootOverlayId: "boot-loading",
+  onError: (err) => console.error("Failed to initialize the visualizer:", err),
+  webglMessage:
+    "This visualizer needs WebGL2, which isn't available in your browser. " +
+    "Try a recent version of Chrome, Firefox, Edge, or Safari 15+, and make sure " +
+    "hardware acceleration is enabled.",
+  genericMessage: "Something went wrong starting the visualizer. See the browser console for details.",
+});

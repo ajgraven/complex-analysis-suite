@@ -53,7 +53,8 @@ export function createComputeClient<Req, Res>(
   let inFlight = false; // a worker request is posted and awaiting its response
   let pending: Req | null = null; // latest request that arrived while a worker request was in flight
   let timer: ReturnType<typeof setTimeout> | null = null; // scheduled sync compute
-  let latestReq: Req | null = null;
+  let latestReq: Req | null = null; // for the deferred-sync path
+  let lastReq: Req | null = null; // the most recent request overall — recovered if the worker dies mid-flight
 
   const setBusy = (b: boolean): void => {
     if (b === busyState) return;
@@ -81,6 +82,7 @@ export function createComputeClient<Req, Res>(
   const cancel = (): void => {
     pending = null;
     latestReq = null;
+    lastReq = null;
     if (timer !== null) {
       clearTimeout(timer);
       timer = null;
@@ -107,8 +109,26 @@ export function createComputeClient<Req, Res>(
         }
       };
       worker.onerror = (): void => {
-        worker?.terminate();
-        worker = null; // fall back to sync from here on
+        // The worker became unusable mid-flight. Drop it — terminating AND clearing its handlers, so a
+        // response already queued for the dead request can't fire cb a second time — then RECOVER the last
+        // request on the main thread so the caller still gets a result. Matches CD's
+        // JuliaMetricsClient.disableWorker (cd-metricsworker-01); future requests take the sync path.
+        const dead = worker;
+        worker = null;
+        inFlight = false;
+        pending = null;
+        reqId += 1; // any late response for the dead request is now stale
+        if (dead) {
+          dead.onmessage = null;
+          dead.onerror = null;
+          try {
+            dead.terminate();
+          } catch {
+            /* already dead / terminate unsupported — the reference is dropped regardless */
+          }
+        }
+        if (lastReq !== null && cb) cb(opts.compute(lastReq));
+        setBusy(false);
       };
     } catch {
       worker = null;
@@ -118,6 +138,7 @@ export function createComputeClient<Req, Res>(
   return {
     request(req: Req, callback: (res: Res) => void): void {
       cb = callback;
+      lastReq = req;
       if (worker) {
         if (inFlight) {
           pending = req; // coalesce — only the latest runs next
