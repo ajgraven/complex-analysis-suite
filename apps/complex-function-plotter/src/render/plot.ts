@@ -16,6 +16,33 @@ import { compileF } from "@cas/expr/glsl";
 import { parse } from "@cas/expr/parser";
 import { freeParameters, substitute } from "@cas/expr/ast";
 import { differentiate } from "@cas/expr/derivative";
+import { makeComplexFn } from "@cas/expr/evaluate";
+import type { Complex } from "@cas/expr/complex";
+import { detectRiemannForm, type RiemannForm } from "../riemann/inverse.js";
+import { detectAlgebraicCurve, type AlgebraicCurve } from "../riemann/algebraicCurve.js";
+import { detectImplicitCurve, type ImplicitCurve } from "../riemann/implicitCurve.js";
+import { exactBranchLocus } from "../riemann/implicitExact.js";
+import { buildCurveMesh } from "../riemann/curveMesh.js";
+import { buildRiemannProgram, buildCurveProgram } from "../render3d/riemannSurface.js";
+import {
+  buildParamPickMesh,
+  pickMeshFromCurve,
+  pickRiemannSurface,
+  sheetsOverZ,
+  type PickMesh,
+  type RiemannHit,
+} from "../riemann/pickMesh.js";
+import { computeMonodromy, type MonodromyResult } from "../riemann/monodromy.js";
+import { findBranchPoints } from "../riemann/branchPoints.js";
+import {
+  type Vec3,
+  add3,
+  sub3,
+  scale3,
+  cross3,
+  normalize3,
+  length3,
+} from "../render3d/mat4.js";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
 import { injectPngText } from "@cas/export";
@@ -147,6 +174,28 @@ interface SphereUniforms extends ColorUniformLocs {
   uLightDir: WebGLUniformLocation | null;
 }
 
+/** The Riemann-surface uniforms (ADR-0028), on top of the shared {@link ColorUniformLocs}. */
+interface RiemannUniforms extends ColorUniformLocs {
+  uVP: WebGLUniformLocation | null;
+  uTCenter: WebGLUniformLocation | null;
+  uTHalf: WebGLUniformLocation | null;
+  uHeightSource: WebGLUniformLocation | null;
+  uHeightScale: WebGLUniformLocation | null;
+  uLightDir: WebGLUniformLocation | null;
+  uShaded: WebGLUniformLocation | null;
+  uOpacity: WebGLUniformLocation | null;
+}
+
+/** The algebraic-curve uniforms (ADR-0029): the baked-mesh program has no t-window (positions are baked). */
+interface CurveUniforms extends ColorUniformLocs {
+  uVP: WebGLUniformLocation | null;
+  uHeightSource: WebGLUniformLocation | null;
+  uHeightScale: WebGLUniformLocation | null;
+  uLightDir: WebGLUniformLocation | null;
+  uShaded: WebGLUniformLocation | null;
+  uOpacity: WebGLUniformLocation | null;
+}
+
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
 const SPHERE_FOV = (50 * Math.PI) / 180; // vertical field of view for the Riemann-sphere camera
 // 3D landscape framing (§B): the perspective eye distance = span * SURFACE_FRAMING / tan(fov/2), so the
@@ -192,9 +241,80 @@ export class Plot {
   private sphereRotation: Quat = DEFAULT_ROTATION;
   private sphereDist = SPHERE_DIST_DEFAULT;
 
+  // Riemann-surface path (ADR-0028). A fourth program renders the true multi-sheeted surface of a
+  // recognized invertible primitive (√, ⁿ√, z^(p/q), log, arcsin/arccos/arctan + affine wraps) by the
+  // parametrize-by-w method: the same grid mesh is reinterpreted over the value plane (uniformizer `t`),
+  // positioned by `z = gZFn(t)`, coloured by the shared `colorAt`, lifted by the Re/Im-w charisma. Built
+  // from the compiled inverse ASTs the registry supplies; null when the active map isn't a recognized
+  // primitive (then the mode is unavailable and the app offers only the principal-branch views).
+  private riemannForm: RiemannForm | null = null;
+  private gzGlsl: string | null = null; // compiled z = gZFn(t)  (position)
+  private gwGlsl: string | null = null; // compiled w = gWFn(t)  (value / colour)
+  private riemannProgram: WebGLProgram | null = null;
+  private riemannUniforms: RiemannUniforms | null = null;
+  private riemannVao: WebGLVertexArrayObject | null = null;
+  private riemannTarget: Vec3 = [0, 0, 0]; // framed surface centroid (orbit look-at)
+  private riemannBaseDist = 6; // framing distance that fits the surface (dolly resets to this)
+  /** Orbit-camera dolly distance for the Riemann surface (set to frame the surface; wheel/pinch adjust). */
+  riemannDist = 6;
+  /** Charisma axis: 0 = Re w (algebraic interlocking sheets), 1 = Im w (the log helicoid). */
+  riemannHeightSource = 0;
+  /** How many sheets to render for an infinite-sheeted primitive (log / inverse trig); finite ones ignore it. */
+  riemannSheets = 3;
+  /** Linked base-plane pane (M3.2, ADR-0030): split the Riemann view — the flat base plane beside the
+   *  surface, hover-linked. The base plane reads {@link view} (the curve mesh is built over it; for the
+   *  parametric path {@link view} is framed to the surface's base-plane extent when this turns on). */
+  riemannLinked = false;
+  /** The parametric surface's base-plane (z) extent, from the last framing — used to frame the linked
+   *  base-plane pane's {@link view} so it shows the region the surface actually covers. */
+  private riemannXYBounds: { minx: number; maxx: number; miny: number; maxy: number } | null = null;
+
+  // Algebraic-curve path (ADR-0029, M2a). When the active map is NOT an M1 primitive but IS a single-radical
+  // algebraic map `w = R(z)^(p/q)`, the surface is a CPU-built baked mesh (NPP proximity gluing over the
+  // z-view) rendered by the function-independent curve program. `riemannKindV` records which path is live.
+  private riemannCurve: AlgebraicCurve | null = null;
+  // Implicit-curve path (ADR-0031, M2c). When an implicit `F(w,z)=0` source is set (the dedicated implicit
+  // mode), the surface is the same baked curve mesh, but its sheet values are the per-vertex roots of
+  // `F(·,z)=0` (`@cas/core rootsMonic`) rather than radical branch values. It drives the surface in place of
+  // the f(z)-derived forms; `implicitSrc` null = ordinary mode.
+  private riemannImplicit: ImplicitCurve | null = null;
+  private implicitSrc: string | null = null;
+  private riemannKindV: "param" | "curve" | "implicit" | null = null;
+  private curveProgram: WebGLProgram | null = null;
+  private curveUniforms: CurveUniforms | null = null;
+  private curveVao: WebGLVertexArrayObject | null = null;
+  private curvePosBuffer: WebGLBuffer | null = null;
+  private curveWBuffer: WebGLBuffer | null = null;
+  private curveSheetFns: ((z: Complex, c: Complex) => Complex)[] = []; // one per branch combo (principal)
+  private curveTriCount = 0;
+  private curveHoles = 0;
+  private curveCapped = false;
+  // Raw curve-mesh bounds (world xy + Re/Im-w ranges, WITHOUT heightScale) so a height-axis / exaggeration
+  // change re-frames the camera cheaply (charisma height is a shader uniform) without rebuilding the mesh.
+  private curveBounds: {
+    minx: number;
+    maxx: number;
+    miny: number;
+    maxy: number;
+    minReW: number;
+    maxReW: number;
+    minImW: number;
+    maxImW: number;
+  } | null = null;
+
+  // Multi-sheet hover-pick (M3.1, ADR-0030). The curve arrays are cached from the last `buildCurveMesh` (they
+  // were upload-and-discard before) so the pick can ray-cast the same triangles. The parametric pick mesh is
+  // sampled lazily (`paramPickDirty`) — only when a hover actually needs it — and reused until the form /
+  // t-window changes (a height-axis / exaggeration change does NOT dirty it: height is recomputed at pick
+  // time from the stored uniformizer basis, matching the shader).
+  private curvePickPositions: Float32Array | null = null;
+  private curvePickValues: Float32Array | null = null;
+  private paramPickMesh: PickMesh | null = null;
+  private paramPickDirty = true;
+
   /** Which view `paint()` draws. `linked` renders the 2D portrait and the 3D landscape side by side
    *  (split viewports), both reading the same `view`, so navigating either keeps them in sync (I7). */
-  mode: "2d" | "3d" | "sphere" | "linked" = "2d";
+  mode: "2d" | "3d" | "sphere" | "linked" | "riemann" = "2d";
   /** The orbit camera for the 3D landscape (its `target` is taken from the view centre at paint time). */
   camera: OrbitCamera = { ...DEFAULT_CAMERA };
   /** Height compression: 0 log|f|, 1 linear |f|, 2 stereographic (see `render3d/height.ts`). */
@@ -283,6 +403,50 @@ export class Plot {
       nextValues.set(n, this.paramValues.get(n) ?? [...NEW_PARAM_DEFAULT]);
     this.paramNamesList = names;
     this.paramValues = nextValues;
+    // Riemann-surface mode (ADR-0028): recognize the plotted map as an invertible primitive and compile
+    // its parametrize-by-w position/value maps. `null` (the common case) leaves the mode unavailable. The
+    // maps reference no live parameters (affine constants are baked), so they compile with no params.
+    const prevPrim = this.riemannForm?.primitive;
+    const prevKind = this.riemannKindV;
+    this.riemannForm = detectRiemannForm(ast);
+    // The algebraic-curve path (ADR-0029) is consulted only when the M1 parametric form declines, so
+    // single primitives keep the cheaper, exact parametric surface.
+    this.riemannCurve = this.riemannForm ? null : detectAlgebraicCurve(ast);
+    // Implicit F(w,z)=0 mode (ADR-0031, M2c): when an implicit source is set it DRIVES the Riemann surface;
+    // the f(z)-derived forms are ignored for the surface (f still compiles for the hidden 2D/3D/sphere
+    // programs). An invalid implicit source shows nothing (no silent fall-back to the f(z) surface).
+    this.riemannImplicit = this.recognizeImplicit();
+    this.riemannKindV = this.implicitSrc
+      ? this.riemannImplicit
+        ? "implicit"
+        : null
+      : this.riemannForm
+        ? "param"
+        : this.riemannCurve
+          ? "curve"
+          : null;
+    if (this.riemannForm) {
+      this.gzGlsl = compileF(this.riemannForm.zFromT, "gZFn");
+      this.gwGlsl = compileF(this.riemannForm.wFromT, "gWFn");
+    } else {
+      this.gzGlsl = null;
+      this.gwGlsl = null;
+    }
+    // Charisma-axis defaults: on a new PRIMITIVE (param), or on entering a finite algebraic path (curve /
+    // implicit); an edit within the same family keeps the user's chosen axis.
+    if (this.riemannKindV === "param" && this.riemannForm && this.riemannForm.primitive !== prevPrim) {
+      this.riemannHeightSource = this.riemannForm.heightSource === "im" ? 1 : 0;
+      this.riemannSheets = this.riemannForm.sheetCount;
+    } else if (
+      (this.riemannKindV === "curve" || this.riemannKindV === "implicit") &&
+      prevKind !== this.riemannKindV
+    ) {
+      this.riemannHeightSource = 0;
+    }
+    // Compile the per-combo sheet evaluators (principal; the root-of-unity factors are baked into each AST).
+    this.curveSheetFns = this.riemannCurve
+      ? this.riemannCurve.sheetExprs.map((e) => makeComplexFn(e, {}))
+      : [];
     return glsl;
   }
 
@@ -308,6 +472,8 @@ export class Plot {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, mesh.indices, gl.STATIC_DRAW);
     this.buildAtlas();
     this.rebuildProgram();
+    this.initCurveGpu();
+    this.rebuildCurveMesh();
   }
 
   private buildAtlas(): void {
@@ -378,6 +544,8 @@ export class Plot {
 
     this.rebuildSurfaceProgram();
     this.rebuildSphereProgram();
+    this.rebuildRiemannProgram();
+    this.rebuildCurveMesh(); // no-op until initCurveGpu has created the buffers
   }
 
   /** Build the 3D surface program (vertex-displaced grid + `colorAt` fragment) for the current `f`, its
@@ -481,6 +649,248 @@ export class Plot {
     this.sphereVao = svao;
   }
 
+  /** Build the Riemann-surface program (ADR-0028) for the current recognized form, its uniforms, and its
+   *  VAO (the shared grid buffers bound to `aUV` + the index buffer). A no-op that clears the program when
+   *  the active map isn't a recognized primitive. Called from {@link rebuildProgram}. */
+  private rebuildRiemannProgram(): void {
+    const gl = this.gl;
+    if (this.riemannProgram) {
+      gl.deleteProgram(this.riemannProgram);
+      this.riemannProgram = null;
+    }
+    if (this.riemannVao) {
+      gl.deleteVertexArray(this.riemannVao);
+      this.riemannVao = null;
+    }
+    this.paramPickMesh = null; // the form changed — the hover-pick mesh (M3.1) must be re-sampled
+    this.paramPickDirty = true;
+    if (!this.riemannForm || !this.gzGlsl || !this.gwGlsl) return;
+    const src = buildRiemannProgram(this.gzGlsl, this.gwGlsl);
+    const program = createProgram(gl, src.vertex, src.fragment);
+    this.riemannProgram = program;
+    const loc = (name: string): WebGLUniformLocation | null =>
+      gl.getUniformLocation(program, name);
+    this.riemannUniforms = {
+      uVP: loc("uVP"),
+      uTCenter: loc("uTCenter"),
+      uTHalf: loc("uTHalf"),
+      uHeightSource: loc("uHeightSource"),
+      uHeightScale: loc("uHeightScale"),
+      uLightDir: loc("uLightDir"),
+      uShaded: loc("uShaded"),
+      uOpacity: loc("uOpacity"),
+      uPhaseLUT: loc("uPhaseLUT"),
+      uPhaseRow: loc("uPhaseRow"),
+      uModulus: loc("uModulus"),
+      uModScale: loc("uModScale"),
+      uEnhance: loc("uEnhance"),
+      uSectors: loc("uSectors"),
+      uCrisp: loc("uCrisp"),
+      uHueShift: loc("uHueShift"),
+      uHueSign: loc("uHueSign"),
+      uCvd: loc("uCvd"),
+      uUncertainty: loc("uUncertainty"),
+      uLevelAbs: loc("uLevelAbs"),
+      uLevelArgOn: loc("uLevelArgOn"),
+      uLevelArg: loc("uLevelArg"),
+    };
+    const rvao = gl.createVertexArray();
+    gl.bindVertexArray(rvao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gridUvBuffer);
+    const aUV = gl.getAttribLocation(program, "aUV");
+    gl.enableVertexAttribArray(aUV);
+    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer); // recorded in the VAO
+    gl.bindVertexArray(null);
+    this.riemannVao = rvao;
+    this.updateRiemannFraming();
+  }
+
+  /** The `t`-window half-extents for the current form + sheet count (about the origin). */
+  private riemannWindow(): { halfX: number; halfY: number } {
+    return this.riemannForm ? this.riemannForm.window(this.riemannSheets) : { halfX: 2, halfY: 2 };
+  }
+
+  /** Sample the surface over its `t`-window (CPU inverse) to frame the orbit camera on it: the look-at
+   *  point becomes the surface centroid and the dolly distance is set to fit its radius. Pole-adjacent
+   *  samples (e.g. tan near ±π/2) are discarded so a few blow-ups don't wreck the framing. Recomputed when
+   *  the form, sheet count, height source, or height scale changes. */
+  private updateRiemannFraming(): void {
+    const form = this.riemannForm;
+    if (!form) return;
+    const zc = makeComplexFn(form.zFromT, {});
+    const { halfX, halfY } = this.riemannWindow();
+    const N = 15;
+    let minx = Infinity,
+      maxx = -Infinity,
+      miny = Infinity,
+      maxy = -Infinity,
+      minh = Infinity,
+      maxh = -Infinity;
+    for (let j = 0; j < N; j++) {
+      const ti = -halfY + (2 * halfY * j) / (N - 1);
+      for (let i = 0; i < N; i++) {
+        const tr = -halfX + (2 * halfX * i) / (N - 1);
+        // Charisma height comes from the uniformizer t (bounded by the window), matching the shader.
+        const h = (this.riemannHeightSource === 1 ? ti : tr) * this.heightScale;
+        let z: Complex;
+        try {
+          z = zc([tr, ti], [0, 0]);
+        } catch {
+          continue;
+        }
+        if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) continue;
+        if (Math.hypot(z[0], z[1]) > 1e3) continue; // skip pole-adjacent position blow-ups (tan/log edges)
+        minx = Math.min(minx, z[0]);
+        maxx = Math.max(maxx, z[0]);
+        miny = Math.min(miny, z[1]);
+        maxy = Math.max(maxy, z[1]);
+        minh = Math.min(minh, h);
+        maxh = Math.max(maxh, h);
+      }
+    }
+    this.riemannXYBounds = Number.isFinite(minx) ? { minx, maxx, miny, maxy } : null;
+    this.frameToBounds(minx, maxx, miny, maxy, minh, maxh);
+  }
+
+  /** Set the orbit target + dolly distance to fit a world bounding box (shared by the parametric and the
+   *  algebraic-curve framing). The distance is clamped to a sane envelope (a defensive backstop). */
+  private frameToBounds(
+    minx: number,
+    maxx: number,
+    miny: number,
+    maxy: number,
+    minh: number,
+    maxh: number,
+  ): void {
+    if (!Number.isFinite(minx) || !Number.isFinite(maxx)) {
+      this.riemannTarget = [0, 0, 0];
+      this.riemannBaseDist = 6;
+      this.riemannDist = 6;
+      return;
+    }
+    const radius = Math.max((maxx - minx) / 2, (maxy - miny) / 2, (maxh - minh) / 2, 0.5);
+    this.riemannTarget = [(minx + maxx) / 2, (miny + maxy) / 2, (minh + maxh) / 2];
+    this.riemannBaseDist = Math.min(1e4, Math.max(0.1, (1.35 * radius) / Math.tan(this.camera.fov / 2)));
+    this.riemannDist = this.riemannBaseDist;
+  }
+
+  /** Create the algebraic-curve GPU resources once (ADR-0029): the function-independent baked-mesh program,
+   *  its attribute buffers (`aPos` world xy, `aW` sheet value), and its VAO. Called from
+   *  {@link initGpuResources} (also on a context restore). The mesh itself is (re)built by
+   *  {@link rebuildCurveMesh}. */
+  private initCurveGpu(): void {
+    const gl = this.gl;
+    const src = buildCurveProgram();
+    const program = createProgram(gl, src.vertex, src.fragment);
+    if (this.curveProgram) gl.deleteProgram(this.curveProgram);
+    this.curveProgram = program;
+    const loc = (name: string): WebGLUniformLocation | null => gl.getUniformLocation(program, name);
+    this.curveUniforms = {
+      uVP: loc("uVP"),
+      uHeightSource: loc("uHeightSource"),
+      uHeightScale: loc("uHeightScale"),
+      uLightDir: loc("uLightDir"),
+      uShaded: loc("uShaded"),
+      uOpacity: loc("uOpacity"),
+      uPhaseLUT: loc("uPhaseLUT"),
+      uPhaseRow: loc("uPhaseRow"),
+      uModulus: loc("uModulus"),
+      uModScale: loc("uModScale"),
+      uEnhance: loc("uEnhance"),
+      uSectors: loc("uSectors"),
+      uCrisp: loc("uCrisp"),
+      uHueShift: loc("uHueShift"),
+      uHueSign: loc("uHueSign"),
+      uCvd: loc("uCvd"),
+      uUncertainty: loc("uUncertainty"),
+      uLevelAbs: loc("uLevelAbs"),
+      uLevelArgOn: loc("uLevelArgOn"),
+      uLevelArg: loc("uLevelArg"),
+    };
+    this.curvePosBuffer = gl.createBuffer();
+    this.curveWBuffer = gl.createBuffer();
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.curvePosBuffer);
+    const aPos = gl.getAttribLocation(program, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.curveWBuffer);
+    const aW = gl.getAttribLocation(program, "aW");
+    gl.enableVertexAttribArray(aW);
+    gl.vertexAttribPointer(aW, 2, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    if (this.curveVao) gl.deleteVertexArray(this.curveVao);
+    this.curveVao = vao;
+  }
+
+  /** (Re)build the algebraic-curve mesh (ADR-0029) for the current map + z-view, upload it to the attribute
+   *  buffers, and frame the orbit camera on it. A no-op unless the active map is a recognized curve (and the
+   *  GPU buffers exist). The z-window is the current {@link view}; the charisma height is applied in-shader,
+   *  so this need not rerun on a height-axis / exaggeration change (only the framing does — see
+   *  {@link reframeRiemann}). */
+  private rebuildCurveMesh(): void {
+    const spec = this.activeCurveSpec(); // radical curve (M2a/M2b) or implicit curve (M2c)
+    if (!spec || !this.curvePosBuffer || !this.curveWBuffer) return;
+    const gl = this.gl;
+    const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
+    const mesh = buildCurveMesh(spec, {
+      cx: this.view.cx,
+      cy: this.view.cy,
+      span: this.view.span,
+      aspect,
+    });
+    this.curveTriCount = mesh.triangleCount;
+    this.curveHoles = mesh.droppedTriangles;
+    this.curveCapped = mesh.capped;
+    this.curvePickPositions = mesh.positions; // cache for the hover-pick ray-cast (M3.1)
+    this.curvePickValues = mesh.values;
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.curvePosBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.positions, gl.DYNAMIC_DRAW);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.curveWBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, mesh.values, gl.DYNAMIC_DRAW);
+    // Record raw bounds (xy + Re/Im-w ranges, no heightScale) so a height change re-frames without a rebuild.
+    const pos = mesh.positions;
+    const val = mesh.values;
+    const b = {
+      minx: Infinity,
+      maxx: -Infinity,
+      miny: Infinity,
+      maxy: -Infinity,
+      minReW: Infinity,
+      maxReW: -Infinity,
+      minImW: Infinity,
+      maxImW: -Infinity,
+    };
+    for (let i = 0; i < pos.length; i += 2) {
+      b.minx = Math.min(b.minx, pos[i]);
+      b.maxx = Math.max(b.maxx, pos[i]);
+      b.miny = Math.min(b.miny, pos[i + 1]);
+      b.maxy = Math.max(b.maxy, pos[i + 1]);
+      b.minReW = Math.min(b.minReW, val[i]);
+      b.maxReW = Math.max(b.maxReW, val[i]);
+      b.minImW = Math.min(b.minImW, val[i + 1]);
+      b.maxImW = Math.max(b.maxImW, val[i + 1]);
+    }
+    this.curveBounds = pos.length ? b : null;
+    this.frameCurve();
+  }
+
+  /** Frame the orbit camera on the current curve mesh from its stored bounds and the live height axis /
+   *  exaggeration — cheap (no mesh rebuild), so a height slider stays smooth. */
+  private frameCurve(): void {
+    const b = this.curveBounds;
+    if (!b) {
+      this.frameToBounds(NaN, NaN, NaN, NaN, NaN, NaN);
+      return;
+    }
+    const wLo = this.riemannHeightSource === 1 ? b.minImW : b.minReW;
+    const wHi = this.riemannHeightSource === 1 ? b.maxImW : b.maxReW;
+    const s = this.heightScale;
+    this.frameToBounds(b.minx, b.maxx, b.miny, b.maxy, wLo * s, wHi * s);
+  }
+
   /**
    * Compile `src` and swap in the new program, keeping the old one on failure (so a transient typo
    * never blanks the canvas). Throws the `@cas/expr` ExprError / a shader-compile Error for the caller
@@ -561,6 +971,7 @@ export class Plot {
     if (this.mode === "sphere") this.paintSphere();
     else if (this.mode === "3d") this.paintSurface();
     else if (this.mode === "linked") this.paintLinked();
+    else if (this.mode === "riemann") this.paintRiemann();
     else this.paint2D();
   }
 
@@ -710,6 +1121,420 @@ export class Plot {
     this.applyColorUniforms(u);
     this.applyParamUniforms(this.sphereParamLocs);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Draw the Riemann view: the surface alone (full canvas), or — when {@link riemannLinked} — the flat
+   *  base plane beside the surface (M3.2), scissored like {@link paintLinked}. */
+  private paintRiemann(): void {
+    if (this.riemannLinked) {
+      this.paintRiemannLinked();
+      return;
+    }
+    this.paintRiemannSurface();
+  }
+
+  /** Draw the live Riemann surface into a viewport (default: the whole canvas) — dispatch to the parametric
+   *  (M1) or the baked algebraic-curve (M2) path. */
+  private paintRiemannSurface(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
+    if (this.riemannKindV === "curve" || this.riemannKindV === "implicit")
+      this.paintRiemannCurve(vx, vy, vw, vh);
+    else this.paintRiemannParam(vx, vy, vw, vh);
+  }
+
+  /** Draw the flat base plane (left) beside the Riemann surface (right), both scissored (M3.2). The base
+   *  plane reads {@link view}; the surface owns its orbit framing. Navigating either updates the readout via
+   *  the hover-link (main.ts), not a shared view. */
+  private paintRiemannLinked(): void {
+    const gl = this.gl;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const halfW = Math.max(1, Math.round(W / 2));
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, 0, halfW, H); // left half — the flat base-plane portrait
+    this.paint2D(0, 0, halfW, H);
+    gl.scissor(halfW, 0, W - halfW, H); // right half — the surface clears + draws its own region
+    this.paintRiemannSurface(halfW, 0, W - halfW, H);
+    gl.disable(gl.SCISSOR_TEST);
+  }
+
+  /** Draw the parametric (M1, ADR-0028) surface: the grid mesh reinterpreted over the value plane,
+   *  positioned by `z = gZFn(t)`, lifted by the Re/Im-t charisma, coloured by the shared `colorAt`, through
+   *  an orbit camera framed on the surface. A no-op (dark clear) when no parametric form is active. */
+  private paintRiemannParam(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
+    const gl = this.gl;
+    const u = this.riemannUniforms;
+    gl.viewport(vx, vy, vw, vh);
+    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg (scissored to this pane in the linked view)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!this.riemannProgram || !u || !this.riemannVao) return;
+    const aspect = vh > 0 ? vw / vh : 1;
+    const cam = this.riemannCamera(); // perspective, framed on the surface (shared with the hover-pick)
+    const { halfX, halfY } = this.riemannWindow();
+    gl.useProgram(this.riemannProgram);
+    gl.bindVertexArray(this.riemannVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+    gl.enable(gl.DEPTH_TEST);
+    // Frame the surface with a world-half-height ≈ its dolly-scaled radius so near/far bracket it.
+    const worldHalf = Math.max(0.5, this.riemannDist * Math.tan(cam.fov / 2));
+    gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, worldHalf));
+    gl.uniform2f(u.uTCenter, 0, 0);
+    gl.uniform2f(u.uTHalf, halfX, halfY);
+    gl.uniform1i(u.uHeightSource, this.riemannHeightSource);
+    gl.uniform1f(u.uHeightScale, this.heightScale);
+    gl.uniform3f(u.uLightDir, 0.4, 0.5, 0.75);
+    gl.uniform1f(u.uShaded, 1);
+    gl.uniform1f(u.uOpacity, this.opacity);
+    this.applyColorUniforms(u);
+    const translucent = this.opacity < 1;
+    if (translucent) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+    }
+    gl.drawElements(gl.TRIANGLES, this.gridIndexCount, gl.UNSIGNED_INT, 0);
+    if (translucent) {
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  /** Draw the baked algebraic-curve surface (M2a, ADR-0029): the CPU-built triangle soup (world xy +
+   *  per-vertex sheet value), lifted in-shader by the Re/Im-w charisma, coloured by the shared `colorAt`,
+   *  through the same orbit camera. A no-op (dark clear) when no curve is active or the mesh is empty. */
+  private paintRiemannCurve(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
+    const gl = this.gl;
+    const u = this.curveUniforms;
+    gl.viewport(vx, vy, vw, vh);
+    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg (scissored to this pane in the linked view)
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!this.curveProgram || !u || !this.curveVao || this.curveTriCount === 0) return;
+    const aspect = vh > 0 ? vw / vh : 1;
+    const cam = this.riemannCamera(); // perspective, framed on the surface (shared with the hover-pick)
+    gl.useProgram(this.curveProgram);
+    gl.bindVertexArray(this.curveVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+    gl.enable(gl.DEPTH_TEST);
+    const worldHalf = Math.max(0.5, this.riemannDist * Math.tan(cam.fov / 2));
+    gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, worldHalf));
+    gl.uniform1i(u.uHeightSource, this.riemannHeightSource);
+    gl.uniform1f(u.uHeightScale, this.heightScale);
+    gl.uniform3f(u.uLightDir, 0.4, 0.5, 0.75);
+    gl.uniform1f(u.uShaded, 1);
+    gl.uniform1f(u.uOpacity, this.opacity);
+    this.applyColorUniforms(u);
+    const translucent = this.opacity < 1;
+    if (translucent) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+    }
+    gl.drawArrays(gl.TRIANGLES, 0, this.curveTriCount * 3);
+    if (translucent) {
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  // --- Riemann-surface controls (ADR-0028 / ADR-0029) ---------------------------------------------
+  /** Whether the active map has a renderable Riemann surface — in implicit mode (M2c) a valid `F(w,z)=0`,
+   *  otherwise an M1 invertible primitive OR an M2 algebraic curve — so the Riemann-surface mode is offered. */
+  riemannAvailable(): boolean {
+    if (this.implicitSrc) return this.riemannImplicit !== null;
+    return this.riemannForm !== null || this.riemannCurve !== null;
+  }
+
+  /** Which Riemann path is live: parametric (M1), baked radical curve (M2a/b), implicit curve (M2c), or none. */
+  riemannModeKind(): "param" | "curve" | "implicit" | null {
+    return this.riemannKindV;
+  }
+
+  /** Whether an implicit source is set but did not parse as a valid `F(w,z)` polynomial — for a honest badge. */
+  implicitInvalid(): boolean {
+    return this.implicitSrc !== null && this.riemannImplicit === null;
+  }
+
+  /** The parametric (M1) form, or null (curve / none). */
+  riemannInfo(): RiemannForm | null {
+    return this.riemannForm;
+  }
+
+  /** A unified badge descriptor for whichever Riemann path is live, or null. Curve stats (ramification
+   *  holes, budget cap) come from the last built mesh — surfaced honestly. */
+  riemannDescriptor(): {
+    label: string;
+    monodromy: string;
+    branchNote: string;
+    sheetKind: "finite" | "infinite";
+    holes: number;
+    capped: boolean;
+  } | null {
+    // Implicit mode (M2c) drives the surface exclusively; never fall through to an f(z)-derived descriptor.
+    if (this.implicitSrc) {
+      if (this.riemannKindV !== "implicit" || !this.riemannImplicit) return null;
+      return {
+        label: this.riemannImplicit.label,
+        monodromy: `${this.riemannImplicit.degreeW} sheets`,
+        branchNote: "roots of F(w,z)=0; sheets glue across the cut, ramification points are small holes",
+        sheetKind: "finite",
+        holes: this.curveHoles,
+        capped: this.curveCapped,
+      };
+    }
+    if (this.riemannForm) {
+      const f = this.riemannForm;
+      return {
+        label: f.label,
+        monodromy: f.monodromy,
+        branchNote: f.branchNote,
+        sheetKind: f.sheetKind,
+        holes: 0,
+        capped: false,
+      };
+    }
+    if (this.riemannCurve) {
+      const c = this.riemannCurve;
+      return {
+        label: c.label,
+        monodromy:
+          `${c.sheetCount} sheets` + (c.radicalCount > 1 ? ` · ${c.radicalCount} radicals` : ""),
+        branchNote: "sheets glue across the cut; ramification points are small holes",
+        sheetKind: "finite",
+        holes: this.curveHoles,
+        capped: this.curveCapped,
+      };
+    }
+    return null;
+  }
+
+  /** Re-frame the Riemann camera, rebuilding the curve mesh over the current z-view when the curve path is
+   *  live (use on a view / formula change or mode entry). Safe to call when no surface is active. */
+  reframeRiemann(): void {
+    if (this.riemannKindV === "curve" || this.riemannKindV === "implicit") this.rebuildCurveMesh();
+    else {
+      this.updateRiemannFraming();
+      this.paramPickDirty = true; // the t-window (sheet count) may have changed — re-sample the pick mesh
+    }
+  }
+
+  /** Frame the linked base-plane pane's {@link view} on the region the surface covers. For the curve path
+   *  the mesh is already built over {@link view}, so it's left as-is; for the parametric path {@link view}
+   *  is otherwise unrelated to the surface, so it's set to the surface's base-plane (z) extent. A no-op
+   *  unless a surface is active. */
+  frameRiemannBaseView(): void {
+    if (this.riemannKindV !== "param") return; // curve: `view` already frames the mesh's z-rectangle
+    const b = this.riemannXYBounds;
+    if (!b) return;
+    const halfX = (b.maxx - b.minx) / 2;
+    const halfY = (b.maxy - b.miny) / 2;
+    this.view = {
+      cx: (b.minx + b.maxx) / 2,
+      cy: (b.miny + b.maxy) / 2,
+      span: Math.max(halfX, halfY, 0.5) * 1.15, // world half-height; a touch of margin
+    };
+  }
+
+  /** Cheap re-frame after a height-axis / exaggeration change: the curve mesh is unchanged (charisma is a
+   *  shader uniform), so only the framing is recomputed — no mesh rebuild, so a height slider stays smooth. */
+  reframeRiemannLight(): void {
+    if (this.riemannKindV === "curve" || this.riemannKindV === "implicit") this.frameCurve();
+    else this.updateRiemannFraming();
+  }
+
+  /** Dolly the Riemann orbit camera in/out by a multiplicative factor (clamped). */
+  dollyRiemann(factor: number): void {
+    this.riemannDist = Math.min(1e5, Math.max(0.05, this.riemannDist * factor));
+  }
+
+  /** Reset the Riemann orbit camera to its framed default distance (the surface fitted to the viewport). */
+  resetRiemann(): void {
+    this.riemannDist = this.riemannBaseDist;
+  }
+
+  /** Parse + recognize the current implicit source (M2c), or null (no source / not a valid `F(w,z)` poly). */
+  private recognizeImplicit(): ImplicitCurve | null {
+    if (!this.implicitSrc) return null;
+    try {
+      return detectImplicitCurve(parse(this.implicitSrc));
+    } catch {
+      return null;
+    }
+  }
+
+  /** The active baked-curve sheet spec: the radical curve (M2a/M2b) or the implicit curve (M2c), or null. */
+  private activeCurveSpec(): { sheetsAt: (z: Complex) => Complex[]; sheetCount: number } | null {
+    if (this.riemannKindV === "implicit" && this.riemannImplicit)
+      return { sheetsAt: this.riemannImplicit.sheetsAt, sheetCount: this.riemannImplicit.degreeW };
+    if (this.riemannKindV === "curve" && this.curveSheetFns.length)
+      return {
+        sheetsAt: (z) => this.curveSheetFns.map((f) => f(z, [0, 0])),
+        sheetCount: this.curveSheetFns.length,
+      };
+    return null;
+  }
+
+  /**
+   * Set (or clear, with null) the implicit `F(w,z)=0` source (M2c, ADR-0031). A non-null source enters
+   * implicit mode — the surface becomes the per-vertex root-solve curve of `F` (`@cas/core rootsMonic`) in
+   * place of the f(z)-derived forms; null reverts. Re-recognizes + rebuilds the mesh/framing. Safe to call
+   * outside the Riemann view.
+   */
+  setImplicitSource(src: string | null): void {
+    this.implicitSrc = src && src.trim() ? src : null;
+    const prevKind = this.riemannKindV;
+    this.riemannImplicit = this.recognizeImplicit();
+    this.riemannKindV = this.implicitSrc
+      ? this.riemannImplicit
+        ? "implicit"
+        : null
+      : this.riemannForm
+        ? "param"
+        : this.riemannCurve
+          ? "curve"
+          : null;
+    if (
+      (this.riemannKindV === "curve" || this.riemannKindV === "implicit") &&
+      prevKind !== this.riemannKindV
+    )
+      this.riemannHeightSource = 0;
+    this.paramPickDirty = true;
+    this.reframeRiemann();
+  }
+
+  /** The CPU pick mesh for the live Riemann path (M3.1): the cached curve soup, or the lazily-sampled
+   *  parametric grid (built on first use after a form / t-window change), or null (no surface active). */
+  private currentRiemannPickMesh(): PickMesh | null {
+    if (this.riemannKindV === "curve") {
+      return this.curvePickPositions && this.curvePickValues
+        ? pickMeshFromCurve(this.curvePickPositions, this.curvePickValues)
+        : null;
+    }
+    if (this.riemannKindV === "param" && this.riemannForm) {
+      if (this.paramPickDirty || !this.paramPickMesh) {
+        const zFn = makeComplexFn(this.riemannForm.zFromT, {});
+        const wFn = makeComplexFn(this.riemannForm.wFromT, {});
+        this.paramPickMesh = buildParamPickMesh(
+          (t) => zFn(t, [0, 0]),
+          (t) => wFn(t, [0, 0]),
+          this.riemannWindow(),
+        );
+        this.paramPickDirty = false;
+      }
+      return this.paramPickMesh;
+    }
+    return null;
+  }
+
+  /** The Riemann orbit camera (perspective; framed on the surface) — shared by the paint and the pick so
+   *  the hover lands on exactly what's drawn. */
+  private riemannCamera(): OrbitCamera {
+    return {
+      ...this.camera,
+      ortho: false,
+      distance: this.riemannDist,
+      target: this.riemannTarget,
+    };
+  }
+
+  /**
+   * Multi-sheet hover-pick (M3.1, ADR-0030): the on-surface point under a client pixel — its base point `z`,
+   * the value `w` on the front-most sheet, and the local sheet census (`sheetIndex` of `sheetCount`) over
+   * that `z`. Ray-casts the drawn triangles through the same framed camera as the paint, so self-occlusion is
+   * honoured (the eye's sheet, not a base-plane shadow). Null over empty scene / when no surface is active.
+   */
+  pickRiemann(clientX: number, clientY: number, vp?: ViewportRect): RiemannHit | null {
+    const mesh = this.currentRiemannPickMesh();
+    if (!mesh || mesh.triangleCount === 0) return null;
+    const r = this.rect(vp);
+    if (r.width <= 0 || r.height <= 0) return null;
+    const ndcX = ((clientX - r.left) / r.width) * 2 - 1;
+    const ndcY = 1 - ((clientY - r.top) / r.height) * 2;
+    const cam = this.riemannCamera();
+    const eye = cameraEye(cam);
+    const fwd = normalize3(sub3(cam.target, eye));
+    let right = cross3(fwd, [0, 0, 1]);
+    if (length3(right) < 1e-6) right = [1, 0, 0]; // looking straight down the height axis
+    right = normalize3(right);
+    const up = normalize3(cross3(right, fwd));
+    const tan = Math.tan(cam.fov / 2);
+    const aspect = r.width / r.height;
+    const dir = normalize3(
+      add3(fwd, add3(scale3(right, ndcX * tan * aspect), scale3(up, ndcY * tan))),
+    );
+    return pickRiemannSurface(mesh, { origin: eye, dir }, this.riemannHeightSource, this.heightScale);
+  }
+
+  /** The set of sheet values over a base point `z` — **exact** for an algebraic curve (evaluate every branch
+   *  combo), a **mesh census** for a parametric primitive. The enumerator behind the monodromy explorer. */
+  riemannSheetsAt(z: Complex): Complex[] {
+    if (this.riemannKindV === "implicit" && this.riemannImplicit) return this.riemannImplicit.sheetsAt(z);
+    if (this.riemannKindV === "curve") return this.curveSheetFns.map((f) => f(z, [0, 0]));
+    const mesh = this.currentRiemannPickMesh();
+    return mesh ? sheetsOverZ(mesh, z[0], z[1]) : [];
+  }
+
+  /**
+   * Estimate the monodromy of a base-plane loop (M3.3, ADR-0030): how the sheets permute after continuing
+   * around it. **An estimate, never certified** (RISKS §3) — the caller keeps the result out of the badge,
+   * the permalink, and every export. Null when no surface is active or the loop has fewer than two sheets.
+   */
+  computeRiemannMonodromy(loop: Complex[]): MonodromyResult | null {
+    if (!this.riemannAvailable()) return null;
+    return computeMonodromy((z) => this.riemannSheetsAt(z), loop);
+  }
+
+  /** Estimate the branch (ramification) points over the region the surface covers (M3.4): where the sheets
+   *  merge. `≈` — a scan of the sheet separation (mesh-limited on the parametric path). Empty when no surface
+   *  is active. The scan box is the curve's z-view, or the parametric surface's base-plane extent. */
+  riemannBranchPoints(grid = 40): Complex[] {
+    if (!this.riemannAvailable()) return [];
+    let box: { xmin: number; xmax: number; ymin: number; ymax: number };
+    if (this.riemannKindV === "param" && this.riemannXYBounds) {
+      const b = this.riemannXYBounds;
+      const padX = (b.maxx - b.minx) * 0.08 + 1e-6;
+      const padY = (b.maxy - b.miny) * 0.08 + 1e-6;
+      box = { xmin: b.minx - padX, xmax: b.maxx + padX, ymin: b.miny - padY, ymax: b.maxy + padY };
+    } else {
+      const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
+      const halfX = this.view.span * aspect;
+      box = {
+        xmin: this.view.cx - halfX,
+        xmax: this.view.cx + halfX,
+        ymin: this.view.cy - this.view.span,
+        ymax: this.view.cy + this.view.span,
+      };
+    }
+    return findBranchPoints((z) => this.riemannSheetsAt(z), box, { grid });
+  }
+
+  /** The **exact** branch locus (M2c.2) for an implicit `F(w,z)=0` with Gaussian-rational coefficients — the
+   *  roots of `disc_w F` (`@cas/exact`). Null when not applicable (not implicit mode, or a float coefficient),
+   *  so the caller falls back to the `≈` sheet-separation scan. Coordinates are `≈`; the locus is `=`. */
+  riemannBranchPointsExact(): Complex[] | null {
+    if (this.riemannKindV !== "implicit" || !this.implicitSrc) return null;
+    try {
+      return exactBranchLocus(parse(this.implicitSrc));
+    } catch {
+      return null;
+    }
   }
 
   // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------

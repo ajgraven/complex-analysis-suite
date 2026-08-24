@@ -66,6 +66,75 @@ function render(src: string, mode: "2d" | "3d", topDown = false): HTMLCanvasElem
   return canvas;
 }
 
+/** Render a Riemann surface (ADR-0028) through the real Plot at a fixed charisma / sheet count. */
+function renderRiemann(src: string, heightSource = 0, sheets?: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, src);
+  if (!plot.riemannAvailable()) throw new Error(`not a Riemann form: ${src}`);
+  plot.mode = "riemann";
+  plot.riemannHeightSource = heightSource;
+  if (sheets !== undefined) plot.riemannSheets = sheets;
+  plot.reframeRiemann(); // frame the camera for the chosen charisma / sheets
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
+/** Render an algebraic-curve Riemann surface (M2a, ADR-0029) through the real Plot. */
+function renderCurve(src: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, src);
+  if (plot.riemannModeKind() !== "curve") throw new Error(`not an algebraic curve: ${src}`);
+  plot.mode = "riemann";
+  plot.reframeRiemann(); // build the curve mesh over the default view + frame the camera
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
+/** Render an implicit `F(w,z)=0` Riemann surface (M2c, ADR-0031) through the real Plot. */
+function renderImplicit(src: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, "z"); // the f(z) box is unused in implicit mode
+  plot.setImplicitSource(src);
+  if (plot.riemannModeKind() !== "implicit") throw new Error(`not a valid implicit curve: ${src}`);
+  plot.mode = "riemann";
+  plot.view = { cx: 0, cy: 0, span: 2 };
+  plot.reframeRiemann();
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
+/** Render the linked Riemann view (M3.2, ADR-0030): the flat base plane beside the surface. */
+function renderRiemannLinked(src: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, src);
+  if (!plot.riemannAvailable()) throw new Error(`not a Riemann form: ${src}`);
+  plot.mode = "riemann";
+  plot.riemannLinked = true;
+  plot.view = { cx: 0, cy: 0, span: 2 };
+  plot.reframeRiemann();
+  plot.frameRiemannBaseView();
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
+/** The mean colour variance of the LEFT half of a square render (the base-plane pane in the linked view). */
+function leftHalfVariance(src: HTMLCanvasElement): number {
+  const g = document.createElement("canvas");
+  g.width = N;
+  g.height = N;
+  const ctx = g.getContext("2d");
+  if (!ctx) throw new Error("no 2D context to read back the render");
+  ctx.drawImage(src, 0, 0, N, N);
+  const d = ctx.getImageData(0, 0, N, N).data;
+  const out: number[] = [];
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N / 2; x++) {
+      const i = (y * N + x) * 4;
+      out.push(d[i], d[i + 1], d[i + 2]);
+    }
+  return variance(out);
+}
+
 describe("plotter render-consistency goldens (Track B)", () => {
   it("renders a non-blank z^2 portrait (guards the invariants below against a blank canvas)", () => {
     expect(variance(fingerprint(render("z^2", "2d"), N))).toBeGreaterThan(200);
@@ -80,5 +149,45 @@ describe("plotter render-consistency goldens (Track B)", () => {
     const portrait = fingerprint(render("z^2", "2d"), N);
     const landscape = fingerprint(render("z^2", "3d", true), N);
     expect(meanAbs(portrait, landscape)).toBeLessThan(6);
+  });
+
+  // The Riemann-surface mode (ADR-0028): the parametrize-by-w surface renders real, phase-coloured
+  // structure (not a blank clear), and the charisma axis actually changes the surface.
+  it("renders a non-blank √z Riemann surface", () => {
+    expect(variance(fingerprint(renderRiemann("sqrt(z)"), N))).toBeGreaterThan(50);
+  });
+
+  it("renders a non-blank log-z helicoid (Im-w charisma)", () => {
+    expect(variance(fingerprint(renderRiemann("log(z)", 1), N))).toBeGreaterThan(50);
+  });
+
+  it("the charisma axis changes the surface (Re w vs Im w on √z differ)", () => {
+    const reW = fingerprint(renderRiemann("sqrt(z)", 0), N);
+    const imW = fingerprint(renderRiemann("sqrt(z)", 1), N);
+    expect(meanAbs(reW, imW)).toBeGreaterThan(3);
+  });
+
+  // The algebraic-curve mode (M2a, ADR-0029): baked NPP meshes render real structure through the real Plot.
+  it("renders a non-blank √(z²−1) algebraic-curve surface", () => {
+    expect(variance(fingerprint(renderCurve("sqrt(z^2 - 1)"), N))).toBeGreaterThan(50);
+  });
+
+  it("renders a non-blank √(z³−z) (elliptic) surface", () => {
+    expect(variance(fingerprint(renderCurve("sqrt(z^3 - z)"), N))).toBeGreaterThan(50);
+  });
+
+  // The implicit F(w,z)=0 mode (M2c, ADR-0031): a per-vertex root-solve surface renders real structure.
+  it("renders a non-blank implicit w³ − w − z surface", () => {
+    expect(variance(fingerprint(renderImplicit("w^3 - w - z"), N))).toBeGreaterThan(50);
+  });
+
+  // The linked base-plane pane (M3.2, ADR-0030): the split renders real structure in BOTH panes, and the
+  // base-plane pane makes the image differ from the surface-only render.
+  it("the linked Riemann view renders a non-blank base-plane pane beside the surface", () => {
+    const linked = renderRiemannLinked("sqrt(z)");
+    expect(variance(fingerprint(linked, N))).toBeGreaterThan(50); // non-blank overall
+    expect(leftHalfVariance(linked)).toBeGreaterThan(50); // the base-plane (left) pane has real structure
+    const surfaceOnly = fingerprint(renderRiemann("sqrt(z)"), N);
+    expect(meanAbs(fingerprint(linked, N), surfaceOnly)).toBeGreaterThan(3); // the split changed the image
   });
 });

@@ -2280,3 +2280,390 @@ serialization → executable layering.)
 
 **Not in scope.** The `@cas/interchange`-side SC form (still deferred, ADR-0007 — gate on a receiving tool)
 and Riemann Map's *separate* CD → RM Böttcher `LaurentMap` converter (a different converter, left as-is).
+
+---
+
+## ADR-0028: Riemann-surface mode in the plotter — parametrize-by-w, branch machinery in-app
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Records the decision to add a true multi-sheeted **Riemann-surface** view to
+`apps/complex-function-plotter`, the **method choice** (parametrize-by-w first, algebraic triangulation
+and z-grid continuation deferred), and — in the [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need)
+shape — keeping the new branch/inverse machinery **in-app** with no package extraction and no new
+[ADR-0005](#adr-0005-expr--interchange-are-the-keystone) multivalued interchange form. The full plan is
+[`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md).*
+
+### Context
+
+The plotter renders 2D domain coloring, a single-sheet analytic **landscape** (height = `|f|`), and a
+domain **Riemann sphere** — all principal-branch. It cannot show a function's **true Riemann surface**
+(multiple sheets glued across branch cuts), which is the natural next view for the multivalued primitives
+users type (√, ⁿ√, `z^{p/q}`, log, inverse trig). The obstacle is that `@cas/expr` is single-valued
+end-to-end ([ADR-0005](#adr-0005-expr--interchange-are-the-keystone) deferred multivalued `expr`), and a
+naive height field paints a **spurious vertical wall** at a branch cut that reads as real structure.
+
+There is no single algorithm that turns an arbitrary user expression into a correct Riemann surface; the
+literature (Trott/Wolfram, Wegert, Nieser–Poelke–Polthier/Kranich) is a *ladder* of methods matched to
+function class. See [`docs/design/riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md).
+
+### Decision
+
+Add a **`riemann` render mode** to the plotter, built on the existing 3D stack (camera, mesh, `colorAt`).
+Ship the **parametrize-by-w** method first: for a recognized invertible primitive `w = A·P(α z+β)+B`
+(P ∈ {sqrt, log, arcsin, arccos, arctan} or a fractional power), sample the value plane `W`, plot
+`(Re g(W), Im g(W), charisma(W))` with `z = g(W)` and color `colorAt(A·W+B)`. The sheets glue
+automatically, so the mode **never performs — and never depends on — globally-consistent sheet
+continuation through branch collisions**, the exploratory, never-certified problem the repo flags in
+[`RISKS.md`](RISKS.md) §3 and `apps/correspondences/src/orbitTree.ts`.
+
+Keep the inverse registry + branch-point detection **in the app** (`src/riemann/`), reusing `@cas/expr`
+for both backends; **extract nothing** and add **no interchange form** until a second consumer exists
+([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) is symmetric). Every result is honestly
+labeled: exact glued topology, `≈` sampled values, a badge for finite sheet-count truncation, and the mode
+is *only offered* when the map is a recognized primitive (else "principal-branch only").
+
+### Options Considered
+
+#### Option A: Parametrize-by-w first (chosen)
+**Pros:** textbook-correct surfaces for the canonical multivalued primitives; reuses `compileF` /
+`makeComplexFn` with zero new numeric code (the inverse is just another expression); sheets glue with no
+branch-tracking; sidesteps the never-certified continuation problem entirely; coloring + height are affine
+in the mesh UV, so they interpolate exactly. **Cons:** needs a symbolically-known single-valued inverse —
+does not cover composites with no global inverse (e.g. `log(sin(√z))`), which fall back to the labeled
+principal-branch views.
+
+#### Option B: Algebraic-curve triangulation now (Kranich proximity gluing)
+**Pros:** the most general single method for the whole *algebraic* sublanguage as one glued surface; the
+exact tools exist (`@cas/exact` `discriminant`, `@cas/core` `rootsMonic`). **Cons, and why deferred:**
+substantially heavier (AST→`P(z,w)=0` reduction, per-vertex root-finding, adaptive subdivision, Web-Worker
+mesh caching); WebGL loses geometry-shader parallelism; visible holes near ramification at low depth. High
+value but wrong first step — it is M2, gated on its own approval.
+
+#### Option C: Multi-sheet stacking by z-grid analytic continuation
+**Pros:** covers some composites over the z-plane. **Cons, and why rejected as the lead:** it *requires*
+nearest-value / phase-unwrap continuation, whose failure modes (a branch point inside a cell, silent
+cut-healing that violates true monodromy) are exactly [`RISKS.md`](RISKS.md) §3 — strictly weaker and
+riskier than Option A wherever an inverse exists. Reserved, `≈`-only, for the M3 monodromy explorer.
+
+#### Option D: A separate `apps/riemann-surface`
+**Pros:** clean slate. **Cons:** the request is explicitly an addition *to the plotter*; a new app would
+duplicate the entire render/expr/coloring/permalink stack it already shares — against the north-star
+("each new tool builds fewer primitives from scratch").
+
+### Trade-off Analysis
+
+Option A delivers the headline capability at the lowest risk and the highest reuse, and it is the only
+option that structurally cannot produce the misleading, uncertified output the guardrails forbid. B is the
+right *second* method (broadest algebraic coverage) but is a large, independent build. C's continuation is
+the genuinely hard, exploratory core the suite has deliberately never certified; confining it to a labeled
+M3 explorer keeps the honest-labeling guardrail intact. In-app machinery honors ADR-0007 symmetry (no
+extraction without a second consumer) and leaves the clean extraction seams (`render3d/`, a `@cas/branch`)
+for when one appears.
+
+### Consequences
+
+- **Easier:** the plotter gains true Riemann surfaces reusing its whole stack; a permalink additively
+  carries the new mode; the two later methods (B, C) have a recorded home and rationale.
+- **Harder:** a second inverse/branch consumer will want `src/riemann/` extracted (the anticipated
+  ADR-0007 trigger, like the `mat4.ts` "third consumer" note for `render3d/`); until then the machinery is
+  app-local by design.
+- **Revisit if** any of: (a) a receiving tool needs a serializable multivalued map (⇒ design the
+  [ADR-0005](#adr-0005-expr--interchange-are-the-keystone) branch-aware interchange); (b) a second consumer
+  needs the inverse registry / branch detection (⇒ extract `@cas/branch`); (c) M2/M3 are approved (⇒
+  follow-on ADRs for the algebraic engine and any `@cas/core`/`@cas/exact` primitive they pull).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md) +
+       [`riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md) and this ADR at the
+       M0 gate.
+2. [ ] Land M0 (spike) + M1 (parametrize-by-w mode) test-guarded on
+       `claude/riemann-surface-rendering-fvybo6`; keep the existing top-down-3D≡2D golden green.
+3. [ ] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
+       `P(z,w)=0` engine and any shared primitive it needs — then M3 (monodromy explorer, `≈`-labeled).
+       *(M2a approved + recorded as [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)*
+4. [ ] On a second consumer of `src/riemann/`, extract `@cas/branch` and supersede this ADR's in-app note.
+
+---
+
+## ADR-0029: Algebraic-curve Riemann surfaces (M2a single-radical, NPP proximity gluing)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+(anticipated in its Action Item 3). Extends the plotter's Riemann view from single invertible primitives to
+**algebraic** functions via the Nieser–Poelke–Polthier / Kranich proximity-gluing algorithm, scoped this pass
+to the **single-radical class** `w = R(z)^(p/q)` (R rational, constant coefficients). Records the method, the
+scope, the roots-of-unity sheet specialization, the new `@cas/core` dependency, and the deferral of
+`@cas/exact`-based elimination (M2b) and multivalued interchange (ADR-0005). Full plan:
+[`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md).*
+
+### Context
+
+M1 (ADR-0028) renders the true Riemann surface for one invertible primitive of an **affine** inner
+(`A·P(αz+β)+B`). It declines algebraic composites — `sqrt(z^2−1)`, `sqrt(z^3−z)`, `(z^2−1)^(1/3)`,
+`sqrt((z−1)/(z+1))` — whose surfaces are the classical multi-sheeted objects. The literature's
+web-implementable method is NPP/Kranich (research notes §2.2): triangulate the z-domain, enumerate the `n`
+sheets per vertex, proximity-stitch, and adaptively subdivide near the branch locus (leaving holes at
+ramification points so cuts never render as walls). The suite already has the general tools it needs at
+scale — `@cas/exact` `resultant`/`discriminant` and `@cas/core` `rootsMonic` — but the **single-radical**
+subclass does not need them for the sheets: the `q` sheets of `R(z)^(p/q)` are elementary (`q`-th
+powers/roots of `R(z)`).
+
+### Decision
+
+Ship **M2a** — `w = R(z)^(p/q)` with R a rational function of z and constant (rational-expressible)
+coefficients — as a **`curve` kind** of the existing `riemann` mode. Sheets are the `q` distinct values of
+`R(z)^(p/q)` (roots-of-unity specialization, **no per-vertex polynomial solve**); the mesh is built by NPP
+proximity gluing on a Web Worker and cached; branch points (zeros of R and its poles, via `@cas/core`
+`rootsMonic` on the `@cas/expr fToRational` numerator/denominator) drive adaptive subdivision + ramification
+holes, with a local near-degeneracy backstop and a badged triangle-budget cap. Height = `Re w`, color =
+shared `colorAt`. **Dispatch prefers M1's exact parametric surface**; the curve path takes only maps M1
+declines. Keep everything **in-app** (ADR-0007); pull **`@cas/core`** only; leave **`@cas/exact`** for M2b.
+
+> **Update (M2.1 as built):** M2a shipped with **no new package deps.** The branch points of this class are
+> exactly the zeros/poles of R, which the mesh's *local* degeneracy test (`minSep → 0`) and the `wCap` catch
+> directly — so `@cas/core rootsMonic` proved unnecessary and was not pulled. Adaptive subdivision is driven
+> by the local test (no precomputed branch-point list); mesh-gen is synchronous (fast enough for M2a grids;
+> the Web Worker is deferred). This strengthens the north-star (zero new primitives) and does not change the
+> decision, only its dependency footprint.
+>
+> **Update (M2b as built):** radical **sums / products / ratios** (`√z + √(z−1)`, `√(z²−1) + z^(1/3)`,
+> `1/√z`, `2·√(z²−1)`) shipped **without `@cas/exact` resultants** — via **root-of-unity branch injection**:
+> the k-th branch of `Rᵢ^(pᵢ/qᵢ)` is its principal value × `ωᵢ^{pᵢk}`, so every sheet is the principal
+> expression with a constant factor at each (structurally-deduped) radical node. `detectAlgebraicCurve`
+> enumerates all `∏qᵢ` combos (cap 16) as ASTs reusing `makeComplexFn`; `curveMesh` was generalized to a
+> `sheetsAt` spec that subsumes M2a. Exact, spurious-branch-free, **still no new deps.** `@cas/core` /
+> `@cas/exact` are now reserved for **M2c** (a direct implicit `F(w,z)=0` input — genuinely coupled roots
+> need per-vertex solving + an exact discriminant), specced in the plan §9.
+
+### Options Considered
+
+#### Option A: M2a single-radical, sheets as roots of unity (chosen)
+**Pros:** the `q` sheets are elementary (no iterative root solve → fast, robust, no convergence/conditioning
+failure per vertex); no symbolic elimination, so **no spurious "conjugate" branches**; covers the headline
+algebraic cases (elliptic `sqrt(z^3−z)`, `sqrt(z^2−1)`, cube roots of rationals); needs only `@cas/core`
+for branch-point location. **Cons:** does not cover radical *sums* (`√z + √(z−1)`), which have genuinely
+coupled sheets — deferred to M2b.
+
+#### Option B: General `P(z,w)=0` now (per-vertex `rootsMonic`, `@cas/exact` elimination)
+**Pros:** one method for all algebraic composites. **Cons, why deferred:** radical **sums** need iterated
+`@cas/exact` resultants to build `P`, which introduce spurious branches that must be filtered by continuity
+from the principal sheet — real complexity and higher-degree `P` (more per-vertex solving, worse
+conditioning). High value but the wrong first step; it is M2b, gated on its own approval.
+
+#### Option C: A `@cas/riemann` / `@cas/branch` package now
+**Pros:** a home for the mesh + branch machinery. **Cons:** ADR-0007 is symmetric — no second consumer yet.
+Keep it in `src/riemann/`; the `mat4.ts`-style "second consumer triggers extraction" note already stands
+(ADR-0028).
+
+### Trade-off Analysis
+
+M2a is the maximal robust subset: it delivers real algebraic surfaces at low risk because the sheet values
+are closed-form, sidestepping both the root-conditioning and the spurious-branch problems that make the
+general curve hard. Reusing `@cas/core` (not re-implementing a solver) honors the north-star; deferring
+`@cas/exact` avoids pulling the heavy exact-elimination path before radical sums (M2b) actually need it. The
+M1-preferred dispatch keeps the cheapest exact path for the primitives M1 already nails.
+
+### Consequences
+
+- **Easier:** the plotter gains the classical algebraic Riemann surfaces reusing M1's mode/camera/coloring;
+  the general path (M2b) has a recorded home and rationale.
+- **Harder:** a `curve` mesh is heavier than M1's parametric grid (worker + cache); a budget cap bounds it
+  (badged). Radical sums remain declined until M2b.
+- **Revisit if** any of: (a) M2b/M2c approved (⇒ `@cas/exact` elimination + spurious-branch filter, or an
+  implicit-input mode — follow-on ADR); (b) a second consumer needs `src/riemann/` (⇒ extract, per
+  ADR-0028 Action Item 4); (c) a receiving tool needs a serializable multivalued map (⇒ ADR-0005
+  branch-aware interchange).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-M2-plan.md`](design/riemann-surface-M2-plan.md) + this ADR.
+2. [x] Land M2.0 (spike, `sqrt(z^2−1)`) then M2.1 (full `R(z)^(p/q)`) — both **zero new deps** (local
+       degeneracy + `wCap`); existing tests (incl. top-down-3D≡2D) kept green.
+3. [x] Land M2b (radical sums / products / ratios) — via **root-of-unity branch injection**, not
+       `@cas/exact` resultants; still zero new deps.
+4. [ ] When (and only when) approved, land M2c (implicit `F(w,z)=0` input) — the first consumer of
+       `@cas/core` per-vertex root-solving + `@cas/exact` discriminant here; follow-on ADR (plan §9).
+
+---
+
+## ADR-0030: Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0028](#adr-0028-riemann-surface-mode-in-the-plotter-parametrize-by-w-branch-machinery-in-app)
+and [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing). Turns the
+Riemann view from a **renderer** into something **interrogable**: read the multi-sheeted value under the
+cursor (M3.1), see the branch/cut structure beside the surface on a linked base plane (M3.2), and trace how a
+loop permutes the sheets (M3.3, monodromy). Records the pick method, the local-branch-ordinal readout, the
+reuse of the linked-view scaffold, and — critically — the confinement of the `≈`/uncertified monodromy
+explorer. Full plan: [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md).*
+
+### Context
+
+M1 (ADR-0028) and M2 (ADR-0029) render the surface but leave it **mute**: no way to ask "what value is *this*
+point", no spatial link to the base plane, no way to watch a loop swap sheets — the three things a Riemann
+surface is *for*. The plotter already has a value inspector (catalog H1) for the 2D portrait and the 3D
+landscape, but the landscape's pick (`render3d/pick.ts`) ray-marches a **single-valued** height field
+`z = h(re, im)`; a Riemann surface stacks sheets over the same base point, so that pick cannot be reused. The
+subtle piece is monodromy: analytic continuation around a loop is exactly the never-certified operation the
+repo flags ([RISKS](RISKS.md) §3).
+
+### Decision
+
+Ship **M3** as three gated, app-local milestones, **no new packages** (ADR-0007 — reads existing geometry),
+in the approved order **M3.1 + M3.2, then M3.3**:
+
+- **M3.1 — multi-sheet hover-pick.** One uniform CPU **pick mesh** for both render paths: per vertex
+  `xy = (Re z, Im z)`, `w` (value), and a **height basis** `hb` (the uniformizer `t` for the M1 parametric
+  path, the value `w` for the M2 curve path) — so world height `= (heightSource? hb.im : hb.re)·heightScale`
+  matches the shader's law and survives a height-axis/exaggeration change without a rebuild. A pure-geometry
+  ray-cast (Möller–Trumbore, nearest hit, double-sided) returns the on-surface `z`/`w`; a point-in-triangle
+  **sheet census** at that `z` gives `N` distinct sheet values and the hovered sheet's **local ordinal** `k`.
+  Report `z`, `w`, `|w|`, `arg w`, and `k / N` — all `≈`.
+- **M3.2 — linked base-plane pane.** Reuse the `paintLinked` split-viewport scaffold to pair the flat base
+  plane with the surface, hover-linked, with branch-point markers.
+- **M3.3 — monodromy explorer.** Opt-in loop drag + nearest-match continuation + a permutation readout —
+  `≈`, uncertified, low-confidence-flagged, and **quarantined** from the badge, the permalink, and every
+  export (RISKS §3).
+
+### Options Considered
+
+#### Option A: Uniform triangle-mesh pick + local branch ordinal (chosen)
+**Pros:** one pick path serves both the parametric and the baked-curve surfaces; a real depth-sorted ray-cast
+picks the sheet the eye actually sees (self-occlusion honest); the branch ordinal `k / N` is well-defined at a
+point and exactly computable from the drawn mesh; near a branch point `N` honestly drops as sheets merge. No
+continuation, so **no RISKS §3 exposure** in M3.1/M3.2. **Cons:** the ordinal is *local*, not a global sheet
+identity — but a global one does not exist without fixing monodromy (M3.3), so claiming one would be
+dishonest; labeled accordingly.
+
+#### Option B: Reuse the height-field ray-march (`pick.ts`)
+**Cons, why rejected:** the march assumes a single-valued `h(re, im)` — precisely what a Riemann surface is
+not. It would silently return one sheet's height and mislabel overlapping sheets. Multi-valuedness is the
+whole subject; the pick must respect it.
+
+#### Option C: Assign global sheet numbers now
+**Cons, why rejected:** global numbering *is* the monodromy representation — the thing M3.3 explores and that
+RISKS §3 says is never certified. Baking a global integer into a hover readout would present uncertified
+structure as fact. Deferred and confined to the opt-in M3.3 explorer.
+
+### Trade-off Analysis
+
+M3.1/M3.2 are pure geometry over geometry that already exists — maximal usefulness at minimal risk and zero
+new primitives (north-star). M3.3 is the one place the plan buys a genuinely subtle capability (monodromy) at
+the cost of certification, and fences it: opt-in, `≈`, and unable to write into any durable/exported artifact.
+The uniform pick mesh (a single `hb` height-basis field) avoids branching the pick per render path and keeps
+the height law identical to the shader, so pick and picture agree.
+
+### Consequences
+
+- **Easier:** the Riemann view gains the value inspector the other views have; the base-plane link gives
+  spatial context for free from `paintLinked`; monodromy has a home that cannot contaminate the rest.
+- **Harder:** the M2 curve arrays must be cached for the pick (were upload-and-discard); a large mesh makes
+  the census O(triangles) per hover (throttled; a spatial index is a later optimization). M3.3 carries a
+  standing honesty burden (its output is never certified).
+- **Revisit if** any of: (a) a second consumer needs `src/riemann/pickMesh.ts` (⇒ extract, per ADR-0028
+  Action Item 4); (b) M2c lands (implicit `F(w,z)=0`) — the pick mesh already takes an arbitrary `sheetsAt`,
+  so it should carry over; (c) a receiving tool needs the monodromy data serialized (⇒ ADR-0005 branch-aware
+  interchange — and only with the RISKS §3 labeling intact).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md) + this ADR.
+2. [x] Land M3.1 (hover-pick) — `riemann/pickMesh.ts` + `Plot.pickRiemann` + readout; node tests; both
+       render paths; existing tests (incl. top-down-3D≡2D) kept green. **Paused for review.**
+3. [x] Land M3.2 (linked base-plane pane) — a "Base-plane pane" toggle (not a new mode); reuse `paintLinked`;
+       bidirectional hover-linking (crosshair). **Branch markers deferred to M3.4** (branch-point *location*
+       pairs with the polish). Browser golden added; gate green. **Paused for review.**
+4. [x] Land M3.3 (monodromy explorer) — `riemann/monodromy.ts` (nearest-match continuation + confidence
+       flags) + `Plot.riemannSheetsAt`/`computeRiemannMonodromy` (exact for curves, census for parametric) +
+       an opt-in loop-drag on the base pane. `≈`, low-confidence-flagged, and **quarantined** from the badge,
+       permalink, and exports (RISKS §3). 10 node tests incl. the real √(z²−1) curve. Gate green.
+5. [x] M3.4 (legibility polish) — **branch-point markers** (moved from M3.2): a uniform sheet-separation
+       scan (`riemann/branchPoints.ts`), drawn on the base-plane pane + counted in the badge, `≈`. Per-sheet
+       tint and cut-shadow were **considered and declined** on honesty grounds (global sheet identity is what
+       monodromy permutes; a cut is a choice, not an invariant — the branch *points* are the invariant mark).
+
+---
+
+## ADR-0031: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing)
+(anticipated in its Action Item 4 / plan §9) and [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+Extends the plotter's Riemann view from algebraic functions the user can *name* as radicals (M2a/M2b) to the
+**general algebraic curve entered implicitly** as a bivariate complex polynomial `F(w,z)=0` — including the
+curves with no radical form. Records the dedicated input-mode UX, the reuse of the M2 mesh + M3 exploration
+stack through the `sheetsAt` seam, and the dependency additions (`@cas/core` `rootsMonic`; `@cas/exact`
+`discriminant`) — the plotter's first consumers of both. Full plan:
+[`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md).*
+
+### Context
+
+M1 (ADR-0028) and M2a/M2b (ADR-0029) render every algebraic surface expressible as a **radical**. But by
+Abel–Ruffini most algebraic curves (a general quintic `w⁵ + z·w + z = 0`) have no radical form, while their
+Riemann surfaces are perfectly concrete. The whole M2/M3 stack is parametrized by ONE seam —
+`sheetsAt: (z) => Complex[]` (the sheet values over a base point) — consumed unchanged by `buildCurveMesh`,
+the M3.1 pick, the M3.3 monodromy, and the M3.4 branch scan. So covering the general curve needs only a new
+`sheetsAt` source, not a new engine. And because `F` is entered **directly**, there are **no spurious
+branches** (the problem that made building `P(z,w)` from radical sums by resultants the wrong first step in
+ADR-0029's Option B): every root of `F(·,z)` is a genuine sheet.
+
+### Decision
+
+Ship **M2c** — an implicit `F(w,z)=0` bivariate-polynomial input (constant Gaussian/complex coefficients) as
+a **new `implicit` kind** of the `riemann` mode, in a **dedicated input mode** (its own box + toggle, distinct
+from the `f`/`g` slots, since an implicit relation is not a function; entering it pins the Riemann view and
+disables the inapplicable tabs). A small app-local generic **bivariate expander** (`implicitPoly.ts`, over a
+pluggable scalar ring) extracts the `w`-coefficients; `detectImplicitCurve` (`implicitCurve.ts`) builds a
+`sheetsAt` that Horner-evaluates each `aₖ(z)` and solves the ascending list with **`@cas/core` `rootsMonic`**
+per vertex (a leading-coefficient zero drops the degree ⇒ fewer sheets ⇒ a mesh hole, never a wall). The whole
+M2 render/mesh + M3 exploration stack rides along unchanged via `riemannSheetsAt`. **M2c.2** adds the **exact**
+branch locus (`implicitExact.ts`): for Gaussian-rational `F`, the roots of `disc_w F` via **`@cas/exact`
+`discriminant`** — the locus `=`, coordinates `≈` — badged as `=K branch points`, falling back to the M3.4
+`≈` scan for float coefficients. Keep the engine **in-app** (ADR-0007 — no second consumer); add **`@cas/core`
+and `@cas/exact`** as dependencies (the plotter's first).
+
+### Options Considered
+
+#### Option A: Dedicated implicit mode + per-vertex `rootsMonic` + exact discriminant (chosen)
+**Pros:** covers the whole algebraic-curve class; reuses the entire M2/M3 stack through the `sheetsAt` seam
+(minimal new code); no spurious branches (direct `F`); the dedicated mode is honest that an implicit relation
+isn't a function; the exact discriminant gives a `=` branch locus where the radicals' local scan was `≈`.
+**Cons:** adds two dependencies (accepted — the anticipated first-consumer moment); per-vertex root-solving is
+heavier than the radicals' closed form (bounded by a degree cap, badged).
+
+#### Option B: Auto-detect `w` in the ordinary box, or an `= 0` equation (input-UX alternatives)
+**Cons, why not:** both silently overload the `f(z)` box / blur the function-vs-relation distinction. The
+dedicated mode was chosen for clarity (plan §6); all three share the same engine, so this is a front-door
+choice only.
+
+#### Option C: Emit `F(w,z)` from the radical recognizer via `@cas/exact` resultant elimination
+**Cons:** an internal unification (make M2a/M2b share the implicit engine) that would reintroduce the spurious
+branches ADR-0029 avoided; not needed for the user-facing implicit input. Left as a possible later refactor.
+
+### Trade-off Analysis
+
+M2c is the maximal-coverage step at low marginal cost: the `sheetsAt` seam means the surface, hover-pick,
+linked pane, monodromy, and branch markers all work the moment the root-solve enumerator exists. Reusing
+`@cas/core`/`@cas/exact` (not re-implementing a solver or a discriminant) honors the north-star; pulling them
+now is exactly the demand ADR-0029 §9 foresaw. The degree cap + honest labels (`≈` roots, exact sheet count,
+`=`/`≈` branch locus, no topology claims) keep it within the guardrails.
+
+### Consequences
+
+- **Easier:** the plotter renders the general algebraic Riemann surface, reusing all of M2/M3; the exact
+  branch locus is available for Gaussian-rational curves.
+- **Harder:** two new dependencies; per-vertex solving is heavier (degree cap, badged); the exact path is
+  limited to Gaussian-rational `F` (float coefficients fall back to the `≈` scan — badged honestly).
+- **Revisit if** any of: (a) a second consumer needs `src/riemann/implicit*.ts` (⇒ extract, ADR-0007);
+  (b) a receiving tool needs the implicit map serialized (⇒ ADR-0005 branch-aware interchange); (c) the
+  radical recognizer is unified onto the implicit engine (Option C — its own follow-on).
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-M2c-plan.md`](design/riemann-surface-M2c-plan.md) + this ADR.
+2. [x] Land M2c.0 + M2c.1 — `implicitPoly.ts` (generic bivariate expander) + `implicitCurve.ts` (`rootsMonic`
+       `sheetsAt`) + the dedicated implicit mode (toggle, box, view pinning, permalink field); adds
+       `@cas/core`. All M3 tools carry over via `riemannSheetsAt`. Node + browser tests.
+3. [x] Land M2c.2 — exact branch locus (`implicitExact.ts`, `@cas/exact` `discriminant`), `=`-labeled, with
+       the `≈` scan as the fall-back for float coefficients. Node tests.
