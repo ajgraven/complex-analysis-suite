@@ -28,6 +28,25 @@
 // at the end (the caller's originals are only READ), so no shared value is mutated.
 // =============================================================================
 
+// S4 (allocation, follow-up): this frame ran 8 `new Float64Array(L+1)` per call — and it is called per
+// boundary node per Newton iteration, the hottest core frame. Hoist the eight scratch buffers to module
+// scope, grown on demand (L is bounded and rarely changes, so the grow path is hit a handful of times
+// then never again). Safe to share: the function is a pure, synchronous, NON-reentrant convolution, and
+// every index 0..L of every buffer is fully overwritten before it is read (the res accumulators are seeded
+// from `result`, u/p/t are written before use), so no stale tail leaks in. Each realm — the main thread
+// and every worker — loads its own module instance and thus its own scratch, so there is no cross-thread
+// sharing (the clean-realm worker check still sees no kernel-global state).
+let _scratchN = 0;
+let _resRe, _resIm, _uRe, _uIm, _pRe, _pIm, _tRe, _tIm;
+function _ensureScratch(n) {
+  if (n <= _scratchN) return;
+  _resRe = new Float64Array(n); _resIm = new Float64Array(n);
+  _uRe = new Float64Array(n); _uIm = new Float64Array(n);
+  _pRe = new Float64Array(n); _pIm = new Float64Array(n);
+  _tRe = new Float64Array(n); _tIm = new Float64Array(n);
+  _scratchN = n;
+}
+
 /**
  * Accumulate the finite-pole branch tail Σ_j Σ_k conj(A_{j,k}) · u_j(z)^k,
  * expanded at z = z0 to order L, INTO `result`.
@@ -45,17 +64,17 @@
  */
 export function branchTaylorAccumulate(result, branches, z0, L) {
   const n = L + 1;
+  _ensureScratch(n);
 
-  // Scalar accumulators for result[0..L]; seeded from the caller's leading terms.
-  const resRe = new Float64Array(n);
-  const resIm = new Float64Array(n);
+  // Scalar accumulators for result[0..L] (module scratch), seeded from the caller's leading terms.
+  const resRe = _resRe, resIm = _resIm;
   for (let i = 0; i < n; i++) { resRe[i] = result[i].re; resIm[i] = result[i].im; }
 
-  // Reusable flat buffers (overwritten per branch): uT = u expanded at z0, pow =
-  // u^k, and a convolution scratch. Length n each.
-  const uRe = new Float64Array(n), uIm = new Float64Array(n);
-  const pRe = new Float64Array(n), pIm = new Float64Array(n);
-  const tRe = new Float64Array(n), tIm = new Float64Array(n);
+  // Reusable flat buffers (module scratch, overwritten per branch): uT = u expanded at z0, pow = u^k, and a
+  // convolution scratch. Indices 0..L are written before read, so a larger buffer's stale tail is never seen.
+  const uRe = _uRe, uIm = _uIm;
+  const pRe = _pRe, pIm = _pIm;
+  const tRe = _tRe, tIm = _tIm;
 
   const z0r = z0.re, z0i = z0.im;
 
