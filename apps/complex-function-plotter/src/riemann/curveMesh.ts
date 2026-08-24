@@ -1,18 +1,21 @@
 /**
  * The algebraic-curve Riemann-surface mesh (M2a, ADR-0028) by **Nieser–Poelke–Polthier / Kranich proximity
  * gluing** (research notes §2.2). For `w = R(z)^(p/q)` the surface is built over a triangulated z-domain:
- * at each grid vertex the `q` sheet values are the `q` distinct values of `R(z)^(p/q)` (elementary — no
- * root solve); each domain triangle is stitched into `q` surface triangles by matching, for each sheet at
- * the anchor corner, the **nearest** sheet value at the other two corners. Where a branch point sits inside
- * a cell the sheets collide (their separation → 0) and the nearest-match becomes a large jump; such
- * triangles are **dropped**, leaving small **holes** at the ramification points that shrink as the grid
- * refines — so a branch cut is never rendered as a wall (it simply isn't in the glued mesh).
+ * at each vertex the `q` sheet values are the `q` distinct values of `R(z)^(p/q)` (elementary — no root
+ * solve); each domain triangle is stitched into `q` surface triangles by matching, for each sheet at the
+ * anchor corner, the **nearest** sheet value at the other two corners. Where a branch point sits inside a
+ * cell the sheets collide (separation → 0) so the nearest-match becomes a large jump; such triangles are
+ * **adaptively subdivided** (up to `subdivideDepth`) and, if still degenerate at the finest level,
+ * **dropped** — leaving small **holes** at the ramification points that shrink with depth, so a branch cut
+ * is never rendered as a wall (it simply isn't in the glued mesh). Poles of R (where `|w| → ∞`) are dropped
+ * by the `wCap`.
  *
- * Output is a **baked, non-indexed** triangle soup: `positions` = world `(Re z, Im z)` per vertex (the
- * charisma height `Re w` / `Im w` is applied in the vertex shader, so it stays a live uniform), `values` =
- * the sheet value `w` per vertex (for `colorAt` and the height), three vertices per kept triangle. Pure: no
- * DOM / GL — runnable on the main thread (tests) or a Web Worker (the app). Uniform grid here; adaptive
- * subdivision + `@cas/core` branch-point seeding are M2.1 refinements over this M2.0 core.
+ * Branch points of this class are exactly the zeros and poles of `R`, both of which the local degeneracy /
+ * `wCap` tests detect directly — so the mesh needs **no branch-point solve and no extra packages** (exact
+ * branch loci via `@cas/exact` are the M2b general-curve tool). Output is a **baked, non-indexed** triangle
+ * soup: `positions` = world `(Re z, Im z)` per vertex (the charisma height `Re w` / `Im w` is applied in the
+ * vertex shader, staying a live uniform), `values` = the sheet value `w` per vertex. Pure: no DOM / GL —
+ * runnable on the main thread (tests + the app; fast enough for M2a grids). Winding matches `mesh.ts`.
  */
 import type { Complex } from "@cas/expr/complex";
 
@@ -33,8 +36,10 @@ export interface CurveViewport {
 }
 
 export interface CurveMeshOptions {
-  /** Base grid cells per side (default 96). */
+  /** Base grid cells per side (default 72). */
   grid?: number;
+  /** Adaptive subdivision levels for degenerate (branch-point) cells (default 3 → up to grid·2³ locally). */
+  subdivideDepth?: number;
   /** Stop after this many kept triangles (badged when hit; default 600k). */
   maxTriangles?: number;
   /** Drop vertices/triangles whose |w| exceeds this (a pole in R; default 1e3). */
@@ -92,22 +97,30 @@ function nearest(cand: readonly Complex[], w: Complex): { idx: number; dist: num
   return { idx, dist: best };
 }
 
+/** A domain vertex: world position + its `q` sheet values (empty if R was non-finite) + sheet separation. */
+interface Vert {
+  x: number;
+  y: number;
+  s: Complex[];
+  sep: number;
+}
+
 /**
- * Build the proximity-glued surface mesh for `spec` over `view`. A triangle is kept for a sheet only if the
- * nearest-match stayed on-sheet — the largest surface-edge |Δw| must be below half the minimum sheet
- * separation among the triangle's corners (a legitimate continuous step is ≪ a sheet gap; a jump across a
- * branch point is ≈ a sheet gap). Degenerate (branch-point) and pole cells are dropped as holes.
+ * Build the proximity-glued surface mesh for `spec` over `view`. A triangle is on-sheet only if the
+ * nearest-match stayed on-sheet — its largest surface-edge |Δw| must be below half the minimum sheet
+ * separation among the corners (a continuous step is ≪ a sheet gap; a jump across a branch point is ≈ a
+ * gap). Degenerate cells are subdivided up to `subdivideDepth`, then their still-degenerate sheets dropped.
  */
 export function buildCurveMesh(
   spec: CurveSpec,
   view: CurveViewport,
   opts: CurveMeshOptions = {},
 ): CurveMesh {
-  const N = Math.max(2, Math.floor(opts.grid ?? 96));
+  const N = Math.max(2, Math.floor(opts.grid ?? 72));
+  const maxDepth = Math.max(0, Math.floor(opts.subdivideDepth ?? 3));
   const maxTriangles = opts.maxTriangles ?? 600_000;
   const wCap = opts.wCap ?? 1e3;
   const { p, q } = spec;
-  const side = N + 1;
   const halfW = view.span * view.aspect;
   const halfH = view.span;
   const x0 = view.cx - halfW;
@@ -115,80 +128,92 @@ export function buildCurveMesh(
   const dx = (2 * halfW) / N;
   const dy = (2 * halfH) / N;
 
-  // Per-vertex sheet values + separation, computed once and shared across the (up to 4) incident cells.
-  const grid: Complex[][] = new Array(side * side);
-  const seps = new Float64Array(side * side);
-  for (let j = 0; j < side; j++) {
-    for (let i = 0; i < side; i++) {
-      const z: Complex = [x0 + i * dx, y0 + j * dy];
-      let r: Complex;
-      try {
-        r = spec.R(z, [0, 0]);
-      } catch {
-        r = [NaN, NaN];
-      }
-      const sheets = Number.isFinite(r[0]) && Number.isFinite(r[1]) ? sheetsOf(r, p, q) : [];
-      grid[j * side + i] = sheets;
-      seps[j * side + i] = sheets.length ? minSeparation(sheets) : 0;
-    }
-  }
-
   const posOut: number[] = [];
   const valOut: number[] = [];
   let dropped = 0;
   let capped = false;
 
-  // Emit the `q` surface triangles for one domain triangle (corners a, b, c = grid vertex indices).
-  const emitTriangle = (a: number, b: number, c: number): void => {
-    const sa = grid[a];
-    const sb = grid[b];
-    const sc = grid[c];
-    if (sa.length !== q || sb.length !== q || sc.length !== q) {
-      dropped += q; // a non-finite corner (pole / NaN) → drop all sheets here
-      return;
+  const vertAt = (x: number, y: number): Vert => {
+    let r: Complex;
+    try {
+      r = spec.R([x, y], [0, 0]);
+    } catch {
+      r = [NaN, NaN];
     }
-    const minSep = Math.min(seps[a], seps[b], seps[c]);
-    const xa = x0 + (a % side) * dx;
-    const ya = y0 + Math.floor(a / side) * dy;
-    const xb = x0 + (b % side) * dx;
-    const yb = y0 + Math.floor(b / side) * dy;
-    const xc = x0 + (c % side) * dx;
-    const yc = y0 + Math.floor(c / side) * dy;
+    const s = Number.isFinite(r[0]) && Number.isFinite(r[1]) ? sheetsOf(r, p, q) : [];
+    return { x, y, s, sep: s.length ? minSeparation(s) : 0 };
+  };
+  const mid = (a: Vert, b: Vert): Vert => vertAt((a.x + b.x) / 2, (a.y + b.y) / 2);
+
+  /**
+   * Stitch one domain triangle (corners P0/P1/P2) into up to `q` on-sheet surface triangles, appending
+   * them to the output. Returns whether ANY sheet was degenerate (the caller subdivides if it can).
+   * `emit` = actually append (false while only probing whether to subdivide).
+   */
+  const stitchTri = (P0: Vert, P1: Vert, P2: Vert, emit: boolean): boolean => {
+    if (P0.s.length !== q || P1.s.length !== q || P2.s.length !== q) {
+      if (emit) dropped += q; // a non-finite corner (pole / NaN)
+      return true;
+    }
+    const minSep = Math.min(P0.sep, P1.sep, P2.sep);
+    let degenerate = false;
     for (let s = 0; s < q; s++) {
-      if (posOut.length / 6 + 1 > maxTriangles) {
-        capped = true;
-        return;
-      }
-      const wa = sa[s];
-      const nb = nearest(sb, wa);
-      const nc = nearest(sc, wa);
-      const wb = sb[nb.idx];
-      const wc = sc[nc.idx];
-      const edge = Math.max(
-        nb.dist,
-        nc.dist,
-        Math.hypot(wb[0] - wc[0], wb[1] - wc[1]),
-      );
-      // Drop degenerate (branch-point) and mis-stitched cells, and pole blow-ups.
+      const wa = P0.s[s];
+      const nb = nearest(P1.s, wa);
+      const nc = nearest(P2.s, wa);
+      const wb = P1.s[nb.idx];
+      const wc = P2.s[nc.idx];
+      const edge = Math.max(nb.dist, nc.dist, Math.hypot(wb[0] - wc[0], wb[1] - wc[1]));
       const mag = Math.max(Math.hypot(wa[0], wa[1]), Math.hypot(wb[0], wb[1]), Math.hypot(wc[0], wc[1]));
       if (minSep < 1e-9 || edge > 0.5 * minSep || mag > wCap) {
-        dropped++;
+        degenerate = true;
+        if (emit) dropped++;
         continue;
       }
-      posOut.push(xa, ya, xb, yb, xc, yc);
-      valOut.push(wa[0], wa[1], wb[0], wb[1], wc[0], wc[1]);
+      if (emit) {
+        if (posOut.length / 6 + 1 > maxTriangles) {
+          capped = true;
+          return degenerate;
+        }
+        posOut.push(P0.x, P0.y, P1.x, P1.y, P2.x, P2.y);
+        valOut.push(wa[0], wa[1], wb[0], wb[1], wc[0], wc[1]);
+      }
     }
+    return degenerate;
   };
 
-  for (let j = 0; j < N && !capped; j++) {
-    for (let i = 0; i < N && !capped; i++) {
-      const A = j * side + i;
-      const B = A + 1;
-      const C = A + side;
-      const D = C + 1;
-      emitTriangle(A, C, B); // CW from +Z, matching mesh.ts (culling off; normal oriented in-shader)
-      emitTriangle(B, C, D);
+  // A cell has corners A=bottom-left, B=bottom-right, C=top-left, D=top-right; two triangles (A,C,B),(B,C,D).
+  const emitCell = (A: Vert, B: Vert, C: Vert, D: Vert, depth: number): void => {
+    if (capped) return;
+    if (depth < maxDepth) {
+      const deg = stitchTri(A, C, B, false) || stitchTri(B, C, D, false);
+      if (deg) {
+        const AB = mid(A, B);
+        const AC = mid(A, C);
+        const BD = mid(B, D);
+        const CD = mid(C, D);
+        const M = mid(A, D);
+        emitCell(A, AB, AC, M, depth + 1);
+        emitCell(AB, B, M, BD, depth + 1);
+        emitCell(AC, M, C, CD, depth + 1);
+        emitCell(M, BD, CD, D, depth + 1);
+        return;
+      }
     }
+    stitchTri(A, C, B, true);
+    stitchTri(B, C, D, true);
+  };
+
+  // Base grid row cache: reuse the lower row's vertices as the next row's upper corners.
+  let lower: Vert[] = [];
+  for (let i = 0; i <= N; i++) lower.push(vertAt(x0 + i * dx, y0));
+  for (let j = 0; j < N && !capped; j++) {
+    const upper: Vert[] = [];
+    for (let i = 0; i <= N; i++) upper.push(vertAt(x0 + i * dx, y0 + (j + 1) * dy));
+    for (let i = 0; i < N && !capped; i++) {
+      emitCell(lower[i], lower[i + 1], upper[i], upper[i + 1], 0);
+    }
+    lower = upper;
   }
 
   return {

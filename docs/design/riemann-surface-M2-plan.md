@@ -20,8 +20,8 @@
 | Milestone | Status | Coverage |
 |---|---|---|
 | **M2.0 — algebraic-curve spike** | ✅ done | `src/riemann/algebraicCurve.ts` (recognizer) + `src/riemann/curveMesh.ts` (NPP proximity-gluing mesh: `sheetsOf` = the q values of `R^(p/q)`; nearest-match stitch; local near-degeneracy → holes; triangle-budget cap) + `buildCurveProgram` (baked-mesh shader, shared fragment). Node: 9 tests — recognition/decline, `sheetsOf` satisfies `w^q=r^p`, `sqrt(z^2−1)` mesh is two-sheet with holes at ±1, all kept triangles on-sheet (max edge < 0.6, no cut-jump), budget cap badged. Browser: the curve program builds+links in live WebGL2. Findings: NPP proximity gluing works as-is; local degeneracy test alone resolves branch points for polynomial radicands (no deps). Retained as M2.1's foundation. Render-through-Plot + screenshots land at M2.1 (same staging as M0→M1). |
-| **M2.1 — R(z)^(p/q) engine (M2a)** | ⏳ pending | full class: `algebraicCurve.ts` recognition (R rational via `@cas/expr fToRational`; branch points = zeros of N and D via `@cas/core rootsMonic`), `curveMesh.ts` + worker (subdivision driven by exact-ish branch points **and** the local test, triangle-budget cap), baked-mesh curve program, `Plot.riemannKind` dispatch (M1 param preferred), auto-select, honest badges, node + browser tests, permalink. |
-| **M2.1 gate** | ⏳ pending | full repo gate + browser goldens; existing tests unchanged; pushed; **pause for review**. |
+| **M2.1 — R(z)^(p/q) engine (M2a)** | ✅ done | `algebraicCurve.ts` recognition (R rational via `@cas/expr fToRational`); `curveMesh.ts` with **local-degeneracy-driven adaptive subdivision** + ramification holes + triangle-budget cap; `buildCurveProgram` baked-mesh render; `Plot.riemannKind` dispatch (**M1 param preferred**, curve when M1 declines) + curve VBO/framing + `paintRiemannCurve`; `main.ts` auto-select + unified `riemannDescriptor` badge (holes/`⚠ capped` surfaced); mesh rebuilt over the current z-view on mode entry. **No new package deps** — branch points of this class are zeros/poles of R, caught by the local degeneracy test + `wCap` (so `@cas/core rootsMonic` proved unnecessary; it/`@cas/exact` are the M2b tools). **Sync** mesh-gen (fast enough for M2a grids; Web Worker deferred). Node: recognition/decline, `w^q=r^p`, mesh (two-sheet, holes, on-sheet continuity, budget cap). Browser: curve program links; `√(z²−1)` / `√(z³−z)` render non-blank through the real Plot. Verified in the app (screenshots). |
+| **M2.1 gate** | ⏳ in progress | full repo gate + browser goldens; existing tests unchanged; pushed; **pause for review**. |
 | M2b — radical sums (`√z + √(z−1)`) via `@cas/exact` resultants + spurious-branch filter | ⛔ deferred | later, separately-approved |
 | M2c — implicit `P(z,w)=0` input mode | ⛔ deferred | later, separately-approved |
 
@@ -113,9 +113,11 @@ No π / 2πi normalization enters `@cas/*`. The only constants are geometric (me
   only". No unlabeled cliff.
 
 ### 4.3 Dependency direction, testing, census
-- Plotter gains **`@cas/core`** (M2.1; `rootsMonic` + complex helpers) — downward, already used by
-  CD/AP/Correspondences, so `pnpm dep:check` stays green. **`@cas/exact` is *not* pulled in M2a** (it is
-  the M2b tool for genuine bivariate elimination/discriminant). No app imports another app; no cycles.
+- **No new package deps (revised at M2.1).** M2a's branch points are exactly the zeros/poles of R, which
+  the mesh's local degeneracy test (`minSep → 0`) and `wCap` catch directly — so `@cas/core rootsMonic`
+  proved unnecessary and was not pulled. **`@cas/core` / `@cas/exact` remain the M2b tools** (per-vertex
+  root-solving + bivariate elimination/discriminant for radical sums / general `P(z,w)=0`). The plotter's
+  dependency set is unchanged; `pnpm dep:check` stays green; no app imports another app; no cycles.
 - **Node tests:** recognition/decline; sheet values satisfy `w^q = R^p`; proximity continuity on a known
   curve; mesh invariants (sheet count, hole near a branch point, budget-cap flag); worker builder parity
   with the sync path. **Browser tests:** the curve program links; `sqrt(z^2−1)` renders non-blank with

@@ -2,8 +2,9 @@
 
 A research-grade browser tool for visualizing a single complex map **w = f(z)** — 2D domain
 coloring and enhanced phase portraits, a 3D analytic-landscape surface, a Riemann sphere, a true
-multi-sheeted **Riemann surface** (for invertible primitives), quantitative instruments, and honest
-labeling. It rides the shared `@cas/*` packages rather than reimplementing them:
+multi-sheeted **Riemann surface** (for invertible primitives and single-radical algebraic maps),
+quantitative instruments, and honest labeling. It rides the shared `@cas/*` packages rather than
+reimplementing them:
 
 - **`@cas/expr`** — custom-function input: one expression string → GLSL shader body **and** a JS
   evaluator, plus symbolic `f'(z)`, `toLatex`, and positioned parse errors.
@@ -62,10 +63,15 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   algebraic sheets, Im w → the log helicoid), coloured by the same `colorAt`. The sheets **glue across the
   branch cut with no false cliff** (and none of the never-certified continuation of RISKS §3); a
   sheet-count control truncates the infinite (log / inverse-trig) families, and an honest badge names the
-  form, its monodromy, and where the principal cut lies. The tab is offered only for a recognized
-  primitive; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
+  form, its monodromy, and where the principal cut lies. It also handles **single-radical algebraic** maps
+  `R(z)^(p/q)` with `R` rational (ADR-0028) — `√(z²−1)`, `√(z³−z)`, `(z²−1)^(1/3)`, `√((z−1)/(z+1))` — that
+  the parametric path declines: a CPU-built **proximity-glued mesh** (Nieser–Poelke–Polthier / Kranich)
+  over the z-view stitches the `q` sheets and drops ramification cells as small **holes** at the branch
+  points (never a wall), badged if the triangle budget is hit. The tab is offered only for a recognized
+  surface; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
   exact. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
-  shader · sphere arcball · **Riemann surface**) plus the inverse registry (`riemann/inverse.ts`).
+  shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
+  (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`) and the NPP mesh (`riemann/curveMesh.ts`).
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The

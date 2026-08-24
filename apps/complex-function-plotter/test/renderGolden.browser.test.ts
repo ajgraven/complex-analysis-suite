@@ -79,6 +79,17 @@ function renderRiemann(src: string, heightSource = 0, sheets?: number): HTMLCanv
   return canvas;
 }
 
+/** Render an algebraic-curve Riemann surface (M2a, ADR-0028) through the real Plot. */
+function renderCurve(src: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, src);
+  if (plot.riemannModeKind() !== "curve") throw new Error(`not an algebraic curve: ${src}`);
+  plot.mode = "riemann";
+  plot.reframeRiemann(); // build the curve mesh over the default view + frame the camera
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
 describe("plotter render-consistency goldens (Track B)", () => {
   it("renders a non-blank z^2 portrait (guards the invariants below against a blank canvas)", () => {
     expect(variance(fingerprint(render("z^2", "2d"), N))).toBeGreaterThan(200);
@@ -109,5 +120,14 @@ describe("plotter render-consistency goldens (Track B)", () => {
     const reW = fingerprint(renderRiemann("sqrt(z)", 0), N);
     const imW = fingerprint(renderRiemann("sqrt(z)", 1), N);
     expect(meanAbs(reW, imW)).toBeGreaterThan(3);
+  });
+
+  // The algebraic-curve mode (M2a, ADR-0028): baked NPP meshes render real structure through the real Plot.
+  it("renders a non-blank √(z²−1) algebraic-curve surface", () => {
+    expect(variance(fingerprint(renderCurve("sqrt(z^2 - 1)"), N))).toBeGreaterThan(50);
+  });
+
+  it("renders a non-blank √(z³−z) (elliptic) surface", () => {
+    expect(variance(fingerprint(renderCurve("sqrt(z^3 - z)"), N))).toBeGreaterThan(50);
   });
 });

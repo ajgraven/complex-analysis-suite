@@ -706,7 +706,7 @@ function main(): void {
   // render all their sheets. The info line is the honest label: form + monodromy + where the principal cut
   // is (the surface glues it), or a "principal-branch only" note when the map isn't a recognized primitive.
   const syncRiemannControls = (): void => {
-    const info = plot.riemannInfo();
+    const d = plot.riemannDescriptor();
     if (riemannHeightSel instanceof HTMLSelectElement)
       riemannHeightSel.value = String(plot.riemannHeightSource);
     if (riemannSheetsInput instanceof HTMLInputElement)
@@ -716,12 +716,15 @@ function main(): void {
     if (riemannExag instanceof HTMLInputElement) riemannExag.value = String(plot.heightScale);
     if (riemannExagVal instanceof HTMLElement)
       riemannExagVal.textContent = String(plot.heightScale);
+    // The sheet-count control applies only to infinite-sheeted parametric families (log / inverse trig);
+    // finite parametric forms and the finite algebraic curves render all their sheets.
     if (riemannSheetsRow instanceof HTMLElement)
-      riemannSheetsRow.hidden = !info || info.sheetKind !== "infinite";
+      riemannSheetsRow.hidden = !d || d.sheetKind !== "infinite";
     if (riemannInfo instanceof HTMLElement)
-      riemannInfo.textContent = info
-        ? `${info.label} · ${info.monodromy}. Cut: ${info.branchNote}.`
-        : "Not a recognized invertible primitive — showing principal-branch views only.";
+      riemannInfo.textContent = d
+        ? `${d.label} · ${d.monodromy}. Cut: ${d.branchNote}.` +
+          (d.capped ? " ⚠ budget capped — surface incomplete." : "")
+        : "Not a recognized surface — showing principal-branch views only.";
   };
 
   const setView = (m: "2d" | "3d" | "sphere" | "linked" | "riemann"): void => {
@@ -739,7 +742,10 @@ function main(): void {
       surfaceControls.hidden = m !== "3d" && m !== "linked";
     if (sphereHint instanceof HTMLElement) sphereHint.hidden = m !== "sphere";
     if (riemannControls instanceof HTMLElement) riemannControls.hidden = m !== "riemann";
-    if (m === "riemann") syncRiemannControls();
+    if (m === "riemann") {
+      plot.reframeRiemann(); // build the curve mesh over the current view / refresh the parametric framing
+      syncRiemannControls();
+    }
     redraw(false);
   };
   if (view2d instanceof HTMLElement)
@@ -759,10 +765,10 @@ function main(): void {
     const ok = plot.riemannAvailable();
     if (viewRiemann instanceof HTMLButtonElement) {
       viewRiemann.disabled = !ok;
-      const label = plot.riemannInfo()?.label;
+      const label = plot.riemannDescriptor()?.label;
       viewRiemann.title = ok
         ? `True Riemann surface${label ? `: ${label}` : ""}`
-        : "Riemann surface: available only for invertible primitives (√, ⁿ√, log, arcsin, arctan, …)";
+        : "Riemann surface: for invertible primitives (√, ⁿ√, log, arcsin, …) and single-radical algebraic maps (√(z²−1), …)";
     }
     if (plot.mode === "riemann" && !ok) setView("2d");
     else if (plot.mode === "riemann") syncRiemannControls();
@@ -773,7 +779,7 @@ function main(): void {
   if (riemannHeightSel instanceof HTMLSelectElement)
     riemannHeightSel.addEventListener("change", () => {
       plot.riemannHeightSource = Number(riemannHeightSel.value) === 1 ? 1 : 0;
-      plot.reframeRiemann();
+      plot.reframeRiemannLight(); // charisma axis is a shader uniform — no mesh rebuild
       redraw(false);
     });
   if (riemannSheetsInput instanceof HTMLInputElement)
@@ -788,7 +794,7 @@ function main(): void {
     riemannExag.addEventListener("input", () => {
       plot.heightScale = Number(riemannExag.value);
       if (riemannExagVal instanceof HTMLElement) riemannExagVal.textContent = riemannExag.value;
-      plot.reframeRiemann();
+      plot.reframeRiemannLight(); // exaggeration is a shader uniform — no mesh rebuild
       redraw(false);
     });
   if (riemannReset instanceof HTMLElement)

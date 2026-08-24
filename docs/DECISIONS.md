@@ -2372,6 +2372,13 @@ holes, with a local near-degeneracy backstop and a badged triangle-budget cap. H
 shared `colorAt`. **Dispatch prefers M1's exact parametric surface**; the curve path takes only maps M1
 declines. Keep everything **in-app** (ADR-0007); pull **`@cas/core`** only; leave **`@cas/exact`** for M2b.
 
+> **Update (M2.1 as built):** M2a shipped with **no new package deps.** The branch points of this class are
+> exactly the zeros/poles of R, which the mesh's *local* degeneracy test (`minSep → 0`) and the `wCap` catch
+> directly — so `@cas/core rootsMonic` proved unnecessary and was not pulled. Adaptive subdivision is driven
+> by the local test (no precomputed branch-point list); mesh-gen is synchronous (fast enough for M2a grids;
+> the Web Worker is deferred). `@cas/core` / `@cas/exact` remain the M2b tools. This strengthens the
+> north-star (zero new primitives) and does not change the decision, only its dependency footprint.
+
 ### Options Considered
 
 #### Option A: M2a single-radical, sheets as roots of unity (chosen)
