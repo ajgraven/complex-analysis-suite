@@ -60,6 +60,10 @@ export const MAX_POLYGON_COORD = 2;
 export const MIN_POLYGON_EDGE = 0.03;
 /** The domain id that draws φ from `customPolygon` (the editor) rather than a preset. */
 export const CUSTOM_PHI = "custom";
+/** The domain id that builds φ from the typed formula `phiExpr` (a symbolic exterior map) rather than a preset. */
+export const CUSTOM_FORMULA = "custom-formula";
+/** Default φ formula shown when the user first switches to the custom-formula domain (a deltoid-like map). */
+export const DEFAULT_PHI_EXPR = "z + 0.4/z^2";
 /** Corner-suppression strength m for the weighted Faber Q_{n,m} (M3): m=1 over-corrects, so the floor is 2. */
 export const MIN_SUPPRESS_M = 2;
 export const MAX_SUPPRESS_M = 8;
@@ -83,6 +87,8 @@ export type FaberViewState = {
   readonly coloring?: ColoringOptions;
   /** The editor polygon (counter-clockwise `[x,y]` vertices), used as the domain when `phi === "custom"`. */
   readonly customPolygon?: readonly (readonly [number, number])[];
+  /** The typed exterior-map formula φ(z), used as the domain when `phi === "custom-formula"`. */
+  readonly phiExpr?: string;
   /** Corner suppression (M3): render Q_{n,m} instead of Fₙ for a monomial input on a polygonal K. */
   readonly suppressCorners?: boolean;
   /** Suppression strength m ∈ [2, 8] (larger = milder weight, closer to Fₙ but provably lower overshoot). */
@@ -156,6 +162,8 @@ export function isFaberViewState(value: unknown): value is FaberViewState {
   if (s.coloring !== undefined && !isColoringOptions(s.coloring as Record<string, unknown> | undefined)) return false;
   if (s.customPolygon !== undefined && !isCustomPolygon(s.customPolygon)) return false;
   if (s.phi === CUSTOM_PHI && !isCustomPolygon(s.customPolygon)) return false; // "custom" needs a valid polygon
+  if (s.phiExpr !== undefined && !isPhiExpr(s.phiExpr)) return false;
+  if (s.phi === CUSTOM_FORMULA && !isPhiExpr(s.phiExpr)) return false; // "custom-formula" needs a formula string
   if (s.suppressCorners !== undefined && typeof s.suppressCorners !== "boolean") return false;
   if (
     s.suppressStrength !== undefined &&
@@ -186,6 +194,11 @@ function isCustomPolygon(value: unknown): value is readonly (readonly [number, n
     if (Math.hypot(a[0] - b[0], a[1] - b[1]) < MIN_POLYGON_EDGE) return false;
   }
   return true;
+}
+
+/** A well-formed φ formula: a non-empty string within the crafted-link length bound. */
+function isPhiExpr(value: unknown): value is string {
+  return typeof value === "string" && value.length > 0 && value.length <= MAX_EXPR_LEN;
 }
 
 /** A well-formed coloring block: finite enhancement/modulus modes in range, positive sectors/scale. */

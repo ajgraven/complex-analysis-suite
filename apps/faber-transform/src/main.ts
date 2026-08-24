@@ -13,6 +13,7 @@ import { F_PRESETS, MENU_PRESETS, phiPresetById } from "./presets.js";
 import { cornerNorms, polygonMap, type CornerNorms, type PolygonMapResult } from "./polygon.js";
 import { createPolygonEditor } from "./render/polygonEditor.js";
 import { rawVertexFromHandleDrag } from "./handleEdit.js";
+import { buildPhiFromExpr, univalentByAreaBound } from "./symbolicPhi.js";
 import {
   boundaryK,
   compileExprF,
@@ -55,6 +56,8 @@ import { createGpuRenderer } from "./render/gpu.js";
 import type { GpuRenderer } from "./render/gpu.js";
 import {
   CUSTOM_PHI,
+  CUSTOM_FORMULA,
+  DEFAULT_PHI_EXPR,
   DEFAULT_VIEW_STATE,
   MAX_DEGREE,
   MIN_DEGREE,
@@ -298,8 +301,18 @@ function main(): void {
   const phiSel = elt("select", { id: "phi" });
   for (const p of MENU_PRESETS) phiSel.append(elt("option", { value: p.id }, p.name));
   phiSel.append(elt("option", { value: CUSTOM_PHI }, "Custom polygon (edit)…"));
+  phiSel.append(elt("option", { value: CUSTOM_FORMULA }, "Custom φ (formula)…"));
   const phiCtl = elt("div", { class: "control" });
   phiCtl.append(mathElt("label", "Domain φ: 𝔻^{*} → Ω", { for: "phi" }), phiSel);
+
+  // The custom-formula domain: a symbolic exterior map φ(z) = c·z + Σ cₖ z⁻ᵏ typed by the user (a simple
+  // pole at ∞). Shown only when the domain is "Custom φ (formula)…". Mirrors the free-form f(z) field.
+  const PHI_PRESETS = ["z + 0.5/z", "z + 0.4/z^2", "z + 0.2/z^4", "z + 0.15/z + 0.1/z^3", "z + (0.2 + 0.1*i)/z^2"];
+  const phiExprList = elt("datalist", { id: "phipresets" });
+  for (const s of PHI_PRESETS) phiExprList.append(elt("option", { value: s }));
+  const phiExprInput = elt("input", { id: "phiexpr", type: "text", list: "phipresets", spellcheck: "false", autocomplete: "off" });
+  const phiExprCtl = elt("div", { class: "control control-wide" });
+  phiExprCtl.append(mathElt("label", "φ(z) =", { for: "phiexpr" }), phiExprInput, phiExprList);
 
   const shapeInput = elt("input", { id: "shape", type: "range", step: "0.01" });
   const shapeLabel = elt("label", { for: "shape" }, "shape");
@@ -399,7 +412,7 @@ function main(): void {
   const crispCtl = elt("div", { class: "control control-check" });
   crispCtl.append(crispInput, elt("label", { for: "crisp" }, "crisp lines"));
 
-  controls.append(phiCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, suppressCtl, mCtl, enhCtl, modCtl, secCtl, crispCtl);
+  controls.append(phiCtl, phiExprCtl, shapeCtl, modeCtl, degCtl, rCtl, thCtl, orderCtl, exprCtl, truncCtl, rootsCtl, suppressCtl, mCtl, enhCtl, modCtl, secCtl, crispCtl);
   root.append(controls);
 
   // The polygon editor (shown only for the custom domain). Live drag redraws the editor; the expensive SC
@@ -459,7 +472,23 @@ function main(): void {
     let cornerImages: readonly Cx[] = []; // wₖ = 1/uₖ on |w|=1 (z-plane prevertices, NOT φ(zₖ)), for the M3 weighted Faber Q_{n,m}
     // Draggable in-panel handles: the canonical corners φ(wₖ) of a converged CUSTOM polygon (undefined otherwise).
     let handles: Vec2[] | undefined;
-    if (state.phi === CUSTOM_PHI && state.customPolygon) {
+    // The ≈-note describing WHY a domain is approximate, and a univalence caveat (custom-formula only).
+    let approxNote = "truncated Schwarz–Christoffel series (≈)";
+    let univNote = "";
+    if (state.phi === CUSTOM_FORMULA) {
+      const built = buildPhiFromExpr(state.phiExpr ?? "");
+      domainStatus = null;
+      if ("error" in built) {
+        // Soft error (like an f(z) parse error): keep the last good render, show the message inline (no blank).
+        return { left: blankPanel, right: blankPanel, badge: "⚠", readout: `φ error: ${built.error}`, error: true };
+      }
+      map = built.map;
+      approx = !built.exact;
+      cornerN = undefined;
+      cornerImages = [];
+      approxNote = "truncated Laurent series (≈)";
+      univNote = univalentByAreaBound(built.map) ? "" : "  ·  ⚠ φ may not be univalent — K's boundary could self-intersect";
+    } else if (state.phi === CUSTOM_PHI && state.customPolygon) {
       const r = getCustomMap(state.customPolygon);
       domainStatus = { converged: r.converged, degraded: r.degraded };
       // A degenerate / self-intersecting polygon drives the exterior SC solve to a non-convergent or
@@ -493,7 +522,7 @@ function main(): void {
     // ≈, not exact — downgrade the `=` badge and note it (plan §6). Closed-form domains stay exact.
     const exactBadge = approx ? "≈" : "=";
     const cornerNote = cornerN ? `, max corner-norm Λ = ${cornerN.maxLambda.toFixed(2)}` : "";
-    const domainNote = approx ? `  ·  φ: truncated Schwarz–Christoffel series (≈)${cornerNote}` : "";
+    const domainNote = (approx ? `  ·  φ: ${approxNote}${cornerNote}` : "") + univNote;
     const diskCurve: Curve = { pts: unitCircle(), color: DISK_COLOR };
     const kCurve: Curve = { pts: boundaryK(map), color: K_COLOR };
     const showRoots = state.showRoots !== false;
@@ -617,9 +646,13 @@ function main(): void {
 
   function syncControls(): void {
     const isCustom = state.phi === CUSTOM_PHI;
+    const isFormula = state.phi === CUSTOM_FORMULA;
     phiSel.value = state.phi;
     rootsInput.checked = state.showRoots !== false;
-    const preset = isCustom ? null : phiPresetById(state.phi);
+    // The φ-formula field shows only for the custom-formula domain (don't clobber the box mid-edit).
+    phiExprCtl.style.display = isFormula ? "" : "none";
+    if (isFormula && document.activeElement !== phiExprInput) phiExprInput.value = state.phiExpr ?? "";
+    const preset = isCustom || isFormula ? null : phiPresetById(state.phi);
     if (preset?.shape) {
       shapeCtl.style.display = "";
       shapeInput.min = String(preset.shape.min);
@@ -692,6 +725,7 @@ function main(): void {
       input: state.input,
       showRoots: state.showRoots,
       customPolygon: state.customPolygon,
+      phiExpr: state.phiExpr,
       suppressCorners: state.suppressCorners,
       suppressStrength: state.suppressStrength,
     });
@@ -891,6 +925,14 @@ function main(): void {
       commit({ ...state, phi: CUSTOM_PHI, customPolygon: poly, wView: { centerRe: 0, centerIm: 0, zoom: BASE_HALF / kHalfOf(getCustomMap(poly).map) } });
       return;
     }
+    if (phiSel.value === CUSTOM_FORMULA) {
+      const expr = state.phiExpr ?? DEFAULT_PHI_EXPR;
+      phiExprInput.value = expr;
+      const built = buildPhiFromExpr(expr);
+      const wView = "error" in built ? state.wView : { centerRe: 0, centerIm: 0, zoom: BASE_HALF / kHalfOf(built.map) };
+      commit({ ...state, phi: CUSTOM_FORMULA, phiExpr: expr, wView });
+      return;
+    }
     const preset = phiPresetById(phiSel.value);
     commit({
       ...state,
@@ -935,6 +977,20 @@ function main(): void {
     }, 180);
   }
   exprInput.addEventListener("input", commitExpr);
+
+  // The custom-formula domain φ: debounced like the f(z) field. Keeps the current K framing (the user's
+  // pan/zoom is preserved — reframing happens only when the domain is first selected from the menu).
+  let phiTimer = 0;
+  function commitPhiExpr(): void {
+    if (state.phi !== CUSTOM_FORMULA) return;
+    const expr = phiExprInput.value.slice(0, MAX_EXPR_LEN);
+    if (phiTimer) window.clearTimeout(phiTimer);
+    phiTimer = window.setTimeout(() => {
+      if (state.phi !== CUSTOM_FORMULA) return; // a domain switch during the debounce wins
+      commit({ ...state, phi: CUSTOM_FORMULA, phiExpr: expr });
+    }, 180);
+  }
+  phiExprInput.addEventListener("input", commitPhiExpr);
   truncInput.addEventListener("input", () => {
     if (state.input.kind !== "expr") return;
     const N = Math.max(MIN_TRUNCATION, Math.min(MAX_TRUNCATION, Math.round(Number(truncInput.value))));

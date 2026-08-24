@@ -45,9 +45,18 @@ Single-page Vite app, `base: "./"` so it serves from any sub-path (it publishes 
 | Triangle / Square / Pentagon / Hexagon | **regular polygons**, closed-form exterior map (M1a) | exact `=` |
 | Rectangle, isosceles triangle, house, L-shape (reentrant) | **arbitrary polygons** via the exterior SC solve (M1b) | `≈` |
 | **Custom polygon** | design `K` up to similarity (M2) — drag the vertex handles **directly on the right K panel**, or use the companion mini-editor (add / remove / reset) | `≈` / `⚠` on a failed fit |
+| **Custom φ (formula)** | type a symbolic exterior map φ(z) = c·z + Σ cₖ z⁻ᵏ (a simple pole at ∞) — e.g. `z + 0.4/z^2` (deltoid), `z + 0.5/z` (ellipse) | `=` for a finite Laurent polynomial, `≈` when the Laurent tail is truncated |
 
 Polygonal domains are honestly `≈`-labeled (the exterior SC map is a numerical solve); a degenerate,
 self-intersecting, or non-converged polygon renders `⚠` with blank panels rather than NaN garbage.
+
+The **custom φ formula** brings the free-form input of the preset gallery to the domain map itself. A rational
+φ is extracted **exactly** (its Laurent-at-∞ coefficients by reciprocal-polynomial series division) — a finite
+Laurent polynomial (e.g. `z + a/z²`) is `=`, a rational with finite poles truncates to `≈`; a transcendental φ
+falls back to the numerical `taylorViaFFT` path (always `≈`). A complex leading term is rotated to the
+real-positive capacity gauge (rotating `K` into canonical orientation). The map must be an exterior map (a
+simple pole at ∞, φ ~ c·z), and a sufficient area-theorem check (`Σ k·|cₖ| ≤ c`) flags a possibly non-univalent
+φ whose `K` boundary could self-intersect.
 
 For the custom domain, the corners of the rendered `K` carry draggable handles. Because `K` is the
 **canonical** (centred / rotated / capacity-scaled) SC image of the drawn polygon, a dragged corner is
@@ -65,12 +74,13 @@ result state: `=` exact (green), `≈` approximate (blue), `⚠` failed fit (amb
 
 | File | Role |
 | --- | --- |
-| `main.ts` | wires the two panels, controls, domain resolution (preset vs custom polygon), the render model + status badge, the share-link |
+| `main.ts` | wires the two panels, controls, domain resolution (preset vs custom polygon vs custom φ formula), the render model + status badge, the share-link |
 | `faber.ts` | the app-side adapter over `@cas/faber` — builds the Faber image (or `Q_{n,m}`) for the chosen input on the chosen φ |
 | `series.ts` | the free-form truncated-series path (bₙ extraction) |
 | `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation + corner images `wₖ`), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
 | `presets.ts` | the curated φ gallery (closed-form + regular + arbitrary polygons), lazily fitted and cached (with lazy corner images for M3) |
-| `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (custom-polygon bounds + the M3 suppression fields) |
+| `symbolicPhi.ts` | build an `ExteriorMap { c, laurent }` from a typed φ(z) — exact Laurent-at-∞ division for rational φ, `taylorViaFFT` fallback otherwise, real-positive capacity normalization, and the area-theorem univalence check |
+| `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (custom-polygon bounds, the `phiExpr` formula, and the M3 suppression fields) |
 | `mathText.ts` | inline-math renderer — turns `_{…}`/`^{…}` markup into real `<sub>`/`<sup>` DOM (text nodes only, no `innerHTML`), so the header, panel titles, readout, and the corner-profile caption typeset Φᵩ / zⁿ / Qₙ,ₘ / Σ-bounds properly |
 | `handleEdit.ts` | the pure math for in-panel vertex editing — recovers the raw↔canonical similarity from the matched corner sets and inverts it, mapping a corner dragged on the K panel back to the raw editor vertex |
 | `render/coloring.ts` | the phase-portrait coloring options (shared with the GPU shader) |
@@ -87,8 +97,10 @@ convergence / degradation flags, reentrant L-shape, and the M3 corner-images + `
 `cornerProfile.test.ts` (the M3 before/after profile compute), `presets.test.ts` (every preset builds),
 `coloring.test.ts` (the coloring options), `expr.test.ts` (the free-form path), `viewState.test.ts`
 (share-link round-trip + namespace guard + custom-polygon validation + the M3 suppression fields),
-`mathText.test.ts` (the inline-math tokenizer), and `handleEdit.test.ts` (the in-panel drag
-similarity-inversion math). The exterior SC numerics and the `Q_{n,m}` engine themselves are unit-tested in
+`mathText.test.ts` (the inline-math tokenizer), `handleEdit.test.ts` (the in-panel drag
+similarity-inversion math), and `symbolicPhi.test.ts` (the custom-φ formula extraction — exact rational
+Laurent, the FFT fallback, leading-term rejections, complex-γ normalization, and the univalence bound). The
+exterior SC numerics and the `Q_{n,m}` engine themselves are unit-tested in
 [`@cas/conformal`](../../packages/conformal) and [`@cas/faber`](../../packages/faber).
 
 ## Status
