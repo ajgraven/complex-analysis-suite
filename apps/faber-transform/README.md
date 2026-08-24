@@ -74,14 +74,14 @@ result state: `=` exact (green), `≈` approximate (blue), `⚠` failed fit (amb
 
 | File | Role |
 | --- | --- |
-| `main.ts` | wires the two panels, controls, domain resolution (preset vs custom polygon vs custom φ formula), the render model + status badge, the share-link |
+| `main.ts` | wires the two panels (each captioned with its live expression — `f(z) = …` on the left, `Φᵩ(f)(w) = …` on the right), the per-panel control groups (Input f under the left, Domain K under the right, Coloring full-width), the Φᵩ connector + phase-portrait colour key, the domain-info chips + status badge, domain resolution (preset vs custom polygon vs custom φ formula), and the share-link |
 | `faber.ts` | the app-side adapter over `@cas/faber` — builds the Faber image (or `Q_{n,m}`) for the chosen input on the chosen φ |
 | `series.ts` | the free-form truncated-series path (bₙ extraction) |
 | `polygon.ts` | `regularPolygonMap` (M1a closed form), `polygonMap` (M1b exterior SC fit + adaptive Laurent truncation + corner images `wₖ`), `cornerNorms` (Λₖ = max{αₖ, 2−αₖ}) |
 | `presets.ts` | the curated φ gallery (closed-form + regular + arbitrary polygons), lazily fitted and cached (with lazy corner images for M3) |
 | `symbolicPhi.ts` | build an `ExteriorMap { c, laurent }` from a typed φ(z) — exact Laurent-at-∞ division for rational φ, `taylorViaFFT` fallback otherwise, real-positive capacity normalization, and the area-theorem univalence check |
 | `viewState.ts` | the serializable view-state + defensive guard + `#vs=` codec (custom-polygon bounds, the `phiExpr` formula, and the M3 suppression fields) |
-| `mathText.ts` | inline-math renderer — turns `_{…}`/`^{…}` markup into real `<sub>`/`<sup>` DOM (text nodes only, no `innerHTML`), so the header, panel titles, readout, and the corner-profile caption typeset Φᵩ / zⁿ / Qₙ,ₘ / Σ-bounds properly |
+| `mathText.ts` | inline-math renderer — turns `_{…}`/`^{…}` markup into real `<sub>`/`<sup>` DOM (text nodes only, no `innerHTML`), so the header, panel titles, per-panel captions, domain chips, and the corner-profile caption typeset Φᵩ / zⁿ / Qₙ,ₘ / Σ-bounds properly |
 | `handleEdit.ts` | the pure math for in-panel vertex editing — recovers the raw↔canonical similarity from the matched corner sets and inverts it, mapping a corner dragged on the K panel back to the raw editor vertex |
 | `render/coloring.ts` | the phase-portrait coloring options (shared with the GPU shader) |
 | `render/gpu.ts` | the WebGL2 phase-portrait renderer for one panel, over `@cas/gpu` |
