@@ -165,6 +165,60 @@ export function drawPolyline(
   ctx.restore();
 }
 
+/**
+ * Draw a world-coordinate polyline whose colour ramps through the hue wheel along its length — segment i
+ * is drawn at hue = i/(n−1). Used for the boundary-correspondence overlay: ∂𝔻 and ∂K are each drawn this
+ * way, so a point and its φ-image (same boundary parameter θ ⇒ same fractional position ⇒ same hue) share
+ * a colour. The hue here encodes POSITION around the loop, distinct from the portrait's arg-of-f hue.
+ */
+export function drawHuePolyline(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  pts: readonly Vec2[],
+  opts: { width?: number; sat?: number; light?: number } = {},
+): void {
+  if (pts.length < 2) return;
+  const sat = opts.sat ?? 92;
+  const light = opts.light ?? 60;
+  ctx.save();
+  ctx.lineWidth = opts.width ?? 2.4;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  const denom = Math.max(1, pts.length - 1);
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [x0, y0] = map.toPx(pts[i]);
+    const [x1, y1] = map.toPx(pts[i + 1]);
+    if (!Number.isFinite(x0) || !Number.isFinite(y0) || !Number.isFinite(x1) || !Number.isFinite(y1)) continue;
+    ctx.strokeStyle = `hsl(${((i / denom) * 360).toFixed(1)}, ${sat}%, ${light}%)`;
+    ctx.beginPath();
+    ctx.moveTo(x0, y0);
+    ctx.lineTo(x1, y1);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+/** Draw a filled marker with a dark outline (a correspondence dot) — visible over any portrait hue. */
+export function drawOutlinedDot(
+  ctx: CanvasRenderingContext2D,
+  map: PlaneMap,
+  w: Vec2,
+  fill: string,
+  radiusPx = 4.5,
+): void {
+  const [x, y] = map.toPx(w);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radiusPx, 0, 2 * Math.PI);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "rgba(0,0,0,0.6)";
+  ctx.stroke();
+  ctx.restore();
+}
+
 /** Trace a closed world-coordinate polygon as the current path (for clipping/masking to ∂K). */
 export function tracePolygon(ctx: CanvasRenderingContext2D, map: PlaneMap, pts: readonly Vec2[]): void {
   if (pts.length < 3) return;
