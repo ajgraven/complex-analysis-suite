@@ -182,8 +182,18 @@ function main(): void {
   const view3d = byId("view3d");
   const viewSphere = byId("viewSphere");
   const viewLinked = byId("viewLinked");
+  const viewRiemann = byId("viewRiemann");
   const sphereHint = byId("sphereHint");
   const surfaceControls = byId("surfaceControls");
+  const riemannControls = byId("riemannControls");
+  const riemannInfo = byId("riemannInfo");
+  const riemannHeightSel = byId("riemannHeight");
+  const riemannSheetsInput = byId("riemannSheets");
+  const riemannSheetsVal = byId("riemannSheetsVal");
+  const riemannSheetsRow = byId("riemannSheetsRow");
+  const riemannExag = byId("riemannExag");
+  const riemannExagVal = byId("riemannExagVal");
+  const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
   const heightScaleVal = byId("heightScaleVal");
@@ -277,10 +287,10 @@ function main(): void {
   // The surface pane's rect — the whole canvas in 3D, the right half in the linked view — for the 3D pick.
   const threeDRect = (): DOMRect | ReturnType<typeof rightHalf> =>
     plot.mode === "linked" ? rightHalf(canvasRect()) : canvasRect();
-  const effMode = (clientX: number): "2d" | "3d" | "sphere" => {
+  const effMode = (clientX: number): "2d" | "3d" | "sphere" | "riemann" => {
     const m = plot.mode;
     if (m === "linked") return isLeftHalf(clientX, canvasRect()) ? "2d" : "3d";
-    return m;
+    return m; // "2d" | "3d" | "sphere" | "riemann"
   };
 
   // Two function slots (catalog A7). One expression box edits the ACTIVE slot; a toggle switches which
@@ -366,6 +376,8 @@ function main(): void {
       heightScale: plot.heightScale,
       specular: plot.specular,
       opacity: plot.opacity,
+      riemannHeight: plot.riemannHeightSource,
+      riemannSheets: plot.riemannSheets,
     },
   });
 
@@ -644,6 +656,7 @@ function main(): void {
       updateFns(src);
       updatePrecisionBadge();
       syncParamsUI();
+      updateRiemannAvail(); // enable/disable the Riemann tab for this map (ADR-0027)
       recomputeSings();
       redraw(false);
       return true;
@@ -685,16 +698,45 @@ function main(): void {
   // View toggle 2D / 3D landscape / Sphere (Phase 5). Each mode swaps the pointer interaction (pan+zoom /
   // orbit+dolly / arcball+dolly — handled in the pointer code) and shows its own controls.
   const ORBIT_SPEED = 0.01; // radians of orbit per pixel of drag
-  const setView = (m: "2d" | "3d" | "sphere" | "linked"): void => {
+  // Reflect the Riemann-surface controls + honest badge for the current recognized form (ADR-0027). The
+  // sheet-count row shows only for infinite-sheeted families (log / inverse trig); finite ones (√, z^(p/q))
+  // render all their sheets. The info line is the honest label: form + monodromy + where the principal cut
+  // is (the surface glues it), or a "principal-branch only" note when the map isn't a recognized primitive.
+  const syncRiemannControls = (): void => {
+    const info = plot.riemannInfo();
+    if (riemannHeightSel instanceof HTMLSelectElement)
+      riemannHeightSel.value = String(plot.riemannHeightSource);
+    if (riemannSheetsInput instanceof HTMLInputElement)
+      riemannSheetsInput.value = String(plot.riemannSheets);
+    if (riemannSheetsVal instanceof HTMLElement)
+      riemannSheetsVal.textContent = String(plot.riemannSheets);
+    if (riemannExag instanceof HTMLInputElement) riemannExag.value = String(plot.heightScale);
+    if (riemannExagVal instanceof HTMLElement)
+      riemannExagVal.textContent = String(plot.heightScale);
+    if (riemannSheetsRow instanceof HTMLElement)
+      riemannSheetsRow.hidden = !info || info.sheetKind !== "infinite";
+    if (riemannInfo instanceof HTMLElement)
+      riemannInfo.textContent = info
+        ? `${info.label} · ${info.monodromy}. Cut: ${info.branchNote}.`
+        : "Not a recognized invertible primitive — showing principal-branch views only.";
+  };
+
+  const setView = (m: "2d" | "3d" | "sphere" | "linked" | "riemann"): void => {
+    // The Riemann surface exists only for a recognized invertible primitive; fall back to 2D otherwise so
+    // the button (or a restored link) never lands on a blank surface.
+    if (m === "riemann" && !plot.riemannAvailable()) m = "2d";
     plot.mode = m;
     setPressed(view2d, m === "2d");
     setPressed(view3d, m === "3d");
     setPressed(viewSphere, m === "sphere");
     setPressed(viewLinked, m === "linked");
+    setPressed(viewRiemann, m === "riemann");
     // The surface height controls apply whenever a surface is on screen — the 3D view or the linked pane.
     if (surfaceControls instanceof HTMLElement)
       surfaceControls.hidden = m !== "3d" && m !== "linked";
     if (sphereHint instanceof HTMLElement) sphereHint.hidden = m !== "sphere";
+    if (riemannControls instanceof HTMLElement) riemannControls.hidden = m !== "riemann";
+    if (m === "riemann") syncRiemannControls();
     redraw(false);
   };
   if (view2d instanceof HTMLElement)
@@ -705,6 +747,53 @@ function main(): void {
     viewSphere.addEventListener("click", () => setView("sphere"));
   if (viewLinked instanceof HTMLElement)
     viewLinked.addEventListener("click", () => setView("linked"));
+  if (viewRiemann instanceof HTMLElement)
+    viewRiemann.addEventListener("click", () => setView("riemann"));
+
+  // Enable the Riemann tab only for a recognized invertible primitive, and drop out of Riemann mode if the
+  // active map stops being one. Called on every formula change (from applyExpr).
+  const updateRiemannAvail = (): void => {
+    const ok = plot.riemannAvailable();
+    if (viewRiemann instanceof HTMLButtonElement) {
+      viewRiemann.disabled = !ok;
+      const label = plot.riemannInfo()?.label;
+      viewRiemann.title = ok
+        ? `True Riemann surface${label ? `: ${label}` : ""}`
+        : "Riemann surface: available only for invertible primitives (√, ⁿ√, log, arcsin, arctan, …)";
+    }
+    if (plot.mode === "riemann" && !ok) setView("2d");
+    else if (plot.mode === "riemann") syncRiemannControls();
+  };
+
+  // Riemann-surface controls (ADR-0027): charisma axis, sheets shown (infinite families), exaggeration
+  // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
+  if (riemannHeightSel instanceof HTMLSelectElement)
+    riemannHeightSel.addEventListener("change", () => {
+      plot.riemannHeightSource = Number(riemannHeightSel.value) === 1 ? 1 : 0;
+      plot.reframeRiemann();
+      redraw(false);
+    });
+  if (riemannSheetsInput instanceof HTMLInputElement)
+    riemannSheetsInput.addEventListener("input", () => {
+      plot.riemannSheets = Number(riemannSheetsInput.value);
+      if (riemannSheetsVal instanceof HTMLElement)
+        riemannSheetsVal.textContent = riemannSheetsInput.value;
+      plot.reframeRiemann();
+      redraw(false);
+    });
+  if (riemannExag instanceof HTMLInputElement)
+    riemannExag.addEventListener("input", () => {
+      plot.heightScale = Number(riemannExag.value);
+      if (riemannExagVal instanceof HTMLElement) riemannExagVal.textContent = riemannExag.value;
+      plot.reframeRiemann();
+      redraw(false);
+    });
+  if (riemannReset instanceof HTMLElement)
+    riemannReset.addEventListener("click", () => {
+      plot.resetCamera();
+      plot.resetRiemann();
+      redraw(false);
+    });
   if (heightModeSel instanceof HTMLSelectElement) {
     heightModeSel.value = String(plot.heightMode);
     heightModeSel.addEventListener("change", () => {
@@ -1197,6 +1286,7 @@ function main(): void {
   const seedDrag = (clientX: number, clientY: number, pan3d = false): void => {
     const m = effMode(clientX);
     if (m === "sphere") sphereLast = canvasUv(clientX, clientY);
+    else if (m === "riemann") orbitLast = { x: clientX, y: clientY }; // orbit only (no domain pan)
     else if (m === "3d") {
       if (pan3d) panLast = { x: clientX, y: clientY };
       else orbitLast = { x: clientX, y: clientY };
@@ -1239,6 +1329,7 @@ function main(): void {
       const mid = pointerMidpoint(a, b);
       const m = effMode(mid.x);
       if (m === "sphere") plot.dollySphere(factor);
+      else if (m === "riemann") plot.dollyRiemann(factor); // pinch dollies the surface camera
       else if (m === "3d") plot.zoomSpan(factor); // §B: pinch zooms the domain
       else plot.zoomAt(mid.x, mid.y, factor, twoDRect());
       redraw(true);
@@ -1326,6 +1417,7 @@ function main(): void {
       e.preventDefault();
       const m = effMode(e.clientX);
       if (m === "sphere") plot.dollySphere(Math.pow(1.0012, e.deltaY));
+      else if (m === "riemann") plot.dollyRiemann(Math.pow(1.0015, e.deltaY));
       else if (m === "3d") plot.zoomSpan(Math.pow(1.0015, e.deltaY)); // §B: scroll zooms the domain
       else plot.zoomAt(e.clientX, e.clientY, Math.pow(1.0015, e.deltaY), twoDRect());
       redraw(true);
@@ -1368,6 +1460,17 @@ function main(): void {
       else if (intent === "out") plot.zoomSpan(1.25);
       // Same grab-turntable sense as the right-drag orbit (surface follows the key): "left" → +azimuth,
       // "right" → −azimuth; "up" tips the near edge up (elevation down), "down" looks more top-down.
+      else if (intent === "left") plot.orbit(STEP, 0);
+      else if (intent === "right") plot.orbit(-STEP, 0);
+      else if (intent === "up") plot.orbit(0, -STEP);
+      else plot.orbit(0, STEP);
+    } else if (plot.mode === "riemann") {
+      const STEP = 0.18;
+      if (intent === "reset") {
+        plot.resetCamera();
+        plot.resetRiemann();
+      } else if (intent === "in") plot.dollyRiemann(0.85);
+      else if (intent === "out") plot.dollyRiemann(1 / 0.85);
       else if (intent === "left") plot.orbit(STEP, 0);
       else if (intent === "right") plot.orbit(-STEP, 0);
       else if (intent === "up") plot.orbit(0, -STEP);
@@ -1418,8 +1521,14 @@ function main(): void {
     redraw(false);
   }
 
+  // Restore Riemann-surface settings from the share-link (setActive seeded the form's defaults; the link's
+  // saved choices override them). Safe when the active map isn't a recognized primitive (reframe no-ops).
+  plot.riemannHeightSource = initial.v3d.riemannHeight === 1 ? 1 : 0;
+  plot.riemannSheets = initial.v3d.riemannSheets;
+  plot.reframeRiemann();
+
   // Restore the saved render mode last (now that setView + its controls exist). The camera / height were
-  // applied above, so a shared 3D landscape / linked figure reopens exactly as it was framed.
+  // applied above, so a shared 3D landscape / linked / Riemann figure reopens exactly as it was framed.
   if (initial.v3d.mode !== "2d") setView(initial.v3d.mode);
 }
 

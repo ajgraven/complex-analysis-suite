@@ -16,6 +16,11 @@ import { compileF } from "@cas/expr/glsl";
 import { parse } from "@cas/expr/parser";
 import { freeParameters, substitute } from "@cas/expr/ast";
 import { differentiate } from "@cas/expr/derivative";
+import { makeComplexFn } from "@cas/expr/evaluate";
+import type { Complex } from "@cas/expr/complex";
+import { detectRiemannForm, type RiemannForm } from "../riemann/inverse.js";
+import { buildRiemannProgram } from "../render3d/riemannSurface.js";
+import type { Vec3 } from "../render3d/mat4.js";
 import { buildFragmentShader, VERTEX_SHADER } from "./colorShader.js";
 import { bakeAtlas } from "./colormaps.js";
 import { injectPngText } from "@cas/export";
@@ -147,6 +152,18 @@ interface SphereUniforms extends ColorUniformLocs {
   uLightDir: WebGLUniformLocation | null;
 }
 
+/** The Riemann-surface uniforms (ADR-0027), on top of the shared {@link ColorUniformLocs}. */
+interface RiemannUniforms extends ColorUniformLocs {
+  uVP: WebGLUniformLocation | null;
+  uTCenter: WebGLUniformLocation | null;
+  uTHalf: WebGLUniformLocation | null;
+  uHeightSource: WebGLUniformLocation | null;
+  uHeightScale: WebGLUniformLocation | null;
+  uLightDir: WebGLUniformLocation | null;
+  uShaded: WebGLUniformLocation | null;
+  uOpacity: WebGLUniformLocation | null;
+}
+
 const MAX_BUFFER = 2200; // cap the largest framebuffer dimension (perf / memory guard)
 const SPHERE_FOV = (50 * Math.PI) / 180; // vertical field of view for the Riemann-sphere camera
 // 3D landscape framing (§B): the perspective eye distance = span * SURFACE_FRAMING / tan(fov/2), so the
@@ -192,9 +209,30 @@ export class Plot {
   private sphereRotation: Quat = DEFAULT_ROTATION;
   private sphereDist = SPHERE_DIST_DEFAULT;
 
+  // Riemann-surface path (ADR-0027). A fourth program renders the true multi-sheeted surface of a
+  // recognized invertible primitive (√, ⁿ√, z^(p/q), log, arcsin/arccos/arctan + affine wraps) by the
+  // parametrize-by-w method: the same grid mesh is reinterpreted over the value plane (uniformizer `t`),
+  // positioned by `z = gZFn(t)`, coloured by the shared `colorAt`, lifted by the Re/Im-w charisma. Built
+  // from the compiled inverse ASTs the registry supplies; null when the active map isn't a recognized
+  // primitive (then the mode is unavailable and the app offers only the principal-branch views).
+  private riemannForm: RiemannForm | null = null;
+  private gzGlsl: string | null = null; // compiled z = gZFn(t)  (position)
+  private gwGlsl: string | null = null; // compiled w = gWFn(t)  (value / colour)
+  private riemannProgram: WebGLProgram | null = null;
+  private riemannUniforms: RiemannUniforms | null = null;
+  private riemannVao: WebGLVertexArrayObject | null = null;
+  private riemannTarget: Vec3 = [0, 0, 0]; // framed surface centroid (orbit look-at)
+  private riemannBaseDist = 6; // framing distance that fits the surface (dolly resets to this)
+  /** Orbit-camera dolly distance for the Riemann surface (set to frame the surface; wheel/pinch adjust). */
+  riemannDist = 6;
+  /** Charisma axis: 0 = Re w (algebraic interlocking sheets), 1 = Im w (the log helicoid). */
+  riemannHeightSource = 0;
+  /** How many sheets to render for an infinite-sheeted primitive (log / inverse trig); finite ones ignore it. */
+  riemannSheets = 3;
+
   /** Which view `paint()` draws. `linked` renders the 2D portrait and the 3D landscape side by side
    *  (split viewports), both reading the same `view`, so navigating either keeps them in sync (I7). */
-  mode: "2d" | "3d" | "sphere" | "linked" = "2d";
+  mode: "2d" | "3d" | "sphere" | "linked" | "riemann" = "2d";
   /** The orbit camera for the 3D landscape (its `target` is taken from the view centre at paint time). */
   camera: OrbitCamera = { ...DEFAULT_CAMERA };
   /** Height compression: 0 log|f|, 1 linear |f|, 2 stereographic (see `render3d/height.ts`). */
@@ -283,6 +321,19 @@ export class Plot {
       nextValues.set(n, this.paramValues.get(n) ?? [...NEW_PARAM_DEFAULT]);
     this.paramNamesList = names;
     this.paramValues = nextValues;
+    // Riemann-surface mode (ADR-0027): recognize the plotted map as an invertible primitive and compile
+    // its parametrize-by-w position/value maps. `null` (the common case) leaves the mode unavailable. The
+    // maps reference no live parameters (affine constants are baked), so they compile with no params.
+    this.riemannForm = detectRiemannForm(ast);
+    if (this.riemannForm) {
+      this.gzGlsl = compileF(this.riemannForm.zFromT, "gZFn");
+      this.gwGlsl = compileF(this.riemannForm.wFromT, "gWFn");
+      this.riemannHeightSource = this.riemannForm.heightSource === "im" ? 1 : 0;
+      this.riemannSheets = this.riemannForm.sheetCount;
+    } else {
+      this.gzGlsl = null;
+      this.gwGlsl = null;
+    }
     return glsl;
   }
 
@@ -378,6 +429,7 @@ export class Plot {
 
     this.rebuildSurfaceProgram();
     this.rebuildSphereProgram();
+    this.rebuildRiemannProgram();
   }
 
   /** Build the 3D surface program (vertex-displaced grid + `colorAt` fragment) for the current `f`, its
@@ -481,6 +533,120 @@ export class Plot {
     this.sphereVao = svao;
   }
 
+  /** Build the Riemann-surface program (ADR-0027) for the current recognized form, its uniforms, and its
+   *  VAO (the shared grid buffers bound to `aUV` + the index buffer). A no-op that clears the program when
+   *  the active map isn't a recognized primitive. Called from {@link rebuildProgram}. */
+  private rebuildRiemannProgram(): void {
+    const gl = this.gl;
+    if (this.riemannProgram) {
+      gl.deleteProgram(this.riemannProgram);
+      this.riemannProgram = null;
+    }
+    if (this.riemannVao) {
+      gl.deleteVertexArray(this.riemannVao);
+      this.riemannVao = null;
+    }
+    if (!this.riemannForm || !this.gzGlsl || !this.gwGlsl) return;
+    const src = buildRiemannProgram(this.gzGlsl, this.gwGlsl);
+    const program = createProgram(gl, src.vertex, src.fragment);
+    this.riemannProgram = program;
+    const loc = (name: string): WebGLUniformLocation | null =>
+      gl.getUniformLocation(program, name);
+    this.riemannUniforms = {
+      uVP: loc("uVP"),
+      uTCenter: loc("uTCenter"),
+      uTHalf: loc("uTHalf"),
+      uHeightSource: loc("uHeightSource"),
+      uHeightScale: loc("uHeightScale"),
+      uLightDir: loc("uLightDir"),
+      uShaded: loc("uShaded"),
+      uOpacity: loc("uOpacity"),
+      uPhaseLUT: loc("uPhaseLUT"),
+      uPhaseRow: loc("uPhaseRow"),
+      uModulus: loc("uModulus"),
+      uModScale: loc("uModScale"),
+      uEnhance: loc("uEnhance"),
+      uSectors: loc("uSectors"),
+      uCrisp: loc("uCrisp"),
+      uHueShift: loc("uHueShift"),
+      uHueSign: loc("uHueSign"),
+      uCvd: loc("uCvd"),
+      uUncertainty: loc("uUncertainty"),
+      uLevelAbs: loc("uLevelAbs"),
+      uLevelArgOn: loc("uLevelArgOn"),
+      uLevelArg: loc("uLevelArg"),
+    };
+    const rvao = gl.createVertexArray();
+    gl.bindVertexArray(rvao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.gridUvBuffer);
+    const aUV = gl.getAttribLocation(program, "aUV");
+    gl.enableVertexAttribArray(aUV);
+    gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 0, 0);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.gridIndexBuffer); // recorded in the VAO
+    gl.bindVertexArray(null);
+    this.riemannVao = rvao;
+    this.updateRiemannFraming();
+  }
+
+  /** The `t`-window half-extents for the current form + sheet count (about the origin). */
+  private riemannWindow(): { halfX: number; halfY: number } {
+    return this.riemannForm ? this.riemannForm.window(this.riemannSheets) : { halfX: 2, halfY: 2 };
+  }
+
+  /** Sample the surface over its `t`-window (CPU inverse) to frame the orbit camera on it: the look-at
+   *  point becomes the surface centroid and the dolly distance is set to fit its radius. Pole-adjacent
+   *  samples (e.g. tan near ±π/2) are discarded so a few blow-ups don't wreck the framing. Recomputed when
+   *  the form, sheet count, height source, or height scale changes. */
+  private updateRiemannFraming(): void {
+    const form = this.riemannForm;
+    if (!form) return;
+    const zc = makeComplexFn(form.zFromT, {});
+    const wc = makeComplexFn(form.wFromT, {});
+    const { halfX, halfY } = this.riemannWindow();
+    const N = 15;
+    let minx = Infinity,
+      maxx = -Infinity,
+      miny = Infinity,
+      maxy = -Infinity,
+      minh = Infinity,
+      maxh = -Infinity;
+    for (let j = 0; j < N; j++) {
+      const ti = -halfY + (2 * halfY * j) / (N - 1);
+      for (let i = 0; i < N; i++) {
+        const tr = -halfX + (2 * halfX * i) / (N - 1);
+        let z: Complex, w: Complex;
+        try {
+          z = zc([tr, ti], [0, 0]);
+          w = wc([tr, ti], [0, 0]);
+        } catch {
+          continue;
+        }
+        const h = (this.riemannHeightSource === 1 ? w[1] : w[0]) * this.heightScale;
+        if (!Number.isFinite(z[0]) || !Number.isFinite(z[1]) || !Number.isFinite(h)) continue;
+        if (Math.hypot(z[0], z[1]) > 1e3) continue; // skip pole-adjacent blow-ups (arctan/tan/log edges)
+        minx = Math.min(minx, z[0]);
+        maxx = Math.max(maxx, z[0]);
+        miny = Math.min(miny, z[1]);
+        maxy = Math.max(maxy, z[1]);
+        minh = Math.min(minh, h);
+        maxh = Math.max(maxh, h);
+      }
+    }
+    if (!Number.isFinite(minx) || !Number.isFinite(maxx)) {
+      this.riemannTarget = [0, 0, 0];
+      this.riemannBaseDist = 6;
+      this.riemannDist = 6;
+      return;
+    }
+    const cx = (minx + maxx) / 2;
+    const cy = (miny + maxy) / 2;
+    const cz = (minh + maxh) / 2;
+    const radius = Math.max((maxx - minx) / 2, (maxy - miny) / 2, (maxh - minh) / 2, 0.5);
+    this.riemannTarget = [cx, cy, cz];
+    this.riemannBaseDist = (1.35 * radius) / Math.tan(this.camera.fov / 2);
+    this.riemannDist = this.riemannBaseDist;
+  }
+
   /**
    * Compile `src` and swap in the new program, keeping the old one on failure (so a transient typo
    * never blanks the canvas). Throws the `@cas/expr` ExprError / a shader-compile Error for the caller
@@ -561,6 +727,7 @@ export class Plot {
     if (this.mode === "sphere") this.paintSphere();
     else if (this.mode === "3d") this.paintSurface();
     else if (this.mode === "linked") this.paintLinked();
+    else if (this.mode === "riemann") this.paintRiemann();
     else this.paint2D();
   }
 
@@ -710,6 +877,81 @@ export class Plot {
     this.applyColorUniforms(u);
     this.applyParamUniforms(this.sphereParamLocs);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  /** Draw the true Riemann surface (ADR-0027): the grid mesh reinterpreted over the value plane, positioned
+   *  by `z = gZFn(t)`, lifted by the Re/Im-w charisma, coloured by the shared `colorAt`, through an orbit
+   *  camera framed on the surface. A no-op (dark clear) when the active map isn't a recognized primitive. */
+  private paintRiemann(): void {
+    const gl = this.gl;
+    const u = this.riemannUniforms;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    if (!this.riemannProgram || !u || !this.riemannVao) return;
+    const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
+    const cam: OrbitCamera = {
+      ...this.camera,
+      ortho: false, // the surface has genuine 3D relief; always perspective
+      distance: this.riemannDist,
+      target: this.riemannTarget,
+    };
+    const { halfX, halfY } = this.riemannWindow();
+    gl.useProgram(this.riemannProgram);
+    gl.bindVertexArray(this.riemannVao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, this.atlasTex);
+    gl.enable(gl.DEPTH_TEST);
+    // Frame the surface with a world-half-height ≈ its dolly-scaled radius so near/far bracket it.
+    const worldHalf = Math.max(0.5, this.riemannDist * Math.tan(cam.fov / 2));
+    gl.uniformMatrix4fv(u.uVP, false, viewProjection(cam, aspect, worldHalf));
+    gl.uniform2f(u.uTCenter, 0, 0);
+    gl.uniform2f(u.uTHalf, halfX, halfY);
+    gl.uniform1i(u.uHeightSource, this.riemannHeightSource);
+    gl.uniform1f(u.uHeightScale, this.heightScale);
+    gl.uniform3f(u.uLightDir, 0.4, 0.5, 0.75);
+    gl.uniform1f(u.uShaded, 1);
+    gl.uniform1f(u.uOpacity, this.opacity);
+    this.applyColorUniforms(u);
+    const translucent = this.opacity < 1;
+    if (translucent) {
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.depthMask(false);
+    }
+    gl.drawElements(gl.TRIANGLES, this.gridIndexCount, gl.UNSIGNED_INT, 0);
+    if (translucent) {
+      gl.disable(gl.BLEND);
+      gl.depthMask(true);
+    }
+    gl.disable(gl.DEPTH_TEST);
+  }
+
+  // --- Riemann-surface controls (ADR-0027) --------------------------------------------------------
+  /** Whether the active map is a recognized invertible primitive (so the Riemann-surface mode is offered). */
+  riemannAvailable(): boolean {
+    return this.riemannForm !== null;
+  }
+
+  /** The recognized form (label / sheet structure / branch note for the UI badge), or null. */
+  riemannInfo(): RiemannForm | null {
+    return this.riemannForm;
+  }
+
+  /** Re-frame the Riemann camera after a height-source / sheet-count / height-scale change (the surface's
+   *  extent moved). Cheap (a coarse CPU sample); safe to call when no form is active. */
+  reframeRiemann(): void {
+    this.updateRiemannFraming();
+  }
+
+  /** Dolly the Riemann orbit camera in/out by a multiplicative factor (clamped). */
+  dollyRiemann(factor: number): void {
+    this.riemannDist = Math.min(1e5, Math.max(0.05, this.riemannDist * factor));
+  }
+
+  /** Reset the Riemann orbit camera to its framed default distance (the surface fitted to the viewport). */
+  resetRiemann(): void {
+    this.riemannDist = this.riemannBaseDist;
   }
 
   // --- Riemann-sphere controls (Phase 5, 5C) ------------------------------------------------------

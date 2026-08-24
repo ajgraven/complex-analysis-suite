@@ -36,6 +36,8 @@ const S: PlotterState = {
     heightScale: 1.5,
     specular: true,
     opacity: 0.6,
+    riemannHeight: 1,
+    riemannSheets: 5,
   },
 };
 
@@ -85,13 +87,27 @@ describe("share-link view state", () => {
     const bad = decodeState(
       encodeViewState(APP_NS, {
         expr: "z",
-        v3d: { mode: "nope", distance: 999, heightMode: 9, opacity: 5 },
+        v3d: { mode: "nope", distance: 999, heightMode: 9, opacity: 5, riemannSheets: 99, riemannHeight: 7 },
       }),
     );
     expect(bad?.v3d.mode).toBe("2d");
     expect(bad?.v3d.distance).toBe(60);
     expect(bad?.v3d.heightMode).toBe(2);
     expect(bad?.v3d.opacity).toBe(1); // clamped to [0.1, 1]
+    expect(bad?.v3d.riemannSheets).toBe(8); // clamped to [1, 8]
+    expect(bad?.v3d.riemannHeight).toBe(0); // only 1 selects Im w; anything else → Re w
+  });
+
+  it("accepts the riemann mode and round-trips its charisma + sheet count", () => {
+    const decoded = decodeState(
+      encodeViewState(APP_NS, {
+        expr: "sqrt(z)",
+        v3d: { mode: "riemann", riemannHeight: 1, riemannSheets: 4 },
+      }),
+    );
+    expect(decoded?.v3d.mode).toBe("riemann");
+    expect(decoded?.v3d.riemannHeight).toBe(1);
+    expect(decoded?.v3d.riemannSheets).toBe(4);
   });
 
   it("round-trips the f/g slots, and a g-active link plots g", () => {

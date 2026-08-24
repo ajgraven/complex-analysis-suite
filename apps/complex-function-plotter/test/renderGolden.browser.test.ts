@@ -66,6 +66,19 @@ function render(src: string, mode: "2d" | "3d", topDown = false): HTMLCanvasElem
   return canvas;
 }
 
+/** Render a Riemann surface (ADR-0027) through the real Plot at a fixed charisma / sheet count. */
+function renderRiemann(src: string, heightSource = 0, sheets?: number): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, src);
+  if (!plot.riemannAvailable()) throw new Error(`not a Riemann form: ${src}`);
+  plot.mode = "riemann";
+  plot.riemannHeightSource = heightSource;
+  if (sheets !== undefined) plot.riemannSheets = sheets;
+  plot.reframeRiemann(); // frame the camera for the chosen charisma / sheets
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
 describe("plotter render-consistency goldens (Track B)", () => {
   it("renders a non-blank z^2 portrait (guards the invariants below against a blank canvas)", () => {
     expect(variance(fingerprint(render("z^2", "2d"), N))).toBeGreaterThan(200);
@@ -80,5 +93,21 @@ describe("plotter render-consistency goldens (Track B)", () => {
     const portrait = fingerprint(render("z^2", "2d"), N);
     const landscape = fingerprint(render("z^2", "3d", true), N);
     expect(meanAbs(portrait, landscape)).toBeLessThan(6);
+  });
+
+  // The Riemann-surface mode (ADR-0027): the parametrize-by-w surface renders real, phase-coloured
+  // structure (not a blank clear), and the charisma axis actually changes the surface.
+  it("renders a non-blank √z Riemann surface", () => {
+    expect(variance(fingerprint(renderRiemann("sqrt(z)"), N))).toBeGreaterThan(50);
+  });
+
+  it("renders a non-blank log-z helicoid (Im-w charisma)", () => {
+    expect(variance(fingerprint(renderRiemann("log(z)", 1), N))).toBeGreaterThan(50);
+  });
+
+  it("the charisma axis changes the surface (Re w vs Im w on √z differ)", () => {
+    const reW = fingerprint(renderRiemann("sqrt(z)", 0), N);
+    const imW = fingerprint(renderRiemann("sqrt(z)", 1), N);
+    expect(meanAbs(reW, imW)).toBeGreaterThan(3);
   });
 });
