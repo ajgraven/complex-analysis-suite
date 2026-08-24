@@ -90,6 +90,38 @@ function renderCurve(src: string): HTMLCanvasElement {
   return canvas;
 }
 
+/** Render the linked Riemann view (M3.2, ADR-0029): the flat base plane beside the surface. */
+function renderRiemannLinked(src: string): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  const plot = new Plot(canvas, src);
+  if (!plot.riemannAvailable()) throw new Error(`not a Riemann form: ${src}`);
+  plot.mode = "riemann";
+  plot.riemannLinked = true;
+  plot.view = { cx: 0, cy: 0, span: 2 };
+  plot.reframeRiemann();
+  plot.frameRiemannBaseView();
+  plot.renderThumbnail(DIM);
+  return canvas;
+}
+
+/** The mean colour variance of the LEFT half of a square render (the base-plane pane in the linked view). */
+function leftHalfVariance(src: HTMLCanvasElement): number {
+  const g = document.createElement("canvas");
+  g.width = N;
+  g.height = N;
+  const ctx = g.getContext("2d");
+  if (!ctx) throw new Error("no 2D context to read back the render");
+  ctx.drawImage(src, 0, 0, N, N);
+  const d = ctx.getImageData(0, 0, N, N).data;
+  const out: number[] = [];
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N / 2; x++) {
+      const i = (y * N + x) * 4;
+      out.push(d[i], d[i + 1], d[i + 2]);
+    }
+  return variance(out);
+}
+
 describe("plotter render-consistency goldens (Track B)", () => {
   it("renders a non-blank z^2 portrait (guards the invariants below against a blank canvas)", () => {
     expect(variance(fingerprint(render("z^2", "2d"), N))).toBeGreaterThan(200);
@@ -129,5 +161,15 @@ describe("plotter render-consistency goldens (Track B)", () => {
 
   it("renders a non-blank √(z³−z) (elliptic) surface", () => {
     expect(variance(fingerprint(renderCurve("sqrt(z^3 - z)"), N))).toBeGreaterThan(50);
+  });
+
+  // The linked base-plane pane (M3.2, ADR-0029): the split renders real structure in BOTH panes, and the
+  // base-plane pane makes the image differ from the surface-only render.
+  it("the linked Riemann view renders a non-blank base-plane pane beside the surface", () => {
+    const linked = renderRiemannLinked("sqrt(z)");
+    expect(variance(fingerprint(linked, N))).toBeGreaterThan(50); // non-blank overall
+    expect(leftHalfVariance(linked)).toBeGreaterThan(50); // the base-plane (left) pane has real structure
+    const surfaceOnly = fingerprint(renderRiemann("sqrt(z)"), N);
+    expect(meanAbs(fingerprint(linked, N), surfaceOnly)).toBeGreaterThan(3); // the split changed the image
   });
 });

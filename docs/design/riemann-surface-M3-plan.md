@@ -26,10 +26,11 @@
 | Milestone | Status | Coverage |
 |---|---|---|
 | **M3.1 — multi-sheet hover-pick value inspector** | ✅ done | `src/riemann/pickMesh.ts` (pure geometry): one uniform `PickMesh` (`xy`, `w`, height-basis `hb`) for BOTH render paths; `pickRiemannSurface` = double-sided Möller–Trumbore nearest hit + point-in-triangle sheet census → `{ z, w, sheetCount, sheetIndex }`; `buildParamPickMesh` (M1) + `pickMeshFromCurve` (M2). `Plot`: caches the curve arrays, lazily samples the param pick mesh (`paramPickDirty`), shares `riemannCamera()` with the paint, `pickRiemann(clientX, clientY, rect)`. `main.ts`: `updateProbeRiemann` fills the readout (`z`/`w`/`\|w\|`/`arg w`, all `≈`) + the new **sheet** row (`k / N`, local ordinal); shown only in the Riemann view. Node: 7 tests (single/stacked-sheet ray-cast, height-axis flip, miss/empty → null, √(z²−1) curve mesh = 2 sheets, param √z = 2 sheets). |
-| **M3.1 gate** | ✅ green · pushed | full repo gate green — typecheck · lint (+dep:check, **no new edges**) · **387 files / 3244 tests** · build (all apps); plotter browser goldens (37) pass; existing tests (incl. top-down-3D≡2D) unchanged. **Paused for review before M3.2.** |
-| **M3.2 — linked base-plane pane** | ⛔ next | a split view: the multi-sheet surface beside the flat base plane (`z`-domain), hover-linked, with branch points / the picked `z` marked. Reuses the `paintLinked` split-viewport scaffolding. |
-| **M3.3 — monodromy explorer** | ⛔ after M3.1+M3.2 | drag a loop in the base plane; continue each sheet value by nearest-match along the loop; report the resulting sheet permutation. `≈`, **opt-in**, confined (RISKS §3 — never certified). |
-| M3.4 — colour / legibility polish | ⛔ deferred (unordered) | per-sheet tint option, cut-shadow, sheet-count legend — foldable anywhere; not in this pass. |
+| **M3.1 gate** | ✅ green · pushed | full repo gate green — typecheck · lint (+dep:check, **no new edges**) · **387 files / 3244 tests** · build (all apps); plotter browser goldens (37) pass; existing tests (incl. top-down-3D≡2D) unchanged. |
+| **M3.2 — linked base-plane pane** | ✅ done | a **"Base-plane pane"** toggle splits the Riemann view: the flat base-plane portrait (left) beside the surface (right), scissored like `paintLinked`. **Bidirectional hover-linking**: picking the surface marks the touched sheet's base point on the base plane (a crosshair); hovering the base plane reads the principal value there and marks it. `Plot`: `riemannLinked`, parameterized `paintRiemann*(vx,vy,vw,vh)` + `paintRiemannLinked`, `frameRiemannBaseView` (frames the base pane to the parametric surface's z-extent; the curve mesh already spans `view`). `main.ts`: pane-aware `effMode`/rects + `navMode` (drag/wheel orbit the surface from either pane), a light left-pane overlay (divider + label + crosshair), permalink `riemannLinked` (back-compat). **Branch-point markers deferred to M3.4** (honest branch-point *location* — `≈`/`=` per path, dedup — pairs with the colour/legibility polish; the linked-pane + hover-correspondence is the headline and stands alone). Browser golden: the linked split renders real structure in both panes + differs from surface-only. |
+| **M3.2 gate** | ✅ green · pushed | full repo gate green — typecheck · lint (+dep:check, **no new edges**) · **387 files / 3244 tests** · build (all apps); plotter browser goldens (38, +1 linked) pass; existing tests unchanged. **Paused for review before M3.3.** |
+| **M3.3 — monodromy explorer** | ⛔ next | drag a loop in the base plane; continue each sheet value by nearest-match along the loop; report the resulting sheet permutation. `≈`, **opt-in**, confined (RISKS §3 — never certified). |
+| M3.4 — colour / legibility polish | ⛔ deferred (unordered) | per-sheet tint option, cut-shadow, sheet-count legend, **branch-point markers** (moved here from M3.2) — foldable anywhere; not in this pass. |
 
 ---
 
@@ -110,14 +111,22 @@ the whole readout is labeled `≈`.
 one-to-one to `z / w / |w| / arg w`) plus one extra **sheet** row shown only in the Riemann view. The hover
 handler's current `renderProbe(null)` for Riemann mode is replaced by this pick.
 
-## 4. M3.2 — linked base-plane pane (sketch, formalized at build)
+## 4. M3.2 — linked base-plane pane
 
-Add a Riemann-linked split: the flat base-plane portrait (`paint2D`) on the left, the Riemann surface
-(`paintRiemann`) on the right, scissored like `paintLinked`. Hover-linking: a pick on the surface marks the
-picked `z` (and, when known, its sibling base point) on the flat pane; branch points (M2: zeros/poles of `R`,
-already located by the mesh's degeneracy test; M1: the primitive's known branch point, e.g. `0` for `√`/`log`)
-are drawn as markers on the base plane with an honest `≈`/`=` label. Reuses `paintLinked`'s viewport plumbing,
-the `leftHalf`/`rightHalf` rects, and `effMode` dispatch already in `main.ts`. No new engine.
+> **As built:** a **"Base-plane pane"** toggle (`plot.riemannLinked`), not a new top-level view mode — less
+> invasive and discoverable in context. The Riemann-linked split draws the flat base-plane portrait
+> (`paint2D`) on the left, the Riemann surface on the right, scissored like `paintLinked`. **Bidirectional
+> hover-linking**: a pick on the surface marks the touched sheet's base point `z` on the flat pane with a
+> crosshair; hovering the flat pane reads the principal value there and marks it. The base pane reads
+> `plot.view` — the curve mesh is already built over it, and `frameRiemannBaseView` frames it to the
+> parametric surface's z-extent. Drag/wheel orbit the surface from either pane (`navMode`); only hover is
+> pane-specific (`effMode`). Reuses `paintLinked`'s viewport plumbing, the `leftHalf`/`rightHalf` rects, and
+> `effMode` dispatch in `main.ts`. No new engine, no new package.
+>
+> **Branch-point markers were deferred to M3.4.** Honest branch-point *location* is its own mini-problem
+> (per-path method, `≈`/`=` labeling, dedup) and pairs naturally with the colour/legibility polish; the
+> linked pane + hover-correspondence is the headline and is complete without them. (Precedent: the existing
+> 2D↔3D linked mode carries no overlay markers either.)
 
 ## 5. M3.3 — monodromy explorer (sketch, formalized at build)
 

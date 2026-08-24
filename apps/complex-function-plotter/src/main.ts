@@ -196,6 +196,7 @@ function main(): void {
   const riemannSheetsRow = byId("riemannSheetsRow");
   const riemannExag = byId("riemannExag");
   const riemannExagVal = byId("riemannExagVal");
+  const riemannLinkedInput = byId("riemannLinked");
   const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
@@ -288,16 +289,30 @@ function main(): void {
   // the surface the right half, so a client pixel is measured against the flat pane's rect (`twoDRect`) and
   // the effective interaction (`effMode`) depends on which half the cursor is in.
   const canvasRect = (): DOMRect => canvas.getBoundingClientRect();
+  // The flat-portrait pane rect — the whole canvas in 2D, the LEFT half in the linked view and in the
+  // Riemann view's base-plane pane (M3.2).
+  const splitLeft = (): boolean =>
+    plot.mode === "linked" || (plot.mode === "riemann" && plot.riemannLinked);
   const twoDRect = (): DOMRect | ReturnType<typeof leftHalf> =>
-    plot.mode === "linked" ? leftHalf(canvasRect()) : canvasRect();
+    splitLeft() ? leftHalf(canvasRect()) : canvasRect();
   // The surface pane's rect — the whole canvas in 3D, the right half in the linked view — for the 3D pick.
   const threeDRect = (): DOMRect | ReturnType<typeof rightHalf> =>
     plot.mode === "linked" ? rightHalf(canvasRect()) : canvasRect();
+  // The Riemann surface pane rect — the whole canvas in the plain Riemann view, the RIGHT half when the
+  // base-plane pane is on — for the hover-pick.
+  const riemannPaneRect = (): DOMRect | ReturnType<typeof rightHalf> =>
+    plot.riemannLinked ? rightHalf(canvasRect()) : canvasRect();
   const effMode = (clientX: number): "2d" | "3d" | "sphere" | "riemann" => {
     const m = plot.mode;
     if (m === "linked") return isLeftHalf(clientX, canvasRect()) ? "2d" : "3d";
+    if (m === "riemann" && plot.riemannLinked)
+      return isLeftHalf(clientX, canvasRect()) ? "2d" : "riemann";
     return m; // "2d" | "3d" | "sphere" | "riemann"
   };
+  // Drag / wheel / pinch act on the surface everywhere in the Riemann view (both panes orbit/dolly it);
+  // only hover is pane-specific. Elsewhere this is just `effMode`.
+  const navMode = (clientX: number): "2d" | "3d" | "sphere" | "riemann" =>
+    plot.mode === "riemann" ? "riemann" : effMode(clientX);
 
   // Two function slots (catalog A7). One expression box edits the ACTIVE slot; a toggle switches which
   // slot is active (and therefore plotted). Both persist in the share-link.
@@ -384,6 +399,7 @@ function main(): void {
       opacity: plot.opacity,
       riemannHeight: plot.riemannHeightSource,
       riemannSheets: plot.riemannSheets,
+      riemannLinked: plot.riemannLinked,
     },
   });
 
@@ -431,13 +447,75 @@ function main(): void {
     return gridResolutionForField(maxJump, span * Math.max(1, aspect));
   };
 
+  // The base point last read on the Riemann surface (or hovered on the base plane), drawn as a crosshair on
+  // the linked base-plane pane (M3.2) so you can see which base point the touched sheet sits over.
+  let linkedZ: Complex | null = null;
+  const drawRiemannLink = (): void => {
+    const cssW = canvas.clientWidth;
+    const cssH = canvas.clientHeight;
+    const d = Math.min(window.devicePixelRatio || 1, 2);
+    const W = Math.max(1, Math.round(cssW * d));
+    const H = Math.max(1, Math.round(cssH * d));
+    if (axesCanvas.width !== W || axesCanvas.height !== H) {
+      axesCanvas.width = W;
+      axesCanvas.height = H;
+    }
+    const ctx = axesCanvas.getContext("2d");
+    if (!ctx) return;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    ctx.setTransform(d, 0, 0, d, 0, 0); // draw in CSS pixels
+    const halfW = cssW / 2;
+    const v = plot.view;
+    const aspect = cssH > 0 ? halfW / cssH : 1;
+    const xmin = v.cx - v.span * aspect;
+    const xmax = v.cx + v.span * aspect;
+    const ymin = v.cy - v.span;
+    const ymax = v.cy + v.span;
+    const sx = (wx: number): number => ((wx - xmin) / (xmax - xmin)) * halfW;
+    const sy = (wy: number): number => ((ymax - wy) / (ymax - ymin)) * cssH;
+    ctx.strokeStyle = "rgba(150,165,190,0.28)"; // the pane divider
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(halfW, 0);
+    ctx.lineTo(halfW, cssH);
+    ctx.stroke();
+    ctx.fillStyle = "rgba(165,180,205,0.85)";
+    ctx.font = "11px system-ui, -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText("base plane (z)", 6, 6);
+    if (linkedZ) {
+      const px = sx(linkedZ[0]);
+      const py = sy(linkedZ[1]);
+      if (px >= 0 && px <= halfW && py >= 0 && py <= cssH) {
+        ctx.strokeStyle = "rgba(245,248,255,0.92)";
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(px - 7, py);
+        ctx.lineTo(px + 7, py);
+        ctx.moveTo(px, py - 7);
+        ctx.lineTo(px, py + 7);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px, py, 4, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  };
+
   const redraw = (draft = false): void => {
     // On a committed frame in a surface mode, adapt the mesh density to the field + zoom (§B / poles) — a
     // cheap no-op when unchanged; skipped on draft frames so a zoom/drag burst never rebuilds mid-gesture.
     if (!draft && (plot.mode === "3d" || plot.mode === "linked"))
       plot.reconcileMeshResolution(surfaceResolutionTarget());
     plot.draw(draft);
-    if (plot.mode !== "2d") {
+    if (plot.mode === "riemann" && plot.riemannLinked) {
+      // The linked Riemann view: the base-plane pane gets a light overlay (divider + label + the
+      // hover-link crosshair) on its left half; the surface half stands alone (M3.2).
+      drawRiemannLink();
+    } else if (plot.mode !== "2d") {
       // The axes / grid / markers are full-canvas 2D-projection overlays; in the 3D landscape, on the
       // sphere, AND in the linked view they'd be wrong (in linked mode drawAxes spans the whole canvas
       // and would bleed across the surface half), so clear the overlay and let the surface stand alone.
@@ -719,6 +797,8 @@ function main(): void {
     if (riemannExag instanceof HTMLInputElement) riemannExag.value = String(plot.heightScale);
     if (riemannExagVal instanceof HTMLElement)
       riemannExagVal.textContent = String(plot.heightScale);
+    if (riemannLinkedInput instanceof HTMLInputElement)
+      riemannLinkedInput.checked = plot.riemannLinked;
     // The sheet-count control applies only to infinite-sheeted parametric families (log / inverse trig);
     // finite parametric forms and the finite algebraic curves render all their sheets.
     if (riemannSheetsRow instanceof HTMLElement)
@@ -748,12 +828,14 @@ function main(): void {
     // The cursor readout is pane-specific — reset it on any view switch. The sheet row + Riemann hint
     // (M3.1) show only in the Riemann view; f(z)/|f|/arg f then read the picked sheet's value.
     for (const el of [pz, pfz, pabs, parg, pbranch]) if (el instanceof HTMLElement) el.textContent = "—";
+    linkedZ = null;
     const inRiemann = m === "riemann";
     if (pbranchDt instanceof HTMLElement) pbranchDt.hidden = !inRiemann;
     if (pbranch instanceof HTMLElement) pbranch.hidden = !inRiemann;
     if (riemannProbeHint instanceof HTMLElement) riemannProbeHint.hidden = !inRiemann;
     if (m === "riemann") {
       plot.reframeRiemann(); // build the curve mesh over the current view / refresh the parametric framing
+      if (plot.riemannLinked) plot.frameRiemannBaseView(); // frame the base-plane pane on the surface (M3.2)
       syncRiemannControls();
     }
     redraw(false);
@@ -805,6 +887,14 @@ function main(): void {
       plot.heightScale = Number(riemannExag.value);
       if (riemannExagVal instanceof HTMLElement) riemannExagVal.textContent = riemannExag.value;
       plot.reframeRiemannLight(); // exaggeration is a shader uniform — no mesh rebuild
+      redraw(false);
+    });
+  // Linked base-plane pane (M3.2): split the Riemann view with the flat base plane, hover-linked.
+  if (riemannLinkedInput instanceof HTMLInputElement)
+    riemannLinkedInput.addEventListener("change", () => {
+      plot.riemannLinked = riemannLinkedInput.checked;
+      if (plot.riemannLinked) plot.frameRiemannBaseView(); // frame the base pane on the surface's z-extent
+      linkedZ = null;
       redraw(false);
     });
   if (riemannReset instanceof HTMLElement)
@@ -1286,10 +1376,14 @@ function main(): void {
   // ordinal. All `≈` (barycentric-interpolated from a finite mesh), matching how the surface is drawn. The
   // Riemann view uses the whole canvas, so the pick measures against the full canvas rect.
   const updateProbeRiemann = (clientX: number, clientY: number): void => {
-    const hit = plot.pickRiemann(clientX, clientY, canvasRect());
+    const hit = plot.pickRiemann(clientX, clientY, riemannPaneRect());
     if (!hit) {
       renderProbe(null);
       setBranchText("—");
+      if (plot.riemannLinked) {
+        linkedZ = null;
+        drawRiemannLink();
+      }
       return;
     }
     if (pz instanceof HTMLElement) pz.textContent = fmtComplex(hit.z);
@@ -1297,6 +1391,10 @@ function main(): void {
     if (pabs instanceof HTMLElement) pabs.textContent = "≈ " + fmtNum(Math.hypot(hit.w[0], hit.w[1]));
     if (parg instanceof HTMLElement) parg.textContent = "≈ " + fmtNum(Math.atan2(hit.w[1], hit.w[0]));
     setBranchText(`${hit.sheetIndex} / ${hit.sheetCount}`);
+    if (plot.riemannLinked) {
+      linkedZ = hit.z; // mark the touched sheet's base point on the base-plane pane
+      drawRiemannLink();
+    }
   };
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
@@ -1324,7 +1422,7 @@ function main(): void {
   // one finger, so the survivor keeps dragging. `pan3d` (left mouse button) pans the 3D landscape; the
   // default (right button / touch / pinch-survivor) orbits it.
   const seedDrag = (clientX: number, clientY: number, pan3d = false): void => {
-    const m = effMode(clientX);
+    const m = navMode(clientX); // in the Riemann view a drag orbits the surface from either pane
     if (m === "sphere") sphereLast = canvasUv(clientX, clientY);
     else if (m === "riemann") orbitLast = { x: clientX, y: clientY }; // orbit only (no domain pan)
     else if (m === "3d") {
@@ -1367,7 +1465,7 @@ function main(): void {
       const factor = pinchFactor(pinchPrev, dist);
       pinchPrev = dist;
       const mid = pointerMidpoint(a, b);
-      const m = effMode(mid.x);
+      const m = navMode(mid.x);
       if (m === "sphere") plot.dollySphere(factor);
       else if (m === "riemann") plot.dollyRiemann(factor); // pinch dollies the surface camera
       else if (m === "3d") plot.zoomSpan(factor); // §B: pinch zooms the domain
@@ -1406,9 +1504,15 @@ function main(): void {
       // screen→world point; 3D picks the point on the surface; the Riemann surface ray-casts its sheets
       // (M3.1); the sphere has no pick, so blank the readout there rather than leaving stale values.
       const m = effMode(e.clientX);
-      if (m === "2d") updateProbe(e.clientX, e.clientY);
+      if (m === "riemann") updateProbeRiemann(e.clientX, e.clientY);
+      else if (plot.mode === "riemann" && plot.riemannLinked && m === "2d") {
+        // The base-plane pane of the linked Riemann view: the principal readout + the hover-link crosshair.
+        updateProbe(e.clientX, e.clientY);
+        setBranchText("—");
+        linkedZ = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
+        drawRiemannLink();
+      } else if (m === "2d") updateProbe(e.clientX, e.clientY);
       else if (m === "3d") updateProbe3d(e.clientX, e.clientY);
-      else if (m === "riemann") updateProbeRiemann(e.clientX, e.clientY);
       else renderProbe(null);
     }
   });
@@ -1458,7 +1562,7 @@ function main(): void {
     "wheel",
     (e) => {
       e.preventDefault();
-      const m = effMode(e.clientX);
+      const m = navMode(e.clientX);
       if (m === "sphere") plot.dollySphere(Math.pow(1.0012, e.deltaY));
       else if (m === "riemann") plot.dollyRiemann(Math.pow(1.0015, e.deltaY));
       else if (m === "3d") plot.zoomSpan(Math.pow(1.0015, e.deltaY)); // §B: scroll zooms the domain
@@ -1568,6 +1672,7 @@ function main(): void {
   // saved choices override them). Safe when the active map isn't a recognized primitive (reframe no-ops).
   plot.riemannHeightSource = initial.v3d.riemannHeight === 1 ? 1 : 0;
   plot.riemannSheets = initial.v3d.riemannSheets;
+  plot.riemannLinked = initial.v3d.riemannLinked;
   plot.reframeRiemann();
 
   // Restore the saved render mode last (now that setView + its controls exist). The camera / height were

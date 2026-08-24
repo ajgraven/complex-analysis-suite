@@ -2522,6 +2522,8 @@ the height law identical to the shader, so pick and picture agree.
 1. [x] Write [`docs/design/riemann-surface-M3-plan.md`](design/riemann-surface-M3-plan.md) + this ADR.
 2. [x] Land M3.1 (hover-pick) — `riemann/pickMesh.ts` + `Plot.pickRiemann` + readout; node tests; both
        render paths; existing tests (incl. top-down-3D≡2D) kept green. **Paused for review.**
-3. [ ] Land M3.2 (linked base-plane pane) — reuse `paintLinked`; hover-linking + branch markers. **Pause.**
+3. [x] Land M3.2 (linked base-plane pane) — a "Base-plane pane" toggle (not a new mode); reuse `paintLinked`;
+       bidirectional hover-linking (crosshair). **Branch markers deferred to M3.4** (branch-point *location*
+       pairs with the polish). Browser golden added; gate green. **Paused for review.**
 4. [ ] Land M3.3 (monodromy explorer) — opt-in, `≈`, confined to its panel (RISKS §3). **Pause.**
-5. [ ] M3.4 (colour/legibility polish) — deferred, unordered; fold in when useful.
+5. [ ] M3.4 (colour/legibility polish, + branch-point markers moved from M3.2) — deferred, unordered.

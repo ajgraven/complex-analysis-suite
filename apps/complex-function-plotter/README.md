@@ -72,7 +72,8 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   exact. **Hovering the surface** ray-casts its sheets (M3.1, ADR-0029) and reads the point the eye actually
   touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**
   (`k / N` — which of the `N` sheets over this `z`; near a branch point `N` honestly drops as they merge),
-  all `≈`. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,
+  **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa). Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
   shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
   (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`), the NPP mesh (`riemann/curveMesh.ts`), and the
   hover-pick (`riemann/pickMesh.ts`).

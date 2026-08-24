@@ -256,6 +256,13 @@ export class Plot {
   riemannHeightSource = 0;
   /** How many sheets to render for an infinite-sheeted primitive (log / inverse trig); finite ones ignore it. */
   riemannSheets = 3;
+  /** Linked base-plane pane (M3.2, ADR-0029): split the Riemann view — the flat base plane beside the
+   *  surface, hover-linked. The base plane reads {@link view} (the curve mesh is built over it; for the
+   *  parametric path {@link view} is framed to the surface's base-plane extent when this turns on). */
+  riemannLinked = false;
+  /** The parametric surface's base-plane (z) extent, from the last framing — used to frame the linked
+   *  base-plane pane's {@link view} so it shows the region the surface actually covers. */
+  private riemannXYBounds: { minx: number; maxx: number; miny: number; maxy: number } | null = null;
 
   // Algebraic-curve path (ADR-0028, M2a). When the active map is NOT an M1 primitive but IS a single-radical
   // algebraic map `w = R(z)^(p/q)`, the surface is a CPU-built baked mesh (NPP proximity gluing over the
@@ -717,6 +724,7 @@ export class Plot {
         maxh = Math.max(maxh, h);
       }
     }
+    this.riemannXYBounds = Number.isFinite(minx) ? { minx, maxx, miny, maxy } : null;
     this.frameToBounds(minx, maxx, miny, maxy, minh, maxh);
   }
 
@@ -1089,23 +1097,60 @@ export class Plot {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  /** Draw the Riemann surface: dispatch to the parametric (M1) or the baked algebraic-curve (M2) path. */
+  /** Draw the Riemann view: the surface alone (full canvas), or — when {@link riemannLinked} — the flat
+   *  base plane beside the surface (M3.2), scissored like {@link paintLinked}. */
   private paintRiemann(): void {
-    if (this.riemannKindV === "curve") this.paintRiemannCurve();
-    else this.paintRiemannParam();
+    if (this.riemannLinked) {
+      this.paintRiemannLinked();
+      return;
+    }
+    this.paintRiemannSurface();
+  }
+
+  /** Draw the live Riemann surface into a viewport (default: the whole canvas) — dispatch to the parametric
+   *  (M1) or the baked algebraic-curve (M2) path. */
+  private paintRiemannSurface(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
+    if (this.riemannKindV === "curve") this.paintRiemannCurve(vx, vy, vw, vh);
+    else this.paintRiemannParam(vx, vy, vw, vh);
+  }
+
+  /** Draw the flat base plane (left) beside the Riemann surface (right), both scissored (M3.2). The base
+   *  plane reads {@link view}; the surface owns its orbit framing. Navigating either updates the readout via
+   *  the hover-link (main.ts), not a shared view. */
+  private paintRiemannLinked(): void {
+    const gl = this.gl;
+    const W = this.canvas.width;
+    const H = this.canvas.height;
+    const halfW = Math.max(1, Math.round(W / 2));
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(0, 0, halfW, H); // left half — the flat base-plane portrait
+    this.paint2D(0, 0, halfW, H);
+    gl.scissor(halfW, 0, W - halfW, H); // right half — the surface clears + draws its own region
+    this.paintRiemannSurface(halfW, 0, W - halfW, H);
+    gl.disable(gl.SCISSOR_TEST);
   }
 
   /** Draw the parametric (M1, ADR-0027) surface: the grid mesh reinterpreted over the value plane,
    *  positioned by `z = gZFn(t)`, lifted by the Re/Im-t charisma, coloured by the shared `colorAt`, through
    *  an orbit camera framed on the surface. A no-op (dark clear) when no parametric form is active. */
-  private paintRiemannParam(): void {
+  private paintRiemannParam(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
     const gl = this.gl;
     const u = this.riemannUniforms;
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg
+    gl.viewport(vx, vy, vw, vh);
+    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg (scissored to this pane in the linked view)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.riemannProgram || !u || !this.riemannVao) return;
-    const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
+    const aspect = vh > 0 ? vw / vh : 1;
     const cam = this.riemannCamera(); // perspective, framed on the surface (shared with the hover-pick)
     const { halfX, halfY } = this.riemannWindow();
     gl.useProgram(this.riemannProgram);
@@ -1141,14 +1186,19 @@ export class Plot {
   /** Draw the baked algebraic-curve surface (M2a, ADR-0028): the CPU-built triangle soup (world xy +
    *  per-vertex sheet value), lifted in-shader by the Re/Im-w charisma, coloured by the shared `colorAt`,
    *  through the same orbit camera. A no-op (dark clear) when no curve is active or the mesh is empty. */
-  private paintRiemannCurve(): void {
+  private paintRiemannCurve(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
     const gl = this.gl;
     const u = this.curveUniforms;
-    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg
+    gl.viewport(vx, vy, vw, vh);
+    gl.clearColor(0.06, 0.068, 0.082, 1); // ≈ the app's --bg (scissored to this pane in the linked view)
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     if (!this.curveProgram || !u || !this.curveVao || this.curveTriCount === 0) return;
-    const aspect = this.canvas.height > 0 ? this.canvas.width / this.canvas.height : 1;
+    const aspect = vh > 0 ? vw / vh : 1;
     const cam = this.riemannCamera(); // perspective, framed on the surface (shared with the hover-pick)
     gl.useProgram(this.curveProgram);
     gl.bindVertexArray(this.curveVao);
@@ -1238,6 +1288,23 @@ export class Plot {
       this.updateRiemannFraming();
       this.paramPickDirty = true; // the t-window (sheet count) may have changed — re-sample the pick mesh
     }
+  }
+
+  /** Frame the linked base-plane pane's {@link view} on the region the surface covers. For the curve path
+   *  the mesh is already built over {@link view}, so it's left as-is; for the parametric path {@link view}
+   *  is otherwise unrelated to the surface, so it's set to the surface's base-plane (z) extent. A no-op
+   *  unless a surface is active. */
+  frameRiemannBaseView(): void {
+    if (this.riemannKindV !== "param") return; // curve: `view` already frames the mesh's z-rectangle
+    const b = this.riemannXYBounds;
+    if (!b) return;
+    const halfX = (b.maxx - b.minx) / 2;
+    const halfY = (b.maxy - b.miny) / 2;
+    this.view = {
+      cx: (b.minx + b.maxx) / 2,
+      cy: (b.miny + b.maxy) / 2,
+      span: Math.max(halfX, halfY, 0.5) * 1.15, // world half-height; a touch of margin
+    };
   }
 
   /** Cheap re-frame after a height-axis / exaggeration change: the curve mesh is unchanged (charisma is a

@@ -27,6 +27,9 @@ export interface View3dState {
    *  families). Absent on a pre-Riemann link → decode to the defaults, so old links still open. */
   riemannHeight: number;
   riemannSheets: number;
+  /** Riemann linked base-plane pane (M3.2, ADR-0029): split the Riemann view with the flat base plane.
+   *  Absent on an older link → decodes to `false`. */
+  riemannLinked: boolean;
 }
 
 /** The default 3D-view state: 2D mode with the default orbit camera and a log-height surface. */
@@ -42,6 +45,7 @@ export const DEFAULT_V3D: View3dState = {
   opacity: 1,
   riemannHeight: 0,
   riemannSheets: 3,
+  riemannLinked: false,
 };
 
 export interface PlotterState extends Record<string, unknown> {
@@ -129,6 +133,7 @@ function cleanV3d(raw: unknown): View3dState {
     opacity: Math.min(1, Math.max(0.1, numOr(o.opacity, 1))),
     riemannHeight: numOr(o.riemannHeight, 0) === 1 ? 1 : 0,
     riemannSheets: Math.min(8, Math.max(1, Math.round(numOr(o.riemannSheets, 3)))),
+    riemannLinked: boolOr(o.riemannLinked, false),
   };
 }
 
