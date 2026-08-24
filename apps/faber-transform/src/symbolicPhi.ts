@@ -76,12 +76,17 @@ function laurentViaFFT(fn: (z: Cx) => Cx, order: number): Cx[] {
   return taylorViaFFT(h, order + 1, 0.4);
 }
 
-/** φ ~ c·z at ∞? Probe φ(R)/R → c at two large radii; guards the FFT path against φ = z², exp(z), etc. */
-function hasSimplePoleAtInfinity(fn: (z: Cx) => Cx, cGuess: number): boolean {
+/**
+ * φ ~ γ·z at ∞? Probe φ(R)/R → γ at two large radii; guards the FFT path against φ = z², exp(z), etc.
+ * Compares against the COMPLEX leading coefficient γ (not its magnitude), so a valid map with a complex
+ * leading term — which the capacity gauge later rotates to real — is not wrongly rejected.
+ */
+function hasSimplePoleAtInfinity(fn: (z: Cx) => Cx, gamma: Cx): boolean {
+  const tol = 0.05 * (cabs(gamma) + 1);
   for (const R of [12, 40]) {
     const w = fn({ re: R, im: 0 });
     if (!Number.isFinite(w.re) || !Number.isFinite(w.im)) return false;
-    if (Math.hypot(w.re / R - cGuess, w.im / R) > 0.05 * (cGuess + 1)) return false;
+    if (Math.hypot(w.re / R - gamma.re, w.im / R - gamma.im) > tol) return false;
   }
   return true;
 }
@@ -121,8 +126,9 @@ export function buildPhiFromExpr(src: string, order = LAURENT_ORDER): PhiResult 
   const compiled = compileExprF(trimmed);
   if ("error" in compiled) return { error: compiled.error };
   const G = laurentViaFFT(compiled.fn, order);
-  const c = cabs(G[0] ?? CZERO);
-  if (!(c > 1e-9) || !Number.isFinite(c) || !hasSimplePoleAtInfinity(compiled.fn, c)) {
+  const gamma = G[0] ?? CZERO;
+  const c = cabs(gamma);
+  if (!(c > 1e-9) || !Number.isFinite(c) || !hasSimplePoleAtInfinity(compiled.fn, gamma)) {
     return { error: "φ must be an exterior map (grow like c·z at ∞ — no faster, no singularity there)" };
   }
   return assemble(G, false);
