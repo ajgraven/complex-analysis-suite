@@ -144,6 +144,51 @@ describe("detectRiemannForm — affine wrappers place points correctly", () => {
   });
 });
 
+describe("detectRiemannForm — adversarial recognition", () => {
+  it("recognizes nested affine wrappers", () => {
+    for (const src of [
+      "sqrt((2+i)*z - 1) + 3",
+      "arctan(z)/2",
+      "-2*log(z)",
+      "3 - sqrt(z)",
+      "z^(7/3)",
+      "z^(-1/2)",
+    ]) {
+      expect(detectRiemannForm(parse(src)), src).not.toBeNull();
+    }
+  });
+
+  it("declines integer powers and non-affine inners", () => {
+    for (const src of ["z^2", "z^3", "z^1", "z^0", "sqrt(z^2)", "1/sqrt(z)", "sqrt(z*z)", "log(z^2)"]) {
+      expect(detectRiemannForm(parse(src)), src).toBeNull();
+    }
+  });
+
+  it("z^(7/3) has 3 sheets (denominator), phase winds 7×", () => {
+    const form = detectRiemannForm(parse("z^(7/3)"));
+    expect(form?.sheetCount).toBe(3);
+    expect(form?.monodromy).toContain("7×");
+  });
+
+  it("affine √: w = √((2+i)z−1)+3 satisfies (w−3)² = (2+i)z − 1", () => {
+    const form = detectRiemannForm(parse("sqrt((2+i)*z - 1) + 3"));
+    expect(form).not.toBeNull();
+    if (!form) return;
+    const mulC = (a: Complex, b: Complex): Complex => [
+      a[0] * b[0] - a[1] * b[1],
+      a[0] * b[1] + a[1] * b[0],
+    ];
+    for (const t of SAMPLE_T) {
+      const z = at(form.zFromT, t);
+      const w = at(form.wFromT, t);
+      const wm3: Complex = [w[0] - 3, w[1]];
+      const lhs = mulC(wm3, wm3); // (w−3)²
+      const rhs = evalStr("(2+i)*z - 1", z); // (2+i)z − 1
+      expect(close(lhs, rhs, 1e-5), `t=${t}: (w-3)²=${lhs} vs ${rhs}`).toBe(true);
+    }
+  });
+});
+
 describe("detectRiemannForm — window scales with sheet count", () => {
   it("log window height grows with N (helicoid turns)", () => {
     const form = detectRiemannForm(parse("log(z)"));

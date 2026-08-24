@@ -1,9 +1,9 @@
 # Complex Function Plotting Tool
 
 A research-grade browser tool for visualizing a single complex map **w = f(z)** — 2D domain
-coloring and enhanced phase portraits, a 3D analytic-landscape surface and Riemann sphere,
-quantitative instruments, and honest labeling. It rides the shared `@cas/*` packages rather than
-reimplementing them:
+coloring and enhanced phase portraits, a 3D analytic-landscape surface, a Riemann sphere, a true
+multi-sheeted **Riemann surface** (for invertible primitives), quantitative instruments, and honest
+labeling. It rides the shared `@cas/*` packages rather than reimplementing them:
 
 - **`@cas/expr`** — custom-function input: one expression string → GLSL shader body **and** a JS
   evaluator, plus symbolic `f'(z)`, `toLatex`, and positioned parse errors.
@@ -38,7 +38,7 @@ Single-page Vite app, `base: "./"` so it serves from any sub-path (it will publi
 
 Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, with:
 
-- **2D / 3D / sphere / linked (5A–5D)** — a four-way **View** toggle. **3D** lifts the flat portrait into an
+- **2D / 3D / sphere / linked / Riemann (5A–5D + ADR-0027)** — a five-way **View** toggle. **3D** lifts the flat portrait into an
   **analytic landscape**: the same map drawn as a height surface (height = log |f| / linear |f| / bounded
   stereographic, with an exaggeration slider), **coloured by the very same `colorAt`** so the surface reads
   like the portrait wrapped over relief (its enhancements — rings, the conformal grid — wrap too). **Left-drag
@@ -54,9 +54,18 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   and the landscape **side by side** in one canvas (split viewports), both reading the **same `view`** — so
   navigating the flat pane (drag-pan / scroll-zoom / keyboard) moves the surface's domain in lock-step, while
   a right-drag on the surface pane orbits it alone (a left-drag there pans both, like the flat pane); the
-  shared-view coupling is the sync (no state to reconcile).
-  Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface shader ·
-  sphere arcball).
+  shared-view coupling is the sync (no state to reconcile). **Riemann** (ADR-0027) draws the true
+  multi-sheeted **Riemann surface** when the active map is a recognized invertible primitive — √, ⁿ√,
+  `z^(p/q)`, log, arcsin/arccos/arctan, plus affine wraps `A·P(αz+β)+B` — by the **parametrize-by-w**
+  method: it samples the value plane (the uniformizer `t`), positions each vertex at `(Re g(t), Im g(t))`
+  from the single-valued inverse `z = g(t)`, and lifts it by the **charisma** height (Re w → interlocking
+  algebraic sheets, Im w → the log helicoid), coloured by the same `colorAt`. The sheets **glue across the
+  branch cut with no false cliff** (and none of the never-certified continuation of RISKS §3); a
+  sheet-count control truncates the infinite (log / inverse-trig) families, and an honest badge names the
+  form, its monodromy, and where the principal cut lies. The tab is offered only for a recognized
+  primitive; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
+  exact. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  shader · sphere arcball · **Riemann surface**) plus the inverse registry (`riemann/inverse.ts`).
 
 - **Input** — name **autocomplete** (builtins, constants, `z`/`c`, and the map's parameters), two
   function slots **`f` / `g`** with a toggle (the active one is plotted), and **copy-as-LaTeX**. The

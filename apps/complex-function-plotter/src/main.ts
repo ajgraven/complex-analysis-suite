@@ -15,10 +15,13 @@
 // (ui/sweep.ts: a grid of thumbnails across one parameter's range, click a cell to jump), share-links
 // (#vs= via @cas/interchange), and PNG export. The Phase-4 special functions Γ / ζ are in the language;
 // when the active map calls one, an honest float32 precision badge (ui/precision.ts) labels the picture
-// `≈`. A View toggle (2D / 3D / Sphere) swaps the flat portrait for the Phase-5 analytic **landscape**
-// (a height surface, orbit/dolly, coloured by the same colorAt so top-down = the 2D portrait) or the
-// **Riemann sphere** (a ray-cast of ℂ∪{∞}, arcball-rotated, so ∞ is the north pole) — all in render3d/.
-// The ∞-inspector (plot f(1/z)) and export (Phase 6) round it out.
+// `≈`. A View toggle (2D / 3D / Sphere / Linked / Riemann) swaps the flat portrait for the Phase-5
+// analytic **landscape** (a height surface, orbit/dolly, coloured by the same colorAt so top-down = the
+// 2D portrait), the **Riemann sphere** (a ray-cast of ℂ∪{∞}, arcball-rotated, so ∞ is the north pole), or
+// the true multi-sheeted **Riemann surface** (ADR-0027, `riemann/` + `render3d/riemannSurface.ts`): for a
+// recognized invertible primitive (√, ⁿ√, z^(p/q), log, arcsin/arccos/arctan + affine wraps) it renders
+// the parametrize-by-w surface, its sheets glued across the branch cut. The ∞-inspector (plot f(1/z)) and
+// export (Phase 6) round it out.
 import "katex/dist/katex.min.css";
 import katex from "katex";
 import { parse } from "@cas/expr/parser";

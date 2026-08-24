@@ -623,7 +623,9 @@ export class Plot {
         }
         const h = (this.riemannHeightSource === 1 ? w[1] : w[0]) * this.heightScale;
         if (!Number.isFinite(z[0]) || !Number.isFinite(z[1]) || !Number.isFinite(h)) continue;
-        if (Math.hypot(z[0], z[1]) > 1e3) continue; // skip pole-adjacent blow-ups (arctan/tan/log edges)
+        // Skip pole-adjacent blow-ups so a few huge samples don't wreck the framing: a pole in the
+        // POSITION (tan/arctan/log window edges) or in the VALUE/height (e.g. z^(-1/2), w = 1/t near 0).
+        if (Math.hypot(z[0], z[1]) > 1e3 || Math.abs(h) > 1e3) continue;
         minx = Math.min(minx, z[0]);
         maxx = Math.max(maxx, z[0]);
         miny = Math.min(miny, z[1]);
