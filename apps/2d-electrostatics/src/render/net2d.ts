@@ -129,6 +129,25 @@ export class Net2D {
     ctx.stroke();
   }
 
+  /** Outline a closed container polyline WITHOUT filling it (the interior view: the wall of ∂𝔻 / ∂K, with
+   *  the flow drawn inside). */
+  strokeBody(pts: readonly Pt[], edge = "#28e0f5", edgeWidth = 2): void {
+    if (pts.length < 2) return;
+    const ctx = this.ctx;
+    ctx.beginPath();
+    const [x0, y0] = this.toPx(pts[0]);
+    ctx.moveTo(x0, y0);
+    for (let i = 1; i < pts.length; i++) {
+      const [px, py] = this.toPx(pts[i]);
+      ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.lineWidth = edgeWidth * this.dpr;
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = edge;
+    ctx.stroke();
+  }
+
   /** A small filled dot with a contrast ring (a colour-matched corner ↔ prevertex marker). */
   drawDot(p: Pt, color: string, r = 4.5): void {
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitPolygonFlow } from "../src/polygonMap.js";
+import { fitPolygonFlow, fitPolygonInterior } from "../src/polygonMap.js";
 import type { Pt } from "../src/transplant.js";
 
 // Ground-truth logarithmic capacities (plan §7): a square of side s has cap = s·0.295085…; a segment of
@@ -63,5 +63,30 @@ describe("exterior SC polygon flow map", () => {
     expect(thin.capacity).toBeGreaterThan(1); // still above the segment limit
     expect(thin.capacity).toBeLessThan(thick.capacity); // thinner ⇒ closer to the plate
     expect(thin.capacity).toBeLessThan(1.1); // within ~6% of cap([−2,2]) = 1 at 40:1 aspect
+  });
+});
+
+describe("interior SC polygon map (flow inside K)", () => {
+  it("the side-2 square's conformal centre is the origin and f reproduces the vertices", () => {
+    const m = fitPolygonInterior(square(2));
+    expect(m.converged).toBe(true);
+    expect(m.center[0]).toBeCloseTo(0, 6);
+    expect(m.center[1]).toBeCloseTo(0, 6);
+    // f(prevertexₖ) = the polygon vertex (precise map), so cornerImages are the input corners.
+    for (let k = 0; k < 4; k++) {
+      const img = m.forward(m.cornerPreimages[k]);
+      expect(img[0]).toBeCloseTo(m.cornerImages[k][0], 4);
+      expect(img[1]).toBeCloseTo(m.cornerImages[k][1], 4);
+    }
+    for (const a of m.angles) expect(a).toBeCloseTo(0.5, 6);
+  });
+
+  it("maps the open disk into the polygon interior", () => {
+    const m = fitPolygonInterior(square(2));
+    for (const zeta of [[0, 0], [0.4, 0.2], [-0.5, 0.5], [0.1, -0.7]] as Pt[]) {
+      const z = m.forward(zeta);
+      expect(Math.abs(z[0])).toBeLessThan(1 + 1e-6);
+      expect(Math.abs(z[1])).toBeLessThan(1 + 1e-6);
+    }
   });
 });

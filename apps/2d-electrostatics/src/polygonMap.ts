@@ -7,7 +7,7 @@
 // pushed-forward flow net share one Ψ, so the body and the flow are automatically consistent. The
 // picture is honestly `≈` (a truncated series over a machine-precision SC fit); `converged`/`degraded`/
 // `residual` from the fit are surfaced verbatim.
-import { fitExteriorSchwarzChristoffel, exteriorMapLaurentAtInfinity, type C } from "@cas/conformal";
+import { fitExteriorSchwarzChristoffel, exteriorMapLaurentAtInfinity, fitSchwarzChristoffel, type C, type SCMap } from "@cas/conformal";
 import type { Pt } from "./transplant.js";
 
 export interface PolygonFlowMap {
@@ -116,5 +116,81 @@ export function fitPolygonFlow(corners: readonly Pt[], opts: { maxOrder?: number
     degraded: fit.degraded,
     residual: fit.residual,
     laurentTerms: lau.length,
+  };
+}
+
+// --- Interior map: f: 𝔻 → the bounded polygon K (flow INSIDE K) --------------------------------------
+
+export interface PolygonInteriorMap {
+  /** f(ζ) → z, the interior SC map, for ζ ∈ 𝔻. */
+  forward(zeta: Pt): Pt;
+  /** Batched forward (one polyline through the map). */
+  forwardMany(zetas: readonly Pt[]): Pt[];
+  /** ∂K — the polygon itself (the target corners), as a closed polyline. */
+  boundary(): Pt[];
+  /** Prevertices wₖ on ∂𝔻, INPUT corner order (matched to the polygon vertices). */
+  readonly cornerPreimages: Pt[];
+  /** The polygon vertices (the input corners), INPUT order. */
+  readonly cornerImages: Pt[];
+  /** Interior angles αₖ / π, INPUT order. */
+  readonly angles: number[];
+  /** The conformal centre f(0). */
+  readonly center: Pt;
+  readonly converged: boolean;
+  readonly degraded: boolean;
+  readonly residual: number;
+}
+
+/**
+ * Fit the interior Schwarz–Christoffel map of a bounded polygon (f: 𝔻 → K) for flow INSIDE K. Precise mode
+ * (machine precision on convex + reentrant), falling back to fast (lightning) if the precise solve throws
+ * on a degenerate polygon. The forward map carries polylines from the disk into the polygon; the polygon
+ * boundary is the input corners themselves (the precise map sends prevertices to them exactly).
+ */
+export function fitPolygonInterior(corners: readonly Pt[]): PolygonInteriorMap {
+  const vertices: C[] = corners.map((p) => [p[0], p[1]]);
+  let sc: SCMap;
+  try {
+    sc = fitSchwarzChristoffel({ vertices }, { mode: "precise" });
+    if (!sc.converged) {
+      const fast = fitSchwarzChristoffel({ vertices }, { mode: "fast" });
+      if (fast.residual < sc.residual) sc = fast;
+    }
+  } catch {
+    sc = fitSchwarzChristoffel({ vertices }, { mode: "fast" });
+  }
+
+  // Prevertices are returned in the solver's order; the precise map sends prevertex k to a polygon vertex.
+  // Align each prevertex to the nearest input corner by its forward image.
+  const cornerPreimages: Pt[] = new Array(corners.length);
+  const cornerImages: Pt[] = new Array(corners.length);
+  const angles: number[] = new Array(corners.length);
+  for (let k = 0; k < sc.prevertices.length; k++) {
+    const image = sc.forward(sc.prevertices[k]);
+    const idx = nearestIndex(vertices, image);
+    cornerPreimages[idx] = [sc.prevertices[k][0], sc.prevertices[k][1]];
+    cornerImages[idx] = [corners[idx][0], corners[idx][1]];
+    angles[idx] = sc.angles[k];
+  }
+
+  return {
+    forward: (zeta: Pt): Pt => {
+      const z = sc.forward([zeta[0], zeta[1]]);
+      return [z[0], z[1]];
+    },
+    forwardMany: (zetas: readonly Pt[]): Pt[] =>
+      sc.forwardMany(zetas.map((p) => [p[0], p[1]])).map((z) => [z[0], z[1]] as Pt),
+    boundary: (): Pt[] => {
+      const pts = corners.map((p) => [p[0], p[1]] as Pt);
+      pts.push([corners[0][0], corners[0][1]]); // close
+      return pts;
+    },
+    cornerPreimages,
+    cornerImages,
+    angles,
+    center: [sc.center[0], sc.center[1]],
+    converged: sc.converged,
+    degraded: sc.degraded,
+    residual: sc.residual,
   };
 }

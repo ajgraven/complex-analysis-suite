@@ -39,7 +39,19 @@ describe("producer round-trip", () => {
       [0, -1.3],
     ];
     const map = fitPolygonFlow(corners);
-    const link = buildConformalLink(corners, map, { createdAt: "2026-07-06T00:00:00Z" });
+    const link = buildConformalLink(
+      corners,
+      {
+        engine: "sc-exterior",
+        angles: map.angles,
+        prevertices: map.cornerPreimages,
+        capacity: map.capacity,
+        converged: map.converged,
+        degraded: map.degraded,
+        residual: map.residual,
+      },
+      { createdAt: "2026-07-06T00:00:00Z" },
+    );
     const back = conformalPolygonFromLink(link);
     if (!back) throw new Error("round-trip link did not decode");
     expect(back.engine).toBe("sc-exterior");

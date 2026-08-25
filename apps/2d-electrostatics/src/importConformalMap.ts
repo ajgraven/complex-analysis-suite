@@ -7,7 +7,18 @@
 // portable geometry; the consumer always re-derives its own exterior fit.
 import { decodeLink, encodeLink, SCHEMA_ID, VERSION, type Envelope, type MapSpec, type ConformalMap } from "@cas/interchange";
 import type { Pt } from "./transplant.js";
-import type { PolygonFlowMap } from "./polygonMap.js";
+
+/** The minimal fit data an exported ConformalMap carries — produced from either the exterior flow map or
+ *  the interior map, so the `engine` tag honestly reflects which transplant the user is viewing. */
+export interface ConformalFit {
+  readonly engine: ConformalMap["engine"];
+  readonly angles: readonly number[];
+  readonly prevertices: readonly Pt[];
+  readonly capacity?: number;
+  readonly converged: boolean;
+  readonly degraded?: boolean;
+  readonly residual?: number;
+}
 
 /** A polygon imported from a conformal-map deep link. */
 export interface ImportedPolygon {
@@ -36,22 +47,22 @@ export function conformalPolygonFromLink(hashOrLink: string): ImportedPolygon | 
 }
 
 /**
- * Build a `kind:"map"` ConformalMap deep link for the current transplant polygon. Engine is
- * `"sc-exterior"` — this app fits the exterior map Ψ: 𝔻* → ext(K) — and the recorded prevertices / angles
- * / constant / capacity come from the fit so a consumer can rebuild it exactly (or just re-fit from the
- * corners). `createdAt` defaults to now; pass a frozen value for reproducible tests/goldens.
+ * Build a `kind:"map"` ConformalMap deep link for the current transplant polygon. The `engine` tag and the
+ * recorded prevertices / angles / capacity come from the active fit (exterior Ψ: 𝔻* → ext(K), or interior
+ * f: 𝔻 → K) so a consumer can rebuild it (or just re-fit from the corners). `createdAt` defaults to now;
+ * pass a frozen value for reproducible tests/goldens.
  */
-export function buildConformalLink(corners: readonly Pt[], map: PolygonFlowMap, opts: { createdAt?: string; appVersion?: string } = {}): string {
+export function buildConformalLink(corners: readonly Pt[], fit: ConformalFit, opts: { createdAt?: string; appVersion?: string } = {}): string {
   const payload: ConformalMap = {
     form: "conformal",
-    engine: "sc-exterior",
+    engine: fit.engine,
     polygon: corners.map((p) => ({ re: p[0], im: p[1] })),
-    angles: map.angles.slice(),
-    prevertices: map.cornerPreimages.map((p) => ({ re: p[0], im: p[1] })),
-    capacity: map.capacity,
-    converged: map.converged,
-    degraded: map.degraded,
-    residual: map.residual,
+    angles: fit.angles.slice(),
+    prevertices: fit.prevertices.map((p) => ({ re: p[0], im: p[1] })),
+    ...(fit.capacity !== undefined ? { capacity: fit.capacity } : {}),
+    converged: fit.converged,
+    ...(fit.degraded !== undefined ? { degraded: fit.degraded } : {}),
+    ...(fit.residual !== undefined ? { residual: fit.residual } : {}),
   };
   const env: Envelope<"map"> = {
     schema: SCHEMA_ID,

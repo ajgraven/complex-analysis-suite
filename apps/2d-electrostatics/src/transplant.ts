@@ -185,3 +185,59 @@ export function unitCircle(samples = 361): Pt[] {
     return [Math.cos(t), Math.sin(t)];
   });
 }
+
+// --- Interior flow: a source–sink pair driving flow INSIDE the disk (→ inside a polygon) --------------
+// For flow inside a bounded polygon (the interior SC map f: 𝔻 → K), the reference is flow inside the unit
+// disk. To keep the wall ∂𝔻 (hence ∂K) impermeable, the driving source and sink sit ON the boundary — an
+// inlet and an outlet port. W_ref(ζ) = log(ζ−a) − log(ζ−b); its streamlines ψ = arg((ζ−a)/(ζ−b)) = const
+// are ARCS OF CIRCLES through a and b (∂𝔻 itself is one such circle, so the wall is a streamline). Each
+// arc has the exact Möbius parametrization ζ = (a − R·b)/(1 − R), R = t·e^{iθ₀} (t ∈ (0,∞)) — no tracing.
+
+/** Two diametrically-opposite boundary ports at inlet angle β: source a = e^{iβ}, sink b = −e^{iβ}, set
+ *  just inside ∂𝔻 so the forward SC map is evaluated off the prevertex singularities. */
+export function inletPorts(beta: number, radius = 0.999): { a: Complex; b: Complex } {
+  return {
+    a: [radius * Math.cos(beta), radius * Math.sin(beta)],
+    b: [-radius * Math.cos(beta), -radius * Math.sin(beta)],
+  };
+}
+
+/**
+ * The source→sink flow net INSIDE the unit disk: streamlines (circle arcs through the ports a, b) and
+ * equipotentials (Apollonius circles |ζ−a|/|ζ−b| = const), each clipped to |ζ| ≤ 1 and carrying a colour
+ * key for the linked pushforward. Exact — no tracing — via the Möbius parametrisation of each level curve.
+ */
+export function sourceSinkNet(a: Complex, b: Complex, opts: FlowNetOptions = {}): { streamlines: NetCurve[]; equipotentials: NetCurve[] } {
+  const nS = opts.streamlines ?? 13;
+  const nE = opts.equipotentials ?? 7;
+  const samples = opts.samples ?? 240;
+  const inDisk = (z: Complex): boolean => z[0] * z[0] + z[1] * z[1] <= 1 - 1e-4;
+  // ζ on the level curve for a given ratio R = (ζ−a)/(ζ−b): ζ = (a − R·b)/(1 − R).
+  const zetaOf = (R: Complex): Complex => div(sub(a, mul(R, b)), sub([1, 0], R));
+
+  const streamlines: NetCurve[] = [];
+  for (let k = 1; k < nS; k++) {
+    const theta = -Math.PI + (TWO_PI * k) / nS; // ψ = θ (skip θ = ±π, the degenerate boundary line)
+    const pts: Pt[] = [];
+    for (let j = 0; j <= samples; j++) {
+      const s = -7 + (14 * j) / samples;
+      const zeta = zetaOf([Math.exp(s) * Math.cos(theta), Math.exp(s) * Math.sin(theta)]);
+      if (inDisk(zeta)) pts.push([zeta[0], zeta[1]]);
+    }
+    if (pts.length > 1) streamlines.push({ color: keyColor(k, nS, 62, 66), pts });
+  }
+
+  const equipotentials: NetCurve[] = [];
+  for (let k = 1; k <= nE; k++) {
+    const rho = Math.exp(-2.6 + (5.2 * k) / (nE + 1)); // |R| = const → an Apollonius circle
+    const pts: Pt[] = [];
+    for (let j = 0; j <= samples; j++) {
+      const tau = -Math.PI + (TWO_PI * j) / samples;
+      const zeta = zetaOf([rho * Math.cos(tau), rho * Math.sin(tau)]);
+      if (inDisk(zeta)) pts.push([zeta[0], zeta[1]]);
+    }
+    if (pts.length > 1) equipotentials.push({ color: "rgba(150,170,210,0.34)", pts });
+  }
+
+  return { streamlines, equipotentials };
+}

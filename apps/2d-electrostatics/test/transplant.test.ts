@@ -5,6 +5,8 @@ import {
   invertToExterior,
   flowNet,
   unitCircle,
+  inletPorts,
+  sourceSinkNet,
   type Complex,
 } from "../src/transplant.js";
 
@@ -78,5 +80,23 @@ describe("flow net", () => {
     expect(uc[0][0]).toBeCloseTo(uc[uc.length - 1][0], 12);
     expect(uc[0][1]).toBeCloseTo(uc[uc.length - 1][1], 12);
     for (const p of uc) expect(Math.hypot(p[0], p[1])).toBeCloseTo(1, 12);
+  });
+});
+
+describe("interior source–sink net", () => {
+  it("inlet ports are diametrically opposite, just inside ∂𝔻", () => {
+    const { a, b } = inletPorts(0.3);
+    expect(a[0]).toBeCloseTo(-b[0], 12);
+    expect(a[1]).toBeCloseTo(-b[1], 12);
+    expect(Math.hypot(a[0], a[1])).toBeLessThan(1);
+    expect(Math.hypot(a[0], a[1])).toBeGreaterThan(0.99);
+  });
+
+  it("every streamline vertex is inside the disk (impermeable walls)", () => {
+    const { a, b } = inletPorts(0);
+    const net = sourceSinkNet(a, b, { streamlines: 9, equipotentials: 5, samples: 120 });
+    expect(net.streamlines.length).toBeGreaterThan(0);
+    for (const c of net.streamlines) for (const z of c.pts) expect(Math.hypot(z[0], z[1])).toBeLessThanOrEqual(1);
+    for (const c of net.equipotentials) for (const z of c.pts) expect(Math.hypot(z[0], z[1])).toBeLessThanOrEqual(1);
   });
 });
