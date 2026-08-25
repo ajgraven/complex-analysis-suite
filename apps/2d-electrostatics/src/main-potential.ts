@@ -23,6 +23,7 @@ import {
 import { POLYGON_PRESETS } from "./transplantPresets.js";
 import { Net2D, boundsOf } from "./render/net2d.js";
 import { faberZeros } from "./faberZeros.js";
+import { lejaPoints, transfiniteDiameter } from "./feketePoints.js";
 
 interface DomainEntry {
   readonly id: string;
@@ -65,6 +66,8 @@ function main(): void {
   let domainId = DEFAULT_DOMAIN;
   let showFaber = false;
   let faberN = 12;
+  let showFekete = false;
+  let feketeN = 20;
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -108,7 +111,27 @@ function main(): void {
   nRow.append(nHead, nInput);
   nRow.style.display = "none"; // shown only when the overlay is on
 
-  controls.append(domRow, faberCheck, nRow);
+  // Fekete/Leja points: a toggle + an n slider (the extremal points → μ_K; dₙ → cap).
+  const feketeCheck = el("label", "check");
+  const feketeBox = el("input");
+  feketeBox.type = "checkbox";
+  feketeBox.checked = showFekete;
+  feketeCheck.append(feketeBox, el("span", undefined, "Fekete/Leja points"));
+
+  const fRow = el("label", "row");
+  const fHead = el("span", "row-h");
+  const fVal = el("span", "row-v", String(feketeN));
+  fHead.append(el("span", "row-l", "points n"), fVal);
+  const fInput = el("input");
+  fInput.type = "range";
+  fInput.min = "2";
+  fInput.max = "60";
+  fInput.step = "1";
+  fInput.value = String(feketeN);
+  fRow.append(fHead, fInput);
+  fRow.style.display = "none";
+
+  controls.append(domRow, faberCheck, nRow, feketeCheck, fRow);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, polyLink, controls, readout);
@@ -154,6 +177,14 @@ function main(): void {
       }
     }
 
+    // The Fekete/Leja points of the current count + their transfinite diameter dₙ (→ cap).
+    let fekete: { points: Pt[]; diameter: number } | null = null;
+    if (domain && showFekete) {
+      const { points } = lejaPoints(domain, feketeN);
+      fekete = { points, diameter: transfiniteDiameter(points) };
+    }
+    const overlay = faber || fekete;
+
     if (net.resize()) {
       net.clear();
       if (domain) {
@@ -175,13 +206,14 @@ function main(): void {
         const dots = equilibriumDots(d, 200);
         const dens = chargeDensity(dots);
         const dmax = Math.max(...dens, 1e-30);
-        const chargeAlpha = faber ? 0.5 : 1; // dim the charge when the zeros overlay is on
+        const chargeAlpha = overlay ? 0.5 : 1; // dim the charge under an overlay so it stays legible
         for (let i = 0; i < dots.length; i++) {
           const f = dens[i] / dmax;
-          net.drawDot(dots[i], densityColor(f), (2.1 + 2.6 * Math.sqrt(f)) * (faber ? 0.7 : 1), chargeAlpha);
+          net.drawDot(dots[i], densityColor(f), (2.1 + 2.6 * Math.sqrt(f)) * (overlay ? 0.7 : 1), chargeAlpha);
         }
-        // Faber zeros: gold ringed dots over the charge they converge to (on corner domains).
+        // Faber zeros (gold) and Fekete/Leja points (magenta) — two more roads to μ_K, over the charge.
         if (faber) for (const z of faber.zeros) net.drawDot(z, "#ffd24a", 4);
+        if (fekete) for (const p of fekete.points) net.drawDot(p, "#e879f9", 4);
       }
     }
 
@@ -200,6 +232,11 @@ function main(): void {
         html +=
           `<br><span class="tp-faber">Faber F<sub>${faberN}</sub> zeros ≈ ${conv} · residual ≈ ${faber.residual.toExponential(1)}</span>` +
           `<br><span class="tp-approx">${claim}</span>`;
+      }
+      if (fekete) {
+        html +=
+          `<br><span class="tp-fekete">Fekete/Leja: transfinite diameter d<sub>${feketeN}</sub> ≈ ${fekete.diameter.toFixed(4)}</span>` +
+          `<br><span class="tp-approx">d<sub>n</sub> ↓ cap(K) = ${domain.capacity.toFixed(4)} · the points → μ_K</span>`;
       }
       readout.innerHTML = html;
     } else {
@@ -222,6 +259,16 @@ function main(): void {
   nInput.addEventListener("input", () => {
     faberN = Number(nInput.value);
     nVal.textContent = String(faberN);
+    requestPaint();
+  });
+  feketeBox.addEventListener("change", () => {
+    showFekete = feketeBox.checked;
+    fRow.style.display = showFekete ? "" : "none";
+    requestPaint();
+  });
+  fInput.addEventListener("input", () => {
+    feketeN = Number(fInput.value);
+    fVal.textContent = String(feketeN);
     requestPaint();
   });
   window.addEventListener("resize", requestPaint);
