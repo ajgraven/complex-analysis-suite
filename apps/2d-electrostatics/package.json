@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cas/conformal": "workspace:*",
     "@cas/core": "workspace:*",
     "@cas/export": "workspace:*",
     "@cas/expr": "workspace:*",

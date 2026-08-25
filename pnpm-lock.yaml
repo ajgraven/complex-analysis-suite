@@ -44,6 +44,9 @@ importers:
 
   apps/2d-electrostatics:
     dependencies:
+      '@cas/conformal':
+        specifier: workspace:*
+        version: link:../../packages/conformal
       '@cas/core':
         specifier: workspace:*
         version: link:../../packages/core
