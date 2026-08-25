@@ -2832,5 +2832,29 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    **This completes the app rollout (U1–U6).**
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
-8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just
-   introduced-once-and-forgotten.
+8. [x] **U8 DONE — non-blocking `axe` CI job so a11y regressions are caught, not just introduced-once-and-forgotten.**
+   `scripts/a11y-audit.mjs` stands up a static server over the real `apps/*/dist` bytes (the deploy layout,
+   launcher-at-root + subpaths, plus correspondences and its `mating.html`), loads each of the **9 pages** in
+   headless Chromium under forced software WebGL2 (SwiftShader, so the audited DOM matches CI on any GPU), and runs
+   axe-core's WCAG 2.0/2.1 **A + AA + best-practice** ruleset. Because real apps carry pre-existing findings
+   (a contrast ratio, a missing landmark), it is a **baseline tripwire**, not a pass/fail on the absolute count:
+   `scripts/a11y-baseline.json` records the known findings per page (rule id + violating-node count — node-count,
+   not brittle CSS selectors, so it is robust to layout churn yet still catches "this rule now fails on more
+   elements"), and only a **new rule** or an **increased count** is a regression. The CI job (`a11y` in `ci.yml`,
+   PR-only like `build`) runs in **report mode** — always exit 0 — so a single flaky automated rule can never wedge
+   `master`; regressions surface as `::warning::` annotations + a `$GITHUB_STEP_SUMMARY` table rather than a blocked
+   merge. `--strict` (exit 1 on regression) is available for local hard checks; `--update-baseline` re-records after
+   an intended change; `pnpm a11y` is the local entry point. Publishing stays gated only on lint/typecheck/test
+   (deploy-pages.yml) — the a11y job, like `browser`, is not a publish blocker. The committed baseline documents the
+   suite's remaining known findings (a burn-down list, separate from the tripwire). **First burn-down (done):** every
+   axe **critical** and the **serious** label/keyboard-focus findings were fixed as attribute-level changes (no
+   visual/behavior change) — riemann-map's unnamed preset `<select>` (`select-name`) and the mating fold slider
+   (`label`) got `aria-label`s; QD's view-mode segmented control moved from `role="tablist"` (which demands
+   `role="tab"` children it lacks) to `role="group"`, matching QD's own convention for its other segmented button
+   groups (`aria-required-children`); complex-dynamics' three `title`-only inputs (`label-title-only`) gained
+   `aria-label`s; and the horizontally-scrolling regions (CD's BibTeX `<pre>`, QD's KaTeX equation blocks) became
+   keyboard-focusable (`scrollable-region-focusable`). Baseline tightened **16 → 10 rule findings / 56 → 46 nodes**;
+   complex-dynamics and both correspondences pages now audit clean (launcher and plotter already did). What remains
+   is deliberately deferred: **color-contrast** (a palette decision) and the **region / landmark / heading** cluster
+   (a broader per-app semantic-HTML pass, `moderate` severity). **This completes U8; only U7 (nav-header ↔
+   `@cas/interchange` hand-off wiring) remains open in this ADR.**

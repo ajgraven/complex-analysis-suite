@@ -206,9 +206,12 @@ state), and `mountNavHeader` (back-to-launcher + sibling nav + a deferred "send 
 fatal boundary + `JuliaMetricsClient` on `createComputeClient`), **faber-transform**, **correspondences** (both
 pages), **riemann-map**, **argument-principle**, and the **plotter** — closing each app's a11y / fatal-error UX
 findings. **QD is deliberately NOT a consumer** (allowJs/vanilla and already product-mature; it took `@cas/schwarz`
-as a devDependency only, for the ADR-0026 σ drift-guard). Still open: **U7** (wire the nav header's hand-off
-picker to `@cas/interchange`'s known map kinds — the one place cross-app interop becomes user-visible) and **U8**
-(an optional non-blocking axe/pa11y CI job). Two correctness guards also landed this arc: a **convention-neutral**
+as a devDependency only, for the ADR-0026 σ drift-guard). **U8 is now done** — a **non-blocking `axe` CI job**
+(`a11y` in `ci.yml` → `scripts/a11y-audit.mjs` + `scripts/a11y-baseline.json`, or `pnpm a11y`) audits all nine
+built app pages in headless Chromium against a per-page baseline, surfacing a11y *regressions* as `::warning::`
+annotations + a step summary without ever blocking a merge (publishing stays gated only on lint/typecheck/test).
+Still open: **U7** (wire the nav header's hand-off picker to `@cas/interchange`'s known map kinds — the one place
+cross-app interop becomes user-visible). Two correctness guards also landed this arc: a **convention-neutral**
 scan over `@cas/core` (ADR-0006 AI-2) and a **Schwarz σ differential** guard between QD's engine and `@cas/schwarz`
 (ADR-0026 AI-2).
 

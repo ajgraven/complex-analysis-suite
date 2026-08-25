@@ -1,0 +1,65 @@
+{
+  "launcher": {},
+  "complex-dynamics": {},
+  "quadrature-domains": {
+    "color-contrast": {
+      "impact": "serious",
+      "count": 1,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "nested-interactive": {
+      "impact": "serious",
+      "count": 4,
+      "help": "Interactive controls must not be nested"
+    }
+  },
+  "complex-function-plotter": {},
+  "riemann-map": {
+    "color-contrast": {
+      "impact": "serious",
+      "count": 1,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "landmark-one-main": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Document should have one main landmark"
+    },
+    "page-has-heading-one": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Page should contain a level-one heading"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 3,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "argument-principle": {
+    "color-contrast": {
+      "impact": "serious",
+      "count": 3,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 13,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "faber-transform": {
+    "landmark-one-main": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Document should have one main landmark"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 18,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "correspondences": {},
+  "correspondences-mating": {}
+}

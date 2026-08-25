@@ -9,10 +9,12 @@ name: CI
 # the backstop for float32 GPU-only drift the CPU mirrors can't catch (Review P4).
 #
 # WHO GATES WHAT (review finding 0-3 — the gate used to run 3–4× per change):
-#   pull_request      → build + browser.   The merge-blocking signal; the only route to master.
+#   pull_request      → build + browser + a11y.   build is the merge-blocking signal; the only route
+#                                                  to master. a11y is a non-blocking report (below).
 #   push to master    → browser only.      deploy-pages.yml carries the full gate before publishing.
 #   push to a branch  → nothing.           Open the PR to gate it.
-# Net effect: exactly one full gate per change, plus the browser backstop wherever it adds signal.
+# Net effect: exactly one full gate per change, plus the browser backstop wherever it adds signal, plus
+# a non-blocking accessibility report on PRs (ADR-0032 U8).
 
 # Triggers are deliberately NOT symmetric, to run the gate ONCE per change.
 #
@@ -155,3 +157,54 @@ jobs:
       # @cas/gpu's dual-backend numeric harness, then CD's real-shader compile/link sweep.
       - name: Browser harnesses (real WebGL2 GLSL — execute + compile)
         run: pnpm test:browser
+
+  # ADR-0032 U8 — a NON-BLOCKING accessibility audit. The @cas/ui adoption (U1–U6) *introduced* the
+  # suite's a11y (canvas roles/labels, live regions, a keyboard layer, the fatal banner); this job
+  # keeps CI honest that it stays. `scripts/a11y-audit.mjs` builds the apps, serves the real dist
+  # bytes, and runs axe-core's WCAG A/AA + best-practice ruleset over each page in headless Chromium,
+  # diffing against the committed `scripts/a11y-baseline.json` so only NEW or INCREASED findings
+  # surface (real apps carry pre-existing findings; failing on all of them would make the job red and
+  # ignored). It runs in REPORT mode — always exits 0 — so a noisy false-positive from one automated
+  # rule can never wedge master; regressions surface as `::warning::` annotations and a step summary,
+  # not a blocked merge. `--strict` (local / opt-in) turns it into a hard check. Publishing is NOT
+  # gated on it (that stays lint/typecheck/test in deploy-pages.yml). PR-only, like `build`.
+  a11y:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: corepack enable
+
+      # Same pnpm-store cache as the other jobs (shared key).
+      - name: Resolve the pnpm store path
+        run: echo "PNPM_STORE=$(pnpm store path --silent)" >> "$GITHUB_ENV"
+      - name: Cache the pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.PNPM_STORE }}
+          key: pnpm-store-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-store-${{ runner.os }}-
+
+      - name: Install (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      # Same Playwright browser cache + install as `browser` (keyed on the lockfile, which pins the
+      # playwright version → the matching Chromium build).
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The audit serves apps/*/dist, so build first (packages + all apps).
+      - name: Build
+        run: pnpm build
+
+      # Report mode: writes a step summary + `::warning::` annotations on regressions, exits 0.
+      - name: Accessibility audit (axe-core, non-blocking)
+        run: node scripts/a11y-audit.mjs
