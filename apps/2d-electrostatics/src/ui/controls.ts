@@ -427,7 +427,11 @@ export function createControls(
       .catch(() => undefined);
   });
 
-  actions.append(presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
+  const airfoilLink = el("a", "pal-btn", "Airfoil ↗");
+  airfoilLink.href = "airfoil.html";
+  airfoilLink.title = "Flow past a Joukowski airfoil (conformal transplant)";
+
+  actions.append(airfoilLink, presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
   bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);
