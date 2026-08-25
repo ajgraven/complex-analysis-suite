@@ -19,6 +19,7 @@
     "@cas/conformal": "workspace:*",
     "@cas/core": "workspace:*",
     "@cas/export": "workspace:*",
+    "@cas/faber": "workspace:*",
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",

@@ -28,6 +28,9 @@ export interface PolygonFlowMap {
   readonly residual: number;
   /** Number of Laurent terms kept (for the honesty readout). */
   readonly laurentTerms: number;
+  /** The Laurent tail c₀, c₁, … of Ψ(w) = c·w + Σ cₖ·w⁻ᵏ (c₀ = 0, centred) — the exterior-map data the
+   *  Faber recurrence reads (@cas/faber). */
+  readonly laurent: Pt[];
 }
 
 /** Nearest-index match of `q` among `pts` (the exterior solver reverses vertex order, so prevertices are
@@ -116,6 +119,7 @@ export function fitPolygonFlow(corners: readonly Pt[], opts: { maxOrder?: number
     degraded: fit.degraded,
     residual: fit.residual,
     laurentTerms: lau.length,
+    laurent: lau.map((z) => [z[0], z[1]] as Pt),
   };
 }
 

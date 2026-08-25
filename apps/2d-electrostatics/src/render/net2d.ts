@@ -148,11 +148,14 @@ export class Net2D {
     ctx.stroke();
   }
 
-  /** A small filled dot with a contrast ring (a colour-matched corner ↔ prevertex marker). */
-  drawDot(p: Pt, color: string, r = 4.5): void {
+  /** A small filled dot with a contrast ring (a colour-matched corner ↔ prevertex marker). `alpha`
+   *  fades it (used to dim the equilibrium charge under the Faber-zero overlay). */
+  drawDot(p: Pt, color: string, r = 4.5, alpha = 1): void {
     if (!Number.isFinite(p[0]) || !Number.isFinite(p[1])) return;
     const ctx = this.ctx;
     const [px, py] = this.toPx(p);
+    ctx.save();
+    ctx.globalAlpha = alpha;
     ctx.beginPath();
     ctx.arc(px, py, r * this.dpr, 0, 2 * Math.PI);
     ctx.fillStyle = color;
@@ -160,5 +163,6 @@ export class Net2D {
     ctx.lineWidth = 1.25 * this.dpr;
     ctx.strokeStyle = "rgba(0,0,0,0.7)";
     ctx.stroke();
+    ctx.restore();
   }
 }

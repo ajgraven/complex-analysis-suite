@@ -56,6 +56,9 @@ importers:
       '@cas/expr':
         specifier: workspace:*
         version: link:../../packages/expr
+      '@cas/faber':
+        specifier: workspace:*
+        version: link:../../packages/faber
       '@cas/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu

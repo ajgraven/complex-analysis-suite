@@ -7,7 +7,7 @@
 // the charge on a conductor, cap(K) its capacitance, g_K its exterior potential. Fourth page of the app.
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
-import type { NetCurve } from "./transplant.js";
+import type { NetCurve, Pt } from "./transplant.js";
 import {
   diskDomain,
   ellipseDomain,
@@ -22,6 +22,7 @@ import {
 } from "./potentialDomain.js";
 import { POLYGON_PRESETS } from "./transplantPresets.js";
 import { Net2D, boundsOf } from "./render/net2d.js";
+import { faberZeros } from "./faberZeros.js";
 
 interface DomainEntry {
   readonly id: string;
@@ -62,6 +63,8 @@ function main(): void {
   app.textContent = "";
 
   let domainId = DEFAULT_DOMAIN;
+  let showFaber = false;
+  let faberN = 12;
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -84,7 +87,28 @@ function main(): void {
     domSel.append(opt);
   }
   domRow.append(domHead, domSel);
-  controls.append(domRow);
+
+  // Faber-zero overlay: a toggle + an order-n slider (the zeros of Fₙ converge to μ_K on corner domains).
+  const faberCheck = el("label", "check");
+  const faberBox = el("input");
+  faberBox.type = "checkbox";
+  faberBox.checked = showFaber;
+  faberCheck.append(faberBox, el("span", undefined, "Faber zeros Fₙ"));
+
+  const nRow = el("label", "row");
+  const nHead = el("span", "row-h");
+  const nVal = el("span", "row-v", String(faberN));
+  nHead.append(el("span", "row-l", "order n"), nVal);
+  const nInput = el("input");
+  nInput.type = "range";
+  nInput.min = "1";
+  nInput.max = "40";
+  nInput.step = "1";
+  nInput.value = String(faberN);
+  nRow.append(nHead, nInput);
+  nRow.style.display = "none"; // shown only when the overlay is on
+
+  controls.append(domRow, faberCheck, nRow);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, polyLink, controls, readout);
@@ -117,6 +141,19 @@ function main(): void {
       domain = null;
     }
 
+    // The Faber zeros of the current order (computed once; drawn below and summarised in the readout).
+    let faber: { zeros: Pt[]; converged: boolean; residual: number; reachedBoundary: boolean } | null = null;
+    if (domain && showFaber) {
+      try {
+        const fz = faberZeros(domain, faberN);
+        const bdryReach = Math.max(1e-9, ...greenCurve(domain, 0, 120).map((p) => Math.hypot(p[0], p[1])));
+        const zeroReach = Math.max(0, ...fz.zeros.map((p) => Math.hypot(p[0], p[1])));
+        faber = { zeros: fz.zeros, converged: fz.converged, residual: fz.residual, reachedBoundary: zeroReach > 0.7 * bdryReach };
+      } catch {
+        faber = null;
+      }
+    }
+
     if (net.resize()) {
       net.clear();
       if (domain) {
@@ -138,20 +175,33 @@ function main(): void {
         const dots = equilibriumDots(d, 200);
         const dens = chargeDensity(dots);
         const dmax = Math.max(...dens, 1e-30);
+        const chargeAlpha = faber ? 0.5 : 1; // dim the charge when the zeros overlay is on
         for (let i = 0; i < dots.length; i++) {
           const f = dens[i] / dmax;
-          net.drawDot(dots[i], densityColor(f), 2.1 + 2.6 * Math.sqrt(f));
+          net.drawDot(dots[i], densityColor(f), (2.1 + 2.6 * Math.sqrt(f)) * (faber ? 0.7 : 1), chargeAlpha);
         }
+        // Faber zeros: gold ringed dots over the charge they converge to (on corner domains).
+        if (faber) for (const z of faber.zeros) net.drawDot(z, "#ffd24a", 4);
       }
     }
 
     // ---- readout -------------------------------------------------------------
     if (domain) {
       const eq = domain.exact ? "=" : "≈";
-      readout.innerHTML =
+      let html =
         `capacity cap(K) ${eq} <b>${domain.capacity.toFixed(6)}</b><br>` +
         `<span class="tp-approx">equilibrium μ = Ψ⁎(dθ/2π) · Green g<sub>K</sub> = log|Ψ⁻¹|</span>` +
         (domain.note ? `<br><span class="tp-approx">${domain.note}</span>` : "");
+      if (faber) {
+        const conv = faber.converged ? "converged" : "not converged";
+        const claim = faber.reachedBoundary
+          ? "ν(Fₙ) → μ_K: the zeros equidistribute onto ∂K (the charge)"
+          : "smooth ∂K: the zeros stay interior — they do <b>not</b> reach μ_K";
+        html +=
+          `<br><span class="tp-faber">Faber F<sub>${faberN}</sub> zeros ≈ ${conv} · residual ≈ ${faber.residual.toExponential(1)}</span>` +
+          `<br><span class="tp-approx">${claim}</span>`;
+      }
+      readout.innerHTML = html;
     } else {
       readout.innerHTML = `<span class="tp-warn">⚠ the exterior map for this conductor failed to fit</span>`;
     }
@@ -162,6 +212,16 @@ function main(): void {
 
   domSel.addEventListener("change", () => {
     domainId = domSel.value;
+    requestPaint();
+  });
+  faberBox.addEventListener("change", () => {
+    showFaber = faberBox.checked;
+    nRow.style.display = showFaber ? "" : "none";
+    requestPaint();
+  });
+  nInput.addEventListener("input", () => {
+    faberN = Number(nInput.value);
+    nVal.textContent = String(faberN);
     requestPaint();
   });
   window.addEventListener("resize", requestPaint);

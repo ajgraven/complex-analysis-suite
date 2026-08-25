@@ -21,6 +21,8 @@ export interface ExteriorDomain {
   evalPsi(w: Pt): Pt;
   /** Logarithmic capacity cap(K) = |c|. */
   readonly capacity: number;
+  /** The Laurent tail c₀, c₁, … of Ψ (c₀ = 0, centred): laurent[k] = coeff of w⁻ᵏ. Feeds @cas/faber. */
+  readonly laurent: readonly Pt[];
   /** `=` (closed-form / converged SC) vs `≈` (degraded / truncated). */
   readonly exact: boolean;
   /** An optional ground-truth note (e.g. the arcsine law on a segment). */
@@ -49,7 +51,7 @@ export function laurentEval(c: number, laurent: readonly Pt[], w: Pt): Pt {
 
 /** A closed-form exterior-map domain from an explicit finite Laurent map (capacity = c, real-positive). */
 function laurentDomain(id: string, name: string, c: number, laurent: readonly Pt[], note?: string): ExteriorDomain {
-  return { id, name, evalPsi: (w) => laurentEval(c, laurent, w), capacity: c, exact: true, note };
+  return { id, name, evalPsi: (w) => laurentEval(c, laurent, w), capacity: c, laurent, exact: true, note };
 }
 
 // --- Closed-form classes (exact Ψ) -------------------------------------------------------------------
@@ -80,6 +82,7 @@ export function polygonDomain(id: string, name: string, corners: readonly Pt[]):
     name,
     evalPsi: (w) => m.evalPsi(w),
     capacity: m.capacity,
+    laurent: m.laurent,
     exact: m.converged && !m.degraded,
   };
 }
