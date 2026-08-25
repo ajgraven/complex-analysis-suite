@@ -5,21 +5,22 @@ import { AIRFOIL_FRAGMENT_SHADER } from "../src/render/airfoilShader.js";
 // render check): the shared @cas/gpu snippets are present, both planes are computed, and the physical
 // velocity divides by J'(ζ).
 describe("airfoil fragment shader assembly", () => {
-  it("declares WebGL2 and both cylinder/airfoil field functions", () => {
+  it("declares WebGL2 and the cylinder/airfoil field + Kármán–Trefftz map functions", () => {
     expect(AIRFOIL_FRAGMENT_SHADER).toContain("#version 300 es");
     expect(AIRFOIL_FRAGMENT_SHADER).toContain("cvec cylVel(cvec zeta)");
     expect(AIRFOIL_FRAGMENT_SHADER).toContain("cvec cylPot(cvec zeta)");
-    expect(AIRFOIL_FRAGMENT_SHADER).toContain("cvec jinv(cvec z)");
-    expect(AIRFOIL_FRAGMENT_SHADER).toContain("cvec jprime(cvec zeta)");
+    expect(AIRFOIL_FRAGMENT_SHADER).toContain("cvec ktInverse(cvec z)");
+    expect(AIRFOIL_FRAGMENT_SHADER).toContain("cvec ktDeriv(cvec z)");
+    expect(AIRFOIL_FRAGMENT_SHADER).toContain("uniform float uN;");
   });
 
-  it("switches ζ and the velocity on uMode (airfoil pane divides by J')", () => {
-    expect(AIRFOIL_FRAGMENT_SHADER).toContain("(uMode == 0) ? p : jinv(p)");
-    expect(AIRFOIL_FRAGMENT_SHADER).toContain("cdiv(cylVel(zeta), jprime(zeta))");
+  it("switches ζ and the velocity on uMode (airfoil pane divides by K', branch-matched to ζ)", () => {
+    expect(AIRFOIL_FRAGMENT_SHADER).toContain("(uMode == 0) ? p : ktInverse(p)");
+    expect(AIRFOIL_FRAGMENT_SHADER).toContain("cdiv(cylVel(zeta), ktDeriv(p))");
   });
 
-  it("pulls in the shared @cas/gpu GLSL by function name", () => {
-    for (const sym of ["planeFromFrag", "hsv2rgb", "csqrt", "clog", "cdiv", "cmul"]) {
+  it("pulls in the shared @cas/gpu GLSL by function name (incl. cpow for the KT power)", () => {
+    for (const sym of ["planeFromFrag", "hsv2rgb", "cpow", "clog", "cdiv", "cmul"]) {
       expect(AIRFOIL_FRAGMENT_SHADER).toContain(sym);
     }
   });

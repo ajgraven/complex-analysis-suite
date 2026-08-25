@@ -7,7 +7,12 @@
 // Kutta–Joukowski lift L = ρUΓ. Second page of the app (index.html is the free-field sandbox).
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
-import { kuttaCirculation, cylinderRadius, type AirfoilParams } from "./airfoil.js";
+import {
+  kuttaCirculation,
+  cylinderRadius,
+  nFromTrailingEdgeAngle,
+  type AirfoilParams,
+} from "./airfoil.js";
 import { createAirfoilRenderer, type AirfoilView } from "./render/airfoilView.js";
 
 const CYL_VIEW: AirfoilView = { center: [0, 0], halfSpan: 2.0 };
@@ -17,6 +22,7 @@ interface FoilState {
   thickness: number;
   camber: number;
   alphaDeg: number;
+  teAngleDeg: number;
   kutta: boolean;
 }
 
@@ -27,6 +33,7 @@ function paramsOf(s: FoilState): AirfoilParams {
     b: 1,
     center: [-s.thickness, s.camber],
     circulation: 0,
+    n: nFromTrailingEdgeAngle((s.teAngleDeg * Math.PI) / 180),
   };
   return { ...base, circulation: s.kutta ? kuttaCirculation(base) : 0 };
 }
@@ -75,7 +82,7 @@ function main(): void {
   if (!app) return;
   app.textContent = "";
 
-  const state: FoilState = { thickness: 0.12, camber: 0.06, alphaDeg: 8, kutta: true };
+  const state: FoilState = { thickness: 0.12, camber: 0.06, alphaDeg: 8, teAngleDeg: 10, kutta: true };
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -88,12 +95,13 @@ function main(): void {
   const sThick = slider("Thickness", 0, 0.35, 0.005, state.thickness);
   const sCamber = slider("Camber", 0, 0.2, 0.005, state.camber);
   const sAoA = slider("Angle of attack", -20, 20, 0.5, state.alphaDeg, "°");
+  const sTE = slider("Trailing-edge angle", 0, 30, 0.5, state.teAngleDeg, "°");
   const kutta = el("label", "check");
   const kBox = el("input");
   kBox.type = "checkbox";
   kBox.checked = state.kutta;
   kutta.append(kBox, el("span", undefined, "Kutta condition"));
-  controls.append(sThick.row, sCamber.row, sAoA.row, kutta);
+  controls.append(sThick.row, sCamber.row, sAoA.row, sTE.row, kutta);
 
   const lift = el("div", "readout lift-readout");
   bar.append(brand, back, controls, lift);
@@ -159,6 +167,11 @@ function main(): void {
   sAoA.input.addEventListener("input", () => {
     state.alphaDeg = Number(sAoA.input.value);
     sAoA.val.textContent = `${state.alphaDeg}°`;
+    requestPaint();
+  });
+  sTE.input.addEventListener("input", () => {
+    state.teAngleDeg = Number(sTE.input.value);
+    sTE.val.textContent = `${state.teAngleDeg}°`;
     requestPaint();
   });
   kBox.addEventListener("change", () => {

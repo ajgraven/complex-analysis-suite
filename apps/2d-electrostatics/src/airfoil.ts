@@ -21,6 +21,12 @@ const div = (a: Complex, b: Complex): Complex => {
 const scale = (a: Complex, s: number): Complex => [a[0] * s, a[1] * s];
 const cabs = (a: Complex): number => Math.hypot(a[0], a[1]);
 const clog = (a: Complex): Complex => [0.5 * Math.log(a[0] * a[0] + a[1] * a[1]), Math.atan2(a[1], a[0])];
+const cexp = (a: Complex): Complex => {
+  const r = Math.exp(a[0]);
+  return [r * Math.cos(a[1]), r * Math.sin(a[1])];
+};
+/** Principal complex power a^p (real exponent). */
+const cpow = (a: Complex, p: number): Complex => cexp(scale(clog(a), p));
 /** Principal complex square root. */
 function csqrt(a: Complex): Complex {
   const r = Math.hypot(a[0], a[1]);
@@ -40,6 +46,9 @@ export interface AirfoilParams {
   readonly center: Complex;
   /** Circulation Γ (use `kuttaCirculation` for the physical value). */
   readonly circulation: number;
+  /** Kármán–Trefftz exponent n = 2 − τ/π (τ = trailing-edge angle). n = 2 (default) is Joukowski (a
+   *  cusped trailing edge); n < 2 gives a finite trailing-edge wedge angle. */
+  readonly n?: number;
 }
 
 /** Cylinder radius R = |b − ζ₀| (so the circle passes through the critical point ζ = b). */
@@ -71,6 +80,39 @@ export function joukowskiInv(z: Complex, b: number): Complex {
   return cabs(plus) >= b ? plus : scale(sub(z, s), 0.5);
 }
 
+// --- Kármán–Trefftz (finite trailing-edge angle; n = 2 recovers Joukowski) ---
+
+/** The KT exponent n = 2 − τ/π for a trailing-edge wedge angle τ (radians). */
+export function nFromTrailingEdgeAngle(tau: number): number {
+  return 2 - tau / Math.PI;
+}
+/** The trailing-edge wedge angle τ = (2 − n)·π (radians). */
+export function trailingEdgeAngle(n: number): number {
+  return (2 - n) * Math.PI;
+}
+
+/** The Kármán–Trefftz map z = n·b·[(ζ+b)ⁿ + (ζ−b)ⁿ] / [(ζ+b)ⁿ − (ζ−b)ⁿ]. */
+export function ktMap(zeta: Complex, b: number, n: number): Complex {
+  const A = cpow(add(zeta, [b, 0]), n);
+  const B = cpow(sub(zeta, [b, 0]), n);
+  return scale(div(add(A, B), sub(A, B)), n * b);
+}
+
+/** dK/dζ = 4n²b²(ζ²−b²)ⁿ⁻¹ / [(ζ+b)ⁿ − (ζ−b)ⁿ]². Vanishes at ζ = ±b (finite-angle corner). */
+export function ktMapPrime(zeta: Complex, b: number, n: number): Complex {
+  const A = cpow(add(zeta, [b, 0]), n);
+  const B = cpow(sub(zeta, [b, 0]), n);
+  const amb = sub(A, B);
+  const z2mb2 = sub(mul(zeta, zeta), [b * b, 0]);
+  return div(scale(cpow(z2mb2, n - 1), 4 * n * n * b * b), mul(amb, amb));
+}
+
+/** The exterior branch of the KT inverse: with m = ((z+nb)/(z−nb))^{1/n}, ζ = b(m+1)/(m−1). */
+export function ktInverse(z: Complex, b: number, n: number): Complex {
+  const m = cpow(div(add(z, [n * b, 0]), sub(z, [n * b, 0])), 1 / n);
+  return scale(div(add(m, [1, 0]), sub(m, [1, 0])), b);
+}
+
 /** The cylinder-plane complex potential W(ζ) = U(e^{−iα}η + R²e^{iα}/η) − (iΓ/2π)log η, η = ζ − ζ₀. */
 export function cylinderPotential(p: AirfoilParams, zeta: Complex): Complex {
   const R = cylinderRadius(p);
@@ -93,10 +135,16 @@ export function cylinderVelocity(p: AirfoilParams, zeta: Complex): Complex {
   return add(uniformDoublet, vortex);
 }
 
-/** The physical (airfoil-plane) complex velocity dW/dz = W'(ζ) / J'(ζ), ζ = J⁻¹(z). */
+/** The physical (airfoil-plane) complex velocity dW/dz = W'(ζ) / K'(ζ), ζ = K⁻¹(z). Uses the Joukowski
+ *  path when n = 2 (the tested closed form) and Kármán–Trefftz otherwise. */
 export function physicalVelocity(p: AirfoilParams, z: Complex): Complex {
-  const zeta = joukowskiInv(z, p.b);
-  return div(cylinderVelocity(p, zeta), joukowskiPrime(zeta, p.b));
+  const n = p.n ?? 2;
+  if (n === 2) {
+    const zeta = joukowskiInv(z, p.b);
+    return div(cylinderVelocity(p, zeta), joukowskiPrime(zeta, p.b));
+  }
+  const zeta = ktInverse(z, p.b, n);
+  return div(cylinderVelocity(p, zeta), ktMapPrime(zeta, p.b, n));
 }
 
 /** The Kutta circulation: Γ = 4πUR·sin(φ₀ − α), which places the rear stagnation point at ζ = b so

@@ -7,6 +7,7 @@
 // rides the same "evaluate exactly per pixel" path as the sandbox. Mirrors ../airfoil.ts.
 import {
   COMPLEX_SINGLE_GLSL,
+  COMPLEX_DERIVED_GLSL,
   PLANE_FROM_FRAG_GLSL,
   HSV2RGB_GLSL,
 } from "@cas/gpu/glsl";
@@ -16,6 +17,7 @@ precision highp float;
 out vec4 outColor;
 
 ${COMPLEX_SINGLE_GLSL}
+${COMPLEX_DERIVED_GLSL}
 ${PLANE_FROM_FRAG_GLSL}
 ${HSV2RGB_GLSL}
 
@@ -26,6 +28,7 @@ uniform vec2  uResolution;
 uniform float uU;        // free-stream speed
 uniform float uAlpha;    // angle of attack (radians)
 uniform float uB;        // Joukowski parameter
+uniform float uN;        // Kármán–Trefftz exponent n = 2 − τ/π (2 = Joukowski)
 uniform vec2  uZeta0;    // cylinder centre
 uniform float uR;        // cylinder radius
 uniform float uGamma;    // circulation
@@ -54,13 +57,23 @@ cvec cylPot(cvec zeta) {
   return cadd(ud, vor);
 }
 
-// Exterior branch of the Joukowski inverse ζ = ½(z ± √(z²−4b²)), |ζ| ≥ b.
-cvec jinv(cvec z) {
-  cvec s = csqrt(csub(cmul(z, z), vec2(4.0 * uB * uB, 0.0)));
-  cvec plus = 0.5 * (z + s);
-  return (cabsf(plus) >= uB) ? plus : 0.5 * (z - s);
+// From a physical point z, the exterior preimage ζ and the map derivative K'(ζ) are BOTH built from the
+// same m = ((z+nb)/(z−nb))^{1/n}, so their (principal) branches agree and no seam appears in the flow:
+//   ζ = b(m+1)/(m−1);   K'(ζ) = n²·(ratio/m)·(m−1)² / (ratio−1)²   (ratio = m^n = (z+nb)/(z−nb)).
+// The K' identity is the direct KT derivative 4n²b²(ζ²−b²)ⁿ⁻¹/[(ζ+b)ⁿ−(ζ−b)ⁿ]² rewritten via m; both
+// reduce to the Joukowski 1 − b²/ζ² at n = 2. (n = 2 → Joukowski.)
+cvec ktRatio(cvec z) { return cdiv(cadd(z, vec2(uN * uB, 0.0)), csub(z, vec2(uN * uB, 0.0))); }
+cvec ktInverse(cvec z) {
+  cvec m = cpow(ktRatio(z), vec2(1.0 / uN, 0.0));
+  return cmul(vec2(uB, 0.0), cdiv(cadd(m, vec2(1.0, 0.0)), csub(m, vec2(1.0, 0.0))));
 }
-cvec jprime(cvec zeta) { return csub(vec2(1.0, 0.0), cdiv(vec2(uB * uB, 0.0), cmul(zeta, zeta))); }
+cvec ktDeriv(cvec z) {
+  cvec ratio = ktRatio(z);
+  cvec m = cpow(ratio, vec2(1.0 / uN, 0.0));
+  cvec mm1 = csub(m, vec2(1.0, 0.0));
+  cvec rm1 = csub(ratio, vec2(1.0, 0.0));
+  return cmul(vec2(uN * uN, 0.0), cdiv(cmul(cdiv(ratio, m), cmul(mm1, mm1)), cmul(rm1, rm1)));
+}
 
 float contour(float v) {
   float d = abs(v - floor(v + 0.5));
@@ -70,8 +83,8 @@ float contour(float v) {
 
 void main() {
   cvec p = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
-  cvec zeta = (uMode == 0) ? p : jinv(p);
-  cvec vel = (uMode == 0) ? cylVel(zeta) : cdiv(cylVel(zeta), jprime(zeta));
+  cvec zeta = (uMode == 0) ? p : ktInverse(p);
+  cvec vel = (uMode == 0) ? cylVel(zeta) : cdiv(cylVel(zeta), ktDeriv(p));
   cvec w = cylPot(zeta);
 
   float m = cabsf(vel);

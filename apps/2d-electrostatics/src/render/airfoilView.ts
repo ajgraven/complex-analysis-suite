@@ -41,6 +41,7 @@ export function createAirfoilRenderer(gl: WebGL2RenderingContext): AirfoilRender
     U: gl.getUniformLocation(program, "uU"),
     alpha: gl.getUniformLocation(program, "uAlpha"),
     b: gl.getUniformLocation(program, "uB"),
+    n: gl.getUniformLocation(program, "uN"),
     zeta0: gl.getUniformLocation(program, "uZeta0"),
     R: gl.getUniformLocation(program, "uR"),
     gamma: gl.getUniformLocation(program, "uGamma"),
@@ -60,6 +61,7 @@ export function createAirfoilRenderer(gl: WebGL2RenderingContext): AirfoilRender
       gl.uniform1f(u.U, params.U);
       gl.uniform1f(u.alpha, params.alpha);
       gl.uniform1f(u.b, params.b);
+      gl.uniform1f(u.n, params.n ?? 2);
       gl.uniform2f(u.zeta0, params.center[0], params.center[1]);
       gl.uniform1f(u.R, cylinderRadius(params));
       gl.uniform1f(u.gamma, params.circulation);
