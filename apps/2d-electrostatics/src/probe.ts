@@ -3,7 +3,7 @@
 // Re = enclosed charge / net flux (Gauss's law); Im = enclosed circulation (Kelvin's theorem). A
 // doublet (order-2 pole) has residue 0, so it is enclosed but contributes nothing. Because the field
 // is closed-form, this is EXACT — no numerical integration — so the readout is `=`, not `≈`.
-import type { Placed } from "./state.js";
+import type { Singularity } from "./field.js";
 
 /** An axis-aligned rectangle in world (complex-plane) coordinates; corners in any order. */
 export interface Rect {
@@ -33,7 +33,7 @@ function inside(r: Rect, at: readonly [number, number]): boolean {
 }
 
 /** The enclosed residue sum (exact) for the singularities inside `r`. */
-export function enclosedResidue(singularities: readonly Placed[], r: Rect): Enclosed {
+export function enclosedResidue(singularities: readonly Singularity[], r: Rect): Enclosed {
   let charge = 0;
   let circulation = 0;
   let count = 0;
