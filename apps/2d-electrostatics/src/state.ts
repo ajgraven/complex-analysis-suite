@@ -30,6 +30,8 @@ export interface AppState {
   tool: Tool;
   /** The flux/circulation probe rectangle (world coords), or null when none is drawn. */
   probe: Rect | null;
+  /** The sensor puck's world position (reads the field where it sits), or null when off. */
+  sensor: [number, number] | null;
 }
 
 let nextId = 1;
@@ -62,5 +64,6 @@ export function initialState(): AppState {
     selected: null,
     tool: "move",
     probe: null,
+    sensor: null,
   };
 }

@@ -385,6 +385,16 @@ export function createControls(
   presetSel.addEventListener("change", () => applyPreset(presetSel.value));
   presetWrap.append(presetSel);
 
+  const sensorBtn = el("button", "pal-btn", "Sensor");
+  sensorBtn.type = "button";
+  sensorBtn.title = "Toggle a draggable field-probe puck (reads |E|/speed, direction, φ, ψ)";
+  sensorBtn.setAttribute("aria-pressed", String(state.sensor !== null));
+  sensorBtn.addEventListener("click", () => {
+    state.sensor = state.sensor ? null : [state.view.center[0], state.view.center[1]];
+    sensorBtn.setAttribute("aria-pressed", String(state.sensor !== null));
+    requestRender();
+  });
+
   const pngBtn = el("button", "pal-btn", "Save PNG");
   pngBtn.type = "button";
   pngBtn.addEventListener("click", () => opts.onSavePng());
@@ -404,7 +414,7 @@ export function createControls(
       .catch(() => undefined);
   });
 
-  actions.append(presetWrap, pngBtn, linkBtn);
+  actions.append(presetWrap, sensorBtn, pngBtn, linkBtn);
   bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);

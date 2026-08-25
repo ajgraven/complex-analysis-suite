@@ -5,9 +5,11 @@
 // can still tell them apart. Selection adds an outer accent ring. Pure CSS-pixel drawing (the caller
 // sets the dpr transform); world→screen via the shared ../view transform.
 import type { AppState, Placed } from "../state.js";
+import { fieldOf } from "../state.js";
 import type { Size } from "../view.js";
 import { worldToScreen } from "../view.js";
 import { enclosedResidue } from "../probe.js";
+import { fieldE, potential } from "../field.js";
 
 export const HANDLE_RADIUS = 7;
 /** Pointer-hit tolerance (CSS px) around a handle centre. */
@@ -120,10 +122,62 @@ function drawProbe(ctx: CanvasRenderingContext2D, state: AppState, size: Size): 
   ctx.restore();
 }
 
+export const SENSOR_RADIUS = 9;
+
+// The draggable sensor puck: a crosshair reading the field where it sits — |E|/speed, direction, and
+// the potential φ = Re W and stream function ψ = Im W. The field vector is (Ex, Ey) = (Re E, −Im E),
+// so its heading is atan2(−Im E, Re E); |E| is the complex modulus. Relabelled by the active lens.
+function drawSensor(ctx: CanvasRenderingContext2D, state: AppState, size: Size): void {
+  const s = state.sensor;
+  if (!s) return;
+  const [x, y] = worldToScreen(state.view, size, s);
+
+  ctx.save();
+  ctx.strokeStyle = "#e7eaf2";
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.arc(x, y, SENSOR_RADIUS, 0, 2 * Math.PI);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x - SENSOR_RADIUS - 4, y);
+  ctx.lineTo(x + SENSOR_RADIUS + 4, y);
+  ctx.moveTo(x, y - SENSOR_RADIUS - 4);
+  ctx.lineTo(x, y + SENSOR_RADIUS + 4);
+  ctx.stroke();
+
+  const field = fieldOf(state);
+  const e = fieldE(field, s);
+  const w = potential(field, s);
+  const mag = Math.hypot(e[0], e[1]);
+  const deg = (Math.atan2(-e[1], e[0]) * 180) / Math.PI;
+  const fluid = state.lens === "hydrodynamic";
+  const lines = [
+    `${fluid ? "speed" : "|E|"} = ${fmt(mag)}`,
+    `∠ = ${deg.toFixed(0)}°`,
+    `φ = ${fmt(w[0])}`,
+    `ψ = ${fmt(w[1])}`,
+  ];
+  ctx.font = "12px ui-monospace, Menlo, monospace";
+  let boxW = 0;
+  for (const l of lines) boxW = Math.max(boxW, ctx.measureText(l).width);
+  const bx = x + SENSOR_RADIUS + 8;
+  const by = y - 8;
+  ctx.fillStyle = "rgba(15,17,21,0.82)";
+  ctx.fillRect(bx, by, boxW + 14, 4 + lines.length * 15);
+  ctx.textBaseline = "top";
+  ctx.fillStyle = "#e7eaf2";
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillStyle = i === 0 ? "#e7eaf2" : "#9fb2c9";
+    ctx.fillText(lines[i], bx + 7, by + 4 + i * 15);
+  }
+  ctx.restore();
+}
+
 /** Repaint the whole overlay for the current state into a context already scaled to CSS pixels. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, state: AppState, size: Size): void {
   ctx.clearRect(0, 0, size.width, size.height);
   drawProbe(ctx, state, size);
+  drawSensor(ctx, state, size);
   for (const s of state.singularities) {
     const [x, y] = worldToScreen(state.view, size, s.at);
     if (x < -20 || y < -20 || x > size.width + 20 || y > size.height + 20) continue;

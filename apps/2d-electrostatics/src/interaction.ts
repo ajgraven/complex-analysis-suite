@@ -5,7 +5,7 @@
 // the accessible surface operable without a mouse.
 import type { AppState, Id } from "./state.js";
 import { screenToWorld, worldToScreen, pxPerWorld, zoomAbout, type Size } from "./view.js";
-import { HIT_TOLERANCE } from "./render/overlay.js";
+import { HIT_TOLERANCE, SENSOR_RADIUS } from "./render/overlay.js";
 
 const MIN_HALF_SPAN = 0.02;
 const MAX_HALF_SPAN = 200;
@@ -14,6 +14,7 @@ type Drag =
   | { kind: "move"; id: Id; offset: [number, number] }
   | { kind: "pan"; startCenter: readonly [number, number]; startPx: [number, number] }
   | { kind: "probe" }
+  | { kind: "sensor"; offset: [number, number] }
   | null;
 
 function clampHalfSpan(h: number): number {
@@ -79,6 +80,15 @@ export function attachInteraction(
       const s = state.singularities.find((x) => x.id === hit);
       const [hx, hy] = s ? worldToScreen(state.view, sz, s.at) : p;
       drag = { kind: "move", id: hit, offset: [hx - p[0], hy - p[1]] };
+    } else if (state.sensor) {
+      const [sx, sy] = worldToScreen(state.view, sz, state.sensor);
+      if (Math.hypot(sx - p[0], sy - p[1]) <= SENSOR_RADIUS + 6) {
+        select(null);
+        drag = { kind: "sensor", offset: [sx - p[0], sy - p[1]] };
+      } else {
+        select(null);
+        drag = { kind: "pan", startCenter: state.view.center, startPx: p };
+      }
     } else {
       select(null);
       drag = { kind: "pan", startCenter: state.view.center, startPx: p };
@@ -95,6 +105,8 @@ export function attachInteraction(
         const [wx, wy] = screenToWorld(state.view, sz, p);
         state.probe = { ...state.probe, x1: wx, y1: wy };
       }
+    } else if (drag.kind === "sensor") {
+      state.sensor = screenToWorld(state.view, sz, [p[0] + drag.offset[0], p[1] + drag.offset[1]]);
     } else if (drag.kind === "move") {
       moveSingularity(drag.id, screenToWorld(state.view, sz, [p[0] + drag.offset[0], p[1] + drag.offset[1]]));
     } else {

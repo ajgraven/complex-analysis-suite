@@ -87,6 +87,10 @@ body {
 .pal-btn:hover {
   background: rgba(231, 234, 242, 0.16);
 }
+.pal-btn[aria-pressed="true"] {
+  background: rgba(109, 167, 200, 0.28);
+  border-color: rgba(109, 167, 200, 0.5);
+}
 .danger {
   background: rgba(207, 86, 86, 0.16);
   border-color: rgba(207, 86, 86, 0.4);
