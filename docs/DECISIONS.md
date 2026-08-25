@@ -2934,8 +2934,13 @@ engine enum, a ≥ 2-corner polygon, and the bounded/typed optional fit data so 
    its `@cas/conformal` re-fit computes. Both sides fail on drift (an app may not import another app, so the
    frozen bytes live in the shared package — the CLAUDE.md golden-corpus rule).
 3. **2D Electrostatics is both producer and consumer**: it imports a `#s=` conformal link (setting an "Imported
-   polygon") and exports its current transplant polygon (a "Copy link" ⧉ button, `engine:"sc-exterior"`).
-4. **The `flow` envelope kind is deferred** (plan §6 lists it, but it has no consumer yet — ADR-0007). The
+   polygon") and exports its current transplant polygon (a "Copy link" ⧉ button, `engine:"sc-exterior"` or
+   `sc-interior` depending on the active view).
+4. **Riemann-Map is the cross-app producer**: a "Send to 2D Electrostatics ↗" button on a polygon region emits
+   the golden's `engine:"sc-interior"` map (a **minimal** payload — corners + angles + converged, no drift-prone
+   prevertices/capacity) and opens `2d-electrostatics/polygon.html` via a CD-style app-segment URL swap. Pinned
+   byte-for-byte from the RM side, so the golden is now anchored on **both** producer and consumer.
+5. **The `flow` envelope kind is deferred** (plan §6 lists it, but it has no consumer yet — ADR-0007). The
    full app-state hand-off (singularity list + map reference + convention tag) lands when a second tool needs it.
 
 ### Consequences
@@ -2944,6 +2949,6 @@ engine enum, a ≥ 2-corner polygon, and the bounded/typed optional fit data so 
   first **`@cas/conformal`** interchange form; shared forward with future apps (fingerprints, circle packing).
   A MINOR bump decodes every older link unchanged (consumers gate on MAJOR = 1); the five pre-existing goldens
   are regenerated to the 1.4.0 label (byte-identical bar that label — none use the new vocabulary).
-- **Deferred:** the `flow` envelope kind (gate on a second consumer); a Riemann-Map **producer** deep link
-  ("Send to 2D Electrostatics") — the consumer + the round-trip within 2D Electrostatics land now, the
-  cross-app producer wiring is a separately-approved follow-on.
+- **Deferred:** the `flow` envelope kind — the full app-state hand-off (singularity list + map reference +
+  convention tag) — until a second consumer needs it (ADR-0007). The Riemann-Map producer deep link, initially
+  deferred here, has since landed (decision 4 above), so the hand-off is now bidirectional and end-to-end.

@@ -30,6 +30,7 @@ import { Overlay2D, type FillCell } from "./render/overlay2d.js";
 import { polylineSelfIntersects, downsample } from "./analysis/univalence.js";
 import { legendModel, renderLegend } from "./ui/legend.js";
 import { importExteriorMap, type ImportedExterior } from "./interchange/importMap.js";
+import { sendToElectrostaticsDeepLink } from "./interchange/exportMap.js";
 import { DOMAIN_PRESETS, domainById, sampleDomainBoundary, conformalSourceGrid, CUSTOM_ID, makeCustomDomain, defaultCustomPolygon, toCCW, polygonNonSimpleReason, type DomainPreset } from "./domains.js";
 import { fitConformalMap, fitForwardMap, fitSchwarzChristoffel, type SCMap } from "@cas/conformal";
 import { injectPngText } from "@cas/export";
@@ -1205,6 +1206,30 @@ function main(): void {
     fitPending = true;
     applyModeContext();
     invalidate();
+  });
+  controls.onSendToElectrostatics(() => {
+    // Hand the current polygon region off to 2D Electrostatics as a `form:"conformal"` map (ADR-0034):
+    // its corners + interior angles are the portable geometry; 2D-E re-fits the flow past / inside K.
+    const d = currentDomain();
+    const corners = d?.corners;
+    if (!corners || !scCorr) {
+      note.textContent = "Pick a polygon region first — the hand-off sends its corners to 2D Electrostatics.";
+      note.classList.add("visible");
+      return;
+    }
+    note.classList.remove("visible");
+    const { url, resolvable } = sendToElectrostaticsDeepLink(
+      { corners, angles: scCorr.angles, converged: regionMap?.converged ?? false },
+      window.location,
+    );
+    const opened = window.open(url, "_blank", "noopener");
+    void navigator.clipboard?.writeText(url).catch(() => {});
+    note.textContent = opened
+      ? "Opened in 2D Electrostatics (link also copied)."
+      : resolvable
+        ? "Link copied — paste it into 2D Electrostatics."
+        : "Couldn't resolve the 2D Electrostatics URL — the link is copied; paste it there.";
+    note.classList.add("visible");
   });
   controls.onDiskSide((side) => {
     state = { ...state, render: { ...state.render, disk: side } };
