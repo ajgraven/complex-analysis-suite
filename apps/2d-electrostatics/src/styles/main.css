@@ -40,6 +40,117 @@ body {
   display: block;
 }
 
+/* --- control surface (toolbar + inspector), floating over the field ------------------------- */
+.toolbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: rgba(15, 17, 21, 0.72);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(231, 234, 242, 0.08);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.brand strong {
+  font-size: 15px;
+}
+.brand span {
+  font-size: 11px;
+  color: #8c95a9;
+}
+
+.palette {
+  display: flex;
+  gap: 6px;
+}
+.pal-btn,
+.danger {
+  font: 13px/1 system-ui, sans-serif;
+  color: var(--text);
+  background: rgba(231, 234, 242, 0.08);
+  border: 1px solid rgba(231, 234, 242, 0.16);
+  border-radius: 7px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.pal-btn:hover {
+  background: rgba(231, 234, 242, 0.16);
+}
+.danger {
+  background: rgba(207, 86, 86, 0.16);
+  border-color: rgba(207, 86, 86, 0.4);
+  margin-top: 6px;
+  width: 100%;
+}
+.danger:hover {
+  background: rgba(207, 86, 86, 0.3);
+}
+
+.uniform {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.inspector {
+  position: fixed;
+  top: 62px;
+  right: 14px;
+  z-index: 5;
+  width: 232px;
+  padding: 12px 14px;
+  background: rgba(15, 17, 21, 0.82);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(231, 234, 242, 0.12);
+  border-radius: 10px;
+}
+.insp-t {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #cdd3e0;
+}
+
+.row {
+  display: block;
+  margin: 8px 0;
+}
+.row-h {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #b6bccb;
+}
+.row-v {
+  font-variant-numeric: tabular-nums;
+  color: #e7eaf2;
+}
+.uniform .row {
+  width: 118px;
+  margin: 0;
+}
+input[type="range"] {
+  width: 100%;
+  accent-color: #6da7c8;
+}
+
+.readout {
+  margin-top: 8px;
+  font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+  color: #9fb2c9;
+}
+
 /* Fatal-error banner created by @cas/ui's runWithFatalBoundary when init throws. */
 #app-error {
   position: fixed;

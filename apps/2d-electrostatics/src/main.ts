@@ -11,6 +11,7 @@ import { fieldOf, initialState } from "./state.js";
 import { createFieldRenderer } from "./render/glView.js";
 import { drawOverlay } from "./render/overlay.js";
 import { attachInteraction } from "./interaction.js";
+import { createControls } from "./ui/controls.js";
 
 function sizeCanvas(canvas: HTMLCanvasElement, cssW: number, cssH: number, dpr: number): void {
   const w = Math.max(1, Math.floor(cssW * dpr));
@@ -56,12 +57,14 @@ function main(): void {
     sizeCanvas(canvas.overlay, cssW, cssH, dpr);
     octx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawOverlay(octx, state, { width: cssW, height: cssH });
+    controls.refresh();
   };
   const requestRender = (): void => {
     if (!frame) frame = requestAnimationFrame(paint);
   };
 
-  attachInteraction(canvas.overlay, state, requestRender);
+  const controls = createControls(app, state, requestRender);
+  attachInteraction(canvas.overlay, state, requestRender, () => controls.onSelectionChange());
   window.addEventListener("resize", requestRender);
   requestRender();
 }
