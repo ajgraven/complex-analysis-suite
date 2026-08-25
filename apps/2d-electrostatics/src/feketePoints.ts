@@ -12,27 +12,14 @@ import type { ExteriorDomain } from "./potentialDomain.js";
 
 const dist = (a: Pt, b: Pt): number => Math.hypot(a[0] - b[0], a[1] - b[1]);
 
-/** n Leja points on ∂K = Ψ(∂𝔻), plus their θ-parameters (in choice order — the sequence is nested, so
- *  the first m of them are the m-point Leja set). Greedy over a fine θ-grid; the first point is an extreme
- *  point of K (max |z|), the classic Leja seed. */
-export function lejaPoints(domain: ExteriorDomain, n: number, gridSize = 1600): { points: Pt[]; thetas: number[] } {
-  const count = Math.max(0, Math.floor(n));
-  if (count === 0) return { points: [], thetas: [] };
-  const M = Math.max(count * 4, gridSize);
-  const grid: Pt[] = new Array(M);
-  const gTheta: number[] = new Array(M);
-  for (let m = 0; m < M; m++) {
-    const th = (2 * Math.PI * m) / M;
-    gTheta[m] = th;
-    grid[m] = domain.evalPsi([Math.cos(th), Math.sin(th)]);
-  }
-
-  // logSum[m] = Σ_{chosen j} log|grid[m] − z_j|; the next point maximizes it (a chosen index → −∞, so it
-  // is never re-picked).
+/** Greedy Leja over a set of candidate points on ∂K: returns the chosen indices (nested — the first k are
+ *  the k-point Leja set). The seed is an extreme point (argmax |z|); each subsequent point maximizes the
+ *  product of distances to those already chosen (computed in the log domain, so a chosen index → −∞ and is
+ *  never re-picked). Shared by the exterior-map and general-K wrappers. */
+function lejaIndices(grid: readonly Pt[], count: number): number[] {
+  const M = grid.length;
   const logSum = new Float64Array(M);
   const chosen: number[] = [];
-
-  // Seed: an extreme point, argmax |z| (ties → the first).
   let seed = 0;
   let bestMod = -Infinity;
   for (let m = 0; m < M; m++) {
@@ -47,7 +34,6 @@ export function lejaPoints(domain: ExteriorDomain, n: number, gridSize = 1600): 
   };
   chosen.push(seed);
   accumulate(seed);
-
   for (let k = 1; k < count; k++) {
     let bi = 0;
     let bv = -Infinity;
@@ -60,8 +46,30 @@ export function lejaPoints(domain: ExteriorDomain, n: number, gridSize = 1600): 
     chosen.push(bi);
     accumulate(bi);
   }
+  return chosen;
+}
 
+/** n Leja points on ∂K = Ψ(∂𝔻), plus their θ-parameters (in choice order). Greedy over a fine θ-grid. */
+export function lejaPoints(domain: ExteriorDomain, n: number, gridSize = 1600): { points: Pt[]; thetas: number[] } {
+  const count = Math.max(0, Math.floor(n));
+  if (count === 0) return { points: [], thetas: [] };
+  const M = Math.max(count * 4, gridSize);
+  const grid: Pt[] = new Array(M);
+  const gTheta: number[] = new Array(M);
+  for (let m = 0; m < M; m++) {
+    const th = (2 * Math.PI * m) / M;
+    gTheta[m] = th;
+    grid[m] = domain.evalPsi([Math.cos(th), Math.sin(th)]);
+  }
+  const chosen = lejaIndices(grid, count);
   return { points: chosen.map((i) => grid[i]), thetas: chosen.map((i) => gTheta[i]) };
+}
+
+/** n Leja points chosen from a general boundary curve (∂K samples) — for domains with no exterior map. */
+export function lejaFromCurve(curve: readonly Pt[], n: number): Pt[] {
+  const count = Math.max(0, Math.min(Math.floor(n), curve.length));
+  if (count === 0) return [];
+  return lejaIndices(curve, count).map((i) => curve[i]);
 }
 
 /** The n-point transfinite diameter dₙ = (∏ᵢ<ⱼ|zᵢ−zⱼ|)^{2/n(n−1)}. Decreases to cap(K) as n → ∞. Zero
