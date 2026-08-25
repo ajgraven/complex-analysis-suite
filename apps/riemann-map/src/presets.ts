@@ -15,21 +15,27 @@ export interface MapPreset {
   readonly expr: string;
 }
 
+// Interior gallery. The view draws the image φ(𝔻), auto-framed to its bounds, so a preset earns its place
+// only if that image is BOUNDED and interesting — maps with a pole or branch point in/near 𝔻 (z+1/z, 1/z,
+// log z, √z) just explode toward the frame edges, and a disk→half-plane map (Möbius, Cayley) or the Koebe
+// slit map are unbounded and auto-fit to a speck; all were dropped (still reachable by typing them). What
+// remains is univalent conformal images (the cusped z+zⁿ/n epicycloid family — the coefficient sits exactly
+// at the univalence bound 1/n, so cusps form on ∂𝔻), a couple of instructive non-injective self-maps, the
+// bounded transcendental images, and one anti-holomorphic reflection.
 export const MAP_PRESETS: readonly MapPreset[] = [
+  // z + zⁿ/n: univalent on 𝔻, image is an (n−1)-cusped epicycloid (cardioid → nephroid → …).
   { id: "cardioid", name: "Cardioid  z + z²/2", expr: "z + z*z/2" },
-  // Families in the draggable parameter c — grab the red c handle on the disk to deform them live.
+  // A family in the draggable parameter c — grab the red c handle on the disk to deform it live. |c| ≤ ½
+  // is univalent (a tilted cardioid); past ½ it folds (∂𝔻 turns amber), so the univalence bound is visible.
+  { id: "cardioid-c", name: "Cardioid family  z + c·z²", expr: "z + c*z*z" },
+  { id: "nephroid", name: "Nephroid  z + z³/3", expr: "z + z*z*z/3" },
+  { id: "epicycloid3", name: "Epicycloid (3 cusps)  z + z⁴/4", expr: "z + z*z*z*z/4" },
+  { id: "square", name: "z²  (2-to-1 fold)", expr: "z*z" },
+  // Blaschke maps: φ_c is a disk automorphism (draggable c, |c| < 1); the product is a proper 2-to-1 self-map.
   { id: "blaschke-c", name: "Blaschke φ_c  (z−c)/(1−c̄z)", expr: "(z - c)/(1 - conjugate(c)*z)" },
-  { id: "quadratic-c", name: "Quadratic  z² + c", expr: "z*z + c" },
-  { id: "joukowski", name: "Joukowski  z + 1/z", expr: "z + 1/z" },
-  { id: "square", name: "z²", expr: "z*z" },
-  { id: "cube", name: "z³", expr: "z*z*z" },
-  { id: "inversion", name: "1/z  (inversion)", expr: "1/z" },
-  { id: "mobius", name: "Möbius  (z−1)/(z+1)", expr: "(z - 1)/(z + 1)" },
-  { id: "cayley", name: "Cayley  (z−i)/(z+i)", expr: "(z - i)/(z + i)" },
-  { id: "blaschke", name: "Blaschke  z(z−½)/(1−½z)", expr: "z*(z - 0.5)/(1 - 0.5*z)" },
+  { id: "blaschke", name: "Blaschke product  z(z−½)/(1−½z)", expr: "z*(z - 0.5)/(1 - 0.5*z)" },
+  // Bounded transcendental images (each univalent on 𝔻 — the derivative's zeros/poles lie outside it).
   { id: "exp", name: "exp z", expr: "exp(z)" },
-  { id: "log", name: "log z", expr: "log(z)" },
-  { id: "sqrt", name: "√z", expr: "sqrt(z)" },
   { id: "sin", name: "sin z", expr: "sin(z)" },
   { id: "tan", name: "tan z", expr: "tan(z)" },
   { id: "conjugate", name: "z̄  (anti-holomorphic)", expr: "conjugate(z)" },
