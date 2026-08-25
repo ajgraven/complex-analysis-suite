@@ -10,8 +10,11 @@ import {
   QD_TO_CD_DELTOID_SIGMA_LINK,
   QD_TO_CD_DELTOID_SIGMA_AT_W0,
   QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
+  RM_TO_POTENTIAL_CONFORMAL_LINK,
+  type ConformalMap,
   type Envelope,
   type LaurentMap,
+  type MapSpec,
   type SchwarzReflection,
 } from "../src/index.js";
 
@@ -101,6 +104,37 @@ describe("@cas/interchange schema + constants", () => {
     expect(isMapSpec({ ...bounded, phi: { form: "bounded", w0: { re: 0, im: 0 }, branches: "nope" } })).toBe(false);
     const manyBranches = Array.from({ length: 5000 }, () => ({ z: { re: 0, im: 0 }, A: [{ re: 1, im: 0 }] }));
     expect(isMapSpec({ ...bounded, phi: { form: "bounded", w0: { re: 0, im: 0 }, branches: manyBranches } })).toBe(false); // over-cap
+  });
+  it("isMapSpec validates the conformal polygon-map form (M2.4c, 1.4.0)", () => {
+    // A ConformalMap (schema.ts): engine tag + polygon corners + converged, plus optional fit data. The
+    // consumer rebuilds it from `polygon` via @cas/conformal. Minimal + full both validate.
+    const minimal: ConformalMap = {
+      form: "conformal",
+      engine: "sc-exterior",
+      polygon: [{ re: 1, im: -1 }, { re: 1, im: 1 }, { re: -1, im: 1 }, { re: -1, im: -1 }],
+      converged: true,
+    };
+    expect(isMapSpec(minimal)).toBe(true);
+    expect(isMapSpec({ ...minimal, engine: "sc-interior", angles: [0.5, 0.5, 0.5, 0.5] })).toBe(true);
+    expect(
+      isMapSpec({
+        ...minimal,
+        engine: "lightning",
+        prevertices: [{ re: 1, im: 0 }, { re: 0, im: 1 }, { re: -1, im: 0 }, { re: 0, im: -1 }],
+        constant: { re: 1.18, im: 0 },
+        capacity: 1.18,
+        degraded: false,
+        residual: 1e-13,
+      }),
+    ).toBe(true);
+    // Malformed / hostile inputs are REJECTED (the seatbelt owns the guarantee).
+    expect(isMapSpec({ ...minimal, engine: "bogus" })).toBe(false); // unknown engine
+    expect(isMapSpec({ ...minimal, polygon: [{ re: 1, im: 0 }] })).toBe(false); // < 2 corners
+    expect(isMapSpec({ ...minimal, converged: "yes" })).toBe(false); // non-boolean flag
+    expect(isMapSpec({ ...minimal, angles: "nope" })).toBe(false); // non-array angles
+    expect(isMapSpec({ ...minimal, capacity: "big" })).toBe(false); // non-finite capacity
+    const bigPoly = Array.from({ length: 5000 }, () => ({ re: 0, im: 0 }));
+    expect(isMapSpec({ ...minimal, polygon: bigPoly })).toBe(false); // over-cap (untrusted-input bound)
   });
 });
 
@@ -229,6 +263,27 @@ describe("deltoid σ golden (S3a)", () => {
       branches: [{ z: { re: 0.2, im: 0 }, A: [{ re: 0.3, im: 0 }] }],
     });
     expect(isMapSpec(sigma)).toBe(true);
+  });
+});
+
+describe("RM → potential conformal golden (M2.4c)", () => {
+  // The first `form:"conformal"` hand-off (1.4.0): Riemann-Map exports a polygon SC map as a bare
+  // `kind:"map"` ConformalMap; 2D-Electrostatics decodes the corners and re-fits the exterior flow map via
+  // @cas/conformal. This package has no conformal engine, so it pins the DECODE + the recipe shape; the
+  // frozen capacity is reproduced through the consumer's real @cas/conformal fit (its own test).
+  it("decodes to the ConformalMap recipe over the side-2 square", () => {
+    const env = decodeLink(RM_TO_POTENTIAL_CONFORMAL_LINK); // decodeLink runs validateEnvelope
+    expect(env.kind).toBe("map");
+    expect(env.version).toBe(VERSION); // minted at 1.4.0 — the version the conformal form arrived in
+    const map = env.payload as MapSpec;
+    expect(map).toEqual({
+      form: "conformal",
+      engine: "sc-interior",
+      polygon: [{ re: 1, im: -1 }, { re: 1, im: 1 }, { re: -1, im: 1 }, { re: -1, im: -1 }],
+      angles: [0.5, 0.5, 0.5, 0.5],
+      converged: true,
+    });
+    expect(isMapSpec(map)).toBe(true);
   });
 });
 

@@ -19,12 +19,14 @@ export const SCHEMA_ID = "complex-analysis-suite/interchange" as const;
  * Current schema version (semver). A MAJOR bump is a breaking change consumers must reject; a MINOR
  * bump adds backward-compatible vocabulary. 1.1.0 (S3a) added the `schwarz` MapSpec form; 1.2.0 added
  * optional finite-pole `branches` on `LaurentMap` (pole-bearing unbounded QDs); 1.3.0 (S5-C2) added the
- * `bounded` φ form for a `schwarz` map (bounded QDs — φ: 𝔻 → Ω, `disk: "D"`). Each MINOR bump moves
+ * `bounded` φ form for a `schwarz` map (bounded QDs — φ: 𝔻 → Ω, `disk: "D"`); 1.4.0 (M2.4c, ADR-0034)
+ * added the `conformal` MapSpec form — a Schwarz–Christoffel / lightning conformal map of a polygon,
+ * reconstructed via @cas/conformal exactly as `schwarz` is via @cas/schwarz. Each MINOR bump moves
  * every `version: VERSION`-stamped export to the new label — a payload that uses none of the new
  * vocabulary is byte-identical bar that label, and consumers gate on MAJOR = 1 so it decodes unchanged.
  * Bump this whenever the type vocabulary below grows, never silently.
  */
-export const VERSION = "1.3.0" as const;
+export const VERSION = "1.4.0" as const;
 
 /** Cartesian complex number — the shared wire representation across the suite. */
 export interface Complex {
@@ -121,7 +123,39 @@ export interface SchwarzMap {
   antiholomorphic: true;
 }
 
-export type MapSpec = RationalMap | LaurentMap | ExprMap | SchwarzMap;
+/**
+ * A conformal map of a polygon, given by its Schwarz–Christoffel data — enough for a consumer to rebuild
+ * the map via @cas/conformal (exactly as `form:"schwarz"` is rebuilt via @cas/schwarz), without having to
+ * re-derive the shape. `engine` names the @cas/conformal builder: "sc-interior" (f: 𝔻 → the bounded
+ * polygon), "sc-exterior" (Ψ: 𝔻* → the exterior of the polygon — the flow-past-a-polygon map), or
+ * "lightning" (a smooth-boundary least-squares fit, which carries no prevertices/angles). The `polygon`
+ * corners are the canonical geometry a consumer can always re-fit from; the recorded `prevertices` wₖ,
+ * interior angles `angles` (αₖ / π), accessory `constant` C, and `capacity` let it rebuild the exact
+ * fitted map. Fit quality is carried honestly (guardrail): `converged`, and — when the fit reports them —
+ * `degraded` / `residual`. Added in schema 1.4.0 (ADR-0034); like `schwarz`, NOT expr-compilable.
+ */
+export interface ConformalMap {
+  form: "conformal";
+  engine: "sc-interior" | "sc-exterior" | "lightning";
+  /** The polygon corners (Ω-plane vertices), counter-clockwise. */
+  polygon: Complex[];
+  /** Interior angles αₖ / π, corner order. Omitted for a lightning (smooth-boundary) fit. */
+  angles?: number[];
+  /** Prevertices wₖ (on ∂𝔻 for sc-interior, on the 1/z reciprocal disk for sc-exterior), corner order. */
+  prevertices?: Complex[];
+  /** Accessory constant C: f′(0) for sc-interior, the ∞-leading coefficient for sc-exterior. */
+  constant?: Complex;
+  /** Logarithmic capacity |C| (meaningful for the exterior map). */
+  capacity?: number;
+  /** The fit reached its tolerance. */
+  converged: boolean;
+  /** The crowding wall was hit — accuracy honestly reduced (when the fit reports it). */
+  degraded?: boolean;
+  /** The fit's honest ≈ error tag (when reported). */
+  residual?: number;
+}
+
+export type MapSpec = RationalMap | LaurentMap | ExprMap | SchwarzMap | ConformalMap;
 export type MapForm = MapSpec["form"];
 
 // --- Payloads (initial set) -------------------------------------------------------------------
