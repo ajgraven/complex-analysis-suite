@@ -14,11 +14,16 @@ import { flowNet, unitCircle, pushforward, type RefFlow, type NetCurve, type Pt 
 import { fitPolygonFlow, type PolygonFlowMap } from "./polygonMap.js";
 import { POLYGON_PRESETS, DEFAULT_PRESET } from "./transplantPresets.js";
 import { Net2D, boundsOf } from "./render/net2d.js";
+import { conformalPolygonFromLink, buildConformalLink } from "./importConformalMap.js";
+
+const CUSTOM_ID = "__imported__";
 
 interface TpState {
   presetId: string;
   alphaDeg: number;
   gamma: number;
+  /** A polygon imported from a `#s=` conformal link (overrides the preset when set). */
+  custom: Pt[] | null;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -58,7 +63,15 @@ function main(): void {
   if (!app) return;
   app.textContent = "";
 
-  const state: TpState = { presetId: DEFAULT_PRESET, alphaDeg: 0, gamma: 0 };
+  const state: TpState = { presetId: DEFAULT_PRESET, alphaDeg: 0, gamma: 0, custom: null };
+
+  // An incoming `#s=` conformal link (e.g. a polygon handed off from the Riemann-Map studio) sets the
+  // imported polygon; we re-fit our own exterior flow past it.
+  const incoming = conformalPolygonFromLink(window.location.hash);
+  if (incoming) {
+    state.custom = incoming.corners;
+    state.presetId = CUSTOM_ID;
+  }
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -74,6 +87,12 @@ function main(): void {
   const presetHead = el("span", "row-h");
   presetHead.append(el("span", "row-l", "Polygon K"));
   const presetSel = el("select", "tp-select");
+  if (state.custom) {
+    const opt = el("option", undefined, "Imported polygon");
+    opt.value = CUSTOM_ID;
+    opt.selected = true;
+    presetSel.append(opt);
+  }
   for (const p of POLYGON_PRESETS) {
     const opt = el("option", undefined, p.label);
     opt.value = p.id;
@@ -83,7 +102,8 @@ function main(): void {
   presetRow.append(presetHead, presetSel);
   const sAoA = slider("Angle of attack", -30, 30, 1, state.alphaDeg, "°");
   const sGamma = slider("Circulation Γ", -4, 4, 0.1, state.gamma);
-  controls.append(presetRow, sAoA.row, sGamma.row);
+  const copyBtn = el("button", "pal-btn", "Copy link ⧉");
+  controls.append(presetRow, sAoA.row, sGamma.row, copyBtn);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, foilLink, controls, readout);
@@ -115,9 +135,12 @@ function main(): void {
     POLYGON_PRESETS.find((p) => p.id === id) ?? POLYGON_PRESETS[0];
 
   let frame = 0;
+  let lastMap: PolygonFlowMap | null = null;
+  let lastCorners: Pt[] = [];
   const paint = (): void => {
     frame = 0;
-    const preset = presetOf(state.presetId);
+    const corners = state.custom ?? presetOf(state.presetId).corners;
+    lastCorners = corners.slice();
     const flow: RefFlow = { U: 1, alpha: (state.alphaDeg * Math.PI) / 180, gamma: state.gamma };
     const net = flowNet(flow, { streamlines: 9, equipotentials: 9, span: 6, samples: 220 });
 
@@ -133,10 +156,11 @@ function main(): void {
     // ---- polygon pane: the transplanted flow ---------------------------------
     let map: PolygonFlowMap | null = null;
     try {
-      map = fitPolygonFlow(preset.corners);
+      map = fitPolygonFlow(corners);
     } catch {
       map = null;
     }
+    lastMap = map;
 
     if (polyNet.resize()) {
       polyNet.clear();
@@ -158,7 +182,7 @@ function main(): void {
         polyNet.drawLines(streams, 1.3);
         polyNet.fillBody(bdry);
         // Colour-matched corner ↔ prevertex markers (the SC prevertex-linking idiom).
-        const n = preset.corners.length;
+        const n = corners.length;
         for (let k = 0; k < n; k++) {
           const col = cornerColor(k, n);
           if (m.cornerImages[k]) polyNet.drawDot(m.cornerImages[k], col);
@@ -183,8 +207,29 @@ function main(): void {
   };
 
   presetSel.addEventListener("change", () => {
-    state.presetId = presetSel.value;
+    // Choosing a named preset drops the imported polygon (and its option).
+    if (presetSel.value !== CUSTOM_ID) {
+      state.presetId = presetSel.value;
+      state.custom = null;
+      const opt = presetSel.querySelector(`option[value="${CUSTOM_ID}"]`);
+      if (opt) opt.remove();
+    }
     requestPaint();
+  });
+  copyBtn.addEventListener("click", () => {
+    if (!lastMap) return;
+    const link = buildConformalLink(lastCorners, lastMap);
+    const url = `${window.location.origin}${window.location.pathname}${link}`;
+    void navigator.clipboard?.writeText(url).then(
+      () => {
+        copyBtn.textContent = "Copied ✓";
+        window.setTimeout(() => (copyBtn.textContent = "Copy link ⧉"), 1400);
+      },
+      () => {
+        copyBtn.textContent = "Copy failed";
+        window.setTimeout(() => (copyBtn.textContent = "Copy link ⧉"), 1400);
+      },
+    );
   });
   sAoA.input.addEventListener("input", () => {
     state.alphaDeg = Number(sAoA.input.value);

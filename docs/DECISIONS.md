@@ -2896,3 +2896,54 @@ M0 (render spike) + M1 (the superposition sandbox — palette, inspector with th
 two-lens toggle, the flux/circulation probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an
 animated tracer-flow layer) are complete and verified in live headless-Chromium WebGL2. M2–M4 are specced in
 the plan and deferred to separately-approved pushes.
+
+---
+
+## ADR-0034: The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0)
+
+**Status:** Accepted. A new `MapSpec` form (`kind` stays `"map"`), reconstructed via `@cas/conformal`,
+minted by 2D Electrostatics' M2.4 polygon transplant. Foreshadowed by
+[ADR-0033](#adr-0033-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) (the
+"companion ADR when M2 lands"). Plan §6:
+[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
+
+### Context
+
+M2 of 2D Electrostatics transplants flow **past a polygon** — flow past the unit disk carried through the
+exterior Schwarz–Christoffel map `Ψ: 𝔻* → ext(K)` (`@cas/conformal`). That makes the app the first **receiving
+tool** for a conformal-map hand-off: the Riemann-Map studio already fits polygon SC maps, and a user who shapes
+a polygon there should be able to see the flow past it here. Every prior interchange form was gated on exactly
+this — a real consumer (ADR-0007); until M2 there was none, so ADR-0033 deferred the form. There now is one.
+
+### Decision
+
+Add **`form:"conformal"`** to `MapSpec` (schema **1.4.0**, a MINOR bump). It carries the polygon's SC data —
+an `engine` tag (`"sc-interior"` | `"sc-exterior"` | `"lightning"`), the `polygon` corners (the portable
+geometry), and the fitted `prevertices` wₖ / interior `angles` αₖ / accessory `constant` C / `capacity` /
+`converged` / `degraded` / `residual`. A consumer rebuilds the map from the polygon via `@cas/conformal` —
+**exactly the reconstruct-via-the-engine pattern of `form:"schwarz"`** (rebuilt via `@cas/schwarz`), with the
+polygon corners playing φ's role as the recorded recipe. Like `schwarz`, it is **not expr-compilable**
+(`mapSpecToExpr` throws with a reconstruct-via-`@cas/conformal` message); the runtime seatbelt validates the
+engine enum, a ≥ 2-corner polygon, and the bounded/typed optional fit data so a hand-edited link is rejected.
+
+1. **The polygon corners are the canonical geometry**; `engine`/`prevertices`/… are the producer's fit
+   provenance. A consumer always re-derives the fit it needs — 2D Electrostatics reads an `"sc-interior"`
+   producer's corners and fits its **own** exterior map. This keeps producer and consumer loosely coupled.
+2. **Cross-app golden `RM_TO_POTENTIAL_CONFORMAL_LINK`** (the side-2 square, `cap = 1.1803405990161`): the
+   interchange package pins the **decode + recipe shape**; 2D Electrostatics pins the **consumer-side capacity**
+   its `@cas/conformal` re-fit computes. Both sides fail on drift (an app may not import another app, so the
+   frozen bytes live in the shared package — the CLAUDE.md golden-corpus rule).
+3. **2D Electrostatics is both producer and consumer**: it imports a `#s=` conformal link (setting an "Imported
+   polygon") and exports its current transplant polygon (a "Copy link" ⧉ button, `engine:"sc-exterior"`).
+4. **The `flow` envelope kind is deferred** (plan §6 lists it, but it has no consumer yet — ADR-0007). The
+   full app-state hand-off (singularity list + map reference + convention tag) lands when a second tool needs it.
+
+### Consequences
+
+- **Positive:** the deferred M2 hand-off is live — the first non-`schwarz` reconstruct-via-engine form, and the
+  first **`@cas/conformal`** interchange form; shared forward with future apps (fingerprints, circle packing).
+  A MINOR bump decodes every older link unchanged (consumers gate on MAJOR = 1); the five pre-existing goldens
+  are regenerated to the 1.4.0 label (byte-identical bar that label — none use the new vocabulary).
+- **Deferred:** the `flow` envelope kind (gate on a second consumer); a Riemann-Map **producer** deep link
+  ("Send to 2D Electrostatics") — the consumer + the round-trip within 2D Electrostatics land now, the
+  cross-app producer wiring is a separately-approved follow-on.
