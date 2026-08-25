@@ -134,6 +134,28 @@
       figure.sweep-cell:hover, figure.sweep-cell:focus { border-color: var(--accent); outline: none; }
       figure.sweep-cell img { display: block; width: 100%; height: auto; }
       figure.sweep-cell figcaption { padding: 4px 6px; font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); text-align: center; }
+      /* Monodromy report overlay (C4) — theme-aware, opaque over the plot. */
+      .report-overlay { position: absolute; inset: 0; background: var(--bg); display: flex; flex-direction: column; z-index: 6; }
+      .report-overlay[hidden] { display: none; }
+      .report-body { flex: 1 1 auto; overflow: auto; padding: 22px 24px 40px; }
+      .report-inner { max-width: 860px; margin: 0 auto; }
+      .report-inner h2 { font-size: 1.1rem; color: var(--fg); margin: 0 0 2px; }
+      .report-inner h3 { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 22px 0 10px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+      .report-sub { color: var(--muted); font-size: 0.8rem; margin: 0 0 4px; }
+      .report-caveat { color: var(--warn); font-size: 0.76rem; margin: 0; }
+      .report-stats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }
+      .report-stat { flex: 1 1 130px; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; background: var(--field-bg); }
+      .report-stat .k { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+      .report-stat .v { font-size: 1.15rem; color: var(--fg); font-weight: 600; margin-top: 3px; }
+      .report-stat .v.bad { color: var(--warn); }
+      .report-gens { display: flex; flex-wrap: wrap; gap: 12px; }
+      .report-gen { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; background: var(--field-bg); display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 120px; }
+      .report-gen .gl { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--accent); }
+      .report-gen .cyc { font-family: ui-monospace, Menlo, monospace; font-size: 0.74rem; color: var(--fg); }
+      .report-gen .meta { font-size: 0.68rem; color: var(--muted); }
+      .report-body p.prose { font-size: 0.82rem; color: var(--fg); line-height: 1.55; max-width: 62ch; }
+      .report-body p.prose code { font-family: ui-monospace, Menlo, monospace; background: var(--field-bg); padding: 1px 4px; border-radius: 4px; }
+      .report-eq { font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--fg); background: var(--field-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 6px 0; white-space: pre-line; }
 
       .legend { display: flex; gap: 14px; align-items: center; }
       .wheel-wrap { position: relative; flex: 0 0 auto; }
@@ -158,6 +180,20 @@
       .transform-sub .sub-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
       #implicitHint { margin-top: 8px; }
       #implicitHint b { color: var(--fg); font-weight: 600; }
+      .gen-loops { margin-top: 8px; }
+      .gen-label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin-bottom: 6px; }
+      .gen-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .gen-chip { font: inherit; font-family: ui-monospace, Menlo, monospace; font-size: 0.78rem; cursor: pointer; color: var(--fg); background: var(--field-bg); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+      .gen-chip:hover:not(:disabled) { border-color: var(--accent); }
+      .gen-chip:disabled { opacity: 0.45; cursor: not-allowed; }
+      .gen-groupbtn { margin-top: 8px; width: 100%; font-size: 0.78rem; }
+      .gen-group { margin-top: 8px; }
+      .gen-group .gen-summary { white-space: pre-line; color: var(--muted); font-size: 0.72rem; margin: 6px 0 0; }
+      .gen-group .gen-summary b { color: var(--fg); font-weight: 600; }
+      .gen-diagrams { display: flex; flex-wrap: wrap; gap: 10px 12px; }
+      .gen-diagram { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .gen-diagram canvas { display: block; }
+      .gen-diagram .gen-diagram-label { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); }
       .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--field-bg); border: 1px solid var(--accent); border-radius: var(--radius); overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
       .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--fg); cursor: pointer; }
       .ac-item.active, .ac-item:hover { background: var(--accent); color: var(--accent-contrast); }
@@ -291,6 +327,12 @@
           <input type="range" id="riemannExag" min="0.1" max="3" step="0.1" value="1" />
           <label class="check" style="margin-top: 8px"><input type="checkbox" id="riemannLinked" /> Base-plane pane</label>
           <label class="check" style="margin-top: 8px"><input type="checkbox" id="riemannMonodromy" /> Monodromy explorer <b>&asymp;</b></label>
+          <div id="generatorLoops" class="gen-loops" hidden>
+            <span class="gen-label">Generator loops (π₁)</span>
+            <div id="generatorChips" class="gen-chips"></div>
+            <button type="button" id="computeGroupBtn" class="gen-groupbtn" hidden>Monodromy group &amp; genus ▸</button>
+            <div id="monodromyGroup" class="gen-group" hidden></div>
+          </div>
           <p id="monodromyResult" class="param-hint" hidden></p>
           <div class="row" style="margin-top: 8px">
             <button type="button" id="riemannReset">Reset view</button>
@@ -445,6 +487,13 @@
           <button type="button" id="sweepClose">Close</button>
         </div>
         <div id="sweepGrid" class="sweep-grid"></div>
+      </div>
+      <div id="monodromyReport" class="report-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="reportTitle">
+        <div class="sweep-bar">
+          <span id="reportTitle" class="sweep-title">Monodromy report</span>
+          <button type="button" id="reportClose">Close</button>
+        </div>
+        <div id="reportBody" class="report-body"></div>
       </div>
     </main>
 

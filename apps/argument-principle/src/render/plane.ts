@@ -4,6 +4,8 @@
 // with emphasized axes, and a polyline (optionally colored by its parameter t to show traversal
 // direction). Phase 1 adds pan/zoom on top of this; the mapping stays the single source of truth.
 
+import { drawDirectionTicks as uiDrawDirectionTicks } from "@cas/ui";
+
 export type Vec2 = readonly [number, number];
 
 export interface Viewport {
@@ -297,31 +299,9 @@ export function drawDirectionTicks(
   halo: string,
   sizePx = 4.5,
 ): void {
-  const n = pts.length;
-  if (n < 2 || count < 1) return;
-  const total = closed ? n : n - 1;
-  for (let k = 0; k < count; k++) {
-    const seg = Math.min(total - 1, Math.floor(((k + 0.5) / count) * total)); // offset so none sits on the seam
-    const a = map.toPx(pts[seg % n]);
-    const b = map.toPx(pts[(seg + 1) % n]);
-    if (!isFinitePx(a) || !isFinitePx(b)) continue;
-    const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
-    ctx.save();
-    ctx.translate((a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
-    ctx.rotate(ang);
-    ctx.beginPath();
-    ctx.moveTo(sizePx, 0);
-    ctx.lineTo(-sizePx, sizePx * 0.82);
-    ctx.lineTo(-sizePx, -sizePx * 0.82);
-    ctx.closePath();
-    ctx.lineJoin = "round";
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = halo;
-    ctx.stroke();
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.restore();
-  }
+  // Delegates to the shared @cas/ui primitive (the plotter's monodromy explorer is the second consumer —
+  // ADR-0007). Index spacing is kept (byArcLength defaults false) so both panes look exactly as before.
+  uiDrawDirectionTicks(ctx, (w) => map.toPx(w), pts, { closed, count, fill, halo, sizePx });
 }
 
 /** Draw a small filled marker (a dot) at a world point. */

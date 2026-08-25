@@ -62,8 +62,9 @@ function sheetLess(a: Complex, b: Complex): number {
   return Math.hypot(a[0], a[1]) - Math.hypot(b[0], b[1]);
 }
 
-/** Finite, deterministically-ordered, near-duplicate-clustered sheet values (branch-point merges collapse). */
-function distinctSheets(values: readonly Complex[]): Complex[] {
+/** Finite, deterministically-ordered, near-duplicate-clustered sheet values (branch-point merges collapse).
+ *  Exported so the live-draw tracker (plot.ts) enumerates sheets exactly as the offline monodromy does. */
+export function distinctSheets(values: readonly Complex[]): Complex[] {
   const finite = values.filter((v) => Number.isFinite(v[0]) && Number.isFinite(v[1]));
   if (finite.length === 0) return [];
   let maxAbs = 0;
@@ -78,8 +79,9 @@ function distinctSheets(values: readonly Complex[]): Complex[] {
   return out;
 }
 
-/** Index in `cand` nearest to `w`, and that distance (idx = −1 for an empty candidate set). */
-function nearest(cand: readonly Complex[], w: Complex): { idx: number; d: number } {
+/** Index in `cand` nearest to `w`, and that distance (idx = −1 for an empty candidate set). Exported for the
+ *  live-draw tracker's nearest-match continuation (plot.ts), matching the offline engine step for step. */
+export function nearest(cand: readonly Complex[], w: Complex): { idx: number; d: number } {
   let idx = -1;
   let best = Infinity;
   for (let j = 0; j < cand.length; j++) {
