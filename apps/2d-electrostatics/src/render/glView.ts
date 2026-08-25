@@ -5,13 +5,7 @@ import { createProgram } from "@cas/gpu/shader";
 import { FULLSCREEN_VERTEX_GLSL } from "@cas/gpu/glsl";
 import { FIELD_FRAGMENT_SHADER, MAX_SINGULARITIES } from "./fieldShader.js";
 import type { Field } from "../field.js";
-
-/** The viewport: which complex numbers fill the canvas. `halfSpan` is the world half-height; x is
- *  aspect-corrected in the shader so pixels stay square (shared PLANE_FROM_FRAG convention). */
-export interface View {
-  readonly center: readonly [number, number];
-  readonly halfSpan: number;
-}
+import type { View } from "../view.js";
 
 export interface FieldRenderer {
   /** Render `field` under `view` into the bound framebuffer at the gl drawing-buffer size. */
