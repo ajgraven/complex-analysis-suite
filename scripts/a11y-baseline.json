@@ -1,0 +1,97 @@
+{
+  "launcher": {},
+  "complex-dynamics": {
+    "label-title-only": {
+      "impact": "serious",
+      "count": 3,
+      "help": "Form elements should have a visible label"
+    },
+    "scrollable-region-focusable": {
+      "impact": "serious",
+      "count": 1,
+      "help": "Scrollable region must have keyboard access"
+    }
+  },
+  "quadrature-domains": {
+    "aria-required-children": {
+      "impact": "critical",
+      "count": 1,
+      "help": "Certain ARIA roles must contain particular children"
+    },
+    "color-contrast": {
+      "impact": "serious",
+      "count": 1,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "nested-interactive": {
+      "impact": "serious",
+      "count": 4,
+      "help": "Interactive controls must not be nested"
+    },
+    "scrollable-region-focusable": {
+      "impact": "serious",
+      "count": 3,
+      "help": "Scrollable region must have keyboard access"
+    }
+  },
+  "complex-function-plotter": {},
+  "riemann-map": {
+    "color-contrast": {
+      "impact": "serious",
+      "count": 1,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "landmark-one-main": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Document should have one main landmark"
+    },
+    "page-has-heading-one": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Page should contain a level-one heading"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 3,
+      "help": "All page content should be contained by landmarks"
+    },
+    "select-name": {
+      "impact": "critical",
+      "count": 1,
+      "help": "Select element must have an accessible name"
+    }
+  },
+  "argument-principle": {
+    "color-contrast": {
+      "impact": "serious",
+      "count": 3,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 13,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "faber-transform": {
+    "landmark-one-main": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Document should have one main landmark"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 18,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "correspondences": {},
+  "correspondences-mating": {
+    "label": {
+      "impact": "critical",
+      "count": 1,
+      "help": "Form elements must have labels"
+    }
+  }
+}
