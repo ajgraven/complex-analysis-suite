@@ -223,7 +223,14 @@ function main(): void {
   const critCount = byId("critCount");
   const inspectInfInput = byId("inspectInf");
   const plotDerivInput = byId("plotDeriv");
-  const implicitModeInput = byId("implicitMode");
+  // Input-kind segmented toggle (Option A): "w = f(z)" vs "F(w, z) = 0", replacing the old implicit-mode
+  // checkbox. The f/g slot header + the Transform sub-group step aside (hide) for the implicit kind rather
+  // than greying out; `implicitHint` explains the Riemann-only rule.
+  const inputFnBtn = byId("inputFn");
+  const inputImplicitBtn = byId("inputImplicit");
+  const fnSlotHead = byId("fnSlotHead");
+  const transformGroup = byId("transformGroup");
+  const implicitHint = byId("implicitHint");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -975,17 +982,18 @@ function main(): void {
   };
   const setImplicitMode = (on: boolean): void => {
     implicitMode = on;
-    if (implicitModeInput instanceof HTMLInputElement) implicitModeInput.checked = on;
-    // f(z)-only controls don't apply to an implicit relation.
-    for (const el of [fnF, fnG, inspectInfInput, plotDerivInput, presetSel])
-      if (
-        el instanceof HTMLButtonElement ||
-        el instanceof HTMLInputElement ||
-        el instanceof HTMLSelectElement
-      )
-        el.disabled = on;
-    if (exprLabel instanceof HTMLElement)
-      exprLabel.textContent = on ? "Surface  F(w, z) = 0" : `Function  ${active}(z)`;
+    // Reflect the input-kind segmented toggle (Option A): the two buttons behave like the f/g and View
+    // toggles — exactly one is pressed.
+    setPressed(inputFnBtn, !on);
+    setPressed(inputImplicitBtn, on);
+    // The f/g slots and the function transforms don't apply to an implicit relation — step them aside
+    // (hide) rather than grey them out, and show the Riemann-only hint. The preset picker (a separate
+    // group that loads an f(z)) stays disabled while implicit.
+    if (fnSlotHead instanceof HTMLElement) fnSlotHead.hidden = on;
+    if (transformGroup instanceof HTMLElement) transformGroup.hidden = on;
+    if (implicitHint instanceof HTMLElement) implicitHint.hidden = !on;
+    if (presetSel instanceof HTMLSelectElement) presetSel.disabled = on;
+    if (exprLabel instanceof HTMLElement) exprLabel.textContent = `Function  ${active}(z)`;
     setExprBox(on ? implicitSrc : exprs[active]);
     updateViewTabsForImplicit();
     if (on) {
@@ -997,8 +1005,16 @@ function main(): void {
       setView("2d");
     }
   };
-  if (implicitModeInput instanceof HTMLInputElement)
-    implicitModeInput.addEventListener("change", () => setImplicitMode(implicitModeInput.checked));
+  // The input-kind buttons are single-select: clicking the already-active one is a no-op (avoids a needless
+  // recompile + view reset).
+  if (inputFnBtn instanceof HTMLElement)
+    inputFnBtn.addEventListener("click", () => {
+      if (implicitMode) setImplicitMode(false);
+    });
+  if (inputImplicitBtn instanceof HTMLElement)
+    inputImplicitBtn.addEventListener("click", () => {
+      if (!implicitMode) setImplicitMode(true);
+    });
 
   // Riemann-surface controls (ADR-0028): charisma axis, sheets shown (infinite families), exaggeration
   // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
