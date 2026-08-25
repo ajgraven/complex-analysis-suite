@@ -33,7 +33,12 @@ import {
   type PickMesh,
   type RiemannHit,
 } from "../riemann/pickMesh.js";
-import { computeMonodromy, type MonodromyResult } from "../riemann/monodromy.js";
+import {
+  computeMonodromy,
+  distinctSheets,
+  nearest,
+  type MonodromyResult,
+} from "../riemann/monodromy.js";
 import { findBranchPoints } from "../riemann/branchPoints.js";
 import {
   type Vec3,
@@ -350,9 +355,13 @@ export class Plot {
     ranges: { start: number; count: number }[]; // per-sheet [firstVertex, vertexCount] into `positions`
     colors: [number, number, number][]; // per-sheet line colour
   } | null = null;
-  // The monodromy result the current lift was built from — kept so the lift can be rebuilt (re-heighted) on a
-  // height-axis / exaggeration change without recomputing the continuation. Cleared with the loop.
-  private riemannLoopResult: MonodromyResult | null = null;
+  // The per-sheet continuation paths the current lift was built from — each a polyline of { z (base point),
+  // w (sheet value) }. Kept so the lift can be rebuilt (re-heighted) on a height-axis / exaggeration change,
+  // and so a live drag can extend it in place. Cleared with the loop.
+  private riemannLoopPaths: { z: Complex; w: Complex }[][] | null = null;
+  // Live-draw continuation state (D-real-time: the lift grows as the loop is dragged on the base plane): the
+  // running tracked sheet values, nearest-matched from point to point. Null when not mid-draw.
+  private liveTrack: Complex[] | null = null;
 
   /** Which view `paint()` draws. `linked` renders the 2D portrait and the 3D landscape side by side
    *  (split viewports), both reading the same `view`, so navigating either keeps them in sync (I7). */
@@ -1400,7 +1409,7 @@ export class Plot {
       this.updateRiemannFraming();
       this.paramPickDirty = true; // the t-window (sheet count) may have changed — re-sample the pick mesh
     }
-    if (this.riemannLoopResult) this.rebuildRiemannLoopGeometry(); // re-lift onto the rebuilt mesh
+    if (this.riemannLoopPaths) this.rebuildRiemannLoopGeometry(); // re-lift onto the rebuilt mesh
   }
 
   /** Frame the linked base-plane pane's {@link view} on the region the surface covers. For the curve path
@@ -1425,7 +1434,7 @@ export class Plot {
   reframeRiemannLight(): void {
     if (this.riemannKindV === "curve" || this.riemannKindV === "implicit") this.frameCurve();
     else this.updateRiemannFraming();
-    if (this.riemannLoopResult) this.rebuildRiemannLoopGeometry(); // re-height the lift (charisma changed)
+    if (this.riemannLoopPaths) this.rebuildRiemannLoopGeometry(); // re-height the lift (charisma changed)
   }
 
   /** Dolly the Riemann orbit camera in/out by a multiplicative factor (clamped). */
@@ -1587,19 +1596,63 @@ export class Plot {
 
   /** Show (or clear, with null) the monodromy loop's per-sheet continuation paths as coloured 3D polylines
    *  lifted ONTO the surface (M3.3) — so the sheet permutation is visible where the sheets live, not only as a
-   *  flat base-plane loop + a text badge. Keeps the result so the lift can be re-heighted on a height change. */
+   *  flat base-plane loop + a text badge. Keeps the paths so the lift can be re-heighted on a height change.
+   *  Ends any live-draw session (the final result supersedes the in-progress lift). */
   setRiemannLoop(res: MonodromyResult | null): void {
-    this.riemannLoopResult = res && res.paths.length ? res : null;
+    this.liveTrack = null;
+    this.riemannLoopPaths = res && res.paths.length ? res.paths : null;
     this.rebuildRiemannLoopGeometry();
   }
 
-  /** Rebuild the lifted-loop geometry from {@link riemannLoopResult} against the current surface mesh + height
+  /** Begin a live-draw lift (real-time): seed the per-sheet tracks at the loop's first base point so the
+   *  surface shows the lifted paths growing as the 2D loop is dragged. Clears any prior loop. A no-op lift
+   *  (no visible paths) when fewer than the expected number of sheets resolve over the start point. */
+  beginRiemannLiveLoop(z0: Complex): void {
+    this.liveTrack = null;
+    this.riemannLoopPaths = null;
+    if (!this.riemannAvailable()) {
+      this.rebuildRiemannLoopGeometry();
+      return;
+    }
+    const cur = distinctSheets(this.riemannSheetsAt(z0));
+    const expected = this.expectedSheetCount();
+    const n = expected && expected >= 2 ? expected : cur.length;
+    if (n < 2 || cur.length < n) {
+      this.rebuildRiemannLoopGeometry(); // clears the GL buffer
+      return;
+    }
+    const s0 = cur.slice(0, n);
+    this.liveTrack = s0.map((v) => [v[0], v[1]] as Complex);
+    this.riemannLoopPaths = s0.map((v) => [{ z: [z0[0], z0[1]] as Complex, w: [v[0], v[1]] as Complex }]);
+    this.rebuildRiemannLoopGeometry();
+  }
+
+  /** Extend the live-draw lift by one base point (real-time): nearest-match-continue each tracked sheet (the
+   *  same step the offline engine takes) and append to its path, then re-lift. No-op if no live session. */
+  extendRiemannLiveLoop(z: Complex): void {
+    if (!this.liveTrack || !this.riemannLoopPaths) return;
+    const cur = distinctSheets(this.riemannSheetsAt(z));
+    if (cur.length >= 1) {
+      for (let k = 0; k < this.liveTrack.length; k++) {
+        const { idx } = nearest(cur, this.liveTrack[k]);
+        if (idx >= 0) this.liveTrack[k] = cur[idx];
+      }
+    }
+    for (let k = 0; k < this.liveTrack.length; k++)
+      this.riemannLoopPaths[k].push({
+        z: [z[0], z[1]] as Complex,
+        w: [this.liveTrack[k][0], this.liveTrack[k][1]] as Complex,
+      });
+    this.rebuildRiemannLoopGeometry();
+  }
+
+  /** Rebuild the lifted-loop geometry from {@link riemannLoopPaths} against the current surface mesh + height
    *  law. Each path point lands at world `(Re z, Im z, surfaceHeight)` — the height read off the drawn surface
    *  on the sheet nearest the tracked value `w` (so the polyline sits exactly on the surface), falling back to
    *  the value-height law where the base point is off-mesh. Per-sheet hues make the permutation legible. */
   private rebuildRiemannLoopGeometry(): void {
-    const res = this.riemannLoopResult;
-    if (!res || !res.paths.length) {
+    const paths = this.riemannLoopPaths;
+    if (!paths || !paths.length) {
       this.riemannLoop = null;
       return;
     }
@@ -1609,10 +1662,10 @@ export class Plot {
     const flat: number[] = [];
     const ranges: { start: number; count: number }[] = [];
     const colors: [number, number, number][] = [];
-    const n = res.paths.length;
+    const n = paths.length;
     let vert = 0;
     for (let k = 0; k < n; k++) {
-      const path = res.paths[k];
+      const path = paths[k];
       const start = vert;
       for (const { z, w } of path) {
         const hMesh = mesh ? surfaceHeightAt(mesh, z[0], z[1], w, hs, scale) : null;
@@ -1630,6 +1683,47 @@ export class Plot {
       gl.bufferData(gl.ARRAY_BUFFER, this.riemannLoop.positions, gl.STATIC_DRAW);
       gl.bindBuffer(gl.ARRAY_BUFFER, null);
     }
+  }
+
+  /** Project a Riemann-surface world point `(Re z, Im z, height)` to CSS pixels in the surface pane, through
+   *  the same framed camera the surface is drawn with (D2 — overlaying 2D direction arrows on the lifted
+   *  paths). Returns null when the point is behind the camera. The pane is the right half in the linked view,
+   *  else the whole canvas — mirroring {@link paintRiemannSurface}'s viewport. */
+  riemannWorldToScreen(x: number, y: number, h: number): [number, number] | null {
+    const cssW = this.canvas.clientWidth;
+    const cssH = this.canvas.clientHeight;
+    const paneLeft = this.riemannLinked ? cssW / 2 : 0;
+    const paneW = cssW - paneLeft;
+    if (paneW <= 0 || cssH <= 0) return null;
+    const cam = this.riemannCamera();
+    const worldHalf = Math.max(0.5, this.riemannDist * Math.tan(cam.fov / 2));
+    const m = viewProjection(cam, paneW / cssH, worldHalf);
+    const cx = m[0] * x + m[4] * y + m[8] * h + m[12];
+    const cy = m[1] * x + m[5] * y + m[9] * h + m[13];
+    const cw = m[3] * x + m[7] * y + m[11] * h + m[15];
+    if (cw <= 1e-6) return null; // at or behind the camera plane
+    const px = paneLeft + (cx / cw) * 0.5 * paneW + paneW * 0.5;
+    const py = (0.5 - (cy / cw) * 0.5) * cssH;
+    return [px, py];
+  }
+
+  /** The lifted monodromy paths projected to CSS pixels in the surface pane, one polyline per sheet, with the
+   *  matching drawn-line colour (0–1 RGB). For the 2D direction-arrow overlay (D2). Null when no loop. */
+  riemannLoopScreenPaths(): { screen: [number, number][]; color: [number, number, number] }[] | null {
+    const loop = this.riemannLoop;
+    if (!loop) return null;
+    const out: { screen: [number, number][]; color: [number, number, number] }[] = [];
+    for (let k = 0; k < loop.ranges.length; k++) {
+      const { start, count } = loop.ranges[k];
+      const screen: [number, number][] = [];
+      for (let i = 0; i < count; i++) {
+        const o = (start + i) * 3;
+        const p = this.riemannWorldToScreen(loop.positions[o], loop.positions[o + 1], loop.positions[o + 2]);
+        if (p) screen.push(p);
+      }
+      out.push({ screen, color: loop.colors[k] });
+    }
+    return out;
   }
 
   /** Draw the lifted monodromy loop (M3.3) into a viewport, over the just-drawn surface, through the same

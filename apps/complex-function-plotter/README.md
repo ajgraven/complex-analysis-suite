@@ -82,14 +82,14 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,
   **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa),
   with **branch-point markers** (M3.4, amber ⊕ where the sheets merge, `≈`, also counted in the badge). A
-  **Monodromy explorer** (M3.3, opt-in) lets you drag a closed loop on the base plane and reads back the
-  estimated sheet **permutation** in cycle notation (√z → 2-cycle, z^(1/3) → 3-cycle) — an uncertified
-  estimate, quarantined from the badge, permalink, and exports (RISKS §3). An
-  opt-in **Monodromy explorer** (M3.3) lets you drag a closed loop on the base plane and estimates how the
+  **Monodromy explorer** (M3.3, opt-in) lets you drag a closed loop on the base plane and estimates how the
   sheets permute around it (e.g. a loop around `0` swaps √z's two sheets — a 2-cycle), reported in cycle
-  notation. Analytic continuation around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so
-  it is honestly `≈`, flags low confidence near a branch point, and is kept out of the badge, permalink, and
-  every export. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  notation. The loop's **per-sheet continuation paths are lifted onto the 3D surface** as colour-coded
+  polylines that grow **in real time as you draw**, and **direction arrows** (shared `@cas/ui`
+  `drawDirectionTicks`, ADR-0007 second consumer) mark the traversal orientation on both the base-plane loop
+  and each lifted path. Analytic continuation around a loop is **never certified**
+  ([RISKS](../../docs/RISKS.md) §3), so it is honestly `≈`, flags low confidence near a branch point, and is
+  kept out of the badge, permalink, and every export. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
   shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
   (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`), the NPP mesh (`riemann/curveMesh.ts`), and the
   hover-pick (`riemann/pickMesh.ts`).

@@ -24,7 +24,7 @@
 // export (Phase 6) round it out.
 import "katex/dist/katex.min.css";
 import katex from "katex";
-import { runWithFatalBoundary } from "@cas/ui";
+import { runWithFatalBoundary, drawDirectionTicks } from "@cas/ui";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
 import {
@@ -538,6 +538,17 @@ function main(): void {
       ctx.strokeStyle = "rgba(150,200,255,0.9)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
+      // Direction arrows (D1): the loop's traversal orientation — a non-colour cue for which way it's traced.
+      // Arc-length spaced (the freehand loop is non-uniform); closed once the drag finishes.
+      if (loop.length >= 3)
+        drawDirectionTicks(ctx, (w) => [sx(w[0]), sy(w[1])], loop, {
+          closed: !loopPoints,
+          count: 6,
+          fill: "rgba(150,200,255,0.95)",
+          halo: "rgba(10,12,16,0.85)",
+          sizePx: 5,
+          byArcLength: true,
+        });
     }
     // Branch-point markers (M3.4): amber ⊕ where sheets merge — the ramification the monodromy loops encircle.
     if (branchPts.length) {
@@ -571,6 +582,26 @@ function main(): void {
         ctx.beginPath();
         ctx.arc(px, py, 4, 0, 2 * Math.PI);
         ctx.stroke();
+      }
+    }
+    // Direction arrows on the lifted paths over the SURFACE pane (D2): project each sheet's 3D polyline to
+    // screen through the same camera, then arrow it in that sheet's colour. Open arcs (each ends on the
+    // sheet it permutes to), so `closed: false`.
+    const sheetPaths = plot.riemannLoopScreenPaths();
+    if (sheetPaths) {
+      const identity = (p: readonly [number, number]): [number, number] => [p[0], p[1]];
+      for (const sp of sheetPaths) {
+        if (sp.screen.length < 2) continue;
+        const [r, g, b] = sp.color;
+        const fill = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+        drawDirectionTicks(ctx, identity, sp.screen, {
+          closed: false,
+          count: 4,
+          fill,
+          halo: "rgba(8,10,14,0.9)",
+          sizePx: 5,
+          byArcLength: true,
+        });
       }
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1695,10 +1726,11 @@ function main(): void {
       plot.riemannLinked &&
       isLeftHalf(e.clientX, canvasRect())
     ) {
-      loopPoints = [plot.screenToWorld(e.clientX, e.clientY, twoDRect())];
+      const z0 = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
+      loopPoints = [z0];
       lastLoop = null;
-      plot.setRiemannLoop(null); // starting a new loop — drop the previous lifted paths
-      drawRiemannLink();
+      plot.beginRiemannLiveLoop(z0); // seed the live lift — the surface path grows as the loop is drawn
+      redraw(true); // repaint the surface (with the seed) + the base-plane overlay
       return;
     }
     // Left mouse button pans the 3D landscape; the right button (or touch / pen) orbits it — the familiar
@@ -1724,9 +1756,17 @@ function main(): void {
       return;
     }
     if (loopPoints) {
-      // Monodromy loop drag (M3.3): accumulate base points and redraw the loop overlay (no WebGL repaint).
-      loopPoints.push(plot.screenToWorld(e.clientX, e.clientY, twoDRect()));
-      drawRiemannLink();
+      // Monodromy loop drag (M3.3): accumulate base points; extend the live lift so the surface path grows in
+      // real time. Throttle by a small world step (keeps the point count — and the per-move lift — bounded and
+      // dedupes jitter); `redraw(true)` repaints the surface with the growing lift + the base-plane overlay.
+      const z = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
+      const last = loopPoints[loopPoints.length - 1];
+      const step = plot.view.span * 0.01; // ~1% of the pane half-height
+      if (!last || Math.hypot(z[0] - last[0], z[1] - last[1]) > step) {
+        loopPoints.push(z);
+        plot.extendRiemannLiveLoop(z);
+      }
+      redraw(true);
       return;
     }
     if (sphereLast) {
