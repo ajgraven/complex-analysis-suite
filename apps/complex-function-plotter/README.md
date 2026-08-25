@@ -87,9 +87,13 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   notation. The loop's **per-sheet continuation paths are lifted onto the 3D surface** as colour-coded
   polylines that grow **in real time as you draw**, and **direction arrows** (shared `@cas/ui`
   `drawDirectionTicks`, ADR-0007 second consumer) mark the traversal orientation on both the base-plane loop
-  and each lifted path. Analytic continuation around a loop is **never certified**
-  ([RISKS](../../docs/RISKS.md) §3), so it is honestly `≈`, flags low confidence near a branch point, and is
-  kept out of the badge, permalink, and every export. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  and each lifted path. The base plane also draws the **principal branch cut(s)** the sheets glue across (B1,
+  dashed rays from each branch point, derived from the primitive's inner `αz + β`), and each enclosed
+  branch-point marker is annotated with the loop's **winding number** about it — the signed integer topology
+  that is **exact (`=`)**, in deliberate contrast to the `≈` permutation it drives (B2). Analytic continuation
+  around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so the permutation is honestly `≈`,
+  flags low confidence near a branch point, and is kept out of the badge, permalink, and every export. Built
+  on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
   shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
   (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`), the NPP mesh (`riemann/curveMesh.ts`), and the
   hover-pick (`riemann/pickMesh.ts`).

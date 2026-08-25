@@ -219,3 +219,47 @@ describe("detectRiemannForm — window scales with sheet count", () => {
     expect(form.window(3).halfY).toBeCloseTo(3 * Math.PI, 6);
   });
 });
+
+describe("detectRiemannForm — branch cut rays (B1)", () => {
+  const dir = (src: string) => {
+    const f = detectRiemannForm(parse(src));
+    if (!f) throw new Error(`no form for ${src}`);
+    return f.cutRays;
+  };
+  it("√z / log z / z^(1/n) cut along the negative real axis from 0", () => {
+    for (const src of ["sqrt(z)", "log(z)", "z^(1/3)"]) {
+      const rays = dir(src);
+      expect(rays.length, src).toBe(1);
+      expect(rays[0].origin[0]).toBeCloseTo(0, 9);
+      expect(rays[0].origin[1]).toBeCloseTo(0, 9);
+      expect(rays[0].dir[0]).toBeCloseTo(-1, 9); // pointing toward −∞ along the real axis
+      expect(rays[0].dir[1]).toBeCloseTo(0, 9);
+    }
+  });
+  it("affine sqrt(z − 1) moves the branch point to z = 1, cut still along −x", () => {
+    const rays = dir("sqrt(z - 1)");
+    expect(rays.length).toBe(1);
+    expect(rays[0].origin[0]).toBeCloseTo(1, 9);
+    expect(rays[0].origin[1]).toBeCloseTo(0, 9);
+    expect(rays[0].dir[0]).toBeCloseTo(-1, 9);
+  });
+  it("arcsin has two cuts, from +1 (toward +∞) and −1 (toward −∞)", () => {
+    const rays = dir("arcsin(z)");
+    expect(rays.length).toBe(2);
+    const origins = rays.map((r) => r.origin[0]).sort((a, b) => a - b);
+    expect(origins[0]).toBeCloseTo(-1, 9);
+    expect(origins[1]).toBeCloseTo(1, 9);
+    const atPlus = rays.find((r) => r.origin[0] > 0)!;
+    expect(atPlus.dir[0]).toBeCloseTo(1, 9); // [1, ∞)
+  });
+  it("arctan cuts run along the imaginary axis from ±i", () => {
+    const rays = dir("arctan(z)");
+    expect(rays.length).toBe(2);
+    for (const r of rays) {
+      expect(r.origin[0]).toBeCloseTo(0, 9);
+      expect(Math.abs(r.origin[1])).toBeCloseTo(1, 9); // at ±i
+      expect(Math.abs(r.dir[1])).toBeCloseTo(1, 9); // vertical
+      expect(r.dir[0]).toBeCloseTo(0, 9);
+    }
+  });
+});

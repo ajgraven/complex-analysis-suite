@@ -18,7 +18,7 @@ import { freeParameters, substitute } from "@cas/expr/ast";
 import { differentiate } from "@cas/expr/derivative";
 import { makeComplexFn } from "@cas/expr/evaluate";
 import type { Complex } from "@cas/expr/complex";
-import { detectRiemannForm, type RiemannForm } from "../riemann/inverse.js";
+import { detectRiemannForm, type RiemannForm, type CutRay } from "../riemann/inverse.js";
 import { detectAlgebraicCurve, type AlgebraicCurve } from "../riemann/algebraicCurve.js";
 import { detectImplicitCurve, type ImplicitCurve } from "../riemann/implicitCurve.js";
 import { exactBranchLocus } from "../riemann/implicitExact.js";
@@ -1776,6 +1776,13 @@ export class Plot {
       };
     }
     return findBranchPoints((z) => this.riemannSheetsAt(z), box, { grid });
+  }
+
+  /** The principal branch cut(s) the sheets glue across, as z-plane rays (B1) — for drawing on the base plane.
+   *  Only the parametric primitives have a canonical principal cut; the baked curve / implicit surfaces glue
+   *  automatically (their ramification shows as the branch-point markers, not a cut), so those return []. */
+  riemannCutRays(): CutRay[] {
+    return this.riemannKindV === "param" && this.riemannForm ? this.riemannForm.cutRays : [];
   }
 
   /** The **exact** branch locus (M2c.2) for an implicit `F(w,z)=0` with Gaussian-rational coefficients — the

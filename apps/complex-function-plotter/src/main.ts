@@ -39,6 +39,7 @@ import {
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
+import { windingNumber } from "./riemann/winding.js";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";
@@ -476,6 +477,10 @@ function main(): void {
   // pane and counted in the badge. Recomputed on a formula / sheet-count / view change while in Riemann mode.
   let branchPts: Complex[] = [];
   let branchExact = false; // true when the markers are the EXACT discriminant locus (M2c.2), else the ≈ scan
+  // Per-branch-point winding numbers of the current monodromy loop (B2): the signed, EXACT (`=`) integer count
+  // of times the loop encircles each branch point — the topological input the ≈ permutation depends on. Only
+  // the enclosed ones (winding ≠ 0) are kept. Empty when no loop is drawn.
+  let loopWindings: { pt: Complex; wind: number }[] = [];
   const recomputeBranchPoints = (): void => {
     if (plot.mode !== "riemann") {
       branchPts = [];
@@ -526,6 +531,28 @@ function main(): void {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("base plane (z)", 6, 6);
+    // Branch cut(s) on the base plane (B1): the principal cut the sheets glue across, a dashed ray from each
+    // branch point to infinity. Clipped to the base-plane (left) pane so the ray doesn't bleed onto the
+    // surface pane. Parametric primitives only (curve / implicit surfaces glue with no canonical cut).
+    const cuts = plot.riemannCutRays();
+    if (cuts.length) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, halfW, cssH);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(232,236,246,0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      const reach = (Math.abs(xmax - xmin) + Math.abs(ymax - ymin)) * 2; // long enough to exit the pane
+      for (const c of cuts) {
+        ctx.beginPath();
+        ctx.moveTo(sx(c.origin[0]), sy(c.origin[1]));
+        ctx.lineTo(sx(c.origin[0] + c.dir[0] * reach), sy(c.origin[1] + c.dir[1] * reach));
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
     // Monodromy loop (M3.3): the in-progress drag, else the finished loop — a filled, outlined polyline.
     const loop = loopPoints ?? lastLoop;
     if (loop && loop.length >= 2) {
@@ -565,6 +592,21 @@ function main(): void {
         ctx.moveTo(px, py - 6.5);
         ctx.lineTo(px, py + 6.5);
         ctx.stroke();
+        // Winding-number label (B2): the EXACT signed turns of the current loop about this branch point.
+        const wound = loopWindings.find((w) => w.pt === b);
+        if (wound) {
+          const lbl = `${wound.wind > 0 ? "+" : ""}${wound.wind}`;
+          ctx.font = "bold 12px system-ui, -apple-system, sans-serif";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "bottom";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(10,12,16,0.9)"; // halo so the digit reads over the coloured field
+          ctx.strokeText(lbl, px + 8, py - 6);
+          ctx.fillStyle = "rgba(255,214,140,0.98)";
+          ctx.fillText(lbl, px + 8, py - 6);
+          ctx.strokeStyle = "rgba(245,180,90,0.95)"; // restore for the next marker's ⊕
+          ctx.lineWidth = 1.25;
+        }
       }
     }
     if (linkedZ) {
@@ -938,6 +980,7 @@ function main(): void {
     linkedZ = null;
     loopPoints = null;
     lastLoop = null; // a stale monodromy loop doesn't belong to the new view
+    loopWindings = [];
     if (monodromyResult instanceof HTMLElement) {
       monodromyResult.hidden = !(m === "riemann" && monodromyOn);
       if (m === "riemann" && monodromyOn)
@@ -1081,6 +1124,7 @@ function main(): void {
         if (riemannMonodromyInput instanceof HTMLInputElement) riemannMonodromyInput.checked = false;
         loopPoints = null;
         lastLoop = null;
+        loopWindings = [];
         plot.setRiemannLoop(null); // clear the lifted paths on the surface
         showMonodromy(null);
       }
@@ -1099,6 +1143,7 @@ function main(): void {
       }
       loopPoints = null;
       lastLoop = null;
+      loopWindings = [];
       plot.setRiemannLoop(null); // clear any lifted paths on the surface (on: fresh start / off: hide)
       showMonodromy(null); // placeholder hint (on) / hidden (off)
       redraw(false);
@@ -1639,19 +1684,32 @@ function main(): void {
     const conf = res.lowConfidence
       ? " · ⚠ low confidence (near a branch point / under-resolved)"
       : "";
-    monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).`;
+    // Winding numbers are EXACT (`=`) integer topology — stated separately from the ≈ permutation (B2).
+    const wind = loopWindings.length
+      ? " Winding = " +
+        loopWindings
+          .map((w) => `${w.wind > 0 ? "+" : ""}${w.wind} about ${fmtComplex(w.pt)}`)
+          .join(", ") +
+        "."
+      : "";
+    monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).${wind}`;
   };
   const finalizeLoop = (): void => {
     const loop = loopPoints;
     loopPoints = null;
     if (!loop || loop.length < 4) {
       lastLoop = null; // too short to be a loop — discard
+      loopWindings = [];
       plot.setRiemannLoop(null); // clear any lifted paths on the surface
       showMonodromy(null);
       redraw(false);
       return;
     }
     lastLoop = loop;
+    // Winding number per branch point (B2) — exact integer topology; keep only the enclosed ones (≠ 0).
+    loopWindings = branchPts
+      .map((pt) => ({ pt, wind: windingNumber(loop, pt) }))
+      .filter((w) => w.wind !== 0);
     const res = plot.computeRiemannMonodromy(loop);
     plot.setRiemannLoop(res); // lift the per-sheet continuation paths onto the 3D surface (M3.3)
     if (!res && monodromyResult instanceof HTMLElement) {
@@ -1729,6 +1787,7 @@ function main(): void {
       const z0 = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
       loopPoints = [z0];
       lastLoop = null;
+      loopWindings = []; // clear the previous loop's winding annotations
       plot.beginRiemannLiveLoop(z0); // seed the live lift — the surface path grows as the loop is drawn
       redraw(true); // repaint the surface (with the seed) + the base-plane overlay
       return;
