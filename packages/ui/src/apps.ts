@@ -24,5 +24,6 @@ export const SUITE_APPS: readonly SuiteApp[] = [
   { id: "complex-function-plotter", label: "Complex Function Plotting Tool", badge: "Plotter" },
   { id: "argument-principle", label: "Argument Principle", badge: "Winding" },
   { id: "faber-transform", label: "Faber Transform", badge: "Faber" },
+  { id: "2d-electrostatics", label: "2D Electrostatics", badge: "Fields & flow" },
   { id: "correspondences", label: "Correspondences", badge: "Coming soon", soon: true },
 ];

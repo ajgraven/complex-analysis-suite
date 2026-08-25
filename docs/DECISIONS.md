@@ -2834,3 +2834,65 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just
    introduced-once-and-forgotten.
+
+---
+
+## ADR-0033: The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow)
+
+**Status:** Accepted. A new **separate app** (decision #8), built on the shared `@cas/*` packages; no new
+package (ADR-0007 — extract only on a second consumer). Plan:
+[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
+
+### Context
+
+The suite visualizes maps (dynamics, conformal maps, Faber, the argument principle) but nothing renders a
+**field** — Dictionary I of the author's writeup *"Complex Analysis as Two-Dimensional Electrostatics and
+Hydrodynamics"*, where a meromorphic function *is* a planar field and its poles *are* the sources. The
+machinery to do so already exists: `@cas/expr` (the field as an executable expression), `@cas/gpu` (WebGL2
+domain-coloring + the shared GLSL stdlib), `@cas/interchange`/`@cas/export` (permalinks + figure recipes),
+and the new `@cas/ui` shell ([ADR-0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)).
+Online the space is open too (elementary-flow toys exist; transplant-through-arbitrary-maps, interactive
+equilibrium-measure/capacity, and complex-charge QD twisting do not).
+
+### Decision
+
+Add **`apps/2d-electrostatics`** ("2D Electrostatics") — an interactive realization of the complex potential
+`W(z) = φ + iψ`: drop and drag charges / sources / sinks / vortices / doublets and see the field as field
+lines, equipotentials, streamlines, and a domain-colored field, with a single **lens** toggle relabelling the
+same picture between the electrostatic and hydrodynamic readings.
+
+1. **The organizing primitive is the complex residue `c = q + iγ` = charge + vortex** (paper §1.7), whose
+   streamlines are logarithmic spirals of pitch `arctan(γ/q)`. The field is `E = W'`, evaluated exactly and
+   per-pixel on the GPU (the closed-form, holomorphic field means no velocity texture and analytic derivatives).
+2. **Conventions live at the app edge** (aligning with [ADR-0006](#adr-0006-convention-neutral-core)): the app
+   adopts the paper's normalizations (`∮ dz/z = 1`, `dA = dx dy/π`, `E = Eₓ − iE_y`) exactly as the QD app does,
+   while the shared `@cas/*` packages stay convention-neutral.
+3. **Framing is hybrid:** a physics-first drop-and-drag sandbox core PLUS a first-class **theorem gallery** that
+   turns the paper's dictionary into live pictures (its first entry, the flux/circulation probe, renders the
+   residue theorem as Gauss's law (Re) + Kelvin circulation (Im) — exact for the closed-form field, labelled `=`).
+4. **Adopts the `@cas/ui` shell from day one** (`mountCanvas` + `runWithFatalBoundary`); registered in
+   `SUITE_APPS`, the launcher, and the combined Pages deploy.
+5. **The Hele-Shaw "twisting" showpiece (M4) lives in this app**, importing the QD app's Schwarz reflection σ /
+   Richardson moments via a new `@cas/interchange` recipe — keeping the QD app stable and making the hand-off
+   itself a feature.
+6. **Honest labelling** throughout (`=` closed-form fields / capacities / residue sums; `≈` numerical contours,
+   Fekete relaxation, transplanted flows; `≤`/`⚠` the ill-posed Hele-Shaw evolution past a cusp).
+
+Consumes `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui` (M0–M1); adds
+`@cas/conformal` (M2), `@cas/faber` (M3), `@cas/schwarz` (M4) as those milestones land.
+
+### Consequences
+
+- **Positive:** a new consumer of already-built machinery (north star); the biggest future consumer of
+  `@cas/conformal` (M2's transplant), which retro-justifies a `ConformalMap` `@cas/interchange` form (deferred to
+  a companion ADR when M2 lands); surfaces potential-theory quantities (capacity, equilibrium measure) that sit
+  one relabel from the exterior-map machinery; and gives the author's writeup an interactive companion.
+- **Deferred:** the `ConformalMap` + `flow` interchange forms (M2, a companion ADR — gate on the receiving tool,
+  which this app becomes); the non-Laurent σ families and the QD df64 deep-zoom (unchanged).
+
+### Status of the build
+
+M0 (render spike) + M1 (the superposition sandbox — palette, inspector with the `c = q+iγ` decomposition, the
+two-lens toggle, the flux/circulation probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an
+animated tracer-flow layer) are complete and verified in live headless-Chromium WebGL2. M2–M4 are specced in
+the plan and deferred to separately-approved pushes.

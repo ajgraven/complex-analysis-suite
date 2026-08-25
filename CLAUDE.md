@@ -9,10 +9,10 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies seven apps — Complex Dynamics, Quadrature Domains,
-Complex Function Plotter, Riemann Map, Argument Principle, and Faber Transform, plus the
-anti-holomorphic Correspondences tool (built, not yet published) — riding eleven shared
-`@cas/*` packages.
+than the last.** It now unifies eight apps — Complex Dynamics, Quadrature Domains,
+Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, and 2D
+Electrostatics, plus the anti-holomorphic Correspondences tool (built, not yet published) —
+riding eleven shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -51,7 +51,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     **`.github/workflows/deploy-pages.yml` publishes automatically on every push to `master`**
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
-    `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, and `faber-transform/` beneath it.
+    `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`, and
+    `2d-electrostatics/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
@@ -91,9 +92,12 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
 the parabolic-Tricorn model coordinate, and a follow-on interactive mating visualizer (`mating.html`).
-Seven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+Eight apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
-rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`) ride the eleven shared `@cas/*` packages
+rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`; the eighth,
+**2D Electrostatics**, ADR-0033 — the complex potential W = φ + iψ as an interactive field of charges /
+sources / vortices (fields, flow, and the residue theorem live), riding `@cas/core`, `@cas/expr`, `@cas/gpu`,
+`@cas/interchange`, `@cas/export`, and `@cas/ui`) ride the eleven shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
