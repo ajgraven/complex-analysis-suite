@@ -387,3 +387,14 @@ input[type="range"] {
 .tp-warn {
   color: #ffb4b4;
 }
+
+/* potential-theory page (main-potential.ts) — a single full-width conductor pane */
+.pot-stage {
+  position: fixed;
+  inset: 58px 0 0 0;
+  background: var(--bg);
+}
+.pot-stage .foil-pane {
+  width: 100%;
+  height: 100%;
+}

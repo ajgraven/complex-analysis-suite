@@ -11,9 +11,9 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Multi-page: the free-field sandbox (index.html), the Joukowski airfoil transplant
-      // (airfoil.html), and the exterior Schwarz–Christoffel polygon transplant (polygon.html).
-      // Vite resolves these HTML inputs relative to the project root.
-      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html" },
+      // (airfoil.html), the exterior Schwarz–Christoffel polygon transplant (polygon.html), and the
+      // potential-theory / conductor view (potential.html). Vite resolves these relative to the root.
+      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html", potential: "potential.html" },
     },
   },
   server: { port: 5180, strictPort: true },
