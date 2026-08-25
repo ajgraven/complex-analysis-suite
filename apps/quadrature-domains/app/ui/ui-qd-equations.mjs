@@ -252,6 +252,11 @@ import _QD from '../solvers/solver.mjs';
           row.appendChild(lab);
           const math = document.createElement('div');
           math.className = 'qdeq-eq-math';
+          // The math overflows horizontally (style.css: overflow-x:auto); make the scroll region
+          // keyboard-reachable and named by its equation label (a11y: scrollable-region-focusable).
+          math.tabIndex = 0;
+          math.setAttribute('role', 'group');
+          math.setAttribute('aria-label', it.label);
           if (it.terms > DISPLAY_TERM_CAP) {
             math.innerHTML = '<span class="hint">[' + it.terms +
               ' terms — too large to display; use “Copy LaTeX” / “Download JSON”]</span>';

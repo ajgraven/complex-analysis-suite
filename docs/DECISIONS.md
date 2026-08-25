@@ -2846,6 +2846,15 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    merge. `--strict` (exit 1 on regression) is available for local hard checks; `--update-baseline` re-records after
    an intended change; `pnpm a11y` is the local entry point. Publishing stays gated only on lint/typecheck/test
    (deploy-pages.yml) — the a11y job, like `browser`, is not a publish blocker. The committed baseline documents the
-   suite's current known findings (16 rule findings / 56 nodes across 9 pages; launcher, plotter and the
-   correspondences index audit clean) — a burn-down list for later, separate from this tripwire. **This completes
-   U8; only U7 (nav-header ↔ `@cas/interchange` hand-off wiring) remains open in this ADR.**
+   suite's remaining known findings (a burn-down list, separate from the tripwire). **First burn-down (done):** every
+   axe **critical** and the **serious** label/keyboard-focus findings were fixed as attribute-level changes (no
+   visual/behavior change) — riemann-map's unnamed preset `<select>` (`select-name`) and the mating fold slider
+   (`label`) got `aria-label`s; QD's view-mode segmented control moved from `role="tablist"` (which demands
+   `role="tab"` children it lacks) to `role="group"`, matching QD's own convention for its other segmented button
+   groups (`aria-required-children`); complex-dynamics' three `title`-only inputs (`label-title-only`) gained
+   `aria-label`s; and the horizontally-scrolling regions (CD's BibTeX `<pre>`, QD's KaTeX equation blocks) became
+   keyboard-focusable (`scrollable-region-focusable`). Baseline tightened **16 → 10 rule findings / 56 → 46 nodes**;
+   complex-dynamics and both correspondences pages now audit clean (launcher and plotter already did). What remains
+   is deliberately deferred: **color-contrast** (a palette decision) and the **region / landmark / heading** cluster
+   (a broader per-app semantic-HTML pass, `moderate` severity). **This completes U8; only U7 (nav-header ↔
+   `@cas/interchange` hand-off wiring) remains open in this ADR.**

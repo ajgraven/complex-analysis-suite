@@ -274,6 +274,7 @@ export function createControls(initialExpr: string): Controls {
   const mapSection = document.createElement("section");
   const preset = document.createElement("select");
   preset.className = "preset";
+  preset.setAttribute("aria-label", "map preset");
   // The formula gallery follows the Disk toggle: interior 𝔻 (default) ⇄ exterior 𝔻*. `activeGallery`
   // is the one currently offered; the picker's options and the typed-edit sync both read from it.
   let activeGallery: readonly MapPreset[] = MAP_PRESETS;

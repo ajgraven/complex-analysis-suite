@@ -1,23 +1,7 @@
 {
   "launcher": {},
-  "complex-dynamics": {
-    "label-title-only": {
-      "impact": "serious",
-      "count": 3,
-      "help": "Form elements should have a visible label"
-    },
-    "scrollable-region-focusable": {
-      "impact": "serious",
-      "count": 1,
-      "help": "Scrollable region must have keyboard access"
-    }
-  },
+  "complex-dynamics": {},
   "quadrature-domains": {
-    "aria-required-children": {
-      "impact": "critical",
-      "count": 1,
-      "help": "Certain ARIA roles must contain particular children"
-    },
     "color-contrast": {
       "impact": "serious",
       "count": 1,
@@ -27,11 +11,6 @@
       "impact": "serious",
       "count": 4,
       "help": "Interactive controls must not be nested"
-    },
-    "scrollable-region-focusable": {
-      "impact": "serious",
-      "count": 3,
-      "help": "Scrollable region must have keyboard access"
     }
   },
   "complex-function-plotter": {},
@@ -55,11 +34,6 @@
       "impact": "moderate",
       "count": 3,
       "help": "All page content should be contained by landmarks"
-    },
-    "select-name": {
-      "impact": "critical",
-      "count": 1,
-      "help": "Select element must have an accessible name"
     }
   },
   "argument-principle": {
@@ -87,11 +61,5 @@
     }
   },
   "correspondences": {},
-  "correspondences-mating": {
-    "label": {
-      "impact": "critical",
-      "count": 1,
-      "help": "Form elements must have labels"
-    }
-  }
+  "correspondences-mating": {}
 }

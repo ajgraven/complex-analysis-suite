@@ -130,7 +130,11 @@
               ?
             </button>
           </span>
-          <select id="places" title="Jump to a famous location in the Mandelbrot set">
+          <select
+            id="places"
+            aria-label="Jump to location"
+            title="Jump to a famous location in the Mandelbrot set"
+          >
             <option value="">Places…</option>
           </select>
           <details class="views-menu" id="views-menu">
@@ -1278,6 +1282,7 @@ abs(z)>2</textarea
                 min="1"
                 max="64"
                 value="2"
+                aria-label="Period k"
                 title="Period k of the cycle the critical orbit lands on"
               />
               <button
@@ -1301,6 +1306,7 @@ abs(z)>2</textarea
                 type="text"
                 id="note-text"
                 placeholder="note label"
+                aria-label="Annotation label"
                 title="Optional label for a pinned annotation"
               />
               <button
@@ -2831,7 +2837,7 @@ z^2+c</textarea
                   >https://github.com/ajgraven/ComplexDynamicsJS</a
                 >
               </p>
-              <pre class="cite-bibtex"><code id="cite-bibtex">@software{graven2026complexdynamics,
+              <pre class="cite-bibtex" tabindex="0" role="group" aria-label="BibTeX citation"><code id="cite-bibtex">@software{graven2026complexdynamics,
   author  = {Graven, Andrew},
   title   = {Complex Dynamics Visualization Tool},
   year    = {2026},
