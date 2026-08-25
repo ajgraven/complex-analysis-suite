@@ -58,8 +58,9 @@ describe("generatorRadius", () => {
       [-1, 0],
       [1, 0],
     ];
-    const r0 = generatorRadius(0, pts, span)!;
-    const loop = generatorLoopAround(pts[0], r0);
+    const r0 = generatorRadius(0, pts, span);
+    expect(r0).not.toBeNull();
+    const loop = generatorLoopAround(pts[0], r0 ?? 0);
     expect(windingNumber(loop, pts[0])).toBe(1);
     expect(windingNumber(loop, pts[1])).toBe(0);
   });

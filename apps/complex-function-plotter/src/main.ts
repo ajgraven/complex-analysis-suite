@@ -1769,7 +1769,7 @@ function main(): void {
     const b = branchPts[index];
     if (!b) return;
     const r = generatorRadius(index, branchPts, plot.view.span);
-    if (r == null) return;
+    if (r === null) return;
     loopPoints = null;
     applyLoop(generatorLoopAround(b, r));
   };
@@ -1781,14 +1781,14 @@ function main(): void {
     if (monodromyGroupEl instanceof HTMLElement) monodromyGroupEl.hidden = true; // stale on a branch-set change
     // The group / genus summary (C3) applies only to a FINITE cover; hide the button for ∞-sheeted surfaces.
     if (computeGroupBtn instanceof HTMLElement)
-      computeGroupBtn.hidden = !(show && plot.riemannSheetCount() != null);
+      computeGroupBtn.hidden = !(show && plot.riemannSheetCount() !== null);
     if (!show) return;
     branchPts.forEach((b, i) => {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "gen-chip";
       chip.textContent = `γ${subscript(i + 1)}`;
-      const isolable = generatorRadius(i, branchPts, plot.view.span) != null;
+      const isolable = generatorRadius(i, branchPts, plot.view.span) !== null;
       chip.disabled = !isolable;
       chip.title = isolable
         ? `Loop around the branch point at ${fmtComplex(b)}`
@@ -1822,13 +1822,13 @@ function main(): void {
   // the inline summary (C3) and the full report (C4). All `≈` (RISKS §3); the parity/bound check is exact.
   const gatherMonodromy = (): MonoData | null => {
     const n = plot.riemannSheetCount();
-    if (n == null || n < 2 || branchPts.length === 0) return null;
+    if (n === null || n < 2 || branchPts.length === 0) return null;
     const base = commonBasePoint(branchPts, plot.view.span);
     const gens: { label: string; perm: Perm; branchPt: Complex }[] = [];
     let skipped = 0;
     branchPts.forEach((b, i) => {
       const r = generatorRadius(i, branchPts, plot.view.span);
-      if (r == null) {
+      if (r === null) {
         skipped++;
         return;
       }

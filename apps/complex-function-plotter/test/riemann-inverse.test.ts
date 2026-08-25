@@ -249,8 +249,9 @@ describe("detectRiemannForm — branch cut rays (B1)", () => {
     const origins = rays.map((r) => r.origin[0]).sort((a, b) => a - b);
     expect(origins[0]).toBeCloseTo(-1, 9);
     expect(origins[1]).toBeCloseTo(1, 9);
-    const atPlus = rays.find((r) => r.origin[0] > 0)!;
-    expect(atPlus.dir[0]).toBeCloseTo(1, 9); // [1, ∞)
+    const atPlus = rays.find((r) => r.origin[0] > 0);
+    expect(atPlus).toBeDefined();
+    expect(atPlus?.dir[0]).toBeCloseTo(1, 9); // [1, ∞)
   });
   it("arctan cuts run along the imaginary axis from ±i", () => {
     const rays = dir("arctan(z)");
