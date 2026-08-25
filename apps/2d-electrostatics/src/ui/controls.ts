@@ -8,6 +8,13 @@
 import type { AppState, Placed, Lens, Tool } from "../state.js";
 import { freshId, findSingularity } from "../state.js";
 import { uniformFromSpeedAngle } from "../field.js";
+import { PRESETS, presetById } from "../presets.js";
+import { encodeState } from "../persist.js";
+
+export interface ControlsOptions {
+  /** Composite the field + overlay into a PNG (with the permalink embedded) and download it. */
+  readonly onSavePng: () => void;
+}
 
 // The two readings of the SAME complex potential — a relabel, not a recompute (the streamlines and
 // equipotentials are identical curves; only the vocabulary changes). One toggle swaps every label.
@@ -81,7 +88,12 @@ function slider(label: string, min: number, max: number, step: number, value: nu
 const fmt = (v: number): string => (Math.abs(v) < 5e-3 ? "0" : v.toFixed(2));
 const complex = (re: number, im: number): string => `${fmt(re)} ${im < 0 ? "−" : "+"} ${fmt(Math.abs(im))}i`;
 
-export function createControls(app: HTMLElement, state: AppState, requestRender: () => void): Controls {
+export function createControls(
+  app: HTMLElement,
+  state: AppState,
+  requestRender: () => void,
+  opts: ControlsOptions,
+): Controls {
   // --- toolbar: brand · palette · uniform stream -----------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
@@ -335,6 +347,65 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
   bar.insertBefore(lensSeg, palette);
   bar.insertBefore(toolSeg, palette);
   updateLegend();
+
+  // --- actions: presets · save PNG · copy link (right side of the toolbar) ---
+  const syncUniformControls = (): void => {
+    uniformU = Math.hypot(state.uniform[0], state.uniform[1]);
+    uniformA = uniformU > 1e-9 ? -Math.atan2(state.uniform[1], state.uniform[0]) : 0;
+    uSpeed.input.value = String(uniformU);
+    uSpeed.value.textContent = uniformU.toFixed(2);
+    const deg = Math.round((uniformA * 180) / Math.PI);
+    uAngle.input.value = String(deg);
+    uAngle.value.textContent = `${deg}°`;
+  };
+  const applyPreset = (id: string): void => {
+    const p = presetById(id);
+    if (!p) return;
+    state.uniform = [p.uniform[0], p.uniform[1]];
+    state.singularities = p.sings.map((s) => ({ ...s, id: freshId() }));
+    state.view = p.view;
+    state.selected = null;
+    state.probe = null;
+    syncUniformControls();
+    requestRender();
+    onSelectionChange();
+  };
+
+  const actions = el("div", "actions");
+  const presetWrap = el("label", "field-inline");
+  presetWrap.append(el("span", "fi-l", "Preset"));
+  const presetSel = document.createElement("select");
+  presetSel.className = "preset-sel";
+  for (const p of PRESETS) {
+    const o = document.createElement("option");
+    o.value = p.id;
+    o.textContent = p.name;
+    presetSel.append(o);
+  }
+  presetSel.addEventListener("change", () => applyPreset(presetSel.value));
+  presetWrap.append(presetSel);
+
+  const pngBtn = el("button", "pal-btn", "Save PNG");
+  pngBtn.type = "button";
+  pngBtn.addEventListener("click", () => opts.onSavePng());
+
+  const linkBtn = el("button", "pal-btn", "Copy link");
+  linkBtn.type = "button";
+  linkBtn.addEventListener("click", () => {
+    const url = location.origin + location.pathname + encodeState(state);
+    const clip = navigator.clipboard;
+    if (!clip) return;
+    void clip
+      .writeText(url)
+      .then(() => {
+        linkBtn.textContent = "Copied!";
+        window.setTimeout(() => (linkBtn.textContent = "Copy link"), 1200);
+      })
+      .catch(() => undefined);
+  });
+
+  actions.append(presetWrap, pngBtn, linkBtn);
+  bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);
 

@@ -97,6 +97,28 @@ body {
   background: rgba(207, 86, 86, 0.3);
 }
 
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.field-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b6bccb;
+}
+.preset-sel {
+  font: 12px system-ui, sans-serif;
+  color: var(--text);
+  background: rgba(231, 234, 242, 0.08);
+  border: 1px solid rgba(231, 234, 242, 0.16);
+  border-radius: 7px;
+  padding: 6px 8px;
+}
+
 .uniform {
   position: fixed;
   right: 14px;
