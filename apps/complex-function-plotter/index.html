@@ -165,8 +165,13 @@
       .gen-chip:hover:not(:disabled) { border-color: var(--accent); }
       .gen-chip:disabled { opacity: 0.45; cursor: not-allowed; }
       .gen-groupbtn { margin-top: 8px; width: 100%; font-size: 0.78rem; }
-      .gen-group { margin-top: 8px; white-space: pre-line; }
-      .gen-group b { color: var(--fg); font-weight: 600; }
+      .gen-group { margin-top: 8px; }
+      .gen-group .gen-summary { white-space: pre-line; color: var(--muted); font-size: 0.72rem; margin: 6px 0 0; }
+      .gen-group .gen-summary b { color: var(--fg); font-weight: 600; }
+      .gen-diagrams { display: flex; flex-wrap: wrap; gap: 10px 12px; }
+      .gen-diagram { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+      .gen-diagram canvas { display: block; }
+      .gen-diagram .gen-diagram-label { font-family: ui-monospace, Menlo, monospace; font-size: 0.72rem; color: var(--muted); }
       .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--field-bg); border: 1px solid var(--accent); border-radius: var(--radius); overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
       .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--fg); cursor: pointer; }
       .ac-item.active, .ac-item:hover { background: var(--accent); color: var(--accent-contrast); }
@@ -304,7 +309,7 @@
             <span class="gen-label">Generator loops (π₁)</span>
             <div id="generatorChips" class="gen-chips"></div>
             <button type="button" id="computeGroupBtn" class="gen-groupbtn" hidden>Monodromy group &amp; genus ▸</button>
-            <p id="monodromyGroup" class="gen-group param-hint" hidden></p>
+            <div id="monodromyGroup" class="gen-group" hidden></div>
           </div>
           <p id="monodromyResult" class="param-hint" hidden></p>
           <div class="row" style="margin-top: 8px">

@@ -2965,6 +2965,9 @@ M3/D/B).
        `Plot.riemannSheetCount` + a **Monodromy group & genus** summary. `≈`, quarantined. Verified √(z²−1) →
        C₂ genus 0 and w²=z³−z → genus 1. (`∞` handling: inferred from the enclosing loop's cycle type, per
        the design doc's open question.)
-4. [ ] C2 — permutation diagram + test; gate.
+4. [x] C2 — permutation diagram (`permDiagram.ts`, canvas, sheet-coloured nodes + `k→σ(k)` arrows) shown per
+       generator in the group summary + test. Also switched parametric branch points to the exact cut-ray
+       origins (`Plot.riemannParamBranchPoints`), replacing the mesh-limited scan (fixes `z^(1/3)`'s spurious
+       24 → 1).
 5. [ ] C4 (optional) — report panel.
 6. [ ] Keep all `≈` outputs quarantined; surface the product-one consistency check prominently.

@@ -1792,6 +1792,20 @@ export class Plot {
     return this.riemannKindV === "param" && this.riemannForm ? this.riemannForm.cutRays : [];
   }
 
+  /** The **exact** finite branch points of a parametric primitive — the cut-ray origins (`z = (u₀−β)/α` for
+   *  each cut), deduplicated. For the recognized principal-branch forms these are analytically complete, so
+   *  they replace the mesh-limited `≈` sheet-separation scan (which can spray spurious points across a folded
+   *  `z^(p/q)` surface). Empty when not in a parametric mode. */
+  riemannParamBranchPoints(): CutRay["origin"][] {
+    if (this.riemannKindV !== "param" || !this.riemannForm) return [];
+    const out: [number, number][] = [];
+    for (const c of this.riemannForm.cutRays) {
+      if (!out.some((q) => Math.hypot(q[0] - c.origin[0], q[1] - c.origin[1]) < 1e-9))
+        out.push([c.origin[0], c.origin[1]]);
+    }
+    return out;
+  }
+
   /** The **exact** branch locus (M2c.2) for an implicit `F(w,z)=0` with Gaussian-rational coefficients — the
    *  roots of `disc_w F` (`@cas/exact`). Null when not applicable (not implicit mode, or a float coefficient),
    *  so the caller falls back to the `≈` sheet-separation scan. Coordinates are `≈`; the locus is `=`. */

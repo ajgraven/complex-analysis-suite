@@ -97,8 +97,10 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   measures each generator over one common base point (lasso loops, so the permutations compose) plus a large
   enclosing loop for the ramification over ∞, and reports the monodromy group `⟨σᵢ⟩ ≤ Sₙ` (order · name ·
   **transitive ⇒ connected**) and the surface's **genus via Riemann–Hurwitz** — e.g. `w² = z³ − z` reads as
-  **genus 1**, a torus. The group and genus are `≈` (built from the estimated permutations); the
-  Riemann–Hurwitz parity/bound check is exact and flags inconsistent estimates. Analytic continuation
+  **genus 1**, a torus. Each generator is drawn as a **permutation diagram** (C2 — sheet-coloured nodes with
+  `k → σ(k)` arrows). The group and genus are `≈` (built from the estimated permutations); the Riemann–Hurwitz
+  parity/bound check is exact and flags inconsistent estimates. (Parametric branch points come from the exact
+  cut-ray origins, so a folded `z^(p/q)` surface reports its one true branch point, not a scattered scan.) Analytic continuation
   around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so the permutation is honestly `≈`,
   flags low confidence near a branch point, and is kept out of the badge, permalink, and every export. Built
   on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface

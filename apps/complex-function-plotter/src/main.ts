@@ -55,6 +55,7 @@ import {
   namedGroup,
   type Perm,
 } from "./riemann/permGroup.js";
+import { drawPermDiagram, permDiagramWidth, DIAGRAM_HEIGHT } from "./riemann/permDiagram.js";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";
@@ -509,6 +510,11 @@ function main(): void {
     const exact = plot.riemannBranchPointsExact(); // M2c.2: exact locus for a Gaussian-rational implicit F
     if (exact) {
       branchPts = exact;
+      branchExact = true;
+    } else if (plot.riemannModeKind() === "param") {
+      // Parametric primitives: the cut-ray origins ARE the exact finite branch points — use them instead of
+      // the mesh-limited scan (which sprays spurious points across a folded z^(p/q) surface).
+      branchPts = plot.riemannParamBranchPoints();
       branchExact = true;
     } else {
       branchPts = plot.riemannBranchPoints();
@@ -1807,7 +1813,7 @@ function main(): void {
     }
     const base = commonBasePoint(branchPts, plot.view.span);
     const gens: Perm[] = [];
-    const genLabels: string[] = [];
+    const diagramEntries: { label: string; perm: Perm }[] = [];
     let skipped = 0;
     branchPts.forEach((b, i) => {
       const r = generatorRadius(i, branchPts, plot.view.span);
@@ -1818,13 +1824,14 @@ function main(): void {
       const res = plot.computeRiemannMonodromy(lassoLoop(base, b, r));
       if (res && res.sheetCount === n && res.isPermutation) {
         gens.push(res.permutation);
-        genLabels.push(`γ${subscript(i + 1)} = ${cycleNotation(res.permutation)}`);
+        diagramEntries.push({ label: `γ${subscript(i + 1)}`, perm: res.permutation });
       } else skipped++;
     });
     // Ramification over ∞: the monodromy of a big loop enclosing all finite branch points (= σ_∞⁻¹).
     const bigRes = plot.computeRiemannMonodromy(enclosingLoop(branchPts, plot.view.span));
     const sigmaInf =
       bigRes && bigRes.sheetCount === n && bigRes.isPermutation ? bigRes.permutation : null;
+    if (sigmaInf) diagramEntries.push({ label: "γ∞", perm: sigmaInf });
     const groupGens = sigmaInf ? [...gens, sigmaInf] : gens;
     const group = groupGens.length
       ? generatedGroup(groupGens, n)
@@ -1834,10 +1841,40 @@ function main(): void {
     if (sigmaInf) cycleCounts.push(cycleCount(sigmaInf));
     const genus = riemannHurwitzGenus(cycleCounts, n);
 
+    // Render: a row of per-generator permutation DIAGRAMS (C2), then the group / genus summary text.
+    monodromyGroupEl.replaceChildren();
+    if (diagramEntries.length && n <= 12) {
+      const row = document.createElement("div");
+      row.className = "gen-diagrams";
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      for (const { label, perm } of diagramEntries) {
+        const wrap = document.createElement("div");
+        wrap.className = "gen-diagram";
+        const cv = document.createElement("canvas");
+        const w = permDiagramWidth(n);
+        cv.width = Math.round(w * dpr);
+        cv.height = Math.round(DIAGRAM_HEIGHT * dpr);
+        cv.style.width = `${w}px`;
+        cv.style.height = `${DIAGRAM_HEIGHT}px`;
+        cv.setAttribute("role", "img");
+        cv.setAttribute("aria-label", `${label}: permutation ${cycleNotation(perm)}`);
+        const dctx = cv.getContext("2d");
+        if (dctx) {
+          dctx.scale(dpr, dpr);
+          drawPermDiagram(dctx, perm);
+        }
+        wrap.appendChild(cv);
+        const lab = document.createElement("span");
+        lab.className = "gen-diagram-label";
+        lab.textContent = `${label} = ${cycleNotation(perm)}`;
+        wrap.appendChild(lab);
+        row.appendChild(wrap);
+      }
+      monodromyGroupEl.appendChild(row);
+    }
+
     const lines: string[] = [];
     lines.push(`${n} sheets · ${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}`);
-    if (genLabels.length) lines.push(genLabels.join("  "));
-    if (sigmaInf) lines.push(`γ∞ = ${cycleNotation(sigmaInf)}`);
     lines.push(
       `≈ monodromy group: order ${group.order}${group.capped ? "+" : ""}` +
         (name ? ` · ${name}` : "") +
@@ -1853,7 +1890,10 @@ function main(): void {
         `⚠ ${skipped} branch point${skipped === 1 ? "" : "s"} not isolated — the group may be incomplete`,
       );
     lines.push("Uncertified estimate (RISKS §3).");
-    monodromyGroupEl.textContent = lines.join("\n");
+    const summary = document.createElement("p");
+    summary.className = "gen-summary";
+    summary.textContent = lines.join("\n");
+    monodromyGroupEl.appendChild(summary);
     monodromyGroupEl.hidden = false;
   };
   if (computeGroupBtn instanceof HTMLElement) computeGroupBtn.addEventListener("click", computeGroup);
