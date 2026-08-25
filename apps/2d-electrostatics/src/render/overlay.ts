@@ -7,6 +7,7 @@
 import type { AppState, Placed } from "../state.js";
 import type { Size } from "../view.js";
 import { worldToScreen } from "../view.js";
+import { enclosedResidue } from "../probe.js";
 
 export const HANDLE_RADIUS = 7;
 /** Pointer-hit tolerance (CSS px) around a handle centre. */
@@ -76,9 +77,53 @@ function drawHandle(ctx: CanvasRenderingContext2D, s: Placed, x: number, y: numb
   ctx.restore();
 }
 
+const fmt = (v: number): string => (Math.abs(v) < 5e-3 ? "0" : v.toFixed(2));
+
+// The flux/circulation loop and its exact residue-theorem readout: Re = enclosed charge (Gauss),
+// Im = enclosed circulation (Kelvin). Labelled `=` because the sum is exact for the closed-form field.
+function drawProbe(ctx: CanvasRenderingContext2D, state: AppState, size: Size): void {
+  const r = state.probe;
+  if (!r) return;
+  const [ax, ay] = worldToScreen(state.view, size, [r.x0, r.y0]);
+  const [bx, by] = worldToScreen(state.view, size, [r.x1, r.y1]);
+  const left = Math.min(ax, bx);
+  const top = Math.min(ay, by);
+  const w = Math.abs(bx - ax);
+  const h = Math.abs(by - ay);
+
+  ctx.save();
+  ctx.fillStyle = "rgba(231,234,242,0.06)";
+  ctx.strokeStyle = "#e7eaf2";
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([6, 4]);
+  ctx.fillRect(left, top, w, h);
+  ctx.strokeRect(left, top, w, h);
+  ctx.setLineDash([]);
+
+  if (w > 12 || h > 12) {
+    const enc = enclosedResidue(state.singularities, r);
+    const chargeWord = state.lens === "hydrodynamic" ? "source" : "charge";
+    const lines = [`∮ E dz = ${fmt(enc.charge)} + ${fmt(enc.circulation)} i`, `${chargeWord} Q = ${fmt(enc.charge)} · circulation = ${fmt(enc.circulation)}`];
+    ctx.font = "12px ui-monospace, Menlo, monospace";
+    let boxW = 0;
+    for (const l of lines) boxW = Math.max(boxW, ctx.measureText(l).width);
+    const bx0 = left;
+    const by0 = Math.max(2, top - 40);
+    ctx.fillStyle = "rgba(15,17,21,0.82)";
+    ctx.fillRect(bx0, by0, boxW + 14, 36);
+    ctx.fillStyle = "#e7eaf2";
+    ctx.textBaseline = "top";
+    ctx.fillText(lines[0], bx0 + 7, by0 + 5);
+    ctx.fillStyle = "#9fb2c9";
+    ctx.fillText(lines[1], bx0 + 7, by0 + 20);
+  }
+  ctx.restore();
+}
+
 /** Repaint the whole overlay for the current state into a context already scaled to CSS pixels. */
 export function drawOverlay(ctx: CanvasRenderingContext2D, state: AppState, size: Size): void {
   ctx.clearRect(0, 0, size.width, size.height);
+  drawProbe(ctx, state, size);
   for (const s of state.singularities) {
     const [x, y] = worldToScreen(state.view, size, s.at);
     if (x < -20 || y < -20 || x > size.width + 20 || y > size.height + 20) continue;

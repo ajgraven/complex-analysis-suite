@@ -57,6 +57,7 @@ function main(): void {
     sizeCanvas(canvas.overlay, cssW, cssH, dpr);
     octx.setTransform(dpr, 0, 0, dpr, 0, 0);
     drawOverlay(octx, state, { width: cssW, height: cssH });
+    canvas.overlay.style.cursor = state.tool === "probe" ? "crosshair" : "default";
     controls.refresh();
   };
   const requestRender = (): void => {

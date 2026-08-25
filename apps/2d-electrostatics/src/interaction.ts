@@ -13,6 +13,7 @@ const MAX_HALF_SPAN = 200;
 type Drag =
   | { kind: "move"; id: Id; offset: [number, number] }
   | { kind: "pan"; startCenter: readonly [number, number]; startPx: [number, number] }
+  | { kind: "probe" }
   | null;
 
 function clampHalfSpan(h: number): number {
@@ -63,8 +64,16 @@ export function attachInteraction(
   const onPointerDown = (e: PointerEvent): void => {
     const sz = size();
     const p = pixel(e);
-    const hit = hitTest(state, sz, p);
     canvas.setPointerCapture(e.pointerId);
+    if (state.tool === "probe") {
+      // Draw a fresh flux/circulation loop from this corner.
+      const [wx, wy] = screenToWorld(state.view, sz, p);
+      state.probe = { x0: wx, y0: wy, x1: wx, y1: wy };
+      drag = { kind: "probe" };
+      requestRender();
+      return;
+    }
+    const hit = hitTest(state, sz, p);
     if (hit !== null) {
       select(hit);
       const s = state.singularities.find((x) => x.id === hit);
@@ -81,7 +90,12 @@ export function attachInteraction(
     if (!drag) return;
     const sz = size();
     const p = pixel(e);
-    if (drag.kind === "move") {
+    if (drag.kind === "probe") {
+      if (state.probe) {
+        const [wx, wy] = screenToWorld(state.view, sz, p);
+        state.probe = { ...state.probe, x1: wx, y1: wy };
+      }
+    } else if (drag.kind === "move") {
       moveSingularity(drag.id, screenToWorld(state.view, sz, [p[0] + drag.offset[0], p[1] + drag.offset[1]]));
     } else {
       const s = pxPerWorld(state.view, sz);

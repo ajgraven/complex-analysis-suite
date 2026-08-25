@@ -231,6 +231,35 @@ input[type="range"] {
   border-top: 1px dashed #7a8296;
 }
 
+/* theorem caption — hybrid framing, shown while the flux/circulation probe is active */
+.caption {
+  position: fixed;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+  max-width: 660px;
+  padding: 9px 14px;
+  background: rgba(15, 17, 21, 0.85);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(231, 234, 242, 0.12);
+  border-radius: 9px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #c4ccda;
+  text-align: center;
+}
+.caption strong {
+  color: #e7eaf2;
+}
+.caption b {
+  color: #8fd0b0;
+  font-weight: 600;
+}
+.caption sub {
+  font-size: 0.75em;
+}
+
 /* Fatal-error banner created by @cas/ui's runWithFatalBoundary when init throws. */
 #app-error {
   position: fixed;

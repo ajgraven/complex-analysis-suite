@@ -5,8 +5,12 @@
 import type { Complex, Field, Singularity } from "./field.js";
 import { uniformFromSpeedAngle } from "./field.js";
 import type { View } from "./view.js";
+import type { Rect } from "./probe.js";
 
 export type Id = number;
+
+/** The active canvas tool: move/drag singularities, or draw a flux/circulation probe rectangle. */
+export type Tool = "move" | "probe";
 
 /** A singularity plus the identity the app tracks it by. Structurally still a `Singularity`, so an
  *  array of these is a valid `Field.singularities`. */
@@ -22,6 +26,10 @@ export interface AppState {
   view: View;
   lens: Lens;
   selected: Id | null;
+  /** The active canvas tool. */
+  tool: Tool;
+  /** The flux/circulation probe rectangle (world coords), or null when none is drawn. */
+  probe: Rect | null;
 }
 
 let nextId = 1;
@@ -52,5 +60,7 @@ export function initialState(): AppState {
     view: { center: [0, 0], halfSpan: 3 },
     lens: "electrostatic",
     selected: null,
+    tool: "move",
+    probe: null,
   };
 }

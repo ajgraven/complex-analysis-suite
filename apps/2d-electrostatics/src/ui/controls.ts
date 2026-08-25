@@ -5,7 +5,7 @@
 // The uniform stream (speed U, angle α) rides the toolbar. Everything mutates the shared AppState and
 // asks for a repaint; `onSelectionChange` rebuilds the inspector, `refresh` keeps its live readouts in
 // step while a handle is dragged on the canvas.
-import type { AppState, Placed, Lens } from "../state.js";
+import type { AppState, Placed, Lens, Tool } from "../state.js";
 import { freshId, findSingularity } from "../state.js";
 import { uniformFromSpeedAngle } from "../field.js";
 
@@ -274,6 +274,17 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
       `<div class="lg-row"><span class="lg-line equi"></span>${t.equipot} (φ = const)</div>`;
   };
 
+  // Theorem caption (hybrid framing): shown while the flux/circulation probe tool is active.
+  const caption = el("aside", "caption");
+  caption.hidden = true;
+  const updateCaption = (): void => {
+    const word = state.lens === "hydrodynamic" ? "source" : "charge";
+    caption.innerHTML =
+      "<strong>Flux / circulation probe.</strong> Drag a loop Γ — the residue theorem gives " +
+      `∮<sub>Γ</sub> E dz = Σ residues = (enclosed ${word}) + i·(circulation): ` +
+      "<b>Re = Gauss's law</b>, <b>Im = Kelvin circulation</b>. Exact (=) for this closed-form field.";
+  };
+
   const lensSeg = el("div", "modeseg");
   lensSeg.setAttribute("role", "group");
   lensSeg.setAttribute("aria-label", "Lens");
@@ -283,6 +294,7 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
     for (const [id, b] of lensBtns) b.setAttribute("aria-pressed", String(id === l));
     onSelectionChange(); // relabel the inspector
     updateLegend();
+    if (!caption.hidden) updateCaption();
     requestRender();
   };
   for (const [id, label] of [
@@ -296,10 +308,35 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
     lensBtns.set(id, b);
     lensSeg.append(b);
   }
+  // Tool toggle: Move (drag singularities) | Probe (draw a flux/circulation loop).
+  const toolSeg = el("div", "modeseg");
+  toolSeg.setAttribute("role", "group");
+  toolSeg.setAttribute("aria-label", "Canvas tool");
+  const toolBtns = new Map<Tool, HTMLButtonElement>();
+  const setTool = (t: Tool): void => {
+    state.tool = t;
+    for (const [id, b] of toolBtns) b.setAttribute("aria-pressed", String(id === t));
+    caption.hidden = t !== "probe";
+    if (t === "probe") updateCaption();
+    requestRender();
+  };
+  for (const [id, label] of [
+    ["move", "Move"],
+    ["probe", "Probe ∮"],
+  ] as [Tool, string][]) {
+    const b = el("button", "seg-btn", label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(id === state.tool));
+    b.addEventListener("click", () => setTool(id));
+    toolBtns.set(id, b);
+    toolSeg.append(b);
+  }
+
   bar.insertBefore(lensSeg, palette);
+  bar.insertBefore(toolSeg, palette);
   updateLegend();
 
-  app.append(bar, inspector, legend, uni);
+  app.append(bar, inspector, legend, uni, caption);
 
   return {
     onSelectionChange,
@@ -308,6 +345,8 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
       bar.remove();
       inspector.remove();
       legend.remove();
+      uni.remove();
+      caption.remove();
     },
   };
 }
