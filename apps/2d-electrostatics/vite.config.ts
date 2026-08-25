@@ -10,9 +10,10 @@ export default defineConfig({
   base: "./",
   build: {
     rollupOptions: {
-      // Multi-page: the free-field sandbox (index.html) and the Joukowski airfoil transplant
-      // (airfoil.html). Vite resolves these HTML inputs relative to the project root.
-      input: { main: "index.html", airfoil: "airfoil.html" },
+      // Multi-page: the free-field sandbox (index.html), the Joukowski airfoil transplant
+      // (airfoil.html), and the exterior Schwarz–Christoffel polygon transplant (polygon.html).
+      // Vite resolves these HTML inputs relative to the project root.
+      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html" },
     },
   },
   server: { port: 5180, strictPort: true },

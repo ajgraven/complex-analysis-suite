@@ -365,3 +365,25 @@ input[type="range"] {
   color: #ffe;
   font: 14px/1.4 system-ui, sans-serif;
 }
+
+/* polygon transplant page (main-polygon.ts) */
+.tp-select {
+  font: 12px/1 system-ui, sans-serif;
+  color: #e7eaf2;
+  background: rgba(20, 28, 46, 0.85);
+  border: 1px solid rgba(231, 234, 242, 0.18);
+  border-radius: 7px;
+  padding: 6px 9px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.tp-readout {
+  min-width: 240px;
+}
+.tp-approx {
+  color: #8c95a9;
+  font-style: italic;
+}
+.tp-warn {
+  color: #ffb4b4;
+}
