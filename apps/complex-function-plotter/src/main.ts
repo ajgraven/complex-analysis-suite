@@ -40,6 +40,7 @@ import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
 import { windingNumber } from "./riemann/winding.js";
+import { generatorLoopAround, generatorRadius } from "./riemann/generatorLoop.js";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";
@@ -202,6 +203,8 @@ function main(): void {
   const riemannLinkedInput = byId("riemannLinked");
   const riemannMonodromyInput = byId("riemannMonodromy");
   const monodromyResult = byId("monodromyResult");
+  const generatorLoopsEl = byId("generatorLoops");
+  const generatorChipsEl = byId("generatorChips");
   const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
@@ -998,6 +1001,7 @@ function main(): void {
       recomputeBranchPoints(); // estimate ramification for the markers + badge count (M3.4)
       syncRiemannControls();
     }
+    renderGeneratorChips(); // show generator chips in the Riemann view (C1); hide otherwise
     redraw(false);
   };
   if (view2d instanceof HTMLElement)
@@ -1029,6 +1033,7 @@ function main(): void {
     else if (plot.mode === "riemann") {
       recomputeBranchPoints(); // the surface changed — re-estimate ramification (M3.4)
       syncRiemannControls();
+      renderGeneratorChips(); // the branch points changed — refresh the generator chips (C1)
     }
   };
 
@@ -1127,6 +1132,7 @@ function main(): void {
         loopWindings = [];
         plot.setRiemannLoop(null); // clear the lifted paths on the surface
         showMonodromy(null);
+        renderGeneratorChips(); // the explorer went off with the pane — hide the generator chips
       }
       linkedZ = null;
       redraw(false);
@@ -1146,6 +1152,7 @@ function main(): void {
       loopWindings = [];
       plot.setRiemannLoop(null); // clear any lifted paths on the surface (on: fresh start / off: hide)
       showMonodromy(null); // placeholder hint (on) / hidden (off)
+      renderGeneratorChips(); // show the generator chips when the explorer is on, hide when off (C1)
       redraw(false);
     });
   if (riemannReset instanceof HTMLElement)
@@ -1694,17 +1701,10 @@ function main(): void {
       : "";
     monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).${wind}`;
   };
-  const finalizeLoop = (): void => {
-    const loop = loopPoints;
-    loopPoints = null;
-    if (!loop || loop.length < 4) {
-      lastLoop = null; // too short to be a loop — discard
-      loopWindings = [];
-      plot.setRiemannLoop(null); // clear any lifted paths on the surface
-      showMonodromy(null);
-      redraw(false);
-      return;
-    }
+  // Commit a closed base-plane loop (hand-drawn or a one-click generator): record its per-branch-point winding
+  // (B2), lift its per-sheet paths onto the surface (M3.3), and show the estimate. Shared by finalizeLoop and
+  // the generator chips (C1).
+  const applyLoop = (loop: Complex[]): void => {
     lastLoop = loop;
     // Winding number per branch point (B2) — exact integer topology; keep only the enclosed ones (≠ 0).
     loopWindings = branchPts
@@ -1720,6 +1720,53 @@ function main(): void {
       showMonodromy(res);
     }
     redraw(false);
+  };
+  const finalizeLoop = (): void => {
+    const loop = loopPoints;
+    loopPoints = null;
+    if (!loop || loop.length < 4) {
+      lastLoop = null; // too short to be a loop — discard
+      loopWindings = [];
+      plot.setRiemannLoop(null); // clear any lifted paths on the surface
+      showMonodromy(null);
+      redraw(false);
+      return;
+    }
+    applyLoop(loop);
+  };
+
+  // One-click generator loops (C1): a chip per branch point that draws the canonical CCW loop around it — a
+  // generator of π₁(base ∖ branch points) — and runs it through the same monodromy pipeline. Disabled when the
+  // branch point can't be isolated (a neighbour is too close); then the user draws the loop by hand.
+  const subscript = (i: number): string =>
+    String(i).replace(/\d/g, (d) => "₀₁₂₃₄₅₆₇₈₉"[Number(d)]);
+  const runGenerator = (index: number): void => {
+    const b = branchPts[index];
+    if (!b) return;
+    const r = generatorRadius(index, branchPts, plot.view.span);
+    if (r == null) return;
+    loopPoints = null;
+    applyLoop(generatorLoopAround(b, r));
+  };
+  const renderGeneratorChips = (): void => {
+    if (!(generatorLoopsEl instanceof HTMLElement) || !(generatorChipsEl instanceof HTMLElement)) return;
+    const show = monodromyOn && plot.mode === "riemann" && branchPts.length > 0;
+    generatorLoopsEl.hidden = !show;
+    generatorChipsEl.replaceChildren();
+    if (!show) return;
+    branchPts.forEach((b, i) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "gen-chip";
+      chip.textContent = `γ${subscript(i + 1)}`;
+      const isolable = generatorRadius(i, branchPts, plot.view.span) != null;
+      chip.disabled = !isolable;
+      chip.title = isolable
+        ? `Loop around the branch point at ${fmtComplex(b)}`
+        : `Branch point at ${fmtComplex(b)} — too close to a neighbour to isolate; draw the loop by hand`;
+      chip.addEventListener("click", () => runGenerator(i));
+      generatorChipsEl.appendChild(chip);
+    });
   };
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;

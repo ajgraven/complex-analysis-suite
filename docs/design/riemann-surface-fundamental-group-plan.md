@@ -27,7 +27,7 @@
 | Milestone | Status | Coverage |
 |---|---|---|
 | **C0 — design doc + ADR-0033** | ✅ this document | scope, math, the `=`/`≈` line, the non-degradation contract, phase order, tests, risks. No app code. |
-| **C1 — one-click generator loops** | ⏳ planned | a chip per branch point → auto-drawn CCW generator loop → the existing monodromy pipeline (lift, arrows, winding). |
+| **C1 — one-click generator loops** | ✅ done | `src/riemann/generatorLoop.ts` (`generatorLoopAround` + `generatorRadius`, winding-certified, 6 tests); a **GENERATOR LOOPS (π₁)** chip row in the explorer (one γᵢ per branch point, disabled + hinted when a neighbour is too close to isolate); `runGenerator` shares `applyLoop` with the hand-drawn path, so a chip lifts + arrows + winds exactly like a manual loop. |
 | **C2 — permutation diagram** | ⏳ planned | inline SVG per σᵢ: sheet-coloured nodes `1…n`, arrows `k → σᵢ(k)`. |
 | **C3 — monodromy group + genus** | ⏳ planned | generated subgroup `⟨σᵢ⟩ ≤ Sₙ` (order, transitivity, name), product-one check, Riemann–Hurwitz genus. |
 | **C4 — monodromy report panel (optional)** | ⏳ planned | the generators + diagrams + group + genus as one educational summary. |
