@@ -23,12 +23,13 @@ import { detectAlgebraicCurve, type AlgebraicCurve } from "../riemann/algebraicC
 import { detectImplicitCurve, type ImplicitCurve } from "../riemann/implicitCurve.js";
 import { exactBranchLocus } from "../riemann/implicitExact.js";
 import { buildCurveMesh } from "../riemann/curveMesh.js";
-import { buildRiemannProgram, buildCurveProgram } from "../render3d/riemannSurface.js";
+import { buildRiemannProgram, buildCurveProgram, buildLineProgram } from "../render3d/riemannSurface.js";
 import {
   buildParamPickMesh,
   pickMeshFromCurve,
   pickRiemannSurface,
   sheetsOverZ,
+  surfaceHeightAt,
   type PickMesh,
   type RiemannHit,
 } from "../riemann/pickMesh.js";
@@ -203,6 +204,30 @@ const SPHERE_FOV = (50 * Math.PI) / 180; // vertical field of view for the Riema
 // window without clipping its pole spikes.
 const SURFACE_FRAMING = 0.42;
 
+/** HSV → RGB (all in [0,1]) — a small self-contained hue wheel for the per-sheet monodromy-loop colours
+ *  (M3.3). Mirrors the colormap module's private helper; kept local to avoid widening that module's API. */
+function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
+  const i = Math.floor(h * 6);
+  const f = h * 6 - i;
+  const p = v * (1 - s);
+  const q = v * (1 - f * s);
+  const u = v * (1 - (1 - f) * s);
+  switch (((i % 6) + 6) % 6) {
+    case 0:
+      return [v, u, p];
+    case 1:
+      return [q, v, p];
+    case 2:
+      return [p, v, u];
+    case 3:
+      return [p, q, v];
+    case 4:
+      return [u, p, v];
+    default:
+      return [v, p, q];
+  }
+}
+
 export class Plot {
   private readonly gl: WebGL2RenderingContext;
   private program: WebGLProgram | null = null;
@@ -311,6 +336,23 @@ export class Plot {
   private curvePickValues: Float32Array | null = null;
   private paramPickMesh: PickMesh | null = null;
   private paramPickDirty = true;
+
+  // Monodromy lift (M3.3): the drawn loop's per-sheet continuation paths, lifted ONTO the surface and drawn
+  // as coloured 3D polylines by a minimal line program, so the sheet permutation is visible where the sheets
+  // live (not only as a base-plane loop + a text badge). Null when no loop is active.
+  private lineProgram: WebGLProgram | null = null;
+  private lineVao: WebGLVertexArrayObject | null = null;
+  private linePosBuffer: WebGLBuffer | null = null;
+  private lineVP: WebGLUniformLocation | null = null;
+  private lineColor: WebGLUniformLocation | null = null;
+  private riemannLoop: {
+    positions: Float32Array; // 3 floats/vertex, all sheets concatenated
+    ranges: { start: number; count: number }[]; // per-sheet [firstVertex, vertexCount] into `positions`
+    colors: [number, number, number][]; // per-sheet line colour
+  } | null = null;
+  // The monodromy result the current lift was built from — kept so the lift can be rebuilt (re-heighted) on a
+  // height-axis / exaggeration change without recomputing the continuation. Cleared with the loop.
+  private riemannLoopResult: MonodromyResult | null = null;
 
   /** Which view `paint()` draws. `linked` renders the 2D portrait and the 3D landscape side by side
    *  (split viewports), both reading the same `view`, so navigating either keeps them in sync (I7). */
@@ -425,6 +467,7 @@ export class Plot {
         : this.riemannCurve
           ? "curve"
           : null;
+    this.setRiemannLoop(null); // a source change is a new surface — drop any lifted monodromy loop
     if (this.riemannForm) {
       this.gzGlsl = compileF(this.riemannForm.zFromT, "gZFn");
       this.gwGlsl = compileF(this.riemannForm.wFromT, "gWFn");
@@ -823,6 +866,29 @@ export class Plot {
     gl.bindVertexArray(null);
     if (this.curveVao) gl.deleteVertexArray(this.curveVao);
     this.curveVao = vao;
+    this.initLineGpu();
+  }
+
+  /** Create the monodromy-lift line program + its buffer/VAO once (M3.3). Called from {@link initCurveGpu}
+   *  (also on a context restore). The polyline vertices are uploaded by {@link setRiemannLoop}. */
+  private initLineGpu(): void {
+    const gl = this.gl;
+    const src = buildLineProgram();
+    const program = createProgram(gl, src.vertex, src.fragment);
+    if (this.lineProgram) gl.deleteProgram(this.lineProgram);
+    this.lineProgram = program;
+    this.lineVP = gl.getUniformLocation(program, "uVP");
+    this.lineColor = gl.getUniformLocation(program, "uColor");
+    this.linePosBuffer = gl.createBuffer();
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.linePosBuffer);
+    const aPos = gl.getAttribLocation(program, "aPos");
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+    gl.bindVertexArray(null);
+    if (this.lineVao) gl.deleteVertexArray(this.lineVao);
+    this.lineVao = vao;
   }
 
   /** (Re)build the algebraic-curve mesh (ADR-0029) for the current map + z-view, upload it to the attribute
@@ -1144,6 +1210,7 @@ export class Plot {
     if (this.riemannKindV === "curve" || this.riemannKindV === "implicit")
       this.paintRiemannCurve(vx, vy, vw, vh);
     else this.paintRiemannParam(vx, vy, vw, vh);
+    this.drawRiemannLoop(vx, vy, vw, vh); // overlay the lifted monodromy paths (M3.3), if any
   }
 
   /** Draw the flat base plane (left) beside the Riemann surface (right), both scissored (M3.2). The base
@@ -1333,6 +1400,7 @@ export class Plot {
       this.updateRiemannFraming();
       this.paramPickDirty = true; // the t-window (sheet count) may have changed — re-sample the pick mesh
     }
+    if (this.riemannLoopResult) this.rebuildRiemannLoopGeometry(); // re-lift onto the rebuilt mesh
   }
 
   /** Frame the linked base-plane pane's {@link view} on the region the surface covers. For the curve path
@@ -1357,6 +1425,7 @@ export class Plot {
   reframeRiemannLight(): void {
     if (this.riemannKindV === "curve" || this.riemannKindV === "implicit") this.frameCurve();
     else this.updateRiemannFraming();
+    if (this.riemannLoopResult) this.rebuildRiemannLoopGeometry(); // re-height the lift (charisma changed)
   }
 
   /** Dolly the Riemann orbit camera in/out by a multiplicative factor (clamped). */
@@ -1415,6 +1484,7 @@ export class Plot {
       prevKind !== this.riemannKindV
     )
       this.riemannHeightSource = 0;
+    this.setRiemannLoop(null); // toggling implicit mode is a surface change — drop any lifted monodromy loop
     this.paramPickDirty = true;
     this.reframeRiemann();
   }
@@ -1498,7 +1568,96 @@ export class Plot {
    */
   computeRiemannMonodromy(loop: Complex[]): MonodromyResult | null {
     if (!this.riemannAvailable()) return null;
-    return computeMonodromy((z) => this.riemannSheetsAt(z), loop);
+    return computeMonodromy((z) => this.riemannSheetsAt(z), loop, {
+      expected: this.expectedSheetCount(),
+    });
+  }
+
+  /** The analytically-known sheet count over a generic base point, when the active surface has one — a robust
+   *  hint for the monodromy census (a resampled start on a near-branch wobble used to poison the count). Finite
+   *  parametric primitive → its `sheetCount`; algebraic curve → its branch-combo count; implicit `F(w,z)=0` →
+   *  `deg_w F`. Undefined for infinite-sheet (helicoid) forms, where no single count holds. */
+  private expectedSheetCount(): number | undefined {
+    if (this.riemannKindV === "implicit" && this.riemannImplicit) return this.riemannImplicit.degreeW;
+    if (this.riemannKindV === "curve" && this.curveSheetFns.length >= 2) return this.curveSheetFns.length;
+    if (this.riemannKindV === "param" && this.riemannForm && this.riemannForm.sheetKind === "finite")
+      return this.riemannForm.sheetCount;
+    return undefined;
+  }
+
+  /** Show (or clear, with null) the monodromy loop's per-sheet continuation paths as coloured 3D polylines
+   *  lifted ONTO the surface (M3.3) — so the sheet permutation is visible where the sheets live, not only as a
+   *  flat base-plane loop + a text badge. Keeps the result so the lift can be re-heighted on a height change. */
+  setRiemannLoop(res: MonodromyResult | null): void {
+    this.riemannLoopResult = res && res.paths.length ? res : null;
+    this.rebuildRiemannLoopGeometry();
+  }
+
+  /** Rebuild the lifted-loop geometry from {@link riemannLoopResult} against the current surface mesh + height
+   *  law. Each path point lands at world `(Re z, Im z, surfaceHeight)` — the height read off the drawn surface
+   *  on the sheet nearest the tracked value `w` (so the polyline sits exactly on the surface), falling back to
+   *  the value-height law where the base point is off-mesh. Per-sheet hues make the permutation legible. */
+  private rebuildRiemannLoopGeometry(): void {
+    const res = this.riemannLoopResult;
+    if (!res || !res.paths.length) {
+      this.riemannLoop = null;
+      return;
+    }
+    const mesh = this.currentRiemannPickMesh();
+    const hs = this.riemannHeightSource;
+    const scale = this.heightScale;
+    const flat: number[] = [];
+    const ranges: { start: number; count: number }[] = [];
+    const colors: [number, number, number][] = [];
+    const n = res.paths.length;
+    let vert = 0;
+    for (let k = 0; k < n; k++) {
+      const path = res.paths[k];
+      const start = vert;
+      for (const { z, w } of path) {
+        const hMesh = mesh ? surfaceHeightAt(mesh, z[0], z[1], w, hs, scale) : null;
+        const h = hMesh ?? (hs === 1 ? w[1] : w[0]) * scale; // fall back to the value-height law off-mesh
+        flat.push(z[0], z[1], h);
+        vert++;
+      }
+      ranges.push({ start, count: path.length });
+      colors.push(hsvToRgb(n > 1 ? k / n : 0, 0.85, 1)); // distinct hue per sheet ⇒ the permutation is legible
+    }
+    this.riemannLoop = { positions: new Float32Array(flat), ranges, colors };
+    if (this.linePosBuffer) {
+      const gl = this.gl;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.linePosBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, this.riemannLoop.positions, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+    }
+  }
+
+  /** Draw the lifted monodromy loop (M3.3) into a viewport, over the just-drawn surface, through the same
+   *  framed orbit camera. Depth test off so the polylines read as an overlay (they sit on the surface and
+   *  z-fight otherwise). A no-op when no loop is active. */
+  private drawRiemannLoop(
+    vx = 0,
+    vy = 0,
+    vw: number = this.canvas.width,
+    vh: number = this.canvas.height,
+  ): void {
+    const loop = this.riemannLoop;
+    if (!loop || !this.lineProgram || !this.lineVao) return;
+    const gl = this.gl;
+    gl.viewport(vx, vy, vw, vh);
+    const aspect = vh > 0 ? vw / vh : 1;
+    const cam = this.riemannCamera();
+    const worldHalf = Math.max(0.5, this.riemannDist * Math.tan(cam.fov / 2));
+    gl.useProgram(this.lineProgram);
+    gl.bindVertexArray(this.lineVao);
+    gl.disable(gl.DEPTH_TEST);
+    gl.uniformMatrix4fv(this.lineVP, false, viewProjection(cam, aspect, worldHalf));
+    for (let k = 0; k < loop.ranges.length; k++) {
+      const c = loop.colors[k];
+      gl.uniform3f(this.lineColor, c[0], c[1], c[2]);
+      gl.drawArrays(gl.LINE_STRIP, loop.ranges[k].start, loop.ranges[k].count);
+    }
+    gl.bindVertexArray(null);
   }
 
   /** Estimate the branch (ramification) points over the region the surface covers (M3.4): where the sheets

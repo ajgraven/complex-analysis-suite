@@ -154,6 +154,10 @@
       .fn-toggle { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
       .fn-tab { font: inherit; cursor: pointer; color: var(--muted); background: var(--field-bg); border: none; border-radius: 0; padding: 3px 10px; font-family: ui-monospace, Menlo, monospace; }
       .fn-tab.active { background: var(--accent); color: var(--accent-contrast); }
+      .transform-sub { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; margin-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+      .transform-sub .sub-head { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+      #implicitHint { margin-top: 8px; }
+      #implicitHint b { color: var(--fg); font-weight: 600; }
       .ac-menu { position: absolute; left: 0; right: 0; z-index: 6; background: var(--field-bg); border: 1px solid var(--accent); border-radius: var(--radius); overflow: hidden; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4); }
       .ac-item { padding: 5px 10px; font-family: ui-monospace, Menlo, monospace; font-size: 0.82rem; color: var(--fg); cursor: pointer; }
       .ac-item.active, .ac-item:hover { background: var(--accent); color: var(--accent-contrast); }
@@ -176,6 +180,13 @@
 
       <div class="group control-group fn-group">
         <div class="fn-head">
+          <label id="inputLabel">Input</label>
+          <div class="fn-toggle" role="group" aria-label="input kind">
+            <button type="button" id="inputFn" class="fn-tab active" aria-pressed="true" title="Plot a function w = f(z)">w = f(z)</button>
+            <button type="button" id="inputImplicit" class="fn-tab" aria-pressed="false" title="Plot an implicit relation F(w, z) = 0 as a Riemann surface">F(w,&nbsp;z) = 0</button>
+          </div>
+        </div>
+        <div class="fn-head" id="fnSlotHead">
           <label for="expr" id="exprLabel">Function&nbsp; f(z)</label>
           <div class="fn-toggle" role="group" aria-label="active function">
             <button type="button" id="fnF" class="fn-tab active" aria-pressed="true">f</button>
@@ -187,9 +198,12 @@
         <div id="preview"></div>
         <div id="error" role="alert"></div>
         <div id="precisionBadge" role="status" hidden></div>
-        <label class="check" style="margin-top: 8px"><input type="checkbox" id="inspectInf" /> Inspect &infin; &mdash; plot f(1/z)</label>
-        <label class="check"><input type="checkbox" id="plotDeriv" /> Plot f&prime; &mdash; the derivative</label>
-        <label class="check"><input type="checkbox" id="implicitMode" /> Implicit surface &mdash; F(w,&nbsp;z) = 0</label>
+        <div class="transform-sub" id="transformGroup">
+          <span class="sub-head">Transform</span>
+          <label class="check"><input type="checkbox" id="inspectInf" /> Inspect &infin; &mdash; plot f(1/z)</label>
+          <label class="check"><input type="checkbox" id="plotDeriv" /> Plot f&prime; &mdash; the derivative</label>
+        </div>
+        <p class="param-hint" id="implicitHint" hidden><b>&#8627; View locked to Riemann.</b> An implicit relation has no single-valued f(z), so the transforms and f/g slots don't apply here.</p>
       </div>
 
       <div class="group control-group">
