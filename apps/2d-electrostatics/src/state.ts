@@ -32,6 +32,8 @@ export interface AppState {
   probe: Rect | null;
   /** The sensor puck's world position (reads the field where it sits), or null when off. */
   sensor: [number, number] | null;
+  /** Whether the animated tracer-particle flow layer is running. */
+  motion: boolean;
 }
 
 let nextId = 1;
@@ -65,5 +67,6 @@ export function initialState(): AppState {
     tool: "move",
     probe: null,
     sensor: null,
+    motion: false,
   };
 }

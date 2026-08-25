@@ -12,6 +12,7 @@ import { createFieldRenderer } from "./render/glView.js";
 import { drawOverlay } from "./render/overlay.js";
 import { attachInteraction } from "./interaction.js";
 import { createControls } from "./ui/controls.js";
+import { createParticleLayer } from "./particles.js";
 import { encodeState, applyStateFromHash } from "./persist.js";
 
 function sizeCanvas(canvas: HTMLCanvasElement, cssW: number, cssH: number, dpr: number): void {
@@ -44,6 +45,14 @@ function main(): void {
   const renderer = createFieldRenderer(gl);
   const state = initialState();
   applyStateFromHash(state, window.location.hash); // reopen a shared permalink
+
+  // The animated tracer-particle layer sits on its own transparent canvas between the GPU field and the
+  // interaction overlay; it never intercepts pointer events (the overlay does).
+  const particleCanvas = document.createElement("canvas");
+  particleCanvas.className = "particle-view";
+  particleCanvas.setAttribute("aria-hidden", "true");
+  canvas.root.insertBefore(particleCanvas, canvas.overlay);
+  const particles = createParticleLayer(particleCanvas, state);
 
   let frame = 0;
   const paint = (): void => {
@@ -112,7 +121,28 @@ function main(): void {
     }, "image/png");
   };
 
-  const controls = createControls(app, state, requestRender, { onSavePng: savePng });
+  // The animated flow layer runs its own rAF loop while `state.motion` is on.
+  let motionRaf = 0;
+  const motionTick = (): void => {
+    motionRaf = 0;
+    if (!state.motion) return;
+    particles.frame();
+    motionRaf = requestAnimationFrame(motionTick);
+  };
+  const toggleMotion = (): void => {
+    if (state.motion) {
+      if (!motionRaf) motionRaf = requestAnimationFrame(motionTick);
+    } else {
+      if (motionRaf) cancelAnimationFrame(motionRaf);
+      motionRaf = 0;
+      particles.clear();
+    }
+  };
+
+  const controls = createControls(app, state, requestRender, {
+    onSavePng: savePng,
+    onToggleMotion: toggleMotion,
+  });
   attachInteraction(canvas.overlay, state, requestRender, () => controls.onSelectionChange());
   window.addEventListener("resize", requestRender);
   requestRender();

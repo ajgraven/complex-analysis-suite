@@ -14,6 +14,8 @@ import { encodeState } from "../persist.js";
 export interface ControlsOptions {
   /** Composite the field + overlay into a PNG (with the permalink embedded) and download it. */
   readonly onSavePng: () => void;
+  /** Start or stop the animated tracer-particle flow loop to match `state.motion`. */
+  readonly onToggleMotion: () => void;
 }
 
 // The two readings of the SAME complex potential — a relabel, not a recompute (the streamlines and
@@ -385,6 +387,17 @@ export function createControls(
   presetSel.addEventListener("change", () => applyPreset(presetSel.value));
   presetWrap.append(presetSel);
 
+  const flowBtn = el("button", "pal-btn", "Flow ▶");
+  flowBtn.type = "button";
+  flowBtn.title = "Animate tracer particles along the flow";
+  flowBtn.setAttribute("aria-pressed", String(state.motion));
+  flowBtn.addEventListener("click", () => {
+    state.motion = !state.motion;
+    flowBtn.setAttribute("aria-pressed", String(state.motion));
+    flowBtn.textContent = state.motion ? "Flow ❚❚" : "Flow ▶";
+    opts.onToggleMotion();
+  });
+
   const sensorBtn = el("button", "pal-btn", "Sensor");
   sensorBtn.type = "button";
   sensorBtn.title = "Toggle a draggable field-probe puck (reads |E|/speed, direction, φ, ψ)";
@@ -414,7 +427,7 @@ export function createControls(
       .catch(() => undefined);
   });
 
-  actions.append(presetWrap, sensorBtn, pngBtn, linkBtn);
+  actions.append(presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
   bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);
