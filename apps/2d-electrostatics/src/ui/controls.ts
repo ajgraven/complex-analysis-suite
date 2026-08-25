@@ -5,9 +5,42 @@
 // The uniform stream (speed U, angle α) rides the toolbar. Everything mutates the shared AppState and
 // asks for a repaint; `onSelectionChange` rebuilds the inspector, `refresh` keeps its live readouts in
 // step while a handle is dragged on the canvas.
-import type { AppState, Placed } from "../state.js";
+import type { AppState, Placed, Lens } from "../state.js";
 import { freshId, findSingularity } from "../state.js";
 import { uniformFromSpeedAngle } from "../field.js";
+
+// The two readings of the SAME complex potential — a relabel, not a recompute (the streamlines and
+// equipotentials are identical curves; only the vocabulary changes). One toggle swaps every label.
+interface Terms {
+  chargeLabel: string;
+  circLabel: string;
+  residueNote: string;
+  fieldLines: string;
+  equipot: string;
+  direction: string;
+  strength: string;
+}
+export function termsFor(l: Lens): Terms {
+  return l === "hydrodynamic"
+    ? {
+        chargeLabel: "Source m (flux)",
+        circLabel: "Circulation Γ",
+        residueNote: "source + i·circulation",
+        fieldLines: "Streamlines",
+        equipot: "Velocity potential",
+        direction: "flow direction",
+        strength: "flow speed",
+      }
+    : {
+        chargeLabel: "Charge q (flux)",
+        circLabel: "Circulation γ",
+        residueNote: "flux + i·circulation",
+        fieldLines: "Field lines",
+        equipot: "Equipotentials",
+        direction: "field direction",
+        strength: "field strength",
+      };
+}
 
 export interface Controls {
   /** Rebuild the inspector for the current selection (call when the selection changes). */
@@ -116,9 +149,9 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
     uAngle.value.textContent = `${uAngle.input.value}°`;
     applyUniform();
   });
-  uni.append(uSpeed.row, uAngle.row);
+  uni.append(el("h2", "insp-t", "Uniform stream"), uSpeed.row, uAngle.row);
 
-  bar.append(brand, palette, uni);
+  bar.append(brand, palette);
 
   // --- inspector: contextual editor for the selected singularity -------------
   const inspector = el("aside", "inspector");
@@ -151,8 +184,9 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
     inspector.append(title);
 
     if (sel.kind === "monopole") {
-      const q = slider("Charge q (flux)", -5, 5, 0.05, sel.c[0]);
-      const g = slider("Circulation γ", -5, 5, 0.05, sel.c[1]);
+      const t = termsFor(state.lens);
+      const q = slider(t.chargeLabel, -5, 5, 0.05, sel.c[0]);
+      const g = slider(t.circLabel, -5, 5, 0.05, sel.c[1]);
       const residueRow = el("div", "readout");
       residueEl = residueRow;
       const setResidue = (): void => {
@@ -177,7 +211,7 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
         setResidue();
         requestRender();
       });
-      inspector.append(q.row, g.row, residueRow);
+      inspector.append(q.row, g.row, residueRow, el("div", "hint", `= ${t.residueNote}`));
       setResidue();
     } else {
       const strength = Math.hypot(sel.mu[0], sel.mu[1]);
@@ -228,7 +262,44 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
     if (residueEl && sel.kind === "monopole") residueEl.textContent = `residue c = ${complex(sel.c[0], sel.c[1])}`;
   };
 
-  app.append(bar, inspector);
+  // --- lens toggle (inserted into the toolbar) + persistent legend -----------
+  const legend = el("aside", "legend");
+  legend.setAttribute("aria-label", "Legend");
+  const updateLegend = (): void => {
+    const t = termsFor(state.lens);
+    legend.innerHTML =
+      `<div class="lg-row"><span class="lg-sw hue"></span>hue = ${t.direction}</div>` +
+      `<div class="lg-row"><span class="lg-sw bright"></span>brightness = ${t.strength}</div>` +
+      `<div class="lg-row"><span class="lg-line stream"></span>${t.fieldLines} (ψ = const)</div>` +
+      `<div class="lg-row"><span class="lg-line equi"></span>${t.equipot} (φ = const)</div>`;
+  };
+
+  const lensSeg = el("div", "modeseg");
+  lensSeg.setAttribute("role", "group");
+  lensSeg.setAttribute("aria-label", "Lens");
+  const lensBtns = new Map<Lens, HTMLButtonElement>();
+  const setLens = (l: Lens): void => {
+    state.lens = l;
+    for (const [id, b] of lensBtns) b.setAttribute("aria-pressed", String(id === l));
+    onSelectionChange(); // relabel the inspector
+    updateLegend();
+    requestRender();
+  };
+  for (const [id, label] of [
+    ["electrostatic", "Electrostatic"],
+    ["hydrodynamic", "Fluid"],
+  ] as [Lens, string][]) {
+    const b = el("button", "seg-btn", label);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(id === state.lens));
+    b.addEventListener("click", () => setLens(id));
+    lensBtns.set(id, b);
+    lensSeg.append(b);
+  }
+  bar.insertBefore(lensSeg, palette);
+  updateLegend();
+
+  app.append(bar, inspector, legend, uni);
 
   return {
     onSelectionChange,
@@ -236,6 +307,7 @@ export function createControls(app: HTMLElement, state: AppState, requestRender:
     destroy(): void {
       bar.remove();
       inspector.remove();
+      legend.remove();
     },
   };
 }
