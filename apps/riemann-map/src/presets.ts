@@ -24,13 +24,13 @@ export interface MapPreset {
 // bounded transcendental images, and one anti-holomorphic reflection.
 export const MAP_PRESETS: readonly MapPreset[] = [
   // z + zⁿ/n: univalent on 𝔻, image is an (n−1)-cusped epicycloid (cardioid → nephroid → …).
-  { id: "cardioid", name: "Cardioid  z + z²/2", expr: "z + z*z/2" },
+  { id: "cardioid", name: "Cardioid  z + z²/2", expr: "z + z^2/2" },
   // A family in the draggable parameter c — grab the red c handle on the disk to deform it live. |c| ≤ ½
   // is univalent (a tilted cardioid); past ½ it folds (∂𝔻 turns amber), so the univalence bound is visible.
-  { id: "cardioid-c", name: "Cardioid family  z + c·z²", expr: "z + c*z*z" },
-  { id: "nephroid", name: "Nephroid  z + z³/3", expr: "z + z*z*z/3" },
-  { id: "epicycloid3", name: "Epicycloid (3 cusps)  z + z⁴/4", expr: "z + z*z*z*z/4" },
-  { id: "square", name: "z²  (2-to-1 fold)", expr: "z*z" },
+  { id: "cardioid-c", name: "Cardioid family  z + c·z²", expr: "z + c*z^2" },
+  { id: "nephroid", name: "Nephroid  z + z³/3", expr: "z + z^3/3" },
+  { id: "epicycloid3", name: "Epicycloid (3 cusps)  z + z⁴/4", expr: "z + z^4/4" },
+  { id: "square", name: "z²  (2-to-1 fold)", expr: "z^2" },
   // Blaschke maps: φ_c is a disk automorphism (draggable c, |c| < 1); the product is a proper 2-to-1 self-map.
   { id: "blaschke-c", name: "Blaschke φ_c  (z−c)/(1−c̄z)", expr: "(z - c)/(1 - conjugate(c)*z)" },
   { id: "blaschke", name: "Blaschke product  z(z−½)/(1−½z)", expr: "z*(z - 0.5)/(1 - 0.5*z)" },
@@ -54,9 +54,9 @@ export const EXTERIOR_MAP_PRESETS: readonly MapPreset[] = [
   { id: "joukowski-ext", name: "Joukowski  ½(z + 1/z)", expr: "(z + 1/z)/2" },
   { id: "vslit-ext", name: "Vertical slit  ½(z − 1/z)", expr: "(z - 1/z)/2" },
   { id: "ellipse-ext", name: "Ellipse  z + 1/(2z)", expr: "z + 1/(2*z)" },
-  { id: "deltoid-ext", name: "Deltoid  z + 1/(2z²)", expr: "z + 1/(2*z*z)" },
-  { id: "astroid-ext", name: "Astroid  z + 1/(3z³)", expr: "z + 1/(3*z*z*z)" },
-  { id: "star5-ext", name: "5-cusp star  z + 1/(4z⁴)", expr: "z + 1/(4*z*z*z*z)" },
+  { id: "deltoid-ext", name: "Deltoid  z + 1/(2z²)", expr: "z + 1/(2*z^2)" },
+  { id: "astroid-ext", name: "Astroid  z + 1/(3z³)", expr: "z + 1/(3*z^3)" },
+  { id: "star5-ext", name: "5-cusp star  z + 1/(4z⁴)", expr: "z + 1/(4*z^4)" },
 ] as const;
 
 /** The id of the preset in `presets` whose expression matches `expr`, or null (used to sync the picker to
