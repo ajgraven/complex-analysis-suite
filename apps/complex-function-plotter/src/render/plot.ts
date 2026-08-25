@@ -1594,6 +1594,13 @@ export class Plot {
     return undefined;
   }
 
+  /** The finite number of sheets `n`, when the active surface is a **finite** cover (√ / ⁿ√, algebraic curve,
+   *  implicit `F(w,z)=0`), else null (infinite-sheeted log / inverse-trig, or no surface). The monodromy-group
+   *  and Riemann–Hurwitz genus summary (C3) applies only to finite covers, so it gates on this. */
+  riemannSheetCount(): number | null {
+    return this.expectedSheetCount() ?? null;
+  }
+
   /** Show (or clear, with null) the monodromy loop's per-sheet continuation paths as coloured 3D polylines
    *  lifted ONTO the surface (M3.3) — so the sheet permutation is visible where the sheets live, not only as a
    *  flat base-plane loop + a text badge. Keeps the paths so the lift can be re-heighted on a height change.

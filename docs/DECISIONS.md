@@ -2960,7 +2960,11 @@ M3/D/B).
 ### Action Items
 1. [x] Write [`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md) + this ADR (C0).
 2. [ ] C1 — `generatorLoop.ts` + branch-point chips (winding-certified) + tests; gate; pause for review.
-3. [ ] C3 — `permGroup.ts` (closure/transitivity/product-one/Riemann–Hurwitz) + summary UI + tests; gate.
+3. [x] C3 — `permGroup.ts` (capped closure + orbit transitivity + Riemann–Hurwitz genus with the exact
+       parity/bound consistency check) + lasso/enclosing loops (common-labeling generators + the ∞ loop) +
+       `Plot.riemannSheetCount` + a **Monodromy group & genus** summary. `≈`, quarantined. Verified √(z²−1) →
+       C₂ genus 0 and w²=z³−z → genus 1. (`∞` handling: inferred from the enclosing loop's cycle type, per
+       the design doc's open question.)
 4. [ ] C2 — permutation diagram + test; gate.
 5. [ ] C4 (optional) — report panel.
 6. [ ] Keep all `≈` outputs quarantined; surface the product-one consistency check prominently.

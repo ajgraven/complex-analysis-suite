@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { generatorLoopAround, generatorRadius } from "../src/riemann/generatorLoop.js";
+import {
+  generatorLoopAround,
+  generatorRadius,
+  lassoLoop,
+  enclosingLoop,
+  commonBasePoint,
+} from "../src/riemann/generatorLoop.js";
 import { windingNumber } from "../src/riemann/winding.js";
 import type { Complex } from "@cas/expr/complex";
 
@@ -56,5 +62,52 @@ describe("generatorRadius", () => {
     const loop = generatorLoopAround(pts[0], r0);
     expect(windingNumber(loop, pts[0])).toBe(1);
     expect(windingNumber(loop, pts[1])).toBe(0);
+  });
+});
+
+describe("lassoLoop", () => {
+  it("winds +1 about its center and 0 about the base point and other points", () => {
+    const base: Complex = [0, -3];
+    const loop = lassoLoop(base, [1, 0], 0.3, 48);
+    expect(windingNumber(loop, [1, 0])).toBe(1); // encircles the target
+    expect(windingNumber(loop, base)).toBe(0); // the out-and-back segment doesn't enclose the base
+    expect(windingNumber(loop, [-2, 0])).toBe(0); // nor a far point
+  });
+
+  it("two lassos from a common base isolate their own centers", () => {
+    const base: Complex = [0, -3];
+    const l1 = lassoLoop(base, [-1, 0], 0.3);
+    const l2 = lassoLoop(base, [1, 0], 0.3);
+    expect(windingNumber(l1, [-1, 0])).toBe(1);
+    expect(windingNumber(l1, [1, 0])).toBe(0);
+    expect(windingNumber(l2, [1, 0])).toBe(1);
+    expect(windingNumber(l2, [-1, 0])).toBe(0);
+  });
+});
+
+describe("enclosingLoop + commonBasePoint", () => {
+  it("encloses every branch point (winding +1 about each)", () => {
+    const pts: Complex[] = [
+      [-1, 0],
+      [1, 0],
+      [0, 0.5],
+    ];
+    const loop = enclosingLoop(pts, 4);
+    for (const b of pts) expect(windingNumber(loop, b)).toBe(1);
+  });
+
+  it("gives a real enclosing loop for a single branch point (radius floored to the view)", () => {
+    const loop = enclosingLoop([[0, 0]], 4);
+    expect(windingNumber(loop, [0, 0])).toBe(1);
+  });
+
+  it("places the common base point below the whole cluster", () => {
+    const pts: Complex[] = [
+      [-1, 0],
+      [1, 2],
+    ];
+    const base = commonBasePoint(pts, 4);
+    expect(base[1]).toBeLessThan(0); // below ymin = 0
+    for (const b of pts) expect(windingNumber(lassoLoop(base, b, 0.3), b)).toBe(1);
   });
 });

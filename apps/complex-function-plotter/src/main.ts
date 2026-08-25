@@ -40,7 +40,21 @@ import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
 import { windingNumber } from "./riemann/winding.js";
-import { generatorLoopAround, generatorRadius } from "./riemann/generatorLoop.js";
+import {
+  generatorLoopAround,
+  generatorRadius,
+  lassoLoop,
+  enclosingLoop,
+  commonBasePoint,
+} from "./riemann/generatorLoop.js";
+import {
+  cycles,
+  cycleCount,
+  generatedGroup,
+  riemannHurwitzGenus,
+  namedGroup,
+  type Perm,
+} from "./riemann/permGroup.js";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";
@@ -205,6 +219,8 @@ function main(): void {
   const monodromyResult = byId("monodromyResult");
   const generatorLoopsEl = byId("generatorLoops");
   const generatorChipsEl = byId("generatorChips");
+  const computeGroupBtn = byId("computeGroupBtn");
+  const monodromyGroupEl = byId("monodromyGroup");
   const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
@@ -1753,6 +1769,10 @@ function main(): void {
     const show = monodromyOn && plot.mode === "riemann" && branchPts.length > 0;
     generatorLoopsEl.hidden = !show;
     generatorChipsEl.replaceChildren();
+    if (monodromyGroupEl instanceof HTMLElement) monodromyGroupEl.hidden = true; // stale on a branch-set change
+    // The group / genus summary (C3) applies only to a FINITE cover; hide the button for ∞-sheeted surfaces.
+    if (computeGroupBtn instanceof HTMLElement)
+      computeGroupBtn.hidden = !(show && plot.riemannSheetCount() != null);
     if (!show) return;
     branchPts.forEach((b, i) => {
       const chip = document.createElement("button");
@@ -1768,6 +1788,75 @@ function main(): void {
       generatorChipsEl.appendChild(chip);
     });
   };
+
+  // Monodromy group + Riemann–Hurwitz genus (C3). Compute a generator permutation for each branch point as the
+  // monodromy of a LASSO from one common base point (so all permutations share a sheet labeling and compose),
+  // plus a big enclosing loop for the ramification over ∞. From these: the monodromy group ⟨σᵢ⟩ ≤ Sₙ (order,
+  // connectedness = transitivity), and the genus via Riemann–Hurwitz. The group + genus are `≈` (built from the
+  // never-certified permutations, RISKS §3); the parity/bound check is exact and flags inconsistent estimates.
+  const cycleNotation = (p: Perm): string => {
+    const nontrivial = cycles(p).filter((c) => c.length > 1);
+    return nontrivial.length ? nontrivial.map((c) => `(${c.map((k) => k + 1).join(" ")})`).join("") : "id";
+  };
+  const computeGroup = (): void => {
+    if (!(monodromyGroupEl instanceof HTMLElement)) return;
+    const n = plot.riemannSheetCount();
+    if (n == null || n < 2 || branchPts.length === 0) {
+      monodromyGroupEl.hidden = true;
+      return;
+    }
+    const base = commonBasePoint(branchPts, plot.view.span);
+    const gens: Perm[] = [];
+    const genLabels: string[] = [];
+    let skipped = 0;
+    branchPts.forEach((b, i) => {
+      const r = generatorRadius(i, branchPts, plot.view.span);
+      if (r == null) {
+        skipped++;
+        return;
+      }
+      const res = plot.computeRiemannMonodromy(lassoLoop(base, b, r));
+      if (res && res.sheetCount === n && res.isPermutation) {
+        gens.push(res.permutation);
+        genLabels.push(`γ${subscript(i + 1)} = ${cycleNotation(res.permutation)}`);
+      } else skipped++;
+    });
+    // Ramification over ∞: the monodromy of a big loop enclosing all finite branch points (= σ_∞⁻¹).
+    const bigRes = plot.computeRiemannMonodromy(enclosingLoop(branchPts, plot.view.span));
+    const sigmaInf =
+      bigRes && bigRes.sheetCount === n && bigRes.isPermutation ? bigRes.permutation : null;
+    const groupGens = sigmaInf ? [...gens, sigmaInf] : gens;
+    const group = groupGens.length
+      ? generatedGroup(groupGens, n)
+      : { order: 1, capped: false, transitive: n <= 1 };
+    const name = namedGroup(group.order, n, group.transitive);
+    const cycleCounts = gens.map((g) => cycleCount(g));
+    if (sigmaInf) cycleCounts.push(cycleCount(sigmaInf));
+    const genus = riemannHurwitzGenus(cycleCounts, n);
+
+    const lines: string[] = [];
+    lines.push(`${n} sheets · ${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}`);
+    if (genLabels.length) lines.push(genLabels.join("  "));
+    if (sigmaInf) lines.push(`γ∞ = ${cycleNotation(sigmaInf)}`);
+    lines.push(
+      `≈ monodromy group: order ${group.order}${group.capped ? "+" : ""}` +
+        (name ? ` · ${name}` : "") +
+        ` · ${group.transitive ? "transitive ⇒ connected" : "intransitive ⇒ disconnected"}`,
+    );
+    lines.push(
+      genus.consistent
+        ? `≈ genus ${genus.genus} (Riemann–Hurwitz; = given the cycle data)`
+        : "genus — ⚠ inconsistent estimates (Riemann–Hurwitz parity/bound failed)",
+    );
+    if (skipped)
+      lines.push(
+        `⚠ ${skipped} branch point${skipped === 1 ? "" : "s"} not isolated — the group may be incomplete`,
+      );
+    lines.push("Uncertified estimate (RISKS §3).");
+    monodromyGroupEl.textContent = lines.join("\n");
+    monodromyGroupEl.hidden = false;
+  };
+  if (computeGroupBtn instanceof HTMLElement) computeGroupBtn.addEventListener("click", computeGroup);
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same

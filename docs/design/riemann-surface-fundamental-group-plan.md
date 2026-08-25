@@ -29,7 +29,7 @@
 | **C0 — design doc + ADR-0033** | ✅ this document | scope, math, the `=`/`≈` line, the non-degradation contract, phase order, tests, risks. No app code. |
 | **C1 — one-click generator loops** | ✅ done | `src/riemann/generatorLoop.ts` (`generatorLoopAround` + `generatorRadius`, winding-certified, 6 tests); a **GENERATOR LOOPS (π₁)** chip row in the explorer (one γᵢ per branch point, disabled + hinted when a neighbour is too close to isolate); `runGenerator` shares `applyLoop` with the hand-drawn path, so a chip lifts + arrows + winds exactly like a manual loop. |
 | **C2 — permutation diagram** | ⏳ planned | inline SVG per σᵢ: sheet-coloured nodes `1…n`, arrows `k → σᵢ(k)`. |
-| **C3 — monodromy group + genus** | ⏳ planned | generated subgroup `⟨σᵢ⟩ ≤ Sₙ` (order, transitivity, name), product-one check, Riemann–Hurwitz genus. |
+| **C3 — monodromy group + genus** | ✅ done | `src/riemann/permGroup.ts` (compose/inverse/cycles/`generatedGroup` capped closure + orbit transitivity/`riemannHurwitzGenus`/`namedGroup`, 12 tests) + lasso/enclosing loops in `generatorLoop.ts` (common-labeling generators + the ∞ loop, 5 tests) + `Plot.riemannSheetCount`. A **Monodromy group & genus** button computes ⟨σᵢ⟩ ≤ Sₙ (order · name · transitive⇒connected) and the Riemann–Hurwitz genus, `≈`, with the exact parity/bound consistency check. Verified: √(z²−1) → C₂, genus 0; **w²=z³−z → genus 1 (torus)**. |
 | **C4 — monodromy report panel (optional)** | ⏳ planned | the generators + diagrams + group + genus as one educational summary. |
 
 ---
