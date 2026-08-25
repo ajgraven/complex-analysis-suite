@@ -104,7 +104,7 @@ export type RiemannViewState = {
  * pushed forward, coloured by the local rotation arg φ′. zoom 0.75 ⇒ world half-height 1.33, framing 𝔻.
  */
 export const DEFAULT_VIEW_STATE: RiemannViewState = {
-  map: { expr: "z + z*z/2", vars: ["z"], antiholomorphic: false },
+  map: { expr: "z + z^2/2", vars: ["z"], antiholomorphic: false },
   viewport: { centerRe: 0, centerIm: 0, zoom: 0.75 },
   render: {
     mode: "disk-image",
