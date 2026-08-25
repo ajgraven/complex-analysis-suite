@@ -99,8 +99,10 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   **transitive ⇒ connected**) and the surface's **genus via Riemann–Hurwitz** — e.g. `w² = z³ − z` reads as
   **genus 1**, a torus. Each generator is drawn as a **permutation diagram** (C2 — sheet-coloured nodes with
   `k → σ(k)` arrows). The group and genus are `≈` (built from the estimated permutations); the Riemann–Hurwitz
-  parity/bound check is exact and flags inconsistent estimates. (Parametric branch points come from the exact
-  cut-ray origins, so a folded `z^(p/q)` surface reports its one true branch point, not a scattered scan.) Analytic continuation
+  parity/bound check is exact and flags inconsistent estimates. A **Monodromy report** (C4) opens the whole
+  story full-screen — the covering's fingerprint, the π₁ generators with diagrams, and the Riemann–Hurwitz
+  computation worked out. (Parametric branch points come from the exact cut-ray origins, so a folded
+  `z^(p/q)` surface reports its one true branch point, not a scattered scan.) Analytic continuation
   around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so the permutation is honestly `≈`,
   flags low confidence near a branch point, and is kept out of the badge, permalink, and every export. Built
   on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface

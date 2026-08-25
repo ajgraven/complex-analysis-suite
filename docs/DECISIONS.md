@@ -2969,5 +2969,9 @@ M3/D/B).
        generator in the group summary + test. Also switched parametric branch points to the exact cut-ray
        origins (`Plot.riemannParamBranchPoints`), replacing the mesh-limited scan (fixes `z^(1/3)`'s spurious
        24 → 1).
-5. [ ] C4 (optional) — report panel.
-6. [ ] Keep all `≈` outputs quarantined; surface the product-one consistency check prominently.
+5. [x] C4 — a theme-aware full-screen **Monodromy report** (fingerprint stats · π₁ generators gallery with
+       diagrams + branch-point locations · the Riemann–Hurwitz computation worked out with the numbers ·
+       honest ≈ framing), opened from the inline summary; shared `gatherMonodromy()` behind both. Layout only.
+6. [x] All `≈` outputs stay quarantined (badge / permalink / export); the Riemann–Hurwitz **parity/bound
+       check** is surfaced as the consistency signal (an odd/negative result ⇒ "inconsistent estimates"),
+       standing in for the ordering-sensitive product-one relation.
