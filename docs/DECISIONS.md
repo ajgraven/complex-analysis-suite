@@ -2594,6 +2594,25 @@ the height law identical to the shader, so pick and picture agree.
        tint and cut-shadow were **considered and declined** on honesty grounds (global sheet identity is what
        monodromy permutes; a cut is a choice, not an invariant — the branch *points* are the invariant mark).
 
+### Amendment (D/B arc — visual-intuition follow-ups)
+
+Later additive work on the same branch, all inside the opt-in explorer and preserving the `≈`/quarantine
+posture above (recorded here rather than as separate ADRs, being refinements not new decisions; the group-level
+follow-on is [ADR-0033](#adr-0033-monodromy-group-and-fundamental-group-tools-generator-loops-permutation-diagram-genus)):
+
+- **D1/D2 — direction arrows** on the base-plane loop *and* the lifted per-sheet paths, via AP's
+  `drawDirectionTicks` lifted into `@cas/ui` (its second consumer — ADR-0007). **Real-time lift:** the surface
+  paths now grow as the loop is drawn (incremental nearest-match continuation).
+- **B2 — winding numbers** per branch point: `windingNumber(loop, center)`, exact integer topology (`=`),
+  shown separately from the `≈` permutation it is the topological input to.
+- **B1 — the principal branch cut** is now **drawn** for the M1 parametric primitives. This **refines** the
+  M3.4 "a cut is a choice, not an invariant" note rather than reversing it: for the *auto-gluing* curve /
+  implicit surfaces a cut remains an arbitrary choice and is **still not drawn** (`Plot.riemannCutRays()`
+  returns `[]` there); it is drawn **only** where the surface is built on a *canonical principal branch* (√,
+  ⁿ√, log, arcsin/arccos, arctan and their affine wraps), where the cut is determined by the principal-value
+  convention — not a choice — and is genuinely where that branch is discontinuous. The branch *points* remain
+  the primary invariant mark for every mode.
+
 ---
 
 ## ADR-0031: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
@@ -2858,3 +2877,90 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    is deliberately deferred: **color-contrast** (a palette decision) and the **region / landmark / heading** cluster
    (a broader per-app semantic-HTML pass, `moderate` severity). **This completes U8; only U7 (nav-header ↔
    `@cas/interchange` hand-off wiring) remains open in this ADR.**
+
+---
+
+## ADR-0033: Monodromy-group and fundamental-group tools (generator loops, permutation diagram, genus)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+Extends the opt-in **Monodromy explorer** from tracing one loop to reading the **whole branched cover**:
+one-click **generator loops** around each branch point (a generating set of the base's fundamental group), a
+**permutation diagram** per generator, and the derived **monodromy group**, connectedness, product-one
+consistency check, and the **surface's genus** via Riemann–Hurwitz. Full plan:
+[`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md).
+Also records the direction-arrow / real-time-lift / branch-cut / winding additions (D1/D2/B1/B2) that precede
+it on the same arc, and reconciles the branch cut with ADR-0030's M3.4 "no cut" note (see Amendment there).*
+
+### Context
+
+The explorer (ADR-0030 M3.3) estimates the sheet permutation of **one** hand-drawn loop. But a branched cover
+is characterized by its **monodromy representation** `ρ : π₁(base ∖ branch points) → Sₙ` as a whole: `π₁` is
+free on one generator `γᵢ` per branch point, `ρ(γᵢ) = σᵢ`, and from `{σᵢ}` follow the monodromy group, whether
+the surface is connected (transitivity), the product-one relation `σ₁⋯σₘσ_∞ = id`, and — via Riemann–Hurwitz —
+the **genus**. All of this is reachable by reusing the M3.3 pipeline on *canonical* loops rather than arbitrary
+ones. The hazard is honesty: every `σᵢ` is the never-certified continuation (RISKS §3), so the whole tower is
+`≈` and must stay quarantined; only the *combinatorial topology* (free-group rank, the product-one **form**,
+Riemann–Hurwitz **given** the cycle data) and the winding numbers are `=`.
+
+### Decision
+
+Ship as gated, app-local, additive milestones (no new packages — ADR-0007, single consumer), inside the
+already-opt-in explorer, in the order **C1 → C3 → C2 → C4**:
+
+- **C1 — generator loops.** A chip per branch point auto-draws a CCW loop around it (radius keyed to the
+  nearest-neighbor distance), certified by the B2 winding number (`= +1` about its own point, `= 0` about the
+  others) and run through the existing `computeRiemannMonodromy` + lift. Prefers the exact discriminant branch
+  points when available. New pure `src/riemann/generatorLoop.ts`.
+- **C3 — group + genus.** New pure `src/riemann/permGroup.ts`: compose/inverse/cycleType, BFS subgroup closure
+  (**capped**) with order + transitivity, the product-one check, and `riemannHurwitzGenus`. Surfaced as an
+  `≈`, quarantined summary.
+- **C2 — permutation diagram.** Sheet-coloured node/arrow diagram per `σᵢ`, pure render from a
+  `MonodromyResult`.
+- **C4 (optional) — a report panel** binding C1–C3 together.
+
+### Options Considered
+
+#### Option A: reuse the M3.3 pipeline on canonical generator loops (chosen)
+**Pros:** no new continuation engine — the risky part is unchanged and already fenced; the only new code is
+loop *generation*, finite-group *algebra*, and Riemann–Hurwitz *arithmetic*, all pure and unit-testable; the
+winding number (B2, `=`) certifies each generator; the product-one relation is a free self-check on the
+estimates. **Cons:** results inherit M3.3's `≈`; clustered branch points can defeat automatic generator sizing
+(mitigated: winding self-check + hand-draw fallback).
+
+#### Option B: symbolic monodromy from the defining polynomial (Puiseux / exact analytic continuation)
+**Cons, why rejected:** a large new exact-CAS capability (Puiseux expansions, certified tracking) — precisely
+the RISKS §3 problem the repo declines to certify; disproportionate to a visualization feature and a second
+engine to maintain.
+
+#### Option C: leave it at one-loop monodromy (status quo)
+**Cons, why rejected:** the user asked to connect the loops to the fundamental group; the group/genus is the
+intellectual payoff and is cheaply reachable by Option A without touching the certified/uncertified boundary.
+
+### Trade-off Analysis
+
+Option A keeps the certification boundary exactly where ADR-0030 drew it (continuation is `≈`, quarantined) and
+buys real mathematical depth with only pure, bounded, testable additions. The genus is the sharpest example: it
+is *exact given* the cycle structure, so the tool honestly reports "genus ≈ 1 (exact given the estimated
+cycles)". The BFS cap bounds cost for high-degree implicit surfaces. Everything is behind the opt-in explorer,
+so the default plotter is untouched (north-star: no regression, no new primitive built from scratch — it rides
+M3/D/B).
+
+### Consequences
+
+- **Easier:** the explorer becomes a genuine covering-space instrument (generators, group, connectedness,
+  genus) with no new risk surface; the product-one check turns the `≈` uncertainty into a visible signal.
+- **Harder:** a standing honesty burden (as M3.3) — the group/genus are `≈` and must never leak into badge /
+  permalink / export; automatic generator sizing needs the winding self-check to stay trustworthy.
+- **Revisit if** (a) a second consumer needs `permGroup.ts` ⇒ extract to `@cas/core` (ADR-0007); (b) a
+  receiving tool wants the monodromy representation serialized ⇒ ADR-0005 branch-aware interchange, RISKS §3
+  labeling intact; (c) exact monodromy (Option B) is ever justified by a non-visualization consumer.
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md) + this ADR (C0).
+2. [ ] C1 — `generatorLoop.ts` + branch-point chips (winding-certified) + tests; gate; pause for review.
+3. [ ] C3 — `permGroup.ts` (closure/transitivity/product-one/Riemann–Hurwitz) + summary UI + tests; gate.
+4. [ ] C2 — permutation diagram + test; gate.
+5. [ ] C4 (optional) — report panel.
+6. [ ] Keep all `≈` outputs quarantined; surface the product-one consistency check prominently.
