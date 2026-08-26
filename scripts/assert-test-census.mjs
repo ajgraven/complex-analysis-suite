@@ -52,6 +52,7 @@ const PROJECTS = [
   { name: 'riemann-map', match: '/apps/riemann-map/', floor: 1 },
   { name: 'argument-principle', match: '/apps/argument-principle/', floor: 1 },
   { name: 'faber-transform', match: '/apps/faber-transform/', floor: 1 },
+  { name: '2d-electrostatics', match: '/apps/2d-electrostatics/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

@@ -72,8 +72,9 @@ export function laurentExpr(c: Complex, F: readonly Complex[], v: string): strin
  * than silently dropping terms into a subtly-wrong map. Callers should catch and surface the message.
  */
 export function mapSpecToExpr(m: MapSpec): string {
-  // An antiholomorphic closed form acts on conj(z), so build it on `conjugate(z)` instead of `z`.
-  const v = m.antiholomorphic ? "conjugate(z)" : "z";
+  // An antiholomorphic closed form acts on conj(z), so build it on `conjugate(z)` instead of `z`. A
+  // conformal map carries no `antiholomorphic` field (and throws below before `v` is used).
+  const v = "antiholomorphic" in m && m.antiholomorphic ? "conjugate(z)" : "z";
   switch (m.form) {
     case "rational":
       return rationalExpr(m.num, m.den, v);
@@ -93,6 +94,14 @@ export function mapSpecToExpr(m: MapSpec): string {
       // the expr path — fail loudly rather than fall through to an implicit `undefined`.
       throw new Error(
         "A schwarz-form map is not expr-compilable — its inverse is numerical. Reconstruct σ from its generating map φ (via @cas/schwarz), or import φ directly.",
+      );
+    case "conformal":
+      // A Schwarz–Christoffel / lightning map is built from prevertices + quadrature (or a least-squares
+      // basis), not an algebraic expression the `expr` pipeline can compile. A consumer rebuilds it from
+      // `m.polygon` (or the recorded prevertices/angles/constant) via @cas/conformal — mirroring how a
+      // schwarz map is reconstructed. Fail loudly if one is routed to the expr path.
+      throw new Error(
+        "A conformal-form map (Schwarz–Christoffel) is not expr-compilable. Reconstruct it from its polygon via @cas/conformal.",
       );
   }
 }

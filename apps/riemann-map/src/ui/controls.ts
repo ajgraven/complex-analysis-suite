@@ -76,6 +76,7 @@ export interface Controls {
   onResetView(cb: () => void): void;
   /** Paste-import an @cas/interchange "#s=" map link (the "Import map…" action). */
   onImportMap(cb: (link: string) => void): void;
+  onSendToElectrostatics(cb: () => void): void;
   /** Apply the precise-nav fields (Apply button or Enter) as a new centre + zoom. */
   onApplyViewport(cb: (re: number, im: number, zoom: number) => void): void;
 }
@@ -256,6 +257,7 @@ export function createControls(initialExpr: string): Controls {
   const savePngListeners: (() => void)[] = [];
   const resetListeners: (() => void)[] = [];
   const importMapListeners: ((link: string) => void)[] = [];
+  const sendElectrostaticsListeners: (() => void)[] = [];
   const applyViewportListeners: ((re: number, im: number, zoom: number) => void)[] = [];
 
   const root = document.createElement("aside");
@@ -382,7 +384,16 @@ export function createControls(initialExpr: string): Controls {
     mkPolyBtn("reset", "Reset to a regular pentagon", "reset"),
     polyCount,
   );
-  polyTools.append(polyHint, polyBtns);
+  // Hand-off: open the current polygon in 2D Electrostatics (flow past / inside K). Polygon-only, so it
+  // rides inside polyTools, which setPolygonTools() shows only for a live polygon region (ADR-0035).
+  const sendRow = document.createElement("div");
+  sendRow.className = "buttons";
+  const sendBtn = document.createElement("button");
+  sendBtn.type = "button";
+  sendBtn.textContent = "Send to 2D Electrostatics ↗";
+  sendBtn.title = "Open this polygon in 2D Electrostatics to see the flow past / inside it";
+  sendRow.append(sendBtn);
+  polyTools.append(polyHint, polyBtns, sendRow);
   const dirField = document.createElement("div");
   dirField.className = "field";
   const dirLbl = document.createElement("span");
@@ -551,6 +562,7 @@ export function createControls(initialExpr: string): Controls {
     const link = window.prompt("Paste an interchange map link (#s=…) from Complex Dynamics:");
     if (link && link.trim()) importMapListeners.forEach((cb) => cb(link.trim()));
   });
+  sendBtn.addEventListener("click", () => sendElectrostaticsListeners.forEach((cb) => cb()));
   const applyViewport = (): void => {
     const re = Number(navRe.input.value);
     const im = Number(navIm.input.value);
@@ -739,6 +751,7 @@ export function createControls(initialExpr: string): Controls {
     onSavePng(cb) { savePngListeners.push(cb); },
     onResetView(cb) { resetListeners.push(cb); },
     onImportMap(cb) { importMapListeners.push(cb); },
+    onSendToElectrostatics(cb) { sendElectrostaticsListeners.push(cb); },
     onApplyViewport(cb) { applyViewportListeners.push(cb); },
   };
 }

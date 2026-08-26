@@ -89,6 +89,16 @@ describe("@cas/interchange mapSpecToExpr — loud-failure guards (the CD-diverge
     };
     expect(() => mapSpecToExpr(m)).toThrow(/schwarz|numerical/i);
   });
+
+  it("throws on a conformal-form map (Schwarz–Christoffel, rebuilt via @cas/conformal, not expr-compilable)", () => {
+    const m = {
+      form: "conformal" as const,
+      engine: "sc-exterior" as const,
+      polygon: [cx(1), cx(-1), { re: -1, im: 1 }, { re: 1, im: 1 }],
+      converged: true,
+    };
+    expect(() => mapSpecToExpr(m)).toThrow(/conformal|@cas\/conformal|Schwarz/i);
+  });
 });
 
 describe("@cas/interchange envelopeToMapSpec", () => {

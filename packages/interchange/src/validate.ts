@@ -75,6 +75,10 @@ export function isComplex(v: unknown): v is Complex {
 function isComplexArray(v: unknown): v is Complex[] {
   return Array.isArray(v) && v.length <= MAX_COEFF_LEN && v.every(isComplex);
 }
+/** A bounded array of finite numbers (a ConformalMap's interior-angle list αₖ). */
+function isNumberArray(v: unknown): v is number[] {
+  return Array.isArray(v) && v.length <= MAX_COEFF_LEN && v.every(isFiniteNum);
+}
 /** A laurent φ's optional finite-pole branches: a bounded array of { z: Complex, A: bounded Complex[] }
  *  (schema.ts BranchSpec). Untrusted-input bounded on both the branch count and each A[] length. */
 function isBranchArray(v: unknown): boolean {
@@ -121,6 +125,23 @@ export function isMapSpec(v: unknown): v is MapSpec {
     case "expr":
       return typeof v.expr === "string" && v.expr.length <= MAX_EXPR_LEN &&
         Array.isArray(v.vars) && v.vars.length <= MAX_VARS_LEN && v.vars.every(isVarName);
+    case "conformal": {
+      // A polygon conformal map (schema.ts ConformalMap, 1.4.0): the required corners + engine tag +
+      // converged flag, plus the optional fit data validated when present (a hand-edited link can carry a
+      // garbage prevertex list, so bound & type it rather than trust it). Reconstructed via @cas/conformal.
+      return (
+        (v.engine === "sc-interior" || v.engine === "sc-exterior" || v.engine === "lightning") &&
+        isComplexArray(v.polygon) &&
+        (v.polygon as Complex[]).length >= 2 &&
+        typeof v.converged === "boolean" &&
+        (v.angles === undefined || isNumberArray(v.angles)) &&
+        (v.prevertices === undefined || isComplexArray(v.prevertices)) &&
+        (v.constant === undefined || isComplex(v.constant)) &&
+        (v.capacity === undefined || isFiniteNum(v.capacity)) &&
+        (v.degraded === undefined || typeof v.degraded === "boolean") &&
+        (v.residual === undefined || isFiniteNum(v.residual))
+      );
+    }
     case "schwarz": {
       // A σ recipe (schema.ts SchwarzMap): a closed-form φ — the disk φ uniformizes, a known inverse
       // method, and the definitional anti-holomorphic flag. A laurent | rational φ is itself a MapSpec

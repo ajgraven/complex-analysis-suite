@@ -2975,3 +2975,126 @@ M3/D/B).
 6. [x] All `≈` outputs stay quarantined (badge / permalink / export); the Riemann–Hurwitz **parity/bound
        check** is surfaced as the consistency signal (an odd/negative result ⇒ "inconsistent estimates"),
        standing in for the ordering-sensitive product-one relation.
+
+---
+
+## ADR-0034: The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow)
+
+**Status:** Accepted. A new **separate app** (decision #8), built on the shared `@cas/*` packages; no new
+package (ADR-0007 — extract only on a second consumer). Plan:
+[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
+
+### Context
+
+The suite visualizes maps (dynamics, conformal maps, Faber, the argument principle) but nothing renders a
+**field** — Dictionary I of the author's writeup *"Complex Analysis as Two-Dimensional Electrostatics and
+Hydrodynamics"*, where a meromorphic function *is* a planar field and its poles *are* the sources. The
+machinery to do so already exists: `@cas/expr` (the field as an executable expression), `@cas/gpu` (WebGL2
+domain-coloring + the shared GLSL stdlib), `@cas/interchange`/`@cas/export` (permalinks + figure recipes),
+and the new `@cas/ui` shell ([ADR-0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)).
+Online the space is open too (elementary-flow toys exist; transplant-through-arbitrary-maps, interactive
+equilibrium-measure/capacity, and complex-charge QD twisting do not).
+
+### Decision
+
+Add **`apps/2d-electrostatics`** ("2D Electrostatics") — an interactive realization of the complex potential
+`W(z) = φ + iψ`: drop and drag charges / sources / sinks / vortices / doublets and see the field as field
+lines, equipotentials, streamlines, and a domain-colored field, with a single **lens** toggle relabelling the
+same picture between the electrostatic and hydrodynamic readings.
+
+1. **The organizing primitive is the complex residue `c = q + iγ` = charge + vortex** (paper §1.7), whose
+   streamlines are logarithmic spirals of pitch `arctan(γ/q)`. The field is `E = W'`, evaluated exactly and
+   per-pixel on the GPU (the closed-form, holomorphic field means no velocity texture and analytic derivatives).
+2. **Conventions live at the app edge** (aligning with [ADR-0006](#adr-0006-convention-neutral-core)): the app
+   adopts the paper's normalizations (`∮ dz/z = 1`, `dA = dx dy/π`, `E = Eₓ − iE_y`) exactly as the QD app does,
+   while the shared `@cas/*` packages stay convention-neutral.
+3. **Framing is hybrid:** a physics-first drop-and-drag sandbox core PLUS a first-class **theorem gallery** that
+   turns the paper's dictionary into live pictures (its first entry, the flux/circulation probe, renders the
+   residue theorem as Gauss's law (Re) + Kelvin circulation (Im) — exact for the closed-form field, labelled `=`).
+4. **Adopts the `@cas/ui` shell from day one** (`mountCanvas` + `runWithFatalBoundary`); registered in
+   `SUITE_APPS`, the launcher, and the combined Pages deploy.
+5. **The Hele-Shaw "twisting" showpiece (M4) lives in this app**, importing the QD app's Schwarz reflection σ /
+   Richardson moments via a new `@cas/interchange` recipe — keeping the QD app stable and making the hand-off
+   itself a feature.
+6. **Honest labelling** throughout (`=` closed-form fields / capacities / residue sums; `≈` numerical contours,
+   Fekete relaxation, transplanted flows; `≤`/`⚠` the ill-posed Hele-Shaw evolution past a cusp).
+
+Consumes `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui` (M0–M1); adds
+`@cas/conformal` (M2), `@cas/faber` (M3), `@cas/schwarz` (M4) as those milestones land.
+
+### Consequences
+
+- **Positive:** a new consumer of already-built machinery (north star); the biggest future consumer of
+  `@cas/conformal` (M2's transplant), which retro-justifies a `ConformalMap` `@cas/interchange` form (deferred to
+  a companion ADR when M2 lands); surfaces potential-theory quantities (capacity, equilibrium measure) that sit
+  one relabel from the exterior-map machinery; and gives the author's writeup an interactive companion.
+- **Deferred:** the `ConformalMap` + `flow` interchange forms (M2, a companion ADR — gate on the receiving tool,
+  which this app becomes); the non-Laurent σ families and the QD df64 deep-zoom (unchanged).
+
+### Status of the build
+
+**M0–M3 complete** (verified in live headless-Chromium WebGL2). M0 (render spike) + M1 (the superposition
+sandbox — palette, inspector with the `c = q+iγ` decomposition, the two-lens toggle, the flux/circulation
+probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an animated tracer-flow layer). **M2**
+(conformal transplant): Joukowski + Kármán–Trefftz airfoils; exterior-SC flow *past* a polygon and interior-SC
+flow *inside* a polygon; the `@cas/interchange` `conformal` map form ([ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
+hand-off. **M3** (potential theory): the conductor-K view — equilibrium charge, capacity, Green's function —
+with Faber-zero and Fekete/Leja overlays (three roads to μ_K), plus general K with no closed-form map via a
+log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber` (M3). **M4** (the Hele-Shaw
+"twisting" showpiece) is specced in the plan and deferred to a separately-approved push.
+
+---
+
+## ADR-0035: The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0)
+
+**Status:** Accepted. A new `MapSpec` form (`kind` stays `"map"`), reconstructed via `@cas/conformal`,
+minted by 2D Electrostatics' M2.4 polygon transplant. Foreshadowed by
+[ADR-0034](#adr-0034-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) (the
+"companion ADR when M2 lands"). Plan §6:
+[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
+
+### Context
+
+M2 of 2D Electrostatics transplants flow **past a polygon** — flow past the unit disk carried through the
+exterior Schwarz–Christoffel map `Ψ: 𝔻* → ext(K)` (`@cas/conformal`). That makes the app the first **receiving
+tool** for a conformal-map hand-off: the Riemann-Map studio already fits polygon SC maps, and a user who shapes
+a polygon there should be able to see the flow past it here. Every prior interchange form was gated on exactly
+this — a real consumer (ADR-0007); until M2 there was none, so ADR-0034 deferred the form. There now is one.
+
+### Decision
+
+Add **`form:"conformal"`** to `MapSpec` (schema **1.4.0**, a MINOR bump). It carries the polygon's SC data —
+an `engine` tag (`"sc-interior"` | `"sc-exterior"` | `"lightning"`), the `polygon` corners (the portable
+geometry), and the fitted `prevertices` wₖ / interior `angles` αₖ / accessory `constant` C / `capacity` /
+`converged` / `degraded` / `residual`. A consumer rebuilds the map from the polygon via `@cas/conformal` —
+**exactly the reconstruct-via-the-engine pattern of `form:"schwarz"`** (rebuilt via `@cas/schwarz`), with the
+polygon corners playing φ's role as the recorded recipe. Like `schwarz`, it is **not expr-compilable**
+(`mapSpecToExpr` throws with a reconstruct-via-`@cas/conformal` message); the runtime seatbelt validates the
+engine enum, a ≥ 2-corner polygon, and the bounded/typed optional fit data so a hand-edited link is rejected.
+
+1. **The polygon corners are the canonical geometry**; `engine`/`prevertices`/… are the producer's fit
+   provenance. A consumer always re-derives the fit it needs — 2D Electrostatics reads an `"sc-interior"`
+   producer's corners and fits its **own** exterior map. This keeps producer and consumer loosely coupled.
+2. **Cross-app golden `RM_TO_POTENTIAL_CONFORMAL_LINK`** (the side-2 square, `cap = 1.1803405990161`): the
+   interchange package pins the **decode + recipe shape**; 2D Electrostatics pins the **consumer-side capacity**
+   its `@cas/conformal` re-fit computes. Both sides fail on drift (an app may not import another app, so the
+   frozen bytes live in the shared package — the CLAUDE.md golden-corpus rule).
+3. **2D Electrostatics is both producer and consumer**: it imports a `#s=` conformal link (setting an "Imported
+   polygon") and exports its current transplant polygon (a "Copy link" ⧉ button, `engine:"sc-exterior"` or
+   `sc-interior` depending on the active view).
+4. **Riemann-Map is the cross-app producer**: a "Send to 2D Electrostatics ↗" button on a polygon region emits
+   the golden's `engine:"sc-interior"` map (a **minimal** payload — corners + angles + converged, no drift-prone
+   prevertices/capacity) and opens `2d-electrostatics/polygon.html` via a CD-style app-segment URL swap. Pinned
+   byte-for-byte from the RM side, so the golden is now anchored on **both** producer and consumer.
+5. **The `flow` envelope kind is deferred** (plan §6 lists it, but it has no consumer yet — ADR-0007). The
+   full app-state hand-off (singularity list + map reference + convention tag) lands when a second tool needs it.
+
+### Consequences
+
+- **Positive:** the deferred M2 hand-off is live — the first non-`schwarz` reconstruct-via-engine form, and the
+  first **`@cas/conformal`** interchange form; shared forward with future apps (fingerprints, circle packing).
+  A MINOR bump decodes every older link unchanged (consumers gate on MAJOR = 1); the five pre-existing goldens
+  are regenerated to the 1.4.0 label (byte-identical bar that label — none use the new vocabulary).
+- **Deferred:** the `flow` envelope kind — the full app-state hand-off (singularity list + map reference +
+  convention tag) — until a second consumer needs it (ADR-0007). The Riemann-Map producer deep link, initially
+  deferred here, has since landed (decision 4 above), so the hand-off is now bidirectional and end-to-end.
