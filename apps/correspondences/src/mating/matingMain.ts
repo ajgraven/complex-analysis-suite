@@ -154,7 +154,7 @@ function build(): void {
         </p>
         <div style="display:flex;gap:0.8rem;align-items:center;flex-wrap:wrap;margin-bottom:0.7rem">
           <button id="fold-play" style="background:#1a1f29;color:#e8c07a;border:1px solid #2a3140;border-radius:6px;padding:0.35rem 0.85rem;cursor:pointer;font:inherit">&#9654; Play</button>
-          <input id="fold-slider" type="range" min="0" max="1000" value="0" style="flex:1;min-width:180px;accent-color:#e8c07a">
+          <input id="fold-slider" type="range" min="0" max="1000" value="0" aria-label="Fold amount" style="flex:1;min-width:180px;accent-color:#e8c07a">
           <span id="fold-label" class="status" style="color:#e8c07a;min-width:13ch"></span>
         </div>
         <canvas id="mate-fold" width="${FOLD_SIZE}" height="${FOLD_SIZE}" style="width:100%;max-width:${FOLD_SIZE}px;height:auto;display:block;border-radius:10px;border:1px solid #262b36;background:#0c0e12;margin:0 auto"></canvas>

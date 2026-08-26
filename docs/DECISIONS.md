@@ -2594,6 +2594,25 @@ the height law identical to the shader, so pick and picture agree.
        tint and cut-shadow were **considered and declined** on honesty grounds (global sheet identity is what
        monodromy permutes; a cut is a choice, not an invariant — the branch *points* are the invariant mark).
 
+### Amendment (D/B arc — visual-intuition follow-ups)
+
+Later additive work on the same branch, all inside the opt-in explorer and preserving the `≈`/quarantine
+posture above (recorded here rather than as separate ADRs, being refinements not new decisions; the group-level
+follow-on is [ADR-0033](#adr-0033-monodromy-group-and-fundamental-group-tools-generator-loops-permutation-diagram-genus)):
+
+- **D1/D2 — direction arrows** on the base-plane loop *and* the lifted per-sheet paths, via AP's
+  `drawDirectionTicks` lifted into `@cas/ui` (its second consumer — ADR-0007). **Real-time lift:** the surface
+  paths now grow as the loop is drawn (incremental nearest-match continuation).
+- **B2 — winding numbers** per branch point: `windingNumber(loop, center)`, exact integer topology (`=`),
+  shown separately from the `≈` permutation it is the topological input to.
+- **B1 — the principal branch cut** is now **drawn** for the M1 parametric primitives. This **refines** the
+  M3.4 "a cut is a choice, not an invariant" note rather than reversing it: for the *auto-gluing* curve /
+  implicit surfaces a cut remains an arbitrary choice and is **still not drawn** (`Plot.riemannCutRays()`
+  returns `[]` there); it is drawn **only** where the surface is built on a *canonical principal branch* (√,
+  ⁿ√, log, arcsin/arccos, arctan and their affine wraps), where the cut is determined by the principal-value
+  convention — not a choice — and is genuinely where that branch is discontinuous. The branch *points* remain
+  the primary invariant mark for every mode.
+
 ---
 
 ## ADR-0031: Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer
@@ -2832,12 +2851,134 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    **This completes the app rollout (U1–U6).**
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
-8. [ ] **Later (not gating):** a non-blocking `axe`/`pa11y` CI job so a11y regressions are caught, not just
-   introduced-once-and-forgotten.
+8. [x] **U8 DONE — non-blocking `axe` CI job so a11y regressions are caught, not just introduced-once-and-forgotten.**
+   `scripts/a11y-audit.mjs` stands up a static server over the real `apps/*/dist` bytes (the deploy layout,
+   launcher-at-root + subpaths, plus correspondences and its `mating.html`), loads each of the **9 pages** in
+   headless Chromium under forced software WebGL2 (SwiftShader, so the audited DOM matches CI on any GPU), and runs
+   axe-core's WCAG 2.0/2.1 **A + AA + best-practice** ruleset. Because real apps carry pre-existing findings
+   (a contrast ratio, a missing landmark), it is a **baseline tripwire**, not a pass/fail on the absolute count:
+   `scripts/a11y-baseline.json` records the known findings per page (rule id + violating-node count — node-count,
+   not brittle CSS selectors, so it is robust to layout churn yet still catches "this rule now fails on more
+   elements"), and only a **new rule** or an **increased count** is a regression. The CI job (`a11y` in `ci.yml`,
+   PR-only like `build`) runs in **report mode** — always exit 0 — so a single flaky automated rule can never wedge
+   `master`; regressions surface as `::warning::` annotations + a `$GITHUB_STEP_SUMMARY` table rather than a blocked
+   merge. `--strict` (exit 1 on regression) is available for local hard checks; `--update-baseline` re-records after
+   an intended change; `pnpm a11y` is the local entry point. Publishing stays gated only on lint/typecheck/test
+   (deploy-pages.yml) — the a11y job, like `browser`, is not a publish blocker. The committed baseline documents the
+   suite's remaining known findings (a burn-down list, separate from the tripwire). **First burn-down (done):** every
+   axe **critical** and the **serious** label/keyboard-focus findings were fixed as attribute-level changes (no
+   visual/behavior change) — riemann-map's unnamed preset `<select>` (`select-name`) and the mating fold slider
+   (`label`) got `aria-label`s; QD's view-mode segmented control moved from `role="tablist"` (which demands
+   `role="tab"` children it lacks) to `role="group"`, matching QD's own convention for its other segmented button
+   groups (`aria-required-children`); complex-dynamics' three `title`-only inputs (`label-title-only`) gained
+   `aria-label`s; and the horizontally-scrolling regions (CD's BibTeX `<pre>`, QD's KaTeX equation blocks) became
+   keyboard-focusable (`scrollable-region-focusable`). Baseline tightened **16 → 10 rule findings / 56 → 46 nodes**;
+   complex-dynamics and both correspondences pages now audit clean (launcher and plotter already did). What remains
+   is deliberately deferred: **color-contrast** (a palette decision) and the **region / landmark / heading** cluster
+   (a broader per-app semantic-HTML pass, `moderate` severity). **This completes U8; only U7 (nav-header ↔
+   `@cas/interchange` hand-off wiring) remains open in this ADR.**
 
 ---
 
-## ADR-0033: The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow)
+## ADR-0033: Monodromy-group and fundamental-group tools (generator loops, permutation diagram, genus)
+
+**Status:** Accepted  **Date:** 2026-08  **Deciders:** Andrew
+
+*Follow-on to [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3-hover-pick-linked-base-plane-monodromy).
+Extends the opt-in **Monodromy explorer** from tracing one loop to reading the **whole branched cover**:
+one-click **generator loops** around each branch point (a generating set of the base's fundamental group), a
+**permutation diagram** per generator, and the derived **monodromy group**, connectedness, product-one
+consistency check, and the **surface's genus** via Riemann–Hurwitz. Full plan:
+[`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md).
+Also records the direction-arrow / real-time-lift / branch-cut / winding additions (D1/D2/B1/B2) that precede
+it on the same arc, and reconciles the branch cut with ADR-0030's M3.4 "no cut" note (see Amendment there).*
+
+### Context
+
+The explorer (ADR-0030 M3.3) estimates the sheet permutation of **one** hand-drawn loop. But a branched cover
+is characterized by its **monodromy representation** `ρ : π₁(base ∖ branch points) → Sₙ` as a whole: `π₁` is
+free on one generator `γᵢ` per branch point, `ρ(γᵢ) = σᵢ`, and from `{σᵢ}` follow the monodromy group, whether
+the surface is connected (transitivity), the product-one relation `σ₁⋯σₘσ_∞ = id`, and — via Riemann–Hurwitz —
+the **genus**. All of this is reachable by reusing the M3.3 pipeline on *canonical* loops rather than arbitrary
+ones. The hazard is honesty: every `σᵢ` is the never-certified continuation (RISKS §3), so the whole tower is
+`≈` and must stay quarantined; only the *combinatorial topology* (free-group rank, the product-one **form**,
+Riemann–Hurwitz **given** the cycle data) and the winding numbers are `=`.
+
+### Decision
+
+Ship as gated, app-local, additive milestones (no new packages — ADR-0007, single consumer), inside the
+already-opt-in explorer, in the order **C1 → C3 → C2 → C4**:
+
+- **C1 — generator loops.** A chip per branch point auto-draws a CCW loop around it (radius keyed to the
+  nearest-neighbor distance), certified by the B2 winding number (`= +1` about its own point, `= 0` about the
+  others) and run through the existing `computeRiemannMonodromy` + lift. Prefers the exact discriminant branch
+  points when available. New pure `src/riemann/generatorLoop.ts`.
+- **C3 — group + genus.** New pure `src/riemann/permGroup.ts`: compose/inverse/cycleType, BFS subgroup closure
+  (**capped**) with order + transitivity, the product-one check, and `riemannHurwitzGenus`. Surfaced as an
+  `≈`, quarantined summary.
+- **C2 — permutation diagram.** Sheet-coloured node/arrow diagram per `σᵢ`, pure render from a
+  `MonodromyResult`.
+- **C4 (optional) — a report panel** binding C1–C3 together.
+
+### Options Considered
+
+#### Option A: reuse the M3.3 pipeline on canonical generator loops (chosen)
+**Pros:** no new continuation engine — the risky part is unchanged and already fenced; the only new code is
+loop *generation*, finite-group *algebra*, and Riemann–Hurwitz *arithmetic*, all pure and unit-testable; the
+winding number (B2, `=`) certifies each generator; the product-one relation is a free self-check on the
+estimates. **Cons:** results inherit M3.3's `≈`; clustered branch points can defeat automatic generator sizing
+(mitigated: winding self-check + hand-draw fallback).
+
+#### Option B: symbolic monodromy from the defining polynomial (Puiseux / exact analytic continuation)
+**Cons, why rejected:** a large new exact-CAS capability (Puiseux expansions, certified tracking) — precisely
+the RISKS §3 problem the repo declines to certify; disproportionate to a visualization feature and a second
+engine to maintain.
+
+#### Option C: leave it at one-loop monodromy (status quo)
+**Cons, why rejected:** the user asked to connect the loops to the fundamental group; the group/genus is the
+intellectual payoff and is cheaply reachable by Option A without touching the certified/uncertified boundary.
+
+### Trade-off Analysis
+
+Option A keeps the certification boundary exactly where ADR-0030 drew it (continuation is `≈`, quarantined) and
+buys real mathematical depth with only pure, bounded, testable additions. The genus is the sharpest example: it
+is *exact given* the cycle structure, so the tool honestly reports "genus ≈ 1 (exact given the estimated
+cycles)". The BFS cap bounds cost for high-degree implicit surfaces. Everything is behind the opt-in explorer,
+so the default plotter is untouched (north-star: no regression, no new primitive built from scratch — it rides
+M3/D/B).
+
+### Consequences
+
+- **Easier:** the explorer becomes a genuine covering-space instrument (generators, group, connectedness,
+  genus) with no new risk surface; the product-one check turns the `≈` uncertainty into a visible signal.
+- **Harder:** a standing honesty burden (as M3.3) — the group/genus are `≈` and must never leak into badge /
+  permalink / export; automatic generator sizing needs the winding self-check to stay trustworthy.
+- **Revisit if** (a) a second consumer needs `permGroup.ts` ⇒ extract to `@cas/core` (ADR-0007); (b) a
+  receiving tool wants the monodromy representation serialized ⇒ ADR-0005 branch-aware interchange, RISKS §3
+  labeling intact; (c) exact monodromy (Option B) is ever justified by a non-visualization consumer.
+
+### Action Items
+1. [x] Write [`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md) + this ADR (C0).
+2. [ ] C1 — `generatorLoop.ts` + branch-point chips (winding-certified) + tests; gate; pause for review.
+3. [x] C3 — `permGroup.ts` (capped closure + orbit transitivity + Riemann–Hurwitz genus with the exact
+       parity/bound consistency check) + lasso/enclosing loops (common-labeling generators + the ∞ loop) +
+       `Plot.riemannSheetCount` + a **Monodromy group & genus** summary. `≈`, quarantined. Verified √(z²−1) →
+       C₂ genus 0 and w²=z³−z → genus 1. (`∞` handling: inferred from the enclosing loop's cycle type, per
+       the design doc's open question.)
+4. [x] C2 — permutation diagram (`permDiagram.ts`, canvas, sheet-coloured nodes + `k→σ(k)` arrows) shown per
+       generator in the group summary + test. Also switched parametric branch points to the exact cut-ray
+       origins (`Plot.riemannParamBranchPoints`), replacing the mesh-limited scan (fixes `z^(1/3)`'s spurious
+       24 → 1).
+5. [x] C4 — a theme-aware full-screen **Monodromy report** (fingerprint stats · π₁ generators gallery with
+       diagrams + branch-point locations · the Riemann–Hurwitz computation worked out with the numbers ·
+       honest ≈ framing), opened from the inline summary; shared `gatherMonodromy()` behind both. Layout only.
+6. [x] All `≈` outputs stay quarantined (badge / permalink / export); the Riemann–Hurwitz **parity/bound
+       check** is surfaced as the consistency signal (an odd/negative result ⇒ "inconsistent estimates"),
+       standing in for the ordering-sensitive product-one relation.
+
+---
+
+## ADR-0034: The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow)
 
 **Status:** Accepted. A new **separate app** (decision #8), built on the shared `@cas/*` packages; no new
 package (ADR-0007 — extract only on a second consumer). Plan:
@@ -2896,7 +3037,7 @@ Consumes `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`
 sandbox — palette, inspector with the `c = q+iγ` decomposition, the two-lens toggle, the flux/circulation
 probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an animated tracer-flow layer). **M2**
 (conformal transplant): Joukowski + Kármán–Trefftz airfoils; exterior-SC flow *past* a polygon and interior-SC
-flow *inside* a polygon; the `@cas/interchange` `conformal` map form ([ADR-0034](#adr-0034-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
+flow *inside* a polygon; the `@cas/interchange` `conformal` map form ([ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
 hand-off. **M3** (potential theory): the conductor-K view — equilibrium charge, capacity, Green's function —
 with Faber-zero and Fekete/Leja overlays (three roads to μ_K), plus general K with no closed-form map via a
 log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber` (M3). **M4** (the Hele-Shaw
@@ -2904,11 +3045,11 @@ log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber`
 
 ---
 
-## ADR-0034: The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0)
+## ADR-0035: The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0)
 
 **Status:** Accepted. A new `MapSpec` form (`kind` stays `"map"`), reconstructed via `@cas/conformal`,
 minted by 2D Electrostatics' M2.4 polygon transplant. Foreshadowed by
-[ADR-0033](#adr-0033-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) (the
+[ADR-0034](#adr-0034-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) (the
 "companion ADR when M2 lands"). Plan §6:
 [`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
 
@@ -2918,7 +3059,7 @@ M2 of 2D Electrostatics transplants flow **past a polygon** — flow past the un
 exterior Schwarz–Christoffel map `Ψ: 𝔻* → ext(K)` (`@cas/conformal`). That makes the app the first **receiving
 tool** for a conformal-map hand-off: the Riemann-Map studio already fits polygon SC maps, and a user who shapes
 a polygon there should be able to see the flow past it here. Every prior interchange form was gated on exactly
-this — a real consumer (ADR-0007); until M2 there was none, so ADR-0033 deferred the form. There now is one.
+this — a real consumer (ADR-0007); until M2 there was none, so ADR-0034 deferred the form. There now is one.
 
 ### Decision
 

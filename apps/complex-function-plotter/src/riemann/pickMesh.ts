@@ -175,6 +175,41 @@ export function sheetsOverZ(mesh: PickMesh, zx: number, zy: number): Complex[] {
 }
 
 /**
+ * The world height of the surface over base point `z` on the sheet whose value is nearest `targetW` (M3.3 —
+ * lifting a monodromy path onto the surface). Scans the covering triangles, interpolates each sheet's value
+ * `w` and its height basis `hb`, picks the sheet nearest `targetW`, and returns its height from `hb` — the
+ * SAME law the shader uses, so the lifted path sits exactly on the drawn surface. Null if `z` is uncovered.
+ */
+export function surfaceHeightAt(
+  mesh: PickMesh,
+  zx: number,
+  zy: number,
+  targetW: Complex,
+  heightSource: number,
+  heightScale: number,
+): number | null {
+  const { xy, w, hb, triangleCount } = mesh;
+  let bestD = Infinity;
+  let bestH: number | null = null;
+  for (let tri = 0; tri < triangleCount; tri++) {
+    const o = tri * 6;
+    const bc = bary2d(zx, zy, xy[o], xy[o + 1], xy[o + 2], xy[o + 3], xy[o + 4], xy[o + 5]);
+    if (!bc) continue;
+    const [a, b, c] = bc;
+    const wx = a * w[o] + b * w[o + 2] + c * w[o + 4];
+    const wy = a * w[o + 1] + b * w[o + 3] + c * w[o + 5];
+    const d = Math.hypot(wx - targetW[0], wy - targetW[1]);
+    if (d < bestD) {
+      bestD = d;
+      const hbR = a * hb[o] + b * hb[o + 2] + c * hb[o + 4];
+      const hbI = a * hb[o + 1] + b * hb[o + 3] + c * hb[o + 5];
+      bestH = vertexHeight(hbR, hbI, heightSource, heightScale);
+    }
+  }
+  return bestH;
+}
+
+/**
  * Ray-cast `mesh` and return the hover pick, or null if the ray misses the surface. `heightSource`
  * (0 = Re, 1 = Im) and `heightScale` reconstruct each vertex's world height from its height basis, matching
  * the shader — so the pick tracks the picture through a height-axis / exaggeration change with no rebuild.

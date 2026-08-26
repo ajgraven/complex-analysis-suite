@@ -865,7 +865,7 @@ function mountViewToggle() {
   card.id = 'qd-view-toggle';
   card.className = 'card';
   card.innerHTML = `
-    <div class="segmented" role="tablist" aria-label="View mode">
+    <div class="segmented" role="group" aria-label="View mode">
       <button class="seg-btn active" data-view="inverse" type="button">inverse</button>
       <button class="seg-btn"        data-view="direct"  type="button">direct</button>
     </div>

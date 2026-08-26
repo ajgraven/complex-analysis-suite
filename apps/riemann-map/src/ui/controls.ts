@@ -276,6 +276,7 @@ export function createControls(initialExpr: string): Controls {
   const mapSection = document.createElement("section");
   const preset = document.createElement("select");
   preset.className = "preset";
+  preset.setAttribute("aria-label", "map preset");
   // The formula gallery follows the Disk toggle: interior 𝔻 (default) ⇄ exterior 𝔻*. `activeGallery`
   // is the one currently offered; the picker's options and the typed-edit sync both read from it.
   let activeGallery: readonly MapPreset[] = MAP_PRESETS;
@@ -384,7 +385,7 @@ export function createControls(initialExpr: string): Controls {
     polyCount,
   );
   // Hand-off: open the current polygon in 2D Electrostatics (flow past / inside K). Polygon-only, so it
-  // rides inside polyTools, which setPolygonTools() shows only for a live polygon region (ADR-0034).
+  // rides inside polyTools, which setPolygonTools() shows only for a live polygon region (ADR-0035).
   const sendRow = document.createElement("div");
   sendRow.className = "buttons";
   const sendBtn = document.createElement("button");

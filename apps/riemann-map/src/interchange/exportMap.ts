@@ -2,7 +2,7 @@
 //
 // The Riemann-Map studio fits the interior SC map f: 𝔻 → K of a polygon region (@cas/conformal). Its
 // corners + interior angles are exactly the portable geometry of a `@cas/interchange` `form:"conformal"`
-// map (ADR-0034), so a polygon shaped here hands off to 2D Electrostatics, which re-fits its own EXTERIOR
+// map (ADR-0035), so a polygon shaped here hands off to 2D Electrostatics, which re-fits its own EXTERIOR
 // map and draws the flow past / inside K. RM is otherwise a consumer (importMap.ts, the CD→RM Böttcher
 // hand-off); this is its first producer — app-local interchange glue over the shared codec (ADR-0007).
 //

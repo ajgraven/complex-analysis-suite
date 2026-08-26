@@ -27,3 +27,6 @@ export type { NavHeaderOptions, NavHeader, HandoffConfig } from "./navHeader.js"
 
 export { SUITE_APPS } from "./apps.js";
 export type { SuiteApp } from "./apps.js";
+
+export { drawDirectionTicks } from "./canvasOverlay.js";
+export type { DirectionTicksOptions, Vec2 } from "./canvasOverlay.js";

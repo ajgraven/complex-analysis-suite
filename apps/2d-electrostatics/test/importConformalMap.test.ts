@@ -4,7 +4,7 @@ import { conformalPolygonFromLink, buildConformalLink } from "../src/importConfo
 import { fitPolygonFlow } from "../src/polygonMap.js";
 import type { Pt } from "../src/transplant.js";
 
-// The consumer side of the RM → potential conformal golden (ADR-0034): decode the SAME frozen link the
+// The consumer side of the RM → potential conformal golden (ADR-0035): decode the SAME frozen link the
 // interchange package pins structurally, read its polygon, and re-fit the EXTERIOR flow map via
 // @cas/conformal. The capacity it computes must match the frozen value — this is the real cross-app
 // contract (a producer→consumer test cannot live in either app, so both pin the shared golden).

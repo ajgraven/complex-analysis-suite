@@ -1,4 +1,4 @@
-// The @cas/interchange hand-off for the polygon transplant (M2.4c, ADR-0034). This app is a CONSUMER of
+// The @cas/interchange hand-off for the polygon transplant (M2.4c, ADR-0035). This app is a CONSUMER of
 // the `form:"conformal"` map — decode a `#s=` link (e.g. a polygon handed off from the Riemann-Map
 // studio) and read its polygon corners, then re-fit the EXTERIOR flow map via @cas/conformal
 // (polygonMap.ts) to draw flow past that polygon. It is also a PRODUCER — export the current transplant

@@ -18,11 +18,13 @@
     "typecheck": "pnpm -r --filter \"./packages/*\" run build && pnpm -r --filter \"./packages/*\" run typecheck && pnpm -r --filter \"./apps/*\" run typecheck",
     "lint": "eslint . && pnpm dep:check && pnpm -r --filter \"./packages/*\" run lint && pnpm -r --filter \"./apps/*\" run lint",
     "dep:check": "depcruise packages apps",
+    "a11y": "node scripts/a11y-audit.mjs",
     "build": "pnpm -r --filter \"./packages/*\" run build && pnpm -r --filter \"./apps/*\" run build && node scripts/check-built-artifacts.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@eslint/js": "^9.17.0",
     "@vitest/browser": "^2.1.4",
     "@vitest/coverage-v8": "^2.1.4",

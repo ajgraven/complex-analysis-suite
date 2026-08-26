@@ -24,7 +24,7 @@
 // export (Phase 6) round it out.
 import "katex/dist/katex.min.css";
 import katex from "katex";
-import { runWithFatalBoundary } from "@cas/ui";
+import { runWithFatalBoundary, drawDirectionTicks } from "@cas/ui";
 import { parse } from "@cas/expr/parser";
 import { toLatex } from "@cas/expr/latex";
 import {
@@ -39,6 +39,23 @@ import {
 import { makeComplexFn } from "@cas/expr/evaluate";
 import { differentiate } from "@cas/expr/derivative";
 import type { Complex } from "@cas/expr/complex";
+import { windingNumber } from "./riemann/winding.js";
+import {
+  generatorLoopAround,
+  generatorRadius,
+  lassoLoop,
+  enclosingLoop,
+  commonBasePoint,
+} from "./riemann/generatorLoop.js";
+import {
+  cycles,
+  cycleCount,
+  generatedGroup,
+  riemannHurwitzGenus,
+  namedGroup,
+  type Perm,
+} from "./riemann/permGroup.js";
+import { drawPermDiagram, permDiagramWidth, DIAGRAM_HEIGHT } from "./riemann/permDiagram.js";
 import { Plot } from "./render/plot.js";
 import { COLORMAPS } from "./render/colormaps.js";
 import { PRESETS } from "./presets.js";
@@ -201,6 +218,13 @@ function main(): void {
   const riemannLinkedInput = byId("riemannLinked");
   const riemannMonodromyInput = byId("riemannMonodromy");
   const monodromyResult = byId("monodromyResult");
+  const generatorLoopsEl = byId("generatorLoops");
+  const generatorChipsEl = byId("generatorChips");
+  const computeGroupBtn = byId("computeGroupBtn");
+  const monodromyGroupEl = byId("monodromyGroup");
+  const monodromyReportEl = byId("monodromyReport");
+  const reportBodyEl = byId("reportBody");
+  const reportCloseBtn = byId("reportClose");
   const riemannReset = byId("riemannReset");
   const heightModeSel = byId("heightMode");
   const heightScaleInput = byId("heightScale");
@@ -223,7 +247,14 @@ function main(): void {
   const critCount = byId("critCount");
   const inspectInfInput = byId("inspectInf");
   const plotDerivInput = byId("plotDeriv");
-  const implicitModeInput = byId("implicitMode");
+  // Input-kind segmented toggle (Option A): "w = f(z)" vs "F(w, z) = 0", replacing the old implicit-mode
+  // checkbox. The f/g slot header + the Transform sub-group step aside (hide) for the implicit kind rather
+  // than greying out; `implicitHint` explains the Riemann-only rule.
+  const inputFnBtn = byId("inputFn");
+  const inputImplicitBtn = byId("inputImplicit");
+  const fnSlotHead = byId("fnSlotHead");
+  const transformGroup = byId("transformGroup");
+  const implicitHint = byId("implicitHint");
   const uncInput = byId("uncertainty");
   const levelAbsInput = byId("levelAbs");
   const levelArgInput = byId("levelArg");
@@ -469,6 +500,10 @@ function main(): void {
   // pane and counted in the badge. Recomputed on a formula / sheet-count / view change while in Riemann mode.
   let branchPts: Complex[] = [];
   let branchExact = false; // true when the markers are the EXACT discriminant locus (M2c.2), else the ≈ scan
+  // Per-branch-point winding numbers of the current monodromy loop (B2): the signed, EXACT (`=`) integer count
+  // of times the loop encircles each branch point — the topological input the ≈ permutation depends on. Only
+  // the enclosed ones (winding ≠ 0) are kept. Empty when no loop is drawn.
+  let loopWindings: { pt: Complex; wind: number }[] = [];
   const recomputeBranchPoints = (): void => {
     if (plot.mode !== "riemann") {
       branchPts = [];
@@ -478,6 +513,11 @@ function main(): void {
     const exact = plot.riemannBranchPointsExact(); // M2c.2: exact locus for a Gaussian-rational implicit F
     if (exact) {
       branchPts = exact;
+      branchExact = true;
+    } else if (plot.riemannModeKind() === "param") {
+      // Parametric primitives: the cut-ray origins ARE the exact finite branch points — use them instead of
+      // the mesh-limited scan (which sprays spurious points across a folded z^(p/q) surface).
+      branchPts = plot.riemannParamBranchPoints();
       branchExact = true;
     } else {
       branchPts = plot.riemannBranchPoints();
@@ -519,6 +559,28 @@ function main(): void {
     ctx.textAlign = "left";
     ctx.textBaseline = "top";
     ctx.fillText("base plane (z)", 6, 6);
+    // Branch cut(s) on the base plane (B1): the principal cut the sheets glue across, a dashed ray from each
+    // branch point to infinity. Clipped to the base-plane (left) pane so the ray doesn't bleed onto the
+    // surface pane. Parametric primitives only (curve / implicit surfaces glue with no canonical cut).
+    const cuts = plot.riemannCutRays();
+    if (cuts.length) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, halfW, cssH);
+      ctx.clip();
+      ctx.strokeStyle = "rgba(232,236,246,0.5)";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 4]);
+      const reach = (Math.abs(xmax - xmin) + Math.abs(ymax - ymin)) * 2; // long enough to exit the pane
+      for (const c of cuts) {
+        ctx.beginPath();
+        ctx.moveTo(sx(c.origin[0]), sy(c.origin[1]));
+        ctx.lineTo(sx(c.origin[0] + c.dir[0] * reach), sy(c.origin[1] + c.dir[1] * reach));
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
     // Monodromy loop (M3.3): the in-progress drag, else the finished loop — a filled, outlined polyline.
     const loop = loopPoints ?? lastLoop;
     if (loop && loop.length >= 2) {
@@ -531,6 +593,17 @@ function main(): void {
       ctx.strokeStyle = "rgba(150,200,255,0.9)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
+      // Direction arrows (D1): the loop's traversal orientation — a non-colour cue for which way it's traced.
+      // Arc-length spaced (the freehand loop is non-uniform); closed once the drag finishes.
+      if (loop.length >= 3)
+        drawDirectionTicks(ctx, (w) => [sx(w[0]), sy(w[1])], loop, {
+          closed: !loopPoints,
+          count: 6,
+          fill: "rgba(150,200,255,0.95)",
+          halo: "rgba(10,12,16,0.85)",
+          sizePx: 5,
+          byArcLength: true,
+        });
     }
     // Branch-point markers (M3.4): amber ⊕ where sheets merge — the ramification the monodromy loops encircle.
     if (branchPts.length) {
@@ -547,6 +620,21 @@ function main(): void {
         ctx.moveTo(px, py - 6.5);
         ctx.lineTo(px, py + 6.5);
         ctx.stroke();
+        // Winding-number label (B2): the EXACT signed turns of the current loop about this branch point.
+        const wound = loopWindings.find((w) => w.pt === b);
+        if (wound) {
+          const lbl = `${wound.wind > 0 ? "+" : ""}${wound.wind}`;
+          ctx.font = "bold 12px system-ui, -apple-system, sans-serif";
+          ctx.textAlign = "left";
+          ctx.textBaseline = "bottom";
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "rgba(10,12,16,0.9)"; // halo so the digit reads over the coloured field
+          ctx.strokeText(lbl, px + 8, py - 6);
+          ctx.fillStyle = "rgba(255,214,140,0.98)";
+          ctx.fillText(lbl, px + 8, py - 6);
+          ctx.strokeStyle = "rgba(245,180,90,0.95)"; // restore for the next marker's ⊕
+          ctx.lineWidth = 1.25;
+        }
       }
     }
     if (linkedZ) {
@@ -564,6 +652,26 @@ function main(): void {
         ctx.beginPath();
         ctx.arc(px, py, 4, 0, 2 * Math.PI);
         ctx.stroke();
+      }
+    }
+    // Direction arrows on the lifted paths over the SURFACE pane (D2): project each sheet's 3D polyline to
+    // screen through the same camera, then arrow it in that sheet's colour. Open arcs (each ends on the
+    // sheet it permutes to), so `closed: false`.
+    const sheetPaths = plot.riemannLoopScreenPaths();
+    if (sheetPaths) {
+      const identity = (p: readonly [number, number]): [number, number] => [p[0], p[1]];
+      for (const sp of sheetPaths) {
+        if (sp.screen.length < 2) continue;
+        const [r, g, b] = sp.color;
+        const fill = `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`;
+        drawDirectionTicks(ctx, identity, sp.screen, {
+          closed: false,
+          count: 4,
+          fill,
+          halo: "rgba(8,10,14,0.9)",
+          sizePx: 5,
+          byArcLength: true,
+        });
       }
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -900,6 +1008,7 @@ function main(): void {
     linkedZ = null;
     loopPoints = null;
     lastLoop = null; // a stale monodromy loop doesn't belong to the new view
+    loopWindings = [];
     if (monodromyResult instanceof HTMLElement) {
       monodromyResult.hidden = !(m === "riemann" && monodromyOn);
       if (m === "riemann" && monodromyOn)
@@ -917,6 +1026,7 @@ function main(): void {
       recomputeBranchPoints(); // estimate ramification for the markers + badge count (M3.4)
       syncRiemannControls();
     }
+    renderGeneratorChips(); // show generator chips in the Riemann view (C1); hide otherwise
     redraw(false);
   };
   if (view2d instanceof HTMLElement)
@@ -948,6 +1058,7 @@ function main(): void {
     else if (plot.mode === "riemann") {
       recomputeBranchPoints(); // the surface changed — re-estimate ramification (M3.4)
       syncRiemannControls();
+      renderGeneratorChips(); // the branch points changed — refresh the generator chips (C1)
     }
   };
 
@@ -975,17 +1086,18 @@ function main(): void {
   };
   const setImplicitMode = (on: boolean): void => {
     implicitMode = on;
-    if (implicitModeInput instanceof HTMLInputElement) implicitModeInput.checked = on;
-    // f(z)-only controls don't apply to an implicit relation.
-    for (const el of [fnF, fnG, inspectInfInput, plotDerivInput, presetSel])
-      if (
-        el instanceof HTMLButtonElement ||
-        el instanceof HTMLInputElement ||
-        el instanceof HTMLSelectElement
-      )
-        el.disabled = on;
-    if (exprLabel instanceof HTMLElement)
-      exprLabel.textContent = on ? "Surface  F(w, z) = 0" : `Function  ${active}(z)`;
+    // Reflect the input-kind segmented toggle (Option A): the two buttons behave like the f/g and View
+    // toggles — exactly one is pressed.
+    setPressed(inputFnBtn, !on);
+    setPressed(inputImplicitBtn, on);
+    // The f/g slots and the function transforms don't apply to an implicit relation — step them aside
+    // (hide) rather than grey them out, and show the Riemann-only hint. The preset picker (a separate
+    // group that loads an f(z)) stays disabled while implicit.
+    if (fnSlotHead instanceof HTMLElement) fnSlotHead.hidden = on;
+    if (transformGroup instanceof HTMLElement) transformGroup.hidden = on;
+    if (implicitHint instanceof HTMLElement) implicitHint.hidden = !on;
+    if (presetSel instanceof HTMLSelectElement) presetSel.disabled = on;
+    if (exprLabel instanceof HTMLElement) exprLabel.textContent = `Function  ${active}(z)`;
     setExprBox(on ? implicitSrc : exprs[active]);
     updateViewTabsForImplicit();
     if (on) {
@@ -997,8 +1109,16 @@ function main(): void {
       setView("2d");
     }
   };
-  if (implicitModeInput instanceof HTMLInputElement)
-    implicitModeInput.addEventListener("change", () => setImplicitMode(implicitModeInput.checked));
+  // The input-kind buttons are single-select: clicking the already-active one is a no-op (avoids a needless
+  // recompile + view reset).
+  if (inputFnBtn instanceof HTMLElement)
+    inputFnBtn.addEventListener("click", () => {
+      if (implicitMode) setImplicitMode(false);
+    });
+  if (inputImplicitBtn instanceof HTMLElement)
+    inputImplicitBtn.addEventListener("click", () => {
+      if (!implicitMode) setImplicitMode(true);
+    });
 
   // Riemann-surface controls (ADR-0028): charisma axis, sheets shown (infinite families), exaggeration
   // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
@@ -1034,7 +1154,10 @@ function main(): void {
         if (riemannMonodromyInput instanceof HTMLInputElement) riemannMonodromyInput.checked = false;
         loopPoints = null;
         lastLoop = null;
+        loopWindings = [];
+        plot.setRiemannLoop(null); // clear the lifted paths on the surface
         showMonodromy(null);
+        renderGeneratorChips(); // the explorer went off with the pane — hide the generator chips
       }
       linkedZ = null;
       redraw(false);
@@ -1051,7 +1174,10 @@ function main(): void {
       }
       loopPoints = null;
       lastLoop = null;
+      loopWindings = [];
+      plot.setRiemannLoop(null); // clear any lifted paths on the surface (on: fresh start / off: hide)
       showMonodromy(null); // placeholder hint (on) / hidden (off)
+      renderGeneratorChips(); // show the generator chips when the explorer is on, hide when off (C1)
       redraw(false);
     });
   if (riemannReset instanceof HTMLElement)
@@ -1590,19 +1716,27 @@ function main(): void {
     const conf = res.lowConfidence
       ? " · ⚠ low confidence (near a branch point / under-resolved)"
       : "";
-    monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).`;
+    // Winding numbers are EXACT (`=`) integer topology — stated separately from the ≈ permutation (B2).
+    const wind = loopWindings.length
+      ? " Winding = " +
+        loopWindings
+          .map((w) => `${w.wind > 0 ? "+" : ""}${w.wind} about ${fmtComplex(w.pt)}`)
+          .join(", ") +
+        "."
+      : "";
+    monodromyResult.textContent = `≈ ${cyc}${shape} over ${res.sheetCount} sheets${conf} — uncertified estimate (RISKS §3).${wind}`;
   };
-  const finalizeLoop = (): void => {
-    const loop = loopPoints;
-    loopPoints = null;
-    if (!loop || loop.length < 4) {
-      lastLoop = null; // too short to be a loop — discard
-      showMonodromy(null);
-      redraw(false);
-      return;
-    }
+  // Commit a closed base-plane loop (hand-drawn or a one-click generator): record its per-branch-point winding
+  // (B2), lift its per-sheet paths onto the surface (M3.3), and show the estimate. Shared by finalizeLoop and
+  // the generator chips (C1).
+  const applyLoop = (loop: Complex[]): void => {
     lastLoop = loop;
+    // Winding number per branch point (B2) — exact integer topology; keep only the enclosed ones (≠ 0).
+    loopWindings = branchPts
+      .map((pt) => ({ pt, wind: windingNumber(loop, pt) }))
+      .filter((w) => w.wind !== 0);
     const res = plot.computeRiemannMonodromy(loop);
+    plot.setRiemannLoop(res); // lift the per-sheet continuation paths onto the 3D surface (M3.3)
     if (!res && monodromyResult instanceof HTMLElement) {
       monodromyResult.hidden = false;
       monodromyResult.textContent =
@@ -1612,6 +1746,318 @@ function main(): void {
     }
     redraw(false);
   };
+  const finalizeLoop = (): void => {
+    const loop = loopPoints;
+    loopPoints = null;
+    if (!loop || loop.length < 4) {
+      lastLoop = null; // too short to be a loop — discard
+      loopWindings = [];
+      plot.setRiemannLoop(null); // clear any lifted paths on the surface
+      showMonodromy(null);
+      redraw(false);
+      return;
+    }
+    applyLoop(loop);
+  };
+
+  // One-click generator loops (C1): a chip per branch point that draws the canonical CCW loop around it — a
+  // generator of π₁(base ∖ branch points) — and runs it through the same monodromy pipeline. Disabled when the
+  // branch point can't be isolated (a neighbour is too close); then the user draws the loop by hand.
+  const subscript = (i: number): string =>
+    String(i).replace(/\d/g, (d) => "₀₁₂₃₄₅₆₇₈₉"[Number(d)]);
+  const runGenerator = (index: number): void => {
+    const b = branchPts[index];
+    if (!b) return;
+    const r = generatorRadius(index, branchPts, plot.view.span);
+    if (r === null) return;
+    loopPoints = null;
+    applyLoop(generatorLoopAround(b, r));
+  };
+  const renderGeneratorChips = (): void => {
+    if (!(generatorLoopsEl instanceof HTMLElement) || !(generatorChipsEl instanceof HTMLElement)) return;
+    const show = monodromyOn && plot.mode === "riemann" && branchPts.length > 0;
+    generatorLoopsEl.hidden = !show;
+    generatorChipsEl.replaceChildren();
+    if (monodromyGroupEl instanceof HTMLElement) monodromyGroupEl.hidden = true; // stale on a branch-set change
+    // The group / genus summary (C3) applies only to a FINITE cover; hide the button for ∞-sheeted surfaces.
+    if (computeGroupBtn instanceof HTMLElement)
+      computeGroupBtn.hidden = !(show && plot.riemannSheetCount() !== null);
+    if (!show) return;
+    branchPts.forEach((b, i) => {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "gen-chip";
+      chip.textContent = `γ${subscript(i + 1)}`;
+      const isolable = generatorRadius(i, branchPts, plot.view.span) !== null;
+      chip.disabled = !isolable;
+      chip.title = isolable
+        ? `Loop around the branch point at ${fmtComplex(b)}`
+        : `Branch point at ${fmtComplex(b)} — too close to a neighbour to isolate; draw the loop by hand`;
+      chip.addEventListener("click", () => runGenerator(i));
+      generatorChipsEl.appendChild(chip);
+    });
+  };
+
+  // Monodromy group + Riemann–Hurwitz genus (C3). Compute a generator permutation for each branch point as the
+  // monodromy of a LASSO from one common base point (so all permutations share a sheet labeling and compose),
+  // plus a big enclosing loop for the ramification over ∞. From these: the monodromy group ⟨σᵢ⟩ ≤ Sₙ (order,
+  // connectedness = transitivity), and the genus via Riemann–Hurwitz. The group + genus are `≈` (built from the
+  // never-certified permutations, RISKS §3); the parity/bound check is exact and flags inconsistent estimates.
+  const cycleNotation = (p: Perm): string => {
+    const nontrivial = cycles(p).filter((c) => c.length > 1);
+    return nontrivial.length ? nontrivial.map((c) => `(${c.map((k) => k + 1).join(" ")})`).join("") : "id";
+  };
+
+  interface MonoData {
+    n: number;
+    gens: { label: string; perm: Perm; branchPt: Complex }[];
+    sigmaInf: Perm | null;
+    group: ReturnType<typeof generatedGroup>;
+    name: string | null;
+    genus: ReturnType<typeof riemannHurwitzGenus>;
+    skipped: number;
+  }
+  // Measure the whole monodromy representation (C3): a lasso generator per branch point (common base ⇒ shared
+  // labeling ⇒ composable) + a big ∞ loop, then the group ⟨σᵢ⟩ ≤ Sₙ and the Riemann–Hurwitz genus. Shared by
+  // the inline summary (C3) and the full report (C4). All `≈` (RISKS §3); the parity/bound check is exact.
+  const gatherMonodromy = (): MonoData | null => {
+    const n = plot.riemannSheetCount();
+    if (n === null || n < 2 || branchPts.length === 0) return null;
+    const base = commonBasePoint(branchPts, plot.view.span);
+    const gens: { label: string; perm: Perm; branchPt: Complex }[] = [];
+    let skipped = 0;
+    branchPts.forEach((b, i) => {
+      const r = generatorRadius(i, branchPts, plot.view.span);
+      if (r === null) {
+        skipped++;
+        return;
+      }
+      const res = plot.computeRiemannMonodromy(lassoLoop(base, b, r));
+      if (res && res.sheetCount === n && res.isPermutation)
+        gens.push({ label: `γ${subscript(i + 1)}`, perm: res.permutation, branchPt: b });
+      else skipped++;
+    });
+    const bigRes = plot.computeRiemannMonodromy(enclosingLoop(branchPts, plot.view.span));
+    const sigmaInf =
+      bigRes && bigRes.sheetCount === n && bigRes.isPermutation ? bigRes.permutation : null;
+    const groupGens = sigmaInf ? [...gens.map((g) => g.perm), sigmaInf] : gens.map((g) => g.perm);
+    const group = groupGens.length
+      ? generatedGroup(groupGens, n)
+      : { order: 1, capped: false, transitive: n <= 1 };
+    const cycleCounts = gens.map((g) => cycleCount(g.perm));
+    if (sigmaInf) cycleCounts.push(cycleCount(sigmaInf));
+    return {
+      n,
+      gens,
+      sigmaInf,
+      group,
+      name: namedGroup(group.order, n, group.transitive),
+      genus: riemannHurwitzGenus(cycleCounts, n),
+      skipped,
+    };
+  };
+
+  // A permutation diagram canvas (C2), HiDPI + accessible, for `perm` over `n` sheets.
+  const makeDiagram = (label: string, perm: Perm, n: number): HTMLCanvasElement => {
+    const cv = document.createElement("canvas");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = permDiagramWidth(n);
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(DIAGRAM_HEIGHT * dpr);
+    cv.style.width = `${w}px`;
+    cv.style.height = `${DIAGRAM_HEIGHT}px`;
+    cv.setAttribute("role", "img");
+    cv.setAttribute("aria-label", `${label}: permutation ${cycleNotation(perm)}`);
+    const dctx = cv.getContext("2d");
+    if (dctx) {
+      dctx.scale(dpr, dpr);
+      drawPermDiagram(dctx, perm);
+    }
+    return cv;
+  };
+  const groupLine = (d: MonoData): string =>
+    `order ${d.group.order}${d.group.capped ? "+" : ""}` +
+    (d.name ? ` · ${d.name}` : "") +
+    ` · ${d.group.transitive ? "transitive ⇒ connected" : "intransitive ⇒ disconnected"}`;
+  const genusLine = (d: MonoData): string =>
+    d.genus.consistent
+      ? `genus ${d.genus.genus} (Riemann–Hurwitz; = given the cycle data)`
+      : "genus — ⚠ inconsistent estimates (Riemann–Hurwitz parity/bound failed)";
+
+  // Inline summary in the side panel (C3): the generator diagrams + a compact group/genus readout, and a
+  // button to open the full report (C4).
+  const computeGroup = (): void => {
+    if (!(monodromyGroupEl instanceof HTMLElement)) return;
+    const d = gatherMonodromy();
+    if (!d) {
+      monodromyGroupEl.hidden = true;
+      return;
+    }
+    monodromyGroupEl.replaceChildren();
+    const entries = [...d.gens, ...(d.sigmaInf ? [{ label: "γ∞", perm: d.sigmaInf }] : [])];
+    if (entries.length && d.n <= 12) {
+      const row = document.createElement("div");
+      row.className = "gen-diagrams";
+      for (const { label, perm } of entries) {
+        const wrap = document.createElement("div");
+        wrap.className = "gen-diagram";
+        wrap.appendChild(makeDiagram(label, perm, d.n));
+        const lab = document.createElement("span");
+        lab.className = "gen-diagram-label";
+        lab.textContent = `${label} = ${cycleNotation(perm)}`;
+        wrap.appendChild(lab);
+        row.appendChild(wrap);
+      }
+      monodromyGroupEl.appendChild(row);
+    }
+    const lines = [
+      `${d.n} sheets · ${branchPts.length} branch point${branchPts.length === 1 ? "" : "s"}`,
+      `≈ monodromy group: ${groupLine(d)}`,
+      `≈ ${genusLine(d)}`,
+    ];
+    if (d.skipped)
+      lines.push(`⚠ ${d.skipped} branch point${d.skipped === 1 ? "" : "s"} not isolated — group may be incomplete`);
+    lines.push("Uncertified estimate (RISKS §3).");
+    const summary = document.createElement("p");
+    summary.className = "gen-summary";
+    summary.textContent = lines.join("\n");
+    monodromyGroupEl.appendChild(summary);
+    const reportBtn = document.createElement("button");
+    reportBtn.type = "button";
+    reportBtn.className = "gen-groupbtn";
+    reportBtn.textContent = "Full report ▸";
+    reportBtn.addEventListener("click", openReport);
+    monodromyGroupEl.appendChild(reportBtn);
+    monodromyGroupEl.hidden = false;
+  };
+
+  // The full-screen "Monodromy report" (C4): the covering's fingerprint, the π₁ generators with diagrams, the
+  // Riemann–Hurwitz computation, and the honest ≈ framing — an educational read, layout only (no new math).
+  const stat = (k: string, v: string, bad = false): HTMLElement => {
+    const el = document.createElement("div");
+    el.className = "report-stat";
+    const kk = document.createElement("div");
+    kk.className = "k";
+    kk.textContent = k;
+    const vv = document.createElement("div");
+    vv.className = bad ? "v bad" : "v";
+    vv.textContent = v;
+    el.append(kk, vv);
+    return el;
+  };
+  const openReport = (): void => {
+    if (!(monodromyReportEl instanceof HTMLElement) || !(reportBodyEl instanceof HTMLElement)) return;
+    const d = gatherMonodromy();
+    if (!d) return;
+    const inner = document.createElement("div");
+    inner.className = "report-inner";
+
+    const h2 = document.createElement("h2");
+    h2.textContent = `Monodromy of ${plot.riemannDescriptor()?.label ?? "the surface"}`;
+    const sub = document.createElement("p");
+    sub.className = "report-sub";
+    sub.textContent =
+      "How the sheets permute as you loop around each branch point — the covering's topological fingerprint.";
+    const caveat = document.createElement("p");
+    caveat.className = "report-caveat";
+    caveat.textContent =
+      "≈ Uncertified estimate: the permutations are analytic continuation (RISKS §3). The Riemann–Hurwitz formula and its parity/bound check are exact.";
+    inner.append(h2, sub, caveat);
+
+    // Fingerprint stat row
+    const stats = document.createElement("div");
+    stats.className = "report-stats";
+    stats.append(
+      stat("Sheets (n)", String(d.n)),
+      stat("Branch points", String(branchPts.length)),
+      stat(
+        "Genus",
+        d.genus.consistent ? `≈ ${d.genus.genus}` : "⚠ inconsistent",
+        !d.genus.consistent,
+      ),
+      stat("Monodromy group", `≈ order ${d.group.order}${d.group.capped ? "+" : ""}${d.name ? ` · ${d.name}` : ""}`),
+      stat("Connected", d.group.transitive ? "yes (transitive)" : "no (intransitive)", !d.group.transitive),
+    );
+    inner.append(stats);
+
+    // Generators
+    const gh = document.createElement("h3");
+    gh.textContent = "Generators of π₁ (one loop per branch point)";
+    inner.append(gh);
+    const prose = document.createElement("p");
+    prose.className = "prose";
+    prose.textContent =
+      `The punctured base ℂ ∖ {branch points} has fundamental group free on ${branchPts.length} generator${branchPts.length === 1 ? "" : "s"} ` +
+      `γ₁ … γ${branchPts.length === 1 ? "₁" : subscript(branchPts.length)}. Monodromy sends each γᵢ to a sheet permutation σᵢ ∈ S${d.n}; the group they generate is the monodromy group.`;
+    inner.append(prose);
+    const gens = document.createElement("div");
+    gens.className = "report-gens";
+    const entries = [
+      ...d.gens.map((g) => ({ label: g.label, perm: g.perm, meta: `about ${fmtComplex(g.branchPt)}` })),
+      ...(d.sigmaInf ? [{ label: "γ∞", perm: d.sigmaInf, meta: "around ∞" }] : []),
+    ];
+    for (const e of entries) {
+      const card = document.createElement("div");
+      card.className = "report-gen";
+      const gl = document.createElement("span");
+      gl.className = "gl";
+      gl.textContent = e.label;
+      card.append(gl, makeDiagram(e.label, e.perm, d.n));
+      const cyc = document.createElement("span");
+      cyc.className = "cyc";
+      cyc.textContent = cycleNotation(e.perm);
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = e.meta;
+      card.append(cyc, meta);
+      gens.append(card);
+    }
+    inner.append(gens);
+    if (d.skipped) {
+      const warn = document.createElement("p");
+      warn.className = "report-caveat";
+      warn.textContent = `⚠ ${d.skipped} branch point${d.skipped === 1 ? "" : "s"} could not be isolated (too close / unresolved) — the generator set and group may be incomplete.`;
+      inner.append(warn);
+    }
+
+    // Riemann–Hurwitz
+    const rh = document.createElement("h3");
+    rh.textContent = "Genus — Riemann–Hurwitz";
+    inner.append(rh);
+    const R = d.genus.ramification;
+    const eq = document.createElement("div");
+    eq.className = "report-eq";
+    eq.textContent =
+      `2 − 2g = 2n − R    (n = ${d.n},  R = Σ (n − #cycles) over all branch points incl. ∞)\n` +
+      `R = ${R}   ⇒   2 − 2g = ${2 * d.n} − ${R} = ${2 * d.n - R}` +
+      (d.genus.consistent
+        ? `   ⇒   g ≈ ${d.genus.genus}`
+        : "   ⇒   ⚠ not an even, non-negative result — the estimated cycles can't come from a genuine cover");
+    inner.append(eq);
+    const rhProse = document.createElement("p");
+    rhProse.className = "prose";
+    rhProse.textContent = d.group.transitive
+      ? "A transitive monodromy group means the surface is a single connected piece."
+      : "The monodromy group is intransitive, so the surface splits into more than one connected component.";
+    inner.append(rhProse);
+
+    reportBodyEl.replaceChildren(inner);
+    monodromyReportEl.hidden = false;
+    if (reportCloseBtn instanceof HTMLElement) reportCloseBtn.focus();
+  };
+  const closeReport = (): void => {
+    if (monodromyReportEl instanceof HTMLElement) monodromyReportEl.hidden = true;
+  };
+  if (computeGroupBtn instanceof HTMLElement) computeGroupBtn.addEventListener("click", computeGroup);
+  if (reportCloseBtn instanceof HTMLElement) reportCloseBtn.addEventListener("click", closeReport);
+  document.addEventListener("keydown", (e) => {
+    if (
+      e.key === "Escape" &&
+      monodromyReportEl instanceof HTMLElement &&
+      !monodromyReportEl.hidden
+    )
+      closeReport();
+  });
 
   // Pointer / touch / keyboard navigation. 2D: pan + zoom-to-cursor (probe when idle); 3D: orbit + dolly;
   // Sphere: arcball rotate + dolly. Two fingers pinch-zoom in any mode, and the keyboard drives the same
@@ -1675,9 +2121,12 @@ function main(): void {
       plot.riemannLinked &&
       isLeftHalf(e.clientX, canvasRect())
     ) {
-      loopPoints = [plot.screenToWorld(e.clientX, e.clientY, twoDRect())];
+      const z0 = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
+      loopPoints = [z0];
       lastLoop = null;
-      drawRiemannLink();
+      loopWindings = []; // clear the previous loop's winding annotations
+      plot.beginRiemannLiveLoop(z0); // seed the live lift — the surface path grows as the loop is drawn
+      redraw(true); // repaint the surface (with the seed) + the base-plane overlay
       return;
     }
     // Left mouse button pans the 3D landscape; the right button (or touch / pen) orbits it — the familiar
@@ -1703,9 +2152,17 @@ function main(): void {
       return;
     }
     if (loopPoints) {
-      // Monodromy loop drag (M3.3): accumulate base points and redraw the loop overlay (no WebGL repaint).
-      loopPoints.push(plot.screenToWorld(e.clientX, e.clientY, twoDRect()));
-      drawRiemannLink();
+      // Monodromy loop drag (M3.3): accumulate base points; extend the live lift so the surface path grows in
+      // real time. Throttle by a small world step (keeps the point count — and the per-move lift — bounded and
+      // dedupes jitter); `redraw(true)` repaints the surface with the growing lift + the base-plane overlay.
+      const z = plot.screenToWorld(e.clientX, e.clientY, twoDRect());
+      const last = loopPoints[loopPoints.length - 1];
+      const step = plot.view.span * 0.01; // ~1% of the pane half-height
+      if (!last || Math.hypot(z[0] - last[0], z[1] - last[1]) > step) {
+        loopPoints.push(z);
+        plot.extendRiemannLiveLoop(z);
+      }
+      redraw(true);
       return;
     }
     if (sphereLast) {

@@ -10,7 +10,7 @@
 // Either way each streamline keeps a colour key, so the same streamline reads the same colour in both
 // panes: the map visibly carries the flow. Presets or an imported polygon choose K; sliders reshape the
 // flow. Honest `≈`/`=` labels + converged/degraded/residual. The app is a producer AND consumer of the
-// `@cas/interchange` `form:"conformal"` map (ADR-0034): import a `#s=` polygon, or "Copy link" to export.
+// `@cas/interchange` `form:"conformal"` map (ADR-0035): import a `#s=` polygon, or "Copy link" to export.
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import {

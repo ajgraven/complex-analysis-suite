@@ -25,7 +25,7 @@
 // VERSION NOTE: the links below carry the schema `version` field, so each MINOR bump regenerates them
 // — 1.0.0 → 1.1.0 (the `schwarz` MapSpec form, S3a), 1.1.0 → 1.2.0 (optional finite-pole `branches` on
 // LaurentMap, Phase 2), 1.2.0 → 1.3.0 (the `bounded` φ form, S5-C2), and 1.3.0 → 1.4.0 (the `conformal`
-// MapSpec form, M2.4c / ADR-0034). None of the five links below use the 1.4.0 `conformal` vocabulary, so
+// MapSpec form, M2.4c / ADR-0035). None of the five links below use the 1.4.0 `conformal` vocabulary, so
 // the 1.4.0 bump changed ONLY the embedded `version` label — they stay byte-identical bar that label; the
 // conformal golden (RM_TO_POTENTIAL_CONFORMAL_LINK, at the end) is the first to exercise the new form.
 // Regenerated via QD's exportPhiLink/exportSigmaLink and CD's bottcherMapLink (below).
@@ -150,7 +150,7 @@ export const CD_TO_RM_BOTTCHER_LINK =
  *  produce from the decoded LaurentMap (γ₁·w + Σ bₖ·w⁻ᵏ at w = 2). */
 export const CD_TO_RM_BOTTCHER_PSI_AT_2 = 2.125;
 
-// --- Riemann-Map → 2D-Electrostatics polygon conformal-map golden (M2.4c, ADR-0034) ----------------
+// --- Riemann-Map → 2D-Electrostatics polygon conformal-map golden (M2.4c, ADR-0035) ----------------
 //
 // The first `form:"conformal"` hand-off (interchange 1.4.0): the Riemann-Map studio EXPORTS a polygon
 // Schwarz–Christoffel map as a bare `kind:"map"` `ConformalMap`, and 2D Electrostatics IMPORTS it to draw

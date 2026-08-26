@@ -48,6 +48,15 @@ export interface RiemannForm {
   branchNote: string;
   /** One-line monodromy description for the badge. */
   monodromy: string;
+  /** The principal branch cut(s), in the z-plane, as rays to infinity — for drawing the cut the sheets glue
+   *  across on the base plane (B1). Derived from the primitive and its affine inner `αz + β`. */
+  cutRays: CutRay[];
+}
+
+/** A branch cut drawn as a ray from a branch point `origin` (z-plane) toward infinity in unit `dir`. */
+export interface CutRay {
+  origin: [number, number];
+  dir: [number, number];
 }
 
 // --- complex-constant arithmetic (for the affine wrapper A·P(αz+β)+B) --------------------------------
@@ -417,6 +426,47 @@ function labelFor(core: Core, A: Cx, B: Cx): string {
   return wrapped ? `${core_label} (affine)` : core_label;
 }
 
+/** Unit direction of a complex number (falls back to +x for a zero vector). */
+function unitDir(c: Cx): [number, number] {
+  const m = Math.hypot(c.re, c.im);
+  return m > 0 ? [c.re / m, c.im / m] : [1, 0];
+}
+
+/** The z-plane point where the inner argument `u = αz + β` equals `u` — i.e. `z = (u − β)/α`. */
+function zAtInner(u: Cx, alpha: Cx, beta: Cx): [number, number] {
+  const z = cDiv(cSub(u, beta), alpha);
+  return [z.re, z.im];
+}
+
+/**
+ * The principal branch cut(s) of the recognized primitive, mapped back into the z-plane through the inner
+ * `u = αz + β` (B1). Each primitive's cut lives in the `u`-plane at a known place — `(−∞, 0]` for √ / ⁿ√ / log,
+ * `(−∞,−1] ∪ [1, ∞)` for arcsin / arccos, the imaginary axis beyond `±i` for arctan — and pulls back to a ray
+ * from a branch point `z = (u₀ − β)/α` in the direction `u` runs toward infinity, i.e. `±1/α` (or `±i/α`).
+ */
+function cutRaysFor(core: Core, alpha: Cx, beta: Cx): CutRay[] {
+  const invA = cDiv(cx(1), alpha); // 1/α
+  switch (core.prim) {
+    case "sqrt":
+    case "pow":
+    case "log":
+      return [{ origin: zAtInner(cx(0), alpha, beta), dir: unitDir(cNeg(invA)) }]; // u ∈ (−∞, 0]
+    case "arcsin":
+    case "arccos":
+      return [
+        { origin: zAtInner(cx(1), alpha, beta), dir: unitDir(invA) }, // u ∈ [1, ∞)
+        { origin: zAtInner(cx(-1), alpha, beta), dir: unitDir(cNeg(invA)) }, // u ∈ (−∞, −1]
+      ];
+    case "arctan":
+      return [
+        { origin: zAtInner(cx(0, 1), alpha, beta), dir: unitDir(cMul(invA, cx(0, 1))) }, // u ∈ i·[1, ∞)
+        { origin: zAtInner(cx(0, -1), alpha, beta), dir: unitDir(cMul(invA, cx(0, -1))) }, // u ∈ i·(−∞, −1]
+      ];
+    default:
+      return [];
+  }
+}
+
 /**
  * Recognize `w = f(z)` as an invertible-primitive Riemann form (ADR-0028), or return null (the caller then
  * offers only the principal-branch views). `ast` is the parsed active map.
@@ -450,5 +500,6 @@ export function detectRiemannForm(ast: Node): RiemannForm | null {
     monodromy: isPow
       ? `${core.q} sheets${Math.abs(core.p) !== 1 ? ` · phase winds ${Math.abs(core.p)}×` : ""} · ${core.q}-cycle`
       : meta.mono,
+    cutRays: cutRaysFor(core, alpha, beta),
   };
 }

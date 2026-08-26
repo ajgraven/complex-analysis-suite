@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "2D Electrostatics — an interactive realization of the complex potential W(z) = φ + iψ: drop and drag charges, sources, sinks, vortices, and doublets and see the field/flow as field-lines, equipotentials, streamlines, and a domain-colored field, with a single lens toggle between the electrostatic and hydrodynamic readings. The eighth suite app (ADR-0033), built on the shared @cas/* packages — the holomorphic, closed-form field via @cas/expr, the WebGL2 render substrate via @cas/gpu, the shared browser shell via @cas/ui, permalinks + map hand-off via @cas/interchange, figure export via @cas/export. Conventions follow the author's paper 'Complex Analysis as Electrostatics and Hydrodynamics' at the app edge.",
+  "description": "2D Electrostatics — an interactive realization of the complex potential W(z) = φ + iψ: drop and drag charges, sources, sinks, vortices, and doublets and see the field/flow as field-lines, equipotentials, streamlines, and a domain-colored field, with a single lens toggle between the electrostatic and hydrodynamic readings. The eighth suite app (ADR-0034), built on the shared @cas/* packages — the holomorphic, closed-form field via @cas/expr, the WebGL2 render substrate via @cas/gpu, the shared browser shell via @cas/ui, permalinks + map hand-off via @cas/interchange, figure export via @cas/export. Conventions follow the author's paper 'Complex Analysis as Electrostatics and Hydrodynamics' at the app edge.",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "scripts": {

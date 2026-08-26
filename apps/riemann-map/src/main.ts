@@ -1208,7 +1208,7 @@ function main(): void {
     invalidate();
   });
   controls.onSendToElectrostatics(() => {
-    // Hand the current polygon region off to 2D Electrostatics as a `form:"conformal"` map (ADR-0034):
+    // Hand the current polygon region off to 2D Electrostatics as a `form:"conformal"` map (ADR-0035):
     // its corners + interior angles are the portable geometry; 2D-E re-fits the flow past / inside K.
     const d = currentDomain();
     const corners = d?.corners;

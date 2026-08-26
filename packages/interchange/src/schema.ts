@@ -19,7 +19,7 @@ export const SCHEMA_ID = "complex-analysis-suite/interchange" as const;
  * Current schema version (semver). A MAJOR bump is a breaking change consumers must reject; a MINOR
  * bump adds backward-compatible vocabulary. 1.1.0 (S3a) added the `schwarz` MapSpec form; 1.2.0 added
  * optional finite-pole `branches` on `LaurentMap` (pole-bearing unbounded QDs); 1.3.0 (S5-C2) added the
- * `bounded` φ form for a `schwarz` map (bounded QDs — φ: 𝔻 → Ω, `disk: "D"`); 1.4.0 (M2.4c, ADR-0034)
+ * `bounded` φ form for a `schwarz` map (bounded QDs — φ: 𝔻 → Ω, `disk: "D"`); 1.4.0 (M2.4c, ADR-0035)
  * added the `conformal` MapSpec form — a Schwarz–Christoffel / lightning conformal map of a polygon,
  * reconstructed via @cas/conformal exactly as `schwarz` is via @cas/schwarz. Each MINOR bump moves
  * every `version: VERSION`-stamped export to the new label — a payload that uses none of the new
@@ -132,7 +132,7 @@ export interface SchwarzMap {
  * corners are the canonical geometry a consumer can always re-fit from; the recorded `prevertices` wₖ,
  * interior angles `angles` (αₖ / π), accessory `constant` C, and `capacity` let it rebuild the exact
  * fitted map. Fit quality is carried honestly (guardrail): `converged`, and — when the fit reports them —
- * `degraded` / `residual`. Added in schema 1.4.0 (ADR-0034); like `schwarz`, NOT expr-compilable.
+ * `degraded` / `residual`. Added in schema 1.4.0 (ADR-0035); like `schwarz`, NOT expr-compilable.
  */
 export interface ConformalMap {
   form: "conformal";

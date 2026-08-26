@@ -67,12 +67,14 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   `R(z)^(p/q)` with `R` rational (ADR-0029) — `√(z²−1)`, `√(z³−z)`, `(z²−1)^(1/3)`, `√((z−1)/(z+1))` — that
   the parametric path declines: a CPU-built **proximity-glued mesh** (Nieser–Poelke–Polthier / Kranich)
   over the z-view stitches the `q` sheets and drops ramification cells as small **holes** at the branch
-  points (never a wall), badged if the triangle budget is hit. An **Implicit surface — F(w,z)=0** toggle
-  (M2c, ADR-0031) covers the **general algebraic curve** entered by its defining bivariate polynomial —
+  points (never a wall), badged if the triangle budget is hit. The **Input** selector beside the formula
+  — a segmented `w = f(z)` / **`F(w, z) = 0`** toggle — switches to implicit mode
+  (M2c, ADR-0031), which covers the **general algebraic curve** entered by its defining bivariate polynomial —
   including the ones with no radical form (`w³ − w − z`, a quintic): the sheets are the per-vertex roots of
   `F(·,z)=0` (`@cas/core` `rootsMonic`), so the whole mesh + exploration stack carries over, and the branch
   locus is **exact** for Gaussian-rational `F` (roots of `disc_w F` via `@cas/exact`, badged `=` vs the `≈`
-  scan). It's its own mode (own box), pinning the Riemann view. The tab is offered only for a recognized
+  scan). It's its own mode (own box), pinning the Riemann view; picking it steps the f/g slots and the
+  function transforms (∞-inspector, derivative) aside, since they don't apply to an implicit relation. The tab is offered only for a recognized
   surface; otherwise the app stays on the principal-branch views. Values are `≈`; the glued topology is
   exact. **Hovering the surface** ray-casts its sheets (M3.1, ADR-0030) and reads the point the eye actually
   touches — the base point `z`, the value `w` on that sheet, `|w|`, `arg w`, and a **local sheet ordinal**
@@ -80,14 +82,30 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   all `≈`. A **Base-plane pane** toggle (M3.2) splits the view — the flat base plane beside the surface,
   **hover-linked**: touch a sheet and a crosshair marks its base point on the flat pane (and vice versa),
   with **branch-point markers** (M3.4, amber ⊕ where the sheets merge, `≈`, also counted in the badge). A
-  **Monodromy explorer** (M3.3, opt-in) lets you drag a closed loop on the base plane and reads back the
-  estimated sheet **permutation** in cycle notation (√z → 2-cycle, z^(1/3) → 3-cycle) — an uncertified
-  estimate, quarantined from the badge, permalink, and exports (RISKS §3). An
-  opt-in **Monodromy explorer** (M3.3) lets you drag a closed loop on the base plane and estimates how the
+  **Monodromy explorer** (M3.3, opt-in) lets you drag a closed loop on the base plane and estimates how the
   sheets permute around it (e.g. a loop around `0` swaps √z's two sheets — a 2-cycle), reported in cycle
-  notation. Analytic continuation around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so
-  it is honestly `≈`, flags low confidence near a branch point, and is kept out of the badge, permalink, and
-  every export. Built on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
+  notation. The loop's **per-sheet continuation paths are lifted onto the 3D surface** as colour-coded
+  polylines that grow **in real time as you draw**, and **direction arrows** (shared `@cas/ui`
+  `drawDirectionTicks`, ADR-0007 second consumer) mark the traversal orientation on both the base-plane loop
+  and each lifted path. The base plane also draws the **principal branch cut(s)** the sheets glue across (B1,
+  dashed rays from each branch point, derived from the primitive's inner `αz + β`), and each enclosed
+  branch-point marker is annotated with the loop's **winding number** about it — the signed integer topology
+  that is **exact (`=`)**, in deliberate contrast to the `≈` permutation it drives (B2). For each branch point
+  the explorer also offers a **one-click generator loop** (C1, [ADR-0033](../../docs/DECISIONS.md)) — the
+  canonical γᵢ of `π₁(base ∖ branch points)`, auto-sized to isolate that point (winding-certified) and run
+  through the same pipeline. A **Monodromy group & genus** summary (C3) then reads the whole covering: it
+  measures each generator over one common base point (lasso loops, so the permutations compose) plus a large
+  enclosing loop for the ramification over ∞, and reports the monodromy group `⟨σᵢ⟩ ≤ Sₙ` (order · name ·
+  **transitive ⇒ connected**) and the surface's **genus via Riemann–Hurwitz** — e.g. `w² = z³ − z` reads as
+  **genus 1**, a torus. Each generator is drawn as a **permutation diagram** (C2 — sheet-coloured nodes with
+  `k → σ(k)` arrows). The group and genus are `≈` (built from the estimated permutations); the Riemann–Hurwitz
+  parity/bound check is exact and flags inconsistent estimates. A **Monodromy report** (C4) opens the whole
+  story full-screen — the covering's fingerprint, the π₁ generators with diagrams, and the Riemann–Hurwitz
+  computation worked out. (Parametric branch points come from the exact cut-ray origins, so a folded
+  `z^(p/q)` surface reports its one true branch point, not a scattered scan.) Analytic continuation
+  around a loop is **never certified** ([RISKS](../../docs/RISKS.md) §3), so the permutation is honestly `≈`,
+  flags low confidence near a branch point, and is kept out of the badge, permalink, and every export. Built
+  on an app-local 3D kit (`render3d/`: mat4 · orbit camera · grid mesh · height law · surface
   shader · sphere arcball · **Riemann surface** (parametric + baked curve)) plus the recognizers
   (`riemann/inverse.ts` · `riemann/algebraicCurve.ts`), the NPP mesh (`riemann/curveMesh.ts`), and the
   hover-pick (`riemann/pickMesh.ts`).
