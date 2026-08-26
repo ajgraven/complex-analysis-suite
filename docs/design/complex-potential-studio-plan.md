@@ -14,9 +14,10 @@
 > that walks the paper's dictionary (Gauss's law, the argument principle, Jensen, Bôcher,
 > the Riemann map as a grounded cavity, method of images, quadrature-domain indistinguishability).
 >
-> **Approved scope for this pass: M0 + M1** (the render spike + the superposition sandbox — a
-> first shippable app). **M2–M4 are specced here but deferred to later, separately-approved
-> pushes.** Nothing here re-litigates a locked ADR.
+> **Status: M0–M3 built and merged** (see the living record below); **M4 deferred** to a separately-approved
+> push. The milestones landed in order, each as its own approved pass — M0 + M1 first (the render spike + the
+> superposition sandbox, a first shippable app), then M2 (conformal transplant) and M3 (potential theory).
+> Nothing here re-litigates a locked ADR.
 >
 > Mirrors the suite runbook style ([`../MIGRATION.md`](../MIGRATION.md)): **phase gates that are
 > each shippable, a motivating win early, one ground-truth check per gate, test-guarded changes.**

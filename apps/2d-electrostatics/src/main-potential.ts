@@ -213,6 +213,9 @@ function main(): void {
     const domain = b.domain;
     faberBox.disabled = !domain || isGeneral(domain); // Faber needs an exterior map
     faberCheck.style.opacity = faberBox.disabled ? "0.4" : "";
+    nRow.style.display = showFaber && !faberBox.disabled ? "" : "none"; // keep the order slider in sync
+
+
 
     // ---- overlays (computed once) --------------------------------------------
     let faber: { zeros: Pt[]; converged: boolean; residual: number; reachedBoundary: boolean } | null = null;
@@ -242,9 +245,10 @@ function main(): void {
     // ---- readout -------------------------------------------------------------
     if (domain) {
       const eq = isGeneral(domain) ? "≈" : domain.exact ? "=" : "≈";
+      const greenLabel = isGeneral(domain) ? "Green g<sub>K</sub> = U − γ (log-lightning)" : "Green g<sub>K</sub> = log|Ψ⁻¹|";
       let html =
         `capacity cap(K) ${eq} <b>${domain.capacity.toFixed(6)}</b><br>` +
-        `<span class="tp-approx">equilibrium μ = charge density · Green g<sub>K</sub> = log|Ψ⁻¹|</span>`;
+        `<span class="tp-approx">equilibrium μ = charge density · ${greenLabel}</span>`;
       if (isGeneral(domain)) html += `<br><span class="tp-approx">${domain.note ?? ""} · residual ≈ ${domain.residual.toExponential(1)}</span>`;
       else if (domain.note) html += `<br><span class="tp-approx">${domain.note}</span>`;
       if (faber) {

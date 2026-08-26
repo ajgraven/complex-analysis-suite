@@ -2892,10 +2892,15 @@ Consumes `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`
 
 ### Status of the build
 
-M0 (render spike) + M1 (the superposition sandbox — palette, inspector with the `c = q+iγ` decomposition, the
-two-lens toggle, the flux/circulation probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an
-animated tracer-flow layer) are complete and verified in live headless-Chromium WebGL2. M2–M4 are specced in
-the plan and deferred to separately-approved pushes.
+**M0–M3 complete** (verified in live headless-Chromium WebGL2). M0 (render spike) + M1 (the superposition
+sandbox — palette, inspector with the `c = q+iγ` decomposition, the two-lens toggle, the flux/circulation
+probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an animated tracer-flow layer). **M2**
+(conformal transplant): Joukowski + Kármán–Trefftz airfoils; exterior-SC flow *past* a polygon and interior-SC
+flow *inside* a polygon; the `@cas/interchange` `conformal` map form ([ADR-0034](#adr-0034-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
+hand-off. **M3** (potential theory): the conductor-K view — equilibrium charge, capacity, Green's function —
+with Faber-zero and Fekete/Leja overlays (three roads to μ_K), plus general K with no closed-form map via a
+log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber` (M3). **M4** (the Hele-Shaw
+"twisting" showpiece) is specced in the plan and deferred to a separately-approved push.
 
 ---
 

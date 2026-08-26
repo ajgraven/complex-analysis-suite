@@ -96,8 +96,10 @@ Eight apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
 rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`; the eighth,
 **2D Electrostatics**, ADR-0033 — the complex potential W = φ + iψ as an interactive field of charges /
-sources / vortices (fields, flow, and the residue theorem live), riding `@cas/core`, `@cas/expr`, `@cas/gpu`,
-`@cas/interchange`, `@cas/export`, and `@cas/ui`) ride the eleven shared `@cas/*` packages
+sources / vortices, extended through M2 (conformal transplant of flows past/inside airfoils and polygons) and
+M3 (a potential-theory conductor view — capacity, equilibrium measure, Green's function, Faber/Fekete points),
+riding `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui`, `@cas/conformal` (M2),
+and `@cas/faber` (M3)) ride the eleven shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
