@@ -218,13 +218,13 @@ function main(): void {
 
 
     // ---- overlays (computed once) --------------------------------------------
-    let faber: { zeros: Pt[]; converged: boolean; residual: number; reachedBoundary: boolean } | null = null;
+    let faber: { zeros: Pt[]; converged: boolean; residual: number; equidistributes: boolean } | null = null;
     if (domain && !isGeneral(domain) && showFaber) {
       try {
         const fz = faberZeros(domain, faberN);
-        const bdryReach = Math.max(1e-9, ...greenCurve(domain, 0, 120).map((p) => Math.hypot(p[0], p[1])));
-        const zeroReach = Math.max(0, ...fz.zeros.map((p) => Math.hypot(p[0], p[1])));
-        faber = { zeros: fz.zeros, converged: fz.converged, residual: fz.residual, reachedBoundary: zeroReach > 0.7 * bdryReach };
+        // Whether ν(Fₙ) → μ_K is a LIMIT fact set by ∂K's regularity (corners/cusps → yes; analytic-smooth
+        // → no), NOT the finite-n zero positions — which are only partway to ∂K even when the limit holds.
+        faber = { zeros: fz.zeros, converged: fz.converged, residual: fz.residual, equidistributes: !domain.smoothBoundary };
       } catch {
         faber = null;
       }
@@ -253,9 +253,9 @@ function main(): void {
       else if (domain.note) html += `<br><span class="tp-approx">${domain.note}</span>`;
       if (faber) {
         const conv = faber.converged ? "converged" : "not converged";
-        const claim = faber.reachedBoundary
-          ? "ν(Fₙ) → μ_K: the zeros equidistribute onto ∂K (the charge)"
-          : "smooth ∂K: the zeros stay interior — they do <b>not</b> reach μ_K";
+        const claim = faber.equidistributes
+          ? "ν(Fₙ) → μ_K as n grows: the zeros equidistribute onto ∂K (the charge)"
+          : "smooth ∂K: the zeros converge to an interior set — <b>not</b> μ_K";
         html +=
           `<br><span class="tp-faber">Faber F<sub>${faberN}</sub> zeros ≈ ${conv} · residual ≈ ${faber.residual.toExponential(1)}</span>` +
           `<br><span class="tp-approx">${claim}</span>`;

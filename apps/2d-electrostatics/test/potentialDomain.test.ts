@@ -14,6 +14,18 @@ import type { Pt } from "../src/transplant.js";
 
 const cabs = (p: Pt): number => Math.hypot(p[0], p[1]);
 
+// The `smoothBoundary` flag decides the honest Faber-zero claim (analytic ∂K → zeros stay interior, not
+// μ_K; corners/cusps → zeros reach μ_K). Pinning it guards the labelling of the disk/ellipse vs the rest.
+describe("smoothBoundary classification (drives the honest Faber-zero label)", () => {
+  it("only the disk and the ellipse have an analytic-smooth boundary", () => {
+    expect(diskDomain(1.2).smoothBoundary).toBe(true);
+    expect(ellipseDomain(2, 1).smoothBoundary).toBe(true);
+    expect(segmentDomain(1).smoothBoundary).toBe(false); // the zeros ARE the arcsine μ_K
+    expect(deltoidDomain().smoothBoundary).toBe(false); // 3 cusps
+    expect(polygonDomain("sq", "sq", [[1, -1], [1, 1], [-1, 1], [-1, -1]]).smoothBoundary).toBe(false); // corners
+  });
+});
+
 // Golden logarithmic capacities (plan §7): cap(K) = |leading coeff of the exterior map Ψ|.
 describe("logarithmic capacity", () => {
   it("closed-form classes match the golden table", () => {

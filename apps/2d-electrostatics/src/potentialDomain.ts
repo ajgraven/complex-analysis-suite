@@ -25,6 +25,10 @@ export interface ExteriorDomain {
   readonly laurent: readonly Pt[];
   /** `=` (closed-form / converged SC) vs `≈` (degraded / truncated). */
   readonly exact: boolean;
+  /** Whether ∂K is analytic-smooth (no corners/cusps). This — not the finite-n zero positions — decides
+   *  whether the Faber-zero counting measure converges to μ_K: a smooth boundary keeps the zeros on an
+   *  interior set (disk → centre, ellipse → focal segment), while corners/cusps drive them onto ∂K. */
+  readonly smoothBoundary: boolean;
   /** An optional ground-truth note (e.g. the arcsine law on a segment). */
   readonly note?: string;
 }
@@ -50,25 +54,26 @@ export function laurentEval(c: number, laurent: readonly Pt[], w: Pt): Pt {
 }
 
 /** A closed-form exterior-map domain from an explicit finite Laurent map (capacity = c, real-positive). */
-function laurentDomain(id: string, name: string, c: number, laurent: readonly Pt[], note?: string): ExteriorDomain {
-  return { id, name, evalPsi: (w) => laurentEval(c, laurent, w), capacity: c, laurent, exact: true, note };
+function laurentDomain(id: string, name: string, c: number, laurent: readonly Pt[], smoothBoundary: boolean, note?: string): ExteriorDomain {
+  return { id, name, evalPsi: (w) => laurentEval(c, laurent, w), capacity: c, laurent, exact: true, smoothBoundary, note };
 }
 
 // --- Closed-form classes (exact Ψ) -------------------------------------------------------------------
 
-/** The disk |z| ≤ r: Ψ(w) = r·w, uniform equilibrium measure, cap = r. */
-export const diskDomain = (r: number): ExteriorDomain => laurentDomain("disk", `Disk (r=${r})`, r, [], "μ uniform on |z|=r");
+/** The disk |z| ≤ r: Ψ(w) = r·w, uniform equilibrium measure, cap = r. Smooth boundary. */
+export const diskDomain = (r: number): ExteriorDomain => laurentDomain("disk", `Disk (r=${r})`, r, [], true, "μ uniform on |z|=r");
 
-/** The ellipse with semi-axes a (x), b (y): Ψ(w) = ((a+b)/2)·w + ((a−b)/2)·w⁻¹, cap = (a+b)/2. */
+/** The ellipse with semi-axes a (x), b (y): Ψ(w) = ((a+b)/2)·w + ((a−b)/2)·w⁻¹, cap = (a+b)/2. Smooth. */
 export const ellipseDomain = (a: number, b: number): ExteriorDomain =>
-  laurentDomain("ellipse", `Ellipse (${a}:${b})`, (a + b) / 2, [[0, 0], [(a - b) / 2, 0]]);
+  laurentDomain("ellipse", `Ellipse (${a}:${b})`, (a + b) / 2, [[0, 0], [(a - b) / 2, 0]], true);
 
-/** The segment [−h, h] (a degenerate ellipse, b = 0): Ψ(w) = (h/2)(w + w⁻¹), cap = h/2, arcsine law. */
+/** The segment [−h, h] (a degenerate ellipse, b = 0): Ψ(w) = (h/2)(w + w⁻¹), cap = h/2, arcsine law. The
+ *  segment IS its own boundary, so the Faber (Chebyshev) zeros land on it → μ_K (not analytic-smooth). */
 export const segmentDomain = (h: number): ExteriorDomain =>
-  laurentDomain("segment", `Segment [−${h}, ${h}]`, h / 2, [[0, 0], [h / 2, 0]], "μ = arcsine law 1/(π√(h²−x²))");
+  laurentDomain("segment", `Segment [−${h}, ${h}]`, h / 2, [[0, 0], [h / 2, 0]], false, "μ = arcsine law 1/(π√(h²−x²))");
 
-/** The deltoid (hypocycloid): Ψ(w) = w + ½·w⁻², cap = 1. */
-export const deltoidDomain = (): ExteriorDomain => laurentDomain("deltoid", "Deltoid", 1, [[0, 0], [0, 0], [0.5, 0]]);
+/** The deltoid (hypocycloid): Ψ(w) = w + ½·w⁻², cap = 1. Its 3 cusps drive the Faber zeros onto ∂K. */
+export const deltoidDomain = (): ExteriorDomain => laurentDomain("deltoid", "Deltoid", 1, [[0, 0], [0, 0], [0.5, 0]], false);
 
 // --- Polygon class (exterior SC fit) -----------------------------------------------------------------
 
@@ -84,6 +89,7 @@ export function polygonDomain(id: string, name: string, corners: readonly Pt[]):
     capacity: m.capacity,
     laurent: m.laurent,
     exact: m.converged && !m.degraded,
+    smoothBoundary: false, // a polygon has corners → the Faber zeros equidistribute onto ∂K
   };
 }
 
