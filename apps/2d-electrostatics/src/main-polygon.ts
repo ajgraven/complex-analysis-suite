@@ -267,10 +267,14 @@ function main(): void {
     if (map) {
       lastFit = { engine: "sc-interior", angles: map.angles, prevertices: map.cornerPreimages, converged: map.converged, degraded: map.degraded, residual: map.residual };
       const tag = map.converged ? (map.degraded ? "converged · degraded" : "converged") : "not converged";
+      // The forward SC map is exact where it converges; a degraded fit downgrades the streamlines to ≈.
+      const flowLabel = map.degraded
+        ? "source→sink flow, streamlines carried by f (≈)"
+        : "source→sink flow, exact streamlines carried by f (=)";
       readout.innerHTML =
         `interior map f: 𝔻 → K<br>` +
         `SC fit: ${tag} · residual ≈ ${map.residual.toExponential(1)}<br>` +
-        `<span class="tp-approx">source→sink flow, exact streamlines carried by f (=)</span>`;
+        `<span class="tp-approx">${flowLabel}</span>`;
     } else {
       lastFit = null;
       readout.innerHTML = `<span class="tp-warn">⚠ the interior SC fit failed for this polygon</span>`;

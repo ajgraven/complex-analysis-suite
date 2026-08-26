@@ -4,7 +4,7 @@
 // cylinder-plane stream function ψ = Im W, so a streamline in the cylinder pane maps to the matching
 // streamline on the wing — the map visibly carries the flow. Thickness/camber/angle-of-attack sliders
 // reshape the airfoil; the Kutta toggle fixes the circulation at the trailing edge and reports the
-// Kutta–Joukowski lift L = ρUΓ. Second page of the app (index.html is the free-field sandbox).
+// Kutta–Joukowski lift L = −ρUΓ. Second page of the app (index.html is the free-field sandbox).
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
 import {
@@ -145,10 +145,10 @@ function main(): void {
     foilRenderer.render(params, FOIL_VIEW, 1);
 
     const R = cylinderRadius(params);
-    const L = params.U * params.circulation; // ρ = 1
+    const L = -params.U * params.circulation; // ρ = 1; Kutta–Joukowski L = −ρUΓ (Γ CCW-positive)
     lift.innerHTML =
       `Γ = ${params.circulation.toFixed(3)} · R = ${R.toFixed(3)}<br>` +
-      `lift L = ρUΓ = <b>${L.toFixed(3)}</b> ${state.kutta ? "(Kutta)" : "(Γ = 0)"}`;
+      `lift L = −ρUΓ = <b>${L.toFixed(3)}</b> ${state.kutta ? "(Kutta)" : "(Γ = 0)"}`;
   };
   const requestPaint = (): void => {
     if (!frame) frame = requestAnimationFrame(paint);

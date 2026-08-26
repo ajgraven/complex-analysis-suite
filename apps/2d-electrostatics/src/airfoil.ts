@@ -2,7 +2,8 @@
 // cylinder pulled back through the Joukowski map z = J(ζ) = ζ + b²/ζ: the cylinder-plane potential is
 // elementary (uniform + doublet + vortex), and the physical velocity is dW/dz = W'(ζ) / J'(ζ). The
 // Kutta condition fixes the circulation so the velocity stays finite at the sharp trailing edge (where
-// J'(b) = 0), which by Kutta–Joukowski gives the lift L = ρUΓ. Everything is closed-form, so it maps
+// J'(b) = 0), which by Kutta–Joukowski gives the lift L = −ρUΓ (Γ is counterclockwise-positive, so a
+// clockwise wing circulation Γ < 0 lifts up). Everything is closed-form, so it maps
 // cleanly onto the same "evaluate the field exactly" render path as the free-singularity sandbox.
 //
 // Geometry: the cylinder passes through the critical point ζ = b (so its image has a sharp trailing
@@ -155,9 +156,11 @@ export function kuttaCirculation(p: AirfoilParams): number {
   return 4 * Math.PI * p.U * R * Math.sin(camberAngle(p) - p.alpha);
 }
 
-/** Lift per unit span by Kutta–Joukowski, L = ρUΓ (ρ = 1 by default). */
+/** Lift per unit span by Kutta–Joukowski, L = −ρUΓ (ρ = 1 by default). The minus sign is the codebase's
+ *  vortex convention: Γ (= p.circulation) is counterclockwise-positive, so the clockwise circulation
+ *  (Γ < 0) a wing at positive angle of attack carries produces positive (upward) lift. */
 export function lift(p: AirfoilParams, rho = 1): number {
-  return rho * p.U * p.circulation;
+  return -rho * p.U * p.circulation;
 }
 
 /** Convenience: the params with the Kutta circulation imposed. */

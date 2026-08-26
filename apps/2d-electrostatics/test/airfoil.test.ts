@@ -67,14 +67,17 @@ describe("Kutta condition", () => {
     expect(kuttaCirculation(p)).toBeCloseTo(4 * Math.PI * p.U * R * Math.sin(camberAngle(p) - p.alpha), 10);
   });
 
-  it("lift is proportional to sin(α + camber) via L = ρUΓ", () => {
+  it("lift is proportional to sin(α + camber) via L = −ρUΓ, positive at positive incidence", () => {
     const mk = (alpha: number): AirfoilParams =>
       withKutta({ U: 1, alpha, b: 1, center: [-0.1, 0.05], circulation: 0 });
     // |lift| grows with angle of attack over a sensible range
     expect(Math.abs(lift(mk(0.3)))).toBeGreaterThan(Math.abs(lift(mk(0.1))));
-    // and matches ρU·Γ exactly
+    // and matches −ρU·Γ exactly (the codebase's CCW-positive Γ makes L = −ρUΓ)
     const p = mk(0.2);
-    expect(lift(p, 1.5)).toBeCloseTo(1.5 * p.U * p.circulation, 12);
+    expect(lift(p, 1.5)).toBeCloseTo(-1.5 * p.U * p.circulation, 12);
+    // a wing at positive angle of attack carries a clockwise (Γ < 0) circulation and lifts UP (L > 0)
+    expect(p.circulation).toBeLessThan(0);
+    expect(lift(p)).toBeGreaterThan(0);
   });
 });
 

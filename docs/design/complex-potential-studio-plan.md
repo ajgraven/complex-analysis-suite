@@ -14,7 +14,7 @@
 > that walks the paper's dictionary (Gauss's law, the argument principle, Jensen, Bôcher,
 > the Riemann map as a grounded cavity, method of images, quadrature-domain indistinguishability).
 >
-> **Status: M0–M3 built and merged** (see the living record below); **M4 deferred** to a separately-approved
+> **Status: M0–M3 built** (see the living record below); **M4 deferred** to a separately-approved
 > push. The milestones landed in order, each as its own approved pass — M0 + M1 first (the render spike + the
 > superposition sandbox, a first shippable app), then M2 (conformal transplant) and M3 (potential theory).
 > Nothing here re-litigates a locked ADR.
