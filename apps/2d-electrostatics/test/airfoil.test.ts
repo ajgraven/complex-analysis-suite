@@ -6,6 +6,7 @@ import {
   cylinderRadius,
   camberAngle,
   cylinderVelocity,
+  cylinderPotential,
   physicalVelocity,
   kuttaCirculation,
   lift,
@@ -139,6 +140,32 @@ describe("Kármán–Trefftz (n < 2 → finite trailing-edge angle)", () => {
     });
     const v = physicalVelocity(p, [2.4, 0.4]);
     expect(Number.isFinite(v[0]) && Number.isFinite(v[1])).toBe(true);
+  });
+
+  // Regression: ktMapPrime must stay on the correct branch over the LEFT-half exterior, where the
+  // principal (ζ²−b²)ⁿ⁻¹ is off by e^{−2πi(n−1)}. physicalVelocity = dW/dz is checked against a
+  // central finite-difference of W(z) = cylinderPotential(K⁻¹(z)) (analytic ⇒ direction-independent,
+  // and the FD does not use ktMapPrime, so it is an independent ground truth).
+  it("KT physical velocity matches dW/dz across the exterior, left half included", () => {
+    const b = 1;
+    const n = 2 - 10 / 180; // the sandbox default trailing-edge angle (10°) ⇒ n = 1.9444…
+    const p: AirfoilParams = withKutta({ U: 1.2, alpha: 0.15, b, center: [-0.12, 0.08], circulation: 0, n });
+    const h = 1e-6;
+    const Wof = (z: Complex): Complex => cylinderPotential(p, ktInverse(z, b, n));
+    for (const z of [
+      [3, 1], // right half (already on the good branch)
+      [-2.5, 0.8], // left half — where the principal-branch bug bit
+      [-2.2, 0.9],
+      [-3, -0.5],
+      [-1.5, 1.8],
+    ] as Complex[]) {
+      const wp = Wof([z[0] + h, z[1]]);
+      const wm = Wof([z[0] - h, z[1]]);
+      const fd: Complex = [(wp[0] - wm[0]) / (2 * h), (wp[1] - wm[1]) / (2 * h)];
+      const v = physicalVelocity(p, z);
+      expect(v[0]).toBeCloseTo(fd[0], 5);
+      expect(v[1]).toBeCloseTo(fd[1], 5);
+    }
   });
 });
 

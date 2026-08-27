@@ -2,8 +2,9 @@ import { describe, it, expect } from "vitest";
 import { enclosedResidue, type Rect } from "../src/probe.js";
 import type { Placed } from "../src/state.js";
 
-// The residue theorem, exact: ∮ E dz = Σ (residues inside) = (Σq) + i(Σγ) over enclosed monopoles;
-// a doublet is enclosed but contributes 0. These pin Gauss's law (Re) and Kelvin circulation (Im).
+// The residue theorem, exact: the normalized integral (1/2πi)∮ E dz = Σ (residues inside) = (Σq) + i(Σγ)
+// over enclosed monopoles; a doublet is enclosed but contributes 0. These pin Gauss's law (Re) and Kelvin
+// circulation (Im). (enclosedResidue returns the residue sum Σc, i.e. this normalized value.)
 const source: Placed = { id: 1, kind: "monopole", at: [0, 0], c: [2, 0] };
 const vortex: Placed = { id: 2, kind: "monopole", at: [1, 0.5], c: [0, 1.5] };
 const doublet: Placed = { id: 3, kind: "doublet", at: [-1, -1], mu: [0.7, 0.2] };

@@ -1,8 +1,9 @@
-// The flux/circulation probe: for a rectangular loop Γ, the residue theorem gives the normalized
-// contour integral ∮_Γ E dz = Σ(residues inside) = Σ c = (Σq) + i(Σγ) over the enclosed monopoles.
-// Re = enclosed charge / net flux (Gauss's law); Im = enclosed circulation (Kelvin's theorem). A
-// doublet (order-2 pole) has residue 0, so it is enclosed but contributes nothing. Because the field
-// is closed-form, this is EXACT — no numerical integration — so the readout is `=`, not `≈`.
+// The flux/circulation probe: for a rectangular loop Γ, the residue theorem gives ∮_Γ E dz = 2πi·Σ(residues
+// inside), i.e. the NORMALIZED contour integral (1/2πi)∮_Γ E dz = Σ c = (Σq) + i(Σγ) over the enclosed
+// monopoles (the app carries the paper's ∮ dz/z = 1 convention at its edge, so the readout shows this
+// normalized form). Re = enclosed charge / net flux (Gauss's law); Im = enclosed circulation (Kelvin's
+// theorem). A doublet (order-2 pole) has residue 0, so it is enclosed but contributes nothing. Because the
+// field is closed-form, this is EXACT — no numerical integration — so the readout is `=`, not `≈`.
 import type { Singularity } from "./field.js";
 
 /** An axis-aligned rectangle in world (complex-plane) coordinates; corners in any order. */

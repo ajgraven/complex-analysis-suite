@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { fitPolygonFlow, fitPolygonInterior } from "../src/polygonMap.js";
+import { fitPolygonFlow, fitPolygonInterior, fitHonestyTier } from "../src/polygonMap.js";
 import type { Pt } from "../src/transplant.js";
 
 // Ground-truth logarithmic capacities (plan §7): a square of side s has cap = s·0.295085…; a segment of
@@ -88,5 +88,32 @@ describe("interior SC polygon map (flow inside K)", () => {
       expect(Math.abs(z[0])).toBeLessThan(1 + 1e-6);
       expect(Math.abs(z[1])).toBeLessThan(1 + 1e-6);
     }
+  });
+});
+
+// Honest-labeling guard (the readout must never call a bad fit "exact (=)"). The interior readout picks
+// its =/≈/⚠ label from fitHonestyTier — NOT from `degraded` alone, which stays false for a lightning
+// fallback (converged:false) and for a non-finite (NaN-residual) failed solve.
+describe("fitHonestyTier — the SC-fit honesty label (guardrail)", () => {
+  it("only a converged, non-degraded, finite-residual fit is exact", () => {
+    expect(fitHonestyTier({ converged: true, degraded: false, residual: 1e-12 })).toBe("exact");
+    expect(fitHonestyTier({ converged: true, degraded: true, residual: 3e-4 })).toBe("approx");
+    // the two shapes of "bad fit" that previously slipped through as exact:
+    expect(fitHonestyTier({ converged: false, degraded: false, residual: NaN })).toBe("unreliable");
+    expect(fitHonestyTier({ converged: false, degraded: false, residual: 0.2 })).toBe("unreliable");
+    expect(fitHonestyTier({ converged: true, degraded: false, residual: NaN })).toBe("unreliable");
+  });
+
+  it("the near-degenerate flat plate is never labelled exact in interior mode", () => {
+    // A 4×0.12 rectangle — the interior SC solve does not converge on it (it approaches a slit). The
+    // readout must therefore never show it as exact (=); this is the case the original bug mislabelled.
+    const plate: Pt[] = [
+      [2, -0.06],
+      [2, 0.06],
+      [-2, 0.06],
+      [-2, -0.06],
+    ];
+    const m = fitPolygonInterior(plate);
+    expect(fitHonestyTier(m)).not.toBe("exact");
   });
 });

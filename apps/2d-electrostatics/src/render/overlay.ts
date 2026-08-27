@@ -81,8 +81,11 @@ function drawHandle(ctx: CanvasRenderingContext2D, s: Placed, x: number, y: numb
 
 const fmt = (v: number): string => (Math.abs(v) < 5e-3 ? "0" : v.toFixed(2));
 
-// The flux/circulation loop and its exact residue-theorem readout: Re = enclosed charge (Gauss),
-// Im = enclosed circulation (Kelvin). Labelled `=` because the sum is exact for the closed-form field.
+// The flux/circulation loop and its exact residue-theorem readout. The displayed numbers are the
+// enclosed residue sum Σc = Q + iΓ, so the honest identity is the NORMALIZED contour integral
+// (1/2πi)∮ E dz = Σc — Re = enclosed charge (Gauss), Im = enclosed circulation (Kelvin). (The raw
+// ∮ E dz would be 2πi·Σc; the app carries the paper's ∮ dz/z = 1 convention at its edge.) Labelled `=`
+// because the sum is exact for the closed-form field.
 function drawProbe(ctx: CanvasRenderingContext2D, state: AppState, size: Size): void {
   const r = state.probe;
   if (!r) return;
@@ -105,7 +108,7 @@ function drawProbe(ctx: CanvasRenderingContext2D, state: AppState, size: Size): 
   if (w > 12 || h > 12) {
     const enc = enclosedResidue(state.singularities, r);
     const chargeWord = state.lens === "hydrodynamic" ? "source" : "charge";
-    const lines = [`∮ E dz = ${fmt(enc.charge)} + ${fmt(enc.circulation)} i`, `${chargeWord} Q = ${fmt(enc.charge)} · circulation = ${fmt(enc.circulation)}`];
+    const lines = [`(1/2πi) ∮ E dz = ${fmt(enc.charge)} + ${fmt(enc.circulation)} i`, `${chargeWord} Q = ${fmt(enc.charge)} · circulation = ${fmt(enc.circulation)}`];
     ctx.font = "12px ui-monospace, Menlo, monospace";
     let boxW = 0;
     for (const l of lines) boxW = Math.max(boxW, ctx.measureText(l).width);

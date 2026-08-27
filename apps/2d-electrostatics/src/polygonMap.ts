@@ -158,7 +158,11 @@ export function fitPolygonInterior(corners: readonly Pt[]): PolygonInteriorMap {
     sc = fitSchwarzChristoffel({ vertices }, { mode: "precise" });
     if (!sc.converged) {
       const fast = fitSchwarzChristoffel({ vertices }, { mode: "fast" });
-      if (fast.residual < sc.residual) sc = fast;
+      // Keep the least-bad usable fit. NaN-robust: a bare `fast.residual < sc.residual` is false when
+      // sc.residual is NaN, which would wrongly discard a finite fast fallback.
+      const scFinite = Number.isFinite(sc.residual);
+      const fastFinite = Number.isFinite(fast.residual);
+      if (fastFinite && (!scFinite || fast.residual < sc.residual)) sc = fast;
     }
   } catch {
     sc = fitSchwarzChristoffel({ vertices }, { mode: "fast" });
@@ -197,4 +201,15 @@ export function fitPolygonInterior(corners: readonly Pt[]): PolygonInteriorMap {
     degraded: sc.degraded,
     residual: sc.residual,
   };
+}
+
+/** The honest-labeling tier for an SC fit result (guardrail: never label a bad fit as exact).
+ *  - `"exact"` (`=`): converged, not degraded, finite residual — the forward map is machine-precise.
+ *  - `"approx"` (`≈`): converged but degraded (e.g. a strongly reentrant/near-degenerate shape).
+ *  - `"unreliable"` (`⚠`): did NOT converge, or a non-finite residual — the map is garbage; the fast
+ *    (lightning) fallback in particular always reports `converged:false`, so `degraded` alone is not
+ *    enough to decide. */
+export function fitHonestyTier(fit: { converged: boolean; degraded: boolean; residual: number }): "exact" | "approx" | "unreliable" {
+  if (!fit.converged || !Number.isFinite(fit.residual)) return "unreliable";
+  return fit.degraded ? "approx" : "exact";
 }
