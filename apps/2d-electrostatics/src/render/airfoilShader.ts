@@ -1,10 +1,11 @@
-// The fragment shader for the two-pane Joukowski transplant. ONE shader renders both panes via a
-// `uMode` switch: pane 0 is the cylinder plane (ζ = the pixel), pane 1 the airfoil plane
-// (ζ = J⁻¹(pixel), exterior branch). Both evaluate the SAME cylinder-plane potential W(ζ), so the
-// streamlines ψ = Im W and equipotentials φ = Re W are contoured at identical values in the two panes
-// — the map visibly carries the flow. The airfoil-pane velocity divides by J'(ζ) (the physical
-// dW/dz = W'(ζ)/J'(ζ)); the body outline is the circle |ζ − ζ₀| = R in both. All closed-form, so it
-// rides the same "evaluate exactly per pixel" path as the sandbox. Mirrors ../airfoil.ts.
+// The fragment shader for the two-pane airfoil transplant. The map is Kármán–Trefftz K (with exponent
+// uN = n = 2 − τ/π); Joukowski is the n = 2 case. ONE shader renders both panes via a `uMode` switch:
+// pane 0 is the cylinder plane (ζ = the pixel), pane 1 the airfoil plane (ζ = K⁻¹(pixel), exterior
+// branch). Both evaluate the SAME cylinder-plane potential W(ζ), so the streamlines ψ = Im W and
+// equipotentials φ = Re W are contoured at identical values in the two panes — the map visibly carries
+// the flow. The airfoil-pane velocity divides by K'(ζ) (the physical dW/dz = W'(ζ)/K'(ζ)); the body
+// outline is the circle |ζ − ζ₀| = R in both. All closed-form, so it rides the same "evaluate exactly
+// per pixel" path as the sandbox. Mirrors ../airfoil.ts (its m-based ktDeriv is branch-safe).
 import {
   COMPLEX_SINGLE_GLSL,
   COMPLEX_DERIVED_GLSL,

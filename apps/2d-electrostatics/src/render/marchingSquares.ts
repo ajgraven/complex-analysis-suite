@@ -38,6 +38,9 @@ export function sampleField(f: (z: Pt) => number, bounds: FieldBounds, nx: numbe
 }
 
 // Per case (bl=1, br=2, tr=4, tl=8), the edges to connect in pairs (edge 0=bottom,1=right,2=top,3=left).
+// The two saddle cases (5, 10) are resolved with a FIXED pairing (not the interpolated cell-centre value),
+// a common simplification: internally consistent, but in a genuinely ambiguous cell it may connect the
+// other way. Equipotential contours here are smooth enough that this is not visible in practice.
 const CASES: readonly (readonly number[])[] = [
   [], // 0
   [3, 0], // 1  bl

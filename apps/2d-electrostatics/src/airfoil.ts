@@ -159,8 +159,8 @@ export function kuttaCirculation(p: AirfoilParams): number {
 }
 
 /** Lift per unit span by Kutta–Joukowski, L = −ρUΓ (ρ = 1 by default). The minus sign is the codebase's
- *  vortex convention: Γ (= p.circulation) is counterclockwise-positive, so the clockwise circulation
- *  (Γ < 0) a wing at positive angle of attack carries produces positive (upward) lift. */
+ *  vortex convention: Γ (= p.circulation) is counterclockwise-positive, so a wing at positive angle of
+ *  attack carries a clockwise circulation (Γ < 0), which gives positive (upward) lift. */
 export function lift(p: AirfoilParams, rho = 1): number {
   return -rho * p.U * p.circulation;
 }
