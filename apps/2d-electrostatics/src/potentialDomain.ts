@@ -109,7 +109,8 @@ export function equilibriumDots(domain: ExteriorDomain, n = 180): Pt[] {
 }
 
 /** Local charge density at each equilibrium dot, ≈ (dθ/2π)/ds with ds the arc length to the next dot —
- *  a relative measure (its integral over ∂K is 1). Peaks at corners/tips, vanishes on flats/of a disk. */
+ *  a relative measure (its integral over ∂K is 1). Peaks at corners/tips, dips on flats, and is flat
+ *  (uniform, nonzero) on a disk. */
 export function chargeDensity(dots: readonly Pt[]): number[] {
   const n = dots.length;
   const gap = (i: number): number => {

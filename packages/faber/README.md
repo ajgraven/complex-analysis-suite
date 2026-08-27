@@ -25,7 +25,9 @@ Given an exterior conformal map φ: 𝔻\* → Ω by its Laurent expansion at �
 **Input contract.** The engine takes a plain `{ c, laurent }` (an `ExteriorMap`), *not* any app's
 conformal-map struct. Quadrature Domains adapts its solved φ via `phiLaurentAtInfinity`; the
 Faber-transform app passes each curated preset's closed-form Laurent, or — for arbitrary polygon
-domains K — a truncated **exterior** Schwarz–Christoffel Laurent (honestly `≈`-labeled).
+domains K — a truncated **exterior** Schwarz–Christoffel Laurent (honestly `≈`-labeled); 2D
+Electrostatics feeds its exterior-domain Laurent tail to `faberConvergence` for the potential-theory
+conductor view's Faber-zero / Fekete-point overlays (M3, ADR-0034).
 
 **Convention-neutral (ADR-0006).** No π / 2πi normalization lives here — those stay at each app's edge.
 

@@ -88,7 +88,10 @@ void main() {
   cvec z = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
   cvec e = fieldE(z);
   float m = cabsf(e);
-  // Hue = field direction (arg E), mapped to the unit hue wheel. Lightness = a bounded rational
+  // Hue = arg E, the phase of the complex field E = W', mapped to the unit hue wheel. (The physical
+  // field/flow VECTOR is conj(E), whose heading is −arg E — what the sensor puck reports; the hue wheel
+  // is therefore mirrored relative to that vector. An arg-E phase portrait is the standard choice here.)
+  // Lightness = a bounded rational
   // transfer of |E| (|E|/(|E|+ref)), so the near-singularity blow-up saturates smoothly instead of
   // clipping — the "encode strength by brightness, not arrow length" lesson, in shader form.
   float hue = fract(cre1(carg(e)) * 0.15915494309189535 + 1.0); // arg/2π

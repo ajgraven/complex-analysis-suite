@@ -10,16 +10,17 @@
 > Nothing here is a locked decision; a chosen app graduates to its own `*-plan.md` and,
 > where it changes a shared contract, an ADR.
 
-The existing seven apps span: complex dynamics (Böttcher / rays / matings), quadrature
+The existing eight apps span: complex dynamics (Böttcher / rays / matings), quadrature
 domains + Schwarz reflection, the domain-coloring plotter (incl. a Riemann-surface mode,
 with algebraic-curve **M2** and monodromy **M3** deferred — so that ground is *claimed*),
 Riemann / conformal maps (lightning + interior/exterior Schwarz–Christoffel), the argument
-principle, the Faber transform, and anti-holomorphic correspondences. The ideas below
-deliberately avoid all of those.
+principle, the Faber transform, 2D electrostatics (complex-potential fields, conformal-transplant
+flow, and potential theory — idea #1 below, since built), and anti-holomorphic correspondences.
+The ideas below deliberately avoid all of those.
 
 ---
 
-## ▶ 1. Complex-Potential Studio — *selected*
+## ✅ 1. Complex-Potential Studio — *built (shipped as `apps/2d-electrostatics`, ADR-0034)*
 
 Two-dimensional electrostatics / ideal hydrodynamics as one interactive object: the
 complex potential `w(z) = φ + iψ`. Drop and drag sources / sinks / vortices / doublets
@@ -39,7 +40,8 @@ potential-theory tab for **equilibrium measure, Fekete points, and logarithmic c
   (Hele-Shaw with spin) is a showpiece QD-app hand-off.
 - **Open online:** elementary-flow toys exist (potentialflow.com, airfoil playgrounds);
   transplant-through-arbitrary-maps and interactive equilibrium-measure / capacity are not.
-- **Plan:** `docs/design/complex-potential-studio-plan.md` (in progress).
+- **Built:** shipped as `apps/2d-electrostatics` (ADR-0034), through M3; design record in
+  `docs/design/complex-potential-studio-plan.md`.
 
 ## ○ 3. Conformal Welding & Shape Fingerprints
 

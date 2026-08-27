@@ -23,7 +23,7 @@ import {
   type NetCurve,
   type Pt,
 } from "./transplant.js";
-import { fitPolygonFlow, fitPolygonInterior } from "./polygonMap.js";
+import { fitPolygonFlow, fitPolygonInterior, fitHonestyTier } from "./polygonMap.js";
 import { POLYGON_PRESETS, DEFAULT_PRESET } from "./transplantPresets.js";
 import { Net2D, boundsOf } from "./render/net2d.js";
 import { conformalPolygonFromLink, buildConformalLink, type ConformalFit } from "./importConformalMap.js";
@@ -213,11 +213,18 @@ function main(): void {
     }
     if (map) {
       lastFit = { engine: "sc-exterior", angles: map.angles, prevertices: map.cornerPreimages, capacity: map.capacity, converged: map.converged, degraded: map.degraded, residual: map.residual };
+      const tier = fitHonestyTier(map); // capacity is `=` only for a clean fit; a degraded/failed one is `≈`
       const tag = map.converged ? (map.degraded ? "converged · degraded" : "converged") : "not converged";
+      const resStr = Number.isFinite(map.residual) ? map.residual.toExponential(1) : "n/a"; // never a raw NaN
+      const capRel = tier === "exact" ? "=" : "≈";
+      const netLine =
+        tier === "unreliable"
+          ? `<span class="tp-warn">⚠ the exterior SC fit did not converge — flow net unreliable</span>`
+          : `<span class="tp-approx">≈ flow net: Ψ is a ${map.laurentTerms}-term Laurent series</span>`;
       readout.innerHTML =
-        `capacity cap(K) = <b>${map.capacity.toFixed(4)}</b><br>` +
-        `exterior SC fit: ${tag} · residual ≈ ${map.residual.toExponential(1)}<br>` +
-        `<span class="tp-approx">≈ flow net: Ψ is a ${map.laurentTerms}-term Laurent series</span>`;
+        `capacity cap(K) ${capRel} <b>${map.capacity.toFixed(4)}</b><br>` +
+        `exterior SC fit: ${tag} · residual ≈ ${resStr}<br>` +
+        netLine;
     } else {
       lastFit = null;
       readout.innerHTML = `<span class="tp-warn">⚠ the exterior SC fit failed for this polygon</span>`;
@@ -266,15 +273,22 @@ function main(): void {
     }
     if (map) {
       lastFit = { engine: "sc-interior", angles: map.angles, prevertices: map.cornerPreimages, converged: map.converged, degraded: map.degraded, residual: map.residual };
+      const tier = fitHonestyTier(map); // "exact" | "approx" | "unreliable" — never label a bad fit as (=)
       const tag = map.converged ? (map.degraded ? "converged · degraded" : "converged") : "not converged";
-      // The forward SC map is exact where it converges; a degraded fit downgrades the streamlines to ≈.
-      const flowLabel = map.degraded
-        ? "source→sink flow, streamlines carried by f (≈)"
-        : "source→sink flow, exact streamlines carried by f (=)";
-      readout.innerHTML =
-        `interior map f: 𝔻 → K<br>` +
-        `SC fit: ${tag} · residual ≈ ${map.residual.toExponential(1)}<br>` +
-        `<span class="tp-approx">${flowLabel}</span>`;
+      const resStr = Number.isFinite(map.residual) ? map.residual.toExponential(1) : "n/a"; // never a raw NaN
+      const head = `interior map f: 𝔻 → K<br>SC fit: ${tag} · residual ≈ ${resStr}<br>`;
+      if (tier === "unreliable") {
+        // Non-converged / non-finite (e.g. a degenerate near-slit polygon): the streamlines drawn above
+        // are unreliable — label ⚠, not (=).
+        readout.innerHTML = head + `<span class="tp-warn">⚠ the interior SC fit did not converge — streamlines unreliable</span>`;
+      } else {
+        // The forward SC map is exact where it converges; a degraded fit downgrades the streamlines to ≈.
+        const flowLabel =
+          tier === "exact"
+            ? "source→sink flow, exact streamlines carried by f (=)"
+            : "source→sink flow, streamlines carried by f (≈)";
+        readout.innerHTML = head + `<span class="tp-approx">${flowLabel}</span>`;
+      }
     } else {
       lastFit = null;
       readout.innerHTML = `<span class="tp-warn">⚠ the interior SC fit failed for this polygon</span>`;

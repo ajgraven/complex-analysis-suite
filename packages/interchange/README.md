@@ -57,7 +57,7 @@ import type {
 
 **Envelope.** Everything on the wire is wrapped: `Envelope<K>` = `{ schema, version, kind,
 payload, provenance }`, where `schema === SCHEMA_ID` (`"complex-analysis-suite/interchange"`)
-and `version === VERSION` (currently `"1.3.0"`; consumers gate on MAJOR = 1, so every 1.x link
+and `version === VERSION` (currently `"1.4.0"`; consumers gate on MAJOR = 1, so every 1.x link
 decodes). `PayloadKind` is `"map" | "quadrature-domain" | "schwarz-reflection" | "view"`.
 
 **Maps** (`MapSpec`) — a map is described structurally when its shape is known, or as an
@@ -71,6 +71,12 @@ expression otherwise (the consumer compiles any of them through `@cas/expr`):
   `disk` + `inverse`); `phi` may be a `laurent`/`rational` map or, since 1.3.0, the σ-only
   `bounded` form (a bounded QD, φ: 𝔻 → Ω). Not `@cas/expr`-compilable — a consumer rebuilds σ via
   `@cas/schwarz`.
+- `ConformalMap` — `form:"conformal"` (since 1.4.0, ADR-0035): a polygon Schwarz–Christoffel map by its
+  SC data — the `polygon` corners, an `engine` tag (`"sc-interior"` / `"sc-exterior"` / `"lightning"`),
+  and the recorded prevertices / interior `angles` / accessory `constant` / `capacity`, with honest
+  `converged` / `degraded` / `residual` labels. Not `@cas/expr`-compilable — a consumer rebuilds the map
+  via `@cas/conformal` (as `schwarz` is rebuilt via `@cas/schwarz`). Produced by Riemann Map and 2D
+  Electrostatics; consumed by 2D Electrostatics.
 
 Each carries an optional `antiholomorphic` flag.
 

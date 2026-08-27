@@ -99,13 +99,15 @@ export function ktMap(zeta: Complex, b: number, n: number): Complex {
   return scale(div(add(A, B), sub(A, B)), n * b);
 }
 
-/** dK/dζ = 4n²b²(ζ²−b²)ⁿ⁻¹ / [(ζ+b)ⁿ − (ζ−b)ⁿ]². Vanishes at ζ = ±b (finite-angle corner). */
+/** dK/dζ = 4n²b²(ζ²−b²)ⁿ⁻¹ / [(ζ+b)ⁿ − (ζ−b)ⁿ]². Vanishes at ζ = ±b (finite-angle corner). The
+ *  numerator power is computed factored as (ζ+b)ⁿ⁻¹·(ζ−b)ⁿ⁻¹ — the principal (ζ²−b²)ⁿ⁻¹ takes the wrong
+ *  branch wherever arg(ζ+b)+arg(ζ−b) leaves (−π, π] (the whole left-half exterior), off by e^{−2πi(n−1)}. */
 export function ktMapPrime(zeta: Complex, b: number, n: number): Complex {
   const A = cpow(add(zeta, [b, 0]), n);
   const B = cpow(sub(zeta, [b, 0]), n);
   const amb = sub(A, B);
-  const z2mb2 = sub(mul(zeta, zeta), [b * b, 0]);
-  return div(scale(cpow(z2mb2, n - 1), 4 * n * n * b * b), mul(amb, amb));
+  const z2mb2pow = mul(cpow(add(zeta, [b, 0]), n - 1), cpow(sub(zeta, [b, 0]), n - 1));
+  return div(scale(z2mb2pow, 4 * n * n * b * b), mul(amb, amb));
 }
 
 /** The exterior branch of the KT inverse: with m = ((z+nb)/(z−nb))^{1/n}, ζ = b(m+1)/(m−1). */
@@ -157,8 +159,8 @@ export function kuttaCirculation(p: AirfoilParams): number {
 }
 
 /** Lift per unit span by Kutta–Joukowski, L = −ρUΓ (ρ = 1 by default). The minus sign is the codebase's
- *  vortex convention: Γ (= p.circulation) is counterclockwise-positive, so the clockwise circulation
- *  (Γ < 0) a wing at positive angle of attack carries produces positive (upward) lift. */
+ *  vortex convention: Γ (= p.circulation) is counterclockwise-positive, so a wing at positive angle of
+ *  attack carries a clockwise circulation (Γ < 0), which gives positive (upward) lift. */
 export function lift(p: AirfoilParams, rho = 1): number {
   return -rho * p.U * p.circulation;
 }

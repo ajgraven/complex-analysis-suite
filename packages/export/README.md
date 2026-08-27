@@ -55,6 +55,8 @@ ancillary chunks).
 - **Complex-Function Plotter** — `src/render/plot.ts` stamps exported plots.
 - **Riemann Map** — `src/main.ts` stamps both the single-pane and the disk-image plate exports with
   `Software` + the `cas:state` permalink.
+- **Argument Principle** — `src/main.ts` stamps its exported figures.
+- **2D Electrostatics** — `src/main.ts` stamps its PNG field/figure exports (`injectPngText`).
 
 ## Tests
 

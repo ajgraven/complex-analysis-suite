@@ -1,8 +1,9 @@
 // Fekete / Leja points — a third road to the equilibrium measure (M3.3). The equilibrium measure μ_K is
 // also the weak-* limit of the normalized counting measures of the extremal points of K: the n points on
-// ∂K that (near-)maximize ∏ᵢ<ⱼ|zᵢ−zⱼ|. Their "diameter" (∏|zᵢ−zⱼ|)^{2/n(n−1)} is the n-point transfinite
-// diameter dₙ(K), which DECREASES to cap(K) (Fekete's theorem) — tying these points back to the capacity
-// the conductor view already shows. Points live on ∂K = Ψ(e^{iθ}), so we work in θ over a fine grid.
+// ∂K that (near-)maximize ∏ᵢ<ⱼ|zᵢ−zⱼ|. Their "diameter" (∏|zᵢ−zⱼ|)^{2/n(n−1)} CONVERGES to cap(K) — tying
+// these points back to the capacity the conductor view already shows. (The monotone DECREASE dₙ ↓ cap is the
+// property of the jointly-optimal Fekete configuration / the true set-function dₙ(K); the Leja product below
+// converges but is not guaranteed monotone.) Points live on ∂K = Ψ(e^{iθ}), so we work in θ over a fine grid.
 //
 // We use LEJA points: greedy and sequential (each new point maximizes the product of distances to those
 // already chosen), so extending n by one just appends — natural for an interactive n-slider — and they
@@ -72,8 +73,9 @@ export function lejaFromCurve(curve: readonly Pt[], n: number): Pt[] {
   return lejaIndices(curve, count).map((i) => curve[i]);
 }
 
-/** The n-point transfinite diameter dₙ = (∏ᵢ<ⱼ|zᵢ−zⱼ|)^{2/n(n−1)}. Decreases to cap(K) as n → ∞. Zero
- *  for fewer than 2 points. */
+/** The n-point transfinite diameter dₙ = (∏ᵢ<ⱼ|zᵢ−zⱼ|)^{2/n(n−1)}. Converges to cap(K) as n → ∞ (monotone
+ *  decrease holds for the optimal Fekete configuration, not necessarily for the Leja points fed in here).
+ *  Zero for fewer than 2 points. */
 export function transfiniteDiameter(points: readonly Pt[]): number {
   const n = points.length;
   if (n < 2) return 0;
