@@ -195,8 +195,9 @@ damped Gauss–Newton solve, sharing the extracted `gaussNewton.ts` driver with 
 the Faber Transform app, a second SC family beside the interior one
 ([ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)).
 Consumers today: the **Riemann-map studio** — the lightning builder for smooth region maps, and the interior SC
-engine for polygon (`corners`) domains — and the **Faber Transform app** — the exterior SC engine for polygonal
-`K`. The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
+engine for polygon (`corners`) domains; the **Faber Transform app** — the exterior SC engine for polygonal
+`K`; and **2D Electrostatics** — **both** SC engines (interior for the flow-in/through-a-polygon transplant,
+exterior for the flow-past-a-polygon map and the potential-theory conductor view). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
 of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on rank-deficiency policy —
 see ADR-0018).
 
@@ -206,8 +207,9 @@ Holds the exterior Faber transform machinery behind the Faber Transform app: the
 series path for free-form `f`. Everything consumes one struct — `ExteriorMap = { c, laurent }` — so the engine is
 blind to *how* φ was produced: a curated closed form (ellipse/deltoid/finite-Laurent QD) or a solved exterior
 Schwarz–Christoffel map for an arbitrary polygon. Built on `@cas/core` (complex/poly algebra, series);
-convention-neutral (ADR-0006: the Faber transform carries no π / 2πi). Sole consumer today: the Faber Transform
-app. This is the domain package that the never-built `@cas/quadrature` (below) *would* have partly held — the
+convention-neutral (ADR-0006: the Faber transform carries no π / 2πi). Consumers today: the Faber Transform
+app, Quadrature Domains (its Faber-analysis delegates here — ADR-0007 second consumer), and 2D Electrostatics
+(the potential-theory conductor view's Faber/Fekete overlays, M3). This is the domain package that the never-built `@cas/quadrature` (below) *would* have partly held — the
 Faber half shipped standalone, demand-driven, when the app needed it.
 
 ### `@cas/quadrature` — domain package *(planned — not built as such; Faber half shipped as `@cas/faber`)*
@@ -339,8 +341,8 @@ tools:
 - **Publishing is automated.** `.github/workflows/deploy-pages.yml` runs on every push to `master`
   (and on `workflow_dispatch`), gates on `lint` → `typecheck` → `test` → `build`, then assembles
   **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/`,
-  `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, and
-  `faber-transform/` beneath it (`apps/correspondences` is built but **not** published). Note the
+  `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`,
+  `faber-transform/`, and `2d-electrostatics/` beneath it (`apps/correspondences` is built but **not** published). Note the
   shape — apps build independently but publish
   *together*, as a single artifact, not as independent Pages sites.
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
@@ -349,8 +351,10 @@ tools:
 - There are **two** workflows: `ci.yml` (jobs `build` + `browser`) and `deploy-pages.yml`. The
   `browser` job — the real-WebGL2 numeric backstop — lives only in CI and is *not* a publish
   blocker, so a GPU-only regression can reach the live site while still failing CI.
-- Packages are **not** separately built or published: apps consume package *source*
-  through the workspace, and each app's Vite build transpiles and bundles everything it
+- Packages are **not** separately *published* (all `workspace:*`); the five `dist/`-built packages
+  (`@cas/core`, `@cas/exact`, `@cas/export`, `@cas/faber`, `@cas/interchange`) are compiled once by the
+  root `build`/`test`/`typecheck` scripts, and the other six are consumed as *source* through the
+  workspace — either way each app's Vite build transpiles and bundles everything it
   imports. There is exactly **one build per app**. (This is the payoff of accepting a
   build step — it retires the awkward "pre-built ESM artifact with version pinning"
   scheme that a no-build Quadrature app would otherwise force. See
@@ -422,7 +426,7 @@ entry point, easy movement between tools, hand-off between them) at a fraction o
 cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all seven apps (plus a "Coming soon" correspondences card); the shared-nav header's
+The launcher is a static stub (`apps/launcher`) listing all seven published apps plus a "Coming soon" correspondences card (eight cards in all); the shared-nav header's
 component (`mountNavHeader`) now lives in the extracted `@cas/ui` package (ADR-0032, §3) but is **not yet rendered
 by the apps** — that adoption (and wiring its "send this to <app>" hand-off picker to the interchange codec) is
 ADR-0032's remaining **U7**. See [MIGRATION](MIGRATION.md).

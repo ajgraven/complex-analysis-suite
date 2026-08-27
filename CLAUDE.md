@@ -147,7 +147,8 @@ honest `converged`/`degraded`/`residual` labels (guardrail). **Riemann Map** wir
 polygon `corners` domains through the SC engine (lightning for smooth regions), the region picker offers the
 polygon presets, and the left disk-pane pan is **locked** for the region source so the fixed unit disk cannot
 drift (#264). **No new package** (SC lives inside `@cas/conformal`); **no `@cas/interchange` form yet**
-(deferred, ADR-0007 — gate on a receiving tool). Plan + literature: [`docs/design/schwarz-christoffel-plan.md`]
+(deferred, ADR-0007 — gate on a receiving tool) — *since superseded: the `conformal` form landed in
+ADR-0035 once 2D Electrostatics became the receiving tool*. Plan + literature: [`docs/design/schwarz-christoffel-plan.md`]
 (docs/design/schwarz-christoffel-plan.md) / [`schwarz-christoffel-research-notes.md`]
 (docs/design/schwarz-christoffel-research-notes.md).
 
@@ -163,7 +164,7 @@ Polygon **vertices are draggable** directly on whichever pane shows Ω (image pa
 forks to an editable **"Custom polygon"** (named presets stay fixed), refits **fast (lightning) while dragging** and
 **precise (warm-started) on release** (ADR-0020's drag-then-refine), with ＋/－/reset tools; the custom polygon rides
 in the `#vs=` view-state so a permalink reopens the exact hand-drawn shape. Still **no `@cas/interchange` SC form**
-(deferred, ADR-0007). A follow-on **exterior-disk preset gallery** (#288) adds closed-form univalent maps
+(deferred, ADR-0007) — *since superseded by the `conformal` form (ADR-0035)*. A follow-on **exterior-disk preset gallery** (#288) adds closed-form univalent maps
 ψ: 𝔻\* = {|z|≥1} → the exterior of a compact `K` (Joukowski / vertical-slit / ellipse / deltoid / star) shown in
 an interactive pan/drag/zoom **image pane**. (See [`apps/riemann-map/README.md`](apps/riemann-map/README.md).)
 
@@ -187,7 +188,8 @@ polygons via a new **exterior** Schwarz–Christoffel engine carved into `@cas/c
 solve, sharing the `gaussNewton.ts` driver with the interior solver + a Laurent-at-∞ extractor), and **M2**
 adaptive Laurent truncation, per-corner norm annotations `Λₖ = max{αₖ, 2−αₖ}`, and a draggable-vertex polygon
 editor. This is `@cas/conformal`'s **second SC family** (exterior alongside ADR-0020's interior), and Faber
-Transform is the exterior engine's sole consumer (ADR-0007). Polygon domains are honestly `≈`-labeled;
+Transform is the exterior engine's sole consumer (ADR-0007) — *since joined by 2D Electrostatics (ADR-0034),
+which drives both SC engines*. Polygon domains are honestly `≈`-labeled;
 degenerate/failed fits render `⚠` with blank panels. **M3** adds the corner-**suppressing** weighted Faber
 polynomials `Q_{n,m}` — a `@cas/faber` engine (`weightedFaberPolynomial`, `Q_{n,m} = Σⱼ gⱼ F_{n−j}`, no new
 numerics: the weight `G_m = ∏(1−w_k/φ)^{1/m}` rides the SC prevertices `w_k = 1/u_k` and the existing `F_n`),

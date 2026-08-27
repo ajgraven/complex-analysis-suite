@@ -88,6 +88,10 @@ Transform consumer below.) See
 - **Faber Transform** (`apps/faber-transform/src/polygon.ts`) — drives the **exterior** SC builder
   (`fitExteriorSchwarzChristoffel` + `exteriorMapLaurentAtInfinity`) to get the exterior map's
   Laurent-at-∞ jet for arbitrary convex/reentrant polygon domains K (M1b, ADR-0024, #279).
+- **2D Electrostatics** (`apps/2d-electrostatics/src/polygonMap.ts`) — the first consumer to drive **both**
+  SC engines: the **interior** `fitSchwarzChristoffel` for the flow-in/through-a-polygon transplant (M2),
+  and the **exterior** `fitExteriorSchwarzChristoffel` + `exteriorMapLaurentAtInfinity` for the
+  flow-past-a-polygon map and the potential-theory conductor view (M3, ADR-0034).
 - **Anticipated:** the other Tier-3 engines (AAA, zipper) — future tenants of this package.
 
 ## Tests
