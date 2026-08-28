@@ -90,6 +90,8 @@ function main(): void {
   (back as HTMLAnchorElement).href = "./";
   const polyLink = el("a", "pal-btn", "Polygon →");
   (polyLink as HTMLAnchorElement).href = "./polygon.html";
+  const twistLink = el("a", "pal-btn", "Hele-Shaw ↗");
+  (twistLink as HTMLAnchorElement).href = "./twist.html";
 
   const controls = el("div", "foil-controls");
   const domRow = el("label", "row");
@@ -152,7 +154,7 @@ function main(): void {
   controls.append(domRow, faberCheck, nRow, feketeCheck, fRow);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, polyLink, controls, readout);
+  bar.append(brand, back, polyLink, twistLink, controls, readout);
 
   // ---- single conductor pane ------------------------------------------------
   const stage = el("div", "pot-stage");

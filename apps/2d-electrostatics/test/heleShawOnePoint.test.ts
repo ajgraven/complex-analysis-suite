@@ -7,6 +7,7 @@ import {
   normalizedArea,
   minAbsPhiPrime,
   criticalTime,
+  buildFamily,
   type Cx,
   type OnePointMap,
 } from "../src/heleShawOnePoint.js";
@@ -132,5 +133,38 @@ describe("critical time & termination mechanism", () => {
     expect(cr.cStar).toBeGreaterThan(0.3); // NOT the spurious ~0.08
     expect(cr.cStar).toBeLessThan(criticalTime([0, 1]).cStar); // shrinks toward the α=2i edge
     expect(solveZ0([0, 1.5], 0.3, must(solveZ0([0, 1.5], 0.1)))).not.toBeNull(); // domain exists mid-range
+  });
+});
+
+describe("buildFamily — the growing-timeline frames (M4b)", () => {
+  it("α = 1: the droplet grows monotonically in t toward t* and the charge stays conserved", () => {
+    const { frames, critical } = buildFamily([1, 0], 40);
+    expect(frames.length).toBeGreaterThan(25);
+    expect(critical.mechanism).toBe("double-point");
+    // monotone growth over the well-conditioned interior — both ends are delicate (c → 0 sends the
+    // prevertex z₀ → ∞, c → c* sends the pole onto the boundary), so the birth and cusp frames carry an
+    // `≈` area; the timeline is monotone in between.
+    const loI = Math.max(1, Math.floor(frames.length * 0.1));
+    const hiI = Math.floor(frames.length * 0.8);
+    for (let i = loI + 1; i < hiI; i++) expect(frames[i].t).toBeGreaterThan(frames[i - 1].t);
+    expect(frames[loI].t).toBeLessThan(2);
+    expect(frames[hiI - 1].t).toBeGreaterThan(5); // approaching t* = 8
+    for (const f of frames) {
+      const a = recoverCharge(f.map);
+      expect(a[0]).toBeCloseTo(1, 8);
+      expect(a[1]).toBeCloseTo(0, 8);
+    }
+  });
+
+  it("twisted α = i: frames build up to a cusp with the twist datum conserved", () => {
+    const { frames, critical } = buildFamily([0, 1], 40);
+    expect(frames.length).toBeGreaterThan(10);
+    expect(critical.mechanism).toBe("cusp");
+    for (const f of frames) expect(recoverCharge(f.map)[1]).toBeCloseTo(1, 7);
+  });
+
+  it("inadmissible α (outside the parabola) yields no frames", () => {
+    expect(buildFamily([0, 3], 20).frames).toEqual([]);
+    expect(buildFamily([-2, 0], 20).frames).toEqual([]);
   });
 });

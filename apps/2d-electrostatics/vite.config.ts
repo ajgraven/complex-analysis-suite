@@ -11,9 +11,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Multi-page: the free-field sandbox (index.html), the Joukowski airfoil transplant
-      // (airfoil.html), the exterior Schwarz–Christoffel polygon transplant (polygon.html), and the
-      // potential-theory / conductor view (potential.html). Vite resolves these relative to the root.
-      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html", potential: "potential.html" },
+      // (airfoil.html), the exterior Schwarz–Christoffel polygon transplant (polygon.html), the
+      // potential-theory / conductor view (potential.html), and the Hele-Shaw "twisting" showpiece
+      // (twist.html). Vite resolves these relative to the root.
+      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html", potential: "potential.html", twist: "twist.html" },
     },
   },
   server: { port: 5180, strictPort: true },

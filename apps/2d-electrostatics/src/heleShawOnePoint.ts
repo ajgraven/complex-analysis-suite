@@ -52,8 +52,16 @@ function chargeOf(z0: Cx, c: number): Cx {
   return scale(mul(t1, t2), 1 / z2);
 }
 
-/** The unique positive real root ≥ 1 of the Eq-3.11 quartic (real α), or null past the critical time
- *  (the two relevant roots collide and leave the reals — a (3,2)-cusp). */
+/** φ_t(1) for a real prevertex z₀ — the value the Eq-3.11 selector `φ_t(1) < w₀` tests. Real for real z₀
+ *  (pole = 1/z₀); singular at z₀ = 1 (the double-point limit). */
+function phiAtOne(z0: number, c: number): number {
+  const k = (W0 / c) * (z0 * z0 - 1) / (z0 * z0);
+  return (c * (1 - z0 + k)) / (1 - 1 / z0); // c·1·(1 − z₀ + k)/(1 − 1/z₀)
+}
+
+/** The physical real root ≥ 1 of the Eq-3.11 quartic (real α): the unique root ≥ 1 with φ_t(1) < w₀ (the
+ *  thesis's secondary selector — it disambiguates when several roots ≥ 1 exist). Null past the critical
+ *  time, where that root collides and leaves the reals (a (3,2)-cusp). */
 function realRootGeq1(c: number, a: number): number | null {
   const f = (z: number): number => c * c * z ** 4 - 2 * c * z ** 3 - a * z * z - 2 * c * z + 4;
   const fp = (z: number): number => 4 * c * c * z ** 3 - 6 * c * z * z - 2 * a * z - 2 * c;
@@ -73,7 +81,9 @@ function realRootGeq1(c: number, a: number): number | null {
     prev = v;
   }
   const geq1 = roots.filter((r) => r >= 1 - 1e-9).sort((p, q) => p - q);
-  return geq1.length ? geq1[0] : null;
+  const physical = geq1.filter((r) => phiAtOne(r, c) < W0);
+  if (physical.length) return physical[0];
+  return geq1.length ? geq1[0] : null; // fall back to the smallest root ≥ 1
 }
 
 /** Solve `chargeOf(z₀, c) = α` for the prevertex z₀ by damped 2-D Newton (the relation is non-holomorphic
@@ -102,11 +112,14 @@ function newtonZ0(alpha: Cx, c: number, seed: Cx): Cx | null {
  *  seeded either from `seed` (marching in c) or, cold, by continuing in arg(α) from the real |α| root at
  *  the same c. Returns null when no admissible prevertex exists at this c (past the critical time). */
 export function solveZ0(alpha: Cx, c: number, seed?: Cx): Cx | null {
+  // A seed always marches the current branch by Newton (real α included — the physical root is smooth in
+  // c, so seeded continuation avoids the root-identity ambiguity a fresh per-c selection would hit in the
+  // transition region where roots merge/leave [≥1]).
+  if (seed) return newtonZ0(alpha, c, seed);
   if (Math.abs(alpha[1]) < 1e-12) {
     const r = realRootGeq1(c, alpha[0]);
     return r === null ? null : [r, 0];
   }
-  if (seed) return newtonZ0(alpha, c, seed);
   // cold start: continue in arg(α) from the real |α| root at this c.
   const mag = cabs(alpha);
   const base = realRootGeq1(c, mag);
@@ -259,4 +272,40 @@ export function criticalTime(alpha: Cx): Critical {
   const map = onePointMap(alpha, cStar * (1 - 1e-3), seedLo ?? undefined);
   const tStar = map ? normalizedArea(map) : 0;
   return { cStar, tStar, mechanism: "cusp" };
+}
+
+// --- the growing family (for animation) ---------------------------------------------------------------
+
+export interface Frame {
+  /** The conformal radius at this frame. */
+  readonly c: number;
+  /** The π-normalized area t = A(Ω_t)/π at this frame. */
+  readonly t: number;
+  /** The Riemann map φ_t. */
+  readonly map: OnePointMap;
+}
+
+/** Build the growing family {Ω_t} as an ordered sequence of frames from birth (t → 0) up to just before
+ *  the critical time — the animation timeline. The physical prevertex z₀ grows without bound as c → 0
+ *  (an empty droplet), so we ANCHOR at c just below c* — where z₀ is small and unambiguous for every
+ *  family — and MARCH the branch DOWNWARD with seeded continuation, then reverse into increasing-t order.
+ *  Returns [] when α is inadmissible. */
+export function buildFamily(alpha: Cx, frames = 60): { frames: Frame[]; critical: Critical } {
+  const critical = criticalTime(alpha);
+  if (!admissible(alpha) || critical.cStar <= 0) return { frames: [], critical };
+  const cHi = critical.cStar * (1 - 1e-3);
+  const cLo = cHi * 0.06; // a small droplet — but not so small that z₀ → ∞ makes the area quadrature noisy
+  let seed = solveZ0(alpha, cHi); // cold-anchored at the well-behaved large-c end
+  if (seed === null) return { frames: [], critical };
+  const collected: Frame[] = [];
+  const n = Math.max(2, frames);
+  for (let i = 0; i < n; i++) {
+    const c = cHi - ((cHi - cLo) * i) / (n - 1); // march c downward
+    const map = onePointMap(alpha, c, seed ?? undefined);
+    if (map === null) continue;
+    seed = map.z0;
+    collected.push({ c, t: normalizedArea(map), map });
+  }
+  collected.reverse(); // birth (small c, small t) → critical time (large c)
+  return { frames: collected, critical };
 }
