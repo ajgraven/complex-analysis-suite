@@ -14,10 +14,11 @@
 > that walks the paper's dictionary (Gauss's law, the argument principle, Jensen, Bôcher,
 > the Riemann map as a grounded cavity, method of images, quadrature-domain indistinguishability).
 >
-> **Status: M0–M3 built** (see the living record below); **M4 deferred** to a separately-approved
-> push. The milestones landed in order, each as its own approved pass — M0 + M1 first (the render spike + the
-> superposition sandbox, a first shippable app), then M2 (conformal transplant) and M3 (potential theory).
-> Nothing here re-litigates a locked ADR.
+> **Status: M0–M3 built; M4a + M4b built** (the exact one-point twisting family + its showpiece page —
+> see the living record below); **M4c–M4e deferred** to separately-approved passes. The milestones landed
+> in order, each as its own approved pass — M0 + M1 first (the render spike + the superposition sandbox, a
+> first shippable app), then M2 (conformal transplant), M3 (potential theory), and M4a/M4b (the Hele-Shaw
+> "twisting" showpiece). Nothing here re-litigates a locked ADR.
 >
 > Mirrors the suite runbook style ([`../MIGRATION.md`](../MIGRATION.md)): **phase gates that are
 > each shippable, a motivating win early, one ground-truth check per gate, test-guarded changes.**
@@ -40,7 +41,7 @@
 | **M1 gate** | ✅ cleared — shippable | Full repo gate green (lint + dep:check, typecheck, **412 test files / census `2d-electrostatics:8` at the M1 gate; the app now carries 19 test files after M2/M3**, build all apps). **Publish wired:** registered in `SUITE_APPS` (+ the eight-app nav test), a launcher card, the `deploy-pages.yml` `cp`, the CLAUDE.md status bump to eight apps, and **ADR-0034** recorded. No in-app `mountNavHeader` — no app renders it yet (the open U7 item), so this stays consistent with the suite. The app ships on the next `master` merge. |
 | M2 — conformal transplant | ✅ done (M2.1–M2.4 + both follow-ons) | **M2.1:** the closed-form Joukowski airfoil engine (`src/airfoil.ts`) — cylinder potential/velocity, Joukowski map + exterior-branch inverse, Kutta circulation `Γ = 4πUR·sin(φ₀−α)`, lift `L = −ρUΓ`. **M2.2:** the two-pane **cylinder↔wing** render (`airfoil.html` + `main-airfoil.ts`, Vite multi-page) — one fragment shader with a `uMode` switch renders both planes, contouring the SAME stream function so streamlines map across; thickness/camber/AoA + Kutta → live lift. **M2.3:** **Kármán–Trefftz** finite trailing-edge angle (`n = 2 − τ/π`; a TE-angle slider), with ζ and K' built from the same `m` so the non-integer power leaves no seam. **M2.4a:** the **exterior-SC polygon flow engine** — `transplant.ts` (closed-form reference flow past the unit disk + the ζ-plane flow net, built by inverting `W_ref` exactly and pushed FORWARD through Ψ) + `polygonMap.ts` (`fitExteriorSchwarzChristoffel` → Ψ from the Laurent-at-∞ series, `@cas/conformal` added); ground-truth square capacities exact, flat-plate cross-check. **M2.4b:** the two-pane **disk↔polygon** line-art render (`polygon.html` + `main-polygon.ts` + `render/net2d.ts`) — colour-matched streamlines + corner↔prevertex dots, presets (triangle/square/pentagon/flat plate/reentrant L-shape), AoA + circulation, honest capacity/converged/degraded/residual. **M2.4c:** the **`ConformalMap` interchange form** (interchange **1.4.0**, **ADR-0035**) — schema/validate/mapSpecToExpr + the `RM_TO_POTENTIAL_CONFORMAL_LINK` golden; the app is producer **and** consumer (import a `#s=` polygon → re-fit exterior flow; "Copy link" export). **Follow-ons (both done):** (i) **interior-SC flow inside K** — a "Flow inside K" mode: a source→sink pair on ∂𝔻 (impermeable walls) with exact Möbius-parametrised streamlines pushed through the interior map f: 𝔻 → K, an inlet-direction slider; (ii) the **Riemann-Map producer** — a "Send to 2D Electrostatics ↗" button on a polygon region emits the `engine:"sc-interior"` map (minimal payload) via a CD-style app-segment URL swap, pinned byte-for-byte from the RM side so the golden is anchored on both ends. All verified live (imported square cap 1.1803; L-shape reentrant flow; RM→2D-E round-trip). **Deferred:** the `flow` envelope kind (ADR-0007 — gate on a second consumer). |
 | M3 — potential-theory tab | ✅ done (M3.1–M3.4) | **M3.1:** the **conductor-K view** (`potential.html` + `main-potential.ts`) — a compact set K as a grounded conductor. `potentialDomain.ts` unifies every exterior-map class behind one `Ψ(w) = c·w + Σ aₖw⁻ᵏ` (polygons via the M2.4 SC fit; disk / ellipse / segment / deltoid as explicit finite Laurent maps), giving **capacity** `= \|c\|`, the **equilibrium measure** `μ = Ψ⁎(dθ/2π)` (uniform-θ charge dots, coloured by local density), and the **Green equipotentials** `g_K = t = Ψ(\|w\|=eᵗ)` + field lines. All `=`. Ground truth: the golden capacity table + the **arcsine law** on `[−1,1]` (dots at `x=cos θ`, crowding at ±1) — 6 node tests. Verified live: segment → confocal-ellipse equipotentials + endpoint crowding; deltoid → charge at the 3 cusps; square → cap 1.0433. **M3.2:** the **Faber-zero overlay** (adds `@cas/faber`) — `faberZeros.ts` adapts an `ExteriorDomain`'s `{c, laurent}` to `@cas/faber`'s `ExteriorMap` and reads the zeros of F₁…F_N via `faberConvergence` (Faber recurrence + Durand–Kerner). A "Faber zeros Fₙ" toggle + order-n slider on the conductor view draws the zeros as gold dots over the (dimmed) equilibrium charge. **Honest:** `≈`, per-order converged/residual, and a data-driven caveat — the zeros equidistribute to `μ_K` only when ∂K has corners (segment → the Chebyshev/arcsine nodes, polygons → ∂K), while a smooth ∂K keeps them interior (disk → the centre, ellipse → the focal segment). 6 node tests pin all four cases. Verified live: segment F₉ zeros on the arcsine nodes; square F₁₆ → ∂K; disk F₁₂ → centre (caveat shown). **M3.3:** the **Fekete/Leja overlay** — `feketePoints.ts` computes greedy **Leja** points on ∂K = Ψ(∂𝔻) (each new point maximises ∏|z−zⱼ|, incremental → n-slider-native) + the **transfinite diameter** `dₙ = (∏\|zᵢ−zⱼ\|)^{2/n(n−1)}`. A "Fekete/Leja points" toggle + n-slider draws them in magenta over the charge (coexisting with the Faber overlay → two roads to μ_K on one picture); the readout shows `dₙ ↓ cap(K)` (Fekete's theorem — the third road ties back to M3.1's capacity). All `≈`. 7 node tests (disk uniform + dₙ→r; segment arcsine + dₙ→½; polygon dₙ→cap; the dₙ formula). Verified live: segment points crowd at ±1 (d₂₀≈0.604→0.5); square shows Faber + Fekete together (d₂₀≈1.220→1.043). No new package. **M3.4:** **general K via log-lightning** (`≈`) — for a compact K with no closed-form map. `logLightning.ts` models K as a grounded conductor directly: log-charges just inside ∂K, weights + Robin constant `γ` solved by boundary least-squares (`@cas/core` `lstsqHouseholder`) so `U ≡ γ` on ∂K → `cap = e^γ`, `g_K(z) = U(z) − γ`, charge density `∝ \|∂g/∂n\|`. Smooth-blob / rounded-oval / off-centre-disk presets (`generalDomains.ts`); the conductor view dispatches exterior-map (pushforward `=`) vs general-K (log-lightning `≈`), rendering the Green equipotentials as **marching-squares** level curves (`render/marchingSquares.ts`). Fekete/Leja works on general K (`lejaFromCurve`); Faber is disabled (no map). 9 node tests (capacity vs the goldens: disk/ellipse/off-disk/square within 1e-3–1e-2; Green vanishes on ∂K + far-field; uniform-disk density; the marching-squares contour). Verified live: the blob's charge concentrates on its convex lobes; the off-centre disk gives cap = 1.000000 (translation-invariant). No new package. **M3 complete** — three roads to μ_K (charge, Faber zeros, Fekete points) + capacity, across exterior-map (`=`) and general (`≈`) K. **Deferred:** the `(1/n)log\|Fₙ\| → g_K` growth-law readout; corner-clustered log-charges for cusped general K. |
-| M4 — Hele-Shaw "twisting" showpiece | ⛔ deferred | complex-`c₀` Polubarinova–Galin time-stepper, spiral equipotentials, moment monitor, cusp detection; **imports QD's σ / moments via interchange.** |
+| M4 — Hele-Shaw "twisting" showpiece | ✅ M4a + M4b done; M4c–M4e deferred | **M4a (engine, `src/heleShawOnePoint.ts`):** the exact Graven–Makarov one-point unbounded-QD family `QD(α/(w−w₀))` at `w₀=2`, charge `α = q + iγ` (thesis §3.3, Eq 3.10–3.11 + the §2.2.3 charge relation) — `admissible` (the parabola `|w₀|²+2Re α > 2|α|`), `solveZ0` (quartic root ≥1 for real α with the `φ_t(1)<w₀` selector / the §2.2.3 relation by Newton for complex α), `onePointMap` (the closed-form φ_t + exact φ'), `recoverCharge` (the conserved quadrature datum — recovers α to machine precision at every t, the honest conservation monitor, since raw polynomial moments are NOT conserved for off-origin injection), `normalizedArea` (`t = A/π`, ADR-0006), `criticalTime` (α>0 → double point, closed form `c*=w₀+√α`, `t*=w₀(w₀+2√α)`; α<0/complex → a (3,2)-cusp, found by marching the branch to the edge), and `buildFamily` (the growing timeline). **M4b (render/UI):** a 5th page `twist.html` + `main-twist.ts` + `render/heleShawRender.ts` — the growing/twisting boundary, the exterior conformal grid (rays spiral for γ≠0), the driving charge's spiral equipotentials, `q`/`γ` (inject/spin) sliders, presets, a `t→t*` play/scrub that stops at the critical time (`⚠`, never past the ill-posed cusp), and an honest readout (recovered charge = α, mechanism). App-local — **no new package** (`@cas/schwarz` is added only at M4d). **Deferred:** M4c the general Polubarinova–Galin time-stepper (`≈`), M4d the QD→2D-E interchange import (interchange 1.5.0 + `@cas/schwarz`), M4e surface-tension regularization. |
 
 ---
 
@@ -207,20 +208,30 @@ bookkeeping the Kutta condition later *chooses*).
   (Baddoo–Trefethen) on the existing `lstsqHouseholder` stack (`≈`).
 *Ground truth:* the golden capacity table (§7); arcsine law on `[−1,1]`.
 
-### M4 — Hele-Shaw "twisting" showpiece *(deferred; lives in this app, imports from QD — ADR-0034)*
+### M4 — Hele-Shaw "twisting" showpiece *(M4a + M4b built; M4c–M4e deferred; lives in this app — ADR-0034)*
 
-Time-step the **Polubarinova–Galin** equation `Re[ġ · conj(g')] = Re c₀` on `|w|=1` with a **complex
-source** `c₀ = q+iγ` (rational/Laurent `g(w,t)`): spiral equipotentials `Re W = q log|z−a| − γ arg(z−a)`,
-a **twisted** growing QD boundary, **Richardson moments monitored** as a conserved-quantity correctness
-check, **cusp detection** (`min|g'|→0` → honest `⚠` at the singular time), optional surface-tension
-regularization → tip-splitting. Imports QD's σ / unbounded-QD complex-charge recipe + moments via
-interchange (§6); reuses `@cas/schwarz`. Key refs: Bazant–Crowdy; Gustafsson–Vasil'ev; McKee–Bush 2024
-("Hele-Shaw with spin"), which draws the airfoil-Kutta analogy inside a Hele-Shaw cell — the M2↔M4
-bridge; Zabrodin (Coulomb-gas droplet).
-*Ground truth:* conserved `Mₙ`; Saffman–Taylor `λ=½`; the Graven–Makarov one-point unbounded-QD family
-(real `c₀` symmetric → imaginary `c₀` maximally twisted, cusp at the admissible-region edge).
-*Honest labels:* evolution past a cusp and any surface-tension regularization are `≈`/`⚠` — ill-posed,
-never certified (RISKS §3 discipline).
+**Built as the exact spine first (M4a + M4b).** Rather than lead with a numerical time-stepper, M4a ports
+the **Graven–Makarov one-point family** in closed form (thesis §3.3): the growing/twisting family
+`{Ω_t} = QD(α/(w−w₀))` at `w₀=2`, charge `α = q + iγ`, is an *exact* rational map `φ_t` parametrized by the
+conformal radius — no PG integration needed, everything `=`. M4b scrubs/plays it (`twist.html`) up to the
+critical time. The conserved-quantity monitor is the **recovered quadrature charge** `α` (exact to machine
+precision), not raw polynomial moments (those are conserved only for origin injection; here `w₀=2`). The
+driving field's **spiral equipotentials** `Re W = q log|z−w₀| − γ arg(z−w₀) = Re(α·log(z−w₀))` are drawn
+in closed form (log-spirals). Termination is honest: a **double point** (α>0, closed form
+`c*=w₀+√α`, `t*=w₀(w₀+2√α)`) or a **(3,2)-cusp** (α<0/complex) — the timeline stops at `t*` (`⚠`), never
+past the ill-posed edge. The M2↔M4 bridge (McKee–Bush 2024, "Hele-Shaw with spin", the airfoil-Kutta
+analogy) is the page's caption.
+
+**Deferred (M4c–M4e).** M4c: the general **Polubarinova–Galin** time-stepper `Re[ġ · conj(g')] = Re c₀` on
+`|w|=1` for arbitrary finite-Laurent `g(w,t)` (numerical, `≈`; moment DRIFT the correctness monitor; cusp
+detection `min|g'|→0`). M4d: import QD's σ / unbounded-QD complex-charge recipe via interchange (§6) —
+adds `@cas/schwarz` + the interchange `1.5.0` moment/`c₀` payload. M4e: surface-tension regularization →
+tip-splitting (Saffman–Taylor `λ=½`), strictly `≈`. Key refs: Bazant–Crowdy; Gustafsson–Vasil'ev;
+Zabrodin (Coulomb-gas droplet).
+*Ground truth (M4a, all verified):* the admissible parabola `|w₀|²+2Re α > 2|α|`; `α=1 → c*=3, t*=8`;
+the recovered charge conserved across `t`; the two termination mechanisms.
+*Honest labels:* the closed-form M4a family is `=`; a future PG evolution past a cusp and any
+surface-tension regularization are `≈`/`⚠` — ill-posed, never certified (RISKS §3 discipline).
 
 ## 5. Package touch-points & dependencies
 
@@ -229,7 +240,8 @@ never certified (RISKS §3 discipline).
   placement, the gallery scaffold. **No new package** (ADR-0007 — extract only on a second consumer).
   Wiring: register in `packages/ui/src/apps.ts` (`SUITE_APPS`), `vitest.workspace.ts`, the census
   `PROJECTS` list (`scripts/assert-test-census.mjs`), a launcher card, and the `deploy-pages.yml` `cp`.
-- **M2:** add `@cas/conformal`. **M3:** add `@cas/faber`. **M4:** add `@cas/schwarz`.
+- **M2:** add `@cas/conformal`. **M3:** add `@cas/faber`. **M4a + M4b:** app-local only — **no new
+  package** (the exact one-point family + its render). **M4d** (the QD interchange import) adds `@cas/schwarz`.
 - Dependency direction respected (app imports packages; no app imports another app — QD hand-off is via
   `@cas/interchange` goldens, not a cross-app import).
 
@@ -263,7 +275,8 @@ never certified (RISKS §3 discipline).
 | spiral pitch of `c=q+iγ` | `arctan(γ/q)` |
 | cylinder stagnation coalescence | `Γ = 4πUa` |
 | airfoil lift | `L = −ρUΓ`, `Γ = −4πUR sin(α+β)` |
-| conserved Hele-Shaw moments | `Mₙ` (`n≥1`) fixed; `M₀` linear in `t` |
+| conserved Hele-Shaw datum (one-point family) | the quadrature charge `(α, w₀)` fixed; `t = A/π` grows (raw `Mₙ` are conserved only for origin injection) |
+| one-point family (M4a) | admissible `|w₀|²+2Re α > 2|α|`; `α=1, w₀=2 → c*=3, t*=8` (double point); `α<0`/complex → (3,2)-cusp |
 
 ## 8. Open items / risks
 

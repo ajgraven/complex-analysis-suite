@@ -3040,8 +3040,14 @@ probe, presets, `#vs=` permalink + PNG export, a sensor puck, and an animated tr
 flow *inside* a polygon; the `@cas/interchange` `conformal` map form ([ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)) with a bidirectional Riemann-Map ↔ 2D-Electrostatics
 hand-off. **M3** (potential theory): the conductor-K view — equilibrium charge, capacity, Green's function —
 with Faber-zero and Fekete/Leja overlays (three roads to μ_K), plus general K with no closed-form map via a
-log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber` (M3). **M4** (the Hele-Shaw
-"twisting" showpiece) is specced in the plan and deferred to a separately-approved push.
+log-lightning fit. The app now also rides `@cas/conformal` (M2) and `@cas/faber` (M3). **M4a + M4b** (the
+Hele-Shaw "twisting" showpiece): the exact Graven–Makarov one-point unbounded-QD family `QD(α/(w−w₀))`
+driven by a complex charge `α = q + iγ` (thesis §3.3 closed form — engine `src/heleShawOnePoint.ts`), and
+its `twist.html` showpiece page that scrubs/plays the growing, twisting droplet up to a double point (α>0)
+or a (3,2)-cusp, with the conserved quadrature charge as the honest correctness monitor. App-local, no new
+package. **M4c** (the general Polubarinova–Galin time-stepper), **M4d** (the QD → 2D-Electrostatics
+interchange import — adds `@cas/schwarz` + interchange `1.5.0`), and **M4e** (surface-tension
+regularization) remain specced in the plan and deferred to separately-approved passes.
 
 ---
 
