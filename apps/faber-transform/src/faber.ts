@@ -1,7 +1,7 @@
 // faber.ts — the app-facing glue over @cas/faber. Evaluates the exterior map φ (to trace ∂K), builds
 // the forward transform Φφ(f) = Σ b_n F_n, and evaluates the resulting polynomial for the right-panel
 // coloring. The app never touches the package's internals directly — everything routes through here.
-import { Complex, makePoly, objAlgebra } from "@cas/core";
+import { Complex, makePoly, objAlgebra, dftOnCircle } from "@cas/core";
 import type { Cx } from "@cas/core";
 import { faberTransform, faberImageOfPole, evalRationalImage, faberTransformRational, polynomialRoots, weightedFaberPolynomial } from "@cas/faber";
 import type { ExteriorMap, RationalImage } from "@cas/faber";
@@ -56,21 +56,11 @@ export function taylorViaFFT(f: (z: Cx) => Cx, N: number, radius = 0.9): Cx[] {
     const th = (2 * Math.PI * k) / M;
     samples.push(f({ re: radius * Math.cos(th), im: radius * Math.sin(th) }));
   }
-  const b: Cx[] = [];
-  for (let n = 0; n <= N; n++) {
-    let re = 0;
-    let im = 0;
-    for (let k = 0; k < M; k++) {
-      const ang = (-2 * Math.PI * n * k) / M;
-      const c = Math.cos(ang);
-      const s = Math.sin(ang);
-      re += samples[k].re * c - samples[k].im * s;
-      im += samples[k].re * s + samples[k].im * c;
-    }
-    const scale = 1 / (M * Math.pow(radius, n));
-    b.push({ re: re * scale, im: im * scale });
-  }
-  return b;
+  // bₙ = ĉₙ / rⁿ, where ĉₙ is the DFT of the ring of samples (the 1/M mean lives inside dftOnCircle).
+  return dftOnCircle(samples, N).map((c, n) => {
+    const scale = 1 / Math.pow(radius, n);
+    return { re: c.re * scale, im: c.im * scale };
+  });
 }
 
 /** Machine epsilon for IEEE-754 doubles — the balance point for the optimal FFT sampling radius. */
