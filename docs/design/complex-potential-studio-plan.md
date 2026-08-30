@@ -14,11 +14,12 @@
 > that walks the paper's dictionary (Gauss's law, the argument principle, Jensen, Bôcher,
 > the Riemann map as a grounded cavity, method of images, quadrature-domain indistinguishability).
 >
-> **Status: M0–M3 built; M4a + M4b built** (the exact one-point twisting family + its showpiece page —
-> see the living record below); **M4c–M4e deferred** to separately-approved passes. The milestones landed
-> in order, each as its own approved pass — M0 + M1 first (the render spike + the superposition sandbox, a
-> first shippable app), then M2 (conformal transplant), M3 (potential theory), and M4a/M4b (the Hele-Shaw
-> "twisting" showpiece). Nothing here re-litigates a locked ADR.
+> **Status: M0–M3 built; M4a + M4b + M4c built** (the exact one-point twisting family + its showpiece page,
+> and the classical interior-droplet PG evolver + its page — see the living record below); **M4d–M4e
+> deferred** to separately-approved passes. The milestones landed in order, each as its own approved pass —
+> M0 + M1 first (the render spike + the superposition sandbox, a first shippable app), then M2 (conformal
+> transplant), M3 (potential theory), M4a/M4b (the exact Hele-Shaw "twisting" showpiece), and M4c (the
+> numerical interior-droplet Polubarinova–Galin evolver). Nothing here re-litigates a locked ADR.
 >
 > Mirrors the suite runbook style ([`../MIGRATION.md`](../MIGRATION.md)): **phase gates that are
 > each shippable, a motivating win early, one ground-truth check per gate, test-guarded changes.**
@@ -41,7 +42,7 @@
 | **M1 gate** | ✅ cleared — shippable | Full repo gate green (lint + dep:check, typecheck, **412 test files / census `2d-electrostatics:8` at the M1 gate; the app now carries 19 test files after M2/M3**, build all apps). **Publish wired:** registered in `SUITE_APPS` (+ the eight-app nav test), a launcher card, the `deploy-pages.yml` `cp`, the CLAUDE.md status bump to eight apps, and **ADR-0034** recorded. No in-app `mountNavHeader` — no app renders it yet (the open U7 item), so this stays consistent with the suite. The app ships on the next `master` merge. |
 | M2 — conformal transplant | ✅ done (M2.1–M2.4 + both follow-ons) | **M2.1:** the closed-form Joukowski airfoil engine (`src/airfoil.ts`) — cylinder potential/velocity, Joukowski map + exterior-branch inverse, Kutta circulation `Γ = 4πUR·sin(φ₀−α)`, lift `L = −ρUΓ`. **M2.2:** the two-pane **cylinder↔wing** render (`airfoil.html` + `main-airfoil.ts`, Vite multi-page) — one fragment shader with a `uMode` switch renders both planes, contouring the SAME stream function so streamlines map across; thickness/camber/AoA + Kutta → live lift. **M2.3:** **Kármán–Trefftz** finite trailing-edge angle (`n = 2 − τ/π`; a TE-angle slider), with ζ and K' built from the same `m` so the non-integer power leaves no seam. **M2.4a:** the **exterior-SC polygon flow engine** — `transplant.ts` (closed-form reference flow past the unit disk + the ζ-plane flow net, built by inverting `W_ref` exactly and pushed FORWARD through Ψ) + `polygonMap.ts` (`fitExteriorSchwarzChristoffel` → Ψ from the Laurent-at-∞ series, `@cas/conformal` added); ground-truth square capacities exact, flat-plate cross-check. **M2.4b:** the two-pane **disk↔polygon** line-art render (`polygon.html` + `main-polygon.ts` + `render/net2d.ts`) — colour-matched streamlines + corner↔prevertex dots, presets (triangle/square/pentagon/flat plate/reentrant L-shape), AoA + circulation, honest capacity/converged/degraded/residual. **M2.4c:** the **`ConformalMap` interchange form** (interchange **1.4.0**, **ADR-0035**) — schema/validate/mapSpecToExpr + the `RM_TO_POTENTIAL_CONFORMAL_LINK` golden; the app is producer **and** consumer (import a `#s=` polygon → re-fit exterior flow; "Copy link" export). **Follow-ons (both done):** (i) **interior-SC flow inside K** — a "Flow inside K" mode: a source→sink pair on ∂𝔻 (impermeable walls) with exact Möbius-parametrised streamlines pushed through the interior map f: 𝔻 → K, an inlet-direction slider; (ii) the **Riemann-Map producer** — a "Send to 2D Electrostatics ↗" button on a polygon region emits the `engine:"sc-interior"` map (minimal payload) via a CD-style app-segment URL swap, pinned byte-for-byte from the RM side so the golden is anchored on both ends. All verified live (imported square cap 1.1803; L-shape reentrant flow; RM→2D-E round-trip). **Deferred:** the `flow` envelope kind (ADR-0007 — gate on a second consumer). |
 | M3 — potential-theory tab | ✅ done (M3.1–M3.4) | **M3.1:** the **conductor-K view** (`potential.html` + `main-potential.ts`) — a compact set K as a grounded conductor. `potentialDomain.ts` unifies every exterior-map class behind one `Ψ(w) = c·w + Σ aₖw⁻ᵏ` (polygons via the M2.4 SC fit; disk / ellipse / segment / deltoid as explicit finite Laurent maps), giving **capacity** `= \|c\|`, the **equilibrium measure** `μ = Ψ⁎(dθ/2π)` (uniform-θ charge dots, coloured by local density), and the **Green equipotentials** `g_K = t = Ψ(\|w\|=eᵗ)` + field lines. All `=`. Ground truth: the golden capacity table + the **arcsine law** on `[−1,1]` (dots at `x=cos θ`, crowding at ±1) — 6 node tests. Verified live: segment → confocal-ellipse equipotentials + endpoint crowding; deltoid → charge at the 3 cusps; square → cap 1.0433. **M3.2:** the **Faber-zero overlay** (adds `@cas/faber`) — `faberZeros.ts` adapts an `ExteriorDomain`'s `{c, laurent}` to `@cas/faber`'s `ExteriorMap` and reads the zeros of F₁…F_N via `faberConvergence` (Faber recurrence + Durand–Kerner). A "Faber zeros Fₙ" toggle + order-n slider on the conductor view draws the zeros as gold dots over the (dimmed) equilibrium charge. **Honest:** `≈`, per-order converged/residual, and a data-driven caveat — the zeros equidistribute to `μ_K` only when ∂K has corners (segment → the Chebyshev/arcsine nodes, polygons → ∂K), while a smooth ∂K keeps them interior (disk → the centre, ellipse → the focal segment). 6 node tests pin all four cases. Verified live: segment F₉ zeros on the arcsine nodes; square F₁₆ → ∂K; disk F₁₂ → centre (caveat shown). **M3.3:** the **Fekete/Leja overlay** — `feketePoints.ts` computes greedy **Leja** points on ∂K = Ψ(∂𝔻) (each new point maximises ∏|z−zⱼ|, incremental → n-slider-native) + the **transfinite diameter** `dₙ = (∏\|zᵢ−zⱼ\|)^{2/n(n−1)}`. A "Fekete/Leja points" toggle + n-slider draws them in magenta over the charge (coexisting with the Faber overlay → two roads to μ_K on one picture); the readout shows `dₙ ↓ cap(K)` (Fekete's theorem — the third road ties back to M3.1's capacity). All `≈`. 7 node tests (disk uniform + dₙ→r; segment arcsine + dₙ→½; polygon dₙ→cap; the dₙ formula). Verified live: segment points crowd at ±1 (d₂₀≈0.604→0.5); square shows Faber + Fekete together (d₂₀≈1.220→1.043). No new package. **M3.4:** **general K via log-lightning** (`≈`) — for a compact K with no closed-form map. `logLightning.ts` models K as a grounded conductor directly: log-charges just inside ∂K, weights + Robin constant `γ` solved by boundary least-squares (`@cas/core` `lstsqHouseholder`) so `U ≡ γ` on ∂K → `cap = e^γ`, `g_K(z) = U(z) − γ`, charge density `∝ \|∂g/∂n\|`. Smooth-blob / rounded-oval / off-centre-disk presets (`generalDomains.ts`); the conductor view dispatches exterior-map (pushforward `=`) vs general-K (log-lightning `≈`), rendering the Green equipotentials as **marching-squares** level curves (`render/marchingSquares.ts`). Fekete/Leja works on general K (`lejaFromCurve`); Faber is disabled (no map). 9 node tests (capacity vs the goldens: disk/ellipse/off-disk/square within 1e-3–1e-2; Green vanishes on ∂K + far-field; uniform-disk density; the marching-squares contour). Verified live: the blob's charge concentrates on its convex lobes; the off-centre disk gives cap = 1.000000 (translation-invariant). No new package. **M3 complete** — three roads to μ_K (charge, Faber zeros, Fekete points) + capacity, across exterior-map (`=`) and general (`≈`) K. **Deferred:** the `(1/n)log\|Fₙ\| → g_K` growth-law readout; corner-clustered log-charges for cusped general K. |
-| M4 — Hele-Shaw "twisting" showpiece | ✅ M4a + M4b done; M4c–M4e deferred | **M4a (engine, `src/heleShawOnePoint.ts`):** the exact Graven–Makarov one-point unbounded-QD family `QD(α/(w−w₀))` at `w₀=2`, charge `α = q + iγ` (thesis §3.3, Eq 3.10–3.11 + the §2.2.3 charge relation) — `admissible` (the parabola `|w₀|²+2Re α > 2|α|`), `solveZ0` (quartic root ≥1 for real α with the `φ_t(1)<w₀` selector / the §2.2.3 relation by Newton for complex α), `onePointMap` (the closed-form φ_t + exact φ'), `recoverCharge` (the conserved quadrature datum — recovers α to machine precision at every t, the honest conservation monitor, since raw polynomial moments are NOT conserved for off-origin injection), `normalizedArea` (`t = A/π`, ADR-0006), `criticalTime` (α>0 → double point, closed form `c*=w₀+√α`, `t*=w₀(w₀+2√α)`; α<0/complex → a (3,2)-cusp, found by marching the branch to the edge), and `buildFamily` (the growing timeline). **M4b (render/UI):** a 5th page `twist.html` + `main-twist.ts` + `render/heleShawRender.ts` — the growing/twisting boundary, the exterior conformal grid (rays spiral for γ≠0), the driving charge's spiral equipotentials, `q`/`γ` (inject/spin) sliders, presets, a `t→t*` play/scrub that stops at the critical time (`⚠`, never past the ill-posed cusp), and an honest readout (recovered charge = α, mechanism). App-local — **no new package** (`@cas/schwarz` is added only at M4d). **Deferred:** M4c the general Polubarinova–Galin time-stepper (`≈`), M4d the QD→2D-E interchange import (interchange 1.5.0 + `@cas/schwarz`), M4e surface-tension regularization. |
+| M4 — Hele-Shaw "twisting" showpiece | ✅ M4a + M4b + M4c done; M4d–M4e deferred | **M4a (engine, `src/heleShawOnePoint.ts`):** the exact Graven–Makarov one-point unbounded-QD family `QD(α/(w−w₀))` at `w₀=2`, charge `α = q + iγ` (thesis §3.3, Eq 3.10–3.11 + the §2.2.3 charge relation) — `admissible` (the parabola `|w₀|²+2Re α > 2|α|`), `solveZ0` (quartic root ≥1 for real α with the `φ_t(1)<w₀` selector / the §2.2.3 relation by Newton for complex α), `onePointMap` (the closed-form φ_t + exact φ'), `recoverCharge` (the conserved quadrature datum — recovers α to machine precision at every t, the honest conservation monitor, since raw polynomial moments are NOT conserved for off-origin injection), `normalizedArea` (`t = A/π`, ADR-0006), `criticalTime` (α>0 → double point, closed form `c*=w₀+√α`, `t*=w₀(w₀+2√α)`; α<0/complex → a (3,2)-cusp, found by marching the branch to the edge), and `buildFamily` (the growing timeline). **M4b (render/UI):** a 5th page `twist.html` + `main-twist.ts` + `render/heleShawRender.ts` — the growing/twisting boundary, the exterior conformal grid (rays spiral for γ≠0), the driving charge's spiral equipotentials, `q`/`γ` (inject/spin) sliders, presets, a `t→t*` play/scrub that stops at the critical time (`⚠`, never past the ill-posed cusp), and an honest readout (recovered charge = α, mechanism). App-local — **no new package** (`@cas/schwarz` is added only at M4d). **M4c (the interior-droplet PG evolver, `≈`):** the *classical interior-droplet* Polubarinova–Galin flow — a bounded droplet `f(w,t)=Σ aₖwᵏ` grown from a central source, a different, textbook-validated scenario from M4a. **M4c.1a** `src/heleShawInterior.ts` (the equation `Re[ḟ·conj(w f')]=(Q/2π)P(a,·)` + a closed-form oracle: the self-similar disk, the exact two-term 4/3-cusp solution, the linearized modal rates `ε̇ₙ/εₙ=−nQ/(2πa₁²)`, the `εₙ·a₁ⁿ` invariant). **M4c.1b** `src/heleShawInteriorStepper.ts` (the Galin–Kufarev **spectral** velocity solve — divide by `|w f'|²`, recover the analytic `P=ḟ/(w f')` from its boundary real part by one DFT + analytic completion, then `ḟ=P·(w f')`; **no least squares** — this replaced the sketch's modal-projection lstsq; RK4 in coefficient space, adaptive step, the conserved Richardson moments `Mₖ=∫∫_D zᵏ dA` as the honest error bar — reported as `|Mₖ|` drift so a rigid spin's rotation `Mₖ↦e^{ikωt}Mₖ` reads as conserved — and a hard ⚠ cusp / suction stop). Its one shared piece is **`@cas/core` `dftOnCircle`** — the ring-of-samples DFT extracted on the ADR-0007 second-consumer rule (Faber Transform's `taylorViaFFT` rewired onto it, byte-identical). **M4c.2** the 6th page `droplet.html` + `main-droplet.ts` + `render/interiorDropletRender.ts` — an initial-shape picker (disk / perturbed-circle-smooths / asymmetric blob / suction-fingering→cusp / spun blob), source-Q + spin-ω sliders, time scrub/play, the interior flow net (streamlines + equipotentials = the pushforward of the disk's polar grid), and the ⚠ cusp / suction-opt-in guards. **Deferred:** M4d the QD→2D-E interchange import (interchange 1.5.0 + `@cas/schwarz`), M4e surface-tension regularization. |
 
 ---
 
@@ -208,7 +209,7 @@ bookkeeping the Kutta condition later *chooses*).
   (Baddoo–Trefethen) on the existing `lstsqHouseholder` stack (`≈`).
 *Ground truth:* the golden capacity table (§7); arcsine law on `[−1,1]`.
 
-### M4 — Hele-Shaw "twisting" showpiece *(M4a + M4b built; M4c–M4e deferred; lives in this app — ADR-0034)*
+### M4 — Hele-Shaw "twisting" showpiece *(M4a + M4b + M4c built; M4d–M4e deferred; lives in this app — ADR-0034)*
 
 **Built as the exact spine first (M4a + M4b).** Rather than lead with a numerical time-stepper, M4a ports
 the **Graven–Makarov one-point family** in closed form (thesis §3.3): the growing/twisting family
@@ -222,16 +223,35 @@ in closed form (log-spirals). Termination is honest: a **double point** (α>0, c
 past the ill-posed edge. The M2↔M4 bridge (McKee–Bush 2024, "Hele-Shaw with spin", the airfoil-Kutta
 analogy) is the page's caption.
 
-**Deferred (M4c–M4e).** M4c: the general **Polubarinova–Galin** time-stepper `Re[ġ · conj(g')] = Re c₀` on
-`|w|=1` for arbitrary finite-Laurent `g(w,t)` (numerical, `≈`; moment DRIFT the correctness monitor; cusp
-detection `min|g'|→0`). M4d: import QD's σ / unbounded-QD complex-charge recipe via interchange (§6) —
+**Built (M4c) — the classical interior-droplet PG evolver (`≈`).** Rather than reproduce the exact M4a
+family numerically, M4c evolves the *textbook* interior scenario: a **bounded** droplet `f(w,t)=Σ aₖwᵏ`
+(interior map, `f(0)=0`) fed by a point source *in* the fluid, moving by the classical Polubarinova–Galin
+law `Re[ḟ·conj(w f')]=(Q/2π)·P(a,·)` on `|w|=1`. **M4c.1a** (`src/heleShawInterior.ts`) is the equation +
+a closed-form **oracle** (all verified to machine precision): the self-similar disk `a₁(t)=√(a₁₀²+Qt/π)`,
+the exact two-term polynomial `a₁w+a₂w²` 4/3-cusp solution, the linearized modal rates `ε̇ₙ/εₙ=−nQ/(2πa₁²)`
+(injection *decays* modes — the circle is a stable attractor — suction *grows* them), and the `εₙ·a₁ⁿ`
+invariant. **M4c.1b** (`src/heleShawInteriorStepper.ts`) is the numerical stepper via the **Galin–Kufarev
+spectral solve** (no least squares): dividing by `|w f'|²` makes `P=ḟ/(w f')` analytic in the disk,
+recovered from its boundary real part by one DFT + analytic completion (`P=R̂₀+2Σ_{n≥1}R̂ₙwⁿ`), then
+`ḟ=P·(w f')`; RK4 in coefficient space with an adaptive step. Its correctness monitor is the conserved
+**Richardson moments** `Mₖ=∫∫_D zᵏ dA` (conserved under central injection — dM_k/dt=Q·aᵏ=0; the interior
+analogue of M4a's recovered charge), reported as `|Mₖ|` drift so a rigid spin (`Mₖ↦e^{ikωt}Mₖ`) reads as
+conserved. Cusp/ill-posedness are honest: a hard **⚠** stop at `min|f'|→0` (never integrated past), and
+suction (`Q<0`) refused unless explicitly opted into. The one shared piece is **`@cas/core` `dftOnCircle`**
+— the ring-of-samples DFT, extracted on the ADR-0007 second-consumer rule (Faber Transform's `taylorViaFFT`
+rewired onto it). **M4c.2** is the 6th page `droplet.html`. Key refs: Polubarinova-Kochina & Galin (1945);
+Gustafsson–Vasil'ev; Howison; Richardson (1972).
+
+**Deferred (M4d–M4e).** M4d: import QD's σ / unbounded-QD complex-charge recipe via interchange (§6) —
 adds `@cas/schwarz` + the interchange `1.5.0` moment/`c₀` payload. M4e: surface-tension regularization →
-tip-splitting (Saffman–Taylor `λ=½`), strictly `≈`. Key refs: Bazant–Crowdy; Gustafsson–Vasil'ev;
-Zabrodin (Coulomb-gas droplet).
+tip-splitting (Saffman–Taylor `λ=½`), strictly `≈`. Key refs: Bazant–Crowdy; Zabrodin (Coulomb-gas droplet).
 *Ground truth (M4a, all verified):* the admissible parabola `|w₀|²+2Re α > 2|α|`; `α=1 → c*=3, t*=8`;
-the recovered charge conserved across `t`; the two termination mechanisms.
-*Honest labels:* the closed-form M4a family is `=`; a future PG evolution past a cusp and any
-surface-tension regularization are `≈`/`⚠` — ill-posed, never certified (RISKS §3 discipline).
+the recovered charge conserved across `t`; the two termination mechanisms. *(M4c, all verified):* the disk /
+two-term / linearized-mode benchmarks; RK4 tracking the exact disk and two-term trajectories; an asymmetric
+blob's conserved moments; the suction cusp stop.
+*Honest labels:* the closed-form M4a family is `=`; the M4c numerical PG evolution is `≈` (moment drift its
+error bar) and any evolution at/after a cusp or under suction is `⚠` — ill-posed, never certified (RISKS §3
+discipline).
 
 ## 5. Package touch-points & dependencies
 
@@ -241,7 +261,10 @@ surface-tension regularization are `≈`/`⚠` — ill-posed, never certified (R
   Wiring: register in `packages/ui/src/apps.ts` (`SUITE_APPS`), `vitest.workspace.ts`, the census
   `PROJECTS` list (`scripts/assert-test-census.mjs`), a launcher card, and the `deploy-pages.yml` `cp`.
 - **M2:** add `@cas/conformal`. **M3:** add `@cas/faber`. **M4a + M4b:** app-local only — **no new
-  package** (the exact one-point family + its render). **M4d** (the QD interchange import) adds `@cas/schwarz`.
+  package** (the exact one-point family + its render). **M4c:** app-local engine + stepper + page; the one
+  shared piece is **`@cas/core` `dftOnCircle`**, extracted on the ADR-0007 second-consumer rule (Faber
+  Transform's `taylorViaFFT` rewired onto it — **no new package**). **M4d** (the QD interchange import) adds
+  `@cas/schwarz`.
 - Dependency direction respected (app imports packages; no app imports another app — QD hand-off is via
   `@cas/interchange` goldens, not a cross-app import).
 

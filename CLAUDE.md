@@ -98,8 +98,12 @@ rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conforma
 **2D Electrostatics**, ADR-0034 — the complex potential W = φ + iψ as an interactive field of charges /
 sources / vortices, extended through M2 (conformal transplant of flows past/inside airfoils and polygons),
 M3 (a potential-theory conductor view — capacity, equilibrium measure, Green's function, Faber/Fekete points),
-and M4a/M4b (the Hele-Shaw "twisting" showpiece — the exact Graven–Makarov one-point unbounded-QD family
-driven by a complex charge, closed-form engine + a `twist.html` scrub/play page; M4c–M4e deferred),
+M4a/M4b (the Hele-Shaw "twisting" showpiece — the exact Graven–Makarov one-point unbounded-QD family
+driven by a complex charge, closed-form engine + a `twist.html` scrub/play page), and M4c (the classical
+interior-droplet Polubarinova–Galin evolver — a bounded droplet grown from a central source by a numerical
+`≈` time-stepper, the Galin–Kufarev spectral solve on the new `@cas/core` `dftOnCircle`, on a `droplet.html`
+page, with the conserved Richardson moments as the honest error bar and a hard ⚠ cusp / suction stop;
+M4d–M4e deferred),
 riding `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui`, `@cas/conformal` (M2),
 and `@cas/faber` (M3)) ride the eleven shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,

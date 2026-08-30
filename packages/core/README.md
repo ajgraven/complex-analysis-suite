@@ -33,6 +33,7 @@ import Complex, {
   makeDurandKerner,
   makeSeries,
   lstsqHouseholder,
+  dftOnCircle,
 } from "@cas/core";
 import type {
   Cx,
@@ -72,6 +73,13 @@ claimed.
 **Stereographic projection** — `planeToSphere(z)` / `sphereToPlane(p)` map `ℂ ∪ {∞}` to and
 from the Riemann sphere, with a cancellation-safe inverse. Shared by both apps' sphere views,
 which is what earned it a place in the kernel (ADR-0007).
+
+**Discrete Fourier transform** — `dftOnCircle(samples, maxIndex?)` returns the DFT coefficients
+`ĉₙ = (1/M)·Σₖ samplesₖ·e^{−2πi nk/M}` of values sampled at the `M`-th roots of unity — the "ring
+of samples → analytic coefficients" step. Convention-neutral (ADR-0006): a bare, unscaled analysis
+transform, the caller attaching whatever scaling its geometry needs. Shared by Faber Transform's
+Taylor extraction (`taylorViaFFT` = this + an `rⁿ` radius scaling) and 2D Electrostatics' interior
+Hele-Shaw velocity solve (its Dirichlet analytic-completion step), the ADR-0007 second consumer.
 
 **Least squares** — `lstsqHouseholder(A, b)` solves the overdetermined `min‖A·x − b‖₂` (real,
 row-major `A`, single right-hand side) by backward-stable Householder QR, zero-filling an

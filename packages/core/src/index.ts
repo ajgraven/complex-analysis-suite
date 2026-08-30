@@ -23,6 +23,10 @@
 //   - rootsMonic     : app-facing monic-polynomial root finding (Horner eval, trim, spiral-seeded
 //                      Durand-Kerner) — the wrapper Complex-Dynamics + Argument-Principle mirrored
 //                      around makeDurandKerner (ADR-0007). Residual policy stays caller-side.
+//   - dft            : the discrete Fourier transform of a ring of samples → analytic coefficients, the
+//                      shared step under Faber-Transform's Taylor extraction (`taylorViaFFT`) and 2D
+//                      Electrostatics' interior Hele-Shaw velocity solve (ADR-0007). Scaling stays
+//                      caller-side (convention-neutral, ADR-0006).
 export { Complex, default } from "./complex.js";
 export type { Cx } from "./complex.js";
 export { objAlgebra, tupleAlgebra } from "./algebra.js";
@@ -39,3 +43,4 @@ export { lstsqHouseholder } from "./lstsq.js";
 export { pointInPolygon, signedArea, orientCCW } from "./geometry.js";
 export type { Point2 } from "./geometry.js";
 export { evalPolyHorner, trimPoly, rootsMonicClosure, rootsMonic } from "./rootsMonic.js";
+export { dftOnCircle } from "./dft.js";

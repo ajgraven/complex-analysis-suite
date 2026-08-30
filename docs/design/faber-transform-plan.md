@@ -207,7 +207,9 @@ none of which v1 blocks:
 - **M3 — Free-form + numeric — DONE.** A third **input mode**: free-form `f(z)` via `@cas/expr`
   (`compileExprF` → JS evaluator), with a datalist of unit-disk-analytic presets and an `N` slider
   (default 32, cap 128). The left panel CPU-renders `f`; the right panel GPU-renders the truncated series
-  `Σ_{n≤N} bₙ Fₙ`. Coefficients come from `taylorViaFFT` (DFT of samples on `|z|=0.9`); `trimTail` drops the
+  `Σ_{n≤N} bₙ Fₙ`. Coefficients come from `taylorViaFFT` (DFT of samples on `|z|=0.9`, the ring-DFT now the
+shared `@cas/core` `dftOnCircle` + an `rⁿ` scaling — its ADR-0007 second consumer is 2D Electrostatics'
+interior Hele-Shaw solve); `trimTail` drops the
   noise-dominated tail before summing (a coefficient at the ~1e-14 roundoff floor times a geometrically
   growing `Fₙ` is O(1) garbage — the tests caught it); `radiusOfConvergence` estimates `R` from index-gap
   coefficient ratios (robust for lacunary/even series and prefactor-unbiased), reported as `∞` for entire
