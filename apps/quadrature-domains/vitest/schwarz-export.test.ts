@@ -8,15 +8,20 @@ import {
   QD_TO_CD_DELTOID_SIGMA_LINK,
   QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
   QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK,
+  QD_TO_POTENTIAL_HELESHAW_LINK,
 } from "@cas/interchange";
 import {
   buildExportEnvelope,
   buildSigmaEnvelope,
+  buildHeleShawEnvelope,
   classifyPhiForExport,
   explainPhiUnavailable,
   explainSigmaUnavailable,
+  explainHeleShawUnavailable,
   exportPhiLink,
   exportSigmaLink,
+  exportHeleShawLink,
+  hDataToMapSpec,
   phiToMapSpec,
 } from "../app/schwarz/schwarz-export.mjs";
 
@@ -268,5 +273,67 @@ describe("bounded-classical φ → form:bounded σ recipe (S5-C2)", () => {
   it("emits the exact bounded-lobe σ link stored as the cross-app golden", () => {
     const link = exportSigmaLink(boundedLobePhi, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
     expect(link).toBe(QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK);
+  });
+});
+
+// M4d: the Hele-Shaw twist hand-off (QD → 2D Electrostatics). A ONE-POINT unbounded QD rides the existing
+// `quadrature-domain` payload (no schema bump) carrying φ + the quadrature data `hData` = h(w) = α/(w−w₀).
+// The charge α is the residue of h — convention-neutral, so no π/2πi conversion (see schwarz-export.mjs).
+describe("QD → 2D-Electrostatics Hele-Shaw twist export (M4d)", () => {
+  // A one-point unbounded QD: an unbounded-Laurent φ + a single simple pole h = α/(w − w₀).
+  const onePointPhi = { unbounded: true, c: 1, polyA: [], branches: [{ z: C(0.2), A: [C(0.3)] }] };
+  // The authored charge α = i at node w₀ = 2 (QD's unb-1pt-imag), snapshot shape { poles:[{a,principal}] }.
+  const imagCharge = { poles: [{ a: C(2), principal: [C(0, 1)] }], polyPart: [] };
+
+  it("hDataToMapSpec serializes a single simple pole as h(w) = α/(w − w₀)", () => {
+    // h = i/(w − 2): num = [i], den = [−2, 1] (low-order-first).
+    expect(hDataToMapSpec(imagCharge)).toEqual({ form: "rational", num: [C(0, 1)], den: [C(-2), C(1)] });
+  });
+
+  it("hDataToMapSpec returns null for what the one-point twist engine can't drive (v1 scope)", () => {
+    expect(hDataToMapSpec(null)).toBeNull();
+    // two nodes:
+    expect(hDataToMapSpec({ poles: [{ a: C(2), principal: [C(1)] }, { a: C(-1), principal: [C(1)] }] })).toBeNull();
+    // order-2 pole (principal has 2 coefficients):
+    expect(hDataToMapSpec({ poles: [{ a: C(2), principal: [C(1), C(0.5)] }] })).toBeNull();
+    // an entire (polynomial) part:
+    expect(hDataToMapSpec({ poles: [{ a: C(2), principal: [C(1)] }], polyPart: [C(1)] })).toBeNull();
+  });
+
+  it("builds a valid quadrature-domain envelope carrying φ + hData, tagged CANONICAL", () => {
+    const env = buildHeleShawEnvelope(onePointPhi, imagCharge, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(env).not.toBeNull();
+    expect(isEnvelopeOfKind(validateEnvelope(env), "quadrature-domain")).toBe(true);
+    expect(env!.payload.bounded).toBe(false);
+    expect(env!.payload.hData).toEqual({ form: "rational", num: [C(0, 1)], den: [C(-2), C(1)] });
+    expect(env!.payload.conventions).toEqual({ area: "standard", contour: "standard" });
+  });
+
+  it("returns null unless φ is unbounded-Laurent AND h is a single simple pole", () => {
+    expect(buildHeleShawEnvelope({ P: [C(0)], Q: [C(1)] }, imagCharge)).toBeNull(); // rational φ, not laurent
+    expect(buildHeleShawEnvelope(onePointPhi, null)).toBeNull(); // no single-pole h
+  });
+
+  it("round-trips through the deep-link codec (QD encode → interchange decode)", () => {
+    const link = exportHeleShawLink(onePointPhi, imagCharge, { createdAt: GOLDEN_CREATED_AT });
+    expect(link!.startsWith("#s=")).toBe(true);
+    const back = decodeLink(link!);
+    expect(back.kind).toBe("quadrature-domain");
+    expect((back.payload as { hData: unknown }).hData).toEqual({ form: "rational", num: [C(0, 1)], den: [C(-2), C(1)] });
+  });
+
+  it("the reason string is null exactly when the one-point twist hand-off IS available", () => {
+    expect(explainHeleShawUnavailable(onePointPhi, imagCharge)).toBeNull();
+    expect(explainHeleShawUnavailable(null, imagCharge)).toMatch(/Use this φ/);
+    expect(explainHeleShawUnavailable({ P: [C(0)], Q: [C(1)] }, imagCharge)).toMatch(/unbounded/i);
+    expect(explainHeleShawUnavailable(onePointPhi, null)).toMatch(/one-point/i);
+  });
+
+  // The PRODUCER half of the QD → 2D-Electrostatics Hele-Shaw contract: QD emits the exact bytes stored as
+  // the cross-app golden and consumed by 2D Electrostatics (apps/2d-electrostatics/test/importHeleShaw). If
+  // this drifts, the hand-off format changed — regenerate the golden only if intended.
+  it("emits the exact Hele-Shaw link stored as the cross-app golden", () => {
+    const link = exportHeleShawLink(onePointPhi, imagCharge, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
+    expect(link).toBe(QD_TO_POTENTIAL_HELESHAW_LINK);
   });
 });
