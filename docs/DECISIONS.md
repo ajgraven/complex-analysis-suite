@@ -3045,9 +3045,17 @@ Hele-Shaw "twisting" showpiece): the exact Graven–Makarov one-point unbounded-
 driven by a complex charge `α = q + iγ` (thesis §3.3 closed form — engine `src/heleShawOnePoint.ts`), and
 its `twist.html` showpiece page that scrubs/plays the growing, twisting droplet up to a double point (α>0)
 or a (3,2)-cusp, with the conserved quadrature charge as the honest correctness monitor. App-local, no new
-package. **M4c** (the general Polubarinova–Galin time-stepper), **M4d** (the QD → 2D-Electrostatics
-interchange import — adds `@cas/schwarz` + interchange `1.5.0`), and **M4e** (surface-tension
-regularization) remain specced in the plan and deferred to separately-approved passes.
+package. **M4c** (the general Polubarinova–Galin time-stepper) is now **built** as the *classical
+interior-droplet* evolver — a bounded droplet `f(w,t)=Σ aₖwᵏ` grown from a central source by the numerical
+PG flow (`≈`), a genuinely different, textbook-validated scenario from the exact exterior M4a family:
+`src/heleShawInterior.ts` (the equation + a closed-form oracle — self-similar disk, the two-term
+4/3-cusp solution, the linearized modal rates), `src/heleShawInteriorStepper.ts` (the Galin–Kufarev
+**spectral** velocity solve — no least squares; it rides the new `@cas/core` `dftOnCircle`, an ADR-0007
+second-consumer extraction alongside Faber Transform's `taylorViaFFT` — RK4 in coefficient space, the
+conserved Richardson moments as the honest `≈` error bar, and a hard ⚠ cusp / suction stop), and the
+`droplet.html` page. **M4d** (the QD → 2D-Electrostatics interchange import — adds `@cas/schwarz` +
+interchange `1.5.0`) and **M4e** (surface-tension regularization) remain specced in the plan and deferred
+to separately-approved passes.
 
 ---
 
