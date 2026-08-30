@@ -129,10 +129,21 @@ export function interiorMoments(coeffs: readonly Cx[], K: number, samples = samp
   return out.map((m) => cscale(m, Math.PI / M));
 }
 
-/** max_k |M_k(now) − M_k(ref)| — the drift of the conserved moments, the honest `≈` error bar. */
+/** max_k |M_k(now) − M_k(ref)| — the drift of the conserved moments (a strict check for a NON-rotating
+ *  flow, where both the phase and magnitude of each M_k are conserved). */
 export function momentDrift(ref: readonly Cx[], now: readonly Cx[]): number {
   let d = 0;
   for (let i = 0; i < ref.length; i++) d = Math.max(d, Math.hypot(now[i][0] - ref[i][0], now[i][1] - ref[i][1]));
+  return d;
+}
+
+/** max_k | |M_k(now)| − |M_k(ref)| | — the drift of the moment MAGNITUDES, the rotation-robust `≈` error
+ *  bar. A rigid spin rotates every M_k (M_k ↦ e^{ikωt}M_k), so its phase is *expected* to move; the
+ *  magnitude is the genuine invariant of the combined injection+spin flow (injection+spin is exactly a
+ *  rigid rotation of the pure-injection solution). Reduces to `momentDrift` when ω = 0. */
+export function momentMagnitudeDrift(ref: readonly Cx[], now: readonly Cx[]): number {
+  let d = 0;
+  for (let i = 0; i < ref.length; i++) d = Math.max(d, Math.abs(Math.hypot(now[i][0], now[i][1]) - Math.hypot(ref[i][0], ref[i][1])));
   return d;
 }
 
@@ -147,7 +158,7 @@ export interface DropletFrame {
   readonly area: number;
   /** min over |w|=1 of |f'| — the cusp gauge. */
   readonly minFPrime: number;
-  /** max_k |M_k − M_k(0)| — conserved-moment drift (the `≈` error bar). */
+  /** max_k | |M_k| − |M_k(0)| | — conserved moment-magnitude drift, the rotation-robust `≈` error bar. */
   readonly momentDrift: number;
 }
 
@@ -200,7 +211,7 @@ export function evolveDroplet(
     coeffs,
     area: dropletArea(coeffs),
     minFPrime: minAbsMapPrime(coeffs),
-    momentDrift: momentDrift(refMoments, interiorMoments(coeffs, K)),
+    momentDrift: momentMagnitudeDrift(refMoments, interiorMoments(coeffs, K)),
   });
 
   const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx))];

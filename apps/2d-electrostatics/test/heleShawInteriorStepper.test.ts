@@ -5,6 +5,7 @@ import {
   evolveDroplet,
   interiorMoments,
   momentDrift,
+  momentMagnitudeDrift,
   canonicalize,
 } from "../src/heleShawInteriorStepper.js";
 import {
@@ -128,5 +129,12 @@ describe("the rigid-spin overlay rotates without changing the shape's moment mag
     expect(last.area).toBeCloseTo(dropletArea(blob), 6); // spin injects no area
     const m1 = interiorMoments(last.coeffs, 2).map(cabs);
     for (let i = 0; i < m0.length; i++) expect(m1[i]).toBeCloseTo(m0[i], 4); // |M_k| unchanged by rotation
+    // the frame's rotation-robust monitor (|M_k| drift) stays tiny, while the absolute drift is O(1)
+    // because the moments' phases rotate — the honest label distinction.
+    const ref = interiorMoments(blob, 2);
+    const now = interiorMoments(last.coeffs, 2);
+    expect(last.momentDrift).toBeLessThan(1e-3); // = momentMagnitudeDrift, rotation-robust
+    expect(momentMagnitudeDrift(ref, now)).toBeLessThan(1e-3);
+    expect(momentDrift(ref, now)).toBeGreaterThan(0.3); // absolute drift IS large — the phases rotated
   });
 });

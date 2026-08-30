@@ -76,6 +76,8 @@ function main(): void {
   (back as HTMLAnchorElement).href = "./";
   const potLink = el("a", "pal-btn", "Potential →");
   (potLink as HTMLAnchorElement).href = "./potential.html";
+  const dropLink = el("a", "pal-btn", "Droplet (numerical) →");
+  (dropLink as HTMLAnchorElement).href = "./droplet.html";
 
   const controls = el("div", "foil-controls");
 
@@ -111,7 +113,7 @@ function main(): void {
   controls.append(presetRow, sQ.row, sG.row, sT.row, playBtn, gridCheck, fieldCheck);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, potLink, controls, readout);
+  bar.append(brand, back, potLink, dropLink, controls, readout);
 
   // ---- single z-plane pane --------------------------------------------------
   const stage = el("div", "pot-stage");
