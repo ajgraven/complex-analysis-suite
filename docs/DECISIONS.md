@@ -3053,9 +3053,16 @@ PG flow (`≈`), a genuinely different, textbook-validated scenario from the exa
 **spectral** velocity solve — no least squares; it rides the new `@cas/core` `dftOnCircle`, an ADR-0007
 second-consumer extraction alongside Faber Transform's `taylorViaFFT` — RK4 in coefficient space, the
 conserved Richardson moments as the honest `≈` error bar, and a hard ⚠ cusp / suction stop), and the
-`droplet.html` page. **M4d** (the QD → 2D-Electrostatics interchange import — adds `@cas/schwarz` +
-interchange `1.5.0`) and **M4e** (surface-tension regularization) remain specced in the plan and deferred
-to separately-approved passes.
+`droplet.html` page. **M4d** (the QD → 2D-Electrostatics interchange import) is **built**: the Quadrature
+Domains app hands a one-point unbounded QD to the twist page via `@cas/interchange`, driving the family
+from the authored charge. It rides the existing `quadrature-domain` payload with `hData` populated (h(w) =
+α/(w − w₀)) — **no schema bump** (`hData` has existed and been validated since 1.0.0) and **no `@cas/schwarz`**
+(both revising the original spec): the charge α is the *residue* of h, a convention-neutral rational
+coefficient read straight off the CANONICAL wire (no π/2πi conversion), so the twist engine drives from it
+directly. QD emits a "Send to 2D Electrostatics (Hele-Shaw)" link (`schwarz-export.mjs`
+`buildHeleShawEnvelope`); 2D-E consumes it (`importHeleShaw.ts`), honestly rejecting anything but a single
+simple pole at w₀ = 2 (v1); the cross-app `QD_TO_POTENTIAL_HELESHAW` golden pins both ends. Only **M4e**
+(surface-tension regularization) remains specced and deferred.
 
 ---
 
