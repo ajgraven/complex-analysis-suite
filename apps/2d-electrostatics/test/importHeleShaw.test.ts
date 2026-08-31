@@ -80,6 +80,10 @@ describe("heleShawFromLink — honest rejection (a Hele-Shaw recipe the one-poin
     const got = heleShawFromLink(qdLink(hRational([c(0, 2)], [c(-2), c(1)])));
     expect(got).toEqual({ ok: false, reason: expect.stringMatching(/admissible/i) });
   });
+  it("rejects a zero charge (h ≡ 0 — a degenerate non-domain admissible would wave through)", () => {
+    const got = heleShawFromLink(qdLink(hRational([c(0, 0)], [c(-2), c(1)])));
+    expect(got).toEqual({ ok: false, reason: expect.stringMatching(/zero/i) });
+  });
   it("accepts an admissible single pole at w₀ = 2 (negative real charge)", () => {
     // h = −0.5/(w − 2): α = −0.5 (−1 < −0.5 ⇒ admissible)
     const got = heleShawFromLink(qdLink(hRational([c(-0.5)], [c(-2), c(1)])));

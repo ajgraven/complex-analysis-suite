@@ -50,6 +50,11 @@ describe("the source term and Poisson-kernel right-hand side", () => {
     for (let i = 0; i < N; i++) integral += sourceDensity(src, (2 * Math.PI * i) / N) * ((2 * Math.PI) / N);
     expect(integral).toBeCloseTo(3, 6); // the source site redistributes, but never changes, the injected flux
   });
+  it("a source on the boundary (invalid — |a|=1 at the sample point) yields 0, never NaN", () => {
+    // Latent guard: the app only ever uses interior sources, but the general API must not return 0/0.
+    expect(poissonKernel([1, 0], 0)).toBe(0); // a = e^{i·0} sits exactly on the sample point
+    expect(Number.isNaN(poissonKernel([1, 0], 0))).toBe(false);
+  });
 });
 
 describe("BENCHMARK — the exact self-similar disk (central source)", () => {

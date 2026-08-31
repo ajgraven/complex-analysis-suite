@@ -46,6 +46,14 @@ export function heleShawFromLink(hashOrLink: string): HeleShawImport | null {
   if (den1[0] === 0 && den1[1] === 0) return { ok: false, reason: "Malformed quadrature data (degenerate denominator)." };
   const alpha = cdiv(num0, den1); // α = num[0]/den[1]
   const node = cdiv([-den0[0], -den0[1]], den1); // w₀ = −den[0]/den[1]
+  // A non-finite α/node (a crafted link with a subnormal denominator underflowing cdiv) or a zero charge
+  // (h ≡ 0, a degenerate non-domain that `admissible` would wave through since 4 > 0) can't drive a family.
+  if (!Number.isFinite(alpha[0]) || !Number.isFinite(alpha[1]) || !Number.isFinite(node[0]) || !Number.isFinite(node[1])) {
+    return { ok: false, reason: "Malformed quadrature data (non-finite charge or node)." };
+  }
+  if (Math.hypot(alpha[0], alpha[1]) < 1e-12) {
+    return { ok: false, reason: "The imported charge is zero — there is no quadrature domain to grow." };
+  }
   if (Math.hypot(node[0] - W0, node[1]) > 1e-6) {
     return { ok: false, reason: `The twist engine is normalized to the node w₀ = ${W0}; this domain’s node is elsewhere (a general node is a later extension).` };
   }
