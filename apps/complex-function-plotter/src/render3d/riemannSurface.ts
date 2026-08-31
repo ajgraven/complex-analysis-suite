@@ -26,6 +26,21 @@ const VERTEX_HEAD = `#version 300 es
 precision highp float;
 precision highp int;`;
 
+// The charisma-height law, shared by both vertex programs and matched EXACTLY by `charismaHeight` in
+// `../riemann/pickMesh.ts` (so pick, picture, and camera framing agree). `src` selects which scalar of the
+// height basis (`hr`, `hi`) lifts the surface: 0 Re · 1 Im · 2 arg (phase) · 3 |·| (modulus) · 4 log|·|.
+// `atan(hi, hr)` is atan2; the `1e-6` floor keeps `log|·|` finite at a zero.
+const CHARISMA_HEIGHT_GLSL = `
+float charismaHeight(float hr, float hi, int src, float scale) {
+  float v;
+  if (src == 1) v = hi;
+  else if (src == 2) v = atan(hi, hr);
+  else if (src == 3) v = length(vec2(hr, hi));
+  else if (src == 4) v = log(max(length(vec2(hr, hi)), 1e-6));
+  else v = hr;
+  return v * scale;
+}`;
+
 /**
  * The shared Riemann fragment: colour the interpolated value `vW` with the exact same `colorAt` as every
  * other view, shaded by a geometric (screen-space) normal. Used by both the parametric (M1) and the baked
@@ -69,8 +84,9 @@ ${COMPLEX_DERIVED_GLSL}
 uniform mat4  uVP;            // view-projection (camera)
 uniform vec2  uTCenter;       // centre of the t-window (value plane), usually (0,0)
 uniform vec2  uTHalf;         // half-extents of the t-window (halfX, halfY)
-uniform int   uHeightSource;  // 0 = Re w (algebraic ramp), 1 = Im w (log helicoid)
+uniform int   uHeightSource;  // 0 Re · 1 Im · 2 arg · 3 |·| · 4 log|·| — of the height basis (here: t)
 uniform float uHeightScale;   // user height exaggeration
+${CHARISMA_HEIGHT_GLSL}
 ${gZGlsl}
 ${gWGlsl}
 in vec2 aUV;                  // grid UV in [0,1]²
@@ -83,7 +99,7 @@ void main() {
   cvec z = gZFn(t, vec_(0.0, 0.0));
   cvec w = gWFn(t, vec_(0.0, 0.0));
   // Charisma from the UNIFORMIZER t (bounded, separates sheets), not w — w = t^p would blow up as |t|^p.
-  float h = (uHeightSource == 1 ? cre1(cim(t)) : cre1(cre(t))) * uHeightScale;
+  float h = charismaHeight(cre1(cre(t)), cre1(cim(t)), uHeightSource, uHeightScale);
   vec3 p = vec3(cre1(cre(z)), cre1(cim(z)), h);
   vW = w;
   vPos = p;
@@ -105,15 +121,16 @@ export function buildCurveProgram(): { vertex: string; fragment: string } {
 ${COMPLEX_SINGLE_GLSL}
 ${COMPLEX_DERIVED_GLSL}
 uniform mat4  uVP;            // view-projection (camera)
-uniform int   uHeightSource;  // 0 = Re w (algebraic sheets), 1 = Im w
+uniform int   uHeightSource;  // 0 Re · 1 Im · 2 arg · 3 |·| · 4 log|·| — of the height basis (here: w)
 uniform float uHeightScale;   // user height exaggeration
+${CHARISMA_HEIGHT_GLSL}
 in vec2 aPos;                 // world (Re z, Im z)
 in vec2 aW;                   // the sheet value w (baked per vertex)
 out vec2 vW;
 out vec3 vPos;
 
 void main() {
-  float h = (uHeightSource == 1 ? cre1(cim(aW)) : cre1(cre(aW))) * uHeightScale;
+  float h = charismaHeight(cre1(cre(aW)), cre1(cim(aW)), uHeightSource, uHeightScale);
   vec3 p = vec3(aPos.x, aPos.y, h);
   vW = aW;
   vPos = p;

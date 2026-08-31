@@ -59,8 +59,12 @@ Type `f(z)` (or pick a preset) and explore its domain-coloring phase portrait, w
   multi-sheeted **Riemann surface** when the active map is a recognized invertible primitive — √, ⁿ√,
   `z^(p/q)`, log, arcsin/arccos/arctan, plus affine wraps `A·P(αz+β)+B` — by the **parametrize-by-w**
   method: it samples the value plane (the uniformizer `t`), positions each vertex at `(Re g(t), Im g(t))`
-  from the single-valued inverse `z = g(t)`, and lifts it by the **charisma** height (Re w → interlocking
-  algebraic sheets, Im w → the log helicoid), coloured by the same `colorAt`. The sheets **glue across the
+  from the single-valued inverse `z = g(t)`, and lifts it by a selectable **charisma** height — **Re** (→
+  interlocking algebraic sheets), **Im** (→ the log helicoid), **arg** (→ a phase helicoid), **|·|** (→ the
+  modulus landscape), or **log|·|** — of the height basis (the uniformizer `t` for the parametric path, the
+  value `w` for the baked-curve / implicit path), coloured by the same `colorAt`. The one height law
+  (`charismaHeight`) is shared by both vertex shaders, the hover-pick, and the camera framing so they always
+  agree. The sheets **glue across the
   branch cut with no false cliff** (and none of the never-certified continuation of RISKS §3); a
   sheet-count control truncates the infinite (log / inverse-trig) families, and an honest badge names the
   form, its monodromy, and where the principal cut lies. It also handles **single-radical algebraic** maps

@@ -4,6 +4,7 @@ import { makeComplexFn } from "@cas/expr/evaluate";
 import type { Complex } from "@cas/expr/complex";
 import {
   buildParamPickMesh,
+  charismaHeight,
   pickMeshFromCurve,
   pickRiemannSurface,
   type PickMesh,
@@ -130,5 +131,24 @@ describe("buildParamPickMesh + pick — parametric √z (M1 path)", () => {
     // z = t², so the two pre-images ±t give two sheets over this base point.
     expect(hit.sheetCount).toBe(2);
     expect(Math.hypot(hit.z[0] - 1.5, hit.z[1] - 0.4)).toBeLessThan(0.1);
+  });
+});
+
+describe("charismaHeight — the 5 height-axis laws", () => {
+  it("selects Re / Im / arg / |·| / log|·| of the height basis, times the scale", () => {
+    // hb = (3, 4): |hb| = 5, arg = atan2(4,3)
+    expect(charismaHeight(3, 4, 0, 1)).toBeCloseTo(3, 12); // Re
+    expect(charismaHeight(3, 4, 1, 1)).toBeCloseTo(4, 12); // Im
+    expect(charismaHeight(3, 4, 2, 1)).toBeCloseTo(Math.atan2(4, 3), 12); // arg
+    expect(charismaHeight(3, 4, 3, 1)).toBeCloseTo(5, 12); // |·|
+    expect(charismaHeight(3, 4, 4, 1)).toBeCloseTo(Math.log(5), 12); // log|·|
+    expect(charismaHeight(3, 4, 3, 2)).toBeCloseTo(10, 12); // scale applies
+  });
+  it("floors log|·| at a zero rather than returning -Infinity", () => {
+    expect(Number.isFinite(charismaHeight(0, 0, 4, 1))).toBe(true);
+    expect(charismaHeight(0, 0, 4, 1)).toBeCloseTo(Math.log(1e-6), 12);
+  });
+  it("an unknown source falls back to Re", () => {
+    expect(charismaHeight(7, 9, 99, 1)).toBeCloseTo(7, 12);
   });
 });
