@@ -34,8 +34,9 @@ describe("buildRiemannProgram — vertex", () => {
   it("passes the value w and the world position to the fragment", () => {
     expect(vertex).toContain("out vec2 vW;");
     expect(vertex).toContain("out vec3 vPos;");
-    // Charisma from the uniformizer t (bounded), not w — Im t vs Re t.
-    expect(vertex).toContain("uHeightSource == 1 ? cre1(cim(t)) : cre1(cre(t))");
+    // Charisma from the uniformizer t (bounded), not w, via the shared 5-mode height law.
+    expect(vertex).toContain("float charismaHeight(");
+    expect(vertex).toContain("charismaHeight(cre1(cre(t)), cre1(cim(t)), uHeightSource, uHeightScale)");
   });
 });
 

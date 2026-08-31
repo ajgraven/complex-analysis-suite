@@ -26,6 +26,7 @@ import { buildCurveMesh } from "../riemann/curveMesh.js";
 import { buildRiemannProgram, buildCurveProgram, buildLineProgram } from "../render3d/riemannSurface.js";
 import {
   buildParamPickMesh,
+  charismaHeight,
   pickMeshFromCurve,
   pickRiemannSurface,
   sheetsOverZ,
@@ -330,6 +331,10 @@ export class Plot {
     maxReW: number;
     minImW: number;
     maxImW: number;
+    minAbs: number; // |w| range — for the |·| / log|·| height axes
+    maxAbs: number;
+    minArg: number; // arg w range — for the arg (phase) height axis
+    maxArg: number;
   } | null = null;
 
   // Multi-sheet hover-pick (M3.1, ADR-0030). The curve arrays are cached from the last `buildCurveMesh` (they
@@ -784,7 +789,7 @@ export class Plot {
       for (let i = 0; i < N; i++) {
         const tr = -halfX + (2 * halfX * i) / (N - 1);
         // Charisma height comes from the uniformizer t (bounded by the window), matching the shader.
-        const h = (this.riemannHeightSource === 1 ? ti : tr) * this.heightScale;
+        const h = charismaHeight(tr, ti, this.riemannHeightSource, this.heightScale);
         let z: Complex;
         try {
           z = zc([tr, ti], [0, 0]);
@@ -937,6 +942,10 @@ export class Plot {
       maxReW: -Infinity,
       minImW: Infinity,
       maxImW: -Infinity,
+      minAbs: Infinity,
+      maxAbs: -Infinity,
+      minArg: Infinity,
+      maxArg: -Infinity,
     };
     for (let i = 0; i < pos.length; i += 2) {
       b.minx = Math.min(b.minx, pos[i]);
@@ -947,6 +956,12 @@ export class Plot {
       b.maxReW = Math.max(b.maxReW, val[i]);
       b.minImW = Math.min(b.minImW, val[i + 1]);
       b.maxImW = Math.max(b.maxImW, val[i + 1]);
+      const abs = Math.hypot(val[i], val[i + 1]);
+      const arg = Math.atan2(val[i + 1], val[i]);
+      b.minAbs = Math.min(b.minAbs, abs);
+      b.maxAbs = Math.max(b.maxAbs, abs);
+      b.minArg = Math.min(b.minArg, arg);
+      b.maxArg = Math.max(b.maxArg, arg);
     }
     this.curveBounds = pos.length ? b : null;
     this.frameCurve();
@@ -960,8 +975,30 @@ export class Plot {
       this.frameToBounds(NaN, NaN, NaN, NaN, NaN, NaN);
       return;
     }
-    const wLo = this.riemannHeightSource === 1 ? b.minImW : b.minReW;
-    const wHi = this.riemannHeightSource === 1 ? b.maxImW : b.maxReW;
+    // Height range for the current axis (matches charismaHeight): Re / Im / arg / |·| / log|·|.
+    let wLo: number;
+    let wHi: number;
+    switch (this.riemannHeightSource) {
+      case 1:
+        wLo = b.minImW;
+        wHi = b.maxImW;
+        break;
+      case 2:
+        wLo = b.minArg;
+        wHi = b.maxArg;
+        break;
+      case 3:
+        wLo = b.minAbs;
+        wHi = b.maxAbs;
+        break;
+      case 4:
+        wLo = Math.log(Math.max(b.minAbs, 1e-6));
+        wHi = Math.log(Math.max(b.maxAbs, 1e-6));
+        break;
+      default:
+        wLo = b.minReW;
+        wHi = b.maxReW;
+    }
     const s = this.heightScale;
     this.frameToBounds(b.minx, b.maxx, b.miny, b.maxy, wLo * s, wHi * s);
   }

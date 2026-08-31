@@ -61,9 +61,37 @@ const cross = (a: Vec3, b: Vec3): Vec3 => [
   a[0] * b[1] - a[1] * b[0],
 ];
 
-/** The world height of a vertex: `(Im-source ? hb.im : hb.re) · heightScale`, matching the shader. */
-function vertexHeight(hbRe: number, hbIm: number, heightSource: number, heightScale: number): number {
-  return (heightSource === 1 ? hbIm : hbRe) * heightScale;
+/**
+ * The world height of a vertex from its height basis `hb` (the uniformizer `t` for the parametric path, the
+ * value `w` for the baked-curve / implicit path). `heightSource` selects which scalar of `hb` lifts the
+ * surface — Re / Im / arg / |·| / log|·| — matching the shader's `charismaHeight` GLSL exactly (GLSL `atan`,
+ * `length`, `log`; the `1e-6` floor keeps `log|·|` finite at a zero). Shared by the pick, `surfaceHeightAt`,
+ * and the camera framing so pick, picture, and frame agree.
+ */
+export function charismaHeight(
+  hbRe: number,
+  hbIm: number,
+  heightSource: number,
+  heightScale: number,
+): number {
+  let v: number;
+  switch (heightSource) {
+    case 1:
+      v = hbIm; // Im
+      break;
+    case 2:
+      v = Math.atan2(hbIm, hbRe); // arg (phase)
+      break;
+    case 3:
+      v = Math.hypot(hbRe, hbIm); // |·| (modulus)
+      break;
+    case 4:
+      v = Math.log(Math.max(Math.hypot(hbRe, hbIm), 1e-6)); // log|·|
+      break;
+    default:
+      v = hbRe; // 0 = Re
+  }
+  return v * heightScale;
 }
 
 const RAY_EPS = 1e-9;
@@ -203,7 +231,7 @@ export function surfaceHeightAt(
       bestD = d;
       const hbR = a * hb[o] + b * hb[o + 2] + c * hb[o + 4];
       const hbI = a * hb[o + 1] + b * hb[o + 3] + c * hb[o + 5];
-      bestH = vertexHeight(hbR, hbI, heightSource, heightScale);
+      bestH = charismaHeight(hbR, hbI, heightSource, heightScale);
     }
   }
   return bestH;
@@ -226,9 +254,9 @@ export function pickRiemannSurface(
   let hit: { b0: number; b1: number; b2: number; o: number } | null = null;
   for (let tri = 0; tri < triangleCount; tri++) {
     const o = tri * 6;
-    const h0 = vertexHeight(hb[o], hb[o + 1], heightSource, heightScale);
-    const h1 = vertexHeight(hb[o + 2], hb[o + 3], heightSource, heightScale);
-    const h2 = vertexHeight(hb[o + 4], hb[o + 5], heightSource, heightScale);
+    const h0 = charismaHeight(hb[o], hb[o + 1], heightSource, heightScale);
+    const h1 = charismaHeight(hb[o + 2], hb[o + 3], heightSource, heightScale);
+    const h2 = charismaHeight(hb[o + 4], hb[o + 5], heightSource, heightScale);
     const v0: Vec3 = [xy[o], xy[o + 1], h0];
     const v1: Vec3 = [xy[o + 2], xy[o + 3], h1];
     const v2: Vec3 = [xy[o + 4], xy[o + 5], h2];

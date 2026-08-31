@@ -136,6 +136,12 @@ function clampIndex(v: number, n: number): number {
   return i >= 0 && i < n ? i : 0;
 }
 
+/** Clamp a Riemann height-axis selection to the 5 valid modes (0 Re · 1 Im · 2 arg · 3 |·| · 4 log|·|). */
+function clampHeightSource(v: number): number {
+  const i = Math.floor(Number(v));
+  return Number.isFinite(i) ? Math.max(0, Math.min(4, i)) : 0;
+}
+
 function main(): void {
   const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -1124,7 +1130,7 @@ function main(): void {
   // (shares plot.heightScale), reset. Each re-frames the orbit camera (the surface's extent moved).
   if (riemannHeightSel instanceof HTMLSelectElement)
     riemannHeightSel.addEventListener("change", () => {
-      plot.riemannHeightSource = Number(riemannHeightSel.value) === 1 ? 1 : 0;
+      plot.riemannHeightSource = clampHeightSource(Number(riemannHeightSel.value));
       plot.reframeRiemannLight(); // charisma axis is a shader uniform — no mesh rebuild
       redraw(false);
     });
@@ -2366,7 +2372,7 @@ function main(): void {
 
   // Restore Riemann-surface settings from the share-link (setActive seeded the form's defaults; the link's
   // saved choices override them). Safe when the active map isn't a recognized primitive (reframe no-ops).
-  plot.riemannHeightSource = initial.v3d.riemannHeight === 1 ? 1 : 0;
+  plot.riemannHeightSource = clampHeightSource(initial.v3d.riemannHeight);
   plot.riemannSheets = initial.v3d.riemannSheets;
   plot.riemannLinked = initial.v3d.riemannLinked;
   plot.reframeRiemann();
