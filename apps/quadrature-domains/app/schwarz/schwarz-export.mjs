@@ -183,30 +183,34 @@ export function exportPhiLink(phi, opts = {}) {
 // @cas/interchange when a second app needs sibling links (ADR-0007). CD_APP_ID equals
 // the interchange provenance `app` id / deploy subpath — see packages/interchange/src/schema.ts.
 export const CD_APP_ID = "complex-dynamics";
+/** The 2D Electrostatics deploy subpath — the second sibling QD links to (the Hele-Shaw twist hand-off,
+ *  M4d). Equals the interchange provenance `app` id / deploy subpath, like CD_APP_ID. */
+export const ELECTROSTATICS_APP_ID = "2d-electrostatics";
 const QD_APP_ID = "quadrature-domains";
 
 /**
- * Resolve the Complex Dynamics app's base URL for a hand-off deep link.
+ * Resolve a sibling app's base URL for a hand-off deep link.
  * @param {{origin?:string, pathname?:string}} loc  current location (window.location in the app)
- * @param {string} [cdBase]  explicit CD base override (dev/config); wins when set
+ * @param {string} [override]  explicit base override (dev/config); wins when set
+ * @param {string} [targetAppId]  the sibling app's deploy subpath (default: Complex Dynamics)
  * @returns {{base:string, resolvable:boolean, reason:("override"|"sibling"|"unresolved")}}
  *   `base` ends with "/". resolvable=false (reason "unresolved") = best-effort only (local
  *   split-port dev): the caller must warn instead of claiming the link resolves.
  */
-export function resolveHandoffBase(loc, cdBase) {
-  if (cdBase) {
-    return { base: cdBase.endsWith("/") ? cdBase : cdBase + "/", resolvable: true, reason: "override" };
+export function resolveHandoffBase(loc, override, targetAppId = CD_APP_ID) {
+  if (override) {
+    return { base: override.endsWith("/") ? override : override + "/", resolvable: true, reason: "override" };
   }
   const origin = (loc && loc.origin) || "";
   const pathname = (loc && loc.pathname) || "/";
   const seg = `/${QD_APP_ID}/`;
   const i = pathname.indexOf(seg);
   if (i !== -1) {
-    // Combined deploy: swap ".../quadrature-domains/..." -> ".../complex-dynamics/".
-    return { base: origin + pathname.slice(0, i) + `/${CD_APP_ID}/`, resolvable: true, reason: "sibling" };
+    // Combined deploy: swap ".../quadrature-domains/..." -> ".../<targetAppId>/".
+    return { base: origin + pathname.slice(0, i) + `/${targetAppId}/`, resolvable: true, reason: "sibling" };
   }
   // No QD segment (local dev root / unusual host): best-effort relative sibling, unverified.
-  return { base: origin + `/${CD_APP_ID}/`, resolvable: false, reason: "unresolved" };
+  return { base: origin + `/${targetAppId}/`, resolvable: false, reason: "unresolved" };
 }
 
 /**
@@ -293,4 +297,99 @@ export function exportSigmaDeepLink(phi, loc, opts = {}) {
   if (!hash) return null;
   const { base, resolvable, reason } = resolveHandoffBase(loc, opts.cdBase);
   return { url: base + hash, resolvable, reason };
+}
+
+// ---------------------------------------------------------------------------
+// Hele-Shaw twist hand-off — M4d (QD -> 2D Electrostatics). The twist page there drives the
+// Graven–Makarov one-point family QD(α/(w−w₀)): a growing/twisting unbounded quadrature domain fed by a
+// complex point charge α = q + iγ. It is parametrized by the INVARIANT charge (α, w₀), which it sweeps in
+// time — so the hand-off must carry the charge, not just a single frame's φ. We ride the existing
+// `quadrature-domain` payload: `phi` (the solved exterior map, for provenance / a future geometric
+// cross-check) PLUS the quadrature data `hData` = h(w) = α/(w − w₀), populated here for the first time.
+//
+// CONVENTION (ADR-0006): α is the RESIDUE of h — a rational-function coefficient, geometric and
+// convention-neutral, exactly like φ's coefficients (the QD dA=dx dy/π + 1/(2πi) normalizations touch the
+// quadrature-COEFFICIENT interpretation ∫∫g dA = π·Σ residue·g(aₖ), not the residue itself). So h rides
+// the CANONICAL wire with NO conversion, and 2D Electrostatics reads α = residue directly.
+//
+// v1 SCOPE: a single simple pole (the QD `unb-1pt` family = the twist engine's exact domain). Multi-pole /
+// higher-order / bounded domains return null (the button reports why).
+
+/**
+ * QD h-data snapshot -> interchange `RationalMap` h(w) = α/(w − w₀), or null if it is not a single simple
+ * pole (v1). The snapshot shape is { poles: [{ a, principal:[…] }], polyPart:[…] } (schwarz-ui cloneHData);
+ * a single order-1 pole means one pole whose `principal` is [α] (the residue) with no entire `polyPart`.
+ */
+export function hDataToMapSpec(hData) {
+  if (!hData || !Array.isArray(hData.poles) || hData.poles.length !== 1) return null;
+  const pole = hData.poles[0];
+  if (!pole || !pole.a || !Array.isArray(pole.principal) || pole.principal.length !== 1) return null;
+  if (Array.isArray(hData.polyPart) && hData.polyPart.length > 0) return null; // an entire part ⇒ not one-point
+  const alpha = pole.principal[0]; // the residue of h = the complex charge α
+  const a = pole.a; // the quadrature node w₀
+  // h(w) = α/(w − a): num/den low-order-first ⇒ num = [α], den = [−a, 1]. Normalize −0 → 0 (a real node's
+  // −a.im is −0, which JSON writes as 0 but `Object.is` treats as distinct).
+  const neg = (x) => (x === 0 ? 0 : -x);
+  return { form: "rational", num: [cc(alpha)], den: [{ re: neg(a.re), im: neg(a.im) }, { re: 1, im: 0 }] };
+}
+
+/**
+ * Build an interchange Envelope<"quadrature-domain"> for the Hele-Shaw twist hand-off: the unbounded φ plus
+ * the one-point quadrature data h. Returns null unless φ is an unbounded-Laurent map AND h is a single
+ * simple pole (v1 scope). `opts.createdAt` defaults to now (pass a fixed value in tests for determinism).
+ */
+export function buildHeleShawEnvelope(phi, hData, opts = {}) {
+  const phiSpec = phiToMapSpec(phi);
+  const hSpec = hDataToMapSpec(hData);
+  if (!phiSpec || phiSpec.form !== "laurent" || !hSpec) return null;
+  return {
+    schema: SCHEMA_ID,
+    version: VERSION,
+    kind: "quadrature-domain",
+    payload: { phi: phiSpec, bounded: false, hData: hSpec, conventions: CANONICAL },
+    provenance: {
+      app: "quadrature-domains",
+      appVersion: opts.appVersion || "0.1.0",
+      createdAt: opts.createdAt || new Date().toISOString(),
+      ...(opts.note ? { note: opts.note } : {}),
+    },
+  };
+}
+
+/** The Hele-Shaw envelope as a copyable deep-link hash ("#s=..."), or null. */
+export function exportHeleShawLink(phi, hData, opts = {}) {
+  const env = buildHeleShawEnvelope(phi, hData, opts);
+  return env ? encodeLink(env) : null;
+}
+
+/**
+ * Full copyable hand-off URL that opens the current one-point QD in 2D Electrostatics' Hele-Shaw twist page
+ * (`2d-electrostatics/twist.html`), or null when the domain isn't a one-point unbounded QD. Mirrors
+ * exportSigmaDeepLink; `opts.electrostaticsBase` is an explicit base override (dev/config).
+ * @returns {{url:string, resolvable:boolean, reason:string} | null}
+ */
+export function exportHeleShawDeepLink(phi, hData, loc, opts = {}) {
+  const hash = exportHeleShawLink(phi, hData, opts);
+  if (!hash) return null;
+  const { base, resolvable, reason } = resolveHandoffBase(loc, opts.electrostaticsBase, ELECTROSTATICS_APP_ID);
+  return { url: base + "twist.html" + hash, resolvable, reason };
+}
+
+/**
+ * Why the Hele-Shaw twist hand-off is unavailable for the captured (φ, h), or null when it IS available.
+ * Mirrors explainSigmaUnavailable: the UI just displays the string. v1 needs an unbounded-Laurent φ and a
+ * single simple pole h.
+ */
+export function explainHeleShawUnavailable(phi, hData) {
+  if (!phi) {
+    return 'Capture a domain first (Inverse tab → "Use this φ"), then send its Hele-Shaw twist.';
+  }
+  const phiSpec = phiToMapSpec(phi);
+  if (!phiSpec || phiSpec.form !== "laurent") {
+    return "The Hele-Shaw twist hand-off covers UNBOUNDED quadrature domains (an unbounded-Laurent φ); this captured domain isn't one.";
+  }
+  if (!hDataToMapSpec(hData)) {
+    return "The Hele-Shaw twist page drives the ONE-POINT family QD(α/(w−w₀)) — capture a single simple pole (one node, order 1).";
+  }
+  return null;
 }

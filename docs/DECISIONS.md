@@ -3013,14 +3013,20 @@ same picture between the electrostatic and hydrodynamic readings.
    residue theorem as Gauss's law (Re) + Kelvin circulation (Im) — exact for the closed-form field, labelled `=`).
 4. **Adopts the `@cas/ui` shell from day one** (`mountCanvas` + `runWithFatalBoundary`); registered in
    `SUITE_APPS`, the launcher, and the combined Pages deploy.
-5. **The Hele-Shaw "twisting" showpiece (M4) lives in this app**, importing the QD app's Schwarz reflection σ /
-   Richardson moments via a new `@cas/interchange` recipe — keeping the QD app stable and making the hand-off
-   itself a feature.
+5. **The Hele-Shaw "twisting" showpiece (M4) lives in this app** — the exact Graven–Makarov one-point family
+   and a numerical interior-droplet evolver, plus a **QD → 2D-E hand-off** that imports a one-point unbounded
+   QD via the *existing* `quadrature-domain` `@cas/interchange` payload (the charge α as the `hData` residue,
+   convention-neutral — no new recipe, no schema bump) — keeping the QD app stable and making the hand-off
+   itself a feature. *(As shipped: see the build-status paragraph below; the original sketch of "importing σ /
+   Richardson moments via a new recipe + `@cas/schwarz`" was superseded — α travels explicitly, so no
+   φ-inversion is needed.)*
 6. **Honest labelling** throughout (`=` closed-form fields / capacities / residue sums; `≈` numerical contours,
    Fekete relaxation, transplanted flows; `≤`/`⚠` the ill-posed Hele-Shaw evolution past a cusp).
 
 Consumes `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui` (M0–M1); adds
-`@cas/conformal` (M2), `@cas/faber` (M3), `@cas/schwarz` (M4) as those milestones land.
+`@cas/conformal` (M2) and `@cas/faber` (M3) as those milestones land. M4 is app-local plus the interchange
+hand-off — **no new package** (the M4d QD import carries the charge in the existing `quadrature-domain`
+payload, so the originally-anticipated `@cas/schwarz` proved unnecessary).
 
 ### Consequences
 
@@ -3053,9 +3059,16 @@ PG flow (`≈`), a genuinely different, textbook-validated scenario from the exa
 **spectral** velocity solve — no least squares; it rides the new `@cas/core` `dftOnCircle`, an ADR-0007
 second-consumer extraction alongside Faber Transform's `taylorViaFFT` — RK4 in coefficient space, the
 conserved Richardson moments as the honest `≈` error bar, and a hard ⚠ cusp / suction stop), and the
-`droplet.html` page. **M4d** (the QD → 2D-Electrostatics interchange import — adds `@cas/schwarz` +
-interchange `1.5.0`) and **M4e** (surface-tension regularization) remain specced in the plan and deferred
-to separately-approved passes.
+`droplet.html` page. **M4d** (the QD → 2D-Electrostatics interchange import) is **built**: the Quadrature
+Domains app hands a one-point unbounded QD to the twist page via `@cas/interchange`, driving the family
+from the authored charge. It rides the existing `quadrature-domain` payload with `hData` populated (h(w) =
+α/(w − w₀)) — **no schema bump** (`hData` has existed and been validated since 1.0.0) and **no `@cas/schwarz`**
+(both revising the original spec): the charge α is the *residue* of h, a convention-neutral rational
+coefficient read straight off the CANONICAL wire (no π/2πi conversion), so the twist engine drives from it
+directly. QD emits a "Send to 2D Electrostatics (Hele-Shaw)" link (`schwarz-export.mjs`
+`buildHeleShawEnvelope`); 2D-E consumes it (`importHeleShaw.ts`), honestly rejecting anything but a single
+simple pole at w₀ = 2 (v1); the cross-app `QD_TO_POTENTIAL_HELESHAW` golden pins both ends. Only **M4e**
+(surface-tension regularization) remains specced and deferred.
 
 ---
 

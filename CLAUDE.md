@@ -102,8 +102,12 @@ M4a/M4b (the Hele-Shaw "twisting" showpiece — the exact Graven–Makarov one-p
 driven by a complex charge, closed-form engine + a `twist.html` scrub/play page), and M4c (the classical
 interior-droplet Polubarinova–Galin evolver — a bounded droplet grown from a central source by a numerical
 `≈` time-stepper, the Galin–Kufarev spectral solve on the new `@cas/core` `dftOnCircle`, on a `droplet.html`
-page, with the conserved Richardson moments as the honest error bar and a hard ⚠ cusp / suction stop;
-M4d–M4e deferred),
+page, with the conserved Richardson moments as the honest error bar and a hard ⚠ cusp / suction stop), and
+M4d (the QD → 2D-E Hele-Shaw import — the Quadrature Domains app hands a one-point unbounded QD to the twist
+page via `@cas/interchange`, driving the family from the authored charge; it rides the existing
+`quadrature-domain` payload with `hData` = h(w)=α/(w−w₀) populated — no schema bump, no `@cas/schwarz`, α the
+convention-neutral residue read straight off the wire; `QD_TO_POTENTIAL_HELESHAW` golden;
+M4e deferred),
 riding `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui`, `@cas/conformal` (M2),
 and `@cas/faber` (M3)) ride the eleven shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,

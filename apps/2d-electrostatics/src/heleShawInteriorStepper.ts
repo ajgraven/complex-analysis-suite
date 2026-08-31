@@ -140,7 +140,9 @@ export function momentDrift(ref: readonly Cx[], now: readonly Cx[]): number {
 /** max_k | |M_k(now)| − |M_k(ref)| | — the drift of the moment MAGNITUDES, the rotation-robust `≈` error
  *  bar. A rigid spin rotates every M_k (M_k ↦ e^{ikωt}M_k), so its phase is *expected* to move; the
  *  magnitude is the genuine invariant of the combined injection+spin flow (injection+spin is exactly a
- *  rigid rotation of the pure-injection solution). Reduces to `momentDrift` when ω = 0. */
+ *  rigid rotation of the pure-injection solution). This is a phase-blind surrogate: by the reverse triangle
+ *  inequality it is ≤ `momentDrift`, equal only for a purely-radial change — so at ω = 0 use the stricter
+ *  `momentDrift` (as `evolveDroplet` does), which also catches phase-only drift. */
 export function momentMagnitudeDrift(ref: readonly Cx[], now: readonly Cx[]): number {
   let d = 0;
   for (let i = 0; i < ref.length; i++) d = Math.max(d, Math.abs(Math.hypot(now[i][0], now[i][1]) - Math.hypot(ref[i][0], ref[i][1])));
@@ -158,7 +160,8 @@ export interface DropletFrame {
   readonly area: number;
   /** min over |w|=1 of |f'| — the cusp gauge. */
   readonly minFPrime: number;
-  /** max_k | |M_k| − |M_k(0)| | — conserved moment-magnitude drift, the rotation-robust `≈` error bar. */
+  /** Conserved-moment drift, the `≈` error bar: the strict `max_k |M_k − M_k(0)|` when there is no spin,
+   *  and the rotation-robust magnitude drift `max_k | |M_k| − |M_k(0)| |` when a spin rotates the moments. */
   readonly momentDrift: number;
 }
 
@@ -205,13 +208,16 @@ export function evolveDroplet(
   const a1mag0 = Math.hypot(coeffs0[0][0], coeffs0[0][1]);
   const cuspStop = cuspFrac * a1mag0;
   const refMoments = interiorMoments(coeffs0, K);
+  // Without spin the moments are conserved in full (phase and magnitude), so the strict absolute drift is
+  // the honest gauge; a spin rotates them (M_k ↦ e^{ikωt}M_k), so there we fall back to the magnitude drift.
+  const driftOf = spin === 0 ? momentDrift : momentMagnitudeDrift;
 
   const frameOf = (t: number, coeffs: Cx[]): DropletFrame => ({
     t,
     coeffs,
     area: dropletArea(coeffs),
     minFPrime: minAbsMapPrime(coeffs),
-    momentDrift: momentMagnitudeDrift(refMoments, interiorMoments(coeffs, K)),
+    momentDrift: driftOf(refMoments, interiorMoments(coeffs, K)),
   });
 
   const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx))];

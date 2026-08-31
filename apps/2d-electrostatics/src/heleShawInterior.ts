@@ -70,12 +70,15 @@ export interface Source {
 }
 
 /** The Poisson kernel P(a, e^{iθ}) = (1 − |a|²) / |e^{iθ} − a|² (≡ 1 at a = 0). Normalized so
- *  (1/2π)∮ P dθ = 1, hence ∮ (Q/2π)·P dθ = Q — the total injected flux, independent of the source site. */
+ *  (1/2π)∮ P dθ = 1, hence ∮ (Q/2π)·P dθ = Q — the total injected flux, independent of the source site.
+ *  `a` must be an INTERIOR source (|a| < 1); on/outside the disk the kernel is not defined, so a source
+ *  coinciding with the boundary sample point would give 0/0 — guarded to 0 rather than NaN. */
 export function poissonKernel(a: Cx, theta: number): number {
   const r2 = abs2(a);
   if (r2 < 1e-300) return 1;
   const d = onCircle(theta);
-  return (1 - r2) / abs2([d[0] - a[0], d[1] - a[1]]);
+  const dist2 = abs2([d[0] - a[0], d[1] - a[1]]);
+  return dist2 < 1e-300 ? 0 : (1 - r2) / dist2;
 }
 
 /** The (PG) right-hand side (Q/2π)·P(a, e^{iθ}) on the boundary. */

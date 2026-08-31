@@ -13,6 +13,7 @@ import type { Pt } from "./transplant.js";
 import { Net2D, boundsOf } from "./render/net2d.js";
 import { boundaryOf, conformalNet, spiralEquipotentials } from "./render/heleShawRender.js";
 import { admissible, buildFamily, recoverCharge, W0, type Cx, type Frame, type Critical } from "./heleShawOnePoint.js";
+import { heleShawFromLink } from "./importHeleShaw.js";
 
 const NODE: Pt = [W0, 0]; // the quadrature node w₀
 const FRAMES = 64;
@@ -36,6 +37,7 @@ interface TwState {
   playing: boolean;
   showGrid: boolean;
   showField: boolean;
+  importNote: string; // provenance / ⚠ reason when opened via a QD Hele-Shaw hand-off (M4d)
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -66,7 +68,7 @@ function main(): void {
   if (!app) return;
   app.textContent = "";
 
-  const state: TwState = { q: 1, gamma: 0, frac: 0.55, playing: false, showGrid: true, showField: true };
+  const state: TwState = { q: 1, gamma: 0, frac: 0.55, playing: false, showGrid: true, showField: true, importNote: "" };
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -153,15 +155,20 @@ function main(): void {
     if (!net.resize()) return;
     net.clear();
 
+    // M4d: a provenance / ⚠-reason line prepended to the readout when opened via a QD hand-off.
+    const noteCls = state.importNote.startsWith("⚠") ? "tp-warn" : "tp-approx";
+    const notePrefix = state.importNote ? `<span class="${noteCls}">${state.importNote}</span><br>` : "";
+
     if (!admissible(alpha)) {
       readout.innerHTML =
+        notePrefix +
         `α = ${fmtCx(alpha)}<br>` +
         `<span class="tp-warn">⚠ no domain — α is outside the admissible parabola |w₀|² + 2·Re α &gt; 2|α|</span>`;
       return;
     }
     const fam = familyFor(state.q, state.gamma);
     if (!fam || fam.frames.length === 0) {
-      readout.innerHTML = `α = ${fmtCx(alpha)}<br><span class="tp-warn">⚠ the family could not be built for this charge</span>`;
+      readout.innerHTML = notePrefix + `α = ${fmtCx(alpha)}<br><span class="tp-warn">⚠ the family could not be built for this charge</span>`;
       return;
     }
     if (fam.bounds) {
@@ -193,6 +200,7 @@ function main(): void {
       ? `<span class="tp-warn">⚠ at the critical time t* ≈ ${fmt(cr.tStar)} — the family terminates in a ${mechWord}${cr.mechanism === "cusp" ? " (ill-posed past here)" : ""}</span>`
       : `<span class="tp-approx">t* ≈ ${fmt(cr.tStar)} · terminates in a ${mechWord}</span>`;
     readout.innerHTML =
+      notePrefix +
       `α = q + iγ = ${fmtCx(alpha)} at w₀ = ${W0}<br>` +
       `t = A(Ω_t)/π = <b>${fmt(frame.t)}</b> &nbsp; c = ${fmt(frame.c)}<br>` +
       `conserved charge (=): recovered α = ${fmtCx(recovered)} (Δ ${chargeErr.toExponential(0)})<br>` +
@@ -281,6 +289,23 @@ function main(): void {
     state.showField = fieldBox.checked;
     requestPaint();
   });
+  // M4d: if opened via a QD Hele-Shaw hand-off (#s=…), drive the family from the imported one-point charge.
+  const imported = heleShawFromLink(window.location.hash);
+  if (imported) {
+    if (imported.ok) {
+      state.q = imported.alpha[0];
+      state.gamma = imported.alpha[1];
+      state.frac = 0.55;
+      state.importNote = "imported from Quadrature Domains";
+      presetSel.value = "Custom α";
+      syncCharge();
+      sT.input.value = String(state.frac);
+      sT.val.textContent = state.frac.toFixed(2);
+    } else {
+      state.importNote = "⚠ " + imported.reason; // an honest banner; the presets still work
+    }
+  }
+
   window.addEventListener("resize", requestPaint);
   requestPaint();
 }
