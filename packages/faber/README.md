@@ -16,7 +16,7 @@ Given an exterior conformal map φ: 𝔻\* → Ω by its Laurent expansion at �
 | `faberPolynomials(map, N)` / `faberPolynomial(map, n)` | Faber polynomials F₀…F_N of K, via the three-term recurrence `c·F_{n+1} = (ζ−c₀)F_n − Σ c_k F_{n−k} − n·c_n`. |
 | `faberTransform(map, taylor)` | The forward transform `Φφ(f)(w) = Σ b_n F_n(w)` from f's Taylor coefficients on the unit disk. Exact for polynomial input; the order-N truncation otherwise. |
 | `polynomialRoots(coeffs, opts)` | Durand–Kerner (over `@cas/core`) + Newton polish; returns `converged:false` rather than garbage at ill-conditioned high degree. |
-| `formatFaberPoly(Fn, opts)` | A readable ζ-expression, e.g. `"ζ² − 2"`. Exponents default to Unicode superscripts; pass `opts.sup` (e.g. ``(k) => `^{${k}}` ``) to emit markup a consumer typesets with real `<sup>`. |
+| `formatFaberPoly(Fn, opts)` | A readable ζ-expression, e.g. `"ζ² − 2"`. Exponents default to Unicode superscripts; pass `opts.sup` (e.g. ``(k) => `^{${k}}` ``) to emit markup a consumer typesets with real `<sup>`. `opts.maxTerms` caps the highest-degree terms shown and elides the rest with `+ …` (keeps a high-degree Fₙ from overflowing a caption; the value is unchanged, only its printed form). |
 | `faberConvergence(map, N)` | Per-order `{ n, converged, residual, roots }` report. |
 | `weightedFaberPolynomial(s)` / `weightSeries` | Corner-suppressing weighted Faber polynomials `Q_{n,m} = Σⱼ gⱼ F_{n−j}` (M3, ADR-0024): the weight `G_m = ∏_k (1 − w_k/z)^{1/m}` on the SC prevertices `w_k = 1/u_k`. |
 | `faberTransformRational` / `partialFractions` | Exact rational-image path — partial-fraction the input, then map each pole/monomial via the exterior-map jet. |

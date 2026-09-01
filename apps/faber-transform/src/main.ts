@@ -95,6 +95,9 @@ const PANEL_BG: readonly [number, number, number] = [22, 24, 30];
 const STAGE_BG = "#16181f"; // must match .stage background so the masked-out region is seamless
 const K_COLOR = "rgba(255,255,255,0.75)";
 const DISK_COLOR = "rgba(255,255,255,0.55)";
+/** Cap the printed terms of a Faber image in the caption — a high-degree Fₙ (up to 41 terms) would
+ *  otherwise overflow the panel and stretch the layout. The `=` badge still certifies the exact value. */
+const CAPTION_MAX_TERMS = 6;
 
 interface Marker {
   readonly w: Vec2;
@@ -693,7 +696,7 @@ function main(): void {
       const suppress = state.suppressCorners === true && cornerImages.length > 0;
       const m = state.suppressStrength ?? DEFAULT_SUPPRESS_M;
       const coeffs = suppress ? weightedMonomialCoeffs(map, cornerImages, n, m) : transformCoeffs(map, monomialTaylor(n));
-      const poly = formatFaberPoly(coeffs, { varSym: "w", sup: (k) => `^{${k}}` });
+      const poly = formatFaberPoly(coeffs, { varSym: "w", sup: (k) => `^{${k}}`, maxTerms: CAPTION_MAX_TERMS });
       const inputCaption = `f(z) = ${n === 0 ? "1" : n === 1 ? "z" : `z^{${n}}`}`;
       const outputCaption = suppress
         ? `${PHI}(f)(w) ≈ Q_{${n},${m}}(w) = ${poly}`

@@ -18,6 +18,16 @@ describe("formatFaberPoly", () => {
   it("a custom `sup` renderer replaces the Unicode exponent (for <sup> typesetting)", () => {
     expect(formatFaberPoly(faberPolynomial(phiJouk, 2), { varSym: "w", sup: (k) => `^{${k}}` })).toBe("w^{2} − 2");
   });
+
+  it("maxTerms caps the printed terms and elides the rest with `+ …`", () => {
+    // A dense degree-5 polynomial 1 + 2ζ + 3ζ² + 4ζ³ + 5ζ⁴ + 6ζ⁵ (6 non-zero terms, descending print).
+    const dense: Cx[] = [re(1), re(2), re(3), re(4), re(5), re(6)];
+    expect(formatFaberPoly(dense, { maxTerms: 3 })).toBe("6ζ⁵ + 5ζ⁴ + 4ζ³ + …");
+    // No ellipsis when the term count is within the cap (or the cap is unset).
+    expect(formatFaberPoly(dense, { maxTerms: 6 })).toBe("6ζ⁵ + 5ζ⁴ + 4ζ³ + 3ζ² + 2ζ + 1");
+    expect(formatFaberPoly(dense, { maxTerms: 10 }).includes("…")).toBe(false);
+    expect(formatFaberPoly(faberPolynomial(phiJouk, 2), { maxTerms: 2 })).toBe("ζ² − 2"); // 2 terms, cap 2 → no cut
+  });
 });
 
 describe("faberConvergence", () => {
