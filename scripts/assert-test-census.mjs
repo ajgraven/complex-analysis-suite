@@ -45,6 +45,7 @@ const PROJECTS = [
   { name: 'conformal', match: '/packages/conformal/', floor: 1 },
   { name: 'faber', match: '/packages/faber/', floor: 1 },
   { name: 'ui', match: '/packages/ui/', floor: 1 },
+  { name: 'flow', match: '/packages/flow/', floor: 1 },
   { name: 'complex-dynamics', match: '/apps/complex-dynamics/', floor: 1 },
   { name: 'complex-function-plotter', match: '/apps/complex-function-plotter/', floor: 1 },
   { name: 'correspondences', match: '/apps/correspondences/', floor: 1 },
@@ -53,6 +54,8 @@ const PROJECTS = [
   { name: 'argument-principle', match: '/apps/argument-principle/', floor: 1 },
   { name: 'faber-transform', match: '/apps/faber-transform/', floor: 1 },
   { name: '2d-electrostatics', match: '/apps/2d-electrostatics/', floor: 1 },
+  { name: 'hele-shaw-flow', match: '/apps/hele-shaw-flow/', floor: 1 },
+  { name: 'potential-theory', match: '/apps/potential-theory/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

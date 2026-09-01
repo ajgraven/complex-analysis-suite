@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "2D Electrostatics — an interactive realization of the complex potential W(z) = φ + iψ. A free-field sandbox (drop and drag charges, sources, sinks, vortices, and doublets; field-lines, equipotentials, streamlines, and a domain-colored field, with a single lens toggle between the electrostatic and hydrodynamic readings), plus conformal-transplant pages — flow past a Joukowski/Kármán–Trefftz airfoil and flow past or inside a polygon via Schwarz–Christoffel — a potential-theory view of a conductor K (its equilibrium charge, capacity, and Green's function; Faber and Fekete/Leja points), a Hele-Shaw \"twisting\" showpiece — the exact Graven–Makarov one-point quadrature domain driven by a complex charge α = q + iγ, grown and spun up to a double point or a (3,2)-cusp, and drivable by a one-point quadrature domain authored in the Quadrature Domains app and handed over as an @cas/interchange link — and a numerical interior-droplet Hele-Shaw evolver: a bounded droplet grown from a central source by the classical Polubarinova–Galin equation (injection smooths; suction fingers into a (3,2)-cusp), with the conserved Richardson moments as an honest error bar. The eighth suite app (ADR-0034), built on the shared @cas/* packages — @cas/core (incl. the dftOnCircle spectral primitive), the holomorphic closed-form field via @cas/expr, the WebGL2 render substrate via @cas/gpu, the shared browser shell via @cas/ui, permalinks + the conformal-map hand-off via @cas/interchange, figure export via @cas/export, the Schwarz–Christoffel engines via @cas/conformal (M2), and the Faber polynomials via @cas/faber (M3). Conventions follow the author's paper 'Complex Analysis as Two-Dimensional Electrostatics and Hydrodynamics' at the app edge.",
+  "description": "2D Electrostatics — an interactive realization of the complex potential W(z) = φ + iψ. A free-field sandbox (drop and drag charges, sources, sinks, vortices, and doublets; field lines, equipotentials, streamlines, and a domain-colored field, with a single lens toggle between the electrostatic and hydrodynamic readings; a flux/circulation probe, a draggable sensor puck, animated tracer flow, presets, permalinks + PNG export), plus conformal-transplant pages — flow past a Joukowski/Kármán–Trefftz airfoil, and flow past or inside a polygon via Schwarz–Christoffel (a producer AND consumer of the @cas/interchange conformal-map hand-off, ADR-0035). The time-evolving Hele-Shaw pages (the twist showpiece + the interior-droplet evolver) and the potential-theory conductor view split out into their own apps — hele-shaw-flow and potential-theory (ADR-0036). Built on the shared @cas/* packages — @cas/gpu (the WebGL2 render substrate), @cas/flow (the conformal-transplant kernel), @cas/interchange (permalinks + the conformal-map hand-off), @cas/export (PNG figure export), and @cas/ui (the shared browser shell). Conventions follow the author's paper 'Complex Analysis as Two-Dimensional Electrostatics and Hydrodynamics' at the app edge.",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "scripts": {
@@ -16,11 +16,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cas/conformal": "workspace:*",
-    "@cas/core": "workspace:*",
     "@cas/export": "workspace:*",
-    "@cas/faber": "workspace:*",
-    "@cas/expr": "workspace:*",
+    "@cas/flow": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
     "@cas/ui": "workspace:*"

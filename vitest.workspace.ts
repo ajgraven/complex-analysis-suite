@@ -22,6 +22,7 @@ export default defineWorkspace([
   "./packages/conformal/vitest.config.ts",
   "./packages/faber/vitest.config.ts",
   "./packages/ui/vitest.config.ts",
+  "./packages/flow/vitest.config.ts",
   "./apps/complex-dynamics/vite.config.ts",
   "./apps/complex-function-plotter/vite.config.ts",
   "./apps/correspondences/vite.config.ts",
@@ -30,4 +31,6 @@ export default defineWorkspace([
   "./apps/argument-principle/vite.config.ts",
   "./apps/faber-transform/vite.config.ts",
   "./apps/2d-electrostatics/vite.config.ts",
+  "./apps/hele-shaw-flow/vite.config.ts",
+  "./apps/potential-theory/vite.config.ts",
 ]);

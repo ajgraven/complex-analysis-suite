@@ -1,0 +1,93 @@
+/* @cas/ui — styling for the shared suite navigation header (mountNavHeader).
+ *
+ * A slim, dark, single-row bar pinned to the top of the viewport: a "Suite" home link + one link per
+ * sibling app. It defines `--cas-nav-h` (its own height) so a consuming app can offset its own fixed
+ * controls beneath it — e.g. `.toolbar { top: var(--cas-nav-h, 0px) }` — with the fallback keeping any
+ * page that does NOT load this file (no nav) at its original offset. Import it once per page that mounts
+ * the nav: `import "@cas/ui/nav.css"`. Self-contained (no dependency on an app's CSS variables) so it
+ * looks the same in every app; first consumers are the three ADR-0036 split apps (2D Electrostatics,
+ * Hele-Shaw Flow, Potential Theory), with a suite-wide rollout to follow. */
+
+:root {
+  --cas-nav-h: 32px;
+}
+
+.cas-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 6;
+  box-sizing: border-box;
+  height: var(--cas-nav-h);
+  display: flex;
+  align-items: center;
+  gap: 0 14px;
+  padding: 0 12px;
+  background: #070b14;
+  border-bottom: 1px solid rgba(120, 140, 180, 0.16);
+  font: 11.5px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.cas-nav-home {
+  flex: 0 0 auto;
+  color: #28e0f5;
+  text-decoration: none;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  padding: 3px 9px;
+  border: 1px solid rgba(40, 224, 245, 0.38);
+  border-radius: 6px;
+}
+.cas-nav-home:hover {
+  background: rgba(40, 224, 245, 0.12);
+}
+
+.cas-nav-apps {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cas-nav-apps li {
+  display: inline-flex;
+}
+.cas-nav-apps a {
+  color: #99a1b3;
+  text-decoration: none;
+}
+.cas-nav-apps a:hover {
+  color: #e8edf6;
+}
+.cas-nav-apps [aria-current="page"] {
+  color: #e8edf6;
+  font-weight: 600;
+}
+.cas-nav-apps [aria-disabled="true"] {
+  color: rgba(153, 161, 179, 0.45);
+}
+
+/* U7 hand-off picker (not wired by any app yet — styled so it lands ready). */
+.cas-nav-handoff {
+  display: inline-flex;
+  align-items: center;
+  gap: 0 8px;
+  margin-left: 6px;
+}
+.cas-nav-handoff-label {
+  color: #99a1b3;
+}
+.cas-nav-handoff-target {
+  color: #28e0f5;
+  text-decoration: none;
+}
+.cas-nav-handoff-target:hover {
+  text-decoration: underline;
+}

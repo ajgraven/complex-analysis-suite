@@ -5,7 +5,8 @@
 // zooms while singularities drag with live recompute. Presets, an Electrostatic ↔ Fluid lens, a
 // `#vs=` permalink, and PNG export round out M1.
 import "./styles/main.css";
-import { runWithFatalBoundary, mountCanvas } from "@cas/ui";
+import "@cas/ui/nav.css";
+import { runWithFatalBoundary, mountCanvas, mountNavHeader } from "@cas/ui";
 import { injectPngText } from "@cas/export";
 import { fieldOf, initialState } from "./state.js";
 import { createFieldRenderer } from "./render/glView.js";
@@ -28,6 +29,7 @@ function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
   app.textContent = "";
+  mountNavHeader(app, { current: "2d-electrostatics" });
 
   const canvas = mountCanvas(app, {
     label:

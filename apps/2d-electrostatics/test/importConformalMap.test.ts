@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RM_TO_POTENTIAL_CONFORMAL_LINK, RM_TO_POTENTIAL_CONFORMAL_CAPACITY } from "@cas/interchange";
 import { conformalPolygonFromLink, buildConformalLink } from "../src/importConformalMap.js";
-import { fitPolygonFlow } from "../src/polygonMap.js";
-import type { Pt } from "../src/transplant.js";
+import { fitPolygonFlow, type Pt } from "@cas/flow";
 
 // The consumer side of the RM → potential conformal golden (ADR-0035): decode the SAME frozen link the
 // interchange package pins structurally, read its polygon, and re-fit the EXTERIOR flow map via

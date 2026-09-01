@@ -12,20 +12,25 @@
 // flow. Honest `≈`/`=` labels + converged/degraded/residual. The app is a producer AND consumer of the
 // `@cas/interchange` `form:"conformal"` map (ADR-0035): import a `#s=` polygon, or "Copy link" to export.
 import "./styles/main.css";
-import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
+import "@cas/ui/nav.css";
+import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import {
   flowNet,
   unitCircle,
   pushforward,
   inletPorts,
   sourceSinkNet,
+  fitPolygonFlow,
+  fitPolygonInterior,
+  fitHonestyTier,
+  POLYGON_PRESETS,
+  DEFAULT_PRESET,
+  Net2D,
+  boundsOf,
   type RefFlow,
   type NetCurve,
   type Pt,
-} from "./transplant.js";
-import { fitPolygonFlow, fitPolygonInterior, fitHonestyTier } from "./polygonMap.js";
-import { POLYGON_PRESETS, DEFAULT_PRESET } from "./transplantPresets.js";
-import { Net2D, boundsOf } from "./render/net2d.js";
+} from "@cas/flow";
 import { conformalPolygonFromLink, buildConformalLink, type ConformalFit } from "./importConformalMap.js";
 
 const CUSTOM_ID = "__imported__";
@@ -99,8 +104,6 @@ function main(): void {
   (back as HTMLAnchorElement).href = "./";
   const foilLink = el("a", "pal-btn", "Airfoil →");
   (foilLink as HTMLAnchorElement).href = "./airfoil.html";
-  const potLink = el("a", "pal-btn", "Potential →");
-  (potLink as HTMLAnchorElement).href = "./potential.html";
 
   const controls = el("div", "foil-controls");
 
@@ -135,7 +138,7 @@ function main(): void {
   controls.append(modeSeg, presetRow, sAoA.row, sGamma.row, copyBtn);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, foilLink, potLink, controls, readout);
+  bar.append(brand, back, foilLink, controls, readout);
 
   // ---- two-pane stage -------------------------------------------------------
   const stage = el("div", "foil-stage");
@@ -151,6 +154,7 @@ function main(): void {
   const disk = makePane("The disk plane: the reference flow that is carried onto the polygon");
   const poly = makePane("The polygon plane: the same flow carried through the Schwarz–Christoffel map onto the polygon");
 
+  mountNavHeader(app, { current: "2d-electrostatics" });
   app.append(bar, stage);
 
   const presetOf = (id: string): (typeof POLYGON_PRESETS)[number] =>

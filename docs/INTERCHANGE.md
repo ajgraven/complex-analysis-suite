@@ -136,10 +136,10 @@ export interface QuadratureDomain {
   phi: MapSpec;                    // Riemann map φ : 𝔻 → Ω (or 𝔻* → Ω for unbounded)
   bounded: boolean;
   weight?: "unweighted" | "log" | "power";
-  hData?: MapSpec;                 // the quadrature function h, when known — populated by the QD → 2D-E
-                                   //   Hele-Shaw hand-off (M4d) as h(w)=α/(w−w₀); the charge α is h's
+  hData?: MapSpec;                 // the quadrature function h, when known — populated by the QD → Hele-Shaw
+                                   //   Flow hand-off (M4d) as h(w)=α/(w−w₀); the charge α is h's
                                    //   residue, convention-neutral (no π/2πi conversion). Golden:
-                                   //   QD_TO_POTENTIAL_HELESHAW_LINK.
+                                   //   QD_TO_HELESHAW_LINK.
   boundarySamples?: Complex[];     // optional cached ∂Ω samples
   conventions: Conventions;        // MUST be present; canonical on the wire
 }

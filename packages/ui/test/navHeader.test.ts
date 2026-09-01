@@ -72,7 +72,7 @@ describe("mountNavHeader", () => {
     expect(targets).toEqual(["../riemann-map/#s=demo", "../complex-function-plotter/#s=demo"]);
   });
 
-  it("SUITE_APPS covers the eight apps in launcher order", () => {
+  it("SUITE_APPS covers the ten apps in launcher order", () => {
     expect(SUITE_APPS.map((a) => a.id)).toEqual([
       "complex-dynamics",
       "quadrature-domains",
@@ -81,6 +81,8 @@ describe("mountNavHeader", () => {
       "argument-principle",
       "faber-transform",
       "2d-electrostatics",
+      "hele-shaw-flow",
+      "potential-theory",
       "correspondences",
     ]);
     expect(SUITE_APPS.find((a) => a.id === "correspondences")?.soon).toBe(true);

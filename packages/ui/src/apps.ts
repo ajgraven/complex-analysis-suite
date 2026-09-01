@@ -25,5 +25,7 @@ export const SUITE_APPS: readonly SuiteApp[] = [
   { id: "argument-principle", label: "Argument Principle", badge: "Winding" },
   { id: "faber-transform", label: "Faber Transform", badge: "Faber" },
   { id: "2d-electrostatics", label: "2D Electrostatics", badge: "Fields & flow" },
+  { id: "hele-shaw-flow", label: "Hele-Shaw Flow", badge: "Free-boundary flow" },
+  { id: "potential-theory", label: "Potential Theory", badge: "Potential theory" },
   { id: "correspondences", label: "Correspondences", badge: "Coming soon", soon: true },
 ];

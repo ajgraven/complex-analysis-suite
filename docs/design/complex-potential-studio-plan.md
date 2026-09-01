@@ -1,5 +1,13 @@
 # Complex-Potential Studio — implementation plan
 
+> **⚠ Historical record — split by [ADR-0036](../DECISIONS.md).** This is the original single-app plan for
+> `apps/2d-electrostatics` and the full **M0–M4 construction record**. That single app has since been split
+> into **three**: **2D Electrostatics** (the field sandbox + airfoil + polygon —
+> [`2d-electrostatics-plan.md`](2d-electrostatics-plan.md)), **Hele-Shaw Flow** (the twist + droplet evolvers
+> — [`hele-shaw-flow-plan.md`](hele-shaw-flow-plan.md)), and **Potential Theory** (the conductor view —
+> [`potential-theory-plan.md`](potential-theory-plan.md)). Read those for each app's *forward* plan; keep
+> this document for the *history* of how M0–M4 were built.
+
 > Adds an **eighth app**, `apps/2d-electrostatics` (label **"2D Electrostatics"**) — an interactive realization of the
 > author's paper *"Complex Analysis as Two-Dimensional Electrostatics and Hydrodynamics"*
 > (Graven, May 2026). The user builds a complex potential `W(z) = φ + iψ` by dropping and

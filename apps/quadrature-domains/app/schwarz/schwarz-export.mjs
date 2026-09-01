@@ -183,9 +183,10 @@ export function exportPhiLink(phi, opts = {}) {
 // @cas/interchange when a second app needs sibling links (ADR-0007). CD_APP_ID equals
 // the interchange provenance `app` id / deploy subpath — see packages/interchange/src/schema.ts.
 export const CD_APP_ID = "complex-dynamics";
-/** The 2D Electrostatics deploy subpath — the second sibling QD links to (the Hele-Shaw twist hand-off,
- *  M4d). Equals the interchange provenance `app` id / deploy subpath, like CD_APP_ID. */
-export const ELECTROSTATICS_APP_ID = "2d-electrostatics";
+/** The Hele-Shaw Flow deploy subpath — the second sibling QD links to (the Hele-Shaw twist hand-off,
+ *  M4d; the twist page moved to its own app in ADR-0036). Equals the interchange provenance `app` id /
+ *  deploy subpath, like CD_APP_ID. */
+export const HELE_SHAW_APP_ID = "hele-shaw-flow";
 const QD_APP_ID = "quadrature-domains";
 
 /**
@@ -300,7 +301,7 @@ export function exportSigmaDeepLink(phi, loc, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Hele-Shaw twist hand-off — M4d (QD -> 2D Electrostatics). The twist page there drives the
+// Hele-Shaw twist hand-off — M4d (QD -> Hele-Shaw Flow). The twist page there drives the
 // Graven–Makarov one-point family QD(α/(w−w₀)): a growing/twisting unbounded quadrature domain fed by a
 // complex point charge α = q + iγ. It is parametrized by the INVARIANT charge (α, w₀), which it sweeps in
 // time — so the hand-off must carry the charge, not just a single frame's φ. We ride the existing
@@ -310,7 +311,7 @@ export function exportSigmaDeepLink(phi, loc, opts = {}) {
 // CONVENTION (ADR-0006): α is the RESIDUE of h — a rational-function coefficient, geometric and
 // convention-neutral, exactly like φ's coefficients (the QD dA=dx dy/π + 1/(2πi) normalizations touch the
 // quadrature-COEFFICIENT interpretation ∫∫g dA = π·Σ residue·g(aₖ), not the residue itself). So h rides
-// the CANONICAL wire with NO conversion, and 2D Electrostatics reads α = residue directly.
+// the CANONICAL wire with NO conversion, and Hele-Shaw Flow reads α = residue directly.
 //
 // v1 SCOPE: a single simple pole (the QD `unb-1pt` family = the twist engine's exact domain). Multi-pole /
 // higher-order / bounded domains return null (the button reports why).
@@ -363,15 +364,15 @@ export function exportHeleShawLink(phi, hData, opts = {}) {
 }
 
 /**
- * Full copyable hand-off URL that opens the current one-point QD in 2D Electrostatics' Hele-Shaw twist page
- * (`2d-electrostatics/twist.html`), or null when the domain isn't a one-point unbounded QD. Mirrors
- * exportSigmaDeepLink; `opts.electrostaticsBase` is an explicit base override (dev/config).
+ * Full copyable hand-off URL that opens the current one-point QD in the Hele-Shaw Flow twist page
+ * (`hele-shaw-flow/twist.html`), or null when the domain isn't a one-point unbounded QD. Mirrors
+ * exportSigmaDeepLink; `opts.heleShawBase` is an explicit base override (dev/config).
  * @returns {{url:string, resolvable:boolean, reason:string} | null}
  */
 export function exportHeleShawDeepLink(phi, hData, loc, opts = {}) {
   const hash = exportHeleShawLink(phi, hData, opts);
   if (!hash) return null;
-  const { base, resolvable, reason } = resolveHandoffBase(loc, opts.electrostaticsBase, ELECTROSTATICS_APP_ID);
+  const { base, resolvable, reason } = resolveHandoffBase(loc, opts.heleShawBase, HELE_SHAW_APP_ID);
   return { url: base + "twist.html" + hash, resolvable, reason };
 }
 

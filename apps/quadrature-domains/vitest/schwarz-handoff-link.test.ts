@@ -91,7 +91,7 @@ describe("schwarz-ui _exportMap routes through the CD resolver (source-pin)", ()
     expect(src).not.toMatch(/location\.origin\s*\+\s*location\.pathname/);
   });
 
-  // M4d: the Hele-Shaw button (_sendToElectrostatics) is closure-private DOM glue — source-pin that it
+  // M4d: the Hele-Shaw button (_sendToHeleShaw) is closure-private DOM glue — source-pin that it
   // routes through the resolver and that the button is wired.
   it("routes the Hele-Shaw hand-off through exportHeleShawDeepLink and wires the button", () => {
     expect(src).toContain("exportHeleShawDeepLink");

@@ -8,9 +8,9 @@ for why extraction is demand-driven rather than up-front.
 > **✅ As built.** The suite is now built, and the diagrams below are the *target*, not an
 > inventory. What actually exists:
 >
-> - **Eleven packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
+> - **Twelve packages** were extracted: **`@cas/core`, `@cas/gpu`, `@cas/expr`,
 >   `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`,
->   `@cas/faber`, `@cas/ui`** — the middle four later than the phase plan, on the same second-consumer rule
+>   `@cas/faber`, `@cas/ui`, `@cas/flow`** — the middle four later than the phase plan, on the same second-consumer rule
 >   (`@cas/exact`: Complex Dynamics and
 >   Correspondences both needed exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ
 >   engine, shared by Complex Dynamics and Correspondences; `@cas/dynamics`: the inverse-Böttcher machinery,
@@ -146,8 +146,8 @@ instead of an ad-hoc JSON blob.
 > **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
 > became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
 > though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
-> The suite now ships **eleven** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
-> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, and `@cas/ui` (`@cas/exact`
+> The suite now ships **twelve** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, and `@cas/flow` (`@cas/exact`
 > through `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
 > extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore);
 > `@cas/faber` is the exterior Faber-transform engine behind the Faber Transform app, [ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine);
@@ -196,8 +196,9 @@ the Faber Transform app, a second SC family beside the interior one
 ([ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine)).
 Consumers today: the **Riemann-map studio** — the lightning builder for smooth region maps, and the interior SC
 engine for polygon (`corners`) domains; the **Faber Transform app** — the exterior SC engine for polygonal
-`K`; and **2D Electrostatics** — **both** SC engines (interior for the flow-in/through-a-polygon transplant,
-exterior for the flow-past-a-polygon map and the potential-theory conductor view). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
+`K`; and **`@cas/flow`** — the conformal-transplant kernel (ADR-0036) that carries **both** SC engines
+(interior for flow inside a polygon, exterior for flow past one and for the conductor view) to the three split
+apps (2D Electrostatics, Hele-Shaw Flow, Potential Theory). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
 of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on rank-deficiency policy —
 see ADR-0018).
 
@@ -208,8 +209,8 @@ series path for free-form `f`. Everything consumes one struct — `ExteriorMap =
 blind to *how* φ was produced: a curated closed form (ellipse/deltoid/finite-Laurent QD) or a solved exterior
 Schwarz–Christoffel map for an arbitrary polygon. Built on `@cas/core` (complex/poly algebra, series);
 convention-neutral (ADR-0006: the Faber transform carries no π / 2πi). Consumers today: the Faber Transform
-app, Quadrature Domains (its Faber-analysis delegates here — ADR-0007 second consumer), and 2D Electrostatics
-(the potential-theory conductor view's Faber/Fekete overlays, M3). This is the domain package that the never-built `@cas/quadrature` (below) *would* have partly held — the
+app, Quadrature Domains (its Faber-analysis delegates here — ADR-0007 second consumer), and **Potential Theory**
+(the conductor view's Faber/Fekete overlays, M3 — split out of 2D Electrostatics in ADR-0036). This is the domain package that the never-built `@cas/quadrature` (below) *would* have partly held — the
 Faber half shipped standalone, demand-driven, when the app needed it.
 
 ### `@cas/quadrature` — domain package *(planned — not built as such; Faber half shipped as `@cas/faber`)*
@@ -342,7 +343,7 @@ tools:
   (and on `workflow_dispatch`), gates on `lint` → `typecheck` → `test` → `build`, then assembles
   **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/`,
   `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`,
-  `faber-transform/`, and `2d-electrostatics/` beneath it (`apps/correspondences` is built but **not** published). Note the
+  `faber-transform/`, `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it (`apps/correspondences` is built but **not** published). Note the
   shape — apps build independently but publish
   *together*, as a single artifact, not as independent Pages sites.
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
@@ -353,7 +354,7 @@ tools:
   blocker, so a GPU-only regression can reach the live site while still failing CI.
 - Packages are **not** separately *published* (all `workspace:*`); the five `dist/`-built packages
   (`@cas/core`, `@cas/exact`, `@cas/export`, `@cas/faber`, `@cas/interchange`) are compiled once by the
-  root `build`/`test`/`typecheck` scripts, and the other six are consumed as *source* through the
+  root `build`/`test`/`typecheck` scripts, and the other seven are consumed as *source* through the
   workspace — either way each app's Vite build transpiles and bundles everything it
   imports. There is exactly **one build per app**. (This is the payoff of accepting a
   build step — it retires the awkward "pre-built ESM artifact with version pinning"
@@ -410,12 +411,14 @@ This is realized in two cheap, additive pieces:
    and a link to each. It sits at the suite's top-level GitHub Pages URL with each published app
    under a subpath beneath it — one combined deploy, not independent per-app sites (see §8). This
    is the "menu to select between apps."
-2. **A shared navigation header (the primitive is built; app wiring is the open U7).** A small component,
+2. **A shared navigation header (piloted in three apps; suite-wide rollout is the open U7).** A small component,
    `mountNavHeader`, now lives in the extracted **`@cas/ui`** package ([ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell))
    with the `SUITE_APPS` registry — offering back-to-launcher + a jump to the sibling apps and, where a hand-off
    is meaningful, a "send this to <app>" action over the [interchange](INTERCHANGE.md) deep-link codec. It is
-   **not yet rendered by the apps** — that adoption (and wiring the hand-off picker to the known map kinds) is
-   ADR-0032's remaining **U7**. This makes cross-navigation available *inside* each app without merging them.
+   **rendered by the three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory — its first
+   consumers, over a shared `@cas/ui/nav.css`); rolling it out to the other seven apps (and wiring the hand-off
+   picker to the known map kinds) is ADR-0032's remaining **U7**. This makes cross-navigation available *inside*
+   each app without merging them.
 
 **Why not a unified shell.** A single-page shell that hosts every tool as a tab would
 have to own cross-tool routing, a shared global state store, and a merged build — a
@@ -426,7 +429,8 @@ entry point, easy movement between tools, hand-off between them) at a fraction o
 cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all seven published apps plus a "Coming soon" correspondences card (eight cards in all); the shared-nav header's
-component (`mountNavHeader`) now lives in the extracted `@cas/ui` package (ADR-0032, §3) but is **not yet rendered
-by the apps** — that adoption (and wiring its "send this to <app>" hand-off picker to the interchange codec) is
-ADR-0032's remaining **U7**. See [MIGRATION](MIGRATION.md).
+The launcher is a static stub (`apps/launcher`) listing all nine published apps plus a "Coming soon" correspondences card (ten cards in all); the shared-nav header's
+component (`mountNavHeader`) now lives in the extracted `@cas/ui` package (ADR-0032, §3) and is **rendered by the
+three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory) — rolling it out to the other seven
+apps (and wiring its "send this to <app>" hand-off picker to the interchange codec) is ADR-0032's remaining
+**U7**. See [MIGRATION](MIGRATION.md).

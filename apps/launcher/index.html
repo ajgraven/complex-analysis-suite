@@ -6,7 +6,7 @@
     <title>Complex Analysis Suite</title>
     <meta
       name="description"
-      content="A suite of interactive complex-analysis and complex-dynamics visualization tools: Complex Dynamics (escape-time fractals, Julia sets, external rays, deep zoom), Quadrature Domains (Schwarz-reflection solvers and dynamics), the Complex Function Plotting Tool (domain coloring, 3D landscapes, special functions), Riemann Map (a conformal-mapping studio), the Argument Principle (winding numbers, zeros &amp; poles), the Faber Transform (the exterior Faber transform on a bounded complement), and 2D Electrostatics (the complex potential as fields, flow, and potential theory)."
+      content="A suite of interactive complex-analysis and complex-dynamics visualization tools: Complex Dynamics (escape-time fractals, Julia sets, external rays, deep zoom), Quadrature Domains (Schwarz-reflection solvers and dynamics), the Complex Function Plotting Tool (domain coloring, 3D landscapes, special functions), Riemann Map (a conformal-mapping studio), the Argument Principle (winding numbers, zeros &amp; poles), the Faber Transform (the exterior Faber transform on a bounded complement), 2D Electrostatics (the complex potential as interactive fields and flow), Hele-Shaw Flow (free-boundary flow: a twisting quadrature domain and an interior-droplet evolver), and Potential Theory (a conductor's equilibrium charge, capacity, and Green's function)."
     />
     <link rel="canonical" href="https://ajgraven.github.io/complex-analysis-suite/" />
     <meta property="og:type" content="website" />
@@ -14,14 +14,14 @@
     <meta property="og:title" content="Complex Analysis Suite" />
     <meta
       property="og:description"
-      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics, Quadrature Domains, the Complex Function Plotting Tool, Riemann Map, the Argument Principle, the Faber Transform, and 2D Electrostatics."
+      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics, Quadrature Domains, the Complex Function Plotting Tool, Riemann Map, the Argument Principle, the Faber Transform, 2D Electrostatics, Hele-Shaw Flow, and Potential Theory."
     />
     <meta property="og:url" content="https://ajgraven.github.io/complex-analysis-suite/" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Complex Analysis Suite" />
     <meta
       name="twitter:description"
-      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics, Quadrature Domains, the Complex Function Plotting Tool, Riemann Map, the Argument Principle, the Faber Transform, and 2D Electrostatics."
+      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics, Quadrature Domains, the Complex Function Plotting Tool, Riemann Map, the Argument Principle, the Faber Transform, 2D Electrostatics, Hele-Shaw Flow, and Potential Theory."
     />
     <style>
       :root {
@@ -177,13 +177,32 @@
           draggable sensor puck, animated tracer flow, classic presets (Rankine, cylinder), and
           permalinks + PNG export. Plus conformal-transplant pages &mdash; flow past a
           Joukowski/K&aacute;rm&aacute;n&ndash;Trefftz airfoil, and flow past or inside a polygon via
-          Schwarz&ndash;Christoffel &mdash; a potential-theory view of a conductor K (its equilibrium
-          charge, capacity, and Green's function; Faber &amp; Fekete points), a Hele-Shaw
-          &ldquo;twisting&rdquo; showpiece: the exact Graven&ndash;Makarov one-point quadrature domain
-          driven by a complex charge, grown and spun up to a double point or a (3,2)-cusp (and drivable by a
-          domain authored in the Quadrature Domains app, handed over as an interchange link), and a numerical
-          interior-droplet Hele-Shaw evolver &mdash; a bounded droplet grown from a central source by the
-          Polubarinova&ndash;Galin equation (injection smooths; suction fingers into a cusp).
+          Schwarz&ndash;Christoffel.
+        </p>
+      </a>
+
+      <a class="card" href="hele-shaw-flow/">
+        <span class="badge">Free-boundary flow</span>
+        <h2>Hele-Shaw Flow</h2>
+        <p>
+          Free-boundary flow in a Hele-Shaw cell, as a conformal map of the disk evolving in time: the
+          exact Graven&ndash;Makarov &ldquo;twisting&rdquo; quadrature domain, driven by a complex charge
+          and grown to a double point or a (3,2)-cusp (drivable by a domain authored in the Quadrature
+          Domains app), and a numerical interior-droplet Polubarinova&ndash;Galin evolver &mdash;
+          injection smooths, suction fingers into a cusp, with the conserved Richardson moments as the
+          honest error bar.
+        </p>
+      </a>
+
+      <a class="card" href="potential-theory/">
+        <span class="badge">Potential theory</span>
+        <h2>Potential Theory</h2>
+        <p>
+          A compact set K as a grounded conductor: its equilibrium charge (the equilibrium measure),
+          logarithmic capacity, and Green&rsquo;s-function equipotentials, from the exterior conformal
+          map &mdash; with the Faber-polynomial zeros and the Fekete/Leja points as two more roads to the
+          equilibrium measure. Exact for Schwarz&ndash;Christoffel polygons and closed-form sets;
+          log-lightning (&approx;) for smooth blobs.
         </p>
       </a>
 

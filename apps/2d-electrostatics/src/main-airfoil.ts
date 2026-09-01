@@ -6,7 +6,8 @@
 // reshape the airfoil; the Kutta toggle fixes the circulation at the trailing edge and reports the
 // Kutta–Joukowski lift L = −ρUΓ. Second page of the app (index.html is the free-field sandbox).
 import "./styles/main.css";
-import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
+import "@cas/ui/nav.css";
+import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import {
   kuttaCirculation,
   cylinderRadius,
@@ -127,6 +128,7 @@ function main(): void {
     "<b>Airfoil plane</b> — the same flow, carried by z = ζ + b²/ζ onto the wing",
   );
 
+  mountNavHeader(app, { current: "2d-electrostatics" });
   app.append(bar, stage);
 
   const cylGl = cyl.canvas.getContext("webgl2");
