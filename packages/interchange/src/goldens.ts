@@ -175,7 +175,7 @@ export const RM_TO_POTENTIAL_CONFORMAL_CAPACITY = 1.1803405990161;
 
 // --- Quadrature-Domains → 2D-Electrostatics Hele-Shaw twist golden (M4d) ----------------------------
 //
-// QD hands a ONE-POINT unbounded quadrature domain to 2D Electrostatics' Hele-Shaw twist page, which
+// QD hands a ONE-POINT unbounded quadrature domain to the Hele-Shaw Flow app's twist page, which
 // drives the Graven–Makarov family QD(α/(w−w₀)) from the charge. It rides the existing `quadrature-domain`
 // payload (NO schema bump — `hData` existed since 1.0.0, now populated for the first time): `phi` (the
 // solved exterior map, provenance) + `hData` = the quadrature data h(w) = α/(w − w₀) as a `RationalMap`.
@@ -188,10 +188,10 @@ export const RM_TO_POTENTIAL_CONFORMAL_CAPACITY = 1.1803405990161;
 
 /** A one-point unbounded QD as an `Envelope<"quadrature-domain">`: `phi` (laurent, one branch) + `hData`
  *  (h = i/(w−2)), app `quadrature-domains`. Emitted by `buildHeleShawEnvelope` / `exportHeleShawLink`. */
-export const QD_TO_POTENTIAL_HELESHAW_LINK =
+export const QD_TO_HELESHAW_LINK =
   "#s=eyJzY2hlbWEiOiJjb21wbGV4LWFuYWx5c2lzLXN1aXRlL2ludGVyY2hhbmdlIiwidmVyc2lvbiI6IjEuNC4wIiwia2luZCI6InF1YWRyYXR1cmUtZG9tYWluIiwicGF5bG9hZCI6eyJwaGkiOnsiZm9ybSI6ImxhdXJlbnQiLCJjIjp7InJlIjoxLCJpbSI6MH0sIkYiOltdLCJicmFuY2hlcyI6W3sieiI6eyJyZSI6MC4yLCJpbSI6MH0sIkEiOlt7InJlIjowLjMsImltIjowfV19XX0sImJvdW5kZWQiOmZhbHNlLCJoRGF0YSI6eyJmb3JtIjoicmF0aW9uYWwiLCJudW0iOlt7InJlIjowLCJpbSI6MX1dLCJkZW4iOlt7InJlIjotMiwiaW0iOjB9LHsicmUiOjEsImltIjowfV19LCJjb252ZW50aW9ucyI6eyJhcmVhIjoic3RhbmRhcmQiLCJjb250b3VyIjoic3RhbmRhcmQifX0sInByb3ZlbmFuY2UiOnsiYXBwIjoicXVhZHJhdHVyZS1kb21haW5zIiwiYXBwVmVyc2lvbiI6IjAuMS4wIiwiY3JlYXRlZEF0IjoiMjAyNi0wNy0wNlQwMDowMDowMFoifX0";
 
 /** The charge the consumer recovers from the golden's `hData`: α = i (the residue of h = i/(w−2)). */
-export const QD_TO_POTENTIAL_HELESHAW_ALPHA = { re: 0, im: 1 } as const;
+export const QD_TO_HELESHAW_ALPHA = { re: 0, im: 1 } as const;
 /** The quadrature node the consumer recovers from the golden's `hData`: w₀ = 2. */
-export const QD_TO_POTENTIAL_HELESHAW_NODE = { re: 2, im: 0 } as const;
+export const QD_TO_HELESHAW_NODE = { re: 2, im: 0 } as const;

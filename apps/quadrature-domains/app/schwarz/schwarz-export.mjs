@@ -183,9 +183,10 @@ export function exportPhiLink(phi, opts = {}) {
 // @cas/interchange when a second app needs sibling links (ADR-0007). CD_APP_ID equals
 // the interchange provenance `app` id / deploy subpath — see packages/interchange/src/schema.ts.
 export const CD_APP_ID = "complex-dynamics";
-/** The 2D Electrostatics deploy subpath — the second sibling QD links to (the Hele-Shaw twist hand-off,
- *  M4d). Equals the interchange provenance `app` id / deploy subpath, like CD_APP_ID. */
-export const ELECTROSTATICS_APP_ID = "2d-electrostatics";
+/** The Hele-Shaw Flow deploy subpath — the second sibling QD links to (the Hele-Shaw twist hand-off,
+ *  M4d; the twist page moved to its own app in ADR-0036). Equals the interchange provenance `app` id /
+ *  deploy subpath, like CD_APP_ID. */
+export const HELE_SHAW_APP_ID = "hele-shaw-flow";
 const QD_APP_ID = "quadrature-domains";
 
 /**
@@ -363,15 +364,15 @@ export function exportHeleShawLink(phi, hData, opts = {}) {
 }
 
 /**
- * Full copyable hand-off URL that opens the current one-point QD in 2D Electrostatics' Hele-Shaw twist page
- * (`2d-electrostatics/twist.html`), or null when the domain isn't a one-point unbounded QD. Mirrors
- * exportSigmaDeepLink; `opts.electrostaticsBase` is an explicit base override (dev/config).
+ * Full copyable hand-off URL that opens the current one-point QD in the Hele-Shaw Flow twist page
+ * (`hele-shaw-flow/twist.html`), or null when the domain isn't a one-point unbounded QD. Mirrors
+ * exportSigmaDeepLink; `opts.heleShawBase` is an explicit base override (dev/config).
  * @returns {{url:string, resolvable:boolean, reason:string} | null}
  */
 export function exportHeleShawDeepLink(phi, hData, loc, opts = {}) {
   const hash = exportHeleShawLink(phi, hData, opts);
   if (!hash) return null;
-  const { base, resolvable, reason } = resolveHandoffBase(loc, opts.electrostaticsBase, ELECTROSTATICS_APP_ID);
+  const { base, resolvable, reason } = resolveHandoffBase(loc, opts.heleShawBase, HELE_SHAW_APP_ID);
   return { url: base + "twist.html" + hash, resolvable, reason };
 }
 

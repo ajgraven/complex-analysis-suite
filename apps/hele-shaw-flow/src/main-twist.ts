@@ -1,4 +1,4 @@
-// apps/2d-electrostatics — the Hele-Shaw "twisting" showpiece (M4b). The Graven–Makarov one-point
+// apps/hele-shaw-flow — the Hele-Shaw "twisting" showpiece (M4b; carved out of 2d-electrostatics, ADR-0036). The Graven–Makarov one-point
 // unbounded-QD family QD(α/(w−w₀)) at w₀ = 2, driven by a COMPLEX charge α = q + iγ: q injects (grows the
 // droplet), γ spins it (the twist). We scrub/play the growing family {Ω_t} up to its critical time — a
 // double point (α > 0) or a (3,2)-cusp (α < 0 or complex) — drawing the twisting boundary, the exterior
@@ -72,11 +72,9 @@ function main(): void {
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
-  brand.innerHTML = "<strong>2D Electrostatics · Hele-Shaw twist</strong><span>a growing quadrature domain driven by a complex charge</span>";
-  const back = el("a", "pal-btn", "← Field sandbox");
+  brand.innerHTML = "<strong>Hele-Shaw Flow · Twist (exact)</strong><span>a growing quadrature domain driven by a complex charge</span>";
+  const back = el("a", "pal-btn", "← Hele-Shaw Flow");
   (back as HTMLAnchorElement).href = "./";
-  const potLink = el("a", "pal-btn", "Potential →");
-  (potLink as HTMLAnchorElement).href = "./potential.html";
   const dropLink = el("a", "pal-btn", "Droplet (numerical) →");
   (dropLink as HTMLAnchorElement).href = "./droplet.html";
 
@@ -114,7 +112,7 @@ function main(): void {
   controls.append(presetRow, sQ.row, sG.row, sT.row, playBtn, gridCheck, fieldCheck);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, potLink, dropLink, controls, readout);
+  bar.append(brand, back, dropLink, controls, readout);
 
   // ---- single z-plane pane --------------------------------------------------
   const stage = el("div", "pot-stage");

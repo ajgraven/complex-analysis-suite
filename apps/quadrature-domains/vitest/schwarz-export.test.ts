@@ -8,7 +8,7 @@ import {
   QD_TO_CD_DELTOID_SIGMA_LINK,
   QD_TO_CD_SINGLE_POLE_SIGMA_LINK,
   QD_TO_CD_BOUNDED_LOBE_SIGMA_LINK,
-  QD_TO_POTENTIAL_HELESHAW_LINK,
+  QD_TO_HELESHAW_LINK,
 } from "@cas/interchange";
 import {
   buildExportEnvelope,
@@ -329,11 +329,11 @@ describe("QD → 2D-Electrostatics Hele-Shaw twist export (M4d)", () => {
     expect(explainHeleShawUnavailable(onePointPhi, null)).toMatch(/one-point/i);
   });
 
-  // The PRODUCER half of the QD → 2D-Electrostatics Hele-Shaw contract: QD emits the exact bytes stored as
-  // the cross-app golden and consumed by 2D Electrostatics (apps/2d-electrostatics/test/importHeleShaw). If
+  // The PRODUCER half of the QD → Hele-Shaw Flow contract: QD emits the exact bytes stored as
+  // the cross-app golden and consumed by Hele-Shaw Flow (apps/hele-shaw-flow/test/importHeleShaw). If
   // this drifts, the hand-off format changed — regenerate the golden only if intended.
   it("emits the exact Hele-Shaw link stored as the cross-app golden", () => {
     const link = exportHeleShawLink(onePointPhi, imagCharge, { createdAt: GOLDEN_CREATED_AT, appVersion: "0.1.0" });
-    expect(link).toBe(QD_TO_POTENTIAL_HELESHAW_LINK);
+    expect(link).toBe(QD_TO_HELESHAW_LINK);
   });
 });

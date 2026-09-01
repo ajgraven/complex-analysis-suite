@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
-  QD_TO_POTENTIAL_HELESHAW_LINK,
-  QD_TO_POTENTIAL_HELESHAW_ALPHA,
-  QD_TO_POTENTIAL_HELESHAW_NODE,
+  QD_TO_HELESHAW_LINK,
+  QD_TO_HELESHAW_ALPHA,
+  QD_TO_HELESHAW_NODE,
   RM_TO_POTENTIAL_CONFORMAL_LINK,
   CANONICAL,
   SCHEMA_ID,
@@ -12,7 +12,7 @@ import {
 } from "@cas/interchange";
 import { heleShawFromLink } from "../src/importHeleShaw.js";
 
-// The consumer side of the QD → 2D-Electrostatics Hele-Shaw golden (M4d): decode the SAME frozen link the
+// The consumer side of the QD → Hele-Shaw Flow golden (M4d): decode the SAME frozen link the
 // QD producer emits (schwarz-export.test.ts pins the producer half) and recover the one-point charge α.
 // A producer→consumer test cannot live in either app, so both pin the shared @cas/interchange golden.
 
@@ -38,12 +38,12 @@ const hRational = (num: Cplx[], den: Cplx[]) => ({ form: "rational", num, den })
 
 describe("heleShawFromLink — the QD → 2D-E golden (consumer side)", () => {
   it("recovers α = i at node w₀ = 2 from the frozen golden link", () => {
-    const got = heleShawFromLink(QD_TO_POTENTIAL_HELESHAW_LINK);
+    const got = heleShawFromLink(QD_TO_HELESHAW_LINK);
     if (!got || !got.ok) throw new Error("golden link did not decode to a drivable Hele-Shaw charge");
-    expect(got.alpha[0]).toBeCloseTo(QD_TO_POTENTIAL_HELESHAW_ALPHA.re, 12);
-    expect(got.alpha[1]).toBeCloseTo(QD_TO_POTENTIAL_HELESHAW_ALPHA.im, 12);
+    expect(got.alpha[0]).toBeCloseTo(QD_TO_HELESHAW_ALPHA.re, 12);
+    expect(got.alpha[1]).toBeCloseTo(QD_TO_HELESHAW_ALPHA.im, 12);
     // the node pinned in the golden is the engine's fixed w₀
-    expect(QD_TO_POTENTIAL_HELESHAW_NODE).toEqual({ re: 2, im: 0 });
+    expect(QD_TO_HELESHAW_NODE).toEqual({ re: 2, im: 0 });
   });
 });
 

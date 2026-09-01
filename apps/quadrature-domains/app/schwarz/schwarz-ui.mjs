@@ -488,7 +488,7 @@ const QD = _QD;
       </div>
       <button type="button" id="schwarz-export-map" class="small">Export Riemann map φ → copy link</button>
       <button type="button" id="schwarz-export-sigma" class="small" style="margin-left:6px;">Export Schwarz reflection σ → copy link</button>
-      <button type="button" id="schwarz-send-heleshaw" class="small" style="margin-left:6px;">Send to 2D Electrostatics (Hele-Shaw) → copy link</button>
+      <button type="button" id="schwarz-send-heleshaw" class="small" style="margin-left:6px;">Send to Hele-Shaw Flow → copy link</button>
       <span id="schwarz-export-status" style="margin-left:8px; font-size:12px;"></span>
     `;
     setTimeout(() => {
@@ -496,7 +496,7 @@ const QD = _QD;
       card.querySelector('#schwarz-clear-overlays').addEventListener('click', clearAllOverlays);
       card.querySelector('#schwarz-export-map').addEventListener('click', _exportMap);
       card.querySelector('#schwarz-export-sigma').addEventListener('click', _exportSigma);
-      card.querySelector('#schwarz-send-heleshaw').addEventListener('click', _sendToElectrostatics);
+      card.querySelector('#schwarz-send-heleshaw').addEventListener('click', _sendToHeleShaw);
     }, 0);
     return card;
   }
@@ -592,10 +592,10 @@ const QD = _QD;
     }
   }
 
-  // M4d: send the captured ONE-POINT unbounded QD to 2D Electrostatics' Hele-Shaw twist page. Mirrors
+  // M4d: send the captured ONE-POINT unbounded QD to the Hele-Shaw Flow twist page. Mirrors
   // _exportSigma, but carries the quadrature data h (the charge α, node w₀) so the twist family is driven
   // by THIS domain's charge; unavailable for anything but a single-simple-pole unbounded QD.
-  function _sendToElectrostatics() {
+  function _sendToHeleShaw() {
     const status = document.getElementById('schwarz-export-status');
     const setStatus = (msg, ok) => {
       if (status) { status.textContent = msg; status.style.color = ok ? '#2a7' : '#c33'; }
@@ -603,10 +603,10 @@ const QD = _QD;
     _autoCaptureIfPending();
     const reason = explainHeleShawUnavailable(sState.phiSnapshot, sState.hDataSnapshot);
     if (reason) { setStatus(reason, false); return; }
-    const electrostaticsBase = (import.meta.env && import.meta.env.VITE_ELECTROSTATICS_BASE) || undefined;
+    const heleShawBase = (import.meta.env && import.meta.env.VITE_HELE_SHAW_BASE) || undefined;
     const result = exportHeleShawDeepLink(sState.phiSnapshot, sState.hDataSnapshot, location, {
       note: 'one-point QD Hele-Shaw twist exported from the Quadrature Domains app',
-      electrostaticsBase,
+      heleShawBase,
     });
     if (!result) {
       setStatus('Hele-Shaw hand-off unavailable for this domain.', false); // defensive: reason was null yet the builder declined
@@ -614,8 +614,8 @@ const QD = _QD;
     }
     const { url, resolvable } = result;
     const okMsg = resolvable
-      ? 'Copied 2D Electrostatics Hele-Shaw hand-off link to clipboard.'
-      : 'Copied link — set VITE_ELECTROSTATICS_BASE to reach 2D Electrostatics in local dev.';
+      ? 'Copied Hele-Shaw Flow hand-off link to clipboard.'
+      : 'Copied link — set VITE_HELE_SHAW_BASE to reach Hele-Shaw Flow in local dev.';
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(
         () => setStatus(okMsg, resolvable),
@@ -1581,7 +1581,7 @@ const QD = _QD;
   if (typeof window !== 'undefined' && window.__SCHWARZ_UI_TEST_HOOK__) {
     window.__schwarzUiTest = {
       sState, setMode, setViewMode, onCanvasClick, onCanvasDblClick, onMouseMove,
-      runHoverOrbit, pinOrbitAt, makeOverlaysCard, _exportMap, _exportSigma, _sendToElectrostatics,
+      runHoverOrbit, pinOrbitAt, makeOverlaysCard, _exportMap, _exportSigma, _sendToHeleShaw,
       get CLICK_DELAY() { return _schwarzInter.getClickDelay(); },
       set CLICK_DELAY(v) { _schwarzInter.setClickDelay(v); },
     };

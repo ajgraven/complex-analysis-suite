@@ -1,0 +1,33 @@
+{
+  "name": "hele-shaw-flow",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Hele-Shaw Flow — the free-boundary flow of a viscous fluid in a Hele-Shaw cell, as a conformal map of the unit disk evolving in time. The exact Graven–Makarov \"twisting\" showpiece (twist.html): the one-point unbounded quadrature domain QD(α/(w−w₀)) at w₀ = 2 driven by a complex charge α = q + iγ, grown and spun up to a double point or a (3,2)-cusp — everything closed form (=), and drivable by a one-point QD authored in the Quadrature Domains app and handed over as an @cas/interchange link. And the classical interior-droplet Polubarinova–Galin evolver (droplet.html): a bounded droplet grown from a central source by numerical time-stepping of the PG equation (≈) — injection smooths, suction fingers into a (3,2)-cusp (ill-posed) — with the conserved Richardson moments as the honest error bar and a hard ⚠ cusp/suction stop. Split out of 2D Electrostatics (ADR-0036); built on the shared @cas/* packages — @cas/flow (the conformal-transplant kernel + the Net2D line-art drawer), @cas/core (the dftOnCircle spectral primitive), @cas/interchange (the QD → Hele-Shaw hand-off), and @cas/ui (the shared browser shell). Conventions follow the author's paper 'Complex Analysis as Two-Dimensional Electrostatics and Hydrodynamics' at the app edge.",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cas/core": "workspace:*",
+    "@cas/flow": "workspace:*",
+    "@cas/interchange": "workspace:*",
+    "@cas/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

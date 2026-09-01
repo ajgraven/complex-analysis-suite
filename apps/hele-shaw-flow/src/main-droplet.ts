@@ -1,4 +1,4 @@
-// apps/2d-electrostatics — the interior-droplet Hele-Shaw evolver (M4c.2). A bounded fluid droplet D(t),
+// apps/hele-shaw-flow — the interior-droplet Hele-Shaw evolver (M4c.2; carved out of 2d-electrostatics, ADR-0036). A bounded fluid droplet D(t),
 // the image of the unit disk under an interior conformal map f(w,t) = Σ a_k w^k, fed by a point source at
 // its center. We integrate the classical Polubarinova–Galin equation (heleShawInteriorStepper.ts) and
 // scrub/play the evolution, drawing the boundary and the interior flow net (streamlines + equipotentials).
@@ -79,8 +79,8 @@ function main(): void {
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
-  brand.innerHTML = "<strong>2D Electrostatics · Hele-Shaw droplet</strong><span>a bounded droplet grown by the Polubarinova–Galin equation (≈)</span>";
-  const back = el("a", "pal-btn", "← Field sandbox");
+  brand.innerHTML = "<strong>Hele-Shaw Flow · Droplet (numerical)</strong><span>a bounded droplet grown by the Polubarinova–Galin equation (≈)</span>";
+  const back = el("a", "pal-btn", "← Hele-Shaw Flow");
   (back as HTMLAnchorElement).href = "./";
   const twistLink = el("a", "pal-btn", "Twist (exact) →");
   (twistLink as HTMLAnchorElement).href = "./twist.html";

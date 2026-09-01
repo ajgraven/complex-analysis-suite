@@ -11,11 +11,10 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Multi-page: the free-field sandbox (index.html), the Joukowski airfoil transplant
-      // (airfoil.html), the exterior Schwarz–Christoffel polygon transplant (polygon.html), the
-      // potential-theory / conductor view (potential.html), the exact Hele-Shaw "twisting" showpiece
-      // (twist.html), and the numerical interior-droplet Polubarinova–Galin evolver (droplet.html).
-      // Vite resolves these relative to the root.
-      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html", potential: "potential.html", twist: "twist.html", droplet: "droplet.html" },
+      // (airfoil.html), the exterior Schwarz–Christoffel polygon transplant (polygon.html), and the
+      // potential-theory / conductor view (potential.html). The Hele-Shaw pages (twist/droplet) split
+      // out into their own app, hele-shaw-flow (ADR-0036). Vite resolves these relative to the root.
+      input: { main: "index.html", airfoil: "airfoil.html", polygon: "polygon.html", potential: "potential.html" },
     },
   },
   server: { port: 5180, strictPort: true },
