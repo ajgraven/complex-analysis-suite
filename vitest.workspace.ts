@@ -32,4 +32,5 @@ export default defineWorkspace([
   "./apps/faber-transform/vite.config.ts",
   "./apps/2d-electrostatics/vite.config.ts",
   "./apps/hele-shaw-flow/vite.config.ts",
+  "./apps/potential-theory/vite.config.ts",
 ]);

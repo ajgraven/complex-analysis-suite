@@ -1,0 +1,33 @@
+{
+  "name": "potential-theory",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Potential Theory — a compact set K as a grounded conductor, the electrostatic lens on logarithmic potential theory made literal. One pane shows K with its equilibrium charge (the equilibrium measure μ_K), the logarithmic capacity cap(K), and the Green's-function equipotentials g_K, plus — as overlays — the Faber-polynomial zeros and the Fekete/Leja points: three roads to μ_K. Two domain classes: EXTERIOR-MAP K (Schwarz–Christoffel polygons + closed-form disk/ellipse/segment/deltoid), where every quantity is an exact `=` pushforward Ψ(circles); and GENERAL K (smooth blobs), where capacity / Green / charge come from a log-lightning fit (`≈`) and the Green equipotentials are marching-squares level curves. Split out of 2D Electrostatics (ADR-0036); built on the shared @cas/* packages — @cas/flow (the conformal-transplant kernel: the exterior SC fit + the Net2D line-art drawer), @cas/faber (the Faber polynomials), @cas/core (the Householder-QR least squares behind the log-lightning fit), and @cas/ui (the shared browser shell). Convention-neutral core; conventions applied at the app edge.",
+  "license": "MIT",
+  "author": "Andrew Graven <andrew@graven.com>",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cas/core": "workspace:*",
+    "@cas/faber": "workspace:*",
+    "@cas/flow": "workspace:*",
+    "@cas/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.17.0",
+    "eslint": "^9.17.0",
+    "globals": "^15.14.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.0",
+    "vite": "^5.4.10",
+    "vitest": "^2.1.4"
+  }
+}

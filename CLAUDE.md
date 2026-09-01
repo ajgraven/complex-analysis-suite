@@ -9,10 +9,10 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies nine apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies ten apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, and Hele-Shaw Flow, plus the anti-holomorphic Correspondences tool (built, not yet
-published) — riding twelve shared `@cas/*` packages.
+Electrostatics, Hele-Shaw Flow, and Potential Theory, plus the anti-holomorphic Correspondences tool
+(built, not yet published) — riding twelve shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -52,7 +52,7 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
-    `2d-electrostatics/`, and `hele-shaw-flow/` beneath it.
+    `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
@@ -92,21 +92,25 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
 the parabolic-Tricorn model coordinate, and a follow-on interactive mating visualizer (`mating.html`).
-Nine apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+Ten apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
 rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`; the eighth,
 **2D Electrostatics**, ADR-0034 — the complex potential W = φ + iψ as an interactive field of charges /
-sources / vortices, extended through M2 (conformal transplant of flows past/inside airfoils and polygons) and
-M3 (a potential-theory conductor view — capacity, equilibrium measure, Green's function, Faber/Fekete points),
-riding `@cas/core`, `@cas/expr`, `@cas/gpu`, `@cas/interchange`, `@cas/export`, `@cas/ui`, `@cas/conformal` (M2),
-`@cas/faber` (M3), and `@cas/flow`; and the ninth, **Hele-Shaw Flow**, ADR-0036 — the *time-evolving*
-free-boundary pages split out of 2D Electrostatics: the exact Graven–Makarov one-point unbounded-QD "twisting"
-showpiece (`twist.html`, closed-form `=`) and the classical interior-droplet Polubarinova–Galin evolver
-(`droplet.html`, numerical `≈`, the Galin–Kufarev spectral solve on `@cas/core` `dftOnCircle`, conserved
-Richardson moments + a hard ⚠ cusp / suction stop), driven natively or by the QD → Hele-Shaw import (the
-Quadrature Domains app hands a one-point unbounded QD via `@cas/interchange`, α the convention-neutral residue
-read straight off the wire — no schema bump; `QD_TO_HELESHAW` golden), riding `@cas/core`, `@cas/flow`,
-`@cas/interchange`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
+sources / vortices, extended through M2 (conformal transplant of flows past/inside airfoils and polygons — a
+producer AND consumer of the `@cas/interchange` conformal-map hand-off, ADR-0035); its potential-theory and
+Hele-Shaw pages split out into their own apps (ADR-0036, the two below), leaving it the field sandbox + the
+airfoil + the polygon transplant, riding `@cas/gpu`, `@cas/flow`, `@cas/interchange`, `@cas/export`, and
+`@cas/ui`; the ninth, **Hele-Shaw Flow**, ADR-0036 — the *time-evolving* free-boundary pages split out of 2D
+Electrostatics: the exact Graven–Makarov one-point unbounded-QD "twisting" showpiece (`twist.html`, closed-form
+`=`) and the classical interior-droplet Polubarinova–Galin evolver (`droplet.html`, numerical `≈`, the
+Galin–Kufarev spectral solve on `@cas/core` `dftOnCircle`, conserved Richardson moments + a hard ⚠ cusp /
+suction stop), driven natively or by the QD → Hele-Shaw import (the Quadrature Domains app hands a one-point
+unbounded QD via `@cas/interchange`, α the convention-neutral residue read straight off the wire — no schema
+bump; `QD_TO_HELESHAW` golden), riding `@cas/core`, `@cas/flow`, `@cas/interchange`, and `@cas/ui`; and the
+tenth, **Potential Theory**, ADR-0036 — the conductor view split out of 2D Electrostatics (M3): a compact set K
+as a grounded conductor — equilibrium charge / logarithmic capacity / Green's function, with Faber-zero and
+Fekete/Leja overlays; exact `=` for Schwarz–Christoffel polygons + closed forms, log-lightning `≈` for smooth
+blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
@@ -236,11 +240,13 @@ analytic branch continuation through cusps (uncertified — RISKS §3), and QD S
 See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
 
 **In progress — ADR-0036 (split 2D Electrostatics into three apps + `@cas/flow`).** Stage 0 (extract
-`@cas/flow`, the shared conformal-transplant kernel) and Stage 1 (carve `apps/hele-shaw-flow` — the twist +
-droplet pages — and retarget the QD → Hele-Shaw hand-off, golden `QD_TO_HELESHAW`) are done. Still pending:
-Stage 2 (carve `apps/potential-theory`, the conductor view) and Stage 3 (reshape 2D Electrostatics to
-sandbox + airfoil + polygon, adopt the nav header, split the studio plan into the three per-app plan docs).
-See [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md).
+`@cas/flow`, the shared conformal-transplant kernel), Stage 1 (carve `apps/hele-shaw-flow` — the twist +
+droplet pages — and retarget the QD → Hele-Shaw hand-off, golden `QD_TO_HELESHAW`), and Stage 2 (carve
+`apps/potential-theory` — the conductor view — leaving 2D Electrostatics as the field sandbox + airfoil +
+polygon, its now-unused `@cas/core`/`@cas/expr`/`@cas/faber`/`@cas/conformal` deps pruned) are done. Still
+pending: Stage 3 (adopt the shared nav header across the three apps, and any remaining reshape/doc polish).
+Per-app plans: [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),
+[`docs/design/potential-theory-plan.md`](docs/design/potential-theory-plan.md).
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

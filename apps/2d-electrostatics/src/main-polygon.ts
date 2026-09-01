@@ -103,8 +103,6 @@ function main(): void {
   (back as HTMLAnchorElement).href = "./";
   const foilLink = el("a", "pal-btn", "Airfoil →");
   (foilLink as HTMLAnchorElement).href = "./airfoil.html";
-  const potLink = el("a", "pal-btn", "Potential →");
-  (potLink as HTMLAnchorElement).href = "./potential.html";
 
   const controls = el("div", "foil-controls");
 
@@ -139,7 +137,7 @@ function main(): void {
   controls.append(modeSeg, presetRow, sAoA.row, sGamma.row, copyBtn);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, foilLink, potLink, controls, readout);
+  bar.append(brand, back, foilLink, controls, readout);
 
   // ---- two-pane stage -------------------------------------------------------
   const stage = el("div", "foil-stage");

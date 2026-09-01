@@ -66,7 +66,7 @@ jobs:
 
       # Builds packages + all apps via the root script. We publish launcher + CD + QD + Complex Function
       # Plotter + Riemann Map + Argument Principle + Faber Transform + 2D Electrostatics + Hele-Shaw Flow
-      # below; building correspondences too is harmless and keeps parity with CI.
+      # + Potential Theory below; building correspondences too is harmless and keeps parity with CI.
       - name: Build
         run: pnpm build
 
@@ -82,6 +82,7 @@ jobs:
           cp -r apps/faber-transform/dist    _site/faber-transform
           cp -r apps/2d-electrostatics/dist  _site/2d-electrostatics
           cp -r apps/hele-shaw-flow/dist     _site/hele-shaw-flow
+          cp -r apps/potential-theory/dist   _site/potential-theory
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5

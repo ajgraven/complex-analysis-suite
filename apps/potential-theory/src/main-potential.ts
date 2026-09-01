@@ -1,4 +1,4 @@
-// apps/2d-electrostatics — the potential-theory view (M3): a compact set K as a grounded CONDUCTOR. One
+// apps/potential-theory — a compact set K as a grounded CONDUCTOR (M3; carved out of 2d-electrostatics, ADR-0036). One
 // pane shows K with its equilibrium charge (μ_K), Green equipotentials (g_K), and — as overlays — the
 // Faber-polynomial zeros and the Fekete/Leja points, three roads to the equilibrium measure.
 //
@@ -83,11 +83,9 @@ function main(): void {
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
-  brand.innerHTML = "<strong>2D Electrostatics · Potential theory</strong><span>a compact set K as a grounded conductor</span>";
-  const back = el("a", "pal-btn", "← Field sandbox");
-  (back as HTMLAnchorElement).href = "./";
-  const polyLink = el("a", "pal-btn", "Polygon →");
-  (polyLink as HTMLAnchorElement).href = "./polygon.html";
+  brand.innerHTML = "<strong>Potential Theory</strong><span>a compact set K as a grounded conductor</span>";
+  const back = el("a", "pal-btn", "← Complex Analysis Suite");
+  (back as HTMLAnchorElement).href = "../";
 
   const controls = el("div", "foil-controls");
   const domRow = el("label", "row");
@@ -150,7 +148,7 @@ function main(): void {
   controls.append(domRow, faberCheck, nRow, feketeCheck, fRow);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, polyLink, controls, readout);
+  bar.append(brand, back, controls, readout);
 
   // ---- single conductor pane ------------------------------------------------
   const stage = el("div", "pot-stage");
