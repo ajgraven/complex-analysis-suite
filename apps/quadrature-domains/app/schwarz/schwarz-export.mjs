@@ -301,7 +301,7 @@ export function exportSigmaDeepLink(phi, loc, opts = {}) {
 }
 
 // ---------------------------------------------------------------------------
-// Hele-Shaw twist hand-off — M4d (QD -> 2D Electrostatics). The twist page there drives the
+// Hele-Shaw twist hand-off — M4d (QD -> Hele-Shaw Flow). The twist page there drives the
 // Graven–Makarov one-point family QD(α/(w−w₀)): a growing/twisting unbounded quadrature domain fed by a
 // complex point charge α = q + iγ. It is parametrized by the INVARIANT charge (α, w₀), which it sweeps in
 // time — so the hand-off must carry the charge, not just a single frame's φ. We ride the existing
@@ -311,7 +311,7 @@ export function exportSigmaDeepLink(phi, loc, opts = {}) {
 // CONVENTION (ADR-0006): α is the RESIDUE of h — a rational-function coefficient, geometric and
 // convention-neutral, exactly like φ's coefficients (the QD dA=dx dy/π + 1/(2πi) normalizations touch the
 // quadrature-COEFFICIENT interpretation ∫∫g dA = π·Σ residue·g(aₖ), not the residue itself). So h rides
-// the CANONICAL wire with NO conversion, and 2D Electrostatics reads α = residue directly.
+// the CANONICAL wire with NO conversion, and Hele-Shaw Flow reads α = residue directly.
 //
 // v1 SCOPE: a single simple pole (the QD `unb-1pt` family = the twist engine's exact domain). Multi-pole /
 // higher-order / bounded domains return null (the button reports why).

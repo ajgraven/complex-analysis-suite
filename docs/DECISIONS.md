@@ -41,9 +41,13 @@ Format follows Michael Nygard's ADR convention.
 | [0030](#adr-0030-riemann-surface-exploration-tools-m3--hover-pick-linked-base-plane-monodromy) | Riemann-surface exploration tools (M3 — hover-pick, linked base-plane, monodromy) | Accepted |
 | [0031](#adr-0031-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer) | Implicit `F(w,z)=0` algebraic Riemann surfaces (M2c) — the plotter's first `@cas/core` + `@cas/exact` consumer | Accepted |
 | [0032](#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell) | Extract `@cas/ui` ahead of adoption; port CD's product shell | Accepted |
+| [0033](#adr-0033-monodromy-group-and-fundamental-group-tools-generator-loops-permutation-diagram-genus) | Monodromy-group and fundamental-group tools (generator loops, permutation diagram, genus) | Accepted |
+| [0034](#adr-0034-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) | The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow) | Accepted |
+| [0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140) | The `conformal` `@cas/interchange` form (polygon Schwarz–Christoffel maps, interchange 1.4.0) | Accepted |
+| [0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow) | Split `2d-electrostatics` into three apps; extract `@cas/flow` | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All thirty-two are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All thirty-six are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first _follow-on_** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
@@ -3155,9 +3159,9 @@ Split into **three apps** sharing **one new package**; `2d-electrostatics` keeps
 sheds two clusters (so the moved surface is minimised and the `RM→polygon` conformal golden is untouched).
 
 1. **`@cas/flow`** (new package) — the cross-app substrate the split forces (apps may not import apps):
-   `transplant` (reference flow past 𝔻 + the `Pt`/`NetCurve` types — the shared kernel), `render/net2d`
+   `transplant` (reference flow past 𝔻 + the `Pt`/`NetCurve` types — the shared kernel), `net2d`
    (2D line-art canvas + `boundsOf`), `polygonMap` (the exterior-Schwarz–Christoffel adapter over
-   `@cas/conformal`), `transplantPresets`. Deps: `@cas/conformal`, `@cas/core`. **Three consumers** (all
+   `@cas/conformal`), `transplantPresets`. Deps: `@cas/conformal` (`@cas/core` transitively). **Three consumers** (all
    three apps) → squarely on the ADR-0007 second-consumer rule.
 2. **2D Electrostatics** (the residue; keeps the dir): sandbox + airfoil + polygon. Re-centred on the
    long-promised **theorem-gallery spine** (a guided walk of the paper's dictionary, sandbox as the

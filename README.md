@@ -10,7 +10,7 @@ visualization tools** that share common underlying packages and can hand data of
 another. The organizing goal — the **north star** — is that **each new tool added to the
 suite requires building fewer primitives from scratch than the last**.
 
-It currently hosts **eight** applications riding **eleven** shared `@cas/*` packages:
+It currently hosts **ten** applications riding **twelve** shared `@cas/*` packages:
 
 | App                                                | What it does                                                                                                                                                                                                                                                                                                  | Stack                   |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
@@ -21,7 +21,9 @@ It currently hosts **eight** applications riding **eleven** shared `@cas/*` pack
 | **Riemann Map** (`apps/riemann-map`)               | Pure-2D conformal-mapping studio: the image of the unit disk under a conformal map — from the editor, a numerical region map 𝔻 → Ω by the lightning method, an exterior (Böttcher) map imported from Complex Dynamics, or a Schwarz–Christoffel polygon map — plus the numerical Riemann map of a chosen domain            | Vite + TypeScript       |
 | **Argument Principle** (`apps/argument-principle`) | Visualizes the argument principle: a closed contour and its winding image under `f(z)`, counting zeros minus poles enclosed, with a live expression editor and hi-res PNG export                                                                                                                              | Vite + TypeScript       |
 | **Faber Transform** (`apps/faber-transform`)       | Visualizer for the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K): domain-colors an analytic `f` on the unit disk beside its Faber image `Σ bₙ Fₙ` on a cornered/curved `K` — ellipse, deltoid, finite-Laurent QDs, and **arbitrary polygons** (regular presets + a draggable editor via the exterior Schwarz–Christoffel engine), with per-corner norm annotations | Vite + TypeScript       |
-| **2D Electrostatics** (`apps/2d-electrostatics`)   | The complex potential `W = φ + iψ` as an interactive field: drop/drag charges, sources, sinks, vortices, doublets, with an Electrostatic ↔ Fluid lens; conformal-transplant pages (flow past a Joukowski/Kármán–Trefftz airfoil, and flow past or inside a polygon via Schwarz–Christoffel); and a potential-theory conductor view (capacity, equilibrium measure, Green's function, Faber/Fekete points) | Vite + TypeScript |
+| **2D Electrostatics** (`apps/2d-electrostatics`)   | The complex potential `W = φ + iψ` as an interactive field: drop/drag charges, sources, sinks, vortices, doublets, with an Electrostatic ↔ Fluid lens; plus conformal-transplant pages — flow past a Joukowski/Kármán–Trefftz airfoil, and flow past or inside a polygon via Schwarz–Christoffel | Vite + TypeScript |
+| **Hele-Shaw Flow** (`apps/hele-shaw-flow`)         | Free-boundary flow in a Hele-Shaw cell as a conformal map of the disk evolving in time: the exact Graven–Makarov "twisting" quadrature domain (a complex charge grows it to a double point or a (3,2)-cusp), and a numerical interior-droplet Polubarinova–Galin evolver (injection smooths; suction fingers into a cusp) | Vite + TypeScript |
+| **Potential Theory** (`apps/potential-theory`)     | A compact set `K` as a grounded conductor: equilibrium charge, logarithmic capacity, and Green's-function equipotentials from the exterior conformal map, with Faber-polynomial zeros and Fekete/Leja points as two more roads to the equilibrium measure (exact `=` for SC polygons + closed forms, log-lightning `≈` for smooth blobs) | Vite + TypeScript |
 
 The Correspondences tool was the **forcing function** for the whole suite: its
 requirements deliberately drove which shared packages got extracted, and in what order.
@@ -39,7 +41,7 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**3533 Vitest tests** across 429
+interactive mating visualizer. The whole workspace is green (**3600 Vitest tests** across 436
 files, lint, typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
@@ -83,7 +85,7 @@ pnpm format                              # Prettier --write .
 
 > The `test`, `typecheck`, and `build` scripts build the `@cas/*` packages first — apps
 > and tests consume the packages' output — source `exports` (no `dist/`) for `@cas/conformal`,
-> `@cas/dynamics`, `@cas/expr`, `@cas/gpu`, `@cas/schwarz`, and `@cas/ui`, and built `dist/` for the
+> `@cas/dynamics`, `@cas/expr`, `@cas/flow`, `@cas/gpu`, `@cas/schwarz`, and `@cas/ui`, and built `dist/` for the
 > other five (`@cas/core`, `@cas/exact`, `@cas/export`, `@cas/faber`, `@cas/interchange`) — so a change
 > to a `dist/`-built package is picked up only after its build runs (the root scripts handle this for you).
 
@@ -91,7 +93,7 @@ Each app is an independent static Vite build (`base: "./"`), so its assets resol
 `.github/workflows/deploy-pages.yml` publishes on every push to `master`, gated on
 lint + typecheck + test: one combined Pages site with the launcher at the root and
 `complex-dynamics/`, `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`,
-`argument-principle/`, `faber-transform/`, and `2d-electrostatics/` beneath it. Correspondences is built but not yet
+`argument-principle/`, `faber-transform/`, `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it. Correspondences is built but not yet
 published (the launcher lists it as "Coming soon"). `ci.yml` remains the separate
 lint/typecheck/test/build gate plus a `browser` job for the WebGL2 GLSL harness. See
 [ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
@@ -113,8 +115,10 @@ complex-analysis-suite/
 │   ├── schwarz/              ← @cas/schwarz     the Schwarz-reflection σ engine (CD + Correspondences)
 │   ├── dynamics/             ← @cas/dynamics    inverse-Böttcher exterior maps + external rays (Complex Dynamics)
 │   ├── export/               ← @cas/export      PNG tEXt reproducibility metadata (CD + plotter + Riemann Map + Argument Principle + 2D Electrostatics)
-│   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform + 2D Electrostatics)
-│   └── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + 2D Electrostatics)
+│   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform + @cas/flow)
+│   ├── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + Potential Theory)
+│   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, the suite nav header
+│   └── flow/                 ← @cas/flow        the conformal-transplant kernel: reference flows + flow-net + interior/exterior SC glue + Net2D line-art (2D Electrostatics + Hele-Shaw Flow + Potential Theory)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
@@ -123,11 +127,14 @@ complex-analysis-suite/
     ├── complex-function-plotter/  ← domain-coloring plotter (2D portraits + 3D surface)
     ├── riemann-map/          ← pure-2D conformal-mapping studio (disk image + numeric Riemann map)
     ├── argument-principle/   ← argument-principle / winding-number visualizer
-    └── faber-transform/      ← exterior Faber-transform visualizer (curved + polygonal K)
+    ├── faber-transform/      ← exterior Faber-transform visualizer (curved + polygonal K)
+    ├── 2d-electrostatics/    ← complex-potential field sandbox + conformal-transplant airfoil & polygon
+    ├── hele-shaw-flow/       ← free-boundary Hele-Shaw evolution: the twist + droplet showpieces
+    └── potential-theory/     ← a compact set K as a grounded conductor (equilibrium measure, capacity, Green)
 ```
 
-> **The eleven packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
-> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, and `@cas/ui`.
+> **The twelve packages that exist** are `@cas/core`, `@cas/gpu`, `@cas/expr`,
+> `@cas/interchange`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, and `@cas/flow`.
 > Packages were extracted **only as a second consumer proved it needed them**
 > ([ADR-0007](docs/DECISIONS.md#adr-0007-incremental-extraction-driven-by-real-need)) — which is why the
 > `quadrature` package that [ARCHITECTURE.md](docs/ARCHITECTURE.md) sketches as a target never
@@ -139,8 +146,11 @@ complex-analysis-suite/
 > forward-map conformal builder, carved out of the Riemann-map app *ahead* of its second consumer
 > ([ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 > to give the Schwarz–Christoffel engine a home to be born into — since realized, with both an interior
-> (Riemann Map, 2D Electrostatics) and an exterior (Faber Transform, 2D Electrostatics) SC builder now living there. `@cas/faber`, the
-> tenth package, houses the exterior Faber-transform engine behind the Faber Transform app.
+> (Riemann Map directly; the split apps through `@cas/flow`) and an exterior (Faber Transform directly; the
+> split apps through `@cas/flow`) SC builder now living there. `@cas/faber`, the tenth package, houses the
+> exterior Faber-transform engine behind the Faber Transform and Potential Theory apps. The **twelfth** and
+> newest package, `@cas/flow`, is the conformal-transplant kernel carved out of 2D Electrostatics when that app
+> split into three ([ADR-0036](docs/DECISIONS.md#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow)).
 
 > **Unified menu, not a unified shell.** The suite ships **separate apps that hand off to
 > each other**, fronted by a lightweight **launcher** (`apps/launcher`) — deliberately
@@ -163,7 +173,7 @@ the rest capture the _why_ (and remain the authoritative reasoning). Read in thi
    design, the one-directional dependency rule, what each package owns, convention
    neutrality, and the `expr` + `interchange` keystone. The _where things live_.
 3. **[docs/DECISIONS.md](docs/DECISIONS.md)** — the Architecture Decision Records
-   (ADR-0001…0035): one decision each, with context, alternatives, trade-offs, and
+   (ADR-0001…0036): one decision each, with context, alternatives, trade-offs, and
    consequences. The _why each choice_.
 4. **[docs/MIGRATION.md](docs/MIGRATION.md)** — the phase-by-phase runbook (Phases 0–6),
    now annotated with what actually shipped at each gate. The _how it was built_.

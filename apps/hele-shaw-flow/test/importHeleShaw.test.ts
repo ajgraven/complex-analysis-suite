@@ -36,7 +36,7 @@ function qdLink(hData: unknown): string {
 }
 const hRational = (num: Cplx[], den: Cplx[]) => ({ form: "rational", num, den });
 
-describe("heleShawFromLink — the QD → 2D-E golden (consumer side)", () => {
+describe("heleShawFromLink — the QD → Hele-Shaw Flow golden (consumer side)", () => {
   it("recovers α = i at node w₀ = 2 from the frozen golden link", () => {
     const got = heleShawFromLink(QD_TO_HELESHAW_LINK);
     if (!got || !got.ok) throw new Error("golden link did not decode to a drivable Hele-Shaw charge");

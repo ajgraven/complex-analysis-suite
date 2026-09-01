@@ -50,8 +50,9 @@ agreed direction.)
 Milestones are numbered **ES-n**. Nothing below is committed beyond ES-0.
 
 - **ES-0 — reshape (done, ADR-0036 stage 3).** Hele-Shaw + Potential-Theory split out; 2D Electrostatics
-  trimmed to sandbox + airfoil + polygon; unused deps pruned (`@cas/export`, `@cas/flow`, `@cas/gpu`,
-  `@cas/interchange`, `@cas/ui`); the shared **nav header** (`mountNavHeader`) adopted on all three pages.
+  trimmed to sandbox + airfoil + polygon; now-unused deps pruned (`@cas/core`, `@cas/expr`, `@cas/faber`,
+  `@cas/conformal`), leaving `@cas/export`, `@cas/flow`, `@cas/gpu`, `@cas/interchange`, `@cas/ui`; the shared
+  **nav header** (`mountNavHeader`) adopted on all three pages.
 - **ES-1 — the theorem gallery** (the spine, above). A gallery index + per-theorem curated state and
   overlay, built on the sandbox. Honest labelling throughout (`=`/`≈`).
 - **ES-2 — the `flow` interchange kind.** The free-field state as an `@cas/interchange` payload (deferred

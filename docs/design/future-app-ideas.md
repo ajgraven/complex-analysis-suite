@@ -10,12 +10,14 @@
 > Nothing here is a locked decision; a chosen app graduates to its own `*-plan.md` and,
 > where it changes a shared contract, an ADR.
 
-The existing eight apps span: complex dynamics (Böttcher / rays / matings), quadrature
+The existing ten apps span: complex dynamics (Böttcher / rays / matings), quadrature
 domains + Schwarz reflection, the domain-coloring plotter (incl. a Riemann-surface mode,
 with algebraic-curve **M2** and monodromy **M3** deferred — so that ground is *claimed*),
 Riemann / conformal maps (lightning + interior/exterior Schwarz–Christoffel), the argument
-principle, the Faber transform, 2D electrostatics (complex-potential fields, conformal-transplant
-flow, and potential theory — idea #1 below, since built), and anti-holomorphic correspondences.
+principle, the Faber transform, 2D electrostatics (complex-potential fields + conformal-transplant
+flow), Hele-Shaw flow (free-boundary evolution — the twist + droplet showpieces), potential theory
+(equilibrium measure / capacity / Green's function — idea #1 below, since built and now its own app
+after the ADR-0036 split), and anti-holomorphic correspondences.
 The ideas below deliberately avoid all of those.
 
 ---
