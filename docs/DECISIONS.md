@@ -3125,3 +3125,73 @@ engine enum, a ≥ 2-corner polygon, and the bounded/typed optional fit data so 
 - **Deferred:** the `flow` envelope kind — the full app-state hand-off (singularity list + map reference +
   convention tag) — until a second consumer needs it (ADR-0007). The Riemann-Map producer deep link, initially
   deferred here, has since landed (decision 4 above), so the hand-off is now bidirectional and end-to-end.
+
+---
+
+## ADR-0036: Split `2d-electrostatics` into three apps; extract `@cas/flow`
+
+**Status:** Accepted. **Supersedes ADR-0034's single-app premise** — decision 5 there ("the Hele-Shaw
+'twisting' showpiece M4 *lives in this app*") and the one-app framing of
+[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md). ADR-0034's *other*
+decisions stand unchanged (the hybrid physics framing, convention-at-the-edge (ADR-0006), honest `=`/`≈`/`⚠`
+labelling, and every per-mode engine); they simply now live across three apps. ADR-0035 (the `conformal`
+interchange form) is unaffected — its producer/consumer (the polygon page) stays in `2d-electrostatics`.
+
+### Context
+
+A state-of-the-app review found `apps/2d-electrostatics` had grown by **page-accretion** (M2→M3→M4a–d, one
+page + one engine each) into a portmanteau of the author's paper rather than one tool. Concretely: **six
+pages spanning three distinct mathematical subjects** — static superposition (the sandbox), steady
+conformal-transplant flow (airfoil, polygon), potential theory (the conductor view), and *time-evolving free
+boundaries* (the two Hele-Shaw pages). The naming model `field.ts` (the `W=φ+iψ` field of charges) and the
+electrostatic↔fluid lens — the app's two headline ideas — are imported by **only the sandbox page**; the
+other five share nothing but a render substrate. The Hele-Shaw pair is a moving-boundary / quadrature-domain
+topic (the twist page already *imports a QD recipe* over interchange, ADR-0034/M4d). The clean fault line is
+**steady vs. evolving**.
+
+### Decision
+
+Split into **three apps** sharing **one new package**; `2d-electrostatics` keeps its directory and URLs and
+sheds two clusters (so the moved surface is minimised and the `RM→polygon` conformal golden is untouched).
+
+1. **`@cas/flow`** (new package) — the cross-app substrate the split forces (apps may not import apps):
+   `transplant` (reference flow past 𝔻 + the `Pt`/`NetCurve` types — the shared kernel), `render/net2d`
+   (2D line-art canvas + `boundsOf`), `polygonMap` (the exterior-Schwarz–Christoffel adapter over
+   `@cas/conformal`), `transplantPresets`. Deps: `@cas/conformal`, `@cas/core`. **Three consumers** (all
+   three apps) → squarely on the ADR-0007 second-consumer rule.
+2. **2D Electrostatics** (the residue; keeps the dir): sandbox + airfoil + polygon. Re-centred on the
+   long-promised **theorem-gallery spine** (a guided walk of the paper's dictionary, sandbox as the
+   interactive core); the deferred `flow` interchange kind lands here so the app's *own* object becomes a
+   first-class hand-off. Adopts `@cas/ui`'s `mountNavHeader` (retires the ad-hoc, non-reversible page links).
+3. **Hele-Shaw Flow** (new `apps/hele-shaw-flow`): the exact Graven–Makarov twist family (`twist.html`, `=`)
+   + the numerical interior-droplet PG evolver (`droplet.html`, `≈`) + the QD import. The suite's
+   Laplacian-growth hub, tightly interoperating with Quadrature Domains. Roadmap: M4e surface-tension
+   regularisation (Saffman–Taylor λ=½), general-node / multi-point families, the bounded-QD→droplet
+   hand-off, an exact-vs-numerical overlay.
+4. **Potential Theory** (new `apps/potential-theory`): the conductor-K view (capacity, equilibrium measure,
+   Green's function; Faber-zero + Fekete/Leja overlays; general K via log-lightning). Roadmap: the
+   `(1/n)log|Fₙ|→g_K` growth law, corner-clustered log-charges, condenser capacity, and RM/QD interop.
+
+### Consequences
+
+- **Migration is staged, one reviewable PR each; working software at every gate.** Stage 0 — extract
+  `@cas/flow` and rewire the *current* app to it (pure refactor, six pages unchanged, gate green). Stage 1 —
+  carve Hele-Shaw Flow (`git mv`, wire the app, move the QD→Hele-Shaw hand-off). Stage 2 — carve Potential
+  Theory. Stage 3 — reshape 2D Electrostatics (nav header, retitle) with the gallery + `flow` kind as
+  follow-on milestones.
+- **URLs / hand-offs:** only moved pages change URL; sandbox/airfoil/**polygon** stay under
+  `2d-electrostatics/`. The QD→Hele-Shaw hand-off target moves `2d-electrostatics/twist.html` →
+  `hele-shaw-flow/twist.html` and its golden is renamed `QD_TO_POTENTIAL_HELESHAW` → `QD_TO_HELESHAW` (the
+  `#s=` payload is byte-identical — provenance is QD; the target URL is not in the hash). No external link
+  users → update, not redirect. `#vs=` view-states for moved pages won't decode under the new app ids
+  (no known users; recorded here).
+- **Wiring per new app:** `packages/ui/src/apps.ts` (`SUITE_APPS`), `vitest.workspace.ts`, the census
+  `PROJECTS` (`scripts/assert-test-census.mjs`), a launcher card, the `deploy-pages.yml` `cp`, the
+  dependency-cruiser / ESLint boundary graph, and the **a11y roster** (`scripts/a11y-audit.mjs`) — which
+  today lists *no* 2D-E page, a pre-existing gap the split closes for all three. CLAUDE.md moves from eight
+  apps to ten; `@cas/flow` is the twelfth `@cas/*` package.
+- **Docs:** three short per-app plan docs accompany their carve stages; the single studio plan is retired in
+  favour of them plus this ADR.
+- **Trade-off accepted:** three launcher cards and three CI projects instead of one, in exchange for three
+  coherent tools each with a single subject, a shared substrate that keeps the marginal cost low, and a
+  Hele-Shaw app that sits with its real mathematical neighbours.
