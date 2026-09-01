@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { sampleField, contourSegments } from "../src/render/marchingSquares.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 describe("marching squares", () => {
   it("contours |z| = r as a circle of radius r", () => {

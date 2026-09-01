@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { fitLogLightning } from "../src/logLightning.js";
 import { diskDomain, ellipseDomain, polygonDomain, greenCurve } from "../src/potentialDomain.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 /** ∂K samples (an open loop — drop greenCurve's closing duplicate). */
 const boundaryOf = (d: Parameters<typeof greenCurve>[0], n = 240): Pt[] => greenCurve(d, 0, n).slice(0, n);

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { faberZeros, faberZerosUpTo, toExteriorMap } from "../src/faberZeros.js";
 import { diskDomain, ellipseDomain, segmentDomain, polygonDomain } from "../src/potentialDomain.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 const byReal = (a: Pt, b: Pt): number => a[0] - b[0];
 const maxMod = (zs: readonly Pt[]): number => Math.max(0, ...zs.map((z) => Math.hypot(z[0], z[1])));

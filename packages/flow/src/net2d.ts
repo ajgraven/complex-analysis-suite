@@ -3,8 +3,8 @@
 // the free-field and airfoil panes, which are WebGL fragment shaders — these two panes draw the flow as
 // forward-mapped polylines on a plain 2D canvas. Mirrors the Riemann-map SC studio's Overlay2D idiom
 // (world→pixel, y up), kept app-local per the no-app-imports rule. The geometry it draws lives in
-// ../transplant.ts / ../polygonMap.ts (both node-tested); this is DOM-only.
-import type { Pt, NetCurve } from "../transplant.js";
+// ./transplant.ts / ./polygonMap.ts (both node-tested); this is DOM-only.
+import type { Pt, NetCurve } from "./transplant.js";
 
 export interface Box {
   minx: number;

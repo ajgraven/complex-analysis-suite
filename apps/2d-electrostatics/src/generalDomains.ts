@@ -1,7 +1,7 @@
 // General-K domains for the conductor view (M3.4): compact sets with NO closed-form exterior map, whose
 // potential-theory quantities come from the log-lightning fit (logLightning.ts) instead of a pushforward.
 // Presets are smooth boundaries defined by a radius function r(θ) (or an off-centre circle). All `≈`.
-import type { Pt } from "./transplant.js";
+import type { Pt } from "@cas/flow";
 import { fitLogLightning } from "./logLightning.js";
 
 /** A compact set K given by boundary samples + its log-lightning potential-theory fit. */

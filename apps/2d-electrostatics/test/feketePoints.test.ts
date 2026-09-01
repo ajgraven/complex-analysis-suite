@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { lejaPoints, transfiniteDiameter } from "../src/feketePoints.js";
 import { diskDomain, segmentDomain, polygonDomain } from "../src/potentialDomain.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 const cabs = (p: Pt): number => Math.hypot(p[0], p[1]);
 

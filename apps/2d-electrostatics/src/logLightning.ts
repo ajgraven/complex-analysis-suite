@@ -11,7 +11,7 @@
 // The least squares runs on @cas/core's lstsqHouseholder. Everything here is `≈` (a numerical fit),
 // in deliberate contrast to the `=` exterior-map domains (potentialDomain.ts).
 import { lstsqHouseholder } from "@cas/core";
-import type { Pt } from "./transplant.js";
+import type { Pt } from "@cas/flow";
 
 export interface LogLightningFit {
   /** cap(K) = e^{γ} (≈). */

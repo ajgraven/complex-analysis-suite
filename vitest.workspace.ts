@@ -22,6 +22,7 @@ export default defineWorkspace([
   "./packages/conformal/vitest.config.ts",
   "./packages/faber/vitest.config.ts",
   "./packages/ui/vitest.config.ts",
+  "./packages/flow/vitest.config.ts",
   "./apps/complex-dynamics/vite.config.ts",
   "./apps/complex-function-plotter/vite.config.ts",
   "./apps/correspondences/vite.config.ts",

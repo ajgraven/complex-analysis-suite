@@ -2,7 +2,7 @@
 // so the Green equipotentials g_K = t are extracted as level curves of the scalar field g_K(z) sampled on
 // a grid (log-lightning gives g_K per point). Standard 16-case marching squares with linear edge
 // interpolation; returns line segments (drawn as short polylines). Pure geometry → node-testable.
-import type { Pt } from "../transplant.js";
+import type { Pt } from "@cas/flow";
 
 export interface ScalarField {
   readonly nx: number;

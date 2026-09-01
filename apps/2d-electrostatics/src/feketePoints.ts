@@ -8,7 +8,7 @@
 // We use LEJA points: greedy and sequential (each new point maximizes the product of distances to those
 // already chosen), so extending n by one just appends — natural for an interactive n-slider — and they
 // equidistribute to μ_K just as the (jointly optimal) Fekete points do. All `≈` (finite n).
-import type { Pt } from "./transplant.js";
+import type { Pt } from "@cas/flow";
 import type { ExteriorDomain } from "./potentialDomain.js";
 
 const dist = (a: Pt, b: Pt): number => Math.hypot(a[0] - b[0], a[1] - b[1]);

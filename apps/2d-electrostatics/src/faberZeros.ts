@@ -13,7 +13,7 @@
 // them to the centre, an ellipse to its focal segment. The view labels this rather than overclaiming.
 import { faberConvergence, type ExteriorMap } from "@cas/faber";
 import type { Cx } from "@cas/core";
-import type { Pt } from "./transplant.js";
+import type { Pt } from "@cas/flow";
 import type { ExteriorDomain } from "./potentialDomain.js";
 
 /** An ExteriorDomain's exterior map as the @cas/faber contract (Ψ(z) = c·z + Σ cₖ z⁻ᵏ, laurent[k] = cₖ). */

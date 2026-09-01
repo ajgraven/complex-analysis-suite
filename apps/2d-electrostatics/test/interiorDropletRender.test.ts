@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { dropletBoundary, dropletFlowNet } from "../src/render/interiorDropletRender.js";
 import type { Cx } from "../src/heleShawInterior.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 const finite = (p: Pt): boolean => Number.isFinite(p[0]) && Number.isFinite(p[1]);
 const blob: Cx[] = [[1.3, 0], [0.2, 0.1], [0, -0.1]];

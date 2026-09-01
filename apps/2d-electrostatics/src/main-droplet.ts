@@ -9,8 +9,7 @@
 // opt-in and stopped hard at the (3,2)-cusp (min|f'| → 0, ⚠), never integrated past. Sixth page of the app.
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
-import type { Pt } from "./transplant.js";
-import { Net2D, boundsOf } from "./render/net2d.js";
+import { Net2D, boundsOf, type Pt } from "@cas/flow";
 import { dropletBoundary, dropletFlowNet } from "./render/interiorDropletRender.js";
 import { canonicalize, evolveDroplet, type DropletFrame, type StopReason } from "./heleShawInteriorStepper.js";
 import { type Cx } from "./heleShawInterior.js";

@@ -21,6 +21,7 @@
     "@cas/export": "workspace:*",
     "@cas/faber": "workspace:*",
     "@cas/expr": "workspace:*",
+    "@cas/flow": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/interchange": "workspace:*",
     "@cas/ui": "workspace:*"

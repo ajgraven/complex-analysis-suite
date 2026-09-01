@@ -10,8 +10,7 @@
 // Polygons get Ψ from the exterior Schwarz–Christoffel fit (polygonMap.ts); the closed-form classes
 // (disk / ellipse / segment / deltoid) carry Ψ as an explicit finite Laurent map. Both reduce to one
 // evalPsi, so the samplers below are domain-agnostic. All `=` for these classes.
-import type { Pt } from "./transplant.js";
-import { fitPolygonFlow } from "./polygonMap.js";
+import { fitPolygonFlow, type Pt } from "@cas/flow";
 
 /** A compact set K exposed through its exterior map Ψ: 𝔻* → ext(K). */
 export interface ExteriorDomain {

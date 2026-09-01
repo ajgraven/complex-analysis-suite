@@ -5,7 +5,7 @@
 // image of the disk's polar grid IS the flow net: images of the circles |w| = r are the equipotentials
 // (constant-pressure contours), and images of the rays arg w = const are the streamlines running from the
 // central source out to the free boundary.
-import type { Pt, NetCurve } from "../transplant.js";
+import type { Pt, NetCurve } from "@cas/flow";
 import { evalMap, type Cx } from "../heleShawInterior.js";
 
 const TWO_PI = 2 * Math.PI;

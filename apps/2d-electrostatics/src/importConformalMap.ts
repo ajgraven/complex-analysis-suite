@@ -6,7 +6,7 @@
 // Complex Dynamics consumes a `form:"schwarz"` recipe via @cas/schwarz — the polygon corners are the
 // portable geometry; the consumer always re-derives its own exterior fit.
 import { decodeLink, encodeLink, SCHEMA_ID, VERSION, type Envelope, type MapSpec, type ConformalMap } from "@cas/interchange";
-import type { Pt } from "./transplant.js";
+import type { Pt } from "@cas/flow";
 
 /** The minimal fit data an exported ConformalMap carries — produced from either the exterior flow map or
  *  the interior map, so the `engine` tag honestly reflects which transplant the user is viewing. */

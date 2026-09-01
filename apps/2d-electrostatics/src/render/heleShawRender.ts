@@ -1,7 +1,7 @@
 // Line-art builders for the Hele-Shaw "twisting" view (M4b). Pure geometry — the page (main-twist.ts)
 // draws the returned curves with Net2D. Everything is an exact pushforward through the closed-form map
 // φ_t (heleShawOnePoint.ts), plus the closed-form spiral equipotentials of the driving complex charge.
-import type { Pt, NetCurve } from "../transplant.js";
+import type { Pt, NetCurve } from "@cas/flow";
 import type { OnePointMap, Cx } from "../heleShawOnePoint.js";
 
 const TWO_PI = 2 * Math.PI;

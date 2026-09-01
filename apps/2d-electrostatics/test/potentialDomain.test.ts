@@ -10,7 +10,7 @@ import {
   greenCurve,
   type ExteriorDomain,
 } from "../src/potentialDomain.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 const cabs = (p: Pt): number => Math.hypot(p[0], p[1]);
 

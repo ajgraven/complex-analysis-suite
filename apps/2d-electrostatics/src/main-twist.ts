@@ -9,8 +9,7 @@
 // the timeline STOPS at t* with a ⚠ and never integrates past it. Fifth page of the app.
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
-import type { Pt } from "./transplant.js";
-import { Net2D, boundsOf } from "./render/net2d.js";
+import { Net2D, boundsOf, type Pt } from "@cas/flow";
 import { boundaryOf, conformalNet, spiralEquipotentials } from "./render/heleShawRender.js";
 import { admissible, buildFamily, recoverCharge, W0, type Cx, type Frame, type Critical } from "./heleShawOnePoint.js";
 import { heleShawFromLink } from "./importHeleShaw.js";

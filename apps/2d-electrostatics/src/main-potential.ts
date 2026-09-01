@@ -8,7 +8,7 @@
 // level curves of the g_K field. Fourth page of the app.
 import "./styles/main.css";
 import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
-import type { NetCurve, Pt } from "./transplant.js";
+import { POLYGON_PRESETS, Net2D, boundsOf, type NetCurve, type Pt } from "@cas/flow";
 import {
   diskDomain,
   ellipseDomain,
@@ -22,8 +22,6 @@ import {
   type ExteriorDomain,
 } from "./potentialDomain.js";
 import { blobDomain, ovalDomain, offDiskDomain, type GeneralDomain } from "./generalDomains.js";
-import { POLYGON_PRESETS } from "./transplantPresets.js";
-import { Net2D, boundsOf } from "./render/net2d.js";
 import { sampleField, contourSegments, type ScalarField, type FieldBounds } from "./render/marchingSquares.js";
 import { faberZeros } from "./faberZeros.js";
 import { lejaPoints, lejaFromCurve, transfiniteDiameter } from "./feketePoints.js";

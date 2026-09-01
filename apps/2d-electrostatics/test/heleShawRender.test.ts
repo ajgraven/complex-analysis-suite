@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { boundaryOf, conformalNet, spiralEquipotentials } from "../src/render/heleShawRender.js";
 import { onePointMap } from "../src/heleShawOnePoint.js";
-import type { Pt } from "../src/transplant.js";
+import type { Pt } from "@cas/flow";
 
 const finite = (p: Pt): boolean => Number.isFinite(p[0]) && Number.isFinite(p[1]);
 const map1 = onePointMap([1, 0], 2);

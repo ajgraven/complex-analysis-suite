@@ -1,0 +1,14 @@
+{
+  // @cas/flow is strict TypeScript on @cas/conformal. SOURCE-exports model: no emit —
+  // consumers (Vite/Vitest) resolve src/*.ts directly. Mirrors @cas/conformal's rigor.
+  // net2d.ts is DOM-only; the base config's DOM lib covers it (no per-package lib change).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": ["src", "test"]
+}

@@ -45,6 +45,7 @@ const PROJECTS = [
   { name: 'conformal', match: '/packages/conformal/', floor: 1 },
   { name: 'faber', match: '/packages/faber/', floor: 1 },
   { name: 'ui', match: '/packages/ui/', floor: 1 },
+  { name: 'flow', match: '/packages/flow/', floor: 1 },
   { name: 'complex-dynamics', match: '/apps/complex-dynamics/', floor: 1 },
   { name: 'complex-function-plotter', match: '/apps/complex-function-plotter/', floor: 1 },
   { name: 'correspondences', match: '/apps/correspondences/', floor: 1 },
