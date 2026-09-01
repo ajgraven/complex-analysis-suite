@@ -112,9 +112,12 @@ header.app-head p {
   align-items: start;
   margin-top: 0.25rem;
 }
+/* min-width: 0 lets the 1fr tracks stay put — without it a long nowrap caption would set the grid
+   item's min-content width and stretch the whole layout (the caption scrolls within its panel instead). */
 .workspace > .side-left {
   grid-column: 1;
   grid-row: 1;
+  min-width: 0;
 }
 .workspace > .connector {
   grid-column: 2;
@@ -124,14 +127,17 @@ header.app-head p {
 .workspace > .side-right {
   grid-column: 3;
   grid-row: 1;
+  min-width: 0;
 }
 .workspace > .for-left {
   grid-column: 1;
   grid-row: 2;
+  min-width: 0;
 }
 .workspace > .for-right {
   grid-column: 3;
   grid-row: 2;
+  min-width: 0;
 }
 
 .connector {
