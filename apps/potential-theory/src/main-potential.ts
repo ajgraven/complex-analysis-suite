@@ -7,7 +7,8 @@
 // Green / charge come from a log-lightning fit (`≈`) and the Green equipotentials are marching-squares
 // level curves of the g_K field. Fourth page of the app.
 import "./styles/main.css";
-import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
+import "@cas/ui/nav.css";
+import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import { POLYGON_PRESETS, Net2D, boundsOf, type NetCurve, type Pt } from "@cas/flow";
 import {
   diskDomain,
@@ -163,6 +164,7 @@ function main(): void {
     "<b>The conductor K</b> — equilibrium charge (dots, crowding = density), Green equipotentials g<sub>K</sub> = t";
   fig.append(canvas, cap);
   stage.append(fig);
+  mountNavHeader(app, { current: "potential-theory" });
   app.append(bar, stage);
 
   const net = new Net2D(canvas);

@@ -52,7 +52,10 @@ const BASELINE_PATH = join(HERE, "a11y-baseline.json");
 // The pages to audit — mirrors deploy-pages.yml's _site layout (launcher at the root, each app under
 // a subpath), PLUS correspondences (built but not yet published) and its mating explorer, both of
 // which carry @cas/ui accessibility and so are worth guarding. `mount` is the URL segment the page's
-// dist is served under; two pages may share one dist (correspondences index + mating).
+// dist is served under; a multi-page app lists one entry per page, all sharing the app's one dist
+// (2d-electrostatics index/airfoil/polygon; hele-shaw-flow index/twist/droplet; correspondences
+// index/mating). The three ADR-0036 apps carry the shared nav header (mountNavHeader) + the @cas/ui
+// canvas/boundary a11y, so all their pages are audited here.
 const PAGES = [
   { id: "launcher", mount: "launcher", dist: "apps/launcher/dist", file: "index.html" },
   {
@@ -89,6 +92,48 @@ const PAGES = [
     id: "faber-transform",
     mount: "faber-transform",
     dist: "apps/faber-transform/dist",
+    file: "index.html",
+  },
+  {
+    id: "2d-electrostatics",
+    mount: "2d-electrostatics",
+    dist: "apps/2d-electrostatics/dist",
+    file: "index.html",
+  },
+  {
+    id: "2d-electrostatics-airfoil",
+    mount: "2d-electrostatics",
+    dist: "apps/2d-electrostatics/dist",
+    file: "airfoil.html",
+  },
+  {
+    id: "2d-electrostatics-polygon",
+    mount: "2d-electrostatics",
+    dist: "apps/2d-electrostatics/dist",
+    file: "polygon.html",
+  },
+  {
+    id: "hele-shaw-flow",
+    mount: "hele-shaw-flow",
+    dist: "apps/hele-shaw-flow/dist",
+    file: "index.html",
+  },
+  {
+    id: "hele-shaw-flow-twist",
+    mount: "hele-shaw-flow",
+    dist: "apps/hele-shaw-flow/dist",
+    file: "twist.html",
+  },
+  {
+    id: "hele-shaw-flow-droplet",
+    mount: "hele-shaw-flow",
+    dist: "apps/hele-shaw-flow/dist",
+    file: "droplet.html",
+  },
+  {
+    id: "potential-theory",
+    mount: "potential-theory",
+    dist: "apps/potential-theory/dist",
     file: "index.html",
   },
   {

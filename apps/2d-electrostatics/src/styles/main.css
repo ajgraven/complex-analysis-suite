@@ -60,7 +60,7 @@ body {
 }
 .foil-stage {
   position: fixed;
-  inset: 58px 0 0 0;
+  inset: calc(var(--cas-nav-h, 0px) + 58px) 0 0 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
@@ -111,7 +111,7 @@ a.pal-btn {
 /* --- control surface (toolbar + inspector), floating over the field ------------------------- */
 .toolbar {
   position: fixed;
-  top: 0;
+  top: var(--cas-nav-h, 0px);
   left: 0;
   right: 0;
   z-index: 5;
@@ -391,7 +391,7 @@ input[type="range"] {
 /* potential-theory page (main-potential.ts) — a single full-width conductor pane */
 .pot-stage {
   position: fixed;
-  inset: 58px 0 0 0;
+  inset: calc(var(--cas-nav-h, 0px) + 58px) 0 0 0;
   background: var(--bg);
 }
 .pot-stage .foil-pane {

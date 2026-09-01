@@ -239,13 +239,16 @@ Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighte
 analytic branch continuation through cusps (uncertified — RISKS §3), and QD Schwarz df64 deep-zoom.
 See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
 
-**In progress — ADR-0036 (split 2D Electrostatics into three apps + `@cas/flow`).** Stage 0 (extract
-`@cas/flow`, the shared conformal-transplant kernel), Stage 1 (carve `apps/hele-shaw-flow` — the twist +
-droplet pages — and retarget the QD → Hele-Shaw hand-off, golden `QD_TO_HELESHAW`), and Stage 2 (carve
-`apps/potential-theory` — the conductor view — leaving 2D Electrostatics as the field sandbox + airfoil +
-polygon, its now-unused `@cas/core`/`@cas/expr`/`@cas/faber`/`@cas/conformal` deps pruned) are done. Still
-pending: Stage 3 (adopt the shared nav header across the three apps, and any remaining reshape/doc polish).
-Per-app plans: [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),
+**Done — ADR-0036 (split 2D Electrostatics into three apps + `@cas/flow`).** Stage 0 extracted `@cas/flow`
+(the shared conformal-transplant kernel); Stage 1 carved `apps/hele-shaw-flow` (the twist + droplet pages)
+and retargeted the QD → Hele-Shaw hand-off (golden `QD_TO_HELESHAW`); Stage 2 carved `apps/potential-theory`
+(the conductor view), leaving 2D Electrostatics as the field sandbox + airfoil + polygon (its now-unused
+`@cas/core`/`@cas/expr`/`@cas/faber`/`@cas/conformal` deps pruned); Stage 3 adopted the shared nav header
+(`mountNavHeader` + `@cas/ui/nav.css`) across all three apps — their first consumers, a suite-wide rollout to
+the other seven left as a follow-on — added all three to the non-blocking a11y roster (baseline refreshed),
+and split the studio plan into three per-app plans. Per-app plans:
+[`docs/design/2d-electrostatics-plan.md`](docs/design/2d-electrostatics-plan.md),
+[`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),
 [`docs/design/potential-theory-plan.md`](docs/design/potential-theory-plan.md).
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.

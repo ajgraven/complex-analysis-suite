@@ -12,7 +12,8 @@
 // flow. Honest `≈`/`=` labels + converged/degraded/residual. The app is a producer AND consumer of the
 // `@cas/interchange` `form:"conformal"` map (ADR-0035): import a `#s=` polygon, or "Copy link" to export.
 import "./styles/main.css";
-import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
+import "@cas/ui/nav.css";
+import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import {
   flowNet,
   unitCircle,
@@ -153,6 +154,7 @@ function main(): void {
   const disk = makePane("The disk plane: the reference flow that is carried onto the polygon");
   const poly = makePane("The polygon plane: the same flow carried through the Schwarz–Christoffel map onto the polygon");
 
+  mountNavHeader(app, { current: "2d-electrostatics" });
   app.append(bar, stage);
 
   const presetOf = (id: string): (typeof POLYGON_PRESETS)[number] =>

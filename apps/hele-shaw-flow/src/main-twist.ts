@@ -8,7 +8,8 @@
 // shown as the conservation monitor), and the α>0 critical time. The cusp edge is ill-posed (RISKS §3):
 // the timeline STOPS at t* with a ⚠ and never integrates past it. Fifth page of the app.
 import "./styles/main.css";
-import { runWithFatalBoundary, attachCanvasA11y } from "@cas/ui";
+import "@cas/ui/nav.css";
+import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import { Net2D, boundsOf, type Pt } from "@cas/flow";
 import { boundaryOf, conformalNet, spiralEquipotentials } from "./render/heleShawRender.js";
 import { admissible, buildFamily, recoverCharge, W0, type Cx, type Frame, type Critical } from "./heleShawOnePoint.js";
@@ -127,6 +128,7 @@ function main(): void {
     "<b>Hele-Shaw with spin</b> — the same mechanism as the airfoil's Kutta lift, inside a Hele-Shaw cell (McKee–Bush 2024). The boundary ∂Ω<sub>t</sub> = φ<sub>t</sub>(∂𝔻) grows and twists.";
   fig.append(canvas, cap);
   stage.append(fig);
+  mountNavHeader(app, { current: "hele-shaw-flow" });
   app.append(bar, stage);
 
   const net = new Net2D(canvas);

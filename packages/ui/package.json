@@ -7,7 +7,8 @@
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./nav.css": "./src/nav.css"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json",
