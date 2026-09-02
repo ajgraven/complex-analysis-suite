@@ -66,7 +66,7 @@ committed beyond HS-0; each is a separately-approved pass.
   **evolving-family** hand-off: round-trip a Hele-Shaw family (charge/initial-shape + timeline), and deepen
   the QD import beyond the v1 single-simple-pole-at-w₀=2 (bounded QDs; nodes other than w₀ = 2; multi-point
   h). Design the kind here; promote shared decode to `@cas/interchange`.
-- **HS-4 — droplet extensions ("F1").** Deepen the interior evolver: off-centre & multiple/competing
+- **HS-4 — droplet extensions ("F1") — DONE (F1.1 + F1.2 + F1.3).** Deepen the interior evolver: off-centre & multiple/competing
   sources, an error-controlled integrator, and an honest accuracy budget. The engine *already* supports an
   off-centre source (`Source.at`, the Poisson-kernel RHS), but the page never used it, the flow-net render
   assumed a central source, and the moment monitor silently assumed conservation — so HS-4 unlocks and
@@ -89,19 +89,19 @@ committed beyond HS-0; each is a separately-approved pass.
   (dt vs 2×dt/2 → local-error estimate → accept/reject + PI control), keeping the cusp cap.
 
   Milestones (each its own gate):
-  - **F1.1 — off-centre single source.** Engine `invertMap` (Newton f⁻¹, guarded when b leaves the fluid);
+  - **F1.1 — off-centre single source (DONE).** Engine `invertMap` (Newton f⁻¹, guarded when b leaves the fluid);
     the driver resolves `at = invertMap(coeffs, b)` per velocity eval; the moment monitor generalises to
     drift-from-predicted `M_k(0) + t·Q·bᵏ` (strict at ω = 0; magnitude-drift under spin, both reducing to the
     current check at b = 0). Render: the flow net warps by the disk automorphism φ_a (equipotentials
     f({|φ_a| = r}), streamlines f({arg φ_a = θ}); polar grid at a = 0). UI: a draggable source marker + an
     off-centre preset. Tests: PG residual small at b ≠ 0, area rate = Q, the `Ṁ_k = Q·bᵏ` law by finite
     difference, central regression.
-  - **F1.2 — multiple / competing sources.** `Source` → `sources: Source[]`; densities and the moment
+  - **F1.2 — multiple / competing sources (DONE).** `Source` → `sources: Source[]`; densities and the moment
     reference sum over sources; a mixed inject/suction set (suction still opt-in ⚠). UI: add/remove sources,
     per-source strength + location, Q_total readout. Render: source markers + boundary + coarse ODE-integrated
     streamlines (the full domain-coloured pressure/velocity field is deferred to idea **B2**). Tests: a
     source+sink (ΣQ = 0) evolves at constant area; PG residual; the summed moment law.
-  - **F1.3 — error-controlled integrator + accuracy budget.** Step-doubling adaptive RK4 with local-error
+  - **F1.3 — error-controlled integrator + accuracy budget (DONE).** Step-doubling adaptive RK4 with local-error
     tolerance + PI step control; an optional mild anti-alias spectral filter; the unified budget = max{local
     truncation error, flux defect |dA/dt − Q_total|, predicted-moment drift}, auto-flagging `⚠ accuracy lost`
     before the cusp; a self-refinement/convergence readout (halve dt / raise N → the budget drops). Tests:
