@@ -42,8 +42,9 @@ lets an `≈` quantity read as `=`, and Faber is switched off where it has no ma
 
 ## Roadmap
 
-Milestones are numbered **PT-n**. PT-0 and PT-1 have shipped; **PT-6 is the selected next build** (B1 + C1
-from the idea backlog below). PT-2 … PT-5 remain queued.
+Milestones are numbered **PT-n**. PT-0 and PT-1 have shipped; **PT-6 is the in-progress build** (B1 + C1
+from the idea backlog below) — its first sub-part **PT-6a (the draw-your-own-K polygon editor) has landed**.
+PT-2 … PT-5 remain queued.
 
 - **PT-0 — carve the app (done, ADR-0036 stage 2).** `apps/potential-theory`; the conductor view + its
   engines (`potentialDomain` / `generalDomains` / `logLightning` / `faberZeros` / `feketePoints` /
@@ -62,10 +63,15 @@ from the idea backlog below). PT-2 … PT-5 remain queued.
   counterpart to the flow hand-offs, gated on the receiving-tool rule (ADR-0007).
 - **PT-5 — benchmarks & comparison.** A capacity/energy comparison panel across the three roads and against
   known closed forms (the didactic "they all agree, and here's the rate" view).
-- **PT-6 — Brownian Monte Carlo + draw-your-own-K + probe (SELECTED — B1 + C1 below).** The chosen next
-  build. Three parts: **(a)** a custom-K editor — a draggable-vertex polygon routed through the exact
-  exterior Schwarz–Christoffel engine (`@cas/flow`, `=`), or a smoothed freehand curve through log-lightning
-  (`≈`) — permalinked in the view-state; **(b)** a hover probe reading g_K / potential / field at the cursor
+- **PT-6 — Brownian Monte Carlo + draw-your-own-K + probe (IN PROGRESS — B1 + C1 below).** The chosen next
+  build. Three parts: **(a) — DONE.** A custom-K editor: a draggable-vertex polygon routed through the exact
+  exterior Schwarz–Christoffel engine (`@cas/flow`'s `fitPolygonFlow` via `polygonDomain`, `=`), so a
+  hand-drawn K earns the same exact capacity / μ_K / Green as the presets. Direct-manipulation vertex drag
+  with a view LOCK during editing (so the shape doesn't swim), ＋/－ vertex and Reset, a degenerate-shape
+  `⚠` guard, and a compact `#vs=` permalink (the app's first — domain + rounded corners). The pure helpers
+  (`customK.ts`) are node-tested; the SC refit runs on drag-release, the outline+handles redraw live. (The
+  optional smoothed-freehand-curve-through-log-lightning `≈` variant is deferred — polygon-only for now.)
+  **(b)** a hover probe reading g_K / potential / field at the cursor
   (exact for exterior-map K, `≈` for general), with an optional draggable test charge; **(c)** a
   walk-on-spheres **harmonic-measure Monte Carlo** — random walkers escaping to ∞ reconstruct μ_K as a live
   "fourth road," honestly `≈` with the far-field radius + sample count shown, and validated against the

@@ -9,7 +9,7 @@
 import "./styles/main.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
-import { POLYGON_PRESETS, Net2D, boundsOf, type NetCurve, type Pt } from "@cas/flow";
+import { POLYGON_PRESETS, Net2D, boundsOf, type Box, type NetCurve, type Pt } from "@cas/flow";
 import {
   diskDomain,
   ellipseDomain,
@@ -26,6 +26,15 @@ import { blobDomain, ovalDomain, offDiskDomain, type GeneralDomain } from "./gen
 import { sampleField, contourSegments, type ScalarField, type FieldBounds } from "./render/marchingSquares.js";
 import { faberZeros } from "./faberZeros.js";
 import { lejaPoints, lejaFromCurve, transfiniteDiameter } from "./feketePoints.js";
+import {
+  DEFAULT_CUSTOM_CORNERS,
+  nearestVertex,
+  addVertex,
+  removeVertex,
+  ensureCCW,
+  encodeViewState,
+  decodeViewState,
+} from "./customK.js";
 
 type AnyDomain = ExteriorDomain | GeneralDomain;
 const isGeneral = (d: AnyDomain): d is GeneralDomain => "kind" in d && d.kind === "general";
@@ -52,6 +61,7 @@ const GENERAL_DOMAINS: readonly DomainEntry[] = [
 ];
 const DOMAINS: readonly DomainEntry[] = [...EXTERIOR_DOMAINS, ...GENERAL_DOMAINS];
 const DEFAULT_DOMAIN = "segment1";
+const CUSTOM_ID = "custom"; // the user-drawn polygon (routed through the exact exterior-SC path)
 
 const GREEN_LEVELS = [0.12, 0.28, 0.48, 0.72, 1.02, 1.4]; // exterior (pushforward)
 const GREEN_LEVELS_GENERAL = [0.12, 0.26, 0.42, 0.6, 0.82]; // general (marching squares — stay near K)
@@ -81,6 +91,19 @@ function main(): void {
   let showFekete = false;
   let feketeN = 20;
 
+  // Custom-polygon (draw-your-own-K) state.
+  let customCorners: Pt[] = DEFAULT_CUSTOM_CORNERS.map((p): Pt => [p[0], p[1]]);
+  let selectedVertex = -1;
+  let dragging = -1;
+
+  // Restore a shared view (PT-6a) BEFORE the toolbar is built, so the <select> reflects the restored domain
+  // and a hand-drawn K is ready to draw. A malformed / unknown hash is ignored (falls back to the default).
+  const restored = decodeViewState(window.location.hash);
+  if (restored) {
+    if (restored.domain === CUSTOM_ID || DOMAINS.some((d) => d.id === restored.domain)) domainId = restored.domain;
+    if (restored.corners && restored.corners.length >= 3) customCorners = restored.corners.map((p): Pt => [p[0], p[1]]);
+  }
+
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
@@ -106,7 +129,27 @@ function main(): void {
   };
   addGroup("Exterior map (exact =)", EXTERIOR_DOMAINS);
   addGroup("General K (log-lightning ≈)", GENERAL_DOMAINS);
+  // "Draw your own" — a user-editable polygon, routed through the exact exterior-SC path (so `=`).
+  const customGroup = el("optgroup");
+  customGroup.label = "Draw your own (exact =)";
+  const customOpt = el("option", undefined, "Custom polygon");
+  customOpt.value = CUSTOM_ID;
+  if (domainId === CUSTOM_ID) customOpt.selected = true;
+  customGroup.append(customOpt);
+  domSel.append(customGroup);
   domRow.append(domHead, domSel);
+
+  // Custom-polygon editor controls (shown only for "Custom polygon").
+  const editRow = el("div");
+  editRow.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
+  const addBtn = el("button", "pal-btn", "＋ vertex");
+  addBtn.type = "button";
+  const delBtn = el("button", "pal-btn", "－ vertex");
+  delBtn.type = "button";
+  const resetBtn = el("button", "pal-btn", "Reset");
+  resetBtn.type = "button";
+  editRow.append(el("span", "row-l", "Edit K"), addBtn, delBtn, resetBtn, el("span", undefined, "· drag a corner"));
+  editRow.style.display = domainId === CUSTOM_ID ? "flex" : "none";
 
   // Faber-zero overlay (exterior-map domains only — a general K has no exterior map).
   const faberCheck = el("label", "check");
@@ -146,7 +189,7 @@ function main(): void {
   fRow.append(fHead, fInput);
   fRow.style.display = "none";
 
-  controls.append(domRow, faberCheck, nRow, feketeCheck, fRow);
+  controls.append(domRow, editRow, faberCheck, nRow, feketeCheck, fRow);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, controls, readout);
@@ -169,6 +212,52 @@ function main(): void {
 
   const net = new Net2D(canvas);
 
+  // ---- custom-polygon (draw-your-own-K) view + editing helpers (PT-6a) -----
+  // While "Custom polygon" is selected the view is LOCKED to a fixed box around the shape, so a dragged
+  // vertex stays put under the cursor. (The exterior-map path otherwise re-fits the view to the outermost
+  // Green curve every paint, which would make the shape swim as it is edited.) The lock box is recomputed
+  // only when the polygon is (re)selected or its vertex count changes — never per drag frame.
+  let customView: Box | null = null;
+  const computeCustomView = (corners: readonly Pt[]): Box => {
+    const bb = boundsOf([{ color: "", pts: corners as Pt[] }]) ?? { minx: -1, maxx: 1, miny: -1, maxy: 1 };
+    const cx = (bb.minx + bb.maxx) / 2;
+    const cy = (bb.miny + bb.maxy) / 2;
+    const ext = Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny) / 2;
+    const half = Math.max(ext, 0.5) * 1.2;
+    return { minx: cx - half, maxx: cx + half, miny: cy - half, maxy: cy + half };
+  };
+  if (domainId === CUSTOM_ID) customView = computeCustomView(customCorners);
+  canvas.style.cursor = domainId === CUSTOM_ID ? "crosshair" : "";
+
+  // Debounced permalink write — the selected domain, plus (for the custom polygon) its corners.
+  let permaTimer = 0;
+  const writePermalink = (): void => {
+    if (permaTimer) window.clearTimeout(permaTimer);
+    permaTimer = window.setTimeout(() => {
+      permaTimer = 0;
+      const hash = encodeViewState({ domain: domainId, corners: domainId === CUSTOM_ID ? customCorners : undefined });
+      window.history.replaceState(null, "", hash);
+    }, 250);
+  };
+
+  // The editable polygon outline + drag handles, drawn on top of whatever the paint drew (the selected
+  // vertex gets a bigger white handle).
+  const drawEditorOverlay = (): void => {
+    net.drawLines([{ color: "rgba(40,224,245,0.55)", pts: [...customCorners, customCorners[0]] }], 1.5);
+    for (let i = 0; i < customCorners.length; i++) {
+      const sel = i === selectedVertex;
+      net.drawDot(customCorners[i], sel ? "#ffffff" : "#28e0f5", sel ? 6 : 4.5);
+    }
+  };
+
+  // A finished custom-polygon edit (drag release / add / remove / reset): drop the stale cached SC, write
+  // the permalink, repaint (which refits the exterior SC at the new geometry).
+  const onCustomEdit = (): void => {
+    built = null;
+    writePermalink();
+    requestPaint();
+  };
+
   // Cache the built domain (and, for a general K, the sampled g_K field) so the log-lightning solve and
   // grid evaluation are not repeated on every pan/toggle — only when the domain changes.
   interface Built {
@@ -180,10 +269,15 @@ function main(): void {
   let built: Built | null = null;
   const currentBuilt = (): Built => {
     if (built && built.id === domainId) return built;
-    const entry = DOMAINS.find((d) => d.id === domainId) ?? DOMAINS[0];
     let domain: AnyDomain | null;
     try {
-      domain = entry.make();
+      // The custom polygon rides the exact exterior-SC path (polygonDomain → @cas/flow's fitPolygonFlow),
+      // so a hand-drawn K earns the same `=` capacity / μ_K / Green as the presets. A degenerate shape
+      // (self-intersecting, bad corner) throws → caught below → null → the ⚠ "drag a corner to fix it".
+      domain =
+        domainId === CUSTOM_ID
+          ? polygonDomain(CUSTOM_ID, "Custom polygon", ensureCCW(customCorners))
+          : (DOMAINS.find((d) => d.id === domainId) ?? DOMAINS[0]).make();
     } catch {
       domain = null;
     }
@@ -207,6 +301,25 @@ function main(): void {
   let frame = 0;
   const paint = (): void => {
     frame = 0;
+    const custom = domainId === CUSTOM_ID;
+    const editing = custom && dragging >= 0;
+
+    // While a vertex is being dragged, skip the (slow) exterior-SC rebuild and the overlays: just redraw
+    // the polygon outline + handles on the LOCKED view, so the drag stays smooth. The SC refit happens on
+    // release (onCustomEdit → built = null → a normal paint below).
+    if (editing) {
+      faberBox.disabled = true;
+      faberCheck.style.opacity = "0.4";
+      nRow.style.display = "none";
+      if (net.resize() && customView) {
+        net.clear();
+        net.fitBounds(customView, 1.0);
+        drawEditorOverlay();
+      }
+      readout.innerHTML = `<span class="tp-approx">✎ editing K — release to refit the conformal map…</span>`;
+      return;
+    }
+
     const b = currentBuilt();
     const domain = b.domain;
     faberBox.disabled = !domain || isGeneral(domain); // Faber needs an exterior map
@@ -236,8 +349,12 @@ function main(): void {
 
     if (net.resize()) {
       net.clear();
-      if (domain && !isGeneral(domain)) drawExterior(domain, overlay !== null, fekete, faber);
+      // For the custom polygon the view is locked to `customView` (so editing doesn't make it swim); a
+      // degenerate custom shape draws nothing but still shows its editable outline so the user can fix it.
+      if (domain && !isGeneral(domain)) drawExterior(domain, overlay !== null, fekete, faber, custom && customView ? customView : undefined);
       else if (domain && isGeneral(domain)) drawGeneral(domain, b, overlay !== null, fekete);
+      else if (custom && customView) net.fitBounds(customView, 1.0);
+      if (custom) drawEditorOverlay();
     }
 
     // ---- readout -------------------------------------------------------------
@@ -264,6 +381,8 @@ function main(): void {
           `<br><span class="tp-approx">d<sub>n</sub> ↓ cap(K) = ${domain.capacity.toFixed(4)} · the points → μ_K</span>`;
       }
       readout.innerHTML = html;
+    } else if (custom) {
+      readout.innerHTML = `<span class="tp-warn">⚠ this polygon is degenerate (self-intersecting or a collapsed corner) — drag a corner to fix it</span>`;
     } else {
       readout.innerHTML = `<span class="tp-warn">⚠ the conductor's potential failed to compute</span>`;
     }
@@ -282,13 +401,18 @@ function main(): void {
     if (fekete) for (const p of fekete.points) net.drawDot(p, "#e879f9", 4);
   };
 
-  /** Exterior-map K: exact pushforward of the ζ-plane circles/rays. */
-  const drawExterior = (d: ExteriorDomain, dim: boolean, fekete: { points: Pt[] } | null, faber: { zeros: Pt[] } | null): void => {
+  /** Exterior-map K: exact pushforward of the ζ-plane circles/rays. `viewBox` (the custom-polygon lock)
+   *  overrides the default auto-fit to the outermost Green curve. */
+  const drawExterior = (d: ExteriorDomain, dim: boolean, fekete: { points: Pt[] } | null, faber: { zeros: Pt[] } | null, viewBox?: Box): void => {
     const green = GREEN_LEVELS.map((t): NetCurve => ({ color: "rgba(120,150,210,0.30)", pts: greenCurve(d, t) }));
-    const bb = boundsOf([{ color: "", pts: green[green.length - 1].pts }]);
-    if (bb) {
-      const pad = 0.06 * Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny);
-      net.fitBounds({ minx: bb.minx - pad, maxx: bb.maxx + pad, miny: bb.miny - pad, maxy: bb.maxy + pad }, 1.04);
+    if (viewBox) {
+      net.fitBounds(viewBox, 1.0);
+    } else {
+      const bb = boundsOf([{ color: "", pts: green[green.length - 1].pts }]);
+      if (bb) {
+        const pad = 0.06 * Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny);
+        net.fitBounds({ minx: bb.minx - pad, maxx: bb.maxx + pad, miny: bb.miny - pad, maxy: bb.maxy + pad }, 1.04);
+      }
     }
     const lines: NetCurve[] = [];
     for (let j = 0; j < FIELD_LINES; j++) lines.push({ color: "rgba(150,140,110,0.18)", pts: fieldLine(d, (2 * Math.PI * j) / FIELD_LINES) });
@@ -321,8 +445,73 @@ function main(): void {
 
   domSel.addEventListener("change", () => {
     domainId = domSel.value;
+    const custom = domainId === CUSTOM_ID;
+    editRow.style.display = custom ? "flex" : "none";
+    canvas.style.cursor = custom ? "crosshair" : "";
+    selectedVertex = -1;
+    dragging = -1;
+    if (custom) customView = computeCustomView(customCorners);
+    writePermalink();
     requestPaint();
   });
+
+  // ---- custom-polygon editor: buttons + direct-manipulation drag (PT-6a) ----
+  addBtn.addEventListener("click", () => {
+    customCorners = addVertex(customCorners);
+    customView = computeCustomView(customCorners);
+    selectedVertex = -1;
+    onCustomEdit();
+  });
+  delBtn.addEventListener("click", () => {
+    const i = selectedVertex >= 0 ? selectedVertex : customCorners.length - 1;
+    customCorners = removeVertex(customCorners, i);
+    customView = computeCustomView(customCorners);
+    selectedVertex = -1;
+    onCustomEdit();
+  });
+  resetBtn.addEventListener("click", () => {
+    customCorners = DEFAULT_CUSTOM_CORNERS.map((p): Pt => [p[0], p[1]]);
+    customView = computeCustomView(customCorners);
+    selectedVertex = -1;
+    onCustomEdit();
+  });
+
+  // Pointer → world, via the inverse of the transform the pane last drew with (locked to `customView`).
+  const worldAt = (e: PointerEvent): Pt => {
+    const r = canvas.getBoundingClientRect();
+    return net.toWorld(e.clientX - r.left, e.clientY - r.top);
+  };
+  // A finger-sized hit target (~14 CSS px) expressed in world units at the current zoom.
+  const hitTolWorld = (): number => {
+    const a = net.toWorld(0, 0);
+    const b = net.toWorld(0, 14);
+    return Math.hypot(a[0] - b[0], a[1] - b[1]) || 0.1;
+  };
+  canvas.addEventListener("pointerdown", (e) => {
+    if (domainId !== CUSTOM_ID) return;
+    const i = nearestVertex(customCorners, worldAt(e), hitTolWorld());
+    selectedVertex = i;
+    if (i >= 0) {
+      dragging = i;
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+    requestPaint();
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (dragging < 0 || domainId !== CUSTOM_ID) return;
+    const w = worldAt(e);
+    customCorners = customCorners.map((p, k): Pt => (k === dragging ? w : p));
+    built = null; // the cached SC is stale mid-drag; a fresh one is built on release
+    requestPaint();
+  });
+  const endDrag = (): void => {
+    if (dragging < 0) return;
+    dragging = -1;
+    onCustomEdit(); // refit the exterior SC + write the permalink at the final vertex position
+  };
+  canvas.addEventListener("pointerup", endDrag);
+  canvas.addEventListener("pointercancel", endDrag);
   faberBox.addEventListener("change", () => {
     showFaber = faberBox.checked;
     nRow.style.display = showFaber && !faberBox.disabled ? "" : "none";
