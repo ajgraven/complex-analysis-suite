@@ -96,13 +96,7 @@
       "help": "All page content should be contained by landmarks"
     }
   },
-  "potential-theory": {
-    "region": {
-      "impact": "moderate",
-      "count": 1,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
+  "potential-theory": {},
   "correspondences": {},
   "correspondences-mating": {}
 }

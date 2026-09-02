@@ -3,7 +3,7 @@
 A compact set **K** as a grounded **conductor** — the electrostatic lens on logarithmic potential
 theory, made literal. The equilibrium measure μ_K *is* the charge density on K; the logarithmic
 capacity cap(K) *is* its capacitance; the Green's function g_K(·, ∞) *is* its exterior potential. One
-pane draws all of it, with three overlays that each recover μ_K a different way.
+pane draws all of it, with **four roads** that each recover μ_K a different way.
 
 ## What it shows
 
@@ -15,6 +15,18 @@ pane draws all of it, with three overlays that each recover μ_K a different way
   corners (honest caveat shown otherwise).
 - **Fekete / Leja points** — greedy points maximising ∏|z − zⱼ|, with the transfinite diameter
   dₙ ↓ cap(K) (Fekete's theorem — the third road, tying back to capacity).
+- **Brownian Monte Carlo** — walk-on-spheres walkers released from a far circle reconstruct μ_K where they
+  first strike ∂K (harmonic measure from ∞ = the equilibrium measure). A live probabilistic *fourth road*,
+  honestly `≈`, with the far-field radius + sample count and a uniform-in-θ convergence check shown.
+
+## Make your own K, and probe it
+
+- **Draw your own K** — a "Custom polygon" with draggable vertices (＋/－ vertex, Reset), routed through the
+  exact exterior Schwarz–Christoffel path, so a hand-drawn conductor earns the same `=` capacity / μ_K /
+  Green as the presets. The shape rides in a `#vs=` permalink.
+- **Hover probe** — reads g_K(z), the equilibrium potential U^μ(z) = −log cap − g_K, and the field
+  |E| = |∇g_K| at the cursor (`=` for exterior-map K via a Newton inverse of Ψ, `≈` for general K), with a
+  marker + outward field arrow and an optional draggable **test charge**.
 
 ## Two domain classes, honestly labelled
 

@@ -80,6 +80,26 @@ export class Net2D {
     return [(ndcx * 0.5 + 0.5) * W, (0.5 - ndcy * 0.5) * H];
   }
 
+  /** Inverse of the internal world→pixel transform: a CSS-pixel coordinate relative to the canvas'
+   *  top-left (e.g. a pointer event's clientX/Y minus `getBoundingClientRect()`) → world coordinates,
+   *  using the transform from the most recent `fitBounds` + `resize`. Lets an interactive pane hit-test
+   *  and drag against what it drew — the companion to the (private) world→pixel `toPx`. */
+  toWorld(cssX: number, cssY: number): Pt {
+    const W = Math.max(1, this.canvas.width);
+    const H = Math.max(1, this.canvas.height);
+    const ndcx = ((cssX * this.dpr) / W - 0.5) * 2;
+    const ndcy = (0.5 - (cssY * this.dpr) / H) * 2;
+    return [this.cx + ndcx * this.halfSpan * this.aspect(), this.cy + ndcy * this.halfSpan];
+  }
+
+  /** World → CSS-pixel coordinate relative to the canvas top-left — the forward companion to `toWorld`,
+   *  for placing a DOM marker/label over what was drawn. Uses the transform from the latest
+   *  `fitBounds` + `resize`. */
+  toCanvasPx(p: Pt): [number, number] {
+    const [dx, dy] = this.toPx(p);
+    return [dx / this.dpr, dy / this.dpr];
+  }
+
   clear(bg = "#0b0f1a"): void {
     this.ctx.fillStyle = bg;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
