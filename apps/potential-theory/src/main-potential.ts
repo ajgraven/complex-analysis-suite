@@ -20,6 +20,7 @@ import {
   chargeDensity,
   greenCurve,
   fieldLine,
+  applyFrame,
   type ExteriorDomain,
 } from "./potentialDomain.js";
 import { blobDomain, ovalDomain, offDiskDomain, type GeneralDomain } from "./generalDomains.js";
@@ -512,9 +513,14 @@ function main(): void {
     if (domain && !isGeneral(domain) && showFaber) {
       try {
         const fz = faberZeros(domain, faberN);
+        // The Faber zeros come out in the domain's real-capacity Laurent frame; push them through the
+        // domain's realignment frame (if any) so they land on the same drawn K as evalPsi. Identity for the
+        // closed-form classes.
+        const fr = domain.frame;
+        const zeros = fr ? fz.zeros.map((z) => applyFrame(fr, z)) : fz.zeros;
         // Whether ν(Fₙ) → μ_K is a LIMIT fact set by ∂K's regularity (corners/cusps → yes; analytic-smooth
         // → no), NOT the finite-n zero positions — which are only partway to ∂K even when the limit holds.
-        faber = { zeros: fz.zeros, converged: fz.converged, residual: fz.residual, equidistributes: !domain.smoothBoundary };
+        faber = { zeros, converged: fz.converged, residual: fz.residual, equidistributes: !domain.smoothBoundary };
       } catch {
         faber = null;
       }
