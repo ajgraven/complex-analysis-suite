@@ -66,9 +66,51 @@ committed beyond HS-0; each is a separately-approved pass.
   **evolving-family** hand-off: round-trip a Hele-Shaw family (charge/initial-shape + timeline), and deepen
   the QD import beyond the v1 single-simple-pole-at-w₀=2 (bounded QDs; nodes other than w₀ = 2; multi-point
   h). Design the kind here; promote shared decode to `@cas/interchange`.
-- **HS-4 — droplet extensions.** Off-centre source (the Poisson-kernel RHS already supports |a| < 1);
-  multiple / moving sources; a stiffer time integrator and a convergence/​self-refinement readout on the
-  Galin–Kufarev solve; a moment-drift budget that auto-flags loss of accuracy before the cusp.
+- **HS-4 — droplet extensions ("F1") — DONE (F1.1 + F1.2 + F1.3).** Deepen the interior evolver: off-centre & multiple/competing
+  sources, an error-controlled integrator, and an honest accuracy budget. The engine *already* supports an
+  off-centre source (`Source.at`, the Poisson-kernel RHS), but the page never used it, the flow-net render
+  assumed a central source, and the moment monitor silently assumed conservation — so HS-4 unlocks and
+  generalises rather than rebuilds.
+
+  **Unifying identity.** Richardson's law `Ṁ_k = Q·bᵏ` (M_k = ∫∫_D zᵏ dA, source strength Q at lab-point b)
+  covers every case: k = 0 is flux conservation (area grows at rate Q), k ≥ 1 with b = 0 is today's
+  conserved-moment check. For several fixed lab-sources it sums and stays constant in t, so
+  `M_k(t) = M_k(0) + t·Σⱼ Qⱼ bⱼᵏ` — one linear reference that defines the source term (a sum of Poisson
+  kernels), the moment reference for any configuration, and a unified `≈` error bar
+  `maxₖ |M_k(t) − predicted|` (k = 0 flux, k ≥ 1 Richardson drift) that reduces to the current check when the
+  source is central.
+
+  **Design decisions.** (1) **Lab-fixed sources** (a physical well at a fixed point b; its preimage
+  a = f⁻¹(b) moves) — physical, and it makes the moment reference exactly linear in t. Costs a small Newton
+  f⁻¹; central (b = 0 ⇒ a = 0) is unchanged, so existing behaviour/tests regress cleanly. (2) The **accuracy
+  budget** becomes the honesty gauge: a tolerance on the unified drift / per-step local error trips
+  `⚠ accuracy lost` — which can fire *before* the geometric cusp (truncation/aliasing), the honest thing to
+  surface. (3) **Error-controlled integrator**: replace the cusp-proximity-only step with step-doubling RK4
+  (dt vs 2×dt/2 → local-error estimate → accept/reject + PI control), keeping the cusp cap.
+
+  Milestones (each its own gate):
+  - **F1.1 — off-centre single source (DONE).** Engine `invertMap` (Newton f⁻¹, guarded when b leaves the fluid);
+    the driver resolves `at = invertMap(coeffs, b)` per velocity eval; the moment monitor generalises to
+    drift-from-predicted `M_k(0) + t·Q·bᵏ` (strict at ω = 0; magnitude-drift under spin, both reducing to the
+    current check at b = 0). Render: the flow net warps by the disk automorphism φ_a (equipotentials
+    f({|φ_a| = r}), streamlines f({arg φ_a = θ}); polar grid at a = 0). UI: a draggable source marker + an
+    off-centre preset. Tests: PG residual small at b ≠ 0, area rate = Q, the `Ṁ_k = Q·bᵏ` law by finite
+    difference, central regression.
+  - **F1.2 — multiple / competing sources (DONE).** `Source` → `sources: Source[]`; densities and the moment
+    reference sum over sources; a mixed inject/suction set (suction still opt-in ⚠). UI: add/remove sources,
+    per-source strength + location, Q_total readout. Render: source markers + boundary + coarse ODE-integrated
+    streamlines (the full domain-coloured pressure/velocity field is deferred to idea **B2**). Tests: a
+    source+sink (ΣQ = 0) evolves at constant area; PG residual; the summed moment law.
+  - **F1.3 — error-controlled integrator + accuracy budget (DONE).** Step-doubling adaptive RK4 with local-error
+    tolerance + PI step control; an optional mild anti-alias spectral filter; the unified budget = max{local
+    truncation error, flux defect |dA/dt − Q_total|, predicted-moment drift}, auto-flagging `⚠ accuracy lost`
+    before the cusp; a self-refinement/convergence readout (halve dt / raise N → the budget drops). Tests:
+    matches the exact `circleRadius`/`quadraticSolutionRates` benchmarks to tol with the error estimate
+    tracking true error; a constructed under-resolved case trips the flag before min|f′| hits the cusp.
+
+  Non-goals within HS-4: the full pressure/velocity field + tracer particles (idea B2), surface-tension
+  regularisation (idea B1 / HS-5), multiply-connected pinch-off (app non-goal), and true implicit/stiff
+  solvers (step-doubling RK4 is the pragmatic choice).
 - **HS-5 — surface tension (M4e).** Regularize the ill-posed suction/​cusp edge with surface tension →
   tip-splitting fingers (Saffman–Taylor λ = ½). Strictly `≈` / ⚠ — a research view, never certified.
 - **HS-6 — the steady↔evolving bridge.** Relate the airfoil-Kutta circulation of the *steady* transplant

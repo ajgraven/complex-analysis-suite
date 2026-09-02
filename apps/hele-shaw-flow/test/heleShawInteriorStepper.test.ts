@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   pgVelocity,
   stepDroplet,
+  stepDoubling,
   evolveDroplet,
   interiorMoments,
   momentDrift,
@@ -14,6 +15,8 @@ import {
   quadraticSolutionRates,
   linearModeRate,
   dropletArea,
+  evalMap,
+  pgResidualSup,
   type Cx,
 } from "../src/heleShawInterior.js";
 
@@ -136,5 +139,115 @@ describe("the rigid-spin overlay rotates without changing the shape's moment mag
     expect(last.momentDrift).toBeLessThan(1e-3); // = momentMagnitudeDrift, rotation-robust
     expect(momentMagnitudeDrift(ref, now)).toBeLessThan(1e-3);
     expect(momentDrift(ref, now)).toBeGreaterThan(0.3); // absolute drift IS large — the phases rotated
+  });
+});
+
+describe("off-centre source (F1.1)", () => {
+  // A unit disk carried with `deg` modes — an off-centre source populates the spare aₖ to form the bulge; a
+  // bare degree-1 disk cannot deform, so the truncated solve must have enough modes to resolve the flow.
+  const disk = (deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [1, 0] : [0, 0]));
+
+  it("the spectral solve → (PG): the off-centre residual converges as the mode count grows", () => {
+    const src = { strength: 2, at: [0.3, 0] as Cx };
+    const lo = pgResidualSup(disk(4), pgVelocity(disk(4), src), src);
+    const hi = pgResidualSup(disk(16), pgVelocity(disk(16), src), src);
+    expect(hi).toBeLessThan(lo); // more modes ⇒ smaller residual (geometric convergence)
+    expect(hi).toBeLessThan(1e-6); // well-resolved at 16 modes (measured ≈ 4e-9)
+  });
+
+  it("obeys Richardson's law Ṁ_k = Q·bᵏ (b = the source image)", () => {
+    const coeffs = disk(8); // f(w) = w, carried with enough modes to deform
+    const a: Cx = [0.3, 0];
+    const Q = 2;
+    const b = evalMap(coeffs, a); // image of the source = 0.3
+    const dt = 1e-3;
+    const m0 = interiorMoments(coeffs, 2);
+    const m1 = interiorMoments(stepDroplet(coeffs, { strength: Q, at: a }, dt), 2);
+    // dM₁/dt ≈ Q·b = 0.6 ; dM₂/dt ≈ Q·b² = 0.18 (both real, b real)
+    expect((m1[0][0] - m0[0][0]) / dt).toBeCloseTo(Q * b[0], 2);
+    expect((m1[1][0] - m0[1][0]) / dt).toBeCloseTo(Q * (b[0] * b[0]), 2);
+  });
+
+  it("the moment monitor tracks the predicted drift: tiny residual, but the raw moments DID move", () => {
+    const res = evolveDroplet(disk(16), { strength: 1.5, lab: [0.5, 0] }, { dt: 0.02, tMax: 1, moments: 2 });
+    const last = res.frames[res.frames.length - 1];
+    expect(last.momentDrift).toBeLessThan(1e-6); // drift from the Richardson prediction stays tiny (measured ≈ 4e-9)
+    const raw = momentDrift(interiorMoments(res.frames[0].coeffs, 2), interiorMoments(last.coeffs, 2));
+    expect(raw).toBeGreaterThan(0.05); // an off-centre source genuinely moves the moments (measured ≈ 0.75)
+  });
+
+  it("stops honestly when the source leaves the fluid", () => {
+    const res = evolveDroplet([[1, 0]], { strength: 1, lab: [5, 0] }, { dt: 0.02, tMax: 1 });
+    expect(res.stop).toBe("source-left-fluid"); // (5,0) is outside the unit-disk droplet
+    expect(res.frames.length).toBe(1);
+  });
+});
+
+describe("competing sources (F1.2)", () => {
+  const disk = (deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [1, 0] : [0, 0]));
+
+  it("sums the source terms: the multi-source residual converges with mode count", () => {
+    const srcs = [{ strength: 2, at: [-0.3, 0] as Cx }, { strength: 1, at: [0.3, 0.1] as Cx }];
+    const lo = pgResidualSup(disk(4), pgVelocity(disk(4), srcs), srcs);
+    const hi = pgResidualSup(disk(16), pgVelocity(disk(16), srcs), srcs);
+    expect(hi).toBeLessThan(lo);
+    expect(hi).toBeLessThan(1e-5); // well-resolved summed RHS at 16 modes
+  });
+
+  it("a source + sink (ΣQ = 0) holds the area while the shape deforms", () => {
+    const wells = [{ strength: 1.2, lab: [-0.5, 0] as Cx }, { strength: -1.2, lab: [0.5, 0] as Cx }];
+    const res = evolveDroplet(disk(16), wells, { allowSuction: true, dt: 0.02, tMax: 0.15, moments: 2 });
+    const first = res.frames[0];
+    const last = res.frames[res.frames.length - 1];
+    expect(last.t).toBeGreaterThan(0.05); // it actually evolved
+    expect(Math.abs(last.area - first.area)).toBeLessThan(0.03); // net flux 0 ⇒ area conserved
+    const raw = momentDrift(interiorMoments(first.coeffs, 2), interiorMoments(last.coeffs, 2));
+    expect(raw).toBeGreaterThan(0.01); // fluid streamed across ⇒ the moments moved
+  });
+
+  it("two injectors: the summed predicted-moment monitor stays small", () => {
+    const wells = [{ strength: 1, lab: [-0.4, 0] as Cx }, { strength: 1.5, lab: [0.4, 0.2] as Cx }];
+    const res = evolveDroplet(disk(16), wells, { dt: 0.02, tMax: 0.6, moments: 2 });
+    const last = res.frames[res.frames.length - 1];
+    expect(last.momentDrift).toBeLessThan(1e-3); // drift from Σⱼ Qⱼ·bⱼᵏ stays small
+    const raw = momentDrift(interiorMoments(res.frames[0].coeffs, 2), interiorMoments(last.coeffs, 2));
+    expect(raw).toBeGreaterThan(0.05); // the moments genuinely moved
+  });
+});
+
+describe("adaptive integrator + accuracy budget (F1.3)", () => {
+  const disk = (deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [1, 0] : [0, 0]));
+
+  it("step-doubling is 5th-order accurate and its error estimate scales like dt⁵", () => {
+    const c: Cx[] = [[2, 0]]; // exact self-similar disk
+    const Q = 1;
+    const a = c[0][0];
+    const dt = 0.2;
+    const s = stepDoubling(c, { strength: Q }, dt);
+    // the Richardson update matches the closed form a₁(t) = √(a₁² + Q·dt/π) to well past RK4 order
+    expect(s.next[0][0]).toBeCloseTo(circleRadius(a, Q, dt), 9);
+    // halving dt shrinks the local-error estimate ≈ 32× (5th order)
+    const e1 = stepDoubling(c, { strength: Q }, dt).err;
+    const e2 = stepDoubling(c, { strength: Q }, dt / 2).err;
+    expect(e1 / e2).toBeGreaterThan(16);
+    expect(e1 / e2).toBeLessThan(64);
+  });
+
+  it("reports a per-frame local-error estimate (0 at t = 0, finite after)", () => {
+    const res = evolveDroplet(disk(8), { strength: 1.5, lab: [0.3, 0] }, { dt: 0.02, tMax: 0.5, moments: 2 });
+    expect(res.frames[0].localErr).toBe(0);
+    const last = res.frames[res.frames.length - 1];
+    expect(Number.isFinite(last.localErr)).toBe(true);
+    expect(last.localErr).toBeLessThan(1e-3); // a well-resolved run stays tiny
+  });
+
+  it("the accuracy budget stops an under-resolved run — before any cusp", () => {
+    // A 4-mode map cannot resolve an off-centre bulge, so the moment drift grows fast; the budget catches it.
+    const under = evolveDroplet(disk(4), { strength: 1.5, lab: [0.6, 0] }, { dt: 0.02, tMax: 3, moments: 2, accuracyBudget: 0.05 });
+    expect(under.stop).toBe("accuracy-lost");
+    expect(under.frames[under.frames.length - 1].minFPrime).toBeGreaterThan(0.1); // not a geometric cusp — accuracy, not geometry
+    // A well-resolved 16-mode run under the same budget does NOT trip it.
+    const ok = evolveDroplet(disk(16), { strength: 1.5, lab: [0.6, 0] }, { dt: 0.02, tMax: 3, moments: 2, accuracyBudget: 0.05 });
+    expect(ok.stop).not.toBe("accuracy-lost");
   });
 });

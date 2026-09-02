@@ -20,7 +20,9 @@ import { dftOnCircle } from "@cas/core";
 import type { Cx as CxObj } from "@cas/core";
 import {
   evalMapPrime,
+  invertMap,
   sourceDensity,
+  toSourceList,
   dropletArea,
   minAbsMapPrime,
   rigidSpinRate,
@@ -48,7 +50,7 @@ function sampleCount(n: number): number {
  * (a physical rigid spin is added separately, {@link rigidSpinRate}). Grows ill-conditioned as the droplet
  * nears a cusp (|w f'| → 0 somewhere), where R = S/|wf'|² blows up — guard with {@link minAbsMapPrime}.
  */
-export function pgVelocity(coeffs: readonly Cx[], src: Source, samples = sampleCount(coeffs.length)): Cx[] {
+export function pgVelocity(coeffs: readonly Cx[], src: Source | readonly Source[], samples = sampleCount(coeffs.length)): Cx[] {
   const N = coeffs.length;
   const M = samples;
   // R(θ) = S / |w f'(w)|² sampled on the boundary (as {re,im} for the DFT).
@@ -75,9 +77,20 @@ export function pgVelocity(coeffs: readonly Cx[], src: Source, samples = sampleC
   return dot;
 }
 
-/** The full coefficient velocity = the source-driven shape velocity + an optional rigid co-rotation iω·f. */
-function velocity(coeffs: readonly Cx[], src: Source, spin: number, samples: number): Cx[] {
-  const shape = pgVelocity(coeffs, src, samples);
+/** Resolve a lab-fixed source (`lab` = a fixed plane point) to the current preimage `at` = f⁻¹(lab). A
+ *  central or preimage-fixed source passes through unchanged; a lab source whose point has left the fluid
+ *  (no interior preimage) resolves to strength 0 (the driver detects the exit separately and stops). */
+export function resolveSource(coeffs: readonly Cx[], src: Source): Source {
+  if (!src.lab) return src;
+  const at = invertMap(coeffs, src.lab);
+  return at ? { strength: src.strength, at } : { strength: 0, at: [0, 0] };
+}
+
+/** The full coefficient velocity = the source-driven shape velocity + an optional rigid co-rotation iω·f.
+ *  Each source in the list is resolved (lab → the current preimage) before the summed spectral solve. */
+function velocity(coeffs: readonly Cx[], src: Source | readonly Source[], spin: number, samples: number): Cx[] {
+  const resolved = toSourceList(src).map((s) => resolveSource(coeffs, s));
+  const shape = pgVelocity(coeffs, resolved, samples);
   if (!spin) return shape;
   const spinDot = rigidSpinRate(coeffs, spin);
   return shape.map((d, i) => cadd(d, spinDot[i]));
@@ -87,7 +100,7 @@ const vcombine = (a: readonly Cx[], b: readonly Cx[], sb: number): Cx[] =>
   a.map((ak, i) => cadd(ak, cscale(b[i], sb)));
 
 /** One classical RK4 step of the (PG) flow in coefficient space. */
-export function stepDroplet(coeffs: readonly Cx[], src: Source, dt: number, spin = 0): Cx[] {
+export function stepDroplet(coeffs: readonly Cx[], src: Source | readonly Source[], dt: number, spin = 0): Cx[] {
   const M = sampleCount(coeffs.length);
   const k1 = velocity(coeffs, src, spin, M);
   const k2 = velocity(vcombine(coeffs, k1, dt / 2), src, spin, M);
@@ -97,6 +110,25 @@ export function stepDroplet(coeffs: readonly Cx[], src: Source, dt: number, spin
     ak[0] + (dt / 6) * (k1[i][0] + 2 * k2[i][0] + 2 * k3[i][0] + k4[i][0]),
     ak[1] + (dt / 6) * (k1[i][1] + 2 * k2[i][1] + 2 * k3[i][1] + k4[i][1]),
   ]);
+}
+
+/** One step-doubling RK4 step (F1.3): one full step of `dt` vs two of `dt/2` gives a local-error estimate
+ *  `err = maxₖ |smallₖ − bigₖ|` and, by Richardson extrapolation (16·small − big)/15, a 5th-order result.
+ *  `err` drives the adaptive step size and feeds the accuracy budget. */
+export function stepDoubling(
+  coeffs: readonly Cx[],
+  src: Source | readonly Source[],
+  dt: number,
+  spin = 0,
+): { next: Cx[]; err: number } {
+  const big = stepDroplet(coeffs, src, dt, spin);
+  const small = stepDroplet(stepDroplet(coeffs, src, dt / 2, spin), src, dt / 2, spin);
+  let err = 0;
+  const next: Cx[] = coeffs.map((_, i) => {
+    err = Math.max(err, Math.hypot(small[i][0] - big[i][0], small[i][1] - big[i][1]));
+    return [(16 * small[i][0] - big[i][0]) / 15, (16 * small[i][1] - big[i][1]) / 15];
+  });
+  return { next, err };
 }
 
 // --- conserved-moment monitor (the `≈` correctness gauge) ---------------------------------------------
@@ -149,6 +181,25 @@ export function momentMagnitudeDrift(ref: readonly Cx[], now: readonly Cx[]): nu
   return d;
 }
 
+/** The PREDICTED moments at elapsed time t for lab-fixed sources: by Richardson's law Ṁ_k = Σⱼ Qⱼ·bⱼᵏ (b
+ *  the fixed plane point of each source), so M_k(t) = M_k(0) + t·Σⱼ Qⱼ·bⱼᵏ — exactly linear in t. This is
+ *  the honest reference the ≈ moment drift is measured against; for a central source (b = 0) every k ≥ 1
+ *  term vanishes and it reduces to the conserved M_k(0). */
+export function predictedMoments(ref: readonly Cx[], sources: readonly { strength: number; b: Cx }[], t: number): Cx[] {
+  return ref.map((m0, i) => {
+    const k = i + 1;
+    let re = m0[0];
+    let im = m0[1];
+    for (const s of sources) {
+      let bk: Cx = [1, 0];
+      for (let j = 0; j < k; j++) bk = cmul(bk, s.b); // bᵏ
+      re += t * s.strength * bk[0];
+      im += t * s.strength * bk[1];
+    }
+    return [re, im] as Cx;
+  });
+}
+
 // --- the evolution driver -----------------------------------------------------------------------------
 
 export interface DropletFrame {
@@ -160,12 +211,22 @@ export interface DropletFrame {
   readonly area: number;
   /** min over |w|=1 of |f'| — the cusp gauge. */
   readonly minFPrime: number;
-  /** Conserved-moment drift, the `≈` error bar: the strict `max_k |M_k − M_k(0)|` when there is no spin,
-   *  and the rotation-robust magnitude drift `max_k | |M_k| − |M_k(0)| |` when a spin rotates the moments. */
+  /** Conserved-moment drift, the `≈` error bar: `max_k |M_k − predicted_k|` (Richardson), strict when
+   *  there is no spin and rotation-robust (magnitudes) under spin. */
   readonly momentDrift: number;
+  /** The adaptive integrator's local truncation-error estimate for the step that produced this frame
+   *  (0 at t = 0) — the per-step numerical error bar (F1.3). */
+  readonly localErr: number;
 }
 
-export type StopReason = "reached-tMax" | "max-frames" | "cusp" | "diverged" | "suction-blocked";
+export type StopReason =
+  | "reached-tMax"
+  | "max-frames"
+  | "cusp"
+  | "diverged"
+  | "suction-blocked"
+  | "source-left-fluid"
+  | "accuracy-lost";
 
 export interface EvolveOptions {
   /** Base time step (adaptively shrunk near a cusp). */
@@ -182,6 +243,13 @@ export interface EvolveOptions {
   readonly spin?: number;
   /** Opt in to the ILL-POSED suction direction (Q<0). Off by default; always `⚠` when on. */
   readonly allowSuction?: boolean;
+  /** Local-error tolerance for the step-doubling adaptive integrator (F1.3): the step shrinks/grows to keep
+   *  `err ≤ tol·|a₁(0)|`. `dt` is the initial and maximum step. Default 1e-6. */
+  readonly tol?: number;
+  /** Accuracy budget (F1.3): stop with `accuracy-lost` once the moment drift exceeds this — an honest cut-
+   *  off that can fire BEFORE the geometric cusp when truncation/aliasing has spoiled the `≈`. Off by
+   *  default. */
+  readonly accuracyBudget?: number;
 }
 
 /**
@@ -191,7 +259,7 @@ export interface EvolveOptions {
  */
 export function evolveDroplet(
   coeffs0: readonly Cx[],
-  src: Source,
+  src: Source | readonly Source[],
   opts: EvolveOptions = {},
 ): { frames: DropletFrame[]; stop: StopReason } {
   const dt0 = opts.dt ?? 0.01;
@@ -200,43 +268,67 @@ export function evolveDroplet(
   const cuspFrac = opts.cuspFrac ?? 0.02;
   const K = opts.moments ?? 3;
   const spin = opts.spin ?? 0;
+  const sources = toSourceList(src);
 
-  if (src.strength < 0 && !opts.allowSuction) {
-    return { frames: [], stop: "suction-blocked" };
+  if (sources.some((s) => s.strength < 0) && !opts.allowSuction) {
+    return { frames: [], stop: "suction-blocked" }; // any sink is the ill-posed direction
   }
 
   const a1mag0 = Math.hypot(coeffs0[0][0], coeffs0[0][1]);
   const cuspStop = cuspFrac * a1mag0;
   const refMoments = interiorMoments(coeffs0, K);
-  // Without spin the moments are conserved in full (phase and magnitude), so the strict absolute drift is
-  // the honest gauge; a spin rotates them (M_k ↦ e^{ikωt}M_k), so there we fall back to the magnitude drift.
+  // The moment drift is measured against the PREDICTED moments M_k(0) + t·Σⱼ Qⱼ·bⱼᵏ (Richardson), so
+  // off-centre / competing sources — whose moments genuinely evolve — are still monitored honestly; for a
+  // single central source (b = 0) the prediction is the conserved M_k(0), recovering the original check.
+  // Without spin the strict absolute drift is the gauge; a spin rotates the phases (M_k ↦ e^{ikωt}M_k), so
+  // there we compare magnitudes.
+  const srcForMoments = sources.map((s) => ({ strength: s.strength, b: (s.lab ?? [0, 0]) as Cx }));
   const driftOf = spin === 0 ? momentDrift : momentMagnitudeDrift;
 
-  const frameOf = (t: number, coeffs: Cx[]): DropletFrame => ({
+  const frameOf = (t: number, coeffs: Cx[], localErr: number): DropletFrame => ({
     t,
     coeffs,
     area: dropletArea(coeffs),
     minFPrime: minAbsMapPrime(coeffs),
-    momentDrift: driftOf(refMoments, interiorMoments(coeffs, K)),
+    momentDrift: driftOf(predictedMoments(refMoments, srcForMoments, t), interiorMoments(coeffs, K)),
+    localErr,
   });
 
-  const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx))];
+  // F1.3 — step-doubling adaptive RK4 with local-error control. `dt0` is the initial and MAXIMUM step; the
+  // controller shrinks it (down to a floor) to keep the estimated local error within `errScale`, and grows
+  // it back when the flow is smooth. This replaces the old cusp-proximity-only heuristic and, via the
+  // Richardson-extrapolated update, is 5th-order accurate.
+  const tol = opts.tol ?? 1e-6;
+  const errScale = tol * Math.max(a1mag0, 1e-12);
+  const dtMin = dt0 * 1e-4; // step floor — accept anyway here so the flow always makes progress
+  const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx), 0)];
   let coeffs: Cx[] = coeffs0.map((a) => [a[0], a[1]] as Cx);
   let t = 0;
+  let dt = dt0;
+  let guard = 0;
+  const guardMax = 40 * maxFrames; // bounds rejected retries as well as accepted steps
 
-  while (frames.length < maxFrames && t < tMax) {
+  while (frames.length < maxFrames && t < tMax && guard++ < guardMax) {
+    // A lab-fixed source must stay inside the fluid; if any has left the disk, stop honestly.
+    if (sources.some((s) => s.lab && invertMap(coeffs, s.lab) === null)) return { frames, stop: "source-left-fluid" };
     const minF = minAbsMapPrime(coeffs);
     if (minF < cuspStop) return { frames, stop: "cusp" }; // ⚠ the ill-posed edge — never step past it
-    // adaptive step: shrink as the cusp approaches; never overshoot tMax
-    const dt = Math.min(dt0 * Math.min(1, minF / a1mag0), tMax - t);
-    if (!(dt > 0)) break;
-    const next = stepDroplet(coeffs, src, dt, spin);
-    if (next.some((a) => !Number.isFinite(a[0]) || !Number.isFinite(a[1]))) {
-      return { frames, stop: "diverged" };
+    const step = Math.min(dt, tMax - t);
+    if (!(step > 0)) break;
+    const { next, err } = stepDoubling(coeffs, src, step, spin);
+    if (next.some((a) => !Number.isFinite(a[0]) || !Number.isFinite(a[1]))) return { frames, stop: "diverged" };
+    if (err <= errScale || step <= dtMin) {
+      // accept the step
+      coeffs = next;
+      t += step;
+      const fr = frameOf(t, coeffs, err);
+      frames.push(fr);
+      // Accuracy budget: the ≈ has degraded past what we vouch for — stop honestly (can fire before a cusp).
+      if (opts.accuracyBudget !== undefined && fr.momentDrift > opts.accuracyBudget) return { frames, stop: "accuracy-lost" };
+      dt = Math.min(dt0, step * Math.min(5, 0.9 * Math.pow(errScale / Math.max(err, 1e-300), 0.2))); // grow, capped at dt0
+    } else {
+      dt = Math.max(dtMin, step * Math.max(0.2, 0.9 * Math.pow(errScale / err, 0.2))); // reject: shrink and retry
     }
-    coeffs = next;
-    t += dt;
-    frames.push(frameOf(t, coeffs));
   }
   return { frames, stop: t >= tMax ? "reached-tMax" : "max-frames" };
 }

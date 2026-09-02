@@ -43,7 +43,7 @@ export class Net2D {
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     const c = canvas.getContext("2d");
-    if (!c) throw new Error("2D Electrostatics polygon transplant: 2D canvas context unavailable.");
+    if (!c) throw new Error("Net2D: 2D canvas context unavailable.");
     this.ctx = c;
   }
 
