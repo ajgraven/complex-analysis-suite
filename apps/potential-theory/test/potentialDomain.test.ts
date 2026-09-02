@@ -89,3 +89,46 @@ describe("Green's function g_K = log|Ψ⁻¹|", () => {
     check(ellipseDomain(2, 1), () => 1);
   });
 });
+
+// The exterior-SC fit reconstructs Ψ in a REAL-CAPACITY frame (leading coeff rotated to |C| > 0), which
+// rotates AND translates the drawn conductor away from the caller's corners. polygonDomain realigns the
+// forward map onto the input corners, so the drawn K coincides with what the caller drew — the custom-
+// polygon editor's handles, or a preset's declared vertices — instead of appearing rotated/reflected.
+describe("polygon domains render in the caller's input frame (not the rotated real-capacity frame)", () => {
+  // Distance from a point to the closed polyline (nearest edge), so a corner "on ∂K" is robust to sampling.
+  const distToPolyline = (p: Pt, poly: readonly Pt[]): number => {
+    let best = Infinity;
+    for (let i = 0; i + 1 < poly.length; i++) {
+      const a = poly[i];
+      const b = poly[i + 1];
+      const dx = b[0] - a[0];
+      const dy = b[1] - a[1];
+      const len2 = dx * dx + dy * dy || 1e-30;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2));
+      best = Math.min(best, Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)));
+    }
+    return best;
+  };
+
+  it("an asymmetric (chiral) polygon's drawn ∂K passes through the caller's corners", () => {
+    // No rotational symmetry and an off-origin centroid, so the real-capacity frame is both rotated and
+    // translated — without the realignment every corner would sit well off the drawn boundary.
+    const corners: Pt[] = [[0, 0], [2, 0], [1.4, 1.6], [0.2, 1.1]];
+    const d = polygonDomain("quad", "Quad", corners);
+    expect(d.exact).toBe(true);
+    const bdry = greenCurve(d, 0, 2000); // ∂K = Ψ(unit circle), densely sampled
+    for (const c of corners) expect(distToPolyline(c, bdry)).toBeLessThan(0.02);
+  });
+
+  it("exposes a unit-rotation realignment frame for polygons, none for the closed-form classes", () => {
+    const d = polygonDomain("quad", "Quad", [[0, 0], [2, 0], [1.4, 1.6], [0.2, 1.1]]);
+    const fr = d.frame;
+    expect(fr).toBeDefined();
+    if (!fr) throw new Error("expected a realignment frame for a polygon domain");
+    expect(Math.hypot(fr.rot[0], fr.rot[1])).toBeCloseTo(1, 12); // a pure rotation (|rot| = 1)
+    // The closed-form classes are already canonical (real-positive capacity, natural orientation).
+    expect(diskDomain(1).frame).toBeUndefined();
+    expect(segmentDomain(1).frame).toBeUndefined();
+    expect(deltoidDomain().frame).toBeUndefined();
+  });
+});

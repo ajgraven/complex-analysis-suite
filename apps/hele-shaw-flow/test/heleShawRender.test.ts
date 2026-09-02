@@ -48,6 +48,19 @@ describe("spiralEquipotentials of the driving charge α at w₀", () => {
     }
   });
 
+  it("a large spin fills the whole annulus around w₀, not a partial wedge", () => {
+    const curves = spiralEquipotentials([0.25, 2], w0, { rMax: 6, rMin: 0.05, levels: 13 });
+    // Each arm is anchored at rMin; its start angle about w₀ must populate all four quadrants (the old
+    // code clustered them in one ~q·ln(rMax/rMin)/γ wedge — the reported "partial" fan).
+    const quads = new Set<number>();
+    for (const c of curves) {
+      const a = Math.atan2(c.pts[0][1] - w0[1], c.pts[0][0] - w0[0]); // (−π, π]
+      quads.add(Math.floor(((a + Math.PI) / (2 * Math.PI)) * 4) % 4);
+      expect(c.pts.every(finite)).toBe(true);
+    }
+    expect(quads.size).toBe(4);
+  });
+
   it("a pure vortex (q = 0) gives radial rays; a pure source (γ = 0) gives finite circles", () => {
     const vortex = spiralEquipotentials([0, 1], w0, { rMax: 4, levels: 6 });
     expect(vortex.length).toBe(6);
