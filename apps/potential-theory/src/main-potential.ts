@@ -32,10 +32,12 @@ import {
   addVertex,
   removeVertex,
   ensureCCW,
+  signedArea2,
   encodeViewState,
   decodeViewState,
 } from "./customK.js";
 import { probeExterior, probeGeneral, type Probe } from "./probeField.js";
+import { mulberry32, walkOnce, uniformThetaCV, mcGeometry, type MCGeometry, type Rng } from "./harmonicMC.js";
 
 type AnyDomain = ExteriorDomain | GeneralDomain;
 const isGeneral = (d: AnyDomain): d is GeneralDomain => "kind" in d && d.kind === "general";
@@ -102,6 +104,17 @@ function main(): void {
   let chargeOn = false; // whether the pinned draggable test charge is shown
   let chargePos: Pt | null = null; // its world position
   let chargeDrag = false; // whether the test charge is being dragged
+
+  // Brownian Monte-Carlo state (PT-6c): the walk-on-spheres harmonic-measure "fourth road."
+  let mcOn = false;
+  let mcGeom: MCGeometry | null = null; // built from the current ∂K polyline
+  let mcCounts: number[] = []; // per-boundary-vertex hit counts (length = mcGeom.boundary.length)
+  let mcTotal = 0; // total accumulated hits
+  let mcUniformTheta = false; // exterior simple K ⇒ the uniform-in-θ validation applies
+  let mcRng: Rng = mulberry32(1);
+  let mcRaf = 0; // the incremental runner's rAF handle (0 = idle)
+  const MC_TARGET = 24000; // stop accumulating past this many hits
+  const MC_BATCH = 100; // walkers per animation frame
 
   // Restore a shared view (PT-6a) BEFORE the toolbar is built, so the <select> reflects the restored domain
   // and a hand-drawn K is ready to draw. A malformed / unknown hash is ignored (falls back to the default).
@@ -203,7 +216,14 @@ function main(): void {
   chargeBox.checked = chargeOn;
   chargeCheck.append(chargeBox, el("span", undefined, "Test charge"));
 
-  controls.append(domRow, editRow, faberCheck, nRow, feketeCheck, fRow, chargeCheck);
+  // Brownian Monte Carlo (PT-6c): the walk-on-spheres harmonic-measure fourth road.
+  const mcCheck = el("label", "check");
+  const mcBox = el("input");
+  mcBox.type = "checkbox";
+  mcBox.checked = mcOn;
+  mcCheck.append(mcBox, el("span", undefined, "Brownian MC"));
+
+  controls.append(domRow, editRow, faberCheck, nRow, feketeCheck, fRow, chargeCheck, mcCheck);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, controls, readout);
@@ -274,6 +294,7 @@ function main(): void {
   const onCustomEdit = (): void => {
     built = null;
     writePermalink();
+    if (mcOn) resetMC(); // the boundary changed — restart the Brownian MC
     requestPaint();
   };
 
@@ -351,6 +372,65 @@ function main(): void {
       if (bb) return [bb.maxx + 0.35 * (bb.maxx - bb.minx) + 0.3, (bb.miny + bb.maxy) / 2];
     }
     return [2, 0];
+  };
+
+  // ---- Brownian Monte Carlo (PT-6c) ----------------------------------------
+  // The ordered ∂K polyline the walkers hit: Ψ(e^{iθ}) at uniform θ for an exterior-map K (so the hit
+  // index → the uniformizing angle), or the boundary samples of a general K.
+  const mcBoundary = (dom: AnyDomain): Pt[] => (isGeneral(dom) ? dom.boundary.map((p): Pt => [p[0], p[1]]) : equilibriumDots(dom, 240));
+  const stopMCRunner = (): void => {
+    if (mcRaf) cancelAnimationFrame(mcRaf);
+    mcRaf = 0;
+  };
+  const mcStep = (): void => {
+    mcRaf = 0;
+    if (!mcOn || !mcGeom) return;
+    for (let i = 0; i < MC_BATCH; i++) {
+      const h = walkOnce(mcGeom, mcRng);
+      if (h) {
+        mcCounts[h.index] = (mcCounts[h.index] ?? 0) + 1;
+        mcTotal++;
+      }
+    }
+    requestPaint();
+    if (mcTotal < MC_TARGET) mcRaf = requestAnimationFrame(mcStep); // keep accumulating, else leave it drawn
+  };
+  // (Re)build the MC geometry for the current domain and (re)start the incremental run. Called on toggle
+  // and whenever the conductor changes (domain switch or a custom-polygon edit).
+  const resetMC = (): void => {
+    stopMCRunner();
+    mcGeom = null;
+    mcCounts = [];
+    mcTotal = 0;
+    if (!mcOn) {
+      requestPaint();
+      return;
+    }
+    const dom = currentBuilt().domain;
+    if (!dom) {
+      requestPaint(); // degenerate custom polygon: nothing to walk against yet
+      return;
+    }
+    const boundary = mcBoundary(dom);
+    mcGeom = mcGeometry(boundary);
+    mcCounts = new Array<number>(boundary.length).fill(0);
+    mcRng = mulberry32((Math.random() * 2 ** 31) >>> 0);
+    const rK = mcGeom.farR / 8;
+    // A slit (segment) double-covers ∂K, so the uniform-in-θ index metric is meaningless there; require an
+    // exterior-map K enclosing real area.
+    mcUniformTheta = !isGeneral(dom) && Math.abs(signedArea2(boundary)) > 1e-3 * rK * rK;
+    mcRaf = requestAnimationFrame(mcStep);
+    requestPaint();
+  };
+  // Draw the accumulated harmonic-measure histogram: each ∂K vertex sized by its hit density (→ μ_K).
+  const drawMC = (): void => {
+    if (!mcGeom || mcTotal === 0) return;
+    let max = 1;
+    for (const c of mcCounts) if (c > max) max = c;
+    for (let i = 0; i < mcGeom.boundary.length; i++) {
+      const c = mcCounts[i];
+      if (c > 0) net.drawDot(mcGeom.boundary[i], "#5ef2a0", 2 + 3 * Math.sqrt(c / max));
+    }
   };
 
   // Cache the built domain (and, for a general K, the sampled g_K field) so the log-lightning solve and
@@ -441,15 +521,17 @@ function main(): void {
       fekete = { points, diameter: transfiniteDiameter(points) };
     }
     const overlay = faber || fekete;
+    const dim = overlay !== null || (mcOn && mcTotal > 0); // dim the exact charge under any overlay road
 
     if (net.resize()) {
       net.clear();
       // For the custom polygon the view is locked to `customView` (so editing doesn't make it swim); a
       // degenerate custom shape draws nothing but still shows its editable outline so the user can fix it.
-      if (domain && !isGeneral(domain)) drawExterior(domain, overlay !== null, fekete, faber, custom && customView ? customView : undefined);
-      else if (domain && isGeneral(domain)) drawGeneral(domain, b, overlay !== null, fekete);
+      if (domain && !isGeneral(domain)) drawExterior(domain, dim, fekete, faber, custom && customView ? customView : undefined);
+      else if (domain && isGeneral(domain)) drawGeneral(domain, b, dim, fekete);
       else if (custom && customView) net.fitBounds(customView, 1.0);
       if (custom) drawEditorOverlay();
+      if (mcOn) drawMC(); // the Brownian MC histogram (PT-6c), on top of the exact charge
 
       // ---- probe glyphs (PT-6b): the hover marker + the pinned test charge, each with a field arrow ---
       if (domain) {
@@ -484,6 +566,15 @@ function main(): void {
         html +=
           `<br><span class="tp-fekete">Fekete/Leja: transfinite diameter d<sub>${feketeN}</sub> ≈ ${fekete.diameter.toFixed(4)}</span>` +
           `<br><span class="tp-approx">d<sub>n</sub> ↓ cap(K) = ${domain.capacity.toFixed(4)} · the points → μ_K</span>`;
+      }
+      if (mcOn && mcTotal > 0) {
+        html += `<br><span class="tp-mc">Brownian MC: ${mcTotal.toLocaleString()} hits · released from R = 8·radius(K)</span>`;
+        if (mcUniformTheta) {
+          const cv = uniformThetaCV(mcCounts, 36);
+          html += `<br><span class="tp-approx">harmonic measure from ∞ = μ_K · uniform-in-θ spread ≈ ${(cv * 100).toFixed(1)}% → 0</span>`;
+        } else {
+          html += `<br><span class="tp-approx">harmonic measure from ∞ = μ_K (the equilibrium charge) · ≈</span>`;
+        }
       }
       readout.innerHTML = html;
     } else if (custom) {
@@ -557,6 +648,7 @@ function main(): void {
     dragging = -1;
     if (custom) customView = computeCustomView(customCorners);
     if (chargeOn) chargePos = defaultChargePos(); // re-home the test charge outside the new K
+    if (mcOn) resetMC(); // restart the Brownian MC against the new conductor
     writePermalink();
     requestPaint();
   });
@@ -676,6 +768,10 @@ function main(): void {
     if (chargeOn && !chargePos) chargePos = defaultChargePos();
     if (!chargeOn) chargeLabel.hidden = true;
     requestPaint();
+  });
+  mcBox.addEventListener("change", () => {
+    mcOn = mcBox.checked;
+    resetMC(); // on → build geometry + start the incremental run; off → stop + clear
   });
   window.addEventListener("resize", requestPaint);
   requestPaint();

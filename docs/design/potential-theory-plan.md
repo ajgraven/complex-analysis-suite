@@ -42,10 +42,10 @@ lets an `≈` quantity read as `=`, and Faber is switched off where it has no ma
 
 ## Roadmap
 
-Milestones are numbered **PT-n**. PT-0 and PT-1 have shipped; **PT-6 is the in-progress build** (B1 + C1
-from the idea backlog below) — its sub-parts **PT-6a (the draw-your-own-K polygon editor) and PT-6b (the
-hover probe + draggable test charge) have landed**; **PT-6c (the Brownian Monte Carlo) is next**. PT-2 …
-PT-5 remain queued.
+Milestones are numbered **PT-n**. PT-0 and PT-1 have shipped; **PT-6 (B1 + C1 from the idea backlog below)
+is now complete** — all three sub-parts have landed: **PT-6a** (the draw-your-own-K polygon editor),
+**PT-6b** (the hover probe + draggable test charge), and **PT-6c** (the walk-on-spheres harmonic-measure
+Monte Carlo). PT-2 … PT-5 remain queued.
 
 - **PT-0 — carve the app (done, ADR-0036 stage 2).** `apps/potential-theory`; the conductor view + its
   engines (`potentialDomain` / `generalDomains` / `logLightning` / `faberZeros` / `feketePoints` /
@@ -64,8 +64,8 @@ PT-5 remain queued.
   counterpart to the flow hand-offs, gated on the receiving-tool rule (ADR-0007).
 - **PT-5 — benchmarks & comparison.** A capacity/energy comparison panel across the three roads and against
   known closed forms (the didactic "they all agree, and here's the rate" view).
-- **PT-6 — Brownian Monte Carlo + draw-your-own-K + probe (IN PROGRESS — B1 + C1 below).** The chosen next
-  build. Three parts: **(a) — DONE.** A custom-K editor: a draggable-vertex polygon routed through the exact
+- **PT-6 — Brownian Monte Carlo + draw-your-own-K + probe (DONE — B1 + C1 below).** All three parts
+  landed. **(a) — DONE.** A custom-K editor: a draggable-vertex polygon routed through the exact
   exterior Schwarz–Christoffel engine (`@cas/flow`'s `fitPolygonFlow` via `polygonDomain`, `=`), so a
   hand-drawn K earns the same exact capacity / μ_K / Green as the presets. Direct-manipulation vertex drag
   with a view LOCK during editing (so the shape doesn't swim), ＋/－ vertex and Reset, a degenerate-shape
@@ -79,18 +79,23 @@ PT-5 remain queued.
   1/|√(z²−1)|, and the ellipse) — and `≈` for general K (the log-lightning greenFn + a central-difference
   gradient). Rendered as a floating readout at the cursor plus an on-canvas marker + outward field arrow,
   with an optional **draggable test charge** (a pinned probe) reusing the same evaluator. The conductor pane
-  also became a `<main>` landmark (a11y). **(c)** a
-  walk-on-spheres **harmonic-measure Monte Carlo** — random walkers escaping to ∞ reconstruct μ_K as a live
-  "fourth road," honestly `≈` with the far-field radius + sample count shown, and validated against the
-  exact μ_K (arcsine on a segment, uniform on the disk, cusp-concentration on the deltoid). App-local (no
-  new package, per ADR-0007); reuses `@cas/flow`, `@cas/ui` (accessible canvas + optional worker offload),
-  and `@cas/core`.
+  also became a `<main>` landmark (a11y). **(c) — DONE.** A walk-on-spheres **harmonic-measure Monte Carlo**
+  (`harmonicMC.ts`, node-tested): Brownian walkers released from a far circle |z − c| = 8·radius(K)
+  reconstruct μ_K where they first strike ∂K (harmonic measure from ∞ = the equilibrium measure) — a live
+  probabilistic **fourth road** beside the charge / Faber zeros / Fekete points, honestly `≈`. Walk-on-
+  spheres jumps to a uniform point on the largest ∂K-free disk (exact BM exit); a walker past the far
+  circle returns via the exact exterior Poisson kernel (a wrapped-Cauchy draw — BM is recurrent in 2D). The
+  hits accumulate incrementally (rAF batches) into a per-∂K-vertex histogram drawn in green, with the
+  far-field radius + running sample count shown and, for an exterior simple K, a quantitative uniform-in-θ
+  spread (→ 0). Validated against the exact μ_K: uniform on the disk, arcsine tip-crowding on the segment,
+  cusp-concentration on the deltoid. App-local (no new package, per ADR-0007); reuses `@cas/flow` and
+  `@cas/ui`.
 
 ## Future expansions — idea backlog (researched Sept 2026)
 
 A menu of larger extensions, researched against the potential-theory / approximation-theory literature and
 the suite's packages, recorded so future passes can refer back. Effort is S/M/L; honesty is the `=`/`≈` the
-feature can honestly claim. **B1 + C1 are being built now as PT-6**; the rest await selection.
+feature can honestly claim. **B1 + C1 shipped as PT-6**; the rest await selection.
 (Sources in References.)
 
 **Tier A — deepen the object.**
@@ -105,9 +110,9 @@ feature can honestly claim. **B1 + C1 are being built now as PT-6**; the rest aw
   components by capacity. `=`/`≈`. Effort **L** (multiply-connected log-lightning / condenser solve).
 
 **Tier B — new lenses on μ_K (the app's spine is "roads to the equilibrium measure").**
-- **B1 — Brownian Monte Carlo = harmonic measure (SELECTED, PT-6).** Random walkers from ∞ hitting ∂K
-  reconstruct μ_K (harmonic measure from ∞ = equilibrium measure); a live probabilistic fourth road, plus
-  the h-function. `≈`. Effort **S–M**.
+- **B1 — Brownian Monte Carlo = harmonic measure (SHIPPED as PT-6c).** Random walkers from ∞ hitting ∂K
+  reconstruct μ_K (harmonic measure from ∞ = equilibrium measure); a live probabilistic fourth road. `≈`.
+  Effort **S–M**. (The h-function / harmonic-measure distribution function is a possible follow-on.)
 - **B2 — polynomial-approximation lab (Bernstein–Walsh).** Type an `f`; draw its degree-n Chebyshev / Faber
   / best approximant on K, its zeros equidistributing to μ_K, and the error contours coinciding with the
   Green equipotentials (error^{1/n} → 1/e^{g}). The "why capacity matters" payoff; subsumes PT-2 and extends
@@ -118,9 +123,9 @@ feature can honestly claim. **B1 + C1 are being built now as PT-6**; the rest aw
   A1 (the endpoint charges are a baby external field). `=` (closed-form check). Effort **S–M**.
 
 **Tier C — interactivity & authorship.**
-- **C1 — draw-your-own-K + a hover probe (SELECTED, PT-6).** A draggable-vertex K editor (polygon → exact
-  exterior SC; smooth → log-lightning `≈`), permalinked, plus a hover readout of g_K / potential / field.
-  Turns "gallery" into "instrument." `=`/`≈`. Effort **M**. Reuses the draggable-editor pattern (Faber /
+- **C1 — draw-your-own-K + a hover probe (SHIPPED as PT-6a/PT-6b).** A draggable-vertex K editor (polygon →
+  exact exterior SC; the smooth → log-lightning `≈` variant deferred), permalinked, plus a hover readout of
+  g_K / potential / field. Turns "gallery" into "instrument." `=`/`≈`. Effort **M**. Reuses the draggable-editor pattern (Faber /
   Riemann-map) + the existing g_K sampler.
 
 **Tier D — cross-app resonance (the suite's north star: hand-offs).**

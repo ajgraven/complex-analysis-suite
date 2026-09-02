@@ -407,6 +407,10 @@ input[type="range"] {
   color: #e879f9;
 }
 
+.tp-mc {
+  color: #5ef2a0;
+}
+
 /* PT-6b — the hover probe (a floating readout at the cursor) + the pinned test-charge label. */
 .tp-probe,
 .tp-charge {
