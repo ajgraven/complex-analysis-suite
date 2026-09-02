@@ -427,11 +427,9 @@ export function createControls(
       .catch(() => undefined);
   });
 
-  const airfoilLink = el("a", "pal-btn", "Airfoil ↗");
-  airfoilLink.href = "airfoil.html";
-  airfoilLink.title = "Flow past a Joukowski airfoil (conformal transplant)";
-
-  actions.append(airfoilLink, presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
+  // The airfoil transplant moved to the sibling 2D Hydrodynamics app (ADR-0037); reach it via the nav
+  // header, not an in-toolbar deep link.
+  actions.append(presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
   bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);

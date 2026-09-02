@@ -101,12 +101,6 @@ const PAGES = [
     file: "index.html",
   },
   {
-    id: "2d-electrostatics-airfoil",
-    mount: "2d-electrostatics",
-    dist: "apps/2d-electrostatics/dist",
-    file: "airfoil.html",
-  },
-  {
     id: "2d-electrostatics-polygon",
     mount: "2d-electrostatics",
     dist: "apps/2d-electrostatics/dist",
@@ -117,6 +111,12 @@ const PAGES = [
     mount: "2d-hydrodynamics",
     dist: "apps/2d-hydrodynamics/dist",
     file: "index.html",
+  },
+  {
+    id: "2d-hydrodynamics-airfoil",
+    mount: "2d-hydrodynamics",
+    dist: "apps/2d-hydrodynamics/dist",
+    file: "airfoil.html",
   },
   {
     id: "hele-shaw-flow",

@@ -60,11 +60,15 @@ green before and after (guardrail: working software at every step).
   nav header, the body roster (`src/bodies.ts`) previewed on the hub, and a smoke test. Wired into
   `SUITE_APPS`, `vitest.workspace.ts`, the census `PROJECTS`, a launcher card, the `deploy-pages.yml` `cp`, and
   the a11y roster. Proves the wiring against a trivial page before any code moves.
-- **HD-1 — move the airfoil (`git mv`, history preserved).** The six airfoil files move in; the page retitles
-  to "2D Hydrodynamics · Airfoil" and its nav retargets (`current: "2d-hydrodynamics"`). Removed from 2D
-  Electrostatics: the files, the airfoil `rollupOptions.input`, and the `2d-electrostatics-airfoil` a11y roster
-  entry. URL: `2d-electrostatics/airfoil.html` → `2d-hydrodynamics/airfoil.html` (no known external users; the
-  page is stateless, so no `#vs=` migration).
+- **HD-1 — move the airfoil (`git mv`, history preserved; done).** The seven airfoil files (`airfoil.html`,
+  `main-airfoil.ts`, `airfoil.ts`, `render/airfoilView.ts` + `airfoilShader.ts`, and the two tests) moved in;
+  the page retitled to "2D Hydrodynamics · Airfoil", its nav retargeted (`current: "2d-hydrodynamics"`), and its
+  back-link now points at the app hub. Its slice of 2D-E's shared stylesheet was ported to a dedicated
+  `src/styles/airfoil.css` so the page looks identical; the app gained `@cas/gpu` (the airfoil renderer). Removed
+  from 2D Electrostatics: the files, the airfoil `rollupOptions.input`, the two now-dangling cross-page links
+  (the sandbox "Airfoil ↗" and the polygon "Airfoil →"), and the `2d-electrostatics-airfoil` a11y roster entry.
+  URL: `2d-electrostatics/airfoil.html` → `2d-hydrodynamics/airfoil.html` (no known external users; the page is
+  stateless, so no `#vs=` migration).
 - **HD-2 — the transplant gallery (the reassigned ES-4 + the second-consumer extraction).** Extract
   `EXTERIOR_MAP_PRESETS` from Riemann-Map into `@cas/flow` (id + label + the `@cas/expr` display string **and**
   a plain `ψ: Pt → Pt` closure for the transplant), rewire Riemann-Map to consume it, and pin the map values

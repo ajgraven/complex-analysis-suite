@@ -1,0 +1,177 @@
+/* 2D Hydrodynamics — airfoil transplant page (the two-pane cylinder ↔ wing view). Ported with the
+   airfoil out of 2d-electrostatics (ADR-0037, HD-1): exactly the rules main-airfoil.ts uses (base
+   shell + toolbar/brand/pal-btn + the foil two-pane stage + sliders + the lift readout + the fatal
+   banner), lifted from that app's shared main.css so the page looks identical after the move. The hub
+   page keeps its own main.css; this sheet is loaded only by airfoil.html. `--cas-nav-h` comes from
+   @cas/ui/nav.css (the nav header height). */
+
+:root {
+  --bg: #0f1115;
+  --text: #e7eaf2;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  overflow: hidden;
+}
+
+#boot-loading {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 10;
+}
+
+/* --- control surface (toolbar) ------------------------------------------------------------- */
+.toolbar {
+  position: fixed;
+  top: var(--cas-nav-h, 0px);
+  left: 0;
+  right: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 8px 14px;
+  background: rgba(15, 17, 21, 0.72);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(231, 234, 242, 0.08);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+.brand strong {
+  font-size: 15px;
+}
+.brand span {
+  font-size: 11px;
+  color: #8c95a9;
+}
+
+.pal-btn {
+  font: 13px/1 system-ui, sans-serif;
+  color: var(--text);
+  background: rgba(231, 234, 242, 0.08);
+  border: 1px solid rgba(231, 234, 242, 0.16);
+  border-radius: 7px;
+  padding: 7px 11px;
+  cursor: pointer;
+}
+.pal-btn:hover {
+  background: rgba(231, 234, 242, 0.16);
+}
+a.pal-btn {
+  text-decoration: none;
+  display: inline-block;
+}
+
+/* --- airfoil sliders + readout ------------------------------------------------------------- */
+.foil-controls {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.foil-controls .row {
+  width: 160px;
+  margin: 0;
+}
+.row {
+  display: block;
+  margin: 8px 0;
+}
+.row-h {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #b6bccb;
+}
+.row-v {
+  font-variant-numeric: tabular-nums;
+  color: #e7eaf2;
+}
+input[type="range"] {
+  width: 100%;
+  accent-color: #6da7c8;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #b6bccb;
+}
+.readout {
+  margin-top: 8px;
+  font: 12px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+  color: #9fb2c9;
+}
+.lift-readout {
+  margin: 0 0 0 auto;
+  text-align: right;
+  color: #c4ccda;
+}
+.lift-readout b {
+  color: #8fd0b0;
+}
+
+/* --- the two-pane cylinder ↔ wing stage ---------------------------------------------------- */
+.foil-stage {
+  position: fixed;
+  inset: calc(var(--cas-nav-h, 0px) + 58px) 0 0 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  background: rgba(231, 234, 242, 0.08);
+}
+.foil-pane {
+  position: relative;
+  margin: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+.foil-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.foil-pane figcaption {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  padding: 6px 10px;
+  background: rgba(15, 17, 21, 0.72);
+  backdrop-filter: blur(6px);
+  border-radius: 7px;
+  font-size: 12px;
+  color: #c4ccda;
+}
+
+/* Fatal-error banner created by @cas/ui's runWithFatalBoundary when init throws. */
+#app-error {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 20;
+  margin: 0;
+  padding: 12px 16px;
+  background: #5a1a1a;
+  color: #ffe;
+  font: 14px/1.4 system-ui, sans-serif;
+}

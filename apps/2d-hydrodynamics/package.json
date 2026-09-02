@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cas/gpu": "workspace:*",
     "@cas/ui": "workspace:*"
   },
   "devDependencies": {

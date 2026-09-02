@@ -98,8 +98,9 @@ rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conforma
 **2D Electrostatics**, ADR-0034 — the complex potential W = φ + iψ as an interactive field of charges /
 sources / vortices, extended through M2 (conformal transplant of flows past/inside airfoils and polygons — a
 producer AND consumer of the `@cas/interchange` conformal-map hand-off, ADR-0035); its potential-theory and
-Hele-Shaw pages split out into their own apps (ADR-0036, the two below), leaving it the field sandbox + the
-airfoil + the polygon transplant, riding `@cas/gpu`, `@cas/flow`, `@cas/interchange`, `@cas/export`, and
+Hele-Shaw pages split out into their own apps (ADR-0036, the two below), and its airfoil transplant into
+2D Hydrodynamics (ADR-0037), leaving it the field sandbox + the polygon transplant, riding `@cas/gpu`,
+`@cas/flow`, `@cas/interchange`, `@cas/export`, and
 `@cas/ui`; the ninth, **Hele-Shaw Flow**, ADR-0036 — the *time-evolving* free-boundary pages split out of 2D
 Electrostatics: the exact Graven–Makarov one-point unbounded-QD "twisting" showpiece (`twist.html`, closed-form
 `=`) and the classical interior-droplet Polubarinova–Galin evolver (`droplet.html`, numerical `≈`, the
@@ -257,8 +258,9 @@ ext(B), the hydrodynamic twin of 2D Electrostatics — anchored by the Joukowski
 broadened by a closed-form transplant gallery (slit / ellipse / deltoid / astroid / star). No new package
 (ADR-0007): it consumes `@cas/ui`/`@cas/gpu`/`@cas/flow`/`@cas/export`, moves the airfoil engine intact, and
 extracts Riemann-Map's `EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule (HD-2). Staged
-HD-0…HD-5: **HD-0 (scaffold + wire the empty hub) is done**; HD-1 `git mv`s the airfoil in and out of 2D
-Electrostatics; HD-2 builds the gallery; the polygon transplant stays in 2D Electrostatics for now (HD-4,
+HD-0…HD-5: **HD-0 (scaffold + wire the empty hub) and HD-1 (`git mv` the airfoil out of 2D Electrostatics —
+retitled, nav retargeted, its CSS ported to `airfoil.css`, the two dangling cross-page links removed) are
+done**; HD-2 builds the gallery; the polygon transplant stays in 2D Electrostatics for now (HD-4,
 deferred — it anchors the ADR-0035 `conformal` hand-off). 2D Electrostatics' ES-4 is reassigned to this app.
 Plan: [`docs/design/2d-hydrodynamics-plan.md`](docs/design/2d-hydrodynamics-plan.md).
 

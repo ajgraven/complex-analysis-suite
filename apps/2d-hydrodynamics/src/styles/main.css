@@ -1,32 +1,19 @@
-/* 2D Hydrodynamics — hub styling (HD-0). The two-pane airfoil/gallery views bring their own layout;
-   this sheet styles the landing hub. Neutral, theme-aware palette; the nav header is styled by
+/* 2D Hydrodynamics — hub styling. The two-pane airfoil/gallery views bring their own layout
+   (airfoil.css, and the gallery's later); this sheet styles the landing hub. Dark palette matched to
+   the suite's apps (2d-electrostatics / hele-shaw-flow / the airfoil page all use #0f1115), so moving
+   from the hub into the airfoil page is one continuous theme. The nav header is styled by
    @cas/ui/nav.css. */
 
 :root {
-  --bg: #f7f8fa;
-  --panel: #ffffff;
-  --ink: #1c2430;
-  --muted: #5c6673;
-  --line: #e2e6ec;
-  /* Deepened so the small code / tag text clears WCAG AA (4.5:1) on its own soft-tint background. */
-  --accent: #1557b0;
-  --accent-soft: rgba(31, 111, 235, 0.1);
-  --lift: #9a4708;
-  --lift-soft: rgba(180, 83, 9, 0.12);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f141b;
-    --panel: #161d27;
-    --ink: #e7edf5;
-    --muted: #99a1b3;
-    --line: #263141;
-    --accent: #5c9bff;
-    --accent-soft: rgba(92, 155, 255, 0.14);
-    --lift: #f2b25a;
-    --lift-soft: rgba(242, 178, 90, 0.16);
-  }
+  --bg: #0f1115;
+  --panel: #171a21;
+  --ink: #e7eaf2;
+  --muted: #98a2b3;
+  --line: #262b35;
+  --accent: #7fb0d8;
+  --accent-soft: rgba(109, 167, 200, 0.16);
+  --lift: #f2b25a;
+  --lift-soft: rgba(242, 178, 90, 0.16);
 }
 
 * {

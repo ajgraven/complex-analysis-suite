@@ -1,11 +1,12 @@
-// apps/2d-electrostatics — the Joukowski airfoil transplant (M2.2). Flow past an airfoil IS flow past a
+// apps/2d-hydrodynamics — the Joukowski airfoil transplant. Flow past an airfoil IS flow past a
 // cylinder carried through z = J(ζ) = ζ + b²/ζ, shown as two linked panes: the cylinder plane (left)
 // and the airfoil plane (right). Both domain-colour the closed-form velocity and contour the SAME
 // cylinder-plane stream function ψ = Im W, so a streamline in the cylinder pane maps to the matching
 // streamline on the wing — the map visibly carries the flow. Thickness/camber/angle-of-attack sliders
 // reshape the airfoil; the Kutta toggle fixes the circulation at the trailing edge and reports the
-// Kutta–Joukowski lift L = −ρUΓ. Second page of the app (index.html is the free-field sandbox).
-import "./styles/main.css";
+// Kutta–Joukowski lift L = −ρUΓ. The airfoil page (index.html is the app hub). Moved here from 2D
+// Electrostatics (ADR-0037, HD-1) — the app's crown-jewel transplant.
+import "./styles/airfoil.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import {
@@ -88,8 +89,8 @@ function main(): void {
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
-  brand.innerHTML = "<strong>2D Electrostatics · Airfoil</strong><span>flow past a Joukowski wing</span>";
-  const back = el("a", "pal-btn", "← Field sandbox");
+  brand.innerHTML = "<strong>2D Hydrodynamics · Airfoil</strong><span>flow past a Joukowski wing</span>";
+  const back = el("a", "pal-btn", "← Overview");
   (back as HTMLAnchorElement).href = "./";
 
   const controls = el("div", "foil-controls");
@@ -128,7 +129,7 @@ function main(): void {
     "<b>Airfoil plane</b> — the same flow, carried by z = ζ + b²/ζ onto the wing",
   );
 
-  mountNavHeader(app, { current: "2d-electrostatics" });
+  mountNavHeader(app, { current: "2d-hydrodynamics" });
   app.append(bar, stage);
 
   const cylGl = cyl.canvas.getContext("webgl2");
