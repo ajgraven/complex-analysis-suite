@@ -119,6 +119,12 @@ const PAGES = [
     file: "airfoil.html",
   },
   {
+    id: "2d-hydrodynamics-gallery",
+    mount: "2d-hydrodynamics",
+    dist: "apps/2d-hydrodynamics/dist",
+    file: "gallery.html",
+  },
+  {
     id: "hele-shaw-flow",
     mount: "hele-shaw-flow",
     dist: "apps/hele-shaw-flow/dist",

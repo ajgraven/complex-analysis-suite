@@ -1,8 +1,8 @@
-/* 2D Hydrodynamics — airfoil transplant page (the two-pane cylinder ↔ wing view). Ported with the
-   airfoil out of 2d-electrostatics (ADR-0037, HD-1): exactly the rules main-airfoil.ts uses (base
-   shell + toolbar/brand/pal-btn + the foil two-pane stage + sliders + the lift readout + the fatal
-   banner), lifted from that app's shared main.css so the page looks identical after the move. The hub
-   page keeps its own main.css; this sheet is loaded only by airfoil.html. `--cas-nav-h` comes from
+/* 2D Hydrodynamics — the shared two-pane transplant stylesheet (airfoil.html + gallery.html). Ported
+   with the airfoil out of 2d-electrostatics (ADR-0037, HD-1): the rules the transplant pages use (base
+   shell + toolbar/brand/pal-btn + the two-pane foil stage + sliders + the lift readout + the body picker
+   + the fatal banner), lifted from that app's shared main.css so the pages look identical. The hub page
+   keeps its own main.css; this sheet is loaded by the two disk↔body pages. `--cas-nav-h` comes from
    @cas/ui/nav.css (the nav header height). */
 
 :root {
@@ -162,6 +162,24 @@ input[type="range"] {
   border-radius: 7px;
   font-size: 12px;
   color: #c4ccda;
+}
+
+/* --- gallery body picker + readout (gallery.html) ------------------------------------------ */
+.tp-select {
+  font: 12px/1 system-ui, sans-serif;
+  color: #e7eaf2;
+  background: rgba(20, 28, 46, 0.85);
+  border: 1px solid rgba(231, 234, 242, 0.18);
+  border-radius: 7px;
+  padding: 6px 9px;
+  margin-top: 4px;
+  cursor: pointer;
+}
+.tp-readout {
+  min-width: 240px;
+}
+.tp-exact {
+  color: #8fd0b0;
 }
 
 /* Fatal-error banner created by @cas/ui's runWithFatalBoundary when init throws. */

@@ -20,6 +20,7 @@
     "@cas/core": "workspace:*",
     "@cas/export": "workspace:*",
     "@cas/expr": "workspace:*",
+    "@cas/flow": "workspace:*",
     "@cas/interchange": "workspace:*",
     "@cas/ui": "workspace:*",
     "katex": "^0.17.0"

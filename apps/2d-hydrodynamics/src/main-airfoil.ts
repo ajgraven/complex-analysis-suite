@@ -6,7 +6,7 @@
 // reshape the airfoil; the Kutta toggle fixes the circulation at the trailing edge and reports the
 // Kutta–Joukowski lift L = −ρUΓ. The airfoil page (index.html is the app hub). Moved here from 2D
 // Electrostatics (ADR-0037, HD-1) — the app's crown-jewel transplant.
-import "./styles/airfoil.css";
+import "./styles/panes.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import {

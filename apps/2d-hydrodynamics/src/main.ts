@@ -19,15 +19,16 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/** A card describing one body ψ: 𝔻* → ext(B). Non-linked in HD-0; HD-1/HD-2 turn these into the
- *  airfoil-page and gallery links as those pages land. */
+/** A clickable card for one body ψ: 𝔻* → ext(B), linking to its page (the airfoil page, or the gallery
+ *  deep-linked by body). */
 function bodyCard(b: BodyEntry): HTMLElement {
-  const card = el("article", "body-card");
+  const card = el("a", "body-card");
+  (card as HTMLAnchorElement).href = b.href;
   card.append(el("h3", "body-name", b.label));
   const psi = el("p", "body-psi");
   psi.append(el("span", "psi-label", "ψ = "), el("code", undefined, b.psi));
   card.append(psi, el("p", "body-desc", `carries 𝔻* onto ${b.body}.`));
-  if (b.kutta) {
+  if (b.lift) {
     card.append(el("span", "tag tag-lift", "Kutta condition · lift"));
   } else {
     card.append(el("span", "tag", "circulation free"));
@@ -54,13 +55,6 @@ function main(): void {
         "W = φ + iψ that its electrostatic twin cannot reduce to dropped charges. Flow past a body B is " +
         "flow past the unit disk 𝔻*, carried onto B by a conformal map ψ: 𝔻* → ext(B); where B has a sharp " +
         "trailing edge, the Kutta condition fixes the circulation and gives the lift.",
-    ),
-  );
-  head.append(
-    el(
-      "p",
-      "status",
-      "Being assembled (ADR-0037): the airfoil page and the transplant gallery are landing behind this hub.",
     ),
   );
   root.append(head);

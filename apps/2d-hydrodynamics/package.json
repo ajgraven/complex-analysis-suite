@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "2D Hydrodynamics — ideal (inviscid, irrotational) flow past a body, realized as flow past the unit disk 𝔻* carried through a conformal map ψ: 𝔻* → ext(B). The hydrodynamic twin of 2D Electrostatics (both render the same complex potential W = φ + iψ; this app showcases the reading the electrostatic↔fluid lens cannot reduce to dropped charges — flow past a wing, and lift). Anchored by the Joukowski / Kármán–Trefftz airfoil (the cylinder↔wing transplant, the Kutta condition, and the Kutta–Joukowski lift), broadened by a closed-form transplant gallery (vertical slit / flat plate, ellipse, deltoid, astroid, 5-cusp star). Established by ADR-0037, with the airfoil promoted out of 2D Electrostatics. Built on the shared @cas/* packages — @cas/ui (the browser shell + suite nav header), @cas/gpu (the WebGL2 render substrate, from HD-1), @cas/flow (the conformal-transplant kernel: flowNet + pushforward, from HD-2), and @cas/export (PNG figure export, from HD-3). No new package (ADR-0007); convention-neutral core, conventions at the app edge (ADR-0006).",
+  "description": "2D Hydrodynamics — ideal (inviscid, irrotational) flow past a body, realized as flow past the unit disk 𝔻* carried through a conformal map ψ: 𝔻* → ext(B). The hydrodynamic twin of 2D Electrostatics (both render the same complex potential W = φ + iψ; this app showcases the reading the electrostatic↔fluid lens cannot reduce to dropped charges — flow past a wing, and lift). Anchored by the Joukowski / Kármán–Trefftz airfoil (the cylinder↔wing transplant, the Kutta condition, and the Kutta–Joukowski lift), broadened by a closed-form transplant gallery (vertical slit / flat plate, ellipse, deltoid, astroid, 5-cusp star). Established by ADR-0037, with the airfoil promoted out of 2D Electrostatics. Built on the shared @cas/* packages — @cas/ui (the browser shell + suite nav header), @cas/gpu (the WebGL2 render substrate behind the airfoil), and @cas/flow (the conformal-transplant kernel: flowNet + pushforward + the closed-form exterior-map gallery). No new package (ADR-0007); convention-neutral core, conventions at the app edge (ADR-0006). (@cas/export for PNG figure export arrives with HD-3.)",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "scripts": {
@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cas/flow": "workspace:*",
     "@cas/gpu": "workspace:*",
     "@cas/ui": "workspace:*"
   },

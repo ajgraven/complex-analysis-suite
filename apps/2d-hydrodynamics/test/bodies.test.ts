@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
+import { EXTERIOR_MAP_PRESETS } from "@cas/flow";
 import { BODIES } from "../src/bodies.js";
 
-// HD-0 smoke test — pins the invariants the hub and (later) the gallery picker rely on. It is a real
-// assertion of structure, not a tautology: it guards uniqueness of the preset keys and the honesty of
-// the Kutta/lift flag (set only where a single trailing edge makes the condition well-posed).
+// Pins the invariants the hub roster relies on, and — the HD-2 guard — that every closed-form body id is a
+// real @cas/flow EXTERIOR_MAP_PRESET id, so the hub cards, the gallery deep links (#<id>), and the shared
+// maps can never fall out of sync.
 describe("body roster", () => {
   it("is non-empty and has unique ids", () => {
     expect(BODIES.length).toBeGreaterThan(0);
@@ -15,17 +16,22 @@ describe("body roster", () => {
     const airfoils = BODIES.filter((b) => b.kind === "airfoil");
     expect(airfoils).toHaveLength(1);
     expect(airfoils[0]?.id).toBe("airfoil");
-    expect(airfoils[0]?.kutta).toBe(true);
+    expect(airfoils[0]?.lift).toBe(true);
+    expect(airfoils[0]?.href).toBe("airfoil.html");
   });
 
-  it("flags the Kutta condition only where a single trailing edge makes it well-posed", () => {
-    const byId = new Map(BODIES.map((b) => [b.id, b]));
-    expect(byId.get("slit")?.kutta).toBe(true); // flat plate — a trailing edge
-    expect(byId.get("ellipse")?.kutta).toBe(false); // smooth — no edge, circulation free
-    expect(byId.get("deltoid")?.kutta).toBe(false); // several cusps — no distinguished trailing edge
+  it("routes every closed-form body to the gallery, with free circulation (no imposed Kutta)", () => {
+    const galleryIds = new Set(EXTERIOR_MAP_PRESETS.map((p) => p.id));
+    const closedForm = BODIES.filter((b) => b.kind === "closed-form");
+    expect(closedForm.length).toBeGreaterThan(0);
+    for (const b of closedForm) {
+      expect(galleryIds.has(b.id), `${b.id} is a real @cas/flow exterior-map preset`).toBe(true);
+      expect(b.href).toBe(`gallery.html#${b.id}`);
+      expect(b.lift).toBe(false);
+    }
   });
 
-  it("gives every gallery body a display map ψ and a body description", () => {
+  it("gives every body a display map ψ and a body description", () => {
     for (const b of BODIES) {
       expect(b.psi.length).toBeGreaterThan(0);
       expect(b.body.length).toBeGreaterThan(0);

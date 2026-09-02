@@ -49,13 +49,6 @@ body {
   color: var(--ink);
 }
 
-.status {
-  margin: 0 0 1.5rem;
-  font-size: 0.9rem;
-  color: var(--muted);
-  font-style: italic;
-}
-
 .hub-section {
   margin-top: 2rem;
 }
@@ -82,6 +75,19 @@ body {
   border-radius: 12px;
   background: var(--panel);
   padding: 0.9rem 1rem 1rem;
+}
+
+a.body-card {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  transition:
+    border-color 0.12s ease,
+    transform 0.12s ease;
+}
+a.body-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-1px);
 }
 
 .body-name {

@@ -82,6 +82,13 @@
       "help": "All page content should be contained by landmarks"
     }
   },
+  "2d-hydrodynamics-gallery": {
+    "region": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
   "hele-shaw-flow": {},
   "hele-shaw-flow-twist": {
     "region": {

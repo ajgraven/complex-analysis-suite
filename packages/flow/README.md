@@ -1,10 +1,11 @@
 # @cas/flow
 
-The **conformal-transplant flow kernel** — the shared engine behind the three apps that split out of
-the original `2d-electrostatics` (ADR-0036): **2D Electrostatics** (the sandbox + airfoil + polygon
-transplant), **Hele-Shaw Flow** (the twist + droplet evolvers), and **Potential Theory** (the conductor
-view). All three carry flow *past or inside* a shape by carrying flow past or inside the unit disk
-through a conformal map, so the "transplant" machinery is one thing they must share — not copy.
+The **conformal-transplant flow kernel** — the shared engine behind the apps that split out of the
+original `2d-electrostatics` (ADR-0036): **2D Electrostatics** (the sandbox + polygon transplant),
+**Hele-Shaw Flow** (the twist + droplet evolvers), and **Potential Theory** (the conductor view) — joined
+by **2D Hydrodynamics** (the airfoil + the closed-form transplant gallery, ADR-0037). All carry flow *past
+or inside* a shape by carrying flow past or inside the unit disk through a conformal map, so the
+"transplant" machinery is one thing they must share — not copy.
 
 Extracted whole from the pre-split app on the ADR-0007 second-consumer rule (the split *is* the second
 consumer). Convention-neutral (ADR-0006): no π / 2πi normalization lives here.
@@ -16,6 +17,7 @@ consumer). Convention-neutral (ADR-0006): no π / 2πi normalization lives here.
 | `transplant.ts`      | The closed-form **reference flows**. Past the unit disk: `refPotential` / `refVelocity` (uniform stream at angle α + circulation Γ) and `invertToExterior` (the exact Γ = 0 root, Newton-polished for Γ ≠ 0). Inside it: `inletPorts` + `sourceSinkNet` (a boundary source→sink pair, whose streamlines are circle arcs — the wall stays a streamline). `flowNet` builds the ζ-plane level curves; `pushforward` maps a curve forward through any Ψ; `unitCircle` is the reference body. |
 | `polygonMap.ts`      | The **@cas/conformal glue**. `fitPolygonFlow` fits the EXTERIOR Schwarz–Christoffel map Ψ: 𝔻\* → ext(K) of a bounded polygon and sums its Laurent-at-∞ series into a forward evaluator; `fitPolygonInterior` fits the INTERIOR map f: 𝔻 → K (precise, falling back to the lightning fit). `fitHonestyTier` maps a fit's `converged`/`degraded`/`residual` to `exact` (`=`) / `approx` (`≈`) / `unreliable` (`⚠`). |
 | `transplantPresets.ts` | The counter-clockwise bounded-polygon presets `K` (triangle … L-shape) the transplant pages offer. |
+| `exteriorPresets.ts` | The **closed-form** exterior maps `EXTERIOR_MAP_PRESETS` (`ψ = a·z + b·z⁻ᵏ`: Joukowski / vertical slit / ellipse / deltoid / astroid / 5-cusp star), each carrying `𝔻*` onto the exterior of a compact `K`. Shared with Riemann-Map on the second-consumer rule (ADR-0037): it reads `expr` to draw ψ(𝔻\*); 2D Hydrodynamics evaluates the `psi` closure to `pushforward` a flow. |
 | `net2d.ts`           | A small 2D-canvas line-art drawer (`Net2D` + `boundsOf`) for the transplant panes: world→pixel with y up, breaking a polyline at any non-finite / blown-up vertex. DOM-only; the base tsconfig's DOM lib covers it. |
 
 ## Consuming it

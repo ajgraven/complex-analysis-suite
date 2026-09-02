@@ -69,13 +69,18 @@ green before and after (guardrail: working software at every step).
   (the sandbox "Airfoil ↗" and the polygon "Airfoil →"), and the `2d-electrostatics-airfoil` a11y roster entry.
   URL: `2d-electrostatics/airfoil.html` → `2d-hydrodynamics/airfoil.html` (no known external users; the page is
   stateless, so no `#vs=` migration).
-- **HD-2 — the transplant gallery (the reassigned ES-4 + the second-consumer extraction).** Extract
-  `EXTERIOR_MAP_PRESETS` from Riemann-Map into `@cas/flow` (id + label + the `@cas/expr` display string **and**
-  a plain `ψ: Pt → Pt` closure for the transplant), rewire Riemann-Map to consume it, and pin the map values
-  with a shared golden. Build `gallery.html`: pick a body → `flowNet` → `pushforward` through `ψ` → the
-  two-pane view, with a circulation slider and the Kutta toggle enabled only where `B` has a sharp edge
-  (Joukowski, slit). Ship on line-art (`Net2D`) first; a GPU domain-color upgrade (generalizing
-  `airfoilShader.ts` to a generic closed-form `ψ`) is an HD-3 option, not an HD-2 requirement.
+- **HD-2 — the transplant gallery (the reassigned ES-4 + the second-consumer extraction; done).** Extracted
+  `EXTERIOR_MAP_PRESETS` from Riemann-Map into `@cas/flow` (`exteriorPresets.ts` — `id` + `name` + the
+  `@cas/expr` display `expr` **and** a plain `ψ: Pt → Pt` closure for the transplant), rewired Riemann-Map to
+  consume it (byte-identical `MapPreset` shape), and pinned it with a golden (ψ values in
+  `@cas/flow`) plus an expr↔psi cross-check in Riemann-Map's `presets.test.ts` so the two forms can't drift.
+  `gallery.html` (`main-gallery.ts`): pick a body → `flowNet` past 𝔻* → `pushforward` through the closed-form
+  `ψ` → the two-pane disk↔body view on `Net2D` line-art, with angle-of-attack and a **free circulation Γ**
+  slider (all `=`, closed form). The gallery is the exterior presets **minus** the Joukowski segment — the
+  airfoil page IS the Joukowski family, and is the one place a **Kutta** condition is imposed (a flat plate
+  with Kutta is the zero-thickness airfoil), so the gallery leaves Γ free rather than duplicating that.
+  The bodies are the flat plate (vertical slit), ellipse, deltoid, astroid, and 5-cusp star. A GPU
+  domain-color upgrade (generalizing `airfoilShader.ts` to a generic closed-form `ψ`) remains an HD-3 option.
 - **HD-3 — parity + identity polish.** Angle of attack, stagnation-point markers, a stream-function contour
   set, optional animated tracers, `#vs=` permalinks, and PNG export via `@cas/export`. Where the app stops
   being "the moved airfoil" and becomes its own tool.

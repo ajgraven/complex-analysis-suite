@@ -258,10 +258,13 @@ ext(B), the hydrodynamic twin of 2D Electrostatics — anchored by the Joukowski
 broadened by a closed-form transplant gallery (slit / ellipse / deltoid / astroid / star). No new package
 (ADR-0007): it consumes `@cas/ui`/`@cas/gpu`/`@cas/flow`/`@cas/export`, moves the airfoil engine intact, and
 extracts Riemann-Map's `EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule (HD-2). Staged
-HD-0…HD-5: **HD-0 (scaffold + wire the empty hub) and HD-1 (`git mv` the airfoil out of 2D Electrostatics —
-retitled, nav retargeted, its CSS ported to `airfoil.css`, the two dangling cross-page links removed) are
-done**; HD-2 builds the gallery; the polygon transplant stays in 2D Electrostatics for now (HD-4,
-deferred — it anchors the ADR-0035 `conformal` hand-off). 2D Electrostatics' ES-4 is reassigned to this app.
+HD-0…HD-5: **HD-0 (scaffold + wire the hub), HD-1 (`git mv` the airfoil out of 2D Electrostatics — retitled,
+nav retargeted, CSS ported to `panes.css`, the two dangling cross-page links removed), and HD-2 (the
+closed-form transplant gallery `gallery.html` on `flowNet`+`pushforward`, plus extracting Riemann-Map's
+`EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule — Riemann-Map draws the maps, 2D
+Hydrodynamics transplants flow through them, golden + expr↔psi cross-check pinning both) are done**; the
+polygon transplant stays in 2D Electrostatics for now (HD-4, deferred — it anchors the ADR-0035 `conformal`
+hand-off). 2D Electrostatics' ES-4 is reassigned to this app.
 Plan: [`docs/design/2d-hydrodynamics-plan.md`](docs/design/2d-hydrodynamics-plan.md).
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Conformal-transplant flow kernel shared by the split-out 2D Electrostatics, Hele-Shaw Flow, and Potential Theory apps (ADR-0036). The closed-form reference flows past/inside the unit disk (uniform + circulation; boundary source–sink ports) and the flow-net level curves built by inverting the reference potential (transplant.ts); the Schwarz–Christoffel glue that carries those nets onto a bounded polygon's exterior/interior via @cas/conformal (polygonMap.ts); the counter-clockwise polygon presets (transplantPresets.ts); and a small 2D-canvas line-art drawer for the transplant panes (net2d.ts). Strict TypeScript on @cas/conformal. Convention-neutral (ADR-0006). Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist build).",
+  "description": "Conformal-transplant flow kernel shared by the split-out 2D Electrostatics, Hele-Shaw Flow, and Potential Theory apps (ADR-0036). The closed-form reference flows past/inside the unit disk (uniform + circulation; boundary source–sink ports) and the flow-net level curves built by inverting the reference potential (transplant.ts); the Schwarz–Christoffel glue that carries those nets onto a bounded polygon's exterior/interior via @cas/conformal (polygonMap.ts); the counter-clockwise polygon presets (transplantPresets.ts); the closed-form exterior-map gallery ψ: 𝔻* → ext(K) shared with Riemann-Map (exteriorPresets.ts, ADR-0037); and a small 2D-canvas line-art drawer for the transplant panes (net2d.ts). Strict TypeScript on @cas/conformal. Convention-neutral (ADR-0006). Consumed via SOURCE by the suite's Vite/Vitest bundlers (no dist build).",
   "license": "MIT",
   "author": "Andrew Graven <andrew@graven.com>",
   "exports": {

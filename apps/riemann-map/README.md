@@ -50,7 +50,10 @@ beneath the launcher).
   the `#vs=` permalink. Fits carry honest `=`/`≈` labels with `converged` / `degraded` / `residual` stats.
 - **Exterior-disk preset gallery** (PR #288) — a gallery of closed-form univalent maps ψ: 𝔻* = {|z| ≥ 1} →
   the exterior of a compact set `K` (Joukowski, vertical slit, ellipse, deltoid/astroid, star), shown in an
-  interactive pan/drag/zoom **image pane**.
+  interactive pan/drag/zoom **image pane**. These presets now live in `@cas/flow`
+  (`EXTERIOR_MAP_PRESETS`), shared with the 2D Hydrodynamics app on the second-consumer rule (ADR-0037):
+  this studio reads their `id`/`name`/`expr` to draw ψ(𝔻*), while 2D Hydrodynamics evaluates the same
+  presets' `psi` closures to transplant a flow past `K`.
 - **Imported disk-image map** — a Böttcher `LaurentMap` exported from Complex Dynamics via `@cas/interchange`
   (the CD→RM "Riemann Map ↗" deep link), consumed as a disk-image source; pinned by the cross-app golden
   `CD_TO_RM_BOTTCHER_LINK`.
