@@ -289,9 +289,13 @@ function main(): void {
     }
   };
 
-  // A finished custom-polygon edit (drag release / add / remove / reset): drop the stale cached SC, write
-  // the permalink, repaint (which refits the exterior SC at the new geometry).
+  // A finished custom-polygon edit (drag release / add / remove / reset): re-fit the locked view so a
+  // vertex dragged past the pane edge (pointer capture keeps the drag live) stays in frame and grabbable,
+  // drop the stale cached SC, write the permalink, repaint (which refits the exterior SC at the new
+  // geometry). Re-fitting only on edit COMPLETION (not per drag frame) keeps the shape from swimming while
+  // dragging, yet never strands a corner off-canvas.
   const onCustomEdit = (): void => {
+    customView = computeCustomView(customCorners);
     built = null;
     writePermalink();
     if (mcOn) resetMC(); // the boundary changed — restart the Brownian MC
@@ -656,20 +660,17 @@ function main(): void {
   // ---- custom-polygon editor: buttons + direct-manipulation drag (PT-6a) ----
   addBtn.addEventListener("click", () => {
     customCorners = addVertex(customCorners);
-    customView = computeCustomView(customCorners);
     selectedVertex = -1;
-    onCustomEdit();
+    onCustomEdit(); // re-fits customView
   });
   delBtn.addEventListener("click", () => {
     const i = selectedVertex >= 0 ? selectedVertex : customCorners.length - 1;
     customCorners = removeVertex(customCorners, i);
-    customView = computeCustomView(customCorners);
     selectedVertex = -1;
     onCustomEdit();
   });
   resetBtn.addEventListener("click", () => {
     customCorners = DEFAULT_CUSTOM_CORNERS.map((p): Pt => [p[0], p[1]]);
-    customView = computeCustomView(customCorners);
     selectedVertex = -1;
     onCustomEdit();
   });
