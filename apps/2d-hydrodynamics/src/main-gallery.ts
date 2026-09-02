@@ -141,6 +141,14 @@ function main(): void {
   pngBtn.type = "button";
   controls.append(bodyRow, sAoA.row, sGamma.row, copyBtn, pngBtn);
 
+  // Route the (possibly permalinked) angle / circulation back through the sliders so an out-of-range value
+  // from a hand-crafted #vs= link clamps to range — keeping the thumb, the label, and the rendered flow in
+  // agreement (the airfoil page does the same in applyVS).
+  state.alphaDeg = Number(sAoA.input.value);
+  sAoA.val.textContent = `${state.alphaDeg}°`;
+  state.gamma = Number(sGamma.input.value);
+  sGamma.val.textContent = state.gamma.toFixed(1);
+
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, controls, readout);
 

@@ -72,8 +72,8 @@ committed beyond HS-0; each is a separately-approved pass.
 - **HS-5 — surface tension (M4e).** Regularize the ill-posed suction/​cusp edge with surface tension →
   tip-splitting fingers (Saffman–Taylor λ = ½). Strictly `≈` / ⚠ — a research view, never certified.
 - **HS-6 — the steady↔evolving bridge.** Relate the airfoil-Kutta circulation of the *steady* transplant
-  (2D Electrostatics) to the *twist* γ here — McKee–Bush (2024), "Hele-Shaw with spin". A didactic overlay,
-  not a new engine; the one honest place the two split apps touch mathematically.
+  (2D Hydrodynamics, ADR-0037) to the *twist* γ here — McKee–Bush (2024), "Hele-Shaw with spin". A didactic
+  overlay, not a new engine; the one honest place the two apps touch mathematically.
 
 ## Non-goals
 

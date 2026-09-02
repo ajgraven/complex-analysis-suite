@@ -47,7 +47,7 @@ body {
   pointer-events: none;
 }
 
-/* --- airfoil transplant page (two-pane) ----------------------------------------------------- */
+/* --- two-pane transplant stage (the polygon page; the airfoil moved to 2d-hydrodynamics, ADR-0037) --- */
 .foil-controls {
   display: flex;
   gap: 16px;

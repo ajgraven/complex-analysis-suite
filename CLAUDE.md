@@ -92,7 +92,7 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
 the parabolic-Tricorn model coordinate, and a follow-on interactive mating visualizer (`mating.html`).
-Ten apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+Eleven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
 rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`; the eighth,
 **2D Electrostatics**, ADR-0034 — the complex potential W = φ + iψ as an interactive field of charges /
@@ -111,7 +111,11 @@ bump; `QD_TO_HELESHAW` golden), riding `@cas/core`, `@cas/flow`, `@cas/interchan
 tenth, **Potential Theory**, ADR-0036 — the conductor view split out of 2D Electrostatics (M3): a compact set K
 as a grounded conductor — equilibrium charge / logarithmic capacity / Green's function, with Faber-zero and
 Fekete/Leja overlays; exact `=` for Schwarz–Christoffel polygons + closed forms, log-lightning `≈` for smooth
-blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
+blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`; and the eleventh, **2D Hydrodynamics**,
+ADR-0037 — the hydrodynamic twin of 2D Electrostatics: ideal flow past a body as flow past 𝔻* through a
+conformal map ψ: 𝔻* → ext(B), the Joukowski/Kármán–Trefftz airfoil (Kutta condition + lift) plus a
+closed-form transplant gallery (flat plate / ellipse / deltoid / astroid / star), the airfoil promoted out
+of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
