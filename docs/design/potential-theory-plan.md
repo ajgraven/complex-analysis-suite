@@ -42,14 +42,15 @@ lets an `≈` quantity read as `=`, and Faber is switched off where it has no ma
 
 ## Roadmap
 
-Milestones are numbered **PT-n**. Nothing below is committed beyond PT-0.
+Milestones are numbered **PT-n**. PT-0 and PT-1 have shipped; **PT-6 is the selected next build** (B1 + C1
+from the idea backlog below). PT-2 … PT-5 remain queued.
 
 - **PT-0 — carve the app (done, ADR-0036 stage 2).** `apps/potential-theory`; the conductor view + its
   engines (`potentialDomain` / `generalDomains` / `logLightning` / `faberZeros` / `feketePoints` /
   `marchingSquares`) moved off `2d-electrostatics` as the single-page `index.html`. Deps `@cas/flow`,
   `@cas/faber`, `@cas/core`, `@cas/ui`.
-- **PT-1 — the shell.** Adopt `mountNavHeader` (`@cas/ui`) — back-to-launcher + sibling nav — replacing the
-  ad-hoc toolbar back-link (the split dropped its cross-app page links; this restores real cross-app nav).
+- **PT-1 — the shell (done, ADR-0036 stage 3).** The shared `mountNavHeader` (`@cas/ui`) + `@cas/ui/nav.css`
+  now render on the page — back-to-launcher + sibling nav, restoring cross-app navigation.
 - **PT-2 — the growth-law readout** (deferred at M3). Draw (1/n)·log|Fₙ(z)| → g_K(z) as an on-canvas
   convergence readout, closing the loop between the Faber overlay and the Green's function (the "Faber
   polynomials as an approximate exterior map" story).
@@ -61,6 +62,63 @@ Milestones are numbered **PT-n**. Nothing below is committed beyond PT-0.
   counterpart to the flow hand-offs, gated on the receiving-tool rule (ADR-0007).
 - **PT-5 — benchmarks & comparison.** A capacity/energy comparison panel across the three roads and against
   known closed forms (the didactic "they all agree, and here's the rate" view).
+- **PT-6 — Brownian Monte Carlo + draw-your-own-K + probe (SELECTED — B1 + C1 below).** The chosen next
+  build. Three parts: **(a)** a custom-K editor — a draggable-vertex polygon routed through the exact
+  exterior Schwarz–Christoffel engine (`@cas/flow`, `=`), or a smoothed freehand curve through log-lightning
+  (`≈`) — permalinked in the view-state; **(b)** a hover probe reading g_K / potential / field at the cursor
+  (exact for exterior-map K, `≈` for general), with an optional draggable test charge; **(c)** a
+  walk-on-spheres **harmonic-measure Monte Carlo** — random walkers escaping to ∞ reconstruct μ_K as a live
+  "fourth road," honestly `≈` with the far-field radius + sample count shown, and validated against the
+  exact μ_K (arcsine on a segment, uniform on the disk, cusp-concentration on the deltoid). App-local (no
+  new package, per ADR-0007); reuses `@cas/flow`, `@cas/ui` (accessible canvas + optional worker offload),
+  and `@cas/core`.
+
+## Future expansions — idea backlog (researched Sept 2026)
+
+A menu of larger extensions, researched against the potential-theory / approximation-theory literature and
+the suite's packages, recorded so future passes can refer back. Effort is S/M/L; honesty is the `=`/`≈` the
+feature can honestly claim. **B1 + C1 are being built now as PT-6**; the rest await selection.
+(Sources in References.)
+
+**Tier A — deepen the object.**
+- **A1 — external fields / weighted equilibrium (headline).** Add a background field / draggable external
+  charges; the equilibrium measure then minimizes *weighted* energy, and its support forms, shrinks, and
+  splits into intervals/arcs with genuine phase transitions ("the drop"). The Saff–Totik theory made
+  interactive; the mathematics behind random-matrix / Coulomb-gas eigenvalue laws; connects to weighted
+  quadrature domains (a QD-app tie). `≈` (a weighted-equilibrium / obstacle solve). Effort **L** (a
+  one-external-charge first slice is **M**).
+- **A2 — condensers & multiply-connected K.** Two conductors at ±V (a capacitor), ring domains, and K with
+  several components/holes; the condenser capacity, the field between the plates, and μ_K splitting across
+  components by capacity. `=`/`≈`. Effort **L** (multiply-connected log-lightning / condenser solve).
+
+**Tier B — new lenses on μ_K (the app's spine is "roads to the equilibrium measure").**
+- **B1 — Brownian Monte Carlo = harmonic measure (SELECTED, PT-6).** Random walkers from ∞ hitting ∂K
+  reconstruct μ_K (harmonic measure from ∞ = equilibrium measure); a live probabilistic fourth road, plus
+  the h-function. `≈`. Effort **S–M**.
+- **B2 — polynomial-approximation lab (Bernstein–Walsh).** Type an `f`; draw its degree-n Chebyshev / Faber
+  / best approximant on K, its zeros equidistributing to μ_K, and the error contours coinciding with the
+  Green equipotentials (error^{1/n} → 1/e^{g}). The "why capacity matters" payoff; subsumes PT-2 and extends
+  the Faber/Leja overlays. `=`/`≈`. Effort **M**. Reuses `@cas/faber`, `@cas/expr`.
+- **B3 — Stieltjes electrostatic model of orthogonal-polynomial zeros.** n movable charges + fixed endpoint
+  charges relax to the zeros of a Jacobi / Hermite / Laguerre polynomial; animate the relaxation, check
+  against the known zeros. The electrostatic framing made literal; bridges Fekete (n-point equilibrium) to
+  A1 (the endpoint charges are a baby external field). `=` (closed-form check). Effort **S–M**.
+
+**Tier C — interactivity & authorship.**
+- **C1 — draw-your-own-K + a hover probe (SELECTED, PT-6).** A draggable-vertex K editor (polygon → exact
+  exterior SC; smooth → log-lightning `≈`), permalinked, plus a hover readout of g_K / potential / field.
+  Turns "gallery" into "instrument." `=`/`≈`. Effort **M**. Reuses the draggable-editor pattern (Faber /
+  Riemann-map) + the existing g_K sampler.
+
+**Tier D — cross-app resonance (the suite's north star: hand-offs).**
+- **D1 — import a K + the Complex-Dynamics tie (enriches PT-4).** Accept a K over `@cas/interchange`: a
+  polygon from the Riemann-map SC studio, a QD's ∂Ω from Quadrature Domains, or a filled Julia set from
+  Complex Dynamics — whose Green's function *is* the escape-rate / Böttcher potential and whose external
+  rays (`@cas/dynamics`) are its Green field lines (a "same object, two apps" showpiece). `=`/`≈`. Effort
+  **M**.
+
+**Smaller wins (already queued above).** PT-2 (growth-law readout, subsumed by B2), PT-3 (corner-clustered
+log-charges for cusped K, `⚠`-honest), PT-5 (the three-roads benchmark panel).
 
 ## Non-goals
 
@@ -74,3 +132,12 @@ Ransford, *Potential Theory in the Complex Plane*; Saff–Totik, *Logarithmic Po
 Fields*; Gopal–Trefethen (2019, the lightning solver); Brubeck–Nakatsukasa–Trefethen (2021, the stable
 basis); and the author's paper *Complex Analysis as Two-Dimensional Electrostatics and Hydrodynamics* for
 the electrostatic reading of μ_K / cap(K) / g_K.
+
+Idea-backlog research (Sept 2026): Trefethen, *Log-lightning computation of capacity and Green's function*
+(2021); Marshall & Rossi / Walden–Ward, *harmonic-measure distribution functions* (harmonic measure = the
+Brownian first-hit law, the basis of B1); Marcellán–Martínez-Finkelshtein–Martínez-González and
+Martínez-Finkelshtein et al., *electrostatic (Stieltjes) interpretation of orthogonal-polynomial zeros*
+(B3); the Bernstein–Walsh theory of polynomial approximation on a compact set (B2); Nasser–Vuorinen,
+*numerical computation of the capacity of generalized condensers* (A2); and Balogh et al., *point-source
+equilibrium problems with connections to weighted quadrature domains* (A1's QD tie). The walk-on-spheres
+Monte Carlo (B1) follows Muller's method for the exit distribution of Brownian motion.
