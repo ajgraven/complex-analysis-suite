@@ -97,24 +97,25 @@ export function spiralEquipotentials(
     return curves;
   }
 
-  // ρ(φ) = exp((C + γ·φ)/q) on Re(α log) = C; sweep φ over the range that keeps ρ ∈ [rMin, rMax].
-  const cLo = q * Math.log(rMin);
-  const cHi = q * Math.log(rMax);
-  for (let k = 0; k < levels; k++) {
-    const C = cLo + ((cHi - cLo) * (k + 0.5)) / levels;
+  // Logarithmic spirals ρ = rMin·exp(κ·(φ − φ₀)) with κ = γ/q, anchored at rMin and swept out to rMax.
+  // Each arm spans `wind = ln(rMax/rMin)/|κ|` radians. Draw N of them, evenly spaced in start angle φ₀
+  // over the full [0, 2π), so the family fills the whole annulus around w₀. (The old code fixed the level
+  // constant C to the φ = 0 slice [q ln rMin, q ln rMax], so the arms covered only one `wind`-wide wedge —
+  // the "partial" fan at large spin.) N scales with the spin to preserve the original angular density.
+  const kappa = gamma / q; // spiral tightness; its sign is the handedness
+  const wind = Math.log(rMax / rMin) / Math.abs(kappa); // radians one arm takes to go rMin → rMax
+  const gap = wind / levels; // the original angular spacing between adjacent arms
+  const N = Math.max(levels, Math.min(160, Math.round(TWO_PI / gap)));
+  const dir = kappa >= 0 ? 1 : -1; // sweep φ so ρ grows from rMin to rMax
+  for (let n = 0; n < N; n++) {
+    const phi0 = (TWO_PI * n) / N;
     const pts: Pt[] = [];
-    // φ range: ρ ∈ [rMin, rMax] ⇔ (q ln rMin − C)/γ and (q ln rMax − C)/γ (order depends on signs).
-    const p1 = (q * Math.log(rMin) - C) / gamma;
-    const p2 = (q * Math.log(rMax) - C) / gamma;
-    const phiLo = Math.min(p1, p2), phiHi = Math.max(p1, p2);
-    const span = Math.min(phiHi - phiLo, 8 * Math.PI); // cap the winding drawn
     for (let i = 0; i <= samples; i++) {
-      const phi = phiLo + (span * i) / samples;
-      const rho = Math.exp((C + gamma * phi) / q);
-      if (rho < rMin * 0.5 || rho > rMax * 1.5) continue;
+      const phi = phi0 + dir * wind * (i / samples);
+      const rho = rMin * Math.exp(kappa * (phi - phi0)); // rMin at i=0, rMax at i=samples
       pts.push([w0[0] + rho * Math.cos(phi), w0[1] + rho * Math.sin(phi)]);
     }
-    if (pts.length > 1) curves.push({ color, pts });
+    curves.push({ color, pts });
   }
   return curves;
 }
