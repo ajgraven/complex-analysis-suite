@@ -112,6 +112,25 @@ export function stepDroplet(coeffs: readonly Cx[], src: Source | readonly Source
   ]);
 }
 
+/** One step-doubling RK4 step (F1.3): one full step of `dt` vs two of `dt/2` gives a local-error estimate
+ *  `err = maxₖ |smallₖ − bigₖ|` and, by Richardson extrapolation (16·small − big)/15, a 5th-order result.
+ *  `err` drives the adaptive step size and feeds the accuracy budget. */
+export function stepDoubling(
+  coeffs: readonly Cx[],
+  src: Source | readonly Source[],
+  dt: number,
+  spin = 0,
+): { next: Cx[]; err: number } {
+  const big = stepDroplet(coeffs, src, dt, spin);
+  const small = stepDroplet(stepDroplet(coeffs, src, dt / 2, spin), src, dt / 2, spin);
+  let err = 0;
+  const next: Cx[] = coeffs.map((_, i) => {
+    err = Math.max(err, Math.hypot(small[i][0] - big[i][0], small[i][1] - big[i][1]));
+    return [(16 * small[i][0] - big[i][0]) / 15, (16 * small[i][1] - big[i][1]) / 15];
+  });
+  return { next, err };
+}
+
 // --- conserved-moment monitor (the `≈` correctness gauge) ---------------------------------------------
 
 /** The Richardson complex moments M_k = ∫∫_D z^k dA = ½∮ f^k·conj(f)·w·f' dθ, k = 1..K. Under injection
@@ -192,12 +211,22 @@ export interface DropletFrame {
   readonly area: number;
   /** min over |w|=1 of |f'| — the cusp gauge. */
   readonly minFPrime: number;
-  /** Conserved-moment drift, the `≈` error bar: the strict `max_k |M_k − M_k(0)|` when there is no spin,
-   *  and the rotation-robust magnitude drift `max_k | |M_k| − |M_k(0)| |` when a spin rotates the moments. */
+  /** Conserved-moment drift, the `≈` error bar: `max_k |M_k − predicted_k|` (Richardson), strict when
+   *  there is no spin and rotation-robust (magnitudes) under spin. */
   readonly momentDrift: number;
+  /** The adaptive integrator's local truncation-error estimate for the step that produced this frame
+   *  (0 at t = 0) — the per-step numerical error bar (F1.3). */
+  readonly localErr: number;
 }
 
-export type StopReason = "reached-tMax" | "max-frames" | "cusp" | "diverged" | "suction-blocked" | "source-left-fluid";
+export type StopReason =
+  | "reached-tMax"
+  | "max-frames"
+  | "cusp"
+  | "diverged"
+  | "suction-blocked"
+  | "source-left-fluid"
+  | "accuracy-lost";
 
 export interface EvolveOptions {
   /** Base time step (adaptively shrunk near a cusp). */
@@ -214,6 +243,13 @@ export interface EvolveOptions {
   readonly spin?: number;
   /** Opt in to the ILL-POSED suction direction (Q<0). Off by default; always `⚠` when on. */
   readonly allowSuction?: boolean;
+  /** Local-error tolerance for the step-doubling adaptive integrator (F1.3): the step shrinks/grows to keep
+   *  `err ≤ tol·|a₁(0)|`. `dt` is the initial and maximum step. Default 1e-6. */
+  readonly tol?: number;
+  /** Accuracy budget (F1.3): stop with `accuracy-lost` once the moment drift exceeds this — an honest cut-
+   *  off that can fire BEFORE the geometric cusp when truncation/aliasing has spoiled the `≈`. Off by
+   *  default. */
+  readonly accuracyBudget?: number;
 }
 
 /**
@@ -249,33 +285,50 @@ export function evolveDroplet(
   const srcForMoments = sources.map((s) => ({ strength: s.strength, b: (s.lab ?? [0, 0]) as Cx }));
   const driftOf = spin === 0 ? momentDrift : momentMagnitudeDrift;
 
-  const frameOf = (t: number, coeffs: Cx[]): DropletFrame => ({
+  const frameOf = (t: number, coeffs: Cx[], localErr: number): DropletFrame => ({
     t,
     coeffs,
     area: dropletArea(coeffs),
     minFPrime: minAbsMapPrime(coeffs),
     momentDrift: driftOf(predictedMoments(refMoments, srcForMoments, t), interiorMoments(coeffs, K)),
+    localErr,
   });
 
-  const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx))];
+  // F1.3 — step-doubling adaptive RK4 with local-error control. `dt0` is the initial and MAXIMUM step; the
+  // controller shrinks it (down to a floor) to keep the estimated local error within `errScale`, and grows
+  // it back when the flow is smooth. This replaces the old cusp-proximity-only heuristic and, via the
+  // Richardson-extrapolated update, is 5th-order accurate.
+  const tol = opts.tol ?? 1e-6;
+  const errScale = tol * Math.max(a1mag0, 1e-12);
+  const dtMin = dt0 * 1e-4; // step floor — accept anyway here so the flow always makes progress
+  const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx), 0)];
   let coeffs: Cx[] = coeffs0.map((a) => [a[0], a[1]] as Cx);
   let t = 0;
+  let dt = dt0;
+  let guard = 0;
+  const guardMax = 40 * maxFrames; // bounds rejected retries as well as accepted steps
 
-  while (frames.length < maxFrames && t < tMax) {
+  while (frames.length < maxFrames && t < tMax && guard++ < guardMax) {
     // A lab-fixed source must stay inside the fluid; if any has left the disk, stop honestly.
     if (sources.some((s) => s.lab && invertMap(coeffs, s.lab) === null)) return { frames, stop: "source-left-fluid" };
     const minF = minAbsMapPrime(coeffs);
     if (minF < cuspStop) return { frames, stop: "cusp" }; // ⚠ the ill-posed edge — never step past it
-    // adaptive step: shrink as the cusp approaches; never overshoot tMax
-    const dt = Math.min(dt0 * Math.min(1, minF / a1mag0), tMax - t);
-    if (!(dt > 0)) break;
-    const next = stepDroplet(coeffs, src, dt, spin);
-    if (next.some((a) => !Number.isFinite(a[0]) || !Number.isFinite(a[1]))) {
-      return { frames, stop: "diverged" };
+    const step = Math.min(dt, tMax - t);
+    if (!(step > 0)) break;
+    const { next, err } = stepDoubling(coeffs, src, step, spin);
+    if (next.some((a) => !Number.isFinite(a[0]) || !Number.isFinite(a[1]))) return { frames, stop: "diverged" };
+    if (err <= errScale || step <= dtMin) {
+      // accept the step
+      coeffs = next;
+      t += step;
+      const fr = frameOf(t, coeffs, err);
+      frames.push(fr);
+      // Accuracy budget: the ≈ has degraded past what we vouch for — stop honestly (can fire before a cusp).
+      if (opts.accuracyBudget !== undefined && fr.momentDrift > opts.accuracyBudget) return { frames, stop: "accuracy-lost" };
+      dt = Math.min(dt0, step * Math.min(5, 0.9 * Math.pow(errScale / Math.max(err, 1e-300), 0.2))); // grow, capped at dt0
+    } else {
+      dt = Math.max(dtMin, step * Math.max(0.2, 0.9 * Math.pow(errScale / err, 0.2))); // reject: shrink and retry
     }
-    coeffs = next;
-    t += dt;
-    frames.push(frameOf(t, coeffs));
   }
   return { frames, stop: t >= tMax ? "reached-tMax" : "max-frames" };
 }

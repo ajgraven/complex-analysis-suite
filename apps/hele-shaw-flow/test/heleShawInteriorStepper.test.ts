@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   pgVelocity,
   stepDroplet,
+  stepDoubling,
   evolveDroplet,
   interiorMoments,
   momentDrift,
@@ -211,5 +212,42 @@ describe("competing sources (F1.2)", () => {
     expect(last.momentDrift).toBeLessThan(1e-3); // drift from Σⱼ Qⱼ·bⱼᵏ stays small
     const raw = momentDrift(interiorMoments(res.frames[0].coeffs, 2), interiorMoments(last.coeffs, 2));
     expect(raw).toBeGreaterThan(0.05); // the moments genuinely moved
+  });
+});
+
+describe("adaptive integrator + accuracy budget (F1.3)", () => {
+  const disk = (deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [1, 0] : [0, 0]));
+
+  it("step-doubling is 5th-order accurate and its error estimate scales like dt⁵", () => {
+    const c: Cx[] = [[2, 0]]; // exact self-similar disk
+    const Q = 1;
+    const a = c[0][0];
+    const dt = 0.2;
+    const s = stepDoubling(c, { strength: Q }, dt);
+    // the Richardson update matches the closed form a₁(t) = √(a₁² + Q·dt/π) to well past RK4 order
+    expect(s.next[0][0]).toBeCloseTo(circleRadius(a, Q, dt), 9);
+    // halving dt shrinks the local-error estimate ≈ 32× (5th order)
+    const e1 = stepDoubling(c, { strength: Q }, dt).err;
+    const e2 = stepDoubling(c, { strength: Q }, dt / 2).err;
+    expect(e1 / e2).toBeGreaterThan(16);
+    expect(e1 / e2).toBeLessThan(64);
+  });
+
+  it("reports a per-frame local-error estimate (0 at t = 0, finite after)", () => {
+    const res = evolveDroplet(disk(8), { strength: 1.5, lab: [0.3, 0] }, { dt: 0.02, tMax: 0.5, moments: 2 });
+    expect(res.frames[0].localErr).toBe(0);
+    const last = res.frames[res.frames.length - 1];
+    expect(Number.isFinite(last.localErr)).toBe(true);
+    expect(last.localErr).toBeLessThan(1e-3); // a well-resolved run stays tiny
+  });
+
+  it("the accuracy budget stops an under-resolved run — before any cusp", () => {
+    // A 4-mode map cannot resolve an off-centre bulge, so the moment drift grows fast; the budget catches it.
+    const under = evolveDroplet(disk(4), { strength: 1.5, lab: [0.6, 0] }, { dt: 0.02, tMax: 3, moments: 2, accuracyBudget: 0.05 });
+    expect(under.stop).toBe("accuracy-lost");
+    expect(under.frames[under.frames.length - 1].minFPrime).toBeGreaterThan(0.1); // not a geometric cusp — accuracy, not geometry
+    // A well-resolved 16-mode run under the same budget does NOT trip it.
+    const ok = evolveDroplet(disk(16), { strength: 1.5, lab: [0.6, 0] }, { dt: 0.02, tMax: 3, moments: 2, accuracyBudget: 0.05 });
+    expect(ok.stop).not.toBe("accuracy-lost");
   });
 });

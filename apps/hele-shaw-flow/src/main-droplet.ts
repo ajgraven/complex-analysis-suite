@@ -62,7 +62,10 @@ interface DrState {
   showNet: boolean;
   wells: Well[]; // the point sources/sinks (fixed lab locations)
   selected: number; // index of the well the Q slider edits
+  tol: number; // the adaptive integrator's local-error tolerance (self-refinement knob, F1.3)
 }
+
+const ACCURACY_BUDGET = 0.05; // stop with ⚠ "accuracy lost" once the moment drift exceeds this (F1.3)
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
   const e = document.createElement(tag);
@@ -104,6 +107,7 @@ function main(): void {
     showNet: true,
     wells: buildWells(first),
     selected: 0,
+    tol: 1e-6,
   };
   const selWell = (): Well => state.wells[state.selected] ?? state.wells[0];
 
@@ -156,7 +160,26 @@ function main(): void {
   suctionBox.checked = state.allowSuction;
   suctionCheck.append(suctionBox, el("span", undefined, "allow suction (⚠ ill-posed)"));
 
-  controls.append(presetRow, sQ.row, wellRow, sSpin.row, sT.row, playBtn, netCheck, suctionCheck);
+  // Solver tolerance (F1.3): the self-refinement knob — tighter tol ⇒ the integrator takes smaller steps
+  // and the local error / moment drift shrink (visible in the readout).
+  const solverRow = el("label", "row");
+  const solverHead = el("span", "row-h");
+  solverHead.append(el("span", "row-l", "solver"));
+  const solverSel = el("select", "tp-select");
+  const TOLS: readonly { label: string; tol: number }[] = [
+    { label: "coarse (1e-4)", tol: 1e-4 },
+    { label: "normal (1e-6)", tol: 1e-6 },
+    { label: "fine (1e-8)", tol: 1e-8 },
+  ];
+  for (const o of TOLS) {
+    const opt = el("option", undefined, o.label);
+    opt.value = String(o.tol);
+    if (o.tol === state.tol) opt.selected = true;
+    solverSel.append(opt);
+  }
+  solverRow.append(solverHead, solverSel);
+
+  controls.append(presetRow, sQ.row, wellRow, sSpin.row, sT.row, solverRow, playBtn, netCheck, suctionCheck);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, twistLink, controls, readout);
@@ -188,7 +211,7 @@ function main(): void {
     state.wells.map((w) => (w.lab[0] || w.lab[1] ? { strength: w.strength, lab: [w.lab[0], w.lab[1]] as Cx } : { strength: w.strength }));
   const timelineFor = (): typeof cache => {
     const p = PRESETS.find((x) => x.id === state.presetId) ?? first;
-    const key = `${state.presetId}|${state.spin}|${state.allowSuction}|` + state.wells.map((w) => `${w.strength}@${w.lab[0]},${w.lab[1]}`).join(";");
+    const key = `${state.presetId}|${state.spin}|${state.allowSuction}|${state.tol}|` + state.wells.map((w) => `${w.strength}@${w.lab[0]},${w.lab[1]}`).join(";");
     if (cache && cache.key === key) return cache;
     const { frames, stop } = evolveDroplet(p.coeffs, sourceSpec(), {
       dt: 0.02,
@@ -196,6 +219,8 @@ function main(): void {
       maxFrames: FRAMES_CAP,
       spin: state.spin,
       allowSuction: state.allowSuction,
+      tol: state.tol,
+      accuracyBudget: ACCURACY_BUDGET,
     });
     // Stable view: fit to the UNION of all frames so the camera doesn't jump while animating — and so it
     // stays correct under suction, where the droplet shrinks and the last (near-cusp) frame is not the
@@ -265,7 +290,9 @@ function main(): void {
           ? `<span class="tp-warn">⚠ the evolution diverged (under-resolved)</span>`
           : tl.stop === "source-left-fluid"
             ? `<span class="tp-warn">⚠ a well left the fluid — stopped</span>`
-            : `<span class="tp-approx">reached t = ${fmt(frame.t)}</span>`;
+            : tl.stop === "accuracy-lost"
+              ? `<span class="tp-warn">⚠ accuracy lost (moment drift &gt; budget) — stopped before the cusp</span>`
+              : `<span class="tp-approx">reached t = ${fmt(frame.t)}</span>`;
     const p = PRESETS.find((x) => x.id === state.presetId) ?? first;
     const total = state.wells.reduce((s, w) => s + w.strength, 0);
     const sel = selWell();
@@ -279,7 +306,7 @@ function main(): void {
       `${state.wells.length} ${wellWord} · ΣQ = ${fmt(total)}${total < 0 ? " (net suction ⚠)" : ""} &nbsp; ω = ${fmt(state.spin)}<br>` +
       `selected well: Q = ${fmt(sel.strength)} at (${fmt(sel.lab[0])}, ${fmt(sel.lab[1])})<br>` +
       `t = <b>${fmt(frame.t)}</b> &nbsp; area A = ${fmt(frame.area)} &nbsp; min|f′| = ${fmt(frame.minFPrime)}<br>` +
-      `${driftLabel} (≈, exact = 0): <b>${frame.momentDrift.toExponential(1)}</b><br>` +
+      `${driftLabel} (≈, exact = 0): <b>${frame.momentDrift.toExponential(1)}</b> &nbsp; local err: ${frame.localErr.toExponential(1)}<br>` +
       `<span class="tp-approx">${p.note}</span>` +
       (atEnd ? `<br>${stopWord}` : "");
   };
@@ -369,6 +396,11 @@ function main(): void {
   suctionBox.addEventListener("change", () => {
     stopPlay();
     state.allowSuction = suctionBox.checked;
+    requestPaint();
+  });
+  solverSel.addEventListener("change", () => {
+    stopPlay();
+    state.tol = Number(solverSel.value); // tighter tol ⇒ smaller steps ⇒ the local err / drift shrink
     requestPaint();
   });
 
