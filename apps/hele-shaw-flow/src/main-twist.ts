@@ -158,6 +158,13 @@ function main(): void {
     const noteCls = state.importNote.startsWith("⚠") ? "tp-warn" : "tp-approx";
     const notePrefix = state.importNote ? `<span class="${noteCls}">${state.importNote}</span><br>` : "";
 
+    if (Math.hypot(alpha[0], alpha[1]) < 1e-6) {
+      // α = 0 is inside the admissible parabola but means zero quadrature charge: there is no domain to
+      // grow (the importer guards this too). Reject it honestly rather than draw a bogus conserved QD.
+      readout.innerHTML =
+        notePrefix + `α = ${fmtCx(alpha)}<br><span class="tp-warn">⚠ the charge is zero — there is no quadrature domain to grow</span>`;
+      return;
+    }
     if (!admissible(alpha)) {
       readout.innerHTML =
         notePrefix +
@@ -201,7 +208,7 @@ function main(): void {
     readout.innerHTML =
       notePrefix +
       `α = q + iγ = ${fmtCx(alpha)} at w₀ = ${W0}<br>` +
-      `t = A(Ω_t)/π = <b>${fmt(frame.t)}</b> &nbsp; c = ${fmt(frame.c)}<br>` +
+      `t = A(Ω_t)/π ≈ <b>${fmt(frame.t)}</b> &nbsp; c = ${fmt(frame.c)}<br>` +
       `conserved charge (=): recovered α = ${fmtCx(recovered)} (Δ ${chargeErr.toExponential(0)})<br>` +
       critLine;
   };

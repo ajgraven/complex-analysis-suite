@@ -107,12 +107,15 @@ export function spiralEquipotentials(
   const gap = wind / levels; // the original angular spacing between adjacent arms
   const N = Math.max(levels, Math.min(160, Math.round(TWO_PI / gap)));
   const dir = kappa >= 0 ? 1 : -1; // sweep φ so ρ grows from rMin to rMax
+  // Sample per arm by its angular length (~0.03 rad/step), not a fixed count: a gentle twist makes each arm
+  // wind through many turns, which a fixed sample budget would render as a coarse polygon.
+  const arcSamples = Math.max(96, Math.min(4000, Math.round(wind / 0.03)));
   for (let n = 0; n < N; n++) {
     const phi0 = (TWO_PI * n) / N;
     const pts: Pt[] = [];
-    for (let i = 0; i <= samples; i++) {
-      const phi = phi0 + dir * wind * (i / samples);
-      const rho = rMin * Math.exp(kappa * (phi - phi0)); // rMin at i=0, rMax at i=samples
+    for (let i = 0; i <= arcSamples; i++) {
+      const phi = phi0 + dir * wind * (i / arcSamples);
+      const rho = rMin * Math.exp(kappa * (phi - phi0)); // rMin at i=0, rMax at i=arcSamples
       pts.push([w0[0] + rho * Math.cos(phi), w0[1] + rho * Math.sin(phi)]);
     }
     curves.push({ color, pts });

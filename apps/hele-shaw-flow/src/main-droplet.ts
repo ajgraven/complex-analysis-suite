@@ -154,10 +154,12 @@ function main(): void {
       spin: state.spin,
       allowSuction: state.allowSuction,
     });
-    // Stable view: fit to the LARGEST (last) frame so the camera doesn't jump while animating.
-    const bounds = frames.length
-      ? boundsOf([{ color: "", pts: dropletBoundary(frames[frames.length - 1].coeffs, 240) }])
-      : null;
+    // Stable view: fit to the UNION of all frames so the camera doesn't jump while animating — and so it
+    // stays correct under suction, where the droplet shrinks and the last (near-cusp) frame is not the
+    // largest. Computed once per family build.
+    const allPts: Pt[] = [];
+    for (const fr of frames) for (const pt of dropletBoundary(fr.coeffs, 120)) allPts.push(pt);
+    const bounds = allPts.length ? boundsOf([{ color: "", pts: allPts }]) : null;
     cache = { key, frames, stop, bounds };
     return cache;
   };
@@ -209,7 +211,7 @@ function main(): void {
     readout.innerHTML =
       `Q = ${fmt(state.q)}${state.q < 0 ? " (suction ⚠)" : " (inject)"} &nbsp; ω = ${fmt(state.spin)}<br>` +
       `t = <b>${fmt(frame.t)}</b> &nbsp; area A = ${fmt(frame.area)} &nbsp; min|f′| = ${fmt(frame.minFPrime)}<br>` +
-      `|Mₖ| moment drift (≈, conserved = 0): <b>${frame.momentDrift.toExponential(1)}</b><br>` +
+      `${state.spin !== 0 ? "|Mₖ|" : "Mₖ"} moment drift (≈, conserved = 0): <b>${frame.momentDrift.toExponential(1)}</b><br>` +
       `<span class="tp-approx">${p.note}</span>` +
       (atEnd ? `<br>${stopWord}` : "");
   };
