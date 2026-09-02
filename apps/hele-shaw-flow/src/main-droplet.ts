@@ -13,7 +13,7 @@ import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui"
 import { Net2D, boundsOf, type Pt } from "@cas/flow";
 import { dropletBoundary, dropletFlowNet } from "./render/interiorDropletRender.js";
 import { canonicalize, evolveDroplet, type DropletFrame, type StopReason } from "./heleShawInteriorStepper.js";
-import { type Cx } from "./heleShawInterior.js";
+import { invertMap, type Cx } from "./heleShawInterior.js";
 
 interface Preset {
   readonly id: string;
@@ -23,15 +23,21 @@ interface Preset {
   readonly spin: number;
   readonly suction: boolean;
   readonly note: string;
+  /** Initial lab-frame location of the point source (a physical well); default the centre [0, 0]. */
+  readonly source?: Cx;
 }
 // Initial droplets. Coefficients are a₁…a_N; a₁ real sets the conformal radius. Injection smooths, suction
 // fingers.
+/** A unit disk represented with `deg` modes (a₁ = r, higher aₖ = 0): an off-centre source needs those
+ *  spare modes to develop the bulge toward the well (a bare degree-1 disk cannot deform). */
+const paddedDisk = (r: number, deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [r, 0] : [0, 0]));
 const PRESETS: readonly Preset[] = [
   { id: "disk", label: "Disk (uniform growth)", coeffs: [[1, 0]], q: 1, spin: 0, suction: false, note: "a disk stays a disk — the exact self-similar solution" },
   { id: "smooth", label: "Perturbed circle → smooths (inject)", coeffs: [[1, 0], [0, 0], [0.22, 0]], q: 1.5, spin: 0, suction: false, note: "injection is stabilizing — the bump decays as the droplet grows" },
   { id: "blob", label: "Asymmetric blob (inject)", coeffs: canonicalize([[1.3, 0], [0.24, 0.12], [0, -0.12]]), q: 1.5, spin: 0, suction: false, note: "watch the Richardson moments stay conserved as the area grows" },
   { id: "finger", label: "Fingering → cusp (suction ⚠)", coeffs: [[1, 0], [0, 0], [0.12, 0]], q: -2, spin: 0, suction: true, note: "suction is ill-posed — the perturbation grows into a (3,2)-cusp" },
   { id: "spin", label: "Spun blob (inject + spin)", coeffs: canonicalize([[1.2, 0], [0.28, 0], [0, 0.12]]), q: 1, spin: 1.2, suction: false, note: "a rigid co-rotation — area- and shape-neutral, the honest interior twist" },
+  { id: "offcenter", label: "Off-centre source → grows toward it (inject)", coeffs: paddedDisk(1, 16), q: 1.5, spin: 0, suction: false, source: [0.5, 0], note: "an off-centre well — drag the source dot; the droplet grows fastest toward it (moments drift by Ṁₖ = Q·bᵏ)" },
 ];
 
 interface DrState {
@@ -42,6 +48,7 @@ interface DrState {
   frac: number; // 0..1 along the evolution timeline
   playing: boolean;
   showNet: boolean;
+  sourceLab: Pt; // the point source's fixed lab location (a physical well); [0,0] = central
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -75,7 +82,16 @@ function main(): void {
   app.textContent = "";
 
   const first = PRESETS[0];
-  const state: DrState = { presetId: first.id, q: first.q, spin: first.spin, allowSuction: first.suction, frac: 0.5, playing: false, showNet: true };
+  const state: DrState = {
+    presetId: first.id,
+    q: first.q,
+    spin: first.spin,
+    allowSuction: first.suction,
+    frac: 0.5,
+    playing: false,
+    showNet: true,
+    sourceLab: first.source ? [first.source[0], first.source[1]] : [0, 0],
+  };
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -128,11 +144,11 @@ function main(): void {
   const canvas = el("canvas", "foil-canvas");
   attachCanvasA11y(canvas, {
     role: "img",
-    label: "A bounded fluid droplet in a Hele-Shaw cell, grown from a central source by the Polubarinova–Galin equation",
+    label: "A bounded fluid droplet in a Hele-Shaw cell, grown from a point source by the Polubarinova–Galin equation",
   });
   const cap = el("figcaption");
   cap.innerHTML =
-    "<b>Interior Hele-Shaw droplet</b> — the free boundary ∂D<sub>t</sub> = f<sub>t</sub>(∂𝔻) moves by Darcy's law under a central source. Injection smooths; suction fingers (ill-posed).";
+    "<b>Interior Hele-Shaw droplet</b> — the free boundary ∂D<sub>t</sub> = f<sub>t</sub>(∂𝔻) moves by Darcy's law under a point source (drag the yellow dot to move it). Injection smooths; suction fingers (ill-posed).";
   fig.append(canvas, cap);
   stage.append(fig);
   mountNavHeader(app, { current: "hele-shaw-flow" });
@@ -143,11 +159,17 @@ function main(): void {
   // Cache the evolved timeline per (preset, Q, spin, suction) — evolveDroplet integrates ~hundreds of RK4
   // steps, so rebuild only when a control changes; the time slider just indexes cached frames.
   let cache: { key: string; frames: DropletFrame[]; stop: StopReason; bounds: ReturnType<typeof boundsOf> } | null = null;
+  // A lab-fixed source spec: pass `lab` only when the source is off-centre, so the central presets keep the
+  // exact original code path (and goldens); a central source is `{ strength }`, at = 0.
+  const sourceSpec = (): { strength: number; lab?: Cx } => {
+    const [bx, by] = state.sourceLab;
+    return bx || by ? { strength: state.q, lab: [bx, by] } : { strength: state.q };
+  };
   const timelineFor = (): typeof cache => {
     const p = PRESETS.find((x) => x.id === state.presetId) ?? first;
-    const key = `${state.presetId}|${state.q}|${state.spin}|${state.allowSuction}`;
+    const key = `${state.presetId}|${state.q}|${state.spin}|${state.allowSuction}|${state.sourceLab[0]},${state.sourceLab[1]}`;
     if (cache && cache.key === key) return cache;
-    const { frames, stop } = evolveDroplet(p.coeffs, { strength: state.q }, {
+    const { frames, stop } = evolveDroplet(p.coeffs, sourceSpec(), {
       dt: 0.02,
       tMax: TMAX,
       maxFrames: FRAMES_CAP,
@@ -165,6 +187,7 @@ function main(): void {
   };
 
   let raf = 0;
+  let draggingSource = false; // while true, reuse the cached timeline (skip the heavy re-evolve per drag frame)
   const paint = (): void => {
     raf = 0;
     if (!net.resize()) return;
@@ -176,7 +199,9 @@ function main(): void {
         `<span class="tp-warn">⚠ suction is ill-posed — tick “allow suction” to evolve it anyway (RISKS §3)</span>`;
       return;
     }
-    const tl = timelineFor();
+    // While dragging the source, reuse the last cached timeline (the shape stays put) and only re-warp the
+    // flow net + move the marker — a full re-evolve runs on release. Otherwise (re)build as needed.
+    const tl = draggingSource && cache ? cache : timelineFor();
     if (!tl || tl.frames.length === 0) {
       readout.innerHTML = `<span class="tp-warn">⚠ no timeline could be built for these settings</span>`;
       return;
@@ -189,15 +214,18 @@ function main(): void {
     const idx = Math.min(tl.frames.length - 1, Math.max(0, Math.round(state.frac * (tl.frames.length - 1))));
     const frame = tl.frames[idx];
 
+    // Resolve the source's disk preimage in the current frame (for the flow-net warp). A central source
+    // gives a = 0 (the plain polar grid); an off-centre well warps the grid by the automorphism φ_a.
+    const at = invertMap(frame.coeffs, state.sourceLab) ?? [0, 0];
+
     // Draw order: interior flow net (light), then the droplet boundary (bright), then the source dot.
     if (state.showNet) {
-      const fnet = dropletFlowNet(frame.coeffs, { rings: 5, rays: 28 });
+      const fnet = dropletFlowNet(frame.coeffs, { rings: 5, rays: 28, at });
       net.drawLines(fnet.streamlines, 0.7);
       net.drawLines(fnet.equipotentials, 0.9);
     }
     net.fillBody(dropletBoundary(frame.coeffs, 480), "rgba(40,224,245,0.10)", "#28e0f5", 2.2);
-    const src: Pt = [0, 0];
-    net.drawDot(src, "#ffd166", 5); // the central source (image of w = 0)
+    net.drawDot(state.sourceLab, "#ffd166", 5); // the point source (draggable)
 
     // ---- readout: honest labels -----------------------------------------------
     const atEnd = idx >= tl.frames.length - 1;
@@ -206,12 +234,20 @@ function main(): void {
         ? `<span class="tp-warn">⚠ stopped at a (3,2)-cusp (min|f′| → 0) — ill-posed past here</span>`
         : tl.stop === "diverged"
           ? `<span class="tp-warn">⚠ the evolution diverged (under-resolved)</span>`
-          : `<span class="tp-approx">reached t = ${fmt(frame.t)}</span>`;
+          : tl.stop === "source-left-fluid"
+            ? `<span class="tp-warn">⚠ the source left the fluid — stopped</span>`
+            : `<span class="tp-approx">reached t = ${fmt(frame.t)}</span>`;
     const p = PRESETS.find((x) => x.id === state.presetId) ?? first;
+    const offCentre = state.sourceLab[0] !== 0 || state.sourceLab[1] !== 0;
+    const mag = state.spin !== 0 ? "|Mₖ|" : "Mₖ";
+    // Central source: the moments are conserved (drift → 0). Off-centre: they follow Richardson's law
+    // Ṁₖ = Q·bᵏ, and we report the drift FROM that prediction (still → 0 for an accurate solve).
+    const driftLabel = offCentre ? `${mag} drift vs Ṁₖ=Q·bᵏ` : `${mag} moment drift (conserved)`;
     readout.innerHTML =
-      `Q = ${fmt(state.q)}${state.q < 0 ? " (suction ⚠)" : " (inject)"} &nbsp; ω = ${fmt(state.spin)}<br>` +
+      `Q = ${fmt(state.q)}${state.q < 0 ? " (suction ⚠)" : " (inject)"} &nbsp; ω = ${fmt(state.spin)}` +
+      `${offCentre ? ` &nbsp; source b = (${fmt(state.sourceLab[0])}, ${fmt(state.sourceLab[1])})` : ""}<br>` +
       `t = <b>${fmt(frame.t)}</b> &nbsp; area A = ${fmt(frame.area)} &nbsp; min|f′| = ${fmt(frame.minFPrime)}<br>` +
-      `${state.spin !== 0 ? "|Mₖ|" : "Mₖ"} moment drift (≈, conserved = 0): <b>${frame.momentDrift.toExponential(1)}</b><br>` +
+      `${driftLabel} (≈, exact = 0): <b>${frame.momentDrift.toExponential(1)}</b><br>` +
       `<span class="tp-approx">${p.note}</span>` +
       (atEnd ? `<br>${stopWord}` : "");
   };
@@ -269,6 +305,7 @@ function main(): void {
     state.q = p.q;
     state.spin = p.spin;
     state.allowSuction = p.suction;
+    state.sourceLab = p.source ? [p.source[0], p.source[1]] : [0, 0];
     state.frac = 0.5;
     sT.input.value = String(state.frac);
     sT.val.textContent = state.frac.toFixed(2);
@@ -302,6 +339,45 @@ function main(): void {
     state.allowSuction = suctionBox.checked;
     requestPaint();
   });
+
+  // ---- draggable point source (F1.1) ---------------------------------------
+  const worldAt = (e: PointerEvent): Pt => {
+    const r = canvas.getBoundingClientRect();
+    return net.toWorld(e.clientX - r.left, e.clientY - r.top);
+  };
+  const hitTolWorld = (): number => {
+    const a = net.toWorld(0, 0);
+    const b = net.toWorld(0, 14);
+    return Math.hypot(a[0] - b[0], a[1] - b[1]) || 0.1;
+  };
+  canvas.addEventListener("pointerdown", (e) => {
+    const w = worldAt(e);
+    if (Math.hypot(w[0] - state.sourceLab[0], w[1] - state.sourceLab[1]) <= hitTolWorld()) {
+      draggingSource = true;
+      stopPlay();
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    }
+  });
+  canvas.addEventListener("pointermove", (e) => {
+    if (!draggingSource) return;
+    const w = worldAt(e);
+    // Keep the source inside the INITIAL droplet (frame 0), so the evolution starts with a valid well; a
+    // later exit under suction is caught by the driver's per-frame "source left the fluid" stop.
+    const fr0 = cache?.frames[0];
+    if (fr0 && invertMap(fr0.coeffs, w) !== null) {
+      state.sourceLab = [w[0], w[1]];
+      requestPaint();
+    }
+  });
+  const endSourceDrag = (): void => {
+    if (!draggingSource) return;
+    draggingSource = false;
+    requestPaint(); // re-evolve with the new source (the cache key changed)
+  };
+  canvas.addEventListener("pointerup", endSourceDrag);
+  canvas.addEventListener("pointercancel", endSourceDrag);
+
   window.addEventListener("resize", requestPaint);
   requestPaint();
 }

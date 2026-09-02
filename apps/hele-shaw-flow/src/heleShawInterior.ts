@@ -63,10 +63,36 @@ export function evalMapPrime(coeffs: readonly Cx[], z: Cx): Cx {
 // --- the source term (the right-hand side of (PG)) ----------------------------------------------------
 
 /** A point source injected into the fluid. `strength` = Q (area/time; Q > 0 injects, Q < 0 suctions —
- *  ill-posed). `at` is the source's preimage in the disk (default 0, the droplet center); |at| < 1. */
+ *  ill-posed). The source location is given EITHER by `at` — its fixed preimage in the disk (a co-moving
+ *  source; default 0, the droplet center) — OR by `lab` — its fixed image point z in the plane (a physical
+ *  well), whose preimage a = f⁻¹(lab) the driver resolves per step ({@link invertMap}). `lab` takes
+ *  precedence when both are present. |at| < 1 / lab ∈ D. */
 export interface Source {
   readonly strength: number;
   readonly at?: Cx;
+  readonly lab?: Cx;
+}
+
+/** Newton inverse of the interior map: the disk preimage w of a plane point z (f(w) = z). Seeded at
+ *  w ≈ z/a₁ (f ≈ a₁·w near 0). Returns the preimage, or null when it does not converge to an INTERIOR
+ *  point |w| < 1 — i.e. z lies on or outside the droplet (a source that has "left the fluid"). */
+export function invertMap(coeffs: readonly Cx[], z: Cx, iters = 60): Cx | null {
+  const a1 = coeffs[0];
+  const a1abs2 = abs2(a1);
+  if (a1abs2 < 1e-300) return null;
+  let w: Cx = [(z[0] * a1[0] + z[1] * a1[1]) / a1abs2, (z[1] * a1[0] - z[0] * a1[1]) / a1abs2]; // z / a₁
+  for (let i = 0; i < iters; i++) {
+    const fw = evalMap(coeffs, w);
+    const ex: Cx = [fw[0] - z[0], fw[1] - z[1]];
+    if (abs2(ex) < 1e-28) break;
+    const fp = evalMapPrime(coeffs, w);
+    const d = abs2(fp);
+    if (d < 1e-300) return null;
+    w = [w[0] - (ex[0] * fp[0] + ex[1] * fp[1]) / d, w[1] - (ex[1] * fp[0] - ex[0] * fp[1]) / d]; // w −= ex/f'
+  }
+  const res = evalMap(coeffs, w);
+  if (abs2([res[0] - z[0], res[1] - z[1]]) > 1e-16 * (1 + abs2(z))) return null;
+  return cabs(w) < 1 - 1e-9 ? w : null;
 }
 
 /** The Poisson kernel P(a, e^{iθ}) = (1 − |a|²) / |e^{iθ} − a|² (≡ 1 at a = 0). Normalized so

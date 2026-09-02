@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   evalMap,
   evalMapPrime,
+  invertMap,
   poissonKernel,
   sourceDensity,
   pgResidual,
@@ -24,6 +25,25 @@ import {
 
 const cabs = (a: Cx): number => Math.hypot(a[0], a[1]);
 const scale = (a: Cx, s: number): Cx => [a[0] * s, a[1] * s];
+
+describe("invertMap (Newton f⁻¹, the disk preimage of a lab point) — F1.1", () => {
+  const coeffs: Cx[] = [[1.3, 0], [0.24, 0.12], [0, -0.12]];
+  it("round-trips f(invertMap(z)) ≈ z for several interior points", () => {
+    for (const z of [[0, 0], [0.4, 0.2], [-0.6, 0.3], [0.9, -0.5]] as Cx[]) {
+      const w = invertMap(coeffs, z);
+      expect(w).not.toBeNull();
+      if (!w) continue;
+      expect(cabs(w)).toBeLessThan(1); // an interior preimage
+      const fz = evalMap(coeffs, w);
+      expect(Math.hypot(fz[0] - z[0], fz[1] - z[1])).toBeLessThan(1e-10);
+    }
+  });
+  it("returns 0 for the centre and null for a point outside the droplet", () => {
+    const w0 = invertMap(coeffs, [0, 0]);
+    expect(w0 && cabs(w0)).toBeLessThan(1e-9); // f(0) = 0
+    expect(invertMap(coeffs, [100, 0])).toBeNull(); // far outside — no interior preimage
+  });
+});
 
 describe("the interior map f(w) = Σ a_k w^k and its derivative", () => {
   it("evaluates and differentiates a finite Taylor map (f(0) = 0)", () => {

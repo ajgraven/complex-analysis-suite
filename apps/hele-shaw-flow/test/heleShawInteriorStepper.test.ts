@@ -14,6 +14,8 @@ import {
   quadraticSolutionRates,
   linearModeRate,
   dropletArea,
+  evalMap,
+  pgResidualSup,
   type Cx,
 } from "../src/heleShawInterior.js";
 
@@ -136,5 +138,46 @@ describe("the rigid-spin overlay rotates without changing the shape's moment mag
     expect(last.momentDrift).toBeLessThan(1e-3); // = momentMagnitudeDrift, rotation-robust
     expect(momentMagnitudeDrift(ref, now)).toBeLessThan(1e-3);
     expect(momentDrift(ref, now)).toBeGreaterThan(0.3); // absolute drift IS large — the phases rotated
+  });
+});
+
+describe("off-centre source (F1.1)", () => {
+  // A unit disk carried with `deg` modes — an off-centre source populates the spare aₖ to form the bulge; a
+  // bare degree-1 disk cannot deform, so the truncated solve must have enough modes to resolve the flow.
+  const disk = (deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [1, 0] : [0, 0]));
+
+  it("the spectral solve → (PG): the off-centre residual converges as the mode count grows", () => {
+    const src = { strength: 2, at: [0.3, 0] as Cx };
+    const lo = pgResidualSup(disk(4), pgVelocity(disk(4), src), src);
+    const hi = pgResidualSup(disk(16), pgVelocity(disk(16), src), src);
+    expect(hi).toBeLessThan(lo); // more modes ⇒ smaller residual (geometric convergence)
+    expect(hi).toBeLessThan(1e-6); // well-resolved at 16 modes (measured ≈ 4e-9)
+  });
+
+  it("obeys Richardson's law Ṁ_k = Q·bᵏ (b = the source image)", () => {
+    const coeffs = disk(8); // f(w) = w, carried with enough modes to deform
+    const a: Cx = [0.3, 0];
+    const Q = 2;
+    const b = evalMap(coeffs, a); // image of the source = 0.3
+    const dt = 1e-3;
+    const m0 = interiorMoments(coeffs, 2);
+    const m1 = interiorMoments(stepDroplet(coeffs, { strength: Q, at: a }, dt), 2);
+    // dM₁/dt ≈ Q·b = 0.6 ; dM₂/dt ≈ Q·b² = 0.18 (both real, b real)
+    expect((m1[0][0] - m0[0][0]) / dt).toBeCloseTo(Q * b[0], 2);
+    expect((m1[1][0] - m0[1][0]) / dt).toBeCloseTo(Q * (b[0] * b[0]), 2);
+  });
+
+  it("the moment monitor tracks the predicted drift: tiny residual, but the raw moments DID move", () => {
+    const res = evolveDroplet(disk(16), { strength: 1.5, lab: [0.5, 0] }, { dt: 0.02, tMax: 1, moments: 2 });
+    const last = res.frames[res.frames.length - 1];
+    expect(last.momentDrift).toBeLessThan(1e-6); // drift from the Richardson prediction stays tiny (measured ≈ 4e-9)
+    const raw = momentDrift(interiorMoments(res.frames[0].coeffs, 2), interiorMoments(last.coeffs, 2));
+    expect(raw).toBeGreaterThan(0.05); // an off-centre source genuinely moves the moments (measured ≈ 0.75)
+  });
+
+  it("stops honestly when the source leaves the fluid", () => {
+    const res = evolveDroplet([[1, 0]], { strength: 1, lab: [5, 0] }, { dt: 0.02, tMax: 1 });
+    expect(res.stop).toBe("source-left-fluid"); // (5,0) is outside the unit-disk droplet
+    expect(res.frames.length).toBe(1);
   });
 });

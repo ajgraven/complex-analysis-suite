@@ -20,6 +20,7 @@ import { dftOnCircle } from "@cas/core";
 import type { Cx as CxObj } from "@cas/core";
 import {
   evalMapPrime,
+  invertMap,
   sourceDensity,
   dropletArea,
   minAbsMapPrime,
@@ -75,9 +76,18 @@ export function pgVelocity(coeffs: readonly Cx[], src: Source, samples = sampleC
   return dot;
 }
 
+/** Resolve a lab-fixed source (`lab` = a fixed plane point) to the current preimage `at` = f⁻¹(lab). A
+ *  central or preimage-fixed source passes through unchanged; a lab source whose point has left the fluid
+ *  (no interior preimage) resolves to strength 0 (the driver detects the exit separately and stops). */
+export function resolveSource(coeffs: readonly Cx[], src: Source): Source {
+  if (!src.lab) return src;
+  const at = invertMap(coeffs, src.lab);
+  return at ? { strength: src.strength, at } : { strength: 0, at: [0, 0] };
+}
+
 /** The full coefficient velocity = the source-driven shape velocity + an optional rigid co-rotation iω·f. */
 function velocity(coeffs: readonly Cx[], src: Source, spin: number, samples: number): Cx[] {
-  const shape = pgVelocity(coeffs, src, samples);
+  const shape = pgVelocity(coeffs, resolveSource(coeffs, src), samples);
   if (!spin) return shape;
   const spinDot = rigidSpinRate(coeffs, spin);
   return shape.map((d, i) => cadd(d, spinDot[i]));
@@ -149,6 +159,25 @@ export function momentMagnitudeDrift(ref: readonly Cx[], now: readonly Cx[]): nu
   return d;
 }
 
+/** The PREDICTED moments at elapsed time t for lab-fixed sources: by Richardson's law Ṁ_k = Σⱼ Qⱼ·bⱼᵏ (b
+ *  the fixed plane point of each source), so M_k(t) = M_k(0) + t·Σⱼ Qⱼ·bⱼᵏ — exactly linear in t. This is
+ *  the honest reference the ≈ moment drift is measured against; for a central source (b = 0) every k ≥ 1
+ *  term vanishes and it reduces to the conserved M_k(0). */
+export function predictedMoments(ref: readonly Cx[], sources: readonly { strength: number; b: Cx }[], t: number): Cx[] {
+  return ref.map((m0, i) => {
+    const k = i + 1;
+    let re = m0[0];
+    let im = m0[1];
+    for (const s of sources) {
+      let bk: Cx = [1, 0];
+      for (let j = 0; j < k; j++) bk = cmul(bk, s.b); // bᵏ
+      re += t * s.strength * bk[0];
+      im += t * s.strength * bk[1];
+    }
+    return [re, im] as Cx;
+  });
+}
+
 // --- the evolution driver -----------------------------------------------------------------------------
 
 export interface DropletFrame {
@@ -165,7 +194,7 @@ export interface DropletFrame {
   readonly momentDrift: number;
 }
 
-export type StopReason = "reached-tMax" | "max-frames" | "cusp" | "diverged" | "suction-blocked";
+export type StopReason = "reached-tMax" | "max-frames" | "cusp" | "diverged" | "suction-blocked" | "source-left-fluid";
 
 export interface EvolveOptions {
   /** Base time step (adaptively shrunk near a cusp). */
@@ -208,8 +237,13 @@ export function evolveDroplet(
   const a1mag0 = Math.hypot(coeffs0[0][0], coeffs0[0][1]);
   const cuspStop = cuspFrac * a1mag0;
   const refMoments = interiorMoments(coeffs0, K);
-  // Without spin the moments are conserved in full (phase and magnitude), so the strict absolute drift is
-  // the honest gauge; a spin rotates them (M_k ↦ e^{ikωt}M_k), so there we fall back to the magnitude drift.
+  // The moment drift is measured against the PREDICTED moments M_k(0) + t·Q·bᵏ (Richardson), so an
+  // off-centre source — whose moments genuinely evolve — is still monitored honestly; for a central source
+  // (b = 0) the prediction is the conserved M_k(0), recovering the original check. Without spin the strict
+  // absolute drift is the gauge; a spin rotates the phases (M_k ↦ e^{ikωt}M_k), so there we compare
+  // magnitudes.
+  const b: Cx = src.lab ?? [0, 0];
+  const srcForMoments = [{ strength: src.strength, b }];
   const driftOf = spin === 0 ? momentDrift : momentMagnitudeDrift;
 
   const frameOf = (t: number, coeffs: Cx[]): DropletFrame => ({
@@ -217,7 +251,7 @@ export function evolveDroplet(
     coeffs,
     area: dropletArea(coeffs),
     minFPrime: minAbsMapPrime(coeffs),
-    momentDrift: driftOf(refMoments, interiorMoments(coeffs, K)),
+    momentDrift: driftOf(predictedMoments(refMoments, srcForMoments, t), interiorMoments(coeffs, K)),
   });
 
   const frames: DropletFrame[] = [frameOf(0, coeffs0.map((a) => [a[0], a[1]] as Cx))];
@@ -225,6 +259,8 @@ export function evolveDroplet(
   let t = 0;
 
   while (frames.length < maxFrames && t < tMax) {
+    // A lab-fixed source must stay inside the fluid; if its preimage has left the disk, stop honestly.
+    if (src.lab && invertMap(coeffs, src.lab) === null) return { frames, stop: "source-left-fluid" };
     const minF = minAbsMapPrime(coeffs);
     if (minF < cuspStop) return { frames, stop: "cusp" }; // ⚠ the ill-posed edge — never step past it
     // adaptive step: shrink as the cusp approaches; never overshoot tMax
