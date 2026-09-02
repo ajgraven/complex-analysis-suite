@@ -92,6 +92,14 @@ export class Net2D {
     return [this.cx + ndcx * this.halfSpan * this.aspect(), this.cy + ndcy * this.halfSpan];
   }
 
+  /** World → CSS-pixel coordinate relative to the canvas top-left — the forward companion to `toWorld`,
+   *  for placing a DOM marker/label over what was drawn. Uses the transform from the latest
+   *  `fitBounds` + `resize`. */
+  toCanvasPx(p: Pt): [number, number] {
+    const [dx, dy] = this.toPx(p);
+    return [dx / this.dpr, dy / this.dpr];
+  }
+
   clear(bg = "#0b0f1a"): void {
     this.ctx.fillStyle = bg;
     this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);

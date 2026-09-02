@@ -406,3 +406,30 @@ input[type="range"] {
 .tp-fekete {
   color: #e879f9;
 }
+
+/* PT-6b — the hover probe (a floating readout at the cursor) + the pinned test-charge label. */
+.tp-probe,
+.tp-charge {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: rgba(15, 17, 21, 0.86);
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(231, 234, 242, 0.14);
+  font: 11.5px/1.45 ui-monospace, "SF Mono", Menlo, monospace;
+  color: #c4ccda;
+  white-space: nowrap;
+}
+.tp-charge {
+  border-color: rgba(255, 210, 74, 0.45);
+}
+.tp-probe b,
+.tp-charge b {
+  color: #8fd0b0;
+  font-weight: 600;
+}
+.tp-probe .tp-eq {
+  color: #8c95a9;
+}

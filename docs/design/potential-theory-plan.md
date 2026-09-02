@@ -43,8 +43,9 @@ lets an `≈` quantity read as `=`, and Faber is switched off where it has no ma
 ## Roadmap
 
 Milestones are numbered **PT-n**. PT-0 and PT-1 have shipped; **PT-6 is the in-progress build** (B1 + C1
-from the idea backlog below) — its first sub-part **PT-6a (the draw-your-own-K polygon editor) has landed**.
-PT-2 … PT-5 remain queued.
+from the idea backlog below) — its sub-parts **PT-6a (the draw-your-own-K polygon editor) and PT-6b (the
+hover probe + draggable test charge) have landed**; **PT-6c (the Brownian Monte Carlo) is next**. PT-2 …
+PT-5 remain queued.
 
 - **PT-0 — carve the app (done, ADR-0036 stage 2).** `apps/potential-theory`; the conductor view + its
   engines (`potentialDomain` / `generalDomains` / `logLightning` / `faberZeros` / `feketePoints` /
@@ -71,8 +72,14 @@ PT-2 … PT-5 remain queued.
   `⚠` guard, and a compact `#vs=` permalink (the app's first — domain + rounded corners). The pure helpers
   (`customK.ts`) are node-tested; the SC refit runs on drag-release, the outline+handles redraw live. (The
   optional smoothed-freehand-curve-through-log-lightning `≈` variant is deferred — polygon-only for now.)
-  **(b)** a hover probe reading g_K / potential / field at the cursor
-  (exact for exterior-map K, `≈` for general), with an optional draggable test charge; **(c)** a
+  **(b) — DONE.** A hover probe reading the three potential-theory quantities at an ARBITRARY point z: the
+  Green's function g_K(z), the equilibrium logarithmic potential U^μ(z) = −log cap − g_K (= the Robin
+  constant γ on/inside K), and the field magnitude |E| = |∇g_K| with its outward direction. Exact (`=`) for
+  exterior-map K — a Newton inverse of Ψ (`probeField.ts`, node-tested against the disk 1/|z|, the segment
+  1/|√(z²−1)|, and the ellipse) — and `≈` for general K (the log-lightning greenFn + a central-difference
+  gradient). Rendered as a floating readout at the cursor plus an on-canvas marker + outward field arrow,
+  with an optional **draggable test charge** (a pinned probe) reusing the same evaluator. The conductor pane
+  also became a `<main>` landmark (a11y). **(c)** a
   walk-on-spheres **harmonic-measure Monte Carlo** — random walkers escaping to ∞ reconstruct μ_K as a live
   "fourth road," honestly `≈` with the far-field radius + sample count shown, and validated against the
   exact μ_K (arcsine on a segment, uniform on the disk, cusp-concentration on the deltoid). App-local (no

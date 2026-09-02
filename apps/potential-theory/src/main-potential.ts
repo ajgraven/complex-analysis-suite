@@ -35,6 +35,7 @@ import {
   encodeViewState,
   decodeViewState,
 } from "./customK.js";
+import { probeExterior, probeGeneral, type Probe } from "./probeField.js";
 
 type AnyDomain = ExteriorDomain | GeneralDomain;
 const isGeneral = (d: AnyDomain): d is GeneralDomain => "kind" in d && d.kind === "general";
@@ -95,6 +96,12 @@ function main(): void {
   let customCorners: Pt[] = DEFAULT_CUSTOM_CORNERS.map((p): Pt => [p[0], p[1]]);
   let selectedVertex = -1;
   let dragging = -1;
+
+  // Hover-probe / test-charge state (PT-6b).
+  let hoverZ: Pt | null = null; // the cursor point (world) while hovering the pane, else null
+  let chargeOn = false; // whether the pinned draggable test charge is shown
+  let chargePos: Pt | null = null; // its world position
+  let chargeDrag = false; // whether the test charge is being dragged
 
   // Restore a shared view (PT-6a) BEFORE the toolbar is built, so the <select> reflects the restored domain
   // and a hand-drawn K is ready to draw. A malformed / unknown hash is ignored (falls back to the default).
@@ -189,13 +196,20 @@ function main(): void {
   fRow.append(fHead, fInput);
   fRow.style.display = "none";
 
-  controls.append(domRow, editRow, faberCheck, nRow, feketeCheck, fRow);
+  // Test charge (PT-6b): a pinned, draggable probe. (The hover probe is always on — no toggle.)
+  const chargeCheck = el("label", "check");
+  const chargeBox = el("input");
+  chargeBox.type = "checkbox";
+  chargeBox.checked = chargeOn;
+  chargeCheck.append(chargeBox, el("span", undefined, "Test charge"));
+
+  controls.append(domRow, editRow, faberCheck, nRow, feketeCheck, fRow, chargeCheck);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, controls, readout);
 
   // ---- single conductor pane ------------------------------------------------
-  const stage = el("div", "pot-stage");
+  const stage = el("main", "pot-stage"); // a landmark so the conductor pane's content is contained (a11y)
   const fig = el("figure", "foil-pane");
   const canvas = el("canvas", "foil-canvas");
   attachCanvasA11y(canvas, {
@@ -204,8 +218,13 @@ function main(): void {
   });
   const cap = el("figcaption");
   cap.innerHTML =
-    "<b>The conductor K</b> — equilibrium charge (dots, crowding = density), Green equipotentials g<sub>K</sub> = t";
-  fig.append(canvas, cap);
+    "<b>The conductor K</b> — equilibrium charge (dots, crowding = density), Green equipotentials g<sub>K</sub> = t · <i>hover to read g<sub>K</sub> / U<sup>μ</sup> / |E|</i>";
+  // The floating hover readout + the pinned test-charge label (PT-6b), positioned over the pane.
+  const hud = el("div", "tp-probe");
+  hud.hidden = true;
+  const chargeLabel = el("div", "tp-charge");
+  chargeLabel.hidden = true;
+  fig.append(canvas, cap, hud, chargeLabel);
   stage.append(fig);
   mountNavHeader(app, { current: "potential-theory" });
   app.append(bar, stage);
@@ -256,6 +275,82 @@ function main(): void {
     built = null;
     writePermalink();
     requestPaint();
+  };
+
+  // ---- hover probe / test charge (PT-6b) -----------------------------------
+  // Evaluate g_K / U^μ / |E| at an arbitrary point z, honestly labelled: exact (=) for an exterior-map K
+  // (a Newton inverse of Ψ), approximate (≈) for a general (log-lightning) K.
+  const probeAt = (dom: AnyDomain, z: Pt): Probe => (isGeneral(dom) ? probeGeneral(dom, z) : probeExterior(dom, z));
+  const eqOf = (dom: AnyDomain): string => (isGeneral(dom) ? "≈" : dom.exact ? "=" : "≈");
+  const num = (x: number): string => (Number.isFinite(x) ? x.toFixed(3) : "—");
+  const probeBody = (dom: AnyDomain, p: Probe): string => {
+    const eq = eqOf(dom);
+    if (p.inside) return `<span class="tp-eq">on / inside K (${eq})</span><br>g<sub>K</sub> = <b>0</b><br>U<sup>μ</sup> = γ = ${num(p.potential)}`;
+    let s = `g<sub>K</sub> = <b>${num(p.gK)}</b> <span class="tp-eq">(${eq})</span><br>U<sup>μ</sup> = ${num(p.potential)}<br>|E| = ${num(p.field)}`;
+    if (!isGeneral(dom)) s += `<br><span class="tp-eq">level |w| = ${num(p.wAbs)}</span>`;
+    return s;
+  };
+
+  // World units per CSS pixel at the current view (so a glyph is a fixed screen size regardless of zoom).
+  const worldPerPx = (): number => {
+    const a = net.toWorld(0, 0);
+    const b = net.toWorld(0, 1);
+    return Math.hypot(a[0] - b[0], a[1] - b[1]) || 0.01;
+  };
+  // A marker dot + a short outward field arrow (∇g_K) at z. Suppressed on/inside K (no field).
+  const drawProbeGlyph = (z: Pt, p: Probe, charge: boolean): void => {
+    const color = charge ? "#ffd24a" : "#ffffff";
+    net.drawDot(z, color, charge ? 6 : 4.5);
+    if (p.inside || p.field <= 0) return;
+    const wpp = worldPerPx();
+    const L = 30 * wpp;
+    const hb = 8 * wpp;
+    const dir = p.fieldDir;
+    const perp: Pt = [-dir[1], dir[0]];
+    const end: Pt = [z[0] + dir[0] * L, z[1] + dir[1] * L];
+    const h1: Pt = [end[0] - dir[0] * hb + perp[0] * hb * 0.55, end[1] - dir[1] * hb + perp[1] * hb * 0.55];
+    const h2: Pt = [end[0] - dir[0] * hb - perp[0] * hb * 0.55, end[1] - dir[1] * hb - perp[1] * hb * 0.55];
+    net.drawLines([{ color, pts: [z, end] }, { color, pts: [h1, end, h2] }], 1.6);
+  };
+
+  // Position the floating hover HUD near the cursor (canvas-relative offset), flipping at the pane edges.
+  const placeHud = (ox: number, oy: number): void => {
+    const fw = fig.clientWidth;
+    const fh = fig.clientHeight;
+    let x = ox + 16;
+    let y = oy + 16;
+    if (x + hud.offsetWidth > fw - 6) x = ox - hud.offsetWidth - 16;
+    if (y + hud.offsetHeight > fh - 6) y = oy - hud.offsetHeight - 16;
+    hud.style.left = `${Math.max(6, x)}px`;
+    hud.style.top = `${Math.max(6, y)}px`;
+  };
+  const updateHud = (ox: number, oy: number): void => {
+    const dom = currentBuilt().domain;
+    if (!dom || !hoverZ) {
+      hud.hidden = true;
+      return;
+    }
+    hud.innerHTML = probeBody(dom, probeAt(dom, hoverZ));
+    hud.hidden = false;
+    placeHud(ox, oy);
+  };
+  // The pinned test-charge label tracks the charge's on-screen position (world → CSS px).
+  const updateChargeLabel = (z: Pt, p: Probe, dom: AnyDomain): void => {
+    const [px, py] = net.toCanvasPx(z);
+    chargeLabel.style.left = `${px + 12}px`;
+    chargeLabel.style.top = `${py + 12}px`;
+    chargeLabel.innerHTML = `<b>test charge</b><br>${probeBody(dom, p)}`;
+    chargeLabel.hidden = false;
+  };
+  // A default charge location just outside K (a point on the g_K = log 1.83 curve / boundary offset).
+  const defaultChargePos = (): Pt => {
+    const dom = currentBuilt().domain;
+    if (dom && !isGeneral(dom)) return dom.evalPsi([1.8, 0.35]);
+    if (dom && isGeneral(dom)) {
+      const bb = boundsOf([{ color: "", pts: dom.boundary }]);
+      if (bb) return [bb.maxx + 0.35 * (bb.maxx - bb.minx) + 0.3, (bb.miny + bb.maxy) / 2];
+    }
+    return [2, 0];
   };
 
   // Cache the built domain (and, for a general K, the sampled g_K field) so the log-lightning solve and
@@ -355,6 +450,16 @@ function main(): void {
       else if (domain && isGeneral(domain)) drawGeneral(domain, b, overlay !== null, fekete);
       else if (custom && customView) net.fitBounds(customView, 1.0);
       if (custom) drawEditorOverlay();
+
+      // ---- probe glyphs (PT-6b): the hover marker + the pinned test charge, each with a field arrow ---
+      if (domain) {
+        if (hoverZ && !chargeDrag) drawProbeGlyph(hoverZ, probeAt(domain, hoverZ), false);
+        if (chargeOn && chargePos) {
+          const cp = probeAt(domain, chargePos);
+          drawProbeGlyph(chargePos, cp, true);
+          updateChargeLabel(chargePos, cp, domain);
+        }
+      }
     }
 
     // ---- readout -------------------------------------------------------------
@@ -451,6 +556,7 @@ function main(): void {
     selectedVertex = -1;
     dragging = -1;
     if (custom) customView = computeCustomView(customCorners);
+    if (chargeOn) chargePos = defaultChargePos(); // re-home the test charge outside the new K
     writePermalink();
     requestPaint();
   });
@@ -488,8 +594,18 @@ function main(): void {
     return Math.hypot(a[0] - b[0], a[1] - b[1]) || 0.1;
   };
   canvas.addEventListener("pointerdown", (e) => {
+    const w = worldAt(e);
+    // 1) grab the pinned test charge (takes priority — it may sit over a vertex).
+    if (chargeOn && chargePos && Math.hypot(w[0] - chargePos[0], w[1] - chargePos[1]) <= hitTolWorld()) {
+      chargeDrag = true;
+      canvas.setPointerCapture(e.pointerId);
+      e.preventDefault();
+      requestPaint();
+      return;
+    }
+    // 2) custom-polygon vertex drag.
     if (domainId !== CUSTOM_ID) return;
-    const i = nearestVertex(customCorners, worldAt(e), hitTolWorld());
+    const i = nearestVertex(customCorners, w, hitTolWorld());
     selectedVertex = i;
     if (i >= 0) {
       dragging = i;
@@ -499,13 +615,36 @@ function main(): void {
     requestPaint();
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (dragging < 0 || domainId !== CUSTOM_ID) return;
-    const w = worldAt(e);
-    customCorners = customCorners.map((p, k): Pt => (k === dragging ? w : p));
-    built = null; // the cached SC is stale mid-drag; a fresh one is built on release
+    if (chargeDrag) {
+      chargePos = worldAt(e);
+      hud.hidden = true; // the charge label carries the readout while dragging it
+      requestPaint();
+      return;
+    }
+    if (dragging >= 0 && domainId === CUSTOM_ID) {
+      const w = worldAt(e);
+      customCorners = customCorners.map((p, k): Pt => (k === dragging ? w : p));
+      hud.hidden = true;
+      built = null; // the cached SC is stale mid-drag; a fresh one is built on release
+      requestPaint();
+      return;
+    }
+    // hover probe (no button down): read g_K / U^μ / |E| under the cursor.
+    hoverZ = worldAt(e);
+    updateHud(e.offsetX, e.offsetY);
+    requestPaint();
+  });
+  canvas.addEventListener("pointerleave", () => {
+    hoverZ = null;
+    hud.hidden = true;
     requestPaint();
   });
   const endDrag = (): void => {
+    if (chargeDrag) {
+      chargeDrag = false;
+      requestPaint();
+      return;
+    }
     if (dragging < 0) return;
     dragging = -1;
     onCustomEdit(); // refit the exterior SC + write the permalink at the final vertex position
@@ -530,6 +669,12 @@ function main(): void {
   fInput.addEventListener("input", () => {
     feketeN = Number(fInput.value);
     fVal.textContent = String(feketeN);
+    requestPaint();
+  });
+  chargeBox.addEventListener("change", () => {
+    chargeOn = chargeBox.checked;
+    if (chargeOn && !chargePos) chargePos = defaultChargePos();
+    if (!chargeOn) chargeLabel.hidden = true;
     requestPaint();
   });
   window.addEventListener("resize", requestPaint);
