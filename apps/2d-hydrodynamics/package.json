@@ -16,8 +16,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cas/export": "workspace:*",
     "@cas/flow": "workspace:*",
     "@cas/gpu": "workspace:*",
+    "@cas/interchange": "workspace:*",
     "@cas/ui": "workspace:*"
   },
   "devDependencies": {

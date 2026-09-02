@@ -81,9 +81,16 @@ green before and after (guardrail: working software at every step).
   with Kutta is the zero-thickness airfoil), so the gallery leaves Γ free rather than duplicating that.
   The bodies are the flat plate (vertical slit), ellipse, deltoid, astroid, and 5-cusp star. A GPU
   domain-color upgrade (generalizing `airfoilShader.ts` to a generic closed-form `ψ`) remains an HD-3 option.
-- **HD-3 — parity + identity polish.** Angle of attack, stagnation-point markers, a stream-function contour
-  set, optional animated tracers, `#vs=` permalinks, and PNG export via `@cas/export`. Where the app stops
-  being "the moved airfoil" and becomes its own tool.
+- **HD-3 — parity + identity polish (done).** Both pages gained the suite's shareable/reproducible shell:
+  `#vs=` **permalinks** + a **Copy link** button (a shared `viewState.ts` on `@cas/interchange`'s
+  `encodeViewState`/`decodeViewState`, app id `2dh`; the gallery also still accepts the bare `#<id>` hub
+  deep-links), and **PNG export** + a **Save PNG** button (a shared `pngExport.ts` compositing the two panes
+  and stamping the permalink into the file's `tEXt` via `@cas/export` — the airfoil's WebGL panes get
+  `preserveDrawingBuffer` so the capture is reliable). The gallery also gained **stagnation-point markers**
+  (the roots of `W_ref'(ζ) = 0`, pushed through ψ — front/rear on the body for `|Γ| ≤ 4πU`, one detached
+  beyond, honestly labelled). The app now consumes `@cas/export` and `@cas/interchange`. Still optional /
+  deferred: animated tracers, a GPU domain-color render for the gallery (generalizing `airfoilShader.ts`),
+  and a stagnation overlay on the airfoil's GL panes (the trailing-edge Kutta stagnation).
 - **HD-4 — migrate the polygon transplant (deferred; the expensive move).** Move `polygon.html` +
   `importConformalMap.ts` here to make the app the complete "flow past any body" home. Deferred because it
   ripples: the [ADR-0035](../DECISIONS.md) `conformal` interchange form, the `RM_TO_POTENTIAL_CONFORMAL_LINK`

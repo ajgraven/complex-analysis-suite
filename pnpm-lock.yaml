@@ -87,12 +87,18 @@ importers:
 
   apps/2d-hydrodynamics:
     dependencies:
+      '@cas/export':
+        specifier: workspace:*
+        version: link:../../packages/export
       '@cas/flow':
         specifier: workspace:*
         version: link:../../packages/flow
       '@cas/gpu':
         specifier: workspace:*
         version: link:../../packages/gpu
+      '@cas/interchange':
+        specifier: workspace:*
+        version: link:../../packages/interchange
       '@cas/ui':
         specifier: workspace:*
         version: link:../../packages/ui

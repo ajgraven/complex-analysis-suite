@@ -16,6 +16,8 @@ import {
   type AirfoilParams,
 } from "./airfoil.js";
 import { createAirfoilRenderer, type AirfoilView } from "./render/airfoilView.js";
+import { encodeAirfoil, decodeAirfoil, type AirfoilVS } from "./viewState.js";
+import { saveCompositePng } from "./pngExport.js";
 
 const CYL_VIEW: AirfoilView = { center: [0, 0], halfSpan: 2.0 };
 const FOIL_VIEW: AirfoilView = { center: [0, 0], halfSpan: 2.8 };
@@ -103,7 +105,31 @@ function main(): void {
   kBox.type = "checkbox";
   kBox.checked = state.kutta;
   kutta.append(kBox, el("span", undefined, "Kutta condition"));
-  controls.append(sThick.row, sCamber.row, sAoA.row, sTE.row, kutta);
+  const copyBtn = el("button", "pal-btn", "Copy link ⧉");
+  copyBtn.type = "button";
+  const pngBtn = el("button", "pal-btn", "Save PNG");
+  pngBtn.type = "button";
+  controls.append(sThick.row, sCamber.row, sAoA.row, sTE.row, kutta, copyBtn, pngBtn);
+
+  // Apply an incoming `#vs=` permalink onto the sliders (which clamp to range) + state.
+  const applyVS = (vs: AirfoilVS): void => {
+    sThick.input.value = String(vs.thickness);
+    state.thickness = Number(sThick.input.value);
+    sThick.val.textContent = state.thickness.toFixed(3);
+    sCamber.input.value = String(vs.camber);
+    state.camber = Number(sCamber.input.value);
+    sCamber.val.textContent = state.camber.toFixed(3);
+    sAoA.input.value = String(vs.alphaDeg);
+    state.alphaDeg = Number(sAoA.input.value);
+    sAoA.val.textContent = `${state.alphaDeg}°`;
+    sTE.input.value = String(vs.teAngleDeg);
+    state.teAngleDeg = Number(sTE.input.value);
+    sTE.val.textContent = `${state.teAngleDeg}°`;
+    kBox.checked = vs.kutta;
+    state.kutta = vs.kutta;
+  };
+  const incoming = decodeAirfoil(window.location.hash);
+  if (incoming) applyVS(incoming);
 
   const lift = el("div", "readout lift-readout");
   bar.append(brand, back, controls, lift);
@@ -132,8 +158,9 @@ function main(): void {
   mountNavHeader(app, { current: "2d-hydrodynamics" });
   app.append(bar, stage);
 
-  const cylGl = cyl.canvas.getContext("webgl2");
-  const foilGl = foil.canvas.getContext("webgl2");
+  // preserveDrawingBuffer so "Save PNG" can read the rendered pixels back (drawImage the GL canvases).
+  const cylGl = cyl.canvas.getContext("webgl2", { preserveDrawingBuffer: true });
+  const foilGl = foil.canvas.getContext("webgl2", { preserveDrawingBuffer: true });
   if (!cylGl || !foilGl) throw new Error("WebGL2 is required for the airfoil transplant view.");
   const cylRenderer = createAirfoilRenderer(cylGl);
   const foilRenderer = createAirfoilRenderer(foilGl);
@@ -156,30 +183,53 @@ function main(): void {
   const requestPaint = (): void => {
     if (!frame) frame = requestAnimationFrame(paint);
   };
+  const permalink = (): string => location.origin + location.pathname + encodeAirfoil(state);
+  const syncHash = (): void => history.replaceState(null, "", encodeAirfoil(state));
 
   sThick.input.addEventListener("input", () => {
     state.thickness = Number(sThick.input.value);
     sThick.val.textContent = state.thickness.toFixed(3);
+    syncHash();
     requestPaint();
   });
   sCamber.input.addEventListener("input", () => {
     state.camber = Number(sCamber.input.value);
     sCamber.val.textContent = state.camber.toFixed(3);
+    syncHash();
     requestPaint();
   });
   sAoA.input.addEventListener("input", () => {
     state.alphaDeg = Number(sAoA.input.value);
     sAoA.val.textContent = `${state.alphaDeg}°`;
+    syncHash();
     requestPaint();
   });
   sTE.input.addEventListener("input", () => {
     state.teAngleDeg = Number(sTE.input.value);
     sTE.val.textContent = `${state.teAngleDeg}°`;
+    syncHash();
     requestPaint();
   });
   kBox.addEventListener("change", () => {
     state.kutta = kBox.checked;
+    syncHash();
     requestPaint();
+  });
+  copyBtn.addEventListener("click", () => {
+    void navigator.clipboard?.writeText(permalink()).then(
+      () => {
+        copyBtn.textContent = "Copied ✓";
+        window.setTimeout(() => (copyBtn.textContent = "Copy link ⧉"), 1400);
+      },
+      () => {
+        copyBtn.textContent = "Copy failed";
+        window.setTimeout(() => (copyBtn.textContent = "Copy link ⧉"), 1400);
+      },
+    );
+  });
+  pngBtn.addEventListener("click", () => {
+    paint(); // render the current view synchronously, then read the GL panes back
+    saveCompositePng([cyl.canvas, foil.canvas], "2d-hydrodynamics-airfoil.png", permalink());
   });
   window.addEventListener("resize", requestPaint);
   requestPaint();
