@@ -28,8 +28,31 @@ export interface ExteriorDomain {
    *  whether the Faber-zero counting measure converges to μ_K: a smooth boundary keeps the zeros on an
    *  interior set (disk → centre, ellipse → focal segment), while corners/cusps drive them onto ∂K. */
   readonly smoothBoundary: boolean;
+  /** An optional rigid transform (rotation + translation) already folded into `evalPsi`, carrying the map
+   *  out of its internal real-capacity Laurent frame and into the caller's INPUT frame. `capacity` and
+   *  `laurent` stay in the real-capacity frame (the @cas/faber contract needs a real-positive leading
+   *  coefficient), so any geometry derived from `laurent` — e.g. the Faber zeros — must be pushed through
+   *  this frame to land on the same drawn K as `evalPsi`. Absent (⇔ identity) for the closed-form classes,
+   *  which are already canonical (real-positive capacity, natural orientation). */
+  readonly frame?: Frame;
   /** An optional ground-truth note (e.g. the arcsine law on a segment). */
   readonly note?: string;
+}
+
+/** A rigid transform (rotation + translation) between the exterior map's internal real-capacity frame and
+ *  the caller's input frame. `rot` is a UNIT complex number [cos, sin]; applied as z ↦ rot·z + [tx, ty]. */
+export interface Frame {
+  readonly rot: Pt;
+  readonly tx: number;
+  readonly ty: number;
+}
+
+/** The identity transform. */
+export const IDENTITY_FRAME: Frame = { rot: [1, 0], tx: 0, ty: 0 };
+
+/** Apply a rigid transform to a point: z ↦ rot·z + [tx, ty] (complex multiply, then translate). */
+export function applyFrame(f: Frame, z: Pt): Pt {
+  return [f.rot[0] * z[0] - f.rot[1] * z[1] + f.tx, f.rot[1] * z[0] + f.rot[0] * z[1] + f.ty];
 }
 
 /** Ψ(w) = c·w + Σ_{k≥1} laurent[k]·w⁻ᵏ (laurent[0] = 0, the centred convention). Shared by every class. */
@@ -76,19 +99,75 @@ export const deltoidDomain = (): ExteriorDomain => laurentDomain("deltoid", "Del
 
 // --- Polygon class (exterior SC fit) -----------------------------------------------------------------
 
+/** The rigid transform (rotation + translation) that best carries `source[k]` onto `target[k]`: a complex
+ *  least-squares fit whose rotation is then normalized to unit magnitude, so the result stays a pure rigid
+ *  motion (the true real-capacity → input-frame relation is an exact rotation + translation). Returns the
+ *  identity when the correspondence is degenerate (coincident or non-finite source points). */
+function alignFrame(target: readonly Pt[], source: readonly Pt[]): Frame {
+  const n = Math.min(target.length, source.length);
+  if (n === 0) return IDENTITY_FRAME;
+  let txm = 0;
+  let tym = 0;
+  let sxm = 0;
+  let sym = 0;
+  for (let k = 0; k < n; k++) {
+    if (!Number.isFinite(target[k][0]) || !Number.isFinite(target[k][1]) || !Number.isFinite(source[k][0]) || !Number.isFinite(source[k][1])) return IDENTITY_FRAME;
+    txm += target[k][0];
+    tym += target[k][1];
+    sxm += source[k][0];
+    sym += source[k][1];
+  }
+  txm /= n;
+  tym /= n;
+  sxm /= n;
+  sym /= n;
+  // rot = Σ (target − t̄)·conj(source − s̄) / Σ |source − s̄|²  (complex).
+  let numRe = 0;
+  let numIm = 0;
+  let den = 0;
+  for (let k = 0; k < n; k++) {
+    const ax = target[k][0] - txm;
+    const ay = target[k][1] - tym;
+    const bx = source[k][0] - sxm;
+    const by = source[k][1] - sym;
+    numRe += ax * bx + ay * by;
+    numIm += ay * bx - ax * by;
+    den += bx * bx + by * by;
+  }
+  if (den < 1e-30) return IDENTITY_FRAME;
+  let rre = numRe / den;
+  let rim = numIm / den;
+  const mag = Math.hypot(rre, rim);
+  if (mag < 1e-12) return IDENTITY_FRAME;
+  rre /= mag; // normalize to a pure rotation
+  rim /= mag;
+  const rot: Pt = [rre, rim];
+  return { rot, tx: txm - (rot[0] * sxm - rot[1] * sym), ty: tym - (rot[1] * sxm + rot[0] * sym) };
+}
+
 /** A polygon K via the exterior Schwarz–Christoffel fit (polygonMap.ts). `exact` reflects the fit's
  *  converged/degraded flags — a degraded fit is honestly `≈`. Throws propagate to the caller (a
- *  degenerate polygon), which flags `⚠`. */
+ *  degenerate polygon), which flags `⚠`.
+ *
+ *  The exterior-SC fit reconstructs Ψ in a REAL-CAPACITY frame (the leading coefficient is rotated to
+ *  |C| > 0, so the domain "rotates freely"): the drawn conductor is therefore a rotated/translated copy of
+ *  the caller's `corners`. We realign the forward map onto `corners` via a rigid transform (folded into
+ *  `evalPsi`), so the drawn K coincides with what the caller drew (e.g. the custom-polygon editor's
+ *  handles, or a preset's declared vertices) rather than appearing rotated. `capacity`/`laurent` are left
+ *  in the real-capacity frame for the @cas/faber contract; the same transform is exposed as `frame` so any
+ *  laurent-derived geometry (the Faber zeros) can be pushed into the input frame to match. */
 export function polygonDomain(id: string, name: string, corners: readonly Pt[]): ExteriorDomain {
   const m = fitPolygonFlow(corners);
+  const frame = alignFrame(corners, m.cornerImages);
   return {
     id,
     name,
-    evalPsi: (w) => m.evalPsi(w),
+    evalPsi: (w) => applyFrame(frame, m.evalPsi(w)),
     capacity: m.capacity,
     laurent: m.laurent,
     exact: m.converged && !m.degraded,
     smoothBoundary: false, // a polygon has corners → the Faber zeros equidistribute onto ∂K
+    frame,
   };
 }
 

@@ -39,8 +39,22 @@ const mul = (a: Pt, b: Pt): Pt => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1]
  *  lies on/inside K (no |w| ≥ 1 preimage) or the iteration does not converge. */
 export function invertPsi(d: ExteriorDomain, z: Pt, iters = 100): { w: Pt; dpsi: Pt } | null {
   const cap = d.capacity || 1;
-  let wx = z[0] / cap;
-  let wy = z[1] / cap;
+  // Seed w₀ from the leading behaviour Ψ(w) ~ leading·w + τ at ∞. For the closed-form (real-capacity gauge)
+  // classes leading = cap and τ = 0, so this is just z/cap; for a realigned polygon map (`frame` present)
+  // the leading coefficient is rotated (leading = rot·cap) and the map is translated, so w₀ = (z − τ)/(rot·cap)
+  // = (z − τ)·conj(rot)/cap — otherwise Newton would start a whole rotation away from the true preimage.
+  let wx: number;
+  let wy: number;
+  const f = d.frame;
+  if (f) {
+    const zx = z[0] - f.tx;
+    const zy = z[1] - f.ty;
+    wx = (zx * f.rot[0] + zy * f.rot[1]) / cap;
+    wy = (zy * f.rot[0] - zx * f.rot[1]) / cap;
+  } else {
+    wx = z[0] / cap;
+    wy = z[1] / cap;
+  }
   let r = hypot(wx, wy);
   // Seed on/outside the unit circle — Ψ is only defined on 𝔻*. Keep z's direction, but fall back to
   // [1, 0] when z ≈ 0 (deep inside K): there a radial rescale can't recover a direction, and evalPsi([0,0])
