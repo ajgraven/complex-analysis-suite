@@ -9,9 +9,9 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies ten apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies eleven apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, Hele-Shaw Flow, and Potential Theory, plus the anti-holomorphic Correspondences tool
+Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, and Potential Theory, plus the anti-holomorphic Correspondences tool
 (built, not yet published) — riding twelve shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
@@ -52,7 +52,7 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
-    `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it.
+    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
@@ -92,14 +92,15 @@ ESM-ification) and the shared-package extractions — **`@cas/core`** (Phase 3),
 (`apps/correspondences`) is complete through Milestone C: the deltoid Schwarz reflection σ (CPU + GPU),
 its deleted correspondence (branch engine + orbit trees + density render), the family parameter plane,
 the parabolic-Tricorn model coordinate, and a follow-on interactive mating visualizer (`mating.html`).
-Ten apps (the sixth, **Argument Principle**, ADR-0019 — it rides
+Eleven apps (the sixth, **Argument Principle**, ADR-0019 — it rides
 `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/export`; the seventh, **Faber Transform**, ADR-0024 — it
 rides `@cas/core`, `@cas/expr`, `@cas/interchange`, `@cas/faber`, `@cas/conformal`, and `@cas/gpu`; the eighth,
 **2D Electrostatics**, ADR-0034 — the complex potential W = φ + iψ as an interactive field of charges /
 sources / vortices, extended through M2 (conformal transplant of flows past/inside airfoils and polygons — a
 producer AND consumer of the `@cas/interchange` conformal-map hand-off, ADR-0035); its potential-theory and
-Hele-Shaw pages split out into their own apps (ADR-0036, the two below), leaving it the field sandbox + the
-airfoil + the polygon transplant, riding `@cas/gpu`, `@cas/flow`, `@cas/interchange`, `@cas/export`, and
+Hele-Shaw pages split out into their own apps (ADR-0036, the two below), and its airfoil transplant into
+2D Hydrodynamics (ADR-0037), leaving it the field sandbox + the polygon transplant, riding `@cas/gpu`,
+`@cas/flow`, `@cas/interchange`, `@cas/export`, and
 `@cas/ui`; the ninth, **Hele-Shaw Flow**, ADR-0036 — the *time-evolving* free-boundary pages split out of 2D
 Electrostatics: the exact Graven–Makarov one-point unbounded-QD "twisting" showpiece (`twist.html`, closed-form
 `=`) and the classical interior-droplet Polubarinova–Galin evolver (`droplet.html`, numerical `≈`, the
@@ -110,7 +111,11 @@ bump; `QD_TO_HELESHAW` golden), riding `@cas/core`, `@cas/flow`, `@cas/interchan
 tenth, **Potential Theory**, ADR-0036 — the conductor view split out of 2D Electrostatics (M3): a compact set K
 as a grounded conductor — equilibrium charge / logarithmic capacity / Green's function, with Faber-zero and
 Fekete/Leja overlays; exact `=` for Schwarz–Christoffel polygons + closed forms, log-lightning `≈` for smooth
-blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
+blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`; and the eleventh, **2D Hydrodynamics**,
+ADR-0037 — the hydrodynamic twin of 2D Electrostatics: ideal flow past a body as flow past 𝔻* through a
+conformal map ψ: 𝔻* → ext(B), the Joukowski/Kármán–Trefftz airfoil (Kutta condition + lift) plus a
+closed-form transplant gallery (flat plate / ellipse / deltoid / astroid / star), the airfoil promoted out
+of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
@@ -250,6 +255,23 @@ and split the studio plan into three per-app plans. Per-app plans:
 [`docs/design/2d-electrostatics-plan.md`](docs/design/2d-electrostatics-plan.md),
 [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),
 [`docs/design/potential-theory-plan.md`](docs/design/potential-theory-plan.md).
+
+**In progress — ADR-0037 (2D Hydrodynamics, the eleventh app; the airfoil promoted out of 2D Electrostatics).**
+A new app, `apps/2d-hydrodynamics` — ideal flow past a body B as flow past 𝔻* through a conformal map ψ: 𝔻* →
+ext(B), the hydrodynamic twin of 2D Electrostatics — anchored by the Joukowski/Kármán–Trefftz airfoil and
+broadened by a closed-form transplant gallery (slit / ellipse / deltoid / astroid / star). No new package
+(ADR-0007): it consumes `@cas/ui`/`@cas/gpu`/`@cas/flow`/`@cas/export`/`@cas/interchange`, moves the airfoil
+engine intact, and extracts Riemann-Map's `EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule
+(HD-2). Staged HD-0…HD-5: **HD-0 (scaffold + wire the hub), HD-1 (`git mv` the airfoil out of 2D
+Electrostatics — retitled, nav retargeted, CSS ported to `panes.css`, the two dangling cross-page links
+removed), HD-2 (the closed-form transplant gallery `gallery.html` on `flowNet`+`pushforward`, plus extracting
+Riemann-Map's `EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule — Riemann-Map draws the
+maps, 2D Hydrodynamics transplants flow through them, golden + expr↔psi cross-check pinning both), and HD-3
+(the shareable/reproducible shell — `#vs=` permalinks + PNG export via `@cas/export`, on both pages, plus
+gallery stagnation-point markers) are done**; the polygon transplant stays in 2D Electrostatics for now
+(HD-4, deferred — it anchors the ADR-0035 `conformal` hand-off). 2D Electrostatics' ES-4 is reassigned to
+this app.
+Plan: [`docs/design/2d-hydrodynamics-plan.md`](docs/design/2d-hydrodynamics-plan.md).
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

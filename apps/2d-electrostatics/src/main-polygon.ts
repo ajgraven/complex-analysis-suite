@@ -102,8 +102,6 @@ function main(): void {
   brand.innerHTML = "<strong>2D Electrostatics · Polygon</strong><span>flow past / inside a polygon — Schwarz–Christoffel transplant</span>";
   const back = el("a", "pal-btn", "← Field sandbox");
   (back as HTMLAnchorElement).href = "./";
-  const foilLink = el("a", "pal-btn", "Airfoil →");
-  (foilLink as HTMLAnchorElement).href = "./airfoil.html";
 
   const controls = el("div", "foil-controls");
 
@@ -138,7 +136,7 @@ function main(): void {
   controls.append(modeSeg, presetRow, sAoA.row, sGamma.row, copyBtn);
 
   const readout = el("div", "readout tp-readout");
-  bar.append(brand, back, foilLink, controls, readout);
+  bar.append(brand, back, controls, readout);
 
   // ---- two-pane stage -------------------------------------------------------
   const stage = el("div", "foil-stage");

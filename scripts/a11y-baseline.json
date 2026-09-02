@@ -67,14 +67,22 @@
       "help": "All page content should be contained by landmarks"
     }
   },
-  "2d-electrostatics-airfoil": {
+  "2d-electrostatics-polygon": {
     "region": {
       "impact": "moderate",
       "count": 1,
       "help": "All page content should be contained by landmarks"
     }
   },
-  "2d-electrostatics-polygon": {
+  "2d-hydrodynamics": {},
+  "2d-hydrodynamics-airfoil": {
+    "region": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "2d-hydrodynamics-gallery": {
     "region": {
       "impact": "moderate",
       "count": 1,

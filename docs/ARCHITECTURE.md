@@ -198,7 +198,8 @@ Consumers today: the **Riemann-map studio** — the lightning builder for smooth
 engine for polygon (`corners`) domains; the **Faber Transform app** — the exterior SC engine for polygonal
 `K`; and **`@cas/flow`** — the conformal-transplant kernel (ADR-0036) that carries **both** SC engines
 (interior for flow inside a polygon, exterior for flow past one and for the conductor view) to the three split
-apps (2D Electrostatics, Hele-Shaw Flow, Potential Theory). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
+apps (2D Electrostatics, Hele-Shaw Flow, Potential Theory), and whose closed-form exterior-map gallery +
+`flowNet`/`pushforward` also feed **2D Hydrodynamics** (ADR-0037). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
 of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on rank-deficiency policy —
 see ADR-0018).
 
@@ -343,7 +344,7 @@ tools:
   (and on `workflow_dispatch`), gates on `lint` → `typecheck` → `test` → `build`, then assembles
   **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/`,
   `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`,
-  `faber-transform/`, `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it (`apps/correspondences` is built but **not** published). Note the
+  `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it (`apps/correspondences` is built but **not** published). Note the
   shape — apps build independently but publish
   *together*, as a single artifact, not as independent Pages sites.
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
@@ -416,8 +417,8 @@ This is realized in two cheap, additive pieces:
    with the `SUITE_APPS` registry — offering back-to-launcher + a jump to the sibling apps and, where a hand-off
    is meaningful, a "send this to <app>" action over the [interchange](INTERCHANGE.md) deep-link codec. It is
    **rendered by the three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory — its first
-   consumers, over a shared `@cas/ui/nav.css`); rolling it out to the other seven apps (and wiring the hand-off
-   picker to the known map kinds) is ADR-0032's remaining **U7**. This makes cross-navigation available *inside*
+   consumers, over a shared `@cas/ui/nav.css`) and by **2D Hydrodynamics** (ADR-0037); rolling it out to the
+   other seven apps (and wiring the hand-off picker to the known map kinds) is ADR-0032's remaining **U7**. This makes cross-navigation available *inside*
    each app without merging them.
 
 **Why not a unified shell.** A single-page shell that hosts every tool as a tab would
@@ -429,8 +430,8 @@ entry point, easy movement between tools, hand-off between them) at a fraction o
 cost and coupling. If a unified shell is ever wanted, it can be added later as *another*
 app that embeds the others — but it is explicitly out of scope now.
 
-The launcher is a static stub (`apps/launcher`) listing all nine published apps plus a "Coming soon" correspondences card (ten cards in all); the shared-nav header's
+The launcher is a static stub (`apps/launcher`) listing all ten published apps plus a "Coming soon" correspondences card (eleven cards in all); the shared-nav header's
 component (`mountNavHeader`) now lives in the extracted `@cas/ui` package (ADR-0032, §3) and is **rendered by the
-three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory) — rolling it out to the other seven
+three ADR-0036 apps** (2D Electrostatics, Hele-Shaw Flow, Potential Theory) plus **2D Hydrodynamics** (ADR-0037) — rolling it out to the other seven
 apps (and wiring its "send this to <app>" hand-off picker to the interchange codec) is ADR-0032's remaining
 **U7**. See [MIGRATION](MIGRATION.md).

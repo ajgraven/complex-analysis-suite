@@ -1,0 +1,23 @@
+{
+  // Greenfield TypeScript app (no JS glue to migrate), strict from the start — mirrors the
+  // 2d-electrostatics / potential-theory app tsconfigs (the airfoil moves here from 2d-electrostatics,
+  // ADR-0037).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitOverride": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": []
+  },
+  "include": ["src", "test", "vite.config.ts"]
+}

@@ -21,7 +21,8 @@ It currently hosts **ten** applications riding **twelve** shared `@cas/*` packag
 | **Riemann Map** (`apps/riemann-map`)               | Pure-2D conformal-mapping studio: the image of the unit disk under a conformal map — from the editor, a numerical region map 𝔻 → Ω by the lightning method, an exterior (Böttcher) map imported from Complex Dynamics, or a Schwarz–Christoffel polygon map — plus the numerical Riemann map of a chosen domain            | Vite + TypeScript       |
 | **Argument Principle** (`apps/argument-principle`) | Visualizes the argument principle: a closed contour and its winding image under `f(z)`, counting zeros minus poles enclosed, with a live expression editor and hi-res PNG export                                                                                                                              | Vite + TypeScript       |
 | **Faber Transform** (`apps/faber-transform`)       | Visualizer for the exterior Faber transform Φφ: 𝒜(𝔻) → 𝒜(K): domain-colors an analytic `f` on the unit disk beside its Faber image `Σ bₙ Fₙ` on a cornered/curved `K` — ellipse, deltoid, finite-Laurent QDs, and **arbitrary polygons** (regular presets + a draggable editor via the exterior Schwarz–Christoffel engine), with per-corner norm annotations | Vite + TypeScript       |
-| **2D Electrostatics** (`apps/2d-electrostatics`)   | The complex potential `W = φ + iψ` as an interactive field: drop/drag charges, sources, sinks, vortices, doublets, with an Electrostatic ↔ Fluid lens; plus conformal-transplant pages — flow past a Joukowski/Kármán–Trefftz airfoil, and flow past or inside a polygon via Schwarz–Christoffel | Vite + TypeScript |
+| **2D Electrostatics** (`apps/2d-electrostatics`)   | The complex potential `W = φ + iψ` as an interactive field: drop/drag charges, sources, sinks, vortices, doublets, with an Electrostatic ↔ Fluid lens; plus a conformal-transplant polygon page — flow past or inside a polygon via Schwarz–Christoffel | Vite + TypeScript |
+| **2D Hydrodynamics** (`apps/2d-hydrodynamics`)     | The hydrodynamic twin: ideal flow past a body as flow past the unit disk carried through a conformal map ψ: 𝔻* → ext(B) — the Joukowski/Kármán–Trefftz airfoil (the Kutta condition + Kutta–Joukowski lift) and a closed-form transplant gallery (flat plate, ellipse, deltoid, astroid, star), with `#vs=` permalinks + PNG export | Vite + TypeScript |
 | **Hele-Shaw Flow** (`apps/hele-shaw-flow`)         | Free-boundary flow in a Hele-Shaw cell as a conformal map of the disk evolving in time: the exact Graven–Makarov "twisting" quadrature domain (a complex charge grows it to a double point or a (3,2)-cusp), and a numerical interior-droplet Polubarinova–Galin evolver (injection smooths; suction fingers into a cusp) | Vite + TypeScript |
 | **Potential Theory** (`apps/potential-theory`)     | A compact set `K` as a grounded conductor: equilibrium charge, logarithmic capacity, and Green's-function equipotentials from the exterior conformal map, with Faber-polynomial zeros and Fekete/Leja points as two more roads to the equilibrium measure (exact `=` for SC polygons + closed forms, log-lightning `≈` for smooth blobs) | Vite + TypeScript |
 
@@ -93,7 +94,7 @@ Each app is an independent static Vite build (`base: "./"`), so its assets resol
 `.github/workflows/deploy-pages.yml` publishes on every push to `master`, gated on
 lint + typecheck + test: one combined Pages site with the launcher at the root and
 `complex-dynamics/`, `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`,
-`argument-principle/`, `faber-transform/`, `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it. Correspondences is built but not yet
+`argument-principle/`, `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it. Correspondences is built but not yet
 published (the launcher lists it as "Coming soon"). `ci.yml` remains the separate
 lint/typecheck/test/build gate plus a `browser` job for the WebGL2 GLSL harness. See
 [ARCHITECTURE §8](docs/ARCHITECTURE.md#8-build--deployment-model).
@@ -118,7 +119,7 @@ complex-analysis-suite/
 │   ├── conformal/            ← @cas/conformal   the conformal-map builder: Vandermonde–Arnoldi + lightning + forward map + interior/exterior Schwarz–Christoffel (Riemann Map + Faber Transform + @cas/flow)
 │   ├── faber/                ← @cas/faber       the exterior Faber-transform engine: Faber-polynomial recurrence, exact rational images, exterior-map Laurent jets (Quadrature Domains + Faber Transform + Potential Theory)
 │   ├── ui/                   ← @cas/ui          the shared browser shell: accessible canvas, fatal-error boundary, off-thread compute, the suite nav header
-│   └── flow/                 ← @cas/flow        the conformal-transplant kernel: reference flows + flow-net + interior/exterior SC glue + Net2D line-art (2D Electrostatics + Hele-Shaw Flow + Potential Theory)
+│   └── flow/                 ← @cas/flow        the conformal-transplant kernel: reference flows + flow-net + interior/exterior SC glue + closed-form exterior-map gallery + Net2D line-art (2D Electrostatics + 2D Hydrodynamics + Hele-Shaw Flow + Potential Theory)
 └── apps/                     ← thin applications; each a Vite build that consumes packages
     ├── launcher/             ← the unified menu: a static landing page linking to each app
     ├── complex-dynamics/
@@ -128,7 +129,8 @@ complex-analysis-suite/
     ├── riemann-map/          ← pure-2D conformal-mapping studio (disk image + numeric Riemann map)
     ├── argument-principle/   ← argument-principle / winding-number visualizer
     ├── faber-transform/      ← exterior Faber-transform visualizer (curved + polygonal K)
-    ├── 2d-electrostatics/    ← complex-potential field sandbox + conformal-transplant airfoil & polygon
+    ├── 2d-electrostatics/    ← complex-potential field sandbox + the conformal-transplant polygon page
+    ├── 2d-hydrodynamics/     ← ideal flow past a body via conformal transplant: the airfoil + a closed-form gallery
     ├── hele-shaw-flow/       ← free-boundary Hele-Shaw evolution: the twist + droplet showpieces
     └── potential-theory/     ← a compact set K as a grounded conductor (equilibrium measure, capacity, Green)
 ```

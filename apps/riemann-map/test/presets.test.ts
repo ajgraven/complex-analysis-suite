@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { EXTERIOR_MAP_PRESETS as FLOW_EXTERIOR_MAP_PRESETS } from "@cas/flow";
 import { MAP_PRESETS, EXTERIOR_MAP_PRESETS, presetIdForExpr } from "../src/presets.js";
 import { compileMap } from "../src/map.js";
 
@@ -20,6 +21,24 @@ describe("map presets (A19)", () => {
       if (!r.ok) continue;
       const [re, im] = r.map.jsFn([1.3, 0.7], [0, 0]); // a point in the exterior disk (|z| ≈ 1.48)
       expect(Number.isFinite(re) && Number.isFinite(im), `${p.id} evaluates finitely`).toBe(true);
+    }
+  });
+
+  it("the shared exterior presets' expr and psi closure agree (no drift across the @cas/flow extraction)", () => {
+    // The shared @cas/flow presets carry BOTH forms: the `expr` this studio compiles to draw ψ(𝔻*), and the
+    // `psi` closure the 2D Hydrodynamics app evaluates to transplant a flow. Compiling one and comparing to
+    // the other at several exterior points pins them together — an edit to either alone fails here.
+    const pts: readonly [number, number][] = [[1.3, 0.7], [2, 0], [0, 1.5], [-1.2, 0.9]];
+    for (const p of FLOW_EXTERIOR_MAP_PRESETS) {
+      const r = compileMap({ expr: p.expr, vars: ["z"], antiholomorphic: false });
+      expect(r.ok, `${p.id} should compile`).toBe(true);
+      if (!r.ok) continue;
+      for (const [x, y] of pts) {
+        const [ere, eim] = r.map.jsFn([x, y], [0, 0]);
+        const [pre, pim] = p.psi([x, y]);
+        expect(ere, `${p.id} re at (${x},${y})`).toBeCloseTo(pre, 12);
+        expect(eim, `${p.id} im at (${x},${y})`).toBeCloseTo(pim, 12);
+      }
     }
   });
 

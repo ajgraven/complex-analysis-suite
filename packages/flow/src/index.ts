@@ -29,5 +29,8 @@ export type { PolygonFlowMap, PolygonInteriorMap } from "./polygonMap.js";
 export { POLYGON_PRESETS, DEFAULT_PRESET } from "./transplantPresets.js";
 export type { PolygonPreset } from "./transplantPresets.js";
 
+export { EXTERIOR_MAP_PRESETS } from "./exteriorPresets.js";
+export type { ExteriorMapPreset } from "./exteriorPresets.js";
+
 export { boundsOf, Net2D } from "./net2d.js";
 export type { Box } from "./net2d.js";
