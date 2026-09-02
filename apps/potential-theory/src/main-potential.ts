@@ -8,7 +8,7 @@
 // level curves of the g_K field. Fourth page of the app.
 import "./styles/main.css";
 import "@cas/ui/nav.css";
-import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
+import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
 import { POLYGON_PRESETS, Net2D, boundsOf, type Box, type NetCurve, type Pt } from "@cas/flow";
 import {
   diskDomain,
@@ -105,6 +105,15 @@ function main(): void {
   let chargeOn = false; // whether the pinned draggable test charge is shown
   let chargePos: Pt | null = null; // its world position
   let chargeDrag = false; // whether the test charge is being dragged
+
+  // Pan / zoom navigation. `userView` becomes true on any manual navigation (wheel, drag-pan, or the
+  // keyboard nav keys) and SUPPRESSES the per-paint auto-fit, so a zoomed/panned view persists across
+  // repaints until a reset (double-click / Enter) or a domain switch re-fits. Without it, figures whose
+  // field lines or outer Green curves spill past the auto-fit box could not be brought into view.
+  let userView = false;
+  let panning = false; // a background (empty-space) drag is panning the view
+  let panLastX = 0;
+  let panLastY = 0;
 
   // Brownian Monte-Carlo state (PT-6c): the walk-on-spheres harmonic-measure "fourth road."
   let mcOn = false;
@@ -233,13 +242,19 @@ function main(): void {
   const stage = el("main", "pot-stage"); // a landmark so the conductor pane's content is contained (a11y)
   const fig = el("figure", "foil-pane");
   const canvas = el("canvas", "foil-canvas");
+  // The pane is interactive (hover probe, vertex / charge drag, and now pan / zoom), so it is a focusable
+  // `role="application"` surface with a keyboard nav map. `onKey` is dispatched through a forward
+  // reference (`onCanvasKey`) because it drives the view helpers defined further down.
+  let onCanvasKey: ((action: CanvasKeyAction) => void) | null = null;
   attachCanvasA11y(canvas, {
-    role: "img",
-    label: "A compact set K as a grounded conductor: its equilibrium charge, Green equipotentials, and field lines",
+    role: "application",
+    label:
+      "A compact set K as a grounded conductor: its equilibrium charge, Green equipotentials, and field lines. Scroll to zoom, drag to pan; arrow keys pan, plus/minus zoom, Enter resets the view.",
+    onKey: (action) => onCanvasKey?.(action),
   });
   const cap = el("figcaption");
   cap.innerHTML =
-    "<b>The conductor K</b> — equilibrium charge (dots, crowding = density), Green equipotentials g<sub>K</sub> = t · <i>hover to read g<sub>K</sub> / U<sup>μ</sup> / |E|</i>";
+    "<b>The conductor K</b> — equilibrium charge (dots, crowding = density), Green equipotentials g<sub>K</sub> = t · <i>hover to read g<sub>K</sub> / U<sup>μ</sup> / |E| · scroll to zoom, drag to pan, double-click to reset</i>";
   // The floating hover readout + the pinned test-charge label (PT-6b), positioned over the pane.
   const hud = el("div", "tp-probe");
   hud.hidden = true;
@@ -251,6 +266,15 @@ function main(): void {
   app.append(bar, stage);
 
   const net = new Net2D(canvas);
+
+  // Auto-fit gate: honour a box only while the user hasn't taken over the view (see `userView`). Every
+  // per-paint `fitBounds` goes through this, so pan/zoom is preserved across repaints.
+  const fitTo = (box: Box, padding = 1.15): void => {
+    if (!userView) net.fitBounds(box, padding);
+  };
+  // The resting cursor advertises what a background drag does: pan everywhere ("grab"), except in the
+  // custom-polygon editor where an empty-space press draws/edits ("crosshair").
+  const restingCursor = (): string => (domainId === CUSTOM_ID ? "crosshair" : "grab");
 
   // ---- custom-polygon (draw-your-own-K) view + editing helpers (PT-6a) -----
   // While "Custom polygon" is selected the view is LOCKED to a fixed box around the shape, so a dragged
@@ -267,7 +291,7 @@ function main(): void {
     return { minx: cx - half, maxx: cx + half, miny: cy - half, maxy: cy + half };
   };
   if (domainId === CUSTOM_ID) customView = computeCustomView(customCorners);
-  canvas.style.cursor = domainId === CUSTOM_ID ? "crosshair" : "";
+  canvas.style.cursor = restingCursor();
 
   // Debounced permalink write — the selected domain, plus (for the custom polygon) its corners.
   let permaTimer = 0;
@@ -493,7 +517,7 @@ function main(): void {
       nRow.style.display = "none";
       if (net.resize() && customView) {
         net.clear();
-        net.fitBounds(customView, 1.0);
+        fitTo(customView, 1.0);
         drawEditorOverlay();
       }
       readout.innerHTML = `<span class="tp-approx">✎ editing K — release to refit the conformal map…</span>`;
@@ -539,7 +563,7 @@ function main(): void {
       // degenerate custom shape draws nothing but still shows its editable outline so the user can fix it.
       if (domain && !isGeneral(domain)) drawExterior(domain, dim, fekete, faber, custom && customView ? customView : undefined);
       else if (domain && isGeneral(domain)) drawGeneral(domain, b, dim, fekete);
-      else if (custom && customView) net.fitBounds(customView, 1.0);
+      else if (custom && customView) fitTo(customView, 1.0);
       if (custom) drawEditorOverlay();
       if (mcOn) drawMC(); // the Brownian MC histogram (PT-6c), on top of the exact charge
 
@@ -612,12 +636,12 @@ function main(): void {
   const drawExterior = (d: ExteriorDomain, dim: boolean, fekete: { points: Pt[] } | null, faber: { zeros: Pt[] } | null, viewBox?: Box): void => {
     const green = GREEN_LEVELS.map((t): NetCurve => ({ color: "rgba(120,150,210,0.30)", pts: greenCurve(d, t) }));
     if (viewBox) {
-      net.fitBounds(viewBox, 1.0);
+      fitTo(viewBox, 1.0);
     } else {
       const bb = boundsOf([{ color: "", pts: green[green.length - 1].pts }]);
       if (bb) {
         const pad = 0.06 * Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny);
-        net.fitBounds({ minx: bb.minx - pad, maxx: bb.maxx + pad, miny: bb.miny - pad, maxy: bb.maxy + pad }, 1.04);
+        fitTo({ minx: bb.minx - pad, maxx: bb.maxx + pad, miny: bb.miny - pad, maxy: bb.maxy + pad }, 1.04);
       }
     }
     const lines: NetCurve[] = [];
@@ -632,7 +656,7 @@ function main(): void {
 
   /** General K: the g_K field's marching-squares equipotentials + the log-lightning charge density. */
   const drawGeneral = (d: GeneralDomain, b: Built, dim: boolean, fekete: { points: Pt[] } | null): void => {
-    if (b.bounds) net.fitBounds(b.bounds, 1.02);
+    if (b.bounds) fitTo(b.bounds, 1.02);
     if (b.field) {
       const green: NetCurve[] = [];
       for (const t of GREEN_LEVELS_GENERAL) for (const [p, q] of contourSegments(b.field, t)) green.push({ color: "rgba(120,150,210,0.34)", pts: [p, q] });
@@ -649,11 +673,56 @@ function main(): void {
     if (!frame) frame = requestAnimationFrame(paint);
   };
 
+  // ---- pan / zoom navigation (wheel · drag · keyboard) ---------------------
+  // Return to the automatic fit for the current domain.
+  const resetView = (): void => {
+    if (!userView) return;
+    userView = false;
+    requestPaint();
+  };
+  const KBD_PAN_PX = 40; // CSS px an arrow-key press pans
+  const KBD_ZOOM = 1.2; // per +/- press
+  // Translate an @cas/ui keyboard action into a view change (arrows pan, +/− zoom about the centre, Enter
+  // resets). Arrow directions match the a11y map: {dx:+1}=right, {dy:-1}=up.
+  onCanvasKey = (action: CanvasKeyAction): void => {
+    if (action.kind === "commit") {
+      resetView();
+      return;
+    }
+    if (action.kind === "pan") {
+      net.panByPixels(-action.dx * KBD_PAN_PX, -action.dy * KBD_PAN_PX);
+    } else {
+      net.zoomAt(canvas.clientWidth / 2, canvas.clientHeight / 2, action.direction === 1 ? KBD_ZOOM : 1 / KBD_ZOOM);
+    }
+    userView = true;
+    hud.hidden = true;
+    requestPaint();
+  };
+  // Wheel zooms toward the cursor (exponential in the scroll delta, so trackpad and mouse feel consistent).
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const r = canvas.getBoundingClientRect();
+      net.zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0015));
+      userView = true;
+      hud.hidden = true;
+      requestPaint();
+    },
+    { passive: false },
+  );
+  // Double-click restores the automatic fit (a discoverable "reset view", alongside Enter).
+  canvas.addEventListener("dblclick", (e) => {
+    e.preventDefault();
+    resetView();
+  });
+
   domSel.addEventListener("change", () => {
     domainId = domSel.value;
     const custom = domainId === CUSTOM_ID;
     editRow.style.display = custom ? "flex" : "none";
-    canvas.style.cursor = custom ? "crosshair" : "";
+    userView = false; // re-fit to the newly selected conductor
+    canvas.style.cursor = restingCursor();
     selectedVertex = -1;
     dragging = -1;
     if (custom) customView = computeCustomView(customCorners);
@@ -702,21 +771,40 @@ function main(): void {
       requestPaint();
       return;
     }
-    // 2) custom-polygon vertex drag.
-    if (domainId !== CUSTOM_ID) return;
-    const i = nearestVertex(customCorners, w, hitTolWorld());
-    selectedVertex = i;
-    if (i >= 0) {
-      dragging = i;
-      canvas.setPointerCapture(e.pointerId);
-      e.preventDefault();
+    // 2) custom-polygon vertex drag (a press on/near a handle grabs it; empty space falls through to pan).
+    if (domainId === CUSTOM_ID) {
+      const i = nearestVertex(customCorners, w, hitTolWorld());
+      selectedVertex = i;
+      if (i >= 0) {
+        dragging = i;
+        canvas.setPointerCapture(e.pointerId);
+        e.preventDefault();
+        requestPaint();
+        return;
+      }
     }
+    // 3) background drag → pan the view.
+    panning = true;
+    panLastX = e.clientX;
+    panLastY = e.clientY;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.style.cursor = "grabbing";
+    e.preventDefault();
     requestPaint();
   });
   canvas.addEventListener("pointermove", (e) => {
     if (chargeDrag) {
       chargePos = worldAt(e);
       hud.hidden = true; // the charge label carries the readout while dragging it
+      requestPaint();
+      return;
+    }
+    if (panning) {
+      net.panByPixels(e.clientX - panLastX, e.clientY - panLastY);
+      panLastX = e.clientX;
+      panLastY = e.clientY;
+      userView = true;
+      hud.hidden = true;
       requestPaint();
       return;
     }
@@ -734,6 +822,7 @@ function main(): void {
     requestPaint();
   });
   canvas.addEventListener("pointerleave", () => {
+    if (panning) return; // a pan with pointer capture keeps running past the pane edge
     hoverZ = null;
     hud.hidden = true;
     requestPaint();
@@ -741,6 +830,12 @@ function main(): void {
   const endDrag = (): void => {
     if (chargeDrag) {
       chargeDrag = false;
+      requestPaint();
+      return;
+    }
+    if (panning) {
+      panning = false;
+      canvas.style.cursor = restingCursor();
       requestPaint();
       return;
     }

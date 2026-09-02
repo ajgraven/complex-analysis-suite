@@ -10,6 +10,7 @@
 //                  with the honest converged/degraded/residual tier (fitHonestyTier).
 //   - transplantPresets : the counter-clockwise bounded-polygon presets K the transplant pages offer.
 //   - net2d      : a small 2D-canvas line-art drawer for the transplant panes (world→pixel, y up).
+//   - viewTransform : the pure pixel↔world pan/zoom math Net2D delegates to (node-tested).
 // Strict TypeScript on @cas/conformal; convention-neutral (ADR-0006).
 export {
   refPotential,
@@ -34,3 +35,6 @@ export type { ExteriorMapPreset } from "./exteriorPresets.js";
 
 export { boundsOf, Net2D } from "./net2d.js";
 export type { Box } from "./net2d.js";
+
+export { pixelToWorld, worldPerPixel, panView, zoomView, MIN_HALF_SPAN, MAX_HALF_SPAN } from "./viewTransform.js";
+export type { View, Viewport } from "./viewTransform.js";
