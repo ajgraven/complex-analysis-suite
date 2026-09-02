@@ -107,9 +107,23 @@ export function poissonKernel(a: Cx, theta: number): number {
   return dist2 < 1e-300 ? 0 : (1 - r2) / dist2;
 }
 
-/** The (PG) right-hand side (Q/2π)·P(a, e^{iθ}) on the boundary. */
-export function sourceDensity(src: Source, theta: number): number {
-  return (src.strength / (2 * Math.PI)) * poissonKernel(src.at ?? [0, 0], theta);
+/** Normalize one source or a list to a list — the engine treats a single source as a one-element set. */
+export function toSourceList(src: Source | readonly Source[]): readonly Source[] {
+  return Array.isArray(src) ? (src as readonly Source[]) : [src as Source];
+}
+
+const oneSourceDensity = (src: Source, theta: number): number =>
+  (src.strength / (2 * Math.PI)) * poissonKernel(src.at ?? [0, 0], theta);
+
+/** The (PG) right-hand side on the boundary: for one source (Q/2π)·P(a, e^{iθ}); for several, the sum
+ *  Σⱼ (Qⱼ/2π)·P(aⱼ, e^{iθ}) — competing wells superpose. The total injected flux is Σⱼ Qⱼ. */
+export function sourceDensity(src: Source | readonly Source[], theta: number): number {
+  if (Array.isArray(src)) {
+    let s = 0;
+    for (const x of src as readonly Source[]) s += oneSourceDensity(x, theta);
+    return s;
+  }
+  return oneSourceDensity(src as Source, theta);
 }
 
 // --- the Polubarinova–Galin residual (the equation) ---------------------------------------------------
@@ -120,7 +134,7 @@ export function sourceDensity(src: Source, theta: number): number {
 export function pgResidual(
   coeffs: readonly Cx[],
   coeffsDot: readonly Cx[],
-  src: Source,
+  src: Source | readonly Source[],
   theta: number,
 ): number {
   const w = onCircle(theta);
@@ -142,7 +156,7 @@ export function pgResidual(
 export function pgResidualSup(
   coeffs: readonly Cx[],
   coeffsDot: readonly Cx[],
-  src: Source,
+  src: Source | readonly Source[],
   samples = 512,
 ): number {
   let mx = 0;

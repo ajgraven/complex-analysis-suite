@@ -11,10 +11,14 @@ import "./styles/main.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
 import { Net2D, boundsOf, type Pt } from "@cas/flow";
-import { dropletBoundary, dropletFlowNet } from "./render/interiorDropletRender.js";
+import { dropletBoundary, dropletFlowNet, multiSourceStreamlines } from "./render/interiorDropletRender.js";
 import { canonicalize, evolveDroplet, type DropletFrame, type StopReason } from "./heleShawInteriorStepper.js";
 import { invertMap, type Cx } from "./heleShawInterior.js";
 
+interface Well {
+  lab: Pt; // fixed plane-frame location
+  strength: number; // Q > 0 injects, Q < 0 sucks
+}
 interface Preset {
   readonly id: string;
   readonly label: string;
@@ -23,8 +27,10 @@ interface Preset {
   readonly spin: number;
   readonly suction: boolean;
   readonly note: string;
-  /** Initial lab-frame location of the point source (a physical well); default the centre [0, 0]. */
+  /** Initial lab-frame location of a single point source; default the centre [0, 0]. */
   readonly source?: Cx;
+  /** A full set of wells (overrides `q`/`source` when present) — for competing multi-source presets. */
+  readonly sources?: readonly Well[];
 }
 // Initial droplets. Coefficients are a₁…a_N; a₁ real sets the conformal radius. Injection smooths, suction
 // fingers.
@@ -38,17 +44,24 @@ const PRESETS: readonly Preset[] = [
   { id: "finger", label: "Fingering → cusp (suction ⚠)", coeffs: [[1, 0], [0, 0], [0.12, 0]], q: -2, spin: 0, suction: true, note: "suction is ill-posed — the perturbation grows into a (3,2)-cusp" },
   { id: "spin", label: "Spun blob (inject + spin)", coeffs: canonicalize([[1.2, 0], [0.28, 0], [0, 0.12]]), q: 1, spin: 1.2, suction: false, note: "a rigid co-rotation — area- and shape-neutral, the honest interior twist" },
   { id: "offcenter", label: "Off-centre source → grows toward it (inject)", coeffs: paddedDisk(1, 16), q: 1.5, spin: 0, suction: false, source: [0.5, 0], note: "an off-centre well — drag the source dot; the droplet grows fastest toward it (moments drift by Ṁₖ = Q·bᵏ)" },
+  { id: "compete", label: "Source + sink (competing ⚠)", coeffs: paddedDisk(1.4, 20), q: 1.5, spin: 0, suction: true, sources: [{ lab: [-0.8, 0], strength: 1.5 }, { lab: [0.8, 0], strength: -1.5 }], note: "a well and a drain (ΣQ = 0): the area holds while fluid streams across — add/remove/drag wells, adjust the selected one's Q" },
 ];
+
+/** The wells of a preset: an explicit multi-well set, else a single well from `source`/`q`. */
+const buildWells = (p: Preset): Well[] =>
+  p.sources
+    ? p.sources.map((w): Well => ({ lab: [w.lab[0], w.lab[1]], strength: w.strength }))
+    : [{ lab: p.source ? [p.source[0], p.source[1]] : [0, 0], strength: p.q }];
 
 interface DrState {
   presetId: string;
-  q: number;
   spin: number;
   allowSuction: boolean;
   frac: number; // 0..1 along the evolution timeline
   playing: boolean;
   showNet: boolean;
-  sourceLab: Pt; // the point source's fixed lab location (a physical well); [0,0] = central
+  wells: Well[]; // the point sources/sinks (fixed lab locations)
+  selected: number; // index of the well the Q slider edits
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: string): HTMLElementTagNameMap[K] {
@@ -84,14 +97,15 @@ function main(): void {
   const first = PRESETS[0];
   const state: DrState = {
     presetId: first.id,
-    q: first.q,
     spin: first.spin,
     allowSuction: first.suction,
     frac: 0.5,
     playing: false,
     showNet: true,
-    sourceLab: first.source ? [first.source[0], first.source[1]] : [0, 0],
+    wells: buildWells(first),
+    selected: 0,
   };
+  const selWell = (): Well => state.wells[state.selected] ?? state.wells[0];
 
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
@@ -115,11 +129,20 @@ function main(): void {
   }
   presetRow.append(presetHead, presetSel);
 
-  const sQ = slider("source Q (inject / suck)", -3, 3, 0.05, state.q);
+  const sQ = slider("source Q (selected well)", -3, 3, 0.05, selWell().strength);
   const sSpin = slider("spin ω (rigid co-rotation)", -2, 2, 0.05, state.spin);
   const sT = slider("time t", 0, 1, 0.001, state.frac);
   const playBtn = el("button", "pal-btn", "▶ Play");
   playBtn.type = "button";
+
+  // Multi-well controls (F1.2): add / remove wells; the Q slider edits the selected one.
+  const wellRow = el("div");
+  wellRow.style.cssText = "display:flex; align-items:center; gap:6px; flex-wrap:wrap;";
+  const addWellBtn = el("button", "pal-btn", "＋ well");
+  addWellBtn.type = "button";
+  const delWellBtn = el("button", "pal-btn", "－ well");
+  delWellBtn.type = "button";
+  wellRow.append(el("span", "row-l", "Wells"), addWellBtn, delWellBtn, el("span", undefined, "· click a dot to select, drag to move"));
 
   const netCheck = el("label", "check");
   const netBox = el("input");
@@ -133,7 +156,7 @@ function main(): void {
   suctionBox.checked = state.allowSuction;
   suctionCheck.append(suctionBox, el("span", undefined, "allow suction (⚠ ill-posed)"));
 
-  controls.append(presetRow, sQ.row, sSpin.row, sT.row, playBtn, netCheck, suctionCheck);
+  controls.append(presetRow, sQ.row, wellRow, sSpin.row, sT.row, playBtn, netCheck, suctionCheck);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, twistLink, controls, readout);
@@ -159,15 +182,13 @@ function main(): void {
   // Cache the evolved timeline per (preset, Q, spin, suction) — evolveDroplet integrates ~hundreds of RK4
   // steps, so rebuild only when a control changes; the time slider just indexes cached frames.
   let cache: { key: string; frames: DropletFrame[]; stop: StopReason; bounds: ReturnType<typeof boundsOf> } | null = null;
-  // A lab-fixed source spec: pass `lab` only when the source is off-centre, so the central presets keep the
-  // exact original code path (and goldens); a central source is `{ strength }`, at = 0.
-  const sourceSpec = (): { strength: number; lab?: Cx } => {
-    const [bx, by] = state.sourceLab;
-    return bx || by ? { strength: state.q, lab: [bx, by] } : { strength: state.q };
-  };
+  // Lab-fixed well specs: pass `lab` only for an off-centre well, so a lone central well keeps the exact
+  // original code path (and goldens); a central well is `{ strength }`, at = 0.
+  const sourceSpec = (): { strength: number; lab?: Cx }[] =>
+    state.wells.map((w) => (w.lab[0] || w.lab[1] ? { strength: w.strength, lab: [w.lab[0], w.lab[1]] as Cx } : { strength: w.strength }));
   const timelineFor = (): typeof cache => {
     const p = PRESETS.find((x) => x.id === state.presetId) ?? first;
-    const key = `${state.presetId}|${state.q}|${state.spin}|${state.allowSuction}|${state.sourceLab[0]},${state.sourceLab[1]}`;
+    const key = `${state.presetId}|${state.spin}|${state.allowSuction}|` + state.wells.map((w) => `${w.strength}@${w.lab[0]},${w.lab[1]}`).join(";");
     if (cache && cache.key === key) return cache;
     const { frames, stop } = evolveDroplet(p.coeffs, sourceSpec(), {
       dt: 0.02,
@@ -187,21 +208,22 @@ function main(): void {
   };
 
   let raf = 0;
-  let draggingSource = false; // while true, reuse the cached timeline (skip the heavy re-evolve per drag frame)
+  let dragWell = -1; // index of the well being dragged (−1 none); while dragging, reuse the cached timeline
   const paint = (): void => {
     raf = 0;
     if (!net.resize()) return;
     net.clear();
 
-    if (state.q < 0 && !state.allowSuction) {
+    const anySuction = state.wells.some((w) => w.strength < 0);
+    if (anySuction && !state.allowSuction) {
       readout.innerHTML =
-        `Q = ${fmt(state.q)} (suction)<br>` +
+        `a well has Q &lt; 0 (suction)<br>` +
         `<span class="tp-warn">⚠ suction is ill-posed — tick “allow suction” to evolve it anyway (RISKS §3)</span>`;
       return;
     }
-    // While dragging the source, reuse the last cached timeline (the shape stays put) and only re-warp the
-    // flow net + move the marker — a full re-evolve runs on release. Otherwise (re)build as needed.
-    const tl = draggingSource && cache ? cache : timelineFor();
+    // While dragging a well, reuse the last cached timeline (the shape stays put) and only re-draw the flow
+    // net + move the markers — a full re-evolve runs on release. Otherwise (re)build as needed.
+    const tl = dragWell >= 0 && cache ? cache : timelineFor();
     if (!tl || tl.frames.length === 0) {
       readout.innerHTML = `<span class="tp-warn">⚠ no timeline could be built for these settings</span>`;
       return;
@@ -214,18 +236,25 @@ function main(): void {
     const idx = Math.min(tl.frames.length - 1, Math.max(0, Math.round(state.frac * (tl.frames.length - 1))));
     const frame = tl.frames[idx];
 
-    // Resolve the source's disk preimage in the current frame (for the flow-net warp). A central source
-    // gives a = 0 (the plain polar grid); an off-centre well warps the grid by the automorphism φ_a.
-    const at = invertMap(frame.coeffs, state.sourceLab) ?? [0, 0];
-
-    // Draw order: interior flow net (light), then the droplet boundary (bright), then the source dot.
+    // Draw order: interior flow net (light), then the droplet boundary (bright), then the well markers.
     if (state.showNet) {
-      const fnet = dropletFlowNet(frame.coeffs, { rings: 5, rays: 28, at });
-      net.drawLines(fnet.streamlines, 0.7);
-      net.drawLines(fnet.equipotentials, 0.9);
+      if (state.wells.length === 1) {
+        // One well: the exact φ_a-warped flow net (a = 0 ⇒ the plain polar grid).
+        const at = invertMap(frame.coeffs, state.wells[0].lab) ?? [0, 0];
+        const fnet = dropletFlowNet(frame.coeffs, { rings: 5, rays: 28, at });
+        net.drawLines(fnet.streamlines, 0.7);
+        net.drawLines(fnet.equipotentials, 0.9);
+      } else {
+        // Several wells: coarse streamlines of the combined flow (the full field is idea B2).
+        const resolved = state.wells.map((w) => ({ at: invertMap(frame.coeffs, w.lab) ?? [0, 0], strength: w.strength }));
+        net.drawLines(multiSourceStreamlines(frame.coeffs, resolved), 0.7);
+      }
     }
     net.fillBody(dropletBoundary(frame.coeffs, 480), "rgba(40,224,245,0.10)", "#28e0f5", 2.2);
-    net.drawDot(state.sourceLab, "#ffd166", 5); // the point source (draggable)
+    state.wells.forEach((w, i) => {
+      const color = w.strength >= 0 ? "#ffd166" : "#6db4ff"; // inject warm, suction cool
+      net.drawDot(w.lab, color, i === state.selected ? 6.5 : 4.5); // the selected well is larger
+    });
 
     // ---- readout: honest labels -----------------------------------------------
     const atEnd = idx >= tl.frames.length - 1;
@@ -235,17 +264,20 @@ function main(): void {
         : tl.stop === "diverged"
           ? `<span class="tp-warn">⚠ the evolution diverged (under-resolved)</span>`
           : tl.stop === "source-left-fluid"
-            ? `<span class="tp-warn">⚠ the source left the fluid — stopped</span>`
+            ? `<span class="tp-warn">⚠ a well left the fluid — stopped</span>`
             : `<span class="tp-approx">reached t = ${fmt(frame.t)}</span>`;
     const p = PRESETS.find((x) => x.id === state.presetId) ?? first;
-    const offCentre = state.sourceLab[0] !== 0 || state.sourceLab[1] !== 0;
+    const total = state.wells.reduce((s, w) => s + w.strength, 0);
+    const sel = selWell();
+    // A lone central well conserves the moments; off-centre / competing wells follow Richardson's law
+    // Ṁₖ = Σⱼ Qⱼ·bⱼᵏ, and we report the drift FROM that prediction (still → 0 for an accurate solve).
+    const conserved = state.wells.length === 1 && sel.lab[0] === 0 && sel.lab[1] === 0;
     const mag = state.spin !== 0 ? "|Mₖ|" : "Mₖ";
-    // Central source: the moments are conserved (drift → 0). Off-centre: they follow Richardson's law
-    // Ṁₖ = Q·bᵏ, and we report the drift FROM that prediction (still → 0 for an accurate solve).
-    const driftLabel = offCentre ? `${mag} drift vs Ṁₖ=Q·bᵏ` : `${mag} moment drift (conserved)`;
+    const driftLabel = conserved ? `${mag} moment drift (conserved)` : `${mag} drift vs Ṁₖ=ΣQⱼ·bⱼᵏ`;
+    const wellWord = state.wells.length === 1 ? "well" : "wells";
     readout.innerHTML =
-      `Q = ${fmt(state.q)}${state.q < 0 ? " (suction ⚠)" : " (inject)"} &nbsp; ω = ${fmt(state.spin)}` +
-      `${offCentre ? ` &nbsp; source b = (${fmt(state.sourceLab[0])}, ${fmt(state.sourceLab[1])})` : ""}<br>` +
+      `${state.wells.length} ${wellWord} · ΣQ = ${fmt(total)}${total < 0 ? " (net suction ⚠)" : ""} &nbsp; ω = ${fmt(state.spin)}<br>` +
+      `selected well: Q = ${fmt(sel.strength)} at (${fmt(sel.lab[0])}, ${fmt(sel.lab[1])})<br>` +
       `t = <b>${fmt(frame.t)}</b> &nbsp; area A = ${fmt(frame.area)} &nbsp; min|f′| = ${fmt(frame.minFPrime)}<br>` +
       `${driftLabel} (≈, exact = 0): <b>${frame.momentDrift.toExponential(1)}</b><br>` +
       `<span class="tp-approx">${p.note}</span>` +
@@ -291,8 +323,8 @@ function main(): void {
 
   // ---- wiring ---------------------------------------------------------------
   const syncControls = (): void => {
-    sQ.input.value = String(state.q);
-    sQ.val.textContent = state.q.toFixed(2);
+    sQ.input.value = String(selWell().strength);
+    sQ.val.textContent = selWell().strength.toFixed(2);
     sSpin.input.value = String(state.spin);
     sSpin.val.textContent = state.spin.toFixed(2);
     suctionBox.checked = state.allowSuction;
@@ -302,10 +334,10 @@ function main(): void {
     if (!p) return;
     stopPlay();
     state.presetId = p.id;
-    state.q = p.q;
     state.spin = p.spin;
     state.allowSuction = p.suction;
-    state.sourceLab = p.source ? [p.source[0], p.source[1]] : [0, 0];
+    state.wells = buildWells(p);
+    state.selected = 0;
     state.frac = 0.5;
     sT.input.value = String(state.frac);
     sT.val.textContent = state.frac.toFixed(2);
@@ -314,8 +346,8 @@ function main(): void {
   });
   sQ.input.addEventListener("input", () => {
     stopPlay();
-    state.q = Number(sQ.input.value);
-    sQ.val.textContent = state.q.toFixed(2);
+    selWell().strength = Number(sQ.input.value); // the Q slider edits the selected well
+    sQ.val.textContent = selWell().strength.toFixed(2);
     requestPaint();
   });
   sSpin.input.addEventListener("input", () => {
@@ -340,7 +372,7 @@ function main(): void {
     requestPaint();
   });
 
-  // ---- draggable point source (F1.1) ---------------------------------------
+  // ---- draggable wells: add / remove / select / drag (F1.2) -----------------
   const worldAt = (e: PointerEvent): Pt => {
     const r = canvas.getBoundingClientRect();
     return net.toWorld(e.clientX - r.left, e.clientY - r.top);
@@ -350,33 +382,68 @@ function main(): void {
     const b = net.toWorld(0, 14);
     return Math.hypot(a[0] - b[0], a[1] - b[1]) || 0.1;
   };
+  const insideInitial = (w: Pt): boolean => {
+    const fr0 = cache?.frames[0]; // keep a well inside the initial droplet so the evolution starts valid
+    return !!fr0 && invertMap(fr0.coeffs, w) !== null;
+  };
+  addWellBtn.addEventListener("click", () => {
+    stopPlay();
+    const base = selWell();
+    let lab: Pt = [base.lab[0] + 0.3, base.lab[1] + 0.3];
+    if (!insideInitial(lab)) lab = insideInitial([0, 0]) ? [0, 0] : [base.lab[0], base.lab[1]];
+    state.wells.push({ lab, strength: 1 });
+    state.selected = state.wells.length - 1;
+    syncControls();
+    requestPaint();
+  });
+  delWellBtn.addEventListener("click", () => {
+    if (state.wells.length <= 1) return; // always keep at least one well
+    stopPlay();
+    state.wells.splice(state.selected, 1);
+    state.selected = Math.min(state.selected, state.wells.length - 1);
+    syncControls();
+    requestPaint();
+  });
+  const nearestWell = (w: Pt): number => {
+    let best = -1;
+    let bestD = hitTolWorld();
+    state.wells.forEach((wl, i) => {
+      const d = Math.hypot(w[0] - wl.lab[0], w[1] - wl.lab[1]);
+      if (d <= bestD) {
+        bestD = d;
+        best = i;
+      }
+    });
+    return best;
+  };
   canvas.addEventListener("pointerdown", (e) => {
-    const w = worldAt(e);
-    if (Math.hypot(w[0] - state.sourceLab[0], w[1] - state.sourceLab[1]) <= hitTolWorld()) {
-      draggingSource = true;
-      stopPlay();
-      canvas.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    }
+    const i = nearestWell(worldAt(e));
+    if (i < 0) return;
+    stopPlay();
+    state.selected = i; // click selects the well
+    dragWell = i;
+    syncControls();
+    canvas.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    requestPaint();
   });
   canvas.addEventListener("pointermove", (e) => {
-    if (!draggingSource) return;
+    if (dragWell < 0) return;
     const w = worldAt(e);
-    // Keep the source inside the INITIAL droplet (frame 0), so the evolution starts with a valid well; a
-    // later exit under suction is caught by the driver's per-frame "source left the fluid" stop.
-    const fr0 = cache?.frames[0];
-    if (fr0 && invertMap(fr0.coeffs, w) !== null) {
-      state.sourceLab = [w[0], w[1]];
+    // Keep the well inside the INITIAL droplet (frame 0), so the evolution starts valid; a later exit
+    // under suction is caught by the driver's per-frame "well left the fluid" stop.
+    if (insideInitial(w)) {
+      state.wells[dragWell].lab = [w[0], w[1]];
       requestPaint();
     }
   });
-  const endSourceDrag = (): void => {
-    if (!draggingSource) return;
-    draggingSource = false;
-    requestPaint(); // re-evolve with the new source (the cache key changed)
+  const endWellDrag = (): void => {
+    if (dragWell < 0) return;
+    dragWell = -1;
+    requestPaint(); // re-evolve with the moved well (the cache key changed)
   };
-  canvas.addEventListener("pointerup", endSourceDrag);
-  canvas.addEventListener("pointercancel", endSourceDrag);
+  canvas.addEventListener("pointerup", endWellDrag);
+  canvas.addEventListener("pointercancel", endWellDrag);
 
   window.addEventListener("resize", requestPaint);
   requestPaint();

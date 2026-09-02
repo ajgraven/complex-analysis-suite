@@ -77,3 +77,57 @@ export function dropletFlowNet(
   }
   return { equipotentials, streamlines };
 }
+
+/** Coarse streamlines of a MULTI-source flow (a schematic — the full domain-coloured pressure/velocity
+ *  field is idea B2). The disk velocity potential of a set of wells is Ω(w) = −Σⱼ (Qⱼ/2π)·log φ_{aⱼ}(w),
+ *  so fluid flows along conj(G'(w)) with G'(w) = Σⱼ (Qⱼ/2π)·(1−|aⱼ|²)/((w−aⱼ)(1−āⱼw)) — outward from each
+ *  injector, into the sinks and the boundary. Seed a fan around each injector and integrate, pushing the
+ *  disk path through f. `sources` carry their disk preimage `at` and `strength`. */
+export function multiSourceStreamlines(
+  coeffs: readonly Cx[],
+  sources: readonly { at: Cx; strength: number }[],
+  opts: { perSource?: number; steps?: number } = {},
+): NetCurve[] {
+  const perSource = opts.perSource ?? 10;
+  const steps = opts.steps ?? 300;
+  const h = 0.008; // disk-space step length
+  const gPrime = (w: Cx): Cx => {
+    let re = 0;
+    let im = 0;
+    for (const s of sources) {
+      const a = s.at;
+      const c = s.strength / (2 * Math.PI);
+      const r2 = a[0] * a[0] + a[1] * a[1];
+      const pr = w[0] - a[0];
+      const pi = w[1] - a[1]; // w − a
+      const qr = 1 - (a[0] * w[0] + a[1] * w[1]);
+      const qi = a[1] * w[0] - a[0] * w[1]; // 1 − ā w  (ā = [a0, −a1])
+      const dr = pr * qr - pi * qi;
+      const di = pr * qi + pi * qr; // (w−a)(1−āw)
+      const dd = dr * dr + di * di;
+      if (dd < 1e-30) continue;
+      re += (c * (1 - r2) * dr) / dd; // Re[(1−|a|²)/denom]·c
+      im += (-c * (1 - r2) * di) / dd; // Im[…]
+    }
+    return [re, im];
+  };
+  const curves: NetCurve[] = [];
+  for (const s of sources) {
+    if (s.strength <= 0) continue; // seed only at injectors; the flow terminates at sinks / the boundary
+    for (let j = 0; j < perSource; j++) {
+      const th = (TWO_PI * j) / perSource;
+      let w: Cx = [s.at[0] + 0.03 * Math.cos(th), s.at[1] + 0.03 * Math.sin(th)];
+      const pts: Pt[] = [evalMap(coeffs, w)];
+      for (let i = 0; i < steps; i++) {
+        const g = gPrime(w);
+        const gm = Math.hypot(g[0], g[1]);
+        if (gm < 1e-12) break;
+        w = [w[0] + (h * g[0]) / gm, w[1] - (h * g[1]) / gm]; // += h·conj(G')/|G'| — down-pressure
+        pts.push(evalMap(coeffs, w));
+        if (w[0] * w[0] + w[1] * w[1] >= 0.9985) break; // reached the boundary
+      }
+      curves.push({ color: "#3a4d6b", pts });
+    }
+  }
+  return curves;
+}

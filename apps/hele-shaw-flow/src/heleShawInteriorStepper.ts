@@ -22,6 +22,7 @@ import {
   evalMapPrime,
   invertMap,
   sourceDensity,
+  toSourceList,
   dropletArea,
   minAbsMapPrime,
   rigidSpinRate,
@@ -49,7 +50,7 @@ function sampleCount(n: number): number {
  * (a physical rigid spin is added separately, {@link rigidSpinRate}). Grows ill-conditioned as the droplet
  * nears a cusp (|w f'| → 0 somewhere), where R = S/|wf'|² blows up — guard with {@link minAbsMapPrime}.
  */
-export function pgVelocity(coeffs: readonly Cx[], src: Source, samples = sampleCount(coeffs.length)): Cx[] {
+export function pgVelocity(coeffs: readonly Cx[], src: Source | readonly Source[], samples = sampleCount(coeffs.length)): Cx[] {
   const N = coeffs.length;
   const M = samples;
   // R(θ) = S / |w f'(w)|² sampled on the boundary (as {re,im} for the DFT).
@@ -85,9 +86,11 @@ export function resolveSource(coeffs: readonly Cx[], src: Source): Source {
   return at ? { strength: src.strength, at } : { strength: 0, at: [0, 0] };
 }
 
-/** The full coefficient velocity = the source-driven shape velocity + an optional rigid co-rotation iω·f. */
-function velocity(coeffs: readonly Cx[], src: Source, spin: number, samples: number): Cx[] {
-  const shape = pgVelocity(coeffs, resolveSource(coeffs, src), samples);
+/** The full coefficient velocity = the source-driven shape velocity + an optional rigid co-rotation iω·f.
+ *  Each source in the list is resolved (lab → the current preimage) before the summed spectral solve. */
+function velocity(coeffs: readonly Cx[], src: Source | readonly Source[], spin: number, samples: number): Cx[] {
+  const resolved = toSourceList(src).map((s) => resolveSource(coeffs, s));
+  const shape = pgVelocity(coeffs, resolved, samples);
   if (!spin) return shape;
   const spinDot = rigidSpinRate(coeffs, spin);
   return shape.map((d, i) => cadd(d, spinDot[i]));
@@ -97,7 +100,7 @@ const vcombine = (a: readonly Cx[], b: readonly Cx[], sb: number): Cx[] =>
   a.map((ak, i) => cadd(ak, cscale(b[i], sb)));
 
 /** One classical RK4 step of the (PG) flow in coefficient space. */
-export function stepDroplet(coeffs: readonly Cx[], src: Source, dt: number, spin = 0): Cx[] {
+export function stepDroplet(coeffs: readonly Cx[], src: Source | readonly Source[], dt: number, spin = 0): Cx[] {
   const M = sampleCount(coeffs.length);
   const k1 = velocity(coeffs, src, spin, M);
   const k2 = velocity(vcombine(coeffs, k1, dt / 2), src, spin, M);
@@ -220,7 +223,7 @@ export interface EvolveOptions {
  */
 export function evolveDroplet(
   coeffs0: readonly Cx[],
-  src: Source,
+  src: Source | readonly Source[],
   opts: EvolveOptions = {},
 ): { frames: DropletFrame[]; stop: StopReason } {
   const dt0 = opts.dt ?? 0.01;
@@ -229,21 +232,21 @@ export function evolveDroplet(
   const cuspFrac = opts.cuspFrac ?? 0.02;
   const K = opts.moments ?? 3;
   const spin = opts.spin ?? 0;
+  const sources = toSourceList(src);
 
-  if (src.strength < 0 && !opts.allowSuction) {
-    return { frames: [], stop: "suction-blocked" };
+  if (sources.some((s) => s.strength < 0) && !opts.allowSuction) {
+    return { frames: [], stop: "suction-blocked" }; // any sink is the ill-posed direction
   }
 
   const a1mag0 = Math.hypot(coeffs0[0][0], coeffs0[0][1]);
   const cuspStop = cuspFrac * a1mag0;
   const refMoments = interiorMoments(coeffs0, K);
-  // The moment drift is measured against the PREDICTED moments M_k(0) + t·Q·bᵏ (Richardson), so an
-  // off-centre source — whose moments genuinely evolve — is still monitored honestly; for a central source
-  // (b = 0) the prediction is the conserved M_k(0), recovering the original check. Without spin the strict
-  // absolute drift is the gauge; a spin rotates the phases (M_k ↦ e^{ikωt}M_k), so there we compare
-  // magnitudes.
-  const b: Cx = src.lab ?? [0, 0];
-  const srcForMoments = [{ strength: src.strength, b }];
+  // The moment drift is measured against the PREDICTED moments M_k(0) + t·Σⱼ Qⱼ·bⱼᵏ (Richardson), so
+  // off-centre / competing sources — whose moments genuinely evolve — are still monitored honestly; for a
+  // single central source (b = 0) the prediction is the conserved M_k(0), recovering the original check.
+  // Without spin the strict absolute drift is the gauge; a spin rotates the phases (M_k ↦ e^{ikωt}M_k), so
+  // there we compare magnitudes.
+  const srcForMoments = sources.map((s) => ({ strength: s.strength, b: (s.lab ?? [0, 0]) as Cx }));
   const driftOf = spin === 0 ? momentDrift : momentMagnitudeDrift;
 
   const frameOf = (t: number, coeffs: Cx[]): DropletFrame => ({
@@ -259,8 +262,8 @@ export function evolveDroplet(
   let t = 0;
 
   while (frames.length < maxFrames && t < tMax) {
-    // A lab-fixed source must stay inside the fluid; if its preimage has left the disk, stop honestly.
-    if (src.lab && invertMap(coeffs, src.lab) === null) return { frames, stop: "source-left-fluid" };
+    // A lab-fixed source must stay inside the fluid; if any has left the disk, stop honestly.
+    if (sources.some((s) => s.lab && invertMap(coeffs, s.lab) === null)) return { frames, stop: "source-left-fluid" };
     const minF = minAbsMapPrime(coeffs);
     if (minF < cuspStop) return { frames, stop: "cusp" }; // ⚠ the ill-posed edge — never step past it
     // adaptive step: shrink as the cusp approaches; never overshoot tMax

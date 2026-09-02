@@ -181,3 +181,35 @@ describe("off-centre source (F1.1)", () => {
     expect(res.frames.length).toBe(1);
   });
 });
+
+describe("competing sources (F1.2)", () => {
+  const disk = (deg: number): Cx[] => Array.from({ length: deg }, (_, i): Cx => (i === 0 ? [1, 0] : [0, 0]));
+
+  it("sums the source terms: the multi-source residual converges with mode count", () => {
+    const srcs = [{ strength: 2, at: [-0.3, 0] as Cx }, { strength: 1, at: [0.3, 0.1] as Cx }];
+    const lo = pgResidualSup(disk(4), pgVelocity(disk(4), srcs), srcs);
+    const hi = pgResidualSup(disk(16), pgVelocity(disk(16), srcs), srcs);
+    expect(hi).toBeLessThan(lo);
+    expect(hi).toBeLessThan(1e-5); // well-resolved summed RHS at 16 modes
+  });
+
+  it("a source + sink (ΣQ = 0) holds the area while the shape deforms", () => {
+    const wells = [{ strength: 1.2, lab: [-0.5, 0] as Cx }, { strength: -1.2, lab: [0.5, 0] as Cx }];
+    const res = evolveDroplet(disk(16), wells, { allowSuction: true, dt: 0.02, tMax: 0.15, moments: 2 });
+    const first = res.frames[0];
+    const last = res.frames[res.frames.length - 1];
+    expect(last.t).toBeGreaterThan(0.05); // it actually evolved
+    expect(Math.abs(last.area - first.area)).toBeLessThan(0.03); // net flux 0 ⇒ area conserved
+    const raw = momentDrift(interiorMoments(first.coeffs, 2), interiorMoments(last.coeffs, 2));
+    expect(raw).toBeGreaterThan(0.01); // fluid streamed across ⇒ the moments moved
+  });
+
+  it("two injectors: the summed predicted-moment monitor stays small", () => {
+    const wells = [{ strength: 1, lab: [-0.4, 0] as Cx }, { strength: 1.5, lab: [0.4, 0.2] as Cx }];
+    const res = evolveDroplet(disk(16), wells, { dt: 0.02, tMax: 0.6, moments: 2 });
+    const last = res.frames[res.frames.length - 1];
+    expect(last.momentDrift).toBeLessThan(1e-3); // drift from Σⱼ Qⱼ·bⱼᵏ stays small
+    const raw = momentDrift(interiorMoments(res.frames[0].coeffs, 2), interiorMoments(last.coeffs, 2));
+    expect(raw).toBeGreaterThan(0.05); // the moments genuinely moved
+  });
+});
