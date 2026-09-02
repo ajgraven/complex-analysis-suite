@@ -3199,3 +3199,111 @@ sheds two clusters (so the moved surface is minimised and the `RM→polygon` con
 - **Trade-off accepted:** three launcher cards and three CI projects instead of one, in exchange for three
   coherent tools each with a single subject, a shared substrate that keeps the marginal cost low, and a
   Hele-Shaw app that sits with its real mathematical neighbours.
+
+---
+
+## ADR-0037: The tenth published app — `apps/2d-hydrodynamics` (ideal flow past bodies, via conformal transplant)
+
+**Status:** Accepted. A new **separate app** (decision #8 topology), anchored by the airfoil moved out of
+2D Electrostatics. **Partially supersedes [ADR-0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow)** —
+only the airfoil's placement (ADR-0036 kept sandbox + airfoil + polygon together as the "steady field-and-flow"
+app); every other ADR-0036 decision stands. **No new package** ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) —
+the app is a new *consumer* of built machinery, and its one extraction is second-consumer-justified). Plan:
+[`design/2d-hydrodynamics-plan.md`](design/2d-hydrodynamics-plan.md).
+
+### Context
+
+ADR-0036 split the old portmanteau along the **steady vs. evolving** fault line, carving out Hele-Shaw Flow
+(evolving) and Potential Theory (the conductor view) and leaving 2D Electrostatics as the *steady*
+field-and-flow app: sandbox + airfoil + polygon. A **finer seam** survives inside "steady", though — between
+the two things "steady" bundles:
+
+- **Field superposition you relabel** — the sandbox: `field.ts` (the `W = φ + iψ` field of dropped charges /
+  sources / vortices / doublets) and the **electrostatic↔fluid lens**. These are the app's two *headline*
+  ideas, and its name is built around the electrostatic reading.
+- **A reference flow you transplant** — the airfoil and polygon: flow past the unit disk carried through a
+  conformal map onto a body.
+
+The **airfoil is the acute case of the mismatch.** Of the three pages it is the only one that (a) imports
+*neither* headline idea (no `field.ts`, no lens), (b) has *no* meaningful electrostatic reading — its whole
+payload is **lift, the Kutta condition, camber, angle of attack, `L = −ρUΓ`**, aerodynamic vocabulary with no
+electrostatic dual anyone studies, and (c) is a self-contained *leaf* — it consumes only `@cas/gpu` (its GPU
+render) and `@cas/ui` (the shell); unlike the polygon it touches no `@cas/flow`, no `@cas/interchange`, and no
+cross-app golden. It is at once the **worst fit** for an app branded around the electrostatic reading and the
+**cheapest to move**. Three further facts point the same way: 2D-E's own roadmap milestone **ES-4** ("more
+transplant families — slit, ellipse, star") is a *flow gallery* accreting onto the app and drifting from its
+electrostatic identity; the closed-form maps ES-4 wants **already exist** in the suite (Riemann-Map's
+`EXTERIOR_MAP_PRESETS` — Joukowski / vertical-slit / ellipse / deltoid / astroid / star); and the airfoil
+already has a *documented* tie to the fluids side ([Hele-Shaw's HS-6](design/hele-shaw-flow-plan.md), relating
+the airfoil Kutta circulation to the Hele-Shaw twist γ — McKee–Bush 2024). The airfoil is not homeless; it is
+the seed of the suite's missing **ideal-flow** app.
+
+### Decision
+
+Add **`apps/2d-hydrodynamics`** ("2D Hydrodynamics") — an interactive realization of **ideal (inviscid,
+irrotational) flow past a body `B`**, realized as flow past the unit disk `𝔻*` carried through a conformal map
+`ψ: 𝔻* → ext(B)`. It is the deliberate **hydrodynamic twin of 2D Electrostatics**: the two apps are the two
+readings of the *same* `W = φ + iψ` (the paper's own title pairing, *"…Two-Dimensional Electrostatics and
+Hydrodynamics"*), split by which phenomena each showcases — **superposition fields you relabel** (Electrostatics)
+vs. **flow past bodies, and lift** (Hydrodynamics).
+
+1. **Anchored by the airfoil, broadened by a gallery.** The Joukowski / Kármán–Trefftz airfoil (with the Kutta
+   condition and Kutta–Joukowski lift) is the crown-jewel page and the app's reason to exist; a **closed-form
+   transplant gallery** (slit / flat-plate, ellipse, deltoid, astroid, star) is its breadth. The airfoil is just
+   the Joukowski special case — a body with a sharp edge, hence a Kutta condition and lift — of the one object
+   the app owns: *transplant a reference flow through a closed-form exterior map.*
+2. **The airfoil moves; the sandbox and polygon stay in 2D Electrostatics.** The airfoil (`airfoil.html`,
+   `main-airfoil.ts`, `airfoil.ts`, `render/airfoilView.ts` + `airfoilShader.ts`, and its two tests) moves by
+   `git mv` (provenance preserved). The **polygon stays** (for now, HD-4): unlike the airfoil it is
+   dual-readable (flow past a body ↔ the field around a charged polygonal conductor) *and* it is the
+   [ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140)
+   `conformal` interchange hub — its `RM_TO_POTENTIAL_CONFORMAL_LINK` golden and Riemann-Map's "Send to 2D
+   Electrostatics ↗" deep link anchor it. Moving it re-opens exactly the coupling ADR-0036 chose to leave
+   undisturbed, so it is deferred until the transplant story is worth unifying.
+3. **Zero new packages** ([ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need); the north star —
+   each new tool builds fewer primitives than the last). Consumes `@cas/gpu` (render), `@cas/ui` (shell),
+   `@cas/flow` (the transplant kernel — `flowNet` builds the streamline/equipotential net past `𝔻*`,
+   `pushforward` carries it onto the body), and `@cas/export` (HD-3 PNG). The airfoil engine moves intact. The
+   gallery's closed-form maps are a textbook **second-consumer extraction** of Riemann-Map's
+   `EXTERIOR_MAP_PRESETS` into `@cas/flow` (Riemann-Map = consumer 1, its exterior *image* pane; 2D
+   Hydrodynamics = consumer 2, the flow *transplant*), pinned by a shared golden since an app may not import
+   another app (the CLAUDE.md golden-corpus rule). The extraction *nets more reuse than it spends.*
+4. **Honest labelling** ([guardrail](../CLAUDE.md)): `=` for the closed-form airfoil and gallery; the polygon
+   keeps its `≈` / `degraded` fit tier if HD-4 later moves it.
+5. **2D Electrostatics' ES-4 is reassigned here.** "More transplant families (slit, ellipse, star)" belongs to
+   the app the transplant gallery *is*; 2D-E re-centres on the sandbox + polygon + its ES-1 theorem-gallery
+   spine. 2D-E keeps a legitimate "flow" story — the lens, streamlines, and tracers all live in the *sandbox*;
+   the airfoil was the one flow page with none of them, so its departure leaves the "Fields & flow" identity
+   intact.
+
+### Consequences
+
+- **Positive:** a new consumer of already-built machinery with **zero new packages**, and its one extraction
+  improves the suite's reuse metric rather than spending it (north star); each app now carries a single
+  interaction model; the airfoil's aerodynamic vocabulary (lift / Kutta / AoA) finally sits under a
+  hydrodynamics banner instead of an "Electrostatics" one; and the closed-form transplant gallery gets a home
+  set up to grow. The suite grows to **ten published apps** (eleven counting the built-but-unpublished
+  Correspondences).
+- **Migration is staged, one reviewable PR each; working software at every gate** (mirroring ADR-0036):
+  **HD-0** — scaffold + wire the empty app (a hub page + the nav header; green with a trivial test).
+  **HD-1** — `git mv` the airfoil in; retarget its nav (`current: "2d-hydrodynamics"`) and remove it from 2D-E
+  (files, the airfoil `rollupOptions.input`, the `2d-electrostatics-airfoil` a11y roster entry). **HD-2** —
+  extract `EXTERIOR_MAP_PRESETS` → `@cas/flow`, rewire Riemann-Map, golden-pin it, and build the gallery on
+  `flowNet` + `pushforward` (line-art first; a GPU domain-color upgrade generalizing `airfoilShader.ts` is an
+  HD-3 option). **HD-3** — parity polish (angle of attack, stagnation points, stream-function contours,
+  `#vs=` permalinks + PNG via `@cas/export`). **HD-4** (deferred) — migrate the polygon (the expensive move:
+  the ADR-0035 form, the golden, the RM deep link). **HD-5** (deferred) — the app becomes the *second consumer*
+  of the `flow` interchange kind that 2D-E's ES-2 defines.
+- **URLs / hand-offs:** only the airfoil page changes URL (`2d-electrostatics/airfoil.html` →
+  `2d-hydrodynamics/airfoil.html`) — no known external users (ADR-0036's "update, not redirect" norm), and the
+  airfoil is stateless (no `#vs=`), so there is **no view-state migration**. The polygon page, its RM hand-off,
+  and the `conformal` golden are untouched (they stay in 2D-E).
+- **Wiring per new app:** `packages/ui/src/apps.ts` (`SUITE_APPS`), `vitest.workspace.ts`, the census
+  `PROJECTS` (`scripts/assert-test-census.mjs`), a launcher card, the `deploy-pages.yml` `cp`, and the **a11y
+  roster** (`scripts/a11y-audit.mjs` + its baseline). The dependency-cruiser / ESLint app-boundary rule is
+  generic (`^apps/([^/]+)/` — an app may import packages, never another app), so it covers the new app with
+  **no per-app edit**. CLAUDE.md moves from ten apps to eleven; **no new `@cas/*` package** (still twelve).
+- **Trade-off accepted:** a fourth app carved from what was one — and a **third flow-flavoured app** (2D
+  Electrostatics "Fields & flow", Hele-Shaw Flow "Free-boundary flow", 2D Hydrodynamics "Ideal flow") — in
+  exchange for each app owning a single interaction model, a reuse metric improved not spent, and the airfoil
+  housed honestly. The three-flow-app naming risk is carried by **distinct badges**, not the app names.

@@ -113,6 +113,12 @@ const PAGES = [
     file: "polygon.html",
   },
   {
+    id: "2d-hydrodynamics",
+    mount: "2d-hydrodynamics",
+    dist: "apps/2d-hydrodynamics/dist",
+    file: "index.html",
+  },
+  {
     id: "hele-shaw-flow",
     mount: "hele-shaw-flow",
     dist: "apps/hele-shaw-flow/dist",

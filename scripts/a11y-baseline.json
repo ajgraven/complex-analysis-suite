@@ -81,6 +81,7 @@
       "help": "All page content should be contained by landmarks"
     }
   },
+  "2d-hydrodynamics": {},
   "hele-shaw-flow": {},
   "hele-shaw-flow-twist": {
     "region": {

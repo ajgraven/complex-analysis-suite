@@ -9,9 +9,9 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies ten apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies eleven apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, Hele-Shaw Flow, and Potential Theory, plus the anti-holomorphic Correspondences tool
+Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, and Potential Theory, plus the anti-holomorphic Correspondences tool
 (built, not yet published) — riding twelve shared `@cas/*` packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
@@ -52,7 +52,7 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
-    `2d-electrostatics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it.
+    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
@@ -250,6 +250,17 @@ and split the studio plan into three per-app plans. Per-app plans:
 [`docs/design/2d-electrostatics-plan.md`](docs/design/2d-electrostatics-plan.md),
 [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),
 [`docs/design/potential-theory-plan.md`](docs/design/potential-theory-plan.md).
+
+**In progress — ADR-0037 (2D Hydrodynamics, the eleventh app; the airfoil promoted out of 2D Electrostatics).**
+A new app, `apps/2d-hydrodynamics` — ideal flow past a body B as flow past 𝔻* through a conformal map ψ: 𝔻* →
+ext(B), the hydrodynamic twin of 2D Electrostatics — anchored by the Joukowski/Kármán–Trefftz airfoil and
+broadened by a closed-form transplant gallery (slit / ellipse / deltoid / astroid / star). No new package
+(ADR-0007): it consumes `@cas/ui`/`@cas/gpu`/`@cas/flow`/`@cas/export`, moves the airfoil engine intact, and
+extracts Riemann-Map's `EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule (HD-2). Staged
+HD-0…HD-5: **HD-0 (scaffold + wire the empty hub) is done**; HD-1 `git mv`s the airfoil in and out of 2D
+Electrostatics; HD-2 builds the gallery; the polygon transplant stays in 2D Electrostatics for now (HD-4,
+deferred — it anchors the ADR-0035 `conformal` hand-off). 2D Electrostatics' ES-4 is reassigned to this app.
+Plan: [`docs/design/2d-hydrodynamics-plan.md`](docs/design/2d-hydrodynamics-plan.md).
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
