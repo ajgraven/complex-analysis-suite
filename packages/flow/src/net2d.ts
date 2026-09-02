@@ -5,6 +5,7 @@
 // (world→pixel, y up), kept app-local per the no-app-imports rule. The geometry it draws lives in
 // ./transplant.ts / ./polygonMap.ts (both node-tested); this is DOM-only.
 import type { Pt, NetCurve } from "./transplant.js";
+import { pixelToWorld, worldPerPixel, panView, zoomView, type View } from "./viewTransform.js";
 
 export interface Box {
   minx: number;
@@ -72,6 +73,38 @@ export class Net2D {
     this.halfSpan = Math.max(needY, needX, 1e-3) * padding;
   }
 
+  /** The current view window (world centre + half-height span), for save / restore. */
+  getView(): View {
+    return { cx: this.cx, cy: this.cy, halfSpan: this.halfSpan };
+  }
+
+  /** Restore a view window saved via {@link getView}. */
+  setView(v: View): void {
+    this.cx = v.cx;
+    this.cy = v.cy;
+    this.halfSpan = Math.max(v.halfSpan, 1e-9);
+  }
+
+  private viewport(): { width: number; height: number; dpr: number } {
+    return { width: this.canvas.width, height: this.canvas.height, dpr: this.dpr };
+  }
+
+  /** World units per CSS pixel at the current view (a fixed screen-size glyph is `n · worldPerPixel()`). */
+  worldPerPixel(): number {
+    return worldPerPixel(this.getView(), this.viewport());
+  }
+
+  /** Pan the view by a CSS-pixel drag delta — the world point under the cursor follows the pointer. */
+  panByPixels(dxCss: number, dyCss: number): void {
+    this.setView(panView(this.getView(), this.viewport(), dxCss, dyCss));
+  }
+
+  /** Zoom about a CSS-pixel focus (relative to the canvas top-left) by `factor` (> 1 zooms in), keeping the
+   *  world point under the focus fixed. `halfSpan` is clamped to a sane [MIN, MAX] range. */
+  zoomAt(cssX: number, cssY: number, factor: number): void {
+    this.setView(zoomView(this.getView(), this.viewport(), cssX, cssY, factor));
+  }
+
   private toPx(p: Pt): [number, number] {
     const W = this.canvas.width;
     const H = this.canvas.height;
@@ -85,11 +118,7 @@ export class Net2D {
    *  using the transform from the most recent `fitBounds` + `resize`. Lets an interactive pane hit-test
    *  and drag against what it drew — the companion to the (private) world→pixel `toPx`. */
   toWorld(cssX: number, cssY: number): Pt {
-    const W = Math.max(1, this.canvas.width);
-    const H = Math.max(1, this.canvas.height);
-    const ndcx = ((cssX * this.dpr) / W - 0.5) * 2;
-    const ndcy = (0.5 - (cssY * this.dpr) / H) * 2;
-    return [this.cx + ndcx * this.halfSpan * this.aspect(), this.cy + ndcy * this.halfSpan];
+    return pixelToWorld(this.getView(), this.viewport(), cssX, cssY);
   }
 
   /** World → CSS-pixel coordinate relative to the canvas top-left — the forward companion to `toWorld`,

@@ -76,6 +76,8 @@ body {
   width: 100%;
   height: 100%;
   display: block;
+  cursor: grab; /* pannable; JS swaps to "grabbing" while dragging and "crosshair" in the polygon editor */
+  touch-action: none; /* a touch-drag pans the view instead of scrolling the page */
 }
 .foil-pane figcaption {
   position: absolute;

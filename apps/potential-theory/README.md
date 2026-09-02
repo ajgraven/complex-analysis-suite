@@ -27,6 +27,11 @@ pane draws all of it, with **four roads** that each recover μ_K a different way
 - **Hover probe** — reads g_K(z), the equilibrium potential U^μ(z) = −log cap − g_K, and the field
   |E| = |∇g_K| at the cursor (`=` for exterior-map K via a Newton inverse of Ψ, `≈` for general K), with a
   marker + outward field arrow and an optional draggable **test charge**.
+- **Navigate** — scroll to zoom toward the cursor, drag the background to pan, double-click to reset to the
+  auto-fit; the focusable pane also takes arrow-key pan, `+`/`−` zoom, and `Enter` to reset (so the outer
+  Green curves and field lines that run past the default frame are reachable). Panning/zooming suppresses
+  the per-paint auto-fit until a reset or a domain switch; the pan/zoom math lives in `@cas/flow`'s
+  `Net2D` (`viewTransform`).
 
 ## Two domain classes, honestly labelled
 
