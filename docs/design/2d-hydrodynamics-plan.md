@@ -19,20 +19,26 @@ carried through a univalent map `ψ: 𝔻* → ext(B)`. The airfoil is the sharp
 Kármán–Trefftz), where the Kutta condition fixes the circulation and Kutta–Joukowski gives the lift; the
 gallery is the same construction for a family of closed-form bodies.
 
+Since **HD-6 (ADR-0038)** the app is a **single page**: `index.html` renders every body through the unified
+`ψ: 𝔻* → ext(B)` framework, switched by a **Body** selector. (This collapsed the original ADR-0037 three-page
+shape — a hub + `airfoil.html` + `gallery.html`; those files are gone and their `#vs=` / bare-`#id` permalinks
+are read by the unified decoder.)
+
 | Page | Content | Honesty |
 | --- | --- | --- |
-| `index.html` | The app hub: what "flow past a body via conformal transplant" is, and the body gallery as a launcher. | — |
-| `airfoil.html` | Flow past a Joukowski / Kármán–Trefftz airfoil — the cylinder↔wing transplant, thickness / camber / angle-of-attack, the Kutta condition, and the Kutta–Joukowski lift `L = −ρUΓ`. | `=` closed form |
-| `gallery.html` | Flow past a closed-form body `ψ: 𝔻* → ext(B)` — vertical slit / flat plate, ellipse, deltoid, astroid, 5-cusp star — with a circulation slider (and the Kutta toggle where `B` has a sharp edge). | `=` closed form |
+| `index.html` | Flow past a body `ψ: 𝔻* → ext(B)`, one page, one two-pane disk↔body view. **Airfoil** (Joukowski / Kármán–Trefftz): thickness / camber / trailing-edge angle, the Kutta condition, and the Kutta–Joukowski lift `L = −ρUΓ`. **Closed-form gallery** (flat plate, ellipse, deltoid, astroid, 5-cusp star): a free-circulation slider. Shared angle-of-attack, permalink, and PNG export. | `=` closed form |
 
 ## The reuse foundation (north star: zero new packages)
 
 - **The airfoil engine moves intact** — `airfoil.ts` (the closed-form Joukowski / Kármán–Trefftz maps, the
-  cylinder-plane potential, the Kutta circulation, and the Kutta–Joukowski lift) and its GPU render
-  (`render/airfoilView.ts` + `render/airfoilShader.ts`, on `@cas/gpu`).
-- **`@cas/flow` is already the transplant substrate** — `flowNet(refFlow)` builds the streamline /
-  equipotential net past `𝔻*`; `pushforward(curves, ψ)` carries it onto the body. The polygon page's exact
-  mechanism, but with a *closed-form* `ψ` in place of an SC-fitted one, so no least-squares solve is needed.
+  cylinder-plane potential, the Kutta circulation, and the Kutta–Joukowski lift). Since HD-6 (ADR-0038) it
+  renders through the unified forward idiom — the per-pixel `ktInverse` shader is retired; `bodyModel.ts`
+  folds the airfoil into `ψ(w) = J(ζ₀ + R·w)` and the body pane is the forward-mapped mesh (below).
+- **`@cas/flow` supplies the maps and the reference-flow kernel** — `refPotential`/`refVelocity` (flow past
+  `𝔻*`) and `EXTERIOR_MAP_PRESETS` (`ψ`, `ψ'`). Since HD-6 (ADR-0038) the body pane is a forward-mapped
+  **domain-colored mesh**: evaluate `ψ`, `ψ'` forward per vertex and colour by the exact velocity `W_ref'/ψ'`
+  (no per-pixel inverse — the cusped bodies have none). `flowNet`/`pushforward` remain `@cas/flow`'s line-art
+  substrate for the *other* flow apps, but this app no longer uses them.
 - **The gallery's closed-form maps already exist** — Riemann-Map's `EXTERIOR_MAP_PRESETS`
   (`apps/riemann-map/src/presets.ts`): univalent `ψ(z) = z + Σ bₖ/zᵏ` for Joukowski `½(z+1/z)`, vertical slit
   `½(z−1/z)`, ellipse `z+1/(2z)`, deltoid `z+1/(2z²)`, astroid `z+1/(3z³)`, 5-cusp star `z+1/(4z⁴)`. Riemann-Map
@@ -43,10 +49,10 @@ gallery is the same construction for a family of closed-form bodies.
 
 ## The design spine
 
-**One construction, made visible: `flow past 𝔻* ── ψ ──▶ flow past B`.** Every page is a two-pane
+**One construction, made visible: `flow past 𝔻* ── ψ ──▶ flow past B`.** The page is a two-pane
 disk↔body view whose left pane shows the elementary reference flow (uniform + circulation, and — for a
-sharp-edged body — the vortex the Kutta condition fixes) and whose right pane shows the *same* streamlines
-carried onto the body by `ψ`. The airfoil is where this pays off physically: the map that carries the flow
+sharp-edged body — the vortex the Kutta condition fixes) and whose right pane shows the *same* flow
+domain-coloured and carried onto the body by `ψ` (streamlines matched across the two panes). The airfoil is where this pays off physically: the map that carries the flow
 also produces the lift, and the app shows both halves at once. Honest labelling throughout — `=` for the
 closed-form airfoil and gallery; a body with no closed-form map (the polygon, if HD-4 brings it) keeps its
 `≈` / `degraded` SC-fit tier.
@@ -99,6 +105,35 @@ green before and after (guardrail: working software at every step).
 - **HD-5 — the `flow` interchange kind (deferred; consume, don't define).** 2D Electrostatics' ES-2 defines the
   deferred `flow` envelope; this app becomes its **second consumer** (import a field/flow app-state and show
   the flow past a transplant body), which retro-justifies the kind under ADR-0007.
+- **HD-6 — one page, domain-colored everywhere (done; [ADR-0038](../DECISIONS.md)).** Collapse the hub +
+  `airfoil.html` + `gallery.html` into a **single page** with a Body selector, and render **every** body with
+  the same domain-colored two-pane look. Rests on the identity that every body — the airfoil included — is a
+  forward map `ψ: 𝔻* → ext(B)` driven by flow past the unit disk (the airfoil is `ψ(w) = J(ζ₀ + R·w)`,
+  `U' = U·R`; the `R` cancels in `dW/dz = W_ref'(w)/ψ'(w)`). The render is the app's own forward idiom on the
+  GPU: a per-pixel shader for the disk (left) and a **forward-mapped colored mesh** for the body (right) — CPU
+  warps the disk-exterior tessellation through `ψ` and colors it by the exact velocity `W_ref'/ψ'`, the GPU
+  interpolating; no per-pixel inverse (the cusped bodies have no closed-form `ψ⁻¹`). Staged, each a green gate:
+  - **HD-6.0 — ADR-0038 + this plan (done).**
+  - **HD-6.1 — the unified body model + the airfoil-equivalence golden (done).** `bodyModel.ts` maps the app
+    state to `{ ψ, ψ', reference flow }` for every body; `@cas/flow`'s `ExteriorMapPreset` gains `psiPrime`. The
+    golden pins that the airfoil-via-`ψ` physical velocity equals the existing `airfoil.ts` field — the linchpin
+    that the unification changes no physics. Pure, no UI.
+  - **HD-6.2 — the single-page shell (done).** One `index.html` + the Body selector + per-body controls + the
+    unified `#vs=` (back-compat for old airfoil / gallery / `#<id>` links); deleted the two pages + hub; rewired
+    `vite.config` + the a11y roster. Rendered on the line-art as a working placeholder (the structural
+    unification). The unified page is a11y-clean (the stage is a `<main>` landmark).
+  - **HD-6.3 — the domain-color render (done).** The left per-pixel disk shader (`diskView`/`diskShader`) + the
+    right forward-mapped colored mesh (`bodyMesh` → `bodyMeshView`/`bodyMeshShader`) + the shared colormap
+    (`fieldColor.glsl`) + a thin 2D overlay (`overlay2d`) for the obstacle outline + stagnation markers,
+    replacing the placeholder (the visual unification — the payload of #2). The airfoil's old per-pixel `ktInverse`
+    shader is gone; every body now renders through the same forward mesh. Colour value gauges the far-field speed
+    and streamline spacing scales with `U`, so both panes read in the same colours and matched ψ-levels; the mesh
+    geometry is node-tested, the GL shading browser-verified across all six bodies.
+  - **HD-6.4 — polish (done).** The doc sweep (this plan + the `CLAUDE.md` status + ADR-0038) and the final
+    browser-verified sweep — all six bodies render, controls switch, the legacy / bare permalinks resolve, and
+    PNG export produces a valid two-pane file with the embedded `2dh:url` permalink. (All-body stagnation markers
+    + the airfoil Kutta trailing-edge point + the lift readout already landed in HD-6.2/6.3 — they fall out of
+    the unified `ψ`-framework for free.)
 
 ## Non-goals
 

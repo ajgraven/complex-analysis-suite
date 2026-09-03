@@ -1,9 +1,8 @@
-/* 2D Hydrodynamics — the shared two-pane transplant stylesheet (airfoil.html + gallery.html). Ported
-   with the airfoil out of 2d-electrostatics (ADR-0037, HD-1): the rules the transplant pages use (base
-   shell + toolbar/brand/pal-btn + the two-pane foil stage + sliders + the lift readout + the body picker
-   + the fatal banner), lifted from that app's shared main.css so the pages look identical. The hub page
-   keeps its own main.css; this sheet is loaded by the two disk↔body pages. `--cas-nav-h` comes from
-   @cas/ui/nav.css (the nav header height). */
+/* 2D Hydrodynamics — the one-page two-pane transplant stylesheet (ADR-0038). Originally ported with the
+   airfoil out of 2d-electrostatics (ADR-0037, HD-1); since HD-6 it is the app's single stylesheet: the
+   base shell + toolbar/brand/pal-btn + the two-pane foil stage + sliders + the per-body control groups +
+   the readout + the body picker + the fatal banner. `--cas-nav-h` comes from @cas/ui/nav.css (the nav
+   header height). */
 
 :root {
   --bg: #0f1115;
@@ -93,6 +92,18 @@ a.pal-btn {
   width: 160px;
   margin: 0;
 }
+
+/* Per-body control groups (ADR-0038): the airfoil reveals thickness/camber/TE/Kutta, a closed-form body
+   reveals the circulation slider. Each group is an inline flex sub-cluster; `hidden` collapses it. */
+.ctl-group {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ctl-group[hidden] {
+  display: none;
+}
 .row {
   display: block;
   margin: 8px 0;
@@ -152,6 +163,19 @@ input[type="range"] {
   height: 100%;
   display: block;
 }
+/* The field (WebGL) canvas and the 2D overlay (obstacle outline + stagnation markers) stack in the pane;
+   the overlay is transparent except where it draws, and never intercepts pointer events (HD-6.3). */
+.foil-gl,
+.foil-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.foil-overlay {
+  pointer-events: none;
+}
 .foil-pane figcaption {
   position: absolute;
   left: 10px;
@@ -164,7 +188,7 @@ input[type="range"] {
   color: #c4ccda;
 }
 
-/* --- gallery body picker + readout (gallery.html) ------------------------------------------ */
+/* --- body picker + readout (the Body selector, index.html) --------------------------------- */
 .tp-select {
   font: 12px/1 system-ui, sans-serif;
   color: #e7eaf2;

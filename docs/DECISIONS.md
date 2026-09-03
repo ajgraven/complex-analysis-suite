@@ -3307,3 +3307,78 @@ vs. **flow past bodies, and lift** (Hydrodynamics).
   Electrostatics "Fields & flow", Hele-Shaw Flow "Free-boundary flow", 2D Hydrodynamics "Ideal flow") — in
   exchange for each app owning a single interaction model, a reuse metric improved not spent, and the airfoil
   housed honestly. The three-flow-app naming risk is carried by **distinct badges**, not the app names.
+
+---
+
+## ADR-0038: 2D Hydrodynamics — one page, domain-colored everywhere (unify the airfoil + gallery)
+
+**Status:** Accepted. An **internal restructure** of `apps/2d-hydrodynamics` (a single-page app + one render
+path); it does **not** reverse any [ADR-0037](#adr-0037-the-tenth-published-app--apps2d-hydrodynamics-ideal-flow-past-bodies-via-conformal-transplant)
+decision (the app, zero-new-packages, the airfoil promotion, and the `@cas/flow` extraction all stand) — it
+supersedes only ADR-0037's *incidental* three-page shape (hub + `airfoil.html` + `gallery.html`). No new
+package. Plan: [`design/2d-hydrodynamics-plan.md`](design/2d-hydrodynamics-plan.md) §HD-6.
+
+### Context
+
+ADR-0037 shipped the app as three pages: a **hub of tiles** linking to a GPU-rendered **airfoil** page
+(a per-pixel fragment shader that inverts the Joukowski / Kármán–Trefftz map, domain-coloring the exact
+velocity field) and a **gallery** page (the closed-form bodies drawn as `@cas/flow` `flowNet` + `pushforward`
+**line-art**). A review of the result found the split reads as a portmanteau, not one tool — and, more
+fundamentally, that the two pages differ only in their **render substrate**, not their physics: both are
+"flow past a body `B`, shown as a two-pane disk↔body view via a conformal transplant." The tiles and the two
+visual dialects are the friction.
+
+### Decision
+
+Collapse the three pages into **one page** that renders **every body with the same domain-colored two-pane
+look**, resting on one unifying identity and one render idiom.
+
+1. **Every body is a forward map `ψ: 𝔻* → ext(B)` driven by flow past the unit disk.** The closed-form bodies
+   already are (`ψ = a·z + b·z⁻ᵏ`, `@cas/flow`'s `EXTERIOR_MAP_PRESETS`). **The airfoil is too:** flow past the
+   cylinder `|ζ−ζ₀| = R` through the Joukowski map `J` is *identical* to flow past the **unit disk** through
+   `ψ(w) = J(ζ₀ + R·w)` with reference speed `U' = U·R` and the same circulation `Γ` (the `R` cancels in
+   `dW/dz = W_ref'(w)/ψ'(w)`; verified algebraically and pinned by a golden). So the airfoil folds into the
+   same `ψ`-framework, Kutta circulation and all — the KT case identically.
+2. **Domain-colored render, one idiom (the "map the grid forward" idiom the app already uses for
+   `pushforward`).** The **left pane** (disk) is a per-pixel fragment shader over the closed-form reference
+   flow `W_ref` (color + `φ`/`ψ` contours + the `|z| = 1` outline) — one shader for all bodies. The **right
+   pane** (body) is a **forward-mapped colored mesh**: a polar tessellation of the disk exterior whose vertices
+   the CPU warps through `ψ` and colors by the exact physical velocity `W_ref'(w)/ψ'(w)` (both closed-form),
+   the GPU interpolating + applying the *same* colormap. The mesh's inner ring is `ψ(∂𝔻)` = the body outline.
+   A thin 2D overlay carries stagnation markers + the lift readout.
+3. **Rejected alternative — a generic per-pixel inverse.** Extending the shader to compute `ζ = ψ⁻¹(z)` per
+   pixel is closed-form only for the `k=1` bodies (airfoil, ellipse, slit); the cusped bodies need polynomial
+   roots (deltoid cubic, astroid quartic, **star quintic — no closed form**), forcing a fragile in-shader
+   Newton that misbehaves where `ψ' → 0` at the cusps. The forward-mesh needs only `ψ` and `ψ'` (always
+   closed-form), handles every body uniformly, and matches `pushforward`. Accepted trade-off: the airfoil's
+   right pane becomes mesh-interpolated (very slightly softer at the trailing edge) rather than per-pixel-exact.
+4. **One page, one control model.** A single `index.html` with a **Body** selector (Airfoil · flat plate ·
+   ellipse · deltoid · astroid · star); the airfoil reveals its thickness / camber / trailing-edge / Kutta
+   controls, the closed-form bodies show a free circulation slider; shared angle-of-attack, permalink, PNG, nav
+   header. A **unified `#vs=`** schema, whose decoder also accepts the old airfoil / gallery / bare-`#<id>`
+   links (so every permalink and PNG recipe minted under ADR-0037 still resolves). `airfoil.html` and
+   `gallery.html` are deleted (URLs 404 — no known external users, per ADR-0037/HD-1's norm).
+5. **Zero new packages** (ADR-0007). The one shared-package touch: `@cas/flow`'s `ExteriorMapPreset` gains a
+   `psiPrime` closure (`ψ' = a − k·b·z⁻⁽ᵏ⁺¹⁾`) alongside `psi` — the map's derivative belongs with the map, and
+   the velocity field needs it. Riemann-Map (the other consumer) reads only `id`/`name`/`expr` and is
+   unaffected. The airfoil's own `ψ`/`ψ'` stay app-local (`airfoil.ts` + a new `bodyModel.ts`). Once the mesh
+   render lands, the app stops importing `@cas/flow`'s line-art (`flowNet`/`pushforward`/`Net2D`) — still used
+   by the other flow apps.
+
+### Consequences
+
+- **Positive:** the app becomes one cohesive tool — one page, one control panel, one rich visual language —
+  and *richer than the sum*: the airfoil gains domain-colored **stagnation markers** (its rear stagnation on
+  the trailing edge is the Kutta condition made visible), and the gallery gains the domain-colored field. The
+  render matches the app's forward-map idiom and needs no fragile in-shader root-finding.
+- **Migration is staged, each an independently-green gate** (HD-6.0…HD-6.4): the ADR + plan; the unified
+  **body model** + the airfoil-equivalence **golden** (the linchpin — proves the `ψ`-form changes no physics);
+  the **single-page shell** (working on the existing line-art as a placeholder — the structural unification);
+  the **domain-color render** (the payload); polish (all-body stagnation + lift, PNG, a11y baseline). Nothing
+  ships until the branch merges as a whole, so `master` never sees a regression window.
+- **Wiring:** `vite.config` (multi-page → single), the a11y roster + baseline (drop the `-airfoil` / `-gallery`
+  page entries). `SUITE_APPS`, the launcher card, and the `deploy-pages.yml` path are **unchanged**
+  (`2d-hydrodynamics/`).
+- **Trade-off accepted:** the airfoil's right pane is mesh-interpolated rather than per-pixel-exact (invisible
+  at a fine mesh; a minor cosmetic softness only near a cusp), in exchange for one robust render path across
+  every body.

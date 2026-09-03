@@ -1,29 +1,29 @@
-// The bodies this app transplants a reference flow onto, for the hub roster. Flow past a body B is flow
-// past the unit disk 𝔻* = {|z| ≥ 1} carried through a univalent conformal map ψ: 𝔻* → ext(B). The airfoil
-// is its own page (thickness / camber / the Kutta condition → lift); the gallery bodies are the
-// closed-form exterior maps ψ, whose ids match @cas/flow's EXTERIOR_MAP_PRESETS (bodies.test.ts pins that
-// correspondence) and whose page is gallery.html, deep-linked by `#<id>`.
+// The bodies this app transplants a reference flow onto — the roster behind the one-page Body selector
+// (ADR-0038). Flow past a body B is flow past the unit disk 𝔻* = {|z| ≥ 1} carried through a univalent
+// conformal map ψ: 𝔻* → ext(B). The airfoil has its own controls (thickness / camber / the Kutta
+// condition → lift); the closed-form bodies are the exterior maps ψ, whose ids match @cas/flow's
+// EXTERIOR_MAP_PRESETS (bodies.test.ts pins that correspondence, so the selector, the `#vs=` body id, and
+// the executable maps can never fall out of sync).
 //
-// This is the DISPLAY roster for the hub landing page; the executable maps live in @cas/flow.
+// This is the DISPLAY roster (label + formula for the selector and the readout); the executable maps live
+// in @cas/flow (the closed-form bodies) and bodyModel.ts (the airfoil-as-ψ).
 
 export type BodyKind = "airfoil" | "closed-form";
 
 export interface BodyEntry {
-  /** Stable id. For a closed-form body it is the @cas/flow EXTERIOR_MAP_PRESET id (and the gallery hash). */
+  /** Stable id. For a closed-form body it is the @cas/flow EXTERIOR_MAP_PRESET id (and the `#vs=` body id). */
   readonly id: string;
-  /** Human label for the hub card. */
+  /** Human label for the Body selector. */
   readonly label: string;
-  /** The conformal map ψ: 𝔻* → ext(B), as a display formula. */
+  /** The conformal map ψ: 𝔻* → ext(B), as a display formula (shown in the readout). */
   readonly psi: string;
-  /** The body B that ψ carries 𝔻* onto. */
+  /** The body B that ψ carries 𝔻* onto (shown in the body-pane caption). */
   readonly body: string;
-  /** This body's page imposes the Kutta condition → lift (the airfoil page only; the gallery leaves the
-   *  circulation free). */
+  /** Whether this body imposes the Kutta condition → lift (the airfoil only; the closed-form bodies leave
+   *  the circulation free). */
   readonly lift: boolean;
-  /** "airfoil" is the dedicated Kutta/lift page; "closed-form" bodies live in the gallery. */
+  /** "airfoil" reveals the thickness/camber/Kutta controls; "closed-form" bodies show the Γ slider. */
   readonly kind: BodyKind;
-  /** The page this card opens. */
-  readonly href: string;
 }
 
 export const BODIES: readonly BodyEntry[] = [
@@ -34,7 +34,6 @@ export const BODIES: readonly BodyEntry[] = [
     body: "a cambered wing with a sharp trailing edge",
     lift: true,
     kind: "airfoil",
-    href: "airfoil.html",
   },
   {
     id: "vslit-ext",
@@ -43,7 +42,6 @@ export const BODIES: readonly BodyEntry[] = [
     body: "the segment [−i, i]",
     lift: false,
     kind: "closed-form",
-    href: "gallery.html#vslit-ext",
   },
   {
     id: "ellipse-ext",
@@ -52,7 +50,6 @@ export const BODIES: readonly BodyEntry[] = [
     body: "an ellipse (semi-axes 3/2 and 1/2)",
     lift: false,
     kind: "closed-form",
-    href: "gallery.html#ellipse-ext",
   },
   {
     id: "deltoid-ext",
@@ -61,7 +58,6 @@ export const BODIES: readonly BodyEntry[] = [
     body: "a 3-cusped hypocycloid",
     lift: false,
     kind: "closed-form",
-    href: "gallery.html#deltoid-ext",
   },
   {
     id: "astroid-ext",
@@ -70,7 +66,6 @@ export const BODIES: readonly BodyEntry[] = [
     body: "a 4-cusped hypocycloid",
     lift: false,
     kind: "closed-form",
-    href: "gallery.html#astroid-ext",
   },
   {
     id: "star5-ext",
@@ -79,6 +74,5 @@ export const BODIES: readonly BodyEntry[] = [
     body: "a 5-cusped hypocycloid",
     lift: false,
     kind: "closed-form",
-    href: "gallery.html#star5-ext",
   },
 ] as const;

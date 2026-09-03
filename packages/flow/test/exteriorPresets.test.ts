@@ -70,4 +70,41 @@ describe("exterior-map presets", () => {
       expect((x / 1.5) ** 2 + (y / 0.5) ** 2).toBeCloseTo(1, 12);
     }
   });
+
+  const primeOf = (id: string): ((z: Pt) => Pt) => {
+    const p = EXTERIOR_MAP_PRESETS.find((e) => e.id === id);
+    if (!p) throw new Error(`no preset ${id}`);
+    return p.psiPrime;
+  };
+
+  // Golden — ψ'(2), frozen. ψ' = a − k·b·z⁻⁽ᵏ⁺¹⁾, real on the real axis (imaginary part ±0).
+  it("pins ψ'(2) — the derivative used for the physical velocity dW/dz = W_ref'/ψ'", () => {
+    const two: Pt = [2, 0];
+    const pinReal = (id: string, re: number): void => {
+      const d = primeOf(id)(two);
+      expect(d[0]).toBeCloseTo(re, 12);
+      expect(d[1]).toBeCloseTo(0, 12); // ±0 on the real axis
+    };
+    pinReal("joukowski-ext", 0.375); // 0.5 − 0.5/4
+    pinReal("vslit-ext", 0.625); // 0.5 + 0.5/4
+    pinReal("ellipse-ext", 0.875); // 1 − 0.5/4
+    pinReal("deltoid-ext", 0.875); // 1 − 1/8
+    pinReal("astroid-ext", 0.9375); // 1 − 1/16
+    pinReal("star5-ext", 0.96875); // 1 − 1/32
+  });
+
+  it("ψ' agrees with a finite difference of ψ at a generic exterior point", () => {
+    const h = 1e-6;
+    for (const p of EXTERIOR_MAP_PRESETS) {
+      for (const z of [[1.6, 0.7], [-1.2, 1.3], [2.4, -0.9]] as const) {
+        const fd: Pt = [
+          (p.psi([z[0] + h, z[1]])[0] - p.psi([z[0] - h, z[1]])[0]) / (2 * h),
+          (p.psi([z[0] + h, z[1]])[1] - p.psi([z[0] - h, z[1]])[1]) / (2 * h),
+        ];
+        const d = p.psiPrime([z[0], z[1]]);
+        expect(d[0]).toBeCloseTo(fd[0], 5);
+        expect(d[1]).toBeCloseTo(fd[1], 5);
+      }
+    }
+  });
 });
