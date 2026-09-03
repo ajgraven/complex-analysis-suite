@@ -19,11 +19,14 @@ carried through a univalent map `ψ: 𝔻* → ext(B)`. The airfoil is the sharp
 Kármán–Trefftz), where the Kutta condition fixes the circulation and Kutta–Joukowski gives the lift; the
 gallery is the same construction for a family of closed-form bodies.
 
+Since **HD-6 (ADR-0038)** the app is a **single page**: `index.html` renders every body through the unified
+`ψ: 𝔻* → ext(B)` framework, switched by a **Body** selector. (This collapsed the original ADR-0037 three-page
+shape — a hub + `airfoil.html` + `gallery.html`; those files are gone and their `#vs=` / bare-`#id` permalinks
+are read by the unified decoder.)
+
 | Page | Content | Honesty |
 | --- | --- | --- |
-| `index.html` | The app hub: what "flow past a body via conformal transplant" is, and the body gallery as a launcher. | — |
-| `airfoil.html` | Flow past a Joukowski / Kármán–Trefftz airfoil — the cylinder↔wing transplant, thickness / camber / angle-of-attack, the Kutta condition, and the Kutta–Joukowski lift `L = −ρUΓ`. | `=` closed form |
-| `gallery.html` | Flow past a closed-form body `ψ: 𝔻* → ext(B)` — vertical slit / flat plate, ellipse, deltoid, astroid, 5-cusp star — with a circulation slider (and the Kutta toggle where `B` has a sharp edge). | `=` closed form |
+| `index.html` | Flow past a body `ψ: 𝔻* → ext(B)`, one page, one two-pane disk↔body view. **Airfoil** (Joukowski / Kármán–Trefftz): thickness / camber / trailing-edge angle, the Kutta condition, and the Kutta–Joukowski lift `L = −ρUΓ`. **Closed-form gallery** (flat plate, ellipse, deltoid, astroid, 5-cusp star): a free-circulation slider. Shared angle-of-attack, permalink, and PNG export. | `=` closed form |
 
 ## The reuse foundation (north star: zero new packages)
 

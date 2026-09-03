@@ -1,9 +1,8 @@
-/* 2D Hydrodynamics — the shared two-pane transplant stylesheet (airfoil.html + gallery.html). Ported
-   with the airfoil out of 2d-electrostatics (ADR-0037, HD-1): the rules the transplant pages use (base
-   shell + toolbar/brand/pal-btn + the two-pane foil stage + sliders + the lift readout + the body picker
-   + the fatal banner), lifted from that app's shared main.css so the pages look identical. The hub page
-   keeps its own main.css; this sheet is loaded by the two disk↔body pages. `--cas-nav-h` comes from
-   @cas/ui/nav.css (the nav header height). */
+/* 2D Hydrodynamics — the one-page two-pane transplant stylesheet (ADR-0038). Originally ported with the
+   airfoil out of 2d-electrostatics (ADR-0037, HD-1); since HD-6 it is the app's single stylesheet: the
+   base shell + toolbar/brand/pal-btn + the two-pane foil stage + sliders + the per-body control groups +
+   the readout + the body picker + the fatal banner. `--cas-nav-h` comes from @cas/ui/nav.css (the nav
+   header height). */
 
 :root {
   --bg: #0f1115;
@@ -92,6 +91,18 @@ a.pal-btn {
 .foil-controls .row {
   width: 160px;
   margin: 0;
+}
+
+/* Per-body control groups (ADR-0038): the airfoil reveals thickness/camber/TE/Kutta, a closed-form body
+   reveals the circulation slider. Each group is an inline flex sub-cluster; `hidden` collapses it. */
+.ctl-group {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ctl-group[hidden] {
+  display: none;
 }
 .row {
   display: block;
