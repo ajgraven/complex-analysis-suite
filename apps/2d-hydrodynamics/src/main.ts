@@ -1,45 +1,34 @@
-// apps/2d-hydrodynamics — the one page (HD-6.2, ADR-0038). Ideal (inviscid, irrotational) flow past a
-// body B, shown as two linked panes: the disk plane (left) and the body plane (right). EVERY body — the
-// closed-form gallery AND the Joukowski / Kármán–Trefftz airfoil — is one forward conformal map
-// ψ: 𝔻* → ext(B) driven by the SAME reference flow past the unit disk; a Body selector switches between
-// them. The reference flow net (uniform + circulation) is built in the disk plane by @cas/flow's
-// `flowNet`, and `pushforward` carries every streamline / equipotential FORWARD through ψ onto the body —
-// the same map that shapes the body carries the flow, so a streamline reads the same colour in both
-// panes. The airfoil folds into this framework as ψ(w) = J(ζ₀ + R·w) (bodyModel.ts, pinned by a golden),
-// so its rear stagnation lands on the trailing edge — the Kutta condition made visible.
+// apps/2d-hydrodynamics — the one page (ADR-0038). Ideal (inviscid, irrotational) flow past a body B,
+// shown as two linked, domain-coloured panes: the disk plane (left) and the body plane (right). EVERY
+// body — the closed-form gallery AND the Joukowski / Kármán–Trefftz airfoil — is one forward conformal
+// map ψ: 𝔻* → ext(B) driven by the SAME reference flow past the unit disk; a Body selector switches
+// between them.
 //
-// HD-6.2 renders on @cas/flow's line-art (Net2D) as a working placeholder; HD-6.3 replaces it with the
-// domain-coloured render (a per-pixel disk shader + a forward-mapped colour mesh for the body). The
-// structure — one page, one control model, one unified `#vs=` — is the unification the user asked for.
+// The render is one idiom (HD-6.3): the LEFT pane is a per-pixel fragment shader over the closed-form
+// reference flow W_ref past the unit disk (diskView.ts); the RIGHT pane is a forward-mapped coloured mesh
+// — the CPU warps a tessellation of the disk exterior through ψ (bodyMesh.ts) and the GPU colours it by
+// the exact physical velocity dW/dz = W_ref'/ψ' (bodyMeshView.ts), through the SAME colormap, so a
+// velocity reads the same colour and the streamlines match across the two planes. No per-pixel inverse
+// ψ⁻¹ is needed (the cusped bodies have none). A thin 2D overlay (overlay2d.ts) draws the obstacle
+// outline + the stagnation markers on each pane; the airfoil folds in as ψ(w) = J(ζ₀ + R·w), so its rear
+// stagnation lands on the trailing edge — the Kutta condition made visible.
 import "./styles/panes.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
-import {
-  flowNet,
-  unitCircle,
-  pushforward,
-  Net2D,
-  boundsOf,
-  EXTERIOR_MAP_PRESETS,
-  type RefFlow,
-  type Pt,
-} from "@cas/flow";
+import { unitCircle, boundsOf, EXTERIOR_MAP_PRESETS, type RefFlow, type Pt } from "@cas/flow";
 import { BODIES, type BodyEntry } from "./bodies.js";
-import {
-  airfoilBody,
-  galleryBody,
-  type ResolvedBody,
-} from "./bodyModel.js";
-import {
-  kuttaCirculation,
-  cylinderRadius,
-  nFromTrailingEdgeAngle,
-  type AirfoilParams,
-} from "./airfoil.js";
+import { airfoilBody, galleryBody, physicalVelocity, type ResolvedBody } from "./bodyModel.js";
+import { kuttaCirculation, cylinderRadius, nFromTrailingEdgeAngle, type AirfoilParams } from "./airfoil.js";
+import { createDiskRenderer, type FieldView } from "./render/diskView.js";
+import { createBodyMeshRenderer } from "./render/bodyMeshView.js";
+import { buildBodyMesh } from "./render/bodyMesh.js";
+import { Overlay2D } from "./render/overlay2d.js";
 import { encodeHydro, decodeHydro, AIRFOIL_ID, type HydroVS } from "./viewState.js";
 import { saveCompositePng } from "./pngExport.js";
 
 const STAGNATION_COLOR = "#ffd24a";
+const DISK_HALFSPAN = 3.6;
+const DISK_VIEW: FieldView = { center: [0, 0], halfSpan: DISK_HALFSPAN };
 
 interface HydroState {
   bodyId: string;
@@ -148,6 +137,21 @@ function stagnationDiskPoints(flow: RefFlow): Pt[] {
   return roots.filter((z) => Number.isFinite(z[0]) && Number.isFinite(z[1]) && Math.hypot(z[0], z[1]) >= 1 - 1e-6);
 }
 
+/** Match a GL canvas' drawing buffer to its CSS box × DPR and set the viewport. */
+function sizeGl(canvas: HTMLCanvasElement, gl: WebGL2RenderingContext): void {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const r = canvas.getBoundingClientRect();
+  const w = Math.max(1, Math.floor(r.width * dpr));
+  const h = Math.max(1, Math.floor(r.height * dpr));
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w;
+    canvas.height = h;
+  }
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0.043, 0.059, 0.102, 1); // #0b0f1a — the body interior shows through where unmeshed
+  gl.clear(gl.COLOR_BUFFER_BIT);
+}
+
 function main(): void {
   const app = document.getElementById("app");
   if (!app) return;
@@ -167,7 +171,6 @@ function main(): void {
 
   const controls = el("div", "foil-controls");
 
-  // Body selector (airfoil + the closed-form gallery).
   const bodyRow = el("label", "row");
   const bodyHead = el("span", "row-h");
   bodyHead.append(el("span", "row-l", "Body"));
@@ -222,22 +225,33 @@ function main(): void {
   const readout = el("div", "readout tp-readout");
   bar.append(brand, controls, readout);
 
-  // ---- two-pane stage -------------------------------------------------------
+  // ---- two-pane stage: each pane = a WebGL field canvas + a 2D overlay canvas -----------------------
   const stage = el("main", "foil-stage");
-  const makePane = (label: string): { net: Net2D; canvas: HTMLCanvasElement; caption: HTMLElement } => {
+  const makePane = (label: string): { gl: HTMLCanvasElement; overlay: HTMLCanvasElement; caption: HTMLElement } => {
     const pane = el("figure", "foil-pane");
-    const canvas = el("canvas", "foil-canvas");
-    attachCanvasA11y(canvas, { role: "img", label });
+    const gl = el("canvas", "foil-gl");
+    attachCanvasA11y(gl, { role: "img", label });
+    const overlay = el("canvas", "foil-overlay");
+    overlay.setAttribute("aria-hidden", "true");
     const caption = el("figcaption");
-    pane.append(canvas, caption);
+    pane.append(gl, overlay, caption);
     stage.append(pane);
-    return { net: new Net2D(canvas), canvas, caption };
+    return { gl, overlay, caption };
   };
   const disk = makePane("The disk plane: the reference flow that is carried onto the body");
   const body = makePane("The body plane: the same flow carried through the conformal map onto the body");
 
   mountNavHeader(app, { current: "2d-hydrodynamics" });
   app.append(bar, stage);
+
+  // preserveDrawingBuffer so "Save PNG" can read the rendered pixels back.
+  const diskGl = disk.gl.getContext("webgl2", { preserveDrawingBuffer: true });
+  const bodyGl = body.gl.getContext("webgl2", { preserveDrawingBuffer: true });
+  if (!diskGl || !bodyGl) throw new Error("WebGL2 is required for the 2D Hydrodynamics field view.");
+  const diskRenderer = createDiskRenderer(diskGl);
+  const bodyRenderer = createBodyMeshRenderer(bodyGl);
+  const diskOverlay = new Overlay2D(disk.overlay);
+  const bodyOverlay = new Overlay2D(body.overlay);
 
   /** Show only the controls that apply to the selected body. */
   const syncControlsVisibility = (): void => {
@@ -253,33 +267,44 @@ function main(): void {
     const isAirfoil = state.bodyId === AIRFOIL_ID;
     const resolved = resolveBody(state);
     const flow = resolved.flow;
-    const net = flowNet(flow, { streamlines: 9, equipotentials: 9, span: 6, samples: 220 });
     const stag = stagnationDiskPoints(flow);
-    const psi = resolved.psi;
+    // Colour value gauge = far-field speed (so the far field sits mid-brightness, the speed-up reads
+    // brighter). Streamline spacing scales with U so both panes show the same ψ-levels (matched lines).
+    const diskModScale = Math.max(0.25, flow.U);
+    const farBody = physicalVelocity(resolved, [50, 0]);
+    const bodyModScale = Math.max(0.25, Math.hypot(farBody[0], farBody[1]));
+    const streamSpacing = 0.55 * Math.max(0.3, flow.U);
 
-    if (disk.net.resize()) {
-      disk.net.fitBounds({ minx: -3.6, maxx: 3.6, miny: -3.6, maxy: 3.6 });
-      disk.net.clear();
-      disk.net.drawLines(net.equipotentials, 0.9);
-      disk.net.drawLines(net.streamlines, 1.3);
-      disk.net.fillBody(unitCircle(180));
-      for (const z of stag) disk.net.drawDot(z, STAGNATION_COLOR, 4.5);
+    // Disk pane — per-pixel reference flow past |w| = 1.
+    sizeGl(disk.gl, diskGl);
+    diskRenderer.render(flow, DISK_VIEW, diskModScale, streamSpacing);
+    if (diskOverlay.resize()) {
+      diskOverlay.setView(0, 0, DISK_HALFSPAN);
+      diskOverlay.clear();
+      diskOverlay.fillBody(unitCircle(200));
+      for (const z of stag) diskOverlay.drawDot(z, STAGNATION_COLOR, 5);
     }
 
-    if (body.net.resize()) {
-      body.net.clear();
-      const streams = pushforward(net.streamlines, psi);
-      const equis = pushforward(net.equipotentials, psi);
-      const bdry = unitCircle(400).map(psi);
-      const bb = boundsOf([{ color: "", pts: bdry }]);
-      if (bb) {
-        const pad = 0.5 * Math.max(bb.maxx - bb.minx, bb.maxy - bb.miny, 0.5);
-        body.net.fitBounds({ minx: bb.minx - pad, maxx: bb.maxx + pad, miny: bb.miny - pad, maxy: bb.maxy + pad }, 1.05);
-      }
-      body.net.drawLines(equis, 0.9);
-      body.net.drawLines(streams, 1.3);
-      body.net.fillBody(bdry);
-      for (const z of stag) body.net.drawDot(psi(z), STAGNATION_COLOR, 4.5);
+    // Body pane — forward-mapped coloured mesh, fit to ψ(∂𝔻).
+    const mesh = buildBodyMesh(resolved);
+    sizeGl(body.gl, bodyGl);
+    let bodyView: FieldView = DISK_VIEW;
+    const bb = boundsOf([{ color: "", pts: mesh.outline }]);
+    if (bb) {
+      const cx = (bb.minx + bb.maxx) / 2;
+      const cy = (bb.miny + bb.maxy) / 2;
+      const aspect = body.gl.height > 0 ? body.gl.width / body.gl.height : 1;
+      const needY = (bb.maxy - bb.miny) / 2;
+      const needX = (bb.maxx - bb.minx) / (2 * Math.max(aspect, 1e-6));
+      const halfSpan = Math.max(needY, needX, 0.5) * 1.3;
+      bodyView = { center: [cx, cy], halfSpan };
+    }
+    bodyRenderer.render(mesh, bodyView, bodyModScale, streamSpacing);
+    if (bodyOverlay.resize()) {
+      bodyOverlay.setView(bodyView.center[0], bodyView.center[1], bodyView.halfSpan);
+      bodyOverlay.clear();
+      bodyOverlay.fillBody(mesh.outline);
+      for (const z of stag) bodyOverlay.drawDot(resolved.psi(z), STAGNATION_COLOR, 5);
     }
 
     const entry = bodyEntry(state.bodyId);
@@ -370,7 +395,7 @@ function main(): void {
   });
   pngBtn.addEventListener("click", () => {
     paint(); // render the current view synchronously, then read the panes back
-    saveCompositePng([disk.canvas, body.canvas], "2d-hydrodynamics.png", permalink());
+    saveCompositePng([[disk.gl, disk.overlay], [body.gl, body.overlay]], "2d-hydrodynamics.png", permalink());
   });
   window.addEventListener("resize", requestPaint);
   requestPaint();

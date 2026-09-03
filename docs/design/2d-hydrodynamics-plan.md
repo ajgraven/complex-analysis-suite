@@ -110,19 +110,25 @@ green before and after (guardrail: working software at every step).
   GPU: a per-pixel shader for the disk (left) and a **forward-mapped colored mesh** for the body (right) — CPU
   warps the disk-exterior tessellation through `ψ` and colors it by the exact velocity `W_ref'/ψ'`, the GPU
   interpolating; no per-pixel inverse (the cusped bodies have no closed-form `ψ⁻¹`). Staged, each a green gate:
-  - **HD-6.0 — ADR-0038 + this plan.**
-  - **HD-6.1 — the unified body model + the airfoil-equivalence golden.** `bodyModel.ts` maps the app state to
-    `{ ψ, ψ', reference flow }` for every body; `@cas/flow`'s `ExteriorMapPreset` gains `psiPrime`. The golden
-    pins that the airfoil-via-`ψ` physical velocity equals the existing `airfoil.ts` field — the linchpin that
-    the unification changes no physics. Pure, no UI.
-  - **HD-6.2 — the single-page shell.** One `index.html` + the Body selector + per-body controls + the unified
-    `#vs=` (back-compat for old airfoil / gallery / `#<id>` links); delete the two pages + hub; rewire
-    `vite.config` + the a11y roster. Rendered on the existing line-art as a working placeholder (the structural
-    unification).
-  - **HD-6.3 — the domain-color render.** The left per-pixel shader + the right forward-mapped colored mesh +
-    the shared colormap, replacing the placeholder (the visual unification — the payload of #2).
-  - **HD-6.4 — polish.** Stagnation markers for all bodies (incl. the airfoil Kutta trailing-edge point) + the
-    lift readout, PNG over the GPU+overlay, the a11y baseline for the single page, and a browser-verified sweep.
+  - **HD-6.0 — ADR-0038 + this plan (done).**
+  - **HD-6.1 — the unified body model + the airfoil-equivalence golden (done).** `bodyModel.ts` maps the app
+    state to `{ ψ, ψ', reference flow }` for every body; `@cas/flow`'s `ExteriorMapPreset` gains `psiPrime`. The
+    golden pins that the airfoil-via-`ψ` physical velocity equals the existing `airfoil.ts` field — the linchpin
+    that the unification changes no physics. Pure, no UI.
+  - **HD-6.2 — the single-page shell (done).** One `index.html` + the Body selector + per-body controls + the
+    unified `#vs=` (back-compat for old airfoil / gallery / `#<id>` links); deleted the two pages + hub; rewired
+    `vite.config` + the a11y roster. Rendered on the line-art as a working placeholder (the structural
+    unification). The unified page is a11y-clean (the stage is a `<main>` landmark).
+  - **HD-6.3 — the domain-color render (done).** The left per-pixel disk shader (`diskView`/`diskShader`) + the
+    right forward-mapped colored mesh (`bodyMesh` → `bodyMeshView`/`bodyMeshShader`) + the shared colormap
+    (`fieldColor.glsl`) + a thin 2D overlay (`overlay2d`) for the obstacle outline + stagnation markers,
+    replacing the placeholder (the visual unification — the payload of #2). The airfoil's old per-pixel `ktInverse`
+    shader is gone; every body now renders through the same forward mesh. Colour value gauges the far-field speed
+    and streamline spacing scales with `U`, so both panes read in the same colours and matched ψ-levels; the mesh
+    geometry is node-tested, the GL shading browser-verified across all six bodies.
+  - **HD-6.4 — polish.** Any remaining refinement: doc/README sweep, and a final browser-verified sweep incl. PNG
+    export over the GPU+overlay. (All-body stagnation markers + the airfoil Kutta trailing-edge point + the lift
+    readout already landed in HD-6.2/6.3 — they fall out of the unified `ψ`-framework for free.)
 
 ## Non-goals
 
