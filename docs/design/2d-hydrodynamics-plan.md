@@ -102,7 +102,7 @@ green before and after (guardrail: working software at every step).
 - **HD-5 — the `flow` interchange kind (deferred; consume, don't define).** 2D Electrostatics' ES-2 defines the
   deferred `flow` envelope; this app becomes its **second consumer** (import a field/flow app-state and show
   the flow past a transplant body), which retro-justifies the kind under ADR-0007.
-- **HD-6 — one page, domain-colored everywhere (in progress; [ADR-0038](../DECISIONS.md)).** Collapse the hub +
+- **HD-6 — one page, domain-colored everywhere (done; [ADR-0038](../DECISIONS.md)).** Collapse the hub +
   `airfoil.html` + `gallery.html` into a **single page** with a Body selector, and render **every** body with
   the same domain-colored two-pane look. Rests on the identity that every body — the airfoil included — is a
   forward map `ψ: 𝔻* → ext(B)` driven by flow past the unit disk (the airfoil is `ψ(w) = J(ζ₀ + R·w)`,
@@ -126,9 +126,11 @@ green before and after (guardrail: working software at every step).
     shader is gone; every body now renders through the same forward mesh. Colour value gauges the far-field speed
     and streamline spacing scales with `U`, so both panes read in the same colours and matched ψ-levels; the mesh
     geometry is node-tested, the GL shading browser-verified across all six bodies.
-  - **HD-6.4 — polish.** Any remaining refinement: doc/README sweep, and a final browser-verified sweep incl. PNG
-    export over the GPU+overlay. (All-body stagnation markers + the airfoil Kutta trailing-edge point + the lift
-    readout already landed in HD-6.2/6.3 — they fall out of the unified `ψ`-framework for free.)
+  - **HD-6.4 — polish (done).** The doc sweep (this plan + the `CLAUDE.md` status + ADR-0038) and the final
+    browser-verified sweep — all six bodies render, controls switch, the legacy / bare permalinks resolve, and
+    PNG export produces a valid two-pane file with the embedded `2dh:url` permalink. (All-body stagnation markers
+    + the airfoil Kutta trailing-edge point + the lift readout already landed in HD-6.2/6.3 — they fall out of
+    the unified `ψ`-framework for free.)
 
 ## Non-goals
 
