@@ -53,7 +53,7 @@ const BASELINE_PATH = join(HERE, "a11y-baseline.json");
 // a subpath), PLUS correspondences (built but not yet published) and its mating explorer, both of
 // which carry @cas/ui accessibility and so are worth guarding. `mount` is the URL segment the page's
 // dist is served under; a multi-page app lists one entry per page, all sharing the app's one dist
-// (2d-electrostatics index/airfoil/polygon; hele-shaw-flow index/twist/droplet; correspondences
+// (2d-electrostatics index/polygon; hele-shaw-flow index/twist/droplet; correspondences
 // index/mating). The three ADR-0036 apps carry the shared nav header (mountNavHeader) + the @cas/ui
 // canvas/boundary a11y, so all their pages are audited here.
 const PAGES = [

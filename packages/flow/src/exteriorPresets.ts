@@ -5,8 +5,8 @@
 //
 // Extracted from the Riemann-Map studio's `EXTERIOR_MAP_PRESETS` on the second-consumer rule
 // (ADR-0007 / ADR-0037): Riemann-Map is consumer 1 (it draws the image ψ(𝔻*) — it reads `id`/`name`/
-// `expr`), and 2D Hydrodynamics is consumer 2 (it transplants a reference flow past 𝔻* onto K — it
-// evaluates the `psi` closure through `pushforward`). The `expr` string is the single source of truth
+// `expr`), and 2D Hydrodynamics is consumer 2 (it renders the flow past K — it evaluates the `psi` /
+// `psiPrime` closures for its forward-mapped-mesh velocity field `W_ref'/ψ'`). The `expr` string is the single source of truth
 // for the display / @cas/expr form; the `psi` closure is the executable map. exteriorPresets.test.ts
 // pins ψ's values (the shared golden), and the Riemann-Map presets test cross-checks `expr` against
 // `psi` — so the two representations can never drift. Convention-neutral (ADR-0006).
@@ -19,7 +19,7 @@ export interface ExteriorMapPreset {
   readonly name: string;
   /** `@cas/expr` source for ψ(z) — the display / authoring form (consumed by the Riemann-Map studio). */
   readonly expr: string;
-  /** ψ: 𝔻* → ext(K), evaluated as a plain closure (consumed by the transplant `pushforward`). */
+  /** ψ: 𝔻* → ext(K), evaluated as a plain closure — the map image (Riemann-Map) and the forward-mesh warp (2D Hydrodynamics). */
   psi(z: Pt): Pt;
   /** ψ'(z) — the map derivative, for the physical velocity dW/dz = W_ref'(z)/ψ'(z) (2D Hydrodynamics). */
   psiPrime(z: Pt): Pt;

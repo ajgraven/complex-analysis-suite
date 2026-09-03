@@ -53,7 +53,7 @@ beneath the launcher).
   interactive pan/drag/zoom **image pane**. These presets now live in `@cas/flow`
   (`EXTERIOR_MAP_PRESETS`), shared with the 2D Hydrodynamics app on the second-consumer rule (ADR-0037):
   this studio reads their `id`/`name`/`expr` to draw ψ(𝔻*), while 2D Hydrodynamics evaluates the same
-  presets' `psi` closures to transplant a flow past `K`.
+  presets' `psi`/`psiPrime` closures for its forward-mapped-mesh flow render (ADR-0038).
 - **Imported disk-image map** — a Böttcher `LaurentMap` exported from Complex Dynamics via `@cas/interchange`
   (the CD→RM "Riemann Map ↗" deep link), consumed as a disk-image source; pinned by the cross-app golden
   `CD_TO_RM_BOTTCHER_LINK`.

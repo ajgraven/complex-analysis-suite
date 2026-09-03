@@ -188,7 +188,7 @@ input[type="range"] {
   color: #c4ccda;
 }
 
-/* --- gallery body picker + readout (gallery.html) ------------------------------------------ */
+/* --- body picker + readout (the Body selector, index.html) --------------------------------- */
 .tp-select {
   font: 12px/1 system-ui, sans-serif;
   color: #e7eaf2;

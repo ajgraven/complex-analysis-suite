@@ -26,7 +26,10 @@ import {
 } from "./airfoil.js";
 
 const cdiv = (a: Pt, b: Pt): Pt => {
-  const d = b[0] * b[0] + b[1] * b[1];
+  // Floor |b|² (mirrors @cas/gpu's GLSL cdiv) so a cusp vertex — where ψ' = 0 exactly, e.g. the deltoid /
+  // astroid / 5-cusp star at θ = 0 — yields a huge FINITE physical velocity rather than NaN. The velocity
+  // genuinely diverges at a cusp, so a bright spot there is correct; a NaN would blacken the mesh triangle.
+  const d = Math.max(b[0] * b[0] + b[1] * b[1], 1e-30);
   return [(a[0] * b[0] + a[1] * b[1]) / d, (a[1] * b[0] - a[0] * b[1]) / d];
 };
 

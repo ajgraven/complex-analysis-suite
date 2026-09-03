@@ -198,8 +198,9 @@ Consumers today: the **Riemann-map studio** — the lightning builder for smooth
 engine for polygon (`corners`) domains; the **Faber Transform app** — the exterior SC engine for polygonal
 `K`; and **`@cas/flow`** — the conformal-transplant kernel (ADR-0036) that carries **both** SC engines
 (interior for flow inside a polygon, exterior for flow past one and for the conductor view) to the three split
-apps (2D Electrostatics, Hele-Shaw Flow, Potential Theory), and whose closed-form exterior-map gallery +
-`flowNet`/`pushforward` also feed **2D Hydrodynamics** (ADR-0037). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
+apps (2D Electrostatics, Hele-Shaw Flow, Potential Theory), and whose closed-form exterior-map gallery (with
+`psiPrime`) also feeds **2D Hydrodynamics** (ADR-0037 / ADR-0038 — which renders it as a forward-mapped
+domain-colored mesh, no longer via `flowNet`/`pushforward`). The near-twin least-squares solver in Quadrature Domains is the *anticipated* second consumer
 of `@cas/core`'s `lstsqHouseholder`, but its adoption is deferred (the two diverged on rank-deficiency policy —
 see ADR-0018).
 

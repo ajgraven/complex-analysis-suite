@@ -314,10 +314,13 @@ function main(): void {
     const stagNote = stag.length === 2 ? " · 2 surface stagnation points" : stag.length === 1 ? " · 1 detached stagnation point" : "";
     if (isAirfoil) {
       const params = airfoilParamsOf(state);
+      const n = params.n ?? 2;
       const R = cylinderRadius(params);
       const L = resolved.lift; // ρ = 1; Kutta–Joukowski L = −ρUΓ
+      // n = 2 is the pure Joukowski map ζ + b²/ζ; n < 2 (a non-zero trailing-edge angle) is Kármán–Trefftz.
+      const mapLabel = n >= 1.999 ? `${entry.psi} (Joukowski)` : `Kármán–Trefftz map (n = ${n.toFixed(2)})`;
       readout.innerHTML =
-        `ψ = <b>${entry.psi}</b> · Γ = ${params.circulation.toFixed(3)} · R = ${R.toFixed(3)}<br>` +
+        `ψ = <b>${mapLabel}</b> · Γ = ${params.circulation.toFixed(3)} · R = ${R.toFixed(3)}<br>` +
         `lift L = −ρUΓ = <b>${L.toFixed(3)}</b> ${state.kutta ? "(Kutta)" : "(Γ = 0)"}${stagNote}`;
     } else {
       readout.innerHTML =

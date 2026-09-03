@@ -273,7 +273,7 @@ gallery stagnation-point markers) are done**; the polygon transplant stays in 2D
 this app.
 Plan: [`docs/design/2d-hydrodynamics-plan.md`](docs/design/2d-hydrodynamics-plan.md).
 
-**In progress — ADR-0038 (2D Hydrodynamics → one page, domain-colored everywhere).** A follow-on that
+**Done — ADR-0038 (2D Hydrodynamics → one page, domain-colored everywhere).** A follow-on that
 collapses ADR-0037's *incidental* three-page shape (hub + `airfoil.html` + `gallery.html`) into a **single
 page** with a **Body** selector, rendering **every** body — the airfoil and the closed-form gallery — with the
 same domain-colored two-pane look. It rests on the identity that every body is a forward map ψ: 𝔻* → ext(B)
@@ -284,8 +284,8 @@ mesh** for the body (right — the CPU warps a disk-exterior tessellation throug
 velocity W_ref′/ψ′ through one shared colormap), so no per-pixel inverse ψ⁻¹ is ever needed (the cusped bodies
 have none). No new package (ADR-0007); `@cas/flow`'s `ExteriorMapPreset` gains a `psiPrime` closure (Riemann-Map,
 the other consumer, is unaffected). A unified `#vs=` decoder still reads every ADR-0037 airfoil / gallery /
-bare-`#id` permalink. **HD-6.0–6.3 done** (ADR + plan; the unified body model + airfoil-equivalence golden;
-the single-page shell; the domain-color render); **HD-6.4** (a final doc/PNG-export sweep) remains.
+bare-`#id` permalink. **HD-6.0–6.4 done** (ADR + plan; the unified body model + airfoil-equivalence golden;
+the single-page shell; the domain-color render; the doc + PNG-export-verification sweep).
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

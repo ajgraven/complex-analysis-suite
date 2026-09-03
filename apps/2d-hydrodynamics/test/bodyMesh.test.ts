@@ -60,6 +60,20 @@ describe("body mesh geometry", () => {
     expect(mesh.vertices[base + 4]).toBeCloseTo(stream, 5);
   });
 
+  it("has no NaN/Inf velocity at cusp vertices where ψ' = 0 exactly (deltoid/astroid/star)", () => {
+    // Regression guard: the deltoid/astroid/5-cusp-star have ψ'(w) = 0 exactly at cusp preimages that land
+    // on grid columns (nTheta divisible by the cusp count), e.g. w = [1,0] at θ = 0. Without a floored
+    // denominator in the physical-velocity divide, those vertices would be NaN and blacken a mesh triangle.
+    for (const id of ["deltoid-ext", "astroid-ext", "star5-ext"]) {
+      const preset = EXTERIOR_MAP_PRESETS.find((e) => e.id === id);
+      if (!preset) throw new Error(`missing ${id}`);
+      const mesh = buildBodyMesh(galleryBody(preset, 0.15, 0.5), { nR: 12, nTheta: 360 });
+      for (let i = 0; i < mesh.vertices.length; i++) {
+        expect(Number.isFinite(mesh.vertices[i]), `${id} vertex float #${i} is finite`).toBe(true);
+      }
+    }
+  });
+
   it("builds for the airfoil body too (ψ = J(ζ₀ + R·w))", () => {
     const air = airfoilBody({ U: 1, alpha: 0.1, b: 1, center: [-0.12, 0.06], circulation: 0.5, n: 2 });
     const mesh = buildBodyMesh(air, { nR: 10, nTheta: 20 });

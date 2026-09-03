@@ -31,11 +31,14 @@ are read by the unified decoder.)
 ## The reuse foundation (north star: zero new packages)
 
 - **The airfoil engine moves intact** — `airfoil.ts` (the closed-form Joukowski / Kármán–Trefftz maps, the
-  cylinder-plane potential, the Kutta circulation, and the Kutta–Joukowski lift) and its GPU render
-  (`render/airfoilView.ts` + `render/airfoilShader.ts`, on `@cas/gpu`).
-- **`@cas/flow` is already the transplant substrate** — `flowNet(refFlow)` builds the streamline /
-  equipotential net past `𝔻*`; `pushforward(curves, ψ)` carries it onto the body. The polygon page's exact
-  mechanism, but with a *closed-form* `ψ` in place of an SC-fitted one, so no least-squares solve is needed.
+  cylinder-plane potential, the Kutta circulation, and the Kutta–Joukowski lift). Since HD-6 (ADR-0038) it
+  renders through the unified forward idiom — the per-pixel `ktInverse` shader is retired; `bodyModel.ts`
+  folds the airfoil into `ψ(w) = J(ζ₀ + R·w)` and the body pane is the forward-mapped mesh (below).
+- **`@cas/flow` supplies the maps and the reference-flow kernel** — `refPotential`/`refVelocity` (flow past
+  `𝔻*`) and `EXTERIOR_MAP_PRESETS` (`ψ`, `ψ'`). Since HD-6 (ADR-0038) the body pane is a forward-mapped
+  **domain-colored mesh**: evaluate `ψ`, `ψ'` forward per vertex and colour by the exact velocity `W_ref'/ψ'`
+  (no per-pixel inverse — the cusped bodies have none). `flowNet`/`pushforward` remain `@cas/flow`'s line-art
+  substrate for the *other* flow apps, but this app no longer uses them.
 - **The gallery's closed-form maps already exist** — Riemann-Map's `EXTERIOR_MAP_PRESETS`
   (`apps/riemann-map/src/presets.ts`): univalent `ψ(z) = z + Σ bₖ/zᵏ` for Joukowski `½(z+1/z)`, vertical slit
   `½(z−1/z)`, ellipse `z+1/(2z)`, deltoid `z+1/(2z²)`, astroid `z+1/(3z³)`, 5-cusp star `z+1/(4z⁴)`. Riemann-Map
@@ -46,10 +49,10 @@ are read by the unified decoder.)
 
 ## The design spine
 
-**One construction, made visible: `flow past 𝔻* ── ψ ──▶ flow past B`.** Every page is a two-pane
+**One construction, made visible: `flow past 𝔻* ── ψ ──▶ flow past B`.** The page is a two-pane
 disk↔body view whose left pane shows the elementary reference flow (uniform + circulation, and — for a
-sharp-edged body — the vortex the Kutta condition fixes) and whose right pane shows the *same* streamlines
-carried onto the body by `ψ`. The airfoil is where this pays off physically: the map that carries the flow
+sharp-edged body — the vortex the Kutta condition fixes) and whose right pane shows the *same* flow
+domain-coloured and carried onto the body by `ψ` (streamlines matched across the two panes). The airfoil is where this pays off physically: the map that carries the flow
 also produces the lift, and the app shows both halves at once. Honest labelling throughout — `=` for the
 closed-form airfoil and gallery; a body with no closed-form map (the polygon, if HD-4 brings it) keeps its
 `≈` / `degraded` SC-fit tier.
