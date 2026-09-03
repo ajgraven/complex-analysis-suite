@@ -21,6 +21,8 @@ export interface ExteriorMapPreset {
   readonly expr: string;
   /** ψ: 𝔻* → ext(K), evaluated as a plain closure (consumed by the transplant `pushforward`). */
   psi(z: Pt): Pt;
+  /** ψ'(z) — the map derivative, for the physical velocity dW/dz = W_ref'(z)/ψ'(z) (2D Hydrodynamics). */
+  psiPrime(z: Pt): Pt;
 }
 
 // --- minimal complex arithmetic (Pt = [re, im]) -------------------------------------------------------
@@ -35,11 +37,18 @@ const cpowInt = (z: Pt, k: number): Pt => {
   return r;
 };
 
-/** The Laurent map ψ(z) = a·z + b·z⁻ᵏ as a closure. Every gallery member is one of these. */
-function laurent(a: number, b: number, k: number): (z: Pt) => Pt {
-  return (z: Pt): Pt => {
-    const inv = cpowInt(cinv(z), k); // z⁻ᵏ = (1/z)ᵏ
-    return [a * z[0] + b * inv[0], a * z[1] + b * inv[1]];
+/** The Laurent map ψ(z) = a·z + b·z⁻ᵏ and its derivative ψ'(z) = a − k·b·z⁻⁽ᵏ⁺¹⁾, from one (a, b, k) so
+ *  the two can never drift. Every gallery member is one of these. */
+function laurentMap(a: number, b: number, k: number): { psi(z: Pt): Pt; psiPrime(z: Pt): Pt } {
+  return {
+    psi: (z: Pt): Pt => {
+      const inv = cpowInt(cinv(z), k); // z⁻ᵏ = (1/z)ᵏ
+      return [a * z[0] + b * inv[0], a * z[1] + b * inv[1]];
+    },
+    psiPrime: (z: Pt): Pt => {
+      const inv = cpowInt(cinv(z), k + 1); // z⁻⁽ᵏ⁺¹⁾
+      return [a - k * b * inv[0], -k * b * inv[1]];
+    },
   };
 }
 
@@ -54,10 +63,10 @@ function laurent(a: number, b: number, k: number): (z: Pt) => Pt {
  * The `expr` strings match Riemann-Map's gallery verbatim (so that consumer stays byte-identical).
  */
 export const EXTERIOR_MAP_PRESETS: readonly ExteriorMapPreset[] = [
-  { id: "joukowski-ext", name: "Joukowski  ½(z + 1/z)", expr: "(z + 1/z)/2", psi: laurent(0.5, 0.5, 1) },
-  { id: "vslit-ext", name: "Vertical slit  ½(z − 1/z)", expr: "(z - 1/z)/2", psi: laurent(0.5, -0.5, 1) },
-  { id: "ellipse-ext", name: "Ellipse  z + 1/(2z)", expr: "z + 1/(2*z)", psi: laurent(1, 0.5, 1) },
-  { id: "deltoid-ext", name: "Deltoid  z + 1/(2z²)", expr: "z + 1/(2*z^2)", psi: laurent(1, 0.5, 2) },
-  { id: "astroid-ext", name: "Astroid  z + 1/(3z³)", expr: "z + 1/(3*z^3)", psi: laurent(1, 1 / 3, 3) },
-  { id: "star5-ext", name: "5-cusp star  z + 1/(4z⁴)", expr: "z + 1/(4*z^4)", psi: laurent(1, 0.25, 4) },
+  { id: "joukowski-ext", name: "Joukowski  ½(z + 1/z)", expr: "(z + 1/z)/2", ...laurentMap(0.5, 0.5, 1) },
+  { id: "vslit-ext", name: "Vertical slit  ½(z − 1/z)", expr: "(z - 1/z)/2", ...laurentMap(0.5, -0.5, 1) },
+  { id: "ellipse-ext", name: "Ellipse  z + 1/(2z)", expr: "z + 1/(2*z)", ...laurentMap(1, 0.5, 1) },
+  { id: "deltoid-ext", name: "Deltoid  z + 1/(2z²)", expr: "z + 1/(2*z^2)", ...laurentMap(1, 0.5, 2) },
+  { id: "astroid-ext", name: "Astroid  z + 1/(3z³)", expr: "z + 1/(3*z^3)", ...laurentMap(1, 1 / 3, 3) },
+  { id: "star5-ext", name: "5-cusp star  z + 1/(4z⁴)", expr: "z + 1/(4*z^4)", ...laurentMap(1, 0.25, 4) },
 ] as const;

@@ -99,6 +99,27 @@ green before and after (guardrail: working software at every step).
 - **HD-5 — the `flow` interchange kind (deferred; consume, don't define).** 2D Electrostatics' ES-2 defines the
   deferred `flow` envelope; this app becomes its **second consumer** (import a field/flow app-state and show
   the flow past a transplant body), which retro-justifies the kind under ADR-0007.
+- **HD-6 — one page, domain-colored everywhere (in progress; [ADR-0038](../DECISIONS.md)).** Collapse the hub +
+  `airfoil.html` + `gallery.html` into a **single page** with a Body selector, and render **every** body with
+  the same domain-colored two-pane look. Rests on the identity that every body — the airfoil included — is a
+  forward map `ψ: 𝔻* → ext(B)` driven by flow past the unit disk (the airfoil is `ψ(w) = J(ζ₀ + R·w)`,
+  `U' = U·R`; the `R` cancels in `dW/dz = W_ref'(w)/ψ'(w)`). The render is the app's own forward idiom on the
+  GPU: a per-pixel shader for the disk (left) and a **forward-mapped colored mesh** for the body (right) — CPU
+  warps the disk-exterior tessellation through `ψ` and colors it by the exact velocity `W_ref'/ψ'`, the GPU
+  interpolating; no per-pixel inverse (the cusped bodies have no closed-form `ψ⁻¹`). Staged, each a green gate:
+  - **HD-6.0 — ADR-0038 + this plan.**
+  - **HD-6.1 — the unified body model + the airfoil-equivalence golden.** `bodyModel.ts` maps the app state to
+    `{ ψ, ψ', reference flow }` for every body; `@cas/flow`'s `ExteriorMapPreset` gains `psiPrime`. The golden
+    pins that the airfoil-via-`ψ` physical velocity equals the existing `airfoil.ts` field — the linchpin that
+    the unification changes no physics. Pure, no UI.
+  - **HD-6.2 — the single-page shell.** One `index.html` + the Body selector + per-body controls + the unified
+    `#vs=` (back-compat for old airfoil / gallery / `#<id>` links); delete the two pages + hub; rewire
+    `vite.config` + the a11y roster. Rendered on the existing line-art as a working placeholder (the structural
+    unification).
+  - **HD-6.3 — the domain-color render.** The left per-pixel shader + the right forward-mapped colored mesh +
+    the shared colormap, replacing the placeholder (the visual unification — the payload of #2).
+  - **HD-6.4 — polish.** Stagnation markers for all bodies (incl. the airfoil Kutta trailing-edge point) + the
+    lift readout, PNG over the GPU+overlay, the a11y baseline for the single page, and a browser-verified sweep.
 
 ## Non-goals
 
