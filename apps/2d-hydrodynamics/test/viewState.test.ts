@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { encodeViewState } from "@cas/interchange";
 import {
   encodeHydro,
   decodeHydro,
@@ -18,6 +19,11 @@ const SAMPLE: HydroVS = {
   teAngleDeg: 12,
   kutta: false,
   gamma: 1.5,
+  // non-default display values, to pin that the display controls persist through the round-trip
+  lineDensity: 1.8,
+  showStream: false,
+  showEqui: true,
+  showMarkers: false,
 };
 
 describe("unified hydro permalink (the one-page schema)", () => {
@@ -50,7 +56,33 @@ describe("hydro permalink back-compat (ADR-0038: old ADR-0037 links still resolv
       teAngleDeg: 8,
       kutta: true,
       gamma: 0,
+      lineDensity: 1,
+      showStream: true,
+      showEqui: false,
+      showMarkers: true,
     });
+  });
+
+  it("defaults the display controls for a unified link minted before they existed", () => {
+    // A pre-display-controls page:"body" payload: only the physics fields. The decoder must fill the
+    // display fields with defaults rather than reject the whole link.
+    const legacyBody = encodeViewState("2dh", {
+      page: "body",
+      bodyId: "ellipse-ext",
+      alphaDeg: 4,
+      thickness: 0.12,
+      camber: 0.06,
+      teAngleDeg: 10,
+      kutta: true,
+      gamma: 0.5,
+    });
+    const decoded = decodeHydro(legacyBody);
+    expect(decoded?.bodyId).toBe("ellipse-ext");
+    expect(decoded?.gamma).toBeCloseTo(0.5, 12);
+    expect(decoded?.lineDensity).toBe(1);
+    expect(decoded?.showStream).toBe(true);
+    expect(decoded?.showEqui).toBe(false);
+    expect(decoded?.showMarkers).toBe(true);
   });
 
   it("reads a legacy gallery link into the matching closed-form body", () => {

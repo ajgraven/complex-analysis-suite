@@ -18,7 +18,8 @@ const isStr = (x: unknown): x is string => typeof x === "string";
 
 // --- the unified, current schema ---------------------------------------------------------------------
 
-/** The full one-page state: which body, plus every control (unused fields carry harmless defaults). */
+/** The full one-page state: which body, its physics controls, and the display controls (flow-line
+ *  density + which layers of the flow net / markers are shown). */
 export interface HydroVS {
   bodyId: string;
   alphaDeg: number;
@@ -27,7 +28,16 @@ export interface HydroVS {
   teAngleDeg: number;
   kutta: boolean;
   gamma: number;
+  // Display controls (added after the initial ADR-0038 shell). They are OPTIONAL on decode — a permalink
+  // minted before they existed simply defaults them — so every earlier link still resolves.
+  lineDensity: number;
+  showStream: boolean;
+  showEqui: boolean;
+  showMarkers: boolean;
 }
+
+/** Defaults for the display controls, filled in when a link predates them (or is a legacy schema). */
+const DISPLAY_DEFAULTS = { lineDensity: 1, showStream: true, showEqui: false, showMarkers: true };
 
 /** Encode the whole page state as a `#vs=` fragment (the unified `page:"body"` schema). */
 export function encodeHydro(s: HydroVS): string {
@@ -62,6 +72,11 @@ export function decodeHydro(hashOrLink: string): HydroVS | null {
           teAngleDeg: s.teAngleDeg,
           kutta: s.kutta,
           gamma: s.gamma,
+          // Display controls are optional — a link minted before they existed defaults them.
+          lineDensity: isNum(s.lineDensity) ? s.lineDensity : DISPLAY_DEFAULTS.lineDensity,
+          showStream: isBool(s.showStream) ? s.showStream : DISPLAY_DEFAULTS.showStream,
+          showEqui: isBool(s.showEqui) ? s.showEqui : DISPLAY_DEFAULTS.showEqui,
+          showMarkers: isBool(s.showMarkers) ? s.showMarkers : DISPLAY_DEFAULTS.showMarkers,
         };
       }
       return null;
@@ -78,17 +93,18 @@ export function decodeHydro(hashOrLink: string): HydroVS | null {
       teAngleDeg: a.teAngleDeg,
       kutta: a.kutta,
       gamma: 0,
+      ...DISPLAY_DEFAULTS,
     };
   }
   // Legacy gallery link → a closed-form body, carrying angle + circulation (airfoil fields default).
   const g = decodeGallery(hashOrLink);
   if (g) {
-    return { bodyId: g.id, alphaDeg: g.alphaDeg, thickness: 0.12, camber: 0.06, teAngleDeg: 10, kutta: true, gamma: g.gamma };
+    return { bodyId: g.id, alphaDeg: g.alphaDeg, thickness: 0.12, camber: 0.06, teAngleDeg: 10, kutta: true, gamma: g.gamma, ...DISPLAY_DEFAULTS };
   }
   // Bare `#<id>` (the old hub deep-linked closed-form bodies this way). Reject `#vs=…` (the `=` fails).
   const bare = hashOrLink.replace(/^#/, "");
   if (bare && /^[a-z0-9-]+$/i.test(bare)) {
-    return { bodyId: bare, alphaDeg: 0, thickness: 0.12, camber: 0.06, teAngleDeg: 10, kutta: true, gamma: 0 };
+    return { bodyId: bare, alphaDeg: 0, thickness: 0.12, camber: 0.06, teAngleDeg: 10, kutta: true, gamma: 0, ...DISPLAY_DEFAULTS };
   }
   return null;
 }

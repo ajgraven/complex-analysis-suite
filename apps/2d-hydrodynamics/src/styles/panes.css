@@ -56,8 +56,12 @@ body {
   flex-direction: column;
   line-height: 1.15;
 }
-.brand strong {
+.brand h1 {
+  margin: 0;
   font-size: 15px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: var(--text);
 }
 .brand span {
   font-size: 11px;
@@ -92,9 +96,15 @@ a.pal-btn {
   width: 160px;
   margin: 0;
 }
+/* The Body row sizes to its select so a long option label can't overflow and overlap the next control. */
+.foil-controls .body-row {
+  width: auto;
+}
 
-/* Per-body control groups (ADR-0038): the airfoil reveals thickness/camber/TE/Kutta, a closed-form body
-   reveals the circulation slider. Each group is an inline flex sub-cluster; `hidden` collapses it. */
+/* Control groups (ADR-0038 + the display controls): the flow/shape group (airfoil reveals
+   thickness/camber/TE/Kutta, a closed-form body reveals the circulation slider), the display group
+   (flow-line density + which flow-net layers show), and the actions group. Each is an inline flex
+   sub-cluster; `hidden` collapses it. */
 .ctl-group {
   display: flex;
   gap: 16px;
@@ -103,6 +113,13 @@ a.pal-btn {
 }
 .ctl-group[hidden] {
   display: none;
+}
+/* A thin vertical rule between groups (subtle; harmless if it lands at a wrap point). */
+.ctl-sep {
+  align-self: stretch;
+  width: 1px;
+  min-height: 32px;
+  background: rgba(231, 234, 242, 0.14);
 }
 .row {
   display: block;
@@ -146,7 +163,12 @@ input[type="range"] {
 /* --- the two-pane cylinder ↔ wing stage ---------------------------------------------------- */
 .foil-stage {
   position: fixed;
-  inset: calc(var(--cas-nav-h, 0px) + 58px) 0 0 0;
+  /* `top` is set precisely from the toolbar's measured height in main.ts (the toolbar wraps to a variable
+     number of rows); this is only the pre-JS fallback. */
+  top: calc(var(--cas-nav-h, 0px) + 96px);
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 2px;
@@ -197,10 +219,13 @@ input[type="range"] {
   border-radius: 7px;
   padding: 6px 9px;
   margin-top: 4px;
+  max-width: 320px;
   cursor: pointer;
 }
+/* The readout takes its own full-width line below the controls (flex child of the toolbar). */
 .tp-readout {
   min-width: 240px;
+  flex-basis: 100%;
 }
 .tp-exact {
   color: #8fd0b0;

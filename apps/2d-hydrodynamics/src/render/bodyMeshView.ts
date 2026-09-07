@@ -5,10 +5,10 @@
 import { createProgram } from "@cas/gpu/shader";
 import { BODY_MESH_VERTEX_SHADER, BODY_MESH_FRAGMENT_SHADER } from "./bodyMeshShader.js";
 import { type BodyMesh } from "./bodyMesh.js";
-import { type FieldView } from "./diskView.js";
+import { type FieldView, type FieldStyle } from "./diskView.js";
 
 export interface BodyMeshRenderer {
-  render(mesh: BodyMesh, view: FieldView, modScale: number, streamSpacing: number): void;
+  render(mesh: BodyMesh, view: FieldView, style: FieldStyle): void;
   destroy(): void;
 }
 
@@ -20,7 +20,7 @@ export function createBodyMeshRenderer(gl: WebGL2RenderingContext): BodyMeshRend
   if (!vao || !vbo || !ibo) throw new Error("2D Hydrodynamics body pane: failed to allocate GL buffers.");
 
   const BYTES = Float32Array.BYTES_PER_ELEMENT; // 4
-  const strideBytes = 5 * BYTES;
+  const strideBytes = 6 * BYTES;
   gl.bindVertexArray(vao);
   gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
   gl.enableVertexAttribArray(0); // aPos
@@ -29,6 +29,8 @@ export function createBodyMeshRenderer(gl: WebGL2RenderingContext): BodyMeshRend
   gl.vertexAttribPointer(1, 2, gl.FLOAT, false, strideBytes, 2 * BYTES);
   gl.enableVertexAttribArray(2); // aStream
   gl.vertexAttribPointer(2, 1, gl.FLOAT, false, strideBytes, 4 * BYTES);
+  gl.enableVertexAttribArray(3); // aPhi
+  gl.vertexAttribPointer(3, 1, gl.FLOAT, false, strideBytes, 5 * BYTES);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
   gl.bindVertexArray(null);
 
@@ -38,12 +40,15 @@ export function createBodyMeshRenderer(gl: WebGL2RenderingContext): BodyMeshRend
     resolution: gl.getUniformLocation(program, "uResolution"),
     modScale: gl.getUniformLocation(program, "uModScale"),
     stream: gl.getUniformLocation(program, "uStreamSpacing"),
+    equi: gl.getUniformLocation(program, "uEquiSpacing"),
+    showStream: gl.getUniformLocation(program, "uShowStream"),
+    showEqui: gl.getUniformLocation(program, "uShowEqui"),
   };
 
   let uploadedIndexCount = -1;
 
   return {
-    render(mesh: BodyMesh, view: FieldView, modScale: number, streamSpacing: number): void {
+    render(mesh: BodyMesh, view: FieldView, style: FieldStyle): void {
       gl.bindVertexArray(vao);
       gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
       gl.bufferData(gl.ARRAY_BUFFER, mesh.vertices, gl.DYNAMIC_DRAW);
@@ -56,8 +61,11 @@ export function createBodyMeshRenderer(gl: WebGL2RenderingContext): BodyMeshRend
       gl.uniform2f(u.center, view.center[0], view.center[1]);
       gl.uniform1f(u.halfSpan, view.halfSpan);
       gl.uniform2f(u.resolution, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      gl.uniform1f(u.modScale, modScale);
-      gl.uniform1f(u.stream, streamSpacing);
+      gl.uniform1f(u.modScale, style.modScale);
+      gl.uniform1f(u.stream, style.streamSpacing);
+      gl.uniform1f(u.equi, style.equiSpacing);
+      gl.uniform1f(u.showStream, style.showStream ? 1 : 0);
+      gl.uniform1f(u.showEqui, style.showEqui ? 1 : 0);
       gl.drawElements(gl.TRIANGLES, mesh.indices.length, gl.UNSIGNED_INT, 0);
       gl.bindVertexArray(null);
     },

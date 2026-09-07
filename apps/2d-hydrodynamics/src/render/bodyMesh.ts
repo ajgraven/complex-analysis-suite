@@ -8,12 +8,12 @@ import { type Pt } from "@cas/flow";
 import { physicalVelocity, potential, type ResolvedBody } from "../bodyModel.js";
 
 export interface BodyMesh {
-  /** Interleaved vertices: [posX, posY, velX, velY, stream] × vertexCount. */
+  /** Interleaved vertices: [posX, posY, velX, velY, stream, phi] × vertexCount. */
   readonly vertices: Float32Array;
   /** Triangle indices into the vertex array (two triangles per polar cell). */
   readonly indices: Uint32Array;
   readonly vertexCount: number;
-  /** Floats per vertex (5). */
+  /** Floats per vertex (6). */
   readonly stride: number;
   /** ψ(∂𝔻) — the r = 1 ring, the body outline (nTheta + 1 points, seam duplicated). */
   readonly outline: Pt[];
@@ -28,7 +28,7 @@ export interface BodyMeshOptions {
   readonly nTheta?: number;
 }
 
-const STRIDE = 5;
+const STRIDE = 6;
 
 /** Build the coloured body mesh for a resolved body (airfoil or gallery). */
 export function buildBodyMesh(body: ResolvedBody, opts: BodyMeshOptions = {}): BodyMesh {
@@ -51,12 +51,18 @@ export function buildBodyMesh(body: ResolvedBody, opts: BodyMeshOptions = {}): B
       const w: Pt = [r * Math.cos(t), r * Math.sin(t)];
       const z = body.psi(w);
       const vel = physicalVelocity(body, w);
-      const stream = potential(body, w)[1]; // Im W_ref = the stream function ψ
+      const pot = potential(body, w); // W_ref: Re = φ (equipotentials), Im = ψ (streamlines)
+      // φ = Re W_ref carries the vortex term (Γ/2π)·arg(w), which jumps by Γ across arg's −x branch cut.
+      // The mesh knows the continuous angle t ∈ [0, 2π], so shift the lower half (t > π, where atan2 wrapped
+      // to negative) by +Γ to unwrap the cut onto the +x seam (t = 0 ≡ 2π), which has NO bridging triangle —
+      // so no equipotential runs across a discontinuity and no dense seam-band appears (Γ = 0 is seamless).
+      const phi = pot[0] + (t > Math.PI ? body.flow.gamma : 0);
       vertices[v] = z[0];
       vertices[v + 1] = z[1];
       vertices[v + 2] = vel[0];
       vertices[v + 3] = vel[1];
-      vertices[v + 4] = stream;
+      vertices[v + 4] = pot[1]; // Im W_ref = the stream function ψ
+      vertices[v + 5] = phi; // Re W_ref = the velocity potential φ (branch-unwrapped along t)
       v += STRIDE;
       if (j === 0) outline.push(z); // the r = 1 ring is ψ(∂𝔻)
     }

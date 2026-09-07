@@ -134,6 +134,17 @@ green before and after (guardrail: working software at every step).
     PNG export produces a valid two-pane file with the embedded `2dh:url` permalink. (All-body stagnation markers
     + the airfoil Kutta trailing-edge point + the lift readout already landed in HD-6.2/6.3 — they fall out of
     the unified `ψ`-framework for free.)
+- **HD-7 — display controls + a robust toolbar (done).** The single-page toolbar was overcrowded (a long Body
+  `<select>` overflowed its fixed-width row and overlapped the next control; the stage top was a hardcoded
+  toolbar height, so a wrapped toolbar overlapped the panes). Fixed by sizing the Body row to its select,
+  grouping the controls (flow/shape · display · actions) with separators, forcing the readout onto its own line,
+  and setting the stage top from the toolbar's **measured** height (a `ResizeObserver`), so any number of wrapped
+  control rows never overlaps the panes. Added a **Display** group: **Flow lines** (a streamline-density slider —
+  smaller `streamSpacing` → more lines), **Equipotentials** (the conjugate contour family φ = Re W_ref, the flow
+  net — the disk shader contours it per-pixel; the body mesh carries a φ vertex attribute branch-unwrapped along
+  the polar angle so the vortex cut lands on the +x seam, which has no bridging triangle, keeping it artifact-free
+  even under circulation), **Streamlines** and **Markers** toggles. All four persist in `#vs=` as **optional**
+  fields, so every earlier permalink still decodes (defaults filled). App-local; no new package or ADR.
 
 ## Non-goals
 

@@ -32,6 +32,9 @@ uniform float uAlpha;  // angle of attack α (radians)
 uniform float uGamma;  // circulation Γ
 uniform float uModScale;
 uniform float uStreamSpacing;
+uniform float uEquiSpacing;
+uniform float uShowStream; // 1 = draw streamlines ψ = Im W_ref, 0 = hide
+uniform float uShowEqui;   // 1 = draw equipotentials φ = Re W_ref, 0 = hide
 
 // W_ref'(w) — the reference complex velocity past the unit disk.
 cvec refVel(cvec w) {
@@ -42,13 +45,13 @@ cvec refVel(cvec w) {
   return cadd(uni, vor);
 }
 
-// Im W_ref(w) — the stream function ψ; its level lines are the streamlines.
-float refStream(cvec w) {
+// W_ref(w) — the reference complex potential; Re = φ (equipotentials), Im = ψ (streamlines).
+cvec refPot(cvec w) {
   cvec ea = vec2(cos(uAlpha), -sin(uAlpha));
   cvec eb = vec2(cos(uAlpha), sin(uAlpha));
   cvec uni = cmul(vec2(uU, 0.0), cadd(cmul(ea, w), cdiv(eb, w)));
   cvec vor = cmul(vec2(0.0, -uGamma / (2.0 * C_PI)), clog(w));
-  return cadd(uni, vor).y;
+  return cadd(uni, vor);
 }
 
 void main() {
@@ -56,7 +59,10 @@ void main() {
   cvec vel = refVel(w);
   vec3 col = fieldColor(vel, uModScale);
 
-  float stream = contourf(refStream(w) / uStreamSpacing); // streamlines ψ = Im W_ref
+  cvec pot = refPot(w);
+  float equi = uShowEqui * contourf(pot.x / uEquiSpacing); // equipotentials φ = Re W_ref (darken)
+  col = mix(col, col * 0.5, 0.6 * equi);
+  float stream = uShowStream * contourf(pot.y / uStreamSpacing); // streamlines ψ = Im W_ref (whiten)
   col = mix(col, vec3(0.97), 0.85 * stream);
 
   // The obstacle: darken the disk interior |w| < 1 (the overlay draws the |w| = 1 outline).

@@ -11,8 +11,22 @@ export interface FieldView {
   readonly halfSpan: number;
 }
 
+/** Display style shared by both panes so a velocity and the flow net read identically across them. */
+export interface FieldStyle {
+  /** Colour value gauge (far-field speed): far field sits mid-brightness, the speed-up reads brighter. */
+  readonly modScale: number;
+  /** Streamline contour spacing (smaller = more flow lines). */
+  readonly streamSpacing: number;
+  /** Equipotential contour spacing (kept equal to `streamSpacing` for a proportioned flow net). */
+  readonly equiSpacing: number;
+  /** Draw the streamlines ψ = Im W_ref. */
+  readonly showStream: boolean;
+  /** Draw the equipotentials φ = Re W_ref (the conjugate family — the flow net). */
+  readonly showEqui: boolean;
+}
+
 export interface DiskRenderer {
-  render(flow: RefFlow, view: FieldView, modScale: number, streamSpacing: number): void;
+  render(flow: RefFlow, view: FieldView, style: FieldStyle): void;
   destroy(): void;
 }
 
@@ -37,10 +51,13 @@ export function createDiskRenderer(gl: WebGL2RenderingContext): DiskRenderer {
     gamma: gl.getUniformLocation(program, "uGamma"),
     modScale: gl.getUniformLocation(program, "uModScale"),
     stream: gl.getUniformLocation(program, "uStreamSpacing"),
+    equi: gl.getUniformLocation(program, "uEquiSpacing"),
+    showStream: gl.getUniformLocation(program, "uShowStream"),
+    showEqui: gl.getUniformLocation(program, "uShowEqui"),
   };
 
   return {
-    render(flow: RefFlow, view: FieldView, modScale: number, streamSpacing: number): void {
+    render(flow: RefFlow, view: FieldView, style: FieldStyle): void {
       gl.useProgram(program);
       gl.bindVertexArray(vao);
       gl.uniform2f(u.center, view.center[0], view.center[1]);
@@ -49,8 +66,11 @@ export function createDiskRenderer(gl: WebGL2RenderingContext): DiskRenderer {
       gl.uniform1f(u.U, flow.U);
       gl.uniform1f(u.alpha, flow.alpha);
       gl.uniform1f(u.gamma, flow.gamma);
-      gl.uniform1f(u.modScale, modScale);
-      gl.uniform1f(u.stream, streamSpacing);
+      gl.uniform1f(u.modScale, style.modScale);
+      gl.uniform1f(u.stream, style.streamSpacing);
+      gl.uniform1f(u.equi, style.equiSpacing);
+      gl.uniform1f(u.showStream, style.showStream ? 1 : 0);
+      gl.uniform1f(u.showEqui, style.showEqui ? 1 : 0);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindVertexArray(null);
     },
