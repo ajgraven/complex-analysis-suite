@@ -10,6 +10,7 @@ import { runWithFatalBoundary, mountCanvas, mountNavHeader } from "@cas/ui";
 import { injectPngText } from "@cas/export";
 import { fieldOf, initialState } from "./state.js";
 import { createFieldRenderer } from "./render/glView.js";
+import { MAX_SINGULARITIES } from "./render/fieldShader.js";
 import { drawOverlay } from "./render/overlay.js";
 import { attachInteraction } from "./interaction.js";
 import { createControls } from "./ui/controls.js";
@@ -56,6 +57,18 @@ function main(): void {
   canvas.root.insertBefore(particleCanvas, canvas.overlay);
   const particles = createParticleLayer(particleCanvas, state);
 
+  // Honest-labelling: the GPU field holds at most MAX_SINGULARITIES of each kind, but the probe, sensor,
+  // and tracers count all of them — so if the field overflows the shader arrays, say so rather than
+  // silently dropping the extras from the picture.
+  const overflowWarn = document.createElement("div");
+  overflowWarn.className = "overflow-warn";
+  overflowWarn.setAttribute("role", "status");
+  overflowWarn.hidden = true;
+  overflowWarn.textContent =
+    `⚠ More than ${MAX_SINGULARITIES} of a kind — the field image shows the first ${MAX_SINGULARITIES}; ` +
+    `the probe and sensor still count all.`;
+  app.append(overflowWarn);
+
   let frame = 0;
   const paint = (): void => {
     frame = 0;
@@ -66,7 +79,8 @@ function main(): void {
 
     sizeCanvas(canvas.render, cssW, cssH, dpr);
     gl.viewport(0, 0, canvas.render.width, canvas.render.height);
-    renderer.render(fieldOf(state), state.view);
+    const stats = renderer.render(fieldOf(state), state.view);
+    overflowWarn.hidden = !stats.overflow;
 
     sizeCanvas(canvas.overlay, cssW, cssH, dpr);
     octx.setTransform(dpr, 0, 0, dpr, 0, 0);

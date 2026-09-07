@@ -2,7 +2,7 @@
 // selection / drag / edit), the view, and the current selection. A render-input `Field` (../field.ts)
 // is derived from it on demand — the model stays a pure snapshot, the app owns identity and interaction.
 import type { Complex, Field, Singularity } from "./field.js";
-import { uniformFromSpeedAngle } from "./field.js";
+import { DEMO_FIELD } from "./field.js";
 import type { View } from "./view.js";
 import type { Rect } from "./probe.js";
 
@@ -46,16 +46,12 @@ export function findSingularity(state: AppState, id: Id | null): Placed | undefi
   return id === null ? undefined : state.singularities.find((s) => s.id === id);
 }
 
-/** The opening state: a uniform stream with a source, a vortex, and a doublet — the demo that shows
- *  radial, circular, and spiral structure at once (M0's DEMO_FIELD, now identified + interactive). */
+/** The opening state: the canonical `DEMO_FIELD` (a uniform stream with a source, a vortex, and a
+ *  doublet — radial, circular, and spiral structure at once), given interactive identities. */
 export function initialState(): AppState {
   return {
-    uniform: uniformFromSpeedAngle(0.6, 0),
-    singularities: [
-      { id: freshId(), kind: "monopole", at: [-1.2, 0], c: [1, 0] }, // a source (charge)
-      { id: freshId(), kind: "monopole", at: [1.2, 0], c: [0, 1] }, // a vortex (circulation)
-      { id: freshId(), kind: "doublet", at: [0, 1.1], mu: [0.4, 0] }, // a doublet
-    ],
+    uniform: [DEMO_FIELD.uniform[0], DEMO_FIELD.uniform[1]],
+    singularities: DEMO_FIELD.singularities.map((s) => ({ ...s, id: freshId() })),
     view: { center: [0, 0], halfSpan: 3 },
     selected: null,
     tool: "move",

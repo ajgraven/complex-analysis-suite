@@ -13,9 +13,15 @@ describe("field fragment shader assembly", () => {
   });
 
   it("pulls in the shared @cas/gpu GLSL stdlib by function name", () => {
-    for (const sym of ["cadd", "csub", "cmul", "cdiv", "cneg", "carg", "cabsf", "planeFromFrag", "hsv2rgb"]) {
+    for (const sym of ["cadd", "csub", "cmul", "cdiv", "cneg", "carg", "cconj", "cabsf", "planeFromFrag", "hsv2rgb"]) {
       expect(FIELD_FRAGMENT_SHADER).toContain(sym);
     }
+  });
+
+  it("colours by the physical field-vector direction arg(conj E) — matching the sensor + the legend", () => {
+    // Not arg(E) (which is the conjugate/mirror heading); the puck reports atan2(−Im E, Re E), so the
+    // hue must use conj(E) to agree with it and with the sibling 2D Hydrodynamics hue = arg(v).
+    expect(FIELD_FRAGMENT_SHADER).toContain("carg(cconj(e))");
   });
 
   it("mirrors the JS twin's terms: c/(z−a) monopoles and −μ/(z−a)² doublets", () => {

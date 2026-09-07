@@ -354,6 +354,25 @@ input[type="range"] {
   font-size: 0.75em;
 }
 
+/* overflow notice — shown when the field exceeds the shader's per-kind singularity capacity */
+.overflow-warn {
+  position: fixed;
+  top: calc(var(--cas-nav-h, 0px) + 58px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 6;
+  max-width: 640px;
+  padding: 8px 13px;
+  background: rgba(90, 26, 26, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 180, 180, 0.35);
+  border-radius: 9px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #ffe;
+  text-align: center;
+}
+
 /* Fatal-error banner created by @cas/ui's runWithFatalBoundary when init throws. */
 #app-error {
   position: fixed;

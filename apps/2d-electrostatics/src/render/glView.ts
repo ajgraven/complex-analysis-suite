@@ -7,9 +7,17 @@ import { FIELD_FRAGMENT_SHADER, MAX_SINGULARITIES } from "./fieldShader.js";
 import type { Field } from "../field.js";
 import type { View } from "../view.js";
 
+/** What a render pass reports back to the caller. */
+export interface RenderStats {
+  /** True when the field holds more monopoles OR more doublets than the shader's uniform arrays can
+   *  hold, so the GPU field is drawn from a TRUNCATED set. The JS twin (`fieldE`), the flux/circulation
+   *  probe, and the tracer layer still use every singularity, so the UI surfaces this to stay honest. */
+  readonly overflow: boolean;
+}
+
 export interface FieldRenderer {
   /** Render `field` under `view` into the bound framebuffer at the gl drawing-buffer size. */
-  render(field: Field, view: View): void;
+  render(field: Field, view: View): RenderStats;
   destroy(): void;
 }
 
@@ -33,8 +41,11 @@ interface Uniforms {
 // integer-ish strengths) an integer number of intervals, so no spurious contour crosses the cut.
 const CONTOUR_SPACING = (2 * Math.PI) / 16;
 
-/** A reference field magnitude for the |E|→lightness transfer, from the strongest coefficient so the
- *  portrait is well-exposed regardless of the chosen strengths (never zero → no divide-by-zero). */
+/** A reference field magnitude for the |E|→lightness transfer: the largest field magnitude any single
+ *  contribution produces AT UNIT DISTANCE — |uniform|, |c| (a monopole's |E| at r = 1), and |μ| (a
+ *  doublet's |E| at r = 1, since E = −μ/r²). Taking them at the same reference distance makes the
+ *  comparison dimensionally sound (all are field magnitudes), so the portrait is well-exposed
+ *  regardless of the chosen strengths (floored so it is never zero → no divide-by-zero). */
 function referenceScale(field: Field): number {
   let s = Math.hypot(field.uniform[0], field.uniform[1]);
   for (const sing of field.singularities) {
@@ -81,19 +92,26 @@ export function createFieldRenderer(gl: WebGL2RenderingContext): FieldRenderer {
   const doubletMu = new Float32Array(MAX_SINGULARITIES * 2);
 
   return {
-    render(field: Field, view: View): void {
+    render(field: Field, view: View): RenderStats {
       let nMono = 0;
       let nDoub = 0;
+      let overflow = false;
       for (const s of field.singularities) {
         if (s.kind === "monopole") {
-          if (nMono >= MAX_SINGULARITIES) continue;
+          if (nMono >= MAX_SINGULARITIES) {
+            overflow = true;
+            continue;
+          }
           monoPos[nMono * 2] = s.at[0];
           monoPos[nMono * 2 + 1] = s.at[1];
           monoCoef[nMono * 2] = s.c[0];
           monoCoef[nMono * 2 + 1] = s.c[1];
           nMono++;
         } else {
-          if (nDoub >= MAX_SINGULARITIES) continue;
+          if (nDoub >= MAX_SINGULARITIES) {
+            overflow = true;
+            continue;
+          }
           doubletPos[nDoub * 2] = s.at[0];
           doubletPos[nDoub * 2 + 1] = s.at[1];
           doubletMu[nDoub * 2] = s.mu[0];
@@ -119,6 +137,7 @@ export function createFieldRenderer(gl: WebGL2RenderingContext): FieldRenderer {
       gl.uniform1f(u.streamSpacing, CONTOUR_SPACING);
       gl.drawArrays(gl.TRIANGLES, 0, 3);
       gl.bindVertexArray(null);
+      return { overflow };
     },
     destroy(): void {
       gl.deleteBuffer(vbo);

@@ -285,7 +285,7 @@ export function createControls(
   const updateCaption = (): void => {
     caption.innerHTML =
       "<strong>Flux / circulation probe.</strong> Drag a loop Γ — the residue theorem gives " +
-      "∮<sub>Γ</sub> E dz = Σ residues = (enclosed charge) + i·(circulation): " +
+      "(1/2πi) ∮<sub>Γ</sub> E dz = Σ residues = (enclosed charge) + i·(circulation): " +
       "<b>Re = Gauss's law</b>, <b>Im = Kelvin circulation</b>. Exact (=) for this closed-form field.";
   };
 
