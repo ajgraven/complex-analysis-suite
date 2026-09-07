@@ -1,6 +1,6 @@
 // The fragment shader that renders the complex field E(z) = W'(z) directly on the GPU, by domain
-// coloring: hue = arg E (field / flow direction), lightness = a bounded transfer of |E| (field
-// strength). It is the exact GPU twin of `fieldE` in ../field.ts — same summation, same conventions
+// coloring: hue = arg(conj E), the heading of the physical field vector (field direction), lightness =
+// a bounded transfer of |E| (field strength). It is the exact GPU twin of `fieldE` in ../field.ts — same summation, same conventions
 // — assembled from the shared @cas/gpu GLSL stdlib so "which pixel is which complex number" and the
 // complex arithmetic match the rest of the suite. The JS twin and this shader are pinned against each
 // other by a later M0 browser parity test; here we only assemble the source.
@@ -13,8 +13,9 @@ import {
   HSV2RGB_GLSL,
 } from "@cas/gpu/glsl";
 
-/** Maximum simultaneous singularities the shader's uniform arrays hold. Ample for the sandbox; extra
- *  are clamped by the renderer (and flagged, per the honest-labelling guardrail, when that matters). */
+/** Maximum monopoles — and, separately, doublets — the shader's uniform arrays hold. Ample for the
+ *  sandbox; a field exceeding either cap is drawn from a truncated set, and the renderer reports the
+ *  overflow (RenderStats.overflow) so the UI can flag it, per the honest-labelling guardrail. */
 export const MAX_SINGULARITIES = 64;
 
 export const FIELD_FRAGMENT_SHADER = /* glsl */ `#version 300 es
@@ -88,13 +89,13 @@ void main() {
   cvec z = planeFromFrag(gl_FragCoord.xy, uCenter, uHalfSpan, uResolution);
   cvec e = fieldE(z);
   float m = cabsf(e);
-  // Hue = arg E, the phase of the complex field E = W', mapped to the unit hue wheel. (The physical
-  // field/flow VECTOR is conj(E), whose heading is −arg E — what the sensor puck reports; the hue wheel
-  // is therefore mirrored relative to that vector. An arg-E phase portrait is the standard choice here.)
-  // Lightness = a bounded rational
-  // transfer of |E| (|E|/(|E|+ref)), so the near-singularity blow-up saturates smoothly instead of
-  // clipping — the "encode strength by brightness, not arrow length" lesson, in shader form.
-  float hue = fract(cre1(carg(e)) * 0.15915494309189535 + 1.0); // arg/2π
+  // Hue = arg(conj E), the heading of the PHYSICAL field vector E = (Ex, Ey) = conj(W') mapped to the
+  // unit hue wheel. This is exactly what the sensor puck reports (atan2(−Im E, Re E)) and matches the
+  // sibling 2D Hydrodynamics app's hue = arg(v) convention, so the colour wheel and the sensor agree
+  // and the legend's "hue = field direction" is literally true. Lightness = a bounded rational transfer
+  // of |E| (|E|/(|E|+ref)), so the near-singularity blow-up saturates smoothly instead of clipping —
+  // the "encode strength by brightness, not arrow length" lesson, in shader form.
+  float hue = fract(cre1(carg(cconj(e))) * 0.15915494309189535 + 1.0); // arg(conj E) / 2π
   float val = m / (m + uModScale);
   vec3 col = hsv2rgb(vec3(hue, 0.82, val));
 

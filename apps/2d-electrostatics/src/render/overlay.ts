@@ -107,8 +107,7 @@ function drawProbe(ctx: CanvasRenderingContext2D, state: AppState, size: Size): 
 
   if (w > 12 || h > 12) {
     const enc = enclosedResidue(state.singularities, r);
-    const chargeWord = state.lens === "hydrodynamic" ? "source" : "charge";
-    const lines = [`(1/2πi) ∮ E dz = ${fmt(enc.charge)} + ${fmt(enc.circulation)} i`, `${chargeWord} Q = ${fmt(enc.charge)} · circulation = ${fmt(enc.circulation)}`];
+    const lines = [`(1/2πi) ∮ E dz = ${fmt(enc.charge)} + ${fmt(enc.circulation)} i`, `charge Q = ${fmt(enc.charge)} · circulation = ${fmt(enc.circulation)}`];
     ctx.font = "12px ui-monospace, Menlo, monospace";
     let boxW = 0;
     for (const l of lines) boxW = Math.max(boxW, ctx.measureText(l).width);
@@ -127,9 +126,9 @@ function drawProbe(ctx: CanvasRenderingContext2D, state: AppState, size: Size): 
 
 export const SENSOR_RADIUS = 9;
 
-// The draggable sensor puck: a crosshair reading the field where it sits — |E|/speed, direction, and
-// the potential φ = Re W and stream function ψ = Im W. The field vector is (Ex, Ey) = (Re E, −Im E),
-// so its heading is atan2(−Im E, Re E); |E| is the complex modulus. Relabelled by the active lens.
+// The draggable sensor puck: a crosshair reading the field where it sits — |E|, direction, and the
+// potential φ = Re W and stream function ψ = Im W. The field vector is (Ex, Ey) = (Re E, −Im E), so
+// its heading is atan2(−Im E, Re E); |E| is the complex modulus.
 function drawSensor(ctx: CanvasRenderingContext2D, state: AppState, size: Size): void {
   const s = state.sensor;
   if (!s) return;
@@ -153,9 +152,8 @@ function drawSensor(ctx: CanvasRenderingContext2D, state: AppState, size: Size):
   const w = potential(field, s);
   const mag = Math.hypot(e[0], e[1]);
   const deg = (Math.atan2(-e[1], e[0]) * 180) / Math.PI;
-  const fluid = state.lens === "hydrodynamic";
   const lines = [
-    `${fluid ? "speed" : "|E|"} = ${fmt(mag)}`,
+    `|E| = ${fmt(mag)}`,
     `∠ = ${deg.toFixed(0)}°`,
     `φ = ${fmt(w[0])}`,
     `ψ = ${fmt(w[1])}`,

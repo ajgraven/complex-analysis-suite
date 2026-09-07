@@ -7,7 +7,7 @@
 //     (W = U(z + a²/z)). Adding a vortex gives circulation, whose stagnation points coalesce at the
 //     top at Γ = 4πUa (the documented ground-truth check).
 import type { Complex, Singularity } from "./field.js";
-import { uniformFromSpeedAngle } from "./field.js";
+import { uniformFromSpeedAngle, DEMO_FIELD } from "./field.js";
 import type { View } from "./view.js";
 
 export interface Preset {
@@ -24,12 +24,8 @@ export const PRESETS: readonly Preset[] = [
   {
     id: "demo",
     name: "Demo — source · vortex · doublet",
-    uniform: uniformFromSpeedAngle(0.6, 0),
-    sings: [
-      { kind: "monopole", at: [-1.2, 0], c: [1, 0] },
-      { kind: "monopole", at: [1.2, 0], c: [0, 1] },
-      { kind: "doublet", at: [0, 1.1], mu: [0.4, 0] },
-    ],
+    uniform: DEMO_FIELD.uniform,
+    sings: DEMO_FIELD.singularities,
     view: V,
   },
   {

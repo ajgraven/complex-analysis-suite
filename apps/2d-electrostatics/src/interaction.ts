@@ -61,6 +61,21 @@ export function attachInteraction(
   const moveSingularity = (id: Id, at: [number, number]): void => {
     state.singularities = state.singularities.map((s) => (s.id === id ? { ...s, at } : s));
   };
+  /** Keyboard selection: step to the next/previous singularity (wrapping); from no selection, start at
+   *  the first (forward) or last (backward). */
+  const cycleSelection = (dir: 1 | -1): void => {
+    const n = state.singularities.length;
+    if (n === 0) return;
+    let idx = state.singularities.findIndex((x) => x.id === state.selected);
+    idx = idx === -1 ? (dir > 0 ? 0 : n - 1) : (idx + dir + n) % n;
+    select(state.singularities[idx].id);
+  };
+  const deleteSelected = (): boolean => {
+    if (state.selected === null) return false;
+    state.singularities = state.singularities.filter((s) => s.id !== state.selected);
+    select(null);
+    return true;
+  };
 
   const onPointerDown = (e: PointerEvent): void => {
     const sz = size();
@@ -138,6 +153,37 @@ export function attachInteraction(
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {
+    const isArrow =
+      e.key === "ArrowLeft" || e.key === "ArrowRight" || e.key === "ArrowUp" || e.key === "ArrowDown";
+
+    // Keyboard parity for the pointer tools: [ / ] cycle the selection, Delete/Backspace removes it,
+    // and Shift+arrows nudge the selected singularity (plain arrows still pan).
+    if (e.key === "[" || e.key === "]") {
+      cycleSelection(e.key === "]" ? 1 : -1);
+      e.preventDefault();
+      requestRender();
+      return;
+    }
+    if (e.key === "Delete" || e.key === "Backspace") {
+      if (deleteSelected()) {
+        e.preventDefault();
+        requestRender();
+      }
+      return;
+    }
+    if (e.shiftKey && isArrow && state.selected !== null) {
+      const cur = state.singularities.find((x) => x.id === state.selected);
+      if (cur) {
+        const step = state.view.halfSpan * 0.03;
+        const dx = e.key === "ArrowLeft" ? -step : e.key === "ArrowRight" ? step : 0;
+        const dy = e.key === "ArrowUp" ? step : e.key === "ArrowDown" ? -step : 0;
+        moveSingularity(cur.id, [cur.at[0] + dx, cur.at[1] + dy]);
+        e.preventDefault();
+        requestRender();
+      }
+      return;
+    }
+
     const sz = size();
     const panStep = sz.height * 0.08;
     const s = pxPerWorld(state.view, sz);

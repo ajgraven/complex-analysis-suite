@@ -2,14 +2,15 @@
 // field of charges, sources, sinks, vortices, and doublets (the author's "Complex Analysis as
 // Electrostatics and Hydrodynamics"). The field is drawn on the GPU (domain-colour of E + the φ/ψ
 // contour net) with a 2D overlay of grabbable handles + the flux/circulation probe; the view pans and
-// zooms while singularities drag with live recompute. Presets, an Electrostatic ↔ Fluid lens, a
-// `#vs=` permalink, and PNG export round out M1.
+// zooms while singularities drag with live recompute. Presets, a `#vs=` permalink, and PNG export
+// round out M1. (The hydrodynamic reading is the sibling 2D Hydrodynamics app's, ADR-0037.)
 import "./styles/main.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, mountCanvas, mountNavHeader } from "@cas/ui";
 import { injectPngText } from "@cas/export";
 import { fieldOf, initialState } from "./state.js";
 import { createFieldRenderer } from "./render/glView.js";
+import { MAX_SINGULARITIES } from "./render/fieldShader.js";
 import { drawOverlay } from "./render/overlay.js";
 import { attachInteraction } from "./interaction.js";
 import { createControls } from "./ui/controls.js";
@@ -33,8 +34,9 @@ function main(): void {
 
   const canvas = mountCanvas(app, {
     label:
-      "The complex potential as a 2D field: drag charges, sources, sinks, and vortices; the field " +
-      "lines, equipotentials, streamlines, and domain-colored field update live. Arrow keys pan, +/− zoom.",
+      "The complex potential as a 2D electrostatic field: drag charges, sources, sinks, and vortices; " +
+      "the field lines, equipotentials, and domain-colored field update live. Arrow keys pan, +/− zoom; " +
+      "[ and ] select a singularity, Shift+arrows move the selected one, Delete removes it.",
     className: "field-view",
   });
 
@@ -56,6 +58,18 @@ function main(): void {
   canvas.root.insertBefore(particleCanvas, canvas.overlay);
   const particles = createParticleLayer(particleCanvas, state);
 
+  // Honest-labelling: the GPU field holds at most MAX_SINGULARITIES of each kind, but the probe, sensor,
+  // and tracers count all of them — so if the field overflows the shader arrays, say so rather than
+  // silently dropping the extras from the picture.
+  const overflowWarn = document.createElement("div");
+  overflowWarn.className = "overflow-warn";
+  overflowWarn.setAttribute("role", "status");
+  overflowWarn.hidden = true;
+  overflowWarn.textContent =
+    `⚠ More than ${MAX_SINGULARITIES} of a kind — the field image shows the first ${MAX_SINGULARITIES}; ` +
+    `the probe and sensor still count all.`;
+  app.append(overflowWarn);
+
   let frame = 0;
   const paint = (): void => {
     frame = 0;
@@ -66,7 +80,8 @@ function main(): void {
 
     sizeCanvas(canvas.render, cssW, cssH, dpr);
     gl.viewport(0, 0, canvas.render.width, canvas.render.height);
-    renderer.render(fieldOf(state), state.view);
+    const stats = renderer.render(fieldOf(state), state.view);
+    overflowWarn.hidden = !stats.overflow;
 
     sizeCanvas(canvas.overlay, cssW, cssH, dpr);
     octx.setTransform(dpr, 0, 0, dpr, 0, 0);

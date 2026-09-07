@@ -59,11 +59,14 @@ export const uniformFromSpeedAngle = (U: number, alpha: number): Complex => [
 // renderer floors true singular pixels separately, and the JS twin skips the exact point.
 const EPS2 = 1e-24;
 
-/** The complex potential W(z) = φ + iψ. Multivalued through the log terms. */
+/** The complex potential W(z) = φ + iψ. Multivalued through the log terms. Evaluation exactly AT a
+ *  singularity floors the offset to √EPS2 so W stays huge-but-finite (log/pole → a large real, not
+ *  −∞/NaN) — the same guard `fieldE` applies, so a sensor puck dropped on a handle reads a number. */
 export function potential(field: Field, z: Complex): Complex {
   let w: Complex = mul(field.uniform, z); // uniform term W = (U e^{−iα}) z
   for (const s of field.singularities) {
-    const d: Complex = [z[0] - s.at[0], z[1] - s.at[1]];
+    let d: Complex = [z[0] - s.at[0], z[1] - s.at[1]];
+    if (d[0] * d[0] + d[1] * d[1] < EPS2) d = [Math.sqrt(EPS2), 0]; // at the singular point — floor
     w = s.kind === "monopole" ? add(w, mul(s.c, clog(d))) : add(w, div(s.mu, d));
   }
   return w;
@@ -88,8 +91,9 @@ export function fieldE(field: Field, z: Complex): Complex {
 /** The hydrodynamic velocity vector, as a complex number: v = conj(E) = u + iv. */
 export const velocity = (field: Field, z: Complex): Complex => conj(fieldE(field, z));
 
-/** A default demonstration field: a uniform stream with a source, a vortex, and a doublet — enough
- *  to show radial, circular, and spiral streamline structure at once (M0 render check). */
+/** The canonical opening field: a uniform stream with a source, a vortex, and a doublet — enough to
+ *  show radial, circular, and spiral streamline structure at once. The single source of truth for the
+ *  demo, consumed by both `initialState()` (../state.ts) and the "demo" preset (../presets.ts). */
 export const DEMO_FIELD: Field = {
   uniform: uniformFromSpeedAngle(0.6, 0),
   singularities: [

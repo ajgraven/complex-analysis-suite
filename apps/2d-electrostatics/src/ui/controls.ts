@@ -5,7 +5,10 @@
 // The uniform stream (speed U, angle α) rides the toolbar. Everything mutates the shared AppState and
 // asks for a repaint; `onSelectionChange` rebuilds the inspector, `refresh` keeps its live readouts in
 // step while a handle is dragged on the canvas.
-import type { AppState, Placed, Lens, Tool } from "../state.js";
+//
+// This app presents the ELECTROSTATIC reading of the complex potential only; the hydrodynamic reading
+// (and its lens toggle) moved to the sibling 2D Hydrodynamics app (ADR-0037).
+import type { AppState, Placed, Tool } from "../state.js";
 import { freshId, findSingularity } from "../state.js";
 import { uniformFromSpeedAngle } from "../field.js";
 import { PRESETS, presetById } from "../presets.js";
@@ -18,9 +21,9 @@ export interface ControlsOptions {
   readonly onToggleMotion: () => void;
 }
 
-// The two readings of the SAME complex potential — a relabel, not a recompute (the streamlines and
-// equipotentials are identical curves; only the vocabulary changes). One toggle swaps every label.
-interface Terms {
+// The vocabulary for the electrostatic reading of the complex potential W = φ + iψ. (The hydrodynamic
+// reading — streamlines / velocity potential / flow speed — is the sibling 2D Hydrodynamics app's, ADR-0037.)
+export interface Terms {
   chargeLabel: string;
   circLabel: string;
   residueNote: string;
@@ -29,27 +32,15 @@ interface Terms {
   direction: string;
   strength: string;
 }
-export function termsFor(l: Lens): Terms {
-  return l === "hydrodynamic"
-    ? {
-        chargeLabel: "Source m (flux)",
-        circLabel: "Circulation Γ",
-        residueNote: "source + i·circulation",
-        fieldLines: "Streamlines",
-        equipot: "Velocity potential",
-        direction: "flow direction",
-        strength: "flow speed",
-      }
-    : {
-        chargeLabel: "Charge q (flux)",
-        circLabel: "Circulation γ",
-        residueNote: "flux + i·circulation",
-        fieldLines: "Field lines",
-        equipot: "Equipotentials",
-        direction: "field direction",
-        strength: "field strength",
-      };
-}
+export const TERMS: Terms = {
+  chargeLabel: "Charge q (flux)",
+  circLabel: "Circulation γ",
+  residueNote: "flux + i·circulation",
+  fieldLines: "Field lines",
+  equipot: "Equipotentials",
+  direction: "field direction",
+  strength: "field strength",
+};
 
 export interface Controls {
   /** Rebuild the inspector for the current selection (call when the selection changes). */
@@ -198,7 +189,7 @@ export function createControls(
     inspector.append(title);
 
     if (sel.kind === "monopole") {
-      const t = termsFor(state.lens);
+      const t = TERMS;
       const q = slider(t.chargeLabel, -5, 5, 0.05, sel.c[0]);
       const g = slider(t.circLabel, -5, 5, 0.05, sel.c[1]);
       const residueRow = el("div", "readout");
@@ -276,11 +267,11 @@ export function createControls(
     if (residueEl && sel.kind === "monopole") residueEl.textContent = `residue c = ${complex(sel.c[0], sel.c[1])}`;
   };
 
-  // --- lens toggle (inserted into the toolbar) + persistent legend -----------
+  // --- persistent legend + probe theorem caption ----------------------------
   const legend = el("aside", "legend");
   legend.setAttribute("aria-label", "Legend");
   const updateLegend = (): void => {
-    const t = termsFor(state.lens);
+    const t = TERMS;
     legend.innerHTML =
       `<div class="lg-row"><span class="lg-sw hue"></span>hue = ${t.direction}</div>` +
       `<div class="lg-row"><span class="lg-sw bright"></span>brightness = ${t.strength}</div>` +
@@ -292,36 +283,12 @@ export function createControls(
   const caption = el("aside", "caption");
   caption.hidden = true;
   const updateCaption = (): void => {
-    const word = state.lens === "hydrodynamic" ? "source" : "charge";
     caption.innerHTML =
       "<strong>Flux / circulation probe.</strong> Drag a loop Γ — the residue theorem gives " +
-      `∮<sub>Γ</sub> E dz = Σ residues = (enclosed ${word}) + i·(circulation): ` +
+      "(1/2πi) ∮<sub>Γ</sub> E dz = Σ residues = (enclosed charge) + i·(circulation): " +
       "<b>Re = Gauss's law</b>, <b>Im = Kelvin circulation</b>. Exact (=) for this closed-form field.";
   };
 
-  const lensSeg = el("div", "modeseg");
-  lensSeg.setAttribute("role", "group");
-  lensSeg.setAttribute("aria-label", "Lens");
-  const lensBtns = new Map<Lens, HTMLButtonElement>();
-  const setLens = (l: Lens): void => {
-    state.lens = l;
-    for (const [id, b] of lensBtns) b.setAttribute("aria-pressed", String(id === l));
-    onSelectionChange(); // relabel the inspector
-    updateLegend();
-    if (!caption.hidden) updateCaption();
-    requestRender();
-  };
-  for (const [id, label] of [
-    ["electrostatic", "Electrostatic"],
-    ["hydrodynamic", "Fluid"],
-  ] as [Lens, string][]) {
-    const b = el("button", "seg-btn", label);
-    b.type = "button";
-    b.setAttribute("aria-pressed", String(id === state.lens));
-    b.addEventListener("click", () => setLens(id));
-    lensBtns.set(id, b);
-    lensSeg.append(b);
-  }
   // Tool toggle: Move (drag singularities) | Probe (draw a flux/circulation loop).
   const toolSeg = el("div", "modeseg");
   toolSeg.setAttribute("role", "group");
@@ -346,7 +313,6 @@ export function createControls(
     toolSeg.append(b);
   }
 
-  bar.insertBefore(lensSeg, palette);
   bar.insertBefore(toolSeg, palette);
   updateLegend();
 
@@ -427,9 +393,14 @@ export function createControls(
       .catch(() => undefined);
   });
 
-  // The airfoil transplant moved to the sibling 2D Hydrodynamics app (ADR-0037); reach it via the nav
-  // header, not an in-toolbar deep link.
-  actions.append(presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
+  // Link to this app's second page (the Schwarz–Christoffel polygon transplant); the polygon page has
+  // the reverse "← Field sandbox" link. (The airfoil transplant moved to the sibling 2D Hydrodynamics
+  // app, ADR-0037 — reach it via the nav header, not an in-toolbar deep link.)
+  const polyLink = el("a", "pal-btn", "Polygon ↗");
+  (polyLink as HTMLAnchorElement).href = "./polygon.html";
+  polyLink.title = "Flow past or inside a polygon (Schwarz–Christoffel transplant)";
+
+  actions.append(presetWrap, polyLink, flowBtn, sensorBtn, pngBtn, linkBtn);
   bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);

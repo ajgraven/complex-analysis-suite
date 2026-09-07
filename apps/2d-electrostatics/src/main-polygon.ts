@@ -14,6 +14,7 @@
 import "./styles/main.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, attachCanvasA11y, mountNavHeader } from "@cas/ui";
+import { injectPngText } from "@cas/export";
 import {
   flowNet,
   unitCircle,
@@ -105,7 +106,7 @@ function main(): void {
 
   const controls = el("div", "foil-controls");
 
-  // Interior/exterior mode toggle (a segmented control, like the sandbox's lens toggle).
+  // Interior/exterior mode toggle (a segmented control, like the sandbox's Move/Probe tool toggle).
   const modeSeg = el("div", "modeseg");
   const btnExt = el("button", "seg-btn", "Flow past K");
   const btnInt = el("button", "seg-btn", "Flow inside K");
@@ -133,21 +134,23 @@ function main(): void {
   const sAoA = slider("Angle of attack", -30, 30, 1, state.alphaDeg, "°");
   const sGamma = slider("Circulation Γ", -4, 4, 0.1, state.gamma);
   const copyBtn = el("button", "pal-btn", "Copy link ⧉");
-  controls.append(modeSeg, presetRow, sAoA.row, sGamma.row, copyBtn);
+  const pngBtn = el("button", "pal-btn", "Save PNG");
+  pngBtn.type = "button";
+  controls.append(modeSeg, presetRow, sAoA.row, sGamma.row, copyBtn, pngBtn);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, back, controls, readout);
 
   // ---- two-pane stage -------------------------------------------------------
   const stage = el("div", "foil-stage");
-  const makePane = (label: string): { net: Net2D; caption: HTMLElement } => {
+  const makePane = (label: string): { net: Net2D; caption: HTMLElement; canvas: HTMLCanvasElement } => {
     const pane = el("figure", "foil-pane");
     const canvas = el("canvas", "foil-canvas");
     attachCanvasA11y(canvas, { role: "img", label });
     const caption = el("figcaption");
     pane.append(canvas, caption);
     stage.append(pane);
-    return { net: new Net2D(canvas), caption };
+    return { net: new Net2D(canvas), caption, canvas };
   };
   const disk = makePane("The disk plane: the reference flow that is carried onto the polygon");
   const poly = makePane("The polygon plane: the same flow carried through the Schwarz–Christoffel map onto the polygon");
@@ -317,6 +320,47 @@ function main(): void {
     if (!frame) frame = requestAnimationFrame(paint);
   };
 
+  // Composite the two panes (disk | polygon) into a single PNG whose tEXt carries the conformal `#s=`
+  // permalink — the polygon-page twin of the sandbox's figure-with-its-own-recipe export.
+  const savePng = (): void => {
+    paint(); // draw the current frame into both pane canvases
+    const c1 = disk.canvas;
+    const c2 = poly.canvas;
+    const w = c1.width + c2.width;
+    const h = Math.max(c1.height, c2.height);
+    if (w < 4 || h < 4) return;
+    const off = document.createElement("canvas");
+    off.width = w;
+    off.height = h;
+    const ctx = off.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#0b0f1a"; // seam colour between the two panes
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(c1, 0, 0);
+    ctx.drawImage(c2, c1.width, 0);
+    off.toBlob((blob) => {
+      if (!blob) return;
+      void blob.arrayBuffer().then((buf) => {
+        const meta: Record<string, string> = { Software: "2D Electrostatics — Complex Analysis Suite" };
+        if (lastFit) {
+          meta["2de:url"] =
+            window.location.origin + window.location.pathname + buildConformalLink(lastCorners, lastFit);
+        }
+        const stamped = injectPngText(new Uint8Array(buf), meta);
+        const ab = new ArrayBuffer(stamped.byteLength);
+        new Uint8Array(ab).set(stamped);
+        const dl = URL.createObjectURL(new Blob([ab], { type: "image/png" }));
+        const a = document.createElement("a");
+        a.href = dl;
+        a.download = "2d-electrostatics-polygon.png";
+        document.body.append(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(dl), 1000);
+      });
+    }, "image/png");
+  };
+
   const setMode = (mode: Mode): void => {
     if (state.mode === mode) return;
     state.mode = mode;
@@ -351,6 +395,7 @@ function main(): void {
       },
     );
   });
+  pngBtn.addEventListener("click", savePng);
   sAoA.input.addEventListener("input", () => {
     state.alphaDeg = Number(sAoA.input.value);
     sAoA.val.textContent = `${state.alphaDeg}°`;
