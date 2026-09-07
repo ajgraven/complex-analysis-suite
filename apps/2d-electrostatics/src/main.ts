@@ -34,8 +34,9 @@ function main(): void {
 
   const canvas = mountCanvas(app, {
     label:
-      "The complex potential as a 2D field: drag charges, sources, sinks, and vortices; the field " +
-      "lines, equipotentials, streamlines, and domain-colored field update live. Arrow keys pan, +/− zoom.",
+      "The complex potential as a 2D electrostatic field: drag charges, sources, sinks, and vortices; " +
+      "the field lines, equipotentials, and domain-colored field update live. Arrow keys pan, +/− zoom; " +
+      "[ and ] select a singularity, Shift+arrows move the selected one, Delete removes it.",
     className: "field-view",
   });
 
