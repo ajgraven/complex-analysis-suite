@@ -1,8 +1,9 @@
-// The shareable permalink (`#vs=`) for the sandbox: the uniform stream, the placed singularities, and
-// the view, wrapped in @cas/interchange's app-namespaced, forward-compatible view-state envelope.
-// Decoding is defensive — a malformed or partial payload restores what it can and ignores the rest
-// (including a legacy `lens` field from links shared before the app became electrostatic-only) — and
-// rebuilds singularities with fresh ids.
+// The shareable permalink (`#vs=`) for the sandbox: the uniform stream, the placed singularities, the
+// view, and the figure annotations (the sensor puck + the flux/circulation probe loop), wrapped in
+// @cas/interchange's app-namespaced, forward-compatible view-state envelope. Decoding is defensive — a
+// malformed or partial payload restores what it can and ignores the rest (including a legacy `lens`
+// field from links shared before the app became electrostatic-only) — and rebuilds singularities with
+// fresh ids. (Transient UI — the active tool and the tracer animation — is deliberately not carried.)
 import { encodeViewState, decodeViewState } from "@cas/interchange";
 import type { AppState, Placed } from "./state.js";
 import { freshId } from "./state.js";
@@ -26,6 +27,10 @@ export function encodeState(state: AppState): string {
     sings,
     view: { center: [state.view.center[0], state.view.center[1]], halfSpan: state.view.halfSpan },
   };
+  if (state.sensor) payload.sensor = [state.sensor[0], state.sensor[1]];
+  if (state.probe) {
+    payload.probe = { x0: state.probe.x0, y0: state.probe.y0, x1: state.probe.x1, y1: state.probe.y1 };
+  }
   return encodeViewState(APP, payload);
 }
 
@@ -67,6 +72,20 @@ export function applyStateFromHash(state: AppState, hashOrLink: string): boolean
     const halfSpan = view.halfSpan;
     if (center && isNum(halfSpan) && halfSpan > 0) {
       state.view = { center, halfSpan };
+      applied = true;
+    }
+  }
+
+  const sensor = pair(s.sensor);
+  if (sensor) {
+    state.sensor = sensor;
+    applied = true;
+  }
+
+  if (s.probe && typeof s.probe === "object") {
+    const p = s.probe as Record<string, unknown>;
+    if (isNum(p.x0) && isNum(p.y0) && isNum(p.x1) && isNum(p.y1)) {
+      state.probe = { x0: p.x0, y0: p.y0, x1: p.x1, y1: p.y1 };
       applied = true;
     }
   }

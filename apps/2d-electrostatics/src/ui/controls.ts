@@ -393,9 +393,14 @@ export function createControls(
       .catch(() => undefined);
   });
 
-  // The airfoil transplant moved to the sibling 2D Hydrodynamics app (ADR-0037); reach it via the nav
-  // header, not an in-toolbar deep link.
-  actions.append(presetWrap, flowBtn, sensorBtn, pngBtn, linkBtn);
+  // Link to this app's second page (the Schwarz–Christoffel polygon transplant); the polygon page has
+  // the reverse "← Field sandbox" link. (The airfoil transplant moved to the sibling 2D Hydrodynamics
+  // app, ADR-0037 — reach it via the nav header, not an in-toolbar deep link.)
+  const polyLink = el("a", "pal-btn", "Polygon ↗");
+  (polyLink as HTMLAnchorElement).href = "./polygon.html";
+  polyLink.title = "Flow past or inside a polygon (Schwarz–Christoffel transplant)";
+
+  actions.append(presetWrap, polyLink, flowBtn, sensorBtn, pngBtn, linkBtn);
   bar.append(actions);
 
   app.append(bar, inspector, legend, uni, caption);
