@@ -10,7 +10,6 @@ describe("app state", () => {
     expect(ids.size).toBe(3); // ids are unique
     expect(s.view.halfSpan).toBeGreaterThan(0);
     expect(s.selected).toBeNull();
-    expect(s.lens).toBe("electrostatic");
   });
 
   it("fieldOf snapshots the uniform + singularities for the renderer", () => {

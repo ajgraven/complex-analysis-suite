@@ -9,10 +9,9 @@ const shape = (s: Placed): unknown =>
     : { kind: "doublet", at: s.at, mu: s.mu };
 
 describe("permalink round-trip", () => {
-  it("restores uniform, singularities, view, and lens", () => {
+  it("restores uniform, singularities, and view", () => {
     const a = initialState();
     a.uniform = [0.3, -0.2];
-    a.lens = "hydrodynamic";
     a.view = { center: [1, 2], halfSpan: 5 };
     a.singularities = [
       { id: 1, kind: "monopole", at: [0.5, 0.5], c: [2, -1] },
@@ -23,11 +22,26 @@ describe("permalink round-trip", () => {
     const b = initialState();
     expect(applyStateFromHash(b, hash)).toBe(true);
     expect(b.uniform).toEqual([0.3, -0.2]);
-    expect(b.lens).toBe("hydrodynamic");
     expect(b.view).toEqual({ center: [1, 2], halfSpan: 5 });
     expect(b.singularities.map(shape)).toEqual(a.singularities.map(shape));
     // ids are freshly assigned, not carried across the wire
     expect(b.singularities.every((s) => typeof s.id === "number")).toBe(true);
+  });
+
+  it("ignores a legacy `lens` field from links shared before the app went electrostatic-only", () => {
+    // Old permalinks encoded a `lens` reading; the field no longer exists. Decoding must restore the
+    // rest of the state and simply drop the unknown key (defensive decode), never throw.
+    const legacy = encodeViewState("2de", {
+      uniform: [0.5, 0],
+      sings: [{ k: "m", at: [0, 0], c: [1, 0] }],
+      view: { center: [0, 0], halfSpan: 3 },
+      lens: "hydrodynamic",
+    });
+    const s = initialState();
+    expect(applyStateFromHash(s, legacy)).toBe(true);
+    expect(s.uniform).toEqual([0.5, 0]);
+    expect(s.singularities).toHaveLength(1);
+    expect("lens" in s).toBe(false);
   });
 
   it("rejects a foreign app namespace and malformed input", () => {

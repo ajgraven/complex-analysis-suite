@@ -2,8 +2,8 @@
 // field of charges, sources, sinks, vortices, and doublets (the author's "Complex Analysis as
 // Electrostatics and Hydrodynamics"). The field is drawn on the GPU (domain-colour of E + the φ/ψ
 // contour net) with a 2D overlay of grabbable handles + the flux/circulation probe; the view pans and
-// zooms while singularities drag with live recompute. Presets, an Electrostatic ↔ Fluid lens, a
-// `#vs=` permalink, and PNG export round out M1.
+// zooms while singularities drag with live recompute. Presets, a `#vs=` permalink, and PNG export
+// round out M1. (The hydrodynamic reading is the sibling 2D Hydrodynamics app's, ADR-0037.)
 import "./styles/main.css";
 import "@cas/ui/nav.css";
 import { runWithFatalBoundary, mountCanvas, mountNavHeader } from "@cas/ui";

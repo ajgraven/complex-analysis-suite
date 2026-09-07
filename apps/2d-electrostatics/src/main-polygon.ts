@@ -105,7 +105,7 @@ function main(): void {
 
   const controls = el("div", "foil-controls");
 
-  // Interior/exterior mode toggle (a segmented control, like the sandbox's lens toggle).
+  // Interior/exterior mode toggle (a segmented control, like the sandbox's Move/Probe tool toggle).
   const modeSeg = el("div", "modeseg");
   const btnExt = el("button", "seg-btn", "Flow past K");
   const btnInt = el("button", "seg-btn", "Flow inside K");

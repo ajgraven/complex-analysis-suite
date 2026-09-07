@@ -259,7 +259,7 @@ input[type="range"] {
   margin-top: 2px;
 }
 
-/* segmented control (the lens toggle) */
+/* segmented control (the Move/Probe tool toggle; also the polygon page's mode toggle) */
 .modeseg {
   display: inline-flex;
   border: 1px solid rgba(231, 234, 242, 0.16);
@@ -279,7 +279,7 @@ input[type="range"] {
   color: #e7eaf2;
 }
 
-/* persistent legend — the visual encoding, relabelled by the active lens */
+/* persistent legend — the visual encoding of the field */
 .legend {
   position: fixed;
   left: 14px;

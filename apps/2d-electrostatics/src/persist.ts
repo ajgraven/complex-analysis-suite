@@ -1,9 +1,10 @@
-// The shareable permalink (`#vs=`) for the sandbox: the uniform stream, the placed singularities, the
-// view, and the lens, wrapped in @cas/interchange's app-namespaced, forward-compatible view-state
-// envelope. Decoding is defensive — a malformed or partial payload restores what it can and ignores
-// the rest — and rebuilds singularities with fresh ids.
+// The shareable permalink (`#vs=`) for the sandbox: the uniform stream, the placed singularities, and
+// the view, wrapped in @cas/interchange's app-namespaced, forward-compatible view-state envelope.
+// Decoding is defensive — a malformed or partial payload restores what it can and ignores the rest
+// (including a legacy `lens` field from links shared before the app became electrostatic-only) — and
+// rebuilds singularities with fresh ids.
 import { encodeViewState, decodeViewState } from "@cas/interchange";
-import type { AppState, Placed, Lens } from "./state.js";
+import type { AppState, Placed } from "./state.js";
 import { freshId } from "./state.js";
 
 const APP = "2de";
@@ -24,7 +25,6 @@ export function encodeState(state: AppState): string {
     uniform: [state.uniform[0], state.uniform[1]],
     sings,
     view: { center: [state.view.center[0], state.view.center[1]], halfSpan: state.view.halfSpan },
-    lens: state.lens,
   };
   return encodeViewState(APP, payload);
 }
@@ -69,11 +69,6 @@ export function applyStateFromHash(state: AppState, hashOrLink: string): boolean
       state.view = { center, halfSpan };
       applied = true;
     }
-  }
-
-  if (s.lens === "electrostatic" || s.lens === "hydrodynamic") {
-    state.lens = s.lens as Lens;
-    applied = true;
   }
 
   return applied;
