@@ -14,9 +14,9 @@ describe("body mesh geometry", () => {
     const nR = 12;
     const nTheta = 24;
     const mesh = buildBodyMesh(body, { nR, nTheta });
-    expect(mesh.stride).toBe(5);
+    expect(mesh.stride).toBe(6);
     expect(mesh.vertexCount).toBe((nR + 1) * (nTheta + 1));
-    expect(mesh.vertices.length).toBe(mesh.vertexCount * 5);
+    expect(mesh.vertices.length).toBe(mesh.vertexCount * 6);
     expect(mesh.indices.length).toBe(nR * nTheta * 6);
     expect(mesh.outline.length).toBe(nTheta + 1); // the r = 1 ring
   });
@@ -38,7 +38,7 @@ describe("body mesh geometry", () => {
     }
   });
 
-  it("tags each vertex with the exact physical velocity + stream function at its w = r·e^{iθ}", () => {
+  it("tags each vertex with the exact physical velocity + stream + potential at its w = r·e^{iθ}", () => {
     const nR = 6;
     const nTheta = 12;
     const rMax = 8;
@@ -47,17 +47,41 @@ describe("body mesh geometry", () => {
     const j = 3;
     const i = 5;
     const r = Math.exp((Math.log(rMax) * j) / nR);
-    const t = (2 * Math.PI * i) / nTheta;
+    const t = (2 * Math.PI * i) / nTheta; // = 5π/6 < π, so the φ branch-unwrap correction is 0 here
     const w: Pt = [r * Math.cos(t), r * Math.sin(t)];
-    const base = (j * (nTheta + 1) + i) * 5;
+    const base = (j * (nTheta + 1) + i) * 6;
     const z = body.psi(w);
     const vel = physicalVelocity(body, w);
-    const stream = potential(body, w)[1];
+    const pot = potential(body, w);
     expect(mesh.vertices[base]).toBeCloseTo(z[0], 5);
     expect(mesh.vertices[base + 1]).toBeCloseTo(z[1], 5);
     expect(mesh.vertices[base + 2]).toBeCloseTo(vel[0], 5);
     expect(mesh.vertices[base + 3]).toBeCloseTo(vel[1], 5);
-    expect(mesh.vertices[base + 4]).toBeCloseTo(stream, 5);
+    expect(mesh.vertices[base + 4]).toBeCloseTo(pot[1], 5); // Im W_ref = stream function ψ
+    expect(mesh.vertices[base + 5]).toBeCloseTo(pot[0], 5); // Re W_ref = velocity potential φ (t < π)
+  });
+
+  it("unwraps the φ branch cut off the triangles: φ jumps by exactly Γ across the t = π seam", () => {
+    // The vortex term makes φ = Re W_ref multivalued (+Γ per loop). buildBodyMesh adds Γ for t > π so φ is
+    // continuous across every triangle (the only discontinuity is the +x cut, which has no bridging cell).
+    const gamma = 0.8; // matches `body` above
+    const nR = 4;
+    const nTheta = 12;
+    const cols = nTheta + 1;
+    const mesh = buildBodyMesh(body, { nR, nTheta });
+    // Columns i=5 (t=5π/6 < π) and i=6 (t=π) get no correction; i=7 (t=7π/6 > π) gets +Γ. Compare the raw
+    // potential jump against the stored (corrected) jump between i=6 and i=7 on ring j=2.
+    const j = 2;
+    const phiAt = (i: number): number => mesh.vertices[(j * cols + i) * 6 + 5];
+    const rawAt = (i: number): number => {
+      const r = Math.exp((Math.log(8) * j) / nR);
+      const t = (2 * Math.PI * i) / nTheta;
+      return potential(body, [r * Math.cos(t), r * Math.sin(t)])[0];
+    };
+    // Stored φ is continuous (raw + Γ correction for i=7); the correction is exactly Γ. (Stored as
+    // float32, so compare at ~1e-5, like the velocity/stream spot-checks above.)
+    expect(phiAt(7) - rawAt(7)).toBeCloseTo(gamma, 5);
+    expect(phiAt(6) - rawAt(6)).toBeCloseTo(0, 5);
   });
 
   it("has no NaN/Inf velocity at cusp vertices where ψ' = 0 exactly (deltoid/astroid/star)", () => {

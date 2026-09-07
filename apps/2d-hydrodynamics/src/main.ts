@@ -19,7 +19,7 @@ import { unitCircle, boundsOf, EXTERIOR_MAP_PRESETS, type RefFlow, type Pt } fro
 import { BODIES, type BodyEntry } from "./bodies.js";
 import { airfoilBody, galleryBody, physicalVelocity, type ResolvedBody } from "./bodyModel.js";
 import { kuttaCirculation, cylinderRadius, nFromTrailingEdgeAngle, type AirfoilParams } from "./airfoil.js";
-import { createDiskRenderer, type FieldView } from "./render/diskView.js";
+import { createDiskRenderer, type FieldView, type FieldStyle } from "./render/diskView.js";
 import { createBodyMeshRenderer } from "./render/bodyMeshView.js";
 import { buildBodyMesh } from "./render/bodyMesh.js";
 import { Overlay2D } from "./render/overlay2d.js";
@@ -40,6 +40,11 @@ interface HydroState {
   kutta: boolean;
   // closed-form-only
   gamma: number; // free circulation Γ
+  // display
+  lineDensity: number; // flow-line density multiplier (1 = default spacing)
+  showStream: boolean; // draw streamlines ψ = Im W_ref
+  showEqui: boolean; // draw equipotentials φ = Re W_ref (the flow net)
+  showMarkers: boolean; // draw the stagnation-point markers
 }
 
 const DEFAULTS: HydroState = {
@@ -50,6 +55,10 @@ const DEFAULTS: HydroState = {
   teAngleDeg: 10,
   kutta: true,
   gamma: 0,
+  lineDensity: 1,
+  showStream: true,
+  showEqui: false,
+  showMarkers: true,
 };
 
 const rad = (deg: number): number => (deg * Math.PI) / 180;
@@ -101,6 +110,19 @@ function slider(label: string, min: number, max: number, step: number, value: nu
   input.value = String(value);
   row.append(head, input);
   return { row, input, val };
+}
+
+interface Check {
+  wrap: HTMLElement;
+  input: HTMLInputElement;
+}
+function checkbox(label: string, checked: boolean): Check {
+  const wrap = el("label", "check");
+  const input = el("input");
+  input.type = "checkbox";
+  input.checked = checked;
+  wrap.append(input, el("span", undefined, label));
+  return { wrap, input };
 }
 
 // --- minimal complex arithmetic for the stagnation roots ---------------------------------------------
@@ -167,11 +189,13 @@ function main(): void {
   // ---- toolbar --------------------------------------------------------------
   const bar = el("header", "toolbar");
   const brand = el("div", "brand");
-  brand.innerHTML = "<strong>2D Hydrodynamics</strong><span>ideal flow past a body</span>";
+  brand.innerHTML = "<h1>2D Hydrodynamics</h1><span>ideal flow past a body</span>"; // the page's level-one heading
 
   const controls = el("div", "foil-controls");
+  const sep = (): HTMLElement => el("div", "ctl-sep");
 
-  const bodyRow = el("label", "row");
+  // Body selector (its own row sizes to the select so a long label can't overlap the next control).
+  const bodyRow = el("label", "row body-row");
   const bodyHead = el("span", "row-h");
   bodyHead.append(el("span", "row-l", "Body"));
   const bodySel = el("select", "tp-select");
@@ -183,31 +207,36 @@ function main(): void {
   }
   bodyRow.append(bodyHead, bodySel);
 
-  // Shared: angle of attack. Range ±30° covers both legacy ranges (airfoil ±20, gallery ±30).
-  const sAoA = slider("Angle of attack", -30, 30, 0.5, state.alphaDeg, "°");
-
-  // Airfoil-only controls.
+  // Flow / shape group: shared angle of attack + the per-body shape (airfoil) or circulation (gallery).
+  const sAoA = slider("Angle of attack", -30, 30, 0.5, state.alphaDeg, "°"); // ±30 covers both legacy ranges
   const sThick = slider("Thickness", 0, 0.35, 0.005, state.thickness);
   const sCamber = slider("Camber", 0, 0.2, 0.005, state.camber);
   const sTE = slider("Trailing-edge angle", 0, 30, 0.5, state.teAngleDeg, "°");
-  const kutta = el("label", "check");
-  const kBox = el("input");
-  kBox.type = "checkbox";
-  kBox.checked = state.kutta;
-  kutta.append(kBox, el("span", undefined, "Kutta condition"));
+  const kutta = checkbox("Kutta condition", state.kutta);
   const airfoilGroup = el("div", "ctl-group");
-  airfoilGroup.append(sThick.row, sCamber.row, sTE.row, kutta);
-
-  // Closed-form-only control: free circulation.
+  airfoilGroup.append(sThick.row, sCamber.row, sTE.row, kutta.wrap);
   const sGamma = slider("Circulation Γ", -4, 4, 0.1, state.gamma);
   const galleryGroup = el("div", "ctl-group");
   galleryGroup.append(sGamma.row);
+  const flowGroup = el("div", "ctl-group");
+  flowGroup.append(sAoA.row, airfoilGroup, galleryGroup);
+
+  // Display group: how much of the flow net to draw, and how densely.
+  const sLines = slider("Flow lines", 0.4, 2.5, 0.1, state.lineDensity);
+  const cStream = checkbox("Streamlines", state.showStream);
+  const cEqui = checkbox("Equipotentials", state.showEqui);
+  const cMarkers = checkbox("Markers", state.showMarkers);
+  const displayGroup = el("div", "ctl-group");
+  displayGroup.append(sLines.row, cStream.wrap, cEqui.wrap, cMarkers.wrap);
 
   const copyBtn = el("button", "pal-btn", "Copy link ⧉");
   copyBtn.type = "button";
   const pngBtn = el("button", "pal-btn", "Save PNG");
   pngBtn.type = "button";
-  controls.append(bodyRow, sAoA.row, airfoilGroup, galleryGroup, copyBtn, pngBtn);
+  const actions = el("div", "ctl-group");
+  actions.append(copyBtn, pngBtn);
+
+  controls.append(bodyRow, sep(), flowGroup, sep(), displayGroup, sep(), actions);
 
   // Clamp the (possibly permalinked) values back through the sliders so an out-of-range hand-crafted link
   // agrees with the thumb, the label, and the rendered flow.
@@ -221,6 +250,8 @@ function main(): void {
   sTE.val.textContent = `${state.teAngleDeg}°`;
   state.gamma = Number(sGamma.input.value);
   sGamma.val.textContent = state.gamma.toFixed(1);
+  state.lineDensity = Number(sLines.input.value);
+  sLines.val.textContent = state.lineDensity.toFixed(1);
 
   const readout = el("div", "readout tp-readout");
   bar.append(brand, controls, readout);
@@ -273,16 +304,25 @@ function main(): void {
     const diskModScale = Math.max(0.25, flow.U);
     const farBody = physicalVelocity(resolved, [50, 0]);
     const bodyModScale = Math.max(0.25, Math.hypot(farBody[0], farBody[1]));
-    const streamSpacing = 0.55 * Math.max(0.3, flow.U);
+    // Streamline spacing scales with U so both panes show the same ψ-levels; the "Flow lines" density
+    // divides it (higher density → tighter spacing → more lines). Equipotentials share the spacing for a
+    // proportioned flow net.
+    const spacing = (0.55 * Math.max(0.3, flow.U)) / state.lineDensity;
+    const style: Omit<FieldStyle, "modScale"> = {
+      streamSpacing: spacing,
+      equiSpacing: spacing,
+      showStream: state.showStream,
+      showEqui: state.showEqui,
+    };
 
     // Disk pane — per-pixel reference flow past |w| = 1.
     sizeGl(disk.gl, diskGl);
-    diskRenderer.render(flow, DISK_VIEW, diskModScale, streamSpacing);
+    diskRenderer.render(flow, DISK_VIEW, { ...style, modScale: diskModScale });
     if (diskOverlay.resize()) {
       diskOverlay.setView(0, 0, DISK_HALFSPAN);
       diskOverlay.clear();
       diskOverlay.fillBody(unitCircle(200));
-      for (const z of stag) diskOverlay.drawDot(z, STAGNATION_COLOR, 5);
+      if (state.showMarkers) for (const z of stag) diskOverlay.drawDot(z, STAGNATION_COLOR, 5);
     }
 
     // Body pane — forward-mapped coloured mesh, fit to ψ(∂𝔻).
@@ -299,12 +339,12 @@ function main(): void {
       const halfSpan = Math.max(needY, needX, 0.5) * 1.3;
       bodyView = { center: [cx, cy], halfSpan };
     }
-    bodyRenderer.render(mesh, bodyView, bodyModScale, streamSpacing);
+    bodyRenderer.render(mesh, bodyView, { ...style, modScale: bodyModScale });
     if (bodyOverlay.resize()) {
       bodyOverlay.setView(bodyView.center[0], bodyView.center[1], bodyView.halfSpan);
       bodyOverlay.clear();
       bodyOverlay.fillBody(mesh.outline);
-      for (const z of stag) bodyOverlay.drawDot(resolved.psi(z), STAGNATION_COLOR, 5);
+      if (state.showMarkers) for (const z of stag) bodyOverlay.drawDot(resolved.psi(z), STAGNATION_COLOR, 5);
     }
 
     const entry = bodyEntry(state.bodyId);
@@ -339,6 +379,10 @@ function main(): void {
     teAngleDeg: state.teAngleDeg,
     kutta: state.kutta,
     gamma: state.gamma,
+    lineDensity: state.lineDensity,
+    showStream: state.showStream,
+    showEqui: state.showEqui,
+    showMarkers: state.showMarkers,
   });
   const permalink = (): string => location.origin + location.pathname + encodeHydro(toVS());
   const syncHash = (): void => history.replaceState(null, "", encodeHydro(toVS()));
@@ -373,14 +417,35 @@ function main(): void {
     syncHash();
     requestPaint();
   });
-  kBox.addEventListener("change", () => {
-    state.kutta = kBox.checked;
+  kutta.input.addEventListener("change", () => {
+    state.kutta = kutta.input.checked;
     syncHash();
     requestPaint();
   });
   sGamma.input.addEventListener("input", () => {
     state.gamma = Number(sGamma.input.value);
     sGamma.val.textContent = state.gamma.toFixed(1);
+    syncHash();
+    requestPaint();
+  });
+  sLines.input.addEventListener("input", () => {
+    state.lineDensity = Number(sLines.input.value);
+    sLines.val.textContent = state.lineDensity.toFixed(1);
+    syncHash();
+    requestPaint();
+  });
+  cStream.input.addEventListener("change", () => {
+    state.showStream = cStream.input.checked;
+    syncHash();
+    requestPaint();
+  });
+  cEqui.input.addEventListener("change", () => {
+    state.showEqui = cEqui.input.checked;
+    syncHash();
+    requestPaint();
+  });
+  cMarkers.input.addEventListener("change", () => {
+    state.showMarkers = cMarkers.input.checked;
     syncHash();
     requestPaint();
   });
@@ -400,7 +465,21 @@ function main(): void {
     paint(); // render the current view synchronously, then read the panes back
     saveCompositePng([[disk.gl, disk.overlay], [body.gl, body.overlay]], "2d-hydrodynamics.png", permalink());
   });
-  window.addEventListener("resize", requestPaint);
+  // The toolbar wraps to as many rows as the controls need; start the stage right below it (measured, not
+  // a hardcoded height) so a wrapped toolbar can never overlap the panes.
+  const layoutStage = (): void => {
+    stage.style.top = `${Math.round(bar.getBoundingClientRect().bottom)}px`;
+  };
+  layoutStage();
+  const barResize = new ResizeObserver(() => {
+    layoutStage();
+    requestPaint();
+  });
+  barResize.observe(bar);
+  window.addEventListener("resize", () => {
+    layoutStage();
+    requestPaint();
+  });
   requestPaint();
 }
 
