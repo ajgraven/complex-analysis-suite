@@ -2984,9 +2984,10 @@ M3/D/B).
 
 ## ADR-0034: The eighth app — `apps/2d-electrostatics` (the complex potential, as fields and flow)
 
-**Status:** Accepted. A new **separate app** (decision #8), built on the shared `@cas/*` packages; no new
-package (ADR-0007 — extract only on a second consumer). Plan:
-[`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
+**Status:** Accepted; **narrowed by [ADR-0039](#adr-0039-2d-electrostatics--drop-the-hydrodynamic-lens-electrostatic-only)**
+(the lens's hydrodynamic reading was later removed — the app is now electrostatic-only). A new **separate app**
+(decision #8), built on the shared `@cas/*` packages; no new package (ADR-0007 — extract only on a second
+consumer). Plan: [`design/complex-potential-studio-plan.md`](design/complex-potential-studio-plan.md).
 
 ### Context
 
@@ -3382,3 +3383,45 @@ look**, resting on one unifying identity and one render idiom.
 - **Trade-off accepted:** the airfoil's right pane is mesh-interpolated rather than per-pixel-exact (invisible
   at a fine mesh; a minor cosmetic softness only near a cusp), in exchange for one robust render path across
   every body.
+
+## ADR-0039: 2D Electrostatics — drop the hydrodynamic lens (electrostatic-only)
+
+**Status:** Accepted. A **scope trim** of `apps/2d-electrostatics`; it narrows
+[ADR-0034](#adr-0034-the-eighth-app--apps2d-electrostatics-the-complex-potential-as-fields-and-flow) (which
+gave the app a single lens toggle relabelling the same picture between the electrostatic and hydrodynamic
+readings) — the hydrodynamic reading now lives in its own app. No new package; no interchange or golden change.
+
+### Context
+
+ADR-0034 shipped the field sandbox with one **lens** toggle ("Electrostatic | Fluid") that relabelled the same
+complex potential `W = φ + iψ` between the two Dictionary readings — a relabel only, no recompute. Since then,
+[ADR-0037](#adr-0037-the-tenth-published-app--apps2d-hydrodynamics-ideal-flow-past-bodies-via-conformal-transplant)
+carved *flow past a body* into its own app, **2D Hydrodynamics**, and
+[ADR-0036](#adr-0036-split-2d-electrostatics-into-three-apps-extract-casflow) moved the evolving / analysis flow
+stories to Hele-Shaw Flow and Potential Theory. With the hydrodynamic reading now the province of a dedicated
+app, the sandbox's Fluid lens is redundant — a second vocabulary for a picture the user reads, in *this* app, as
+an electrostatic field.
+
+### Decision
+
+Make 2D Electrostatics present the **electrostatic reading only**.
+
+1. Remove the `Lens` type, `state.lens`, and the toolbar `Electrostatic | Fluid` toggle; the two-vocabulary
+   `termsFor(lens)` collapses to a single electrostatic `TERMS`. The probe/sensor readouts hard-label
+   "charge" / "|E|".
+2. Stop encoding `lens` in the `#vs=` permalink. Decoding stays defensive: a legacy link that still carries a
+   `lens` field decodes fine (the unknown key is ignored).
+3. Update the app's own descriptions (index.html, package.json, README) and the app plan to match.
+
+The field **math is untouched** — `velocity = conj(E)` still drives the tracer layer, and `W = φ + iψ` is the
+same object; only the *product surface* narrows.
+
+### Consequences
+
+- **Positive:** the app has one clear identity (a field explorer); the electrostatic ↔ hydrodynamic duality is
+  now told once, well, across two apps (this + 2D Hydrodynamics) rather than as a toggle inside each.
+- **Backward compatibility:** permalinks and PNG recipes minted under ADR-0034 still open — the `lens` field is
+  silently dropped and everything else restores.
+- **Docs:** ADR-0034's lens decision is narrowed here; [`design/2d-electrostatics-plan.md`](design/2d-electrostatics-plan.md)
+  is updated to describe the electrostatic-only sandbox.
+- **Not a package / interchange change** (ADR-0007): no `@cas/*` touch, no schema bump, no golden change.
