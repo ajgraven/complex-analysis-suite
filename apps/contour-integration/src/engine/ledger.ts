@@ -47,6 +47,8 @@ export interface LedgerResult {
   readonly verdict: Verdict;
   /** Named for the UI: the first constraint that failed, or null. */
   readonly failedAt: ConstraintId | null;
+  /** False in sandbox mode, where no piece is the target and there is no real integral to solve for. */
+  readonly hasTarget: boolean;
 }
 
 /** How the arcs of a contour are disposed of. `piMultiple` is the arc's angular extent over π. */
@@ -156,7 +158,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         "indent the contour around the singularity, or move it",
       ),
     );
-    return { rows, closes: false, verdict: assembleVerdict(certificates), failedAt: "LEGALITY" };
+    return {
+      rows,
+      closes: false,
+      verdict: assembleVerdict(certificates),
+      failedAt: "LEGALITY",
+      hasTarget: spec.some((p) => p.role === "target"),
+    };
   }
 
   const closed = isClosed(pieces);
@@ -173,7 +181,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     ),
   );
   if (!closed) {
-    return { rows, closes: false, verdict: assembleVerdict(certificates), failedAt: "LEGALITY" };
+    return {
+      rows,
+      closes: false,
+      verdict: assembleVerdict(certificates),
+      failedAt: "LEGALITY",
+      hasTarget: spec.some((p) => p.role === "target"),
+    };
   }
 
   const minClearance = Math.min(
@@ -332,12 +346,19 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     value: closes ? value : undefined,
     verdict: assembleVerdict(certificates),
     failedAt: rows.find((r) => r.status === "failed")?.constraint ?? (killFailed ? "KILL" : null),
+    hasTarget,
   };
 }
 
 /** Exported for the UI's headline sentence — the thing a number alone cannot say. */
 export function ledgerHeadline(result: LedgerResult): string {
-  if (result.closes) return "This argument closes.";
+  if (result.closes) {
+    // In sandbox mode there is no real integral being solved for, so "the argument closes" would
+    // claim more than happened: what was established is the closed-contour value itself.
+    return result.hasTarget
+      ? "This argument closes."
+      : "The closed-contour value is established exactly.";
+  }
   if (result.failedAt === null) return "This argument is incomplete.";
   return `This argument does not close: ${result.failedAt} fails.`;
 }

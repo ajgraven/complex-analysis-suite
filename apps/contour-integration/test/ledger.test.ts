@@ -144,5 +144,8 @@ describe("sandbox mode", () => {
     const cover = rowsFor(r, "COVER")[0];
     expect(cover.status).toBe("unknown");
     expect(cover.claim).toMatch(/no piece is marked as the target/);
+    // And the headline does not overclaim: nothing was "argued" to a real integral here.
+    expect(r.hasTarget).toBe(false);
+    expect(ledgerHeadline(r)).toBe("The closed-contour value is established exactly.");
   });
 });

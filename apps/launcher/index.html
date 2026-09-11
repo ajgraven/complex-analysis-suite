@@ -6,7 +6,7 @@
     <title>Complex Analysis Suite</title>
     <meta
       name="description"
-      content="A suite of interactive complex-analysis and complex-dynamics visualization tools: Complex Dynamics (escape-time fractals, Julia sets, external rays, deep zoom) and Quadrature Domains (Schwarz-reflection solvers and dynamics)."
+      content="A suite of interactive complex-analysis and complex-dynamics visualization tools: Complex Dynamics (escape-time fractals, Julia sets, external rays, deep zoom), Quadrature Domains (Schwarz-reflection solvers and dynamics), and Contour Integration (the residue theorem, with certified bounds)."
     />
     <link rel="canonical" href="https://ajgraven.github.io/complex-analysis-suite/" />
     <meta property="og:type" content="website" />
@@ -14,14 +14,14 @@
     <meta property="og:title" content="Complex Analysis Suite" />
     <meta
       property="og:description"
-      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics and Quadrature Domains."
+      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics, Quadrature Domains and Contour Integration."
     />
     <meta property="og:url" content="https://ajgraven.github.io/complex-analysis-suite/" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="Complex Analysis Suite" />
     <meta
       name="twitter:description"
-      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics and Quadrature Domains."
+      content="Interactive complex-analysis and complex-dynamics visualization tools — Complex Dynamics, Quadrature Domains and Contour Integration."
     />
     <style>
       :root {
@@ -120,6 +120,19 @@
         </p>
       </a>
 
+
+      <a class="card" href="contour-integration/">
+        <span class="badge">Integration</span>
+        <h2>Contour Integration</h2>
+        <p>
+          Contour integration &amp; the residue theorem: draw a contour over a phase portrait, watch
+          &int;f dz accumulate, and read whether the <em>argument</em> closes &mdash; exact residues,
+          exactly-decided winding numbers, and certified bounds on the vanishing arcs. Early access:
+          templates and the real-line families work; free-hand contours and branch cuts are still to
+          come.
+        </p>
+      </a>
+
       <div class="card soon">
         <span class="badge">Coming soon</span>
         <h2>Correspondences</h2>
@@ -128,17 +141,6 @@
           packages: the deltoid Schwarz reflection σ (CPU + GPU), its deleted correspondence, a
           family parameter plane, a parabolic-Tricorn model space, and an interactive mating
           visualizer. Built and tested, but not yet part of the published site.
-        </p>
-      </div>
-
-      <div class="card soon">
-        <span class="badge">Coming soon</span>
-        <h2>Contour Integration</h2>
-        <p>
-          Sandbox &amp; worked-example gallery for contour integration and the residue theorem: draw a
-          contour, watch the integral accumulate, and read whether the argument actually closes &mdash;
-          including the evaluation of real definite integrals in closed form. In development; not yet
-          part of the published site.
         </p>
       </div>
     </main>
