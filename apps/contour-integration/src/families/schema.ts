@@ -34,6 +34,10 @@ export type TemplateId =
  */
 export type SymbolSpec =
   | { readonly kind: "polynomial"; readonly var: string }
+  /** A rational function of `var` — tier B names its `R(x)` this way, as distinct from a polynomial. */
+  | { readonly kind: "rationalFn"; readonly var: string }
+  /** An entire function of `var` — A4's `g`, whose Taylor coefficients the contour reads off. */
+  | { readonly kind: "entireFn"; readonly var: string }
   | { readonly kind: "realParam" }
   | { readonly kind: "complexParam" }
   | { readonly kind: "integerParam" };
@@ -216,6 +220,19 @@ export interface Family {
       readonly through?: "halfIntegers";
     }[];
     readonly pieces: readonly FamilyPiece[];
+    /**
+     * Geometry parameters COMPUTED from the family's parameters.
+     *
+     * *Added for B1, which is the record that needs it.* Its arc must lie in the half-plane where
+     * `a·Im z ≥ 0`, i.e. `theta1 = π·sgn(a)` — and §2.2's `Scalar` is the affine subset, in which
+     * `π·sgn(a)` is not expressible at all. Introducing `sgnA` as a derived value makes it affine
+     * again (`{param: "sgnA", mul: π}`) without widening `Scalar` for one family.
+     *
+     * The record's own notes call this gap G5 and settle for a prose caveat on `orientation`; this
+     * is the field that makes the geometry honest instead. Each `expr` is an `@cas/expr` expression
+     * over the family's parameters, evaluated at instantiation.
+     */
+    readonly derived?: readonly { readonly name: string; readonly expr: string }[];
     /** B1 needs `sgn(a)`, so this is not always a literal. */
     readonly orientation: "ccw" | "cw" | { readonly expr: string };
     /** Per-pole, not a prose blurb: the winding number the family asserts for each. */

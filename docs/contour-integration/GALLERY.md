@@ -149,9 +149,10 @@ implementation decision.
 ## 5. Status
 
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
-together with Pass 5's exact rational linear algebra, which invariant 4 rests on, and the unit-circle
-substitution `z = e^{iθ}` (`src/engine/substitution.ts`). Six records are loaded: **A1, A2, A3** (the
-circle families) and **A5, A6, A7** (the semicircle families).
+together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
+substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
+`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`). Nine records are loaded: **A1–A3** (circle), **A5–A7**
+(semicircle) and **B1–B3** (Jordan) — every entry in tiers A and B except A4.
 
 **A4 is deliberately absent.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to
 `e^z/(i z^{n+1})`, whose exact residue is the Taylor coefficient of an *entire* function — `1/n!` —
@@ -168,6 +169,26 @@ A2's `|a| ≶ 1` switch and its `a = 0` pole-*count* change, and A3's order ladd
 `n = 0…4`. The residue-theorem value is also checked to be *identical* at `R = 3` and `R = 40`
 (which is what makes the instantiation radius a display default rather than a claim), the quadrature
 cross-check is required to agree, and A6's `closing-down-disagrees` trap is executed directly.
+
+### 5.0a The exponential basis: `=` on the form, `≈` on the decimal
+
+Tier B's residues are not algebraic numbers. `Res(g·e^{iaz}, z₀) = Res(g,z₀)·e^{iaz₀}` at a simple
+pole, and `e^{iaz₀}` lies outside ℚ(i)(√d) — so until now the whole residue fell back to floating
+point and tier B could only be `≈`. But **the exponential factor does not need to be evaluated to be
+exact, only carried.** Carrying it is what turns `1.1557273` into `π/e`.
+
+B3 is the record that makes the distinction unavoidable, and it says so itself: its residue's
+algebraic factor is *literally the same element* as A6's, yet `Σ_all Res = 0` — free for A6 — is
+false there, because `e^{iz}` has an essential singularity at ∞. The `=` is on the symbolic form; the
+decimal stays `≈`, and not merely by PLAN §3.3's general rule — certifying it needs enclosures for
+`exp`, `cos` and `sin`, which PLAN §3.2 cut because ECMA-262 gives them no ulp bound.
+
+Two limits are held honestly rather than papered over. **Simple poles only:** at order `m > 1` the
+residue is `p(z₀)·e^{iaz₀}` for a polynomial built from derivatives, so a repeated pole under an
+exponential keeps its exact locations and declines to claim a residue. **A zero frequency switches
+lemmas:** `e^{i·0·z} = 1` is an ordinary rational integrand, Jordan's `π/|a|` is infinite there and
+says nothing, and B1's own trap warns that an engine treating that as a failure "will paper over
+exactly the case it was built to catch".
 
 ### 5.0 The substitution is engine code, not a rewrite convenience
 
@@ -216,6 +237,26 @@ calls machine-readable that nothing had ever tried to read**:
 Also corrected in the same pass: `restrictions` on A1 and A2 was explanatory prose duplicating their
 traps. The field scopes a claim *narrower than the parameter domain*; both families' closed forms
 hold on their whole legal domain, so both correctly have none.
+
+Tier B added two more, and closed one the records had left open:
+
+7. **Gap G5 is closed.** B1's arc must lie where `a·Im z ≥ 0`, i.e. `theta1 = π·sgn(a)` — and §2.2's
+   `Scalar` is the affine subset, in which that is not expressible at all. The record settles for a
+   prose caveat on `orientation`. A new `contour.derived` field computes `sgnA` from the parameters,
+   which makes the geometry affine in it again and the `a = −1` fixture actually executable.
+8. **`auxiliary.relation` is load-bearing, and a test keyed off the wrong half would have hidden it.**
+   B1 and B3 take `Re` of `∮`; B2 takes `Im`. Reading the real part for all three passes twice and
+   fails once, and the failure looks like an engine bug rather than a missing step in the argument.
+   The other half is the *free companion* — `∫ sin(ax)/(x²+b²)` and `∫ x cos x/(1+x²)`, both zero by
+   parity — and is now asserted to vanish for every entry.
+9. **A variant fixture is decided by NAME, not by type.** `halfRange` and `closeDown` are booleans,
+   but B2's `companion: "re"` is a string; keying off the type silently treats it as a parameter
+   binding. A key the family does not declare as a parameter is a variant flag.
+
+Two rendering bugs also surfaced, neither visible to a numeric check: a unit value printed as the
+**empty string** (the unit-numerator elision needs a symbol to elide in favour of), and a compound
+coefficient was not bracketed before an exponential multiplied it, so B3's
+`(π√2/4 − πi√2/4)·e^{β}` printed as `π√2/4 − πi√2/4·e^{β}` — right value, different formula.
 
 One conflict **dissolved** rather than being carried: the records wrote a single `rigorIfDischarged`
 and flagged its clash with DESIGN §4 Pass 3 (`"="` vs `"≤"`) as gap G2. v2's split into

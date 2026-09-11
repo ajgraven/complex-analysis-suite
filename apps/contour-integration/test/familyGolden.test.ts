@@ -17,9 +17,32 @@ const numericValues = (g: Golden): Record<string, number> =>
     number
   >;
 
-/** A fixture that selects an alternative derivation rather than binding parameters. */
-const isVariant = (g: Golden): boolean =>
-  Object.values(g.params).some((v) => typeof v === "boolean");
+/**
+ * A fixture that selects an alternative derivation rather than binding parameters.
+ *
+ * Decided by NAME, not by type: a key the family does not declare as a parameter is a variant flag.
+ * `halfRange` and `closeDown` are booleans, but B2's `companion: "re"` is a string, and keying off
+ * the type would have silently treated it as a parameter binding and then compared the wrong half of
+ * the contour value against zero.
+ */
+function isVariant(family: Family, g: Golden): boolean {
+  const declared = new Set(family.parameters.map((p) => p.name));
+  return Object.keys(g.params).some((k) => !declared.has(k));
+}
+
+/**
+ * The real-linear functional recovering the target from the contour value.
+ *
+ * This is what makes `auxiliary.relation` load-bearing rather than decorative: B1 and B3 take `Re`
+ * of `∮`, B2 takes `Im`. Reading `value[0]` for all three would pass twice and fail once, and the
+ * failure would look like an engine bug rather than a missing step in the argument.
+ */
+function applyRelation(family: Family, value: readonly [number, number]): number {
+  const relation = family.auxiliary?.relation ?? "Re";
+  if (relation === "Re") return value[0];
+  if (relation === "Im") return value[1];
+  throw new Error(`'${family.id}' declares an auxiliary relation '${relation}' with no evaluator`);
+}
 
 /** Run one record through the real engine at one fixture. */
 function run(family: Family, g: Golden, overrides: Record<string, number> = {}) {
@@ -39,7 +62,7 @@ const cases = FAMILIES.map((f) => [f.id, f] as const);
 
 /** The primary fixture — the first one that binds parameters rather than selecting a variant. */
 const primary = (family: Family): Golden =>
-  family.golden.find((g) => !isVariant(g)) ?? family.golden[0];
+  family.golden.find((g) => !isVariant(family, g)) ?? family.golden[0];
 
 describe("every loaded record reproduces its own golden value through the engine", () => {
   it.each(cases)("%s", (_id, family) => {
@@ -48,11 +71,15 @@ describe("every loaded record reproduces its own golden value through the engine
 
     const { theorem } = run(family, g);
     expect(theorem.exactValue).toBeDefined();
-    const [re, im] = must(theorem.exactValue, "an exact value").value;
+    const value = must(theorem.exactValue, "an exact value").value;
+    const got = applyRelation(family, value);
 
-    expect(Math.abs(re - want)).toBeLessThanOrEqual(g.verifiedTo * Math.max(1, Math.abs(want)));
-    // The imaginary row of `M t = r` asserts the answer is real; check the engine agrees.
-    expect(Math.abs(im)).toBeLessThan(g.verifiedTo);
+    expect(Math.abs(got - want)).toBeLessThanOrEqual(g.verifiedTo * Math.max(1, Math.abs(want)));
+    // The other half is the FREE COMPANION, and it must come out zero for every entry here:
+    // ∫ sin(ax)/(x²+b²) and ∫ x cos x/(1+x²) both vanish by parity, and the same contour delivers
+    // them. A non-zero one would be a sign or orientation bug, not a new result.
+    const companion = family.auxiliary?.relation === "Im" ? value[0] : value[1];
+    expect(Math.abs(companion)).toBeLessThan(1e-12);
   });
 });
 
@@ -65,17 +92,17 @@ describe("every fixture of every record, not just the flagship one", () => {
     for (const g of family.golden) {
       // `halfRange` / `closeDown` select a derivation the engine has no route for; the closing-down
       // one is executed directly below instead.
-      if (isVariant(g)) continue;
+      if (isVariant(family, g)) continue;
       const want = typeof g.numeric === "number" ? g.numeric : g.numeric[0];
       const value = must(
         run(family, g).theorem.exactValue,
         `an exact value at ${JSON.stringify(g.params)}`,
       );
+      const got = applyRelation(family, value.value);
       expect(
-        Math.abs(value.value[0] - want),
-        `${family.id} at ${JSON.stringify(g.params)}: got ${value.value[0]} (${value.text}), want ${want}`,
+        Math.abs(got - want),
+        `${family.id} at ${JSON.stringify(g.params)}: got ${got} (${value.text}), want ${want}`,
       ).toBeLessThanOrEqual(g.verifiedTo * Math.max(1, Math.abs(want)));
-      expect(Math.abs(value.value[1])).toBeLessThan(1e-12);
     }
   });
 });
@@ -89,8 +116,11 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
 
   it.each(withLimit.map((f) => [f.id, f] as const))("%s", (_id, family) => {
     const g = primary(family);
-    const atThree = must(run(family, g, { R: 3 }).theorem.exactValue, "an exact value at R = 3");
-    const atForty = must(run(family, g, { R: 40 }).theorem.exactValue, "an exact value at R = 40");
+    // The limit parameter is NOT always called R — tier B names it `R_lim`, because `R` is the
+    // rational function. Take the name from the record instead of assuming it.
+    const name = must(family.contour.limitParams[0], "a limit parameter").name;
+    const atThree = must(run(family, g, { [name]: 3 }).theorem.exactValue, "an exact value at R = 3");
+    const atForty = must(run(family, g, { [name]: 40 }).theorem.exactValue, "an exact value at R = 40");
     expect(atForty.value).toEqual(atThree.value);
     expect(atForty.text).toBe(atThree.text);
   });
@@ -102,6 +132,9 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "semicircle-order2",
       "semicircle-quartic",
       "semicircle-order3",
+      "jordan-cosine-kernel",
+      "jordan-strict",
+      "jordan-quartic",
     ]);
   });
 });

@@ -4,7 +4,7 @@
 // pieces already hold the runtime `Geom`, so nothing is translated here — only the parameter scope
 // is assembled and the family-level fields (coefficients, bonus, lemma) are dropped, because they
 // belong to Pass 5 and not to geometry.
-import { parse, substitute, type Node } from "@cas/expr";
+import { evaluate, parse, substitute, type Node } from "@cas/expr";
 import type { Contour, Param, Params, Piece } from "../engine/contour/model.js";
 import { toContourIntegrand } from "../engine/substitution.js";
 import type { Family } from "./schema.js";
@@ -51,6 +51,28 @@ function buildParams(family: Family, values: Readonly<Record<string, number>>): 
     // outside its own slider.
     const span = Math.max(10, Math.abs(value) * 2);
     params[p.name] = { name: p.name, value, range: [-span, span], scale: "linear" };
+  }
+
+  // Derived geometry values, computed from the parameters just bound. B1's arc flips half-plane
+  // with sgn(a), and `Scalar` is affine — so the sign becomes a parameter of its own and the
+  // geometry stays affine in it.
+  for (const d of family.contour.derived ?? []) {
+    const scope: Record<string, [number, number]> = {};
+    for (const [name, p] of Object.entries(params)) scope[name] = [p.value, 0];
+    let value: number;
+    try {
+      const got = evaluate(parse(d.expr), [0, 0], [0, 0], undefined, scope);
+      if (typeof got === "boolean") throw new Error("a derived value must be numeric");
+      value = got[0];
+    } catch (e) {
+      throw new Error(
+        `instantiating '${family.id}': derived value '${d.name}' = '${d.expr}' did not evaluate: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+    }
+    const span = Math.max(1, Math.abs(value));
+    params[d.name] = { name: d.name, value, range: [-span, span], scale: "linear" };
   }
 
   for (const l of family.contour.limitParams) {
