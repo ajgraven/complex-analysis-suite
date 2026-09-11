@@ -24,6 +24,7 @@ export default defineConfig({
         "packages/*/src/**/*.{ts,tsx}",
         "apps/complex-dynamics/src/**/*.{ts,tsx}",
         "apps/correspondences/src/**/*.{ts,tsx}",
+        "apps/contour-integration/src/**/*.{ts,tsx}",
       ],
       exclude: [
         "**/*.test.*",

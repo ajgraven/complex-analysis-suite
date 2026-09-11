@@ -21,6 +21,7 @@ const APP_NAMES = [
   "complex-function-plotter",
   "quadrature-domains",
   "correspondences",
+  "contour-integration",
   "launcher",
   "riemann-map",
   "argument-principle",
