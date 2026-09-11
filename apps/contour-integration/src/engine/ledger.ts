@@ -16,9 +16,9 @@ import { Frac } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
-import { clearance } from "../kernel/winding.js";
+import { clearance, windingNumber } from "../kernel/winding.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
-import { classifyAgainstCut } from "../kernel/branch/crossing.js";
+import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
@@ -280,23 +280,73 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       ...branch.points.map((b) => Math.hypot(b.at[0], b.at[1])),
     );
 
+    // FIRST, the topological question one piece of geometry cannot answer: is the contour a loop in
+    // ℂ∖Γ at all? A loop encircling a branch point does not close on one sheet — `z^α` comes back
+    // multiplied — so `n(γ, b) ≠ 0` is a refusal whatever any individual piece is doing, and it is
+    // decided exactly by the same crossing predicates that decide a pole's winding number. This is
+    // the sharper form of a rule the per-piece geometry used to approximate: a naked circle about the
+    // origin was refused for "crossing the cut at its seam", when what is actually wrong with it is
+    // that it goes round the branch point.
+    const encircled: string[] = [];
+    for (const point of branch.points) {
+      const genuine = point.order.kind === "log" || point.order.alpha.d !== 1n;
+      if (!genuine) continue;
+      const w = windingNumber(pieces, point.at);
+      if (w.decided && w.n !== 0) {
+        encircled.push(`n(γ, ${point.label}) = ${w.n}`);
+      }
+    }
+    if (encircled.length > 0) {
+      push(
+        rowFrom(
+          "LEGALITY",
+          "failed",
+          `the contour encircles a branch point (${encircled.join(", ")}), so the integrand does not return to the same value`,
+          refuse(
+            "LEGALITY",
+            `${encircled.join(", ")} — a loop with non-zero winding about a branch point is not a loop in ℂ∖Γ, ` +
+              "so the integrand is multivalued along it and no single sheet carries the answer",
+            {
+              provenance: [
+                { ok: false, text: "the winding number is decided exactly, by the same sign predicates the poles use" },
+                { ok: true, text: "suggested repair: indent the contour around the branch point — that is what a keyhole IS — or move it clear" },
+              ],
+            },
+          ),
+          undefined,
+          "indent the contour around the branch point (a keyhole), or move it clear",
+        ),
+      );
+      return {
+        rows,
+        closes: false,
+        verdict: assembleVerdict(certificates),
+        failedAt: "LEGALITY",
+        hasTarget: spec.some((p) => p.role === "target"),
+        pieceLimits,
+      };
+    }
+
     const offending: string[] = [];
     const undecidable: string[] = [];
-    let crossings = 0;
+    let declared = 0;
     for (const cut of branch.cuts) {
       const poly = cutPolyline(branch, cut, 4 * extent);
       if (poly === null) continue; // admissibility already proved every endpoint exists
       for (let k = 0; k < pieces.length; k++) {
         const c = classifyAgainstCut(cut.id, pieces[k], poly, extent);
-        if (c.kind === "clear") continue;
+        // `clear` and `endpoint` are both fine: a piece ENDING on the cut is the contour arriving at
+        // it, which is where one piece of a keyhole hands over to the next.
+        if (c.kind === "clear" || c.kind === "endpoint") continue;
         const piece = spec[k];
         const label = piece?.name ?? `piece ${k + 1}`;
         if (c.kind === "touches") {
           undecidable.push(`${label} grazes the cut '${cut.id}'`);
         } else if (piece?.side === undefined) {
-          offending.push(`${label} crosses the cut '${cut.id}'`);
-        } else {
-          crossings += c.count;
+          const how = c.kind === "along" ? "runs along" : "crosses";
+          offending.push(`${label} ${how} the cut '${cut.id}'`);
+        } else if (needsSide(c.kind)) {
+          declared += 1;
         }
       }
     }
@@ -307,9 +357,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         "LEGALITY",
         cutOk ? "satisfied" : "failed",
         cutOk
-          ? crossings === 0
-            ? "no piece of the contour meets a branch cut"
-            : `every piece that meets a branch cut declares the side it runs on (${crossings} crossing${crossings === 1 ? "" : "s"})`
+          ? declared === 0
+            ? "no piece of the contour meets a branch cut, except where it ends on one"
+            : `every piece that meets a branch cut declares the side it runs on (${declared} piece${declared === 1 ? "" : "s"})`
           : undecidable.length > 0
             ? `${undecidable[0]}, so it has no side to declare`
             : `${offending[0]} without declaring which side it runs on`,

@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { Frac } from "@cas/exact";
 import { checkAdmissibility, type AdmissibilityReport } from "../src/kernel/branch/admissibility.js";
-import { classifyAgainstCut } from "../src/kernel/branch/crossing.js";
+import { classifyAgainstCut, needsSide } from "../src/kernel/branch/crossing.js";
 import { liftArgument } from "../src/kernel/branch/lift.js";
 import {
   INFINITY,
@@ -524,10 +524,24 @@ describe("classifyAgainstCut", () => {
     expect(c.at?.[1]).toBeCloseTo(0, 9);
   });
 
-  it("refuses a grazing contact rather than picking a side for it", () => {
-    // Collinear with the cut: every orientation predicate is zero, and there IS no side.
+  it("calls a segment lying IN the cut `along` — the keyhole's lip", () => {
+    // Collinear with the cut. This is not a grazing contact and must not be refused: `model.ts` says
+    // the `side` tag exists to pin "which limit is meant where the piece runs along a branch cut",
+    // and the keyhole's two lips are exactly that. Calling it a refusal made tier D's flagship
+    // contour illegal.
     const c = classifyAgainstCut("k", { kind: "segment", from: [1, 0], to: [4, 0] }, positiveAxis, 10);
-    expect(c.kind).toBe("touches");
+    expect(c.kind).toBe("along");
+    expect(needsSide(c.kind)).toBe(true);
+  });
+
+  it("does not call a segment merely POINTING at the cut `along`", () => {
+    // Parallel but off the cut, and perpendicular meeting it at an end: neither lies in it.
+    expect(
+      classifyAgainstCut("k", { kind: "segment", from: [1, 0.5], to: [4, 0.5] }, positiveAxis, 10).kind,
+    ).toBe("clear");
+    expect(
+      classifyAgainstCut("k", { kind: "segment", from: [2, 0], to: [2, 3] }, positiveAxis, 10).kind,
+    ).toBe("endpoint");
   });
 
   it("keeps the two lips of a keyhole apart, however thin they are", () => {
@@ -589,24 +603,30 @@ describe("classifyAgainstCut", () => {
       expect(classifyAgainstCut("k", arc(0.3, 0.3 + TAU), short, 10).kind).toBe("clear");
     });
 
-    it("crosses at the SEAM of a closed circle like anywhere else", () => {
-      // A closed arc has no ends, only a parameter that happens to start somewhere. Reading the seam
-      // as an endpoint refused the app's opening state outright: a circle about the origin, `θ₀ = 0`,
-      // and a cut running out along the positive axis — which puts the crossing exactly on the seam.
-      const circle = arc(0, TAU);
-      const c = classifyAgainstCut("k", circle, positiveAxis, 10);
-      expect(c.kind).toBe("crosses");
-      expect(c.count).toBe(1);
-      expect(c.at?.[0]).toBeCloseTo(2, 9);
+    it("meets the cut at its own ENDS without crossing — the keyhole's outer circle", () => {
+      // A 2π sweep starting and ending at z = 2, which is on the cut. As a path in ℂ∖Γ that is an arc
+      // from the upper lip round to the lower one: it never crosses. Treating a closed sweep as
+      // having no ends called this a crossing, and that made the keyhole illegal — what is actually
+      // wrong with a bare circle here is that it encircles the branch point, which is the ledger's
+      // winding row and not this predicate's business.
+      for (const sweep of [TAU, (3 * Math.PI) / 2, Math.PI]) {
+        const c = classifyAgainstCut("k", arc(0, sweep), positiveAxis, 10);
+        expect(c.kind).toBe("endpoint");
+        expect(needsSide(c.kind)).toBe(false);
+      }
     });
 
-    it("but an OPEN arc that STARTS on the cut is still degenerate, crossing or not", () => {
-      // Three quarters of a turn beginning at z = 2, which is on the cut. The traversal does pass
-      // through that direction, so the crossing count is 1 and the naive reading is `crosses` — but
-      // the piece BEGINS there, and which side its neighbour approaches from is exactly the question
-      // a `side` tag would have to answer. The end is real here in a way a closed arc's seam is not.
-      const c = classifyAgainstCut("k", arc(0, (3 * Math.PI) / 2), positiveAxis, 10);
-      expect(c.kind).toBe("touches");
+    it("still crosses when the cut meets its INTERIOR", () => {
+      // Half a turn from θ = π/2 to 3π/2 sweeps across ℝ₋, so a cut down the negative axis is met
+      // well away from either end.
+      const negativeAxis: Cx[] = [
+        [0, 0],
+        [-100, 0],
+      ];
+      const c = classifyAgainstCut("k", arc(Math.PI / 2, (3 * Math.PI) / 2), negativeAxis, 10);
+      expect(c.kind).toBe("crosses");
+      expect(c.count).toBe(1);
+      expect(c.at?.[0]).toBeCloseTo(-2, 9);
     });
 
     it("refuses a tangency, where the crossing count is the question", () => {
@@ -640,13 +660,27 @@ describe("classifyAgainstCut", () => {
     });
 
     it("is refused for an arc piece", () => {
+      // The bend at (0,2) is on the circle and is NOT where the arc begins, so there is no handover
+      // to excuse it.
+      const bent: Cx[] = [
+        [0, 0],
+        [0, 2],
+        [3, 4],
+      ];
+      const circle: Resolved = { kind: "arc", center: [0, 0], radius: 2, theta0: 0, theta1: TAU };
+      expect(classifyAgainstCut("k", circle, bent, 10).kind).toBe("touches");
+    });
+
+    it("but a bend at the piece's own END is the ordinary handover", () => {
+      // The bend at (2,0) is exactly where this arc starts and finishes. That is one piece of a
+      // contour meeting the next ON the cut, which is how a keyhole is built.
       const bent: Cx[] = [
         [0, 0],
         [2, 0],
         [4, 3],
       ];
       const circle: Resolved = { kind: "arc", center: [0, 0], radius: 2, theta0: 0, theta1: TAU };
-      expect(classifyAgainstCut("k", circle, bent, 10).kind).toBe("touches");
+      expect(classifyAgainstCut("k", circle, bent, 10).kind).toBe("endpoint");
     });
 
     it("but a bend merely NEAR the piece is decided as usual", () => {

@@ -6,12 +6,27 @@
 // keyhole contour (two segments deliberately hugging opposite sides of ℝ₊, whose difference is the
 // whole integral) and a contour that wanders across a cut and silently changes sheet.
 //
-// THE ANSWER IS THREE-VALUED, ON PURPOSE. `clear` and `crosses` are decisions; `touches` is a
-// refusal, and it is the honest outcome whenever the piece and the cut are closer than the geometry
-// can resolve. A grazing contact has no side, so neither tag would pin anything and the app must say
-// so rather than round the question away. That is the same posture `winding.ts` takes about a pole
-// sitting on the contour, and it shares the same threshold so the app has ONE idea of "too close to
-// say" rather than two that can drift.
+// FIVE ANSWERS, AND D1 IS WHY. The first version of this file had three — `clear`, `crosses`,
+// `touches` — and refused the keyhole outright, which is the one contour tier D is built on. Two of
+// its four pieces run ALONG the cut (that is what the `side` tag is for: `model.ts` says the tag
+// "pins which limit is meant where the piece runs along a branch cut — never an ε-offset"), and the
+// other two meet the cut only at their own ENDPOINTS, where they join the lips. Neither is a
+// crossing, and calling both a grazing contact made the gallery's flagship record illegal.
+//
+//   `clear`     they do not meet.
+//   `endpoint`  they meet only at an end of the PIECE — the contour arriving at the cut, which is
+//               where one piece hands over to the next. Legal, and needs no tag.
+//   `along`     the piece lies in the cut. The keyhole's two lips. Legal WHEN TAGGED.
+//   `crosses`   the piece's interior transversally crosses. Legal when tagged; otherwise the sheet
+//               changes with nothing said about it.
+//   `touches`   a tangency, or a bend of the cut resting on the piece's interior. A refusal: there
+//               is no side there, so no tag would pin anything.
+//
+// What the old `endpoint`-is-a-refusal rule was really catching — a circle that encircles a branch
+// point and must therefore cross the cut somewhere — is caught properly by a different and better
+// test, one piece of geometry cannot see: the WINDING NUMBER of the whole contour about each branch
+// point, which `ledger.ts` decides exactly. A loop with `n(γ,b) ≠ 0` is not a loop in ℂ∖Γ at all,
+// and saying that is a sharper diagnosis than naming whichever piece happened to cross.
 //
 // **A BEND OF THE CUT LYING ON THE PIECE IS DEGENERATE.** That one rule, checked before anything
 // else, is what lets every other predicate here stay strict. The alternative — a sign convention that
@@ -31,8 +46,11 @@ import { distanceToPoint, startPoint, endPoint } from "../geom.js";
 import { orient2d } from "../exactPredicates.js";
 import { RELATIVE_CLEARANCE_FLOOR } from "../winding.js";
 
-/** `clear` and `crosses` are decisions. `touches` is a refusal: too close to have a side. */
-export type CrossingKind = "clear" | "crosses" | "touches";
+/** See the header. `touches` is the only refusal; `along` and `crosses` are legal when tagged. */
+export type CrossingKind = "clear" | "endpoint" | "along" | "crosses" | "touches";
+
+/** Whether this contact obliges the piece to declare which side of the cut it runs on. */
+export const needsSide = (kind: CrossingKind): boolean => kind === "along" || kind === "crosses";
 
 export interface CutClassification {
   readonly cutId: string;
@@ -76,21 +94,6 @@ function passesThrough(g: Extract<Resolved, { kind: "arc" }>, theta: number): nu
   return Math.ceil((total - along) / TAU);
 }
 
-/**
- * Whether the arc's traversal closes on itself — one full turn, or several.
- *
- * A closed arc has no ENDS, only a seam where its parameter happens to start, and the difference
- * matters: a crossing at the endpoint of an open arc is degenerate (the piece stops on the cut and
- * its neighbour's side is the open question), while a crossing at the seam of a circle is an
- * ordinary crossing that the parameterisation merely happens to begin at. Reading the seam as an
- * endpoint refused the app's own opening state — a circle about the origin, and a cut running out
- * along the positive axis from it, which is where a default `theta0 = 0` puts the seam.
- */
-function closesOnItself(g: Extract<Resolved, { kind: "arc" }>): boolean {
-  const turns = Math.abs(g.theta1 - g.theta0) / TAU;
-  return turns >= 1 && Math.abs(turns - Math.round(turns)) < 1e-12;
-}
-
 /** How far along the arc, in length, the direction `theta` sits from the nearer of its two ends. */
 function endpointProximity(g: Extract<Resolved, { kind: "arc" }>, theta: number): number {
   const sweep = g.theta1 - g.theta0;
@@ -99,37 +102,69 @@ function endpointProximity(g: Extract<Resolved, { kind: "arc" }>, theta: number)
   return Math.min(along, Math.abs(total - along)) * g.radius;
 }
 
+/** One point where a piece meets a cut edge, and what kind of meeting it is. */
 interface Hit {
+  /** How many times the traversal passes through. Zero for a meeting at an end of the piece. */
   readonly count: number;
   readonly at: Cx;
-  /** True when the intersection is grazing, or lands on an endpoint of either object. */
+  /** The meeting is at an END of the piece — where the contour hands over to its next piece. */
+  readonly atPieceEnd: boolean;
+  /** Tangential: no side, and therefore nothing a `side` tag could pin. */
   readonly grazing: boolean;
 }
 
-/** Transversal crossing of a segment piece with one cut edge — four strict `orient2d` predicates. */
-function segmentHits(a: Cx, b: Cx, c: Cx, d: Cx): Hit | null {
+/** Whether the two collinear segments `[a,b]` and `[c,d]` overlap in more than a point. */
+function overlapsCollinearly(a: Cx, b: Cx, c: Cx, d: Cx, tol: number): boolean {
+  if (orient2d(a, b, c) !== 0 || orient2d(a, b, d) !== 0) return false;
+  const ux = b[0] - a[0];
+  const uy = b[1] - a[1];
+  const len2 = ux * ux + uy * uy;
+  if (len2 === 0) return false;
+  const at = (p: Cx): number => ((p[0] - a[0]) * ux + (p[1] - a[1]) * uy) / len2;
+  const lo = Math.min(at(c), at(d));
+  const hi = Math.max(at(c), at(d));
+  return Math.min(hi, 1) - Math.max(lo, 0) > tol / Math.sqrt(len2);
+}
+
+/** Where a segment piece meets one cut edge. Exact-sign predicates, with the ends kept apart. */
+function segmentHits(a: Cx, b: Cx, c: Cx, d: Cx, tol: number): Hit | null {
   const s1 = orient2d(a, b, c);
   const s2 = orient2d(a, b, d);
   const s3 = orient2d(c, d, a);
   const s4 = orient2d(c, d, b);
-  // Every degenerate configuration has a zero somewhere, and every one of them is already `touches`:
-  // a vertex of the cut on the piece was caught before this ran, and a vertex of the PIECE on the cut
-  // leaves the two at distance zero, which the clearance test below reads.
-  if (s1 === 0 || s2 === 0 || s3 === 0 || s4 === 0) return null;
-  if (s1 * s2 > 0 || s3 * s4 > 0) return null;
+  // Collinear is the caller's business (`along`), not a crossing.
+  if (s1 === 0 && s2 === 0) return null;
+  if (s1 * s2 > 0) return null;
+
+  // `s3`/`s4` zero means an END of the PIECE lies on the cut's line — the contour arriving at the
+  // cut. That is a meeting, not a crossing, and it is what makes the keyhole's circles legal.
+  const onEnd = s3 === 0 || s4 === 0;
+  if (!onEnd && s3 * s4 > 0) return null;
 
   const rx = b[0] - a[0];
   const ry = b[1] - a[1];
   const sx = d[0] - c[0];
   const sy = d[1] - c[1];
   const den = rx * sy - ry * sx;
-  // The sign tests above already proved the crossing; `den` is only how it is LOCATED, and it cannot
-  // be zero once all four orientations are strict.
+  if (den === 0) return null; // parallel and not collinear: no meeting
   const t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / den;
-  return { count: 1, at: [a[0] + t * rx, a[1] + t * ry], grazing: false };
+  const span = Math.hypot(rx, ry);
+  const tolT = span === 0 ? 0 : tol / span;
+  // Beyond the cut edge itself, in the edge's own parameter.
+  const u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / den;
+  if (u < -tolT || u > 1 + tolT) return null;
+  if (t < -tolT || t > 1 + tolT) return null;
+
+  const atPieceEnd = t <= tolT || t >= 1 - tolT;
+  return {
+    count: atPieceEnd ? 0 : 1,
+    at: [a[0] + t * rx, a[1] + t * ry],
+    atPieceEnd,
+    grazing: false,
+  };
 }
 
-/** Transversal crossings of an arc piece with one cut edge: |a + uD − c|² = r², one quadratic. */
+/** Where an arc piece meets one cut edge: |a + uD − c|² = r², one quadratic. */
 function arcHits(g: Extract<Resolved, { kind: "arc" }>, a: Cx, b: Cx, tol: number): Hit[] {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
@@ -144,22 +179,23 @@ function arcHits(g: Extract<Resolved, { kind: "arc" }>, a: Cx, b: Cx, tol: numbe
 
   const root = Math.sqrt(disc);
   const span = Math.sqrt(A);
-  // The two intersections are `root/A` apart in `u`, so `root/span` apart in the plane. A short chord
-  // between them is a grazing contact however the discriminant's own magnitude scales, which is why
-  // tangency is judged here rather than on `disc`.
+  // The two intersections are `root/span` apart in the plane. A short chord between them is a
+  // grazing contact however the discriminant's own magnitude scales, which is why tangency is judged
+  // here rather than on `disc`.
   const grazing = root / span < tol;
 
   const out: Hit[] = [];
   for (const u of [(-B - root) / (2 * A), (-B + root) / (2 * A)]) {
-    // Past either end of this edge is not a crossing of THIS pair; the edge's own vertices cannot be
-    // on the arc, because the caller already refused that case.
     if (u < 0 || u > 1) continue;
     const at: Cx = [a[0] + u * dx, a[1] + u * dy];
     const theta = Math.atan2(at[1] - g.center[1], at[0] - g.center[0]);
     const count = passesThrough(g, theta);
-    const nearArcEnd = !closesOnItself(g) && endpointProximity(g, theta) < tol;
-    if (count === 0 && !nearArcEnd) continue;
-    out.push({ count: Math.max(count, 1), at, grazing: grazing || nearArcEnd });
+    // An END of the arc, whether or not the sweep closes. The keyhole's outer piece sweeps a full
+    // 2π and BOTH of its ends sit on the cut — it runs from the upper lip round to the lower one —
+    // so treating a closed sweep as having no ends is exactly what made that contour illegal.
+    const atPieceEnd = endpointProximity(g, theta) < tol;
+    if (count === 0 && !atPieceEnd) continue;
+    out.push({ count: atPieceEnd ? 0 : count, at, atPieceEnd, grazing });
     if (root === 0) break; // a double root is one point, not two
   }
   return out;
@@ -207,42 +243,64 @@ export function classifyAgainstCut(
   scale: number,
 ): CutClassification {
   const tol = RELATIVE_CLEARANCE_FLOOR * Math.max(scale, 1);
+  const from = startPoint(g);
+  const to = endPoint(g);
 
-  // The one pre-check that keeps every predicate below strict. A bend of the cut resting on the piece
-  // — the branch point itself included — has no side, so there is nothing for a `side` tag to pin.
+  // A bend of the cut resting on the piece's INTERIOR has no side, so no tag could pin anything
+  // there. On the piece's own END it is the ordinary handover from one piece to the next — which is
+  // where the keyhole's inner circle meets its lips — so only the interior case is degenerate.
   for (const v of poly) {
     const d = distanceToPoint(g, v);
-    if (d <= tol) return { cutId, kind: "touches", count: 0, nearest: d, at: v };
+    if (d > tol) continue;
+    const atEnd =
+      Math.hypot(v[0] - from[0], v[1] - from[1]) <= tol ||
+      Math.hypot(v[0] - to[0], v[1] - to[1]) <= tol;
+    if (!atEnd) return { cutId, kind: "touches", count: 0, nearest: d, at: v };
   }
 
   let count = 0;
   let nearest = Number.POSITIVE_INFINITY;
   let at: Cx | undefined;
   let grazed = false;
+  let met = false;
+  let along = false;
 
   for (let k = 0; k + 1 < poly.length; k++) {
     const a = poly[k];
     const b = poly[k + 1];
     nearest = Math.min(nearest, nearestToEdge(g, a, b));
+    if (g.kind === "segment" && overlapsCollinearly(g.from, g.to, a, b, tol)) {
+      along = true;
+      continue;
+    }
     const hits =
       g.kind === "segment"
-        ? ([segmentHits(g.from, g.to, a, b)].filter((h) => h !== null) as Hit[])
+        ? ([segmentHits(g.from, g.to, a, b, tol)].filter((h) => h !== null) as Hit[])
         : arcHits(g, a, b, tol);
     for (const h of hits) {
       if (h.grazing) {
         grazed = true;
         continue;
       }
+      met = true;
       count += h.count;
-      at ??= h.at;
+      if (h.count > 0) at ??= h.at;
     }
   }
 
-  if (grazed || (count === 0 && nearest <= tol)) {
-    return { cutId, kind: "touches", count: 0, nearest: Number.isFinite(nearest) ? nearest : 0, at };
-  }
+  // ORDER MATTERS, and it is by how much the caller has to do about it: lying in the cut and
+  // crossing it both oblige the piece to declare a side, and both are more than a grazing contact
+  // has to say. A refusal that fires before them would make the keyhole illegal.
+  if (along) return { cutId, kind: "along", count: 0, nearest: 0 };
   if (count > 0) {
     return { cutId, kind: "crosses", count, nearest: 0, ...(at === undefined ? {} : { at }) };
+  }
+  if (grazed) {
+    return { cutId, kind: "touches", count: 0, nearest: Number.isFinite(nearest) ? nearest : 0, at };
+  }
+  if (met) return { cutId, kind: "endpoint", count: 0, nearest: 0 };
+  if (nearest <= tol) {
+    return { cutId, kind: "touches", count: 0, nearest: Number.isFinite(nearest) ? nearest : 0 };
   }
   return { cutId, kind: "clear", count: 0, nearest: Number.isFinite(nearest) ? nearest : Infinity };
 }

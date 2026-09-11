@@ -5,9 +5,8 @@
 // so it stays fully editable after loading and its `R` is the same store field whether you drag the
 // handle or scrub the number in the derivation prose.
 //
-// Six of the gallery's seven templates are here or trivially derived from these; the keyhole and
-// dogbone wait for M4, since their pieces need the `side` tags that only mean something once branch
-// cuts exist.
+// The keyhole arrived with M4.2, because its pieces need the `side` tags that only mean something
+// once branch cuts exist. The dogbone waits for M4.6.
 import type { Contour, Param, Piece, Scalar } from "./model.js";
 import { pt } from "./model.js";
 
@@ -139,6 +138,68 @@ export function indentedSemicircleTemplate(radius = 8, indent = 0.05): Contour {
     params: {
       R: param("R", radius, [0.5, 1e6], "log", { to: "inf" }),
       rho: param("rho", indent, [1e-9, 1], "log", { to: "0+" }),
+    },
+  };
+}
+
+/**
+ * The keyhole: out along the upper lip of `[0,∞)`, round to the lower lip, back in, and round again.
+ *
+ * **THE LIPS LIE IN THE CUT, and the `side` tag is what tells them apart** — `model.ts` is explicit
+ * that the tag pins "which limit is meant where the piece runs along a branch cut, never an
+ * ε-offset". So `upper` and `lower` are the SAME segment of ℝ₊ traversed in opposite directions,
+ * and they fail to cancel only because `z^{α−1}` returns multiplied by `e^{2πi(α−1)}`. Drawing them
+ * a hair above and below would make the picture clearer and the mathematics wrong: the factor is a
+ * statement about a limit, not about a small displacement.
+ *
+ * The two circles run `0 → 2π` and `2π → 0`, which is the whole reason the contour is legal: as a
+ * path in ℂ∖Γ the outer one is an arc from the upper lip round to the lower one, not a closed loop,
+ * and the net winding about the branch point at 0 is `+1 − 1 = 0`. A bare circle about the origin
+ * has winding 1 and is refused — the cut is not optional there, it is unavoidable.
+ *
+ * D1 and D3 both supply their own pieces; this is the sandbox's copy, so a keyhole can be drawn and
+ * dragged without opening a record.
+ */
+export function keyholeTemplate(outer = 4, inner = 0.15): Contour {
+  const pieces: Piece[] = [
+    {
+      id: "upper",
+      name: "the upper edge of the cut",
+      geom: { kind: "segment", from: pt(ref("eps"), 0), to: pt(ref("R"), 0) },
+      role: "target",
+      side: "above",
+      colour: 0,
+    },
+    {
+      id: "outer",
+      name: "the R → ∞ circle",
+      geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: 2 * Math.PI },
+      role: "vanish",
+      lemma: "L2",
+      colour: 1,
+    },
+    {
+      id: "lower",
+      name: "the lower edge of the cut",
+      geom: { kind: "segment", from: pt(ref("R"), 0), to: pt(ref("eps"), 0) },
+      role: "reproduces",
+      side: "below",
+      colour: 2,
+    },
+    {
+      id: "inner",
+      name: "the ε → 0 circle",
+      geom: { kind: "arc", center: pt(0, 0), radius: ref("eps"), theta0: 2 * Math.PI, theta1: 0 },
+      role: "vanish",
+      lemma: "L1",
+      colour: 3,
+    },
+  ];
+  return {
+    pieces,
+    params: {
+      R: param("R", outer, [0.5, 1e6], "log", { to: "inf" }),
+      eps: param("eps", inner, [1e-9, 1], "log", { to: "0+" }),
     },
   };
 }

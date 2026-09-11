@@ -6,7 +6,13 @@ import { integrateContour } from "../src/engine/contour/integrate.js";
 import { applyResidueTheorem } from "../src/engine/residueTheorem.js";
 import { evaluateLedger, ledgerHeadline, legalityRefusal } from "../src/engine/ledger.js";
 import { resolveAll, type Contour } from "../src/engine/contour/model.js";
-import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
+import { isClosed } from "../src/kernel/geom.js";
+import { windingNumber } from "../src/kernel/winding.js";
+import {
+  circleTemplate,
+  keyholeTemplate,
+  semicircleTemplate,
+} from "../src/engine/contour/templates.js";
 import { INFINITY, type BranchChoice, type BranchPoint } from "../src/kernel/branch/model.js";
 import { Frac } from "@cas/exact";
 
@@ -26,6 +32,13 @@ function run(src: string, contour: Contour, branch?: BranchChoice) {
 }
 
 const rowsFor = (r: ReturnType<typeof run>, c: string) => r.rows.filter((x) => x.constraint === c);
+
+/** The same piece with no `side` declared — what the untagged refusals are tested against. */
+function untag(piece: Contour["pieces"][number]): Contour["pieces"][number] {
+  const copy: Record<string, unknown> = { ...piece };
+  delete copy.side;
+  return copy as Contour["pieces"][number];
+}
 
 describe("the ledger closes a correct argument", () => {
   it("closes ∫dx/(1+x²) = π on the upper semicircle", () => {
@@ -206,7 +219,23 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
   });
 
   const cutRows = (r: ReturnType<typeof run>) =>
-    rowsFor(r, "LEGALITY").filter((x) => x.claim.includes("cut"));
+    rowsFor(r, "LEGALITY").filter((x) => x.claim.includes("cut") || x.claim.includes("branch point"));
+  /** The per-piece row specifically — both cut rows mention "cut", and only one is about pieces. */
+  const pieceRow = (r: ReturnType<typeof run>) =>
+    cutRows(r).find((x) => !x.claim.includes("admissible"));
+
+  /**
+   * A circle around z = −3, which the cut down ℝ₋ runs straight through.
+   *
+   * Off the origin deliberately: a circle ABOUT the branch point is refused by the winding row
+   * before any per-piece geometry is read, so it cannot be used to test the crossing rule.
+   */
+  const crossedBy = (side?: "above" | "below"): Contour => {
+    const base = circleTemplate([-3, 0], 1);
+    return side === undefined
+      ? base
+      : { ...base, pieces: base.pieces.map((p) => ({ ...p, side })) };
+  };
 
   it("emits no cut rows at all for a rational integrand", () => {
     // A permanently green "no cuts to check" row would be noise in front of every one of the 28
@@ -250,35 +279,65 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     expect(cutRows(r)).toHaveLength(1);
   });
 
-  it("refuses a piece that crosses a cut without declaring its side, and names the repair", () => {
-    // The cut down ℝ₋, and a circle about the origin that must cross it.
+  it("refuses a contour that ENCIRCLES a branch point, before reading any piece", () => {
+    // The sharper form of a rule the per-piece geometry used to approximate. A circle about the
+    // origin was refused for "crossing the cut at its seam"; what is actually wrong with it is that
+    // `z^(1/3)` does not come back to the same value after a turn around 0. The winding number is
+    // decided exactly, by the same sign predicates the poles use.
     const r = run("1/(z-3)", circleTemplate([0, 0], 1), keyhole([-1, 0]));
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("LEGALITY");
     expect(r.value).toBeUndefined();
-    const row = cutRows(r)[1];
-    expect(row.status).toBe("failed");
-    expect(row.claim).toMatch(/crosses the cut/);
-    expect(row.repair).toBe("tag this segment `above` or `below`, or move the cut");
+    const row = cutRows(r).find((x) => x.claim.includes("encircles"));
+    expect(row?.status).toBe("failed");
+    expect(row?.claim).toMatch(/n\(γ, z = 0\) = 1/);
+    expect(row?.repair).toMatch(/keyhole/);
+    // And it fires FIRST: the per-piece row is never reached.
+    expect(cutRows(r).some((x) => /declaring which side|declares the side|meets a branch cut/.test(x.claim))).toBe(false);
+  });
+
+  it("does not apply the winding rule to a point that is not a branch point at all", () => {
+    // α = 2 is single-valued: `z²` comes back to itself after a turn, so a loop around it changes
+    // nothing and the declared cut is spurious. Testing every declared point rather than every
+    // GENUINE one would refuse a perfectly ordinary contour.
+    const integral: BranchChoice = {
+      ...keyhole([-1, 0]),
+      points: [{ id: "0", at: [0, 0], order: { kind: "power", alpha: Frac.of(2n) }, label: "z = 0" }],
+    };
+    const r = run("1/(z-3)", circleTemplate([0, 0], 1), integral);
+    expect(cutRows(r).some((x) => x.claim.includes("encircles"))).toBe(false);
+    // The declared cut is still a declared cut, and this circle still crosses it without saying
+    // which side — the app does not get to decide a user's cut was pointless. So LEGALITY does fail
+    // here; what must not happen is failing for the WINDING reason, which does not apply.
+    expect(cutRows(r).find((x) => x.status === "failed")?.claim).toMatch(/crosses the cut/);
+  });
+
+  it("does not mind a contour that stays clear of the branch point", () => {
+    expect(run("1/(z+3)", crossedBy(), keyhole([1, 0])).failedAt).toBeNull();
+  });
+
+  it("refuses a piece that crosses a cut without declaring its side, and names the repair", () => {
+    const r = run("1/(z+3)", crossedBy(), keyhole([-1, 0]));
+    expect(r.closes).toBe(false);
+    expect(r.failedAt).toBe("LEGALITY");
+    expect(r.value).toBeUndefined();
+    const row = pieceRow(r);
+    expect(row?.status).toBe("failed");
+    expect(row?.claim).toMatch(/crosses the cut/);
+    expect(row?.repair).toBe("tag this segment `above` or `below`, or move the cut");
   });
 
   it("accepts the same crossing once the piece declares which side it runs on", () => {
-    const base = circleTemplate([0, 0], 1);
-    const tagged: Contour = {
-      ...base,
-      pieces: base.pieces.map((p) => ({ ...p, side: "above" as const })),
-    };
-    const r = run("1/(z-3)", tagged, keyhole([-1, 0]));
-    const row = cutRows(r)[1];
-    expect(row.status).toBe("satisfied");
-    expect(row.claim).toMatch(/declares the side it runs on \(1 crossing\)/);
+    const row = pieceRow(run("1/(z+3)", crossedBy("above"), keyhole([-1, 0])));
+    expect(row?.status).toBe("satisfied");
+    expect(row?.claim).toMatch(/declares the side it runs on \(1 piece\)/);
   });
 
-  it("refuses a piece lying ALONG the cut, and no tag rescues it", () => {
-    // A tag says which limit is meant where the contour crosses; a piece running down the cut itself
-    // is not approaching from a side at all, so `above` would pin nothing. The distinction matters
-    // because the keyhole's two lips DO lie parallel to the cut and must stay legal — they are a
-    // hair off it, not on it, and that hair is the entire integral.
+  it("accepts a TAGGED piece lying along the cut — that is what a keyhole lip is", () => {
+    // `model.ts` is explicit that the `side` tag pins "which limit is meant where the piece runs
+    // along a branch cut — never an ε-offset". So a lip lies IN the cut and says which side it means.
+    // The first version of this engine refused that outright, which made tier D's flagship contour
+    // illegal; the untagged case below is the one that must fail.
     const onTheCut: Contour = {
       pieces: [
         {
@@ -304,31 +363,33 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
       ...keyhole([1, 0]),
       cuts: [{ id: "Γ", from: "0", to: INFINITY, via: [[1, 0]] }],
     };
-    const r = run("1/(z-9)", onTheCut, alongPositiveAxis);
-    const row = cutRows(r)[1];
-    expect(row.status).toBe("failed");
-    expect(row.claim).toMatch(/grazes/);
-    expect(row.repair).toBe("move the cut clear of the contour, or move the contour");
+    const tagged = pieceRow(run("1/(z-9)", onTheCut, alongPositiveAxis));
+    expect(tagged?.status).toBe("satisfied");
+
+    // …and untagged it refuses, naming the repair DESIGN §4 Pass 1 step 2 specifies.
+    const bare: Contour = {
+      ...onTheCut,
+      pieces: onTheCut.pieces.map((q) => untag(q)),
+    };
+    const row = pieceRow(run("1/(z-9)", bare, alongPositiveAxis));
+    expect(row?.status).toBe("failed");
+    expect(row?.claim).toMatch(/runs along the cut/);
+    expect(row?.repair).toBe("tag this segment `above` or `below`, or move the cut");
   });
 
-  it("refuses a cut whose BEND rests on the contour, tagged or not", () => {
-    // The bend at z = −1 sits exactly on the unit circle. There is no side at a bend — the cut leaves
-    // it in two directions — so no tag pins anything, and "move the cut" is the only real repair. It
-    // is also the state a drag passes through on its way somewhere legal, which is why it is a
-    // refusal and not an error.
-    const base = circleTemplate([0, 0], 1);
-    const tagged: Contour = {
-      ...base,
-      pieces: base.pieces.map((q) => ({ ...q, side: "above" as const })),
-    };
+  it("refuses a cut whose BEND rests on the contour's interior, tagged or not", () => {
+    // A bend has no side — the cut leaves it in two directions — so no tag pins anything there, and
+    // "move the cut" is the only real repair. It is also a state a drag passes through on its way
+    // somewhere legal, which is why it is a refusal and not an error. (A bend at a piece's own END
+    // is different: that is the handover a keyhole is built from, and it is legal.)
     const bent: BranchChoice = {
       ...keyhole([-1, 0]),
-      cuts: [{ id: "Γ", from: "0", to: INFINITY, via: [[-1, 0], [-3, 2]] }],
+      cuts: [{ id: "Γ", from: "0", to: INFINITY, via: [[-3, 1], [-5, 4]] }],
     };
-    const row = cutRows(run("1/(z-3)", tagged, bent))[1];
-    expect(row.status).toBe("failed");
-    expect(row.claim).toMatch(/grazes/);
-    expect(row.repair).toBe("move the cut clear of the contour, or move the contour");
+    const row = pieceRow(run("1/(z+3)", crossedBy("above"), bent));
+    expect(row?.status).toBe("failed");
+    expect(row?.claim).toMatch(/grazes/);
+    expect(row?.repair).toBe("move the cut clear of the contour, or move the contour");
   });
 
   it("moves the cut instead, and the same contour becomes legal", () => {
@@ -370,11 +431,11 @@ describe("legalityRefusal — the one gate on printing a value at all", () => {
   });
 
   it("names the failing row when a piece crosses a cut it has not declared a side for", () => {
-    // The case the shell used to miss: the QUADRATURE is perfectly happy here — ∮ dz/z over this
-    // circle is 2πi and every residue is exact — and LEGALITY still refuses. Reporting the number
-    // anyway is exactly the "singular configuration produces a number that then has to be
-    // suppressed" that running LEGALITY first exists to prevent.
-    const r = run("1/z", circleTemplate([0, 0], 1.5), rayTo([1, 0]));
+    // The case the shell used to miss: the QUADRATURE is perfectly happy here — every residue of
+    // `1/(z+3)` is exact — and LEGALITY still refuses. Reporting the number anyway is exactly the
+    // "singular configuration produces a number that then has to be suppressed" that running
+    // LEGALITY first exists to prevent.
+    const r = run("1/(z+3)", circleTemplate([-3, 0], 1), rayTo([-1, 0]));
     const row = legalityRefusal(r);
     expect(row?.claim).toMatch(/crosses the cut/);
     expect(row?.repair).toMatch(/tag this segment/);
@@ -396,7 +457,7 @@ describe("legalityRefusal — the one gate on printing a value at all", () => {
   });
 
   it("reports the FIRST failing LEGALITY row, which is the one that stopped the pass", () => {
-    const r = run("1/z", circleTemplate([0, 0], 1.5), rayTo([1, 0]));
+    const r = run("1/(z+3)", circleTemplate([-3, 0], 1), rayTo([-1, 0]));
     const failures = r.rows.filter((x) => x.constraint === "LEGALITY" && x.status === "failed");
     expect(failures).toHaveLength(1);
     expect(legalityRefusal(r)).toBe(failures[0]);
@@ -407,5 +468,76 @@ describe("legalityRefusal — the one gate on printing a value at all", () => {
     const away = circleTemplate([3, 0], 0.5);
     expect(legalityRefusal(run("1/(z-3)", away, rayTo([-1, 0])))).toBeUndefined();
     expect(legalityRefusal(run("1/(z-3)", away, rayTo([1, 0])))?.claim).toMatch(/crosses the cut/);
+  });
+});
+
+describe("the keyhole is LEGAL — the contour tier D is built on", () => {
+  // Everything in this block is about the contour's geometry against the cut, so the integrand is
+  // any rational function with no pole on ℝ₊. The keyhole's own integrand arrives with D1.
+  const origin: BranchPoint = {
+    id: "0",
+    at: [0, 0],
+    order: { kind: "power", alpha: Frac.of(1n, 3n) },
+    label: "z = 0",
+  };
+  const cutAlongPositiveAxis: BranchChoice = {
+    convention: "zeroToTwoPi",
+    points: [origin],
+    cuts: [{ id: "Γ", from: "0", to: INFINITY, via: [[1000, 0]] }],
+    basePoint: [0, 1],
+    sheet: 0,
+  };
+
+  const cutRows = (r: ReturnType<typeof run>) =>
+    rowsFor(r, "LEGALITY").filter((x) => x.claim.includes("cut") || x.claim.includes("branch point"));
+
+  it("passes LEGALITY: the lips declare their sides and the circles only END on the cut", () => {
+    const r = run("1/(z+1)", keyholeTemplate(4, 0.15), cutAlongPositiveAxis);
+    const rows = cutRows(r);
+    expect(rows.every((x) => x.status === "satisfied")).toBe(true);
+    expect(rows.some((x) => /declares the side it runs on \(2 pieces\)/.test(x.claim))).toBe(true);
+    // It stops later, at KILL: nothing kills a keyhole's circles for a RATIONAL integrand, because
+    // the lemmas that do (`ε^α → 0` needs α > 0, `R^{α−1} → 0` needs α < 1) are statements about the
+    // branch exponent. That is D1's integrand, and it arrives with D1.
+    expect(r.failedAt).not.toBe("LEGALITY");
+  });
+
+  it("has net winding ZERO about the branch point — which is why it is a loop in ℂ∖Γ at all", () => {
+    // `+1` from the outer circle and `−1` from the inner. This is the property that distinguishes a
+    // keyhole from a bare circle, and the reason the bare circle cannot be repaired by a tag.
+    const pieces = resolveAll(keyholeTemplate(4, 0.15));
+    expect(windingNumber(pieces, [0, 0]).n).toBe(0);
+    expect(windingNumber(pieces, [0, 0]).decided).toBe(true);
+  });
+
+  it("still encloses a pole off the cut, so the residue theorem has something to say", () => {
+    // z = −1 is inside the annulus the keyhole sweeps, at arg π — squarely inside (0, 2π).
+    const pieces = resolveAll(keyholeTemplate(4, 0.15));
+    expect(windingNumber(pieces, [-1, 0]).n).toBe(1);
+  });
+
+  it("refuses once a lip's side tag is removed", () => {
+    const bare = keyholeTemplate(4, 0.15);
+    const untagged: Contour = {
+      ...bare,
+      pieces: bare.pieces.map((q) => untag(q)),
+    };
+    const row = cutRows(run("1/(z+1)", untagged, cutAlongPositiveAxis)).find(
+      (x) => !x.claim.includes("admissible"),
+    );
+    expect(row?.status).toBe("failed");
+    expect(row?.claim).toMatch(/runs along the cut/);
+  });
+
+  it("is closed, at every scale of its two limit parameters", () => {
+    for (const [R, eps] of [
+      [4, 0.15],
+      [1e3, 1e-6],
+      [0.6, 0.5],
+    ]) {
+      const pieces = resolveAll(keyholeTemplate(R, eps));
+      expect(isClosed(pieces)).toBe(true);
+      expect(windingNumber(pieces, [0, 0]).n).toBe(0);
+    }
   });
 });
