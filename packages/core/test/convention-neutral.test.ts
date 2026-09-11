@@ -49,10 +49,11 @@ function stripComments(text: string): string {
   const noBlock = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
   return noBlock
     .split("\n")
-    // No `$`: after splitting on "
-" a CRLF checkout leaves a trailing "", and `.` does not match
-    // it while `$` (no `m` flag) will not match before it — so the pattern could not fire at all and
-    // the `//` comment survived, flagging the very comments that assert core is π-free.
+    // No `$` anchor. After splitting on a newline, a CRLF checkout leaves a trailing carriage
+    // return; `.` does not match one, and `$` (without the `m` flag) will not match before it — so
+    // the pattern could not fire at all, the `//` comment survived, and this guard flagged the very
+    // comments that assert core is free of the constant it bans. Dropping the anchor makes the
+    // stripper line-ending agnostic.
     .map((line) => line.replace(/\/\/.*/, ""))
     .join("\n");
 }
