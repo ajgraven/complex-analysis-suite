@@ -32,8 +32,11 @@ describe("asExponentialSum — a SUM of exponential terms, which the single-fact
   it("decomposes C2's auxiliary", () => {
     const form = formOf(C2_AUX);
     expect(form.den.degree()).toBe(2);
-    // Two frequencies: the rational part 1 + iz, and −1·e^{iz}.
-    expect(form.terms.map((t) => t.a.toNumber())).toEqual([0, 1]);
+    // Two exponents: the rational part 1 + iz (λ = 0), and −1·e^{iz} (λ = i).
+    expect(form.terms.map((t) => t.lambda.toTuple())).toEqual([
+      [0, 0],
+      [0, 1],
+    ]);
     expect(form.terms.map((t) => t.num.degree())).toEqual([1, 0]);
   });
 
@@ -43,6 +46,9 @@ describe("asExponentialSum — a SUM of exponential terms, which the single-fact
     // e^{iaz+c} = e^c·e^{iaz}, and e^c is not a Gaussian rational — so a constant term refuses
     // rather than being quietly factored out of the exact field.
     expect(asExponentialSum(parse("exp(i*z + 1)"))).toBeNull();
+    // exp(z) DOES read — λ = 1 is a perfectly good Gaussian rational, and A4 needs it. What refuses
+    // it is the arc BOUND, where |e^{λz}| = e^{Re λz} grows along the real axis.
+    expect(asExponentialSum(parse("exp(z)"))?.terms[0].lambda.toTuple()).toEqual([1, 0]);
     // Dividing BY an exponential introduces e^{−iaz}, unbounded where e^{iaz} is bounded.
     expect(asExponentialSum(parse("1/exp(i*z)"))).toBeNull();
   });

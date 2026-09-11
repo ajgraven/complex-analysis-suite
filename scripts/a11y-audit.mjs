@@ -137,6 +137,12 @@ const PAGES = [
     file: "index.html",
   },
   {
+    id: "contour-integration",
+    mount: "contour-integration",
+    dist: "apps/contour-integration/dist",
+    file: "index.html",
+  },
+  {
     id: "correspondences",
     mount: "correspondences",
     dist: "apps/correspondences/dist",

@@ -19,7 +19,7 @@ import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatExpSum } from "../expSum.js";
 import { formatFrac, formatGauss } from "../formatExact.js";
-import type { ExpRationalForm } from "../exponentialSum.js";
+import { imaginaryFrequency, type ExpRationalForm } from "../exponentialSum.js";
 import type { Resolved } from "../geom.js";
 import { signedSweepOverPi } from "./smallArc.js";
 
@@ -73,7 +73,7 @@ export function largeArcLimit(
     // z·f multiplies every numerator by z.
     const numDegree = term.num.degree() + 1;
 
-    if (term.a.isZero()) {
+    if (term.lambda.isZero()) {
       if (numDegree > denDegree) {
         return {
           ok: false,
@@ -89,13 +89,25 @@ export function largeArcLimit(
       continue;
     }
 
-    const boundedHere = (term.a.n > 0n && half === "upper") || (term.a.n < 0n && half === "lower");
+    // `|e^{λz}| = e^{Re(λz)}` is bounded on a half-plane only when λ is purely imaginary. A real part
+    // means growth along the real axis, which no arc lemma here covers — so A4's e^z is refused.
+    const a = imaginaryFrequency(term.lambda);
+    if (a === null) {
+      return {
+        ok: false,
+        certificate: refuse(
+          "L5",
+          `the exponent ${formatGauss(term.lambda)}·z has a real part, so |e^{λz}| grows along the real axis and no arc lemma applies`,
+        ),
+      };
+    }
+    const boundedHere = (a.n > 0n && half === "upper") || (a.n < 0n && half === "lower");
     if (!boundedHere) {
       return {
         ok: false,
         certificate: refuse(
           "L5",
-          `|e^{iaz}| = e^{−a·Im z} GROWS on the ${half} arc for a = ${formatFrac(term.a)}, so z·f has no limit there`,
+          `|e^{iaz}| = e^{−a·Im z} GROWS on the ${half} arc for a = ${formatFrac(a)}, so z·f has no limit there`,
         ),
       };
     }
@@ -104,7 +116,7 @@ export function largeArcLimit(
         ok: false,
         certificate: refuse(
           "L5",
-          `the term with a = ${formatFrac(term.a)} is bounded but does not decay (degree ${numDegree} over ${denDegree}); it oscillates rather than tending to a limit`,
+          `the term with a = ${formatFrac(a)} is bounded but does not decay (degree ${numDegree} over ${denDegree}); it oscillates rather than tending to a limit`,
         ),
       };
     }
