@@ -3658,17 +3658,27 @@ code path.
 
 ### Action Items
 
-1. [ ] Widen `expSum.ts`'s exponent to `ℚ(i)(√d) ⊕ (ℚ(i))·π ⊕ Σ(ℚ)·ln(ℚ₊)`, with `ln` symbolic
-       (M4.2 for the `π` half, M4.5 for the `ln` half).
-2. [ ] The sine recogniser, as **one** rule over a two-term denominator with equal-modulus terms,
-       with a test that an unrecognised shape refuses rather than returning a decimal (M4.2).
+1. [~] Widen `expSum.ts`'s exponent to `ℚ(i)(√d) ⊕ (ℚ(i))·π ⊕ Σ(ℚ)·ln(ℚ₊)`, with `ln` symbolic —
+       **the `π` half landed in M4.2** as `kernel/exponent.ts`, with π a component and never a
+       number; the `ln` half is M4.5's, and `kernel/branchResidue.ts` refuses a pole off the unit
+       circle by name until it arrives.
+2. [x] The sine recogniser, as **one** rule over a two-term denominator with equal-modulus terms,
+       with a test that an unrecognised shape refuses rather than returning a decimal —
+       `kernel/sineForm.ts` (M4.2). One rule grew a sibling rather than a second case: D3's
+       **geometric cancellation** collapses `Σ_{k<m} q^k` against a denominator `1 − q^m`, which is
+       what turns `sin(πa)` into `sin(πa/n)`. It is declared and bounded the same way, and it may
+       never rescue a degenerate derivation — the degeneracy is decided on the original denominator
+       before anything cancels.
 3. [ ] Generalise `families/linear.ts` over a `Field`; instantiate at `Frac` and at ℚ(i)(π), with the
        loader's invariant-4 tests green either side (M4.3).
 4. [ ] Retire `exactConstant`'s "deferred to M4" docstring once the symbolic entry lands, so the
        parked decision does not read as still open (M4.3).
-5. [ ] The four `Family["branch"]` schema changes, before D1 loads — **moved from M4.1 to M4.2**
-       (M4.1 built the branch model, the admissibility check and the cut editor; the schema fields
-       have no reader until D1 loads, and item 4 above is the standing lesson about adding fields
-       ahead of their engines).
+5. [x] The four `Family["branch"]` schema changes, before D1 loads — **done in M4.2**, validated
+       against D1 and D3 rather than added ahead of them. A fifth change was needed and is recorded
+       with them: `branch.rationalPart`, the cofactor the engine splits `z^α·R(z)` on, because the
+       branch point carries no residue while `R`'s poles carry all of them. And a sixth, from D3:
+       `Golden.refuses`, for a fixture that documents a collapsed derivation — invariant 4's rank
+       rule inverts there rather than being lifted, since "the derivation collapses here" and "the
+       engine cannot do this yet" must not look the same in the corpus.
 6. [ ] **Revisit if** a tier-E/F/G record needs a form outside the basis — G1–G3's `πcot`/`πcsc`
        kernels are the likely first test, and they are M5's, not M4's.

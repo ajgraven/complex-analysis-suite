@@ -316,8 +316,26 @@ stay `clear` down to the resolution floor. The sandbox's **cut editor** is a dec
 a detector — an incomplete detector would report "no branch points" for an integrand that has them
 and let LEGALITY pass a crossing in silence — and the dogbone join/split gesture is live. One latent
 hole closed on the way: `engine/ledger.ts` now exports `legalityRefusal`, so the result card can no
-longer print `∮` past a LEGALITY row the quadrature knew nothing about. Still to come in M4: the
-schema changes + keyhole (M4.2), ℚ(i)(π) in Pass 5 (M4.3), and the GPU cut picture (M4.7).
+longer print `∮` past a LEGALITY row the quadrature knew nothing about. **M4.2** delivers **north-star #4**: `∫₀^∞ x^{α−1}/(1+x) dx` prints `π/sin(πα)` labelled `=`, with
+the keyhole's four pieces, the `(1 − e^{2πiα})` factor and a certified bound on each vanishing arc.
+D1 and D3 are the fourteenth and fifteenth loaded records — **tier D has begun**. The exponential
+basis widens to `β = ℚ(i)(√d) ⊕ ℚ(i)·π` with π an INDETERMINATE (`kernel/exponent.ts`), so `e^{2πiα}`
+and `e^{iπ(α−1)}` compare by exponent rather than by tolerance; one **sine recogniser**
+(`kernel/sineForm.ts`) factors `a − b·e^{β}` with `|a| = |b|` and refuses everything else (R3); the
+**power-residue reader** evaluates `z₀^α` in the DECLARED `argRange`, guessed numerically and then
+verified exactly, which is D1's `residue-with-the-wrong-argument` trap made arithmetic; and
+`branchArc.ts` spends `α < 1` on the outer circle and `α > 0` on the inner — the same ML inequality
+read in opposite directions. D3 adds the **cyclotomic sum**, which computes `Σₖ Res` over the `n`-th
+roots of `−1` without ever naming one (at `n = 5` and `n = 7` no root fits one quadratic extension,
+and the SUM needs none), and the **geometric cancellation** that turns `sin(πa)` into `sin(πa/n)`.
+Three refusals are structural rather than detected: the wrong `argRange` swings the cut onto ℝ₋ and
+LEGALITY catches both untagged circles; integer `α` makes the coefficient exactly zero; and a
+cancellation may simplify a derivation but never rescue one — `Golden.refuses` is the schema
+consequence, and invariant 4's rank rule inverts for such a fixture rather than being lifted. Two
+guardrail holes closed on the way: `solveFamily` now gates on LEGALITY as the result card does, and
+no skipped quadrature is ever rendered as agreement. Still to come in M4: ℚ(i)(π) in Pass 5 with
+`linear.ts` over a `Field` (M4.3, → D4), prerequisite chaining (M4.4, → D5), the `ln(ℚ₊)` exponent
+half (M4.5, → D2), the dogbone and `Res(f,∞)` (M4.6, → D6/D7), and the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

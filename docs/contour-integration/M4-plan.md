@@ -150,7 +150,7 @@ before D2.
 | slice | delivers | size |
 |---|---|---|
 | **M4.1** ✅ | `BranchChoice`, the admissibility validator, CPU continuous-argument lift, `side` tags, LEGALITY steps 2–3, and the sandbox's cut editor | M |
-| **M4.2** | **the four `Family["branch"]` schema changes of §1.3** · keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser → **D1, D3** | **L** |
+| **M4.2** ✅ | the four `Family["branch"]` schema changes of §1.3 · keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser · **the cyclotomic sum and the geometric cancellation** → **D1, D3** | **L** |
 | **M4.3** | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` → **D4** | M–L |
 | **M4.4** | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** | `ln(ℚ₊)` exponents and radical factors → **D2, D7's algebraic half** | S–M |
@@ -163,9 +163,9 @@ before D2.
   `side` tag refuses and names the repair ("tag this segment `above` or `below`, or move the cut").
   Both halves verified in a browser: the "Branch cuts" card's verdict changes live as the dogbone is
   joined and split, and the ledger's own LEGALITY rows change with it.
-- **M4.2** — **north-star #4, verbatim.** Plus D1's `arg ∈ (−π,π]` trap reported as the *earliest* of
-  its three refusals (pole on the cut, untagged crossing, degenerate solve), which is what its record
-  asks for.
+- **M4.2** ✅ — **north-star #4, verbatim.** D1's `arg ∈ (−π,π]` trap is reported as the earliest of
+  its three refusals that this engine can see: the cut swings onto ℝ₋ and both untagged circles cross
+  it (LEGALITY step 2). D3 lands with it, including the two integer-`a` fixtures that must refuse.
 - **M4.3** — D4's three targets solve, and the wrong `argRange` reports *"this contour carries no
   information about `∫₀^∞ R(x) log x dx`"* as a computed rank statement rather than a hand-written
   detector.
@@ -252,3 +252,57 @@ crossing a cut without declaring its side is the first that does not, and the ap
 under a `⚠` LEGALITY row. `engine/ledger.ts` now exports the gate — *nothing may report a value while
 a LEGALITY row refuses* — and it reads the failing ROW rather than `failedAt`, so a row that one day
 fails softly still withholds the value.
+
+---
+
+## 5. What M4.2 landed, and what it taught
+
+Six commits: the widened basis, the sine recogniser, the schema plus the coefficient walk, the
+crossing correction, the power-residue reader, D1, and D3. Five things changed a decision.
+
+### The keyhole was illegal, and M4.1's cut rules were wrong
+
+Tier D's flagship contour refused to load. Two of its four pieces LIE IN the cut — that is what the
+`side` tag is for — and the other two meet it only at their own ENDS, where they hand over to the
+lips. M4.1 called both a grazing contact. The fix replaced its seam rule with a better one: **the
+winding number of the whole contour about each branch point must be zero**, which is what is
+actually wrong with a bare circle and is decided exactly. See the M4.2c-2 commit.
+
+### A fold that helps the answer can destroy the derivation
+
+`e^{irπ}` with `2r ∈ ℤ` is a sign, and folding it into its coefficient is what makes D1 print
+`π/sin(3π/10)` instead of `−π·e^(−iπ)/sin(3π/10)`. Doing it during CONSTRUCTION instead collapses
+α = 3/4's coefficient `1 − e^{3iπ/2}` to `1 + i`, after which no sine factors out at all. So the fold
+runs on the way out, and `targetCoefficient` deliberately does not run it.
+
+### The form of an answer depends on how an exponent was written
+
+D1's lower edge declares its factor as `−e^{2πi(α−1)}` — convention F, the full multiplier including
+the reversal — whose π part at α = 3/10 is `−7/5`. Factoring that gives `sin(7π/10)`; the record
+states `sin(3π/10)`. Supplementary, hence equal, and only one is recognisable as `π/sin(πα)`.
+Reducing the phase into one period before factoring canonicalises it, and the two `(−1)^k` factors
+the reduction introduces cancel exactly.
+
+### A cancellation may simplify a derivation, never rescue one
+
+D3's geometric sum cancels the keyhole's own `(1 − e^{2πia})`. At integer `a` that factor is
+identically zero, so `N/D` is `0/0` — and the identity happily reports the limit, which is the
+*correct* `(π/7)/sin(3π/7)`. The degeneracy is therefore decided on the ORIGINAL denominator, before
+anything cancels. `Golden.refuses` is the schema consequence: invariant 4's rank rule inverts for a
+fixture that documents a collapse, rather than being lifted.
+
+### Nothing may report a value while LEGALITY refuses — in every path
+
+The result card's gate (`legalityRefusal`, extended M3) had a twin hole in `solveFamily`. Pass 5
+reads the residue sum and the piece limits and knows nothing about whether the contour was legal;
+under the principal determination it produced a confident COMPLEX number for a real integral.
+
+### Deferred, and why
+
+- **The wedge cross-check** (D3's `wedge-disagreement` trap — "it is a free test and it should be
+  wired as one"). The `2π/n` wedge is gallery F1's own contour, so wiring the invariant means having
+  F1; it belongs with the wedge family, not here.
+- **D2** needs the `ln(ℚ₊)` half of the exponent (poles at `−1` and `−2`, so `ln|z₀| ≠ 0`) — M4.5,
+  per ADR-0041 Action Item 1.
+- **D4/D5** need Pass 5 over ℚ(i)(π) and `linear.ts` over a `Field` — M4.3. `buildSystem` refuses
+  them by name today: a coefficient outside ℚ(i) with more than one unknown says so.

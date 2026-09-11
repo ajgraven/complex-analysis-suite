@@ -38,11 +38,33 @@ whether the whole thing closes.
   which side it runs on. A crossing with no `side` tag refuses and names the repair; a *grazing*
   contact refuses too, because it has no side for a tag to pin. Neither row is emitted at all for a
   rational integrand.
-- The sandbox's **Branch cuts** card declares points and cuts (it does not detect them from the
-  typed integrand — that is M4.2, and a shallow detector would let an undeclared crossing through in
-  silence). Points and cuts are draggable by pointer and keyboard, and the dogbone gesture — one
-  bounded arc ⟷ two rays to ∞ — is the round trip research 06 calls the most valuable interaction in
-  the app. Whether a given join is *legal* is the rule's call, not the button's.
+- The sandbox's **Branch cuts** card declares points and cuts. Points and cuts are draggable by
+  pointer and keyboard, and the dogbone gesture — one bounded arc ⟷ two rays to ∞ — is the round trip
+  research 06 calls the most valuable interaction in the app. Whether a given join is *legal* is the
+  rule's call, not the button's.
+- **LEGALITY also asks the topological question** one piece of geometry cannot: the winding number of
+  the whole contour about each branch point must be zero, or it is not a loop in ℂ∖Γ at all. That is
+  what makes a keyhole legal (`+1 − 1 = 0`) and a bare circle about a branch point not, and it is
+  decided by the same exact-sign predicates the poles use.
+
+**M4.2 (tier D begins) has landed** — north-star behaviour 4:
+
+- `∫₀^∞ x^(α−1)/(1+x) dx` prints **`π/sin(πα)` labelled `=`**, and
+  `∫₀^∞ x^(a−1)/(1+xⁿ) dx` prints **`(π/n)/sin(πa/n)`**. D1 and D3 are the fourteenth and fifteenth
+  loaded records.
+- The exponential basis carries π as an **indeterminate**: `β = ℚ(i)(√d) ⊕ ℚ(i)·π`, so `e^{2πiα}` and
+  `e^{iπ(α−1)}` are compared by exponent rather than by tolerance. One **sine recogniser** factors
+  `a − b·e^{β}` with `|a| = |b|`; everything outside that shape refuses by name.
+- Every residue is evaluated in the **declared `argRange`**, with the argument guessed numerically
+  and then verified in exact arithmetic — the same guess-then-verify discipline the pole-finder uses.
+  A point 0.003 off a quarter turn is refused, not rounded onto one.
+- D3's residue sum is computed **without naming a root**: at `n = 5` and `n = 7` no root of `1 + zⁿ`
+  fits one quadratic extension, and the sum needs none.
+- **Three refusals are structural**, not detected: the wrong `argRange` moves the cut under the
+  contour; integer `α` makes the coefficient exactly zero; and a cancellation may simplify a
+  derivation but never rescue one — so at integer `a`, where D3's closed form is still correct *by
+  continuity*, the app refuses the keyhole route rather than printing a right number from a collapsed
+  argument. `Golden.refuses` is how a fixture says that about itself.
 
 The thirteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
@@ -94,6 +116,7 @@ Four layers, strictly downward-depending, with the boundary enforced by this pac
 ```
 src/kernel/   pure maths — no DOM, no upward imports. Where the golden corpus points.
               `branch/` is the cut system: model, admissibility, argument lift, crossings.
+              `exponent.ts` / `sineForm.ts` / `cyclotomic.ts` are tier D's output basis.
 src/engine/   problem semantics: contour, substitution, residue theorem, ledger.
 src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve.
 src/ui/       Stage (WebGL2) and panels.
