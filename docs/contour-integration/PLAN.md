@@ -482,6 +482,11 @@ layer, not its Gröbner/multivariate layer — so this is **not** grounds to ext
 
 ### 6.1 Two extraction questions this app forces
 
+> ⚠ **Both were answered against a stale checkout.** Item 1's argument survives — the honest-labelling
+> guardrail really does have no shared code, and that was re-verified against real master — but its
+> "every new app has reimplemented it" refers to a larger set of apps than the draft knew about, and
+> the ADR is filed as **ADR-0040**, not 0009. Item 2 is simply wrong; see below.
+
 1. **Honest labelling has zero shared code.** `rigorMeta`'s `=/≤/≥/≈/⚠/?` vocabulary lives at
    `apps/quadrature-domains/app/algebra/algebra-canvas.mjs:907`, `classifyRigor` at
    `algebra-ui.mjs:461`, `assembleVerdict` at `prove-plan.mjs:336` — 6,000 lines of QD `.mjs`. Every
@@ -492,10 +497,31 @@ layer, not its Gröbner/multivariate layer — so this is **not** grounds to ext
    extraction-by-reimplementation, which ADR-0007 doesn't literally cover — so it needs its own ADR
    recording the departure and the reasoning (a guardrail CLAUDE.md calls non-negotiable having zero
    shared code is itself the justification). QD is **not** touched by this work.
-2. **`@cas/ui` is documented as planned-but-never-built**, with `IMPROVEMENTS.md` recording an
-   explicit defer and naming a third consumer as the trigger. This app is that third consumer.
-   **Proposal:** stay app-local through M5, then propose the seed once two or three helpers are
-   genuinely identical across apps.
+2. ~~**`@cas/ui` is documented as planned-but-never-built**~~ — **wrong, and corrected after the
+   fact.** `@cas/ui` was extracted ahead of adoption as the shared *browser shell* (canvas a11y, a
+   fatal-error boundary, an off-thread compute client, a nav header) under ADR-0032, long before this
+   plan was written; the plan was drafted against a checkout 581 commits stale (see the banner on
+   [`research/08`](research/08-repo-reuse-survey.md)). **Open item:** adopt `@cas/ui`'s shell in this
+   app rather than proposing a seed — the nav header in particular, so it sits in the suite the way
+   its siblings do.
+
+### 6.3 The overlap nobody saw: `apps/argument-principle`
+
+Recorded after the rebase onto real master. That app already ships a draggable contour, a winding
+number and a contour-integral quadrature of `f′/f`. Its `winding.ts` computes the winding by
+**accumulating argument along a sampled polyline** and labels the result `≈`, with a header naming
+itself as the [ADR-0007](../DECISIONS.md) second-consumer extraction candidate once a co-consumer
+appears.
+
+This app is that co-consumer, and it arrives with a *stronger* implementation: `kernel/winding.ts`
+decides the winding number by **exact-sign crossing predicates** over a polygonisation certified
+below the clearance to the query point, so it is honestly `=` rather than `≈`, and it refuses rather
+than guessing when the point is not clear of the contour.
+
+**Open item, not yet done:** promote the exact winding into a shared package and migrate
+`apps/argument-principle` onto it, with its tests green either side. That is a real upgrade for that
+app — an argument-principle demo whose winding number is exact is a better demo — and it is the
+extraction its own source asked for.
 
 ### 6.2 New-app checklist (research 08 §7 — verified against the actual files)
 

@@ -38,7 +38,7 @@ const PRESETS: { label: string; src: string }[] = [
   { label: "1/(1+z^4)", src: "1/(1+z^4)" },
   { label: "1/(z-1)^2", src: "1/(z-1)^2" },
   { label: "(3+4i)/(z^3-1)", src: "(3+4i)/(z^3-1)" },
-  { label: "z/(z^2+2z+2)", src: "z/(z^2+2z+2)" },
+  { label: "z/(z^2+2*z+2)", src: "z/(z^2+2*z+2)" },
   { label: "exp(i*z)/(1+z^2)", src: "exp(i*z)/(1+z^2)" },
 ];
 

@@ -1,5 +1,31 @@
 # 08 — Repo reuse survey: what `apps/contour-integration` can actually stand on
 
+> # ⚠ Written against a stale checkout — read with this in mind
+>
+> This document surveyed the repository at commit `b1e3004` (2026-07-30), which the authoring session
+> mistook for current. `origin/master` was **581 commits ahead** at the time: **twelve apps and
+> thirteen packages**, not the four and five surveyed here. Everything below about the files it did
+> read is accurate; everything it says about what the suite *contains*, and about what has or has not
+> been extracted, is not.
+>
+> Known corrections:
+>
+> - **`@cas/ui` exists.** It was extracted ahead of adoption as the shared browser shell (ADR-0032).
+>   This document's "planned but never built" is wrong, and so is the reasoning that treated the
+>   contour app as its third consumer.
+> - **Seven more packages exist** — `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`,
+>   `@cas/faber`, `@cas/flow`, `@cas/ui` — and eight more apps.
+> - **`apps/argument-principle` already has a contour, a winding number and contour-integral
+>   quadrature.** A survey that had seen it would have started from there.
+> - **`dependency-cruiser` is wired** (`pnpm dep:check`), not "a planned follow-on".
+> - The `Frac.toNumber` defect this session found had **already been fixed on master**, better.
+> - `@cas/expr` **already parses `2i`** (as an `imag` token, with `2i^2 = (2i)²`).
+>
+> The API-level findings it reports — `makeDurandKerner` is an iteration not a root-finder,
+> `@cas/core/series` exports only `mul`, the publish mechanism is a `cp -r` list — were re-checked
+> against real master and still hold.
+
+
 > Research track 08 for `apps/contour-integration`. An exhaustive, verified inventory of the five
 > shared `@cas/*` packages and the three existing apps, aimed at one question: **for each capability
 > the contour tool needs, do we reuse, extend, or build?** Every path and symbol below was read from

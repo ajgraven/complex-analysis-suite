@@ -44,7 +44,7 @@ describe("findPoles — locations", () => {
 
   it("finds poles off the axes", () => {
     // z² + 2z + 2 has roots −1 ± i.
-    const ps = poles("z/(z^2+2z+2)");
+    const ps = poles("z/(z^2+2*z+2)");
     expect(ps).toHaveLength(2);
     expect(ps.some((p) => near(p, -1, 1, 1e-6))).toBe(true);
     expect(ps.some((p) => near(p, -1, -1, 1e-6))).toBe(true);
