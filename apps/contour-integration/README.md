@@ -47,8 +47,20 @@ to be hand-written was a symptom of `applyResidueTheorem` folding the *agreeing*
 into the same verdict as the exact residue sum, which capped an exact `∮` at `≤`. Corroboration is
 now reported beside a value rather than inside its label; a disagreement still refuses it.
 
-Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
-teaching layer (M6).
+**The contour is an object you can grab.** A drag means a radius handle, the contour itself, or the
+view, decided in that order; translation keeps a template a template (its radius stays bound to `R`,
+so `R → ∞` still animates on a contour you have dragged across the plane), and a radius handle edits
+the parameter the template already binds its arcs to — the indented semicircle's two handles are
+`R → ∞` and `ρ → 0`, the two limits its argument is about. Everything works from the keyboard: Enter
+walks what the arrows move, shift with an arrow still pans. Drag `1/z`'s circle across the origin and
+`∮` goes from `2πi` to `0`, exactly; park it on the pole and there is no number at all.
+
+A gesture runs the quadrature under a work ceiling and says so (`resolution capped`); the full pass on
+release reconciles against it and logs a disagreement past the estimator's own bound. `∮` is the same
+either way — it comes from `2πi Σ n·Res`, not from the quadrature.
+
+Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
+contour from nothing), branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6).
 
 ## Documentation
 

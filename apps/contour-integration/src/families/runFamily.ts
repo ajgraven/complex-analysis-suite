@@ -16,6 +16,7 @@
 // this app's honest refusals, which is the one thing a refusal must never be confused with.
 import { makeComplexFn, type Node } from "@cas/expr";
 import { analyse, type Analysis } from "../engine/analyse.js";
+import type { QuadratureBudget } from "../engine/contour/integrate.js";
 import type { Contour } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
@@ -43,6 +44,8 @@ export interface RunOptions {
    * would substitute a number for a function the first time a record reused the name.
    */
   readonly geometry?: Readonly<Record<string, number>>;
+  /** A quadrature work ceiling, for a record whose geometry is being dragged. See `analyse`. */
+  readonly budget?: QuadratureBudget;
 }
 
 export interface FamilyRun extends Analysis {
@@ -132,7 +135,13 @@ export function runFamily(
       f,
       poles,
       contour,
-      ...analyse({ ast: built.ast, f, poles, contour }),
+      ...analyse({
+        ast: built.ast,
+        f,
+        poles,
+        contour,
+        ...(options.budget === undefined ? {} : { budget: options.budget }),
+      }),
     },
   };
 }

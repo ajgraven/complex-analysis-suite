@@ -544,13 +544,15 @@ ul.ledger {
   font-weight: 600;
 }
 
-.derivation .stage {
+/* `derivStage`, not `stage`: `.stage` is the canvas container, whose `grid-area` and
+   `overflow: hidden` would then have applied to every block in this panel too. */
+.derivStage {
   margin: 0.6rem 0 0;
   padding-left: 0.55rem;
   border-left: 2px solid var(--c-border);
 }
 
-.derivation .stage.failed {
+.derivStage.failed {
   border-left-color: var(--c-warn);
 }
 

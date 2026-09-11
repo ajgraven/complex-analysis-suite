@@ -18,7 +18,11 @@
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
-import { integrateContour, type ContourIntegral } from "./contour/integrate.js";
+import {
+  integrateContour,
+  type ContourIntegral,
+  type QuadratureBudget,
+} from "./contour/integrate.js";
 import { resolveAll, type Contour } from "./contour/model.js";
 import { evaluateLedger, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
@@ -31,6 +35,15 @@ export interface AnalysisInput {
   readonly f: (z: Cx) => Cx;
   readonly poles: PoleReport;
   readonly contour: Contour;
+  /**
+   * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
+   *
+   * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
+   * exact residues and costs nothing to re-evaluate, and the winding numbers are exact-sign predicates
+   * over a polygonisation; so a draft pass changes how well the second opinion is computed and nothing
+   * about the answer. A capped piece says so in its own certificate.
+   */
+  readonly budget?: QuadratureBudget;
 }
 
 export interface Analysis {
@@ -40,10 +53,10 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour }: AnalysisInput): Analysis {
+export function analyse({ ast, f, poles, contour, budget }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
-  const integral = integrateContour(f, resolved, singular);
+  const integral = integrateContour(f, resolved, singular, budget);
   // Two routes that share no machinery: the theorem computes `2πi Σ n·Res` from exact residues, and
   // then CHECKS itself against the quadrature above. Agreement is the strongest evidence the app has.
   const theorem = applyResidueTheorem(poles, integral);

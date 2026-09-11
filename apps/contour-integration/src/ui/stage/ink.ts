@@ -27,6 +27,14 @@ export interface InkOptions {
   /** Position of the integration marker along the whole contour, in [0, 1]; omit to hide it. */
   readonly marker?: number;
   readonly refused?: boolean;
+  /**
+   * Grabbable handles, in plot coordinates.
+   *
+   * Drawn as rings rather than filled dots, so they read as something to take hold of and cannot be
+   * mistaken for the filled integration marker or for a pole glyph — three round things on one canvas
+   * is two too many unless they differ in kind.
+   */
+  readonly handles?: readonly { readonly at: Cx; readonly emphasis: "none" | "hover" | "grabbed" }[];
 }
 
 /** Screen-space sampling of one piece, fine enough that an arc reads as a curve. */
@@ -144,6 +152,19 @@ export function drawContour(
       ctx.restore();
       arrowHead(ctx, at.x, at.y, at.dx, at.dy, 6);
     }
+  }
+
+  for (const handle of opts.handles ?? []) {
+    const [x, y] = plotToScreen(handle.at[0], handle.at[1], view, vp);
+    const r = handle.emphasis === "none" ? 5 : 7;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, 2 * Math.PI);
+    ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+    ctx.strokeStyle = handle.emphasis === "grabbed" ? "#ffffff" : "#e7e9ee";
+    ctx.lineWidth = handle.emphasis === "none" ? 1.6 : 2.4;
+    ctx.stroke();
   }
 
   if (opts.marker !== undefined) {

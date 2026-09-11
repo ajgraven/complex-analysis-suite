@@ -6,6 +6,8 @@ import {
   fitView,
   panBy,
   plotToScreen,
+  scale,
+  screenToPlot,
   zoomAt,
   type View,
   type Viewport,
@@ -19,6 +21,15 @@ import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
+import {
+  handlesOf,
+  nearestHandle,
+  onContour,
+  radiusDragValue,
+  setParam,
+  translateContour,
+  type Handle,
+} from "../engine/contour/edit.js";
 import {
   circleTemplate,
   indentedSemicircleTemplate,
@@ -85,6 +96,19 @@ const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
   { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
 ];
 
+/** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
+const GRAB_PX = 11;
+
+/**
+ * Function evaluations per piece while a gesture is in flight.
+ *
+ * PLAN §4.5: drag coarse, re-run the full quadrature on release, reconcile, and treat a disagreement
+ * beyond the estimator's own bound as a bug signal worth logging. The node-spacing rule asks for up to
+ * 65,536 nodes when a pole is close, which is right for an answer and far too slow for a gesture — and
+ * only the CROSS-CHECK is affected, since `∮` comes from a formula over exact residues either way.
+ */
+const DRAFT_EVALUATIONS = 768;
+
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
   className?: string,
@@ -142,6 +166,24 @@ export function mountApp(root: Element): void {
   let scrub = 1;
   let contrast: ContrastMode = "none";
   let highlight = -1;
+
+  // --- grab state --------------------------------------------------------------------------
+  /**
+   * What a move acts on. `null` means the view, which is the default and the only thing the app used
+   * to offer: every pointer drag panned, so north-star behaviour 1 — drag a contour across a pole and
+   * watch the value jump by exactly `2πi·Res` — was unreachable except through a parameter slider.
+   */
+  let grab: { readonly kind: "body" } | { readonly kind: "radius"; readonly handle: Handle } | null =
+    null;
+  let handles: readonly Handle[] = [];
+  /** The handle under the pointer, for the ink layer and the cursor. −1 for none. */
+  let hovered = -1;
+  /** Which gesture is in flight. `contour` is the one that runs the quadrature at draft quality. */
+  let gesture: "none" | "view" | "contour" = "none";
+  /** The contour as it was when the gesture began, so a translation is measured from an anchor rather
+   *  than accumulated move by move. */
+  let anchorContour: Contour | null = null;
+  let anchorAt: Cx = [0, 0];
 
   // --- gallery state -----------------------------------------------------------------------
   // ONE door into the corpus, and it is the loader's output rather than the raw `FAMILIES` array: a
@@ -344,6 +386,15 @@ export function mountApp(root: Element): void {
           highlight,
           marker: acc && acc.steps.length > 0 ? scrub : undefined,
           refused: integral?.refusal !== undefined,
+          handles: handles.map((h, k) => ({
+            at: h.at,
+            emphasis:
+              grab?.kind === "radius" && grab.handle.param === h.param
+                ? "grabbed"
+                : k === hovered
+                  ? "hover"
+                  : "none",
+          })),
         });
       }
       drawPoleMarkers();
@@ -463,6 +514,10 @@ export function mountApp(root: Element): void {
     stage?.setIntegrand(run.ast);
   }
 
+  /** The work ceiling for this pass: draft while a contour is being dragged, full otherwise. */
+  const budgetNow = (): { readonly maxEvaluations: number } | undefined =>
+    gesture === "contour" ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined;
+
   function recompute(): void {
     if (mode === "gallery") {
       recomputeRecord();
@@ -471,7 +526,8 @@ export function mountApp(root: Element): void {
       if (!f || !ast || !poles) {
         clearComputed();
       } else {
-        const a = analyse({ ast, f, poles, contour });
+        const budget = budgetNow();
+        const a = analyse({ ast, f, poles, contour, ...(budget === undefined ? {} : { budget }) });
         resolved = a.resolved;
         integral = a.integral;
         theorem = a.theorem;
@@ -480,6 +536,8 @@ export function mountApp(root: Element): void {
         solved = null;
       }
     }
+    handles = handlesOf(contour, resolved);
+    if (hovered >= handles.length) hovered = -1;
     rebuildDerivation();
     renderRecordCard();
     renderLedger();
@@ -505,9 +563,11 @@ export function mountApp(root: Element): void {
       clearComputed();
       return;
     }
+    const budget = budgetNow();
     const r = solveFamily(family, golden, {
       bindings: bindingOverrides,
       geometry: geometryOverrides,
+      ...(budget === undefined ? {} : { budget }),
     });
     if (r.ok) {
       adopt(r.run);
@@ -851,7 +911,7 @@ export function mountApp(root: Element): void {
     shell.append(summary);
 
     for (const st of derivation.stages) {
-      const block = el("div", `stage${st.failed ? " failed" : ""}`);
+      const block = el("div", `derivStage${st.failed ? " failed" : ""}`);
       block.append(el("h3", undefined, st.title), el("p", "muted small why", st.why));
 
       for (const statement of st.statements) {
@@ -1008,6 +1068,25 @@ export function mountApp(root: Element): void {
    * is computed from the others, so moving it independently would desync the geometry from its own
    * definition. Anything a family did not declare falls to `derived`, which is read-only.
    */
+  /**
+   * Write a parameter, through whichever channel owns it, and recompute.
+   *
+   * The sliders and the radius handles are the same edit and now go through the same door: dragging
+   * the indented semicircle's outer arc moves `R` exactly as its slider does, which is what makes the
+   * handle an affordance for the argument's own limit rather than a second way to change the picture.
+   */
+  function applyParam(name: string, value: number): void {
+    const channel = channelOf(name);
+    if (channel === "binding") {
+      bindingOverrides = { ...bindingOverrides, [name]: value };
+    } else if (channel === "geometry") {
+      geometryOverrides = { ...geometryOverrides, [name]: value };
+    } else {
+      contour = setParam(contour, name, value);
+    }
+    recompute();
+  }
+
   function channelOf(name: string): "sandbox" | "binding" | "geometry" | "derived" {
     if (mode !== "gallery" || !family) return "sandbox";
     if (family.contour.limitParams.some((l) => l.name === name)) return "geometry";
@@ -1070,17 +1149,7 @@ export function mountApp(root: Element): void {
       slider.addEventListener("input", () => {
         const v = fromSlider(Number(slider.value));
         readout.textContent = `${p.name} = ${fmt(v)}`;
-        if (channel === "binding") {
-          bindingOverrides = { ...bindingOverrides, [p.name]: v };
-        } else if (channel === "geometry") {
-          geometryOverrides = { ...geometryOverrides, [p.name]: v };
-        } else {
-          contour = {
-            ...contour,
-            params: { ...contour.params, [p.name]: { ...p, value: v } },
-          };
-        }
-        recompute();
+        applyParam(p.name, v);
       });
       wrap.append(readout, slider);
       if (channel === "geometry" && p.limit) {
@@ -1160,30 +1229,204 @@ export function mountApp(root: Element): void {
   }
 
   // --- interaction --------------------------------------------------------------------------
-  let dragging = false;
+  //
+  // THREE THINGS A POINTER DRAG CAN MEAN, decided in this order: a radius handle, then the contour
+  // itself, then the view. Until now every drag panned the view, so north-star behaviour 1 — drag a
+  // contour across a pole and watch the value jump by exactly `2πi·Res` — was reachable only through a
+  // parameter slider, which is not the same experience and was not the promise.
   let lastX = 0;
   let lastY = 0;
 
+  const stagePoint = (ev: PointerEvent): readonly [number, number] => {
+    const rect = stageWrap.getBoundingClientRect();
+    return [ev.clientX - rect.left, ev.clientY - rect.top];
+  };
+  const plotAt = (px: number, py: number): Cx => screenToPlot(px, py, view, viewport());
+  /** The grab radius in PLOT units, so it is a constant number of pixels at every zoom level. */
+  const grabTolerance = (): number => GRAB_PX * scale(view, viewport());
+
+  /**
+   * Whether the contour may be moved bodily.
+   *
+   * Sandbox only. Under a gallery record the contour is the record's, and translating it would leave a
+   * worked example whose pieces no longer match the argument it is making — the same reason 3.5a hides
+   * the template picker there. The radius handles still work, because those edit the parameters the
+   * record itself declares, and `R → ∞` / `ρ → 0` are what its argument is about.
+   */
+  const canMoveBody = (): boolean => mode === "sandbox";
+
+  function updateCursor(px?: number, py?: number): void {
+    if (gesture === "contour") {
+      stageWrap.style.cursor = "grabbing";
+      return;
+    }
+    if (gesture === "view" || px === undefined || py === undefined) {
+      stageWrap.style.cursor = gesture === "view" ? "grabbing" : "default";
+      return;
+    }
+    const at = plotAt(px, py);
+    const tol = grabTolerance();
+    const over =
+      nearestHandle(handles, at, tol) !== null || (canMoveBody() && onContour(resolved, at, tol));
+    stageWrap.style.cursor = over ? "grab" : "default";
+  }
+
+  /**
+   * Compare the draft value the drag ended on against the full one, and log a disagreement.
+   *
+   * PLAN §4.5's instruction, verbatim: re-run the full quadrature on release and reconcile —
+   * "disagreement beyond the estimator's bound is a bug signal worth logging". It is a `console.warn`
+   * rather than a UI surface because the user cannot act on it; a developer can.
+   */
+  function reconcileDraft(draft: Cx | undefined, worstEstimate: number): void {
+    const full = integral?.value;
+    if (draft === undefined || full === undefined) return;
+    const off = Math.hypot(full[0] - draft[0], full[1] - draft[1]);
+    const tol = Math.max(32 * worstEstimate, 1e-9 * Math.max(1, Math.hypot(full[0], full[1])));
+    if (off > tol) {
+      console.warn(
+        `[contour-integration] the draft quadrature used during the drag and the full one on release ` +
+          `disagree by ${off.toExponential(2)}, past the estimator's own bound of ${tol.toExponential(2)}`,
+      );
+    }
+  }
+
   stageWrap.addEventListener("pointerdown", (ev) => {
-    dragging = true;
+    const [px, py] = stagePoint(ev);
+    const at = plotAt(px, py);
+    const tol = grabTolerance();
+    const handle = nearestHandle(handles, at, tol);
+    if (handle !== null) {
+      grab = { kind: "radius", handle };
+      gesture = "contour";
+    } else if (canMoveBody() && onContour(resolved, at, tol)) {
+      grab = { kind: "body" };
+      gesture = "contour";
+      // Anchored, not accumulated: a long drag measured from where it started cannot drift, and the
+      // `add` offsets stay a single term instead of a sum of every pointer move.
+      anchorContour = contour;
+      anchorAt = at;
+    } else {
+      gesture = "view";
+    }
     lastX = ev.clientX;
     lastY = ev.clientY;
     stageWrap.setPointerCapture(ev.pointerId);
+    updateCursor(px, py);
+    if (gesture === "contour") requestDraw();
   });
+
   stageWrap.addEventListener("pointermove", (ev) => {
-    if (!dragging) return;
-    view = panBy(view, ev.clientX - lastX, ev.clientY - lastY, viewport());
-    lastX = ev.clientX;
-    lastY = ev.clientY;
-    requestDraw();
+    const [px, py] = stagePoint(ev);
+    if (gesture === "none") {
+      const handle = nearestHandle(handles, plotAt(px, py), grabTolerance());
+      const index = handle === null ? -1 : handles.indexOf(handle);
+      if (index !== hovered) {
+        hovered = index;
+        requestDraw();
+      }
+      updateCursor(px, py);
+      return;
+    }
+    if (gesture === "view") {
+      view = panBy(view, ev.clientX - lastX, ev.clientY - lastY, viewport());
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      requestDraw();
+      return;
+    }
+
+    const at = plotAt(px, py);
+    if (grab?.kind === "body" && anchorContour !== null) {
+      contour = translateContour(anchorContour, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
+      recompute();
+    } else if (grab?.kind === "radius") {
+      // Out of range returns null rather than clamping, so the handle simply stops at the parameter's
+      // declared bound instead of silently pinning it there.
+      const next = radiusDragValue(contour, grab.handle, at);
+      if (next !== null) applyParam(next.param, next.value);
+    }
   });
-  const endDrag = (ev: PointerEvent): void => {
-    if (!dragging) return;
-    dragging = false;
+
+  const endGesture = (ev: PointerEvent): void => {
+    if (gesture === "none") return;
+    const wasContour = gesture === "contour";
+    const draft = wasContour ? integral?.value : undefined;
+    const worst = wasContour
+      ? Math.max(0, ...(integral?.pieces.map((q) => q.errorEstimate) ?? [0]))
+      : 0;
+    gesture = "none";
+    anchorContour = null;
     stageWrap.releasePointerCapture(ev.pointerId);
+    if (wasContour) {
+      recompute();
+      reconcileDraft(draft, worst);
+    }
+    updateCursor();
   };
-  stageWrap.addEventListener("pointerup", endDrag);
-  stageWrap.addEventListener("pointercancel", endDrag);
+  stageWrap.addEventListener("pointerup", endGesture);
+  stageWrap.addEventListener("pointercancel", endGesture);
+
+  // --- the same three things, from the keyboard ----------------------------------------------
+  const grabName = (): string =>
+    grab === null
+      ? "the view"
+      : grab.kind === "body"
+        ? "the whole contour"
+        : `${grab.handle.pieceName} (${grab.handle.param})`;
+
+  /** Re-point a radius grab at the rebuilt handle, so repeated key presses keep working. */
+  function refreshGrab(): void {
+    const held = grab;
+    if (held === null || held.kind !== "radius") return;
+    const again = handles.find(
+      (h) => h.param === held.handle.param && h.pieceIndex === held.handle.pieceIndex,
+    );
+    grab = again === undefined ? null : { kind: "radius", handle: again };
+  }
+
+  /** Enter / Space walks what the arrows act on: the view, the contour, then each radius handle. */
+  function cycleGrab(): void {
+    const stops: (typeof grab)[] = [null];
+    if (canMoveBody()) stops.push({ kind: "body" });
+    for (const handle of handles) stops.push({ kind: "radius", handle });
+    const sameAs = (a: typeof grab): boolean =>
+      a === null
+        ? grab === null
+        : grab !== null &&
+          a.kind === grab.kind &&
+          (a.kind !== "radius" || (grab.kind === "radius" && a.handle.param === grab.handle.param));
+    const index = stops.findIndex(sameAs);
+    grab = stops[(index + 1) % stops.length] ?? null;
+    announce(
+      grab === null
+        ? "Arrow keys pan the view. Press Enter to grab the contour instead."
+        : `Arrow keys now move ${grabName()}. Press Enter for the next handle.`,
+    );
+    requestDraw();
+  }
+
+  function moveGrab(dx: number, dy: number): void {
+    const held = grab;
+    if (held === null) return;
+    const port = viewport();
+    // A fixed fraction of the viewport, as for panning, so a step means the same thing at every zoom.
+    const step = (Math.min(port.width, port.height) / 24) * scale(view, port);
+    // Screen y runs down and plot y runs up.
+    const d: Cx = [dx * step, -dy * step];
+    if (held.kind === "body") {
+      if (!canMoveBody()) return;
+      contour = translateContour(contour, d);
+      recompute();
+    } else {
+      const next = radiusDragValue(contour, held.handle, [
+        held.handle.at[0] + d[0],
+        held.handle.at[1] + d[1],
+      ]);
+      if (next !== null) applyParam(next.param, next.value);
+    }
+    refreshGrab();
+  }
 
   // The accessible-canvas contract (ADR-0032): the GL canvas is the RENDER surface and is hidden
   // from assistive tech; the ink overlay above it carries the name, the focus and the keyboard map,
@@ -1191,12 +1434,23 @@ export function mountApp(root: Element): void {
   const stageA11y = attachCanvasA11y(inkCanvas, {
     label:
       "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
-      "Arrow keys pan, plus and minus zoom.",
+      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour or one of its radius " +
+      "handles, after which the arrow keys move what you grabbed and shift with an arrow pans.",
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,
-    onKey: (action: CanvasKeyAction) => {
+    onKey: (action: CanvasKeyAction, ev: KeyboardEvent) => {
       const port = viewport();
+      if (action.kind === "commit") {
+        cycleGrab();
+        return;
+      }
+      // With something grabbed the arrows MOVE it and shift pans, rather than the other way round:
+      // the grab was just asked for, so it is the primary action until it is released.
+      if (action.kind === "pan" && grab !== null && !ev.shiftKey) {
+        moveGrab(action.dx, action.dy);
+        return;
+      }
       if (action.kind === "pan") {
         // A keyboard step is a fixed fraction of the viewport, so it means the same thing at every
         // zoom level — unlike a pixel step, which shrinks as you zoom in.
