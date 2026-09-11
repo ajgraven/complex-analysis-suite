@@ -29,8 +29,14 @@ whether the whole thing closes.
   `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tiers D–G need
   branch cuts and the kernel families of M4/M5.
 
-Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
-teaching layer (M6).
+The thirteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+tier and fixture, showing its target, the contour integrand it is actually integrated against (which
+is not the posed one), the closed form the engine derives, and whether that agrees with the golden
+value. A fixture that selects an alternative *derivation* rather than binding parameters is offered
+as not executable instead of offered and then failing.
+
+Still to come: the generated derivation panel, free-hand contour editing, branch cuts (M4), the rest
+of the gallery (M5), the teaching layer (M6).
 
 ## Documentation
 

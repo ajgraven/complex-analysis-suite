@@ -590,11 +590,14 @@ failing constraint; p.v. is a distinct result type from a convergent integral.
 > stays `≈`, which is its own record's position — its exponents are complex, so `Re` does not
 > distribute and `e^{β}` carries cos and sin of an irrational.
 >
-> **Still open from M3's scope**, and deliberately so: the Family records are not wired into the
-> SHELL — there is no picker, so the gallery is testable but not browsable, which is the gap between
-> "the records execute" and "a user can open one". Also open: the generated derivation panel, the
-> Pólya work/flux toggle, and M1's pen-tool free-path editor. Running status lives in
-> [`GALLERY.md`](GALLERY.md) §5.
+> **M3.5a closed the first of M3's open items:** the Family records are wired into the shell. A
+> `Sandbox | Gallery` source switch opens any of the thirteen by tier and fixture, and both modes run
+> through one driver (`src/engine/analyse.ts`, reached for a record by `src/families/runFamily.ts`),
+> which the golden corpus also calls — so the numbers on screen are the numbers the suite pins, along
+> the same path, rather than a second implementation agreeing by inspection.
+>
+> **Still open from M3's scope**: the generated derivation panel (M3.5b), the Pólya work/flux toggle,
+> and M1's pen-tool free-path editor (M3.5c). Running status lives in [`GALLERY.md`](GALLERY.md) §5.
 
 ### M4 — Branch cuts · *L*
 `BranchChoice` model, admissibility validator, jump weights **verified by numeric continuation

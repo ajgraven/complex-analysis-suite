@@ -48,7 +48,15 @@ body {
   grid-template-columns: 1fr var(--rail);
   grid-template-rows: var(--bar) 1fr var(--strip);
   grid-template-areas: "bar bar" "stage rail" "strip rail";
-  height: 100vh;
+  /* The shared suite nav (ADR-0032) is `position: fixed` at the top of the viewport and publishes its
+     own height as `--cas-nav-h`. A 100vh shell anchored at y = 0 therefore runs UNDERNEATH it: this
+     app adopted the nav without the offset, so the top 32 px of its 48 px bar — the brand, the
+     integrand box and five of the seven presets — were covered, and because the nav sits at z-index 6
+     it swallowed every click in that band as well. Reserve the strip and take it off the height, so
+     the shell still exactly fills what is left and nothing scrolls. The `0px` fallback keeps a page
+     that does not load `nav.css` exactly where it was. */
+  margin-top: var(--cas-nav-h, 0px);
+  height: calc(100vh - var(--cas-nav-h, 0px));
 }
 
 /* ---- bar ---- */
@@ -116,6 +124,49 @@ body {
   color: var(--c-text);
   border-color: var(--c-accent);
   background: rgba(110, 168, 254, 0.14);
+}
+
+/* The source switch, and the two mutually exclusive groups of bar controls it reveals. Both groups
+   live in the bar at once and one is `hidden`, so the row does not reflow as the mode changes. */
+.sourceToggle {
+  display: flex;
+  gap: 0.25rem;
+  padding-right: 0.4rem;
+  border-right: 1px solid var(--c-border);
+  margin-right: 0.2rem;
+}
+
+.barGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+}
+
+/* `display: flex` above beats the UA stylesheet's `[hidden] { display: none }`, so the group that the
+   current mode does not want stayed on screen. Both modes' controls were visible at once until this
+   rule existed. */
+.barGroup[hidden] {
+  display: none;
+}
+
+.picker {
+  max-width: 16rem;
+  padding: 0.28rem 0.4rem;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-panel-2);
+  color: var(--c-text);
+  font: 12px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.picker:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+.picker option:disabled {
+  color: var(--c-muted);
 }
 
 /* ---- stage ---- */
@@ -458,4 +509,29 @@ ul.ledger {
 .ledgerRow .repair {
   grid-column: 3;
   margin: 0.25rem 0 0;
+}
+
+/* ---- gallery record ---- */
+.recordHead {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.1rem 0 0.15rem;
+}
+
+.targetLine {
+  margin: 0.35rem 0 0.1rem;
+  padding: 0.3rem 0.4rem;
+  border-left: 2px solid var(--c-accent);
+  background: var(--c-panel-2);
+  overflow-wrap: anywhere;
+}
+
+.method summary {
+  cursor: pointer;
+}
+
+.method p {
+  margin: 0.3rem 0 0;
+  color: var(--c-muted);
 }
