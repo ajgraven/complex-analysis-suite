@@ -148,8 +148,42 @@ implementation decision.
 
 ## 5. Status
 
-The 28 records are written and self-consistent against the v2 schema, but **not yet loaded by any
-code**, since no code exists. The next time they are touched should be M3, when the loader and its
-four invariants are implemented — at which point every `check`, `detect` and `discharge` string in
-them becomes executable, and any that cannot be implemented as written is a finding about the
-schema, not about the entry.
+**The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
+together with Pass 5's exact rational linear algebra, which invariant 4 rests on. Three records are
+loaded: **A5, A6, A7** — the pure-rational semicircle families, which are the ones the engine can run
+end to end today. A1–A4 need the `z = e^{iθ}` substitution, tier B needs the Jordan branch wired to a
+family, and C–G need indentation, branch cuts and the kernel families of M4/M5. A record loaded
+before its machinery exists would be a worked example that cannot be worked.
+
+Each loaded record is **executed against the engine in the test suite**, not merely parsed: its
+golden value is reproduced through `findPoles → integrateContour → applyResidueTheorem`, the
+residue-theorem value is checked to be *identical* at `R = 3` and `R = 40` (which is what makes the
+instantiation radius a display default rather than a claim), and the quadrature cross-check is
+required to agree. A6's `closing-down-disagrees` trap is executed directly.
+
+### 5.1 What transcription found
+
+Three gaps, in the same spirit as the 19 that writing the records found:
+
+1. **`FamilyPiece` was declared and never defined.** DESIGN §5 wrote `pieces: FamilyPiece[]`; §2.2's
+   runtime `Piece` carries no coefficient information, and Pass 5 cannot build `M` without knowing
+   *which* unknown a `target` piece is the target of. Now defined in DESIGN §5.1.
+2. **`golden[].params` holds variant flags, not only parameter bindings.** A5's `halfRange`, A6's
+   `closeDown` and A7's `halfRange` are booleans selecting an alternative *derivation*, and the field
+   was typed `string | number`. Widened; a family with a parameter actually named `closeDown` would
+   collide, which is the argument for a separate `variant` field if a later tier needs one.
+3. **`M` is not always rational.** Tiers A and B use only `1` and `0`, but the log keyhole's `2πi`
+   coefficient has no rational entry. The loader refuses rather than rounds — rank is the whole
+   Pass-5 report, and a rounded `2π` would make it a matter of tuning. Deferred to M4.
+
+One conflict **dissolved** rather than being carried: the records wrote a single `rigorIfDischarged`
+and flagged its clash with DESIGN §4 Pass 3 (`"="` vs `"≤"`) as gap G2. v2's split into
+`rigorOfBound` / `rigorOfLimit` settles it — the finite-`R` bound is a bound, the substituted limit
+is exact — so both readings were right about different claims.
+
+And one thing the tests corrected in the *implementation*, worth recording because the record was
+right and the implementer was not: closing A6 downward does **not** negate `∮`. The lower template's
+traversal is clockwise, so its identity carries the opposite sign, and the two closures land on the
+same `π/√2` — exactly as the record's prose says ("both give 2.2214414690791831"). The test now also
+asserts the two contours enclose *different* poles, since agreement alone is the one thing an engine
+with both the orientation and the half-plane predicate backwards would also produce.

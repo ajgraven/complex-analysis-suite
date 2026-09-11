@@ -446,7 +446,7 @@ export interface Family {
     template: TemplateId;            // circle | semicircle | indentedSemicircle | keyhole |
                                      // dogbone | rectangle | wedge | square
     limitParams: { name: string; to: "inf" | "0+"; through?: "halfIntegers" }[];
-    pieces: FamilyPiece[];
+    pieces: FamilyPiece[];       // defined below — §5.1
     orientation: "ccw" | "cw" | { expr: string };   // B1 needs sgn(a)
     /** per-pole, not a prose blurb: the winding number the family asserts for each */
     windings: { pole: string; n: string }[];
@@ -480,13 +480,54 @@ export interface Family {
   rigor: { policy: "min"; inputs: string[] };
   traps: { id: string; detect: string; message: string }[];
 
-  golden: { params: Record<string, string | number>;
+  golden: { params: Record<string, string | number | boolean>;  // booleans are VARIANT FLAGS —
+            //   `halfRange`, `closeDown`: they select an alternative derivation of the same
+            //   family, not a parameter binding. Widened after A5/A6/A7 each used one.
             value: string; numeric: number | [number, number];
             verifiedTo: number;
             /** how it was verified — two independent methods required for the primary fixture */
             method: string }[];
 }
 ```
+
+### 5.1 `FamilyPiece`
+
+*Added after the schema above was written against the gallery: §5 declared `pieces: FamilyPiece[]`
+and never defined the type. §2.2's runtime `Piece` is close but carries no coefficient information,
+and **Pass 5 cannot build `M` without it** — a role alone says a piece is a `target`, not WHICH
+unknown it is the target of, nor with what real-linear functional.*
+
+```ts
+export interface FamilyPiece {
+  id: string;
+  name: string;
+  geom: Geom;                        // §2.2's runtime geometry, not a string — see the note below
+  role: PieceRole;
+  lemma?: LemmaId;                   // required when role === "vanish"; invariant 1 checks it
+  /** Pass 5's `aᵢ`, one entry per unknown this piece touches. */
+  coefficients?: { targetId: string; coefficient: string }[];
+  /** Pass 5's `bᵢ` — the bonus constant a `reproduces` piece carries alongside its multiple. */
+  bonus?: string;
+  side?: "above" | "below";
+  colour: 0 | 1 | 2 | 3 | 4 | 5;
+}
+```
+
+`coefficients` is **required** for `reproduces` (a bonus row is meaningless without one) and may be
+omitted on a `target` piece only when the family has exactly one unknown, where `1` is unambiguous.
+
+**Geometry is the runtime type, not a string.** The gallery's JSONC writes `"x": "-R"`; the loaded
+record reuses §2.2's affine `Scalar`, so the value a record declares is the value `resolve()`
+consumes — no parser, no glue, and no second representation to drift out of step.
+
+**`M` is not always rational.** Every coefficient in tiers A and B is `1` or `0`, but the log
+keyhole's lower edge reproduces `∫R log + 2πi∫R`, so its row carries a `2π`. The loader **refuses**
+such a coefficient rather than rounding it, because rank is the load-bearing report of Pass 5 and a
+rounded `2π` would make rank a matter of tuning. Tier D needs either a symbolic matrix entry or a
+documented rational rescaling of the unknowns; the choice is deferred to M4, where a record that
+needs it exists.
+
+---
 
 **Loader invariants, enforced at startup and in a test:**
 
