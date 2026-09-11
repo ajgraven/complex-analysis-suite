@@ -279,3 +279,18 @@ describe("a failing record is dropped, not thrown on", () => {
     expect(violations.map((v) => v.family)).toEqual(["broken"]);
   });
 });
+
+describe("a fixture that documents a refusal must actually be refused", () => {
+  it("reports a `refuses` fixture whose rank is full", () => {
+    // The other half of invariant 4, and the reason `refuses` is not an escape hatch: a fixture
+    // claiming the derivation collapses there, on a contour where it plainly does not, documents
+    // nothing. D3's two are rank 0; this one is rank 1 and says so.
+    const f = broken((x) => ({
+      ...x,
+      golden: x.golden.map((g, k) => (k === 0 ? { ...g, refuses: "not really" } : g)),
+    }));
+    const hits = checkFamily(f).filter((v) => v.invariant === 4);
+    expect(hits[0]?.message).toMatch(/marked as documenting a refusal/);
+    expect(hits[0]?.message).toMatch(/does NOT collapse there/);
+  });
+});

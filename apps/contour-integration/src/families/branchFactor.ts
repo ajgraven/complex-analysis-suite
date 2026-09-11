@@ -15,7 +15,7 @@
 // **`rationalPart`** is an AST, since everything downstream (poles, residues, the arc bounds) wants
 // the polynomial pair and `toExactRational` produces it.
 import { Frac, Gauss } from "@cas/exact";
-import { parse, type Node } from "@cas/expr";
+import { parse, substitute, type Node } from "@cas/expr";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import { INFINITY, type BranchChoice } from "../kernel/branch/model.js";
 import type { Cx } from "../kernel/geom.js";
@@ -90,6 +90,16 @@ export function powerFactorOf(family: Family, bindings: Bindings): BranchFactorR
       ok: false,
       reason: `the rational cofactor '${branch.rationalPart}' does not parse: ${e instanceof Error ? e.message : String(e)}`,
     };
+  }
+  // The cofactor may be a function of the family's parameters as well as of `z` — D3's is
+  // `1/(1+z^n)` — so it is bound exactly as `contourIntegrandOf` binds the integrand. Without this
+  // the pole-finder is handed a polynomial in two variables and reports nothing.
+  for (const declared of family.parameters) {
+    const bound = bindings[declared.name];
+    if (typeof bound === "boolean" || bound === undefined) continue;
+    const value = typeof bound === "number" ? bound : Number(bound);
+    if (!Number.isFinite(value)) continue;
+    rational = substitute(rational, declared.name, { kind: "num", value });
   }
 
   // Where the branch point sits. Needed as a NUMBER here rather than exactly, because it is the

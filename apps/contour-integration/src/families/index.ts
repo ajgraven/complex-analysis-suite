@@ -27,6 +27,7 @@ import { b3JordanQuartic } from "./records/b3-jordan-quartic.js";
 import { a6SemicircleQuartic } from "./records/a6-semicircle-quartic.js";
 import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
 import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
+import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export { buildSystem, exactConstant, type FamilySystem } from "./system.js";
@@ -60,6 +61,7 @@ export const FAMILIES: readonly Family[] = [
   c2RemovableOneMinusCos,
   c3PvSineOverXTimesQuadratic,
   d1MellinKeyhole,
+  d3KeyholeXToTheN,
 ];
 
 /**
@@ -309,14 +311,33 @@ function checkInvariant4(family: Family): Violation[] {
 
   // A family with no parameters still gets one pass, at the empty binding: `M` does not depend on a
   // fixture there, but the check must still run.
-  const bindings = family.golden.length > 0 ? family.golden.map((g) => g.params) : [{}];
-  for (const [i, params] of bindings.entries()) {
+  //
+  // A fixture marked `refuses` inverts the rule rather than escaping it. D3 carries two: at integer
+  // `a` its keyhole genuinely carries no information about the target, so `rank(M) = 0` is the
+  // CORRECT report and demanding full rank there would drop a record for telling the truth. The
+  // requirement becomes the other one — a `refuses` fixture that turned out to have full rank is not
+  // documenting a degeneracy at all, and that is just as much a corpus error.
+  const fixtures =
+    family.golden.length > 0
+      ? family.golden.map((g) => ({ params: g.params, refuses: g.refuses }))
+      : [{ params: {}, refuses: undefined }];
+  for (const [i, fixture] of fixtures.entries()) {
+    const params = fixture.params;
     const built = buildSystem(family, params);
     if (!built.ok) {
       fail(`golden ${i}: M could not be decided exactly — ${built.reason}`);
       continue;
     }
     const { rank } = built.system.report;
+    if (fixture.refuses !== undefined) {
+      if (rank === m) {
+        fail(
+          `golden ${i} is marked as documenting a refusal (${fixture.refuses}), but rank(M) = ${m} ` +
+            "— the derivation does NOT collapse there, so the fixture documents nothing",
+        );
+      }
+      continue;
+    }
     if (rank !== m) {
       const undetermined = built.system.report.kernel.length;
       fail(

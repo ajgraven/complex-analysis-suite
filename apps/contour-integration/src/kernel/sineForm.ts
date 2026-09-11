@@ -14,6 +14,15 @@
 // refuses: a two-term `c·(e^{β₁} − e^{β₂})` whose half-difference `(β₁−β₂)/2` is `i·r·π` with `r`
 // rational. D1's, D3's and D7's `1 − e^{2πiμ}` are all that shape; nothing else in the gallery is.
 //
+// ONE MORE RULE, AND ONLY BECAUSE A RECORD NEEDS IT. D3's residue sum is `n` terms in geometric
+// progression, and its `(1 − e^{2πia})` is the SAME factor the keyhole's coefficient carries — so the
+// two cancel, and what is left is `1/(1 − e^{2πia/n})`, whose sine is `sin(πa/n)` rather than
+// `sin(πa)`. Without that cancellation the answer is numerically right and reads as
+// `(π/n)·(Σₖ e^{…})/sin(πa)`, which no reader would recognise as `(π/n)/sin(πa/n)`; worse, at integer
+// `a` it is `0/0` rather than a decided refusal. The recogniser is stated in
+// {@link cancelGeometricSum} and bounded the same way: an arithmetic progression of equal
+// coefficients over a denominator that is exactly its `m`-th power, or nothing.
+//
 // **AND A VANISHING SINE IS A REFUSAL, NOT A ZERO.** `r ∈ ℤ` means `sin(π r) = 0`, which is the
 // division by zero D1's `wrong-branch` trap and D3's `integer-a-degenerate-keyhole` trap both
 // describe: the classical symptom is "the two edges cancel and my integral collapses to 0", and the
@@ -111,6 +120,73 @@ function tryInv(c: SqrtExt): SqrtExt | null {
 }
 
 /**
+ * `Σ_{k<m} c·e^{β₀+kδ} / (1 − e^{mδ})` → `c·e^{β₀} / (1 − e^{δ})`, or null when that is not the shape.
+ *
+ * The identity is the finite geometric series, `Σ_{k<m} q^k = (1 − q^m)/(1 − q)`, applied where the
+ * denominator IS `1 − q^m`. D3 is the record that needs it: its residue sum over the `n`-th roots of
+ * `−1` is exactly such a progression, and the `(1 − e^{2πia})` it produces is the same factor the
+ * keyhole's two edges contribute — so the cancellation is not a tidying of the answer, it is what
+ * makes the answer expressible at all. Without it D3 at `a = 1.5, n = 4` reads as
+ * `(π/4)·(Σₖ e^{…})/sin(π/2)` rather than `(π/4)/sin(3π/8)`.
+ *
+ * **THE STEP IS READ FROM THE NUMERATOR**, and the denominator is then only required to satisfy
+ * `e^{Δ} = e^{mδ}` — a congruence mod `2πi`, not an equality. Deriving the step as `Δ/m` instead was
+ * the first attempt and it fails on every fixture: `Δ` arrives canonicalised into one period (that
+ * is what makes D1's form the record's), so at `a = 1.5` it is `iπ` while the progression's true
+ * span is `3iπ`, and `3iπ/4 ≠ iπ/4`. The numerator's step is unambiguous; the denominator's exponent
+ * is only ever a representative.
+ *
+ * DECIDED, NOT FITTED. Every exponent is verified against the progression and every coefficient
+ * against the first, so a numerator that merely happens to have `m` terms is refused rather than
+ * reinterpreted. `m = 1` is excluded: it matches any single-term numerator and cancels nothing.
+ */
+function cancelGeometricSum(
+  numerator: ExpSum,
+  first: ExpTermLike,
+  second: ExpTermLike,
+): { readonly numerator: ExpSum; readonly pair: readonly [ExpTermLike, ExpTermLike] } | null {
+  const m = numerator.terms.length;
+  if (m < 2) return null;
+
+  // Read the progression from its lowest term up, which is the order the identity is written in.
+  const rising = [...numerator.terms].sort((x, y) => {
+    const d = x.exponent.pi.im.sub(y.exponent.pi.im);
+    return d.isZero() ? 0 : d.n < 0n ? -1 : 1;
+  });
+  const base = rising[0];
+  const step = rising[1].exponent.sub(base.exponent);
+  if (step.isZero()) return null;
+  for (let k = 0; k < m; k++) {
+    if (!rising[k].exponent.equals(base.exponent.add(step.scale(Gauss.int(k))))) return null;
+    if (!rising[k].coefficient.equals(base.coefficient)) return null;
+  }
+
+  // `e^{Δ} = e^{mδ}`: the two exponents must agree in every component, and in the imaginary π part
+  // modulo 2 — which is precisely the freedom `e^{β}` has.
+  const total = step.scale(Gauss.int(m));
+  const delta = first.exponent.sub(second.exponent);
+  const drift = total.sub(delta);
+  if (!drift.algebraic.isZero() || !drift.pi.re.isZero()) return null;
+  const halves = drift.pi.im.div(Frac.of(2n));
+  if (halves.d !== 1n) return null;
+
+  // The effective denominator: `c₁(e^{β₂+δ} − e^{β₂})`, whose ratio to the original is exactly the
+  // progression that was cancelled out of the numerator.
+  return {
+    numerator: ExpSum.of(base.coefficient, base.exponent),
+    pair: [
+      { coefficient: first.coefficient, exponent: second.exponent.add(step) },
+      { coefficient: second.coefficient, exponent: second.exponent },
+    ],
+  };
+}
+
+interface ExpTermLike {
+  readonly coefficient: SqrtExt;
+  readonly exponent: Exponent;
+}
+
+/**
  * Divide `numerator` by `denominator`, carrying the result as `sum / sin(π r)`.
  *
  * A one-term denominator is plain division and produces no sine — which is the path every tier-A–C
@@ -171,12 +247,39 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
     return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
   }
 
-  const gamma = first.exponent.sub(second.exponent).half();
+  // THE GEOMETRIC CANCELLATION, before the sine is looked for. It replaces BOTH sides — the numerator
+  // loses its progression and the denominator its `m`-th power — so the sine found afterwards is
+  // `sin(πa/n)` rather than `sin(πa)`, which is the form D3 states. Everything below then runs on
+  // the effective pair and needs no further special case.
+  const geometric = cancelGeometricSum(numerator, first, second);
+  const effective = geometric === null ? numerator : geometric.numerator;
+  const [lead, trail] = geometric === null ? [first, second] : geometric.pair;
+  const gamma = lead.exponent.sub(trail.exponent).half();
   if (!gamma.algebraic.isZero() || !gamma.pi.re.isZero()) {
     const reason =
       `the exponents of ${formatPiExpSum(denominator)} differ by ${formatExponent(gamma.scale(Gauss.int(2)))}, ` +
       "which is not a purely imaginary multiple of π, so the difference is a sinh rather than a sine";
     return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
+  }
+
+  // **THE DEGENERACY IS DECIDED ON THE ORIGINAL DENOMINATOR.** A cancellation may simplify a
+  // derivation; it must never rescue one. At integer `a` the keyhole's own coefficient
+  // `1 − e^{2πia}` is identically zero, so `N/D` is `0/0` — and the geometric identity happily
+  // reports the limit, which for D3 at `a = 3, n = 7` is the perfectly correct `(π/7)/sin(3π/7)`.
+  // That is exactly what the record forbids: "the VALUE is right, the keyhole DERIVATION is
+  // degenerate […] A correct value obtained from a collapsed derivation is not a proof."
+  if (geometric !== null && normaliseSine(first.exponent.sub(second.exponent).half().pi.im) === null) {
+    const reason =
+      `the coefficient on the unknown is ${formatPiExpSum(denominator)}, whose sine factor is ZERO: ` +
+      "the two edges of the cut carry the same phase, so they cancel and the contour carries no " +
+      "information about the target — the closed form may still be correct by continuity, and a " +
+      "correct value from a collapsed derivation is not a proof";
+    return {
+      ok: false,
+      reason,
+      degenerate: true,
+      certificate: refuse("the target", reason, { provenance: DEGENERATE_TRAIL }),
+    };
   }
 
   // `γ = i·r·π`, so `e^{γ} − e^{−γ} = 2i·sin(rπ)`.
@@ -196,15 +299,15 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
 
   // `D = c₁·e^{(β₁+β₂)/2}·2i·sin(rπ)`, so the reciprocal is `1/(2i·c₁·sign) · e^{−(β₁+β₂)/2} / sin(π r)`.
   const twoI = SqrtExt.fromGauss(new Gauss(Frac.ZERO, Frac.of(2n)));
-  const scale = tryInv(first.coefficient.mul(twoI));
+  const scale = tryInv(lead.coefficient.mul(twoI));
   if (scale === null) {
     const reason = `the coefficient ${formatPiExpSum(denominator)} does not invert inside one quadratic extension`;
     return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
   }
   const signed = normalised.sign === 1 ? scale : scale.neg();
-  const halfSum = first.exponent.add(second.exponent).half();
+  const halfSum = lead.exponent.add(trail.exponent).half();
 
-  const sum = numerator.scale(signed).shift(halfSum.neg()).foldSigns();
+  const sum = effective.scale(signed).shift(halfSum.neg()).foldSigns();
   return {
     ok: true,
     form: isUnitSine(normalised.r) ? { sum } : { sum, sine: normalised.r },

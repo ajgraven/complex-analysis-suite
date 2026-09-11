@@ -67,6 +67,19 @@ describe("every fixture of every record, not just the flagship one", () => {
       // `halfRange` / `closeDown` select a derivation the engine has no route for; the closing-down
       // one is executed directly below instead.
       if (isVariant(family, g)) continue;
+      // A fixture marked `refuses` documents a collapsed derivation, and its `value` records what
+      // the answer would be — which is exactly why it must not be printed. D3 carries two, at
+      // integer `a`, where the keyhole carries no information about the target while
+      // `(π/n)/sin(πa/n)` remains correct by continuity. The test is that the engine REFUSES and
+      // says so, not that it reproduces the number.
+      if (g.refuses !== undefined) {
+        const r = solveFamily(family, g);
+        expect(r.ok, `${family.id} at ${JSON.stringify(g.params)} should refuse: ${g.refuses}`).toBe(
+          false,
+        );
+        if (!r.ok) expect(r.reason).toMatch(/carries no information|is ZERO|exactly zero/);
+        continue;
+      }
       const want = typeof g.numeric === "number" ? g.numeric : g.numeric[0];
       const { solved } = solve(family, g);
       expect(
@@ -109,6 +122,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "removable-one-minus-cos",
       "pv-sine-over-x-times-quadratic",
       "mellin-keyhole",
+      "keyhole-x-to-the-n",
     ]);
   });
 });
@@ -240,6 +254,10 @@ describe("the closed form each record establishes", () => {
     // keyhole's coefficient `1 − e^{2πiα}` factors through a sine, which is CARRIED rather than
     // evaluated. North-star behaviour 4, in one string.
     "mellin-keyhole": "π/sin(3π/10)",
+    // D3, whose sine is `sin(πa/n)` and not `sin(πa)` — the geometric sum over the n roots
+    // cancels the keyhole's own `(1 − e^{2πia})`, and without that cancellation the answer is
+    // numerically right in a form no reader would recognise.
+    "keyhole-x-to-the-n": "(π/4)/sin(3π/8)",
   };
 
   it("covers every loaded record", () => {

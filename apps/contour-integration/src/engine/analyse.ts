@@ -90,7 +90,13 @@ export function analyse({ ast, f, poles, contour, budget, branch, power }: Analy
   const theorem =
     power === undefined
       ? applyResidueTheorem(poles, integral)
-      : applyBranchTheorem({ poles, integral, factor: power.factor });
+      : applyBranchTheorem({
+          poles,
+          integral,
+          factor: power.factor,
+          rational: power.rational,
+          pieces: resolved,
+        });
   const ledger = evaluateLedger({
     ast,
     pieces: resolved,

@@ -23,8 +23,13 @@ import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
 import { branchResidue, type PowerFactor } from "../kernel/branchResidue.js";
+import { asCyclotomic, cyclotomicResidueSum } from "../kernel/cyclotomic.js";
+import { toExactRational } from "../kernel/exactRational.js";
+import type { Node } from "@cas/expr";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
+import type { Resolved } from "../kernel/geom.js";
+import { windingNumber } from "../kernel/winding.js";
 import type { ResidueTheoremResult } from "./residueTheorem.js";
 
 /** `2πi` in units of π, i.e. `2i` — what the solve multiplies the residue sum by. */
@@ -36,6 +41,16 @@ export interface BranchTheoremInput {
   /** The winding numbers the contour integral already decided, by exact-sign predicates. */
   readonly integral: ContourIntegral;
   readonly factor: PowerFactor;
+  /**
+   * The rational cofactor's AST, when the caller has it.
+   *
+   * Opens the cyclotomic route: for `1 + z^n` the residue sum has a closed form even where no
+   * individual root is expressible, and D3's `n = 5` and `n = 7` fixtures reach their answers no
+   * other way. Omitted, the per-pole route is the only one.
+   */
+  readonly rational?: Node;
+  /** The resolved contour — needed only to ASK the winding question at each cyclotomic root. */
+  readonly pieces?: readonly Resolved[];
 }
 
 /**
@@ -47,6 +62,28 @@ export interface BranchTheoremInput {
 export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremResult {
   const { poles, integral, factor } = input;
   const certificates: Certificate[] = [];
+
+  // THE CYCLOTOMIC ROUTE FIRST, because it needs strictly less. `Σₖ Res` over the roots of
+  // `b_n z^n + b₀` has a closed form built from the structure alone, so it works where the poles are
+  // not individually representable — which for D3 at `n = 5` and `n = 7` is the difference between
+  // an exact answer and no answer at all.
+  const cyclotomic = input.rational === undefined ? null : asCyclotomicCofactor(input.rational);
+  if (cyclotomic !== null) {
+    const enclosed = everyRootEnclosed(cyclotomic, input.pieces ?? []);
+    if (enclosed !== null) {
+      const sum = cyclotomicResidueSum(cyclotomic, factor.alpha, factor.argRange);
+      if (!sum.ok) {
+        return { verdict: assembleVerdict([refuse("∮ f dz", sum.reason), sum.certificate]) };
+      }
+      const piUnits = sum.value.scale(TWO_I);
+      const [re, im] = piUnits.toTuple();
+      return {
+        exactValue: { value: [Math.PI * re, Math.PI * im], text: formatTwoPiIExpSum(sum.value) },
+        piUnits,
+        verdict: assembleVerdict([sum.certificate, enclosed]),
+      };
+    }
+  }
 
   const exactPoles = poles.exactPoles;
   if (exactPoles === undefined || !poles.exactlyComplete) {
@@ -107,4 +144,45 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
     piUnits,
     verdict: assembleVerdict(certificates),
   };
+}
+
+/** The cofactor read as `1/(b_n z^n + b₀)`, or null. A numerator of degree > 0 is a different sum. */
+function asCyclotomicCofactor(rational: Node): ReturnType<typeof asCyclotomic> {
+  const split = toExactRational(rational);
+  if (!split.ok) return null;
+  if (split.value.num.degree() !== 0) return null;
+  if (!split.value.num.coeff(0).equals(Gauss.ONE)) return null;
+  return asCyclotomic(split.value.den);
+}
+
+/**
+ * A certificate that the contour encircles every root exactly once — or null, meaning it does not.
+ *
+ * The residues stay symbolic; only the WINDING is asked of the geometry, and it is decided by the
+ * same exact-sign predicates every other winding number uses. A keyhole with `ε < 1 < R` encloses
+ * the whole unit circle, which is where these roots live, so this is a check rather than a hope: a
+ * contour that missed one would produce a confident sum over poles it never enclosed.
+ */
+function everyRootEnclosed(
+  form: NonNullable<ReturnType<typeof asCyclotomic>>,
+  pieces: readonly Resolved[],
+): Certificate | null {
+  if (pieces.length === 0) return null;
+  for (let k = 0; k < form.n; k++) {
+    const theta = (Math.PI * (form.psi.toNumber() + 2 * k)) / form.n;
+    const w = windingNumber(pieces, [Math.cos(theta), Math.sin(theta)]);
+    if (!w.decided || w.n !== 1) return null;
+  }
+  return exact(
+    `the contour encircles each of the ${form.n} roots exactly once`,
+    "exact-sign crossing count at each root of the rotated n-gon",
+    {
+      provenance: [
+        {
+          ok: true,
+          text: "the roots are located numerically only to ASK the winding question; their residues are never evaluated",
+        },
+      ],
+    },
+  );
 }

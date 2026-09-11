@@ -215,6 +215,22 @@ export interface Golden {
   readonly verifiedTo: number;
   /** How it was verified — two independent methods are required for the primary fixture. */
   readonly method: string;
+  /**
+   * This fixture documents a **REFUSAL**, not a value — and `value`/`numeric` record what the answer
+   * would be, which is precisely why it is dangerous.
+   *
+   * *Added for D3*, the record that forces the distinction. At integer `a` its integrand has no
+   * branch point at all: the keyhole's two edges are the same integral traversed both ways,
+   * `1 + Σcⱼ = 0` exactly, and the contour carries no information about the target — while the closed
+   * form `(π/n)/sin(πa/n)` stays perfectly finite and *correct by continuity*. The record's own words:
+   * "The value survives; the derivation does not. […] A correct value obtained from a collapsed
+   * derivation is not a proof; print the wedge's derivation or print nothing."
+   *
+   * So a fixture carrying this is REQUIRED to be rank-deficient, and one not carrying it is required
+   * to have full rank. Both directions, because "the derivation collapses here" and "the engine
+   * cannot do this yet" must not look the same in the corpus.
+   */
+  readonly refuses?: string;
 }
 
 export interface Family {
