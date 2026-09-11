@@ -41,6 +41,15 @@ describe("the M2 gate: an exact ∮ that the quadrature confirms", () => {
     expect(theorem.agrees).toBe(true);
   });
 
+  it("gives π√2/2 for 1/(1+z⁴) over the upper half-plane — the M2 gate's own example", () => {
+    // The residues live in ℚ(i)(√2), sum to −i√2/4 over the two upper poles, and 2πi times that is
+    // π√2/2. Printing 2.2214414 there would be correct and worthless.
+    const { theorem } = setup("1/(1+z^4)", resolveAll(semicircleTemplate(400)));
+    expect(theorem.exactValue?.text).toBe("π√2/2");
+    expect(theorem.exactValue?.value[0]).toBeCloseTo(Math.PI / Math.SQRT2, 12);
+    expect(theorem.agrees).toBe(true);
+  });
+
   it("gives 0 when the contour encloses nothing", () => {
     const { theorem } = setup("1/(z-5)", circle(1));
     expect(theorem.exactValue?.text).toBe("0");
@@ -89,10 +98,10 @@ describe("when the residue theorem does not apply, it says so", () => {
     expect(theorem.verdict.level).toBe("⚠");
   });
 
-  it("estimates rather than claims when a pole is algebraic", () => {
-    // z⁴+1: the residues live in an algebraic extension, so no exact sum is available — and the
-    // result says that rather than quietly reporting the numeric value as exact.
-    const { theorem } = setup("1/(1+z^4)", circle(2));
+  it("estimates rather than claims when the poles outrun one quadratic extension", () => {
+    // A general quintic has no closed-form roots, so no exact sum is available — and the result says
+    // that rather than quietly reporting the numeric value as exact.
+    const { theorem } = setup("1/(z^5-z-1)", circle(3));
     expect(theorem.exactValue).toBeUndefined();
     expect(theorem.verdict.level).toBe("≈");
   });

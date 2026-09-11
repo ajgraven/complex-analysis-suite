@@ -16,8 +16,8 @@ import { tupleAlgebra, makeDurandKerner, type ComplexTuple } from "@cas/core";
 import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
 import { toExactRational } from "./exactRational.js";
-import { exactResidues, gaussToCx, residueSum, type ExactPole } from "./exactResidue.js";
-import { formatGauss } from "./formatExact.js";
+import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
+import { formatSqrtExt } from "./formatExact.js";
 
 export type Cx = ComplexTuple;
 type Poly = Cx[]; // ascending: p[k] is the coefficient of z^k
@@ -44,8 +44,10 @@ export interface PoleReport {
   readonly exactlyComplete: boolean;
   /** Σ Res over all poles, exact, present only when `exactlyComplete`. */
   readonly exactResidueSum?: { readonly value: Cx; readonly text: string };
-  /** The exactly-pinned poles in their exact form, for arithmetic that must stay in ℚ(i). */
-  readonly exactPoles?: readonly ExactPole[];
+  /** The exactly-pinned poles in exact form, for arithmetic that must stay in ℚ(i) or ℚ(i)(√d). */
+  readonly exactPoles?: readonly AlgebraicPole[];
+  /** The quadratic extension the exact data needed, or null when ℚ(i) sufficed. */
+  readonly radicand?: bigint | null;
   readonly certificates: readonly Certificate[];
 }
 
@@ -174,12 +176,12 @@ function rootsOf(den: Poly): { roots: Cx[]; converged: boolean; iterations: numb
   };
 }
 
-const toPole = (p: ExactPole): Pole => ({
-  at: gaussToCx(p.at),
+const toPole = (p: AlgebraicPole): Pole => ({
+  at: p.at.toTuple(),
   order: p.order,
   orderCertain: true,
   possiblyRemovable: false,
-  residue: { value: gaussToCx(p.residue), text: formatGauss(p.residue) },
+  residue: { value: p.residue.toTuple(), text: formatSqrtExt(p.residue) },
   isExact: true,
 });
 
@@ -207,7 +209,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     const denFloat = trim(toFloatPoly(den));
     // Root-finding is injected, and each squarefree factor is solved separately — see exactResidues
     // for why that matters for a repeated root.
-    const report = exactResidues(num, den, (factor) => {
+    const report = exactPolesOf(num, den, (factor) => {
       const coeffs = trim(toFloatPoly(factor));
       return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
     });
@@ -229,25 +231,34 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     }
 
     if (report.poles.length > 0) {
+      const field = report.radicand === null || report.radicand === undefined
+        ? "ℚ(i)"
+        : `ℚ(i)(√${report.radicand})`;
       certificates.push(
         exactCert(
-          `${report.poles.length} pole${report.poles.length === 1 ? "" : "s"} with exact location, order and residue`,
-          "Taylor shift, exact series inverse, one convolution — over ℚ(i)",
+          `${report.poles.length} pole${report.poles.length === 1 ? "" : "s"} with exact location, order and residue in ${field}`,
+          report.radicand === null || report.radicand === undefined
+            ? "Taylor shift, exact series inverse, one convolution"
+            : "roots split by the quadratic formula and binomial recursion; residues by P/Q′ at the root",
         ),
       );
     }
 
     if (report.complete) {
-      const sum = residueSum(report.poles);
+      const sum = weightedSum(report.poles, () => 1);
       return {
         poles: report.poles.map(toPole),
         rational: true,
         exactlyComplete: true,
-        exactResidueSum: { value: gaussToCx(sum), text: formatGauss(sum) },
+        exactResidueSum: { value: sum.toTuple(), text: formatSqrtExt(sum) },
         exactPoles: report.poles,
+        radicand: report.radicand,
         certificates: [
           ...certificates,
-          exactCert(`Σ Res = ${formatGauss(sum)} over every pole of f`, "exact sum over exactly-pinned poles"),
+          exactCert(
+            `Σ Res = ${formatSqrtExt(sum)} over every pole of f`,
+            "exact sum over exactly-pinned poles",
+          ),
         ],
       };
     }
@@ -255,16 +266,17 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     // Some poles are algebraic. The exact ones stay exact; the rest fall back, and the report says
     // which is which rather than averaging the two claims into one.
     const { roots, converged, iterations } = rootsOf(denFloat);
-    const exactAt = report.poles.map((p) => gaussToCx(p.at));
+    const exactAt = report.poles.map((p) => p.at.toTuple());
     const numericOnly = roots.filter(
       (r) => !exactAt.some((e) => Math.hypot(e[0] - r[0], e[1] - r[1]) < 1e-6),
     );
     const clustered = cluster(numericOnly, cauchyBound(trim(denFloat)));
 
+    const unpinned = den.degree() - report.poles.reduce((n, p) => n + p.order, 0);
     certificates.push(
       unknown(
-        `${report.totalDegree - report.poles.reduce((n, p) => n + p.order, 0)} pole${report.totalDegree - report.poles.length === 1 ? "" : "s"} of f are algebraic, not Gaussian rational`,
-        "their residues live in an algebraic extension of ℚ(i); the ladder that names them is later work",
+        `${unpinned} pole${unpinned === 1 ? "" : "s"} of f could not be pinned exactly`,
+        "their residues need more than one quadratic extension of ℚ(i) — a general number field, which PLAN.md §3.3 puts on a later rung (printed as a RootSum)",
       ),
       estimate("those poles are located numerically", "Durand–Kerner from Cauchy-bound seeds, Newton-polished", {
         provenance: [{ ok: converged, text: `Durand–Kerner converged in ${iterations} iterations` }],
@@ -285,6 +297,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
       rational: true,
       exactlyComplete: false,
       exactPoles: report.poles,
+      radicand: report.radicand,
       certificates,
     };
   }
