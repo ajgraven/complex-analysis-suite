@@ -151,10 +151,21 @@ implementation decision.
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
 together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
 substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
-`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Eleven
-records are loaded: **A1–A3** (circle), **A5–A7** (semicircle), **B1–B3** (Jordan), **C1** (the
-indented semicircle) and **C2** (removability + L5) — every entry in tiers A and B except A4, plus
-the two halves of the C1/C2 contrast.
+`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Twelve
+records are loaded: **A1–A3** (circle), **A5–A7** (semicircle), **B1–B3** (Jordan) and **C1–C3**
+(indentation, removability, and the two-singularity ledger) — **every entry in tiers A, B and C
+except A4**, which is the M3 gate's thirteen less one.
+
+Each solves to a **symbolic closed form**, asserted by name in `familyGolden.test.ts`:
+
+| | | | |
+|---|---|---|---|
+| `2π√3/3` | `8π/3` | `π/6` | `π/2` |
+| `π√2/2` | `π/8` | `π/e` | `π/e` |
+| `π/2` | `π/2` | `π − π/e` | B3: decimal only |
+
+B3 is the one without a symbolic form, and its own record says why: its exponents are complex, so
+`Re` does not distribute over the terms and `e^{β}` contributes `cos` and `sin` of an irrational.
 
 **A4 is deliberately absent.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to
 `e^z/(i z^{n+1})`, whose exact residue is the Taylor coefficient of an *entire* function — `1/n!` —
@@ -194,6 +205,27 @@ argument does not close and no principal value exists either. And C1's own free 
 executed: indenting *below* flips both the winding number and the sign of `iα·Res`, `∮` becomes
 `2πi` instead of 0, and the two changes cancel to the same π/2 — an engine that flipped only one
 would land on −π/2 or 3π/2 and look plausible either way.
+
+### 5.0d C3: two singularities of different kinds in one ledger
+
+`e^{iz}/(z(z²+b²))` has a simple pole **on** the contour at 0 and a simple pole **inside** it at `ib`,
+and both must be accounted — by different mechanisms, with different weights:
+
+```
+n(γ, 0)  = 0   and an L4 contribution of   −iπ·Res(f,0)  = −iπ/b²
+n(γ, ib) = 1   and a residue contribution of  2πi·Res(f,ib) = −iπe^{−b}/b²
+```
+
+They differ by **exactly a factor of two**, which is why the record warns that a hand-chosen sign
+here is indistinguishable from a winding-number error. Three poles, three different winding numbers,
+and `(π/b²)(1 − e^{−b})` needs all of it.
+
+**Gap G6 is closed.** C3 is posed as a principal value, and the record calls that "correct but
+inherited": `∫cos x/(x(x²+b²))` diverges at the origin so the AUXILIARY needs one, while the target
+`sin x/(x(x²+b²))` is removable at 0 and `O(x⁻³)` at infinity and so converges absolutely — its p.v.
+*is* its value. A boolean on the target cannot carry that. The target's three-state `convergence` plus
+a new `auxiliary.principalValue` says both at once, which is what the record's
+`pv-claimed-of-the-target` trap asks for.
 
 ### 5.0c C2 is the same π, moved
 

@@ -142,6 +142,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "jordan-quartic",
       "indented-sinc",
       "removable-one-minus-cos",
+      "pv-sine-over-x-times-quadratic",
     ]);
   });
 });
@@ -235,3 +236,33 @@ function must<T>(v: T | undefined, what: string): T {
   if (v === undefined) throw new Error(`expected ${what} to be present`);
   return v;
 }
+
+describe("the closed form each record establishes", () => {
+  // The M3 gate's own criterion, made executable: "each produce a closed form labelled `=`". These
+  // are the SYMBOLIC answers, not decimals — the whole solve runs in units of π so that π/2 stays
+  // π/2. The one `undefined` is B3, and its record says exactly why: its exponents are complex, so
+  // Re does not distribute over the terms and the decimal is the honest report.
+  const EXPECTED: Readonly<Record<string, string | undefined>> = {
+    "circle-linear-cos": "2π√3/3",
+    "circle-poisson": "8π/3",
+    "circle-cos-n-theta": "π/6",
+    "semicircle-order2": "π/2",
+    "semicircle-quartic": "π√2/2",
+    "semicircle-order3": "π/8",
+    "jordan-cosine-kernel": "π/e",
+    "jordan-strict": "π/e",
+    "jordan-quartic": undefined,
+    "indented-sinc": "π/2",
+    "removable-one-minus-cos": "π/2",
+    "pv-sine-over-x-times-quadratic": "π − π/e",
+  };
+
+  it("covers every loaded record", () => {
+    expect(Object.keys(EXPECTED).sort()).toEqual(FAMILIES.map((f) => f.id).sort());
+  });
+
+  it.each(cases)("%s", (id, family) => {
+    const { solved } = solve(family, primary(family));
+    expect(solved.text).toBe(EXPECTED[id]);
+  });
+});

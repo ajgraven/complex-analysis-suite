@@ -155,6 +155,21 @@ export interface Family {
     readonly integrand: string;
     /** The real-linear functional recovering the target: `"Re"` | `"Im"` | an expression. */
     readonly relation: "Re" | "Im" | string;
+    /**
+     * Whether the AUXILIARY needs a principal value — which is usually where a p.v. actually lives.
+     *
+     * *Added for C3, the record that needs it, and it closes that record's gap G6.* C3 is posed as a
+     * principal value and the qualifier is "correct but inherited": `∫cos x/(x(x²+b²))` diverges at
+     * the origin, so the auxiliary genuinely needs one, while the target `sin x/(x(x²+b²))` is
+     * removable at 0 and `O(x⁻³)` at infinity and so converges ABSOLUTELY — its p.v. is simply its
+     * value. C1 is the same shape: `∫cos x/x` diverges while `∫sin x/x` converges.
+     *
+     * With the target's own three-state `convergence` and this flag, both facts are sayable at once,
+     * which is what C3's `pv-claimed-of-the-target` trap asks for: "p.v. = …" without "and the
+     * integral converges, so this is also its value" understates the result, and "∫ = …" without
+     * recording that the derivation ran through a p.v. hides a hypothesis.
+     */
+    readonly principalValue?: boolean;
     readonly note: string;
   };
 

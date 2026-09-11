@@ -16,8 +16,7 @@
 // there is no family at all. Moving it inward is a wiring change, not a redesign.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { exact, refuse, unknown, type Certificate } from "@cas/rigor";
-import { ExpSum } from "../kernel/expSum.js";
-import { formatPiSqrt } from "../kernel/formatExact.js";
+import { ExpSum, formatPiExpSum } from "../kernel/expSum.js";
 import { exactConstant, type Bindings } from "./system.js";
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
@@ -68,6 +67,29 @@ function realPart(x: SqrtExt, part: "re" | "im"): SqrtExt {
   const pick = (g: Gauss): Gauss =>
     part === "re" ? new Gauss(g.re, Frac.ZERO) : new Gauss(g.im, Frac.ZERO);
   return SqrtExt.of(pick(x.a), pick(x.b), x.d);
+}
+
+/** Whether an element of ℚ(i)(√d) is real — both parts free of `i`. */
+const isReal = (x: SqrtExt): boolean => x.a.im.isZero() && x.b.im.isZero();
+
+/**
+ * Re or Im of `Σ cₖ e^{βₖ}`, when it distributes over the terms — or null.
+ *
+ * It distributes exactly when every `βₖ` is REAL, since `e^{β}` is then real and
+ * `Re(Σ cₖe^{βₖ}) = Σ Re(cₖ)e^{βₖ}`. B1's `e^{−1}` and C3's `1 − e^{−b}` qualify, which is what lets
+ * their answers read `π/e` and `π − π/e` rather than as decimals.
+ *
+ * B3 is the case that does NOT: its exponents are `−√2/2 ± i√2/2`, so `e^{β}` carries `cos` and `sin`
+ * of an irrational and the real part is not an element of this basis at all. Returning null there is
+ * the record's own position — "`=` is earned on the form while the decimal remains `≈`".
+ */
+function realPartOfSum(sum: ExpSum, part: "re" | "im"): ExpSum | null {
+  let out = ExpSum.ZERO;
+  for (const t of sum.terms) {
+    if (!isReal(t.exponent)) return null;
+    out = out.add(ExpSum.of(realPart(t.coefficient, part), t.exponent));
+  }
+  return out;
 }
 
 /** The total coefficient `Σ aᵢ` on the unknown, over the family's target pieces. */
@@ -150,12 +172,11 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
   // The SYMBOLIC form survives only when no exponential did: Re of `c·e^{β}` is not an element of
   // ℚ(i)(√d) unless β = 0. When one does survive, the value is reported as a decimal and the
   // certificate says so — which is B3's situation stated as a rule rather than as a special case.
-  const algebraic = piUnits.asSqrtExt();
+  const extracted = realPartOfSum(piUnits, spec.part);
   let text: string | undefined;
-  if (algebraic !== null) {
-    const part = realPart(algebraic, spec.part);
-    const folded = part.mul(SqrtExt.fromGauss(Gauss.rat(1n, spec.divisor)));
-    text = formatPiSqrt(folded);
+  if (extracted !== null) {
+    const folded = extracted.scale(SqrtExt.fromGauss(Gauss.rat(1n, spec.divisor)));
+    text = formatPiExpSum(folded);
     certificates.push(
       exact(
         `the target is ${text}`,
@@ -166,7 +187,7 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     certificates.push(
       unknown(
         "the target's closed form",
-        "the solved value carries an exponential factor, so its real part is not an element of ℚ(i)(√d); the decimal stands",
+        "the solved value carries an exponential with a COMPLEX exponent, so e^{β} contributes cos and sin of an irrational and the real part is not in this basis; the decimal stands",
       ),
     );
   }
