@@ -90,6 +90,18 @@ function twoPiITerms(g: Gauss, radical: string): Term[] {
   return terms;
 }
 
+/**
+ * `π · x` for `x ∈ ℚ(i)(√d)` — the form a SOLVED TARGET is reported in.
+ *
+ * Every value in tiers A–C is π times an algebraic number, because `2πi Σ Res` and L4's `iα·Res` both
+ * are. So the solve works in units of π throughout and π is never evaluated: `π/2`, not 1.5707963.
+ */
+export function formatPiSqrt(x: SqrtExt): string {
+  const terms = [...gaussTerms(x.a, "π")];
+  if (!x.b.isZero()) terms.push(...gaussTerms(x.b, `π${RADICAL}${x.d}`));
+  return joinTerms(terms);
+}
+
 /** `2πi · g`, simplified — the form a residue sum over ℚ(i) is reported in. */
 export function formatTwoPiI(g: Gauss): string {
   return joinTerms(twoPiITerms(g, ""));

@@ -43,11 +43,24 @@ export type Geom =
  *  multiple of the unknown, `residue` encircles poles, `free` is merely computed. */
 export type PieceRole = "target" | "vanish" | "reproduces" | "residue" | "free";
 
+/** The eight vanishing lemmas of research 03 §14. L2 = the large-arc ML lemma, L3 = Jordan, L4 = the
+ *  small-arc lemma, which is the one that does NOT vanish. */
+export type LemmaId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8";
+
 export interface Piece {
   readonly id: string;
   readonly name: string;
   readonly geom: Geom;
   readonly role: PieceRole;
+  /**
+   * Which lemma disposes of this piece (DESIGN §2.2).
+   *
+   * Optional in the SANDBOX, where the right lemma is a fact about the integrand and the ledger
+   * reads it off the shape — a rational integrand has no frequency and Jordan has nothing to say
+   * about it. Required for L4, because no shape test distinguishes an indentation from a closing
+   * arc: in C1 the two share a centre, and only their radii differ.
+   */
+  readonly lemma?: LemmaId;
   /** Pins which limit is meant where the piece runs along a branch cut. Unused until M4. */
   readonly side?: "above" | "below";
   readonly colour: 0 | 1 | 2 | 3 | 4 | 5;

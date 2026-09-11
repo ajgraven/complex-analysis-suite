@@ -11,16 +11,24 @@
 // machinery — exact ℚ(i) arithmetic on one side, floating Gauss–Legendre panels on the other —
 // arriving at the same number is strong evidence that both are right, and a disagreement is a bug
 // report. This module is where they are compared, and a disagreement is reported as one.
-import type { SqrtExt } from "@cas/exact";
+import { Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
-import { formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
+import { ExpSum, formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 
 export interface ResidueTheoremResult {
   /** `2πi Σ n·Res`, exact, present only when every pole and winding was exact. */
   readonly exactValue?: { readonly value: Cx; readonly text: string };
+  /**
+   * The same value in UNITS OF π — i.e. `2i Σ n·Res`.
+   *
+   * Pass 5 adds this to L4's `iα·Res`, which is also π times an algebraic number, and divides by the
+   * target coefficient. Working in these units is what keeps the whole solve exact: π is never
+   * evaluated, so `π/2` stays `π/2` instead of becoming 1.5707963.
+   */
+  readonly piUnits?: ExpSum;
   /** Distance between the exact value and the quadrature, when both exist. */
   readonly disagreement?: number;
   /** True when the two independent computations agree to the quadrature's own estimate. */
@@ -124,5 +132,12 @@ export function applyResidueTheorem(
         ),
   );
 
-  return { exactValue: { value, text }, disagreement, agrees, verdict: assembleVerdict(certificates) };
+  return {
+    exactValue: { value, text },
+    // 2πi·Σ = π·(2i·Σ), and the scaling stays inside the exponential basis.
+    piUnits: sum.scale(SqrtExt.fromGauss(Gauss.int(0, 2))),
+    disagreement,
+    agrees,
+    verdict: assembleVerdict(certificates),
+  };
 }

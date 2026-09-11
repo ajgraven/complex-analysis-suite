@@ -151,8 +151,9 @@ implementation decision.
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
 together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
 substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
-`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`). Nine records are loaded: **A1–A3** (circle), **A5–A7**
-(semicircle) and **B1–B3** (Jordan) — every entry in tiers A and B except A4.
+`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Ten
+records are loaded: **A1–A3** (circle), **A5–A7** (semicircle), **B1–B3** (Jordan) and **C1** (the
+indented semicircle) — every entry in tiers A and B except A4, plus the Dirichlet integral.
 
 **A4 is deliberately absent.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to
 `e^z/(i z^{n+1})`, whose exact residue is the Taylor coefficient of an *entire* function — `1/n!` —
@@ -169,6 +170,29 @@ A2's `|a| ≶ 1` switch and its `a = 0` pole-*count* change, and A3's order ladd
 `n = 0…4`. The residue-theorem value is also checked to be *identical* at `R = 3` and `R = 40`
 (which is what makes the instantiation radius a display default rather than a claim), the quadrature
 cross-check is required to agree, and A6's `closing-down-disagrees` trap is executed directly.
+
+### 5.0b C1 is where `∮` stops being the answer
+
+Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc
+vanishes and the real axis is all that remains (B), so `∮ f dz` and the target are the same number
+and reading the closed-contour value was enough. **C1 is where that stops.** Its contour encloses
+nothing — `∮ = 0` — and the entire answer comes from the indentation's `iα·Res`. Reading `∮` there
+reports 0 for an integral whose value is π/2.
+
+So `solveTarget` solves `a·t + Σbᵢ = S` in **units of π**: `2πi Σ Res` is `π·(2iΣ)` and L4's `iα·Res`
+is `π·(i(α/π)Res)`, so the whole solve stays exact and π is never evaluated. `π/2` stays `π/2`.
+
+**L4 is the one lemma in the catalogue whose piece does not vanish**, and the role `vanish` on it is
+not a contradiction: DESIGN §4 Pass 5's table gives such a piece `aᵢ = 0` and `bᵢ = 0, *or a known
+limit such as iα·Res from L4*`. The role says it touches no unknown, not that it contributes nothing.
+The two classical wrong answers are each one factor away — `2πi·Res` (a FULL turn around an
+*enclosed* pole, and this one is detoured around) gives π, and "the small arc vanishes" gives 0.
+
+L4 **refuses at order ≥ 2**, where `∫_{C_ρ}` grows like `ρ^{1−m}`: no limit exists, so the contour
+argument does not close and no principal value exists either. And C1's own free self-test is
+executed: indenting *below* flips both the winding number and the sign of `iα·Res`, `∮` becomes
+`2πi` instead of 0, and the two changes cancel to the same π/2 — an engine that flipped only one
+would land on −π/2 or 3π/2 and look plausible either way.
 
 ### 5.0a The exponential basis: `=` on the form, `≈` on the decimal
 
@@ -252,6 +276,17 @@ Tier B added two more, and closed one the records had left open:
 9. **A variant fixture is decided by NAME, not by type.** `halfRange` and `closeDown` are booleans,
    but B2's `companion: "re"` is a string; keying off the type silently treats it as a parameter
    binding. A key the family does not declare as a parameter is a variant flag.
+
+C1 added two more:
+
+10. **The namespace set was closed over the wrong sample.** The loader's predicate-namespace guard was
+    built from tiers A and B and admitted four names; C1's `analytic:dirichletTest(...)` is
+    legitimate and was rejected. A scan of all 28 records finds **thirteen**. A closed set is only as
+    good as the sample it was closed over, and the list now carries the full census.
+11. **The lemma has to reach the runtime piece.** DESIGN §2.2 gives `Piece` a `lemma` field and the
+    runtime type had dropped it, so the ledger had to infer the lemma from the integrand's shape.
+    No shape test distinguishes an indentation from a closing arc — in C1 they share a centre — and
+    the indentation silently took the Jordan path, solving to 0 instead of π/2.
 
 Two rendering bugs also surfaced, neither visible to a numeric check: a unit value printed as the
 **empty string** (the unit-numerator elision needs a symbol to elide in favour of), and a compound

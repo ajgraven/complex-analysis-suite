@@ -5,6 +5,8 @@ import { semicircleTemplate } from "../src/engine/contour/templates.js";
 import { integrateContour } from "../src/engine/contour/integrate.js";
 import { applyResidueTheorem } from "../src/engine/residueTheorem.js";
 import { findPoles } from "../src/kernel/poles.js";
+import { evaluateLedger } from "../src/engine/ledger.js";
+import { solveTarget } from "../src/families/solveTarget.js";
 import { FAMILIES, loadFamilies } from "../src/families/index.js";
 import { contourIntegrandOf, instantiate } from "../src/families/instantiate.js";
 import type { Cx } from "../src/kernel/geom.js";
@@ -31,17 +33,22 @@ function isVariant(family: Family, g: Golden): boolean {
 }
 
 /**
- * The real-linear functional recovering the target from the contour value.
+ * Solve the contour identity for the target, through Pass 5.
  *
- * This is what makes `auxiliary.relation` load-bearing rather than decorative: B1 and B3 take `Re`
- * of `∮`, B2 takes `Im`. Reading `value[0]` for all three would pass twice and fail once, and the
- * failure would look like an engine bug rather than a missing step in the argument.
+ * Not "read the closed-contour value and take a real part" — that worked for tiers A and B only
+ * because `∮` and the target coincide there. C1 is where it stops: its contour encloses nothing, so
+ * `∮ = 0` while the target is π/2, and the whole answer comes from the indentation's `iα·Res`.
  */
-function applyRelation(family: Family, value: readonly [number, number]): number {
-  const relation = family.auxiliary?.relation ?? "Re";
-  if (relation === "Re") return value[0];
-  if (relation === "Im") return value[1];
-  throw new Error(`'${family.id}' declares an auxiliary relation '${relation}' with no evaluator`);
+function solve(family: Family, g: Golden, overrides: Record<string, number> = {}) {
+  const r = run(family, g, overrides);
+  const piUnits = must(r.theorem.piUnits, `${family.id}: a closed-contour value in units of π`);
+  const solved = solveTarget(family, {
+    closedContourPiUnits: piUnits,
+    smallArcs: r.ledger.smallArcs,
+    bindings: g.params,
+  });
+  if (!solved.ok) throw new Error(`${family.id}: Pass 5 refused — ${solved.reason}`);
+  return { ...r, solved: solved.solved };
 }
 
 /** Run one record through the real engine at one fixture. */
@@ -55,7 +62,16 @@ function run(family: Family, g: Golden, overrides: Record<string, number> = {}) 
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
   const integral = integrateContour(f, resolved, singular);
-  return { poles, integral, theorem: applyResidueTheorem(poles, integral) };
+  const theorem = applyResidueTheorem(poles, integral);
+  const ledger = evaluateLedger({
+    ast: built.ast,
+    pieces: resolved,
+    spec: contour.pieces,
+    poles,
+    integral,
+    theorem,
+  });
+  return { poles, integral, theorem, ledger };
 }
 
 const cases = FAMILIES.map((f) => [f.id, f] as const);
@@ -69,17 +85,10 @@ describe("every loaded record reproduces its own golden value through the engine
     const g = primary(family);
     const want = typeof g.numeric === "number" ? g.numeric : g.numeric[0];
 
-    const { theorem } = run(family, g);
-    expect(theorem.exactValue).toBeDefined();
-    const value = must(theorem.exactValue, "an exact value").value;
-    const got = applyRelation(family, value);
-
-    expect(Math.abs(got - want)).toBeLessThanOrEqual(g.verifiedTo * Math.max(1, Math.abs(want)));
-    // The other half is the FREE COMPANION, and it must come out zero for every entry here:
-    // ∫ sin(ax)/(x²+b²) and ∫ x cos x/(1+x²) both vanish by parity, and the same contour delivers
-    // them. A non-zero one would be a sign or orientation bug, not a new result.
-    const companion = family.auxiliary?.relation === "Im" ? value[0] : value[1];
-    expect(Math.abs(companion)).toBeLessThan(1e-12);
+    const { solved } = solve(family, g);
+    expect(Math.abs(solved.value - want)).toBeLessThanOrEqual(
+      g.verifiedTo * Math.max(1, Math.abs(want)),
+    );
   });
 });
 
@@ -94,14 +103,10 @@ describe("every fixture of every record, not just the flagship one", () => {
       // one is executed directly below instead.
       if (isVariant(family, g)) continue;
       const want = typeof g.numeric === "number" ? g.numeric : g.numeric[0];
-      const value = must(
-        run(family, g).theorem.exactValue,
-        `an exact value at ${JSON.stringify(g.params)}`,
-      );
-      const got = applyRelation(family, value.value);
+      const { solved } = solve(family, g);
       expect(
-        Math.abs(got - want),
-        `${family.id} at ${JSON.stringify(g.params)}: got ${got} (${value.text}), want ${want}`,
+        Math.abs(solved.value - want),
+        `${family.id} at ${JSON.stringify(g.params)}: got ${solved.value} (${solved.text ?? "no closed form"}), want ${want}`,
       ).toBeLessThanOrEqual(g.verifiedTo * Math.max(1, Math.abs(want)));
     }
   });
@@ -135,6 +140,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "jordan-cosine-kernel",
       "jordan-strict",
       "jordan-quartic",
+      "indented-sinc",
     ]);
   });
 });
