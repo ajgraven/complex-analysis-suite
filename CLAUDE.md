@@ -9,10 +9,11 @@
 `complex-analysis-suite` — a monorepo for a growing **suite of complex-analysis /
 complex-dynamics visualization tools** that share common packages and hand data off to
 one another. North-star property: **each new tool builds fewer primitives from scratch
-than the last.** It now unifies eleven apps — Complex Dynamics, Quadrature Domains,
+than the last.** It now unifies twelve apps — Complex Dynamics, Quadrature Domains,
 Complex Function Plotter, Riemann Map, Argument Principle, Faber Transform, 2D
-Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, and Potential Theory, plus the anti-holomorphic Correspondences tool
-(built, not yet published) — riding twelve shared `@cas/*` packages.
+Electrostatics, 2D Hydrodynamics, Hele-Shaw Flow, Potential Theory, and Contour Integration, plus the
+anti-holomorphic Correspondences tool (built, not yet published) — riding thirteen shared `@cas/*`
+packages.
 
 Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISION.md) →
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) → [`docs/DECISIONS.md`](docs/DECISIONS.md)
@@ -52,7 +53,8 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
     (and on `workflow_dispatch`), gated on `lint` + `typecheck` + `test`. It assembles **one
     combined Pages site** — launcher at the root, `complex-dynamics/`, `quadrature-domains/`,
     `complex-function-plotter/`, `riemann-map/`, `argument-principle/`, `faber-transform/`,
-    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it.
+    `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`, and
+    `contour-integration/` beneath it.
     `apps/correspondences` is **built but not published** (the launcher shows it as "Coming soon"). There are **two** workflows: `ci.yml` (the `build` + `browser` gate) and
     `deploy-pages.yml`; the `browser` job is not a publish blocker.
 
@@ -115,7 +117,7 @@ blobs; riding `@cas/flow`, `@cas/faber`, `@cas/core`, and `@cas/ui`; and the ele
 ADR-0037 — the hydrodynamic twin of 2D Electrostatics: ideal flow past a body as flow past 𝔻* through a
 conformal map ψ: 𝔻* → ext(B), the Joukowski/Kármán–Trefftz airfoil (Kutta condition + lift) plus a
 closed-form transplant gallery (flat plate / ellipse / deltoid / astroid / star), the airfoil promoted out
-of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the twelve shared `@cas/*` packages
+of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the thirteen shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
 `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
@@ -238,6 +240,35 @@ Still open: **U7** (wire the nav header's hand-off picker to `@cas/interchange`'
 cross-app interop becomes user-visible). Two correctness guards also landed this arc: a **convention-neutral**
 scan over `@cas/core` (ADR-0006 AI-2) and a **Schwarz σ differential** guard between QD's engine and `@cas/schwarz`
 (ADR-0026 AI-2).
+
+**`apps/contour-integration`** (2026-09): a sandbox and 28-integral worked-example gallery for contour
+integration and the residue theorem, including the evaluation of real definite integrals in closed
+form. Plan, design and content spec are in [`docs/contour-integration/`](docs/contour-integration/)
+— **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
+specification, not examples added afterwards.
+
+Through **Milestone 3** and published. `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
+polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
+`π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
+own error estimate is reported, not resolved by preference. The arc bounds are certified in exact ℚ
+with **no floating point in the chain** (including certified rational brackets on π), and the
+`deg Q ≥ deg P + 2` hypothesis is *derived* from the exponent rather than checked. The **Closing
+Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and a wrong contour
+fails diagnostically — closing `∫cos x/(1+x²)` downward shows the bound diverging and names KILL.
+The 28 gallery records load as **data** through a schema and a loader enforcing four invariants,
+with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; six of
+them (A1–A3 via the `z = e^{iθ}` substitution, A5–A7, B1–B3 via an exponential output basis
+`Σ cₖ e^{βₖ}` that makes a Jordan residue exact without evaluating it — `∫cos x/(1+x²) = π/e`) are
+executed against the engine in the suite.
+A record that fails an invariant is dropped, not thrown on. Still to come: free-hand contour
+editing, branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6). Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
+exponential basis `Σ cₖ e^{βₖ}`, in which the FORM is `=` and the decimal stays `≈`.
+
+It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
+extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD
+`.mjs` that each later app reimplemented. Branded types make `=` a compile error to write by hand.
+**QD is not migrated onto it**, so the suite has two rigor vocabularies on purpose.
 
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),

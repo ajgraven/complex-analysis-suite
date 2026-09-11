@@ -85,6 +85,7 @@ jobs:
           cp -r apps/2d-hydrodynamics/dist   _site/2d-hydrodynamics
           cp -r apps/hele-shaw-flow/dist     _site/hele-shaw-flow
           cp -r apps/potential-theory/dist   _site/potential-theory
+          cp -r apps/contour-integration/dist   _site/contour-integration
           touch _site/.nojekyll
 
       - uses: actions/configure-pages@v5
