@@ -9,6 +9,8 @@
 // units along y, with x derived from the aspect ratio, so a resize changes what you can see without
 // changing the scale.
 
+import { pointAt, type Resolved } from "./geom.js";
+
 export type Pt = readonly [x: number, y: number];
 
 export interface View {
@@ -97,4 +99,47 @@ export function zoomAt(view: View, factor: number, px: number, py: number, vp: V
     center: [view.center[0] + offX * k, view.center[1] + offY * k],
     halfHeight: view.halfHeight / factor,
   };
+}
+
+/**
+ * The view that frames a contour.
+ *
+ * Opening a record left its contour wherever the default view happened to be pointing, and the two
+ * do not match: C1's semicircle runs to R = 4 and the indented-semicircle template to R = 8, against
+ * a default half-height of 2 — so most of the argument on screen was off screen. Fits whichever axis
+ * binds (x is derived from the aspect ratio, so a wide contour is limited by the width) with a
+ * margin, from the piece geometry rather than from the template's parameters, which is what makes it
+ * work for a hand-built contour too.
+ *
+ * A degenerate contour — one point, or an empty list — keeps the default half-height instead of
+ * zooming to infinity.
+ */
+export function fitView(pieces: readonly Resolved[], vp: Viewport, pad = 1.2): View {
+  let xmin = Infinity;
+  let xmax = -Infinity;
+  let ymin = Infinity;
+  let ymax = -Infinity;
+  // Sampled rather than solved: an arc's extremes are its endpoints plus whichever axis crossings it
+  // sweeps through, and 64 points put the bound within 0.1% of the radius — far inside the margin
+  // this then multiplies in. Exactness would buy nothing a `pad` of 1.2 does not already cover.
+  const SAMPLES = 64;
+  for (const piece of pieces) {
+    for (let k = 0; k <= SAMPLES; k++) {
+      const [x, y] = pointAt(piece, k / SAMPLES);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+      if (x < xmin) xmin = x;
+      if (x > xmax) xmax = x;
+      if (y < ymin) ymin = y;
+      if (y > ymax) ymax = y;
+    }
+  }
+  if (!Number.isFinite(xmin) || !Number.isFinite(ymin)) return DEFAULT_VIEW;
+
+  const aspect = Math.max(vp.width, 1) / Math.max(vp.height, 1);
+  const halfHeight = Math.max(
+    ((ymax - ymin) / 2) * pad,
+    ((xmax - xmin) / 2 / aspect) * pad,
+    DEFAULT_VIEW.halfHeight * 1e-6,
+  );
+  return { center: [(xmin + xmax) / 2, (ymin + ymax) / 2], halfHeight };
 }

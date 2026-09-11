@@ -33,6 +33,20 @@ export interface ResidueTheoremResult {
   readonly disagreement?: number;
   /** True when the two independent computations agree to the quadrature's own estimate. */
   readonly agrees?: boolean;
+  /**
+   * The corroboration, when the two routes AGREE — deliberately not part of {@link verdict}.
+   *
+   * `meet` is the label of a claim that DEPENDS on two sub-claims, and `∮` does not depend on the
+   * quadrature: the residue theorem computes it from exact residues and exact winding numbers, and
+   * the quadrature is a second opinion about the same number. Folding the agreement's `≤` into the
+   * verdict met `=` with `≤` and capped an exact value at `≤` — which is why the shell was reduced
+   * to hand-writing a `=` badge beside it, the one thing `@cas/rigor` exists to make impossible.
+   *
+   * Corroboration never weakens a claim. **Contradiction still refuses it**: when the two routes
+   * disagree beyond the quadrature's own error estimate, the refusal goes into the verdict and
+   * absorbs it, because then one of them is wrong and no number may be printed.
+   */
+  readonly crossCheck?: Certificate;
   readonly verdict: Verdict;
 }
 
@@ -118,19 +132,20 @@ export function applyResidueTheorem(
   const tolerance = Math.max(AGREEMENT_SLACK * worst, 1e-9 * Math.max(1, Math.hypot(...value)));
   const agrees = disagreement <= tolerance;
 
-  certificates.push(
-    agrees
-      ? bound(
-          "≤",
-          `the quadrature agrees with it to ${disagreement.toExponential(2)}`,
-          "independent cross-check: exact ℚ(i) arithmetic against floating Gauss–Legendre panels",
-          { restriction: "agreement is evidence, not proof — the two share no machinery, which is the point" },
-        )
-      : refuse(
-          "the two routes disagree",
-          `the residue theorem gives ${text} but the quadrature gives a value ${disagreement.toExponential(2)} away, which is beyond its own error estimate — one of them is wrong`,
-        ),
+  const crossCheck = bound(
+    "≤",
+    `the quadrature agrees with it to ${disagreement.toExponential(2)}`,
+    "independent cross-check: exact ℚ(i) arithmetic against floating Gauss–Legendre panels",
+    { restriction: "agreement is evidence, not proof — the two share no machinery, which is the point" },
   );
+  if (!agrees) {
+    certificates.push(
+      refuse(
+        "the two routes disagree",
+        `the residue theorem gives ${text} but the quadrature gives a value ${disagreement.toExponential(2)} away, which is beyond its own error estimate — one of them is wrong`,
+      ),
+    );
+  }
 
   return {
     exactValue: { value, text },
@@ -138,6 +153,7 @@ export function applyResidueTheorem(
     piUnits: sum.scale(SqrtExt.fromGauss(Gauss.int(0, 2))),
     disagreement,
     agrees,
+    ...(agrees ? { crossCheck } : {}),
     verdict: assembleVerdict(certificates),
   };
 }

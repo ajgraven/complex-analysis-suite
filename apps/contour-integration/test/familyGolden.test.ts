@@ -5,85 +5,45 @@ import { semicircleTemplate } from "../src/engine/contour/templates.js";
 import { integrateContour } from "../src/engine/contour/integrate.js";
 import { applyResidueTheorem } from "../src/engine/residueTheorem.js";
 import { findPoles } from "../src/kernel/poles.js";
-import { evaluateLedger } from "../src/engine/ledger.js";
-import { solveTarget } from "../src/families/solveTarget.js";
 import { FAMILIES, loadFamilies } from "../src/families/index.js";
 import { contourIntegrandOf, instantiate } from "../src/families/instantiate.js";
+import {
+  isVariant,
+  primaryGolden as primary,
+  runFamily,
+  solveFamily,
+  type FamilyRun,
+} from "../src/families/runFamily.js";
+import type { SolvedTarget } from "../src/families/solveTarget.js";
 import type { Cx } from "../src/kernel/geom.js";
 import type { Family, Golden } from "../src/families/schema.js";
 
-/** The numeric bindings a fixture supplies; variant flags are not parameter values. */
-const numericValues = (g: Golden): Record<string, number> =>
-  Object.fromEntries(Object.entries(g.params).filter(([, v]) => typeof v === "number")) as Record<
-    string,
-    number
-  >;
-
 /**
- * A fixture that selects an alternative derivation rather than binding parameters.
+ * The corpus drives the engine through `src/families/runFamily.ts` — the SAME door the shell's
+ * gallery goes through — so the numbers a user reads are the numbers these assertions pin. What used
+ * to live here was a private copy of that pipeline, agreeing with the shell's by inspection.
  *
- * Decided by NAME, not by type: a key the family does not declare as a parameter is a variant flag.
- * `halfRange` and `closeDown` are booleans, but B2's `companion: "re"` is a string, and keying off
- * the type would have silently treated it as a parameter binding and then compared the wrong half of
- * the contour value against zero.
+ * The two wrappers below exist only to turn `{ ok: false, reason }` back into a throw. A test wants
+ * to die at the first unbuildable record, naming it; the shell wants to report it and carry on.
  */
-function isVariant(family: Family, g: Golden): boolean {
-  const declared = new Set(family.parameters.map((p) => p.name));
-  // A declared SYMBOL is a binding too, not a variant. A4's fixtures name `g: "exp(z)"` — the
-  // entire function whose Taylor coefficients the contour reads off — and it is a symbol rather
-  // than a parameter because it is a function, not a number. Counting it as a variant would have
-  // skipped every one of A4's fixtures silently.
-  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
-  return Object.keys(g.params).some((k) => !declared.has(k));
+function run(family: Family, g: Golden, geometry: Record<string, number> = {}): FamilyRun {
+  const r = runFamily(family, g, { geometry });
+  if (!r.ok) throw new Error(r.reason);
+  return r.run;
 }
 
-/**
- * Solve the contour identity for the target, through Pass 5.
- *
- * Not "read the closed-contour value and take a real part" — that worked for tiers A and B only
- * because `∮` and the target coincide there. C1 is where it stops: its contour encloses nothing, so
- * `∮ = 0` while the target is π/2, and the whole answer comes from the indentation's `iα·Res`.
- */
-function solve(family: Family, g: Golden, overrides: Record<string, number> = {}) {
-  const r = run(family, g, overrides);
-  const piUnits = must(r.theorem.piUnits, `${family.id}: a closed-contour value in units of π`);
-  const solved = solveTarget(family, {
-    closedContourPiUnits: piUnits,
-    pieceLimits: r.ledger.pieceLimits,
-    bindings: g.params,
-  });
-  if (!solved.ok) throw new Error(`${family.id}: Pass 5 refused — ${solved.reason}`);
-  return { ...r, solved: solved.solved };
-}
-
-/** Run one record through the real engine at one fixture. */
-function run(family: Family, g: Golden, overrides: Record<string, number> = {}) {
-  const built = contourIntegrandOf(family, g.params);
-  if (!built.ok) throw new Error(`${family.id}: ${built.reason}`);
-  const fn = makeComplexFn(built.ast);
-  const f = (z: Cx): Cx => fn(z as [number, number], [0, 0]) as Cx;
-  const poles = findPoles(built.ast);
-  const contour = instantiate(family, { values: { ...numericValues(g), ...overrides } });
-  const resolved = resolveAll(contour);
-  const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
-  const integral = integrateContour(f, resolved, singular);
-  const theorem = applyResidueTheorem(poles, integral);
-  const ledger = evaluateLedger({
-    ast: built.ast,
-    pieces: resolved,
-    spec: contour.pieces,
-    poles,
-    integral,
-    theorem,
-  });
-  return { poles, integral, theorem, ledger };
+/** Through Pass 5 — the step that makes `∮` stop being the answer (C1 encloses nothing). */
+function solve(
+  family: Family,
+  g: Golden,
+  geometry: Record<string, number> = {},
+): FamilyRun & { solved: SolvedTarget } {
+  const r = solveFamily(family, g, { geometry });
+  if (!r.ok) throw new Error(r.reason);
+  return { ...r.run, solved: r.solved };
 }
 
 const cases = FAMILIES.map((f) => [f.id, f] as const);
-
-/** The primary fixture — the first one that binds parameters rather than selecting a variant. */
-const primary = (family: Family): Golden =>
-  family.golden.find((g) => !isVariant(family, g)) ?? family.golden[0];
 
 describe("every loaded record reproduces its own golden value through the engine", () => {
   it.each(cases)("%s", (_id, family) => {

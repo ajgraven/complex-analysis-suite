@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_VIEW,
+  fitView,
   panBy,
   panDelta,
   plotRange,
@@ -116,5 +117,54 @@ describe("zoomAt", () => {
     const z = zoomAt(DEFAULT_VIEW, 3, VP.width / 2, VP.height / 2, VP);
     expect(z.center[0]).toBeCloseTo(DEFAULT_VIEW.center[0], 12);
     expect(z.center[1]).toBeCloseTo(DEFAULT_VIEW.center[1], 12);
+  });
+});
+
+describe("fitView", () => {
+  // The upper-half-plane semicircle at R = 8 — the indented-semicircle template's own radius, and the
+  // contour that made this function necessary: the default half-height of 2 showed a quarter of it.
+  const upperSemicircle = [
+    { kind: "segment", from: [-8, 0], to: [8, 0] },
+    { kind: "arc", center: [0, 0], radius: 8, theta0: 0, theta1: Math.PI },
+  ] as const;
+
+  it("frames the whole contour, with a margin", () => {
+    const view = fitView(upperSemicircle, VP);
+    const [xmin, xmax, ymin, ymax] = plotRange(view, VP);
+    expect(xmin).toBeLessThanOrEqual(-8);
+    expect(xmax).toBeGreaterThanOrEqual(8);
+    expect(ymin).toBeLessThanOrEqual(0);
+    expect(ymax).toBeGreaterThanOrEqual(8);
+    // Centred on the contour's box, not on the origin: the semicircle's mass is above the axis.
+    expect(view.center[0]).toBeCloseTo(0, 9);
+    expect(view.center[1]).toBeCloseTo(4, 1);
+  });
+
+  it("is bound by WIDTH when the contour is wider than the viewport's aspect", () => {
+    // 40 wide and 0 tall in an 800x400 (aspect 2) viewport: the height that frames it comes from the
+    // width, since the vertical extent is zero. A fit that only looked at y would divide by nothing.
+    const flat = [{ kind: "segment", from: [-20, 0], to: [20, 0] }] as const;
+    const view = fitView(flat, VP);
+    const [xmin, xmax] = plotRange(view, VP);
+    expect(view.halfHeight).toBeCloseTo(12, 9); // (40/2) / aspect 2 * pad 1.2
+    expect(xmin).toBeLessThanOrEqual(-20);
+    expect(xmax).toBeGreaterThanOrEqual(20);
+  });
+
+  it("keeps the default rather than zooming to infinity on a degenerate contour", () => {
+    expect(fitView([], VP)).toEqual(DEFAULT_VIEW);
+  });
+
+  it("survives a non-finite coordinate instead of producing a NaN view", () => {
+    // `R \u2192 \u221e` is a limit the UI animates towards, so an infinite resolved endpoint is reachable;
+    // the finite pieces must still decide the frame rather than the camera going NaN.
+    const withJunk = [
+      { kind: "segment", from: [-1, -1], to: [1, 1] },
+      { kind: "segment", from: [Number.POSITIVE_INFINITY, 0], to: [Number.NaN, 0] },
+    ] as const;
+    const view = fitView(withJunk, VP);
+    expect(Number.isFinite(view.halfHeight)).toBe(true);
+    expect(Number.isFinite(view.center[0])).toBe(true);
+    expect(Number.isFinite(view.center[1])).toBe(true);
   });
 });

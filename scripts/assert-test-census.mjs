@@ -46,6 +46,7 @@ const PROJECTS = [
   { name: 'faber', match: '/packages/faber/', floor: 1 },
   { name: 'ui', match: '/packages/ui/', floor: 1 },
   { name: 'flow', match: '/packages/flow/', floor: 1 },
+  { name: 'rigor', match: '/packages/rigor/', floor: 1 },
   { name: 'complex-dynamics', match: '/apps/complex-dynamics/', floor: 1 },
   { name: 'complex-function-plotter', match: '/apps/complex-function-plotter/', floor: 1 },
   { name: 'correspondences', match: '/apps/correspondences/', floor: 1 },
@@ -57,6 +58,7 @@ const PROJECTS = [
   { name: '2d-hydrodynamics', match: '/apps/2d-hydrodynamics/', floor: 1 },
   { name: 'hele-shaw-flow', match: '/apps/hele-shaw-flow/', floor: 1 },
   { name: 'potential-theory', match: '/apps/potential-theory/', floor: 1 },
+  { name: 'contour-integration', match: '/apps/contour-integration/', floor: 1 },
 ];
 const GLOBAL_FILE_FLOOR = 200;
 

@@ -590,10 +590,59 @@ failing constraint; p.v. is a distinct result type from a convergent integral.
 > stays `≈`, which is its own record's position — its exponents are complex, so `Re` does not
 > distribute and `e^{β}` carries cos and sin of an irrational.
 >
-> **Still open from M3's scope**, and deliberately so: the Family records are not wired into the
-> SHELL — there is no picker, so the gallery is testable but not browsable, which is the gap between
-> "the records execute" and "a user can open one". Also open: the generated derivation panel, the
-> Pólya work/flux toggle, and M1's pen-tool free-path editor. Running status lives in
+> **M3.5a closed the first of M3's open items:** the Family records are wired into the shell. A
+> `Sandbox | Gallery` source switch opens any of the thirteen by tier and fixture, and both modes run
+> through one driver (`src/engine/analyse.ts`, reached for a record by `src/families/runFamily.ts`),
+> which the golden corpus also calls — so the numbers on screen are the numbers the suite pins, along
+> the same path, rather than a second implementation agreeing by inspection.
+>
+> **M3.5b closed the second:** the generated derivation panel. It is a *view* over evidence that
+> already existed — the ledger's rows each carry a `Certificate` with a `method` and a ✓/✗ provenance
+> trail that no surface had ever shown — so the panel renders the argument rather than re-narrating
+> it, and `engine/derivation.ts` mints nothing but `unknown` (the one level that cannot manufacture a
+> claim).
+>
+> Two labels were wrong underneath it, and are fixed. `applyResidueTheorem` folded the AGREEING
+> quadrature's `≤` into the same verdict as the exact residue sum, so `meet` capped an exact `∮` at
+> `≤` — `meet` is for a claim that *depends* on two sub-claims, and `∮` does not depend on the
+> quadrature. Corroboration is now reported beside the value (`crossCheck`) instead of inside its
+> label, while a *disagreement* still refuses it. That had left the shell hand-writing `badge("=")`
+> to show the truth, which is precisely what [ADR-0040](../DECISIONS.md) exists to prevent; every
+> badge in the app now comes from a verdict.
+>
+> **M3.5c made the contour an object you can grab.** North-star behaviour 1 — drag a contour across a
+> pole and watch the value jump by exactly `2πi·Res` — was previously reachable only through a
+> parameter slider, because every pointer drag panned the view. A drag now means one of three things,
+> decided in that order: a **radius handle**, the **contour itself**, or the view. Translation stays
+> inside `model.ts`'s affine `Scalar` subset — a literal coordinate moves by rewriting the number and a
+> param-bound one absorbs the offset into its own `add` — so a dragged template is **still a template**,
+> with its radius still bound to `R` and `R → ∞` still animating. A radius handle edits the parameter
+> the template already binds its arcs to, which makes the indented semicircle's two handles `R → ∞` and
+> `ρ → 0`: the two limits its argument is about, and the same edit as their sliders. Everything works
+> from the keyboard (Enter walks what the arrows move; shift-arrow still pans), and PLAN §4.5's
+> drag-coarse/reconcile-on-release is in: a gesture runs the quadrature under a work ceiling, is
+> honestly `capped`, and the full pass on release logs any disagreement past the estimator's own bound.
+> `∮` itself is unaffected either way, since it comes from a formula over exact residues.
+>
+> Two limits worth stating rather than papering over. **Body translation is sandbox-only** — under a
+> gallery record the contour is the record's, and moving it would leave a worked example whose pieces
+> no longer match its own argument (the radius handles still work, because those are the record's own
+> declared limits). And **the refusal is for a pole ON the contour**: at a clearance of 1e-6 the app
+> still reports `2πi` — correctly, because `2πi Σ n·Res` is as exact there as anywhere — while the
+> quadrature cross-check degrades to an error estimate of order 1e+2. PLAN §4.4's answer to that is to
+> subtract the principal part rather than to refuse a value the engine knows exactly, and that is M2
+> work that has not been done. So a fast pointer drag will usually step over the refusal band, while a
+> keyboard step can land in it; `test/edit.test.ts` pins both readings.
+>
+> **Still open from M3's scope**: the Pólya work/flux toggle, and the **pen tool** — free-hand path
+> editing, which is adding and removing points, moving individual endpoints, and drawing a contour from
+> nothing. That needs its own semantics for closure (moving one endpoint of a template's diameter opens
+> the contour, and the ledger then correctly refuses the residue theorem), which is why it is not a
+> corner of this slice. The `rigorOfBound` / `rigorOfLimit` split of DESIGN §4 Pass 3 is still unmade in
+> the engine — a vanishing arc's one certificate is its finite-`R` bound, so the argument-wide meet reads
+> `≤` wherever a bound appears. The derivation panel handles that honestly rather than hiding it: the
+> conclusion is badged from its own evidence, and the argument-wide line says outright that it is "the
+> weakest step in the argument, not the label of the answer". Running status lives in
 > [`GALLERY.md`](GALLERY.md) §5.
 
 ### M4 — Branch cuts · *L*

@@ -3,8 +3,11 @@ import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
 import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
 import {
   DEFAULT_VIEW,
+  fitView,
   panBy,
   plotToScreen,
+  scale,
+  screenToPlot,
   zoomAt,
   type View,
   type Viewport,
@@ -12,25 +15,58 @@ import {
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
-import { integrateContour, type ContourIntegral } from "../engine/contour/integrate.js";
-import { applyResidueTheorem, type ResidueTheoremResult } from "../engine/residueTheorem.js";
-import { evaluateLedger, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
+import { analyse } from "../engine/analyse.js";
+import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
+import type { ContourIntegral } from "../engine/contour/integrate.js";
+import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
+import { ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
+  handlesOf,
+  nearestHandle,
+  onContour,
+  radiusDragValue,
+  setParam,
+  translateContour,
+  type Handle,
+} from "../engine/contour/edit.js";
+import {
   circleTemplate,
+  indentedSemicircleTemplate,
   rectangleTemplate,
   semicircleTemplate,
 } from "../engine/contour/templates.js";
+import {
+  isVariant,
+  offeredFamilies,
+  primaryGolden,
+  solveFamily,
+  type FamilyRun,
+} from "../families/runFamily.js";
+import type { Family, FamilyTarget, Golden } from "../families/schema.js";
+import type { SolvedTarget } from "../families/solveTarget.js";
+import type { Bindings } from "../families/system.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
 
 /**
- * Milestone 1's shell: an integrand, a contour, and the integral accumulating along it.
+ * The shell: an integrand, a contour, and the integral accumulating along it — in two modes.
  *
- * The one thing to notice in the wiring is the order in `recompute`: the integral is asked for, and
- * if it comes back refused **no value is shown at all**. The result card has no "invalid" styling
- * for a number, because there is never a number to style.
+ * **Sandbox** is the free one: type `f`, pick a template, drag the view. **Gallery** opens one of the
+ * corpus records instead, which is the difference between an engine that can prove things and an app
+ * that shows them: until this mode existed, thirteen certified worked examples passed in CI and no
+ * user could open one.
+ *
+ * The wiring rule both modes obey is that neither of them computes anything here. Sandbox mode calls
+ * `engine/analyse.ts`; gallery mode calls `families/runFamily.ts`, which calls the same `analyse`.
+ * That is the whole reason the second mode is safe to add: the numbers on screen are the numbers the
+ * golden corpus pins, along the same code path, rather than a second implementation that agrees by
+ * inspection.
+ *
+ * The other thing to notice is the order inside `analyse`: the integral is asked for first, and if it
+ * comes back refused **no value is shown at all**. The result card has no "invalid" styling for a
+ * number, because there is never a number to style.
  */
 
 const PRESETS: { label: string; src: string }[] = [
@@ -43,14 +79,35 @@ const PRESETS: { label: string; src: string }[] = [
   { label: "exp(i*z)/(1+z^2)", src: "exp(i*z)/(1+z^2)" },
 ];
 
-type TemplateId = "circle" | "semicircle" | "semicircleDown" | "rectangle";
+type TemplateId = "circle" | "semicircle" | "semicircleDown" | "indented" | "rectangle";
 
 const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
   { id: "circle", label: "circle", build: () => circleTemplate([0, 0], 1.5) },
   { id: "semicircle", label: "semicircle ↑", build: () => semicircleTemplate(3, "upper") },
   { id: "semicircleDown", label: "semicircle ↓", build: () => semicircleTemplate(3, "lower") },
+  // C1's contour, and the one that makes `∮` stop being the answer: it encloses nothing, so
+  // `∮ = 0` while the integral is π/2 and the entire value comes from the indentation's
+  // `iα·Res`. The engine has had this template since M3 with no way in.
+  {
+    id: "indented",
+    label: "indented semicircle",
+    build: () => indentedSemicircleTemplate(8, 0.05),
+  },
   { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
 ];
+
+/** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
+const GRAB_PX = 11;
+
+/**
+ * Function evaluations per piece while a gesture is in flight.
+ *
+ * PLAN §4.5: drag coarse, re-run the full quadrature on release, reconcile, and treat a disagreement
+ * beyond the estimator's own bound as a bug signal worth logging. The node-spacing rule asks for up to
+ * 65,536 nodes when a pole is close, which is right for an answer and far too slow for a gesture — and
+ * only the CROSS-CHECK is affected, since `∮` comes from a formula over exact residues either way.
+ */
+const DRAFT_EVALUATIONS = 768;
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -71,20 +128,96 @@ const fmt = (x: number): string => {
 };
 const fmtCx = ([re, im]: Cx): string => `${fmt(re)} ${im < 0 ? "−" : "+"} ${fmt(Math.abs(im))}i`;
 
+/** A fixture's bindings, short enough for a `<select>` option: `a = 5, b = 3`. */
+const fixtureLabel = (g: Golden): string => {
+  const parts = Object.entries(g.params).map(
+    ([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`,
+  );
+  return parts.length > 0 ? parts.join(", ") : "no parameters";
+};
+
+/**
+ * The real quantity a record is about, rendered from the record's own fields.
+ *
+ * Deliberately built from `FamilyTarget` rather than written as prose per record: a second,
+ * hand-written statement of what the integral is would be a second source of truth, and the first
+ * time it disagreed with the executable one the app would be lying in the most legible place.
+ */
+const targetText = (t: FamilyTarget): string => {
+  const bound = (x: string): string => (x === "inf" ? "∞" : x === "-inf" ? "−∞" : x);
+  const range = `(${bound(t.lower)} → ${bound(t.upper)})`;
+  return t.kind === "sum"
+    ? `Σ ${t.variable} ${range}  ${t.summand ?? "?"}`
+    : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
+};
+
 export function mountApp(root: Element): void {
   let view: View = DEFAULT_VIEW;
   let ast: Node | null = null;
   let f: ((z: Cx) => Cx) | null = null;
   let poles: PoleReport | null = null;
   let contour: Contour = TEMPLATES[0].build();
-  let resolved: Resolved[] = resolveAll(contour);
+  let resolved: readonly Resolved[] = resolveAll(contour);
   let integral: ContourIntegral | null = null;
   let theorem: ResidueTheoremResult | null = null;
   let ledger: LedgerResult | null = null;
+  let derivation: Derivation | null = null;
   let acc: Accumulation | null = null;
   let scrub = 1;
   let contrast: ContrastMode = "none";
   let highlight = -1;
+
+  // --- grab state --------------------------------------------------------------------------
+  /**
+   * What a move acts on. `null` means the view, which is the default and the only thing the app used
+   * to offer: every pointer drag panned, so north-star behaviour 1 — drag a contour across a pole and
+   * watch the value jump by exactly `2πi·Res` — was unreachable except through a parameter slider.
+   */
+  let grab: { readonly kind: "body" } | { readonly kind: "radius"; readonly handle: Handle } | null =
+    null;
+  let handles: readonly Handle[] = [];
+  /** The handle under the pointer, for the ink layer and the cursor. −1 for none. */
+  let hovered = -1;
+  /** Which gesture is in flight. `contour` is the one that runs the quadrature at draft quality. */
+  let gesture: "none" | "view" | "contour" = "none";
+  /** The contour as it was when the gesture began, so a translation is measured from an anchor rather
+   *  than accumulated move by move. */
+  let anchorContour: Contour | null = null;
+  let anchorAt: Cx = [0, 0];
+
+  // --- gallery state -----------------------------------------------------------------------
+  // ONE door into the corpus, and it is the loader's output rather than the raw `FAMILIES` array: a
+  // record that failed an invariant must not be openable anywhere, because a worked example that
+  // cannot be worked is worse than a missing one.
+  const offered = offeredFamilies();
+  let mode: "sandbox" | "gallery" = "sandbox";
+  /**
+   * The sandbox's own contour, parked while a record is open.
+   *
+   * Opening a record REPLACES `contour`, so without this, switching back left the record's geometry
+   * standing under a typed integrand — C1's indented semicircle with `1/z` on it. Not wrong, but not
+   * a state either mode meant to produce, and the user did not ask for it.
+   */
+  let sandboxContour: Contour = contour;
+  let family: Family | null = null;
+  let golden: Golden | null = null;
+  /** A move on a family PARAMETER. These reach the integrand, not only the geometry. */
+  let bindingOverrides: Bindings = {};
+  /** A move on a LIMIT parameter. Geometry only; never substituted into the integrand. */
+  let geometryOverrides: Record<string, number> = {};
+  let solved: SolvedTarget | null = null;
+  /** What the record could not do, when it could not do it. Shown, never swallowed. */
+  let recordNote: string | null = null;
+  /**
+   * Slider bounds, frozen when a fixture is opened.
+   *
+   * `instantiate` derives a parameter's range from its VALUE (`span = max(10, 2|v|)`), which is right
+   * for opening a record and wrong for dragging one: re-deriving the range on every move rescales the
+   * track under the thumb, so a steady drag drifts. Frozen per fixture, the track means one thing for
+   * as long as the user is holding it.
+   */
+  let frozenRanges: Record<string, { range: readonly [number, number]; scale: "linear" | "log" }> =
+    {};
 
   // --- layout -------------------------------------------------------------------------------
   const shell = el("div", "shell");
@@ -102,7 +235,13 @@ export function mountApp(root: Element): void {
   // before the stage so it sits above it in the document order a screen reader walks.
   mountNavHeader(shell, { current: "contour-integration" });
 
-  // Bar: the integrand.
+  // Bar: where the problem comes from — a typed integrand, or one of the gallery's records.
+  const sourceWrap = el("div", "sourceToggle");
+  sourceWrap.setAttribute("role", "group");
+  sourceWrap.setAttribute("aria-label", "problem source");
+  const sandboxGroup = el("span", "barGroup");
+  const galleryGroup = el("span", "barGroup");
+
   const input = el("input", "expr");
   input.type = "text";
   input.spellcheck = false;
@@ -118,16 +257,54 @@ export function mountApp(root: Element): void {
     });
     presetWrap.append(b);
   }
-  bar.append(el("span", "brand", "Contour Integration"), el("span", "flabel", "f(z) ="), input, presetWrap);
+  sandboxGroup.append(el("span", "flabel", "f(z) ="), input, presetWrap);
+
+  // A `<select>` with one `<optgroup>` per tier, not a wall of buttons. The tiers ARE the gallery's
+  // ordering — each adds exactly one engine capability — and a native select is keyboard- and
+  // screen-reader-navigable without any work of ours.
+  const recordSelect = el("select", "picker");
+  recordSelect.setAttribute("aria-label", "gallery record");
+  for (const tier of offered.tiers) {
+    const group = document.createElement("optgroup");
+    group.label = `tier ${tier.tier}`;
+    for (const fam of tier.families) {
+      const opt = document.createElement("option");
+      opt.value = fam.id;
+      opt.textContent = fam.id;
+      group.append(opt);
+    }
+    recordSelect.append(group);
+  }
+  const fixtureSelect = el("select", "picker");
+  fixtureSelect.setAttribute("aria-label", "fixture");
+  galleryGroup.append(
+    el("span", "flabel", "record"),
+    recordSelect,
+    el("span", "flabel", "at"),
+    fixtureSelect,
+  );
+
+  for (const m of ["sandbox", "gallery"] as const) {
+    const b = el("button", "preset", m === "sandbox" ? "Sandbox" : "Gallery");
+    b.type = "button";
+    b.dataset.mode = m;
+    b.setAttribute("aria-pressed", String(m === mode));
+    b.addEventListener("click", () => setMode(m));
+    sourceWrap.append(b);
+  }
+
+  bar.append(el("span", "brand", "Contour Integration"), sourceWrap, sandboxGroup, galleryGroup);
 
   // Rail cards.
   const errorBox = el("div", "error");
   errorBox.hidden = true;
+  const recordCard = el("section", "card");
   const ledgerCard = el("section", "card");
+  const derivationCard = el("section", "card");
   const resultCard = el("section", "card");
   const contourCard = el("section", "card");
   const poleCard = el("section", "card");
-  rail.append(errorBox, ledgerCard, resultCard, contourCard, poleCard);
+  rail.append(errorBox, recordCard, ledgerCard, derivationCard, resultCard, contourCard, poleCard);
 
   // Strip: the accumulator.
   // The canvas needs a containing block with a definite size of its own. A `height: 100%` canvas
@@ -209,6 +386,15 @@ export function mountApp(root: Element): void {
           highlight,
           marker: acc && acc.steps.length > 0 ? scrub : undefined,
           refused: integral?.refusal !== undefined,
+          handles: handles.map((h, k) => ({
+            at: h.at,
+            emphasis:
+              grab?.kind === "radius" && grab.handle.param === h.param
+                ? "grabbed"
+                : k === hovered
+                  ? "hover"
+                  : "none",
+          })),
         });
       }
       drawPoleMarkers();
@@ -251,35 +437,230 @@ export function mountApp(root: Element): void {
   }
 
   // --- computation --------------------------------------------------------------------------
-  function recompute(): void {
-    resolved = resolveAll(contour);
-    if (!f) {
-      integral = null;
-      theorem = null;
-      ledger = null;
-      acc = null;
-    } else {
-      const singular = (poles?.poles ?? []).map((p) => ({ at: p.at, order: p.order }));
-      integral = integrateContour(f, resolved, singular);
-      // Null when the integral was refused — a partial sum through a singularity is meaningless,
-      // not merely rough, and showing one beside a refusal hands back the withheld number.
-      acc = accumulateForIntegral(f, resolved, integral);
-      // The residue theorem is applied from the exact data, then CHECKED against the quadrature.
-      // Two routes that share no machinery agreeing is the strongest evidence the app can offer.
-      theorem = poles ? applyResidueTheorem(poles, integral) : null;
-      ledger =
-        ast && poles && theorem
-          ? evaluateLedger({ ast, pieces: resolved, spec: contour.pieces, poles, integral, theorem })
-          : null;
+  /**
+   * Point the camera at the contour that is now on screen.
+   *
+   * Called when the contour is REPLACED — a record opened, a fixture chosen, a template picked — and
+   * deliberately not when a slider moves one: refitting mid-drag would fight the hand on the slider,
+   * and `R → ∞` would walk the camera out with it.
+   */
+  function frameContour(): void {
+    view = fitView(resolved, viewport());
+    requestDraw();
+  }
+
+  function clearComputed(): void {
+    integral = null;
+    theorem = null;
+    ledger = null;
+    derivation = null;
+    acc = null;
+    solved = null;
+  }
+
+  /**
+   * What the problem IS, for the derivation's first stage.
+   *
+   * Read off the record in gallery mode — the same fields the record card shows, so the two cannot
+   * disagree — and off the expression box in the sandbox, which is all there is to say there.
+   */
+  function problemStatements(): Statement[] {
+    if (mode !== "gallery" || !family) {
+      return [
+        { label: "integrand", text: input.value.trim() },
+        { label: "contour", text: contour.pieces.map((p) => p.name).join(", ") },
+      ];
     }
+    const out: Statement[] = family.targets.map((t) => ({ label: "target", text: targetText(t) }));
+    out.push({ label: "contour integrand", text: contourIntegrandText(family) });
+    if (family.auxiliary) {
+      out.push({
+        label: "relation",
+        text: `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`,
+      });
+    }
+    return out;
+  }
+
+  /** Rebuild the derivation from whatever the analysis just produced. */
+  function rebuildDerivation(): void {
+    derivation =
+      ledger && poles && integral && theorem
+        ? buildDerivation({
+            ledger,
+            poles,
+            integral,
+            theorem,
+            spec: contour.pieces,
+            statements: problemStatements(),
+            ...(solved === null ? {} : { solved }),
+          })
+        : null;
+  }
+
+  /** Take a completed run as the app's state. Nothing is recomputed: `runFamily` already did it. */
+  function adopt(run: FamilyRun): void {
+    ast = run.ast;
+    f = run.f;
+    poles = run.poles;
+    contour = run.contour;
+    resolved = run.resolved;
+    integral = run.integral;
+    theorem = run.theorem;
+    ledger = run.ledger;
+    // A partial sum through a singularity is meaningless rather than merely rough, so this is null
+    // whenever the integral refused — showing one beside a refusal hands back the withheld number.
+    acc = accumulateForIntegral(run.f, run.resolved, run.integral);
+    stage?.setIntegrand(run.ast);
+  }
+
+  /** The work ceiling for this pass: draft while a contour is being dragged, full otherwise. */
+  const budgetNow = (): { readonly maxEvaluations: number } | undefined =>
+    gesture === "contour" ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined;
+
+  function recompute(): void {
+    if (mode === "gallery") {
+      recomputeRecord();
+    } else {
+      resolved = resolveAll(contour);
+      if (!f || !ast || !poles) {
+        clearComputed();
+      } else {
+        const budget = budgetNow();
+        const a = analyse({ ast, f, poles, contour, ...(budget === undefined ? {} : { budget }) });
+        resolved = a.resolved;
+        integral = a.integral;
+        theorem = a.theorem;
+        ledger = a.ledger;
+        acc = accumulateForIntegral(f, resolved, integral);
+        solved = null;
+      }
+    }
+    handles = handlesOf(contour, resolved);
+    if (hovered >= handles.length) hovered = -1;
+    rebuildDerivation();
+    renderRecordCard();
     renderLedger();
+    renderDerivation();
     renderResult();
     renderContourCard();
+    renderPoles();
     drawAcc();
     requestDraw();
   }
 
+  /**
+   * Re-run the open record at the current bindings.
+   *
+   * Everything the gallery shows comes back from this one call, including the geometry: a family
+   * parameter changes the INTEGRAND as well as the contour (A1's `a` lives in `1/(a + b·cos θ)`), so
+   * "move a slider" is "rebuild the problem", not "move a point".
+   */
+  function recomputeRecord(): void {
+    recordNote = null;
+    solved = null;
+    if (!family || !golden) {
+      clearComputed();
+      return;
+    }
+    const budget = budgetNow();
+    const r = solveFamily(family, golden, {
+      bindings: bindingOverrides,
+      geometry: geometryOverrides,
+      ...(budget === undefined ? {} : { budget }),
+    });
+    if (r.ok) {
+      adopt(r.run);
+      solved = r.solved;
+      errorBox.hidden = true;
+      return;
+    }
+    // Pass 5 may refuse while the run itself is sound. Show what there is and say what is missing,
+    // rather than blanking a record whose ledger and contour are perfectly readable.
+    recordNote = r.reason;
+    if (r.run) {
+      adopt(r.run);
+      errorBox.hidden = true;
+    } else {
+      clearComputed();
+      errorBox.hidden = false;
+      errorBox.textContent = r.reason;
+    }
+  }
+
+  function setMode(next: "sandbox" | "gallery"): void {
+    const previous = mode;
+    mode = next;
+    for (const b of sourceWrap.querySelectorAll("button")) {
+      b.setAttribute("aria-pressed", String(b.dataset.mode === next));
+      b.classList.toggle("on", b.dataset.mode === next);
+    }
+    // The integrand box lives inside `sandboxGroup`, so gallery mode hides it rather than making it
+    // read-only: the contour integrand is derived from the record (substitution and Jacobian
+    // included), an editable copy of it would desync the two, and the record card states it instead.
+    sandboxGroup.hidden = next !== "sandbox";
+    galleryGroup.hidden = next !== "gallery";
+    if (next === "gallery") {
+      if (previous === "sandbox") sandboxContour = contour;
+      loadRecord(recordSelect.value || offered.tiers[0]?.families[0]?.id);
+    } else {
+      recordNote = null;
+      contour = sandboxContour;
+      applyExpression();
+      // Not on the first call, where `previous === next` and the app is simply booting: reframing
+      // there would override the default view for no reason the user can see.
+      if (previous !== next) frameContour();
+    }
+  }
+
+  /** Open a record at its primary fixture — the first that binds parameters rather than varying. */
+  function loadRecord(id: string | undefined): void {
+    const found = offered.tiers.flatMap((t) => t.families).find((fam) => fam.id === id);
+    family = found ?? null;
+    golden = found ? primaryGolden(found) : null;
+    if (found) recordSelect.value = found.id;
+    selectFixture(golden);
+  }
+
+  /** Bind a fixture: its parameters become the bindings, and every override is dropped. */
+  function selectFixture(g: Golden | null): void {
+    golden = g;
+    bindingOverrides = {};
+    geometryOverrides = {};
+    frozenRanges = {};
+    renderFixtureOptions();
+    recompute();
+    frameContour();
+    // Frozen AFTER the first run, from the contour the record actually produced, so the tracks match
+    // the values on screen.
+    if (mode === "gallery") {
+      for (const param of Object.values(contour.params)) {
+        frozenRanges[param.name] = { range: param.range, scale: param.scale };
+      }
+    }
+  }
+
+  function renderFixtureOptions(): void {
+    fixtureSelect.replaceChildren();
+    if (!family) return;
+    for (const [k, g] of family.golden.entries()) {
+      const opt = document.createElement("option");
+      opt.value = String(k);
+      const variant = isVariant(family, g);
+      // A variant fixture selects an alternative DERIVATION (A5's half-range corollary, A6's closing
+      // down) that the engine has no route for. Offering it and then failing would read as a bug in
+      // the record; saying so is the honest version.
+      opt.textContent = variant
+        ? `${fixtureLabel(g)} — alternative derivation, not executable`
+        : fixtureLabel(g);
+      opt.disabled = variant;
+      if (golden === g) opt.selected = true;
+      fixtureSelect.append(opt);
+    }
+  }
+
   function applyExpression(): void {
+    if (mode === "gallery") return;
     try {
       ast = parse(input.value.trim());
       const fn = makeComplexFn(ast);
@@ -292,12 +673,10 @@ export function mountApp(root: Element): void {
       poles = null;
       errorBox.hidden = false;
       errorBox.textContent = e instanceof Error ? e.message : String(e);
-      renderPoles();
       recompute();
       return;
     }
     poles = findPoles(ast);
-    renderPoles();
     recompute();
   }
 
@@ -311,6 +690,116 @@ export function mountApp(root: Element): void {
     failed: "✗",
     unknown: "?",
   };
+
+  /**
+   * What is actually integrated, which is NOT the posed integrand.
+   *
+   * GALLERY §5.0 calls confusing the two "the single commonest error in the whole subject":
+   * `cos 2θ/(5 − 4cos θ)` is smooth at every real θ, and the contour integrand it becomes has a
+   * pole of order 2 at the origin. Read straight off the record, so the statement on screen is the
+   * one the engine acted on.
+   */
+  function contourIntegrandText(fam: Family): string {
+    if (fam.auxiliary) return fam.auxiliary.integrand;
+    const t = fam.targets[0];
+    if (t?.substitution) {
+      return (
+        `${t.integrand ?? "?"}   with  z = ${t.substitution.map},  ` +
+        `d${t.variable} = ${t.substitution.jacobian} dz`
+      );
+    }
+    return `${t?.integrand ?? "?"}   read in z — the real axis IS a piece of the contour`;
+  }
+
+  /**
+   * The open record: what it claims, and what the engine independently got.
+   *
+   * Showing both is the point. The record's `closedForm` was derived and numerically verified by
+   * hand during research; `solved.text` is what Pass 5 produced just now from exact residues in units
+   * of π. The app's whole thesis is the agreement of two routes that share no machinery, and this is
+   * where a reader can see it rather than take it on trust.
+   */
+  function renderRecordCard(): void {
+    recordCard.hidden = mode !== "gallery";
+    if (mode !== "gallery") return;
+    recordCard.replaceChildren(el("h2", undefined, "Gallery record"));
+
+    if (!family || !golden) {
+      recordCard.append(el("p", "muted", "No record selected."));
+      return;
+    }
+
+    const head = el("p", "recordHead");
+    head.append(el("span", "tag", `tier ${family.tier}`), el("span", "num", family.id));
+    recordCard.append(head, el("p", "muted small", family.title));
+
+    for (const t of family.targets) {
+      recordCard.append(el("p", "num targetLine", targetText(t)));
+      if (t.convergence !== "absolute") {
+        recordCard.append(
+          el("p", "muted small", `converges ${t.convergence === "conditional" ? "conditionally" : "as a principal value"}`),
+        );
+      }
+    }
+    recordCard.append(
+      el("p", "muted small", "Contour integrand:"),
+      el("p", "num", contourIntegrandText(family)),
+    );
+    if (family.auxiliary) {
+      recordCard.append(
+        el("p", "muted small", `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`),
+      );
+    }
+
+    // The engine's answer, then the record's claim, then whether they agree.
+    if (solved) {
+      if (solved.text !== undefined) {
+        const line = el("p", "resultValue exactValue");
+        // Pass 5's own evidence decides this, never the call site.
+        line.append(badge(assembleVerdict(solved.certificates).level), ` ${solved.text}`);
+        recordCard.append(line);
+      }
+      const dec = el("p", "num numericValue");
+      dec.append(badge("≈"), ` ${fmt(solved.value)}`);
+      recordCard.append(dec);
+
+      const claim = family.closedForm.simplified ?? family.closedForm.expr;
+      recordCard.append(el("p", "muted small", `the record claims  ${claim}`));
+
+      const want = typeof golden.numeric === "number" ? golden.numeric : golden.numeric[0];
+      const off = Math.abs(solved.value - want);
+      const tol = golden.verifiedTo * Math.max(1, Math.abs(want));
+      const agree = el("p", off <= tol ? "crosscheck" : "restriction");
+      agree.append(
+        off <= tol ? badge("≤") : badge("⚠"),
+        off <= tol
+          ? ` agrees with the golden value to ${off.toExponential(2)}`
+          : ` DISAGREES with the golden value by ${off.toExponential(2)} — one of them is wrong`,
+      );
+      recordCard.append(agree);
+      // `method` is a paragraph, by design — GALLERY §2's whole point is that a golden value with no
+      // method is an assertion. It is still not what a reader needs first, so it folds.
+      const how = el("details", "method");
+      how.append(el("summary", "muted small", "how the golden value was verified"), el("p", "muted small", golden.method));
+      recordCard.append(how);
+    }
+
+    for (const r of family.restrictions ?? []) {
+      recordCard.append(el("p", "restriction", r));
+    }
+    if (recordNote !== null) {
+      recordCard.append(el("p", "repair", recordNote));
+    }
+    // Said from data rather than implied by silence: the loader drops a record that fails any of
+    // DESIGN §5's four invariants, and a reader is entitled to know whether it dropped any.
+    recordCard.append(
+      el(
+        "p",
+        "muted small",
+        `${offered.count} records loaded · ${offered.dropped.length} dropped`,
+      ),
+    );
+  }
 
   /**
    * The Closing Ledger. The headline is a SENTENCE, not a number: "does this argument finish" is the
@@ -342,9 +831,12 @@ export function mountApp(root: Element): void {
     // The headline IS the product — "does this argument close?" — so a screen-reader user should
     // hear it change rather than have to go looking for it. Guarded against repeating on a redraw
     // that changed nothing, which would otherwise make the live region chatter on every pan.
-    const sentence = ledger.closes && ledger.value
-      ? `${ledgerHeadline(ledger)} The value is ${ledger.value.text}.`
-      : ledgerHeadline(ledger);
+    const sentence =
+      ledger.closes && ledger.value
+        ? solved?.text !== undefined
+          ? `${ledgerHeadline(ledger)} The closed contour is worth ${ledger.value.text}, and the integral is ${solved.text}.`
+          : `${ledgerHeadline(ledger)} The closed-contour value is ${ledger.value.text}.`
+        : ledgerHeadline(ledger);
     if (sentence !== announced) {
       announced = sentence;
       announce(sentence);
@@ -352,8 +844,28 @@ export function mountApp(root: Element): void {
 
     if (ledger.closes && ledger.value) {
       const v = el("p", "resultValue exactValue");
-      v.append(badge("="), ` ${ledger.value.text}`);
-      ledgerCard.append(v);
+      // The VALUE's evidence, not the argument's. `ledger.verdict` is the meet over every step, so it
+      // carries the arc bound's `≤` — which is a true statement about the weakest step and a false
+      // one about `∮`, whose own evidence is the residue theorem. DESIGN §4 Pass 3 is explicit that
+      // the bound and the limit are different claims and that only the limit reaches the answer.
+      const valueLevel =
+        theorem?.exactValue !== undefined ? theorem.verdict.level : (integral?.verdict.level ?? "?");
+      v.append(badge(valueLevel), ` ${ledger.value.text}`);
+      // NAME the number. This one is `∮ f dz`, and when the contour has a target that is not the
+      // answer — C1 is the case that makes it unavoidable: its contour encloses nothing, so `∮ = 0`
+      // while the integral is π/2 and the entire value comes from the indentation's `iα·Res`.
+      // Unlabelled, "This argument closes. = 0" reads as "the answer is 0", which is GALLERY §5.0b's
+      // wrong answer printed in the most authoritative place on the page.
+      ledgerCard.append(
+        v,
+        el(
+          "p",
+          "muted small",
+          ledger.hasTarget
+            ? "∮ f dz — the closed contour. The integral it is being used to find is above."
+            : "∮ f dz",
+        ),
+      );
     }
 
     const list = el("ul", "ledger");
@@ -368,6 +880,107 @@ export function mountApp(root: Element): void {
       list.append(li);
     }
     ledgerCard.append(list);
+  }
+
+  /**
+   * The derivation: the argument in order, with every line carrying its own evidence.
+   *
+   * Nothing here composes a claim. `engine/derivation.ts` reads the ledger's rows and their
+   * certificates; this function turns that structure into DOM. The one editorial decision is what to
+   * show by default — a failing argument opens itself, because the diagnostic IS the product, while
+   * a closing one folds, because a reader who is satisfied should not have to scroll past a proof.
+   */
+  function renderDerivation(): void {
+    derivationCard.replaceChildren();
+    if (!derivation) {
+      derivationCard.hidden = true;
+      return;
+    }
+    derivationCard.hidden = false;
+
+    const shell = el("details", "derivation");
+    shell.open = !derivation.closes;
+    const steps = derivation.stages.reduce((n, st) => n + st.lines.length, 0);
+    const summary = el(
+      "summary",
+      undefined,
+      derivation.closes
+        ? `Derivation — ${steps} steps, each with its evidence`
+        : `Derivation — where it stops: ${derivation.failedAt ?? "incomplete"}`,
+    );
+    shell.append(summary);
+
+    for (const st of derivation.stages) {
+      const block = el("div", `derivStage${st.failed ? " failed" : ""}`);
+      block.append(el("h3", undefined, st.title), el("p", "muted small why", st.why));
+
+      for (const statement of st.statements) {
+        const row = el("p", "statement");
+        row.append(el("span", "stLabel", statement.label), el("span", "num", statement.text));
+        block.append(row);
+      }
+
+      if (st.poles.length > 0) {
+        const list = el("ul", "poleTable");
+        for (const row of st.poles) {
+          const li = el("li");
+          li.append(el("span", "num", fmtCx(row.at)));
+          li.append(el("span", "tag", `order ${row.order}`));
+          li.append(
+            el(
+              "span",
+              row.windingDecided ? "tag" : "tag warn",
+              row.windingDecided ? `n(γ) = ${row.winding}` : "n(γ) undecided",
+            ),
+          );
+          if (row.residue !== undefined) li.append(el("span", "num", `Res = ${row.residue}`));
+          if (row.basis === "numeric") li.append(el("span", "tag warn", "located numerically"));
+          if (row.possiblyRemovable) li.append(el("span", "tag warn", "may be removable"));
+          if (!row.orderCertain) li.append(el("span", "tag warn", "order uncertain"));
+          list.append(li);
+        }
+        block.append(el("p", "muted small", "per pole — the winding number and the count are separate facts:"), list);
+      }
+
+      for (const line of st.lines) {
+        const li = el("div", `derivLine ${line.status}`);
+        const head = el("p", "derivClaim");
+        head.append(badge(line.level), ` ${line.text}`);
+        li.append(head);
+        if (line.pieceName !== undefined) li.append(el("p", "muted small", line.pieceName));
+        li.append(el("p", "muted small method", line.method));
+        if (line.restriction !== undefined) li.append(el("p", "restriction", line.restriction));
+
+        // A failed step is the diagnostic and is never folded away. The satisfied ones are the audit
+        // trail — worth having, not worth reading first — so they go behind one disclosure.
+        const failedSteps = line.provenance.filter((x) => !x.ok);
+        const okSteps = line.provenance.filter((x) => x.ok);
+        for (const step of failedSteps) li.append(el("p", "provBad", `✗ ${step.text}`));
+        if (okSteps.length > 0) {
+          const trail = el("details", "prov");
+          trail.append(
+            el("summary", "muted small", `audit trail (${okSteps.length} step${okSteps.length === 1 ? "" : "s"})`),
+          );
+          for (const step of okSteps) trail.append(el("p", "provOk", `✓ ${step.text}`));
+          li.append(trail);
+        }
+        if (line.repair !== undefined) li.append(el("p", "repair", line.repair));
+        block.append(li);
+      }
+      shell.append(block);
+    }
+
+    if (derivation.conclusion) {
+      const end = el("p", "conclusion");
+      // Badged from the CONCLUSION's own evidence, which is not the argument-wide meet: a vanishing
+      // arc owes a `≤` at finite R and an `=` for its limit, and only the limit enters the answer.
+      end.append(
+        badge(derivation.conclusion.level),
+        ` ${derivation.conclusion.label} = ${derivation.conclusion.text}`,
+      );
+      shell.append(end);
+    }
+    derivationCard.append(shell);
   }
 
   function renderResult(): void {
@@ -393,7 +1006,11 @@ export function mountApp(root: Element): void {
     // formula rather than from integrating, and the quadrature below it is the corroboration.
     if (theorem?.exactValue) {
       const head = el("p", "resultValue exactValue");
-      head.append(badge("="), ` ${theorem.exactValue.text}`);
+      // From the verdict, not from a literal. This badge used to be a hand-written "=" because the
+      // verdict was capped at `≤` by the AGREEING quadrature — a claim that does not depend on the
+      // quadrature being labelled by it. `residueTheorem.ts` now reports the corroboration beside the
+      // value instead of inside it, so the computed level is the one to show.
+      head.append(badge(theorem.verdict.level), ` ${theorem.exactValue.text}`);
       resultCard.append(head);
       const field =
         poles?.radicand === null || poles?.radicand === undefined
@@ -402,10 +1019,10 @@ export function mountApp(root: Element): void {
       resultCard.append(
         el("p", "muted small", `2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ${field}`),
       );
-      const check = el("p", theorem.agrees === true ? "crosscheck" : "restriction");
+      const check = el("p", theorem.crossCheck !== undefined ? "crosscheck" : "restriction");
       check.append(
-        theorem.agrees === true ? badge("≤") : badge("⚠"),
-        theorem.agrees === true
+        badge(theorem.crossCheck?.level ?? "⚠"),
+        theorem.crossCheck !== undefined
           ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
           : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
       );
@@ -441,48 +1058,103 @@ export function mountApp(root: Element): void {
     );
   }
 
+  /**
+   * Which channel a parameter's slider writes to.
+   *
+   * In the sandbox every parameter is geometry, so a move edits the contour in place. Under a record
+   * the three kinds are genuinely different: a FAMILY parameter rebuilds the integrand as well as the
+   * contour, a LIMIT parameter is geometry alone (and must never be substituted into the integrand —
+   * tier B renames its radius `R_lim` because `R` there is the rational function), and a DERIVED value
+   * is computed from the others, so moving it independently would desync the geometry from its own
+   * definition. Anything a family did not declare falls to `derived`, which is read-only.
+   */
+  /**
+   * Write a parameter, through whichever channel owns it, and recompute.
+   *
+   * The sliders and the radius handles are the same edit and now go through the same door: dragging
+   * the indented semicircle's outer arc moves `R` exactly as its slider does, which is what makes the
+   * handle an affordance for the argument's own limit rather than a second way to change the picture.
+   */
+  function applyParam(name: string, value: number): void {
+    const channel = channelOf(name);
+    if (channel === "binding") {
+      bindingOverrides = { ...bindingOverrides, [name]: value };
+    } else if (channel === "geometry") {
+      geometryOverrides = { ...geometryOverrides, [name]: value };
+    } else {
+      contour = setParam(contour, name, value);
+    }
+    recompute();
+  }
+
+  function channelOf(name: string): "sandbox" | "binding" | "geometry" | "derived" {
+    if (mode !== "gallery" || !family) return "sandbox";
+    if (family.contour.limitParams.some((l) => l.name === name)) return "geometry";
+    if (family.parameters.some((q) => q.name === name)) return "binding";
+    return "derived";
+  }
+
   function renderContourCard(): void {
     contourCard.replaceChildren(el("h2", undefined, "Contour"));
 
-    const picker = el("div", "presets");
-    for (const t of TEMPLATES) {
-      const b = el("button", "preset", t.label);
-      b.type = "button";
-      b.addEventListener("click", () => {
-        contour = t.build();
-        recompute();
-      });
-      picker.append(b);
+    // No template picker under a record: the contour is the record's, and swapping it would leave a
+    // worked example whose pieces no longer match the argument it is making.
+    if (mode === "sandbox") {
+      const picker = el("div", "presets");
+      for (const t of TEMPLATES) {
+        const b = el("button", "preset", t.label);
+        b.type = "button";
+        b.addEventListener("click", () => {
+          contour = t.build();
+          recompute();
+          frameContour();
+        });
+        picker.append(b);
+      }
+      contourCard.append(picker);
+    } else if (family) {
+      contourCard.append(el("p", "muted small", `template: ${family.contour.template}`));
     }
-    contourCard.append(picker);
 
     for (const p of Object.values(contour.params)) {
+      const channel = channelOf(p.name);
+      if (channel === "derived") {
+        const row = el("label", "paramRow");
+        row.append(
+          el("span", "num", `${p.name} = ${fmt(p.value)}`),
+          el("span", "tag", "derived"),
+        );
+        contourCard.append(row);
+        continue;
+      }
+
       const wrap = el("label", "paramRow");
       const slider = el("input", "slider");
       slider.type = "range";
       slider.min = "0";
       slider.max = "1000";
-      const [lo, hi] = p.range;
+      // Frozen bounds under a record, so a drag does not rescale its own track (see `frozenRanges`).
+      const bounds = frozenRanges[p.name] ?? { range: p.range, scale: p.scale };
+      const [lo, hi] = bounds.range;
       const toSlider = (v: number): number =>
-        p.scale === "log"
+        bounds.scale === "log"
           ? (1000 * (Math.log(v) - Math.log(lo))) / (Math.log(hi) - Math.log(lo))
           : (1000 * (v - lo)) / (hi - lo);
-      const fromSlider = (s: number): number =>
-        p.scale === "log"
-          ? Math.exp(Math.log(lo) + (s / 1000) * (Math.log(hi) - Math.log(lo)))
-          : lo + (s / 1000) * (hi - lo);
+      const fromSlider = (t: number): number =>
+        bounds.scale === "log"
+          ? Math.exp(Math.log(lo) + (t / 1000) * (Math.log(hi) - Math.log(lo)))
+          : lo + (t / 1000) * (hi - lo);
       slider.value = String(Math.round(toSlider(p.value)));
       const readout = el("span", "num", `${p.name} = ${fmt(p.value)}`);
       slider.addEventListener("input", () => {
         const v = fromSlider(Number(slider.value));
-        contour = {
-          ...contour,
-          params: { ...contour.params, [p.name]: { ...p, value: v } },
-        };
         readout.textContent = `${p.name} = ${fmt(v)}`;
-        recompute();
+        applyParam(p.name, v);
       });
       wrap.append(readout, slider);
+      if (channel === "geometry" && p.limit) {
+        wrap.append(el("span", "tag", p.limit.to === "inf" ? "→ ∞" : "→ 0⁺"));
+      }
       contourCard.append(wrap);
     }
 
@@ -541,7 +1213,9 @@ export function mountApp(root: Element): void {
       if (pole.possiblyRemovable) li.append(el("span", "tag warn", "may be removable"));
       if (pole.residue) {
         const res = el("span", "num residueText");
-        res.append(badge("="), ` Res = ${pole.residue.text}`);
+        // No badge: there is no per-pole certificate to read one from, and the card already states
+        // the pole report's own verdict above. A literal "=" here was a label with nothing behind it.
+        res.append(` Res = ${pole.residue.text}`);
         li.append(res);
       } else if (pole.isExact === false) {
         li.append(el("span", "tag warn", "≈ located numerically"));
@@ -555,30 +1229,204 @@ export function mountApp(root: Element): void {
   }
 
   // --- interaction --------------------------------------------------------------------------
-  let dragging = false;
+  //
+  // THREE THINGS A POINTER DRAG CAN MEAN, decided in this order: a radius handle, then the contour
+  // itself, then the view. Until now every drag panned the view, so north-star behaviour 1 — drag a
+  // contour across a pole and watch the value jump by exactly `2πi·Res` — was reachable only through a
+  // parameter slider, which is not the same experience and was not the promise.
   let lastX = 0;
   let lastY = 0;
 
+  const stagePoint = (ev: PointerEvent): readonly [number, number] => {
+    const rect = stageWrap.getBoundingClientRect();
+    return [ev.clientX - rect.left, ev.clientY - rect.top];
+  };
+  const plotAt = (px: number, py: number): Cx => screenToPlot(px, py, view, viewport());
+  /** The grab radius in PLOT units, so it is a constant number of pixels at every zoom level. */
+  const grabTolerance = (): number => GRAB_PX * scale(view, viewport());
+
+  /**
+   * Whether the contour may be moved bodily.
+   *
+   * Sandbox only. Under a gallery record the contour is the record's, and translating it would leave a
+   * worked example whose pieces no longer match the argument it is making — the same reason 3.5a hides
+   * the template picker there. The radius handles still work, because those edit the parameters the
+   * record itself declares, and `R → ∞` / `ρ → 0` are what its argument is about.
+   */
+  const canMoveBody = (): boolean => mode === "sandbox";
+
+  function updateCursor(px?: number, py?: number): void {
+    if (gesture === "contour") {
+      stageWrap.style.cursor = "grabbing";
+      return;
+    }
+    if (gesture === "view" || px === undefined || py === undefined) {
+      stageWrap.style.cursor = gesture === "view" ? "grabbing" : "default";
+      return;
+    }
+    const at = plotAt(px, py);
+    const tol = grabTolerance();
+    const over =
+      nearestHandle(handles, at, tol) !== null || (canMoveBody() && onContour(resolved, at, tol));
+    stageWrap.style.cursor = over ? "grab" : "default";
+  }
+
+  /**
+   * Compare the draft value the drag ended on against the full one, and log a disagreement.
+   *
+   * PLAN §4.5's instruction, verbatim: re-run the full quadrature on release and reconcile —
+   * "disagreement beyond the estimator's bound is a bug signal worth logging". It is a `console.warn`
+   * rather than a UI surface because the user cannot act on it; a developer can.
+   */
+  function reconcileDraft(draft: Cx | undefined, worstEstimate: number): void {
+    const full = integral?.value;
+    if (draft === undefined || full === undefined) return;
+    const off = Math.hypot(full[0] - draft[0], full[1] - draft[1]);
+    const tol = Math.max(32 * worstEstimate, 1e-9 * Math.max(1, Math.hypot(full[0], full[1])));
+    if (off > tol) {
+      console.warn(
+        `[contour-integration] the draft quadrature used during the drag and the full one on release ` +
+          `disagree by ${off.toExponential(2)}, past the estimator's own bound of ${tol.toExponential(2)}`,
+      );
+    }
+  }
+
   stageWrap.addEventListener("pointerdown", (ev) => {
-    dragging = true;
+    const [px, py] = stagePoint(ev);
+    const at = plotAt(px, py);
+    const tol = grabTolerance();
+    const handle = nearestHandle(handles, at, tol);
+    if (handle !== null) {
+      grab = { kind: "radius", handle };
+      gesture = "contour";
+    } else if (canMoveBody() && onContour(resolved, at, tol)) {
+      grab = { kind: "body" };
+      gesture = "contour";
+      // Anchored, not accumulated: a long drag measured from where it started cannot drift, and the
+      // `add` offsets stay a single term instead of a sum of every pointer move.
+      anchorContour = contour;
+      anchorAt = at;
+    } else {
+      gesture = "view";
+    }
     lastX = ev.clientX;
     lastY = ev.clientY;
     stageWrap.setPointerCapture(ev.pointerId);
+    updateCursor(px, py);
+    if (gesture === "contour") requestDraw();
   });
+
   stageWrap.addEventListener("pointermove", (ev) => {
-    if (!dragging) return;
-    view = panBy(view, ev.clientX - lastX, ev.clientY - lastY, viewport());
-    lastX = ev.clientX;
-    lastY = ev.clientY;
-    requestDraw();
+    const [px, py] = stagePoint(ev);
+    if (gesture === "none") {
+      const handle = nearestHandle(handles, plotAt(px, py), grabTolerance());
+      const index = handle === null ? -1 : handles.indexOf(handle);
+      if (index !== hovered) {
+        hovered = index;
+        requestDraw();
+      }
+      updateCursor(px, py);
+      return;
+    }
+    if (gesture === "view") {
+      view = panBy(view, ev.clientX - lastX, ev.clientY - lastY, viewport());
+      lastX = ev.clientX;
+      lastY = ev.clientY;
+      requestDraw();
+      return;
+    }
+
+    const at = plotAt(px, py);
+    if (grab?.kind === "body" && anchorContour !== null) {
+      contour = translateContour(anchorContour, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
+      recompute();
+    } else if (grab?.kind === "radius") {
+      // Out of range returns null rather than clamping, so the handle simply stops at the parameter's
+      // declared bound instead of silently pinning it there.
+      const next = radiusDragValue(contour, grab.handle, at);
+      if (next !== null) applyParam(next.param, next.value);
+    }
   });
-  const endDrag = (ev: PointerEvent): void => {
-    if (!dragging) return;
-    dragging = false;
+
+  const endGesture = (ev: PointerEvent): void => {
+    if (gesture === "none") return;
+    const wasContour = gesture === "contour";
+    const draft = wasContour ? integral?.value : undefined;
+    const worst = wasContour
+      ? Math.max(0, ...(integral?.pieces.map((q) => q.errorEstimate) ?? [0]))
+      : 0;
+    gesture = "none";
+    anchorContour = null;
     stageWrap.releasePointerCapture(ev.pointerId);
+    if (wasContour) {
+      recompute();
+      reconcileDraft(draft, worst);
+    }
+    updateCursor();
   };
-  stageWrap.addEventListener("pointerup", endDrag);
-  stageWrap.addEventListener("pointercancel", endDrag);
+  stageWrap.addEventListener("pointerup", endGesture);
+  stageWrap.addEventListener("pointercancel", endGesture);
+
+  // --- the same three things, from the keyboard ----------------------------------------------
+  const grabName = (): string =>
+    grab === null
+      ? "the view"
+      : grab.kind === "body"
+        ? "the whole contour"
+        : `${grab.handle.pieceName} (${grab.handle.param})`;
+
+  /** Re-point a radius grab at the rebuilt handle, so repeated key presses keep working. */
+  function refreshGrab(): void {
+    const held = grab;
+    if (held === null || held.kind !== "radius") return;
+    const again = handles.find(
+      (h) => h.param === held.handle.param && h.pieceIndex === held.handle.pieceIndex,
+    );
+    grab = again === undefined ? null : { kind: "radius", handle: again };
+  }
+
+  /** Enter / Space walks what the arrows act on: the view, the contour, then each radius handle. */
+  function cycleGrab(): void {
+    const stops: (typeof grab)[] = [null];
+    if (canMoveBody()) stops.push({ kind: "body" });
+    for (const handle of handles) stops.push({ kind: "radius", handle });
+    const sameAs = (a: typeof grab): boolean =>
+      a === null
+        ? grab === null
+        : grab !== null &&
+          a.kind === grab.kind &&
+          (a.kind !== "radius" || (grab.kind === "radius" && a.handle.param === grab.handle.param));
+    const index = stops.findIndex(sameAs);
+    grab = stops[(index + 1) % stops.length] ?? null;
+    announce(
+      grab === null
+        ? "Arrow keys pan the view. Press Enter to grab the contour instead."
+        : `Arrow keys now move ${grabName()}. Press Enter for the next handle.`,
+    );
+    requestDraw();
+  }
+
+  function moveGrab(dx: number, dy: number): void {
+    const held = grab;
+    if (held === null) return;
+    const port = viewport();
+    // A fixed fraction of the viewport, as for panning, so a step means the same thing at every zoom.
+    const step = (Math.min(port.width, port.height) / 24) * scale(view, port);
+    // Screen y runs down and plot y runs up.
+    const d: Cx = [dx * step, -dy * step];
+    if (held.kind === "body") {
+      if (!canMoveBody()) return;
+      contour = translateContour(contour, d);
+      recompute();
+    } else {
+      const next = radiusDragValue(contour, held.handle, [
+        held.handle.at[0] + d[0],
+        held.handle.at[1] + d[1],
+      ]);
+      if (next !== null) applyParam(next.param, next.value);
+    }
+    refreshGrab();
+  }
 
   // The accessible-canvas contract (ADR-0032): the GL canvas is the RENDER surface and is hidden
   // from assistive tech; the ink overlay above it carries the name, the focus and the keyboard map,
@@ -586,12 +1434,23 @@ export function mountApp(root: Element): void {
   const stageA11y = attachCanvasA11y(inkCanvas, {
     label:
       "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
-      "Arrow keys pan, plus and minus zoom.",
+      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour or one of its radius " +
+      "handles, after which the arrow keys move what you grabbed and shift with an arrow pans.",
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,
-    onKey: (action: CanvasKeyAction) => {
+    onKey: (action: CanvasKeyAction, ev: KeyboardEvent) => {
       const port = viewport();
+      if (action.kind === "commit") {
+        cycleGrab();
+        return;
+      }
+      // With something grabbed the arrows MOVE it and shift pans, rather than the other way round:
+      // the grab was just asked for, so it is the primary action until it is released.
+      if (action.kind === "pan" && grab !== null && !ev.shiftKey) {
+        moveGrab(action.dx, action.dy);
+        return;
+      }
       if (action.kind === "pan") {
         // A keyboard step is a fixed fraction of the viewport, so it means the same thing at every
         // zoom level — unlike a pixel step, which shrinks as you zoom in.
@@ -629,10 +1488,17 @@ export function mountApp(root: Element): void {
   input.addEventListener("keydown", (ev) => {
     if (ev.key === "Enter") applyExpression();
   });
+  recordSelect.addEventListener("change", () => loadRecord(recordSelect.value));
+  fixtureSelect.addEventListener("change", () => {
+    const k = Number(fixtureSelect.value);
+    if (family && Number.isInteger(k)) selectFixture(family.golden[k] ?? null);
+  });
   window.addEventListener("resize", () => {
     drawAcc();
     requestDraw();
   });
 
-  applyExpression();
+  // Through `setMode` rather than straight to `applyExpression`, so the bar's two groups start in the
+  // state the mode says they should be in instead of in whatever order they were appended.
+  setMode(mode);
 }

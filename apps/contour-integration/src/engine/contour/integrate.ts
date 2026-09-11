@@ -59,12 +59,29 @@ function pullback(f: (z: Cx) => Cx, g: Resolved): (t: number) => Cx {
   return (t) => cmul(f(pointAt(g, t)), derivAt(g, t));
 }
 
+/**
+ * A ceiling on the work one piece may cost.
+ *
+ * Exists for the DRAG. Dragging a contour re-integrates it on every pointer move, and the node-spacing
+ * rule asks for up to 65,536 nodes when a pole is close — which is right for an answer and far too slow
+ * for a gesture. A drag passes a small budget and takes the `capped` flag that comes back; the release
+ * runs unbudgeted and the two are reconciled. Nothing is hidden: `capped` already flows into the
+ * certificate's provenance as a ✗ step, and the piece list already renders "resolution capped".
+ *
+ * The number is total function evaluations INCLUDING the refinement pass that produces the error
+ * estimate, which costs twice the coarse pass — hence the division by three in both rules below.
+ */
+export interface QuadratureBudget {
+  readonly maxEvaluations?: number;
+}
+
 /** Integrate one piece, with the rule chosen by the geometry (see kernel/quadrature.ts). */
 export function integratePiece(
   f: (z: Cx) => Cx,
   g: Resolved,
   pieceId: string,
   singularities: readonly Singularity[],
+  budget?: QuadratureBudget,
 ): PieceIntegral {
   const nearest =
     singularities.length === 0 ? Infinity : Math.min(...singularities.map((s) => clearance([g], s.at)));
@@ -80,13 +97,26 @@ export function integratePiece(
   let nodes: number;
   let capped: boolean;
   if (loop) {
-    const n = nodeCount(len, nearest);
+    // `capped` by comparison with the UNBUDGETED ideal rather than by re-deriving the spacing rule:
+    // one formula, in `nodeCount`, and no second copy of it here to drift.
+    const ideal = nodeCount(len, nearest);
+    const allowed =
+      budget?.maxEvaluations === undefined
+        ? ideal
+        : Math.max(16, Math.floor(budget.maxEvaluations / 3));
+    const n = Math.min(ideal, allowed);
     coarse = periodicTrapezoid(h, n);
     fine = periodicTrapezoid(h, 2 * n);
     nodes = 2 * n;
-    capped = false;
+    capped = n < ideal;
   } else {
-    const plan = panelPlan(len, nearest);
+    const plan = panelPlan(
+      len,
+      nearest,
+      budget?.maxEvaluations === undefined
+        ? undefined
+        : { maxEvaluations: Math.max(16, Math.floor(budget.maxEvaluations / 3)) },
+    );
     coarse = gaussPanels(h, plan.panels, plan.nodesPerPanel);
     fine = gaussPanels(h, 2 * plan.panels, plan.nodesPerPanel);
     nodes = 2 * plan.panels * plan.nodesPerPanel;
@@ -134,6 +164,7 @@ export function integrateContour(
   f: (z: Cx) => Cx,
   pieces: readonly Resolved[],
   singularities: readonly Singularity[] = [],
+  budget?: QuadratureBudget,
 ): ContourIntegral {
   const closed = isClosed(pieces);
   const windings = singularities.map((s) => {
@@ -166,7 +197,7 @@ export function integrateContour(
   }
 
   // --- quadrature ----------------------------------------------------------------------------
-  const results = pieces.map((g, k) => integratePiece(f, g, `piece ${k + 1}`, singularities));
+  const results = pieces.map((g, k) => integratePiece(f, g, `piece ${k + 1}`, singularities, budget));
   const total = compensatedSum(results.map((r) => r.value));
 
   const certificates: Certificate[] = results.map((r) => r.certificate);

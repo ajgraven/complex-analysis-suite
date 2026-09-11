@@ -29,8 +29,38 @@ whether the whole thing closes.
   `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tiers D–G need
   branch cuts and the kernel families of M4/M5.
 
-Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
-teaching layer (M6).
+The thirteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+tier and fixture, showing its target, the contour integrand it is actually integrated against (which
+is not the posed one), the closed form the engine derives, and whether that agrees with the golden
+value. A fixture that selects an alternative *derivation* rather than binding parameters is offered
+as not executable instead of offered and then failing.
+
+Each one also comes with its **derivation**: the argument in order — LEGALITY, CATCH, KILL, COVER,
+SOLVE, VERDICT — with every line badged from its own certificate and carrying the method that
+established it and its ✓/✗ audit trail. It is a view over evidence the engine already produced, not a
+second narration of it. An argument that does not close opens the panel by itself, shows the failed
+step inline, and offers the repair: closing `∫cos x/(1+x²)` downward shows the bound diverging, names
+KILL, and says to close through the other half-plane.
+
+Every badge in the app is computed from a verdict. There are no literal labels left: the one that had
+to be hand-written was a symptom of `applyResidueTheorem` folding the *agreeing* quadrature's `≤`
+into the same verdict as the exact residue sum, which capped an exact `∮` at `≤`. Corroboration is
+now reported beside a value rather than inside its label; a disagreement still refuses it.
+
+**The contour is an object you can grab.** A drag means a radius handle, the contour itself, or the
+view, decided in that order; translation keeps a template a template (its radius stays bound to `R`,
+so `R → ∞` still animates on a contour you have dragged across the plane), and a radius handle edits
+the parameter the template already binds its arcs to — the indented semicircle's two handles are
+`R → ∞` and `ρ → 0`, the two limits its argument is about. Everything works from the keyboard: Enter
+walks what the arrows move, shift with an arrow still pans. Drag `1/z`'s circle across the origin and
+`∮` goes from `2πi` to `0`, exactly; park it on the pole and there is no number at all.
+
+A gesture runs the quadrature under a work ceiling and says so (`resolution capped`); the full pass on
+release reconciles against it and logs a disagreement past the estimator's own bound. `∮` is the same
+either way — it comes from `2πi Σ n·Res`, not from the quadrature.
+
+Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
+contour from nothing), branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6).
 
 ## Documentation
 
