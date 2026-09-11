@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **474 test files / 4207 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **475 test files / 4234 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -297,11 +297,27 @@ the value jumps by exactly `2πi·Res`, park it on the pole and there is no numb
 come: the pen tool (free-hand path editing), branch cuts (M4), the rest of the gallery (M5), the
 teaching layer (M6).
 
-**M4 (branch cuts) is planned and its engine decisions are taken** — ADR-0041 and
+**M4 (branch cuts): the decisions are taken and M4.1 has landed** — ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
 **carried, not reduced** (a form labelled `=`, decimal `≈`, as tier B already carries `e^{β}`), and
 Pass 5 moves to **ℚ(i)(π)** with π an indeterminate so that rank stays decided. No new number field. Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
 exponential basis `Σ cₖ e^{βₖ}`, in which the FORM is `=` and the decimal stays `≈`.
+
+**M4.1** brought the branch-cut kernel (`src/kernel/branch/`) and made it visible. A cut is a
+**choice**, not a property of `f`: exponents are exact `Frac`s because research 06 §2.1's
+admissibility test asks *"is `Σ αₖ` an INTEGER"* — a decision, not a measurement — and one rule
+explains the whole tier-D gallery (the keyhole's cut must reach ∞ and may be any arc doing so; the
+dogbone is admissible **both** as the bounded arc `a→b` and as two rays to ∞; a `log` is never
+bounded). **LEGALITY steps 2–3** land with it: the cut system must be admissible, and any piece that
+meets a cut must declare which side it runs on — a crossing without a `side` tag refuses and names
+the repair. The crossing classifier is three-valued on purpose (`clear` and `crosses` are decisions,
+`touches` is a refusal, since a grazing contact has no side to declare), and the keyhole's two lips
+stay `clear` down to the resolution floor. The sandbox's **cut editor** is a declared object, *not*
+a detector — an incomplete detector would report "no branch points" for an integrand that has them
+and let LEGALITY pass a crossing in silence — and the dogbone join/split gesture is live. One latent
+hole closed on the way: `engine/ledger.ts` now exports `legalityRefusal`, so the result card can no
+longer print `∮` past a LEGALITY row the quadrature knew nothing about. Still to come in M4: the
+schema changes + keyhole (M4.2), ℚ(i)(π) in Pass 5 (M4.3), and the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

@@ -589,6 +589,26 @@ describe("classifyAgainstCut", () => {
       expect(classifyAgainstCut("k", arc(0.3, 0.3 + TAU), short, 10).kind).toBe("clear");
     });
 
+    it("crosses at the SEAM of a closed circle like anywhere else", () => {
+      // A closed arc has no ends, only a parameter that happens to start somewhere. Reading the seam
+      // as an endpoint refused the app's opening state outright: a circle about the origin, `θ₀ = 0`,
+      // and a cut running out along the positive axis — which puts the crossing exactly on the seam.
+      const circle = arc(0, TAU);
+      const c = classifyAgainstCut("k", circle, positiveAxis, 10);
+      expect(c.kind).toBe("crosses");
+      expect(c.count).toBe(1);
+      expect(c.at?.[0]).toBeCloseTo(2, 9);
+    });
+
+    it("but an OPEN arc that STARTS on the cut is still degenerate, crossing or not", () => {
+      // Three quarters of a turn beginning at z = 2, which is on the cut. The traversal does pass
+      // through that direction, so the crossing count is 1 and the naive reading is `crosses` — but
+      // the piece BEGINS there, and which side its neighbour approaches from is exactly the question
+      // a `side` tag would have to answer. The end is real here in a way a closed arc's seam is not.
+      const c = classifyAgainstCut("k", arc(0, (3 * Math.PI) / 2), positiveAxis, 10);
+      expect(c.kind).toBe("touches");
+    });
+
     it("refuses a tangency, where the crossing count is the question", () => {
       // The circle |z| = 2 touching the horizontal line y = 2 at one point: the discriminant is zero
       // and "does it cross" has no answer.

@@ -3666,6 +3666,9 @@ code path.
        loader's invariant-4 tests green either side (M4.3).
 4. [ ] Retire `exactConstant`'s "deferred to M4" docstring once the symbolic entry lands, so the
        parked decision does not read as still open (M4.3).
-5. [ ] The four `Family["branch"]` schema changes, before D1 loads (M4.1).
+5. [ ] The four `Family["branch"]` schema changes, before D1 loads — **moved from M4.1 to M4.2**
+       (M4.1 built the branch model, the admissibility check and the cut editor; the schema fields
+       have no reader until D1 loads, and item 4 above is the standing lesson about adding fields
+       ahead of their engines).
 6. [ ] **Revisit if** a tier-E/F/G record needs a form outside the basis — G1–G3's `πcot`/`πcsc`
        kernels are the likely first test, and they are M5's, not M4's.

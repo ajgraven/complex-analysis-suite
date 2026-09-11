@@ -76,6 +76,21 @@ function passesThrough(g: Extract<Resolved, { kind: "arc" }>, theta: number): nu
   return Math.ceil((total - along) / TAU);
 }
 
+/**
+ * Whether the arc's traversal closes on itself — one full turn, or several.
+ *
+ * A closed arc has no ENDS, only a seam where its parameter happens to start, and the difference
+ * matters: a crossing at the endpoint of an open arc is degenerate (the piece stops on the cut and
+ * its neighbour's side is the open question), while a crossing at the seam of a circle is an
+ * ordinary crossing that the parameterisation merely happens to begin at. Reading the seam as an
+ * endpoint refused the app's own opening state — a circle about the origin, and a cut running out
+ * along the positive axis from it, which is where a default `theta0 = 0` puts the seam.
+ */
+function closesOnItself(g: Extract<Resolved, { kind: "arc" }>): boolean {
+  const turns = Math.abs(g.theta1 - g.theta0) / TAU;
+  return turns >= 1 && Math.abs(turns - Math.round(turns)) < 1e-12;
+}
+
 /** How far along the arc, in length, the direction `theta` sits from the nearer of its two ends. */
 function endpointProximity(g: Extract<Resolved, { kind: "arc" }>, theta: number): number {
   const sweep = g.theta1 - g.theta0;
@@ -142,7 +157,7 @@ function arcHits(g: Extract<Resolved, { kind: "arc" }>, a: Cx, b: Cx, tol: numbe
     const at: Cx = [a[0] + u * dx, a[1] + u * dy];
     const theta = Math.atan2(at[1] - g.center[1], at[0] - g.center[0]);
     const count = passesThrough(g, theta);
-    const nearArcEnd = endpointProximity(g, theta) < tol;
+    const nearArcEnd = !closesOnItself(g) && endpointProximity(g, theta) < tol;
     if (count === 0 && !nearArcEnd) continue;
     out.push({ count: Math.max(count, 1), at, grazing: grazing || nearArcEnd });
     if (root === 0) break; // a double root is one point, not two

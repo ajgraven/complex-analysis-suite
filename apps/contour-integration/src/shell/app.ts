@@ -14,12 +14,32 @@ import {
 } from "../kernel/camera.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
+import { checkAdmissibility } from "../kernel/branch/admissibility.js";
+import {
+  INFINITY as INFINITY_ID,
+  NO_BRANCH,
+  cutPolyline,
+  type BranchChoice,
+} from "../kernel/branch/model.js";
+import {
+  OFFERED_ORDERS,
+  addBranchPoint,
+  applyBranchGrab,
+  branchHandles,
+  joinToOneCut,
+  orderLabel,
+  removeBranchPoint,
+  setOrder,
+  splitToRays,
+  type BranchGrab,
+  type BranchHandle,
+} from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
-import { ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
+import { ledgerHeadline, legalityRefusal, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
   handlesOf,
@@ -173,9 +193,23 @@ export function mountApp(root: Element): void {
    * to offer: every pointer drag panned, so north-star behaviour 1 — drag a contour across a pole and
    * watch the value jump by exactly `2πi·Res` — was unreachable except through a parameter slider.
    */
-  let grab: { readonly kind: "body" } | { readonly kind: "radius"; readonly handle: Handle } | null =
-    null;
+  let grab:
+    | { readonly kind: "body" }
+    | { readonly kind: "radius"; readonly handle: Handle }
+    | { readonly kind: "branch"; readonly handle: BranchHandle }
+    | null = null;
   let handles: readonly Handle[] = [];
+  /**
+   * The declared cut system — a SANDBOX object, not something read out of the integrand.
+   *
+   * `engine/branchEdit.ts` says why it is declared rather than detected. Under a gallery record it
+   * stays empty: a record's argument is the record's, and a cut drawn across it would be editing a
+   * worked example rather than exploring one.
+   */
+  let branch: BranchChoice = NO_BRANCH;
+  let bHandles: readonly BranchHandle[] = [];
+  /** The branch handle under the pointer, for the cursor. −1 for none. */
+  let bHovered = -1;
   /** The handle under the pointer, for the ink layer and the cursor. −1 for none. */
   let hovered = -1;
   /** Which gesture is in flight. `contour` is the one that runs the quadrature at draft quality. */
@@ -303,8 +337,18 @@ export function mountApp(root: Element): void {
   const derivationCard = el("section", "card");
   const resultCard = el("section", "card");
   const contourCard = el("section", "card");
+  const branchCard = el("section", "card");
   const poleCard = el("section", "card");
-  rail.append(errorBox, recordCard, ledgerCard, derivationCard, resultCard, contourCard, poleCard);
+  rail.append(
+    errorBox,
+    recordCard,
+    ledgerCard,
+    derivationCard,
+    resultCard,
+    contourCard,
+    branchCard,
+    poleCard,
+  );
 
   // Strip: the accumulator.
   // The canvas needs a containing block with a definite size of its own. A `height: 100%` canvas
@@ -386,6 +430,7 @@ export function mountApp(root: Element): void {
           highlight,
           marker: acc && acc.steps.length > 0 ? scrub : undefined,
           refused: integral?.refusal !== undefined,
+          cuts: cutPolylines(),
           handles: handles.map((h, k) => ({
             at: h.at,
             emphasis:
@@ -396,10 +441,65 @@ export function mountApp(root: Element): void {
                   : "none",
           })),
         });
+        // Branch handles ride the same ring idiom as the radius handles, drawn after them so a cut
+        // vertex sitting under a contour handle is still takeable.
+        drawBranchHandles(ctx, vp);
       }
       drawPoleMarkers();
     });
   };
+
+  /**
+   * Each cut as a finite polyline, with its rays clipped beyond everything on screen.
+   *
+   * The clipping radius comes from the VIEW rather than from the contour, because this one is for
+   * drawing: a ray has to leave the visible plane, and the ledger's own clipping (which is about the
+   * geometry, not the picture) is computed separately from the contour's extent.
+   */
+  function cutPolylines(): { points: readonly Cx[]; refused: boolean }[] {
+    // Not under a record: the cut system is the sandbox's, and drawing it over a worked example would
+    // put a barrier on a figure whose argument knows nothing about it.
+    if (mode !== "sandbox" || branch.cuts.length === 0) return [];
+    const vp = viewport();
+    const reach =
+      4 *
+      (Math.hypot(view.center[0], view.center[1]) +
+        view.halfHeight * (1 + Math.max(1, vp.width) / Math.max(1, vp.height)));
+    // ONE reading of legality for the picture and the rail: the ledger's LEGALITY row and this
+    // colour must never disagree about whether a cut system is admissible.
+    const refused = !checkAdmissibility(branch).ok;
+    const out: { points: readonly Cx[]; refused: boolean }[] = [];
+    for (const cut of branch.cuts) {
+      const poly = cutPolyline(branch, cut, reach);
+      if (poly !== null) out.push({ points: poly, refused });
+    }
+    return out;
+  }
+
+  function drawBranchHandles(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+    bHandles.forEach((h, k) => {
+      const [x, y] = plotToScreen(h.at[0], h.at[1], view, vp);
+      const held = grab?.kind === "branch" && sameBranchGrab(grab.handle.grab, h.grab);
+      const r = held || k === bHovered ? 7 : 5;
+      ctx.beginPath();
+      // A branch POINT is a square and a cut vertex is a diamond, so the two are told apart without
+      // colour — and neither can be mistaken for the round poles, handles or integration marker.
+      if (h.grab.kind === "point") ctx.rect(x - r, y - r, 2 * r, 2 * r);
+      else {
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y);
+        ctx.lineTo(x, y + r);
+        ctx.lineTo(x - r, y);
+        ctx.closePath();
+      }
+      ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.strokeStyle = held ? "#ffffff" : "#c77dff";
+      ctx.lineWidth = held || k === bHovered ? 2.4 : 1.6;
+      ctx.stroke();
+    });
+  }
 
   function drawPoleMarkers(): void {
     overlay.replaceChildren();
@@ -527,7 +627,14 @@ export function mountApp(root: Element): void {
         clearComputed();
       } else {
         const budget = budgetNow();
-        const a = analyse({ ast, f, poles, contour, ...(budget === undefined ? {} : { budget }) });
+        const a = analyse({
+          ast,
+          f,
+          poles,
+          contour,
+          branch,
+          ...(budget === undefined ? {} : { budget }),
+        });
         resolved = a.resolved;
         integral = a.integral;
         theorem = a.theorem;
@@ -538,12 +645,15 @@ export function mountApp(root: Element): void {
     }
     handles = handlesOf(contour, resolved);
     if (hovered >= handles.length) hovered = -1;
+    bHandles = mode === "sandbox" ? branchHandles(branch) : [];
+    if (bHovered >= bHandles.length) bHovered = -1;
     rebuildDerivation();
     renderRecordCard();
     renderLedger();
     renderDerivation();
     renderResult();
     renderContourCard();
+    renderBranchCard();
     renderPoles();
     drawAcc();
     requestDraw();
@@ -990,15 +1100,23 @@ export function mountApp(root: Element): void {
       return;
     }
 
-    if (integral.refusal !== undefined || !mayReportValue(integral.verdict)) {
+    // Two independent reasons there may be no number, and the second is the one that used to be
+    // missed: the quadrature can be perfectly happy about a contour LEGALITY has already refused.
+    const illegal = ledger === null ? undefined : legalityRefusal(ledger);
+    if (integral.refusal !== undefined || !mayReportValue(integral.verdict) || illegal !== undefined) {
       // No number. Not a greyed-out number, not a number with a warning beside it — none.
       const row = el("p", "refusal");
       row.append(badge("⚠"), " Refused");
-      resultCard.append(row, el("p", "muted", integral.refusal ?? "the result was refused"));
-      const repair = integral.verdict.certificates
-        .flatMap((c) => c.provenance)
-        .find((s) => s.text.startsWith("suggested repair"));
-      if (repair) resultCard.append(el("p", "repair", repair.text));
+      resultCard.append(
+        row,
+        el("p", "muted", illegal?.claim ?? integral.refusal ?? "the result was refused"),
+      );
+      const repair =
+        illegal?.repair ??
+        integral.verdict.certificates
+          .flatMap((c) => c.provenance)
+          .find((s) => s.text.startsWith("suggested repair"))?.text;
+      if (repair !== undefined) resultCard.append(el("p", "repair", repair));
       return;
     }
 
@@ -1183,6 +1301,104 @@ export function mountApp(root: Element): void {
     contourCard.append(list);
   }
 
+  /**
+   * The declared cut system, and the one line that says whether it is legal.
+   *
+   * The verdict is shown HERE as well as in the ledger deliberately: it is the thing that changes as
+   * a cut is dragged, and a reader watching their own hand should not have to look across the rail
+   * to see the consequence. Both readings come from the same `checkAdmissibility` call the ledger
+   * makes, so they cannot say different things.
+   */
+  function renderBranchCard(): void {
+    branchCard.replaceChildren(el("h2", undefined, "Branch cuts"));
+    if (mode !== "sandbox") {
+      branchCard.append(
+        el("p", "muted small", "A record's cuts are the record's. Switch to the sandbox to draw one."),
+      );
+      return;
+    }
+
+    const tools = el("div", "presets");
+    const add = el("button", "preset", "+ branch point");
+    add.type = "button";
+    add.addEventListener("click", () => {
+      // Placed at the middle of the view rather than at the origin, so a second point does not land
+      // on the first and a point never appears off screen.
+      const c = branch.points.length === 0 ? ([0, 0] as Cx) : ([view.center[0] + 1, view.center[1]] as Cx);
+      branch = addBranchPoint(branch, c);
+      recompute();
+    });
+    tools.append(add);
+
+    // The dogbone gesture, offered exactly when it means something: two points, and a shape to
+    // toggle between. Whether the JOIN is admissible is the ledger's call, not this button's.
+    const bounded = branch.cuts.find((c) => c.from !== INFINITY_ID && c.to !== INFINITY_ID);
+    if (branch.points.length === 2 && bounded === undefined) {
+      const join = el("button", "preset", "join into one cut");
+      join.type = "button";
+      join.addEventListener("click", () => {
+        const next = joinToOneCut(branch, branch.points[0].id, branch.points[1].id);
+        if (next !== null) branch = next;
+        recompute();
+      });
+      tools.append(join);
+    } else if (bounded !== undefined) {
+      const split = el("button", "preset", "split into two rays");
+      split.type = "button";
+      split.addEventListener("click", () => {
+        const next = splitToRays(branch, bounded.id);
+        if (next !== null) branch = next;
+        recompute();
+      });
+      tools.append(split);
+    }
+    branchCard.append(tools);
+
+    if (branch.points.length === 0) {
+      branchCard.append(
+        el("p", "muted small", "No branch points declared, so the integrand is treated as single-valued."),
+      );
+      return;
+    }
+
+    const report = checkAdmissibility(branch);
+    const head = el("p", "verdict");
+    head.append(badge(report.certificate.level), ` ${report.detail}`);
+    branchCard.append(head);
+    if (!report.ok && report.repair !== undefined) {
+      branchCard.append(el("p", "muted small", report.repair));
+    }
+
+    const list = el("ul", "pieces");
+    for (const point of branch.points) {
+      const li = el("li");
+      const pick = el("select", "picker");
+      pick.setAttribute("aria-label", `order of branch point ${point.id}`);
+      for (const o of OFFERED_ORDERS) {
+        const opt = document.createElement("option");
+        opt.value = o.label;
+        opt.textContent = o.label;
+        opt.selected = orderLabel(o.order) === orderLabel(point.order);
+        pick.append(opt);
+      }
+      pick.addEventListener("change", () => {
+        const chosen = OFFERED_ORDERS.find((o) => o.label === pick.value);
+        if (chosen) branch = setOrder(branch, point.id, chosen.order);
+        recompute();
+      });
+      const drop = el("button", "preset", "remove");
+      drop.type = "button";
+      drop.setAttribute("aria-label", `remove branch point ${point.id}`);
+      drop.addEventListener("click", () => {
+        branch = removeBranchPoint(branch, point.id);
+        recompute();
+      });
+      li.append(el("span", "pieceName", point.label), pick, drop);
+      list.append(li);
+    }
+    branchCard.append(list);
+  }
+
   function renderPoles(): void {
     poleCard.replaceChildren(el("h2", undefined, "Poles"));
     if (!poles) {
@@ -1267,7 +1483,9 @@ export function mountApp(root: Element): void {
     const at = plotAt(px, py);
     const tol = grabTolerance();
     const over =
-      nearestHandle(handles, at, tol) !== null || (canMoveBody() && onContour(resolved, at, tol));
+      nearestBranchHandle(at, tol) !== null ||
+      nearestHandle(handles, at, tol) !== null ||
+      (canMoveBody() && onContour(resolved, at, tol));
     stageWrap.style.cursor = over ? "grab" : "default";
   }
 
@@ -1291,12 +1509,33 @@ export function mountApp(root: Element): void {
     }
   }
 
+  /** The branch handle nearest `at` within `tol`, or null. Same rule as `nearestHandle`. */
+  function nearestBranchHandle(at: Cx, tol: number): BranchHandle | null {
+    let best: BranchHandle | null = null;
+    let bestD = tol;
+    for (const h of bHandles) {
+      const d = Math.hypot(h.at[0] - at[0], h.at[1] - at[1]);
+      if (d <= bestD) {
+        bestD = d;
+        best = h;
+      }
+    }
+    return best;
+  }
+
   stageWrap.addEventListener("pointerdown", (ev) => {
     const [px, py] = stagePoint(ev);
     const at = plotAt(px, py);
     const tol = grabTolerance();
-    const handle = nearestHandle(handles, at, tol);
-    if (handle !== null) {
+    // A cut vertex is checked BEFORE the contour's own handles: it is the smaller target, it is
+    // usually the thing sitting on top, and a drag that hits the contour instead would move the one
+    // object the user was trying to hold still.
+    const bHandle = nearestBranchHandle(at, tol);
+    const handle = bHandle === null ? nearestHandle(handles, at, tol) : null;
+    if (bHandle !== null) {
+      grab = { kind: "branch", handle: bHandle };
+      gesture = "contour";
+    } else if (handle !== null) {
       grab = { kind: "radius", handle };
       gesture = "contour";
     } else if (canMoveBody() && onContour(resolved, at, tol)) {
@@ -1319,10 +1558,15 @@ export function mountApp(root: Element): void {
   stageWrap.addEventListener("pointermove", (ev) => {
     const [px, py] = stagePoint(ev);
     if (gesture === "none") {
-      const handle = nearestHandle(handles, plotAt(px, py), grabTolerance());
+      const at = plotAt(px, py);
+      const tol = grabTolerance();
+      const bHandle = nearestBranchHandle(at, tol);
+      const bIndex = bHandle === null ? -1 : bHandles.indexOf(bHandle);
+      const handle = bHandle === null ? nearestHandle(handles, at, tol) : null;
       const index = handle === null ? -1 : handles.indexOf(handle);
-      if (index !== hovered) {
+      if (index !== hovered || bIndex !== bHovered) {
         hovered = index;
+        bHovered = bIndex;
         requestDraw();
       }
       updateCursor(px, py);
@@ -1337,7 +1581,10 @@ export function mountApp(root: Element): void {
     }
 
     const at = plotAt(px, py);
-    if (grab?.kind === "body" && anchorContour !== null) {
+    if (grab?.kind === "branch") {
+      branch = applyBranchGrab(branch, grab.handle.grab, at);
+      recompute();
+    } else if (grab?.kind === "body" && anchorContour !== null) {
       contour = translateContour(anchorContour, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
       recompute();
     } else if (grab?.kind === "radius") {
@@ -1373,29 +1620,47 @@ export function mountApp(root: Element): void {
       ? "the view"
       : grab.kind === "body"
         ? "the whole contour"
-        : `${grab.handle.pieceName} (${grab.handle.param})`;
+        : grab.kind === "branch"
+          ? grab.handle.label
+          : `${grab.handle.pieceName} (${grab.handle.param})`;
 
-  /** Re-point a radius grab at the rebuilt handle, so repeated key presses keep working. */
+  /** Re-point a handle grab at the rebuilt handle, so repeated key presses keep working. */
   function refreshGrab(): void {
     const held = grab;
-    if (held === null || held.kind !== "radius") return;
-    const again = handles.find(
-      (h) => h.param === held.handle.param && h.pieceIndex === held.handle.pieceIndex,
-    );
-    grab = again === undefined ? null : { kind: "radius", handle: again };
+    if (held === null) return;
+    if (held.kind === "radius") {
+      const again = handles.find(
+        (h) => h.param === held.handle.param && h.pieceIndex === held.handle.pieceIndex,
+      );
+      grab = again === undefined ? null : { kind: "radius", handle: again };
+      return;
+    }
+    if (held.kind !== "branch") return;
+    const want = held.handle.grab;
+    const again = bHandles.find((h) => sameBranchGrab(h.grab, want));
+    grab = again === undefined ? null : { kind: "branch", handle: again };
   }
+
+  const sameBranchGrab = (a: BranchGrab, b: BranchGrab): boolean =>
+    a.kind === b.kind &&
+    a.id === b.id &&
+    (a.kind !== "cut" || (b.kind === "cut" && a.index === b.index));
 
   /** Enter / Space walks what the arrows act on: the view, the contour, then each radius handle. */
   function cycleGrab(): void {
     const stops: (typeof grab)[] = [null];
     if (canMoveBody()) stops.push({ kind: "body" });
     for (const handle of handles) stops.push({ kind: "radius", handle });
-    const sameAs = (a: typeof grab): boolean =>
-      a === null
-        ? grab === null
-        : grab !== null &&
-          a.kind === grab.kind &&
-          (a.kind !== "radius" || (grab.kind === "radius" && a.handle.param === grab.handle.param));
+    for (const handle of bHandles) stops.push({ kind: "branch", handle });
+    const sameAs = (a: typeof grab): boolean => {
+      if (a === null) return grab === null;
+      if (grab === null || a.kind !== grab.kind) return false;
+      if (a.kind === "radius") return grab.kind === "radius" && a.handle.param === grab.handle.param;
+      if (a.kind === "branch") {
+        return grab.kind === "branch" && sameBranchGrab(a.handle.grab, grab.handle.grab);
+      }
+      return true;
+    };
     const index = stops.findIndex(sameAs);
     grab = stops[(index + 1) % stops.length] ?? null;
     announce(
@@ -1418,6 +1683,12 @@ export function mountApp(root: Element): void {
       if (!canMoveBody()) return;
       contour = translateContour(contour, d);
       recompute();
+    } else if (held.kind === "branch") {
+      branch = applyBranchGrab(branch, held.handle.grab, [
+        held.handle.at[0] + d[0],
+        held.handle.at[1] + d[1],
+      ]);
+      recompute();
     } else {
       const next = radiusDragValue(contour, held.handle, [
         held.handle.at[0] + d[0],
@@ -1434,8 +1705,9 @@ export function mountApp(root: Element): void {
   const stageA11y = attachCanvasA11y(inkCanvas, {
     label:
       "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
-      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour or one of its radius " +
-      "handles, after which the arrow keys move what you grabbed and shift with an arrow pans.",
+      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one of its radius " +
+      "handles, or a branch point or branch cut, after which the arrow keys move what you grabbed " +
+      "and shift with an arrow pans.",
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,

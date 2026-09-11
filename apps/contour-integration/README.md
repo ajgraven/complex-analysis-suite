@@ -29,6 +29,21 @@ whether the whole thing closes.
   `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tiers D–G need
   branch cuts and the kernel families of M4/M5.
 
+**M4.1 (branch cuts) has landed**, engine and editor:
+
+- A **cut is a choice**, not a property of `f`. `src/kernel/branch/` holds the model (exact `Frac`
+  exponents, because admissibility asks whether `Σ αₖ` is an *integer*), research 06 §2.1's
+  admissibility check, a continuous-argument lift, and the piece-versus-cut classifier.
+- **LEGALITY steps 2–3**: the cut system must be admissible, and any piece meeting a cut must declare
+  which side it runs on. A crossing with no `side` tag refuses and names the repair; a *grazing*
+  contact refuses too, because it has no side for a tag to pin. Neither row is emitted at all for a
+  rational integrand.
+- The sandbox's **Branch cuts** card declares points and cuts (it does not detect them from the
+  typed integrand — that is M4.2, and a shallow detector would let an undeclared crossing through in
+  silence). Points and cuts are draggable by pointer and keyboard, and the dogbone gesture — one
+  bounded arc ⟷ two rays to ∞ — is the round trip research 06 calls the most valuable interaction in
+  the app. Whether a given join is *legal* is the rule's call, not the button's.
+
 The thirteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
@@ -78,6 +93,7 @@ Four layers, strictly downward-depending, with the boundary enforced by this pac
 
 ```
 src/kernel/   pure maths — no DOM, no upward imports. Where the golden corpus points.
+              `branch/` is the cut system: model, admissibility, argument lift, crossings.
 src/engine/   problem semantics: contour, substitution, residue theorem, ledger.
 src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve.
 src/ui/       Stage (WebGL2) and panels.

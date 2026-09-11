@@ -35,7 +35,18 @@ export interface InkOptions {
    * is two too many unless they differ in kind.
    */
   readonly handles?: readonly { readonly at: Cx; readonly emphasis: "none" | "hover" | "grabbed" }[];
+  /**
+   * Branch cuts, already reduced to finite polylines (`kernel/branch/model.cutPolyline`).
+   *
+   * Drawn UNDER the contour, hatched, and never in a piece colour: a cut is a barrier the contour is
+   * drawn against, not another piece of it. `refused` turns it the same amber the contour uses when
+   * LEGALITY refuses, so the app has one colour for "this does not close" rather than two.
+   */
+  readonly cuts?: readonly { readonly points: readonly Cx[]; readonly refused: boolean }[];
 }
+
+const CUT_INK = "#c77dff";
+const REFUSED_INK = "#f0b45e";
 
 /** Screen-space sampling of one piece, fine enough that an arc reads as a curve. */
 function screenPath(g: Resolved, view: View, vp: Viewport): [number, number][] {
@@ -107,10 +118,45 @@ export function drawContour(
   opts: InkOptions,
 ): void {
   ctx.clearRect(0, 0, vp.width, vp.height);
-  if (pieces.length === 0) return;
-
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+
+  // Cuts first, so the contour is legible where it crosses one — which is precisely where the
+  // reader is looking.
+  for (const cut of opts.cuts ?? []) {
+    if (cut.points.length < 2) continue;
+    const pts = cut.points.map((z): [number, number] => {
+      const [x, y] = plotToScreen(z[0], z[1], view, vp);
+      return [x, y];
+    });
+    tracePath(ctx, pts);
+    ctx.strokeStyle = "rgba(8, 10, 14, 0.85)";
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = cut.refused ? REFUSED_INK : CUT_INK;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // Hatching, the conventional mark for a cut in a textbook figure, and the one thing on this
+    // canvas that cannot be confused with a contour piece: dashes are already spoken for
+    // ("not certified"), and arrowheads mean orientation.
+    ctx.lineWidth = 1.6;
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const [x0, y0] = pts[k];
+      const [x1, y1] = pts[k + 1];
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      if (len < 1) continue;
+      const ux = (x1 - x0) / len;
+      const uy = (y1 - y0) / len;
+      for (let d = 7; d < len; d += 14) {
+        const cx = x0 + ux * d;
+        const cy = y0 + uy * d;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx - uy * 5 - ux * 3, cy + ux * 5 - uy * 3);
+        ctx.stroke();
+      }
+    }
+  }
 
   const paths = pieces.map((g) => screenPath(g, view, vp));
 

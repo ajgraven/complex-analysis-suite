@@ -4,7 +4,7 @@ import type { Cx } from "../src/kernel/geom.js";
 import { findPoles } from "../src/kernel/poles.js";
 import { integrateContour } from "../src/engine/contour/integrate.js";
 import { applyResidueTheorem } from "../src/engine/residueTheorem.js";
-import { evaluateLedger, ledgerHeadline } from "../src/engine/ledger.js";
+import { evaluateLedger, ledgerHeadline, legalityRefusal } from "../src/engine/ledger.js";
 import { resolveAll, type Contour } from "../src/engine/contour/model.js";
 import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
 import { INFINITY, type BranchChoice, type BranchPoint } from "../src/kernel/branch/model.js";
@@ -339,5 +339,73 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     const away = circleTemplate([3, 0], 1);
     expect(run("1/(z-3)", away, keyhole([-1, 0])).failedAt).toBeNull();
     expect(run("1/(z-3)", away, keyhole([1, 0])).failedAt).toBe("LEGALITY");
+  });
+});
+
+describe("legalityRefusal — the one gate on printing a value at all", () => {
+  const origin: BranchPoint = {
+    id: "0",
+    at: [0, 0],
+    order: { kind: "power", alpha: Frac.of(1n, 3n) },
+    label: "z = 0",
+  };
+  const rayTo = (dir: [number, number]): BranchChoice => ({
+    convention: "zeroToTwoPi",
+    points: [origin],
+    cuts: [{ id: "Γ", from: "0", to: INFINITY, via: [[100 * dir[0], 100 * dir[1]]] }],
+    basePoint: [0, 1],
+    sheet: 0,
+  });
+
+  it("is nothing when the argument is legal, whatever else it fails", () => {
+    // The gate is about LEGALITY alone, not about whether the argument CLOSES. `sin z/(1+z²)` on a
+    // large semicircle does not close — no lemma kills its arc — and the contour integral over the
+    // contour actually drawn is still a perfectly reportable number. Widening this to "does not
+    // close" would blank a value the app is entitled to show.
+    const open = run("sin(z)/(1+z^2)", semicircleTemplate(50));
+    expect(open.closes).toBe(false);
+    expect(open.failedAt).not.toBe("LEGALITY");
+    expect(legalityRefusal(open)).toBeUndefined();
+    expect(legalityRefusal(run("1/z", circleTemplate([0, 0], 1.5)))).toBeUndefined();
+  });
+
+  it("names the failing row when a piece crosses a cut it has not declared a side for", () => {
+    // The case the shell used to miss: the QUADRATURE is perfectly happy here — ∮ dz/z over this
+    // circle is 2πi and every residue is exact — and LEGALITY still refuses. Reporting the number
+    // anyway is exactly the "singular configuration produces a number that then has to be
+    // suppressed" that running LEGALITY first exists to prevent.
+    const r = run("1/z", circleTemplate([0, 0], 1.5), rayTo([1, 0]));
+    const row = legalityRefusal(r);
+    expect(row?.claim).toMatch(/crosses the cut/);
+    expect(row?.repair).toMatch(/tag this segment/);
+    expect(r.value).toBeUndefined();
+  });
+
+  it("names it for an inadmissible cut system too", () => {
+    const bounded: BranchChoice = {
+      ...rayTo([1, 0]),
+      points: [
+        origin,
+        { id: "1", at: [5, 0], order: { kind: "power", alpha: Frac.of(1n, 3n) }, label: "z = 5" },
+      ],
+      cuts: [{ id: "Γ", from: "0", to: "1", via: [] }],
+    };
+    expect(legalityRefusal(run("1/z", circleTemplate([0, 0], 1.5), bounded))?.claim).toMatch(
+      /not admissible/,
+    );
+  });
+
+  it("reports the FIRST failing LEGALITY row, which is the one that stopped the pass", () => {
+    const r = run("1/z", circleTemplate([0, 0], 1.5), rayTo([1, 0]));
+    const failures = r.rows.filter((x) => x.constraint === "LEGALITY" && x.status === "failed");
+    expect(failures).toHaveLength(1);
+    expect(legalityRefusal(r)).toBe(failures[0]);
+  });
+
+  it("is nothing again once the cut is moved out of the contour's way", () => {
+    // The lesson, as a test: the cut is a choice, and the repair is to make a different one.
+    const away = circleTemplate([3, 0], 0.5);
+    expect(legalityRefusal(run("1/(z-3)", away, rayTo([-1, 0])))).toBeUndefined();
+    expect(legalityRefusal(run("1/(z-3)", away, rayTo([1, 0])))?.claim).toMatch(/crosses the cut/);
   });
 });

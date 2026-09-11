@@ -149,8 +149,8 @@ before D2.
 
 | slice | delivers | size |
 |---|---|---|
-| **M4.1** | `BranchChoice`, the admissibility validator, CPU continuous-argument lift, `side` tags, LEGALITY steps 2–3 | M |
-| **M4.2** | keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser → **D1, D3** | **L** |
+| **M4.1** ✅ | `BranchChoice`, the admissibility validator, CPU continuous-argument lift, `side` tags, LEGALITY steps 2–3, and the sandbox's cut editor | M |
+| **M4.2** | **the four `Family["branch"]` schema changes of §1.3** · keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser → **D1, D3** | **L** |
 | **M4.3** | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` → **D4** | M–L |
 | **M4.4** | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** | `ln(ℚ₊)` exponents and radical factors → **D2, D7's algebraic half** | S–M |
@@ -159,8 +159,10 @@ before D2.
 
 ### Gates
 
-- **M4.1** — drag a cut and watch the admissibility verdict change; a piece crossing a cut without a
+- **M4.1** ✅ — drag a cut and watch the admissibility verdict change; a piece crossing a cut without a
   `side` tag refuses and names the repair ("tag this segment `above` or `below`, or move the cut").
+  Both halves verified in a browser: the "Branch cuts" card's verdict changes live as the dogbone is
+  joined and split, and the ledger's own LEGALITY rows change with it.
 - **M4.2** — **north-star #4, verbatim.** Plus D1's `arg ∈ (−π,π]` trap reported as the *earliest* of
   its three refusals (pole on the cut, untagged crossing, degenerate solve), which is what its record
   asks for.
@@ -200,3 +202,53 @@ for M4.5, where the radical machinery lands anyway.
 principal-part subtraction for near-pole quadrature (PLAN §4.4, M2 work that M3.5c's findings
 re-raised); the `rigorOfBound` / `rigorOfLimit` split of DESIGN §4 Pass 3; and the `@cas/interchange`
 hand-off for a branch system, which stays gated on a receiving tool (ADR-0007).
+
+---
+
+## 4. What M4.1 actually landed, and what it taught
+
+Four kernel modules (`src/kernel/branch/`), a pure editor (`src/engine/branchEdit.ts`), the two
+LEGALITY rows, and a sandbox card. Four things are worth recording because they changed a decision
+rather than merely executing one.
+
+### The sandbox DECLARES branch points; it does not detect them
+
+Reading `z^(1/3)` out of a typed expression is M4.2's work. Doing it *shallowly* in M4.1 would have
+been worse than not doing it at all: an incomplete detector reports "no branch points" for an
+integrand that has them, and LEGALITY then passes a contour that crosses an undeclared cut **in
+silence** — a guardrail violation dressed as a feature. A declared cut system claims nothing about
+`f`; it says "these are the cuts I have drawn", and the ledger judges exactly that. The editor
+survives M4.2 unchanged, because research 06's thesis is that *where the cuts run is the user's
+choice* — so placing and dragging one is the teaching surface whatever supplies the points.
+
+### The four `Family["branch"]` schema changes move to M4.2
+
+[ADR-0041](../DECISIONS.md) Action Item 5 tagged them M4.1, qualified "before D1 loads". D1 loads in
+M4.2, and §1.3's own item 4 is the reason to wait: `contour.residueAtInfinity` and `prerequisites`
+are already in the schema **with no consumer**, and are the wrong shape for it. Adding three more
+fields with no reader would repeat that, and a schema validated against a record is a schema that is
+right. They are M4.2's first step, not M4.1's last.
+
+### Two engine bugs the tests found, both about aliasing
+
+- **The continuous-argument lift.** Checking `|Δθ| ≤ π/4` on a candidate interval cannot detect the
+  failure the rule exists to prevent: a path turning by exactly 2π has `v₁ = v₀`, the principal value
+  is 0, and a whole revolution is dropped in silence — a 16-turn circle against a 16-sample first
+  pass reported no turning at all. Testing the two PARTS of the interval fixes that case and moves
+  the resonance to 32; bisecting again moves it to 64. Every dyadic subdivision has a frequency that
+  defeats it. The split is therefore at `φ = (√5 − 1)/2`, which removes the whole family: `k·φ·Δt` is
+  never an integer. The certificate stays `≤` regardless — a black-box path can defeat any fixed
+  sampling, and that is what the label is for.
+- **The crossing classifier.** A closed arc's *seam* is not an endpoint. Reading it as one refused
+  the app's own opening state — a circle about the origin with `θ₀ = 0`, and a cut running out along
+  the positive axis, which puts the crossing exactly on the seam. An OPEN arc's end is real and stays
+  degenerate.
+
+### `legalityRefusal` — a latent hole the cut rows made reachable
+
+The result card gated its `∮` on the QUADRATURE's refusal, never on the ledger. Every LEGALITY
+failure until now was one the integral had already refused, so the two agreed by accident; a contour
+crossing a cut without declaring its side is the first that does not, and the app printed `∮ = 2πi`
+under a `⚠` LEGALITY row. `engine/ledger.ts` now exports the gate — *nothing may report a value while
+a LEGALITY row refuses* — and it reads the failing ROW rather than `failedAt`, so a row that one day
+fails softly still withholds the value.

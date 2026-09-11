@@ -566,6 +566,24 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
 }
 
 /** Exported for the UI's headline sentence — the thing a number alone cannot say. */
+/**
+ * The LEGALITY row that refuses, if there is one. **Nothing may report a value while this exists.**
+ *
+ * The ledger already withholds its own `value`, but that was only half the rule: the result card
+ * reached its `∮` through `residueTheorem` instead, so a LEGALITY failure the QUADRATURE knew nothing
+ * about — a contour that does not close, or one crossing a branch cut without declaring its side —
+ * printed a number anyway. Every LEGALITY failure used to be one the integral had already refused, so
+ * the two agreed by accident; M4's cut rows are the first that do not. This is the gate, in one
+ * place, so agreement is structural rather than a coincidence that held for a while.
+ */
+export function legalityRefusal(result: LedgerResult): LedgerRow | undefined {
+  // The ROW, not `failedAt`. Today the two agree — every failed LEGALITY row returns immediately, so
+  // it is always the first — but reading `failedAt` would make the gate depend on that, and the
+  // dependence points the wrong way: a LEGALITY row that one day fails softly must still withhold the
+  // value, and a gate keyed on `failedAt` would quietly stop doing so.
+  return result.rows.find((r) => r.constraint === "LEGALITY" && r.status === "failed");
+}
+
 export function ledgerHeadline(result: LedgerResult): string {
   if (result.closes) {
     // In sandbox mode there is no real integral being solved for, so "the argument closes" would
