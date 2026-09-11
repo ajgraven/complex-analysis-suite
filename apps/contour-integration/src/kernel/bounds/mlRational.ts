@@ -1,0 +1,272 @@
+// The certified arc bound: `|∫_arc f dz| ≤ θ·R·M(R)`, computed in exact ℚ.
+//
+// This is the app's thesis in one function. PLAN.md §3.2 argues it at length; the short version is
+// that for a rational integrand the bound needs **no transcendental functions at all**:
+//
+//     |P(z)| ≤ Σ|aₖ|Rᵏ                      (triangle inequality)
+//     |Q(z)| ≥ |b_q|R^q − Σ_{k<q}|bₖ|Rᵏ     (reverse triangle inequality)
+//
+// Everything there is `+ × ÷` on non-negative rationals, except the coefficient moduli `√(re²+im²)`
+// — and those have exact rational bounds from `ratBound`. So the whole thing runs in BigInt ℚ, with
+// no floating point, no directed-rounding argument, and no appeal to the accuracy of `Math`. Which
+// matters, because ECMA-262 gives `Math.exp` and friends no ulp bound whatsoever, so an interval
+// library built on them is a heuristic wearing a proof's clothes (research 04 §5).
+//
+// It also **derives the degree condition rather than asserting it**. `M(R) ~ (|a_p|/|b_q|)R^{p−q}`,
+// so the bound behaves like `R^{p−q+1}`, which vanishes exactly when `deg Q ≥ deg P + 2`. The
+// textbook hypothesis falls out of the arithmetic instead of being checked alongside it.
+import { Frac, QiPoly, piUpper } from "@cas/exact";
+import { bound, refuse, type Certificate } from "@cas/rigor";
+import { fracCmp, sqrtDown, sqrtUp } from "./ratBound.js";
+
+/** What happens to the bound as the limit parameter runs to its limit. */
+export type ArcAsymptotics = "vanishes" | "bounded" | "diverges";
+
+export interface ArcBound {
+  /** The radius the bound was evaluated at. */
+  readonly R: Frac;
+  /** `|∫_arc f dz| ≤ value`, exactly — present unless the bound could not be established at all. */
+  readonly value?: Frac;
+  readonly asymptotics: ArcAsymptotics;
+  /** The bound behaves like `R^exponent`. Negative ⇒ it vanishes. */
+  readonly exponent: number;
+  /** `deg Q − deg P`, the quantity the classical hypothesis is stated in. */
+  readonly degreeGap: number;
+  readonly certificate: Certificate;
+}
+
+/** `Σ |aₖ| Rᵏ`, rounded UP — an upper bound on `|P(z)|` for `|z| = R`. */
+export function coefficientUpperBound(p: QiPoly, R: Frac): Frac {
+  let total = Frac.ZERO;
+  let power = Frac.ONE;
+  for (let k = 0; k <= p.degree(); k++) {
+    const c = p.coeff(k);
+    if (!c.isZero()) {
+      const modulusSquared = c.re.mul(c.re).add(c.im.mul(c.im));
+      total = total.add(sqrtUp(modulusSquared).mul(power));
+    }
+    power = power.mul(R);
+  }
+  return total;
+}
+
+/**
+ * `|b_q|R^q − Σ_{k<q}|bₖ|Rᵏ`, rounded DOWN — a lower bound on `|Q(z)|` for `|z| = R`.
+ *
+ * A *positive* result does double duty: it certifies the bound, and it certifies that every root of
+ * `Q` lies strictly inside `|z| = R`, since `Q` cannot vanish where `|Q| > 0`. The pole-enclosure
+ * hypothesis and the arc bound come from the same inequality.
+ */
+export function denominatorLowerBound(q: QiPoly, R: Frac): Frac {
+  const top = q.degree();
+  if (top < 0) return Frac.ZERO;
+  const lead = q.coeff(top);
+  const leadModulusSquared = lead.re.mul(lead.re).add(lead.im.mul(lead.im));
+
+  // R^top, then the leading term |b_q|·R^q. (An earlier version multiplied by R once more here,
+  // inflating the denominator bound by a factor of R and so making M(R) too SMALL — a "bound" below
+  // the true maximum, which is the dangerous direction. The sampled-max test caught it.)
+  let power = Frac.ONE;
+  for (let k = 0; k < top; k++) power = power.mul(R);
+  let total = sqrtDown(leadModulusSquared).mul(power);
+
+  power = Frac.ONE;
+  for (let k = 0; k < top; k++) {
+    const c = q.coeff(k);
+    if (!c.isZero()) {
+      const modulusSquared = c.re.mul(c.re).add(c.im.mul(c.im));
+      total = total.sub(sqrtUp(modulusSquared).mul(power));
+    }
+    power = power.mul(R);
+  }
+  return total;
+}
+
+const positive = (f: Frac): boolean => f.n > 0n;
+
+/**
+ * The ML bound for `P/Q` on a circular arc of radius `R` subtending `piMultiple · π`.
+ *
+ * `piMultiple` is a rational because every arc in the gallery subtends a rational multiple of π —
+ * a semicircle is `1`, a full circle `2`, a quarter `1/2`. The π itself comes from
+ * `@cas/exact`'s certified bracket, so the arc length is bounded above without a floating constant
+ * anywhere in the chain.
+ */
+export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac): ArcBound {
+  const degP = num.degree();
+  const degQ = den.degree();
+  const degreeGap = degQ - degP;
+  const exponent = degP - degQ + 1;
+  const asymptotics: ArcAsymptotics =
+    exponent < 0 ? "vanishes" : exponent === 0 ? "bounded" : "diverges";
+
+  if (!positive(R)) {
+    return {
+      R,
+      asymptotics: "diverges",
+      exponent,
+      degreeGap,
+      certificate: refuse("the arc bound", "the radius must be positive"),
+    };
+  }
+
+  const denLow = denominatorLowerBound(den, R);
+  if (!positive(denLow)) {
+    // Not a failure of the method: below the Cauchy root bound a pole may lie ON or outside the arc,
+    // and then there is genuinely no bound of this form. Enlarging R is the repair.
+    return {
+      R,
+      asymptotics,
+      exponent,
+      degreeGap,
+      certificate: refuse(
+        `the arc bound at R = ${R.toNumber()}`,
+        "the reverse triangle inequality gives no positive lower bound on |Q| there, so a pole may lie on or outside the arc — take a larger R",
+      ),
+    };
+  }
+
+  const numHigh = coefficientUpperBound(num, R);
+  const maxModulus = numHigh.div(denLow); // ≥ max |f| on |z| = R
+  const value = piMultiple.mul(piUpper()).mul(R).mul(maxModulus);
+
+  const claim = `|∫ over the arc| ≤ ${value.toNumber().toExponential(3)} at R = ${R.toNumber()}`;
+  const because =
+    asymptotics === "vanishes"
+      ? `and → 0 as R → ∞, because deg Q − deg P = ${degreeGap} ≥ 2 makes the bound O(R^${exponent})`
+      : asymptotics === "bounded"
+        ? `but it does NOT vanish: deg Q − deg P = ${degreeGap}, so the bound is O(1) and this lemma establishes nothing in the limit`
+        : `and it DIVERGES as R → ∞: deg Q − deg P = ${degreeGap}, so the bound is O(R^${exponent})`;
+
+  return {
+    R,
+    value,
+    asymptotics,
+    exponent,
+    degreeGap,
+    certificate:
+      asymptotics === "vanishes"
+        ? bound("≤", `${claim}, ${because}`, "exact ℚ coefficient bound; no floating point anywhere", {
+            provenance: [
+              { ok: true, text: "|P| ≤ Σ|aₖ|Rᵏ by the triangle inequality, with each |aₖ| bounded above in ℚ" },
+              { ok: true, text: `|Q| ≥ ${denLow.toNumber().toExponential(3)} > 0, which also certifies every pole lies strictly inside |z| = R` },
+              { ok: true, text: "π bounded above by a certified rational (Machin + alternating series)" },
+            ],
+          })
+        : refuse(`${claim}, ${because}`, "exact ℚ coefficient bound — the bound holds, the lemma does not discharge", {
+            provenance: [
+              { ok: true, text: `the bound itself is valid at R = ${R.toNumber()}` },
+              { ok: false, text: "but it does not tend to zero, so the lemma does not discharge" },
+            ],
+          }),
+  };
+}
+
+/**
+ * Jordan's lemma for `g(z)·e^{iaz}` on a semicircular arc: `|∫| ≤ (π/a)·max|g|`, **independent of R**.
+ *
+ * The whole content is `∫₀^π e^{−κ sinθ} dθ ≤ π/κ`, from `sin θ ≥ 2θ/π` on `[0, π/2]`. It beats the
+ * plain ML bound by the entire factor `aR`, which is what weakens the hypothesis from
+ * `g = O(|z|^{-1-ε})` to merely `g → 0` — and that gap is exactly what makes `∫ x sin x/(1+x²) dx`
+ * reachable at all.
+ *
+ * **The sign of `a` is a hard branch, not a convention.** `|e^{iaz}| = e^{−a·Im z}` is bounded only
+ * where `a·Im z ≥ 0`. Close the wrong way and there is no bound: the integrand grows like `e^{aR}`.
+ * Reporting that plainly is the point — it is the app's demonstration that a wrong contour fails for
+ * a reason, rather than merely failing.
+ */
+export function jordanArcBound(
+  gNum: QiPoly,
+  gDen: QiPoly,
+  a: Frac,
+  half: "upper" | "lower",
+  R: Frac,
+): ArcBound {
+  const degreeGap = gDen.degree() - gNum.degree();
+  const correctHalf = (a.n > 0n && half === "upper") || (a.n < 0n && half === "lower");
+
+  if (a.isZero()) {
+    return {
+      R,
+      asymptotics: "bounded",
+      exponent: 0,
+      degreeGap,
+      certificate: refuse(
+        "Jordan's lemma",
+        "it needs a non-zero frequency; with a = 0 the exponential is 1 and the plain ML bound applies instead",
+      ),
+    };
+  }
+
+  if (!correctHalf) {
+    return {
+      R,
+      asymptotics: "diverges",
+      exponent: Number.POSITIVE_INFINITY,
+      degreeGap,
+      certificate: refuse(
+        `the ${half} semicircle DIVERGES for a = ${a.toNumber()}`,
+        `|e^{iaz}| = e^{−a·Im z} is bounded only where a·Im z ≥ 0, so on the ${half} half-plane it grows like e^{${Math.abs(a.toNumber())}R} — the arc cannot be closed this way, and the failing constraint is KILL`,
+        {
+          provenance: [
+            { ok: false, text: `a = ${a.toNumber()} requires the ${a.n > 0n ? "upper" : "lower"} half-plane` },
+            { ok: true, text: "suggested repair: close the contour through the other half-plane" },
+          ],
+        },
+      ),
+    };
+  }
+
+  const denLow = denominatorLowerBound(gDen, R);
+  if (!positive(denLow)) {
+    return {
+      R,
+      asymptotics: degreeGap >= 1 ? "vanishes" : "bounded",
+      exponent: -degreeGap,
+      degreeGap,
+      certificate: refuse(
+        `Jordan's bound at R = ${R.toNumber()}`,
+        "no positive lower bound on |Q| there — take a larger R",
+      ),
+    };
+  }
+
+  const maxG = coefficientUpperBound(gNum, R).div(denLow);
+  const absA = a.n < 0n ? a.neg() : a;
+  const value = piUpper().div(absA).mul(maxG);
+  const asymptotics: ArcAsymptotics = degreeGap >= 1 ? "vanishes" : "bounded";
+
+  return {
+    R,
+    value,
+    asymptotics,
+    exponent: -degreeGap,
+    degreeGap,
+    certificate:
+      asymptotics === "vanishes"
+        ? bound(
+            "≤",
+            `|∫ over the ${half} semicircle| ≤ (π/|a|)·max|g| ≤ ${value.toNumber().toExponential(3)} at R = ${R.toNumber()}, and → 0 as R → ∞ since max|g| = O(R^${-degreeGap})`,
+            "Jordan's lemma, with max|g| from the exact ℚ coefficient bound",
+            {
+              provenance: [
+                { ok: true, text: "∫₀^π e^{−κ sinθ}dθ ≤ π/κ, from sin θ ≥ 2θ/π on [0, π/2]" },
+                { ok: true, text: `the bound is independent of R, beating plain ML by the factor |a|R` },
+                { ok: true, text: `deg Q − deg P = ${degreeGap} ≥ 1, so max|g| → 0` },
+              ],
+            },
+          )
+        : refuse(
+            `Jordan's bound does NOT vanish: max|g| stays O(1) since deg Q − deg P = ${degreeGap}`,
+            "Jordan's lemma — the bound holds, the lemma does not discharge",
+          ),
+  };
+}
+
+/** Exported for tests and for the ledger's display of the intermediate quantity. */
+export const maxModulusBound = (num: QiPoly, den: QiPoly, R: Frac): Frac | null => {
+  const low = denominatorLowerBound(den, R);
+  return positive(low) ? coefficientUpperBound(num, R).div(low) : null;
+};
+
+export { fracCmp };

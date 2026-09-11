@@ -396,3 +396,66 @@ ul.pieces li:hover {
   font-size: 11.5px;
   color: var(--c-text);
 }
+
+/* ---- the Closing Ledger ---- */
+.headline {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.headline.closes {
+  color: #7fd1a8;
+}
+
+.headline.open {
+  color: var(--c-warn);
+}
+
+ul.ledger {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+}
+
+.ledgerRow {
+  display: grid;
+  grid-template-columns: 4.6rem 1rem 1fr;
+  gap: 0.35rem;
+  align-items: start;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12px;
+}
+
+.constraint {
+  font: 10.5px/1.6 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  color: var(--c-muted);
+}
+
+.glyph {
+  text-align: center;
+  font-weight: 700;
+}
+
+.ledgerRow.satisfied .glyph {
+  color: #7fd1a8;
+}
+
+.ledgerRow.failed .glyph {
+  color: var(--c-warn);
+}
+
+.ledgerRow.unknown .glyph {
+  color: var(--c-muted);
+}
+
+.ledgerClaim {
+  color: var(--c-text);
+}
+
+.ledgerRow .repair {
+  grid-column: 3;
+  margin: 0.25rem 0 0;
+}

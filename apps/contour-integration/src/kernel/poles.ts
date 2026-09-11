@@ -16,6 +16,7 @@ import { tupleAlgebra, makeDurandKerner, type ComplexTuple } from "@cas/core";
 import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
 import { toExactRational } from "./exactRational.js";
+import { asExponentialTimesRational } from "./exponentialFactor.js";
 import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
 import { formatSqrtExt } from "./formatExact.js";
 
@@ -300,6 +301,44 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
       radicand: report.radicand,
       certificates,
     };
+  }
+
+  // --- g(z)·e^{iaz}: exact LOCATIONS, inexact residues ----------------------------------------
+  // The exponential is entire, so the poles are exactly those of the rational part and their orders
+  // are exactly known. The RESIDUES are not: they carry a factor e^{iaα}, which is outside the
+  // output basis (ℚ(i) and one quadratic extension of it). Reporting the locations exactly while
+  // saying plainly that the residues are not is strictly better than the previous behaviour, which
+  // found no poles at all for these integrands.
+  const exponential = asExponentialTimesRational(ast);
+  if (exponential) {
+
+    const structure = exactPolesOf(exponential.num, exponential.den, (factor) => {
+      const coeffs = trim(toFloatPoly(factor));
+      return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
+    });
+    if (structure.poles.length > 0) {
+      return {
+        poles: structure.poles.map((p) => ({
+          at: p.at.toTuple(),
+          order: p.order,
+          orderCertain: true,
+          possiblyRemovable: false,
+          isExact: false,
+        })),
+        rational: true,
+        exactlyComplete: false,
+        certificates: [
+          exactCert(
+            `${structure.poles.length} pole${structure.poles.length === 1 ? "" : "s"} at exactly known locations, of exactly known order`,
+            "f = g(z)·e^{iaz} with g rational; the exponential is entire, so the poles are g's",
+          ),
+          unknown(
+            "the residues",
+            `each carries a factor e^{iaα}, which is outside the output basis ℚ(i)(√d) — the numeric value stands`,
+          ),
+        ],
+      };
+    }
   }
 
   // --- the numeric path ----------------------------------------------------------------------
