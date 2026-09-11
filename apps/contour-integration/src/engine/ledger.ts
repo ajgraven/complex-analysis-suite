@@ -15,8 +15,11 @@ import { assembleVerdict, exact, refuse, unknown, type Certificate, type Verdict
 import { Frac } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { arcLength, isClosed } from "../kernel/geom.js";
+import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
 import { clearance } from "../kernel/winding.js";
+import { checkAdmissibility } from "../kernel/branch/admissibility.js";
+import { classifyAgainstCut } from "../kernel/branch/crossing.js";
+import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
@@ -151,6 +154,8 @@ export interface LedgerInput {
   readonly poles: PoleReport;
   readonly integral: ContourIntegral;
   readonly theorem: ResidueTheoremResult;
+  /** The cut system. Omitted for a rational integrand, which is {@link NO_BRANCH}. */
+  readonly branch?: BranchChoice;
 }
 
 /**
@@ -163,6 +168,7 @@ export interface LedgerInput {
  */
 export function evaluateLedger(input: LedgerInput): LedgerResult {
   const { ast, pieces, spec, poles, integral, theorem } = input;
+  const branch = input.branch ?? NO_BRANCH;
   const rows: LedgerRow[] = [];
   const certificates: Certificate[] = [];
   const pieceLimits: { pieceId: string; contribution: ExpSum }[] = [];
@@ -231,6 +237,111 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         exact("clearance", "distance from each pole to each piece"),
       ),
     );
+  }
+
+  // ---- LEGALITY, steps 2 and 3: the cut system ----------------------------------------------
+  //
+  // Validity BEFORE crossings, which inverts DESIGN §4 Pass 1's numbering for a reason: a malformed
+  // or inadmissible cut system has no polyline to test a piece against, so asking "does this piece
+  // cross that cut" of it would be answering a question about an object that does not exist. The two
+  // rows are omitted entirely for a rational integrand — a permanently green "no cuts to check" row
+  // teaches nothing and hides the rows that do.
+  if (branch.points.length > 0 || branch.cuts.length > 0) {
+    const admissible = checkAdmissibility(branch);
+    push(
+      rowFrom(
+        "LEGALITY",
+        admissible.ok ? "satisfied" : "failed",
+        admissible.ok
+          ? `the cut system is admissible — ${admissible.detail}`
+          : `the cut system is not admissible: ${admissible.detail}`,
+        admissible.certificate,
+        undefined,
+        admissible.repair,
+      ),
+    );
+    if (!admissible.ok) {
+      return {
+        rows,
+        closes: false,
+        verdict: assembleVerdict(certificates),
+        failedAt: "LEGALITY",
+        hasTarget: spec.some((p) => p.role === "target"),
+        pieceLimits,
+      };
+    }
+
+    // One scale for both the ray clipping and the "too close to say" floor, taken from the picture
+    // the user is actually looking at: the contour's own extent, plus every branch point, so a cut
+    // running out past the contour is still clipped beyond everything the test cares about.
+    const extent = Math.max(
+      1,
+      ...pieces.flatMap((g) => [startPoint(g), endPoint(g)]).map((q) => Math.hypot(q[0], q[1])),
+      ...branch.points.map((b) => Math.hypot(b.at[0], b.at[1])),
+    );
+
+    const offending: string[] = [];
+    const undecidable: string[] = [];
+    let crossings = 0;
+    for (const cut of branch.cuts) {
+      const poly = cutPolyline(branch, cut, 4 * extent);
+      if (poly === null) continue; // admissibility already proved every endpoint exists
+      for (let k = 0; k < pieces.length; k++) {
+        const c = classifyAgainstCut(cut.id, pieces[k], poly, extent);
+        if (c.kind === "clear") continue;
+        const piece = spec[k];
+        const label = piece?.name ?? `piece ${k + 1}`;
+        if (c.kind === "touches") {
+          undecidable.push(`${label} grazes the cut '${cut.id}'`);
+        } else if (piece?.side === undefined) {
+          offending.push(`${label} crosses the cut '${cut.id}'`);
+        } else {
+          crossings += c.count;
+        }
+      }
+    }
+
+    const cutOk = offending.length === 0 && undecidable.length === 0;
+    push(
+      rowFrom(
+        "LEGALITY",
+        cutOk ? "satisfied" : "failed",
+        cutOk
+          ? crossings === 0
+            ? "no piece of the contour meets a branch cut"
+            : `every piece that meets a branch cut declares the side it runs on (${crossings} crossing${crossings === 1 ? "" : "s"})`
+          : undecidable.length > 0
+            ? `${undecidable[0]}, so it has no side to declare`
+            : `${offending[0]} without declaring which side it runs on`,
+        cutOk
+          ? exact(
+              "each piece is on a definite side of each cut",
+              "exact-sign segment predicates, and the circle–line quadratic for arcs",
+            )
+          : refuse(
+              "LEGALITY",
+              undecidable.length > 0
+                ? `${undecidable.join("; ")} — a grazing contact has no side, so no tag would pin anything`
+                : `${offending.join("; ")}`,
+            ),
+        undefined,
+        cutOk
+          ? undefined
+          : undecidable.length > 0
+            ? "move the cut clear of the contour, or move the contour"
+            : "tag this segment `above` or `below`, or move the cut",
+      ),
+    );
+    if (!cutOk) {
+      return {
+        rows,
+        closes: false,
+        verdict: assembleVerdict(certificates),
+        failedAt: "LEGALITY",
+        hasTarget: spec.some((p) => p.role === "target"),
+        pieceLimits,
+      };
+    }
   }
 
   // ---- CATCH --------------------------------------------------------------------------------

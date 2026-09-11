@@ -18,6 +18,7 @@
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
+import type { BranchChoice } from "../kernel/branch/model.js";
 import {
   integrateContour,
   type ContourIntegral,
@@ -36,6 +37,14 @@ export interface AnalysisInput {
   readonly poles: PoleReport;
   readonly contour: Contour;
   /**
+   * The cut system, when the integrand is multivalued.
+   *
+   * It reaches the ledger and nothing else: LEGALITY decides whether the cuts are admissible and
+   * whether every piece that meets one declares its side, and until that passes there is no value to
+   * compute. Omitted — the rational case — the two cut rows are not emitted at all.
+   */
+  readonly branch?: BranchChoice;
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -53,7 +62,7 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget }: AnalysisInput): Analysis {
+export function analyse({ ast, f, poles, contour, budget, branch }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
   const integral = integrateContour(f, resolved, singular, budget);
@@ -67,6 +76,7 @@ export function analyse({ ast, f, poles, contour, budget }: AnalysisInput): Anal
     poles,
     integral,
     theorem,
+    branch,
   });
   return { resolved, integral, theorem, ledger };
 }
