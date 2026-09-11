@@ -48,6 +48,15 @@ function tryAdd(x: SqrtExt, y: SqrtExt): SqrtExt | null {
   }
 }
 
+/** Multiply two elements, or report that they do not share one quadratic extension. */
+function tryMul(x: SqrtExt, y: SqrtExt): SqrtExt | null {
+  try {
+    return x.mul(y);
+  } catch {
+    return null;
+  }
+}
+
 export class ExpSum {
   /** Normalised: exponents pairwise distinct where combinable, no zero coefficients. */
   readonly terms: readonly ExpTerm[];
@@ -57,6 +66,22 @@ export class ExpSum {
   }
 
   static readonly ZERO = new ExpSum([]);
+
+  /** The normal form: no two terms sharing an exponent, no zero coefficients, biggest exponent first. */
+  private static normalise(terms: readonly ExpTerm[]): ExpTerm[] {
+    const out: ExpTerm[] = [];
+    for (const t of terms) {
+      const at = out.findIndex((x) => x.exponent.equals(t.exponent));
+      if (at === -1) {
+        out.push({ ...t });
+        continue;
+      }
+      const combined = tryAdd(out[at].coefficient, t.coefficient);
+      if (combined === null) out.push({ ...t });
+      else out[at] = { coefficient: combined, exponent: out[at].exponent };
+    }
+    return ExpSum.sort(out.filter((t) => !t.coefficient.isZero()));
+  }
 
   /**
    * Largest exponent first, so the `e^0` term leads.
@@ -73,7 +98,8 @@ export class ExpSum {
   }
 
   static of(coefficient: SqrtExt, exponent: Exponent): ExpSum {
-    return coefficient.isZero() ? ExpSum.ZERO : new ExpSum([{ coefficient, exponent }]);
+    if (coefficient.isZero()) return ExpSum.ZERO;
+    return new ExpSum(ExpSum.normalise([{ coefficient, exponent }]));
   }
 
   /** An algebraic number, as the one-term sum `x·e^0`. */
@@ -93,7 +119,7 @@ export class ExpSum {
       if (combined === null) terms.push({ ...incoming });
       else terms[at] = { coefficient: combined, exponent: terms[at].exponent };
     }
-    return new ExpSum(ExpSum.sort(terms.filter((t) => !t.coefficient.isZero())));
+    return new ExpSum(ExpSum.normalise(terms));
   }
 
   sub(other: ExpSum): ExpSum {
@@ -109,6 +135,55 @@ export class ExpSum {
     if (factor.isZero()) return ExpSum.ZERO;
     return new ExpSum(
       this.terms.map((t) => ({ ...t, coefficient: t.coefficient.mul(factor) })),
+    );
+  }
+
+  /**
+   * Fold every exponent that is secretly a sign into its coefficient — `e^{iπ} ↦ −1`, `e^{iπ/2} ↦ i`.
+   *
+   * **A REDUCTION OF A RESULT, NOT PART OF THE NORMAL FORM**, and the distinction cost a design
+   * mistake to learn. Doing this during construction destroys the shape the sine recogniser reads:
+   * D1 at α = 3/4 has coefficient `1 − e^{3iπ/2}`, whose second exponent folds to `−i` and collapses
+   * the whole two-term denominator to `1 + i` — after which no sine factors out, and the answer
+   * prints as `π(1 + i)·e^(−iπ/4)` instead of `π/sin(3π/4)`. Both are exact and only one is the
+   * record's. So the fold runs on the way OUT, once nothing is going to be factored again.
+   *
+   * Its job on the way out is the mirror image: the solve leaves a residual `e^{−iπ}` on every
+   * keyhole answer, and carrying that prints `−π·e^(−iπ)/sin(3π/10)` for `π/sin(3π/10)`.
+   */
+  foldSigns(): ExpSum {
+    const folded: ExpTerm[] = [];
+    for (const t of this.terms) {
+      const factor = t.exponent.asAlgebraicFactor();
+      const product = factor === null ? null : tryMul(t.coefficient, factor);
+      // A fold that would leave one quadratic extension is skipped: the term stays as it was, which
+      // is still correct and merely less reduced.
+      folded.push(product === null ? t : { coefficient: product, exponent: Exponent.ZERO });
+    }
+    return new ExpSum(ExpSum.normalise(folded));
+  }
+
+  /**
+   * NOT reduced modulo `2πi`, deliberately. `e^{β}` depends on its π part only mod `2i`, so a normal
+   * form could fold `e^{7iπ/3}` onto `e^{iπ/3}` — but halving an exponent is what the sine recogniser
+   * does, and halving is not well defined modulo `2i`: `e^{2iπ} = 1` while `e^{iπ} = −1`. Two terms
+   * whose exponents differ by `2iπ` therefore stay separate, and the sum stays correct — the same
+   * posture `tryAdd` takes about two different radicands. Every hypothesis in the gallery keeps its
+   * exponent inside one period anyway.
+   */
+
+  /**
+   * Multiply every term by `e^{by}` — the one operation the sine recogniser needs that `scale` is not.
+   *
+   * Factoring `a − b·e^{β}` as `e^{(β₁+β₂)/2}·2i·sin(…)` leaves a leftover exponential on the
+   * denominator, and dividing by it shifts every exponent of the numerator. Terms that were distinct
+   * stay distinct (a shift is injective) and terms that were equal stay equal, so the normal form
+   * survives untouched.
+   */
+  shift(by: Exponent): ExpSum {
+    if (by.isZero()) return this;
+    return new ExpSum(
+      ExpSum.normalise(this.terms.map((t) => ({ ...t, exponent: t.exponent.add(by) }))),
     );
   }
 

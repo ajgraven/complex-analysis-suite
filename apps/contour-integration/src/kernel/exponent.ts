@@ -113,6 +113,31 @@ export class Exponent {
     return this.pi.im.isZero() ? this.pi.re : null;
   }
 
+  /**
+   * The value of `e^{β}` when it is EXACTLY an element of ℚ(i) — otherwise null.
+   *
+   * That happens precisely when the algebraic part is zero and the π part is `i·r` with `2r ∈ ℤ`,
+   * because `e^{irπ} = e^{i(2r)π/2} = i^{2r}`, which cycles through `1, i, −1, −i`. So `e^{iπ} = −1`
+   * and `e^{iπ/2} = i` are not exponentials at all; they are signs.
+   *
+   * WHY THIS MATTERS RATHER THAN BEING TIDINESS. D1's solve leaves a residual `e^{−iπ}` on the
+   * answer, and carrying it prints `−π·e^(−iπ)/sin(3π/10)` — the right NUMBER in a form the record
+   * does not state and a reader cannot check at a glance. Folding it in prints `π/sin(3π/10)`.
+   *
+   * Quarter-integer `r` is deliberately NOT folded: `e^{iπ/4} = (1+i)/√2` needs a quadratic
+   * extension, which could collide with a radicand the coefficients already carry. `2r ∈ ℤ` lands in
+   * ℚ(i) with no radical at all and can never conflict.
+   */
+  asAlgebraicFactor(): SqrtExt | null {
+    if (!this.algebraic.isZero()) return null;
+    if (!this.pi.re.isZero()) return null;
+    const twice = this.pi.im.mul(Frac.of(2n));
+    if (twice.d !== 1n) return null;
+    const power = ((twice.n % 4n) + 4n) % 4n;
+    const values = [Gauss.ONE, Gauss.I, Gauss.ONE.neg(), Gauss.I.neg()];
+    return SqrtExt.fromGauss(values[Number(power)]);
+  }
+
   /** **The one crossing into the numeric plane**, and why a decimal rendering of `e^{β}` is `≈`. */
   toTuple(): [number, number] {
     const [ar, ai] = this.algebraic.toTuple();
