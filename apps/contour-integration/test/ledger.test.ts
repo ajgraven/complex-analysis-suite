@@ -35,9 +35,9 @@ const rowsFor = (r: ReturnType<typeof run>, c: string) => r.rows.filter((x) => x
 
 /** The same piece with no `side` declared — what the untagged refusals are tested against. */
 function untag(piece: Contour["pieces"][number]): Contour["pieces"][number] {
-  const copy: Record<string, unknown> = { ...piece };
+  const copy = { ...piece } as { side?: "above" | "below" } & Contour["pieces"][number];
   delete copy.side;
-  return copy as Contour["pieces"][number];
+  return copy;
 }
 
 describe("the ledger closes a correct argument", () => {
