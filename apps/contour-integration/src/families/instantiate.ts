@@ -95,6 +95,11 @@ function buildPieces(family: Family): Piece[] {
     name: p.name,
     geom: p.geom,
     role: p.role,
+    // The lemma MUST travel. It is optional in the sandbox, where the ledger reads the right lemma
+    // off the integrand's shape — but no shape test distinguishes an indentation from a closing arc
+    // (in C1 they share a centre), so dropping it here silently sent L4's piece down the Jordan path
+    // and the solved target came out 0 instead of π/2.
+    ...(p.lemma !== undefined ? { lemma: p.lemma } : {}),
     ...(p.side !== undefined ? { side: p.side } : {}),
     colour: p.colour,
   }));

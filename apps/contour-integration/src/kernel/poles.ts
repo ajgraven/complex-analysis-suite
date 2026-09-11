@@ -362,6 +362,12 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
           })),
           rational: true,
           exactlyComplete: false,
+          // The LOCATIONS and ORDERS are exact even when the residues are not, so they are handed
+          // over. L4 needs them precisely here: its refusal at an order-2 pole should say "order 2,
+          // and L4 is false for order ≥ 2", not "no pole found" — which is what withholding them
+          // made it say.
+          exactPoles: structure.poles,
+          radicand: structure.radicand,
           certificates,
         };
       }

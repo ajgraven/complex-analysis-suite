@@ -23,6 +23,8 @@ import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRa
 import type { Piece } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
+import { smallArcLimit } from "../kernel/bounds/smallArc.js";
+import type { ExpSum } from "../kernel/expSum.js";
 import type { ResidueTheoremResult } from "./residueTheorem.js";
 
 export type ConstraintId = "LEGALITY" | "CATCH" | "KILL" | "COVER";
@@ -49,6 +51,14 @@ export interface LedgerResult {
   readonly failedAt: ConstraintId | null;
   /** False in sandbox mode, where no piece is the target and there is no real integral to solve for. */
   readonly hasTarget: boolean;
+  /**
+   * The exact limits of any INDENTATIONS, in units of π.
+   *
+   * L4 is the one lemma in the catalogue whose piece does not vanish — it contributes `iα·Res` — so
+   * its value has to leave the ledger for Pass 5 to use. A `vanish` piece with any other lemma
+   * contributes nothing and needs no entry here.
+   */
+  readonly smallArcs: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
 }
 
 /** How the arcs of a contour are disposed of. `piMultiple` is the arc's angular extent over π. */
@@ -148,6 +158,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
   const { ast, pieces, spec, poles, integral, theorem } = input;
   const rows: LedgerRow[] = [];
   const certificates: Certificate[] = [];
+  const smallArcs: { pieceId: string; contribution: ExpSum }[] = [];
 
   const push = (row: LedgerRow): void => {
     rows.push(row);
@@ -172,6 +183,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       verdict: assembleVerdict(certificates),
       failedAt: "LEGALITY",
       hasTarget: spec.some((p) => p.role === "target"),
+      smallArcs,
     };
   }
 
@@ -195,6 +207,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       verdict: assembleVerdict(certificates),
       failedAt: "LEGALITY",
       hasTarget: spec.some((p) => p.role === "target"),
+      smallArcs,
     };
   }
 
@@ -267,6 +280,37 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           piece.id,
         ),
       );
+      continue;
+    }
+
+    // L4 FIRST, because no shape test would find it: an indentation and a closing arc can share a
+    // centre (they do in C1), and dispatching on radius would be guessing. The lemma is declared.
+    if (piece.role === "vanish" && piece.lemma === "L4") {
+      const small = smallArcLimit(geom, poles.exactPoles ?? [], poles.exponentialFrequency);
+      if (small.ok) {
+        smallArcs.push({ pieceId: piece.id, contribution: small.limit.contribution });
+        push(
+          rowFrom(
+            "KILL",
+            "satisfied",
+            small.limit.certificate.claim,
+            small.limit.certificate,
+            piece.id,
+          ),
+        );
+      } else {
+        killFailed = true;
+        push(
+          rowFrom(
+            "KILL",
+            "failed",
+            `${piece.name} is an indentation, but L4 does not apply here`,
+            small.certificate,
+            piece.id,
+            "L4 needs a simple pole at the centre of the arc; at order ≥ 2 no limit exists and no principal value does either",
+          ),
+        );
+      }
       continue;
     }
 
@@ -355,6 +399,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     verdict: assembleVerdict(certificates),
     failedAt: rows.find((r) => r.status === "failed")?.constraint ?? (killFailed ? "KILL" : null),
     hasTarget,
+    smallArcs,
   };
 }
 

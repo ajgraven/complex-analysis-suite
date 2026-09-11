@@ -17,6 +17,7 @@ import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
 import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
 import { a3CircleCosNTheta } from "./records/a3-circle-cos-n-theta.js";
 import { a5SemicircleOrder2 } from "./records/a5-semicircle-order2.js";
+import { c1IndentedSinc } from "./records/c1-indented-sinc.js";
 import { b1JordanCosineKernel } from "./records/b1-jordan-cosine-kernel.js";
 import { b2JordanStrict } from "./records/b2-jordan-strict.js";
 import { b3JordanQuartic } from "./records/b3-jordan-quartic.js";
@@ -51,19 +52,45 @@ export const FAMILIES: readonly Family[] = [
   b1JordanCosineKernel,
   b2JordanStrict,
   b3JordanQuartic,
+  c1IndentedSinc,
 ];
 
 /**
  * The predicate namespaces the corpus uses. Not `@cas/expr` — see `checkWellFormed`.
  *
- * `algebraic` runs in exact arithmetic, `numeric` on the computed value, `structural` on the shape
- * of the contour or the pole set, `symbolic` on the expression itself.
+ * Taken from a scan of ALL 28 records rather than from the ones loaded so far, which is the lesson
+ * this list carries: the first version had four, inferred from tiers A and B, and C1's
+ * `analytic:dirichletTest(...)` was rejected by a guard that had simply never seen the rest of the
+ * corpus. A closed set is only as good as the sample it was closed over.
+ *
+ *   algebraic   exact arithmetic over ℚ(i), polynomials, resultants        (100 uses)
+ *   symbolic    on the expression or the derived form itself                (54)
+ *   structural  on the shape of the contour, the pole set, the engine       (42)
+ *   numeric     on a computed value                                         (30)
+ *   branch      on the branch-cut system                             (M4)   (8)
+ *   series      on Laurent or Taylor coefficients                           (5)
+ *   lattice     on the period lattice of a quasi-periodic strip      (E)    (3)
+ *   provenance  on where a value came from — float versus exact             (2)
+ *   geom        on the geometry alone                                       (2)
+ *   engine      on engine configuration or capability                       (2)
+ *   analytic    classical analysis tests: Dirichlet, absolute convergence   (2)
+ *   parity      on evenness or oddness of an integrand                      (1)
+ *   ledger      on a ledger row                                             (1)
  */
 const PREDICATE_NAMESPACES: ReadonlySet<string> = new Set([
   "algebraic",
-  "numeric",
-  "structural",
   "symbolic",
+  "structural",
+  "numeric",
+  "branch",
+  "series",
+  "lattice",
+  "provenance",
+  "geom",
+  "engine",
+  "analytic",
+  "parity",
+  "ledger",
 ]);
 
 /** Which of DESIGN §5's numbered invariants failed, or the well-formedness that precedes them. */

@@ -11,10 +11,9 @@
 // the value `resolve()` consumes — no parser, no glue, no second representation to drift. model.ts
 // already records that the affine subset covers every template in the gallery.
 import type { Level } from "@cas/rigor";
-import type { Geom, PieceRole } from "../engine/contour/model.js";
+import type { Geom, LemmaId, PieceRole } from "../engine/contour/model.js";
 
-/** The eight vanishing lemmas of research 03 §14. L2 = the large-arc ML lemma, L3 = Jordan. */
-export type LemmaId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8";
+export type { LemmaId } from "../engine/contour/model.js";
 
 /** GALLERY.md §1: six templates plus `square` for tier G. Everything else is parameterisation. */
 export type TemplateId =

@@ -87,6 +87,62 @@ export function semicircleTemplate(radius = 2, half: "upper" | "lower" = "upper"
   };
 }
 
+/**
+ * The indented semicircle: `[−R, −ρ]`, a **clockwise** half-turn over the origin, `[ρ, R]`, and the
+ * `R → ∞` arc. Two limit parameters, heading opposite ways.
+ *
+ * The indentation is the point of the template. A simple pole sitting exactly ON the path makes the
+ * integral meaningless; detouring over it makes the contour legal again, EXCLUDES the pole from the
+ * residue sum (`n(γ,0) = 0`), and — in the limit — contributes `iα·Res` with `α` the signed swept
+ * angle. Here the arc runs `θ: π → 0`, so `α = −π` and the piece pays `−iπ·Res`: a FRACTION of
+ * `2πi·Res`, fixed by geometry and never by taste.
+ *
+ * Note the two segments are both `target`. Neither is individually a multiple of the unknown — only
+ * their sum is, which is the principal value — and Pass 5 uses only the sum of the coefficients, so
+ * the split between them is a convention rather than a claim.
+ */
+export function indentedSemicircleTemplate(radius = 8, indent = 0.05): Contour {
+  const pieces: Piece[] = [
+    {
+      id: "left",
+      name: "the real axis, left of the indentation",
+      geom: { kind: "segment", from: pt(ref("R", -1), 0), to: pt(ref("rho", -1), 0) },
+      role: "target",
+      colour: 0,
+    },
+    {
+      id: "indent",
+      name: "the ρ → 0 indentation over z = 0",
+      // θ: π → 0 sweeps CLOCKWISE over the origin, which is what makes α negative.
+      geom: { kind: "arc", center: pt(0, 0), radius: ref("rho"), theta0: Math.PI, theta1: 0 },
+      role: "vanish",
+      lemma: "L4",
+      colour: 3,
+    },
+    {
+      id: "right",
+      name: "the real axis, right of the indentation",
+      geom: { kind: "segment", from: pt(ref("rho"), 0), to: pt(ref("R"), 0) },
+      role: "target",
+      colour: 0,
+    },
+    {
+      id: "bigarc",
+      name: "the R → ∞ semicircle",
+      geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: Math.PI },
+      role: "vanish",
+      colour: 1,
+    },
+  ];
+  return {
+    pieces,
+    params: {
+      R: param("R", radius, [0.5, 1e6], "log", { to: "inf" }),
+      rho: param("rho", indent, [1e-9, 1], "log", { to: "0+" }),
+    },
+  };
+}
+
 /** An axis-aligned rectangle, positively oriented, from two opposite corners. */
 export function rectangleTemplate(
   x0: number,
