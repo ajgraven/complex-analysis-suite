@@ -130,8 +130,15 @@ instead of an ad-hoc JSON blob.
 
 > The three packages below were part of the original design but were **NEVER EXTRACTED** — the
 > demand-driven rule (extract only when a second consumer needs it, ADR-0007) never fired for them.
-> The suite ships **five** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`. The
-> sections are kept as design intent; each notes where the functionality actually lives today.
+> The suite ships **six** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> `@cas/exact`, and `@cas/rigor`. The sections are kept as design intent; each notes where the
+> functionality actually lives today.
+>
+> `@cas/rigor` (2026-09) is the odd one out and has its own record,
+> [ADR-0009](DECISIONS.md#adr-0009-cas-rigor-extraction-by-reimplementation): it was **created, not
+> extracted**. The honest-labelling guardrail that `CLAUDE.md` calls non-negotiable had no shared
+> code at all — it existed only as ~6,000 lines of QD `.mjs` that every later app reimplemented — so
+> the package was written fresh rather than moved. QD is not yet migrated onto it.
 
 ### `@cas/ui` — the shared UI kit *(planned — not built)*
 Would hold KaTeX typesetting helpers; the inspector/readout card framework; complex-number slider

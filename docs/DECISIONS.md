@@ -17,13 +17,16 @@ Format follows Michael Nygard's ADR convention.
 | [0006](#adr-0006-convention-neutral-core-packages) | Convention-neutral core packages | Accepted |
 | [0007](#adr-0007-incremental-extraction-driven-by-real-need) | Incremental extraction driven by real need | Accepted |
 | [0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate) | Extract `@cas/exact`; keep QD's `sym-core` separate | Accepted |
+| [0009](#adr-0009-cas-rigor-extraction-by-reimplementation) | `@cas/rigor`: extraction by *reimplementation* | Accepted |
 
 > **Status legend:** Proposed → Accepted (once you sign off) → Superseded/Deprecated.
-> All eight are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
+> All nine are **Accepted**. ADRs 0001–0007 are the up-front decisions (recorded in
 > [`CLAUDE.md`](../CLAUDE.md) and [RISKS §Decisions](RISKS.md#open-questions-decisions-needed-from-you));
 > **0008 is the first *follow-on*** — a decision made during the build, which
 > [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) explicitly asked to be recorded
 > this way. Expect more of that shape than of the original seven.
+> **0009 is the first departure from ADR-0007's letter** rather than an application of it: a shared
+> package created by *reimplementation* because the original was never extractable.
 > Supersede rather than rewrite if any change later.
 >
 > **✅ Executed.** The seven up-front decisions were carried out — the
@@ -565,3 +568,107 @@ solo developer that is a bad trade. It stops being a bad trade under the conditi
        breaking `@cas/exact`'s complex-multiply sign produces 200. This required adding
        `@cas/exact` to the QD app's **devDependencies** — the app's runtime still does not use
        it, and the boundary this ADR draws is unchanged.
+
+---
+
+## ADR-0009: `@cas/rigor`: extraction by *reimplementation*
+
+**Status:** Accepted  **Date:** 2026-09  **Deciders:** Andrew
+
+*A follow-on ADR in the sense [ADR-0007](#adr-0007-incremental-extraction-driven-by-real-need) asks
+for, but recording a move ADR-0007 does not cover: a shared package created by writing the code
+again rather than by moving it.*
+
+### Context
+[`CLAUDE.md`](../CLAUDE.md) lists honest labelling among the **non-negotiable guardrails** — "`=`
+exact, `≤` rigorous bound, `≈` estimate". It is the guardrail the suite leans on hardest: QD's
+whole proof workflow, CD's exactness claims, and the correspondence tool's uncertified straightening
+all depend on a reader being able to trust the symbol next to a number.
+
+A survey of the repo while planning the fifth app found that this guardrail has **no shared code at
+all**. The vocabulary and the assembly logic exist only inside the Quadrature app:
+
+- `rigorMeta`'s `=/≤/≥/≈/⚠/?` vocabulary — `apps/quadrature-domains/app/algebra/algebra-canvas.mjs`
+- `classifyRigor` — `algebra-ui.mjs`
+- `assembleVerdict` — `prove-plan.mjs`
+
+Roughly 6,000 lines of QD-specific `.mjs`, none of it importable. Every app that has needed the
+concept since has reimplemented it, and the next one was about to as well.
+
+The new contour-integration app leans on it harder than any predecessor: its central claim is not a
+number but a *verdict* — "this argument closes" — assembled from per-piece evidence. Landing a
+fourth private copy of the vocabulary underneath that would be the point at which the guardrail
+stops being a guardrail and becomes a habit.
+
+### Decision
+**Create `packages/rigor` (`@cas/rigor`) as new, small, strict TypeScript**, and consume it from
+`apps/contour-integration`. **Do not touch the Quadrature app.** Its migration is a separate
+decision on its own schedule, and is explicitly *not* part of this one.
+
+The package's goal is narrow and stated as such in its README: **make `=` impossible to write by
+hand.** `Certificate` and `Verdict` are branded types with no public constructors, so a certificate
+can only come from `exact` / `bound` / `estimate` / `unknown` / `refuse`, a verdict can only come
+from `assembleVerdict`, and a verdict's level is the **meet** over its evidence — computed from what
+was established, never chosen by the call site.
+
+### Options Considered
+
+#### Option A: Write `@cas/rigor` fresh; leave QD alone (this ADR)
+**Pros:** small (≈200 lines), strict TS from the start, no risk to a mature and heavily-tested app,
+and it can be *better* than what it replaces — the branding turns the rule into a compiler error,
+which the `.mjs` original cannot do. **Cons:** for a period the suite has two implementations of the
+same vocabulary, which is precisely the duplication ADR-0008 accepted knowingly for `sym-core` and
+is accepting again here. Creates a package whose second consumer is future rather than present.
+
+#### Option B: Port QD's implementation into a package and migrate QD onto it
+**Pros:** eliminates the duplication outright; one vocabulary, immediately. **Cons:** the logic is
+entangled with QD's proof tree, its store, and its PWA build; the port is large and its blast radius
+is the app with the most to lose. It puts a mature app at risk for a new app's benefit, against the
+*working software at every step* guardrail. Nothing about it has to happen now.
+
+#### Option C: Reimplement it app-locally again, extract later
+**Pros:** strictly ADR-0007-compliant — no package until a second consumer exists in code.
+**Cons:** app-local code that works is rarely promoted; this is the fourth copy, and "extract later"
+is what produced the present situation. The rule exists to stop speculative generality, and a
+guardrail that `CLAUDE.md` calls non-negotiable having no shared implementation is not a speculative
+need.
+
+### Trade-off Analysis
+ADR-0007's demand-driven rule is about *extraction* — moving code once a second consumer proves the
+shape. It has no clause for a primitive that four consumers have each rebuilt because the original
+was never extractable in the first place. Applying the rule literally (Option C) optimises for the
+thing it was written to prevent and produces a fifth copy next time.
+
+So the rule is being followed in spirit and departed from in letter, and this record is the price of
+that. The honest cost is the same one ADR-0008 paid: two implementations of one idea, temporarily,
+with the risk that they drift. The mitigation is the same too — a differential test, once QD is
+migrated; there is nothing meaningful to differential-test against today, because the shapes differ.
+
+The decisive asymmetry: Option A is small and reversible, Option B is large and touches the app with
+the most to lose, and the two are not mutually exclusive. Doing A first makes B easier, because B
+then has a target to migrate *to* rather than a design to invent mid-port.
+
+### Consequences
+- The suite has **six** packages. `@cas/rigor` is the first created rather than extracted, and the
+  first whose justification is a guardrail rather than a second consumer.
+- `@cas/rigor` depends on nothing, knows nothing about what is being measured (ADR-0006), and is
+  consumed by `apps/contour-integration` only.
+- **QD is unchanged.** Any statement that the suite has one rigor vocabulary would be false until
+  QD is migrated; the package README and this record both say so.
+- **Watch for:** the two vocabularies drifting — a level meaning one thing in QD and another here.
+  The lattice is the place it would show up first, and QD's `classifyRigor` is the comparison point.
+- **Revisit if** any of: (a) a second app adopts `@cas/rigor`, at which point the API should be
+  frozen deliberately rather than by accretion; (b) QD's verdict logic is touched for its own
+  reasons, which is the cheap moment to migrate it; or (c) the two are found to disagree on any
+  input, which makes the migration urgent rather than optional.
+
+### Action Items
+1. [x] Create `packages/rigor` with the level lattice, branded certificates, and `assembleVerdict`.
+2. [x] Verify the branding actually bites: a hand-written `{ level: "=" }` certificate fails to
+       typecheck (`TS2741: Property '[CERTIFICATE_BRAND]' is missing`), confirmed by trying it.
+3. [x] Test the two rules most often violated by accident — `meet("≤","≥") = "≈"` (an enclosure is
+       not a one-sided bound) and `meet("=","?") = "?"` (an unknown step is not a passing step) —
+       plus commutativity and associativity exhaustively over all 36 level pairs.
+4. [ ] Migrate the Quadrature app onto `@cas/rigor`, with a differential test against
+       `classifyRigor`'s behaviour, when QD's verdict logic is next touched for its own reasons.
+       **Not scheduled**; this ADR deliberately does not do it.
