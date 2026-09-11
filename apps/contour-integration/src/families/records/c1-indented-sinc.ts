@@ -41,6 +41,7 @@ export const c1IndentedSinc: Family = {
     integrand: "exp(i*z)/z",
     // Im because sin x = Im e^{ix}; the /2 because sin(x)/x is EVEN, so ∫₀^∞ = ½∫_ℝ.
     relation: "Im/2",
+    principalValue: true,
     note: "sin x = Im e^{ix} on ℝ; the real part ∫cos x/x diverges at the origin, which is why the auxiliary needs a principal value and the target does not",
   },
 

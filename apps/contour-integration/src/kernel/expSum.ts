@@ -18,7 +18,7 @@
 // refuses and falls back rather than guessing. Every tier-B denominator is squarefree, so nothing in
 // the corpus is lost by that.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
-import { formatSqrtExt, formatTwoPiISqrt } from "./formatExact.js";
+import { formatPiSqrt, formatSqrtExt, formatTwoPiISqrt } from "./formatExact.js";
 import type { AlgebraicPole } from "./algebraic.js";
 
 export interface ExpTerm {
@@ -48,6 +48,20 @@ export class ExpSum {
 
   static readonly ZERO = new ExpSum([]);
 
+  /**
+   * Largest exponent first, so the `e^0` term leads.
+   *
+   * Purely for reading: C3's answer is `π − π/e`, and without an order it renders as `−π/e + π`,
+   * which is the same number and a worse sentence.
+   */
+  private static sort(terms: readonly ExpTerm[]): ExpTerm[] {
+    return [...terms].sort((x, y) => {
+      const [xr, xi] = x.exponent.toTuple();
+      const [yr, yi] = y.exponent.toTuple();
+      return yr - xr || yi - xi;
+    });
+  }
+
   static of(coefficient: SqrtExt, exponent: SqrtExt): ExpSum {
     return coefficient.isZero() ? ExpSum.ZERO : new ExpSum([{ coefficient, exponent }]);
   }
@@ -69,7 +83,7 @@ export class ExpSum {
       if (combined === null) terms.push({ ...incoming });
       else terms[at] = { coefficient: combined, exponent: terms[at].exponent };
     }
-    return new ExpSum(terms.filter((t) => !t.coefficient.isZero()));
+    return new ExpSum(ExpSum.sort(terms.filter((t) => !t.coefficient.isZero())));
   }
 
   sub(other: ExpSum): ExpSum {
@@ -161,6 +175,20 @@ export function formatExpSum(sum: ExpSum): string {
 export function formatTwoPiIExpSum(sum: ExpSum): string {
   if (sum.isZero()) return "0";
   return joinExpTerms(sum.terms.map((t) => attachExponential(formatTwoPiISqrt(t.coefficient), t.exponent)));
+}
+
+/**
+ * `π · Σ cₖ e^{βₖ}` — the form a SOLVED TARGET is reported in.
+ *
+ * Every value in tiers A–C is π times an element of this basis, because `2πi Σ Res`, L4's `iα·Res`
+ * and L5's `iα·L` all are. So the solve works in units of π throughout and π is never evaluated:
+ * `π/2`, `π/e`, `π − π/e`.
+ */
+export function formatPiExpSum(sum: ExpSum): string {
+  if (sum.isZero()) return "0";
+  return joinExpTerms(
+    sum.terms.map((t) => attachExponential(formatPiSqrt(t.coefficient), t.exponent)),
+  );
 }
 
 /** Whether a rendered coefficient is a SUM, and so needs bracketing before anything multiplies it. */
