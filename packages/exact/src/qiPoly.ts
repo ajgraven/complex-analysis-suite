@@ -202,4 +202,80 @@ export class QiPoly {
     const g = this.gcd(this.derivative());
     return g.degree() < 1 ? this : this.divExact(g);
   }
+
+  /**
+   * The Taylor shift p(var + a), exactly.
+   *
+   * Repeated synthetic division by (var − a): each remainder is the next coefficient of the shifted
+   * polynomial, since dividing out (var − a) k times leaves p^{(k)}(a)/k! behind. Exact over a field
+   * and O(deg²), which is the right trade here — the alternative, expanding binomials, is the same
+   * cost with far more opportunity to get a sign wrong.
+   *
+   * This is the primitive that turns "the residue at a" into "the coefficient of var^{-1} of a
+   * series about 0": shift the pole to the origin and the Laurent expansion is a series quotient.
+   */
+  shift(a: Gauss): QiPoly {
+    if (this.isZero()) return QiPoly.zero();
+    const out: Gauss[] = [];
+    let work: Gauss[] = this.coeffs.slice();
+    while (work.length > 0) {
+      const q = new Array<Gauss>(Math.max(0, work.length - 1));
+      let acc = Gauss.ZERO;
+      for (let i = work.length - 1; i >= 1; i--) {
+        acc = acc.mul(a).add(work[i]);
+        q[i - 1] = acc;
+      }
+      out.push(acc.mul(a).add(work[0]));
+      work = q;
+    }
+    return QiPoly.fromCoeffs(out);
+  }
+}
+
+/**
+ * The extended Euclidean algorithm over ℚ(i)[var]: returns the monic `g = gcd(a, b)` together with
+ * cofactors satisfying `s·a + t·b = g`.
+ *
+ * Needed because the residue at a simple pole is `P/Q′` *evaluated at a root of Q* — and the way to
+ * keep that exact without ever naming the root is to compute it in the quotient ring ℚ(i)[z]/⟨Q⟩,
+ * where dividing by Q′ means inverting it modulo Q. See {@link invMod}.
+ */
+export function extendedGcd(a: QiPoly, b: QiPoly): { g: QiPoly; s: QiPoly; t: QiPoly } {
+  let r0 = a;
+  let r1 = b;
+  let s0 = QiPoly.int(1);
+  let s1 = QiPoly.zero();
+  let t0 = QiPoly.zero();
+  let t1 = QiPoly.int(1);
+
+  while (!r1.isZero()) {
+    const { q, r } = r0.divmod(r1);
+    r0 = r1;
+    r1 = r;
+    const s2 = s0.sub(q.mul(s1));
+    s0 = s1;
+    s1 = s2;
+    const t2 = t0.sub(q.mul(t1));
+    t0 = t1;
+    t1 = t2;
+  }
+
+  if (r0.isZero()) return { g: r0, s: s0, t: t0 };
+  // Normalise so g is monic; the cofactors scale with it so the identity still holds.
+  const lead = r0.leadingCoeff().inv();
+  return { g: r0.scale(lead), s: s0.scale(lead), t: t0.scale(lead) };
+}
+
+/**
+ * The inverse of `a` modulo `m`, or `null` when `a` is not invertible there.
+ *
+ * `null` is a real answer, not a failure: `a` is non-invertible exactly when it shares a factor with
+ * `m`, which for `m = Q` and `a = Q′` means Q has a repeated root — i.e. the pole is not simple and
+ * the `P/Q′` shortcut does not apply. Returning null rather than throwing lets the caller take the
+ * higher-order route instead of treating a legitimate case as an error.
+ */
+export function invMod(a: QiPoly, m: QiPoly): QiPoly | null {
+  const { g, s } = extendedGcd(a, m);
+  if (g.degree() !== 0) return null; // a shares a factor with m
+  return s.divmod(m).r;
 }

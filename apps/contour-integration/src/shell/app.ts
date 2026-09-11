@@ -12,6 +12,7 @@ import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { integrateContour, type ContourIntegral } from "../engine/contour/integrate.js";
+import { applyResidueTheorem, type ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
   circleTemplate,
@@ -74,6 +75,7 @@ export function mountApp(root: Element): void {
   let contour: Contour = TEMPLATES[0].build();
   let resolved: Resolved[] = resolveAll(contour);
   let integral: ContourIntegral | null = null;
+  let theorem: ResidueTheoremResult | null = null;
   let acc: Accumulation | null = null;
   let scrub = 1;
   let contrast: ContrastMode = "none";
@@ -244,6 +246,7 @@ export function mountApp(root: Element): void {
     resolved = resolveAll(contour);
     if (!f) {
       integral = null;
+      theorem = null;
       acc = null;
     } else {
       const singular = (poles?.poles ?? []).map((p) => ({ at: p.at, order: p.order }));
@@ -251,6 +254,9 @@ export function mountApp(root: Element): void {
       // Null when the integral was refused — a partial sum through a singularity is meaningless,
       // not merely rough, and showing one beside a refusal hands back the withheld number.
       acc = accumulateForIntegral(f, resolved, integral);
+      // The residue theorem is applied from the exact data, then CHECKED against the quadrature.
+      // Two routes that share no machinery agreeing is the strongest evidence the app can offer.
+      theorem = poles ? applyResidueTheorem(poles, integral) : null;
     }
     renderResult();
     renderContourCard();
@@ -304,11 +310,32 @@ export function mountApp(root: Element): void {
       return;
     }
 
+    // The exact value, when the residue theorem could supply one, is the headline — it comes from a
+    // formula rather than from integrating, and the quadrature below it is the corroboration.
+    if (theorem?.exactValue) {
+      const head = el("p", "resultValue exactValue");
+      head.append(badge("="), ` ${theorem.exactValue.text}`);
+      resultCard.append(head);
+      resultCard.append(
+        el("p", "muted small", "2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ℚ(i)"),
+      );
+      const check = el("p", theorem.agrees === true ? "crosscheck" : "restriction");
+      check.append(
+        theorem.agrees === true ? badge("≤") : badge("⚠"),
+        theorem.agrees === true
+          ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
+          : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
+      );
+      resultCard.append(check);
+    }
+
     const value = integral.value ?? [0, 0];
-    const head = el("p", "resultValue num");
+    const head = el("p", theorem?.exactValue ? "num numericValue" : "resultValue num");
     head.append(badge(integral.verdict.level), ` ${fmtCx(value)}`);
     resultCard.append(head);
-    resultCard.append(el("p", "muted small", describeLevel(integral.verdict.level)));
+    if (!theorem?.exactValue) {
+      resultCard.append(el("p", "muted small", describeLevel(integral.verdict.level)));
+    }
 
     for (const r of integral.verdict.restrictions) {
       resultCard.append(el("p", "restriction", r));
@@ -429,9 +456,19 @@ export function mountApp(root: Element): void {
       if (pole.order > 1) li.append(el("span", "tag", `order ${pole.order}`));
       if (!pole.orderCertain) li.append(el("span", "tag warn", "order uncertain"));
       if (pole.possiblyRemovable) li.append(el("span", "tag warn", "may be removable"));
+      if (pole.residue) {
+        const res = el("span", "num residueText");
+        res.append(badge("="), ` Res = ${pole.residue.text}`);
+        li.append(res);
+      } else if (pole.isExact === false) {
+        li.append(el("span", "tag warn", "≈ located numerically"));
+      }
       list.append(li);
     }
     poleCard.append(list);
+    if (poles.exactResidueSum) {
+      poleCard.append(el("p", "muted small", `Σ Res = ${poles.exactResidueSum.text} (exact, over every pole)`));
+    }
   }
 
   // --- interaction --------------------------------------------------------------------------
