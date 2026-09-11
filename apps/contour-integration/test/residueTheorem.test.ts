@@ -29,8 +29,13 @@ describe("the M2 gate: an exact ∮ that the quadrature confirms", () => {
     const { theorem } = setup("1/z", circle(1.5));
     expect(theorem.exactValue?.text).toBe("2πi");
     expect(theorem.agrees).toBe(true);
-    expect(theorem.verdict.level).toBe("≤"); // `=` for the value, capped by the agreement bound
+    // `=`, and NOT capped by the agreeing quadrature. `meet` is for a claim that DEPENDS on two
+    // sub-claims; `∮` does not depend on the quadrature, which is a second opinion about the same
+    // number. The corroboration is reported beside the value instead of inside its label.
+    expect(theorem.verdict.level).toBe("=");
     expect(theorem.verdict.certificates[0].level).toBe("=");
+    expect(theorem.crossCheck?.level).toBe("≤");
+    expect(theorem.verdict.certificates.some((c) => c.claim.includes("quadrature agrees"))).toBe(false);
   });
 
   it("gives π for the semicircular contour on 1/(1+z²) — gallery A5, exactly", () => {
@@ -142,5 +147,9 @@ describe("the cross-check is a real check", () => {
     expect(theorem.agrees).toBe(false);
     expect(mayReportValue(theorem.verdict)).toBe(false);
     expect(theorem.verdict.certificates.some((c) => c.claim.includes("disagree"))).toBe(true);
+    // Corroboration never weakens; CONTRADICTION still refuses. A disagreement beyond the
+    // quadrature's own error estimate means one of the two is wrong, so it goes in the verdict and
+    // absorbs it — and there is no `crossCheck` to report, because nothing was corroborated.
+    expect(theorem.crossCheck).toBeUndefined();
   });
 });

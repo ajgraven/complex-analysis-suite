@@ -35,8 +35,20 @@ is not the posed one), the closed form the engine derives, and whether that agre
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered
 as not executable instead of offered and then failing.
 
-Still to come: the generated derivation panel, free-hand contour editing, branch cuts (M4), the rest
-of the gallery (M5), the teaching layer (M6).
+Each one also comes with its **derivation**: the argument in order — LEGALITY, CATCH, KILL, COVER,
+SOLVE, VERDICT — with every line badged from its own certificate and carrying the method that
+established it and its ✓/✗ audit trail. It is a view over evidence the engine already produced, not a
+second narration of it. An argument that does not close opens the panel by itself, shows the failed
+step inline, and offers the repair: closing `∫cos x/(1+x²)` downward shows the bound diverging, names
+KILL, and says to close through the other half-plane.
+
+Every badge in the app is computed from a verdict. There are no literal labels left: the one that had
+to be hand-written was a symptom of `applyResidueTheorem` folding the *agreeing* quadrature's `≤`
+into the same verdict as the exact residue sum, which capped an exact `∮` at `≤`. Corroboration is
+now reported beside a value rather than inside its label; a disagreement still refuses it.
+
+Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
+teaching layer (M6).
 
 ## Documentation
 

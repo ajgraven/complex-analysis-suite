@@ -596,8 +596,27 @@ failing constraint; p.v. is a distinct result type from a convergent integral.
 > which the golden corpus also calls — so the numbers on screen are the numbers the suite pins, along
 > the same path, rather than a second implementation agreeing by inspection.
 >
-> **Still open from M3's scope**: the generated derivation panel (M3.5b), the Pólya work/flux toggle,
-> and M1's pen-tool free-path editor (M3.5c). Running status lives in [`GALLERY.md`](GALLERY.md) §5.
+> **M3.5b closed the second:** the generated derivation panel. It is a *view* over evidence that
+> already existed — the ledger's rows each carry a `Certificate` with a `method` and a ✓/✗ provenance
+> trail that no surface had ever shown — so the panel renders the argument rather than re-narrating
+> it, and `engine/derivation.ts` mints nothing but `unknown` (the one level that cannot manufacture a
+> claim).
+>
+> Two labels were wrong underneath it, and are fixed. `applyResidueTheorem` folded the AGREEING
+> quadrature's `≤` into the same verdict as the exact residue sum, so `meet` capped an exact `∮` at
+> `≤` — `meet` is for a claim that *depends* on two sub-claims, and `∮` does not depend on the
+> quadrature. Corroboration is now reported beside the value (`crossCheck`) instead of inside its
+> label, while a *disagreement* still refuses it. That had left the shell hand-writing `badge("=")`
+> to show the truth, which is precisely what [ADR-0040](../DECISIONS.md) exists to prevent; every
+> badge in the app now comes from a verdict.
+>
+> **Still open from M3's scope**: the Pólya work/flux toggle, and M1's pen-tool free-path editor
+> (M3.5c). The `rigorOfBound` / `rigorOfLimit` split of DESIGN §4 Pass 3 is still unmade in the
+> engine — a vanishing arc's one certificate is its finite-`R` bound, so the argument-wide meet reads
+> `≤` wherever a bound appears. The derivation panel handles that honestly rather than hiding it: the
+> conclusion is badged from its own evidence, and the argument-wide line says outright that it is "the
+> weakest step in the argument, not the label of the answer". Running status lives in
+> [`GALLERY.md`](GALLERY.md) §5.
 
 ### M4 — Branch cuts · *L*
 `BranchChoice` model, admissibility validator, jump weights **verified by numeric continuation

@@ -535,3 +535,115 @@ ul.ledger {
   margin: 0.3rem 0 0;
   color: var(--c-muted);
 }
+
+/* ---- derivation ---- */
+/* Folded by default when the argument closes, open when it does not: a failing argument's diagnostic
+   is the thing worth reading, and a satisfied reader should not have to scroll past a proof. */
+.derivation > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.derivation .stage {
+  margin: 0.6rem 0 0;
+  padding-left: 0.55rem;
+  border-left: 2px solid var(--c-border);
+}
+
+.derivation .stage.failed {
+  border-left-color: var(--c-warn);
+}
+
+.derivation h3 {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--c-muted);
+}
+
+.derivation .why {
+  margin: 0.15rem 0 0.4rem;
+}
+
+.statement {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  margin: 0.2rem 0;
+  flex-wrap: wrap;
+}
+
+.stLabel {
+  color: var(--c-muted);
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.statement .num {
+  overflow-wrap: anywhere;
+}
+
+ul.poleTable {
+  list-style: none;
+  margin: 0.2rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.25rem;
+}
+
+ul.poleTable li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  font-size: 12px;
+}
+
+.derivLine {
+  margin: 0.35rem 0 0.5rem;
+}
+
+.derivClaim {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.derivLine.failed .derivClaim {
+  color: var(--c-warn);
+}
+
+.derivLine .method {
+  margin: 0.1rem 0 0;
+  font-style: italic;
+}
+
+.derivLine .prov {
+  margin: 0.15rem 0 0;
+}
+
+.derivLine .prov summary {
+  cursor: pointer;
+}
+
+.provOk,
+.provBad {
+  margin: 0.12rem 0 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.provOk {
+  color: var(--c-muted);
+}
+
+.provBad {
+  color: var(--c-warn);
+}
+
+.conclusion {
+  margin: 0.7rem 0 0.1rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}

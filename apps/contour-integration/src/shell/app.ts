@@ -14,6 +14,7 @@ import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { analyse } from "../engine/analyse.js";
+import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
@@ -136,6 +137,7 @@ export function mountApp(root: Element): void {
   let integral: ContourIntegral | null = null;
   let theorem: ResidueTheoremResult | null = null;
   let ledger: LedgerResult | null = null;
+  let derivation: Derivation | null = null;
   let acc: Accumulation | null = null;
   let scrub = 1;
   let contrast: ContrastMode = "none";
@@ -256,10 +258,11 @@ export function mountApp(root: Element): void {
   errorBox.hidden = true;
   const recordCard = el("section", "card");
   const ledgerCard = el("section", "card");
+  const derivationCard = el("section", "card");
   const resultCard = el("section", "card");
   const contourCard = el("section", "card");
   const poleCard = el("section", "card");
-  rail.append(errorBox, recordCard, ledgerCard, resultCard, contourCard, poleCard);
+  rail.append(errorBox, recordCard, ledgerCard, derivationCard, resultCard, contourCard, poleCard);
 
   // Strip: the accumulator.
   // The canvas needs a containing block with a definite size of its own. A `height: 100%` canvas
@@ -399,8 +402,49 @@ export function mountApp(root: Element): void {
     integral = null;
     theorem = null;
     ledger = null;
+    derivation = null;
     acc = null;
     solved = null;
+  }
+
+  /**
+   * What the problem IS, for the derivation's first stage.
+   *
+   * Read off the record in gallery mode — the same fields the record card shows, so the two cannot
+   * disagree — and off the expression box in the sandbox, which is all there is to say there.
+   */
+  function problemStatements(): Statement[] {
+    if (mode !== "gallery" || !family) {
+      return [
+        { label: "integrand", text: input.value.trim() },
+        { label: "contour", text: contour.pieces.map((p) => p.name).join(", ") },
+      ];
+    }
+    const out: Statement[] = family.targets.map((t) => ({ label: "target", text: targetText(t) }));
+    out.push({ label: "contour integrand", text: contourIntegrandText(family) });
+    if (family.auxiliary) {
+      out.push({
+        label: "relation",
+        text: `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`,
+      });
+    }
+    return out;
+  }
+
+  /** Rebuild the derivation from whatever the analysis just produced. */
+  function rebuildDerivation(): void {
+    derivation =
+      ledger && poles && integral && theorem
+        ? buildDerivation({
+            ledger,
+            poles,
+            integral,
+            theorem,
+            spec: contour.pieces,
+            statements: problemStatements(),
+            ...(solved === null ? {} : { solved }),
+          })
+        : null;
   }
 
   /** Take a completed run as the app's state. Nothing is recomputed: `runFamily` already did it. */
@@ -436,8 +480,10 @@ export function mountApp(root: Element): void {
         solved = null;
       }
     }
+    rebuildDerivation();
     renderRecordCard();
     renderLedger();
+    renderDerivation();
     renderResult();
     renderContourCard();
     renderPoles();
@@ -649,7 +695,8 @@ export function mountApp(root: Element): void {
     if (solved) {
       if (solved.text !== undefined) {
         const line = el("p", "resultValue exactValue");
-        line.append(badge("="), ` ${solved.text}`);
+        // Pass 5's own evidence decides this, never the call site.
+        line.append(badge(assembleVerdict(solved.certificates).level), ` ${solved.text}`);
         recordCard.append(line);
       }
       const dec = el("p", "num numericValue");
@@ -737,7 +784,13 @@ export function mountApp(root: Element): void {
 
     if (ledger.closes && ledger.value) {
       const v = el("p", "resultValue exactValue");
-      v.append(badge("="), ` ${ledger.value.text}`);
+      // The VALUE's evidence, not the argument's. `ledger.verdict` is the meet over every step, so it
+      // carries the arc bound's `≤` — which is a true statement about the weakest step and a false
+      // one about `∮`, whose own evidence is the residue theorem. DESIGN §4 Pass 3 is explicit that
+      // the bound and the limit are different claims and that only the limit reaches the answer.
+      const valueLevel =
+        theorem?.exactValue !== undefined ? theorem.verdict.level : (integral?.verdict.level ?? "?");
+      v.append(badge(valueLevel), ` ${ledger.value.text}`);
       // NAME the number. This one is `∮ f dz`, and when the contour has a target that is not the
       // answer — C1 is the case that makes it unavoidable: its contour encloses nothing, so `∮ = 0`
       // while the integral is π/2 and the entire value comes from the indentation's `iα·Res`.
@@ -769,6 +822,107 @@ export function mountApp(root: Element): void {
     ledgerCard.append(list);
   }
 
+  /**
+   * The derivation: the argument in order, with every line carrying its own evidence.
+   *
+   * Nothing here composes a claim. `engine/derivation.ts` reads the ledger's rows and their
+   * certificates; this function turns that structure into DOM. The one editorial decision is what to
+   * show by default — a failing argument opens itself, because the diagnostic IS the product, while
+   * a closing one folds, because a reader who is satisfied should not have to scroll past a proof.
+   */
+  function renderDerivation(): void {
+    derivationCard.replaceChildren();
+    if (!derivation) {
+      derivationCard.hidden = true;
+      return;
+    }
+    derivationCard.hidden = false;
+
+    const shell = el("details", "derivation");
+    shell.open = !derivation.closes;
+    const steps = derivation.stages.reduce((n, st) => n + st.lines.length, 0);
+    const summary = el(
+      "summary",
+      undefined,
+      derivation.closes
+        ? `Derivation — ${steps} steps, each with its evidence`
+        : `Derivation — where it stops: ${derivation.failedAt ?? "incomplete"}`,
+    );
+    shell.append(summary);
+
+    for (const st of derivation.stages) {
+      const block = el("div", `stage${st.failed ? " failed" : ""}`);
+      block.append(el("h3", undefined, st.title), el("p", "muted small why", st.why));
+
+      for (const statement of st.statements) {
+        const row = el("p", "statement");
+        row.append(el("span", "stLabel", statement.label), el("span", "num", statement.text));
+        block.append(row);
+      }
+
+      if (st.poles.length > 0) {
+        const list = el("ul", "poleTable");
+        for (const row of st.poles) {
+          const li = el("li");
+          li.append(el("span", "num", fmtCx(row.at)));
+          li.append(el("span", "tag", `order ${row.order}`));
+          li.append(
+            el(
+              "span",
+              row.windingDecided ? "tag" : "tag warn",
+              row.windingDecided ? `n(γ) = ${row.winding}` : "n(γ) undecided",
+            ),
+          );
+          if (row.residue !== undefined) li.append(el("span", "num", `Res = ${row.residue}`));
+          if (row.basis === "numeric") li.append(el("span", "tag warn", "located numerically"));
+          if (row.possiblyRemovable) li.append(el("span", "tag warn", "may be removable"));
+          if (!row.orderCertain) li.append(el("span", "tag warn", "order uncertain"));
+          list.append(li);
+        }
+        block.append(el("p", "muted small", "per pole — the winding number and the count are separate facts:"), list);
+      }
+
+      for (const line of st.lines) {
+        const li = el("div", `derivLine ${line.status}`);
+        const head = el("p", "derivClaim");
+        head.append(badge(line.level), ` ${line.text}`);
+        li.append(head);
+        if (line.pieceName !== undefined) li.append(el("p", "muted small", line.pieceName));
+        li.append(el("p", "muted small method", line.method));
+        if (line.restriction !== undefined) li.append(el("p", "restriction", line.restriction));
+
+        // A failed step is the diagnostic and is never folded away. The satisfied ones are the audit
+        // trail — worth having, not worth reading first — so they go behind one disclosure.
+        const failedSteps = line.provenance.filter((x) => !x.ok);
+        const okSteps = line.provenance.filter((x) => x.ok);
+        for (const step of failedSteps) li.append(el("p", "provBad", `✗ ${step.text}`));
+        if (okSteps.length > 0) {
+          const trail = el("details", "prov");
+          trail.append(
+            el("summary", "muted small", `audit trail (${okSteps.length} step${okSteps.length === 1 ? "" : "s"})`),
+          );
+          for (const step of okSteps) trail.append(el("p", "provOk", `✓ ${step.text}`));
+          li.append(trail);
+        }
+        if (line.repair !== undefined) li.append(el("p", "repair", line.repair));
+        block.append(li);
+      }
+      shell.append(block);
+    }
+
+    if (derivation.conclusion) {
+      const end = el("p", "conclusion");
+      // Badged from the CONCLUSION's own evidence, which is not the argument-wide meet: a vanishing
+      // arc owes a `≤` at finite R and an `=` for its limit, and only the limit enters the answer.
+      end.append(
+        badge(derivation.conclusion.level),
+        ` ${derivation.conclusion.label} = ${derivation.conclusion.text}`,
+      );
+      shell.append(end);
+    }
+    derivationCard.append(shell);
+  }
+
   function renderResult(): void {
     resultCard.replaceChildren(el("h2", undefined, "∮ f(z) dz"));
     if (!integral) {
@@ -792,7 +946,11 @@ export function mountApp(root: Element): void {
     // formula rather than from integrating, and the quadrature below it is the corroboration.
     if (theorem?.exactValue) {
       const head = el("p", "resultValue exactValue");
-      head.append(badge("="), ` ${theorem.exactValue.text}`);
+      // From the verdict, not from a literal. This badge used to be a hand-written "=" because the
+      // verdict was capped at `≤` by the AGREEING quadrature — a claim that does not depend on the
+      // quadrature being labelled by it. `residueTheorem.ts` now reports the corroboration beside the
+      // value instead of inside it, so the computed level is the one to show.
+      head.append(badge(theorem.verdict.level), ` ${theorem.exactValue.text}`);
       resultCard.append(head);
       const field =
         poles?.radicand === null || poles?.radicand === undefined
@@ -801,10 +959,10 @@ export function mountApp(root: Element): void {
       resultCard.append(
         el("p", "muted small", `2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ${field}`),
       );
-      const check = el("p", theorem.agrees === true ? "crosscheck" : "restriction");
+      const check = el("p", theorem.crossCheck !== undefined ? "crosscheck" : "restriction");
       check.append(
-        theorem.agrees === true ? badge("≤") : badge("⚠"),
-        theorem.agrees === true
+        badge(theorem.crossCheck?.level ?? "⚠"),
+        theorem.crossCheck !== undefined
           ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
           : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
       );
@@ -986,7 +1144,9 @@ export function mountApp(root: Element): void {
       if (pole.possiblyRemovable) li.append(el("span", "tag warn", "may be removable"));
       if (pole.residue) {
         const res = el("span", "num residueText");
-        res.append(badge("="), ` Res = ${pole.residue.text}`);
+        // No badge: there is no per-pole certificate to read one from, and the card already states
+        // the pole report's own verdict above. A literal "=" here was a label with nothing behind it.
+        res.append(` Res = ${pole.residue.text}`);
         li.append(res);
       } else if (pole.isExact === false) {
         li.append(el("span", "tag warn", "≈ located numerically"));
