@@ -239,6 +239,18 @@ cross-app interop becomes user-visible). Two correctness guards also landed this
 scan over `@cas/core` (ADR-0006 AI-2) and a **Schwarz σ differential** guard between QD's engine and `@cas/schwarz`
 (ADR-0026 AI-2).
 
+**Beyond the runbook — a fifth app, `apps/contour-integration`** (started 2026-09): a sandbox and
+28-integral worked-example gallery for contour integration and the residue theorem, including the
+evaluation of real definite integrals in closed form. Plan, design and content spec are in
+[`docs/contour-integration/`](docs/contour-integration/) — **read `PLAN.md` then `DESIGN.md` before
+touching it**; the 28 gallery entries are the engine's specification, not examples added afterwards.
+Currently at **Milestone 0** (scaffold; built and gated, deliberately *not* in the Pages publish
+list — that happens at M3). It brought a **sixth** package, `@cas/rigor`
+([ADR-0009](docs/DECISIONS.md)), which is the first one *created* rather than extracted: the
+honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD `.mjs` that each
+later app reimplemented. **QD is not migrated onto it**, so the suite currently has two rigor
+vocabularies on purpose.
+
 Deferred / exploratory (not started): further correspondence families (circle-and-cardioid → cubic
 Chebyshev → general d:d), the remaining non-Laurent σ families (power-weighted PQD, log-weighted LQD),
 analytic branch continuation through cusps (uncertified — RISKS §3), and QD Schwarz df64 deep-zoom.

@@ -146,12 +146,15 @@ instead of an ad-hoc JSON blob.
 > **`@cas/dynamics` reached genesis**: its inverse-Böttcher core was extracted when the Riemann-map app
 > became a second consumer ([ADR-0014](DECISIONS.md#adr-0014-extract-casdynamics-on-the-second-consumer-rule-riemann-map)),
 > though that app has since **shed** it (ADR-0017), leaving Complex Dynamics the sole consumer.
-> The suite now ships **twelve** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
+> The suite now ships **thirteen** packages: `@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`,
 > `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, `@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, and `@cas/flow` (`@cas/exact`
 > through `@cas/export` extracted later than the phase plan on the ADR-0007 second-consumer rule; `@cas/conformal`
 > extracted *ahead* of demand, [ADR-0018](DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore);
 > `@cas/faber` is the exterior Faber-transform engine behind the Faber Transform app, [ADR-0024](DECISIONS.md#adr-0024-faber-transform-app--casfaber--polygonal-k-via-the-exterior-sc-engine);
-> `@cas/ui` is the shared **browser shell** — the canvas-a11y / fatal-boundary / off-thread-compute / nav-header primitives — extracted *ahead* of app adoption, [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell)).
+> `@cas/ui` is the shared **browser shell** — the canvas-a11y / fatal-boundary / off-thread-compute / nav-header primitives — extracted *ahead* of app adoption, [ADR-0032](DECISIONS.md#adr-0032-extract-casui-ahead-of-adoption-port-cds-product-shell);
+> and **`@cas/rigor`**, the verdict algebra behind the honest-labelling guardrail, which is the first package
+> **created rather than extracted** — that guardrail had no shared code at all, only ~6,000 lines of QD `.mjs`
+> that every later app reimplemented, [ADR-0040](DECISIONS.md#adr-0040-casrigor-extraction-by-reimplementation)).
 > The sections are kept as design intent; each notes where the functionality actually lives today.
 
 ### `@cas/ui` — the shared UI kit *(this section = the would-be **KaTeX/theming** kit; the `@cas/ui` PACKAGE now exists as a narrower browser shell — ADR-0032)*
