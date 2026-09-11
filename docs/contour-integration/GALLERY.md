@@ -151,10 +151,10 @@ implementation decision.
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
 together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
 substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
-`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Twelve
-records are loaded: **A1–A3** (circle), **A5–A7** (semicircle), **B1–B3** (Jordan) and **C1–C3**
-(indentation, removability, and the two-singularity ledger) — **every entry in tiers A, B and C
-except A4**, which is the M3 gate's thirteen less one.
+`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Thirteen
+records are loaded: **A1–A7** (circle and semicircle), **B1–B3** (Jordan) and **C1–C3** (indentation,
+removability, and the two-singularity ledger) — **every entry in tiers A, B and C**, which is the
+M3 gate's thirteen.
 
 Each solves to a **symbolic closed form**, asserted by name in `familyGolden.test.ts`:
 
@@ -162,7 +162,8 @@ Each solves to a **symbolic closed form**, asserted by name in `familyGolden.tes
 |---|---|---|---|
 | `2π√3/3` | `8π/3` | `π/6` | `π/2` |
 | `π√2/2` | `π/8` | `π/e` | `π/e` |
-| `π/2` | `π/2` | `π − π/e` | B3: decimal only |
+| `π/2` | `π/2` | `π − π/e` | `2π` |
+| B3: decimal only | | | |
 
 B3 is the one without a symbolic form, and its own record says why: its exponents are complex, so
 `Re` does not distribute over the terms and `e^{β}` contributes `cos` and `sin` of an irrational.
@@ -205,6 +206,28 @@ argument does not close and no principal value exists either. And C1's own free 
 executed: indenting *below* flips both the winding number and the sign of `iα·Res`, `∮` becomes
 `2πi` instead of 0, and the two changes cancel to the same π/2 — an engine that flipped only one
 would land on −π/2 or 3π/2 and look plausible either way.
+
+### 5.0e A4: no residue of its own, and the answer is still 2π
+
+`g(z) = e^z` is entire. The singular set of the integrand *as posed* is empty, the pole finder
+correctly returns nothing, and Cauchy's theorem correctly reports `∮ g dz = 0` — all true, all
+irrelevant. What is being integrated is `g(z)·(dz/(iz))`, and **the Jacobian supplies the only pole
+there is**. Its residue is `g(0)/i`: the Cauchy integral formula, equivalently the mean-value
+property of a harmonic function over a circle.
+
+With the index `n` exposed it becomes CIF *for derivatives*: `Res(g(z)/z^{n+1}, 0)` is the `n`-th
+Taylor coefficient of `g`, so `e^z/(i z^{n+1})` has residue `−i/n!` and the value is `2π/n!` —
+verified at `n = 0, 1, 2, 3, 5`. What it teaches is the fact A1 and A3 have been circling: **residue
+selection operates on the CONTOUR integrand, and its singular set differs from the posed integrand's
+whenever the substitution has a Jacobian.**
+
+A4 was the last of the thirteen to load, and the reason is worth recording. Its residue needs the
+series of an ENTIRE function, not the rational machinery — and the three steps are exactly the ones
+`exactResidue.ts` already took for a rational `f`: `splitOrder`, `seriesInverse`, `seriesMul`, all
+`@cas/exact`'s. The only thing added was the expansion of `e^{λw}` itself. The exponent coefficient
+`λ` also had to widen from `i·a` to a general Gaussian rational, because A4's is `1`, not imaginary;
+the algebra is closed either way and only the ARC BOUNDS care, so `imaginaryFrequency` is where they
+ask — and correctly refuse `e^z` on an arc, where it grows along the real axis.
 
 ### 5.0d C3: two singularities of different kinds in one ledger
 

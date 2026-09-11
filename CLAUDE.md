@@ -258,9 +258,8 @@ Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", 
 fails diagnostically — closing `∫cos x/(1+x²)` downward shows the bound diverging and names KILL.
 The 28 gallery records load as **data** through a schema and a loader enforcing four invariants,
 with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; six of
-them (A1–A3 via the `z = e^{iθ}` substitution, A5–A7, B1–B3 via an exponential output basis
-`Σ cₖ e^{βₖ}` that makes a Jordan residue exact without evaluating it — `∫cos x/(1+x²) = π/e`) are
-executed against the engine in the suite.
+them — **every entry in tiers A, B and C** — are executed against the engine in the suite, each
+solving to a symbolic closed form because the whole solve runs in units of π and never evaluates it.
 A record that fails an invariant is dropped, not thrown on. Still to come: free-hand contour
 editing, branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6). Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
 exponential basis `Σ cₖ e^{βₖ}`, in which the FORM is `=` and the decimal stays `≈`.

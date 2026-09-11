@@ -13,12 +13,12 @@
 // The exact path still uses the numeric one: floating roots make excellent **candidates**, and a
 // candidate is only promoted once the exact denominator vanishes there. Guess, then verify.
 import { tupleAlgebra, makeDurandKerner, type ComplexTuple } from "@cas/core";
-import type { Frac } from "@cas/exact";
+import { SqrtExt, type Frac } from "@cas/exact";
 import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
 import { toExactRational } from "./exactRational.js";
 import { asExponentialTimesRational } from "./exponentialFactor.js";
-import { asExponentialSum, isEntire, type ExpRationalForm } from "./exponentialSum.js";
+import { asExponentialSum, isEntire, residueAtZero, type ExpRationalForm } from "./exponentialSum.js";
 import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
 import { formatSqrtExt } from "./formatExact.js";
 import { ExpSum, formatExpSum, jordanExponent, weightedExpSum } from "./expSum.js";
@@ -423,7 +423,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
   // is REMOVABLE and the residue sum is empty — which is the entry's whole point, and the reason its
   // value has to come from the large arc instead.
   const sumForm = asExponentialSum(ast);
-  if (sumForm !== null && sumForm.terms.length > 1) {
+  if (sumForm !== null) {
     const entire = isEntire(sumForm);
     if (entire.ok) {
       return {
@@ -437,6 +437,46 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
           exactCert(
             "f is entire: every apparent singularity is removable, so Σ Res is empty",
             "exact Taylor expansion of Σ Nₖ(w)e^{iaₖw} at the origin, where e^{ia·0} = 1 keeps every coefficient in ℚ(i)",
+          ),
+        ],
+      };
+    }
+
+    // --- a pole at the ORIGIN of an entire numerator: A4, and the Cauchy integral formula -----
+    // `Res(g(z)/z^{n+1}, 0)` is the n-th Taylor coefficient of g. A4's `e^z/(i z^{n+1})` therefore
+    // has residue `−i/n!` exactly — the CIF for derivatives, computed rather than quoted, and the
+    // one thing that kept A4 out of the corpus.
+    const atZero = residueAtZero(sumForm);
+    if (atZero.ok && atZero.value.order > 0) {
+      const residue = SqrtExt.fromGauss(atZero.value.residue);
+      const pole: AlgebraicPole = {
+        at: SqrtExt.ZERO,
+        order: atZero.value.order,
+        residue,
+        radicand: 1n,
+      };
+      const sum = weightedExpSum([pole], () => 1);
+      return {
+        poles: [
+          {
+            at: [0, 0],
+            order: pole.order,
+            orderCertain: true,
+            possiblyRemovable: false,
+            residue: { value: residue.toTuple(), text: formatSqrtExt(residue) },
+            isExact: true,
+          },
+        ],
+        rational: true,
+        exactlyComplete: true,
+        exactResidueSum: { value: sum.toTuple(), text: formatExpSum(sum) },
+        exactPoles: [pole],
+        radicand: null,
+        exponentialSum: sumForm,
+        certificates: [
+          exactCert(
+            `one pole at the origin, of order ${pole.order}, with residue ${formatSqrtExt(residue)}`,
+            "the coefficient of w^{m−1} in N(w)·E(w)⁻¹, by exact ℚ(i) series — for g(z)/z^{n+1} that is the n-th Taylor coefficient of g, which is the Cauchy integral formula",
           ),
         ],
       };

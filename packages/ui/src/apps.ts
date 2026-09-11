@@ -28,5 +28,6 @@ export const SUITE_APPS: readonly SuiteApp[] = [
   { id: "2d-hydrodynamics", label: "2D Hydrodynamics", badge: "Ideal flow" },
   { id: "hele-shaw-flow", label: "Hele-Shaw Flow", badge: "Free-boundary flow" },
   { id: "potential-theory", label: "Potential Theory", badge: "Potential theory" },
+  { id: "contour-integration", label: "Contour Integration", badge: "Residue theorem" },
   { id: "correspondences", label: "Correspondences", badge: "Coming soon", soon: true },
 ];

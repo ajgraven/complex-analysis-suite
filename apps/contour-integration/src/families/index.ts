@@ -16,6 +16,7 @@ import { BONUS_ZERO, bonusMagnitudes, buildSystem } from "./system.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
 import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
 import { a3CircleCosNTheta } from "./records/a3-circle-cos-n-theta.js";
+import { a4CircleCifTaylor } from "./records/a4-circle-cif-taylor.js";
 import { a5SemicircleOrder2 } from "./records/a5-semicircle-order2.js";
 import { c1IndentedSinc } from "./records/c1-indented-sinc.js";
 import { c2RemovableOneMinusCos } from "./records/c2-removable-one-minus-cos.js";
@@ -33,21 +34,19 @@ export { solveExact, applyCombination, type SolveReport, type RatMatrix } from "
 /**
  * The records, in gallery order.
  *
- * Tiers A and B less A4 — the families the engine can run end to end today. A1–A3 arrived with the
- * `z = e^{iθ}` substitution; B1–B3 with the exponential basis `Σ cₖ e^{βₖ}`, which is what lets a
- * Jordan residue be exact without being evaluated.
+ * **All of tiers A, B and C** — the families the engine runs end to end. A1–A3 arrived with the
+ * `z = e^{iθ}` substitution; A4 with the residue-at-the-origin series, which is the Cauchy integral
+ * formula; B1–B3 with the exponential basis `Σ cₖ e^{βₖ}`, which lets a Jordan residue be exact
+ * without being evaluated; C1–C3 with L4, L5 and Pass 5's solve.
  *
- * **A4 is not here.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to `e^z/(i z^{n+1})`,
- * whose exact residue is the Taylor coefficient of an ENTIRE function — `1/n!` — and the residue
- * engine's exact path stops at rational functions times one exponential. A4 needs a
- * known-entire-function series table, which is its own piece of work. Tiers C–G need indentation,
- * branch cuts and the kernel families of M4/M5. A record loaded before its machinery exists would be
- * a worked example that cannot be worked.
+ * Tiers D–G need branch cuts and the kernel families of M4/M5. A record loaded before its machinery
+ * exists would be a worked example that cannot be worked.
  */
 export const FAMILIES: readonly Family[] = [
   a1CircleLinearCos,
   a2CirclePoisson,
   a3CircleCosNTheta,
+  a4CircleCifTaylor,
   a5SemicircleOrder2,
   a6SemicircleQuartic,
   a7SemicircleOrder3,

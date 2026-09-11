@@ -29,6 +29,11 @@ const numericValues = (g: Golden): Record<string, number> =>
  */
 function isVariant(family: Family, g: Golden): boolean {
   const declared = new Set(family.parameters.map((p) => p.name));
+  // A declared SYMBOL is a binding too, not a variant. A4's fixtures name `g: "exp(z)"` — the
+  // entire function whose Taylor coefficients the contour reads off — and it is a symbol rather
+  // than a parameter because it is a function, not a number. Counting it as a variant would have
+  // skipped every one of A4's fixtures silently.
+  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
   return Object.keys(g.params).some((k) => !declared.has(k));
 }
 
@@ -246,6 +251,7 @@ describe("the closed form each record establishes", () => {
     "circle-linear-cos": "2π√3/3",
     "circle-poisson": "8π/3",
     "circle-cos-n-theta": "π/6",
+    "circle-cif-taylor": "2π",
     "semicircle-order2": "π/2",
     "semicircle-quartic": "π√2/2",
     "semicircle-order3": "π/8",

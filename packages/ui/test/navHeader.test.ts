@@ -72,7 +72,7 @@ describe("mountNavHeader", () => {
     expect(targets).toEqual(["../riemann-map/#s=demo", "../complex-function-plotter/#s=demo"]);
   });
 
-  it("SUITE_APPS covers the eleven apps in launcher order", () => {
+  it("SUITE_APPS covers the twelve apps in launcher order", () => {
     expect(SUITE_APPS.map((a) => a.id)).toEqual([
       "complex-dynamics",
       "quadrature-domains",
@@ -84,6 +84,7 @@ describe("mountNavHeader", () => {
       "2d-hydrodynamics",
       "hele-shaw-flow",
       "potential-theory",
+      "contour-integration",
       "correspondences",
     ]);
     expect(SUITE_APPS.find((a) => a.id === "correspondences")?.soon).toBe(true);

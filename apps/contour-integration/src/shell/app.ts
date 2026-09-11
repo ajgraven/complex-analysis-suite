@@ -1,5 +1,6 @@
 import { makeComplexFn, parse, type Node } from "@cas/expr";
 import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
+import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
 import {
   DEFAULT_VIEW,
   panBy,
@@ -97,6 +98,9 @@ export function mountApp(root: Element): void {
   stageWrap.append(glCanvas, inkCanvas, overlay);
   shell.append(bar, stageWrap, rail, strip);
   root.replaceChildren(shell);
+  // The shared suite nav (ADR-0032): back to the launcher, and across to the sibling apps. Mounted
+  // before the stage so it sits above it in the document order a screen reader walks.
+  mountNavHeader(shell, { current: "contour-integration" });
 
   // Bar: the integrand.
   const input = el("input", "expr");
@@ -312,6 +316,9 @@ export function mountApp(root: Element): void {
    * The Closing Ledger. The headline is a SENTENCE, not a number: "does this argument finish" is the
    * question a number cannot answer, and it is the one thing this app offers that nothing else does.
    */
+  /** The last sentence announced, so the live region does not repeat itself on every redraw. */
+  let announced = "";
+
   function renderLedger(): void {
     ledgerCard.replaceChildren(el("h2", undefined, "Does the argument close?"));
     if (!ledger) {
@@ -322,6 +329,17 @@ export function mountApp(root: Element): void {
     const head = el("p", ledger.closes ? "headline closes" : "headline open");
     head.textContent = ledgerHeadline(ledger);
     ledgerCard.append(head);
+
+    // The headline IS the product — "does this argument close?" — so a screen-reader user should
+    // hear it change rather than have to go looking for it. Guarded against repeating on a redraw
+    // that changed nothing, which would otherwise make the live region chatter on every pan.
+    const sentence = ledger.closes && ledger.value
+      ? `${ledgerHeadline(ledger)} The value is ${ledger.value.text}.`
+      : ledgerHeadline(ledger);
+    if (sentence !== announced) {
+      announced = sentence;
+      a11y.announce(sentence);
+    }
 
     if (ledger.closes && ledger.value) {
       const v = el("p", "resultValue exactValue");
@@ -552,6 +570,32 @@ export function mountApp(root: Element): void {
   };
   stageWrap.addEventListener("pointerup", endDrag);
   stageWrap.addEventListener("pointercancel", endDrag);
+
+  // The accessible-canvas contract (ADR-0032): the GL canvas is the RENDER surface and is hidden
+  // from assistive tech; the ink overlay above it carries the name, the focus and the keyboard map,
+  // so the stage is navigable without a pointer at all.
+  const a11y = attachCanvasA11y(inkCanvas, {
+    label:
+      "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
+      "Arrow keys pan, plus and minus zoom.",
+    role: "application",
+    render: glCanvas,
+    liveRegionHost: stageWrap,
+    onKey: (action: CanvasKeyAction) => {
+      const port = viewport();
+      if (action.kind === "pan") {
+        // A keyboard step is a fixed fraction of the viewport, so it means the same thing at every
+        // zoom level — unlike a pixel step, which shrinks as you zoom in.
+        const step = Math.min(port.width, port.height) / 12;
+        view = panBy(view, -action.dx * step, -action.dy * step, port);
+      } else if (action.kind === "zoom") {
+        view = zoomAt(view, action.direction > 0 ? 1.25 : 1 / 1.25, port.width / 2, port.height / 2, port);
+      } else {
+        return;
+      }
+      requestDraw();
+    },
+  });
 
   stageWrap.addEventListener(
     "wheel",
