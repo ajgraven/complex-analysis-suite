@@ -1,51 +1,238 @@
-/* Chrome tokens only. The domain colouring is DATA and does not theme-swap (PLAN.md §5.3); only the
-   contour halo's polarity will flip with the theme. Palette values arrive with the Stage. */
+/* Chrome tokens only. The phase portrait is DATA and does not theme-swap (PLAN.md §5.3); only the
+   contour halo's polarity will flip with the theme, once there is a contour. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
   --c-bg: #0f1115;
   --c-panel: #171a21;
   --c-border: #262b36;
   --c-text: #e7e9ee;
   --c-muted: #99a1b3;
   --c-accent: #6ea8fe;
+  --c-warn: #f0b45e;
+  --rail: 21rem;
+  --bar: 3rem;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   margin: 0;
-  min-height: 100vh;
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--c-text);
   background: var(--c-bg);
+  overflow: hidden;
 }
 
-/* Every live-updating number is tabular, so digits do not jitter at 60fps (PLAN.md §5.3). */
-.num {
+/* Every live-updating number is tabular, so digits do not jitter (PLAN.md §5.3). */
+.num,
+.poles li {
   font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
-.scaffold {
-  max-width: 44rem;
-  margin: 0 auto;
-  padding: clamp(1.5rem, 6vw, 4rem) 1.25rem;
+.shell {
+  display: grid;
+  grid-template-columns: 1fr var(--rail);
+  grid-template-rows: var(--bar) 1fr;
+  grid-template-areas: "bar bar" "stage rail";
+  height: 100vh;
 }
 
-.scaffold h1 {
-  margin: 0 0 0.4rem;
-  font-size: 1.6rem;
+.bar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0 0.9rem;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.brand {
+  font-weight: 600;
   letter-spacing: -0.01em;
+  margin-right: 0.6rem;
 }
 
-.scaffold p {
+.flabel {
   color: var(--c-muted);
-  margin: 0 0 1rem;
 }
 
-.scaffold code {
-  background: rgba(255, 255, 255, 0.06);
-  padding: 0.1rem 0.35rem;
-  border-radius: 5px;
+.expr {
+  flex: 0 1 22rem;
+  padding: 0.32rem 0.5rem;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: #0c0e12;
+  color: var(--c-text);
+  font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.expr:focus-visible {
+  outline: 2px solid var(--c-accent);
+  outline-offset: 1px;
+}
+
+.presets {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.preset {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--c-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--c-muted);
+  font: 12px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  cursor: pointer;
+}
+
+.preset:hover {
+  color: var(--c-text);
+  border-color: var(--c-accent);
+}
+
+.stage {
+  grid-area: stage;
+  position: relative;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.stage:active {
+  cursor: grabbing;
+}
+
+.gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* A pole marker. An open ring, so the phase right at the pole stays visible through it —
+   the singularity is the thing being pointed at, not something to paint over. */
+.pole {
+  position: absolute;
+  width: 13px;
+  height: 13px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid #101216;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.85);
+}
+
+.pole.uncertain {
+  border-style: dashed;
+}
+
+.poleOrder {
+  position: absolute;
+  left: 15px;
+  top: -2px;
+  white-space: nowrap;
+  font: 11px/1 ui-monospace, Menlo, Consolas, monospace;
+  color: #101216;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.rail {
+  grid-area: rail;
+  border-left: 1px solid var(--c-border);
+  background: var(--c-panel);
+  overflow-y: auto;
+  padding: 0.9rem;
+}
+
+.card h2 {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
+}
+
+.muted {
+  color: var(--c-muted);
+  margin: 0.4rem 0;
+}
+
+.verdict {
+  margin: 0 0 0.6rem;
+  color: var(--c-muted);
+}
+
+.badge {
+  display: inline-block;
+  min-width: 1.35rem;
+  text-align: center;
+  padding: 0.05rem 0.3rem;
+  margin-right: 0.3rem;
+  border-radius: 4px;
+  border: 1px solid var(--c-border);
+  background: #0c0e12;
+  color: var(--c-text);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+}
+
+.badge.small {
+  font-size: 11px;
+}
+
+.poles {
+  list-style: none;
+  margin: 0 0 0.8rem;
+  padding: 0;
+}
+
+.poles li {
+  padding: 0.22rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12.5px;
+}
+
+.tag {
+  display: inline-block;
+  margin-left: 0.4rem;
+  padding: 0 0.32rem;
+  border-radius: 999px;
+  background: rgba(110, 168, 254, 0.14);
+  color: var(--c-accent);
+  font: 11px/1.6 system-ui, sans-serif;
+}
+
+.tag.warn {
+  background: rgba(240, 180, 94, 0.16);
+  color: var(--c-warn);
+}
+
+.cert {
+  margin: 0.35rem 0;
+  color: var(--c-muted);
+  font-size: 12px;
+}
+
+.error {
+  margin: 0 0 0.8rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid rgba(240, 180, 94, 0.4);
+  border-radius: 6px;
+  background: rgba(240, 180, 94, 0.08);
+  color: var(--c-warn);
+  font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace;
 }
