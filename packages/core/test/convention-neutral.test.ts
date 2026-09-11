@@ -49,7 +49,12 @@ function stripComments(text: string): string {
   const noBlock = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
   return noBlock
     .split("\n")
-    .map((line) => line.replace(/\/\/.*$/, ""))
+    // No `$` anchor. After splitting on a newline, a CRLF checkout leaves a trailing carriage
+    // return; `.` does not match one, and `$` (without the `m` flag) will not match before it — so
+    // the pattern could not fire at all, the `//` comment survived, and this guard flagged the very
+    // comments that assert core is free of the constant it bans. Dropping the anchor makes the
+    // stripper line-ending agnostic.
+    .map((line) => line.replace(/\/\/.*/, ""))
     .join("\n");
 }
 

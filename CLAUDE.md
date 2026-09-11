@@ -78,13 +78,39 @@ Read the docs in this order before making changes: [`docs/VISION.md`](docs/VISIO
 - **Don't over-reach.** Follow the phase order; extract only when a second consumer needs
   it; ask before large speculative refactors.
 
-## Source repositories (fill in before running Phase 0)
+## Getting set up (any machine — local or cloud)
 
+**The toolchain is pinned; do not improvise it.** Node **22** (`.nvmrc`, `engines.node >= 22`) and
+**pnpm 9.15.9** (`packageManager` — `corepack enable` honours it). Nothing else is required: no
+global installs, no native build tools, no GPU.
+
+```bash
+pnpm install
+pnpm build
 ```
-CD_SRC=<path-or-URL to ComplexDynamicsJS>      # already Vite + TypeScript
-QD_SRC=<path-or-URL to QuadratureDomains>      # currently vanilla JS, no build
+
+**The gate — run it after your LAST edit, never before it:**
+
+```bash
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
-`scripts/bootstrap-subtrees.sh` uses these to pull both apps in with history preserved.
+
+Green is **470 test files / 4082 tests** with lint and typecheck silent. `pnpm lint` includes
+`pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
+clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
+separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
+the only jsdom project. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+real failures before.
+
+Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
+`vite` left running in the background.
+
+**Line endings are LF everywhere**, enforced by `.gitattributes`. The index was always LF; before
+that file existed, a Windows checkout produced a CRLF working tree and two gate tests failed locally
+while passing in CI. If that split ever reappears, suspect the checkout before the code.
+
+*Historical:* `scripts/bootstrap-subtrees.sh` pulled Complex Dynamics and Quadrature Domains in with
+their history during Phase 0. Both were imported long ago; the script is kept for provenance only.
 
 ## Status (Phases 0–6 complete)
 

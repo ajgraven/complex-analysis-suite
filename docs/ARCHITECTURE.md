@@ -179,6 +179,23 @@ pixel. Pure, DOM-free, convention-neutral (ADR-0006: byte manipulation, no maths
 Dynamics, the Complex-Function Plotter, and the Riemann-map studio. The natural future home for the
 medium-term high-res / SVG export goal.
 
+### `@cas/rigor` — the verdict algebra *(built — ADR-0040)*
+
+The **honest-labelling guardrail in code**. `Level` is `= | ≤ | ≥ | ≈ | ? | ⚠`, and a `Verdict` is the
+`meet` over the certificates that produced it, so a claim can only ever be as strong as its weakest
+input. Two meets are worth knowing: `meet("≤","≥") = "≈"` — an enclosure is not a one-sided bound —
+and `⚠` absorbs everything.
+
+What makes it more than a convention is **branding**. `Certificate` and `Verdict` carry a
+`unique symbol`, so `{ level: "=" }` written by hand is a *compile error*; the only way to get one is
+through `exact` / `bound` / `estimate` / `unknown` / `refuse` and `assembleVerdict`. `mayReportValue`
+is then the single gate a UI consults before printing a number at all.
+
+The first package **created rather than extracted** (ADR-0040): the guardrail had existed since
+ADR-0001 with no shared code behind it — only ~6,000 lines of Quadrature-Domains `.mjs` that each
+later app reimplemented. Consumers: `apps/contour-integration`. **QD is deliberately not migrated**,
+so the suite carries two rigor vocabularies on purpose; that migration is a later ADR.
+
 ### `@cas/conformal` — the conformal-map builder *(built — ADR-0018, extract-ahead-of-demand)*
 Holds the numerical **Riemann-map builder**: the Vandermonde–Arnoldi stable polynomial basis
 (Brubeck–Nakatsukasa–Trefethen 2021), the **lightning** solver f: Ω → 𝔻 (Gopal–Trefethen 2019) with
@@ -348,7 +365,8 @@ tools:
   (and on `workflow_dispatch`), gates on `lint` → `typecheck` → `test` → `build`, then assembles
   **one combined Pages site**: `apps/launcher/dist` at the root, with `complex-dynamics/`,
   `quadrature-domains/`, `complex-function-plotter/`, `riemann-map/`, `argument-principle/`,
-  `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, and `potential-theory/` beneath it (`apps/correspondences` is built but **not** published). Note the
+  `faber-transform/`, `2d-electrostatics/`, `2d-hydrodynamics/`, `hele-shaw-flow/`, `potential-theory/`,
+  and `contour-integration/` beneath it (`apps/correspondences` is built but **not** published). Note the
   shape — apps build independently but publish
   *together*, as a single artifact, not as independent Pages sites.
 - `apps/correspondences` is **built but not published** (kept in the build for CI parity; the
