@@ -49,7 +49,11 @@ function stripComments(text: string): string {
   const noBlock = text.replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "));
   return noBlock
     .split("\n")
-    .map((line) => line.replace(/\/\/.*$/, ""))
+    // No `$`: after splitting on "
+" a CRLF checkout leaves a trailing "", and `.` does not match
+    // it while `$` (no `m` flag) will not match before it — so the pattern could not fire at all and
+    // the `//` comment survived, flagging the very comments that assert core is π-free.
+    .map((line) => line.replace(/\/\/.*/, ""))
     .join("\n");
 }
 

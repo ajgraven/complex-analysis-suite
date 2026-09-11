@@ -1,0 +1,20 @@
+# Line endings are normalised to LF everywhere.
+#
+# The repository's index was already all-LF; what varied was the WORKING TREE, because a checkout on
+# Windows with `core.autocrlf=true` converted to CRLF. That split cost real time: two gate tests
+# failed locally and passed in CI, and the first diagnosis of one of them was "a pre-existing defect
+# on master" — it was neither pre-existing nor a defect, it was the checkout.
+#
+# `text=auto eol=lf` makes every checkout agree with CI and with every other machine, which matters
+# more once development moves between a local machine and a cloud environment.
+* text=auto eol=lf
+
+# Binary: never touch these.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.wasm binary

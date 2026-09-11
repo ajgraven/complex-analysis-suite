@@ -2768,7 +2768,8 @@ its builder when Schwarz–Christoffel landed.
 **Scope boundary — QD is deliberately NOT a consumer.** Quadrature Domains is `allowJs`/vanilla
 ([ADR-0002](#adr-0002-typescript-as-the-common-language)), large, and *already* product-mature (the audit's
 top half). Forcing it onto a strict-TS shell buys nothing and violates the ADR-0002 / [ADR-0008](#adr-0008-extract-casexact-keep-qds-sym-core-separate)
-precedent of leaving QD's mature surface in place. `@cas/ui` targets the **six TS apps**.
+precedent of leaving QD's mature surface in place. `@cas/ui` targets the **strict-TS apps** — six at the
+time of writing, and every TS app added since (ADR-0036's three, ADR-0037's, and `contour-integration`).
 
 **Dependency direction.** `@cas/ui` is a leaf UI package. In U0 it has **no** `@cas/*` runtime dependency (the
 nav picker is caller-driven — the app supplies `accepts`/`hrefFor`); the `@cas/interchange` edge is added at U7
@@ -2854,6 +2855,18 @@ when the picker consults the known map kinds. App ids/labels are **data** in `ap
    it. Both verified with a headless-Chromium smoke (arg-principle: 3 img-labelled panes, no fatal banner;
    plotter: `#view` a11y intact, no error shown; no console errors either); their 15 + 18 tests stay green.
    **This completes the app rollout (U1–U6).**
+6b. [x] **Adopted in `apps/contour-integration`** (the fifth app, ADR-0040), which had shipped M0–M3
+   without the shell at all — no nav header, no fatal boundary, no accessible canvas, and it was **not in
+   `SUITE_APPS`**, so no other app's nav could link to it even though it is published. Now: the boot runs
+   inside `runWithFatalBoundary` (it builds a WebGL2 stage, so a driver without WebGL2 left a blank page
+   with the reason only in the console); `mountNavHeader` with `current: "contour-integration"`; and
+   `attachCanvasA11y` on the ink overlay with the GL canvas `aria-hidden`, arrows panning by a fixed
+   *fraction* of the viewport so a step means the same thing at every zoom level. The ledger headline —
+   "does this argument close?", which IS the product — is announced through the live region, guarded
+   against repeating on a redraw that changed nothing. Added to the `a11y` CI roster. A stale
+   `@cas/interchange` dependency that nothing imported was dropped in the same pass; it returns with the
+   `#vs=` permalink work.
+
 7. [ ] **U7:** wire the nav header's generic "Send to…" hand-off picker to `@cas/interchange`'s known map kinds
    (adds the `@cas/interchange` dependency), turning the 3 hard-coded deep-link buttons into discovery.
 8. [x] **U8 DONE — non-blocking `axe` CI job so a11y regressions are caught, not just introduced-once-and-forgotten.**

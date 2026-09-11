@@ -318,6 +318,15 @@ export function mountApp(root: Element): void {
    */
   /** The last sentence announced, so the live region does not repeat itself on every redraw. */
   let announced = "";
+  /**
+   * Set once the accessible canvas is attached, below.
+   *
+   * A binding rather than a direct reference to that `const`: it is declared after this function and
+   * only happens to be initialised before the first render. Reordering the mount would turn that
+   * into a temporal-dead-zone throw at runtime that the type checker cannot see, so the indirection
+   * makes the order a non-issue instead of a thing to remember.
+   */
+  let announce: (message: string) => void = () => {};
 
   function renderLedger(): void {
     ledgerCard.replaceChildren(el("h2", undefined, "Does the argument close?"));
@@ -338,7 +347,7 @@ export function mountApp(root: Element): void {
       : ledgerHeadline(ledger);
     if (sentence !== announced) {
       announced = sentence;
-      a11y.announce(sentence);
+      announce(sentence);
     }
 
     if (ledger.closes && ledger.value) {
@@ -574,7 +583,7 @@ export function mountApp(root: Element): void {
   // The accessible-canvas contract (ADR-0032): the GL canvas is the RENDER surface and is hidden
   // from assistive tech; the ink overlay above it carries the name, the focus and the keyboard map,
   // so the stage is navigable without a pointer at all.
-  const a11y = attachCanvasA11y(inkCanvas, {
+  const stageA11y = attachCanvasA11y(inkCanvas, {
     label:
       "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
       "Arrow keys pan, plus and minus zoom.",
@@ -596,6 +605,8 @@ export function mountApp(root: Element): void {
       requestDraw();
     },
   });
+
+  announce = (message) => stageA11y.announce(message);
 
   stageWrap.addEventListener(
     "wheel",

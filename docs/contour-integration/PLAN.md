@@ -583,6 +583,19 @@ Ledger's subject.
 arc certified; **the LHP semicircle for `∫cos x/(1+x²)` shows its bound diverging** and names the
 failing constraint; p.v. is a distinct result type from a convergent integral.
 
+> **✅ GATE MET.** All thirteen load and are executed against the engine in the suite, each solving to
+> a symbolic closed form asserted by name (`familyGolden.test.ts`); the diverging LHP bound and its
+> KILL row are pinned in `ledger.test.ts`; and p.v. is carried by the target's three-state
+> `convergence` plus `auxiliary.principalValue` (C3's gap G6). B3 is the one entry whose *decimal*
+> stays `≈`, which is its own record's position — its exponents are complex, so `Re` does not
+> distribute and `e^{β}` carries cos and sin of an irrational.
+>
+> **Still open from M3's scope**, and deliberately so: the Family records are not wired into the
+> SHELL — there is no picker, so the gallery is testable but not browsable, which is the gap between
+> "the records execute" and "a user can open one". Also open: the generated derivation panel, the
+> Pólya work/flux toggle, and M1's pen-tool free-path editor. Running status lives in
+> [`GALLERY.md`](GALLERY.md) §5.
+
 ### M4 — Branch cuts · *L*
 `BranchChoice` model, admissibility validator, jump weights **verified by numeric continuation
 probe before use**. CPU lift along path with `|Δθ| ≤ π/4` control; GPU `cutCorrection` +
