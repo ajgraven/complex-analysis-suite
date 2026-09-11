@@ -44,7 +44,7 @@ function solve(family: Family, g: Golden, overrides: Record<string, number> = {}
   const piUnits = must(r.theorem.piUnits, `${family.id}: a closed-contour value in units of π`);
   const solved = solveTarget(family, {
     closedContourPiUnits: piUnits,
-    smallArcs: r.ledger.smallArcs,
+    pieceLimits: r.ledger.pieceLimits,
     bindings: g.params,
   });
   if (!solved.ok) throw new Error(`${family.id}: Pass 5 refused — ${solved.reason}`);
@@ -141,6 +141,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "jordan-strict",
       "jordan-quartic",
       "indented-sinc",
+      "removable-one-minus-cos",
     ]);
   });
 });

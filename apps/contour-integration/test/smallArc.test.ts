@@ -96,7 +96,7 @@ function solveOn(contour: Contour) {
   if (piUnits === undefined) throw new Error("no closed-contour value");
   const solved = solveTarget(c1IndentedSinc, {
     closedContourPiUnits: piUnits,
-    smallArcs: ledger.smallArcs,
+    pieceLimits: ledger.pieceLimits,
   });
   if (!solved.ok) throw new Error(solved.reason);
   return { integral, theorem, ledger, solved: solved.solved };
@@ -130,12 +130,12 @@ describe("indenting below must agree with indenting above — the record's free 
 
     // Above: the pole is excluded, ∮ = 0, and the indentation pays −iπ.
     expect(above.integral.windings[0].n).toBe(0);
-    expect(formatExpSum(above.ledger.smallArcs[0].contribution)).toBe("−i");
+    expect(formatExpSum(above.ledger.pieceLimits[0].contribution)).toBe("−i");
     expect(above.theorem.exactValue?.text).toBe("0");
 
     // Below: the pole is enclosed, ∮ = 2πi, and the indentation pays +iπ.
     expect(under.integral.windings[0].n).toBe(1);
-    expect(formatExpSum(under.ledger.smallArcs[0].contribution)).toBe("i");
+    expect(formatExpSum(under.ledger.pieceLimits[0].contribution)).toBe("i");
     expect(under.theorem.exactValue?.text).toBe("2πi");
 
     // Two different routes, the same answer — which is the point. An engine that flipped only one of

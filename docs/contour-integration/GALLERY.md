@@ -151,9 +151,10 @@ implementation decision.
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
 together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
 substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
-`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Ten
-records are loaded: **A1–A3** (circle), **A5–A7** (semicircle), **B1–B3** (Jordan) and **C1** (the
-indented semicircle) — every entry in tiers A and B except A4, plus the Dirichlet integral.
+`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Eleven
+records are loaded: **A1–A3** (circle), **A5–A7** (semicircle), **B1–B3** (Jordan), **C1** (the
+indented semicircle) and **C2** (removability + L5) — every entry in tiers A and B except A4, plus
+the two halves of the C1/C2 contrast.
 
 **A4 is deliberately absent.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to
 `e^z/(i z^{n+1})`, whose exact residue is the Taylor coefficient of an *entire* function — `1/n!` —
@@ -193,6 +194,27 @@ argument does not close and no principal value exists either. And C1's own free 
 executed: indenting *below* flips both the winding number and the sign of `iα·Res`, `∮` becomes
 `2πi` instead of 0, and the two changes cancel to the same π/2 — an engine that flipped only one
 would land on −π/2 or 3π/2 and look plausible either way.
+
+### 5.0c C2 is the same π, moved
+
+C1's reflex is to indent whatever sits on the contour. **C2 is where that reflex is wrong**, and the
+engine earns it: the numerator of `(1 − e^{iz} + iz)/z²` vanishes to order 2 at the origin — exactly
+matching the denominator — computed by an exact Taylor expansion. That is decidable *at the origin
+only*, because `e^{ia·0} = 1` is a Gaussian rational; about any other point the constant `e^{iar}`
+appears and whether such a sum vanishes is a transcendence question, so it refuses there.
+
+The auxiliary was built by subtracting the principal part `i/z` to make the origin removable — and
+subtracting a principal part does not DELETE that term, it **moves its contribution onto the large
+arc**. There `z·f(z) → i`, not 0, so **L5** — not L2, not Jordan — returns `iα·L = iπ·i = −π`. C1's
+indentation pays `−iπ·Res = −π` and C2's arc pays `iπ·L = −π`: the same π, different piece, and both
+land the target on π/2. The test asserts they produce the identical `−1` in units of π.
+
+Two things this needed. `(1 − e^{iz} + iz)/z²` is a **sum** of exponential terms, which the tier-B
+single-factor reader cannot see, so `asExponentialSum` reads `f` as `(Σ Nₖ(z)e^{iaₖz})/D(z)` — and
+that one decomposition serves both the removability test and L5's limit. And **L5 is declared, not
+inferred**: the degree test that would pick L2 is exactly the one that fails here, so guessing would
+pick the wrong lemma and silently return 0. When L5 is *not* declared the engine declines the arc
+rather than claiming a bound, which is what stops the 0 being printed — that refusal is tested.
 
 ### 5.0a The exponential basis: `=` on the form, `≈` on the decimal
 

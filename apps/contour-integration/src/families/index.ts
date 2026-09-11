@@ -18,6 +18,7 @@ import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
 import { a3CircleCosNTheta } from "./records/a3-circle-cos-n-theta.js";
 import { a5SemicircleOrder2 } from "./records/a5-semicircle-order2.js";
 import { c1IndentedSinc } from "./records/c1-indented-sinc.js";
+import { c2RemovableOneMinusCos } from "./records/c2-removable-one-minus-cos.js";
 import { b1JordanCosineKernel } from "./records/b1-jordan-cosine-kernel.js";
 import { b2JordanStrict } from "./records/b2-jordan-strict.js";
 import { b3JordanQuartic } from "./records/b3-jordan-quartic.js";
@@ -53,6 +54,7 @@ export const FAMILIES: readonly Family[] = [
   b2JordanStrict,
   b3JordanQuartic,
   c1IndentedSinc,
+  c2RemovableOneMinusCos,
 ];
 
 /**

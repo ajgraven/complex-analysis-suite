@@ -24,6 +24,7 @@ import type { Piece } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { smallArcLimit } from "../kernel/bounds/smallArc.js";
+import { largeArcLimit } from "../kernel/bounds/largeArcLimit.js";
 import type { ExpSum } from "../kernel/expSum.js";
 import type { ResidueTheoremResult } from "./residueTheorem.js";
 
@@ -52,13 +53,19 @@ export interface LedgerResult {
   /** False in sandbox mode, where no piece is the target and there is no real integral to solve for. */
   readonly hasTarget: boolean;
   /**
-   * The exact limits of any INDENTATIONS, in units of π.
+   * The exact limits of the pieces that do NOT vanish, in units of π.
    *
-   * L4 is the one lemma in the catalogue whose piece does not vanish — it contributes `iα·Res` — so
-   * its value has to leave the ledger for Pass 5 to use. A `vanish` piece with any other lemma
-   * contributes nothing and needs no entry here.
+   * Two lemmas land here. **L4** is an indentation and contributes `iα·Res`; **L5** is a large arc
+   * along which `z·f → L ≠ 0` and contributes `iα·L`. Both are `vanish`-role pieces that carry a
+   * known limit rather than zero — DESIGN §4 Pass 5's `bᵢ = 0, or a known limit` — and both have to
+   * leave the ledger for Pass 5 to use. A piece discharged by L1/L2/L3 contributes nothing and gets
+   * no entry.
+   *
+   * C1 and C2 are the same π seen twice: C1's indentation pays `−iπ·Res` and C2's arc pays `iπ·L`,
+   * because subtracting a principal part to make the origin removable MOVES that contribution onto
+   * the arc rather than deleting it.
    */
-  readonly smallArcs: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
+  readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
 }
 
 /** How the arcs of a contour are disposed of. `piMultiple` is the arc's angular extent over π. */
@@ -158,7 +165,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
   const { ast, pieces, spec, poles, integral, theorem } = input;
   const rows: LedgerRow[] = [];
   const certificates: Certificate[] = [];
-  const smallArcs: { pieceId: string; contribution: ExpSum }[] = [];
+  const pieceLimits: { pieceId: string; contribution: ExpSum }[] = [];
 
   const push = (row: LedgerRow): void => {
     rows.push(row);
@@ -183,7 +190,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       verdict: assembleVerdict(certificates),
       failedAt: "LEGALITY",
       hasTarget: spec.some((p) => p.role === "target"),
-      smallArcs,
+      pieceLimits,
     };
   }
 
@@ -207,7 +214,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       verdict: assembleVerdict(certificates),
       failedAt: "LEGALITY",
       hasTarget: spec.some((p) => p.role === "target"),
-      smallArcs,
+      pieceLimits,
     };
   }
 
@@ -288,7 +295,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     if (piece.role === "vanish" && piece.lemma === "L4") {
       const small = smallArcLimit(geom, poles.exactPoles ?? [], poles.exponentialFrequency);
       if (small.ok) {
-        smallArcs.push({ pieceId: piece.id, contribution: small.limit.contribution });
+        pieceLimits.push({ pieceId: piece.id, contribution: small.limit.contribution });
         push(
           rowFrom(
             "KILL",
@@ -308,6 +315,50 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             small.certificate,
             piece.id,
             "L4 needs a simple pole at the centre of the arc; at order ≥ 2 no limit exists and no principal value does either",
+          ),
+        );
+      }
+      continue;
+    }
+
+    // L5: the large arc that does not vanish. Like L4 it is declared, not inferred — the degree test
+    // that would pick L2 is exactly the one that fails here, so guessing would pick the wrong lemma
+    // and silently return 0 for the target (C2's `l2-instead-of-l5` trap).
+    if (piece.role === "vanish" && piece.lemma === "L5") {
+      const form = poles.exponentialSum;
+      if (form === undefined) {
+        killFailed = true;
+        push(
+          rowFrom(
+            "KILL",
+            "unknown",
+            `${piece.name} is declared L5, but f could not be read as (Σ Nₖ e^{iaₖz})/D`,
+            unknown(piece.name, "L5 needs z·f(z)'s limit, which needs that decomposition"),
+            piece.id,
+          ),
+        );
+        continue;
+      }
+      const mid = (geom.kind === "arc" ? (geom.theta0 + geom.theta1) / 2 : 0);
+      const half = Math.sin(mid) >= 0 ? "upper" : "lower";
+      const large = largeArcLimit(form, geom, half);
+      if (large.ok) {
+        if (!large.limit.contribution.isZero()) {
+          pieceLimits.push({ pieceId: piece.id, contribution: large.limit.contribution });
+        }
+        push(
+          rowFrom("KILL", "satisfied", large.limit.certificate.claim, large.limit.certificate, piece.id),
+        );
+      } else {
+        killFailed = true;
+        push(
+          rowFrom(
+            "KILL",
+            "failed",
+            `${piece.name} is declared L5, but z·f(z) has no limit along it`,
+            large.certificate,
+            piece.id,
+            "L5 needs z·f(z) → L uniformly; without it the arc's contribution is not a number the argument can use",
           ),
         );
       }
@@ -399,7 +450,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     verdict: assembleVerdict(certificates),
     failedAt: rows.find((r) => r.status === "failed")?.constraint ?? (killFailed ? "KILL" : null),
     hasTarget,
-    smallArcs,
+    pieceLimits,
   };
 }
 

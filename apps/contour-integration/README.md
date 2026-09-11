@@ -20,11 +20,13 @@ whether the whole thing closes.
   rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
 - The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
   a wrong contour fails diagnostically.
-- The **Family loader** and its four invariants run the gallery records as data. Six of the 28 load
-  and are executed against the engine in the test suite: every entry in tiers A and B except A4 —
-  A1–A3 (circle, through the `z = e^{iθ}` substitution), A5–A7 (semicircle), and B1–B3 (Jordan,
-  through the exponential basis `Σ cₖ e^{βₖ}`). A4 needs exact Taylor coefficients of an entire
-  function; tiers C–G need indentation, branch cuts and the kernel families of M4/M5.
+- The **Family loader** and its four invariants run the gallery records as data. Eleven of the 28
+  load and are executed against the engine in the test suite: every entry in tiers A and B except
+  A4 — A1–A3 (circle, through the `z = e^{iθ}` substitution), A5–A7 (semicircle), B1–B3 (Jordan,
+  through the exponential basis `Σ cₖ e^{βₖ}`) — plus **C1** (the indented semicircle and L4's
+  `iα·Res`) and **C2** (removability detected, and L5's non-vanishing arc). A4 needs exact Taylor
+  coefficients of an entire function; C3 needs principal value as a distinct result type; D–G need
+  branch cuts and the kernel families of M4/M5.
 
 Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
 teaching layer (M6).
