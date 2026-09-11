@@ -16,6 +16,63 @@ import type { Geom, LemmaId, PieceRole } from "../engine/contour/model.js";
 export type { LemmaId } from "../engine/contour/model.js";
 
 /** GALLERY.md §1: six templates plus `square` for tier G. Everything else is parameterisation. */
+/**
+ * How a branch point acts, and with which argument convention.
+ *
+ * **`argRange` BELONGS TO THE FACTOR, NOT THE CUT** ([M4-plan](../../../../docs/contour-integration/M4-plan.md)
+ * §1.3, GAP G4). D7 is the record that forces it: `z^μ(1−z)^ν` has two branch points with different
+ * exponents *and two different conventions* — `[0,2π)` for `z^μ` and `(−π,π]` for `(b−z)^ν` — so a
+ * single range on the cut cannot say what the record says. Every residue is evaluated in ITS OWN
+ * factor's range, which is D1's `residue-with-the-wrong-argument` trap made structural: "the check
+ * is arithmetic, not a convention".
+ */
+export interface BranchFactor {
+  /** Where the branch point sits, as an expression — `0`, `1`, `-1`, `exp(i*pi/n)`. */
+  readonly at: string;
+  readonly order:
+    | { readonly kind: "power"; readonly alpha: string }
+    | { readonly kind: "log"; readonly power: 1 | 2 };
+  /** The determination this factor is evaluated in. Displayed always, never implicit. */
+  readonly argRange: readonly [string, string];
+}
+
+/**
+ * The phase a factor picks up crossing the cut — and **whether it multiplies or adds**.
+ *
+ * A tagged union, because the two are genuinely different operations and `string` could not tell
+ * them apart (M4-plan §1.3). D1/D2/D3/D7's `z^α` is MULTIPLICATIVE: `f ↦ f·e^{2πiα}`. D4/D5's
+ * `log z` is ADDITIVE: `log z ↦ log z + 2πi`, and D4 carries an explicit `log-phase-is-additive`
+ * trap for exactly this confusion. Writing an additive phase where a multiplicative one is expected
+ * produces a plausible finite wrong answer, which is the failure mode worth a type.
+ */
+export type CrossingPhase =
+  | { readonly kind: "multiplicative"; readonly factor: string }
+  | { readonly kind: "additive"; readonly increment: string };
+
+export interface BranchSpec {
+  readonly function: string;
+  /** The branch points, each with its own exponent and its own argument convention. */
+  readonly factors: readonly BranchFactor[];
+  readonly cuts: readonly { readonly from: string; readonly to: string }[];
+  readonly crossingPhase: CrossingPhase;
+  /**
+   * research 06 §2.1 — every component of Γ not touching ∞ has `Σα ∈ ℤ`, and no `log` is bounded.
+   *
+   * A SEAT for the record's own statement of the rule, checked by `kernel/branch/admissibility.ts`.
+   */
+  readonly admissibility: string;
+  /**
+   * What the discontinuity set of the COMPOSITE actually is, when it is not the union of the
+   * sub-expressions' cuts.
+   *
+   * Research 06 §2.2's lesson, learned from Maple's `BranchCuts`: rendering the union is dishonest,
+   * because cuts can cancel — `log z + log(1/z)` is continuous across ℝ₋ even though each term is
+   * not. A record with nothing to say here omits it; a record that needs it can no longer only
+   * gesture at it in prose.
+   */
+  readonly effectiveCut?: string;
+}
+
 export type TemplateId =
   | "circle"
   | "semicircle"
@@ -208,23 +265,7 @@ export interface Family {
     readonly note: string;
   }[];
 
-  readonly branch?: {
-    readonly function: string;
-    readonly branchPoints: readonly {
-      readonly at: string;
-      readonly order:
-        | { readonly kind: "power"; readonly alpha: string }
-        | { readonly kind: "log"; readonly power: 1 | 2 };
-    }[];
-    readonly cuts: readonly {
-      readonly from: string;
-      readonly to: string;
-      readonly argRange: readonly [string, string];
-    }[];
-    readonly crossingPhase: string;
-    /** research 06 §2.1 — every non-∞-touching component has `Σα ∈ ℤ`. */
-    readonly admissibilityCheck: string;
-  };
+  readonly branch?: BranchSpec;
 
   readonly contour: {
     readonly template: TemplateId;
