@@ -1,4 +1,4 @@
-// `Σ cₖ · e^{βₖ}` with `cₖ, βₖ ∈ ℚ(i)(√d)` — the exact output basis Jordan's families need.
+// `Σ cₖ · e^{βₖ}` with `cₖ ∈ ℚ(i)(√d)` and `βₖ` an {@link Exponent} — the exact output basis.
 //
 // WHY THIS TYPE EXISTS. The residue of `g(z)·e^{iaz}` at a simple pole `z₀` of `g` is
 // `Res(g,z₀)·e^{iaz₀}`. The algebraic factor is already exact; the exponential factor is not an
@@ -13,18 +13,28 @@
 // the two. PLAN §3.3 already fixes the convention: a decimal rendering of an exact result is itself
 // labelled `≈`.
 //
+// THE EXPONENT IS ITS OWN TYPE (`kernel/exponent.ts`), which is where tier D enters: `β` carries a
+// π component alongside its algebraic part, so the keyhole's `e^{2πiα}` and its residue's
+// `e^{i(α−1)π}` live in the same basis as tier B's `e^{iaz₀}` and are compared by exponent rather
+// than by tolerance. Nothing about tiers A–C changed: their exponents simply have a zero π part.
+//
 // SIMPLE POLES ONLY. At a pole of order `m > 1` the residue is `p(z₀)·e^{iaz₀}` for a polynomial `p`
 // built from derivatives, which is representable here but needs the derivative machinery; the caller
 // refuses and falls back rather than guessing. Every tier-B denominator is squarefree, so nothing in
 // the corpus is lost by that.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { formatPiSqrt, formatSqrtExt, formatTwoPiISqrt } from "./formatExact.js";
+import { Exponent, formatExponent, jordanExponent } from "./exponent.js";
 import type { AlgebraicPole } from "./algebraic.js";
+
+// Re-exported so `expSum.ts` stays the one import for the basis, as it was before the exponent
+// grew its own module.
+export { Exponent, jordanExponent, formatExponent } from "./exponent.js";
 
 export interface ExpTerm {
   readonly coefficient: SqrtExt;
   /** The exponent `β` in `e^{β}`. Zero means the term is purely algebraic. */
-  readonly exponent: SqrtExt;
+  readonly exponent: Exponent;
 }
 
 /** Add two elements, or report that they do not share one quadratic extension. */
@@ -62,13 +72,13 @@ export class ExpSum {
     });
   }
 
-  static of(coefficient: SqrtExt, exponent: SqrtExt): ExpSum {
+  static of(coefficient: SqrtExt, exponent: Exponent): ExpSum {
     return coefficient.isZero() ? ExpSum.ZERO : new ExpSum([{ coefficient, exponent }]);
   }
 
   /** An algebraic number, as the one-term sum `x·e^0`. */
   static fromSqrtExt(x: SqrtExt): ExpSum {
-    return ExpSum.of(x, SqrtExt.ZERO);
+    return ExpSum.of(x, Exponent.ZERO);
   }
 
   add(other: ExpSum): ExpSum {
@@ -141,18 +151,13 @@ export class ExpSum {
   }
 }
 
-/** `i·a·z₀` — the exponent of the factor `e^{iaz₀}` a Jordan residue carries. */
-export function jordanExponent(a: Frac, at: SqrtExt): SqrtExt {
-  return at.mul(SqrtExt.fromGauss(new Gauss(Frac.ZERO, a)));
-}
-
 /** Render `e^{β}`, with the two exponents worth a nicer name than the general form. */
-function formatExponential(exponent: SqrtExt): string {
+function formatExponential(exponent: Exponent): string {
   if (exponent.isZero()) return "";
-  const one = SqrtExt.fromGauss(Gauss.ONE);
+  const one = Exponent.fromSqrtExt(SqrtExt.fromGauss(Gauss.ONE));
   if (exponent.equals(one)) return "e";
   if (exponent.equals(one.neg())) return "1/e";
-  return `e^(${formatSqrtExt(exponent)})`;
+  return `e^(${formatExponent(exponent)})`;
 }
 
 /**
@@ -202,7 +207,7 @@ const isCompound = (text: string): boolean => text.includes(" + ") || text.inclu
  * compound coefficient is bracketed. This was caught by looking at B3's output, not by a test: the
  * value was right and the rendering was wrong, which is the failure mode a numeric check cannot see.
  */
-function attachExponential(coefficient: string, exponent: SqrtExt): string {
+function attachExponential(coefficient: string, exponent: Exponent): string {
   const exponential = formatExponential(exponent);
   if (exponential === "") return coefficient;
   if (coefficient === "1") return exponential;

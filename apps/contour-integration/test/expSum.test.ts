@@ -1,10 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
-import { ExpSum, formatExpSum, formatTwoPiIExpSum, jordanExponent } from "../src/kernel/expSum.js";
+import {
+  ExpSum,
+  Exponent,
+  formatExpSum,
+  formatTwoPiIExpSum,
+  jordanExponent,
+} from "../src/kernel/expSum.js";
 
 const g = (re: number, im = 0): SqrtExt => SqrtExt.fromGauss(Gauss.int(re, im));
 const rat = (n: number, d: number): SqrtExt =>
   SqrtExt.fromGauss(Gauss.rat(BigInt(n), BigInt(d)));
+/** An exponent with no π part — which is every tier-A–C exponent. */
+const e = (re: number, im = 0): Exponent => Exponent.fromSqrtExt(g(re, im));
 
 describe("ExpSum — the algebraic case must be unchanged", () => {
   it("comes straight back out as a SqrtExt when no exponential survived", () => {
@@ -22,27 +30,27 @@ describe("ExpSum — the algebraic case must be unchanged", () => {
   });
 
   it("is not algebraic once a non-zero exponent is present", () => {
-    expect(ExpSum.of(g(1), g(-1)).asSqrtExt()).toBeNull();
+    expect(ExpSum.of(g(1), e(-1)).asSqrtExt()).toBeNull();
   });
 });
 
 describe("ExpSum — arithmetic", () => {
   it("combines terms with the same exponent and drops the ones that cancel", () => {
-    const a = ExpSum.of(g(3), g(-1));
-    const b = ExpSum.of(g(-3), g(-1));
+    const a = ExpSum.of(g(3), e(-1));
+    const b = ExpSum.of(g(-3), e(-1));
     expect(a.add(b).isZero()).toBe(true);
     expect(a.add(a).terms).toHaveLength(1);
     expect(a.add(a).terms[0].coefficient.toTuple()[0]).toBe(6);
   });
 
   it("keeps terms with different exponents apart", () => {
-    const s = ExpSum.of(g(1), g(-1)).add(ExpSum.of(g(1), g(-2)));
+    const s = ExpSum.of(g(1), e(-1)).add(ExpSum.of(g(1), e(-2)));
     expect(s.terms).toHaveLength(2);
     expect(s.toTuple()[0]).toBeCloseTo(Math.exp(-1) + Math.exp(-2), 14);
   });
 
   it("scales every coefficient, which is how 2πi·Σ is formed", () => {
-    const s = ExpSum.of(g(1), g(-1)).add(ExpSum.of(g(2), g(-2)));
+    const s = ExpSum.of(g(1), e(-1)).add(ExpSum.of(g(2), e(-2)));
     const scaled = s.scale(g(0, 1));
     expect(scaled.terms.map((t) => t.coefficient.toTuple())).toEqual([
       [0, 1],
@@ -55,7 +63,7 @@ describe("ExpSum — arithmetic", () => {
     // the terms simply stay separate — and the value must still be right.
     const root2 = SqrtExt.of(Gauss.ZERO, Gauss.ONE, 2n);
     const root3 = SqrtExt.of(Gauss.ZERO, Gauss.ONE, 3n);
-    const s = ExpSum.of(root2, g(0)).add(ExpSum.of(root3, g(0)));
+    const s = ExpSum.of(root2, e(0)).add(ExpSum.of(root3, e(0)));
     expect(s.terms).toHaveLength(2);
     expect(s.toTuple()[0]).toBeCloseTo(Math.SQRT2 + Math.sqrt(3), 14);
   });
@@ -64,14 +72,14 @@ describe("ExpSum — arithmetic", () => {
 describe("ExpSum — the numeric crossing", () => {
   it("evaluates e^{β} for a complex exponent", () => {
     // e^{iπ/2}-ish: use β = i, so e^i = cos 1 + i sin 1.
-    const [re, im] = ExpSum.of(g(1), g(0, 1)).toTuple();
+    const [re, im] = ExpSum.of(g(1), e(0, 1)).toTuple();
     expect(re).toBeCloseTo(Math.cos(1), 14);
     expect(im).toBeCloseTo(Math.sin(1), 14);
   });
 
   it("gets B1's residue right: Res = e^{−ab}/(2ib) at a = b = 1", () => {
     // Res(g, ib) = 1/(2ib) = −i/2; the exponential factor is e^{ia(ib)} = e^{−1}.
-    const residue = ExpSum.of(rat(-1, 2).mul(g(0, 1)), g(-1));
+    const residue = ExpSum.of(rat(-1, 2).mul(g(0, 1)), e(-1));
     const [re, im] = residue.toTuple();
     expect(re).toBeCloseTo(0, 15);
     expect(im).toBeCloseTo(-Math.exp(-1) / 2, 15);
@@ -96,20 +104,20 @@ describe("jordanExponent", () => {
 
 describe("rendering", () => {
   it("names e and 1/e rather than printing e^(1) and e^(−1)", () => {
-    expect(formatExpSum(ExpSum.of(g(1), g(-1)))).toBe("1/e");
-    expect(formatExpSum(ExpSum.of(g(1), g(1)))).toBe("e");
-    expect(formatExpSum(ExpSum.of(g(3), g(-1)))).toBe("3/e");
-    expect(formatExpSum(ExpSum.of(g(1), g(-2)))).toBe("e^(−2)");
+    expect(formatExpSum(ExpSum.of(g(1), e(-1)))).toBe("1/e");
+    expect(formatExpSum(ExpSum.of(g(1), e(1)))).toBe("e");
+    expect(formatExpSum(ExpSum.of(g(3), e(-1)))).toBe("3/e");
+    expect(formatExpSum(ExpSum.of(g(1), e(-2)))).toBe("e^(−2)");
   });
 
   it("folds 2πi into the coefficient, so B1 reads π/e", () => {
     // Res = −i/2 · e^{−1}; 2πi·(−i/2) = π.
-    const residue = ExpSum.of(rat(-1, 2).mul(g(0, 1)), g(-1));
+    const residue = ExpSum.of(rat(-1, 2).mul(g(0, 1)), e(-1));
     expect(formatTwoPiIExpSum(residue)).toBe("π/e");
   });
 
   it("joins several terms with explicit signs", () => {
-    const s = ExpSum.of(g(1), g(-1)).add(ExpSum.of(g(-2), g(-2)));
+    const s = ExpSum.of(g(1), e(-1)).add(ExpSum.of(g(-2), e(-2)));
     expect(formatExpSum(s)).toBe("1/e − 2·e^(−2)");
   });
 
@@ -124,13 +132,13 @@ describe("a compound coefficient is bracketed before the exponential multiplies 
     // B3's shape. Without brackets only the last term reads as multiplied, which is a different
     // formula — right value, wrong statement, and no numeric check can see it.
     const compound = SqrtExt.of(Gauss.int(1), Gauss.int(0, -1), 2n); // 1 − i√2
-    const s = ExpSum.of(compound, g(-1, 1));
+    const s = ExpSum.of(compound, e(-1, 1));
     const text = formatExpSum(s);
     expect(text.startsWith("(")).toBe(true);
     expect(text).toBe("(1 − i√2)·e^(−1 + i)");
   });
 
   it("leaves a single-term coefficient unbracketed", () => {
-    expect(formatExpSum(ExpSum.of(g(3), g(-2)))).toBe("3·e^(−2)");
+    expect(formatExpSum(ExpSum.of(g(3), e(-2)))).toBe("3·e^(−2)");
   });
 });

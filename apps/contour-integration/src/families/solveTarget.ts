@@ -69,9 +69,6 @@ function realPart(x: SqrtExt, part: "re" | "im"): SqrtExt {
   return SqrtExt.of(pick(x.a), pick(x.b), x.d);
 }
 
-/** Whether an element of ℚ(i)(√d) is real — both parts free of `i`. */
-const isReal = (x: SqrtExt): boolean => x.a.im.isZero() && x.b.im.isZero();
-
 /**
  * Re or Im of `Σ cₖ e^{βₖ}`, when it distributes over the terms — or null.
  *
@@ -86,7 +83,7 @@ const isReal = (x: SqrtExt): boolean => x.a.im.isZero() && x.b.im.isZero();
 function realPartOfSum(sum: ExpSum, part: "re" | "im"): ExpSum | null {
   let out = ExpSum.ZERO;
   for (const t of sum.terms) {
-    if (!isReal(t.exponent)) return null;
+    if (!t.exponent.isReal()) return null;
     out = out.add(ExpSum.of(realPart(t.coefficient, part), t.exponent));
   }
   return out;
