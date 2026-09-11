@@ -10,9 +10,23 @@ whether the whole thing closes.
 
 ## Status
 
-**Milestone 0 — scaffold.** Wired into lint, typecheck, test and build; nothing is drawn yet.
-Not in the Pages publish list (that happens at M3). See the milestone table in
+**Through Milestone 3, and published.** See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
+
+- `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
+  decided winding numbers and exact residues over ℚ(i) or one quadratic extension of it, so
+  `1/(1+z⁴)` reads `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**.
+- Arc bounds are certified in exact ℚ with **no floating point in the chain**, including certified
+  rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
+- The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
+  a wrong contour fails diagnostically.
+- The **Family loader** and its four invariants run the gallery records as data. Six of the 28 load
+  and are executed against the engine in the test suite: A1–A3 (circle, through the `z = e^{iθ}`
+  substitution) and A5–A7 (semicircle). A4 needs exact Taylor coefficients of an entire function;
+  tiers B–G need Jordan wiring, indentation, branch cuts and the kernel families of M4/M5.
+
+Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
+teaching layer (M6).
 
 ## Documentation
 
@@ -30,10 +44,15 @@ Four layers, strictly downward-depending, with the boundary enforced by this pac
 
 ```
 src/kernel/   pure maths — no DOM, no upward imports. Where the golden corpus points.
-src/engine/   problem semantics: contour, branch, residue, ledger, family, derivation.
+src/engine/   problem semantics: contour, substitution, residue theorem, ledger.
+src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve.
 src/ui/       Stage (WebGL2) and panels.
 src/shell/    app wiring, URL state, workers, figure export.
 ```
+
+`src/families/` is where the 28 gallery entries become executable. A record is **dropped, not
+thrown on**, when it fails an invariant — it must not take the app down, and must not present itself
+as a worked example it cannot support.
 
 ## Development
 

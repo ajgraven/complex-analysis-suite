@@ -44,13 +44,10 @@ export const a1CircleLinearCos: Family = {
     { name: "b", domain: "real", constraints: ["abs(b) < abs(a)"] },
   ],
 
-  // The gap between what keeps the contour legal and what the printed form needs. Carried on the
-  // family so it travels into the verdict — a restriction that rides with a certificate but not with
-  // a formula is how a true claim becomes a false one.
-  restrictions: [
-    "the general closed form 2π·sgn(a)/√(a²−b²) holds on the whole legal domain |a| > |b|",
-    "the textbook form 2π/√(a²−b²) holds only on a > |b| > 0 — see traps.textbook-form-drops-sign",
-  ],
+  // restrictions: DELIBERATELY ABSENT. The field scopes a claim to something NARROWER than the
+  // parameter domain (DESIGN §5's examples are a branch selection), and this family's sign-general
+  // closed form holds on the whole legal domain |a| > |b|. The gap between that and what the
+  // TEXTBOOK form needs is a trap, not a restriction — see traps.textbook-form-drops-sign.
 
   hypotheses: [
     {
@@ -102,8 +99,10 @@ export const a1CircleLinearCos: Family = {
     ],
     orientation: "ccw",
     windings: [
-      { pole: "(-a + sign(a)*sqrt(a^2 - b^2))/b", n: "1" },
-      { pole: "(-a - sign(a)*sqrt(a^2 - b^2))/b", n: "0" },
+      // `a/abs(a)` is sgn(a) written in the grammar the expression language actually has; a = 0 is
+      // not a legal parameter here, since |a| > |b| ≥ 0.
+      { pole: "(-a + a/abs(a)*sqrt(a^2 - b^2))/b", n: "1" },
+      { pole: "(-a - a/abs(a)*sqrt(a^2 - b^2))/b", n: "0" },
     ],
   },
 

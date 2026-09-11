@@ -82,6 +82,26 @@ describe("solveExact — contradiction is distinct from rank deficiency", () => 
   });
 });
 
+describe("solveExact — the over-determined case the design anticipates", () => {
+  // DESIGN §4 Pass 5: rows are stacked "over every identity the family declares — several contours,
+  // several parameter instances, plus any prerequisites", so k > m is the normal shape, not an edge.
+  it("solves from the pivot row and checks the redundant ones for contradiction", () => {
+    const M = [[f(1)], [f(0)], [f(2)]];
+    const consistent = solveExact(M, 1, [f(3), f(0), f(6)]);
+    expect(consistent.rank).toBe(1);
+    expect(consistent.inconsistentRows).toEqual([]);
+    expect(applyCombination(must(consistent.combination, "a combination")[0], [f(3), f(0), f(6)]).toNumber()).toBe(3);
+
+    // Row 1 now asserts 0 = 1; row 2 is still the consistent multiple of row 0.
+    const contradicted = solveExact(M, 1, [f(3), f(1), f(6)]);
+    expect(contradicted.inconsistentRows).toEqual([1]);
+
+    // Row 2 disagreeing with row 0 is a contradiction too, and a different one.
+    const disagreeing = solveExact(M, 1, [f(3), f(0), f(7)]);
+    expect(disagreeing.inconsistentRows).toEqual([2]);
+  });
+});
+
 describe("solveExact — exactness is the point, not a nicety", () => {
   it("decides a rank that a float elimination would get wrong", () => {
     // The second row differs from the first by 1 ulp in the last entry. In float64 the entry rounds

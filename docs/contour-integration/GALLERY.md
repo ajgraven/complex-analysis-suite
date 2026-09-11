@@ -196,6 +196,27 @@ Three gaps, in the same spirit as the 19 that writing the records found:
    coefficient has no rational entry. The loader refuses rather than rounds — rank is the whole
    Pass-5 report, and a rounded `2π` would make it a matter of tuning. Deferred to M4.
 
+Three more found by a review pass after A1–A3 landed, all in the same class — **a field the schema
+calls machine-readable that nothing had ever tried to read**:
+
+4. **`windings` did not parse.** DESIGN §5 specifies it as "per-pole, not a prose blurb", and three
+   of the transcribed entries were neither: `sign(a)`, which `@cas/expr` does not have, and
+   `if … then … else`, which is spelled `if(c, t, e)`. The loader now requires both halves to parse,
+   so this cannot recur.
+5. **`traps[].detect` has a form the namespace convention did not anticipate.** A1 and A2 both write
+   `hypotheses.<id> == false` — a back-reference saying "this trap explains that hypothesis's
+   refusal". Admitted as a recognised form, and it buys a stronger check than the namespace one: the
+   referenced hypothesis must exist.
+6. **Three languages share this schema.** `@cas/expr` for geometry and windings; a namespaced
+   predicate DSL for `check` / `detect` / `constraints` (which *cannot* be `@cas/expr` — it has no
+   `>=` or `!=`); and display notation for `closedForm`, whose `Sum`, `Res` and `sign` exist in no
+   grammar. Tabulated in DESIGN §5.0, because conflating them is how a field ends up looking
+   executable while being prose.
+
+Also corrected in the same pass: `restrictions` on A1 and A2 was explanatory prose duplicating their
+traps. The field scopes a claim *narrower than the parameter domain*; both families' closed forms
+hold on their whole legal domain, so both correctly have none.
+
 One conflict **dissolved** rather than being carried: the records wrote a single `rigorIfDischarged`
 and flagged its clash with DESIGN §4 Pass 3 (`"="` vs `"≤"`) as gap G2. v2's split into
 `rigorOfBound` / `rigorOfLimit` settles it — the finite-`R` bound is a bound, the substituted limit

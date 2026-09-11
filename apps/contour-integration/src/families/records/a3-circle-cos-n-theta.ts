@@ -87,7 +87,7 @@ export const a3CircleCosNTheta: Family = {
     ],
     orientation: "ccw",
     windings: [
-      { pole: "0", n: "if n >= 1 then 1 else 0" },
+      { pole: "0", n: "if(n > 0, 1, 0)" }, // n ≥ 1, for an integer parameter
       { pole: "1/2", n: "1" },
       { pole: "2", n: "0" },
     ],

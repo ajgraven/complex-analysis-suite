@@ -216,6 +216,56 @@ describe("well-formedness — what makes the four invariants mean anything", () 
   });
 });
 
+describe("well-formedness — the fields the schema calls machine-readable really are", () => {
+  it("catches a winding number that is not a readable expression", () => {
+    // Three of these were real, in the first draft of A1–A3: `sign(a)`, which the expression
+    // language does not have, and `if … then … else`, which is spelled `if(c, t, e)`. Without this
+    // guard they sat in the corpus looking executable.
+    const f = broken((x) => ({
+      ...x,
+      contour: {
+        ...x.contour,
+        windings: [{ pole: "i", n: "if n >= 1 then 1 else 0" }],
+      },
+    }));
+    const hits = checkFamily(f);
+    expect(hits[0].invariant).toBe("well-formed");
+    expect(hits[0].message).toMatch(/winding number .* is not a readable expression/);
+  });
+
+  it("catches a pole location that is not a readable expression", () => {
+    const f = broken((x) => ({
+      ...x,
+      contour: { ...x.contour, windings: [{ pole: "sign(a)*sqrt(2)", n: "1" }] },
+    }));
+    expect(checkFamily(f)[0].message).toMatch(/pole 'sign\(a\)\*sqrt\(2\)' is not a readable/);
+  });
+
+  it("catches a predicate with an unrecognised namespace", () => {
+    const f = broken((x) => ({
+      ...x,
+      traps: [{ id: "typo", detect: "algebriac:gcd(P, Q) == 1", message: "…" }],
+    }));
+    expect(checkFamily(f)[0].message).toMatch(/neither a 'hypotheses\.<id>.*nor a known namespace/s);
+  });
+
+  it("accepts the hypotheses back-reference form, and catches a typo in the id", () => {
+    // `hypotheses.<id> == false` is how A1 and A2 say "this trap explains that hypothesis's
+    // refusal". It is a legitimate form the namespace convention did not anticipate.
+    const good = broken((x) => ({
+      ...x,
+      traps: [{ id: "t", detect: "hypotheses.coprime == false", message: "…" }],
+    }));
+    expect(checkFamily(good)).toEqual([]);
+
+    const typo = broken((x) => ({
+      ...x,
+      traps: [{ id: "t", detect: "hypotheses.coprimeee == false", message: "…" }],
+    }));
+    expect(checkFamily(typo)[0].message).toMatch(/references a hypothesis 'coprimeee' that this family does not declare/);
+  });
+});
+
 describe("a failing record is dropped, not thrown on", () => {
   it("keeps the healthy records and withholds the broken one", () => {
     const bad = broken((x) => ({ ...x, id: "broken", traps: [] }));

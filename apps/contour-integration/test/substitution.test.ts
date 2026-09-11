@@ -10,6 +10,7 @@ import { contourIntegrandOf } from "../src/families/instantiate.js";
 import { findPoles } from "../src/kernel/poles.js";
 import { a1CircleLinearCos } from "../src/families/records/a1-circle-linear-cos.js";
 import { a3CircleCosNTheta } from "../src/families/records/a3-circle-cos-n-theta.js";
+import type { Family } from "../src/families/schema.js";
 import type { Node } from "@cas/expr";
 
 const SAMPLE_THETA = [0.3, 1.0, 2.2, 3.9, 5.5, 6.1];
@@ -176,6 +177,34 @@ describe("the substitution manufactures the singularities the posed integrand do
     // f(z) = −2i/(z² + 4z + 1): the reciprocal pair −2 ± √3, and nothing at the origin.
     expect(report.poles).toHaveLength(2);
     expect(report.poles.map((p) => p.at[0]).sort((x, y) => x - y)[0]).toBeCloseTo(-2 - Math.sqrt(3), 9);
+  });
+});
+
+describe("the auxiliary is PRE-Jacobian — A4's shape, pinned before A4 exists", () => {
+  it("multiplies the declared auxiliary by the Jacobian rather than treating it as final", () => {
+    // A4 states its contour integrand is g(z)/(i z^{n+1}). Its θ-form g(e^{iθ})e^{−inθ}
+    // complexifies to g(z)·z^{−n}, so the remaining i·z can only come from dθ = dz/(iz). Writing an
+    // auxiliary with the Jacobian already folded in would double it, silently, by a factor of iz —
+    // which is exactly the kind of quiet constant error the whole app exists to refuse.
+    const a4Shaped: Family = {
+      ...a3CircleCosNTheta,
+      id: "a4-shaped-probe",
+      auxiliary: { integrand: "exp(z)/z^2", relation: "Re", note: "g(z)·z^{−n} at n = 2" },
+    };
+    const built = contourIntegrandOf(a4Shaped, { n: 2 });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    // Evaluate: the result must be exp(z)/(i z^3), not exp(z)/z^2.
+    const at = (z: [number, number]): [number, number] => {
+      const v = evaluate(built.ast, z, [0, 0]);
+      if (typeof v === "boolean") throw new Error("expected a complex value");
+      return v;
+    };
+    const [re, im] = at([2, 0]);
+    // exp(2)/(i·8) = −i·exp(2)/8
+    expect(re).toBeCloseTo(0, 12);
+    expect(im).toBeCloseTo(-Math.exp(2) / 8, 12);
   });
 });
 

@@ -37,9 +37,9 @@ export const a2CirclePoisson: Family = {
 
   parameters: [{ name: "a", domain: "real", constraints: ["abs(a) != 1"] }],
 
-  restrictions: [
-    "2π/(1−a²) holds on |a| < 1; 2π/(a²−1) holds on |a| > 1 — the same |1−a²| with a different enclosed pole behind it",
-  ],
+  // restrictions: DELIBERATELY ABSENT. 2π/|1−a²| holds on the whole parameter domain |a| ≠ 1; what
+  // changes across |a| = 1 is WHICH POLE is enclosed, and that is carried by `windings` below and
+  // explained by traps.branch-hidden-by-closed-form.
 
   hypotheses: [
     {
@@ -83,8 +83,8 @@ export const a2CirclePoisson: Family = {
     orientation: "ccw",
     // The winding numbers are the SWITCH, written out: neither pole has a fixed membership.
     windings: [
-      { pole: "a", n: "if abs(a) < 1 then 1 else 0" },
-      { pole: "1/a", n: "if abs(a) > 1 then 1 else 0" },
+      { pole: "a", n: "if(abs(a) < 1, 1, 0)" },
+      { pole: "1/a", n: "if(abs(a) > 1, 1, 0)" },
     ],
   },
 

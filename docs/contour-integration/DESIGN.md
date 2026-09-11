@@ -403,7 +403,14 @@ export interface Family {
     substitution?: { map: string; inverse: string; jacobian: string };  // z = e^{iθ}, u = xⁿ …
   }[];
 
-  /** The contour integrand, when it differs from the target's — i.e. complexification. */
+  /**
+   * The contour integrand, when it differs from the target's — i.e. complexification.
+   *
+   * **PRE-Jacobian.** When a `substitution` is also declared, the Jacobian is applied ON TOP of this
+   * expression. A4 pins it: `g(e^{iθ}) e^{−inθ}` complexifies to `g(z) z^{−n}`, and the record's
+   * contour integrand is `g(z)/(i z^{n+1})` — that times `dθ = dz/(iz)`. An auxiliary written with
+   * the Jacobian already folded in would double it by a factor of `iz`, silently.
+   */
   auxiliary?: {
     integrand: string;               // "exp(i*z)/z" for ∫ sin x / x
     /** the real-linear functional recovering the target: "Re" | "Im" | an expression */
@@ -489,6 +496,44 @@ export interface Family {
             method: string }[];
 }
 ```
+
+### 5.0 Which string fields are machine-readable, and in what language
+
+*Added with the loader, which had to decide this to check anything.* Three different languages live
+in this schema, and conflating them is how a field ends up looking executable while being prose.
+
+| field | language | checked by the loader |
+|---|---|---|
+| `windings[].pole`, `windings[].n` | `@cas/expr` | **yes** — must parse |
+| `targets[].integrand`, `auxiliary.integrand`, `substitution.*` | `@cas/expr` | yes, on use |
+| `hypotheses[].check`, `traps[].detect`, `vanishingLemmas[].discharge` | the predicate DSL (below) | namespace / back-reference only |
+| `parameters[].constraints`, `restrictions` | the predicate DSL | not yet |
+| `closedForm.expr`, `closedForm.simplified` | **display notation** | no |
+| `traps[].message`, `*.note`, `*.statement`, `golden[].method` | prose | no |
+
+**The predicate DSL is not `@cas/expr`,** and cannot be: `@cas/expr`'s comparisons are `>`, `<` and
+`==` only, so `n >= 0` and `abs(a) != 1` do not parse, and `algebraic:squarefreeMultiplicityAt(Q, i)
+== 3` is not an expression at all. It has two forms:
+
+```
+<namespace>:<predicate>          namespace ∈ { algebraic, numeric, structural, symbolic }
+hypotheses.<id> == true|false    a back-reference: "fire when that hypothesis failed"
+```
+
+The back-reference form was found in the records rather than designed — A1's `pole-on-circle` and
+A2's `modulus-one-refusal` both use it, and it is the right way to say "this trap is the human
+explanation of that hypothesis's refusal". The loader checks the referenced hypothesis exists.
+
+**`closedForm` is display notation, not an expression.** The corpus writes
+`2*pi*i*Sum(Res(f, z_k), im(z_k) > 0)` and `2*pi*sign(a)/sqrt(a^2 - b^2)`; neither `Sum`, `Res` nor
+`sign` exists in `@cas/expr`. The value a family actually establishes comes from the engine, not
+from parsing this field.
+
+**`restrictions` scopes a claim NARROWER than the parameter domain** — a branch selection, not an
+explanation. A family whose closed form holds on its whole legal domain has none; the gap between
+that domain and what a *textbook* form needs is a `trap`.
+
+---
 
 ### 5.1 `FamilyPiece`
 

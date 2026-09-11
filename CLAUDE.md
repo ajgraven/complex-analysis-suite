@@ -256,8 +256,11 @@ with **no floating point in the chain** (including certified rational brackets o
 `deg Q ≥ deg P + 2` hypothesis is *derived* from the exponent rather than checked. The **Closing
 Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and a wrong contour
 fails diagnostically — closing `∫cos x/(1+x²)` downward shows the bound diverging and names KILL.
-Still to come: free-hand contour editing, branch cuts (M4), the rest of the gallery (M5), the
-teaching layer (M6). Its residues stop at the output basis ℚ(i)(√d), so `∫cos x/(1+x²) = π/e` is
+The 28 gallery records load as **data** through a schema and a loader enforcing four invariants,
+with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; six of
+them (A1–A3 via the `z = e^{iθ}` substitution, A5–A7) are executed against the engine in the suite.
+A record that fails an invariant is dropped, not thrown on. Still to come: free-hand contour
+editing, branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6). Its residues stop at the output basis ℚ(i)(√d), so `∫cos x/(1+x²) = π/e` is
 honestly reported as *not closing* — `e^{-1}` would need a symbolic-constant layer.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than

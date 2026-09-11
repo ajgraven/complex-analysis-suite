@@ -46,7 +46,11 @@ function buildParams(family: Family, values: Readonly<Record<string, number>>): 
           `a family parameter is a number with a domain, so the caller must supply one`,
       );
     }
-    params[p.name] = { name: p.name, value, range: [-10, 10], scale: "linear" };
+    // The range is a UI hint, but it must at least CONTAIN the value it is given: A1's a = 10
+    // fixture sat exactly on the old fixed [−10, 10] edge, and a fixture beyond it would have been
+    // outside its own slider.
+    const span = Math.max(10, Math.abs(value) * 2);
+    params[p.name] = { name: p.name, value, range: [-span, span], scale: "linear" };
   }
 
   for (const l of family.contour.limitParams) {
@@ -94,6 +98,12 @@ export type ContourIntegrandResult =
  *    number, and `a + b cos θ` is not a rational function of `z` until `a` and `b` are.
  * 2. **The substitution is applied**, when the record declares one — and with it the Jacobian.
  * 3. Only then does anything downstream see an expression.
+ *
+ * **The auxiliary is PRE-Jacobian.** When a record declares `auxiliary`, that expression replaces
+ * the target's integrand and the Jacobian is still applied on top of it. A4 is what pins this: its
+ * θ-form `g(e^{iθ}) e^{−inθ}` complexifies to `g(z) z^{−n}`, and the record states the contour
+ * integrand is `g(z)/(i z^{n+1})` — i.e. that times `dθ = dz/(iz)`. Writing an auxiliary with the
+ * Jacobian already folded in would double it, silently, by a factor of `iz`.
  *
  * Step 3 is the invariant worth naming: **nothing downstream ever sees the θ-form.** The
  * substitution manufactures singularities the posed integrand does not have (A3's order-`n` pole at

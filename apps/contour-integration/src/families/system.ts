@@ -17,7 +17,13 @@ export type Bindings = Readonly<Record<string, string | number | boolean>>;
 
 export type ExactConstant = { ok: true; value: Gauss } | { ok: false; reason: string };
 
-/** How far the exact walk and the numeric evaluator may differ before the disagreement is reported. */
+/**
+ * How far the exact walk and the numeric evaluator may differ before the disagreement is reported.
+ *
+ * RELATIVE, not absolute. The check exists to catch a coding error in the exact walker — which would
+ * be a gross disagreement, not a rounding one — and an absolute bound would report a large
+ * coefficient as "disagreeing" purely because float64 cannot hold it to 1e-9.
+ */
 const CROSS_CHECK_TOL = 1e-9;
 
 /** Below this, a bonus constant counts as zero for invariant 3's fixture rule. */
@@ -111,7 +117,11 @@ export function exactConstant(ast: Node, bindings: Bindings): ExactConstant {
   const got = evaluate(ast, [0, 0], [0, 0], undefined, numericParams);
   if (typeof got !== "boolean") {
     const [re, im] = value.toTuple();
-    if (Math.abs(got[0] - re) > CROSS_CHECK_TOL || Math.abs(got[1] - im) > CROSS_CHECK_TOL) {
+    const scale = Math.max(1, Math.abs(re), Math.abs(im));
+    if (
+      Math.abs(got[0] - re) > CROSS_CHECK_TOL * scale ||
+      Math.abs(got[1] - im) > CROSS_CHECK_TOL * scale
+    ) {
       return {
         ok: false,
         reason: `the exact and numeric evaluations of the coefficient disagree (${re}+${im}i vs ${got[0]}+${got[1]}i)`,

@@ -10,6 +10,7 @@
 // must not take the app down with it, and — more importantly — must not let that record present
 // itself as a worked example. Dropping it is the same refusal discipline the rest of the engine runs
 // on: withhold the thing that cannot be stood behind, and say why.
+import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem } from "./system.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
@@ -43,6 +44,19 @@ export const FAMILIES: readonly Family[] = [
   a6SemicircleQuartic,
   a7SemicircleOrder3,
 ];
+
+/**
+ * The predicate namespaces the corpus uses. Not `@cas/expr` — see `checkWellFormed`.
+ *
+ * `algebraic` runs in exact arithmetic, `numeric` on the computed value, `structural` on the shape
+ * of the contour or the pole set, `symbolic` on the expression itself.
+ */
+const PREDICATE_NAMESPACES: ReadonlySet<string> = new Set([
+  "algebraic",
+  "numeric",
+  "structural",
+  "symbolic",
+]);
 
 /** Which of DESIGN §5's numbered invariants failed, or the well-formedness that precedes them. */
 export type InvariantId = 1 | 2 | 3 | 4 | "well-formed";
@@ -85,8 +99,68 @@ function checkWellFormed(family: Family): Violation[] {
       fail(`vanishingLemmas entry ${lemma.lemma} names a piece '${lemma.piece}' that does not exist`);
     }
   }
+  // `windings` is specified as "per-pole, not a prose blurb" (DESIGN §5), so both halves must be
+  // readable as expressions. Nothing evaluates them yet — which is exactly why this is checked here.
+  // Transcribing A1–A3 produced three entries that did NOT parse (`sign(a)`, which the expression
+  // language does not have, and `if … then … else`, which is spelled `if(c, t, e)`), and without
+  // this guard they would have sat in the corpus looking executable until something tried.
   for (const w of family.contour.windings) {
-    if (w.n.trim() === "") fail(`the winding number for pole '${w.pole}' is empty`);
+    for (const [what, src] of [
+      ["pole", w.pole],
+      ["winding number", w.n],
+    ] as const) {
+      if (src.trim() === "") {
+        fail(`the ${what} for pole '${w.pole}' is empty`);
+        continue;
+      }
+      try {
+        parse(src);
+      } catch (e) {
+        fail(
+          `the ${what} '${src}' is not a readable expression: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+    }
+  }
+
+  // The `check` / `detect` / `discharge` strings are a PREDICATE DSL awaiting its interpreter —
+  // deliberately not `@cas/expr`, which has no `>=` or `!=` and could not express
+  // `algebraic:squarefreeMultiplicityAt(Q, i) == 3` at all. Two forms are recognised:
+  //
+  //   `<namespace>:<predicate>`        — the common case, routed by namespace
+  //   `hypotheses.<id> == true|false`  — a back-reference: "fire when that hypothesis failed"
+  //
+  // The back-reference form was NOT anticipated when this guard was written; A1 and A2 both use it
+  // for their pole-on-the-contour traps, and it is the right way to say "this trap is the human
+  // explanation of that hypothesis's refusal". Admitting it also buys a stronger check than the
+  // namespace one — the referenced hypothesis must EXIST, so a typo in the id cannot leave a trap
+  // permanently unroutable.
+  const known = new Set(family.hypotheses.map((h) => h.id));
+  const backReference = /^hypotheses\.([A-Za-z0-9_-]+)\s*==\s*(?:true|false)$/;
+  const predicates: [string, string][] = [
+    ...family.hypotheses.map((h) => [`hypotheses.${h.id}.check`, h.check] as [string, string]),
+    ...family.traps.map((t) => [`traps.${t.id}.detect`, t.detect] as [string, string]),
+    ...family.vanishingLemmas.map(
+      (l) => [`vanishingLemmas.${l.piece}.discharge`, l.discharge] as [string, string],
+    ),
+  ];
+  for (const [where, src] of predicates) {
+    const ref = backReference.exec(src.trim());
+    if (ref !== null) {
+      if (!known.has(ref[1])) {
+        fail(`${where} references a hypothesis '${ref[1]}' that this family does not declare`);
+      }
+      continue;
+    }
+    const namespace = /^([a-zA-Z]+):/.exec(src)?.[1];
+    if (namespace === undefined || !PREDICATE_NAMESPACES.has(namespace)) {
+      fail(
+        `${where} is neither a 'hypotheses.<id> == true|false' back-reference nor a known ` +
+          `namespace (${[...PREDICATE_NAMESPACES].join(" / ")}): '${src.slice(0, 60)}'`,
+      );
+    }
   }
   return v;
 }
