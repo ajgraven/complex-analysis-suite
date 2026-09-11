@@ -12,6 +12,9 @@
 // on: withhold the thing that cannot be stood behind, and say why.
 import type { Family } from "./schema.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem } from "./system.js";
+import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
+import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
+import { a3CircleCosNTheta } from "./records/a3-circle-cos-n-theta.js";
 import { a5SemicircleOrder2 } from "./records/a5-semicircle-order2.js";
 import { a6SemicircleQuartic } from "./records/a6-semicircle-quartic.js";
 import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
@@ -23,12 +26,19 @@ export { solveExact, applyCombination, type SolveReport, type RatMatrix } from "
 /**
  * The records, in gallery order.
  *
- * Tiers A5–A7 only, and deliberately so: these are the families the engine can run end to end
- * today. A1–A4 need the `z = e^{iθ}` substitution, tier B needs the Jordan branch wired to a
- * family, and tiers C–G need indentation, branch cuts and the kernel families that are M4 and M5.
- * A record loaded before its machinery exists would be a worked example that cannot be worked.
+ * Tier A less A4, and deliberately so: these are the families the engine can run end to end today.
+ * A1–A3 arrived with the `z = e^{iθ}` substitution; **A4 is not here** because its integrand
+ * `e^{cos θ} cos(sin θ − nθ)` complexifies to `e^z/(i z^{n+1})`, whose exact residue is the Taylor
+ * coefficient of an ENTIRE function — `1/n!` — and the residue engine's exact path stops at rational
+ * functions over ℚ(i) and one quadratic extension. A4 needs a known-entire-function series table,
+ * which is its own piece of work. Tier B needs the Jordan branch wired to a family; C–G need
+ * indentation, branch cuts and the kernel families of M4/M5. A record loaded before its machinery
+ * exists would be a worked example that cannot be worked.
  */
 export const FAMILIES: readonly Family[] = [
+  a1CircleLinearCos,
+  a2CirclePoisson,
+  a3CircleCosNTheta,
   a5SemicircleOrder2,
   a6SemicircleQuartic,
   a7SemicircleOrder3,

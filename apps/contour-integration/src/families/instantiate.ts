@@ -4,8 +4,11 @@
 // pieces already hold the runtime `Geom`, so nothing is translated here — only the parameter scope
 // is assembled and the family-level fields (coefficients, bonus, lemma) are dropped, because they
 // belong to Pass 5 and not to geometry.
+import { parse, substitute, type Node } from "@cas/expr";
 import type { Contour, Param, Params, Piece } from "../engine/contour/model.js";
+import { toContourIntegrand } from "../engine/substitution.js";
 import type { Family } from "./schema.js";
+import type { Bindings } from "./system.js";
 
 /**
  * Where a limit parameter starts.
@@ -78,16 +81,63 @@ export function instantiate(family: Family, options: InstantiateOptions = {}): C
   };
 }
 
-/** The integrand a family's contour is integrated against — the auxiliary when one is declared. */
-export function contourIntegrandOf(family: Family): string {
-  if (family.auxiliary !== undefined) return family.auxiliary.integrand;
+export type ContourIntegrandResult =
+  | { readonly ok: true; readonly ast: Node }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * The integrand a family's contour is actually integrated against.
+ *
+ * Three things happen here, in this order, and the order matters:
+ *
+ * 1. **Parameters are bound to their fixture values.** `cos(n·θ)` is not a harmonic until `n` is a
+ *    number, and `a + b cos θ` is not a rational function of `z` until `a` and `b` are.
+ * 2. **The substitution is applied**, when the record declares one — and with it the Jacobian.
+ * 3. Only then does anything downstream see an expression.
+ *
+ * Step 3 is the invariant worth naming: **nothing downstream ever sees the θ-form.** The
+ * substitution manufactures singularities the posed integrand does not have (A3's order-`n` pole at
+ * the origin, from a real integrand that is smooth at every θ), so pole detection run on the posed
+ * form is not slightly wrong, it is wrong by a factor of 8.5. Making this the only route to an
+ * integrand is what prevents that, structurally rather than by remembering.
+ */
+export function contourIntegrandOf(family: Family, bindings: Bindings = {}): ContourIntegrandResult {
   const target = family.targets[0];
-  if (target?.integrand === undefined) {
-    throw new Error(
-      `'${family.id}' declares neither an auxiliary integrand nor a target integrand, so there is ` +
-        `nothing to integrate — a family whose unknown is a sum needs an auxiliary (tier G)`,
-    );
+  const source = family.auxiliary?.integrand ?? target?.integrand;
+  if (target === undefined || source === undefined) {
+    return {
+      ok: false,
+      reason:
+        `'${family.id}' declares neither an auxiliary integrand nor a target integrand, so there ` +
+        `is nothing to integrate — a family whose unknown is a sum needs an auxiliary (tier G)`,
+    };
   }
-  // The target is written in its real variable; the contour integral is the same expression in z.
-  return target.integrand.replace(new RegExp(`\\b${target.variable}\\b`, "g"), "z");
+
+  let ast: Node;
+  try {
+    ast = parse(source);
+  } catch (e) {
+    return { ok: false, reason: `'${source}' does not parse: ${e instanceof Error ? e.message : String(e)}` };
+  }
+
+  // 1 — bind the declared parameters. Variant flags in a fixture (`halfRange`, `closeDown`) are not
+  // parameters and are deliberately not consulted: only names the family declares are bound.
+  for (const p of family.parameters) {
+    const bound = bindings[p.name];
+    if (bound === undefined) {
+      return { ok: false, reason: `parameter '${p.name}' is unbound, so the integrand is not a function of z alone` };
+    }
+    const value = typeof bound === "number" ? bound : Number(bound);
+    if (typeof bound === "boolean" || !Number.isFinite(value)) {
+      return { ok: false, reason: `parameter '${p.name}' is bound to '${String(bound)}', which is not a number` };
+    }
+    ast = substitute(ast, p.name, { kind: "num", value });
+  }
+
+  // 2 — substitute, or simply read the real variable as z when the real line IS the contour.
+  if (target.substitution !== undefined) {
+    const substituted = toContourIntegrand(ast, target.variable, target.substitution);
+    return substituted.ok ? { ok: true, ast: substituted.value } : substituted;
+  }
+  return { ok: true, ast: substitute(ast, target.variable, { kind: "var", name: "z" }) };
 }

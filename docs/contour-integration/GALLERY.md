@@ -149,17 +149,37 @@ implementation decision.
 ## 5. Status
 
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
-together with Pass 5's exact rational linear algebra, which invariant 4 rests on. Three records are
-loaded: **A5, A6, A7** — the pure-rational semicircle families, which are the ones the engine can run
-end to end today. A1–A4 need the `z = e^{iθ}` substitution, tier B needs the Jordan branch wired to a
-family, and C–G need indentation, branch cuts and the kernel families of M4/M5. A record loaded
-before its machinery exists would be a worked example that cannot be worked.
+together with Pass 5's exact rational linear algebra, which invariant 4 rests on, and the unit-circle
+substitution `z = e^{iθ}` (`src/engine/substitution.ts`). Six records are loaded: **A1, A2, A3** (the
+circle families) and **A5, A6, A7** (the semicircle families).
 
-Each loaded record is **executed against the engine in the test suite**, not merely parsed: its
-golden value is reproduced through `findPoles → integrateContour → applyResidueTheorem`, the
-residue-theorem value is checked to be *identical* at `R = 3` and `R = 40` (which is what makes the
-instantiation radius a display default rather than a claim), and the quadrature cross-check is
-required to agree. A6's `closing-down-disagrees` trap is executed directly.
+**A4 is deliberately absent.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to
+`e^z/(i z^{n+1})`, whose exact residue is the Taylor coefficient of an *entire* function — `1/n!` —
+and the residue engine's exact path stops at rational functions over ℚ(i) and one quadratic
+extension of it. A4 needs a table of known entire functions with exact truncated ℚ(i) series, which
+is its own piece of work. Tier B needs the Jordan branch wired to a family; C–G need indentation,
+branch cuts and the kernel families of M4/M5. A record loaded before its machinery exists would be a
+worked example that cannot be worked.
+
+Each loaded record is **executed against the engine in the test suite**, not merely parsed. *Every*
+fixture is run, not only the flagship one — which is where the parameterised families earn their
+keep: A1's `a < 0` case (where the textbook closed form is wrong and the residue route is right),
+A2's `|a| ≶ 1` switch and its `a = 0` pole-*count* change, and A3's order ladder `2π/3 · 2⁻ⁿ` for
+`n = 0…4`. The residue-theorem value is also checked to be *identical* at `R = 3` and `R = 40`
+(which is what makes the instantiation radius a display default rather than a claim), the quadrature
+cross-check is required to agree, and A6's `closing-down-disagrees` trap is executed directly.
+
+### 5.0 The substitution is engine code, not a rewrite convenience
+
+`z = e^{iθ}` **manufactures singularities the posed integrand does not have**, which is research 03
+§1's "single commonest error" in the whole subject. `cos 2θ/(5 − 4cos θ)` is smooth at every real θ;
+the contour integrand it becomes has a pole of order exactly 2 at the origin, and running pole
+detection on the posed form returns `17π/12` where the answer is `π/6` — a factor of 8.5. So the
+rule is structural rather than remembered: `contourIntegrandOf` binds parameters, substitutes, and
+attaches the Jacobian, and **there is no other route to an integrand**. Nothing downstream can see
+the θ-form. A1 is the deliberate contrast — there the Jacobian's `z` cancels exactly and the origin
+is a *removable* singularity the engine names rather than fails to look for; both are pinned by
+tests.
 
 ### 5.1 What transcription found
 
