@@ -653,6 +653,26 @@ probe before use**. CPU lift along path with `|Δθ| ≤ π/4` control; GPU `cut
 **Gate:** D1–D7 (7 integrals) exact; dragging a cut across the contour changes the answer *and says
 so*; the `arg ∈ (−π,π]` trap is detected and explained; CPU/GPU parity green in the browser suite.
 
+> **M4.0 is done: the two engine decisions are taken** (ADR-0041), and the staging plan beneath them
+> is [`M4-plan.md`](M4-plan.md) — **read it before starting M4**.
+>
+> **Tier D's output basis is CARRIED, not reduced.** `(π^k / sin(π r))·Σⱼ cⱼ ∏ₘ aⱼₘ^{qⱼₘ}` is
+> reported as a *form* labelled `=`, with the decimal `≈`, exactly as tier B carries `e^{β}`. The
+> fixtures are what decided it: reducing would need a general algebraic number field — `sin(3π/8)` is
+> the nested `√(2+√2)`, `sin(3π/7)` is degree 3, D3's `sin(23π/50)` is **degree 20**, and D7 needs
+> `40^{3/4}` and `10^{1/3}·6^{2/3}` — to express answers the records themselves write as
+> `"pi/sin(pi*alpha)"`. Mechanically it is `expSum.ts`'s exponent widened to admit `(ℚ(i))·π` and
+> `Σ(ℚ)·ln(ℚ₊)`, plus **one** recogniser for the two-term denominator that becomes a sine.
+>
+> **Pass 5 moves to ℚ(i)(π), with π an indeterminate**, because D4's row `−(1, 4πi, −4π²)` and D5's
+> `−(1, 6πi, −12π², −8π³i)` do not fit in ℚ. `linear.ts` is generalised over a `Field` rather than
+> rewritten, so rank stays *decided*. The cheaper alternative `system.ts`'s docstring names —
+> rescaling the unknowns by powers of π — does not generalise: the unknowns are not homogeneous in π
+> (`T0 = π/2` and `T2 = π³/8` for one R; `T0 = π/4` and `T1 = −π/4` both degree 1 for another).
+>
+> The staging is reordered by **which machinery each record needs**, so D1 and D3 land before D2, and
+> D5 waits on the prerequisite chaining rather than on more algebra.
+
 ### M5 — The rest of the taxonomy · *M*
 Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–F2), series summation via
 `πcot`/`πcsc` including the kernel/`f` pole-collision case (G1–G3).

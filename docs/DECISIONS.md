@@ -3549,3 +3549,123 @@ then has a target to migrate *to* rather than a design to invent mid-port.
 4. [ ] Migrate the Quadrature app onto `@cas/rigor`, with a differential test against
        `classifyRigor`'s behaviour, when QD's verdict logic is next touched for its own reasons.
        **Not scheduled**; this ADR deliberately does not do it.
+
+---
+
+## ADR-0041: Tier D's output basis is *carried*, not reduced; and Pass 5 moves to ℚ(i)(π)
+
+**Status:** Accepted  **Date:** 2026-09  **Deciders:** Andrew
+
+*The two engine decisions M4 (branch cuts) cannot start without, taken before any keyhole code
+exists. `apps/contour-integration/src/families/system.ts` parks the second one explicitly — "the
+decision is deferred to M4, where a record that needs it actually exists" — and that record now
+exists.*
+
+### Context
+
+M4 delivers tier D of the gallery: D1–D7, the keyhole and dogbone families. Two questions block it,
+and both are the kind that get re-litigated at slice five if they are not written down first.
+
+**What number system do tier-D answers live in?** Tiers A–C reach ℚ(i) or one quadratic extension of
+it (`@cas/exact`'s `SqrtExt`), plus tier B's exponential basis `Σ cₖ e^{βₖ}`. Tier D's closed forms
+are visibly outside that: `π/sin(πα)`, `(π/n)/sin(πa/n)`, `π³/8`, `(π/sin(πμ))·(c − (1−μ)b −
+c^μ(c−b)^{1−μ})`.
+
+**And what ring does Pass 5's matrix live in?** D4's lower edge reproduces an affine combination of
+*three* targets with coefficients `−(1, 4πi, −4π²)`; D5's has four, `−(1, 6πi, −12π², −8π³i)`.
+`linear.ts` solves `M t = r` over `Frac`, exactly, so that rank is **decided rather than
+thresholded** — the property four of the gallery's classical traps are detected by. A `2π` does not
+fit in it, and `exactConstant` currently refuses rather than rounding, which is correct and also a
+dead end for tier D.
+
+### Decision
+
+**1. The output basis is carried symbolically and never evaluated.** Tier D reports
+
+```
+(π^k / sin(π r)) · Σⱼ cⱼ · ∏ₘ aⱼₘ^{qⱼₘ}        cⱼ ∈ ℚ(i)(√d),  aⱼₘ ∈ ℚ₊,  qⱼₘ, r ∈ ℚ
+```
+
+as a **form**, labelled `=`, with the decimal rendering `≈` — the rule PLAN §3.3 already fixes and
+tier B already lives by. Mechanically this is the existing exponential basis with `expSum.ts`'s
+exponent widened from `SqrtExt` to admit `(ℚ(i))·π` and `Σ(ℚ)·ln(aⱼ)` for positive rational `aⱼ`,
+with `ln(aⱼ)` a symbol; plus **one** recogniser, for a two-term denominator `a − b·e^{β}` with
+`|a| = |b|`, which half-angle-factors into a sine. Anything outside the basis is **refused**.
+
+**2. Pass 5's matrix is over ℚ(i)(π), with π an indeterminate.** `families/linear.ts` is generalised
+over a small `Field` interface rather than rewritten: instantiated at `Frac` for the loader's
+existing invariant 4, and at ℚ(i)(π) for the Pass-5 solve. π is transcendental, so ℚ(i)[π] is a
+polynomial ring, its fraction field admits exact elimination, and **rank stays decided**.
+
+### Options Considered
+
+#### Option A: carry the form; π as an indeterminate (this ADR)
+**Pros:** small — one exponent widening, one recogniser, one `Field` abstraction over code that
+already exists. Keeps the form the reader asked for: the records write their own `value` fields as
+`"pi/sin(pi*alpha)"` and `"(pi/(2*sqrt(2)))*(17 - 40^(3/4))"`, which is this basis exactly. Uniform
+with tier B, so the app gains no second idiom. **Cons:** the engine cannot *decide* equality of two
+carried forms in general, so a simplifier-style question ("are these the same number?") is out of
+reach; and the basis must be policed, since a record outside it fails late rather than at load.
+
+#### Option B: reduce everything into an algebraic number field
+**Pros:** one number, comparable and printable; no carried symbols. **Cons:** the fixtures decide it.
+`sin(3π/8)` is the nested `√(2+√2)` — degree 4; `sin(3π/7)` is degree 3; `sin(23π/50)` is **degree
+20**; D7 needs `40^{3/4}` and `10^{1/3}·6^{2/3}`. That is a general algebraic number field with
+minimal-polynomial arithmetic, to express answers whose *whole value* is the closed form. It is a
+large, delicate piece of exact algebra bought in exchange for throwing away what the user wanted to
+see.
+
+#### Option C: rescale the unknowns to clear π from Pass 5's matrix
+The alternative `system.ts`'s own docstring names. Substituting `Tₖ = π^{eₖ}·tₖ` would clear π if the
+unknowns were homogeneous in it. **They are not.** For `R = 1/(1+x²)`, `T0 = π/2` and `T2 = π³/8` —
+degrees 1 and 3 — while for `R = 1/(1+x²)²`, `T0 = π/4` **and** `T1 = −π/4` are both degree 1, which
+D4's row `−(1, 4πi, −4π²)` cannot be homogeneous in. No single exponent assignment works across the
+two records. The rescaling is a coincidence of one family, not a method, and a rescaling that
+silently failed on the next record would corrupt a rank rather than a value.
+
+### Trade-off Analysis
+
+The two decisions share one shape: **prefer carrying exact structure over reducing it to a number.**
+That is already this app's most load-bearing habit — GALLERY §5.0a records that carrying `e^{iaz₀}`
+rather than evaluating it is what turned `1.1557273` into `π/e` — and tier D is where the habit pays
+for itself twice over, because the alternative is a number field for the answers and a rounding for
+the matrix.
+
+The cost is honest and worth stating: an engine that carries forms cannot compare them. Two
+expressions equal as numbers may not be recognised as equal, so the corpus's numeric cross-check
+remains the only equality oracle, and the output basis becomes a thing that must be *policed* —
+PLAN §9's R3 ("declare the output basis and refuse outside it") stops being advice and becomes a
+code path.
+
+### Consequences
+
+- `kernel/expSum.ts`'s exponent widens; its coefficient field does **not**. `@cas/exact` is
+  unchanged: no new number field anywhere in the suite.
+- `families/linear.ts` gains a `Field` parameter. Its existing `Frac` instantiation and the loader's
+  invariant 4 are untouched, and that must be true before and after (CLAUDE.md: a module never moves
+  without its tests green either side).
+- **Tier D's decimals are `≈`, uniformly** — including where the value happens to be rational, since
+  a decimal rendering of an exact result is an estimate of it.
+- A record whose closed form leaves the basis is a **finding about the record or about this ADR**,
+  not something to widen the basis for in passing. Superseding this record is the way to widen it.
+- The `Family["branch"]` schema needs four changes before D1 can load — `crossingPhase` as a tagged
+  union (D4/D5's is additive, not multiplicative), `argRange` per branch factor rather than per cut,
+  and seats for `admissibility` and `effectiveCut`. These are the records' own ⚠ GAP G4 and are
+  detailed in [`M4-plan.md`](contour-integration/M4-plan.md) §1.3, not here.
+- **Watch for:** the recogniser growing. One rule, for one denominator shape, is the decision; a
+  second and third rule accreting into a simplifier is the failure mode, and is R3 arriving by the
+  back door.
+
+### Action Items
+
+1. [ ] Widen `expSum.ts`'s exponent to `ℚ(i)(√d) ⊕ (ℚ(i))·π ⊕ Σ(ℚ)·ln(ℚ₊)`, with `ln` symbolic
+       (M4.2 for the `π` half, M4.5 for the `ln` half).
+2. [ ] The sine recogniser, as **one** rule over a two-term denominator with equal-modulus terms,
+       with a test that an unrecognised shape refuses rather than returning a decimal (M4.2).
+3. [ ] Generalise `families/linear.ts` over a `Field`; instantiate at `Frac` and at ℚ(i)(π), with the
+       loader's invariant-4 tests green either side (M4.3).
+4. [ ] Retire `exactConstant`'s "deferred to M4" docstring once the symbolic entry lands, so the
+       parked decision does not read as still open (M4.3).
+5. [ ] The four `Family["branch"]` schema changes, before D1 loads (M4.1).
+6. [ ] **Revisit if** a tier-E/F/G record needs a form outside the basis — G1–G3's `πcot`/`πcsc`
+       kernels are the likely first test, and they are M5's, not M4's.

@@ -283,11 +283,24 @@ with **no floating point in the chain** (including certified rational brackets o
 Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and a wrong contour
 fails diagnostically — closing `∫cos x/(1+x²)` downward shows the bound diverging and names KILL.
 The 28 gallery records load as **data** through a schema and a loader enforcing four invariants,
-with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; six of
-them — **every entry in tiers A, B and C** — are executed against the engine in the suite, each
+with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; **thirteen**
+of them — **every entry in tiers A, B and C** — are executed against the engine in the suite, each
 solving to a symbolic closed form because the whole solve runs in units of π and never evaluates it.
-A record that fails an invariant is dropped, not thrown on. Still to come: free-hand contour
-editing, branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6). Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
+A record that fails an invariant is dropped, not thrown on. **Extended M3 (M3.5a–c)** then made the
+engine's work reachable: the thirteen records are **browsable** (a `Sandbox | Gallery` switch, with
+one shared analysis path — `engine/analyse.ts` — that the golden corpus also runs, so the numbers on
+screen are the numbers the suite pins); every record carries a **derivation panel** that renders the
+ledger's own certificates, their methods and their ✓/✗ audit trails, with **every badge in the app
+computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
+caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
+the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
+come: the pen tool (free-hand path editing), branch cuts (M4), the rest of the gallery (M5), the
+teaching layer (M6).
+
+**M4 (branch cuts) is planned and its engine decisions are taken** — ADR-0041 and
+[`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
+**carried, not reduced** (a form labelled `=`, decimal `≈`, as tier B already carries `e^{β}`), and
+Pass 5 moves to **ℚ(i)(π)** with π an indeterminate so that rank stays decided. No new number field. Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
 exponential basis `Σ cₖ e^{βₖ}`, in which the FORM is `=` and the decimal stays `≈`.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
