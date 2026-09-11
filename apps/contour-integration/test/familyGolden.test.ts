@@ -108,15 +108,30 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "indented-sinc",
       "removable-one-minus-cos",
       "pv-sine-over-x-times-quadratic",
+      "mellin-keyhole",
     ]);
   });
 });
 
 describe("the quadrature agrees with the residue theorem, as the records claim", () => {
   it.each(cases)("%s", (_id, family) => {
+    const r = run(family, primary(family));
+    // A MULTIVALUED integrand has no quadrature to agree with, and that is not a gap to paper over.
+    // Sampling `z^α` needs a determination at every node and a compiled evaluator uses the principal
+    // one, so for a keyhole the two lips return the same value, cancel, and the "second opinion"
+    // answers a different question with confidence. `runFamily` therefore skips it outright, and the
+    // absence is stated rather than left to look like agreement.
+    if (family.branch !== undefined) {
+      expect(r.integral.quadratureSkipped).toMatch(/multivalued/);
+      expect(r.theorem.agrees).toBeUndefined();
+      expect(r.theorem.crossCheck).toBeUndefined();
+      // …and the exact route still produced a value, which is the point.
+      expect(r.theorem.exactValue).toBeDefined();
+      return;
+    }
     // Two routes that share no machinery. `agrees` is the engine's own comparison against the
     // quadrature's error estimate, which is the claim each record's `method` field records.
-    expect(run(family, primary(family)).theorem.agrees).toBe(true);
+    expect(r.theorem.agrees).toBe(true);
   });
 });
 
@@ -221,6 +236,10 @@ describe("the closed form each record establishes", () => {
     "indented-sinc": "π/2",
     "removable-one-minus-cos": "π/2",
     "pv-sine-over-x-times-quadratic": "π − π/e",
+    // D1, and the first answer in the corpus that is not π times an algebraic number: the
+    // keyhole's coefficient `1 − e^{2πiα}` factors through a sine, which is CARRIED rather than
+    // evaluated. North-star behaviour 4, in one string.
+    "mellin-keyhole": "π/sin(3π/10)",
   };
 
   it("covers every loaded record", () => {

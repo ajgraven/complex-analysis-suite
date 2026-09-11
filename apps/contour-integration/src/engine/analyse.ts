@@ -27,6 +27,8 @@ import {
 import { resolveAll, type Contour } from "./contour/model.js";
 import { evaluateLedger, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
+import { applyBranchTheorem } from "./branchTheorem.js";
+import type { PowerFactor } from "../kernel/branchResidue.js";
 
 export interface AnalysisInput {
   /** The CONTOUR integrand — post-substitution, Jacobian attached (`engine/substitution.ts`). */
@@ -45,6 +47,15 @@ export interface AnalysisInput {
    */
   readonly branch?: BranchChoice;
   /**
+   * The branch factor `z^α` multiplying a rational cofactor, when the integrand has that shape.
+   *
+   * Its presence changes TWO things and nothing else: the residue theorem routes through
+   * `branchTheorem.ts` (the branch point is not a pole, and each residue carries `z₀^α` in the
+   * declared determination), and `poles` is expected to describe the RATIONAL COFACTOR rather than
+   * the whole integrand — which is the caller's job, since only the record knows the split.
+   */
+  readonly power?: { readonly factor: PowerFactor; readonly rational: Node };
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -62,13 +73,16 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget, branch }: AnalysisInput): Analysis {
+export function analyse({ ast, f, poles, contour, budget, branch, power }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
   const integral = integrateContour(f, resolved, singular, budget);
   // Two routes that share no machinery: the theorem computes `2πi Σ n·Res` from exact residues, and
   // then CHECKS itself against the quadrature above. Agreement is the strongest evidence the app has.
-  const theorem = applyResidueTheorem(poles, integral);
+  const theorem =
+    power === undefined
+      ? applyResidueTheorem(poles, integral)
+      : applyBranchTheorem({ poles, integral, factor: power.factor });
   const ledger = evaluateLedger({
     ast,
     pieces: resolved,
@@ -77,6 +91,7 @@ export function analyse({ ast, f, poles, contour, budget, branch }: AnalysisInpu
     integral,
     theorem,
     branch,
+    power,
   });
   return { resolved, integral, theorem, ledger };
 }

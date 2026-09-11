@@ -15,6 +15,15 @@ import type { Geom, LemmaId, PieceRole } from "../engine/contour/model.js";
 
 export type { LemmaId } from "../engine/contour/model.js";
 
+/**
+ * A parameter binding taken from a golden fixture.
+ *
+ * Here rather than in `system.ts` because both the rational coefficient walk and the widened one
+ * need it, and `system.ts` needs the widened walk — which made the two modules import each other.
+ * It is schema vocabulary anyway: a binding is what a `Golden`'s `params` is.
+ */
+export type Bindings = Readonly<Record<string, string | number | boolean>>;
+
 /** GALLERY.md §1: six templates plus `square` for tier G. Everything else is parameterisation. */
 /**
  * How a branch point acts, and with which argument convention.
@@ -51,6 +60,16 @@ export type CrossingPhase =
 
 export interface BranchSpec {
   readonly function: string;
+  /**
+   * The rational cofactor, in `z`: the integrand is `(the branch function)·R(z)`.
+   *
+   * Declared rather than derived. The engine needs the split — the branch point carries no residue
+   * while `R`'s poles carry all of them — and recovering it by dividing `z^α` out of the auxiliary
+   * integrand symbolically would be fragile in exactly the cases that matter. The record already
+   * names `R` among its target's `symbols`, but that is the subject of the HYPOTHESES (a structural
+   * predicate about a function) and carries no expression; this is the expression.
+   */
+  readonly rationalPart: string;
   /** The branch points, each with its own exponent and its own argument convention. */
   readonly factors: readonly BranchFactor[];
   readonly cuts: readonly { readonly from: string; readonly to: string }[];

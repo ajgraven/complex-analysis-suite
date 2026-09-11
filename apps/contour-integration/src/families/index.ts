@@ -26,6 +26,7 @@ import { b2JordanStrict } from "./records/b2-jordan-strict.js";
 import { b3JordanQuartic } from "./records/b3-jordan-quartic.js";
 import { a6SemicircleQuartic } from "./records/a6-semicircle-quartic.js";
 import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
+import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export { buildSystem, exactConstant, type FamilySystem } from "./system.js";
@@ -39,8 +40,10 @@ export { solveExact, applyCombination, type SolveReport, type RatMatrix } from "
  * formula; B1–B3 with the exponential basis `Σ cₖ e^{βₖ}`, which lets a Jordan residue be exact
  * without being evaluated; C1–C3 with L4, L5 and Pass 5's solve.
  *
- * Tiers D–G need branch cuts and the kernel families of M4/M5. A record loaded before its machinery
- * exists would be a worked example that cannot be worked.
+ * D1 joins them with M4.2: the widened exponential basis, the sine recogniser, the power-residue
+ * reader and Pass 5 over the `reproduces` role. Tiers E–G, and the rest of D, need the machinery of
+ * M4.3 onward and M5 — a record loaded before its machinery exists would be a worked example that
+ * cannot be worked.
  */
 export const FAMILIES: readonly Family[] = [
   a1CircleLinearCos,
@@ -56,6 +59,7 @@ export const FAMILIES: readonly Family[] = [
   c1IndentedSinc,
   c2RemovableOneMinusCos,
   c3PvSineOverXTimesQuadratic,
+  d1MellinKeyhole,
 ];
 
 /**

@@ -167,7 +167,11 @@ describe("invariant 4 — rank(M) = m for the family's own goldens", () => {
     }));
     const hits = checkFamily(f).filter((v) => v.invariant === 4);
     expect(hits[0].message).toMatch(/could not be decided exactly/);
-    expect(hits[0].message).toMatch(/irrational/);
+    // A BARE `2π` is still refused after M4.2 widened the basis, and the message now names where it
+    // belongs rather than only what is wrong with it: π is an exponent component in this basis, not
+    // a coefficient, so the plain-log keyhole's row needs Pass 5 over ℚ(i)(π) — which is M4.3's.
+    expect(hits[0].message).toMatch(/bare π/);
+    expect(hits[0].message).toMatch(/M4\.3/);
   });
 });
 

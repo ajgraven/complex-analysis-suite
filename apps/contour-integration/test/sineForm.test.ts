@@ -172,17 +172,18 @@ describe("D3 — (π/n)/sin(πa/n), and the integer-a collapse", () => {
 });
 
 describe("sin is odd and π-antiperiodic, so the printed form is the record's", () => {
-  it("factors a conjugate pair of coefficients through the SAME sine", () => {
-    // `1 − e^{3iπ/5}` and `1 − e^{−3iπ/5}` are conjugates; their leftover exponentials differ and
-    // their sine factor does not. (The recogniser also re-takes the term order itself rather than
-    // inheriting `ExpSum`'s display sort — but the two orders agree today, so this test does not
-    // distinguish them and does not claim to.)
-    for (const alpha of [3, -3]) {
+  it("factors a conjugate pair through SUPPLEMENTARY sines, which are the same number", () => {
+    // `1 − e^{3iπ/5}` and `1 − e^{−3iπ/5}` are conjugates, and the canonical phase sends them to
+    // `sin(3π/10)` and `sin(7π/10)`. Supplementary, hence equal — the forms differ because the two
+    // denominators genuinely differ, and neither is being rounded onto the other.
+    const rs = [3, -3].map((alpha) => {
       const r = divideCarryingSine(ExpSum.fromSqrtExt(alg(1)), keyholeCoefficient(alpha, 10));
       expect(r.ok).toBe(true);
-      if (!r.ok) continue;
-      expect(r.form.sine?.equals(q(3, 10))).toBe(true);
-    }
+      return r.ok ? r.form.sine : undefined;
+    });
+    expect(rs[0]?.equals(q(3, 10))).toBe(true);
+    expect(rs[1]?.equals(q(7, 10))).toBe(true);
+    expect(rs[0]?.add(rs[1] ?? q(0)).equals(q(1))).toBe(true);
   });
 
   it("drops a sine that is identically 1", () => {

@@ -16,14 +16,29 @@
 // there is no family at all. Moving it inward is a wiring change, not a redesign.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { exact, refuse, unknown, type Certificate } from "@cas/rigor";
-import { ExpSum, formatPiExpSum } from "../kernel/expSum.js";
-import { exactConstant, type Bindings } from "./system.js";
+import { ExpSum } from "../kernel/expSum.js";
+import {
+  divideCarryingSine,
+  formatSineForm,
+  sineFormToNumber,
+  type SineForm,
+} from "../kernel/sineForm.js";
+import { exactBasisConstant } from "./basisConstant.js";
+import type { Bindings } from "./system.js";
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
 
 export interface SolvedTarget {
   /** `t/π`, exactly — the unknown in units of π, before the relation is applied. */
   readonly piUnits: ExpSum;
+  /**
+   * The unknown in units of π, INCLUDING a sine factor when the coefficient carried one.
+   *
+   * Tiers A–C never have one, so `form.sine` is absent there and `form.sum` is `piUnits`. A keyhole
+   * has one, and it is not optional decoration: `π/sin(πα)` is the answer and `piUnits` alone cannot
+   * express it.
+   */
+  readonly form: SineForm;
   /** The real number the target's relation extracts. `≈` by construction: π is evaluated here. */
   readonly value: number;
   /** The exact form, when the relation can be applied symbolically — `π/2`, not 1.5707963. */
@@ -89,20 +104,41 @@ function realPartOfSum(sum: ExpSum, part: "re" | "im"): ExpSum | null {
   return out;
 }
 
-/** The total coefficient `Σ aᵢ` on the unknown, over the family's target pieces. */
-function targetCoefficient(family: Family, bindings: Bindings): { ok: true; a: Gauss } | { ok: false; reason: string } {
+/**
+ * The total coefficient on the unknown — `Σ aᵢ` over the `target` pieces **plus `Σ cⱼ` over the
+ * `reproduces` ones**, in the widened basis.
+ *
+ * THE `reproduces` ROLE IS THE KEYHOLE'S WHOLE MECHANISM, and folding it in here is what M4.2
+ * added. Its lower edge is the target traversed backwards times `e^{2πi(α−1)}`, so it does not
+ * cancel the upper edge — the two together multiply the unknown by `1 − e^{2πiα}`. A solve that
+ * refused the role (as this one did for tiers A–C, none of which has one) can only ever handle a
+ * contour on which the target appears once.
+ *
+ * The value is an `ExpSum` rather than a `Gauss` because that coefficient is not an algebraic
+ * number. `exactConstant` refuses it by design and says so; `exactBasisConstant` is the walker
+ * ADR-0041 chose instead.
+ */
+function targetCoefficient(
+  family: Family,
+  bindings: Bindings,
+): { ok: true; a: ExpSum } | { ok: false; reason: string } {
   const targetIds = family.targets.map((t) => t.id);
   if (targetIds.length !== 1) {
     return { ok: false, reason: `this solve handles one unknown; the family declares ${targetIds.length}` };
   }
-  let total = Gauss.ZERO;
+  let total = ExpSum.ZERO;
   let sawTarget = false;
   for (const piece of family.contour.pieces) {
-    if (piece.role !== "target") continue;
-    sawTarget = true;
-    const rows = piece.coefficients ?? [{ targetId: targetIds[0], coefficient: "1" }];
+    if (piece.role === "target") sawTarget = true;
+    else if (piece.role !== "reproduces") continue;
+    const rows =
+      piece.coefficients ??
+      (piece.role === "target" ? [{ targetId: targetIds[0], coefficient: "1" }] : undefined);
+    if (rows === undefined) {
+      return { ok: false, reason: `the 'reproduces' piece '${piece.id}' declares no coefficient row` };
+    }
     for (const row of rows) {
-      const value = exactConstant(parse(row.coefficient), bindings);
+      const value = exactBasisConstant(parse(row.coefficient), bindings);
       if (!value.ok) {
         return { ok: false, reason: `piece '${piece.id}': ${value.reason}` };
       }
@@ -110,12 +146,11 @@ function targetCoefficient(family: Family, bindings: Bindings): { ok: true; a: G
     }
   }
   if (!sawTarget) return { ok: false, reason: "no piece carries the target role" };
-  if (total.isZero()) {
-    return {
-      ok: false,
-      reason: "the target coefficients sum to zero: this contour carries no information about the unknown",
-    };
-  }
+  // NOT folded. `ExpSum.foldSigns` says why: folding `e^{irπ}` with `2r ∈ ℤ` into its coefficient
+  // collapses the two-term shape the sine recogniser reads, and D1 at α = 3/4 has exactly that
+  // exponent — its answer would come out as an algebraic multiple of π instead of `π/sin(3π/4)`.
+  // The degenerate keyhole does not need folding either: at integer α the two exponents are EQUAL,
+  // so the normal form combines them and the coefficient is exactly zero already.
   return { ok: true, a: total };
 }
 
@@ -138,11 +173,12 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     };
   }
 
-  // Every `free` piece would contribute a quadrature value, which is `≈` and would cap the result.
-  // No tier-A–C family has one, so this refuses rather than quietly downgrading.
-  const free = family.contour.pieces.filter((p) => p.role === "free" || p.role === "reproduces");
+  // A `free` piece would contribute a quadrature value, which is `≈` and would cap the result. No
+  // family in the corpus has one, so this refuses rather than quietly downgrading. (`reproduces`
+  // used to be refused alongside it and is now folded into the coefficient above.)
+  const free = family.contour.pieces.filter((p) => p.role === "free");
   if (free.length > 0) {
-    const reason = `piece '${free[0].id}' has role '${free[0].role}', which this solve does not yet carry`;
+    const reason = `piece '${free[0].id}' has role 'free', which this solve does not yet carry`;
     return { ok: false, reason, certificate: refuse("the target", reason) };
   }
 
@@ -152,9 +188,14 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     constants = constants.add(arc.contribution);
   }
 
-  // a·t = S − Σbᵢ
+  // a·t = S − Σbᵢ, then divide — which for a keyhole is where the sine comes from.
   const numerator = inputs.closedContourPiUnits.sub(constants);
-  const piUnits = numerator.scale(SqrtExt.fromGauss(coefficient.a.inv()));
+  const divided = divideCarryingSine(numerator, coefficient.a);
+  if (!divided.ok) {
+    return { ok: false, reason: divided.reason, certificate: divided.certificate };
+  }
+  certificates.push(divided.certificate);
+  const piUnits = divided.form.sum;
 
   const relation = family.auxiliary?.relation ?? "Re";
   const spec = RELATIONS[relation];
@@ -163,17 +204,18 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     return { ok: false, reason, certificate: refuse("the target", reason) };
   }
 
-  const [re, im] = piUnits.toTuple();
-  const value = (Math.PI * (spec.part === "re" ? re : im)) / Number(spec.divisor);
+  const value = sineFormToNumber(divided.form, spec.part) / Number(spec.divisor);
 
   // The SYMBOLIC form survives only when no exponential did: Re of `c·e^{β}` is not an element of
   // ℚ(i)(√d) unless β = 0. When one does survive, the value is reported as a decimal and the
   // certificate says so — which is B3's situation stated as a rule rather than as a special case.
   const extracted = realPartOfSum(piUnits, spec.part);
   let text: string | undefined;
+  let form: SineForm = divided.form;
   if (extracted !== null) {
     const folded = extracted.scale(SqrtExt.fromGauss(Gauss.rat(1n, spec.divisor)));
-    text = formatPiExpSum(folded);
+    form = divided.form.sine === undefined ? { sum: folded } : { sum: folded, sine: divided.form.sine };
+    text = formatSineForm(form);
     certificates.push(
       exact(
         `the target is ${text}`,
@@ -189,5 +231,5 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     );
   }
 
-  return { ok: true, solved: { piUnits, value, text, certificates } };
+  return { ok: true, solved: { piUnits, form, value, text, certificates } };
 }

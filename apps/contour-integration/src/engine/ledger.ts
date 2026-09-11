@@ -23,6 +23,8 @@ import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/mode
 import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
+import { branchArcBound } from "../kernel/bounds/branchArc.js";
+import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { Piece } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -138,6 +140,33 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   return mlArcBound(rational.value.num, rational.value.den, R, extent);
 }
 
+/**
+ * The same ML bound as `disposeArc`, for `z^α·R(z)`.
+ *
+ * WHICH LIMIT is not inferable from the geometry: an outer circle and an inner circle differ only in
+ * radius, and D1's two are 1e9 apart at one fixture and adjacent at another. So it is read off the
+ * DECLARED lemma — `L2` is the large arc, `L1` the small one — which is the same reason `L4` and `L5`
+ * are declared rather than guessed.
+ */
+function disposeBranchArc(
+  power: { readonly factor: PowerFactor; readonly rational: Node },
+  g: Resolved,
+  lemma: Piece["lemma"],
+): ArcBound | null {
+  if (g.kind !== "arc") return null;
+  const R = arcRadius(g);
+  const extent = arcExtent(g);
+  if (!R || !extent) return null;
+  const limit = lemma === "L1" ? "0+" : lemma === "L2" ? "inf" : null;
+  if (limit === null) return null;
+  const rational = toExactRational(power.rational);
+  if (!rational.ok) return null;
+  return branchArcBound(power.factor.alpha, rational.value.num, rational.value.den, R, {
+    limit,
+    piMultiple: extent,
+  });
+}
+
 const rowFrom = (
   constraint: ConstraintId,
   status: LedgerRow["status"],
@@ -156,6 +185,8 @@ export interface LedgerInput {
   readonly theorem: ResidueTheoremResult;
   /** The cut system. Omitted for a rational integrand, which is {@link NO_BRANCH}. */
   readonly branch?: BranchChoice;
+  /** The branch factor `z^α` and its rational cofactor — see `analyse.ts`. */
+  readonly power?: { readonly factor: PowerFactor; readonly rational: Node };
 }
 
 /**
@@ -526,6 +557,27 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
+    // A `reproduces` piece is not computed and does not vanish: it comes back as a MULTIPLE of the
+    // unknown, and that multiple is the whole mechanism of a keyhole. Its own row says so, rather
+    // than reporting a quadrature of a piece whose value the argument never uses.
+    if (piece.role === "reproduces") {
+      // The multiple itself is FAMILY data — the runtime piece has a role and no coefficient row —
+      // so the row names the mechanism and Pass 5 reports the factor. Same split as `solveTarget`'s.
+      push(
+        rowFrom(
+          "KILL",
+          "satisfied",
+          `${piece.name} reproduces the target, as a multiple the solve reads off the family`,
+          exact(
+            "the piece reproduces the unknown",
+            "declared by its role; the coefficient enters Pass 5's M rather than the right-hand side",
+          ),
+          piece.id,
+        ),
+      );
+      continue;
+    }
+
     if (piece.role !== "vanish") {
       push(
         rowFrom(
@@ -540,7 +592,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
-    const disposal = disposeArc(ast, geom);
+    const disposal = input.power === undefined ? disposeArc(ast, geom) : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
       push(
@@ -550,7 +602,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           `${piece.name} must vanish, but no lemma here applies to this integrand`,
           unknown(
             `the arc ${piece.name}`,
-            "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither",
+            input.power === undefined
+              ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
+              : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",

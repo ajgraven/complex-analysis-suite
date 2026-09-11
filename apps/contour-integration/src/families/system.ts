@@ -9,11 +9,14 @@
 import { Frac, Gauss } from "@cas/exact";
 import { evaluate, parse, type Node } from "@cas/expr";
 import { simplestRational } from "../kernel/exactRational.js";
-import type { Family, FamilyPiece } from "./schema.js";
+import type { Bindings, Family, FamilyPiece } from "./schema.js";
 import { solveExact, type RatMatrix, type SolveReport } from "./linear.js";
+import { exactBasisConstant } from "./basisConstant.js";
+import { ExpSum } from "../kernel/expSum.js";
 
-/** A parameter binding taken from a golden fixture. */
-export type Bindings = Readonly<Record<string, string | number | boolean>>;
+// `Bindings` lives in `schema.ts`; re-exported here because every caller of this module already
+// imports it from here.
+export type { Bindings } from "./schema.js";
 
 export type ExactConstant = { ok: true; value: Gauss } | { ok: false; reason: string };
 
@@ -166,8 +169,16 @@ function coefficientsOf(
 }
 
 export interface FamilySystem {
-  /** Two rows — the real and imaginary parts of the single complex contour identity. */
+  /**
+   * Two rows — the real and imaginary parts of the single complex contour identity.
+   *
+   * EMPTY when a coefficient is not an algebraic number. A keyhole's is `1 − e^{2πiα}`, which no
+   * rational matrix holds, and rounding it would make a rank a matter of tuning — the exact thing
+   * `linear.ts` exists to avoid. `basisTotals` carries it instead, and `report` is still a decision.
+   */
   readonly matrix: RatMatrix;
+  /** The per-unknown totals in the widened basis. Present exactly when `matrix` is empty. */
+  readonly basisTotals?: readonly ExpSum[];
   readonly unknowns: number;
   readonly targetIds: readonly string[];
   readonly report: SolveReport;
@@ -188,7 +199,11 @@ export function buildSystem(family: Family, bindings: Bindings = {}): BuildResul
   const m = targetIds.length;
   if (m === 0) return { ok: false, reason: "a family must declare at least one unknown" };
 
-  const totals = targetIds.map(() => Gauss.ZERO);
+  // THE WIDENED BASIS, ALWAYS — and then reduced back to ℚ(i) when it fits. `exactBasisConstant`
+  // subsumes every coefficient `exactConstant` accepted, so tiers A–C take exactly the path they
+  // always took; what changed is that a keyhole's `−e^{2πi(α−1)}` no longer fails the invariant it
+  // was never able to express.
+  const totals = targetIds.map(() => ExpSum.ZERO);
   for (const piece of family.contour.pieces) {
     const row = coefficientsOf(piece, targetIds);
     if (!row.ok) return row;
@@ -204,7 +219,7 @@ export function buildSystem(family: Family, bindings: Bindings = {}): BuildResul
           }`,
         };
       }
-      const value = exactConstant(ast, bindings);
+      const value = exactBasisConstant(ast, bindings);
       if (!value.ok) {
         return { ok: false, reason: `piece '${piece.id}' coefficient '${entry.coefficient}': ${value.reason}` };
       }
@@ -213,10 +228,47 @@ export function buildSystem(family: Family, bindings: Bindings = {}): BuildResul
     }
   }
 
-  const matrix: Frac[][] = [totals.map((g) => g.re), totals.map((g) => g.im)];
+  // `foldSigns` before asking whether anything is zero: at integer α a keyhole's two edge
+  // coefficients are `1` and `−1` wearing exponentials, and they must cancel EXACTLY so the
+  // degenerate case is decided rather than measured.
+  const folded = totals.map((t) => t.foldSigns());
+  const algebraic = folded.map((t) => t.asSqrtExt()?.asGauss() ?? null);
+  if (algebraic.every((g): g is Gauss => g !== null)) {
+    const matrix: Frac[][] = [algebraic.map((g) => g.re), algebraic.map((g) => g.im)];
+    return {
+      ok: true,
+      system: { matrix, unknowns: m, targetIds, report: solveExact(matrix, m) },
+    };
+  }
+
+  // A coefficient outside ℚ(i). The rank question is still a DECISION — `ExpSum.isZero` is exact —
+  // but only for one unknown: eliminating over several needs `linear.ts` generalised to a `Field`
+  // over ℚ(i)(π), which is M4.3's work and D4's record.
+  if (m !== 1) {
+    return {
+      ok: false,
+      reason:
+        `a coefficient is not an algebraic number and the family has ${m} unknowns: elimination over ` +
+        "the widened basis needs linear.ts generalised over a Field (M4.3)",
+    };
+  }
+  const nonZero = !folded[0].isZero();
   return {
     ok: true,
-    system: { matrix, unknowns: m, targetIds, report: solveExact(matrix, m) },
+    system: {
+      matrix: [],
+      basisTotals: folded,
+      unknowns: 1,
+      targetIds,
+      report: {
+        rank: nonZero ? 1 : 0,
+        unknowns: 1,
+        pivotColumns: nonZero ? [0] : [],
+        kernel: nonZero ? [] : [[Frac.ONE]],
+        ...(nonZero ? { combination: [[Frac.ONE]] } : {}),
+        inconsistentRows: [],
+      },
+    },
   };
 }
 

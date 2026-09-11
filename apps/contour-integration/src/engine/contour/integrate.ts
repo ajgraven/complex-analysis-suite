@@ -4,7 +4,16 @@
 // through (or within rounding distance of) a singularity does not have an integral, and the nearest
 // existing tool's answer to that situation — a confident `6.71197 + 0.46361i`, wrong to six figures,
 // with no caveat — is the single clearest thing this app can do better (research 01 §1).
-import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
+import {
+  assembleVerdict,
+  bound,
+  estimate,
+  exact,
+  refuse,
+  unknown,
+  type Certificate,
+  type Verdict,
+} from "@cas/rigor";
 import {
   arcLength,
   derivAt,
@@ -47,6 +56,8 @@ export interface ContourIntegral {
   readonly pieces: readonly PieceIntegral[];
   readonly verdict: Verdict;
   readonly refusal?: string;
+  /** Why no quadrature was attempted, when none was. NOT a refusal — see {@link QuadratureBudget.skip}. */
+  readonly quadratureSkipped?: string;
   /** n(γ, aₖ) per singularity, exactly decided — present whether or not the integral was computed. */
   readonly windings: readonly { readonly at: Cx; readonly n: number; readonly decided: boolean }[];
   readonly closed: boolean;
@@ -73,6 +84,18 @@ function pullback(f: (z: Cx) => Cx, g: Resolved): (t: number) => Cx {
  */
 export interface QuadratureBudget {
   readonly maxEvaluations?: number;
+  /**
+   * Do not attempt the quadrature at all, for this stated reason.
+   *
+   * Exists for a MULTIVALUED integrand. Sampling `z^α` needs a determination at every node, and a
+   * compiled evaluator silently uses the principal one — so for a keyhole, whose declared branch is
+   * `arg z ∈ (0, 2π)`, the two lips return the same value, cancel, and the "second opinion" is a
+   * confident answer to a different question. Worse than no cross-check.
+   *
+   * Distinct from {@link ContourIntegral.refusal}: nothing is wrong with the contour, so LEGALITY is
+   * untouched. The winding numbers are still decided — they come from the geometry, not from `f`.
+   */
+  readonly skip?: string;
 }
 
 /** Integrate one piece, with the rule chosen by the geometry (see kernel/quadrature.ts). */
@@ -175,6 +198,27 @@ export function integrateContour(
   if (pieces.length === 0) {
     const c = refuse("∫ over an empty contour", "there is no contour");
     return { pieces: [], verdict: assembleVerdict([c]), refusal: c.method, windings, closed };
+  }
+
+  // The windings are decided above, from the geometry alone, so they survive a skipped quadrature —
+  // which is the whole reason this is a skip rather than a refusal.
+  if (budget?.skip !== undefined) {
+    const why = unknown("the quadrature", budget.skip);
+    return {
+      pieces: pieces.map((_g, k) => ({
+        pieceId: String(k),
+        value: [0, 0] as Cx,
+        nodes: 0,
+        errorEstimate: Number.POSITIVE_INFINITY,
+        capped: false,
+        rule: "gauss-legendre" as const,
+        certificate: why,
+      })),
+      verdict: assembleVerdict([why]),
+      quadratureSkipped: budget.skip,
+      windings,
+      closed,
+    };
   }
 
   // --- refusal, first ------------------------------------------------------------------------

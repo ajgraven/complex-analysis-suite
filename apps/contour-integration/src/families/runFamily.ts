@@ -24,6 +24,8 @@ import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
 import type { Family, Golden } from "./schema.js";
 import { solveTarget, type SolvedTarget } from "./solveTarget.js";
+import { powerFactorOf } from "./branchFactor.js";
+import { legalityRefusal } from "../engine/ledger.js";
 import type { Bindings } from "./system.js";
 
 export interface RunOptions {
@@ -124,7 +126,27 @@ export function runFamily(
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
 
-  const poles = findPoles(built.ast);
+  // A BRANCH FAMILY TAKES ITS POLES FROM THE RATIONAL COFACTOR, not from the whole integrand.
+  // D1's `branch-point-is-not-a-pole` trap is exactly this: `z^{α−1}` has a branch point at the
+  // origin and no Laurent series there, so a pole-finder pointed at the full integrand is being
+  // asked a category-error question — and `findPoles` would in any case report nothing, since
+  // `z^{α−1}/(1+z)` is not a rational function at all.
+  const power = powerFactorOf(family, bindings);
+  const poles = findPoles(power.ok ? power.rational : built.ast);
+
+  // And no quadrature: sampling `z^{α−1}` needs a determination, and the compiled evaluator uses
+  // the principal one — which for a keyhole makes the two lips cancel and answers a different
+  // question with confidence. See `QuadratureBudget.skip`.
+  const budget = power.ok
+    ? {
+        ...options.budget,
+        skip:
+          "the integrand is multivalued: sampling z^α needs a determination, and a compiled " +
+          "evaluator uses the principal one — so a quadrature of this contour would answer a " +
+          "different question. The exact route is the residue theorem.",
+      }
+    : options.budget;
+
   return {
     ok: true,
     run: {
@@ -140,7 +162,10 @@ export function runFamily(
         f,
         poles,
         contour,
-        ...(options.budget === undefined ? {} : { budget: options.budget }),
+        ...(budget === undefined ? {} : { budget }),
+        ...(power.ok
+          ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }
+          : {}),
       }),
     },
   };
@@ -160,6 +185,20 @@ export function solveFamily(
 ): SolveFamilyResult {
   const r = runFamily(family, golden, options);
   if (!r.ok) return r;
+
+  // NOTHING MAY REPORT A VALUE WHILE A LEGALITY ROW REFUSES — the same gate the result card takes,
+  // and it belongs here for the same reason. Pass 5 reads the residue sum and the piece limits and
+  // knows nothing about whether the contour was legal; D1 under the principal determination is the
+  // case that proves it, since its circles cross the relocated cut untagged while the solve goes on
+  // to produce a perfectly confident complex number for a real integral.
+  const illegal = legalityRefusal(r.run.ledger);
+  if (illegal !== undefined) {
+    return {
+      ok: false,
+      run: r.run,
+      reason: `${family.id}: LEGALITY refuses — ${illegal.claim}${illegal.repair === undefined ? "" : ` (${illegal.repair})`}`,
+    };
+  }
 
   const piUnits = r.run.theorem.piUnits;
   if (piUnits === undefined) {

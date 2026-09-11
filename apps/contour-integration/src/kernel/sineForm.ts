@@ -66,16 +66,36 @@ const DEGENERATE_TRAIL = [
  * degenerate case.
  */
 function normaliseSine(r: Frac): { readonly r: Frac; readonly sign: 1 | -1 } | null {
-  // Only ANTIPERIODICITY is needed here, because the caller hands `r` over already positive — see
-  // the canonical ordering in `divideCarryingSine`. Oddness would otherwise have to come FIRST:
-  // reducing `r = −3/10` by periods lands on `sin(7π/10)`, which is the same number and not the form
-  // D1 states, while negating first lands on `sin(3π/10)` directly.
-  //
-  // `sin(π(v + k)) = (−1)^k sin(π v)`, so reduce into `[0, 1)` and carry the parity.
+  // `r` arrives in `[0, 1)` — the canonical phase below and the canonical ordering together
+  // guarantee it — so the only question left is whether it is zero. The antiperiodic reduction is
+  // kept because it is what makes that guarantee unnecessary to trust: `sin(π(v + k)) = (−1)^k
+  // sin(π v)`, so an `r` from anywhere still lands in `[0, 1)` with its parity carried out.
   const k = r.n / r.d;
   const value = r.sub(Frac.of(k, 1n));
   if (value.isZero()) return null; // sin(π r) = 0
   return { r: value, sign: (((k % 2n) + 2n) % 2n) === 0n ? 1 : -1 };
+}
+
+/**
+ * `β` with its π coefficient's imaginary part reduced into `[0, 2)`.
+ *
+ * **VALUE-PRESERVING, FORM-CANONICALISING — and the reason D1's answer reads the way its record
+ * writes it.** `e^{β}` depends on that component only mod 2, so the reduction changes nothing about
+ * the number; what it changes is which of many equal factorings comes out. D1's lower edge declares
+ * its factor as `−e^{2πi(α−1)}` (convention F: the full multiplier, reversal included), which at
+ * α = 3/10 has π part `−7/5`; factoring that gives `sin(7π/10)`, while the record states
+ * `sin(3π/10)`. The two are the same number — supplementary angles — and only one is the form a
+ * reader recognises as `π/sin(πα)`.
+ *
+ * It is sound because the two `(−1)^k` factors it introduces cancel: shifting `β₁` by `2πik` moves
+ * `e^{−(β₁+β₂)/2}` by `(−1)^k` and `sin(π r)` by `(−1)^k`, and the quotient is untouched.
+ */
+function canonicalPhase(b: Exponent): Exponent {
+  const im = b.pi.im;
+  let k = im.n / (2n * im.d);
+  if (im.n < 0n && k * 2n * im.d !== im.n) k -= 1n;
+  if (k === 0n) return b;
+  return Exponent.of(b.algebraic, new Gauss(b.pi.re, im.sub(Frac.of(2n * k, 1n))));
 }
 
 /** `sin(π/2) = 1`, which is not part of an answer — D1's α = 1/2 fixture reads `pi`, not `pi/sin(pi/2)`. */
@@ -137,10 +157,12 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
   // Taking the order again here is insurance: `ExpSum.sort`'s own docstring says it exists "purely
   // for reading", and a future change to how terms are DISPLAYED must not be able to turn
   // `sin(3π/10)` into `sin(7π/10)`.
-  const pair = [...denominator.terms].sort((x, y) => {
-    const d = y.exponent.pi.im.sub(x.exponent.pi.im);
-    return d.isZero() ? 0 : d.n < 0n ? -1 : 1;
-  });
+  const pair = denominator.terms
+    .map((t) => ({ coefficient: t.coefficient, exponent: canonicalPhase(t.exponent) }))
+    .sort((x, y) => {
+      const d = y.exponent.pi.im.sub(x.exponent.pi.im);
+      return d.isZero() ? 0 : d.n < 0n ? -1 : 1;
+    });
   const [first, second] = pair;
   if (!second.coefficient.equals(first.coefficient.neg())) {
     const reason =

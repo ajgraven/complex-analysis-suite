@@ -31,7 +31,7 @@ import { evaluate, type Node } from "@cas/expr";
 import { ExpSum } from "../kernel/expSum.js";
 import { Exponent } from "../kernel/exponent.js";
 import { simplestRational } from "../kernel/exactRational.js";
-import type { Bindings } from "./system.js";
+import type { Bindings } from "./schema.js";
 
 export type BasisConstant =
   | { readonly ok: true; readonly value: ExpSum }
