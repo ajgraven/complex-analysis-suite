@@ -18,6 +18,7 @@ import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
 import { toExactRational } from "./exactRational.js";
 import { asExponentialTimesRational } from "./exponentialFactor.js";
+import { asExponentialSum, isEntire, type ExpRationalForm } from "./exponentialSum.js";
 import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
 import { formatSqrtExt } from "./formatExact.js";
 import { ExpSum, formatExpSum, jordanExponent, weightedExpSum } from "./expSum.js";
@@ -51,6 +52,8 @@ export interface PoleReport {
   readonly exactPoles?: readonly AlgebraicPole[];
   /** The quadratic extension the exact data needed, or null when ℚ(i) sufficed. */
   readonly radicand?: bigint | null;
+  /** `f` read as `(Σ Nₖ e^{iaₖz})/D`, when it has that shape — what L5 needs to find its limit. */
+  readonly exponentialSum?: ExpRationalForm;
   /**
    * The frequency `a` of `f = g(z)·e^{iaz}`, when f has that shape.
    *
@@ -410,6 +413,32 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
         radicand: structure.radicand,
         exponentialFrequency: frequency,
         certificates,
+      };
+    }
+  }
+
+  // --- an ENTIRE sum of exponential terms: no poles at all, decided rather than assumed ---------
+  // C2's auxiliary `(1 − e^{iz} + iz)/z²` is a SUM, so the single-factor reader above cannot see it.
+  // Its numerator vanishes to order 2 at the origin, exactly matching the denominator, so the origin
+  // is REMOVABLE and the residue sum is empty — which is the entry's whole point, and the reason its
+  // value has to come from the large arc instead.
+  const sumForm = asExponentialSum(ast);
+  if (sumForm !== null && sumForm.terms.length > 1) {
+    const entire = isEntire(sumForm);
+    if (entire.ok) {
+      return {
+        poles: [],
+        rational: true,
+        exactlyComplete: true,
+        exactResidueSum: { value: [0, 0], text: "0" },
+        exactPoles: [],
+        exponentialSum: sumForm,
+        certificates: [
+          exactCert(
+            "f is entire: every apparent singularity is removable, so Σ Res is empty",
+            "exact Taylor expansion of Σ Nₖ(w)e^{iaₖw} at the origin, where e^{ia·0} = 1 keeps every coefficient in ℚ(i)",
+          ),
+        ],
       };
     }
   }

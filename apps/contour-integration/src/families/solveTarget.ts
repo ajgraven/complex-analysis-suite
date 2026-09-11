@@ -39,8 +39,8 @@ export type SolveTargetResult =
 export interface SolveInputs {
   /** The closed-contour value in units of π — `applyResidueTheorem`'s `piUnits`. */
   readonly closedContourPiUnits: ExpSum;
-  /** The exact limits of any indentations, in units of π, keyed by piece id. */
-  readonly smallArcs: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
+  /** The exact limits of the pieces that do not vanish (L4, L5), in units of π. */
+  readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
   readonly bindings?: Bindings;
 }
 
@@ -129,7 +129,7 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
 
   const certificates: Certificate[] = [];
   let constants = ExpSum.ZERO;
-  for (const arc of inputs.smallArcs) {
+  for (const arc of inputs.pieceLimits) {
     constants = constants.add(arc.contribution);
   }
 
