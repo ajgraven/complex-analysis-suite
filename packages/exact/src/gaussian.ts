@@ -93,22 +93,37 @@ export class Frac {
     const n = Number(this.n);
     const d = Number(this.d);
     if (Number.isFinite(n) && Number.isFinite(d)) return n / d; // unchanged for everything in range
-    // Shift both sides right by the SAME number of bits until the larger fits in a double. The shift
-    // is exact in binary and common to both, so the quotient is unchanged except for the truncated
-    // low bits — a relative error below 2^-1000. If one side shifts away to 0 the true ratio really
-    // did overflow or underflow the double range, and 0 / Infinity is then the right answer.
-    const KEEP_BITS = 1000; // 2^1000 ≈ 1.07e301, comfortably inside the double range
+    if (this.n === 0n) return 0;
+
+    // Scale so the INTEGER quotient carries a fixed number of significant bits, then undo the
+    // scaling as a power of two. The previous version shifted numerator and denominator by the same
+    // amount, chosen from whichever was larger — which is right when both are huge, but destroys the
+    // numerator when only the denominator is. `m / 2^1050` with a 53-bit `m` (which is exactly what
+    // an exactly-converted small double looks like) shifted `m` right by ~51 bits and returned a
+    // value ~7% wrong, for a ratio that is perfectly representable. (cd-frac-07 follow-up)
+    const PREC = 64n;
     const neg = this.n < 0n;
-    let a = neg ? -this.n : this.n; // Frac normalizes the sign onto the numerator, d > 0
-    let b = this.d;
-    const shift = Math.max(a.toString(2).length, b.toString(2).length) - KEEP_BITS;
-    if (shift > 0) {
-      const s = BigInt(shift);
-      a >>= s;
-      b >>= s;
+    const a = neg ? -this.n : this.n;
+    const b = this.d;
+    const exp = PREC - BigInt(a.toString(2).length - b.toString(2).length);
+    const q = exp >= 0n ? (a << exp) / b : a / (b << -exp);
+
+    // Apply 2^-exp in bounded steps. Doing it in one `Math.pow` would route an extreme ratio through
+    // a subnormal intermediate and lose most of the precision the quotient just earned; each step
+    // here only shifts the exponent, so it is exact.
+    let value = Number(q);
+    let e = -Number(exp);
+    const STEP = 1000;
+    while (e < -STEP) {
+      value *= Math.pow(2, -STEP);
+      e += STEP;
     }
-    const q = Number(a) / Number(b);
-    return neg ? -q : q;
+    while (e > STEP) {
+      value *= Math.pow(2, STEP);
+      e -= STEP;
+    }
+    value *= Math.pow(2, e);
+    return neg ? -value : value;
   }
 }
 
