@@ -11,11 +11,11 @@
 // machinery — exact ℚ(i) arithmetic on one side, floating Gauss–Legendre panels on the other —
 // arriving at the same number is strong evidence that both are right, and a disagreement is a bug
 // report. This module is where they are compared, and a disagreement is reported as one.
-import type { Gauss } from "@cas/exact";
+import type { SqrtExt } from "@cas/exact";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
-import { formatTwoPiI } from "../kernel/formatExact.js";
-import { gaussToCx, weightedResidueSum } from "../kernel/exactResidue.js";
+import { formatTwoPiISqrt } from "../kernel/formatExact.js";
+import { weightedSum } from "../kernel/algebraic.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 
@@ -76,8 +76,8 @@ export function applyResidueTheorem(
   // n(γ, a) for an exact pole: match by position against the decided winding numbers. The lookup is
   // by distance because the winding list is keyed on the float locations the contour was measured
   // with; exactness enters through the residue, not through the search.
-  const windingOf = (a: Gauss): number => {
-    const at = gaussToCx(a);
+  const windingOf = (a: SqrtExt): number => {
+    const at = a.toTuple();
     let best = 0;
     let bestDist = Infinity;
     for (const w of integral.windings) {
@@ -90,11 +90,12 @@ export function applyResidueTheorem(
     return bestDist < 1e-6 ? best : 0;
   };
 
-  const sum = weightedResidueSum(poles.exactPoles, windingOf);
-  // 2πi·(a + bi) = −2πb + 2πa·i.
+  const sum = weightedSum(poles.exactPoles, windingOf);
+  // 2πi·(a + bi) = −2πb + 2πa·i, evaluated after the exact sum so the rounding happens once.
+  const [sumRe, sumIm] = sum.toTuple();
   const twoPi = 2 * Math.PI;
-  const value: Cx = [-twoPi * sum.im.toNumber(), twoPi * sum.re.toNumber()];
-  const text = formatTwoPiI(sum);
+  const value: Cx = [-twoPi * sumIm, twoPi * sumRe];
+  const text = formatTwoPiISqrt(sum);
 
   certificates.push(
     exact(

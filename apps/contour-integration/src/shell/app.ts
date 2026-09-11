@@ -316,8 +316,12 @@ export function mountApp(root: Element): void {
       const head = el("p", "resultValue exactValue");
       head.append(badge("="), ` ${theorem.exactValue.text}`);
       resultCard.append(head);
+      const field =
+        poles?.radicand === null || poles?.radicand === undefined
+          ? "ℚ(i)"
+          : `ℚ(i)(√${poles.radicand})`;
       resultCard.append(
-        el("p", "muted small", "2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ℚ(i)"),
+        el("p", "muted small", `2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ${field}`),
       );
       const check = el("p", theorem.agrees === true ? "crosscheck" : "restriction");
       check.append(

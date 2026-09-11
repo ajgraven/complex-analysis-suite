@@ -113,9 +113,10 @@ describe("findPoles — honest refusals", () => {
   });
 
   it("never labels a NUMERICALLY-located pole exact", () => {
-    // The guarantee M1 established, restated for the inputs where it still applies: an algebraic
-    // pole (z⁴+1) and a transcendental integrand both stay below `=`.
-    for (const src of ["1/(1+z^4)", "sin(z)/z", "pi/(z-1)"]) {
+    // The guarantee M1 established, restated for the inputs where it still applies. z⁴+1 is no
+    // longer among them: M2's second half pins it in ℚ(i)(√2). What is left is a general quintic,
+    // a pair of poles needing two DIFFERENT quadratic extensions, and a transcendental integrand.
+    for (const src of ["1/(z^5-z-1)", "1/((z^2-2)*(z^2-3))", "sin(z)/z", "pi/(z-1)"]) {
       const r = findPoles(parse(src));
       expect(assembleVerdict(r.certificates).level).not.toBe("=");
       for (const pole of r.poles) {
@@ -136,8 +137,11 @@ describe("findPoles — the exact path", () => {
 
   it("gives an exact residue SUM only when every pole was pinned", () => {
     expect(findPoles(parse("1/(1+z^2)")).exactResidueSum?.text).toBe("0");
-    // z⁴+1's roots are algebraic, so no exact sum is claimed at all.
-    expect(findPoles(parse("1/(1+z^4)")).exactResidueSum).toBeUndefined();
+    // z⁴+1 is now pinned in ℚ(i)(√2), so it DOES get an exact sum — and it is zero, since the
+    // degree gap is 4.
+    expect(findPoles(parse("1/(1+z^4)")).exactResidueSum?.text).toBe("0");
+    // A general quintic still gets none.
+    expect(findPoles(parse("1/(z^5-z-1)")).exactResidueSum).toBeUndefined();
   });
 
   it("reports an exact order where M1 could only infer one", () => {
@@ -148,10 +152,20 @@ describe("findPoles — the exact path", () => {
     expect(r.poles[0].isExact).toBe(true);
   });
 
+  it("reaches an algebraic pole: 1/(1+z⁴) is pinned in ℚ(i)(√2)", () => {
+    const r = findPoles(parse("1/(1+z^4)"));
+    expect(r.exactlyComplete).toBe(true);
+    expect(r.radicand).toBe(2n);
+    expect(r.poles).toHaveLength(4);
+    expect(r.poles.every((p) => p.isExact)).toBe(true);
+    // Res = −α/4 at each root, so each residue text carries the √2.
+    expect(r.poles.every((p) => (p.residue?.text ?? "").includes("√2"))).toBe(true);
+  });
+
   it("mixes exact and numeric poles without averaging the two claims", () => {
-    // (z−1) is rational, z²+2 is not (roots ±i√2). The rational one keeps its exact residue; the
-    // others are reported numerically, and the verdict reflects the weaker half.
-    const r = findPoles(parse("1/((z-1)*(z^2+2))"));
+    // (z−1) is rational; z⁵−z−1 is a general quintic with no closed form. The rational pole keeps
+    // its exact residue, the rest are numeric, and the verdict reflects the weaker half.
+    const r = findPoles(parse("1/((z-1)*(z^5-z-1))"));
     expect(r.exactlyComplete).toBe(false);
     expect(r.poles.filter((p) => p.isExact)).toHaveLength(1);
     expect(r.poles.filter((p) => !p.isExact).length).toBeGreaterThan(0);
