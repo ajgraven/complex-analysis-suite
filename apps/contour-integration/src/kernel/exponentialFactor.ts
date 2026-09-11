@@ -1,0 +1,103 @@
+// Recognising `g(z)·e^{iaz}` — the shape Jordan's lemma is about.
+//
+// Without this the app cannot show its most instructive failure. For a *rational* integrand the ML
+// bound is identical on the upper and lower semicircles, because `|f|` does not care which way you
+// close. The asymmetry lives entirely in the exponential: `|e^{iaz}| = e^{−a·Im z}` is bounded only
+// where `a·Im z ≥ 0`, so closing `∫cos x/(1+x²)` downward makes the arc bound grow like `e^{R}`.
+//
+// That is the gate's own demonstration, and it needs the `a` — so the integrand has to be taken
+// apart rather than evaluated.
+//
+// Narrow on purpose: exactly one `exp` factor, whose argument is `i·a·z` with `a` rational, times a
+// rational function. `exp(z²)`, two exponentials, or a non-rational remainder all decline.
+import { Frac, QiPoly } from "@cas/exact";
+import type { Node } from "@cas/expr";
+import { toExactRational } from "./exactRational.js";
+
+export interface ExponentialForm {
+  /** The frequency `a` in `e^{iaz}`. Its SIGN decides which half-plane can be closed. */
+  readonly a: Frac;
+  readonly num: QiPoly;
+  readonly den: QiPoly;
+}
+
+/** Flatten a product/quotient tree into numerator and denominator factors. */
+function splitFactors(node: Node): { num: Node[]; den: Node[] } {
+  if (node.kind === "arith" && node.op === "*") {
+    const l = splitFactors(node.left);
+    const r = splitFactors(node.right);
+    return { num: [...l.num, ...r.num], den: [...l.den, ...r.den] };
+  }
+  if (node.kind === "arith" && node.op === "/") {
+    const l = splitFactors(node.left);
+    const r = splitFactors(node.right);
+    // Dividing by a quotient flips its parts, which is why this recurses rather than special-casing.
+    return { num: [...l.num, ...r.den], den: [...l.den, ...r.num] };
+  }
+  return { num: [node], den: [] };
+}
+
+const isExp = (n: Node): boolean => n.kind === "call" && n.name === "exp";
+
+/**
+ * The frequency `a` when `arg` is exactly `i·a·z`, or null.
+ *
+ * Read through the exact rational reader, so `i*z`, `2i*z`, `z*i` and `i*z/3` all work and anything
+ * with a constant term or a higher power does not. A non-zero real part would mean `e^{cz}` with
+ * genuine growth along the real axis, which is a different lemma.
+ */
+function frequencyOf(arg: Node): Frac | null {
+  const r = toExactRational(arg);
+  if (!r.ok) return null;
+  const { num, den } = r.value;
+  if (den.degree() !== 0) return null;
+  const scale = den.coeff(0);
+  if (num.degree() !== 1) return null;
+  if (!num.coeff(0).isZero()) return null; // a constant term is a constant factor, not a frequency
+  const c = num.coeff(1).div(scale); // the coefficient of z, which must be i·a
+  if (!c.re.isZero()) return null;
+  return c.im;
+}
+
+/** Rebuild a product of factors as a single rational function, or null. */
+function rationalProduct(num: readonly Node[], den: readonly Node[]): { num: QiPoly; den: QiPoly } | null {
+  let n = QiPoly.int(1);
+  let d = QiPoly.int(1);
+  for (const factor of num) {
+    const r = toExactRational(factor);
+    if (!r.ok) return null;
+    n = n.mul(r.value.num);
+    d = d.mul(r.value.den);
+  }
+  for (const factor of den) {
+    const r = toExactRational(factor);
+    if (!r.ok) return null;
+    n = n.mul(r.value.den);
+    d = d.mul(r.value.num);
+  }
+  return d.isZero() ? null : { num: n, den: d };
+}
+
+/**
+ * Read `f` as `g(z)·e^{iaz}` with `g` rational over ℚ(i), or null.
+ *
+ * Null is the common case and not a failure — a purely rational integrand simply has no frequency,
+ * and the plain ML bound is the right lemma for it.
+ */
+export function asExponentialTimesRational(ast: Node): ExponentialForm | null {
+  const { num, den } = splitFactors(ast);
+  if (den.some(isExp)) return null; // e^{−iaz} in a denominator: the same lemma with the sign flipped, later
+  const exps = num.filter(isExp);
+  if (exps.length !== 1) return null;
+
+  const theExp = exps[0];
+  if (theExp.kind !== "call" || theExp.args.length !== 1) return null;
+  const a = frequencyOf(theExp.args[0]);
+  if (a === null || a.isZero()) return null;
+
+  const rest = rationalProduct(
+    num.filter((f) => f !== theExp),
+    den,
+  );
+  return rest ? { a, num: rest.num, den: rest.den } : null;
+}

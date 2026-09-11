@@ -13,6 +13,8 @@
 //                   from a cluster of nearly coincident floating roots.
 //   - sqrtExt.ts  : the quadratic extension ℚ(i)(√d) — one rung above ℚ(i), which is what an
 //                   algebraic pole's residue needs (the residues of 1/(1+z⁴) are not in ℚ(i)).
+//   - piBounds.ts : certified rational brackets on π and arctan (Machin + the alternating-series
+//                   bound), so an arc-length bound never rests on a floating constant.
 //   - biPoly.ts   : exact bivariate polynomials — a polynomial in an outer variable over QiPoly (inner)
 //                   coefficients, with monic division; the layer CD's dynatomic Φ_n(z,c) needs.
 //   - resultant.ts: Sylvester resultant / discriminant (fraction-free Bareiss over ℚ(i)[inner]) and
@@ -32,6 +34,7 @@ export {
 } from "./qiSeries.js";
 export { multiplicityAt, yunSquarefree, type SquarefreeFactor } from "./squarefree.js";
 export { SqrtExt, sqrtOfFrac, sqrtOfGauss, squarefreeSplit } from "./sqrtExt.js";
+export { arctanBounds, piBounds, piLower, piUpper, type RationalInterval } from "./piBounds.js";
 export { BiPoly } from "./biPoly.js";
 export { bareissDet, discriminant, integerPrimitive, primitivePoly, resultant } from "./resultant.js";
 export { renderBiPolyText, renderGaussMag, renderQiPolyText } from "./render.js";

@@ -13,6 +13,7 @@ import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { integrateContour, type ContourIntegral } from "../engine/contour/integrate.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "../engine/residueTheorem.js";
+import { evaluateLedger, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
   circleTemplate,
@@ -38,13 +39,15 @@ const PRESETS: { label: string; src: string }[] = [
   { label: "1/(z-1)^2", src: "1/(z-1)^2" },
   { label: "(3+4i)/(z^3-1)", src: "(3+4i)/(z^3-1)" },
   { label: "z/(z^2+2z+2)", src: "z/(z^2+2z+2)" },
+  { label: "exp(i*z)/(1+z^2)", src: "exp(i*z)/(1+z^2)" },
 ];
 
-type TemplateId = "circle" | "semicircle" | "rectangle";
+type TemplateId = "circle" | "semicircle" | "semicircleDown" | "rectangle";
 
 const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
   { id: "circle", label: "circle", build: () => circleTemplate([0, 0], 1.5) },
-  { id: "semicircle", label: "semicircle", build: () => semicircleTemplate(3) },
+  { id: "semicircle", label: "semicircle ↑", build: () => semicircleTemplate(3, "upper") },
+  { id: "semicircleDown", label: "semicircle ↓", build: () => semicircleTemplate(3, "lower") },
   { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
 ];
 
@@ -76,6 +79,7 @@ export function mountApp(root: Element): void {
   let resolved: Resolved[] = resolveAll(contour);
   let integral: ContourIntegral | null = null;
   let theorem: ResidueTheoremResult | null = null;
+  let ledger: LedgerResult | null = null;
   let acc: Accumulation | null = null;
   let scrub = 1;
   let contrast: ContrastMode = "none";
@@ -115,10 +119,11 @@ export function mountApp(root: Element): void {
   // Rail cards.
   const errorBox = el("div", "error");
   errorBox.hidden = true;
+  const ledgerCard = el("section", "card");
   const resultCard = el("section", "card");
   const contourCard = el("section", "card");
   const poleCard = el("section", "card");
-  rail.append(errorBox, resultCard, contourCard, poleCard);
+  rail.append(errorBox, ledgerCard, resultCard, contourCard, poleCard);
 
   // Strip: the accumulator.
   // The canvas needs a containing block with a definite size of its own. A `height: 100%` canvas
@@ -247,6 +252,7 @@ export function mountApp(root: Element): void {
     if (!f) {
       integral = null;
       theorem = null;
+      ledger = null;
       acc = null;
     } else {
       const singular = (poles?.poles ?? []).map((p) => ({ at: p.at, order: p.order }));
@@ -257,7 +263,12 @@ export function mountApp(root: Element): void {
       // The residue theorem is applied from the exact data, then CHECKED against the quadrature.
       // Two routes that share no machinery agreeing is the strongest evidence the app can offer.
       theorem = poles ? applyResidueTheorem(poles, integral) : null;
+      ledger =
+        ast && poles && theorem
+          ? evaluateLedger({ ast, pieces: resolved, spec: contour.pieces, poles, integral, theorem })
+          : null;
     }
+    renderLedger();
     renderResult();
     renderContourCard();
     drawAcc();
@@ -289,6 +300,47 @@ export function mountApp(root: Element): void {
   // --- rail rendering -----------------------------------------------------------------------
   function badge(level: string): HTMLElement {
     return el("span", "badge", level);
+  }
+
+  const STATUS_GLYPH: Record<string, string> = {
+    satisfied: "✓",
+    failed: "✗",
+    unknown: "?",
+  };
+
+  /**
+   * The Closing Ledger. The headline is a SENTENCE, not a number: "does this argument finish" is the
+   * question a number cannot answer, and it is the one thing this app offers that nothing else does.
+   */
+  function renderLedger(): void {
+    ledgerCard.replaceChildren(el("h2", undefined, "Does the argument close?"));
+    if (!ledger) {
+      ledgerCard.append(el("p", "muted", "No integrand."));
+      return;
+    }
+
+    const head = el("p", ledger.closes ? "headline closes" : "headline open");
+    head.textContent = ledgerHeadline(ledger);
+    ledgerCard.append(head);
+
+    if (ledger.closes && ledger.value) {
+      const v = el("p", "resultValue exactValue");
+      v.append(badge("="), ` ${ledger.value.text}`);
+      ledgerCard.append(v);
+    }
+
+    const list = el("ul", "ledger");
+    for (const row of ledger.rows) {
+      const li = el("li", `ledgerRow ${row.status}`);
+      li.append(
+        el("span", "constraint", row.constraint),
+        el("span", "glyph", STATUS_GLYPH[row.status] ?? "?"),
+        el("span", "ledgerClaim", row.claim),
+      );
+      if (row.repair !== undefined) li.append(el("span", "repair", row.repair));
+      list.append(li);
+    }
+    ledgerCard.append(list);
   }
 
   function renderResult(): void {
