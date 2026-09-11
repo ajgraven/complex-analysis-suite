@@ -98,12 +98,20 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   if (!R || !extent) return null;
 
   const exponential = asExponentialTimesRational(ast);
-  if (exponential) {
+  if (exponential && !exponential.a.isZero()) {
     // Which half the arc lies in decides everything; read it off the arc's own midpoint.
     const mid = (g.theta0 + g.theta1) / 2;
     const half = Math.sin(mid) >= 0 ? "upper" : "lower";
     return jordanArcBound(exponential.num, exponential.den, exponential.a, half, R);
   }
+
+  // A ZERO FREQUENCY MUST SWITCH LEMMAS, not report an infinite bound. Jordan's constant is π/|a|,
+  // which at a = 0 is ∞ and says nothing — correctly, since Jordan has no content without
+  // exponential decay. But `e^{i·0·z} = 1` leaves a perfectly ordinary rational integrand, and the
+  // plain ML bound discharges it whenever the degree gap allows. Gallery B1's `a = 0` fixture is
+  // this case, and its trap is explicit that an engine treating π/0 as a failure "will paper over
+  // exactly the case it was built to catch".
+  if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent);
 
   const rational = toExactRational(ast);
   if (!rational.ok) return null;

@@ -14,8 +14,7 @@
 import type { SqrtExt } from "@cas/exact";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
-import { formatTwoPiISqrt } from "../kernel/formatExact.js";
-import { weightedSum } from "../kernel/algebraic.js";
+import { formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 
@@ -90,12 +89,14 @@ export function applyResidueTheorem(
     return bestDist < 1e-6 ? best : 0;
   };
 
-  const sum = weightedSum(poles.exactPoles, windingOf);
+  // The exponential basis when f = g(z)·e^{iaz}, and plain ℚ(i)(√d) otherwise — `weightedExpSum`
+  // with no frequency is `weightedSum` lifted, so the rational families are byte-identical.
+  const sum = weightedExpSum(poles.exactPoles, windingOf, poles.exponentialFrequency);
   // 2πi·(a + bi) = −2πb + 2πa·i, evaluated after the exact sum so the rounding happens once.
   const [sumRe, sumIm] = sum.toTuple();
   const twoPi = 2 * Math.PI;
   const value: Cx = [-twoPi * sumIm, twoPi * sumRe];
-  const text = formatTwoPiISqrt(sum);
+  const text = formatTwoPiIExpSum(sum);
 
   certificates.push(
     exact(

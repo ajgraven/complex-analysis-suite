@@ -15,7 +15,17 @@ import type { Node } from "@cas/expr";
 import { toExactRational } from "./exactRational.js";
 
 export interface ExponentialForm {
-  /** The frequency `a` in `e^{iaz}`. Its SIGN decides which half-plane can be closed. */
+  /**
+   * The frequency `a` in `e^{iaz}`. Its SIGN decides which half-plane can be closed.
+   *
+   * **May be zero.** `e^{i·0·z}` is the constant 1, so the integrand is really rational — but the
+   * `exp` call is still in the AST, and the exact rational reader refuses on a call. Reporting
+   * `a = 0` here is what lets the caller recognise the degeneration and take the rational path,
+   * rather than falling through to floating point for an integrand that is exactly `1/(z²+b²)`.
+   * Gallery B1's `a = 0` fixture is precisely this case, and its own trap says the family must
+   * "notice the degeneration and switch lemmas rather than report an infinite bound as a failure":
+   * Jordan's constant is `π/|a|`, which at `a = 0` is `∞` and says nothing.
+   */
   readonly a: Frac;
   readonly num: QiPoly;
   readonly den: QiPoly;
@@ -52,6 +62,8 @@ function frequencyOf(arg: Node): Frac | null {
   const { num, den } = r.value;
   if (den.degree() !== 0) return null;
   const scale = den.coeff(0);
+  // An identically-zero exponent is `e^0 = 1`: a frequency of zero, not a refusal.
+  if (num.isZero()) return Frac.ZERO;
   if (num.degree() !== 1) return null;
   if (!num.coeff(0).isZero()) return null; // a constant term is a constant factor, not a frequency
   const c = num.coeff(1).div(scale); // the coefficient of z, which must be i·a
@@ -93,7 +105,7 @@ export function asExponentialTimesRational(ast: Node): ExponentialForm | null {
   const theExp = exps[0];
   if (theExp.kind !== "call" || theExp.args.length !== 1) return null;
   const a = frequencyOf(theExp.args[0]);
-  if (a === null || a.isZero()) return null;
+  if (a === null) return null;
 
   const rest = rationalProduct(
     num.filter((f) => f !== theExp),

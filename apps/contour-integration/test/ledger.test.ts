@@ -88,24 +88,51 @@ describe("the ledger fails visibly, and names which constraint", () => {
     expect(rowsFor(r, "KILL").some((x) => x.status === "failed")).toBe(false);
   });
 
-  it("still does not CLOSE that one, because e^{−1} is outside the output basis", () => {
-    // ∫cos x/(1+x²) dx = π/e. The arc is certified and the pole locations are exact, but the residue
-    // carries e^{i·i} = e^{−1}, which ℚ(i)(√d) cannot express. The honest report is an incomplete
-    // argument with the reason named — not a decimal dressed as a closed form.
+  it("now CLOSES that one, and reads π/e rather than a decimal", () => {
+    // This test previously asserted the opposite, and the change is the point. e^{i·i} = e^{−1} is
+    // not an algebraic number, so ℚ(i)(√d) cannot hold it — but it does not need to be EVALUATED to
+    // be exact, only CARRIED, which is what `ExpSum` does. What was an honestly incomplete argument
+    // is now an honestly complete one.
     const r = run("exp(i*z)/(1+z^2)", semicircleTemplate(50, "upper"));
-    expect(r.closes).toBe(false);
-    expect(ledgerHeadline(r)).toBe("This argument is incomplete.");
-    const catchRow = rowsFor(r, "CATCH").find((x) => x.status === "unknown");
-    expect(catchRow?.claim).toMatch(/not every residue is known exactly/);
+    expect(r.closes).toBe(true);
+    expect(r.value?.text).toBe("π/e");
+    expect(r.value?.numeric[0]).toBeCloseTo(Math.PI / Math.E, 12);
+    expect(rowsFor(r, "CATCH").some((x) => x.status === "unknown")).toBe(false);
   });
 
-  it("finds the pole LOCATIONS exactly even there, which it previously missed entirely", () => {
+  it("finds the pole locations AND the residues exactly there", () => {
     const poles = findPoles(parse("exp(i*z)/(1+z^2)"));
     expect(poles.poles).toHaveLength(2);
     expect(poles.poles.every((p) => p.orderCertain)).toBe(true);
     expect(poles.poles.some((p) => Math.hypot(p.at[0], p.at[1] - 1) < 1e-15)).toBe(true);
-    // But no residue is claimed, because none is expressible.
-    expect(poles.poles.every((p) => p.residue === undefined)).toBe(true);
+    expect(poles.exactlyComplete).toBe(true);
+    // Res(e^{iz}/(1+z²), i) = e^{−1}/(2i) = −i/(2e), which the record checks as −0.183939720585721 i.
+    const upper = poles.poles.find((p) => p.at[1] > 0);
+    expect(upper?.residue?.text).toBe("−i/2·e^(−1)");
+    expect(upper?.residue?.value[1]).toBeCloseTo(-0.183939720585721, 14);
+  });
+
+  it("switches lemmas at a ZERO frequency rather than reporting π/0 as a failure", () => {
+    // Jordan's constant is π/|a|, which at a = 0 is ∞ and says nothing — correctly, since Jordan
+    // has no content without exponential decay. But e^{i·0·z} = 1 leaves an ordinary rational
+    // integrand that plain ML discharges. Gallery B1's own trap: an engine that treats π/0 as a
+    // failure "will paper over exactly the case it was built to catch".
+    const r = run("exp(0*i*z)/(z^2 + 1)", semicircleTemplate(50, "upper"));
+    expect(r.closes).toBe(true);
+    expect(r.value?.text).toBe("π");
+    const arc = rowsFor(r, "KILL").find((x) => x.pieceId === "arc");
+    expect(arc?.status).toBe("satisfied");
+    expect(arc?.evidence.method).not.toMatch(/Jordan/);
+  });
+
+  it("declines a REPEATED pole under an exponential rather than guessing its residue", () => {
+    // At order m > 1 the residue is p(z₀)·e^{iaz₀} for a polynomial p built from derivatives, which
+    // the exponential basis does not yet carry. Locations stay exact; the residues do not pretend.
+    const poles = findPoles(parse("exp(i*z)/(1+z^2)^2"));
+    expect(poles.rational).toBe(true);
+    expect(poles.poles.every((p) => p.order === 2 && p.orderCertain)).toBe(true);
+    expect(poles.exactlyComplete).toBe(false);
+    expect(poles.certificates.some((c) => /order > 1/.test(c.method))).toBe(true);
   });
 
   it("fails LEGALITY, and computes nothing, when a pole sits on the contour", () => {

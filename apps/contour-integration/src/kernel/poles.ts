@@ -13,12 +13,14 @@
 // The exact path still uses the numeric one: floating roots make excellent **candidates**, and a
 // candidate is only promoted once the exact denominator vanishes there. Guess, then verify.
 import { tupleAlgebra, makeDurandKerner, type ComplexTuple } from "@cas/core";
+import type { Frac } from "@cas/exact";
 import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
 import { toExactRational } from "./exactRational.js";
 import { asExponentialTimesRational } from "./exponentialFactor.js";
 import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
 import { formatSqrtExt } from "./formatExact.js";
+import { ExpSum, formatExpSum, jordanExponent, weightedExpSum } from "./expSum.js";
 
 export type Cx = ComplexTuple;
 type Poly = Cx[]; // ascending: p[k] is the coefficient of z^k
@@ -49,6 +51,14 @@ export interface PoleReport {
   readonly exactPoles?: readonly AlgebraicPole[];
   /** The quadratic extension the exact data needed, or null when ℚ(i) sufficed. */
   readonly radicand?: bigint | null;
+  /**
+   * The frequency `a` of `f = g(z)·e^{iaz}`, when f has that shape.
+   *
+   * Present means every exact residue carries a factor `e^{iaz₀}`, so the residue SUM lives in the
+   * exponential basis rather than in ℚ(i)(√d) — `π/e`, not a decimal. Absent is the rational case
+   * and nothing about it changes.
+   */
+  readonly exponentialFrequency?: Frac;
   readonly certificates: readonly Certificate[];
 }
 
@@ -303,40 +313,97 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     };
   }
 
-  // --- g(z)·e^{iaz}: exact LOCATIONS, inexact residues ----------------------------------------
+  // --- g(z)·e^{iaz}: exact locations AND exact residues, in the exponential basis --------------
   // The exponential is entire, so the poles are exactly those of the rational part and their orders
-  // are exactly known. The RESIDUES are not: they carry a factor e^{iaα}, which is outside the
-  // output basis (ℚ(i) and one quadratic extension of it). Reporting the locations exactly while
-  // saying plainly that the residues are not is strictly better than the previous behaviour, which
-  // found no poles at all for these integrands.
+  // are exactly known. The residues carry a factor e^{iaz₀} which is not an algebraic number — but
+  // it does not need to be EVALUATED to be exact, only CARRIED, which is what `ExpSum` is for. That
+  // is the difference between reporting 1.1557273 and reporting π/e.
+  //
+  // SIMPLE POLES ONLY. At order m > 1 the residue is p(z₀)·e^{iaz₀} for a polynomial p built from
+  // derivatives of g·e^{iaz}; representable here, but it needs machinery this does not have, so a
+  // repeated pole declines to the locations-only report rather than guessing.
   const exponential = asExponentialTimesRational(ast);
   if (exponential) {
-
     const structure = exactPolesOf(exponential.num, exponential.den, (factor) => {
       const coeffs = trim(toFloatPoly(factor));
       return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
     });
     if (structure.poles.length > 0) {
+      const allSimple = structure.poles.every((p) => p.order === 1);
+      const exactResidues = structure.complete && allSimple;
+      const field =
+        structure.radicand === null || structure.radicand === undefined
+          ? "ℚ(i)"
+          : `ℚ(i)(√${structure.radicand})`;
+
+      const certificates: Certificate[] = [
+        exactCert(
+          `${structure.poles.length} pole${structure.poles.length === 1 ? "" : "s"} at exactly known locations, of exactly known order`,
+          "f = g(z)·e^{iaz} with g rational; the exponential is entire, so the poles are g's",
+        ),
+      ];
+
+      if (!exactResidues) {
+        certificates.push(
+          unknown(
+            "the residues",
+            !allSimple
+              ? "a pole of order > 1 needs the derivative of g·e^{iaz}, which the exponential basis does not yet carry — the numeric value stands"
+              : `not every pole of g is expressible in ${field}; the numeric value stands`,
+          ),
+        );
+        return {
+          poles: structure.poles.map((p) => ({
+            at: p.at.toTuple(),
+            order: p.order,
+            orderCertain: true,
+            possiblyRemovable: false,
+            isExact: false,
+          })),
+          rational: true,
+          exactlyComplete: false,
+          certificates,
+        };
+      }
+
+      // A zero frequency is `e^0 = 1`: the residues carry no exponential factor at all, and the
+      // output must be byte-identical to what the purely rational path would have produced.
+      const frequency = exponential.a.isZero() ? undefined : exponential.a;
+      const residueOf = (p: AlgebraicPole): { value: Cx; text: string } => {
+        const r =
+          frequency === undefined
+            ? ExpSum.fromSqrtExt(p.residue)
+            : ExpSum.of(p.residue, jordanExponent(frequency, p.at));
+        return { value: r.toTuple(), text: formatExpSum(r) };
+      };
+      const sum = weightedExpSum(structure.poles, () => 1, frequency);
+      certificates.push(
+        exactCert(
+          `every residue is ${field} × e^{iaz₀}, exactly`,
+          "Res(g·e^{iaz}, z₀) = Res(g, z₀)·e^{iaz₀} at a simple pole; the exponential factor is carried, not evaluated",
+        ),
+        exactCert(
+          `Σ Res = ${formatExpSum(sum)} over every pole of f`,
+          "exact sum over exactly-pinned simple poles",
+        ),
+      );
+
       return {
         poles: structure.poles.map((p) => ({
           at: p.at.toTuple(),
           order: p.order,
           orderCertain: true,
           possiblyRemovable: false,
-          isExact: false,
+          residue: residueOf(p),
+          isExact: true,
         })),
         rational: true,
-        exactlyComplete: false,
-        certificates: [
-          exactCert(
-            `${structure.poles.length} pole${structure.poles.length === 1 ? "" : "s"} at exactly known locations, of exactly known order`,
-            "f = g(z)·e^{iaz} with g rational; the exponential is entire, so the poles are g's",
-          ),
-          unknown(
-            "the residues",
-            `each carries a factor e^{iaα}, which is outside the output basis ℚ(i)(√d) — the numeric value stands`,
-          ),
-        ],
+        exactlyComplete: true,
+        exactResidueSum: { value: sum.toTuple(), text: formatExpSum(sum) },
+        exactPoles: structure.poles,
+        radicand: structure.radicand,
+        exponentialFrequency: frequency,
+        certificates,
       };
     }
   }

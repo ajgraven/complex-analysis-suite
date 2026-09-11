@@ -21,10 +21,14 @@ export function formatFrac(f: Frac): string {
  * A unit numerator disappears and the denominator goes on the outside, so `1/2 · π√2` prints as
  * `π√2/2` rather than `1π√2/2` or `π√2 / 2`. The sign is the caller's business, because a term in
  * the middle of a sum needs ` − ` and a leading one needs `−`.
+ *
+ * The elision needs a SYMBOL to elide in favour of. With an empty symbol — a plain Gaussian rational
+ * rather than a multiple of π or √d — dropping the `1` left the value 1 rendering as the empty
+ * string, so a residue of exactly 1 printed as nothing at all.
  */
 function times(f: Frac, symbol: string): string {
   const n = f.n < 0n ? -f.n : f.n;
-  const head = n === 1n ? symbol : `${n}${symbol}`;
+  const head = n === 1n && symbol !== "" ? symbol : `${n}${symbol}`;
   return f.d === 1n ? head : `${head}/${f.d}`;
 }
 
