@@ -68,6 +68,14 @@ export interface AnalysisInput {
 
 export interface Analysis {
   readonly resolved: readonly Resolved[];
+  /**
+   * The cut system this analysis was run against, handed back so a caller can draw it.
+   *
+   * Returned for the same reason `resolved` is: the alternative is for the shell to rebuild it, and
+   * a figure whose cut is reconstructed by a second path is a figure that can disagree with the
+   * ledger about where the cut runs — which for D1 is the entire lesson.
+   */
+  readonly branch?: BranchChoice;
   readonly integral: ContourIntegral;
   readonly theorem: ResidueTheoremResult;
   readonly ledger: LedgerResult;
@@ -93,5 +101,5 @@ export function analyse({ ast, f, poles, contour, budget, branch, power }: Analy
     branch,
     power,
   });
-  return { resolved, integral, theorem, ledger };
+  return { resolved, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }

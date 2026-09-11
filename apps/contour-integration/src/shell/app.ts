@@ -207,6 +207,8 @@ export function mountApp(root: Element): void {
    * worked example rather than exploring one.
    */
   let branch: BranchChoice = NO_BRANCH;
+  /** The open record's cut system, when it declares one. Drawn, never edited. */
+  let recordBranch: BranchChoice | null = null;
   let bHandles: readonly BranchHandle[] = [];
   /** The branch handle under the pointer, for the cursor. −1 for none. */
   let bHovered = -1;
@@ -457,9 +459,11 @@ export function mountApp(root: Element): void {
    * geometry, not the picture) is computed separately from the contour's extent.
    */
   function cutPolylines(): { points: readonly Cx[]; refused: boolean }[] {
-    // Not under a record: the cut system is the sandbox's, and drawing it over a worked example would
-    // put a barrier on a figure whose argument knows nothing about it.
-    if (mode !== "sandbox" || branch.cuts.length === 0) return [];
+    // THE RECORD'S OWN CUT, under a record. D1's `argRange` decides where the cut runs and the whole
+    // record is about what happens when it runs somewhere else, so a figure without it is missing
+    // the thing it is teaching. In the sandbox the cut is the user's.
+    const drawn = mode === "sandbox" ? branch : (recordBranch ?? NO_BRANCH);
+    if (drawn.cuts.length === 0) return [];
     const vp = viewport();
     const reach =
       4 *
@@ -467,10 +471,10 @@ export function mountApp(root: Element): void {
         view.halfHeight * (1 + Math.max(1, vp.width) / Math.max(1, vp.height)));
     // ONE reading of legality for the picture and the rail: the ledger's LEGALITY row and this
     // colour must never disagree about whether a cut system is admissible.
-    const refused = !checkAdmissibility(branch).ok;
+    const refused = !checkAdmissibility(drawn).ok;
     const out: { points: readonly Cx[]; refused: boolean }[] = [];
-    for (const cut of branch.cuts) {
-      const poly = cutPolyline(branch, cut, reach);
+    for (const cut of drawn.cuts) {
+      const poly = cutPolyline(drawn, cut, reach);
       if (poly !== null) out.push({ points: poly, refused });
     }
     return out;
@@ -550,6 +554,7 @@ export function mountApp(root: Element): void {
   }
 
   function clearComputed(): void {
+    recordBranch = null;
     integral = null;
     theorem = null;
     ledger = null;
@@ -608,6 +613,7 @@ export function mountApp(root: Element): void {
     integral = run.integral;
     theorem = run.theorem;
     ledger = run.ledger;
+    recordBranch = run.branch ?? null;
     // A partial sum through a singularity is meaningless rather than merely rough, so this is null
     // whenever the integral refused — showing one beside a refusal hands back the withheld number.
     acc = accumulateForIntegral(run.f, run.resolved, run.integral);
@@ -1137,22 +1143,36 @@ export function mountApp(root: Element): void {
       resultCard.append(
         el("p", "muted small", `2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ${field}`),
       );
-      const check = el("p", theorem.crossCheck !== undefined ? "crosscheck" : "restriction");
-      check.append(
-        badge(theorem.crossCheck?.level ?? "⚠"),
-        theorem.crossCheck !== undefined
-          ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
-          : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
-      );
-      resultCard.append(check);
+      // Three states, not two: agreement, disagreement, and NOTHING TO COMPARE. Folding the third
+      // into the second announced a disagreement of exactly 0.00e+0 for a keyhole, which reads as a
+      // contradiction where there was simply no second route.
+      if (integral.quadratureSkipped === undefined) {
+        const check = el("p", theorem.crossCheck !== undefined ? "crosscheck" : "restriction");
+        check.append(
+          badge(theorem.crossCheck?.level ?? "⚠"),
+          theorem.crossCheck !== undefined
+            ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
+            : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
+        );
+        resultCard.append(check);
+      }
     }
 
-    const value = integral.value ?? [0, 0];
-    const head = el("p", theorem?.exactValue ? "num numericValue" : "resultValue num");
-    head.append(badge(integral.verdict.level), ` ${fmtCx(value)}`);
-    resultCard.append(head);
-    if (!theorem?.exactValue) {
-      resultCard.append(el("p", "muted small", describeLevel(integral.verdict.level)));
+    // NO NUMERIC LINE WHEN THERE IS NO QUADRATURE. `integral.value ?? [0,0]` would have printed
+    // `≈ 0.000 + 0.000i` beside the exact answer — a fabricated second opinion, and the one thing a
+    // corroboration line must never be. The skip states its own reason instead.
+    if (integral.quadratureSkipped !== undefined) {
+      const why = el("p", "restriction");
+      why.append(badge("?"), " no quadrature to compare against");
+      resultCard.append(why, el("p", "muted small", integral.quadratureSkipped));
+    } else {
+      const value = integral.value ?? [0, 0];
+      const head = el("p", theorem?.exactValue ? "num numericValue" : "resultValue num");
+      head.append(badge(integral.verdict.level), ` ${fmtCx(value)}`);
+      resultCard.append(head);
+      if (!theorem?.exactValue) {
+        resultCard.append(el("p", "muted small", describeLevel(integral.verdict.level)));
+      }
     }
 
     for (const r of integral.verdict.restrictions) {
