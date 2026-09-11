@@ -3,6 +3,11 @@
  * exponent marker in scientific notation (`1e-3`): an `e`/`E` is part of a number
  * only when it directly follows the digits of a number and is itself followed by
  * an optional sign and a digit.
+ *
+ * Also inserts an implicit `*` after a number literal that is immediately followed
+ * by an identifier or `(`, so `2z`, `3+4i`, `2pi` and `2(z+1)` read as written —
+ * see {@link tokenize}'s `maybeImplicitMultiply` for why it is narrow, and why
+ * whitespace and a bare `e`/`E` deliberately suppress it.
  */
 
 import { ExprError } from "./ast";
@@ -38,6 +43,40 @@ export function tokenize(src: string): Token[] {
     tokens.push({ type, value, pos });
   };
 
+  /**
+   * Emit an implicit `*` after a number literal, so `2z`, `2i`, `2pi` and `2(z+1)` mean what they
+   * look like. `3+4i` therefore parses as `3+4*i` with `i` the existing constant — no new token
+   * type and no new AST node, so every downstream consumer (derivative, LaTeX, GLSL, the rational
+   * extractor) sees an ordinary multiply and needs no change.
+   *
+   * **Strictly additive:** it fires only where the number is *immediately* followed by an
+   * identifier or `(`, and every such input previously threw at `parseProgram`'s statement
+   * separator check. No program that parsed before parses differently now.
+   *
+   * **Two deliberate non-cases**, both protecting guards that already exist:
+   *
+   * - Whitespace suppresses it. `2 3`, `z c` and `1 e` keep throwing, which is the whole point of
+   *   the separator guard — a typo should be an error, not a silently different result.
+   * - A bare `e`/`E` after a number never gets one. The lexer already reserves that position for a
+   *   scientific exponent, and a truncated `1e5` typed as `1e` is far likelier than someone meaning
+   *   `1·e`; turning it into 2.718 would be exactly the silent-wrong-answer class the separator
+   *   guard was added to close. Write `2*e`.
+   */
+  const maybeImplicitMultiply = (at: number): void => {
+    const next = src[at];
+    if (next === undefined) return;
+    if (next === "(") {
+      push("op", "*", at);
+      return;
+    }
+    if (!isIdentStart(next)) return;
+    let j = at;
+    while (j < src.length && isIdentPart(src[j])) j++;
+    const ident = src.slice(at, j);
+    if (ident === "e" || ident === "E") return; // reserved for the exponent marker — see above
+    push("op", "*", at);
+  };
+
   while (i < src.length) {
     const ch = src[i];
     if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
@@ -64,6 +103,7 @@ export function tokenize(src: string): Token[] {
         }
       }
       push("number", src.slice(start, i), start);
+      maybeImplicitMultiply(i);
       continue;
     }
 
