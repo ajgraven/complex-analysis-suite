@@ -1,16 +1,23 @@
-// Finding the poles of a rational integrand, and saying honestly how well they are known.
+// Finding the poles of an integrand, and saying honestly how well they are known.
 //
-// `@cas/core`'s `makeDurandKerner` is an **iteration**, not a root-finder: it takes seeds the caller
-// supplies and refines them, with no seeding, deflation, multiplicity detection or polish (research
-// 08 §2). All of that lives here.
+// Two paths, and which one applies is a fact about `f` rather than a setting:
 //
-// Everything this module reports is `≈`. Floating roots are estimates, and a pole location computed
-// in floating point is an estimate wearing a decision's clothes — the exact path (squarefree
-// decomposition over ℚ(i), so multiplicity is *known* rather than inferred from a cluster of nearly
-// coincident floats) arrives in M2 and will upgrade these labels to `=`.
+// - **Exact.** When `f` is a rational function over ℚ(i), the denominator's multiplicity structure,
+//   the pole locations (where they are Gaussian rational) and their residues are all *decided* in
+//   exact arithmetic. Those poles carry `=`.
+// - **Numeric.** Otherwise, `@cas/core`'s Durand–Kerner iteration — which is an iteration, not a
+//   root-finder: seeding, deflation, multiplicity and polish all live here (research 08 §2) — and
+//   everything it reports is `≈`, including a multiplicity that was *inferred* from a cluster of
+//   nearly coincident floats rather than computed.
+//
+// The exact path still uses the numeric one: floating roots make excellent **candidates**, and a
+// candidate is only promoted once the exact denominator vanishes there. Guess, then verify.
 import { tupleAlgebra, makeDurandKerner, type ComplexTuple } from "@cas/core";
 import { fToRational, type Node } from "@cas/expr";
-import { estimate, unknown, type Certificate } from "@cas/rigor";
+import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
+import { toExactRational } from "./exactRational.js";
+import { exactResidues, gaussToCx, residueSum, type ExactPole } from "./exactResidue.js";
+import { formatGauss } from "./formatExact.js";
 
 export type Cx = ComplexTuple;
 type Poly = Cx[]; // ascending: p[k] is the coefficient of z^k
@@ -19,26 +26,26 @@ const durandKerner = makeDurandKerner(tupleAlgebra);
 
 export interface Pole {
   readonly at: Cx;
-  /**
-   * Multiplicity, inferred by clustering nearly coincident roots. An inference, not a measurement —
-   * see `orderCertain`.
-   */
   readonly order: number;
-  /** False when the cluster was tight enough to be ambiguous, or the numerator nearly vanishes too. */
+  /** True when the multiplicity was COMPUTED (exact path) rather than inferred from a cluster. */
   readonly orderCertain: boolean;
-  /**
-   * True when the numerator is also ~0 here, so the singularity may be **removable** and this may
-   * not be a pole at all. `fToRational` does not reduce to lowest terms, so this happens for real.
-   * Flagged rather than silently dropped: quietly removing a pole that is genuinely there would
-   * change an integral's value with no visible cause.
-   */
+  /** Only ever true on the numeric path: exactly, a removable singularity is cancelled and gone. */
   readonly possiblyRemovable: boolean;
+  /** Present when the pole and its residue are exact. */
+  readonly residue?: { readonly value: Cx; readonly text: string };
+  readonly isExact: boolean;
 }
 
 export interface PoleReport {
   readonly poles: readonly Pole[];
-  /** False when f is not a rational function of z, in which case `poles` is empty and nothing is claimed. */
+  /** False when f is not a rational function of z, in which case nothing is claimed. */
   readonly rational: boolean;
+  /** True when every pole was pinned exactly — the condition for an exact residue SUM. */
+  readonly exactlyComplete: boolean;
+  /** Σ Res over all poles, exact, present only when `exactlyComplete`. */
+  readonly exactResidueSum?: { readonly value: Cx; readonly text: string };
+  /** The exactly-pinned poles in their exact form, for arithmetic that must stay in ℚ(i). */
+  readonly exactPoles?: readonly ExactPole[];
   readonly certificates: readonly Certificate[];
 }
 
@@ -56,20 +63,13 @@ export function evalPoly(p: Poly, z: Cx): Cx {
   return [re, im];
 }
 
-/** Drop trailing (highest-degree) coefficients that are zero, so `deg` is honest. */
 function trim(p: Poly): Poly {
   let n = p.length;
   while (n > 1 && p[n - 1][0] === 0 && p[n - 1][1] === 0) n--;
   return p.slice(0, n);
 }
 
-/**
- * Cauchy's root bound: every root satisfies `|z| ≤ 1 + max|a_k/a_n|`.
- *
- * The same inequality that certifies the ML bound in `bounds/` — here it only seeds the iteration,
- * so its exactness does not matter yet, but it is the same fact and will be shared once the exact
- * path lands.
- */
+/** Cauchy's root bound: every root satisfies `|z| ≤ 1 + max|a_k/a_n|`. */
 function cauchyBound(p: Poly): number {
   const lead = abs(p[p.length - 1]);
   if (lead === 0) return 1;
@@ -78,8 +78,7 @@ function cauchyBound(p: Poly): number {
   return 1 + m;
 }
 
-/** Aberth-style seeding: `n` points on a circle, offset so no seed is real (a real seed on a real
- *  polynomial can stay real forever and never find a conjugate pair). */
+/** Aberth-style seeding: `n` points on a circle, offset so no seed is real. */
 function seeds(n: number, radius: number): Cx[] {
   const out: Cx[] = [];
   for (let k = 0; k < n; k++) {
@@ -101,9 +100,10 @@ function polish(p: Poly, z0: Cx, steps = 3): Cx {
     const d = evalPoly(dp, z);
     const d2 = d[0] * d[0] + d[1] * d[1];
     if (d2 === 0) break;
-    const stepRe = (v[0] * d[0] + v[1] * d[1]) / d2;
-    const stepIm = (v[1] * d[0] - v[0] * d[1]) / d2;
-    const next: Cx = [z[0] - stepRe, z[1] - stepIm];
+    const next: Cx = [
+      z[0] - (v[0] * d[0] + v[1] * d[1]) / d2,
+      z[1] - (v[1] * d[0] - v[0] * d[1]) / d2,
+    ];
     if (!Number.isFinite(next[0]) || !Number.isFinite(next[1])) break;
     z = next;
   }
@@ -111,23 +111,20 @@ function polish(p: Poly, z0: Cx, steps = 3): Cx {
 }
 
 /**
- * Group roots that agree to `tol` (relative to the root scale) into multiplicities.
+ * Group roots that agree to `tol` into multiplicities — the numeric path's honest weak point.
  *
- * This is the honest weak point and it is why every order carries `orderCertain`. A double root and
- * two distinct roots `1e-9` apart look identical to a floating root-finder, and `@cas/core`'s own
- * `COINCIDENT_EPS2` refuses to paper over the same ambiguity rather than guessing. M2's squarefree
- * decomposition over ℚ(i) removes the guess entirely by computing the multiplicity structure before
- * any root is approximated.
+ * A double root and two distinct roots `1e-9` apart look identical to a floating root-finder, which
+ * is why every order from this path carries `orderCertain: false` when the separation is marginal.
+ * The exact path removes the inference entirely.
  */
 function cluster(roots: Cx[], scaleHint: number): { at: Cx; order: number; certain: boolean }[] {
   const tol = Math.max(1e-7, 1e-7 * scaleHint);
-  const ambiguousBelow = tol * 100; // separations in [tol, 100·tol) are too close to call
+  const ambiguousBelow = tol * 100;
   const out: { at: Cx; order: number; certain: boolean }[] = [];
 
   for (const r of roots) {
     const hit = out.find((g) => Math.hypot(g.at[0] - r[0], g.at[1] - r[1]) < tol);
     if (hit) {
-      // Running mean, so the reported location is not biased toward whichever root came first.
       const n = hit.order + 1;
       hit.at = [(hit.at[0] * hit.order + r[0]) / n, (hit.at[1] * hit.order + r[1]) / n];
       hit.order = n;
@@ -148,23 +145,161 @@ function cluster(roots: Cx[], scaleHint: number): { at: Cx; order: number; certa
   return out;
 }
 
+/** Float coefficients of an exact polynomial, ascending. */
+function toFloatPoly(p: import("@cas/exact").QiPoly): Poly {
+  const out: Poly = [];
+  for (let k = 0; k <= p.degree(); k++) out.push(p.coeff(k).toTuple());
+  return out;
+}
+
+/** Numerically locate the roots of a denominator, as candidates for the exact path or as the answer. */
+function rootsOf(den: Poly): { roots: Cx[]; converged: boolean; iterations: number; radius: number } {
+  const degree = den.length - 1;
+  const radius = cauchyBound(den);
+  const lead = den[degree];
+  const d2 = lead[0] * lead[0] + lead[1] * lead[1];
+  const monic: Poly = den.map((k) => [
+    (k[0] * lead[0] + k[1] * lead[1]) / d2,
+    (k[1] * lead[0] - k[0] * lead[1]) / d2,
+  ]);
+  const result = durandKerner((z) => evalPoly(monic, z), seeds(degree, radius), {
+    tol: 1e-13,
+    maxIter: 300,
+  });
+  return {
+    roots: (result?.roots ?? []).map((r) => polish(den, r)),
+    converged: result?.converged ?? false,
+    iterations: result?.iterations ?? 0,
+    radius,
+  };
+}
+
+const toPole = (p: ExactPole): Pole => ({
+  at: gaussToCx(p.at),
+  order: p.order,
+  orderCertain: true,
+  possiblyRemovable: false,
+  residue: { value: gaussToCx(p.residue), text: formatGauss(p.residue) },
+  isExact: true,
+});
+
 /**
- * Locate the poles of `f` as a rational function of `z`, at the given parameter values.
+ * Locate the poles of `f`, exactly where possible.
  *
- * Returns `rational: false` — and claims nothing — when `f` is not rational in `z`. That is not a
- * failure: `sin(z)/z`, `exp(1/z)` and every transcendental integrand in the gallery land there, and
- * the numeric path for them (AAA from samples) is M2 work.
+ * Returns `rational: false` — claiming nothing — when `f` is not rational in `z`. That is not a
+ * failure: every transcendental integrand in the gallery lands there, and the numeric path for them
+ * (AAA from samples) is later work.
  */
 export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport {
+  // --- the exact path ------------------------------------------------------------------------
+  const exactForm = toExactRational(ast);
+  if (exactForm.ok) {
+    const { num, den } = exactForm.value;
+    if (den.degree() < 1 && num.degree() >= 0) {
+      return {
+        poles: [],
+        rational: true,
+        exactlyComplete: true,
+        certificates: [exactCert("f has no poles: the denominator is constant", "exact reading over ℚ(i)")],
+      };
+    }
+
+    const denFloat = trim(toFloatPoly(den));
+    // Root-finding is injected, and each squarefree factor is solved separately — see exactResidues
+    // for why that matters for a repeated root.
+    const report = exactResidues(num, den, (factor) => {
+      const coeffs = trim(toFloatPoly(factor));
+      return coeffs.length <= 1 ? [] : rootsOf(coeffs).roots;
+    });
+
+    const certificates: Certificate[] = [
+      exactCert(
+        `f is a rational function over ℚ(i) of degree ${num.degree()}/${den.degree()}`,
+        "exact reading of the expression, refusing anything not representable in ℚ(i)",
+      ),
+    ];
+
+    if (report.removableDegree > 0) {
+      certificates.push(
+        exactCert(
+          `${report.removableDegree} removable singularit${report.removableDegree === 1 ? "y" : "ies"} cancelled`,
+          "exact gcd of numerator and denominator",
+        ),
+      );
+    }
+
+    if (report.poles.length > 0) {
+      certificates.push(
+        exactCert(
+          `${report.poles.length} pole${report.poles.length === 1 ? "" : "s"} with exact location, order and residue`,
+          "Taylor shift, exact series inverse, one convolution — over ℚ(i)",
+        ),
+      );
+    }
+
+    if (report.complete) {
+      const sum = residueSum(report.poles);
+      return {
+        poles: report.poles.map(toPole),
+        rational: true,
+        exactlyComplete: true,
+        exactResidueSum: { value: gaussToCx(sum), text: formatGauss(sum) },
+        exactPoles: report.poles,
+        certificates: [
+          ...certificates,
+          exactCert(`Σ Res = ${formatGauss(sum)} over every pole of f`, "exact sum over exactly-pinned poles"),
+        ],
+      };
+    }
+
+    // Some poles are algebraic. The exact ones stay exact; the rest fall back, and the report says
+    // which is which rather than averaging the two claims into one.
+    const { roots, converged, iterations } = rootsOf(denFloat);
+    const exactAt = report.poles.map((p) => gaussToCx(p.at));
+    const numericOnly = roots.filter(
+      (r) => !exactAt.some((e) => Math.hypot(e[0] - r[0], e[1] - r[1]) < 1e-6),
+    );
+    const clustered = cluster(numericOnly, cauchyBound(trim(denFloat)));
+
+    certificates.push(
+      unknown(
+        `${report.totalDegree - report.poles.reduce((n, p) => n + p.order, 0)} pole${report.totalDegree - report.poles.length === 1 ? "" : "s"} of f are algebraic, not Gaussian rational`,
+        "their residues live in an algebraic extension of ℚ(i); the ladder that names them is later work",
+      ),
+      estimate("those poles are located numerically", "Durand–Kerner from Cauchy-bound seeds, Newton-polished", {
+        provenance: [{ ok: converged, text: `Durand–Kerner converged in ${iterations} iterations` }],
+      }),
+    );
+
+    return {
+      poles: [
+        ...report.poles.map(toPole),
+        ...clustered.map((g) => ({
+          at: g.at,
+          order: g.order,
+          orderCertain: g.certain,
+          possiblyRemovable: false,
+          isExact: false,
+        })),
+      ],
+      rational: true,
+      exactlyComplete: false,
+      exactPoles: report.poles,
+      certificates,
+    };
+  }
+
+  // --- the numeric path ----------------------------------------------------------------------
   const rat = fToRational(ast, c, a);
   if (!rat) {
     return {
       poles: [],
       rational: false,
+      exactlyComplete: false,
       certificates: [
         unknown(
           "the poles of f",
-          "f is not a rational function of z; the numeric pole search is not implemented yet",
+          `f is not a rational function of z (${exactForm.reason}); the numeric pole search is not implemented yet`,
         ),
       ],
     };
@@ -177,30 +312,15 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     return {
       poles: [],
       rational: true,
-      certificates: [
-        estimate("f has no poles: the denominator is constant", "rational decomposition of the AST"),
-      ],
+      exactlyComplete: false,
+      certificates: [estimate("f has no poles: the denominator is constant", "floating rational decomposition")],
     };
   }
 
-  const radius = cauchyBound(den);
-  const lead = den[degree];
-  const monic: Poly = den.map((k) => {
-    const d2 = lead[0] * lead[0] + lead[1] * lead[1];
-    return [(k[0] * lead[0] + k[1] * lead[1]) / d2, (k[1] * lead[0] - k[0] * lead[1]) / d2] as Cx;
-  });
-
-  const result = durandKerner((z) => evalPoly(monic, z), seeds(degree, radius), {
-    tol: 1e-13,
-    maxIter: 300,
-  });
-  const raw = (result?.roots ?? []).map((r) => polish(den, r));
-
-  // Scale for the removable-singularity test: comparing |num| against 0 is meaningless without one,
-  // since scaling f by 1e-12 would make every pole look removable.
+  const { roots, converged, iterations, radius } = rootsOf(den);
   const numScale = Math.max(...num.map(abs), 1e-300);
 
-  const poles: Pole[] = cluster(raw, radius).map((g) => {
+  const poles: Pole[] = cluster(roots, radius).map((g) => {
     const nv = abs(evalPoly(num, g.at));
     const possiblyRemovable = nv < 1e-8 * numScale * Math.max(1, Math.pow(radius, num.length - 1));
     return {
@@ -208,6 +328,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
       order: g.order,
       orderCertain: g.certain && !possiblyRemovable,
       possiblyRemovable,
+      isExact: false,
     };
   });
 
@@ -217,7 +338,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
       "Durand–Kerner from Cauchy-bound seeds, Newton-polished",
       {
         provenance: [
-          { ok: result?.converged ?? false, text: `Durand–Kerner converged in ${result?.iterations ?? 0} iterations` },
+          { ok: converged, text: `Durand–Kerner converged in ${iterations} iterations` },
           { ok: true, text: `denominator degree ${degree}` },
         ],
       },
@@ -227,7 +348,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     certificates.push(
       unknown(
         "the multiplicity of at least one pole",
-        "roots too close to separate in floating point — exact squarefree decomposition lands in M2",
+        "roots too close to separate in floating point; the exact path settles this when f is rational over ℚ(i)",
       ),
     );
   }
@@ -240,5 +361,5 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
     );
   }
 
-  return { poles, rational: true, certificates };
+  return { poles, rational: true, exactlyComplete: false, certificates };
 }

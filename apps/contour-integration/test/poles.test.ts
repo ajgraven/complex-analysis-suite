@@ -90,19 +90,71 @@ describe("findPoles — honest refusals", () => {
     expect(r.poles).toEqual([]);
   });
 
-  it("flags a possibly-removable singularity instead of silently dropping it", () => {
-    // fToRational does not reduce to lowest terms, so the shared factor really does survive. Quietly
-    // deleting a point that might be a genuine pole would change an integral with no visible cause.
+  it("CANCELS a removable singularity exactly, instead of hedging about it", () => {
+    // M1 could only say "the numerator nearly vanishes here too, so this may not be a pole". The
+    // exact path decides it: the common factor is cancelled by an exact gcd and the point is simply
+    // not a pole. The hedge is replaced by a fact, which is the whole shape of M2.
     const r = findPoles(parse("z/(z*(z-2))"));
-    expect(r.poles.some((p) => p.possiblyRemovable)).toBe(true);
-    expect(assembleVerdict(r.certificates).level).toBe("?");
+    expect(r.exactlyComplete).toBe(true);
+    expect(r.poles).toHaveLength(1);
+    expect(r.poles[0].at[0]).toBeCloseTo(2, 12);
+    expect(r.poles[0].possiblyRemovable).toBe(false);
+    expect(assembleVerdict(r.certificates).level).toBe("=");
+    expect(r.certificates.some((c) => c.claim.includes("removable"))).toBe(true);
   });
 
-  it("never labels a numerically-located pole exact", () => {
-    // Floating roots are estimates. The verdict must say so — this is the guard that stops M0's
-    // numbers from quietly reading as M2's.
-    for (const src of ["1/z", "1/(1+z^2)", "1/(1+z^4)", "z^2+1"]) {
-      expect(assembleVerdict(findPoles(parse(src)).certificates).level).not.toBe("=");
+  it("still hedges on the NUMERIC path, where it genuinely cannot decide", () => {
+    // π is not in ℚ(i), so the exact reading refuses and the floating decomposition takes over --
+    // and there the "may be removable" wording is the honest one again.
+    const r = findPoles(parse("pi*z/(z*(z-2))"));
+    expect(r.exactlyComplete).toBe(false);
+    expect(r.poles.some((p) => p.possiblyRemovable)).toBe(true);
+    expect(assembleVerdict(r.certificates).level).not.toBe("=");
+  });
+
+  it("never labels a NUMERICALLY-located pole exact", () => {
+    // The guarantee M1 established, restated for the inputs where it still applies: an algebraic
+    // pole (z⁴+1) and a transcendental integrand both stay below `=`.
+    for (const src of ["1/(1+z^4)", "sin(z)/z", "pi/(z-1)"]) {
+      const r = findPoles(parse(src));
+      expect(assembleVerdict(r.certificates).level).not.toBe("=");
+      for (const pole of r.poles) {
+        if (!pole.isExact) expect(pole.residue).toBeUndefined();
+      }
     }
+  });
+});
+
+describe("findPoles — the exact path", () => {
+  it("reports exact residues for a Gaussian-rational integrand", () => {
+    const r = findPoles(parse("1/(1+z^2)"));
+    expect(r.exactlyComplete).toBe(true);
+    expect(r.poles.every((p) => p.isExact && p.orderCertain)).toBe(true);
+    const texts = r.poles.map((p) => p.residue?.text).sort();
+    expect(texts).toEqual(["i/2", "−i/2"]); // U+2212 sorts after ASCII letters
+  });
+
+  it("gives an exact residue SUM only when every pole was pinned", () => {
+    expect(findPoles(parse("1/(1+z^2)")).exactResidueSum?.text).toBe("0");
+    // z⁴+1's roots are algebraic, so no exact sum is claimed at all.
+    expect(findPoles(parse("1/(1+z^4)")).exactResidueSum).toBeUndefined();
+  });
+
+  it("reports an exact order where M1 could only infer one", () => {
+    const r = findPoles(parse("1/(z-1)^5"));
+    expect(r.poles).toHaveLength(1);
+    expect(r.poles[0].order).toBe(5);
+    expect(r.poles[0].orderCertain).toBe(true);
+    expect(r.poles[0].isExact).toBe(true);
+  });
+
+  it("mixes exact and numeric poles without averaging the two claims", () => {
+    // (z−1) is rational, z²+2 is not (roots ±i√2). The rational one keeps its exact residue; the
+    // others are reported numerically, and the verdict reflects the weaker half.
+    const r = findPoles(parse("1/((z-1)*(z^2+2))"));
+    expect(r.exactlyComplete).toBe(false);
+    expect(r.poles.filter((p) => p.isExact)).toHaveLength(1);
+    expect(r.poles.filter((p) => !p.isExact).length).toBeGreaterThan(0);
+    expect(assembleVerdict(r.certificates).level).not.toBe("=");
   });
 });
