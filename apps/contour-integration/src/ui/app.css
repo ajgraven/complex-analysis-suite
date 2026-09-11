@@ -1,16 +1,18 @@
 /* Chrome tokens only. The phase portrait is DATA and does not theme-swap (PLAN.md §5.3); only the
-   contour halo's polarity will flip with the theme, once there is a contour. */
+   contour halo's polarity flips with the theme. */
 :root {
   color-scheme: dark;
   --c-bg: #0f1115;
   --c-panel: #171a21;
+  --c-panel-2: #0c0e12;
   --c-border: #262b36;
   --c-text: #e7e9ee;
   --c-muted: #99a1b3;
   --c-accent: #6ea8fe;
   --c-warn: #f0b45e;
-  --rail: 21rem;
+  --rail: 22rem;
   --bar: 3rem;
+  --strip: 12rem;
 }
 
 * {
@@ -31,20 +33,25 @@ body {
 }
 
 /* Every live-updating number is tabular, so digits do not jitter (PLAN.md §5.3). */
-.num,
-.poles li {
+.num {
   font-variant-numeric: tabular-nums;
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+.small {
+  font-size: 12px;
+}
+
 .shell {
   display: grid;
+  min-height: 0;
   grid-template-columns: 1fr var(--rail);
-  grid-template-rows: var(--bar) 1fr;
-  grid-template-areas: "bar bar" "stage rail";
+  grid-template-rows: var(--bar) 1fr var(--strip);
+  grid-template-areas: "bar bar" "stage rail" "strip rail";
   height: 100vh;
 }
 
+/* ---- bar ---- */
 .bar {
   grid-area: bar;
   display: flex;
@@ -53,12 +60,14 @@ body {
   padding: 0 0.9rem;
   border-bottom: 1px solid var(--c-border);
   background: var(--c-panel);
+  overflow: hidden;
 }
 
 .brand {
   font-weight: 600;
   letter-spacing: -0.01em;
-  margin-right: 0.6rem;
+  margin-right: 0.5rem;
+  white-space: nowrap;
 }
 
 .flabel {
@@ -66,11 +75,11 @@ body {
 }
 
 .expr {
-  flex: 0 1 22rem;
+  flex: 0 1 18rem;
   padding: 0.32rem 0.5rem;
   border: 1px solid var(--c-border);
   border-radius: 6px;
-  background: #0c0e12;
+  background: var(--c-panel-2);
   color: var(--c-text);
   font: 13px/1.4 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
@@ -84,6 +93,7 @@ body {
   display: flex;
   gap: 0.3rem;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .preset {
@@ -94,6 +104,7 @@ body {
   color: var(--c-muted);
   font: 12px/1.3 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .preset:hover {
@@ -101,6 +112,13 @@ body {
   border-color: var(--c-accent);
 }
 
+.preset.on {
+  color: var(--c-text);
+  border-color: var(--c-accent);
+  background: rgba(110, 168, 254, 0.14);
+}
+
+/* ---- stage ---- */
 .stage {
   grid-area: stage;
   position: relative;
@@ -113,10 +131,17 @@ body {
   cursor: grabbing;
 }
 
-.gl {
+.gl,
+.ink {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+}
+
+.ink {
+  pointer-events: none;
 }
 
 .overlay {
@@ -125,8 +150,8 @@ body {
   pointer-events: none;
 }
 
-/* A pole marker. An open ring, so the phase right at the pole stays visible through it —
-   the singularity is the thing being pointed at, not something to paint over. */
+/* An open ring, so the phase right at the pole stays visible through it — the singularity is the
+   thing being pointed at, not something to paint over. */
 .pole {
   position: absolute;
   width: 13px;
@@ -153,28 +178,36 @@ body {
   border-radius: 3px;
 }
 
+/* ---- rail ---- */
 .rail {
   grid-area: rail;
   border-left: 1px solid var(--c-border);
   background: var(--c-panel);
   overflow-y: auto;
-  padding: 0.9rem;
+  padding: 0.85rem;
+}
+
+.card {
+  margin-bottom: 1.1rem;
 }
 
 .card h2 {
   margin: 0 0 0.5rem;
   font-size: 0.95rem;
-  letter-spacing: 0.01em;
 }
 
 .muted {
   color: var(--c-muted);
-  margin: 0.4rem 0;
+  margin: 0.35rem 0;
 }
 
-.verdict {
-  margin: 0 0 0.6rem;
-  color: var(--c-muted);
+.verdict,
+.resultValue {
+  margin: 0 0 0.25rem;
+}
+
+.resultValue {
+  font-size: 1.05rem;
 }
 
 .badge {
@@ -185,30 +218,76 @@ body {
   margin-right: 0.3rem;
   border-radius: 4px;
   border: 1px solid var(--c-border);
-  background: #0c0e12;
+  background: var(--c-panel-2);
   color: var(--c-text);
   font-family: ui-monospace, Menlo, Consolas, monospace;
 }
 
-.badge.small {
-  font-size: 11px;
+.refusal {
+  margin: 0 0 0.3rem;
+  color: var(--c-warn);
+  font-weight: 600;
 }
 
-.poles {
+.repair {
+  margin: 0.35rem 0 0;
+  padding: 0.4rem 0.5rem;
+  border-left: 2px solid var(--c-accent);
+  background: rgba(110, 168, 254, 0.08);
+  color: var(--c-text);
+  font-size: 12px;
+}
+
+.restriction {
+  margin: 0.2rem 0;
+  color: var(--c-warn);
+  font-size: 12px;
+}
+
+ul.pieces,
+ul.poles,
+ul.windings {
   list-style: none;
-  margin: 0 0 0.8rem;
+  margin: 0.4rem 0 0;
   padding: 0;
 }
 
-.poles li {
-  padding: 0.22rem 0;
+ul.pieces li,
+ul.poles li,
+ul.windings li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding: 0.28rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-size: 12.5px;
 }
 
+ul.pieces li:hover {
+  background: rgba(110, 168, 254, 0.07);
+}
+
+.chip {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+}
+
+.pieceName {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+
+.pieceValue {
+  flex-basis: 100%;
+  color: var(--c-muted);
+  font-size: 11.5px;
+}
+
 .tag {
   display: inline-block;
-  margin-left: 0.4rem;
   padding: 0 0.32rem;
   border-radius: 999px;
   background: rgba(110, 168, 254, 0.14);
@@ -221,10 +300,15 @@ body {
   color: var(--c-warn);
 }
 
-.cert {
-  margin: 0.35rem 0;
-  color: var(--c-muted);
-  font-size: 12px;
+.paramRow {
+  display: block;
+  margin: 0.5rem 0;
+}
+
+.slider,
+.scrub {
+  width: 100%;
+  accent-color: var(--c-accent);
 }
 
 .error {
@@ -235,4 +319,56 @@ body {
   background: rgba(240, 180, 94, 0.08);
   color: var(--c-warn);
   font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace;
+}
+
+/* ---- strip: the accumulator ---- */
+.strip {
+  grid-area: strip;
+  display: grid;
+  grid-template-columns: 1fr 15rem;
+  min-height: 0;
+  border-top: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+/* A definite containing block for the canvas. Without `min-height: 0` a grid item's automatic
+   minimum size is its content, so a percentage-height canvas inside it has nothing to resolve
+   against and grows without bound on every measure-and-resize cycle. */
+.accWrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.accCanvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.accSide {
+  padding: 0.7rem 0.9rem;
+  border-left: 1px solid var(--c-border);
+  overflow: hidden;
+}
+
+.accSide h2 {
+  margin: 0 0 0.3rem;
+  font-size: 0.9rem;
+}
+
+.accValue {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+
+.contrasts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  align-items: center;
+  margin-top: 0.5rem;
 }
