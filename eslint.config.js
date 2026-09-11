@@ -20,6 +20,7 @@ const APP_NAMES = [
   "complex-dynamics",
   "quadrature-domains",
   "correspondences",
+  "contour-integration",
   "launcher",
 ];
 

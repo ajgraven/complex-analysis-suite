@@ -26,6 +26,18 @@
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "5176", "--directory", "apps/correspondences/dist"],
       "port": 5176
+    },
+    {
+      "name": "contour",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "apps/contour-integration/node_modules/vite/bin/vite.js",
+        "apps/contour-integration",
+        "--port",
+        "5177",
+        "--strictPort"
+      ],
+      "port": 5177
     }
   ]
 }
