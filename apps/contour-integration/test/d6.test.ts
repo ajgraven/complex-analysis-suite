@@ -90,7 +90,10 @@ describe("what the dogbone teaches", () => {
     expect(reasons()).toMatch(/f = O\(z\^\(−3\)\) at infinity/);
     expect(reasons()).toMatch(/an order of −2 or less leaves no z⁻¹ coefficient/);
     // The one-number unification: the same computation would discharge an outer circle by L2.
-    expect(reasons()).toMatch(/SAME computation discharges L2 on the outer circle/);
+    expect(reasons()).toMatch(/SAME computation discharges L2 on an outer circle/);
+    // And the condition that makes the question meaningful at all, now that a branch factor reaches
+    // infinity too: `Σ αⱼ = −1 ∈ ℤ`, so the monodromy round a large circle is 1.
+    expect(reasons()).toMatch(/Σ αⱼ = −1 ∈ ℤ, so f IS single-valued near infinity/);
   });
 
   it("takes OPPOSITE signs at the conjugate poles — the trap that returns 0 and looks fine", () => {
@@ -151,23 +154,35 @@ describe("the determination is read from the record, and refuses what it cannot 
     expect(formatExpSum(at.value)).toBe("−i√2/2");
   });
 
-  it("refuses two different determinations in one product, rather than reading the first", () => {
-    // D7 declares `arg z ∈ [0,2π)` for one factor and `arg(b−z) ∈ (−π,π]` for the other. That is a
-    // different branch structure, not a harder case of this one, and silently using one window for
-    // both would rotate half the residues with nothing to warn you.
-    const split = {
-      ...D6,
-      branch: must(D6.branch, "a branch") && {
-        ...must(D6.branch, "a branch"),
-        factors: [
-          must(D6.branch, "a branch").factors[0],
-          { ...must(D6.branch, "a branch").factors[1], argRange: ["-1", "1"] as const },
-        ],
-      },
-    };
-    const factor = multiFactorOf(split, flagship.params);
-    expect(factor.ok).toBe(false);
-    if (!factor.ok) expect(factor.reason).toMatch(/declares a different determination from the first/);
+  it("reads each factor in ITS OWN window, so changing one changes the answer", () => {
+    // D6's two factors share `[0, 2π)` and nothing forces them to: each is read in the window the
+    // record declares for it. At `z₀ = −i` the offset `1 − i` has argument `7π/4` in `[0, 2π)` and
+    // `−π/4` in the principal window — a full turn apart — so moving that ONE factor multiplies the
+    // branch factor there by `e^{2πiα} = e^{−iπ} = −1`. D7 is the record that needs two windows; this
+    // is the check that the seat is real rather than decorative.
+    const factor = multiFactorOf(D6, flagship.params);
+    if (!factor.ok) throw new Error(factor.reason);
+    const declared = multiPowerAtPole(SqrtExt.fromGauss(Gauss.I.neg()), factor.factor);
+    const moved = multiPowerAtPole(SqrtExt.fromGauss(Gauss.I.neg()), {
+      ...factor.factor,
+      points: factor.factor.points.map((p, k) =>
+        k === 0 ? { ...p, argRange: [Frac.of(-1n), Frac.ONE] as const } : p,
+      ),
+    });
+    if (!declared.ok || !moved.ok) throw new Error("both windows should give a value");
+    expect(formatExpSum(declared.value)).toBe("−√2/2");
+    expect(formatExpSum(moved.value)).toBe("√2/2");
+  });
+
+  it("still refuses a window that is not one turn wide, naming the factor", () => {
+    const factor = multiFactorOf(D6, flagship.params);
+    if (!factor.ok) throw new Error(factor.reason);
+    const narrow = multiPowerAtPole(SqrtExt.fromGauss(Gauss.I), {
+      ...factor.factor,
+      points: factor.factor.points.map((p) => ({ ...p, argRange: [Frac.ZERO, Frac.ONE] as const })),
+    });
+    expect(narrow.ok).toBe(false);
+    if (!narrow.ok) expect(narrow.reason).toMatch(/z = -1 declares an argument range of width 1\/1·π/);
   });
 });
 

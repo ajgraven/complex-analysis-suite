@@ -233,27 +233,22 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
   const rational = cofactorOf(family, branch.rationalPart, bindings);
   if (typeof rational === "string") return { ok: false, reason: rational };
 
-  const lo = realRational(powers[0].argRange[0], bindings, "the argument range's lower end");
-  if (typeof lo === "string") return { ok: false, reason: lo };
-  const hi = realRational(powers[0].argRange[1], bindings, "the argument range's upper end");
-  if (typeof hi === "string") return { ok: false, reason: hi };
-
-  const points: { at: SqrtExt; alpha: Frac; label: string }[] = [];
+  const points: MultiPowerFactor["points"][number][] = [];
   const geometry: BranchPoint[] = [];
+  let lo = Frac.ZERO;
+  let hi = Frac.of(2n);
   for (let k = 0; k < powers.length; k++) {
     const factor = powers[k];
     if (factor.order.kind !== "power") return { ok: false, reason: "unreachable" };
-    const sameLo = realRational(factor.argRange[0], bindings, "the argument range's lower end");
-    const sameHi = realRational(factor.argRange[1], bindings, "the argument range's upper end");
-    if (typeof sameLo === "string") return { ok: false, reason: sameLo };
-    if (typeof sameHi === "string") return { ok: false, reason: sameHi };
-    if (!sameLo.equals(lo) || !sameHi.equals(hi)) {
-      return {
-        ok: false,
-        reason:
-          `branch point '${factor.at}' declares a different determination from the first — this engine reads ` +
-          "one window for the whole product, and two windows is a different branch structure rather than a harder case of this one",
-      };
+    // **EACH FACTOR IS READ IN ITS OWN WINDOW.** D6's two share `[0, 2π)`; D7's do not, and reading
+    // both in the first would rotate half its residues with nothing to warn you.
+    const ownLo = realRational(factor.argRange[0], bindings, "the argument range's lower end");
+    if (typeof ownLo === "string") return { ok: false, reason: ownLo };
+    const ownHi = realRational(factor.argRange[1], bindings, "the argument range's upper end");
+    if (typeof ownHi === "string") return { ok: false, reason: ownHi };
+    if (k === 0) {
+      lo = ownLo;
+      hi = ownHi;
     }
 
     let ast: Node;
@@ -269,7 +264,13 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
     if (typeof alpha === "string") return { ok: false, reason: alpha };
 
     const label = `z = ${factor.at}`;
-    points.push({ at: SqrtExt.fromGauss(at.value), alpha, label });
+    points.push({
+      at: SqrtExt.fromGauss(at.value),
+      alpha,
+      label,
+      sign: factor.orientation === "b-minus-z" ? -1 : 1,
+      argRange: [ownLo, ownHi],
+    });
     geometry.push({ id: `b${k + 1}`, at: at.value.toTuple() as Cx, order: { kind: "power", alpha }, label });
   }
 
@@ -303,7 +304,7 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
 
   return {
     ok: true,
-    factor: { constant, points, argRange: [lo, hi] },
+    factor: { constant, points },
     rational,
     choice: {
       convention: lo.isZero() ? "zeroToTwoPi" : hi.equals(Frac.ONE) ? "principal" : "custom",

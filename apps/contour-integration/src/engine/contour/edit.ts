@@ -22,8 +22,10 @@ import type { Contour, Geom, PointSpec, Scalar } from "./model.js";
 function shiftScalar(s: Scalar, d: number): Scalar {
   if (typeof s === "number") return s + d;
   // `add` is exactly the seat for this: `{ param: "R", mul: -1 }` + dx is `-R + dx`, which is what a
-  // translated endpoint means, and it survives every later change to `R`.
-  return { ...s, add: (s.add ?? 0) + d };
+  // translated endpoint means, and it survives every later change to `R`. A nested `add` — D7's
+  // `b − η`, affine in two parameters — shifts at its innermost end, so the translation lands on the
+  // constant and both parameters keep their meaning.
+  return { ...s, add: shiftScalar(s.add ?? 0, d) };
 }
 
 const shiftPoint = (p: PointSpec, d: Cx): PointSpec => ({
@@ -109,9 +111,14 @@ export function radiusDragValue(
   if (typeof scalar === "number") return null;
   const mul = scalar.mul ?? 1;
   if (mul === 0) return null;
+  // A radius that is affine in a SECOND parameter is not a handle this gesture can move: solving for
+  // one value would silently pin the other. Records that need it exist (D7's edges); a draggable
+  // radius that does not is what this returns null for.
+  const offset = scalar.add ?? 0;
+  if (typeof offset !== "number") return null;
 
   const wanted = Math.hypot(at[0] - handle.centre[0], at[1] - handle.centre[1]);
-  const value = (wanted - (scalar.add ?? 0)) / mul;
+  const value = (wanted - offset) / mul;
   const param = contour.params[scalar.param];
   if (param === undefined || !Number.isFinite(value)) return null;
   const [lo, hi] = param.range;

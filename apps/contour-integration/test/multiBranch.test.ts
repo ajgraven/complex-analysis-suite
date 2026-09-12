@@ -21,10 +21,9 @@ const KEYHOLE: readonly [Frac, Frac] = [q(0n), q(2n)];
 const INVERSE_W: MultiPowerFactor = {
   constant: SqrtExt.fromGauss(Gauss.I),
   points: [
-    { at: g(1n), alpha: q(-1n, 2n), label: "z = 1" },
-    { at: g(-1n), alpha: q(-1n, 2n), label: "z = −1" },
+    { at: g(1n), alpha: q(-1n, 2n), label: "z = 1", sign: 1, argRange: KEYHOLE },
+    { at: g(-1n), alpha: q(-1n, 2n), label: "z = −1", sign: 1, argRange: KEYHOLE },
   ],
-  argRange: KEYHOLE,
 };
 
 const value = (r: ReturnType<typeof multiPowerAtPole>): [number, number] => {
@@ -75,7 +74,11 @@ describe("the dogbone's branch factor", () => {
     // one turn multiplies the product by e^{2πi·Σα}, which is 1 precisely when Σα is an INTEGER.
     // Research 06 §2.1(b) calls that condition admissibility; here it is the same statement about the
     // same number, and it is why the bounded cut [−1, 1] exists at all.
-    const principal: MultiPowerFactor = { ...INVERSE_W, argRange: [q(-1n), q(1n)] };
+    const inWindow = (f: MultiPowerFactor, range: readonly [Frac, Frac]): MultiPowerFactor => ({
+      ...f,
+      points: f.points.map((p) => ({ ...p, argRange: range })),
+    });
+    const principal = inWindow(INVERSE_W, [q(-1n), q(1n)]);
     const keyhole = multiPowerAtPole(g(0n, -1n), INVERSE_W);
     const other = multiPowerAtPole(g(0n, -1n), principal);
     if (!keyhole.ok || !other.ok) throw new Error("both windows should give a value");
@@ -88,12 +91,12 @@ describe("the dogbone's branch factor", () => {
     const inadmissible: MultiPowerFactor = {
       ...INVERSE_W,
       points: [
-        { at: g(1n), alpha: q(-1n, 2n), label: "z = 1" },
-        { at: g(-1n), alpha: q(-1n, 4n), label: "z = −1" },
+        { at: g(1n), alpha: q(-1n, 2n), label: "z = 1", sign: 1, argRange: KEYHOLE },
+        { at: g(-1n), alpha: q(-1n, 4n), label: "z = −1", sign: 1, argRange: KEYHOLE },
       ],
     };
     const a = multiPowerAtPole(g(0n, -1n), inadmissible);
-    const b = multiPowerAtPole(g(0n, -1n), { ...inadmissible, argRange: [q(-1n), q(1n)] });
+    const b = multiPowerAtPole(g(0n, -1n), inWindow(inadmissible, [q(-1n), q(1n)]));
     if (!a.ok || !b.ok) throw new Error("both windows should give a value");
     expect(b.argMultiple.sub(a.argMultiple).equals(q(3n, 2n))).toBe(true);
     expect(b.value.toTuple()[1]).not.toBeCloseTo(a.value.toTuple()[1], 6);
@@ -161,7 +164,10 @@ describe("the dogbone's branch factor", () => {
   });
 
   it("refuses a window that is not one turn wide", () => {
-    const r = multiPowerAtPole(g(0n, 1n), { ...INVERSE_W, argRange: [q(0n), q(1n)] });
+    const r = multiPowerAtPole(g(0n, 1n), {
+      ...INVERSE_W,
+      points: INVERSE_W.points.map((p) => ({ ...p, argRange: [q(0n), q(1n)] as const })),
+    });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/covers exactly one turn/);
   });
@@ -171,7 +177,10 @@ describe("the dogbone's branch factor", () => {
     // combination of logarithms of rationals, and inventing an atom for it would break canonicity.
     const odd: MultiPowerFactor = {
       ...INVERSE_W,
-      points: [{ at: SqrtExt.of(Gauss.ONE, Gauss.ONE, 2n), alpha: q(-1n, 2n), label: "z = 1 + √2" }],
+      points: [
+        { at: SqrtExt.of(Gauss.ONE, Gauss.ONE, 2n), alpha: q(-1n, 2n), label: "z = 1 + √2", sign: 1 as const, argRange: KEYHOLE },
+        INVERSE_W.points[1],
+      ],
     };
     const r = multiPowerAtPole(g(0n, 1n), odd);
     expect(r.ok).toBe(false);

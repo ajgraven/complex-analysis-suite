@@ -155,11 +155,14 @@ export class ExpSum {
   foldSigns(): ExpSum {
     const folded: ExpTerm[] = [];
     for (const t of this.terms) {
-      const factor = t.exponent.asAlgebraicFactor();
-      const product = factor === null ? null : tryMul(t.coefficient, factor);
+      // PARTIAL folds count. D7's `e^{−iπ + (ln 2)/4 + (3 ln 5)/4}` has a `−iπ` that is the number
+      // `−1` and a logarithm this basis carries; extracting only the first leaves a REAL exponent,
+      // which is the difference between an answer with a closed form and an answer without one.
+      const { factor, rest } = t.exponent.splitAlgebraicFactor();
+      const product = factor.equals(SqrtExt.ONE) ? t.coefficient : tryMul(t.coefficient, factor);
       // A fold that would leave one quadratic extension is skipped: the term stays as it was, which
       // is still correct and merely less reduced.
-      folded.push(product === null ? t : { coefficient: product, exponent: Exponent.ZERO });
+      folded.push(product === null ? t : { coefficient: product, exponent: rest });
     }
     return new ExpSum(ExpSum.normalise(folded));
   }

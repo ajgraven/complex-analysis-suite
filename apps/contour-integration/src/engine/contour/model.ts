@@ -22,7 +22,18 @@ import type { Cx, Resolved } from "../../kernel/geom.js";
  * height) and keeps geometry independent of the complex expression evaluator. The type is shaped so
  * the general form can be added later without touching call sites.
  */
-export type Scalar = number | { readonly param: string; readonly mul?: number; readonly add?: number };
+/**
+ * A coordinate: a number, or an affine function of a parameter — with `add` allowed to be another.
+ *
+ * `add` was a number until D7, whose dogbone hugs `[0, b]` with `b` a PARAMETER: its upper edge runs
+ * to `b − η`, which is affine in two of them. One nesting is enough for every record in the gallery
+ * and keeps the type an affine form rather than an expression language, which is what `derived`
+ * already exists for — and unlike `derived`, this stays live under a drag, so scrubbing `η` does not
+ * leave the picture a hair open and the ledger refusing a contour that had been closed.
+ */
+export type Scalar =
+  | number
+  | { readonly param: string; readonly mul?: number; readonly add?: number | Scalar };
 
 export interface PointSpec {
   readonly x: Scalar;
@@ -86,7 +97,7 @@ export function resolveScalar(s: Scalar, params: Params): number {
   if (typeof s === "number") return s;
   const p = params[s.param];
   if (p === undefined) throw new Error(`Contour references unknown parameter '${s.param}'`);
-  return p.value * (s.mul ?? 1) + (s.add ?? 0);
+  return p.value * (s.mul ?? 1) + resolveScalar(s.add ?? 0, params);
 }
 
 const resolvePoint = (p: PointSpec, params: Params): Cx => [

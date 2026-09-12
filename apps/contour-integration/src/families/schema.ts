@@ -43,6 +43,16 @@ export interface BranchFactor {
     | { readonly kind: "log"; readonly power: number };
   /** The determination this factor is evaluated in. Displayed always, never implicit. */
   readonly argRange: readonly [string, string];
+  /**
+   * Which difference the record actually wrote: `(z − b)` (default) or `(b − z)`.
+   *
+   * D7's integrand is `x^μ(b − x)^ν`, and the two are NOT the same power even though `b − z` and
+   * `−(z − b)` are the same number: the argument read in the window is the argument of whichever one
+   * was written. Its own trap is exactly that — at `z = c > b` approached from above,
+   * `arg(b − z) = −π` and not `+π`, and using `+π` rotates the residue by `e^{iπ/2}` while leaving
+   * the final answer real and entirely plausible.
+   */
+  readonly orientation?: "z-minus-b" | "b-minus-z";
 }
 
 /**

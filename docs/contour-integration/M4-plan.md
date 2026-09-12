@@ -154,7 +154,7 @@ before D2.
 | **M4.3** ✅ | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` · **the log-residue engine and the log arc bound** → **D4** | M–L |
 | **M4.4** ✅ | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** ✅ | `ln(ℚ₊)` exponents and radical factors → **D2**; D7's algebraic half is ready and waits on M4.6's contour | S–M |
-| **M4.6** ◐ | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** — a+b+c done, D6 lands | M |
+| **M4.6** ✅ | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** | M |
 | **M4.7** | the GPU picture: `cutCorrection`, `cargCut`/`clogCut`/`cpowCut` twins, `DUAL_BACKEND_CORPUS`, monodromy readout, sheet badge, shadow-cut mode, **drag-a-cut** | M–L |
 
 ### Gates
@@ -639,3 +639,82 @@ a bounded cut, a one-point product, and a cut naming a branch point the factor l
   the RATIONAL COFACTOR, and for D6 `Σ Res(R) = 0` — printed unqualified beside an answer of `π√2`, it
   reads as a contradiction. The card now names `R` and says that `Res(f, z₀)` is this times the branch
   factor's value there.
+
+---
+
+## 12. What M4.6d landed, and what it taught
+
+`branchResidueAtInfinity`, per-factor determinations, a `Scalar` affine in two parameters, two folds
+made partial — and **D7**, the twentieth record. M4.6's gate, verbatim, is met: its outer circle
+contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of 1.216.
+
+### The constant in front of the binomial series is DERIVED, not fitted
+
+`Res(f,∞) = −[z⁻¹]f`, and with a branch factor the expansion is `Φ(z) = Λ·z^{Σα}·∏(1 − bⱼ/z)^{αⱼ}`. The
+series is ordinary and exact over ℚ; the whole difficulty is `Λ`, and the temptation is to measure it at
+a large point. It does not have to be. Along a reference direction `d`, the window-`j` argument of
+`sⱼ·z` tends to a rational multiple of π — because the direction is one — so
+
+    Λ = c·exp(iπ[Σ αⱼθⱼ − d·Σα]),   θⱼ = lift(d + [sⱼ < 0], window j)
+
+is a root of unity with every ingredient exact. The direction is SEARCHED rather than fixed at `+i∞`,
+because a cut may run that way; any one clear of every window's lower edge serves, and that the answer
+cannot depend on which is `Σα ∈ ℤ` once more.
+
+### `Σ αⱼ ∈ ℤ` is not bookkeeping at infinity either
+
+The monodromy round a large circle is `e^{2πiΣα}`. Unless it is 1, `f` is not single-valued near
+infinity, `C_R` is not a loop in its domain, and there is no residue there — not a hard one, **none**.
+So the refusal is by name rather than a fallback, and it is the same condition that makes the bounded
+cut admissible. D7's own hypothesis calls it `infinity-not-a-branch-point`; the engine now computes it.
+
+### Two windows, and one factor written backwards
+
+M4.6c read one window for the whole product, which D6 could live with and D7 could not: `z^μ` is
+`[0,2π)` and `(b−z)^ν` is principal. And `(b − z)` is not `(z − b)` — the same NUMBER and not the same
+POWER, because the argument read in the window is the argument of whichever difference the record wrote.
+At `z = c > b` the difference is a negative real sitting exactly on the principal window's own edge:
+`−π` is in `[−π, π)` and `+π` is not, they differ by a full turn, and using the wrong one rotates the
+residue by `e^{iπ/2}` while leaving the final answer real and entirely plausible. `BranchFactor` gained
+an `orientation`, and the break pass confirms both halves — ignoring the orientation fails nine tests,
+reading every factor in the first window fails eight.
+
+### An all-or-nothing fold cost D7 its closed form
+
+Its answer carries `e^{−iπ + (ln 2)/4 + (3 ln 5)/4}`. The `−iπ` is the number `−1`; the logarithm is
+`250^{1/4}`, which this basis CARRIES (ADR-0041's thesis — a quarter power is the exact form, not a
+shortfall). Folding them together or not at all left the `−1` stuck to the logarithm, the exponent not
+REAL, and `Re` therefore not distributing over the sum — so the record solved to the right decimal with
+no closed form at all, **for want of extracting a minus sign**. `Exponent.splitAlgebraicFactor` returns
+what folds and what is left. The same shape one level down: `LogPart.splitAlgebraic` folds prime by
+prime, so D7's `10^{1/4}·6^{3/4} = 2·3^{3/4}·5^{1/4}` no longer prints its whole `2` as `2¹` because a
+quarter weight stood beside it.
+
+### A contour whose cut has PARAMETERS for ends
+
+`Scalar` was affine in one parameter and a constant, and D7's upper edge runs to `b − η` with both of
+them parameters. `add` may now be another `Scalar` — one nesting, which keeps the type an affine form
+rather than an expression language. `derived` already exists for computed values and would have worked
+at instantiate time, but it is computed ONCE: scrubbing `η` would leave the picture a hair open and the
+ledger refusing a contour that had been closed a moment earlier.
+
+### A golden this session invented, and the engine caught
+
+The fourth fixture's `numeric` was written from the closed form by hand and was wrong in the third
+decimal; the engine disagreed, an independent tanh-sinh quadrature agreed with the ENGINE, and the
+record was corrected. Worth recording because it is the corpus working in the direction it is usually
+assumed not to: the 28 records are the specification, and a transcription of one is still a
+transcription.
+
+### The browser found D7's own trap, looking back at the reader
+
+The domain-colouring backdrop is drawn by the compiled evaluator, which uses the PRINCIPAL branch of
+every sub-expression — so behind D7's dogbone it shows a seam on `(b, ∞)`, where `z^μ` and `(b−z)^ν`
+each jump and their product does NOT. That is `rendering-the-union-of-sub-cuts` verbatim, research 06
+§2.2's Maple lesson, drawn by the app about its own record. It has been true since D1 (a keyhole's
+`[0,2π)` is not the principal window either) and it is M4.7's to fix, since rendering a declared
+determination is exactly what the GPU slice is for. What changed now is that the app says so: a record
+with a branch carries a line stating that the colouring is the principal branch and the ledger is not.
+The distinction matters — every number on the right comes from exact residues in the DECLARED
+determination, which is also why the quadrature is skipped — and an app that draws one branch while
+computing in another must not leave the reader to notice.

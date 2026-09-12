@@ -140,10 +140,33 @@ export class LogPart {
    * basis CARRIES instead, so null there is the design working rather than a shortfall.
    */
   asAlgebraic(): SqrtExt | null {
+    const split = this.splitAlgebraic();
+    return split.rest.isZero() ? split.factor : null;
+  }
+
+  /**
+   * The part of `e^{Σ qⱼ ln pⱼ}` that IS algebraic, and the exponent left over.
+   *
+   * **PRIME BY PRIME, and D7 is why.** Its `10^{1/4}·6^{3/4}` is `2¹·3^{3/4}·5^{1/4}` over primes:
+   * the `2` is an ordinary integer and only the other two are carried. Folding all-or-nothing
+   * printed `2¹·3^(3/4)·5^(1/4)` — the right number, written the way no one writes it — because one
+   * quarter weight in the sum disqualified every whole one beside it.
+   *
+   * A weight with denominator 1 gives a rational and 2 gives a square root, which `SqrtExt` holds;
+   * denominator 3 or 4 is exactly what the basis CARRIES instead, so leaving it in `rest` is the
+   * design working rather than a shortfall.
+   */
+  splitAlgebraic(): { readonly factor: SqrtExt; readonly rest: LogPart } {
+    const carried = this.terms.filter((t) => t.weight.d !== 1n && t.weight.d !== 2n);
+    const foldable = new LogPart(this.terms.filter((t) => t.weight.d === 1n || t.weight.d === 2n));
+    return { factor: foldable.foldAll(), rest: LogPart.of(carried) };
+  }
+
+  /** Every term folded — the caller has already checked that each weight is a whole or a half. */
+  private foldAll(): SqrtExt {
     let rational = Frac.ONE;
     let radicand = 1n;
     for (const { prime, weight } of this.terms) {
-      if (weight.d !== 1n && weight.d !== 2n) return null;
       // `p^w = p^{k/2}` with `k = 2w` an integer; split off the whole part, leaving `p^0` or `p^{1/2}`.
       const k = weight.d === 1n ? weight.n * 2n : weight.n;
       const half = ((k % 2n) + 2n) % 2n;

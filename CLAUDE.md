@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **497 test files / 4664 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **499 test files / 4689 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -414,8 +414,26 @@ a contour); cut classification depended on the cut's DISCRETISATION, because the
 handle of a straight bounded cut lands on the lips' interior and was read as a bend; and every certified
 arc bound assumed the arc was centred at the ORIGIN, which every `vanish` arc in the app happened to be
 until the dogbone's caps sat on its branch points — an off-centre arc now gets no bound of that shape and
-says so, rather than a `≤` computed from the wrong geometry. Still to come in M4: D7 (M4.6d) and the GPU cut
-picture (M4.7).
+says so, rather than a `≤` computed from the wrong geometry.
+
+**M4.6d completes M4.6 with D7** (`∫₀^b x^μ(b−x)^{1−μ}/(c−x) dx`, the twentieth record), where `Res(f,∞)`
+is not a correction but most of the identity: `f → e^{iπμ} ≠ 0` at infinity, so `2πi·Res(f,∞)` has
+magnitude 26.7 in an answer of 1.216, and dropping it leaves an answer that is **still perfectly real**
+and wrong by a factor of 14.5 and a sign. The residue there comes from the binomial series with its
+constant DERIVED — `Φ(z) = Λ·z^{Σα}·∏(1 − bⱼ/z)^{αⱼ}` with `Λ` a root of unity read off the declared
+windows along a searched reference direction — and `Σ αⱼ ∈ ℤ` is required and refused by name, since
+otherwise `f` is not single-valued near infinity and there is no residue there at all. D7 also needed
+per-factor determinations (`z^μ` in `[0,2π)`, `(b−z)^ν` in the principal window) and a factor written
+BACKWARDS (`(b − z)`, not `(z − b)` — the same number, not the same power). Its answer prints
+`(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)`, which took making two folds partial: `e^{−iπ + log}` now
+yields its `−1` while carrying the logarithm, and a logarithm folds **prime by prime**. A `Scalar`'s
+`add` may now be another `Scalar`, because D7's dogbone hugs `[0, b]` with `b` a parameter and its upper
+edge runs to `b − η`. Verifying it in a browser found the app drawing **D7's own trap**: the
+domain-colouring backdrop comes from the compiled evaluator, which uses the PRINCIPAL branch of every
+sub-expression, so it shows a seam on `(b, ∞)` where the composite is continuous — research 06 §2.2's
+`rendering-the-union-of-sub-cuts`, true since D1 and M4.7's to fix. What changed is that a record with a
+branch now says so, since an app that draws one determination while computing in another must not leave
+the reader to notice. Still to come in M4: the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

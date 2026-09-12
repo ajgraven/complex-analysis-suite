@@ -164,6 +164,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "log-squared-keyhole",
       "log-cubed-keyhole",
       "dogbone-inverse-sqrt",
+      "dogbone-two-fractional-powers",
     ]);
   });
 });
@@ -317,6 +318,11 @@ describe("the closed form each record establishes", () => {
     // and the branch factor's two values `+√2/2` and `−√2/2` at the conjugate poles are what keeps
     // them from cancelling. `π√2/2` is `π/√2`.
     "dogbone-inverse-sqrt": "π√2/2",
+    // D7, where `Res(f,∞)` is most of the answer — and the first whose form carries a QUARTER power.
+    // `2^{1/4}·5^{3/4}` is `250^{1/4}` over primes, which is what keeps equality a decision; the
+    // record writes the same number as `40^{3/4}/4`, and recovering a record's own grouping would
+    // mean remembering it. The sine is carried, never evaluated.
+    "dogbone-two-fractional-powers": "(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)",
   };
 
   it("covers every loaded record", () => {

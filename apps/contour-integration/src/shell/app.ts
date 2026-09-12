@@ -1439,6 +1439,22 @@ export function mountApp(root: Element): void {
       branchCard.append(
         el("p", "muted small", "A record's cuts are the record's. Switch to the sandbox to draw one."),
       );
+      // **THE BACKDROP IS DRAWN IN THE PRINCIPAL BRANCH, NOT THE DECLARED ONE**, and saying so is the
+      // difference between a picture and a claim. The colouring comes from the compiled evaluator,
+      // which uses principal determinations for every sub-expression — so for D7 it shows a seam on
+      // `(b, ∞)` where the composite is in fact continuous, which is that record's own
+      // `rendering-the-union-of-sub-cuts` trap looking back at the reader. The LEDGER is unaffected:
+      // every number on the right comes from exact residues in the DECLARED determination, and the
+      // quadrature is skipped for exactly this reason. Rendering the declared branch is M4.7's work.
+      if (family?.branch !== undefined) {
+        branchCard.append(
+          el(
+            "p",
+            "muted small",
+            "⚠ the colouring behind the contour is drawn in the PRINCIPAL branch of each factor, not the determination this record declares — so it can show a seam where the composite is continuous. Every number in the ledger comes from the declared one.",
+          ),
+        );
+      }
       return;
     }
 

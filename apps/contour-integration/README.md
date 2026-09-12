@@ -167,7 +167,35 @@ whether the whole thing closes.
   outer circle. And the two edges **ADD** — `W` changes sign across the cut and the traversal is
   reversed, two minus signs making one — so `∮ = 2T` where a reader expecting cancellation gets zero.
 
-The nineteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+**M4.6d lands D7 — `∫₀^b x^μ(b−x)^{1−μ}/(c−x) dx`, the twentieth record, and completes M4.6:**
+
+- **`Res(f,∞)` is not a correction here, it is most of the identity.** `f → e^{iπμ} ≠ 0` at infinity, so
+  `2πi·Res(f,∞)` has magnitude 26.7 in an answer of magnitude 1.216. Drop it and the answer is **still
+  perfectly real** — so the usual "it came out complex, I made a mistake" check does not fire — and it
+  is wrong by a factor of 14.5 and by a sign. The test computes that wrong number rather than asserting
+  the trap in prose.
+- **The residue at infinity comes from the binomial series, with its constant DERIVED.** For `|z|` past
+  every branch point, `Φ(z) = Λ·z^{Σα}·∏(1 − bⱼ/z)^{αⱼ}` with `Λ = c·e^{iπ[Σαⱼθⱼ − d·Σα]}`, where `θⱼ`
+  is the window-`j` argument along a reference direction `d`. Every `θⱼ` is an exact rational because
+  the direction is, so `Λ` is a root of unity decided rather than fitted; the direction is SEARCHED,
+  because a cut may run the obvious way. **`Σ αⱼ ∈ ℤ` is required and refused by name**: otherwise the
+  monodromy round a large circle is not 1, `f` is not single-valued there, and there is no residue at
+  infinity — not a hard one, none.
+- **Two windows, and one factor written backwards.** `z^μ` is read in `[0,2π)` and `(b−z)^ν` in the
+  principal window — and it is `(b − z)`, not `(z − b)`: the same number and not the same power,
+  because the argument read in the window is the argument of whichever difference the record wrote. At
+  `z = c > b` that is `arg = −π` and not `+π`, which rotates the residue by `e^{iπ/2}` and leaves the
+  answer real and plausible.
+- **A quarter power is the exact FORM.** The answer prints `(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)` —
+  the record's `(π/(2√2))(17 − 40^{3/4})`, with `250^{1/4}` factored over primes because that is what
+  keeps equality a decision. Two folds had to become partial for it to appear at all: `e^{−iπ + log}`
+  now yields its `−1` while carrying the logarithm, and a logarithm folds **prime by prime**, so one
+  quarter weight no longer disqualifies the whole one beside it.
+- The dogbone hugs `[0, b]` with `b` a PARAMETER, so its upper edge runs to `b − η` — affine in two of
+  them. A `Scalar`'s `add` may now be another `Scalar`, which keeps the picture live under a drag where
+  a derived value would go stale.
+
+The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered

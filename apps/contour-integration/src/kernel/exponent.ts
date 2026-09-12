@@ -164,28 +164,54 @@ export class Exponent {
    * ℚ(i) with no radical at all and can never conflict.
    */
   asAlgebraicFactor(): SqrtExt | null {
-    if (!this.algebraic.isZero()) return null;
-    if (!this.pi.re.isZero()) return null;
-    const twice = this.pi.im.mul(Frac.of(2n));
-    if (twice.d !== 1n) return null;
-    const power = ((twice.n % 4n) + 4n) % 4n;
-    const values = [Gauss.ONE, Gauss.I, Gauss.ONE.neg(), Gauss.I.neg()];
-    const sign = SqrtExt.fromGauss(values[Number(power)]);
+    const split = this.splitAlgebraicFactor();
+    return split.rest.isZero() ? split.factor : null;
+  }
 
-    // …and the same fold for the logarithmic part, which is M4.5's "radical factors". `e^{ln 2}` is
-    // the number 2, and `e^{(ln 2)/2}` is `√2`; printing either as an exponential is the disservice
-    // this method exists to prevent. A weight with denominator 3 or 4 — D7's `10^{1/3}`, `40^{3/4}` —
-    // is what the basis CARRIES instead, and `asAlgebraic` returns null there by design.
-    if (this.log.isZero()) return sign;
-    const radical = this.log.asAlgebraic();
-    if (radical === null) return null;
-    try {
-      return sign.mul(radical);
-    } catch {
-      // Two different radicands cannot share one `SqrtExt`. Carried rather than folded, which is the
-      // honest outcome and not a failure.
-      return null;
+  /**
+   * The part of `e^{β}` that IS an exact algebraic number, and the exponent left over.
+   *
+   * **THE TWO HALVES FOLD SEPARATELY, AND D7 IS WHY.** Its answer carries `e^{−iπ + (ln 2)/4 +
+   * (3 ln 5)/4}`: the `−iπ` is the number `−1` and the logarithm is `250^{1/4}`, which this basis
+   * CARRIES rather than folds (ADR-0041's thesis — a quarter power is the exact form, not a
+   * shortfall). Folding them all-or-nothing left the `−iπ` stuck to the logarithm, and an exponent
+   * that is not real is one `Re` does not distribute over — so D7's answer came out as a decimal with
+   * no closed form at all, for want of extracting a minus sign.
+   *
+   * `e^{iπr}` folds when `2r ∈ ℤ`, where it cycles through `1, i, −1, −i`. Quarter-integer `r` is
+   * deliberately NOT folded: `e^{iπ/4} = (1+i)/√2` needs a quadratic extension, which could collide
+   * with a radicand the coefficients already carry. The logarithm folds when every weight has
+   * denominator 1 or 2 — `e^{ln 2}` is 2 and `e^{(ln 2)/2}` is `√2`.
+   */
+  splitAlgebraicFactor(): { readonly factor: SqrtExt; readonly rest: Exponent } {
+    let factor = SqrtExt.ONE;
+    let pi = this.pi;
+    let log = this.log;
+
+    if (this.pi.re.isZero()) {
+      const twice = this.pi.im.mul(Frac.of(2n));
+      if (twice.d === 1n) {
+        const power = ((twice.n % 4n) + 4n) % 4n;
+        const values = [Gauss.ONE, Gauss.I, Gauss.ONE.neg(), Gauss.I.neg()];
+        factor = SqrtExt.fromGauss(values[Number(power)]);
+        pi = Gauss.ZERO;
+      }
     }
+
+    // PRIME BY PRIME, not all-or-nothing: D7's `10^{1/4}·6^{3/4}` is `2·3^{3/4}·5^{1/4}`, and one
+    // quarter weight must not disqualify the whole one beside it.
+    if (!log.isZero()) {
+      const split = log.splitAlgebraic();
+      try {
+        factor = factor.mul(split.factor);
+        log = split.rest;
+      } catch {
+        // Two different radicands cannot share one `SqrtExt`. Carried rather than folded, which is
+        // the honest outcome and not a failure.
+      }
+    }
+
+    return { factor, rest: Exponent.of(this.algebraic, pi, log) };
   }
 
   /** **The one crossing into the numeric plane**, and why a decimal rendering of `e^{β}` is `≈`. */

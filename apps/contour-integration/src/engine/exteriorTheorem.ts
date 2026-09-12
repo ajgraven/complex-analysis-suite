@@ -45,8 +45,8 @@ import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
 import { ExpSum, formatExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
-import { residueAtInfinityOf, type ResidueAtInfinity } from "../kernel/atInfinity.js";
-import { exponentSum, multiBranchResidue, type MultiPowerFactor } from "../kernel/branchResidue.js";
+import { branchResidueAtInfinity, residueAtInfinityOf } from "../kernel/atInfinity.js";
+import { multiBranchResidue, type MultiPowerFactor } from "../kernel/branchResidue.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { formatFrac, formatSqrtExt } from "../kernel/formatExact.js";
 import type { BranchChoice } from "../kernel/branch/model.js";
@@ -183,11 +183,14 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
       ]),
     };
   }
-  const atInfinity: ResidueAtInfinity = residueAtInfinityOf(
-    split.value.num,
-    split.value.den,
-    input.multi === undefined ? Frac.ZERO : exponentSum(input.multi),
-  );
+  // **THE BRANCH FACTOR REACHES INFINITY TOO.** With one present, `Res(f,∞)` is not a polynomial
+  // division at all: the fractional powers need their binomial series, and the constant in front of
+  // them is what the declared determinations impose. D7 is where it matters — its residue at infinity
+  // has magnitude 4.25 in an answer of 1.2 — and D6 is where the same computation certifies a zero.
+  const atInfinity =
+    input.multi === undefined
+      ? residueAtInfinityOf(split.value.num, split.value.den, Frac.ZERO)
+      : branchResidueAtInfinity(input.multi, split.value.num, split.value.den);
   certificates.push(atInfinity.certificate);
   if (!atInfinity.ok || atInfinity.value === undefined) {
     return {
@@ -201,8 +204,9 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
 
   // `Σ (nₖ − σ)·Res(f,aₖ) − σ·Res(f,∞)`, in that order and with no second copy of either weight:
   // `sigma` is read once, above, and both halves of the identity are built from it here.
-  const atInf = SqrtExt.fromGauss(atInfinity.value);
-  const sum = weighted.sum.add(ExpSum.fromSqrtExt(sigma === 0 ? SqrtExt.ZERO : atInf.mul(SqrtExt.fromGauss(Gauss.int(-sigma)))));
+  const atInf =
+    atInfinity.value instanceof ExpSum ? atInfinity.value : ExpSum.fromSqrtExt(SqrtExt.fromGauss(atInfinity.value));
+  const sum = weighted.sum.add(sigma === 0 ? ExpSum.ZERO : atInf.scale(SqrtExt.fromGauss(Gauss.int(-sigma))));
 
   const piUnits = sum.scale(TWO_I);
   const [re, im] = piUnits.toTuple();
@@ -217,7 +221,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
         provenance: [
           {
             ok: true,
-            text: `σ = ${int(sigma)}, Σ Res over the ${weighted.count} finite pole${weighted.count === 1 ? "" : "s"} = ${weighted.plainText}, and Res(f,∞) = ${formatSqrtExt(atInf)} is the outer circle exactly, not an estimate of it`,
+            text: `σ = ${int(sigma)}, Σ Res over the ${weighted.count} finite pole${weighted.count === 1 ? "" : "s"} = ${weighted.plainText}, and Res(f,∞) = ${formatExpSum(atInf)} is the outer circle exactly, not an estimate of it`,
           },
           {
             ok: true,

@@ -299,9 +299,29 @@ export function branchResidue(pole: AlgebraicPole, factor: PowerFactor): BranchR
  */
 export interface MultiPowerFactor {
   readonly constant: SqrtExt;
-  readonly points: readonly { readonly at: SqrtExt; readonly alpha: Frac; readonly label: string }[];
-  /** `arg(z − bⱼ) ∈ [lo·π, hi·π)`, PER FACTOR — the record declares one window for all of them. */
-  readonly argRange: readonly [Frac, Frac];
+  readonly points: readonly {
+    readonly at: SqrtExt;
+    readonly alpha: Frac;
+    readonly label: string;
+    /**
+     * `−1` when the factor is `(bⱼ − z)^{αⱼ}` rather than `(z − bⱼ)^{αⱼ}`.
+     *
+     * D7 writes `x^μ(b − x)^ν`, and the difference is not cosmetic: `(b − z)` and `−(z − b)` are the
+     * same number and NOT the same power, because the argument that is read in the window is the
+     * argument of whichever one the record wrote. Its own trap is exactly this — at `z = c > b`
+     * approached from above, `arg(b − z) = −π` and not `+π`, and using `+π` rotates the residue by
+     * `e^{iπ/2}` while leaving the final answer real and plausible.
+     */
+    readonly sign: 1 | -1;
+    /**
+     * `arg(sⱼ·(z − bⱼ)) ∈ [lo·π, hi·π)`, PER FACTOR.
+     *
+     * D6's two factors share `[0, 2π)`; D7's are `[0, 2π)` for `z^μ` and the principal window for
+     * `(b − z)^ν`, and reading both in the first would rotate half the residues with nothing to warn
+     * you. One window per product was M4.6c's simplification and M4.6d's first casualty.
+     */
+    readonly argRange: readonly [Frac, Frac];
+  }[];
 }
 
 /** Σⱼ αⱼ, which is what admissibility and the order at infinity are both about. */
@@ -373,10 +393,12 @@ function argInWindow(w: SqrtExt, range: readonly [Frac, Frac]): number {
  * verify is only as good as the gap it had to choose across.
  */
 export function multiPowerAtPole(z0: SqrtExt, factor: MultiPowerFactor): BranchResidue {
-  const width = factor.argRange[1].sub(factor.argRange[0]);
-  if (!width.equals(Frac.of(2n))) {
-    const reason = `the declared argument range has width ${width.n}/${width.d}·π, but a determination of arg covers exactly one turn (2π)`;
-    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  for (const point of factor.points) {
+    const width = point.argRange[1].sub(point.argRange[0]);
+    if (!width.equals(Frac.of(2n))) {
+      const reason = `${point.label} declares an argument range of width ${width.n}/${width.d}·π, but a determination of arg covers exactly one turn (2π)`;
+      return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+    }
   }
   if (factor.points.length === 0) {
     const reason = "the branch factor declares no branch points, so there is nothing multivalued about it";
@@ -392,7 +414,9 @@ export function multiPowerAtPole(z0: SqrtExt, factor: MultiPowerFactor): BranchR
       const reason = `${formatSqrtExt(z0)} IS the branch point ${point.label}: there is no Laurent series there and no residue to take`;
       return { ok: false, reason, certificate: refuse("the branch factor", reason) };
     }
-    offsets.push(w);
+    // `sⱼ = −1` is `(bⱼ − z)`, and it is the ARGUMENT that changes: the modulus is the same number
+    // and the power is not, because the window is applied to whichever difference the record wrote.
+    offsets.push(point.sign < 0 ? w.neg() : w);
   }
 
   // `n` clears every exponent's denominator; `N = 2n` also clears the square root in `|w| = √(|w|²)`.
@@ -422,7 +446,7 @@ export function multiPowerAtPole(z0: SqrtExt, factor: MultiPowerFactor): BranchR
       return { ok: false, reason, certificate: refuse("the branch factor", reason) };
     }
     modulusSquared = modulusSquared.mul(power);
-    argument += alpha.toNumber() * argInWindow(offsets[j], factor.argRange);
+    argument += alpha.toNumber() * argInWindow(offsets[j], factor.points[j].argRange);
   }
 
   // `∏ (z₀ − bⱼ)^{Nαⱼ}` — integer powers, so exact.
@@ -499,7 +523,12 @@ export function multiPowerAtPole(z0: SqrtExt, factor: MultiPowerFactor): BranchR
       `the branch factor at ${formatSqrtExt(z0)} is ${formatExpSum(value)}`,
       "the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement",
       {
-        restriction: `arg(z − bⱼ) ∈ [${formatFrac(factor.argRange[0])}·π, ${formatFrac(factor.argRange[1])}·π) for every j`,
+        restriction: factor.points
+          .map(
+            (p) =>
+              `arg(${p.sign < 0 ? `${p.label.replace("z = ", "")} − z` : `z − ${p.label.replace("z = ", "")}`}) ∈ [${formatFrac(p.argRange[0])}·π, ${formatFrac(p.argRange[1])}·π)`,
+          )
+          .join("; "),
         provenance: [
           {
             ok: true,
