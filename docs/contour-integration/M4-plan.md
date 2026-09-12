@@ -152,7 +152,7 @@ before D2.
 | **M4.1** ✅ | `BranchChoice`, the admissibility validator, CPU continuous-argument lift, `side` tags, LEGALITY steps 2–3, and the sandbox's cut editor | M |
 | **M4.2** ✅ | the four `Family["branch"]` schema changes of §1.3 · keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser · **the cyclotomic sum and the geometric cancellation** → **D1, D3** | **L** |
 | **M4.3** ✅ | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` · **the log-residue engine and the log arc bound** → **D4** | M–L |
-| **M4.4** | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
+| **M4.4** ✅ | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** | `ln(ℚ₊)` exponents and radical factors → **D2, D7's algebraic half** | S–M |
 | **M4.6** | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** | M |
 | **M4.7** | the GPU picture: `cutCorrection`, `cargCut`/`clogCut`/`cpowCut` twins, `DUAL_BACKEND_CORPUS`, monodromy readout, sheet badge, shadow-cut mode, **drag-a-cut** | M–L |
@@ -170,8 +170,11 @@ before D2.
   reports the third as invisible; and the plain-`log` variant says *"this contour does not determine
   T1 — this contour carries no information about T1"* as a computed consequence of a zero column,
   not as a hand-written detector.
-- **M4.4** — D5 refuses to close **alone**, names `T0` as the missing input, and closes when D4
-  supplies it — with the borrowed value's rigor meeting into the result, never silently upgrading it.
+- **M4.4** ✅ — D5 refuses to close **alone** (`this contour does not determine T2 — … no information
+  about 3/(4π²)·T0 + T2`, which names `T0` as a computed consequence of the kernel) and closes when
+  D4 supplies it, at the SAME binding. The borrowed verdict meets into `T2`, which depends on it, and
+  **not** into `T1`, which does not — dependence decided in the field, not assumed from the fact that
+  a prerequisite exists. A record expecting `≈` keeps `≈` however exact its source turned out to be.
 - **M4.6** — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
   magnitude 1.216. The residue at infinity is not an edge case, and D6 passing only because
   `Res(f,∞) = 0` is the coincidence that would hide the bug.
@@ -306,8 +309,8 @@ under the principal determination it produced a confident COMPLEX number for a r
 - **D2** needs the `ln(ℚ₊)` half of the exponent (poles at `−1` and `−2`, so `ln|z₀| ≠ 0`) — M4.5,
   per ADR-0041 Action Item 1.
 - **D4/D5** need Pass 5 over ℚ(i)(π) and `linear.ts` over a `Field` — M4.3. `buildSystem` refuses
-  them by name today: a coefficient outside ℚ(i) with more than one unknown says so. *(D4 landed in
-  M4.3; D5 waits on M4.4's `prerequisites`, and on `ln(ℚ₊)` for its second fixture.)*
+  them by name today: a coefficient outside ℚ(i) with more than one unknown says so. *(Both have
+  since landed — D4 in M4.3, D5 in M4.4.)*
 
 ---
 
@@ -374,3 +377,47 @@ in this schema — nothing binds a function into an integrand — so the one deg
 fixtures actually use is transcribed as an integer parameter `p`, the power of `1 + x²`. Its third
 golden (`T0 = π/4`, "the free bonus from the same contour") is not a fixture at all: it is the other
 unknown of the same solve, and `solveFamily`'s `targets` reports it.
+
+---
+
+## 8. What M4.4 landed, and what it taught
+
+**D5 is the first record that does not close alone**, and gallery gap G8 — "no `prerequisites`" —
+closes with it.
+
+### The dependency is executable, and resolved at the caller's binding
+
+`from: "family:log-squared-keyhole with the same R"` is not a citation. The engine finds that record,
+solves it **at D5's bindings** — `p = 1` here borrows `p = 1` there, not D4's own flagship `p = 2` —
+and reads the named unknown out of the result. Borrowing at the source's fixture instead would return
+`π/4` where `π/2` is needed and answer a different question with confidence; the break pass confirms
+a test fails when it does.
+
+### The borrowed verdict meets into what depends on it, and nothing else
+
+An unknown is `weights·r`, so it depends on a borrowed `tⱼ` exactly when `Σ_row weights[row]·M[row][j]`
+is non-zero — a decision in ℚ(i)(π), not an assumption from the presence of a prerequisite. D5 makes
+the difference visible: `T1` comes off the REAL part of the identity, where `T0`'s coefficient is
+zero, and stays `=` on its own contour; `T2` comes off the imaginary part, where `T0` sits, and
+carries `T0`'s certificate. A blanket meet would have downgraded the bonus for nothing.
+
+The record's declared `rigor` meets with the borrowed one rather than overriding it, in **both**
+directions: a record that built its argument on `≈` keeps `≈` even though D4 supplies `=`, and one
+that hoped for `=` and got `≈` keeps `≈`. Neither direction upgrades.
+
+### Invariant 4 judges a borrowing record on the system without the borrowed column
+
+Dropping a column is structural — it needs the unknown's index and not its value — so the loader
+still checks D5 without evaluating a single residue. Two directions, as everywhere else here: a
+record whose contour cannot determine what it claims is broken, and so is one that borrows a value
+its own contour supplies. The second is not hypothetical: `T1` IS determined by D5's contour, and
+declaring it an input would document a dependency that is not there.
+
+### The transcription answered the record's own coverage complaint
+
+D5's `sign-of-T1-from-the-1-over-i` trap says the `1/i` sign is invisible at `R = 1/(1+x²)`, where
+`Σ₃` is purely real and `T1 = 0` either way, and asks for "a second R with a NON-ZERO bonus term".
+The gallery's choice, `1/(x²+4)`, has poles off the unit circle and needs `ln 2` — M4.5. Carrying `R`
+as the integer parameter `p` supplies one inside this basis instead: at `p = 2` the bonus is
+`T1 = −π/4`, **which is D4's own primary answer at the same `p`**, reached by a different contour. The
+two records now cross-check each other on a number neither takes from the other.

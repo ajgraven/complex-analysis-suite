@@ -124,6 +124,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "mellin-keyhole",
       "keyhole-x-to-the-n",
       "log-squared-keyhole",
+      "log-cubed-keyhole",
     ]);
   });
 });
@@ -263,6 +264,10 @@ describe("the closed form each record establishes", () => {
     // two unknowns of three that this contour determines. The primary is `∫₀^∞ log x/(1+x²)² dx`;
     // `∫₀^∞ dx/(1+x²)² = π/4` comes free from the same identity and is checked in `test/d4.test.ts`.
     "log-squared-keyhole": "−π/4",
+    // D5, the first record that does not close alone: its log³ keyhole determines `∫R log²x` only
+    // modulo `∫R dx`, which D4's log² keyhole on the same R supplies. The borrowed value's verdict
+    // meets into this one — see `test/d5.test.ts`.
+    "log-cubed-keyhole": "π³/8",
   };
 
   it("covers every loaded record", () => {

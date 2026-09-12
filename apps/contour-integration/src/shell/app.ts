@@ -916,8 +916,19 @@ export function mountApp(root: Element): void {
         for (const other of systemTargets.solved) {
           if (other.targetId === primaryId) continue;
           const line = el("p", "resultValue exactValue bonusValue");
-          line.append(badge(assembleVerdict([other.certificate]).level), ` ${other.text}`);
+          line.append(badge(assembleVerdict(other.certificates).level), ` ${other.text}`);
           recordCard.append(line, el("p", "muted small", `${describe(other.targetId)} — from the same contour`));
+        }
+        // A borrowed input is part of the argument, not a detail of it: the record's own trap asks
+        // for "the prerequisite as its own row with its own verdict", and the badge above already
+        // meets that verdict into every answer that used it.
+        for (const input of systemTargets.borrowed) {
+          const line = el("p", "resultValue bonusValue");
+          line.append(badge(assembleVerdict([input.certificate]).level), ` ${input.text}`);
+          recordCard.append(
+            line,
+            el("p", "muted small", `${describe(input.targetId)} — ${input.certificate.claim}`),
+          );
         }
         for (const sentence of systemTargets.invisible) {
           const line = el("p", "restriction");

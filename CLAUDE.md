@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **489 test files / 4524 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **490 test files / 4549 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -352,7 +352,19 @@ record, which turns three of D4's traps into arithmetic. `kernel/logResidue.ts` 
 `Res(R·log^m z, z₀)` at a pole of any order (the Laurent principal part convolved with the expansion
 of `log^m`, so a double pole mixes both halves), checked against an independent quadrature to 1e−12;
 `kernel/bounds/logArc.ts` kills the circles, where a log moves no exponent but does take the boundary
-case away. Still to come in M4: prerequisite chaining (M4.4, → D5), the `ln(ℚ₊)` exponent half
+case away.
+
+**M4.4** lands **D5**, the seventeenth record and the first that does not close ALONE:
+`∫₀^∞ (log x)²/(1+x²) dx = π³/8`. Its `log³` keyhole gives two real equations in three unknowns —
+`∫R log x` outright, `∫R log²x` only *modulo* `∫R dx` — so the record declares a **prerequisite**,
+and the engine RUNS it: `from: "family:log-squared-keyhole"` resolves D4 at the *same* binding
+(borrowing at D4's own fixture would return π/4 where π/2 is needed). The borrowed verdict then meets
+into the answers that depend on it and **no others** — dependence decided in ℚ(i)(π) as
+`Σ_row weights·M[row][j] ≠ 0`, so D5's bonus stays exact on its own contour while its primary carries
+the input's certificate — and a record expecting `≈` keeps `≈` however exact its source was. Invariant
+4 judges a borrowing record on the system with that column REMOVED (structural, so still no residues),
+in both directions: a contour that cannot determine what the record claims is broken, and so is one
+that borrows a value it supplies itself. Still to come in M4: the `ln(ℚ₊)` exponent half
 (M4.5, → D2), the dogbone and `Res(f,∞)` (M4.6, → D6/D7), and the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than

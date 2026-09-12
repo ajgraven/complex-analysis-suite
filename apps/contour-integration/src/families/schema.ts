@@ -169,8 +169,14 @@ export interface FamilyTarget {
    * `∫R log²x` has an identically zero column and is invisible. All three facts are claims about the
    * contour, and invariant 4 checks them in both directions — a `primary` or `bonus` target that the
    * contour does not pin is a broken record, and so is a `cancels` target that it does.
+   *
+   * **`input` is the fourth, and D5 is why.** Its `log³` keyhole gives two real equations in three
+   * unknowns: it determines `∫R log x` outright and `∫R log²x` only MODULO `∫R dx`, which must come
+   * from elsewhere — the record's `prerequisites`. An `input` target is therefore required NOT to be
+   * determined by this contour alone, on the same principle as the other three: a record that
+   * borrows a value its own contour supplies is documenting a dependency that is not there.
    */
-  readonly role?: "primary" | "bonus" | "cancels";
+  readonly role?: "primary" | "bonus" | "cancels" | "input";
   readonly kind: "integral" | "sum";
   readonly variable: "x" | "theta" | "n";
   readonly lower: string;
@@ -276,12 +282,30 @@ export interface Family {
     readonly note: string;
   };
 
-  /** Values this family may assume as known, each with its own provenance and rigor. */
+  /**
+   * Values this family may assume as known, each with its own provenance and rigor.
+   *
+   * **Declared, then RESOLVED.** `from` naming `family:<id>` is executable: the engine runs that
+   * record at the same bindings and reads the named target out of it. `rigor` is what the record
+   * EXPECTS, and the borrowed verdict meets with it rather than overriding it, so a record can never
+   * claim more rigor than its input actually had. D5's whole lesson is that this must be visible:
+   * assuming `T0 = 0` instead of borrowing `π/2` returns `−13π³/24` in place of `π³/8`, and nothing
+   * about the arithmetic complains.
+   *
+   * `value` is the FLAGSHIP's value, for a reader — not the engine's check. The borrowed number is
+   * verified twice over without it: the source record carries its own goldens and the corpus runs
+   * them, and this record's own golden fails if the wrong target was borrowed.
+   */
   readonly prerequisites?: readonly {
     readonly targetId: string;
+    /** `family:<id>` to resolve by running that record; anything else is prose for the reader. */
     readonly from: string;
+    /** The unknown to read out of the SOURCE, when it is not named the same there. */
+    readonly sourceTargetId?: string;
     readonly value: string;
     readonly rigor: Level;
+    /** Where else the value could come from, when the named family is not the only route. */
+    readonly alternative?: string;
   }[];
 
   /** Exact constants imported rather than derived — E3's and F2's `√π` — so they escape `≈`. */

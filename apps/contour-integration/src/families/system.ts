@@ -196,6 +196,33 @@ export interface PiSystem extends SystemShape {
 
 export type FamilySystem = RationalSystem | PiSystem;
 
+/**
+ * The same system with some unknowns REMOVED — the ones a record borrows rather than derives.
+ *
+ * Dropping a column is purely structural: it needs the unknown's index and not its value, which is
+ * what lets DESIGN §5's invariant 4 check a family with prerequisites without running a single
+ * residue. D5 is the record that needs it — its `log³` keyhole has two real equations in three
+ * unknowns and determines `∫R log²x` only MODULO `∫R dx`, so the contour's own claim is about the
+ * system with `∫R dx` taken out, and asking for full determination of the four-column system would
+ * drop a record for being honest about its dependency.
+ *
+ * The right-hand side is the CALLER's business: removing a column moves `M[:,j]·tⱼ` across the
+ * equals sign, and only a caller holding `tⱼ` can do that. `solvePiTargets` does it; the invariant
+ * does not need to.
+ */
+export function withoutColumns(system: PiSystem, drop: readonly string[]): PiSystem {
+  const keep = system.targetIds.flatMap((id, j) => (drop.includes(id) ? [] : [j]));
+  const matrix = system.matrix.map((row) => keep.map((j) => row[j]));
+  const targetIds = keep.map((j) => system.targetIds[j]);
+  return {
+    field: "Q(i)(pi)",
+    matrix,
+    unknowns: targetIds.length,
+    targetIds,
+    report: solveOver(RAT_PI_FIELD, matrix, targetIds.length),
+  };
+}
+
 export type BuildResult = { ok: true; system: FamilySystem } | { ok: false; reason: string };
 
 /**

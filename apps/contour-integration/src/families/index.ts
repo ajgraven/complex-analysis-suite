@@ -12,7 +12,7 @@
 // on: withhold the thing that cannot be stood behind, and say why.
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
-import { BONUS_ZERO, bonusMagnitudes, buildSystem } from "./system.js";
+import { BONUS_ZERO, bonusMagnitudes, buildSystem, withoutColumns } from "./system.js";
 import { describeKernel } from "./linear.js";
 import { FRAC_FIELD, RAT_PI_FIELD } from "./field.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
@@ -31,6 +31,7 @@ import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
 import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
 import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
 import { d4LogSquaredKeyhole } from "./records/d4-log-squared-keyhole.js";
+import { d5LogCubedKeyhole } from "./records/d5-log-cubed-keyhole.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export {
@@ -85,6 +86,7 @@ export const FAMILIES: readonly Family[] = [
   d1MellinKeyhole,
   d3KeyholeXToTheN,
   d4LogSquaredKeyhole,
+  d5LogCubedKeyhole,
 ];
 
 /**
@@ -356,20 +358,36 @@ function checkInvariant4(family: Family): Violation[] {
     // (`role: "cancels"`) — while `rank === m` would drop it. What must hold is that every unknown
     // the record claims to determine is one this contour actually pins, which `determined` answers
     // directly; a rank equal to the number of claims can still pin the wrong columns.
-    const names = family.targets.map((t) => t.id);
-    const determined = new Set(built.system.report.determined.map((d) => d.column));
-    const claimed = family.targets.flatMap((t, j) => (t.role === "cancels" ? [] : [j]));
-    const missing = claimed.filter((j) => !determined.has(j));
+    //
+    // A record that BORROWS an unknown is judged on the system WITHOUT it. D5's `log³` keyhole
+    // determines `∫R log²x` only modulo `∫R dx`, so requiring its whole four-column system to be
+    // determined would drop it for being honest about the dependency — and the reduction is
+    // structural, so this still runs without evaluating a single residue.
+    const borrowed = (family.prerequisites ?? []).map((p) => p.targetId);
+    const full = built.system;
+    if (borrowed.length > 0 && full.field !== "Q(i)(pi)") {
+      fail(`golden ${i}: prerequisites are carried only for a log family, and this one is over ${full.field}`);
+      continue;
+    }
+    const system =
+      full.field === "Q(i)(pi)" && borrowed.length > 0 ? withoutColumns(full, borrowed) : full;
+
+    const names = system.targetIds;
+    const determined = new Set(system.report.determined.map((d) => names[d.column]));
+    const claimed = family.targets
+      .filter((t) => t.role !== "cancels" && t.role !== "input")
+      .map((t) => t.id);
+    const missing = claimed.filter((id) => !determined.has(id));
     const invisible =
-      built.system.field === "Q"
-        ? describeKernel(FRAC_FIELD, built.system.report, names)
-        : describeKernel(RAT_PI_FIELD, built.system.report, names);
+      system.field === "Q"
+        ? describeKernel(FRAC_FIELD, system.report, names)
+        : describeKernel(RAT_PI_FIELD, system.report, names);
 
     if (fixture.refuses !== undefined) {
       if (missing.length === 0) {
         fail(
           `golden ${i} is marked as documenting a refusal (${fixture.refuses}), but this contour ` +
-            `determines ${claimed.map((j) => names[j]).join(", ")} there — the derivation does NOT ` +
+            `determines ${claimed.join(", ")} there — the derivation does NOT ` +
             "collapse, so the fixture documents nothing",
         );
       }
@@ -377,16 +395,26 @@ function checkInvariant4(family: Family): Violation[] {
     }
     if (missing.length > 0) {
       fail(
-        `golden ${i}: this contour does not determine ${missing.map((j) => names[j]).join(", ")} ` +
-          `— rank(M) = ${built.system.report.rank} of ${m} unknown(s). ${invisible.join("; ")}`,
+        `golden ${i}: this contour does not determine ${missing.join(", ")} ` +
+          `— rank(M) = ${system.report.rank} of ${m} unknown(s). ${invisible.join("; ")}`,
       );
     }
     // The other direction. A record claiming a cancellation that does not happen is documenting
     // nothing, exactly as a `refuses` fixture at full rank is.
-    const pinned = family.targets.flatMap((t, j) => (t.role === "cancels" && determined.has(j) ? [t.id] : []));
+    const pinned = family.targets.filter((t) => t.role === "cancels" && determined.has(t.id));
     if (pinned.length > 0) {
       fail(
-        `golden ${i}: ${pinned.join(", ")} is marked as cancelling, but this contour determines it`,
+        `golden ${i}: ${pinned.map((t) => t.id).join(", ")} is marked as cancelling, but this contour determines it`,
+      );
+    }
+    // And the third: a borrowed unknown must be one this contour genuinely cannot supply. Judged on
+    // the FULL system, where it is still a column — in the reduced one it is not there to ask about.
+    const fullDetermined = new Set(full.report.determined.map((d) => full.targetIds[d.column]));
+    const selfSupplied = family.targets.filter((t) => t.role === "input" && fullDetermined.has(t.id));
+    if (selfSupplied.length > 0) {
+      fail(
+        `golden ${i}: ${selfSupplied.map((t) => t.id).join(", ")} is borrowed as an input, but this ` +
+          "contour determines it on its own — the dependency the record documents is not there",
       );
     }
   }

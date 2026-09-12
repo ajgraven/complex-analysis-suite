@@ -33,6 +33,8 @@ import {
 } from "./solveTarget.js";
 import { logFactorOf, powerFactorOf } from "./branchFactor.js";
 import { legalityRefusal } from "../engine/ledger.js";
+import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
+import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
 
 export interface RunOptions {
@@ -214,6 +216,23 @@ export function solveFamily(
   golden: Golden,
   options: RunOptions = {},
 ): SolveFamilyResult {
+  return solveWithin(family, golden, options, new Set());
+}
+
+/**
+ * `solveFamily`, carrying the chain of records already being solved.
+ *
+ * The chain exists for one reason: a record may BORROW an unknown from another record, and a corpus
+ * in which two records borrow from each other would recurse forever. It is threaded rather than kept
+ * in module state so that two solves cannot interfere, and it is not part of `RunOptions` because it
+ * is not a caller's business.
+ */
+function solveWithin(
+  family: Family,
+  golden: Golden,
+  options: RunOptions,
+  chain: ReadonlySet<string>,
+): SolveFamilyResult {
   const r = runFamily(family, golden, options);
   if (!r.ok) return r;
 
@@ -234,7 +253,7 @@ export function solveFamily(
   // THE LOG FAMILIES TAKE THE SYSTEM ROUTE. Not a variant of the scalar one: there is no single `a`
   // to divide by, because D4's lower edge reproduces an affine combination of three real integrals.
   if (family.branch?.factors.some((x) => x.order.kind === "log") ?? false) {
-    return solveLogFamily(family, r.run);
+    return solveLogFamily(family, r.run, chain);
   }
 
   const piUnits = r.run.theorem.piUnits;
@@ -259,8 +278,97 @@ export function solveFamily(
   return { ok: true, route: "scalar", run: r.run, solved: solved.solved };
 }
 
+/**
+ * A record's declared `prerequisites`, RESOLVED — each value run out of the record that supplies it.
+ *
+ * **Executable provenance.** D5's `log³` keyhole gives two real equations in three unknowns: it
+ * determines `∫R log x` outright and `∫R log²x` only MODULO `∫R dx`. The record says where that
+ * missing input comes from — `family:log-squared-keyhole`, D4, on the same `R` — and this runs it.
+ * Not a lookup table: the source record is solved at the SAME bindings, so `p = 1` here borrows
+ * `p = 1` there, and the borrowed value arrives with its own verdict attached.
+ *
+ * Nothing is upgraded on the way. The borrowed certificate travels with the value and meets into
+ * every answer that depends on it (`solvePiTargets` decides which those are), and the record's
+ * declared `rigor` meets with it too — a record cannot claim more rigor than its input had.
+ */
+function resolvePrerequisites(
+  family: Family,
+  bindings: Bindings,
+  chain: ReadonlySet<string>,
+):
+  | { ok: true; known: readonly { targetId: string; value: RatPi; certificate: Certificate }[] }
+  | { ok: false; reason: string } {
+  const needed = family.prerequisites ?? [];
+  if (needed.length === 0) return { ok: true, known: [] };
+
+  const known: { targetId: string; value: RatPi; certificate: Certificate }[] = [];
+  for (const need of needed) {
+    const sourceId = FAMILY_PREFIX.exec(need.from)?.[1];
+    if (sourceId === undefined) {
+      return {
+        ok: false,
+        reason:
+          `needs ${need.targetId}, which this contour cannot supply, and its source '${need.from}' ` +
+          `is not a record this engine can run${need.alternative === undefined ? "" : ` (the record also offers: ${need.alternative})`}`,
+      };
+    }
+    // The current record counts as part of the chain: a record borrowing from ITSELF would otherwise
+    // resolve to the registered copy of the same id and quietly answer a different question.
+    if (sourceId === family.id || chain.has(sourceId)) {
+      return { ok: false, reason: `prerequisite cycle: ${[...chain, family.id, sourceId].join(" → ")}` };
+    }
+    const source = FAMILIES.find((f) => f.id === sourceId);
+    if (source === undefined) {
+      return { ok: false, reason: `needs ${need.targetId} from '${sourceId}', which is not a loaded record` };
+    }
+
+    const from = solveWithin(source, primaryGolden(source), { bindings }, new Set([...chain, family.id]));
+    if (!from.ok) {
+      return { ok: false, reason: `needs ${need.targetId} from '${sourceId}', which did not solve — ${from.reason}` };
+    }
+    if (from.route !== "system") {
+      return {
+        ok: false,
+        reason: `needs ${need.targetId} from '${sourceId}', which solves a single unknown and cannot name one`,
+      };
+    }
+    const wanted = need.sourceTargetId ?? need.targetId;
+    const supplied = from.targets.solved.find((x) => x.targetId === wanted);
+    if (supplied === undefined) {
+      return {
+        ok: false,
+        reason: `needs ${need.targetId} from '${sourceId}', which does not determine ${wanted}`,
+      };
+    }
+
+    // The borrowed verdict, MET with what the record expected of it. A record asking for `≈` and
+    // getting `=` keeps `≈`, because it built its argument on the weaker claim; a record asking for
+    // `=` and getting `≈` keeps `≈` too. Neither direction upgrades.
+    const borrowed = assembleVerdict(supplied.certificates).level;
+    const level = meet(borrowed, need.rigor);
+    known.push({
+      targetId: need.targetId,
+      value: supplied.exact,
+      certificate:
+        level === "="
+          ? exact(
+              `${need.targetId} = ${supplied.text}, borrowed from '${sourceId}'`,
+              `resolved by running that record at the same bindings; its own verdict is ${borrowed}`,
+            )
+          : estimate(
+              `${need.targetId} = ${supplied.text}, borrowed from '${sourceId}' with rigor ${level}`,
+              `resolved by running that record at the same bindings; its verdict ${borrowed} meets with the ${need.rigor} this record expected`,
+            ),
+    });
+  }
+  return { ok: true, known };
+}
+
+/** `family:<id>`, with anything after the id treated as prose for the reader. */
+const FAMILY_PREFIX = /^family:([A-Za-z0-9-]+)/;
+
 /** Pass 5 for a log family: `M t = r` over ℚ(i)(π), reported per unknown. */
-function solveLogFamily(family: Family, run: FamilyRun): SolveFamilyResult {
+function solveLogFamily(family: Family, run: FamilyRun, chain: ReadonlySet<string>): SolveFamilyResult {
   const closedContour = run.theorem.exactInPi;
   if (closedContour === undefined) {
     return {
@@ -279,9 +387,15 @@ function solveLogFamily(family: Family, run: FamilyRun): SolveFamilyResult {
     };
   }
 
+  const prerequisites = resolvePrerequisites(family, run.bindings, chain);
+  if (!prerequisites.ok) {
+    return { ok: false, run, reason: `${family.id}: ${prerequisites.reason}` };
+  }
+
   const solved = solvePiTargets(family, {
     closedContour,
     pieceLimits: carried.limits,
+    known: prerequisites.known,
     bindings: run.bindings,
   });
   if (!solved.ok) return { ok: false, run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
@@ -308,7 +422,7 @@ function solveLogFamily(family: Family, run: FamilyRun): SolveFamilyResult {
     solved: {
       value: primary.value,
       text: primary.text,
-      certificates: [primary.certificate],
+      certificates: primary.certificates,
     },
     targets: solved.targets,
   };

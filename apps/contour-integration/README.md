@@ -85,7 +85,25 @@ whether the whole thing closes.
   `plain-log-loses-the-log-integral` trap — its row is `[−2πi, 0]`, and that zero IS the log
   integral going invisible.
 
-The sixteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+**M4.4 adds D5, the first record that does not close alone:**
+
+- `∫₀^∞ (log x)²/(1+x²) dx = π³/8` — but its `log³` keyhole gives two real equations in three
+  unknowns. It determines `∫R log x` outright and `∫R log²x` only **modulo `∫R dx`**, which this
+  contour cannot supply. Remove the record's `prerequisites` and the app says so, naming `T0` from
+  the kernel rather than from a hand-written message.
+- **The dependency is executable.** `from: "family:log-squared-keyhole"` means the engine runs D4 at
+  **the same binding** and reads `∫R dx` out of it. Borrowing at D4's own fixture instead would
+  return `π/4` where `π/2` is needed, and answer a different question with confidence.
+- **The borrowed verdict meets into what depends on it, and nothing else.** Dependence is decided in
+  ℚ(i)(π): `∫R log x` comes off the real part of the identity, where the borrowed term's coefficient
+  is zero, and stays exact on its own contour; `∫R log²x` comes off the imaginary part and carries
+  the input's certificate. A record expecting `≈` keeps `≈` however exact its source turned out to be.
+- The second fixture exists because of a trap. D5's own record says the `1/i` sign error is invisible
+  at `R = 1/(1+x²)`, where the bonus is `0` either way; at `p = 2` the bonus is `−π/4` — **D4's own
+  primary answer at the same `p`**, reached by a different contour, so the two records cross-check
+  each other on a number neither takes from the other.
+
+The seventeen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered

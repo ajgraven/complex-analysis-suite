@@ -27,7 +27,7 @@ import { exactBasisConstant } from "./basisConstant.js";
 import { combineOver, describeKernel, realifyRhs, solveOver } from "./linear.js";
 import { RAT_PI_FIELD } from "./field.js";
 import { RatPi, formatRatPi } from "../kernel/ratPi.js";
-import { buildSystem } from "./system.js";
+import { buildSystem, withoutColumns } from "./system.js";
 import type { Bindings } from "./system.js";
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
@@ -275,20 +275,38 @@ export interface PiSolveInputs {
   readonly closedContour: RatPi;
   /** The exact limits of the pieces that do not vanish (L4, L5). Zero for a vanishing piece. */
   readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: RatPi }[];
+  /**
+   * Unknowns supplied from elsewhere — a record's resolved `prerequisites`.
+   *
+   * Each one moves its column across the equals sign: `M t = r` becomes `M′ t′ = r − M[:,j]·tⱼ`.
+   * That is only valid because the unknowns are real, which is the same hypothesis the Re/Im split
+   * rests on. The certificate travels with the value so the answers that depend on it can meet it.
+   */
+  readonly known?: readonly {
+    readonly targetId: string;
+    readonly value: RatPi;
+    readonly certificate: Certificate;
+  }[];
   readonly bindings?: Bindings;
 }
 
 export interface PiSolvedTarget {
   readonly targetId: string;
   /**
-   * The evidence for THIS unknown, and no other.
+   * The evidence for THIS unknown — its own, plus every borrowed input it actually DEPENDS ON.
    *
    * Separated from `PiSolvedTargets.certificates` because a verdict is a meet: a caller that badged
    * one answer with the whole system's evidence would cap an exact value at `?` on the strength of a
    * statement about a DIFFERENT unknown. `residueTheorem.ts` records the same lesson about
    * corroboration — a claim is never weakened by something it does not depend on.
+   *
+   * Dependence is COMPUTED, not assumed: the unknown is `weights·r`, so it depends on a borrowed
+   * `tⱼ` exactly when `Σ_row weights[row]·M[row][j] ≠ 0`. D5 is the record that makes the difference
+   * visible — its `∫R log x` comes off the real part alone and stays exact on its own contour, while
+   * its `∫R log²x` comes off the imaginary part, where the borrowed `∫R dx` sits, and inherits that
+   * value's verdict. A blanket meet would have downgraded the bonus for no reason.
    */
-  readonly certificate: Certificate;
+  readonly certificates: readonly Certificate[];
   /** The exact value: `π/4`, not `0.7853981`. */
   readonly text: string;
   readonly exact: RatPi;
@@ -300,6 +318,14 @@ export interface PiSolvedTargets {
   readonly solved: readonly PiSolvedTarget[];
   /** One sentence per combination of unknowns this contour cannot see. Usually empty. */
   readonly invisible: readonly string[];
+  /**
+   * The unknowns that came from elsewhere, with the evidence they arrived with.
+   *
+   * Reported rather than absorbed, because a borrowed input is part of the argument: D5's own trap
+   * asks for "the prerequisite as its own row with its own verdict", and a result that showed only
+   * the answer would hide the one step a reader most needs to audit.
+   */
+  readonly borrowed: readonly { readonly targetId: string; readonly text: string; readonly certificate: Certificate }[];
   readonly certificates: readonly Certificate[];
 }
 
@@ -360,8 +386,28 @@ export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiRe
     (acc, piece) => acc.sub(piece.contribution),
     inputs.closedContour,
   );
-  const rhs = realifyRhs([total]);
-  const report = solveOver(RAT_PI_FIELD, system.matrix, system.unknowns, rhs);
+
+  // A borrowed unknown moves its column across the equals sign. The column is found by name, and a
+  // name this system does not carry is a refusal rather than a silent no-op — a prerequisite naming
+  // the wrong target would otherwise leave the system rank-deficient for no visible reason.
+  const known = inputs.known ?? [];
+  const columnOf = new Map(system.targetIds.map((id, j) => [id, j]));
+  for (const supplied of known) {
+    if (!columnOf.has(supplied.targetId)) {
+      const reason = `'${supplied.targetId}' is supplied as a known value, but this family has no such unknown`;
+      return { ok: false, reason, certificate: refuse("the targets", reason) };
+    }
+  }
+
+  const rhs = realifyRhs([total]).map((value, row) =>
+    known.reduce(
+      (acc, supplied) => acc.sub(system.matrix[row][columnOf.get(supplied.targetId) ?? 0].mul(supplied.value)),
+      value,
+    ),
+  );
+  const reduced =
+    known.length === 0 ? system : withoutColumns(system, known.map((x) => x.targetId));
+  const report = solveOver(RAT_PI_FIELD, reduced.matrix, reduced.unknowns, rhs);
 
   // CONTRADICTION IS NOT RANK DEFICIENCY. A zero row against a non-zero right-hand side means the
   // identity does not hold — for these families that is the reality condition failing, and the
@@ -383,24 +429,51 @@ export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiRe
 
   const solved = report.determined.map((d) => {
     const pinned = combineOver(RAT_PI_FIELD, d.weights, rhs);
-    const targetId = system.targetIds[d.column];
+    const targetId = reduced.targetIds[d.column];
     const text = formatRatPi(pinned);
     const [re, im] = pinned.toNumber();
-    const certificate = exact(
-      `${targetId} is ${text}`,
-      "Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly",
-    );
+    // Which borrowed inputs this answer actually rests on: `Σ_row weights[row]·M[row][j]`, decided
+    // in the field rather than assumed from the fact that a prerequisite exists.
+    const borrowed = known.filter((supplied) => {
+      const j = columnOf.get(supplied.targetId) ?? 0;
+      const reach = d.weights.reduce(
+        (acc, w, row) => acc.add(w.mul(system.matrix[row][j])),
+        RatPi.ZERO,
+      );
+      return !reach.isZero();
+    });
+    const certificates = [
+      exact(
+        `${targetId} is ${text}`,
+        "Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly",
+        borrowed.length === 0
+          ? undefined
+          : {
+              provenance: borrowed.map((supplied) => ({
+                ok: true,
+                text: `${supplied.targetId} was supplied from elsewhere; its own verdict meets into this one`,
+              })),
+            },
+      ),
+      ...borrowed.map((supplied) => supplied.certificate),
+    ];
     // The unknowns of a log family are real by hypothesis, and the realified system says so: a
     // non-zero imaginary part here would be an engine fault, not a value to report.
-    return { targetId, certificate, text, exact: pinned, value: im === 0 ? re : Number.NaN };
+    return { targetId, certificates, text, exact: pinned, value: im === 0 ? re : Number.NaN };
   });
 
-  const certificates: Certificate[] = solved.map((x) => x.certificate);
+  const certificates: Certificate[] = solved.flatMap((x) => x.certificates);
 
-  const invisible = describeKernel(RAT_PI_FIELD, report, system.targetIds);
+  const invisible = describeKernel(RAT_PI_FIELD, report, reduced.targetIds);
   for (const sentence of invisible) {
     certificates.push(unknown("an unknown of this system", sentence));
   }
 
-  return { ok: true, targets: { solved, invisible, certificates } };
+  const borrowed = known.map((supplied) => ({
+    targetId: supplied.targetId,
+    text: formatRatPi(supplied.value),
+    certificate: supplied.certificate,
+  }));
+
+  return { ok: true, targets: { solved, invisible, borrowed, certificates } };
 }
