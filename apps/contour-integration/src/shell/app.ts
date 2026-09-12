@@ -39,6 +39,7 @@ import { accumulateForIntegral, type Accumulation } from "../engine/contour/accu
 import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
+import { PRESETS } from "./presets.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { ledgerHeadline, legalityRefusal, type LedgerResult } from "../engine/ledger.js";
@@ -92,16 +93,6 @@ import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accum
  * comes back refused **no value is shown at all**. The result card has no "invalid" styling for a
  * number, because there is never a number to style.
  */
-
-const PRESETS: { label: string; src: string }[] = [
-  { label: "1/z", src: "1/z" },
-  { label: "1/(1+z^2)", src: "1/(1+z^2)" },
-  { label: "1/(1+z^4)", src: "1/(1+z^4)" },
-  { label: "1/(z-1)^2", src: "1/(z-1)^2" },
-  { label: "(3+4i)/(z^3-1)", src: "(3+4i)/(z^3-1)" },
-  { label: "z/(z^2+2*z+2)", src: "z/(z^2+2*z+2)" },
-  { label: "exp(i*z)/(1+z^2)", src: "exp(i*z)/(1+z^2)" },
-];
 
 type TemplateId =
   | "circle"

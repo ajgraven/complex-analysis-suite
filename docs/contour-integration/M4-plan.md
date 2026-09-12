@@ -187,8 +187,13 @@ before D2.
 
 ### Two prerequisites
 
-- **The app has no `test:browser`** and is not in the root hardcoded chain. M4.7's parity gate needs
-  one; it belongs at the head of that slice, not bolted on at the end.
+- ~~**The app has no `test:browser`**~~ ✅ **M4.7a.** It has one now, at the head of the slice as
+  planned: `vitest.browser.config.ts` mirroring the other three, wired into the root chain and the CI
+  `browser` job, with a shader compile/link sweep over the sandbox's presets and all twenty records'
+  contour integrands — 28 programs the node gate structurally could not build. One line the other
+  three configs do not have: `CAS_CHROMIUM_EXECUTABLE`, because Playwright pins an exact Chromium and
+  `pnpm` skips its postinstall, so a container with a Chromium from a different Playwright version
+  cannot launch the provider at all and the parity gate becomes a suite only CI can run.
 - **Shadow-cut mode is free** — cuts as the shadow of each branch point away from a base point need
   no cut data structure at all (research 06 §2.3). Worth taking early as the cheap intuition-builder,
   with explicit cuts for the dogbone.

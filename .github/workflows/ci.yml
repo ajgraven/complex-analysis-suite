@@ -101,7 +101,7 @@ jobs:
         run: pnpm build
 
   # Everything that needs a real WebGL2 context, in headless Chromium — the backstop the node/jsdom
-  # gate structurally can't be. Five harnesses, all under `pnpm test:browser`:
+  # gate structurally can't be. Six harnesses, all under `pnpm test:browser`:
   #
   #   · @cas/gpu — runGLSL over DUAL_BACKEND_CORPUS: executes the emitted GLSL and compares against
   #     the JS reference, catching float32 GPU-only drift (Review P4). SwiftShader (software WebGL2)
@@ -117,6 +117,11 @@ jobs:
   #   · @cas/schwarz — CPU↔GPU σ-parity net (the reflection escape-time field agrees across backends).
   #   · complex-function-plotter and quadrature-domains — compile AND link their real WebGL2 shaders,
   #     the same uncompiled-shader backstop as complex-dynamics.
+  #   · contour-integration — the same compile/link sweep over the sandbox's presets and every gallery
+  #     record's contour integrand, plus M4.7's CPU↔GPU branch-cut parity gate: the cut correction
+  #     that decides which DETERMINATION the phase portrait draws is computed twice, once in TS and
+  #     once in GLSL, and a picture drawn in a branch the ledger does not compute in is the defect
+  #     this catches.
   #
   # Kept SEPARATE from `build` so it never slows the main gate.
   # NOT covered: apps/correspondences' shaders are still never compiled (unpublished app).
@@ -154,7 +159,8 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      # @cas/gpu's dual-backend numeric harness, then CD's real-shader compile/link sweep.
+      # @cas/gpu's dual-backend numeric harness, then each app's real-shader compile/link sweep
+      # (CD, the plotter, QD, and — from M4.7 — Contour Integration's branch-cut CPU↔GPU parity gate).
       - name: Browser harnesses (real WebGL2 GLSL — execute + compile)
         run: pnpm test:browser
 
