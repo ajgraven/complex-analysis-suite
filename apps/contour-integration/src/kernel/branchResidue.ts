@@ -30,11 +30,11 @@
 // all, so `exactPolesOf` will not have pinned it either; refusing is honest rather than restrictive,
 // and D3's `n = 5` and `n = 7` fixtures reach their answer by summing the residues as a GEOMETRIC
 // SERIES instead, which never names an individual root.
-import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt, bigGcd } from "@cas/exact";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
-import { formatSqrtExt } from "./formatExact.js";
+import { formatFrac, formatSqrtExt } from "./formatExact.js";
 import { LogPart, formatLogPart } from "./logPart.js";
 import type { AlgebraicPole } from "./algebraic.js";
 
@@ -283,4 +283,271 @@ export function branchResidue(pole: AlgebraicPole, factor: PowerFactor): BranchR
   const power = powerAtPole(pole.at, factor);
   if (!power.ok) return power;
   return { ...power, value: power.value.scale(pole.residue) };
+}
+
+// ---------------------------------------------------------------------------------------------
+// SEVERAL BRANCH POINTS ON ONE CUT
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * `c·∏ⱼ (z − bⱼ)^{αⱼ}` — the branch factor of a DOGBONE, read in one declared determination.
+ *
+ * D6's `√(1−z²)` is `−i·(z−1)^{1/2}(z+1)^{1/2}` with both arguments in `[0,2π)`, and D7's
+ * `z^μ(b−z)^ν` is the same shape with different exponents. The constant is not decoration: it is
+ * what pins `W(x + i0) = +√(1−x²)` on the upper lip rather than `+i√(1−x²)`, which is the difference
+ * between the record's answer and `i` times it.
+ */
+export interface MultiPowerFactor {
+  readonly constant: SqrtExt;
+  readonly points: readonly { readonly at: SqrtExt; readonly alpha: Frac; readonly label: string }[];
+  /** `arg(z − bⱼ) ∈ [lo·π, hi·π)`, PER FACTOR — the record declares one window for all of them. */
+  readonly argRange: readonly [Frac, Frac];
+}
+
+/** Σⱼ αⱼ, which is what admissibility and the order at infinity are both about. */
+export const exponentSum = (factor: MultiPowerFactor): Frac =>
+  factor.points.reduce((acc, p) => acc.add(p.alpha), Frac.ZERO);
+
+/** Complex conjugate — of the COEFFICIENTS only, since `√d` is a positive real by construction. */
+const conjugateOf = (x: SqrtExt): SqrtExt => SqrtExt.of(x.a.conj(), x.b.conj(), x.d);
+
+/** `x^k` for an integer `k` of either sign, or null when `x` is zero and `k` is negative. */
+function powInt(x: SqrtExt, k: bigint): SqrtExt | null {
+  if (k < 0n) {
+    if (x.isZero()) return null;
+    const up = powInt(x, -k);
+    if (up === null || up.isZero()) return null;
+    try {
+      return up.inv();
+    } catch {
+      return null;
+    }
+  }
+  let acc = SqrtExt.ONE;
+  for (let j = 0n; j < k; j++) {
+    try {
+      acc = acc.mul(x);
+    } catch {
+      return null;
+    }
+  }
+  return acc;
+}
+
+/** Relative distance allowed between the exact value and the independent float evaluation. */
+const NUMERIC_TOLERANCE = 1e-9;
+
+/**
+ * `arg(w)` in the declared window, as a float — a COMPUTATION, not a guess.
+ *
+ * `atan2` names the argument in `(−π, π]` to within a rounding error, and the window says which turn
+ * is meant, so there is exactly one answer and it is this one. What is guessed is only whether the
+ * WEIGHTED SUM of these is a rational multiple of π, and that is verified exactly below.
+ */
+function argInWindow(w: SqrtExt, range: readonly [Frac, Frac]): number {
+  const [re, im] = w.toTuple();
+  const raw = Math.atan2(im, re) / Math.PI;
+  const lo = range[0].toNumber();
+  const turns = Math.ceil((lo - raw) / 2);
+  return raw + 2 * turns;
+}
+
+/**
+ * `c·∏ⱼ (z₀ − bⱼ)^{αⱼ}` at a point that is not one of the branch points.
+ *
+ * **THE INDIVIDUAL ARGUMENTS NEED NOT BE RATIONAL MULTIPLES OF π. THE WEIGHTED SUM IS.** At D6's pole
+ * `z₀ = ia` the two arguments are `π − arctan a` and `arctan a`, and neither is anything this basis
+ * can hold; their half-sum is `π/2` exactly, for every `a`, and that is the whole reason the dogbone
+ * has a closed form. So this does not ask `argumentOfPole` about each factor separately — it asks the
+ * question once, about the product.
+ *
+ * And the answer is VERIFIED, not measured. With `n` the common denominator of the exponents and
+ * `N = 2n`,
+ *
+ *     ∏ⱼ (z₀ − bⱼ)^{Nαⱼ}  =  ∏ⱼ (|z₀ − bⱼ|²)^{nαⱼ} · e^{iπNr}
+ *
+ * — every power on both sides is an INTEGER power, so both products are exact elements of ℚ(i)(√d),
+ * and `e^{iπNr}` is their exact quotient rather than anything guessed. The float only chooses which
+ * lift of it the declared determination means, and consecutive lifts are `2/N` apart in `r` while the
+ * determination is known to `1e-16` — a separation the certificate reports, because a guess-then-
+ * verify is only as good as the gap it had to choose across.
+ */
+export function multiPowerAtPole(z0: SqrtExt, factor: MultiPowerFactor): BranchResidue {
+  const width = factor.argRange[1].sub(factor.argRange[0]);
+  if (!width.equals(Frac.of(2n))) {
+    const reason = `the declared argument range has width ${width.n}/${width.d}·π, but a determination of arg covers exactly one turn (2π)`;
+    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  }
+  if (factor.points.length === 0) {
+    const reason = "the branch factor declares no branch points, so there is nothing multivalued about it";
+    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  }
+
+  // The offsets, and the refusal that has to come first: `z₀` may not BE a branch point. There is no
+  // Laurent series at one and no residue to take — D6's `branch-point-is-not-a-pole` trap.
+  const offsets: SqrtExt[] = [];
+  for (const point of factor.points) {
+    const w = z0.sub(point.at);
+    if (w.isZero()) {
+      const reason = `${formatSqrtExt(z0)} IS the branch point ${point.label}: there is no Laurent series there and no residue to take`;
+      return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+    }
+    offsets.push(w);
+  }
+
+  // `n` clears every exponent's denominator; `N = 2n` also clears the square root in `|w| = √(|w|²)`.
+  let n = 1n;
+  for (const point of factor.points) n = (n * point.alpha.d) / bigGcd(n, point.alpha.d);
+  const N = 2n * n;
+
+  // ln M = Σⱼ αⱼ·ln|z₀ − bⱼ| = Σⱼ (αⱼ/2)·ln(|z₀ − bⱼ|²), over primes and therefore canonical.
+  let logModulus = LogPart.ZERO;
+  let modulusSquared = SqrtExt.ONE;
+  let argument = 0;
+  for (let j = 0; j < offsets.length; j++) {
+    const alpha = factor.points[j].alpha;
+    const square = offsets[j].mul(conjugateOf(offsets[j]));
+    const ln = logModulusOf(square);
+    if (ln === null) {
+      const reason =
+        `|${formatSqrtExt(z0)} − ${factor.points[j].label}|² = ${formatSqrtExt(square)}, whose logarithm is not a ` +
+        "rational combination of logarithms of rationals — this basis holds ℚ₊ and q√d, and inventing an atom for " +
+        "anything else would break the canonical form that makes exponents comparable";
+      return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+    }
+    logModulus = logModulus.add(ln.scale(alpha.div(Frac.of(2n))));
+    const power = powInt(square, (alpha.mul(Frac.of(n))).n / (alpha.mul(Frac.of(n))).d);
+    if (power === null) {
+      const reason = `the modulus ${formatSqrtExt(square)} could not be raised to an integer power inside one quadratic extension of ℚ(i)`;
+      return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+    }
+    modulusSquared = modulusSquared.mul(power);
+    argument += alpha.toNumber() * argInWindow(offsets[j], factor.argRange);
+  }
+
+  // `∏ (z₀ − bⱼ)^{Nαⱼ}` — integer powers, so exact.
+  let product = SqrtExt.ONE;
+  for (let j = 0; j < offsets.length; j++) {
+    const e = factor.points[j].alpha.mul(Frac.of(N));
+    const power = powInt(offsets[j], e.n / e.d);
+    if (power === null) {
+      const reason = `(${formatSqrtExt(z0)} − ${factor.points[j].label})^${e.n / e.d} left one quadratic extension of ℚ(i)`;
+      return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+    }
+    product = product.mul(power);
+  }
+
+  // `e^{iπNr}`, computed rather than guessed.
+  let phase: SqrtExt;
+  try {
+    phase = product.div(modulusSquared);
+  } catch {
+    const reason = "the exact quotient ∏(z₀−bⱼ)^{Nαⱼ} / ∏(|z₀−bⱼ|²)^{nαⱼ} left one quadratic extension of ℚ(i)";
+    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  }
+
+  const found = unitMultiple(phase);
+  if (found === null) {
+    const reason =
+      `the product's total phase e^(iπ·${N}r) was not verified to be a rational multiple of π with denominator ` +
+      "1, 2, 3, 4 or 6 — those are the only roots of unity one quadratic extension of ℚ(i) can hold";
+    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  }
+
+  // The lift: `Nr ≡ s (mod 2)` is exact, and the declared determination's own value picks which one.
+  const step = Frac.of(2n, N);
+  const base = found.div(Frac.of(N));
+  const k = Math.round((argument - base.toNumber()) / step.toNumber());
+  const r = base.add(step.mul(Frac.of(BigInt(k))));
+
+  // `foldSigns` here rather than only at the end of the sum: `e^{−iπ/2 − (ln 2)/2}` times the
+  // constant `i` IS the number `√2/2`, and a reader asked to check the residue at one pole against
+  // the record should be shown that, not an exponential of it. The fold is exact and a sum of folded
+  // terms folds the same way, so nothing downstream changes.
+  const exponent = Exponent.of(SqrtExt.ZERO, new Gauss(Frac.ZERO, r), logModulus);
+  const value = ExpSum.of(factor.constant, exponent).foldSigns();
+
+  // **A SECOND ROUTE, SHARING ALMOST NOTHING WITH THE FIRST.** The exact value above came out of
+  // `LogPart` over primes, integer powers in ℚ(i)(√d), a root-of-unity search and an algebraic fold;
+  // this one is `c·∏|z₀−bⱼ|^{αⱼ}·e^{iπΣαⱼθⱼ}` in plain floating point, and the only thing the two
+  // have in common is `argInWindow`. So a wrong weight on the logarithm, a dropped constant, a
+  // mis-lifted phase or a fold that left the extension all show up here as a disagreement — and a
+  // disagreement is a refusal, because one of the two is then wrong and neither may be printed.
+  let modulus = 1;
+  for (let j = 0; j < offsets.length; j++) {
+    const [wr, wi] = offsets[j].toTuple();
+    modulus *= Math.pow(Math.hypot(wr, wi), factor.points[j].alpha.toNumber());
+  }
+  const [cr, ci] = factor.constant.toTuple();
+  const phi = Math.PI * argument;
+  const dr = modulus * (cr * Math.cos(phi) - ci * Math.sin(phi));
+  const di = modulus * (cr * Math.sin(phi) + ci * Math.cos(phi));
+  const [er, ei] = value.toTuple();
+  const disagreement = Math.hypot(er - dr, ei - di) / Math.max(1, Math.hypot(dr, di));
+  if (!(disagreement <= NUMERIC_TOLERANCE)) {
+    const reason =
+      `the exact value ${formatExpSum(value)} and a direct evaluation of the declared branch disagree by ` +
+      `${disagreement.toExponential(2)} — one of the two is wrong, so neither is reported`;
+    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  }
+
+  return {
+    ok: true,
+    value,
+    argMultiple: r,
+    certificate: exact(
+      `the branch factor at ${formatSqrtExt(z0)} is ${formatExpSum(value)}`,
+      "the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement",
+      {
+        restriction: `arg(z − bⱼ) ∈ [${formatFrac(factor.argRange[0])}·π, ${formatFrac(factor.argRange[1])}·π) for every j`,
+        provenance: [
+          {
+            ok: true,
+            text: `Σ αⱼ·arg(z₀ − bⱼ) = ${formatFrac(r)}·π, and the individual arguments need not be rational multiples of π — at D6's pole they are π − arctan a and arctan a, and only the half-sum is`,
+          },
+          {
+            ok: true,
+            text: `the exact phase pins it modulo ${formatFrac(step)}·π, and the declared determination picks which lift — the nearest alternative is ${formatFrac(step)}·π away`,
+          },
+          {
+            ok: true,
+            text: `independent cross-check: a direct float evaluation of c·∏|z₀−bⱼ|^{αⱼ}·e^{iΣαⱼθⱼ} agrees to ${disagreement.toExponential(2)}, sharing no arithmetic with the exact route but the window`,
+          },
+          {
+            ok: true,
+            text: logModulus.isZero()
+              ? "every branch point is at distance 1 from the pole, so the modulus contributes nothing"
+              : `ln ∏|z₀ − bⱼ|^{αⱼ} = ${formatLogPart(logModulus)}, over primes and therefore canonical`,
+          },
+        ],
+      },
+    ),
+  };
+}
+
+/** `s` with `e^{iπs} = ζ` for an exact `ζ` of modulus 1 — or null when no representable one fits. */
+function unitMultiple(zeta: SqrtExt): Frac | null {
+  for (const m of DENOMINATORS) {
+    for (let k = 0n; k < 2n * m; k++) {
+      const candidate = unitRoot(k, m);
+      if (candidate !== null && candidate.equals(zeta)) return Frac.of(k, m);
+    }
+  }
+  return null;
+}
+
+/**
+ * `Res(c·∏(z−bⱼ)^{αⱼ}·R(z), z₀) = (the factor at z₀)·Res(R, z₀)` at a simple pole.
+ *
+ * Simple only, for the same reason {@link branchResidue} is: at order `m > 1` the residue needs
+ * derivatives of the branch factor, which bring in powers of `log` and a different basis.
+ */
+export function multiBranchResidue(pole: AlgebraicPole, factor: MultiPowerFactor): BranchResidue {
+  if (pole.order !== 1) {
+    const reason = `the pole ${formatSqrtExt(pole.at)} has order ${pole.order}; a branch factor times a higher-order pole needs powers of log, which are outside this basis`;
+    return { ok: false, reason, certificate: refuse("the residue", reason) };
+  }
+  const at = multiPowerAtPole(pole.at, factor);
+  if (!at.ok) return at;
+  return { ...at, value: at.value.scale(pole.residue) };
 }

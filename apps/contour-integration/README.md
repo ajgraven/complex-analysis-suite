@@ -145,7 +145,29 @@ whether the whole thing closes.
   cut already placed. Which theorem applies is then decided by the geometry: drag a keyhole until it
   swallows its branch point and the identity changes with it.
 
-The eighteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+**M4.6c lands D6 — `∫₋₁¹ dx/((x²+a²)√(1−x²)) = π/(a√(1+a²))`, the nineteenth record:**
+
+- **The individual arguments need not be rational multiples of π. The weighted SUM is.** At the pole
+  `ia` the two are `π − arctan a` and `arctan a`, and nothing in this basis holds either; their
+  half-sum is `π/2` for every `a`, and that is the whole reason the dogbone has a closed form. So the
+  question is asked once about the PRODUCT: raising it to its exponents' common denominator clears
+  every fractional power, and the phase is then an exact quotient in ℚ(i)(√d) rather than a
+  measurement. The engine then checks itself against a direct evaluation of the declared branch,
+  sharing only the window — a disagreement refuses.
+- **The branch takes OPPOSITE signs at the conjugate poles.** `W(x + i0) = +√(1−x²)` forces
+  `W(+ia) = +√(1+a²)` and `W(−ia) = −√(1+a²)`. Using `+` at both — the natural symmetry reflex —
+  makes the residues cancel and returns exactly **0** instead of `π/(a√(1+a²))`, and nothing about the
+  result looks wrong. The record's constant `i` is load-bearing for the same reason: drop it and every
+  residue rotates, the answer turns imaginary, and only that shows.
+- **The cap bound is taken about the cap's OWN branch point**, by exact synthetic division — the first
+  bound in `kernel/bounds/` that is not about the origin. `|∫| = O(η^{1+α})` vanishes iff `α > −1`,
+  which is the integrability of the endpoint singularity, spent there. `η² < |b − bⱼ|²` is checked
+  exactly, because a cap reaching the far end of the cut has no bound of this form at all.
+- **`Res(f,∞) = 0` is certified, not assumed**: `f = O(|z|⁻³)`, the same number that would discharge an
+  outer circle. And the two edges **ADD** — `W` changes sign across the cut and the traversal is
+  reversed, two minus signs making one — so `∮ = 2T` where a reader expecting cancellation gets zero.
+
+The nineteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered

@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **494 test files / 4616 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **497 test files / 4664 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -397,15 +397,25 @@ point routes here to be refused by name rather than to the ordinary theorem to b
 integrand can falsify the pole weights and the residue at infinity against the quadrature but **not the
 sign of σ** (`Σ Res + Res(f,∞) = 0` kills that whole term), which is said out loud in the certificate
 rather than left for a reader to discover. The sandbox gains the keyhole and the dogbone, each seeding the
-cut system its shape presupposes. Verifying that in a browser found **three rules that had been true by
+cut system its shape presupposes. **M4.6c** then lands **D6** (`∫₋₁¹ dx/((x²+a²)√(1−x²)) = π/(a√(1+a²))`,
+the nineteenth record): the individual arguments of a multi-point branch factor need not be rational
+multiples of π — at the pole `ia` they are `π − arctan a` and `arctan a` — but the weighted SUM is, so
+the question is asked once about the PRODUCT and verified by raising it to the exponents' common
+denominator, where every fractional power clears and the phase is an exact quotient in ℚ(i)(√d). The
+branch pinned on the upper lip takes `+√(1+a²)` at `+ia` and `−√(1+a²)` at `−ia`, so the residues ADD
+where the symmetry reflex would cancel them and return 0; the record's constant `i` is load-bearing for
+the same reason. Its end caps are killed by the first bound in `kernel/bounds/` that is **not about the
+origin** — the cofactor is shifted to the cap's own branch point by exact synthetic division, and
+`|∫| = O(η^{1+α})` vanishes iff `α > −1`, the integrability of the endpoint singularity. Verifying M4.6b
+in a browser found **three rules that had been true by
 accident**, all older than this slice: LEGALITY read the branch points ONE AT A TIME and so refused the
 dogbone (the rule is on the total monodromy `Σⱼ n(γ,bⱼ)·αⱼ ∈ ℤ` — admissibility's arithmetic read along
 a contour); cut classification depended on the cut's DISCRETISATION, because the draggable midpoint
 handle of a straight bounded cut lands on the lips' interior and was read as a bend; and every certified
 arc bound assumed the arc was centred at the ORIGIN, which every `vanish` arc in the app happened to be
 until the dogbone's caps sat on its branch points — an off-centre arc now gets no bound of that shape and
-says so, rather than a `≤` computed from the wrong geometry. Still to come in M4: the off-centre arc bound
-and D6 (M4.6c), D7 (M4.6d), and the GPU cut picture (M4.7).
+says so, rather than a `≤` computed from the wrong geometry. Still to come in M4: D7 (M4.6d) and the GPU cut
+picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

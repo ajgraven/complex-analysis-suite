@@ -38,6 +38,7 @@ import {
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
+import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { ledgerHeadline, legalityRefusal, type LedgerResult } from "../engine/ledger.js";
@@ -1229,8 +1230,15 @@ export function mountApp(root: Element): void {
         poles?.radicand === null || poles?.radicand === undefined
           ? "ℚ(i)"
           : `ℚ(i)(√${poles.radicand})`;
+      // The IDENTITY, from the result rather than from a literal here. A dogbone is solved by a
+      // different equation — `2πi[Σ(n − σ)Res − σRes(f,∞)]` — and printing the plain one above its
+      // answer states the very equation D6 exists to show is inapplicable.
       resultCard.append(
-        el("p", "muted small", `2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ${field}`),
+        el(
+          "p",
+          "muted small",
+          `${(theorem.identity ?? RESIDUE_THEOREM_IDENTITY).replace("∮ f dz = ", "")}, from exact residues over ${field}`,
+        ),
       );
       // Three states, not two: agreement, disagreement, and NOTHING TO COMPARE. Folding the third
       // into the second announced a disagreement of exactly 0.00e+0 for a keyhole, which reads as a
@@ -1393,10 +1401,16 @@ export function mountApp(root: Element): void {
       swatch.style.background = PIECE_COLOURS[piece.colour % PIECE_COLOURS.length];
       const pieceIntegral = integral?.pieces[k];
       li.append(swatch, el("span", "pieceName", piece.name), el("span", "tag", piece.role));
-      if (pieceIntegral) {
+      // **A SKIPPED QUADRATURE HAS NO VALUE, AND `0 + 0i` IS NOT IT.** `integrateContour` fills the
+      // piece list with zeros when it declines to sample a multivalued integrand, which is fine as a
+      // placeholder and a lie on screen: D6's upper edge is worth 2.22, and printing `0 + 0i` beside
+      // it is exactly the number a reader would go looking for the bug in.
+      if (pieceIntegral && integral?.quadratureSkipped === undefined) {
         const v = el("span", "num pieceValue", fmtCx(pieceIntegral.value));
         li.append(v);
         if (pieceIntegral.capped) li.append(el("span", "tag warn", "resolution capped"));
+      } else if (pieceIntegral) {
+        li.append(el("span", "tag", "not sampled"));
       }
       li.addEventListener("pointerenter", () => {
         highlight = k;
@@ -1549,8 +1563,27 @@ export function mountApp(root: Element): void {
       list.append(li);
     }
     poleCard.append(list);
+    // **WHOSE RESIDUES THESE ARE.** A branch record's pole report describes the RATIONAL COFACTOR, not
+    // the integrand: the branch point carries no residue, and `Res(f, z₀)` is the cofactor's residue
+    // times the branch factor's value there. D6 is where the distinction stops being pedantic —
+    // `Σ Res(R) = 0` for it, printed unqualified beside a non-zero answer, reads as a contradiction.
+    if (family?.branch !== undefined) {
+      poleCard.append(
+        el(
+          "p",
+          "muted small",
+          "of the rational cofactor R — the branch point carries no residue, and Res(f, z₀) is this times the branch factor at z₀",
+        ),
+      );
+    }
     if (poles.exactResidueSum) {
-      poleCard.append(el("p", "muted small", `Σ Res = ${poles.exactResidueSum.text} (exact, over every pole)`));
+      poleCard.append(
+        el(
+          "p",
+          "muted small",
+          `Σ Res = ${poles.exactResidueSum.text} (exact, over every pole${family?.branch === undefined ? "" : " of R"})`,
+        ),
+      );
     }
   }
 

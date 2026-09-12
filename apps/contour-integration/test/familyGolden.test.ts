@@ -95,13 +95,15 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
   // true: once every selected pole is enclosed, 2πi Σ n·Res is independent of R, so the two runs
   // must agree EXACTLY — not to a tolerance. A difference would mean the winding numbers changed,
   // which is the one thing R is allowed to do and the one thing these radii must not straddle.
-  const withLimit = FAMILIES.filter((f) => f.contour.limitParams.length > 0);
+  // The parameter heading to INFINITY, which is not always `limitParams[0]` and is not always
+  // present: D6's dogbone has no outer circle at all, so its one limit parameter shrinks instead.
+  const withLimit = FAMILIES.filter((f) => f.contour.limitParams.some((p) => p.to === "inf"));
 
   it.each(withLimit.map((f) => [f.id, f] as const))("%s", (_id, family) => {
     const g = primary(family);
     // The limit parameter is NOT always called R — tier B names it `R_lim`, because `R` is the
     // rational function. Take the name from the record instead of assuming it.
-    const limit = must(family.contour.limitParams[0], "a limit parameter");
+    const limit = must(family.contour.limitParams.find((p) => p.to === "inf"), "a limit parameter to ∞");
     // BOTH radii must enclose every selected pole, or the property under test does not hold: the
     // value is independent of R once everything is inside, and changes when a pole crosses out. A
     // record whose poles need more room says so with `start`, and D2's are at −2 and −4.
@@ -131,6 +133,37 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "keyhole-x-to-the-n",
       "log-squared-keyhole",
       "log-cubed-keyhole",
+    ]);
+  });
+
+  // The mirror property, and D6 is why it is here: a dogbone has NO outer circle — the residue at
+  // infinity stands in for it — so its only limit parameter shrinks, and a test that assumed every
+  // limit was a radius heading outward simply could not run on it. Shrinking must not change the
+  // value either, and it would if `η` crossed a pole, reached the other branch point, or swallowed
+  // the segment the target runs along.
+  const withShrinking = FAMILIES.filter((f) => f.contour.limitParams.some((p) => p.to === "0+"));
+
+  it.each(withShrinking.map((f) => [f.id, f] as const))("%s, as its ε shrinks", (_id, family) => {
+    const g = primary(family);
+    const limit = must(family.contour.limitParams.find((p) => p.to === "0+"), "a limit parameter to 0⁺");
+    const coarse = Math.min(0.05, limit.start ?? 0.05);
+    const fine = coarse / 1000;
+    const near = must(run(family, g, { [limit.name]: coarse }).theorem.exactValue, `an exact value at ε = ${coarse}`);
+    const far = must(run(family, g, { [limit.name]: fine }).theorem.exactValue, `an exact value at ε = ${fine}`);
+    expect(far.value).toEqual(near.value);
+    expect(far.text).toBe(near.text);
+  });
+
+  it("names which families have a SHRINKING limit parameter", () => {
+    expect(withShrinking.map((f) => f.id)).toEqual([
+      "indented-sinc",
+      "pv-sine-over-x-times-quadratic",
+      "mellin-keyhole",
+      "keyhole-two-poles",
+      "keyhole-x-to-the-n",
+      "log-squared-keyhole",
+      "log-cubed-keyhole",
+      "dogbone-inverse-sqrt",
     ]);
   });
 });
@@ -279,6 +312,11 @@ describe("the closed form each record establishes", () => {
     // modulo `∫R dx`, which D4's log² keyhole on the same R supplies. The borrowed value's verdict
     // meets into this one — see `test/d5.test.ts`.
     "log-cubed-keyhole": "π³/8",
+    // D6, the first record whose contour encloses NO pole — and whose answer is not zero. The value
+    // comes from the exterior identity, where every residue is weighted by `n − σ = 0 − (−1) = 1`,
+    // and the branch factor's two values `+√2/2` and `−√2/2` at the conjugate poles are what keeps
+    // them from cancelling. `π√2/2` is `π/√2`.
+    "dogbone-inverse-sqrt": "π√2/2",
   };
 
   it("covers every loaded record", () => {

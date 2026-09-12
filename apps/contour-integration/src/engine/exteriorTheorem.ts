@@ -44,8 +44,9 @@
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
-import { ExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
+import { ExpSum, formatExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
 import { residueAtInfinityOf, type ResidueAtInfinity } from "../kernel/atInfinity.js";
+import { exponentSum, multiBranchResidue, type MultiPowerFactor } from "../kernel/branchResidue.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { formatFrac, formatSqrtExt } from "../kernel/formatExact.js";
 import type { BranchChoice } from "../kernel/branch/model.js";
@@ -84,8 +85,15 @@ export interface ExteriorTheoremInput {
   readonly branch: BranchChoice;
   /** The rational integrand (or cofactor) as an AST — what `Res(f,∞)` is read off. */
   readonly rational: Node;
-  /** `Σ αⱼ` over the branch factor's exponents; `0` for a rational integrand. */
-  readonly branchExponentSum?: Frac;
+  /**
+   * The multi-point branch factor `c·∏(z − bⱼ)^{αⱼ}`, when the integrand carries one.
+   *
+   * This is the dogbone's own case and the reason the module exists: D6's `√(1−z²)` has TWO branch
+   * points, and it is the pair of them summing to an integer exponent that makes the bounded cut — and
+   * therefore this contour — legal at all. Present, every residue is `(the factor at z₀)·Res(R, z₀)`
+   * and `Σ αⱼ` is what the order at infinity reads.
+   */
+  readonly multi?: MultiPowerFactor;
   /**
    * The branch factor's kind, when the integrand has one — and the reason this refuses.
    *
@@ -134,7 +142,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
       ]),
     };
   }
-  if (input.factor !== undefined) {
+  if (input.factor !== undefined && input.multi === undefined) {
     return {
       identity: EXTERIOR_IDENTITY,
       verdict: assembleVerdict([
@@ -162,9 +170,9 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
   certificates.push(orientation.certificate);
   const sigma = orientation.sigma;
 
-  const weighted = weighPoles(poles, pieces, sigma);
+  const weighted = weighPoles(poles, pieces, sigma, input.multi);
   if (!weighted.ok) return { identity: EXTERIOR_IDENTITY, verdict: assembleVerdict([refuse("the exterior residue theorem", weighted.reason)]) };
-  certificates.push(weighted.certificate);
+  certificates.push(weighted.certificate, ...weighted.residues);
 
   const split = toExactRational(rational);
   if (!split.ok) {
@@ -178,7 +186,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
   const atInfinity: ResidueAtInfinity = residueAtInfinityOf(
     split.value.num,
     split.value.den,
-    input.branchExponentSum ?? Frac.ZERO,
+    input.multi === undefined ? Frac.ZERO : exponentSum(input.multi),
   );
   certificates.push(atInfinity.certificate);
   if (!atInfinity.ok || atInfinity.value === undefined) {
@@ -311,10 +319,12 @@ type Weighed =
       readonly ok: true;
       /** `Σ (n(γ,aₖ) − σ)·Res(f,aₖ)`, exact. */
       readonly sum: ExpSum;
-      /** `Σ Res(f,aₖ)` unweighted, for the sentence — the quantity `Res(f,∞)` has to cancel. */
+      /** `Σ Res(f,aₖ)` unweighted, for the sentence — branch factor included, since that is what `f` is. */
       readonly plainText: string;
       readonly count: number;
       readonly certificate: Certificate;
+      /** One per pole when a branch factor is present: what its value there was, and why. */
+      readonly residues: readonly Certificate[];
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -326,7 +336,12 @@ type Weighed =
  * value as SEPARATE rows so that neither can be read off the other — so the certificate reports the
  * count and says, in as many words, that it implies nothing about the value.
  */
-function weighPoles(poles: PoleReport, pieces: readonly Resolved[], sigma: number): Weighed {
+function weighPoles(
+  poles: PoleReport,
+  pieces: readonly Resolved[],
+  sigma: number,
+  multi?: MultiPowerFactor,
+): Weighed {
   const exactPoles = poles.exactPoles;
   if (exactPoles === undefined || !poles.exactlyComplete) {
     return {
@@ -337,8 +352,9 @@ function weighPoles(poles: PoleReport, pieces: readonly Resolved[], sigma: numbe
     };
   }
   let sum = ExpSum.ZERO;
-  let plain = SqrtExt.ZERO;
+  let plain = ExpSum.ZERO;
   let enclosed = 0;
+  const certificates: Certificate[] = [];
   for (const pole of exactPoles) {
     const w = windingNumber(pieces, pole.at.toTuple());
     if (!w.decided) {
@@ -348,14 +364,27 @@ function weighPoles(poles: PoleReport, pieces: readonly Resolved[], sigma: numbe
       };
     }
     if (w.n !== 0) enclosed += 1;
-    plain = plain.add(pole.residue);
+    // **THE BRANCH FACTOR IS NOT A SEPARATE STEP.** `Res(c·∏(z−bⱼ)^{αⱼ}·R, z₀)` is the factor's value
+    // at `z₀` times `Res(R, z₀)`, because the factor is holomorphic and non-zero there — and its
+    // value is the one question the determination decides. D6's second trap is the whole of it: the
+    // branch pinned on the upper lip takes `+√(1+a²)` at `+ia` and `−√(1+a²)` at `−ia`, and using `+`
+    // at both makes the residues cancel and returns 0 for an integral that is not 0.
+    let residue = ExpSum.fromSqrtExt(pole.residue);
+    if (multi !== undefined) {
+      const withFactor = multiBranchResidue(pole, multi);
+      if (!withFactor.ok) return { ok: false, reason: withFactor.reason };
+      residue = withFactor.value;
+      certificates.push(withFactor.certificate);
+    }
+    plain = plain.add(residue);
     const weight = w.n - sigma;
-    if (weight !== 0) sum = sum.add(ExpSum.fromSqrtExt(pole.residue.mul(SqrtExt.fromGauss(Gauss.int(weight)))));
+    if (weight !== 0) sum = sum.add(residue.scale(SqrtExt.fromGauss(Gauss.int(weight))));
   }
   return {
     ok: true,
     sum,
-    plainText: formatSqrtExt(plain),
+    residues: certificates,
+    plainText: formatExpSum(plain.foldSigns()),
     count: exactPoles.length,
     certificate: exact(
       `n(γ, aₖ) ≠ 0 at ${enclosed} of the ${exactPoles.length} pole${exactPoles.length === 1 ? "" : "s"}`,

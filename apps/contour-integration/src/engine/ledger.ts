@@ -12,7 +12,7 @@
 // The order of the passes is load-bearing. LEGALITY runs first and returns with **no value at all**
 // when it fails, so a singular configuration never produces a number that then has to be suppressed.
 import { assembleVerdict, exact, refuse, unknown, type Certificate, type Verdict } from "@cas/rigor";
-import { Frac } from "@cas/exact";
+import { Frac, SqrtExt } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
@@ -24,10 +24,10 @@ import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
-import { branchArcBound } from "../kernel/bounds/branchArc.js";
+import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
 import type { LogFactor } from "../kernel/logResidue.js";
-import type { PowerFactor } from "../kernel/branchResidue.js";
+import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
 import type { Piece } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -205,6 +205,63 @@ function disposeLogArc(
   });
 }
 
+/**
+ * The ML bound for `c·∏(z−bⱼ)^{αⱼ}·R(z)` on an end cap that sits ON one of its own branch points.
+ *
+ * The dispatch is by GEOMETRY and not by declaration, for once: the cap's centre either is a branch
+ * point of the factor or it is not, and that is a fact about the picture rather than a choice. A cap
+ * centred anywhere else gets no bound of this shape — every other bound in `kernel/bounds/` reasons
+ * about `|z| = R` from the ORIGIN, and applying one to an arc centred elsewhere computes a `≤` from
+ * the wrong geometry.
+ */
+function disposeDogboneArc(
+  multi: { readonly factor: MultiPowerFactor; readonly rational: Node },
+  g: Resolved,
+  lemma: Piece["lemma"],
+): ArcBound | null {
+  if (g.kind !== "arc" || lemma !== "L1") return null;
+  const radius = g.radius;
+  if (!Number.isFinite(radius) || radius <= 0) return null;
+  const extent = arcExtent(g);
+  if (!extent) return null;
+  const eta = Frac.of(BigInt(Math.round(Math.round(radius * 1e6) / 1e6 * 1e6)), 1000000n);
+
+  const here = multi.factor.points.findIndex((b) => {
+    const [x, y] = b.at.toTuple();
+    return Math.hypot(x - g.center[0], y - g.center[1]) < 1e-9;
+  });
+  if (here < 0) return null;
+  const centre = multi.factor.points[here].at.asGauss();
+  if (centre === null) return null; // the shift is exact over ℚ(i); a centre in ℚ(i)(√d) is not it
+
+  const rational = toExactRational(multi.rational);
+  if (!rational.ok) return null;
+
+  const others: { distanceSquared: Frac; alpha: Frac; label: string }[] = [];
+  for (let j = 0; j < multi.factor.points.length; j++) {
+    if (j === here) continue;
+    const gap = multi.factor.points[here].at.sub(multi.factor.points[j].at);
+    const squared = gap.mul(SqrtExt.of(gap.a.conj(), gap.b.conj(), gap.d)).asGauss();
+    if (squared === null || !squared.im.isZero()) return null;
+    others.push({ distanceSquared: squared.re, alpha: multi.factor.points[j].alpha, label: multi.factor.points[j].label });
+  }
+
+  const c = multi.factor.constant.mul(
+    SqrtExt.of(multi.factor.constant.a.conj(), multi.factor.constant.b.conj(), multi.factor.constant.d),
+  ).asGauss();
+  if (c === null || !c.im.isZero()) return null;
+
+  return dogboneArcBound({
+    alpha: multi.factor.points[here].alpha,
+    others,
+    constantModulusSquared: c.re,
+    num: rational.value.num.shift(centre),
+    den: rational.value.den.shift(centre),
+    eta,
+    piMultiple: extent,
+  });
+}
+
 const rowFrom = (
   constraint: ConstraintId,
   status: LedgerRow["status"],
@@ -227,6 +284,8 @@ export interface LedgerInput {
   readonly power?: { readonly factor: PowerFactor; readonly rational: Node };
   /** The branch factor `log^m z` and its rational cofactor — the other half of the same seat. */
   readonly log?: { readonly factor: LogFactor; readonly rational: Node };
+  /** The multi-point branch factor `c·∏(z−bⱼ)^{αⱼ}` and its cofactor — the dogbone's seat. */
+  readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
 }
 
 /**
@@ -682,11 +741,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     }
 
     const disposal =
-      input.log !== undefined
-        ? disposeLogArc(input.log, geom, piece.lemma)
-        : input.power === undefined
-          ? disposeArc(ast, geom)
-          : disposeBranchArc(input.power, geom, piece.lemma);
+      input.multi !== undefined
+        ? disposeDogboneArc(input.multi, geom, piece.lemma)
+        : input.log !== undefined
+          ? disposeLogArc(input.log, geom, piece.lemma)
+          : input.power === undefined
+            ? disposeArc(ast, geom)
+            : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
       push(

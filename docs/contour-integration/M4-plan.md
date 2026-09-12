@@ -154,7 +154,7 @@ before D2.
 | **M4.3** ✅ | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` · **the log-residue engine and the log arc bound** → **D4** | M–L |
 | **M4.4** ✅ | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** ✅ | `ln(ℚ₊)` exponents and radical factors → **D2**; D7's algebraic half is ready and waits on M4.6's contour | S–M |
-| **M4.6** ◐ | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** — a+b done | M |
+| **M4.6** ◐ | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** — a+b+c done, D6 lands | M |
 | **M4.7** | the GPU picture: `cutCorrection`, `cargCut`/`clogCut`/`cpowCut` twins, `DUAL_BACKEND_CORPUS`, monodromy readout, sheet badge, shadow-cut mode, **drag-a-cut** | M–L |
 
 ### Gates
@@ -563,3 +563,79 @@ theorem, which would confidently return `2πi Σ n·Res` for a contour it cannot
 and is refused by name instead. `ResidueTheoremResult` gained an `identity` field for the same reason —
 the derivation panel used to open its SOLVE stage with a hard-coded `∮ = 2πi Σ n·Res`, which above a
 dogbone's answer states the very equation D6 exists to show is inapplicable.
+
+---
+
+## 11. What M4.6c landed, and what it taught
+
+`multiPowerAtPole`, `dogboneArcBound`, `multiFactorOf`, and **D6** — the nineteenth record and the
+first whose contour encloses nothing. Four things changed a decision.
+
+### The question is asked once about the PRODUCT, not once per factor
+
+`argumentOfPole` refuses an argument that is not a rational multiple of π with denominator 1, 2, 3, 4
+or 6 — and at D6's pole `ia` the two arguments are `π − arctan a` and `arctan a`, so it would refuse
+both and the record would never run. Their half-sum is `π/2` for every `a`. So the weighted sum is what
+gets asked and what gets verified, by clearing denominators:
+
+    ∏ⱼ (z₀ − bⱼ)^{Nαⱼ}  =  ∏ⱼ (|z₀ − bⱼ|²)^{nαⱼ} · e^{iπNr},   n = lcm(den αⱼ),  N = 2n
+
+Every power on both sides is an INTEGER power, so both products are exact elements of ℚ(i)(√d) and
+`e^{iπNr}` is their exact quotient rather than a measurement. The float only chooses which lift of it
+the declared determination means, and consecutive lifts are `2/N` apart in `r` — a gap the certificate
+reports, because a guess-then-verify is only as good as the separation it had to choose across.
+
+### A check nobody can trigger is worth replacing, not keeping
+
+The first version checked that the guessed `r` sat within `1e-9` of the declared determination's own
+`Σ αⱼθⱼ`. It cannot fail: `k` always rounds to the nearest allowed lift, so the gap is at most half a
+step by construction, and the break pass said so — the mutation that disabled it broke nothing. The
+replacement is a genuine second route: `c·∏|z₀−bⱼ|^{αⱼ}·e^{iπΣαⱼθⱼ}` in plain floating point, which
+shares only `argInWindow` with the exact one. A wrong log weight, a dropped constant, a mis-lifted
+phase or a fold that left the extension all show up there as a disagreement, and a disagreement is a
+refusal. It is defence-in-depth for the fixtures the suite does not enumerate, and the break pass says
+that too: disabling it alone changes nothing, disabling it and then breaking the log weight hides five
+failures.
+
+### The first bound that is not about the origin
+
+Every bound in `kernel/bounds/` reasons from `Σ|aₖ|R^k` over `|dₙ|Rⁿ − Σ|dₖ|R^k` — the reverse triangle
+inequality on `|z| = R` about `0`. A dogbone's end caps sit on its branch points, so `dogboneArcBound`
+shifts the cofactor to the cap's centre first (`QiPoly.shift`, the same exact synthetic division the
+residues use) and then states the bound this file already had, read about `w = z − b`. The other branch
+points move the VALUE and not the exponent, because each is a positive distance away — which is checked
+exactly, `η² < |b − bⱼ|²` over ℚ, since a cap reaching the far end of the cut has no bound of this form
+at all.
+
+**D6 cannot catch a missing shift**, and that is worth recording. Its poles are at `±i`, where reading
+`|R|` about the origin happens to be conservative: the bound comes out ~2× too large, still true, still
+`≤`. The test that makes the shift load-bearing is a VARIANT with a pole at `1 ± i/10`, just outside the
+cap, where the unshifted reading says `|D| ≥ 0.9` (true about the origin, meaningless on the cap, where
+`|D|` falls to 0.0075) and produces a bound of ~1.1 for an integral of ~10². Not a loose bound: an
+invalid one, wearing a `≤`. A fixture that happens to be conservative is exactly how such a bug
+survives, so the corpus needed a fixture chosen to break it rather than one chosen to pass.
+
+### The constant in front of the product is not decoration
+
+`W := −i·exp(½(Log(z−1) + Log(z+1)))`, and the `−i` is what makes `W(x + i0) = +√(1−x²)` on the upper
+lip rather than `+i√(1−x²)`. Drop it and every residue rotates by the same factor: the answer stays
+finite, stays plausible, and is wrong by `i` — the only symptom is a number that should have been real.
+So `BranchSpec` gained a `constant`, and the break pass confirms it: removing it fails nine tests.
+Alongside it, `multiFactorOf` refuses two different determinations in one product (D7 declares exactly
+that, and reading both in the first window would rotate half the residues in silence), a `log` sharing
+a bounded cut, a one-point product, and a cut naming a branch point the factor list does not.
+
+### Three more things the browser said, and the unit tests could not
+
+- **The result card hard-coded its own copy of the identity.** M4.6b moved the DERIVATION panel's
+  copy onto `ResidueTheoremResult.identity`; the card above it had a second one, and above D6's answer
+  it printed `2πi Σ n·Res` — the equation this record exists to show is inapplicable. Both now read the
+  same field.
+- **A skipped quadrature was printed as `0 + 0i`.** `integrateContour` fills the piece list with zeros
+  when it declines to sample a multivalued integrand, which is a fine placeholder and a lie on screen:
+  D6's upper edge is worth 2.22, and a zero beside it is exactly the number a reader would go looking
+  for the bug in. It now says "not sampled".
+- **The Poles card did not say whose residues it was showing.** A branch record's pole report describes
+  the RATIONAL COFACTOR, and for D6 `Σ Res(R) = 0` — printed unqualified beside an answer of `π√2`, it
+  reads as a contradiction. The card now names `R` and says that `Res(f, z₀)` is this times the branch
+  factor's value there.

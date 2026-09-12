@@ -18,9 +18,9 @@
 //
 // **`rationalPart`** is an AST, since everything downstream (poles, residues, the arc bounds) wants
 // the polynomial pair and `toExactRational` produces it.
-import { Frac, Gauss } from "@cas/exact";
+import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { parse, substitute, type Node } from "@cas/expr";
-import type { PowerFactor } from "../kernel/branchResidue.js";
+import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 import { INFINITY, type BranchChoice, type BranchPoint } from "../kernel/branch/model.js";
 import type { Cx } from "../kernel/geom.js";
@@ -187,5 +187,130 @@ export function logFactorOf(family: Family, bindings: Bindings): LogFactorResult
     factor: { power, argRange: [common.lo, common.hi] },
     rational: common.rational,
     choice: cutFromDetermination(common.atX, common.lo, common.hi, { kind: "log" }),
+  };
+}
+
+export type MultiFactorResult =
+  | {
+      readonly ok: true;
+      readonly factor: MultiPowerFactor;
+      readonly rational: Node;
+      readonly choice: BranchChoice;
+    }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Whether a family's branch factor has SEVERAL branch points — the dogbone's shape.
+ *
+ * Asked separately from reading it, because `runFamily` has to choose a route before it has anything
+ * to read: one power point is `powerFactorOf`'s case and cannot be legally enclosed by a contour;
+ * several is this one, and cannot be handled by an argument that asks about a single point.
+ */
+export const isMultiPoint = (family: Family): boolean =>
+  (family.branch?.factors.filter((f) => f.order.kind === "power").length ?? 0) > 1;
+
+/**
+ * The multi-point branch factor a family declares, at one binding.
+ *
+ * Everything here is exact or refused. The branch points must be Gaussian rationals, because the
+ * residue reader divides by `(z₀ − bⱼ)` in exact arithmetic and the cap bound shifts the cofactor to
+ * them by exact synthetic division. The exponents must be rationals, because admissibility asks
+ * whether `Σ αⱼ` is an INTEGER. The determination must be the SAME window for every factor, because
+ * {@link MultiPowerFactor} carries one — D7 declares two different ones and is refused by name here
+ * rather than silently read in the first.
+ */
+export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorResult {
+  const branch = family.branch;
+  if (branch === undefined) return { ok: false, reason: "the family declares no branch" };
+  const powers = branch.factors.filter((f) => f.order.kind === "power");
+  if (powers.length !== branch.factors.length) {
+    return { ok: false, reason: "a log branch point cannot share a bounded cut: its monodromy has infinite order" };
+  }
+  if (powers.length < 2) {
+    return { ok: false, reason: `a multi-point factor needs at least two branch points; the family declares ${powers.length}` };
+  }
+
+  const rational = cofactorOf(family, branch.rationalPart, bindings);
+  if (typeof rational === "string") return { ok: false, reason: rational };
+
+  const lo = realRational(powers[0].argRange[0], bindings, "the argument range's lower end");
+  if (typeof lo === "string") return { ok: false, reason: lo };
+  const hi = realRational(powers[0].argRange[1], bindings, "the argument range's upper end");
+  if (typeof hi === "string") return { ok: false, reason: hi };
+
+  const points: { at: SqrtExt; alpha: Frac; label: string }[] = [];
+  const geometry: BranchPoint[] = [];
+  for (let k = 0; k < powers.length; k++) {
+    const factor = powers[k];
+    if (factor.order.kind !== "power") return { ok: false, reason: "unreachable" };
+    const sameLo = realRational(factor.argRange[0], bindings, "the argument range's lower end");
+    const sameHi = realRational(factor.argRange[1], bindings, "the argument range's upper end");
+    if (typeof sameLo === "string") return { ok: false, reason: sameLo };
+    if (typeof sameHi === "string") return { ok: false, reason: sameHi };
+    if (!sameLo.equals(lo) || !sameHi.equals(hi)) {
+      return {
+        ok: false,
+        reason:
+          `branch point '${factor.at}' declares a different determination from the first — this engine reads ` +
+          "one window for the whole product, and two windows is a different branch structure rather than a harder case of this one",
+      };
+    }
+
+    let ast: Node;
+    try {
+      ast = parse(factor.at);
+    } catch (e) {
+      return { ok: false, reason: `the branch point '${factor.at}' does not parse: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const at = exactConstant(ast, bindings);
+    if (!at.ok) return { ok: false, reason: `the branch point '${factor.at}': ${at.reason}` };
+
+    const alpha = realRational(factor.order.alpha, bindings, "the branch exponent");
+    if (typeof alpha === "string") return { ok: false, reason: alpha };
+
+    const label = `z = ${factor.at}`;
+    points.push({ at: SqrtExt.fromGauss(at.value), alpha, label });
+    geometry.push({ id: `b${k + 1}`, at: at.value.toTuple() as Cx, order: { kind: "power", alpha }, label });
+  }
+
+  let constant = SqrtExt.ONE;
+  if (branch.constant !== undefined) {
+    let ast: Node;
+    try {
+      ast = parse(branch.constant);
+    } catch (e) {
+      return { ok: false, reason: `the branch constant '${branch.constant}' does not parse: ${e instanceof Error ? e.message : String(e)}` };
+    }
+    const value = exactConstant(ast, bindings);
+    if (!value.ok) return { ok: false, reason: `the branch constant '${branch.constant}': ${value.reason}` };
+    constant = SqrtExt.fromGauss(value.value);
+  }
+
+  // The cut system: the record's own arcs, resolved against the points above. A record that joins
+  // two points names them by the SAME expressions it declared them with, so the match is on those
+  // strings rather than on a second set of ids — one source of truth for where a branch point is.
+  const cuts = branch.cuts.map((arc, k) => ({
+    id: `Γ${k + 1}`,
+    from: arc.from === "inf" ? INFINITY : `b${powers.findIndex((f) => f.at === arc.from) + 1}`,
+    to: arc.to === "inf" ? INFINITY : `b${powers.findIndex((f) => f.at === arc.to) + 1}`,
+    via: [] as Cx[],
+  }));
+  for (const arc of cuts) {
+    if (arc.from === "b0" || arc.to === "b0") {
+      return { ok: false, reason: `a declared cut names a branch point the factor list does not: ${arc.from} → ${arc.to}` };
+    }
+  }
+
+  return {
+    ok: true,
+    factor: { constant, points, argRange: [lo, hi] },
+    rational,
+    choice: {
+      convention: lo.isZero() ? "zeroToTwoPi" : hi.equals(Frac.ONE) ? "principal" : "custom",
+      points: geometry,
+      cuts,
+      basePoint: [0, 1],
+      sheet: 0,
+    },
   };
 }

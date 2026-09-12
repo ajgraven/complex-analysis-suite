@@ -72,6 +72,15 @@ export interface BranchSpec {
   readonly rationalPart: string;
   /** The branch points, each with its own exponent and its own argument convention. */
   readonly factors: readonly BranchFactor[];
+  /**
+   * The constant in front of `∏ⱼ (z − bⱼ)^{αⱼ}`, when the branch is pinned by one. Default `1`.
+   *
+   * Not decoration. D6's `W(z) := −i·exp(½(Log(z−1) + Log(z+1)))` is `−i` times the product, and the
+   * `−i` is exactly what makes `W(x + i0) = +√(1−x²)` on the upper lip rather than `+i√(1−x²)`. Drop
+   * it and every residue is off by a factor of `i`, the answer comes out imaginary, and the only
+   * thing that looks wrong is a number that should have been real.
+   */
+  readonly constant?: string;
   readonly cuts: readonly { readonly from: string; readonly to: string }[];
   readonly crossingPhase: CrossingPhase;
   /**

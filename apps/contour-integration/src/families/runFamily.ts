@@ -31,7 +31,7 @@ import {
   type SolvedTarget,
   type SolvedValue,
 } from "./solveTarget.js";
-import { logFactorOf, powerFactorOf } from "./branchFactor.js";
+import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branchFactor.js";
 import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
@@ -160,9 +160,14 @@ export function runFamily(
   // failure. A family declares `z^α` or `log^m z`; the two are different branch structures, and a
   // record with both is not a harder case of either.
   const isLog = family.branch?.factors.some((x) => x.order.kind === "log") ?? false;
-  const power = isLog ? { ok: false as const, reason: "the family's branch factor is a log" } : powerFactorOf(family, bindings);
+  const several = isMultiPoint(family);
+  const power =
+    isLog || several
+      ? { ok: false as const, reason: `the family's branch factor is a ${isLog ? "log" : "product over several branch points"}` }
+      : powerFactorOf(family, bindings);
   const log = isLog ? logFactorOf(family, bindings) : { ok: false as const, reason: "the family's branch factor is a power" };
-  const cofactor = power.ok ? power.rational : log.ok ? log.rational : null;
+  const multi = several ? multiFactorOf(family, bindings) : { ok: false as const, reason: "the family declares at most one branch point" };
+  const cofactor = power.ok ? power.rational : log.ok ? log.rational : multi.ok ? multi.rational : null;
   const poles = findPoles(cofactor ?? built.ast);
 
   // And no quadrature: sampling `z^{α−1}` needs a determination, and the compiled evaluator uses
@@ -174,7 +179,7 @@ export function runFamily(
       : {
           ...options.budget,
           skip:
-            `the integrand is multivalued: sampling ${power.ok ? "z^α" : "log^m z"} needs a ` +
+            `the integrand is multivalued: sampling ${power.ok ? "z^α" : log.ok ? "log^m z" : "∏(z−bⱼ)^{αⱼ}"} needs a ` +
             "determination, and a compiled evaluator uses the principal one — so a quadrature of " +
             "this contour would answer a different question. The exact route is the residue theorem.",
         };
@@ -199,6 +204,7 @@ export function runFamily(
           ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }
           : {}),
         ...(log.ok ? { log: { factor: log.factor, rational: log.rational }, branch: log.choice } : {}),
+        ...(multi.ok ? { multi: { factor: multi.factor, rational: multi.rational }, branch: multi.choice } : {}),
       }),
     },
   };

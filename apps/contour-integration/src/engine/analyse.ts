@@ -32,6 +32,7 @@ import { applyLogTheorem } from "./logTheorem.js";
 import { applyExteriorTheorem, enclosesTheCut } from "./exteriorTheorem.js";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
+import type { MultiPowerFactor } from "../kernel/branchResidue.js";
 
 export interface AnalysisInput {
   /** The CONTOUR integrand — post-substitution, Jacobian attached (`engine/substitution.ts`). */
@@ -70,6 +71,15 @@ export interface AnalysisInput {
    */
   readonly log?: { readonly factor: LogFactor; readonly rational: Node };
   /**
+   * The multi-point branch factor `c·∏(z − bⱼ)^{αⱼ}` — the DOGBONE's seat.
+   *
+   * `power` is the one-branch-point case, whose cut must reach infinity; this is the several-point
+   * case, whose bounded cut is what a dogbone hugs. The two are not a special case of each other in
+   * the code even though they are in the mathematics: a single point cannot be legally enclosed, and
+   * several points cannot be handled by an argument that asks about one.
+   */
+  readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -95,7 +105,7 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget, branch, power, log }: AnalysisInput): Analysis {
+export function analyse({ ast, f, poles, contour, budget, branch, power, log, multi }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
   const integral = integrateContour(f, resolved, singular, budget);
@@ -114,7 +124,8 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log }: 
           integral,
           pieces: resolved,
           branch,
-          rational: power?.rational ?? log?.rational ?? ast,
+          rational: multi?.rational ?? power?.rational ?? log?.rational ?? ast,
+          ...(multi === undefined ? {} : { multi: multi.factor }),
           ...(power === undefined ? {} : { factor: { kind: "power" as const } }),
           ...(log === undefined ? {} : { factor: { kind: "log" as const } }),
         })
@@ -139,6 +150,7 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log }: 
     branch,
     power,
     log,
+    multi,
   });
   return { resolved, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }
