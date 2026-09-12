@@ -18,10 +18,11 @@
 //
 // TWO BOUNDS, BOTH DECLARED.
 //
-// **`|z₀| = 1`.** Off the unit circle `z₀^α = e^{α(ln r + iθ)}` needs `ln r`, and the exponent basis
-// carries no logarithm until M4.5 (ADR-0041 Action Item 1). D1's pole is at `−1` and D3's are roots
-// of `−1`, so the whole of M4.2 sits on the circle; D2's poles at `−1` and `−2` are exactly the
-// record that will need the other half.
+// **The modulus must be a rational times a square root.** `z₀ = r e^{iθ}` gives
+// `z₀^α = e^{α ln r + iαθ}`, so the exponent needs `ln r` — which M4.5 added (`kernel/logPart.ts`).
+// What it holds is `Σ(ℚ)·ln(ℚ₊)`, so `r ∈ ℚ₊` works (D2's poles at `−2` and `−4`) and so does
+// `r = q√d`, since `ln(q√d) = ln q + ½ln d`. A modulus like `1 + √2` is outside it and is refused by
+// name. Through M4.4 every pole in the corpus sat on the circle and `ln r` was zero.
 //
 // **`arg z₀ / π` has denominator 1, 2, 3, 4 or 6.** Those are precisely the roots of unity that live
 // in a quadratic extension of ℚ(i) — `±1`, `±i`, `(±1±i)/√2`, `(±1±i√3)/2`, `(±√3±i)/2` — and
@@ -31,9 +32,10 @@
 // SERIES instead, which never names an individual root.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { exact, refuse, type Certificate } from "@cas/rigor";
-import { ExpSum } from "./expSum.js";
+import { ExpSum, formatExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
 import { formatSqrtExt } from "./formatExact.js";
+import { LogPart, formatLogPart } from "./logPart.js";
 import type { AlgebraicPole } from "./algebraic.js";
 
 /** The branch factor `z^α`, and the determination it is read in. */
@@ -60,15 +62,6 @@ export type BranchResidue =
 
 /** Complex conjugate of `a + b√d`: conjugate each Gaussian coefficient, since `√d` is real. */
 const conjugate = (x: SqrtExt): SqrtExt => SqrtExt.of(x.a.conj(), x.b.conj(), x.d);
-
-/** `|z|² = z·z̄`, exactly. */
-function modulusSquared(x: SqrtExt): SqrtExt | null {
-  try {
-    return x.mul(conjugate(x));
-  } catch {
-    return null;
-  }
-}
 
 /**
  * `e^{iπ/m}` for the five `m` whose primitive root lives in one quadratic extension of ℚ(i).
@@ -115,12 +108,54 @@ const DENOMINATORS: readonly bigint[] = Object.keys(PRIMITIVE)
   .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /**
- * `arg z₀ / π` as an exact rational inside the declared range — guessed, then VERIFIED.
+ * The POSITIVE REAL modulus `z₀·conj(ζ)` for a candidate root of unity `ζ` — or null.
+ *
+ * This is the verification, and it is exact. `z₀ = r·ζ` exactly when `z₀·ζ⁻¹` is a positive real,
+ * and `ζ⁻¹ = conj(ζ)` on the unit circle; dividing rather than comparing is what lets the same test
+ * serve a pole OFF the circle, where `r ≠ 1` and `ζ` alone can never equal `z₀`.
+ */
+function modulusAlong(at: SqrtExt, root: SqrtExt): SqrtExt | null {
+  let w: SqrtExt;
+  try {
+    w = at.mul(conjugate(root));
+  } catch {
+    return null;
+  }
+  // Real: no `i` in either coefficient. Positive: the value is, and it is checked numerically only
+  // to pick the sign — the EQUALITY that matters was decided exactly above.
+  if (!w.a.im.isZero() || !w.b.im.isZero()) return null;
+  const [re, im] = w.toTuple();
+  if (Math.abs(im) > 1e-12 || re <= 0) return null;
+  return w;
+}
+
+/**
+ * `ln r` for a positive `r ∈ ℚ(√d)`, when the basis holds it — `ℚ₊` or `q√d`.
+ *
+ * `ln(q√d) = ln q + ½ln d`, so a pure radical is fine. `1 + √2` is not: its logarithm is not a
+ * rational combination of logarithms of rationals at all, and refusing beats inventing an atom for
+ * it (which would break `logPart.ts`'s canonicity, and with it the decidability of `equals`).
+ */
+function logModulusOf(r: SqrtExt): LogPart | null {
+  const rational = r.b.isZero() ? r.a.re : null;
+  if (rational !== null) return LogPart.ln(rational);
+  if (!r.a.isZero()) return null;
+  const coefficient = LogPart.ln(r.b.re);
+  const radical = LogPart.ln(Frac.of(r.d));
+  if (coefficient === null || radical === null) return null;
+  return coefficient.add(radical.scale(Frac.of(1n, 2n)));
+}
+
+/**
+ * `arg z₀ / π` as an exact rational inside the declared range, with `ln|z₀|` — guessed, then VERIFIED.
  *
  * The guess comes from `atan2` and the verification from exact arithmetic, so a near miss is a
  * refusal rather than a plausible answer.
  */
-function argumentMultiple(at: SqrtExt, range: readonly [Frac, Frac]): Frac | null {
+function argumentMultiple(
+  at: SqrtExt,
+  range: readonly [Frac, Frac],
+): { r: Frac; modulus: SqrtExt } | null {
   const [re, im] = at.toTuple();
   const guess = Math.atan2(im, re) / Math.PI; // in (−1, 1]
   const lo = range[0].toNumber();
@@ -135,7 +170,9 @@ function argumentMultiple(at: SqrtExt, range: readonly [Frac, Frac]): Frac | nul
       const value = r.toNumber();
       if (value < lo || value >= hi) continue;
       const candidate = unitRoot(k, m);
-      if (candidate !== null && candidate.equals(at)) return r;
+      if (candidate === null) continue;
+      const modulus = modulusAlong(at, candidate);
+      if (modulus !== null) return { r, modulus };
     }
   }
   return null;
@@ -151,7 +188,7 @@ function argumentMultiple(at: SqrtExt, range: readonly [Frac, Frac]): Frac | nul
 export function argumentOfPole(
   at: SqrtExt,
   argRange: readonly [Frac, Frac],
-): { readonly ok: true; readonly r: Frac } | { readonly ok: false; readonly reason: string } {
+): { readonly ok: true; readonly r: Frac; readonly logModulus: LogPart } | { readonly ok: false; readonly reason: string } {
   const width = argRange[1].sub(argRange[0]);
   if (!width.equals(Frac.of(2n))) {
     return {
@@ -160,18 +197,8 @@ export function argumentOfPole(
     };
   }
 
-  const mod2 = modulusSquared(at);
-  if (mod2 === null || !mod2.equals(SqrtExt.ONE)) {
-    return {
-      ok: false,
-      reason:
-        `the pole ${formatSqrtExt(at)} is not on the unit circle, so its argument alone does not ` +
-        "determine log z₀ or z₀^α — both need ln|z₀|, and no basis here carries a logarithm yet (M4.5)",
-    };
-  }
-
-  const r = argumentMultiple(at, argRange);
-  if (r === null) {
+  const found = argumentMultiple(at, argRange);
+  if (found === null) {
     return {
       ok: false,
       reason:
@@ -181,7 +208,18 @@ export function argumentOfPole(
         "residues as a geometric series instead",
     };
   }
-  return { ok: true, r };
+
+  const logModulus = logModulusOf(found.modulus);
+  if (logModulus === null) {
+    return {
+      ok: false,
+      reason:
+        `the pole ${formatSqrtExt(at)} has modulus ${formatSqrtExt(found.modulus)}, whose logarithm ` +
+        "is not a rational combination of logarithms of rationals — this basis holds ℚ₊ and q√d, " +
+        "and inventing an atom for anything else would break the canonical form that makes exponents comparable",
+    };
+  }
+  return { ok: true, r: found.r, logModulus };
 }
 
 /**
@@ -197,18 +235,29 @@ export function powerAtPole(at: SqrtExt, factor: PowerFactor): BranchResidue {
   }
   const r = argument.r;
 
-  const exponent = Exponent.piTimes(new Gauss(Frac.ZERO, factor.alpha.mul(r)));
+  // `z₀^α = e^{α·ln r} · e^{iαθ}` with `θ = rπ`. On the unit circle the first factor is `e^0` and
+  // this is exactly what M4.2 computed; off it, the logarithm is the only new thing.
+  const exponent = Exponent.of(
+    SqrtExt.ZERO,
+    new Gauss(Frac.ZERO, factor.alpha.mul(r)),
+    argument.logModulus.scale(factor.alpha),
+  );
   return {
     ok: true,
     value: ExpSum.of(SqrtExt.ONE, exponent),
     argMultiple: r,
     certificate: exact(
-      `z₀^α at ${formatSqrtExt(at)} is e^{i·(${factor.alpha.n}/${factor.alpha.d})·(${r.n}/${r.d})·π}`,
+      `z₀^α at ${formatSqrtExt(at)} is ${formatExpSum(ExpSum.of(SqrtExt.ONE, exponent))}`,
       "the argument is DECIDED: a rational multiple of π is guessed numerically and then verified in exact arithmetic",
       {
         restriction: `arg z ∈ [${factor.argRange[0].n}/${factor.argRange[0].d}·π, ${factor.argRange[1].n}/${factor.argRange[1].d}·π)`,
         provenance: [
-          { ok: true, text: `arg(${formatSqrtExt(at)}) = ${r.n}/${r.d}·π, verified by e^{irπ} = z₀ over ℚ(i)(√d)` },
+          {
+            ok: true,
+            text: `arg(${formatSqrtExt(at)}) = ${r.n}/${r.d}·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real${
+              argument.logModulus.isZero() ? " of modulus 1" : ` modulus with ln = ${formatLogPart(argument.logModulus)}`
+            }`,
+          },
           {
             ok: true,
             text: "the determination is an INPUT to the answer: the principal branch would change it by e^{2πiα} with nothing to warn you",

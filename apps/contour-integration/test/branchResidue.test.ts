@@ -147,12 +147,27 @@ describe("D3's poles — the n-th roots of −1, all at arg in (0, 2π)", () => 
 });
 
 describe("the two declared bounds", () => {
-  it("refuses a pole off the unit circle, and names the missing half of the basis", () => {
+  it("reads a pole OFF the unit circle, now that the exponent carries ln r", () => {
+    // D2's pole. `(−2)^{1/2} = e^{(1/2)(ln 2 + iπ)} = i√2`, and the two halves arrive in one
+    // exponent — the argument decided in the declared range, the modulus as a symbolic logarithm.
     const r = powerAtPole(alg(-2), { alpha: q(1, 2), argRange: KEYHOLE });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.argMultiple.equals(q(1))).toBe(true);
+    expect(formatExpSum(r.value)).toBe("e^(iπ/2 + ln 2/2)");
+    // …and it folds to `i√2` exactly, which is the number the record's residues are built from.
+    expect(formatExpSum(r.value.foldSigns())).toBe("i√2");
+  });
+
+  it("refuses a modulus whose logarithm this basis cannot hold", () => {
+    // `1 + √2` is a perfectly good positive real and `ln(1 + √2)` is not a rational combination of
+    // logarithms of rationals. Inventing an atom for it would break the canonical form that makes
+    // two exponents comparable at all.
+    const at = SqrtExt.of(Gauss.ONE, Gauss.ONE, 2n);
+    const r = powerAtPole(at, { alpha: q(1, 2), argRange: KEYHOLE });
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.reason).toMatch(/not on the unit circle/);
-    expect(r.reason).toMatch(/M4\.5/);
+    expect(r.reason).toMatch(/not a rational combination of logarithms/);
   });
 
   it("refuses an argument that is no rational multiple of π, and says how those records cope", () => {

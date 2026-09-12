@@ -198,14 +198,16 @@ describe("refusals, each naming what it saw", () => {
     expect(!r.ok && r.reason).toMatch(/branch point at the origin/);
   });
 
-  it("refuses a pole off the unit circle, naming ln|z₀|", () => {
-    // R = 1/(z² + 4) has poles at ±2i, and ln 2 is the basis M4.5 adds. D5's second fixture is
-    // exactly this integrand, and its answer π log 2/4 says so on its face.
+  it("refuses a pole off the unit circle, because ℚ(i)(π) has no seat for ln|z₀|", () => {
+    // R = 1/(z² + 4) has poles at ±2i. M4.5 gave the EXPONENT basis a logarithm, which is what lets
+    // `z^α` read such a pole — but a log family's residues are polynomials in π, and dropping the
+    // `ln 2` rather than refusing would return a confident wrong residue. D5's second gallery
+    // fixture is exactly this integrand, and its answer `π log 2/4` says what the ring would need.
     const den = QiPoly.fromCoeffs([g(4), Gauss.ZERO, Gauss.ONE]);
     const r = logResidue(ONE, den, g(0, 2), { power: 2, argRange: KEYHOLE });
     expect(r.ok).toBe(false);
-    expect(!r.ok && r.reason).toMatch(/ln\|z₀\|/);
-    expect(!r.ok && r.reason).toMatch(/M4\.5/);
+    expect(!r.ok && r.reason).toMatch(/ln\|z₀\| = ln 2/);
+    expect(!r.ok && r.reason).toMatch(/no seat for a logarithm/);
   });
 
   it("refuses a point that is not a pole", () => {

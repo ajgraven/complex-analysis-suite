@@ -25,6 +25,7 @@
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { formatPiSqrt, formatSqrtExt, formatTwoPiISqrt } from "./formatExact.js";
 import { Exponent, formatExponent, jordanExponent } from "./exponent.js";
+import { formatLogPower } from "./logPart.js";
 import type { AlgebraicPole } from "./algebraic.js";
 
 // Re-exported so `expSum.ts` stays the one import for the basis, as it was before the exponent
@@ -226,12 +227,17 @@ export class ExpSum {
   }
 }
 
-/** Render `e^{β}`, with the two exponents worth a nicer name than the general form. */
+/** Render `e^{β}`, with the exponents worth a nicer name than the general form. */
 function formatExponential(exponent: Exponent): string {
   if (exponent.isZero()) return "";
   const one = Exponent.fromSqrtExt(SqrtExt.fromGauss(Gauss.ONE));
   if (exponent.equals(one)) return "e";
   if (exponent.equals(one.neg())) return "1/e";
+  // A purely logarithmic exponent is a POWER, and writing it as an exponential hides what it is:
+  // `e^{(3/4)ln 40}` is `40^{3/4}`, which is the form the record states and the reader can check.
+  // (The fold in `Exponent.asAlgebraicFactor` has already taken the cases that land in ℚ or one
+  // quadratic extension, so what reaches here is the genuinely carried remainder.)
+  if (exponent.algebraic.isZero() && exponent.pi.isZero()) return formatLogPower(exponent.log);
   return `e^(${formatExponent(exponent)})`;
 }
 

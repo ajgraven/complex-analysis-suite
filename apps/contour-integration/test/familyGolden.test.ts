@@ -101,11 +101,16 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
     const g = primary(family);
     // The limit parameter is NOT always called R — tier B names it `R_lim`, because `R` is the
     // rational function. Take the name from the record instead of assuming it.
-    const name = must(family.contour.limitParams[0], "a limit parameter").name;
-    const atThree = must(run(family, g, { [name]: 3 }).theorem.exactValue, "an exact value at R = 3");
-    const atForty = must(run(family, g, { [name]: 40 }).theorem.exactValue, "an exact value at R = 40");
-    expect(atForty.value).toEqual(atThree.value);
-    expect(atForty.text).toBe(atThree.text);
+    const limit = must(family.contour.limitParams[0], "a limit parameter");
+    // BOTH radii must enclose every selected pole, or the property under test does not hold: the
+    // value is independent of R once everything is inside, and changes when a pole crosses out. A
+    // record whose poles need more room says so with `start`, and D2's are at −2 and −4.
+    const small = Math.max(3, limit.start ?? 0);
+    const large = Math.max(40, small * 10);
+    const near = must(run(family, g, { [limit.name]: small }).theorem.exactValue, `an exact value at R = ${small}`);
+    const far = must(run(family, g, { [limit.name]: large }).theorem.exactValue, `an exact value at R = ${large}`);
+    expect(far.value).toEqual(near.value);
+    expect(far.text).toBe(near.text);
   });
 
   it("names which families have a limit parameter at all", () => {
@@ -122,6 +127,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "removable-one-minus-cos",
       "pv-sine-over-x-times-quadratic",
       "mellin-keyhole",
+      "keyhole-two-poles",
       "keyhole-x-to-the-n",
       "log-squared-keyhole",
       "log-cubed-keyhole",
@@ -256,6 +262,11 @@ describe("the closed form each record establishes", () => {
     // keyhole's coefficient `1 − e^{2πiα}` factors through a sine, which is CARRIED rather than
     // evaluated. North-star behaviour 4, in one string.
     "mellin-keyhole": "π/sin(3π/10)",
+    // D2, the first record whose poles are off the unit circle: `(−2)^{1/2} = e^{(1/2)(ln 2 + iπ)}`,
+    // and the `ln 2` folds back to a radical because its weight is a half. Its crossing phase is
+    // REAL — `e^{iπ} = −1` — so the two edges add and the sine is `sin(π/2) = 1`, which is why the
+    // answer carries no sine at all.
+    "keyhole-two-poles": "π − π√2/2",
     // D3, whose sine is `sin(πa/n)` and not `sin(πa)` — the geometric sum over the n roots
     // cancels the keyhole's own `(1 − e^{2πia})`, and without that cancellation the answer is
     // numerically right in a form no reader would recognise.

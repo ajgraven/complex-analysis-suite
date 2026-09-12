@@ -343,6 +343,17 @@ export interface Family {
       readonly name: string;
       readonly to: "inf" | "0+";
       readonly through?: "halfIntegers";
+      /**
+       * Where this limit STARTS, when the global display default will not do.
+       *
+       * `instantiate.ts`'s default radius is 4, which is a display choice and knows nothing about a
+       * record's poles. D2's sit at `−2` and `−4`, so the default puts one exactly ON the outer
+       * circle and the winding about it is undecided — the record opens refusing. The value is still
+       * only a starting point: the residue-theorem answer is independent of it once every selected
+       * pole is enclosed, which the corpus asserts by running each record at two widely separated
+       * radii and requiring the exact value to be IDENTICAL.
+       */
+      readonly start?: number;
     }[];
     readonly pieces: readonly FamilyPiece[];
     /**

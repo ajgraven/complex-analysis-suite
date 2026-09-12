@@ -103,7 +103,24 @@ whether the whole thing closes.
   primary answer at the same `p`**, reached by a different contour, so the two records cross-check
   each other on a number neither takes from the other.
 
-The seventeen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+**M4.5 completes the output basis, and lands D2:**
+
+- `∫₀^∞ √x/(x²+6x+8) dx = π(1 − 1/√2)` — the first record whose poles are **off the unit circle**.
+  `(−2)^{1/2} = e^{(1/2)(ln 2 + iπ)}`: the argument is decided in the declared determination as it
+  always was, and the modulus arrives as a symbolic `ln 2` in the same exponent. Dropping it — what a
+  basis carrying only the argument does — returns `π/2`, which is plausible and wrong.
+- **The logarithms are carried over PRIMES.** `ln 4 = 2ln 2`, so a representation keyed by the
+  rational it came from would hold their difference as a two-term sum that is not obviously zero, and
+  the sine recogniser would be comparing forms rather than numbers. Unique factorisation keeps
+  equality a decision; trial division **refuses** rather than returning an uncertified atom.
+- **And folds back out.** `e^{ln 2}` is the number 2 and `e^{(ln 2)/2}` is `√2`, so D2's answer reads
+  `π − π√2/2`. A weight with denominator 3 or 4 — `10^{1/3}`, `40^{3/4}` — is carried instead and
+  printed as a power, which is the whole thesis: the FORM is exact and only the decimal is `≈`.
+- D2's crossing phase is **real**: `e^{2πi(s−1)} = −1` at `s = 3/2`, so the two edges ADD and the
+  sine is `sin(π/2) = 1`. A real-valued phase looks like no phase, which is exactly when a reader
+  concludes the edges must cancel.
+
+The eighteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered

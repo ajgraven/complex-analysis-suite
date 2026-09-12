@@ -153,7 +153,7 @@ before D2.
 | **M4.2** ✅ | the four `Family["branch"]` schema changes of §1.3 · keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser · **the cyclotomic sum and the geometric cancellation** → **D1, D3** | **L** |
 | **M4.3** ✅ | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` · **the log-residue engine and the log arc bound** → **D4** | M–L |
 | **M4.4** ✅ | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
-| **M4.5** | `ln(ℚ₊)` exponents and radical factors → **D2, D7's algebraic half** | S–M |
+| **M4.5** ✅ | `ln(ℚ₊)` exponents and radical factors → **D2**; D7's algebraic half is ready and waits on M4.6's contour | S–M |
 | **M4.6** | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** | M |
 | **M4.7** | the GPU picture: `cutCorrection`, `cargCut`/`clogCut`/`cpowCut` twins, `DUAL_BACKEND_CORPUS`, monodromy readout, sheet badge, shadow-cut mode, **drag-a-cut** | M–L |
 
@@ -175,6 +175,11 @@ before D2.
   D4 supplies it, at the SAME binding. The borrowed verdict meets into `T2`, which depends on it, and
   **not** into `T1`, which does not — dependence decided in the field, not assumed from the fact that
   a prerequisite exists. A record expecting `≈` keeps `≈` however exact its source turned out to be.
+- **M4.5** ✅ — D2's two poles sit at `−2` and `−4`, OFF the unit circle: `(−2)^{1/2}` reads as
+  `e^{(ln 2)/2 + iπ/2}` with the argument decided in the declared determination and the modulus a
+  symbolic `ln 2`, and folds back to `i√2` because the weight is a half. `π − π√2/2`, which is the
+  record's `π(1 − 1/√2)`. Dropping the modulus — what a basis carrying only the argument does —
+  returns `π/2`: plausible, and the one a reader would not question.
 - **M4.6** — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
   magnitude 1.216. The residue at infinity is not an edge case, and D6 passing only because
   `Res(f,∞) = 0` is the coincidence that would hide the bug.
@@ -421,3 +426,53 @@ The gallery's choice, `1/(x²+4)`, has poles off the unit circle and needs `ln 2
 as the integer parameter `p` supplies one inside this basis instead: at `p = 2` the bonus is
 `T1 = −π/4`, **which is D4's own primary answer at the same `p`**, reached by a different contour. The
 two records now cross-check each other on a number neither takes from the other.
+
+---
+
+## 9. What M4.5 landed, and what it taught
+
+ADR-0041's Action Item 1 is complete: the exponent now carries `Σ(ℚ)·ln(pⱼ)` beside its algebraic and
+π components, and D2 is the record that needed it.
+
+### The atoms are primes, and that is the whole design
+
+`ln 4 = 2 ln 2`. A representation keyed by the rational it came from would hold `ln 4 − 2·ln 2` as a
+two-term sum that is not obviously zero, and the sine recogniser — which decides whether two exponents
+differ by a sign — would be comparing FORMS rather than numbers. Factoring into primes makes the
+representation canonical by unique factorisation, so `equals` and `isZero` stay decisions. It is the
+same reason π is a component rather than a number, one summand along, and it costs a trial division
+that **refuses** rather than returning an uncertified atom: an unfactored cofactor would break
+canonicity silently, and `ln(p·q)` would stop equalling `ln p + ln q`.
+
+### The verification changed shape, not strictness
+
+`argumentOfPole` used to verify a candidate root of unity by EQUALITY with the pole, which can only
+ever succeed on the unit circle. It now divides — `z₀·conj(ζ)` must be a positive real — and reads the
+modulus off the quotient. Same guess-then-verify discipline, one bound fewer, and the bound that
+remains is narrower and still named: `ln r` must be a rational combination of logarithms of
+rationals, so `ℚ₊` and `q√d` are in and `1 + √2` is out.
+
+### The fold back out is the other half of the same slice
+
+`e^{ln 2}` is the number 2, and printing it as an exponential is the disservice `asAlgebraicFactor`
+already prevented for `e^{iπ}`. A weight with denominator 1 folds to a rational, denominator 2 to a
+square root — which is why D2's answer reads `π − π√2/2` — and denominators 3 and 4 are CARRIED, which
+is ADR-0041's thesis rather than a shortfall. What is carried now prints as a power, `2^(1/3)·5^(1/3)`,
+not as `e^(…)`.
+
+### A widening can create a silent wrong answer somewhere else
+
+`kernel/logResidue.ts` asked `argumentOfPole` for an argument and built `log z₀ = iπr` from it. The
+moment a pole off the unit circle stopped being refused, that code would have **dropped `ln r`** and
+returned a confident wrong residue — a log family's residues are polynomials in π, and ℚ(i)(π) has no
+seat for a logarithm. It now refuses by name. The existing tests caught it, which is the argument for
+writing the refusals as tests in the first place: three of them asserted a refusal that M4.5 was
+removing, and one of the three was removing it in the wrong place.
+
+### A record's default contour must enclose its own poles
+
+`instantiate.ts`'s default radius is 4, a display choice that knows nothing about where a record's
+poles are — and D2's sits exactly ON it, where the winding number is undecided and the record opens
+refusing. `limitParams[].start` is the record's own answer. The corpus's R-independence test now takes
+its two radii from that too, since the property it checks ("independent once every selected pole is
+enclosed") is false when one radius excludes a pole.

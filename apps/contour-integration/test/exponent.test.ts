@@ -1,4 +1,5 @@
-// Guards for the widened exponent: `β = (ℚ(i)(√d)) + (ℚ(i))·π`, with π an INDETERMINATE.
+// Guards for the widened exponent: `β = (ℚ(i)(√d)) + (ℚ(i))·π + Σ(ℚ)·ln(p)`, with π an INDETERMINATE
+// and `ln` a symbol.
 //
 // The quantities under test are the keyhole's own. D1's edge factor is `e^{2πi(α−1)}` and its residue
 // carries `(−1)^{α−1} = e^{iπ(α−1)}`; at α = 3/10 those are `e^{−7iπ/5}` and `e^{−7iπ/10}`. They have
@@ -8,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { Exponent, formatExponent, jordanExponent } from "../src/kernel/exponent.js";
 import { ExpSum, formatExpSum } from "../src/kernel/expSum.js";
+import { LogPart } from "../src/kernel/logPart.js";
 
 const q = (n: number, d = 1): Frac => Frac.of(BigInt(n), BigInt(d));
 const gi = (reN: number, reD: number, imN = 0, imD = 1): Gauss =>
@@ -177,5 +179,61 @@ describe("ExpSum over the widened exponent", () => {
   it("still reduces to an algebraic value when no exponential survived", () => {
     expect(ExpSum.fromSqrtExt(alg(3)).asSqrtExt()?.toTuple()).toEqual([3, 0]);
     expect(ExpSum.of(alg(3), Exponent.piTimes(Gauss.I)).asSqrtExt()).toBeNull();
+  });
+});
+
+describe("the logarithmic component — M4.5, and D2's poles off the unit circle", () => {
+  const ln = (n: number, d = 1): LogPart => {
+    const got = LogPart.ln(q(n, d));
+    if (got === null) throw new Error("refused");
+    return got;
+  };
+
+  it("carries ln r beside the argument, which is what a pole off the unit circle needs", () => {
+    // `z₀ = −2 = 2·e^{iπ}`, so `z₀^{1/2} = e^{(1/2)(ln 2 + iπ)}`. Both halves in one exponent.
+    const b = Exponent.of(SqrtExt.ZERO, gi(0, 1, 1, 2), ln(2).scale(q(1, 2)));
+    expect(formatExponent(b)).toBe("iπ/2 + ln 2/2");
+    const [re, im] = b.toTuple();
+    expect(re).toBeCloseTo(Math.log(Math.SQRT2), 15);
+    expect(im).toBeCloseTo(Math.PI / 2, 15);
+  });
+
+  it("keeps equality a decision across the three components", () => {
+    const a = Exponent.of(alg(1), gi(1, 2), ln(4));
+    const b = Exponent.of(alg(1), gi(1, 2), ln(2).scale(q(2)));
+    expect(a.equals(b)).toBe(true);
+    expect(a.sub(b).isZero()).toBe(true);
+    expect(a.equals(Exponent.of(alg(1), gi(1, 2), ln(2)))).toBe(false);
+  });
+
+  it("is REAL — the imaginary part of a logarithm is the argument, decided elsewhere", () => {
+    expect(Exponent.fromLog(ln(2)).isReal()).toBe(true);
+    // …and it therefore takes `e^{β}` OFF the unit circle, which the sine recogniser must not be handed.
+    expect(Exponent.fromLog(ln(2)).isImaginary()).toBe(false);
+    expect(Exponent.piTimes(Gauss.I).isImaginary()).toBe(true);
+  });
+
+  it("refuses to be scaled by i — `2^i` is outside the declared basis", () => {
+    expect(() => Exponent.fromLog(ln(2)).scale(Gauss.I)).toThrow(/outside this basis/);
+    // A real scale is fine, and a purely algebraic exponent may still be scaled by i.
+    expect(Exponent.fromLog(ln(2)).scale(gi(1, 2)).log.equals(ln(2).scale(q(1, 2)))).toBe(true);
+    expect(Exponent.fromSqrtExt(alg(1)).scale(Gauss.I).toTuple()).toEqual([0, 1]);
+  });
+
+  it("folds a power that lands in ℚ or one quadratic extension, and carries the rest", () => {
+    // `e^{ln 2}` is the number 2 — printing it as an exponential is the same disservice as printing
+    // `e^{iπ}` instead of −1, which is what this method already did for the π half.
+    expect(Exponent.fromLog(ln(2)).asAlgebraicFactor()?.toTuple()[0]).toBe(2);
+    expect(Exponent.fromLog(ln(2).scale(q(1, 2))).asAlgebraicFactor()?.toTuple()[0]).toBeCloseTo(Math.SQRT2, 15);
+    // `i·√2`: the sign fold and the radical fold combine in one SqrtExt.
+    const both = Exponent.of(SqrtExt.ZERO, gi(0, 1, 1, 2), ln(2).scale(q(1, 2)));
+    expect(both.asAlgebraicFactor()?.toTuple()).toEqual([0, Math.SQRT2]);
+    // A third is carried.
+    expect(Exponent.fromLog(ln(10).scale(q(1, 3))).asAlgebraicFactor()).toBeNull();
+  });
+
+  it("prints a carried power as a power, not as an exponential", () => {
+    const sum = ExpSum.of(SqrtExt.ONE, Exponent.fromLog(ln(10).scale(q(1, 3))));
+    expect(formatExpSum(sum)).toBe("2^(1/3)·5^(1/3)");
   });
 });

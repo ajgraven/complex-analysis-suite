@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **490 test files / 4549 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **492 test files / 4585 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -364,8 +364,23 @@ into the answers that depend on it and **no others** — dependence decided in �
 the input's certificate — and a record expecting `≈` keeps `≈` however exact its source was. Invariant
 4 judges a borrowing record on the system with that column REMOVED (structural, so still no residues),
 in both directions: a contour that cannot determine what the record claims is broken, and so is one
-that borrows a value it supplies itself. Still to come in M4: the `ln(ℚ₊)` exponent half
-(M4.5, → D2), the dogbone and `Res(f,∞)` (M4.6, → D6/D7), and the GPU cut picture (M4.7).
+that borrows a value it supplies itself.
+
+**M4.5** completes ADR-0041's Action Item 1 — the exponent's `Σ(ℚ)·ln(ℚ₊)` half (`kernel/logPart.ts`)
+— and lands **D2**, the eighteenth record and the first whose poles are off the UNIT CIRCLE:
+`∫₀^∞ √x/(x²+6x+8) dx = π(1 − 1/√2)`. `(−2)^{1/2} = e^{(1/2)(ln 2 + iπ)}`, the argument decided in the
+declared determination as before and the modulus now a symbolic `ln 2` in the same exponent; dropping
+it returns `π/2`, which is plausible and wrong. The logarithms are carried over **primes**, because
+`ln 4 = 2ln 2` and a representation keyed by the rational would make the sine recogniser compare
+forms rather than numbers — trial division refuses rather than returning an uncertified atom. They
+fold back out when the weight is an integer or a half (`e^{ln 2}` is 2, `e^{(ln 2)/2}` is `√2`, so
+D2 reads `π − π√2/2`) and are CARRIED at a third or a quarter, printed as a power. `argumentOfPole`
+now verifies by DIVISION rather than equality — `z₀·conj(ζ)` a positive real — which is the same
+guess-then-verify with one bound fewer. Two findings the widening forced: `logResidue` would have
+silently dropped `ln r` for a log family (ℚ(i)(π) has no seat for it) and now refuses by name, and a
+record whose poles sit on the default contour radius opens refusing, so `limitParams[].start` lets a
+record say where its own contour must start. Still to come in M4: the dogbone and `Res(f,∞)`
+(M4.6, → D6/D7), and the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

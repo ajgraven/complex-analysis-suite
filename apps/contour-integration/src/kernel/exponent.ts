@@ -1,4 +1,4 @@
-// The exponent `β` in `e^{β}`, widened to carry π.
+// The exponent `β` in `e^{β}`, widened to carry π and the logarithms of positive rationals.
 //
 // WHY IT HAD TO WIDEN. `expSum.ts` carries `Σ cₖ e^{βₖ}` with `βₖ ∈ ℚ(i)(√d)`, which is exactly what
 // tier B's Jordan residues need: `e^{iaz₀}` at an algebraic pole. Tier D's keyhole needs one thing
@@ -9,8 +9,12 @@
 //
 //     β = (element of ℚ(i)(√d))  +  (element of ℚ(i))·π
 //
-// is the whole widening M4.2 needs, and ADR-0041's Action Item 1 splits it there deliberately: the
-// `Σ (ℚ)·ln(aⱼ)` half arrives in M4.5, with D2's poles at `−1` and `−2`, where `ln r ≠ 0`.
+// is the whole widening M4.2 needed, and ADR-0041's Action Item 1 split it there deliberately. **M4.5
+// completes it**: D2's poles are at `−2` and `−4`, where `ln r ≠ 0`, so the third summand
+//
+//     + Σ (ℚ)·ln(pⱼ)        over PRIMES pⱼ
+//
+// arrives with them (`logPart.ts`, which says why primes rather than the rationals they came from).
 //
 // **π IS AN INDETERMINATE.** It is a separate component rather than a number, and it is never folded
 // into the algebraic part, because `e^{iπα}` must stay comparable to `e^{iπ(α−1)}` by EXPONENT — the
@@ -22,53 +26,67 @@
 // which makes `equals` a decision, not a comparison.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { formatSqrtExt } from "./formatExact.js";
+import { LogPart, formatLogPart } from "./logPart.js";
 
 export class Exponent {
   /** The algebraic part, in ℚ(i)(√d). */
   readonly algebraic: SqrtExt;
   /** The coefficient of π, in ℚ(i). π itself is never evaluated here. */
   readonly pi: Gauss;
+  /** `Σ qⱼ·ln(pⱼ)` over primes, with `ln` a symbol and never a number. */
+  readonly log: LogPart;
 
-  private constructor(algebraic: SqrtExt, pi: Gauss) {
+  private constructor(algebraic: SqrtExt, pi: Gauss, log: LogPart) {
     this.algebraic = algebraic;
     this.pi = pi;
+    this.log = log;
   }
 
-  static of(algebraic: SqrtExt, pi: Gauss = Gauss.ZERO): Exponent {
-    return new Exponent(algebraic, pi);
+  static of(algebraic: SqrtExt, pi: Gauss = Gauss.ZERO, log: LogPart = LogPart.ZERO): Exponent {
+    return new Exponent(algebraic, pi, log);
   }
 
-  static readonly ZERO = new Exponent(SqrtExt.ZERO, Gauss.ZERO);
+  static readonly ZERO = new Exponent(SqrtExt.ZERO, Gauss.ZERO, LogPart.ZERO);
 
   /** An exponent with no π part — every tier-A–C exponent, unchanged. */
   static fromSqrtExt(x: SqrtExt): Exponent {
-    return new Exponent(x, Gauss.ZERO);
+    return new Exponent(x, Gauss.ZERO, LogPart.ZERO);
   }
 
   /** `c·π`. `Exponent.piTimes(Gauss.I)` is `iπ`; the keyhole's edge factor is `2iα·π`. */
   static piTimes(c: Gauss): Exponent {
-    return new Exponent(SqrtExt.ZERO, c);
+    return new Exponent(SqrtExt.ZERO, c, LogPart.ZERO);
+  }
+
+  /** `Σ qⱼ ln pⱼ` alone — `e^{β}` is then a positive real, a power of a rational. */
+  static fromLog(log: LogPart): Exponent {
+    return new Exponent(SqrtExt.ZERO, Gauss.ZERO, log);
   }
 
   isZero(): boolean {
-    return this.algebraic.isZero() && this.pi.isZero();
+    return this.algebraic.isZero() && this.pi.isZero() && this.log.isZero();
   }
 
-  /** Exact, because π is transcendental over ℚ(i): the components match or the numbers differ. */
+  /**
+   * Exact. π is transcendental over ℚ(i) and the `ln pⱼ` are linearly independent over ℚ, so the
+   * components match or the numbers differ — the whole reason each is carried separately.
+   */
   equals(o: Exponent): boolean {
-    return this.algebraic.equals(o.algebraic) && this.pi.equals(o.pi);
+    return (
+      this.algebraic.equals(o.algebraic) && this.pi.equals(o.pi) && this.log.equals(o.log)
+    );
   }
 
   add(o: Exponent): Exponent {
-    return new Exponent(this.algebraic.add(o.algebraic), this.pi.add(o.pi));
+    return new Exponent(this.algebraic.add(o.algebraic), this.pi.add(o.pi), this.log.add(o.log));
   }
 
   sub(o: Exponent): Exponent {
-    return new Exponent(this.algebraic.sub(o.algebraic), this.pi.sub(o.pi));
+    return new Exponent(this.algebraic.sub(o.algebraic), this.pi.sub(o.pi), this.log.sub(o.log));
   }
 
   neg(): Exponent {
-    return new Exponent(this.algebraic.neg(), this.pi.neg());
+    return new Exponent(this.algebraic.neg(), this.pi.neg(), this.log.neg());
   }
 
   /**
@@ -80,7 +98,16 @@ export class Exponent {
    * is that refusal expressed as a missing method rather than as a runtime check.
    */
   scale(g: Gauss): Exponent {
-    return new Exponent(this.algebraic.mul(SqrtExt.fromGauss(g)), this.pi.mul(g));
+    // `i·ln 2` would be `2^i` — a perfectly good number and one nothing in the corpus is, so it stays
+    // outside the declared basis. Refusing loudly beats widening for a case no record needs.
+    if (!g.im.isZero() && !this.log.isZero()) {
+      throw new Error("a logarithmic exponent may only be scaled by a REAL rational; i·ln a is outside this basis");
+    }
+    return new Exponent(
+      this.algebraic.mul(SqrtExt.fromGauss(g)),
+      this.pi.mul(g),
+      this.log.scale(g.re),
+    );
   }
 
   /** `β/2` — what the sine recogniser splits `a − b·e^{β}` on. */
@@ -96,6 +123,9 @@ export class Exponent {
    * rather than by taking a real part term by term.
    */
   isReal(): boolean {
+    // The logarithmic part is real by construction — `LogPart.ln` refuses a non-positive rational,
+    // and the imaginary part of a logarithm is the ARGUMENT, decided separately in the declared
+    // determination. So it constrains nothing here.
     return (
       this.algebraic.a.im.isZero() && this.algebraic.b.im.isZero() && this.pi.im.isZero()
     );
@@ -103,8 +133,13 @@ export class Exponent {
 
   /** Whether `β` is purely imaginary, so `e^{β}` sits on the unit circle. The sine recogniser's gauge. */
   isImaginary(): boolean {
+    // A logarithm is real and non-zero, so it takes `e^{β}` off the unit circle — which is exactly
+    // what the sine recogniser must not be handed.
     return (
-      this.algebraic.a.re.isZero() && this.algebraic.b.re.isZero() && this.pi.re.isZero()
+      this.log.isZero() &&
+      this.algebraic.a.re.isZero() &&
+      this.algebraic.b.re.isZero() &&
+      this.pi.re.isZero()
     );
   }
 
@@ -135,14 +170,29 @@ export class Exponent {
     if (twice.d !== 1n) return null;
     const power = ((twice.n % 4n) + 4n) % 4n;
     const values = [Gauss.ONE, Gauss.I, Gauss.ONE.neg(), Gauss.I.neg()];
-    return SqrtExt.fromGauss(values[Number(power)]);
+    const sign = SqrtExt.fromGauss(values[Number(power)]);
+
+    // …and the same fold for the logarithmic part, which is M4.5's "radical factors". `e^{ln 2}` is
+    // the number 2, and `e^{(ln 2)/2}` is `√2`; printing either as an exponential is the disservice
+    // this method exists to prevent. A weight with denominator 3 or 4 — D7's `10^{1/3}`, `40^{3/4}` —
+    // is what the basis CARRIES instead, and `asAlgebraic` returns null there by design.
+    if (this.log.isZero()) return sign;
+    const radical = this.log.asAlgebraic();
+    if (radical === null) return null;
+    try {
+      return sign.mul(radical);
+    } catch {
+      // Two different radicands cannot share one `SqrtExt`. Carried rather than folded, which is the
+      // honest outcome and not a failure.
+      return null;
+    }
   }
 
   /** **The one crossing into the numeric plane**, and why a decimal rendering of `e^{β}` is `≈`. */
   toTuple(): [number, number] {
     const [ar, ai] = this.algebraic.toTuple();
     const [pr, pi] = this.pi.toTuple();
-    return [ar + Math.PI * pr, ai + Math.PI * pi];
+    return [ar + Math.PI * pr + this.log.toNumber(), ai + Math.PI * pi];
   }
 }
 
@@ -169,11 +219,18 @@ function formatPiPart(c: Gauss): string {
   return parts.join("");
 }
 
-/** `β` written by hand — the algebraic part, the π part, or their sum. */
+/** Join two rendered summands with the right sign, eliding an empty one. */
+function joinSummands(left: string, right: string): string {
+  if (left === "") return right;
+  if (right === "") return left;
+  return right.startsWith(MINUS) ? `${left} ${MINUS} ${right.slice(1)}` : `${left} + ${right}`;
+}
+
+/** `β` written by hand — the algebraic part, the π part, the logarithms, or their sum. */
 export function formatExponent(e: Exponent): string {
-  if (e.pi.isZero()) return formatSqrtExt(e.algebraic);
-  const pi = formatPiPart(e.pi);
-  if (e.algebraic.isZero()) return pi;
-  const algebraic = formatSqrtExt(e.algebraic);
-  return pi.startsWith(MINUS) ? `${algebraic} ${MINUS} ${pi.slice(1)}` : `${algebraic} + ${pi}`;
+  const algebraic = e.algebraic.isZero() ? "" : formatSqrtExt(e.algebraic);
+  const pi = e.pi.isZero() ? "" : formatPiPart(e.pi);
+  const log = e.log.isZero() ? "" : formatLogPart(e.log);
+  const text = joinSummands(joinSummands(algebraic, pi), log);
+  return text === "" ? formatSqrtExt(e.algebraic) : text;
 }

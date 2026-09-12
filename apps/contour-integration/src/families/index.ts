@@ -29,6 +29,7 @@ import { b3JordanQuartic } from "./records/b3-jordan-quartic.js";
 import { a6SemicircleQuartic } from "./records/a6-semicircle-quartic.js";
 import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
 import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
+import { d2KeyholeTwoPoles } from "./records/d2-keyhole-two-poles.js";
 import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
 import { d4LogSquaredKeyhole } from "./records/d4-log-squared-keyhole.js";
 import { d5LogCubedKeyhole } from "./records/d5-log-cubed-keyhole.js";
@@ -84,6 +85,7 @@ export const FAMILIES: readonly Family[] = [
   c2RemovableOneMinusCos,
   c3PvSineOverXTimesQuadratic,
   d1MellinKeyhole,
+  d2KeyholeTwoPoles,
   d3KeyholeXToTheN,
   d4LogSquaredKeyhole,
   d5LogCubedKeyhole,

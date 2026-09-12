@@ -3658,10 +3658,16 @@ code path.
 
 ### Action Items
 
-1. [~] Widen `expSum.ts`'s exponent to `ℚ(i)(√d) ⊕ (ℚ(i))·π ⊕ Σ(ℚ)·ln(ℚ₊)`, with `ln` symbolic —
+1. [x] Widen `expSum.ts`'s exponent to `ℚ(i)(√d) ⊕ (ℚ(i))·π ⊕ Σ(ℚ)·ln(ℚ₊)`, with `ln` symbolic —
        **the `π` half landed in M4.2** as `kernel/exponent.ts`, with π a component and never a
-       number; the `ln` half is M4.5's, and `kernel/branchResidue.ts` refuses a pole off the unit
-       circle by name until it arrives.
+       number; **the `ln` half landed in M4.5** as `kernel/logPart.ts`, and D2's poles at `−2` and
+       `−4` are what needed it. One thing the item did not say and the implementation forced: the
+       atoms are **PRIMES**, not the rationals they came from, because `ln 4 = 2ln 2` and a
+       representation keyed by the rational would hold their difference as a two-term sum that is
+       not obviously zero — which would make the sine recogniser compare forms rather than numbers.
+       Unique factorisation is what keeps `equals` a decision. The fold back OUT is the same item's
+       "radical factors": `e^{ln 2}` is the number 2 and `e^{(ln 2)/2}` is `√2`, while a weight with
+       denominator 3 or 4 (D7's `10^{1/3}`, `40^{3/4}`) is CARRIED, which is this ADR's whole thesis.
 2. [x] The sine recogniser, as **one** rule over a two-term denominator with equal-modulus terms,
        with a test that an unrecognised shape refuses rather than returning a decimal —
        `kernel/sineForm.ts` (M4.2). One rule grew a sibling rather than a second case: D3's

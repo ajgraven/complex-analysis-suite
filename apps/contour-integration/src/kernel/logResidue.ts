@@ -41,6 +41,7 @@ import { exact, refuse, type Certificate } from "@cas/rigor";
 import { argumentOfPole } from "./branchResidue.js";
 import { exactPoleAt } from "./exactResidue.js";
 import { formatGauss } from "./formatExact.js";
+import { formatLogPart } from "./logPart.js";
 import { RatPi, formatRatPi } from "./ratPi.js";
 
 /** The branch factor `log^m z`, and the determination it is read in. */
@@ -74,10 +75,14 @@ export type LogResidue =
 /**
  * `log z₀` in the declared determination, as an element of ℚ(i)(π).
  *
- * On the unit circle `log z₀ = i·r·π` with `z₀ = e^{irπ}`, and `argumentOfPole` refuses off it —
- * `ln|z₀|` has no seat in any basis here until M4.5. D4's poles are `±i` and D5's the same, so the
- * whole of M4.3 sits on the circle; D5's second fixture `R = 1/(x²+4)` is the one that will need
- * the other half, and its answer `π log 2/4` says so on its face.
+ * On the unit circle `log z₀ = i·r·π` with `z₀ = e^{irπ}`, and that is all ℚ(i)(π) can hold. Off it
+ * `log z₀ = ln r + i·r′π`, and **`ln r` has no seat in this ring** — `kernel/logPart.ts` gives the
+ * EXPONENT basis one (M4.5, which is what lets `z^α` read a pole off the circle), but a log family's
+ * residues are polynomials in π and a `ln 2` among them would need ℚ(i)[π][ln r] instead.
+ *
+ * So this refuses rather than dropping the term, which is the whole point: silently discarding
+ * `ln 2` would return a confident wrong residue. D5's second gallery fixture `R = 1/(x²+4)` is
+ * exactly that case, and its answer `π log 2/4` says on its face what the ring would have to carry.
  */
 export function logAtPole(at: Gauss, argRange: readonly [Frac, Frac]): LogAtPole {
   if (at.isZero()) {
@@ -85,6 +90,15 @@ export function logAtPole(at: Gauss, argRange: readonly [Frac, Frac]): LogAtPole
   }
   const argument = argumentOfPole(SqrtExt.fromGauss(at), argRange);
   if (!argument.ok) return argument;
+  if (!argument.logModulus.isZero()) {
+    return {
+      ok: false,
+      reason:
+        `the pole ${formatGauss(at)} is not on the unit circle, so log z₀ carries ln|z₀| = ` +
+        `${formatLogPart(argument.logModulus)} — a log family's residues are polynomials in π, and ` +
+        "ℚ(i)(π) has no seat for a logarithm of a rational",
+    };
+  }
   return {
     ok: true,
     value: RatPi.piPower(1, new Gauss(Frac.ZERO, argument.r)),
