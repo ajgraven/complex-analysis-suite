@@ -10,6 +10,7 @@ import { isClosed } from "../src/kernel/geom.js";
 import { windingNumber } from "../src/kernel/winding.js";
 import {
   circleTemplate,
+  dogboneTemplate,
   keyholeTemplate,
   semicircleTemplate,
 } from "../src/engine/contour/templates.js";
@@ -279,21 +280,80 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     expect(cutRows(r)).toHaveLength(1);
   });
 
-  it("refuses a contour that ENCIRCLES a branch point, before reading any piece", () => {
+  it("refuses a contour whose total MONODROMY is not trivial, before reading any piece", () => {
     // The sharper form of a rule the per-piece geometry used to approximate. A circle about the
     // origin was refused for "crossing the cut at its seam"; what is actually wrong with it is that
     // `z^(1/3)` does not come back to the same value after a turn around 0. The winding number is
-    // decided exactly, by the same sign predicates the poles use.
+    // decided exactly, by the same sign predicates the poles use — and the test is on `Σ n·α`, not
+    // on any single winding.
     const r = run("1/(z-3)", circleTemplate([0, 0], 1), keyhole([-1, 0]));
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("LEGALITY");
     expect(r.value).toBeUndefined();
-    const row = cutRows(r).find((x) => x.claim.includes("encircles"));
+    const row = cutRows(r).find((x) => x.claim.includes("does not close on one sheet"));
     expect(row?.status).toBe("failed");
     expect(row?.claim).toMatch(/n\(γ, z = 0\) = 1/);
+    expect(row?.evidence.method).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = 1\/3 is not an integer/);
     expect(row?.repair).toMatch(/keyhole/);
     // And it fires FIRST: the per-piece row is never reached.
     expect(cutRows(r).some((x) => /declaring which side|declares the side|meets a branch cut/.test(x.claim))).toBe(false);
+  });
+
+  it("will not certify an arc bound for an arc that is not centred at the origin", () => {
+    // Every bound in `kernel/bounds/` reasons on |z| = R about 0. The dogbone's end caps sit at its
+    // branch points, and are the first `vanish` arcs in the app that are not centred there — before
+    // them the hypothesis held by accident. A `≤` computed from the wrong geometry is the one thing
+    // this app may not print, so the row reports honestly that no bound of this shape applies.
+    const half = { kind: "power", alpha: Frac.of(-1n, 2n) } as const;
+    const cut: BranchChoice = {
+      convention: "zeroToTwoPi",
+      points: [
+        { id: "b1", at: [-1, 0], order: half, label: "z = -1" },
+        { id: "b2", at: [1, 0], order: half, label: "z = 1" },
+      ],
+      cuts: [{ id: "Γ", from: "b1", to: "b2", via: [] }],
+      basePoint: [0, 1],
+      sheet: 0,
+    };
+    const r = run("(z+3)/(z^2+1)", dogboneTemplate(), cut);
+    const caps = rowsFor(r, "KILL").filter((x) => x.claim.includes("η-circle"));
+    expect(caps).toHaveLength(2);
+    for (const cap of caps) {
+      expect(cap.status).toBe("unknown");
+      expect(cap.evidence.level).toBe("?");
+      expect(cap.evidence.method).toMatch(/centred elsewhere/);
+    }
+    // And the origin-centred arcs it used to be true-by-accident for still get their bound.
+    const plain = run("1/(1+z^2)", semicircleTemplate(200));
+    expect(rowsFor(plain, "KILL").find((x) => x.claim.includes("arc"))?.evidence.level).toBe("≤");
+  });
+
+  it("LETS THE DOGBONE THROUGH: two turns whose exponents sum to an integer", () => {
+    // The rule read one branch point at a time refuses the dogbone — `n(D, ±1) = −1` at both — and
+    // the refusal is wrong: `Σ n·α = (−1)(−½) + (−1)(−½) = 1 ∈ ℤ`, so `√(1−z²)` returns to itself and
+    // the contour is a loop in ℂ∖Γ after all. This is the same arithmetic as admissibility, read
+    // along the contour instead of along a component of the cut forest.
+    const half = { kind: "power", alpha: Frac.of(-1n, 2n) } as const;
+    const cut: BranchChoice = {
+      convention: "zeroToTwoPi",
+      points: [
+        { id: "b1", at: [-1, 0], order: half, label: "z = -1" },
+        { id: "b2", at: [1, 0], order: half, label: "z = 1" },
+      ],
+      cuts: [{ id: "Γ", from: "b1", to: "b2", via: [] }],
+      basePoint: [0, 1],
+      sheet: 0,
+    };
+    const r = run("(z+3)/(z^2+1)", dogboneTemplate(), cut);
+    const row = cutRows(r).find((x) => x.claim.includes("still closes on one sheet"));
+    expect(row?.status).toBe("satisfied");
+    expect(row?.claim).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = 1 ∈ ℤ/);
+    expect(rowsFor(r, "LEGALITY").every((x) => x.status !== "failed")).toBe(true);
+    // And a single end is not enough: half the dogbone leaves Σ n·α = 1/2.
+    const oneEnd = run("(z+3)/(z^2+1)", circleTemplate([1, 0], 0.4), cut);
+    const bad = cutRows(oneEnd).find((x) => x.claim.includes("does not close on one sheet"));
+    expect(bad?.status).toBe("failed");
+    expect(bad?.evidence.method).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = −1\/2 is not an integer/);
   });
 
   it("does not apply the winding rule to a point that is not a branch point at all", () => {

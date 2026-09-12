@@ -201,6 +201,30 @@ function arcHits(g: Extract<Resolved, { kind: "arc" }>, a: Cx, b: Cx, tol: numbe
   return out;
 }
 
+/**
+ * The same polyline with every interior vertex it runs STRAIGHT THROUGH removed.
+ *
+ * A vertex is kept when the cut actually turns there — including a full reversal, which is a bend of
+ * 180° and is exactly as degenerate to rest on as any other. Endpoints are always kept: the first and
+ * last vertices are branch points (or a ray's tip), and a piece passing through a branch point is a
+ * real problem rather than a discretisation artefact.
+ */
+function withoutStraightVertices(poly: readonly Cx[], tol: number): readonly Cx[] {
+  if (poly.length < 3) return poly;
+  const out: Cx[] = [poly[0]];
+  for (let k = 1; k + 1 < poly.length; k++) {
+    const ax = poly[k][0] - poly[k - 1][0];
+    const ay = poly[k][1] - poly[k - 1][1];
+    const bx = poly[k + 1][0] - poly[k][0];
+    const by = poly[k + 1][1] - poly[k][1];
+    const cross = Math.abs(ax * by - ay * bx);
+    const straight = cross <= tol * Math.max(Math.hypot(ax, ay), Math.hypot(bx, by)) && ax * bx + ay * by > 0;
+    if (!straight) out.push(poly[k]);
+  }
+  out.push(poly[poly.length - 1]);
+  return out;
+}
+
 /** Closest approach between a piece and one cut edge. Exact for a segment; complete for an arc. */
 function nearestToEdge(g: Resolved, a: Cx, b: Cx): number {
   const edge = seg(a, b);
@@ -239,10 +263,17 @@ function nearestToEdge(g: Resolved, a: Cx, b: Cx): number {
 export function classifyAgainstCut(
   cutId: string,
   g: Resolved,
-  poly: readonly Cx[],
+  polyline: readonly Cx[],
   scale: number,
 ): CutClassification {
   const tol = RELATIVE_CLEARANCE_FLOOR * Math.max(scale, 1);
+  // The classification must not depend on how the cut was DISCRETISED. `joinToOneCut` puts a
+  // draggable control vertex at the midpoint of a bounded cut, and for the dogbone's straight cut
+  // that vertex lands exactly on the interior of both lips — where the degenerate-bend test below
+  // reads it as a bend and refuses a contour that is perfectly legal. It is not a bend; it is a
+  // handle. Dropping every interior vertex the cut runs straight through makes the same geometric
+  // cut classify the same way whatever vertices it happens to carry.
+  const poly = withoutStraightVertices(polyline, tol);
   const from = startPoint(g);
   const to = endPoint(g);
 

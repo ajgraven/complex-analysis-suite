@@ -20,6 +20,7 @@ import { clearance, windingNumber } from "../kernel/winding.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
+import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
@@ -99,6 +100,14 @@ function arcExtent(g: Resolved): Frac | null {
 /** The radius of an arc as an exact rational, when it is one. */
 function arcRadius(g: Resolved): Frac | null {
   if (g.kind !== "arc") return null;
+  // **THE BOUND IS ABOUT `|z| = R`, SO THE ARC MUST BE CENTRED AT THE ORIGIN.** Every certified arc
+  // bound in `kernel/bounds/` reasons from `Σ|aₖ|R^k` over `|dₙ|Rⁿ − Σ|dₖ|R^k` — the reverse
+  // triangle inequality on the circle of radius `R` ABOUT 0 — and applying it to an arc centred
+  // elsewhere would compute a `≤` from the wrong geometry. Until M4.6b every `vanish` arc in the app
+  // happened to be centred at 0, so the hypothesis was true by accident; the dogbone's end caps sit
+  // at its branch points and are the first that are not. Returning null here reports honestly that
+  // no bound of this shape applies, instead of certifying one that does not.
+  if (g.center[0] !== 0 || g.center[1] !== 0) return null;
   const r = g.radius;
   if (!Number.isFinite(r) || r <= 0) return null;
   // The radius comes from a slider, so it is a double; the simplest rational that round-trips is the
@@ -343,40 +352,64 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     );
 
     // FIRST, the topological question one piece of geometry cannot answer: is the contour a loop in
-    // ℂ∖Γ at all? A loop encircling a branch point does not close on one sheet — `z^α` comes back
-    // multiplied — so `n(γ, b) ≠ 0` is a refusal whatever any individual piece is doing, and it is
-    // decided exactly by the same crossing predicates that decide a pole's winding number. This is
-    // the sharper form of a rule the per-piece geometry used to approximate: a naked circle about the
-    // origin was refused for "crossing the cut at its seam", when what is actually wrong with it is
-    // that it goes round the branch point.
-    const encircled: string[] = [];
+    // ℂ∖Γ at all? It is exactly when the integrand comes back to the value it started with, and what
+    // decides that is the TOTAL monodromy — `exp(2πi Σⱼ n(γ,bⱼ)·αⱼ)` — not any one winding number.
+    //
+    // **THIS IS WHY THE DOGBONE IS LEGAL AND A NAKED CIRCLE IS NOT.** A dogbone winds `−1` about each
+    // end of `√(1−z²)`'s cut, so testing the branch points one at a time refuses it — and the refusal
+    // is wrong, because `Σ n·α = (−1)(−½) + (−1)(−½) = 1 ∈ ℤ` and `f` returns to itself. That is the
+    // same arithmetic as admissibility (research 06 §2.1(b)) read along a contour instead of along a
+    // component of the cut forest, and the same reason it is a DECISION: `αⱼ` are exact `Frac`s, so
+    // `Σ n·α` has denominator 1 or it does not, and there is no "nearly an integer".
+    //
+    // A `log` point is the one case no cancellation reaches: its monodromy adds `2πi` rather than
+    // multiplying by a root of unity, so any non-zero winding about one is a refusal on its own.
+    const turns: string[] = [];
+    let monodromy = Frac.ZERO;
+    const logTurns: string[] = [];
+    const undecidedTurns: string[] = [];
     for (const point of branch.points) {
       const genuine = point.order.kind === "log" || point.order.alpha.d !== 1n;
       if (!genuine) continue;
       const w = windingNumber(pieces, point.at);
-      if (w.decided && w.n !== 0) {
-        encircled.push(`n(γ, ${point.label}) = ${w.n}`);
+      if (!w.decided) {
+        undecidedTurns.push(`${point.label} (${w.reason})`);
+        continue;
       }
+      if (w.n === 0) continue;
+      turns.push(`n(γ, ${point.label}) = ${formatFrac(Frac.of(BigInt(w.n)))}`);
+      if (point.order.kind === "log") logTurns.push(point.label);
+      else monodromy = monodromy.add(point.order.alpha.mul(Frac.of(BigInt(w.n))));
     }
-    if (encircled.length > 0) {
+
+    const monodromyFailure =
+      undecidedTurns.length > 0
+        ? `the winding number about a branch point could not be decided (${undecidedTurns.join("; ")}), so the monodromy along γ is not decided either`
+        : logTurns.length > 0
+          ? `the contour winds about the logarithmic branch point ${logTurns.join(", ")}: one turn adds 2πi to log(z − b), and no winding but zero brings it back`
+          : turns.length > 0 && monodromy.d !== 1n
+            ? `the contour's total monodromy is e^(2πi·${formatFrac(monodromy)}) ≠ 1: ${turns.join(", ")}, and Σ n(γ,bⱼ)·αⱼ = ${formatFrac(monodromy)} is not an integer, so the integrand does not return to the value it started with and no single sheet carries the answer`
+            : null;
+
+    if (monodromyFailure !== null) {
       push(
         rowFrom(
           "LEGALITY",
           "failed",
-          `the contour encircles a branch point (${encircled.join(", ")}), so the integrand does not return to the same value`,
-          refuse(
-            "LEGALITY",
-            `${encircled.join(", ")} — a loop with non-zero winding about a branch point is not a loop in ℂ∖Γ, ` +
-              "so the integrand is multivalued along it and no single sheet carries the answer",
-            {
-              provenance: [
-                { ok: false, text: "the winding number is decided exactly, by the same sign predicates the poles use" },
-                { ok: true, text: "suggested repair: indent the contour around the branch point — that is what a keyhole IS — or move it clear" },
-              ],
-            },
-          ),
+          undecidedTurns.length > 0
+            ? "the winding about a branch point is undecided, so the monodromy along the contour is too"
+            : `the contour winds about a branch point and does not close on one sheet (${turns.join(", ")})`,
+          refuse("LEGALITY", monodromyFailure, {
+            provenance: [
+              { ok: false, text: "each winding number is decided exactly, by the same sign predicates the poles use" },
+              {
+                ok: true,
+                text: "the test is on the SUM Σ n(γ,bⱼ)·αⱼ, not on any single winding: a contour may encircle two branch points and still close on one sheet, which is what a dogbone does",
+              },
+            ],
+          }),
           undefined,
-          "indent the contour around the branch point (a keyhole), or move it clear",
+          "indent the contour around the branch point (a keyhole), or take in the whole bounded component so the exponents sum to an integer (a dogbone)",
         ),
       );
       return {
@@ -387,6 +420,31 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         hasTarget: spec.some((p) => p.role === "target"),
         pieceLimits,
       };
+    }
+
+    // The positive row, emitted only when there is something to say: a contour that encircles nothing
+    // has no monodromy question to answer, and a row asserting that would be noise.
+    if (turns.length > 0) {
+      push(
+        rowFrom(
+          "LEGALITY",
+          "satisfied",
+          `the contour winds about a branch point and still closes on one sheet (Σ n(γ,bⱼ)·αⱼ = ${formatFrac(monodromy)} ∈ ℤ)`,
+          exact(
+            `the monodromy along γ is e^(2πi·${formatFrac(monodromy)}) = 1`,
+            "exact winding numbers against exact exponents, summed over ℚ — the admissibility arithmetic of research 06 §2.1(b), read along the contour",
+            {
+              provenance: [
+                { ok: true, text: `${turns.join(", ")} — non-zero, and the SUM is what has to be an integer` },
+                {
+                  ok: true,
+                  text: "this is the dogbone's licence: it winds about both ends of a bounded cut, and the two turns cancel in the exponent",
+                },
+              ],
+            },
+          ),
+        ),
+      );
     }
 
     const offending: string[] = [];
@@ -638,9 +696,11 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           `${piece.name} must vanish, but no lemma here applies to this integrand`,
           unknown(
             `the arc ${piece.name}`,
-            input.power === undefined && input.log === undefined
-              ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
-              : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
+            geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
+              ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
+              : input.power === undefined && input.log === undefined
+                ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
+                : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",

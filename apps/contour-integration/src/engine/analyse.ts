@@ -29,6 +29,7 @@ import { evaluateLedger, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
 import { applyBranchTheorem } from "./branchTheorem.js";
 import { applyLogTheorem } from "./logTheorem.js";
+import { applyExteriorTheorem, enclosesTheCut } from "./exteriorTheorem.js";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 
@@ -100,18 +101,34 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log }: 
   const integral = integrateContour(f, resolved, singular, budget);
   // Two routes that share no machinery: the theorem computes `2πi Σ n·Res` from exact residues, and
   // then CHECKS itself against the quadrature above. Agreement is the strongest evidence the app has.
+  //
+  // FOUR ROUTES, and the FIRST is decided by the geometry rather than by the integrand. A contour
+  // with the cut INSIDE it — the dogbone — does not satisfy the residue theorem at all: `f` is not
+  // holomorphic there, and `2πi Σ n·Res` over windings that are all zero would print `0` for an
+  // integral that is not zero (D6). So the exterior identity is chosen by asking where the cut is,
+  // and a contour that has moved is allowed to change which theorem applies to it.
   const theorem =
-    log !== undefined
-      ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
-      : power === undefined
-        ? applyResidueTheorem(poles, integral)
-        : applyBranchTheorem({
-            poles,
-            integral,
-            factor: power.factor,
-            rational: power.rational,
-            pieces: resolved,
-          });
+    branch !== undefined && enclosesTheCut(resolved, branch)
+      ? applyExteriorTheorem({
+          poles,
+          integral,
+          pieces: resolved,
+          branch,
+          rational: power?.rational ?? log?.rational ?? ast,
+          ...(power === undefined ? {} : { factor: { kind: "power" as const } }),
+          ...(log === undefined ? {} : { factor: { kind: "log" as const } }),
+        })
+      : log !== undefined
+        ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
+        : power === undefined
+          ? applyResidueTheorem(poles, integral)
+          : applyBranchTheorem({
+              poles,
+              integral,
+              factor: power.factor,
+              rational: power.rational,
+              pieces: resolved,
+            });
   const ledger = evaluateLedger({
     ast,
     pieces: resolved,

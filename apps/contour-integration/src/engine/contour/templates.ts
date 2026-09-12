@@ -5,8 +5,8 @@
 // so it stays fully editable after loading and its `R` is the same store field whether you drag the
 // handle or scrub the number in the derivation prose.
 //
-// The keyhole arrived with M4.2, because its pieces need the `side` tags that only mean something
-// once branch cuts exist. The dogbone waits for M4.6.
+// The keyhole arrived with M4.2 and the dogbone with M4.6, because their pieces need the `side` tags
+// that only mean something once branch cuts exist.
 import type { Contour, Param, Piece, Scalar } from "./model.js";
 import { pt } from "./model.js";
 
@@ -202,6 +202,92 @@ export function keyholeTemplate(outer = 4, inner = 0.15): Contour {
       eps: param("eps", inner, [1e-9, 1], "log", { to: "0+" }),
     },
   };
+}
+
+/**
+ * The dogbone: along the top of a bounded cut, round one end, back along the bottom, round the other.
+ *
+ * **IT ENCLOSES NOTHING, AND IS NOT ZERO.** That is the whole point of the shape, and D6's first trap
+ * says it plainly: `n(D, ±ia) = 0` — the dogbone winds zero times about every pole — "and yet
+ * `∫_D f = 2T ≠ 0`. The residue theorem's hypothesis is not 'no poles inside' but 'holomorphic inside
+ * except at isolated singularities', and the CUT is inside." The identity that does apply is the one
+ * for the EXTERIOR region, which contains ∞ — `engine/exteriorTheorem.ts`.
+ *
+ * **THERE IS NO OUTER CIRCLE HERE, and its absence is the claim.** D6 and D7 both list one, because
+ * the classical derivation writes the composite cycle `γ = C_R(ccw) + crosscut + D_cw + crosscut-back`
+ * and reads `∮γ = 2πi Σ Res` off it. Drawing that as a contour would be drawing two disjoint loops and
+ * calling them one path — and it would make every winding number `1`, which is precisely the fact D6
+ * exists to deny. So `C_R` is not a piece: it is `Res(f, ∞)`, exactly, and it appears as that row.
+ * `∮_{C_R,ccw} f = −2πi·Res(f,∞)` is the definition of the residue at infinity, not an approximation
+ * to it, so nothing is lost — D7's `|∮_outer| = 26.7` is still on screen, in the row that owns it.
+ *
+ * As with the keyhole, the two edges are the SAME segment traversed in opposite directions and the
+ * `side` tag is what tells them apart; they fail to cancel because the branch factor returns
+ * multiplied by its crossing phase. The traversal runs right along the TOP, which is clockwise about
+ * the cut — convention O, and the sign the exterior identity is written in.
+ *
+ * Each end cap is a FULL turn, not a semicircle, for the same reason the keyhole's inner circle runs
+ * `2π → 0`: the lips lie in the cut, so the arc leaves the upper lip at local angle `π` (resp. `2π`),
+ * goes round the far side, and arrives at the lower lip having turned by `−2π`. Its two endpoints are
+ * the same POINT and different LIPS, which is what makes the path closed and the classification
+ * `endpoint` rather than an untagged crossing.
+ */
+export function dogboneTemplate(left = -1, right = 1, end = 0.12): Contour {
+  const pieces: Piece[] = [
+    {
+      id: "top",
+      name: "the upper edge of the cut, left to right",
+      geom: {
+        kind: "segment",
+        from: pt(ref("eta", 1, left), 0),
+        to: pt(ref("eta", -1, right), 0),
+      },
+      role: "target",
+      side: "above",
+      colour: 0,
+    },
+    {
+      id: "endB",
+      name: "the η-circle round the right branch point, upper lip to lower",
+      geom: {
+        kind: "arc",
+        center: pt(right, 0),
+        radius: ref("eta"),
+        theta0: Math.PI,
+        theta1: -Math.PI,
+      },
+      role: "vanish",
+      lemma: "L1",
+      colour: 3,
+    },
+    {
+      id: "bottom",
+      name: "the lower edge of the cut, right to left",
+      geom: {
+        kind: "segment",
+        from: pt(ref("eta", -1, right), 0),
+        to: pt(ref("eta", 1, left), 0),
+      },
+      role: "reproduces",
+      side: "below",
+      colour: 2,
+    },
+    {
+      id: "endA",
+      name: "the η-circle round the left branch point, lower lip to upper",
+      geom: {
+        kind: "arc",
+        center: pt(left, 0),
+        radius: ref("eta"),
+        theta0: 2 * Math.PI,
+        theta1: 0,
+      },
+      role: "vanish",
+      lemma: "L1",
+      colour: 3,
+    },
+  ];
+  return { pieces, params: { eta: param("eta", end, [1e-9, 0.5], "log", { to: "0+" }) } };
 }
 
 /** An axis-aligned rectangle, positively oriented, from two opposite corners. */

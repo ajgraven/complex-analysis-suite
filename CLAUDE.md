@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **493 test files / 4596 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **494 test files / 4616 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -379,8 +379,33 @@ now verifies by DIVISION rather than equality — `z₀·conj(ζ)` a positive re
 guess-then-verify with one bound fewer. Two findings the widening forced: `logResidue` would have
 silently dropped `ln r` for a log family (ℚ(i)(π) has no seat for it) and now refuses by name, and a
 record whose poles sit on the default contour radius opens refusing, so `limitParams[].start` lets a
-record say where its own contour must start. Still to come in M4: the dogbone and `Res(f,∞)`
-(M4.6, → D6/D7), and the GPU cut picture (M4.7).
+record say where its own contour must start.
+
+**M4.6** is the dogbone's, and **M4.6a–b have landed**. `Res(f,∞)` is exact over ℚ(i) by one polynomial
+division, with `Σ_finite Res + Res(f,∞) = 0` as a differential check between two computations that share
+no arithmetic; and ONE number — the order at infinity `p = Σαⱼ − (deg D − deg N)` — decides both whether
+the outer circle vanishes (L2 needs `p < −1`) and whether the residue there is zero (`p ≤ −2`), which is
+research 03 §9(d)'s unification made arithmetic. `engine/exteriorTheorem.ts` is then the identity a
+contour with the CUT INSIDE IT satisfies — `∮γ = 2πi[Σ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞)]`, `σ` the
+winding about the branch points — and it is the ORDINARY residue theorem applied to `γ − σ·C_R`, which
+winds zero times about the cut. `σ = 0` gives the residue theorem back term for term, which is what makes
+the `− σ` falsifiable. Three things it settled: the dogbone template carries **no outer circle**, because
+drawing `C_R` would be two disjoint loops called one path and would make every winding `1` — the one fact
+D6 exists to deny, so `C_R` is `Res(f,∞)` and appears as that row; `analyse` routes on the GEOMETRY, so a
+contour that has moved may change which theorem applies to it, and an UNDECIDED winding about a branch
+point routes here to be refused by name rather than to the ordinary theorem to be answered; and a rational
+integrand can falsify the pole weights and the residue at infinity against the quadrature but **not the
+sign of σ** (`Σ Res + Res(f,∞) = 0` kills that whole term), which is said out loud in the certificate
+rather than left for a reader to discover. The sandbox gains the keyhole and the dogbone, each seeding the
+cut system its shape presupposes. Verifying that in a browser found **three rules that had been true by
+accident**, all older than this slice: LEGALITY read the branch points ONE AT A TIME and so refused the
+dogbone (the rule is on the total monodromy `Σⱼ n(γ,bⱼ)·αⱼ ∈ ℤ` — admissibility's arithmetic read along
+a contour); cut classification depended on the cut's DISCRETISATION, because the draggable midpoint
+handle of a straight bounded cut lands on the lips' interior and was read as a bend; and every certified
+arc bound assumed the arc was centred at the ORIGIN, which every `vanish` arc in the app happened to be
+until the dogbone's caps sat on its branch points — an off-centre arc now gets no bound of that shape and
+says so, rather than a `≤` computed from the wrong geometry. Still to come in M4: the off-centre arc bound
+and D6 (M4.6c), D7 (M4.6d), and the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

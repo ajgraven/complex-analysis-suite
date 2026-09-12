@@ -120,6 +120,31 @@ whether the whole thing closes.
   sine is `sin(π/2) = 1`. A real-valued phase looks like no phase, which is exactly when a reader
   concludes the edges must cancel.
 
+**M4.6 is the dogbone's, and M4.6a–b have landed:**
+
+- `Res(f,∞)` is exact over ℚ(i) by one polynomial division, and `Σ_finite Res + Res(f,∞) = 0` checks it
+  against a computation sharing none of its arithmetic. **One number decides two rows**: the order at
+  infinity `p = Σαⱼ − (deg D − deg N)` says both whether the outer circle vanishes (L2 wants `p < −1`)
+  and whether the residue there is zero (`p ≤ −2`). The implication runs one way — `1/z` is regular at
+  infinity with `Res = −1` — so the certificate says which direction it establishes.
+- **The contour with the cut inside it does not satisfy the residue theorem.** A dogbone winds zero
+  times about every pole and its integral is not zero; the hypothesis that fails is holomorphy, because
+  the CUT is inside. What holds is `∮γ = 2πi[Σ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞)]` with `σ` the
+  winding about the branch points — and that is the *ordinary* residue theorem applied to `γ − σ·C_R`,
+  which winds zero times about the cut. `σ = 0` gives the plain theorem back term for term.
+- **The outer circle is not drawn, and its absence is the claim.** Drawing `C_R` would be two disjoint
+  loops called one path, and would make every winding number `1` — the fact the dogbone exists to deny.
+  `∮_{C_R,ccw} = −2πi·Res(f,∞)` is the definition of the residue at infinity, so the circle appears as
+  that row instead, exactly and not as an estimate.
+- **What the fixtures cannot test is said out loud.** `Σ Res + Res(f,∞) = 0` for every rational `f`, so
+  no rational fixture can falsify the SIGN of `σ` — it kills the whole `σ`-dependent term. The pole
+  weights and the residue at infinity are each falsified against the quadrature; the sign waits for D6,
+  and the certificate says so rather than leaving a reader to find out.
+- The sandbox gains the **keyhole** and the **dogbone**, each offering the cut system its shape
+  presupposes — declared objects in the Branch cuts card, draggable and removable, never overwriting a
+  cut already placed. Which theorem applies is then decided by the geometry: drag a keyhole until it
+  swallows its branch point and the identity changes with it.
+
 The eighteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden

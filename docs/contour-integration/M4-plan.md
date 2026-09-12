@@ -154,7 +154,7 @@ before D2.
 | **M4.3** ✅ | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` · **the log-residue engine and the log arc bound** → **D4** | M–L |
 | **M4.4** ✅ | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** ✅ | `ln(ℚ₊)` exponents and radical factors → **D2**; D7's algebraic half is ready and waits on M4.6's contour | S–M |
-| **M4.6** | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** | M |
+| **M4.6** ◐ | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** — a+b done | M |
 | **M4.7** | the GPU picture: `cutCorrection`, `cargCut`/`clogCut`/`cpowCut` twins, `DUAL_BACKEND_CORPUS`, monodromy readout, sheet badge, shadow-cut mode, **drag-a-cut** | M–L |
 
 ### Gates
@@ -476,3 +476,90 @@ poles are — and D2's sits exactly ON it, where the winding number is undecided
 refusing. `limitParams[].start` is the record's own answer. The corpus's R-independence test now takes
 its two radii from that too, since the property it checks ("independent once every selected pole is
 enclosed") is false when one radius excludes a pole.
+
+---
+
+## 10. What M4.6a–b landed, and what it taught
+
+`kernel/atInfinity.ts`, `engine/exteriorTheorem.ts`, the dogbone template, and the sandbox's first way
+into either tier-D shape. Five things are worth recording because they changed a decision.
+
+### The identity generalises, and generalising it is what made it testable
+
+The plan's form is the one D6's trap states — `∮_{D,cw} f = 2πi[Σ Res outside + Res(f,∞)]` — with the
+dogbone's `n = 0` baked in. The implemented form is
+
+    ∮γ f dz = 2πi [ Σₖ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞) ],   σ = n(γ, branch point)
+
+because `Z = γ − σ·C_R` winds `σ − σ = 0` about the cut whatever `σ` is, and the ORDINARY residue
+theorem applies to `Z` — no new theorem is used anywhere in the file, a different cycle is chosen. That
+is not generality for its own sake. Under the special form a rational fixture can falsify exactly one
+choice (that `Res(f,∞)` is present at all); under the general one it falsifies three, because `σ = 0`
+must reproduce `applyResidueTheorem` **term for term** on a keyhole, and a contour that encloses both
+the cut and a pole gives a non-zero answer the quadrature checks. Weighting by `n` instead of `n − σ`
+was invisible before and is caught now.
+
+### What a rational integrand cannot test, said out loud
+
+`Σ_all Res + Res(f,∞) = 0` for every rational `f`, so the whole `σ`-dependent term vanishes identically
+and the answer is `2πi Σ nₖ·Res` **whatever `σ` is**. The sign of `σ` is therefore not falsifiable by
+anything in this slice; what pins it is D6, whose contour is clockwise and whose answer is
+`π/(a√(1+a²))`. The response was to say so — in the module header, in a certificate step the user can
+read, and in a test that asserts the certificate says it — and to derive `σ` ONCE so the arithmetic and
+the sentence cannot drift apart. A break pass that reports "caught" for a mutation the fixtures cannot
+actually see would be worse than no break pass.
+
+### The dogbone has no outer circle, and that absence is the claim
+
+D6 and D7 both list `C_R` as a fifth piece, because the classical derivation writes the composite cycle
+and reads `∮γ = 2πi Σ Res` off it. Drawing it would be drawing two disjoint loops and calling them one
+path — and it would make every winding number `1`, which is precisely the fact D6 exists to deny. So
+`C_R` is not a piece: `∮_{C_R,ccw} = −2πi·Res(f,∞)` is the *definition* of the residue at infinity, and
+the circle appears as that row. Nothing is lost (D7's `|∮_outer| = 26.7` is still on screen) and the
+winding numbers stay honest. The records' own ⚠ GAP G5 is this, from the other side.
+
+### The lips lie in the cut, so the end caps are full turns
+
+A dogbone drawn as the boundary of an η-neighbourhood has semicircular caps and edges at `±iη` — and
+then the target piece is not `∫₋₁¹ f(x) dx`. Keeping the edges ON the cut, as `model.ts` requires and as
+the keyhole already does, forces each cap to run from the upper lip round to the lower one: local angle
+`π → −π` at the right branch point, `2π → 0` at the left. Same POINT, different LIP, a turn of `−2π`
+each — which is what makes the path exactly closed, makes the crossing classification `endpoint` rather
+than an untagged crossing, and makes `n(D, ±1) = −1` while `n(D, pole) = 0`.
+
+### The browser found three bugs the unit tests could not, and all three were old
+
+The dogbone was the first contour of its shape the app had ever drawn, and it walked straight into
+three rules that had been *true by accident*:
+
+- **LEGALITY read the branch points ONE AT A TIME.** "A loop with non-zero winding about a branch
+  point is not a loop in ℂ∖Γ" is right for a keyhole and wrong for a dogbone, which winds `−1` about
+  both ends of `√(1−z²)`'s cut and closes on one sheet anyway because `Σ n·α = 1 ∈ ℤ`. The rule is on
+  the TOTAL monodromy `exp(2πi Σⱼ n(γ,bⱼ)·αⱼ)`, which is the same arithmetic as admissibility
+  (research 06 §2.1(b)) read along a contour instead of along a component of the cut forest — and a
+  decision for the same reason, since `αⱼ` are exact `Frac`s. A `log` point is the case no
+  cancellation reaches, and an undecided winding now refuses instead of being skipped.
+- **Cut classification depended on the cut's DISCRETISATION.** `joinToOneCut` puts a draggable control
+  vertex at the midpoint of a bounded cut; for the dogbone's straight cut that vertex lands on the
+  interior of both lips, where the "a bend resting on the piece's interior has no side" test read it
+  as a bend and refused. It is not a bend, it is a handle. Interior vertices the cut runs straight
+  through are now dropped before classifying, so the same geometric cut classifies the same way
+  whatever vertices it happens to carry.
+- **Every certified arc bound assumed the arc was centred at the ORIGIN.** `kernel/bounds/` reasons
+  from `Σ|aₖ|R^k` over `|dₙ|Rⁿ − Σ|dₖ|R^k`, the reverse triangle inequality on `|z| = R` about `0`,
+  and `arcRadius` never looked at the centre — every `vanish` arc in the app happened to be centred
+  there. The dogbone's caps sit at its branch points. That is a `≤` computed from the wrong geometry,
+  which is the one thing this app may not print, so an off-centre arc now gets no bound of this shape
+  and says so. **The bound it needs is M4.6c's**, because D6's caps need the same thing with a branch
+  factor on them (`|f| ~ C·η^{−1/2}` near `z = 1`, length `πη`, so `|∫| = O(η^{1/2})`) — one shifted
+  expansion serves both, and building only the rational half now would be building it twice.
+
+### The theorem is chosen by the geometry, and an undecided winding is not a "no"
+
+`analyse` routes to the exterior identity when the contour winds about a branch point, so dragging a
+keyhole until it swallows its branch point changes which theorem applies to it. An UNDECIDED winding
+counts as "the cut may be inside": the alternative is handing the picture to the ordinary residue
+theorem, which would confidently return `2πi Σ n·Res` for a contour it cannot describe. It routes here
+and is refused by name instead. `ResidueTheoremResult` gained an `identity` field for the same reason —
+the derivation panel used to open its SOLVE stage with a hard-coded `∮ = 2πi Σ n·Res`, which above a
+dogbone's answer states the very equation D6 exists to show is inapplicable.

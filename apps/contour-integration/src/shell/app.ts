@@ -1,3 +1,4 @@
+import { Frac } from "@cas/exact";
 import { makeComplexFn, parse, type Node } from "@cas/expr";
 import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
 import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
@@ -52,7 +53,9 @@ import {
 } from "../engine/contour/edit.js";
 import {
   circleTemplate,
+  dogboneTemplate,
   indentedSemicircleTemplate,
+  keyholeTemplate,
   rectangleTemplate,
   semicircleTemplate,
 } from "../engine/contour/templates.js";
@@ -99,9 +102,31 @@ const PRESETS: { label: string; src: string }[] = [
   { label: "exp(i*z)/(1+z^2)", src: "exp(i*z)/(1+z^2)" },
 ];
 
-type TemplateId = "circle" | "semicircle" | "semicircleDown" | "indented" | "rectangle";
+type TemplateId =
+  | "circle"
+  | "semicircle"
+  | "semicircleDown"
+  | "indented"
+  | "rectangle"
+  | "keyhole"
+  | "dogbone";
 
-const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
+/**
+ * `seed` is how a template whose SHAPE presupposes a cut declares one.
+ *
+ * A keyhole with no cut is four pieces with a coincidence in them, and a dogbone with no cut is a
+ * closed curve enclosing nothing — which is to say `∮ = 0` and no lesson. So these two offer the cut
+ * system they were drawn for. It stays a CHOICE in exactly the sense M4.1 fixed: the seeded points
+ * and cut are ordinary declared objects, listed in the Branch cuts card, draggable, re-orderable and
+ * removable, and the template only offers them when nothing is declared yet — it never overwrites a
+ * cut the user placed.
+ */
+const TEMPLATES: {
+  id: TemplateId;
+  label: string;
+  build: () => Contour;
+  seed?: (branch: BranchChoice) => BranchChoice;
+}[] = [
   { id: "circle", label: "circle", build: () => circleTemplate([0, 0], 1.5) },
   { id: "semicircle", label: "semicircle ↑", build: () => semicircleTemplate(3, "upper") },
   { id: "semicircleDown", label: "semicircle ↓", build: () => semicircleTemplate(3, "lower") },
@@ -114,6 +139,26 @@ const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
     build: () => indentedSemicircleTemplate(8, 0.05),
   },
   { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
+  // Tier D's two shapes, which the engine has had since M4.2 and M4.6 with no way in either.
+  {
+    id: "keyhole",
+    label: "keyhole",
+    build: () => keyholeTemplate(4, 0.15),
+    seed: (b) => setOrder(addBranchPoint(b, [0, 0]), "b1", { kind: "power", alpha: Frac.of(1n, 2n) }),
+  },
+  // The one that encloses nothing and is not zero — but only once the cut is inside it, which is
+  // why this is the template that seeds a BOUNDED cut rather than a ray.
+  {
+    id: "dogbone",
+    label: "dogbone",
+    build: () => dogboneTemplate(-1, 1, 0.12),
+    seed: (b) => {
+      const half = { kind: "power", alpha: Frac.of(-1n, 2n) } as const;
+      let next = setOrder(addBranchPoint(b, [-1, 0]), "b1", half);
+      next = setOrder(addBranchPoint(next, [1, 0]), "b2", half);
+      return joinToOneCut(next, "b1", "b2") ?? next;
+    },
+  },
 ];
 
 /** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
@@ -1288,6 +1333,7 @@ export function mountApp(root: Element): void {
         b.type = "button";
         b.addEventListener("click", () => {
           contour = t.build();
+          if (t.seed !== undefined && branch.points.length === 0) branch = t.seed(branch);
           recompute();
           frameContour();
         });
