@@ -17,8 +17,8 @@
 import { makeComplexFn, type Node } from "@cas/expr";
 import { analyse, type Analysis } from "../engine/analyse.js";
 import type { PathFn, QuadratureBudget } from "../engine/contour/integrate.js";
-import { resolveAll, type Contour, type CutSide } from "../engine/contour/model.js";
-import { pointAt, type Cx } from "../kernel/geom.js";
+import type { Contour } from "../engine/contour/model.js";
+import type { Cx } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
@@ -36,7 +36,8 @@ import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
-import { evaluateDeclared, sideResolves, type DeclaredProduct } from "../kernel/branch/declared.js";
+import type { DeclaredProduct } from "../kernel/branch/declared.js";
+import { declaredEvaluator } from "../engine/declaredRun.js";
 
 export interface RunOptions {
   /**
@@ -208,27 +209,14 @@ export function runFamily(
   // running vertically through a lip, where "above" displaces ALONG the cut rather than across it
   // (`sideResolves`) — and it names that rather than the old general reason, because a record in that
   // shape would otherwise get a quadrature that picked a limit by coin toss.
+  // `declaredEvaluator` is shared with the sandbox (`engine/declaredRun.ts`) on the second-consumer
+  // rule: the two must sample the IDENTICAL integrand, or the sandbox's quadrature would be checking
+  // a different function from the one the golden corpus checks and neither would say so.
   let unresolved: string | null = null;
   if (declared !== undefined) {
-    const co = makeComplexFn(declared.cofactor);
-    const product = declared.product;
-    f = (z: Cx, side?: CutSide): Cx => {
-      const b = evaluateDeclared(product, z, side);
-      const r = co(z as [number, number], [0, 0]) as Cx;
-      return [b[0] * r[0] - b[1] * r[1], b[0] * r[1] + b[1] * r[0]];
-    };
-    // Sampled once per side-declaring piece, at its midpoint: a lip runs ALONG a cut by
-    // construction, so whether the side resolves is a property of the pair and not of the point.
-    const resolvedPieces = resolveAll(contour);
-    contour.pieces.forEach((piece, k) => {
-      if (piece.side === undefined || unresolved !== null) return;
-      if (!sideResolves(product, pointAt(resolvedPieces[k], 0.5), piece.side)) {
-        unresolved =
-          `${piece.name} declares side '${piece.side}', but the cut it runs along is vertical there: ` +
-          `"above" displaces along the cut rather than across it, so no limit is pinned and a ` +
-          `quadrature would choose one by coin toss. The exact route is the residue theorem.`;
-      }
-    });
+    const built = declaredEvaluator(declared.product, declared.cofactor, contour);
+    f = built.f;
+    unresolved = built.unresolved;
   }
   const budget =
     unresolved === null ? options.budget : { ...options.budget, skip: unresolved };
