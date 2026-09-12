@@ -24,6 +24,7 @@ import {
   INFINITY as INFINITY_ID,
   NO_BRANCH,
   cutPolyline,
+  effectiveBranch,
   type BranchChoice,
 } from "../kernel/branch/model.js";
 import {
@@ -38,6 +39,7 @@ import {
   splitToRays,
   type BranchGrab,
   type BranchHandle,
+  setShadow,
 } from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { analyse } from "../engine/analyse.js";
@@ -247,7 +249,16 @@ export function mountApp(root: Element): void {
    * stays empty: a record's argument is the record's, and a cut drawn across it would be editing a
    * worked example rather than exploring one.
    */
-  let branch: BranchChoice = NO_BRANCH;
+  /**
+   * The sandbox's own cut system. `NO_BRANCH` with its LAMP moved off the origin.
+   *
+   * `NO_BRANCH.basePoint` is `[0,0]`, which is right for a rational integrand where nothing reads
+   * it — and wrong here, because the first branch point a reader adds also lands at the origin and
+   * a point sitting ON the base point casts no shadow. Shadow mode then refused on its first click,
+   * correctly and uselessly. Every gallery record puts its base point at `i` for the same reason,
+   * so the sandbox does too rather than inventing a third convention.
+   */
+  let branch: BranchChoice = { ...NO_BRANCH, basePoint: [0, 1] };
   /** The open record's cut system, when it declares one. Drawn, never edited. */
   let recordBranch: BranchChoice | null = null;
   /**
@@ -268,6 +279,17 @@ export function mountApp(root: Element): void {
    */
   let isoPref: boolean | null = null;
   const isoOn = (): boolean => isoPref ?? declaredOnStage !== null;
+  /**
+   * The cut system to ANALYSE and DRAW — the shadow of the base point, or the declared arcs.
+   *
+   * One accessor, because the alternative is for each of the ledger, the ink layer and the readout
+   * to remember to derive, and the first one that forgot would draw a cut the verdict is not about.
+   * The EDITOR and the handles deliberately read `branch` itself: the declaration is what a reader
+   * edits, and `shadowCuts` clears the flag on what it returns so a derived system cannot be edited
+   * as though it were declared.
+   */
+  const effective = (): BranchChoice =>
+    effectiveBranch(mode === "sandbox" ? branch : (recordBranch ?? NO_BRANCH));
   let bHandles: readonly BranchHandle[] = [];
   /** The branch handle under the pointer, for the cursor. −1 for none. */
   let bHovered = -1;
@@ -530,7 +552,7 @@ export function mountApp(root: Element): void {
     // THE RECORD'S OWN CUT, under a record. D1's `argRange` decides where the cut runs and the whole
     // record is about what happens when it runs somewhere else, so a figure without it is missing
     // the thing it is teaching. In the sandbox the cut is the user's.
-    const drawn = mode === "sandbox" ? branch : (recordBranch ?? NO_BRANCH);
+    const drawn = effective();
     if (drawn.cuts.length === 0) return [];
     const vp = viewport();
     const reach =
@@ -721,7 +743,7 @@ export function mountApp(root: Element): void {
           f,
           poles,
           contour,
-          branch,
+          branch: effective(),
           ...(budget === undefined ? {} : { budget }),
         });
         resolved = a.resolved;
@@ -1520,8 +1542,7 @@ export function mountApp(root: Element): void {
    * stays clear of the contour, and this is exactly what changes when it does not.
    */
   function monodromyReadout(): HTMLElement | null {
-    const drawn = mode === "sandbox" ? branch : (recordBranch ?? NO_BRANCH);
-    const all = allCrossingMonodromy(drawn);
+    const all = allCrossingMonodromy(effective());
     if (all.length === 0) return null;
     const wrap = el("div");
     wrap.append(el("h3", "small muted", "Crossing a cut"));
@@ -1581,7 +1602,34 @@ export function mountApp(root: Element): void {
     }
 
     const tools = el("div", "presets");
+    // **SHADOW MODE — research 06 §2.3, and free.** If `f` is defined by continuing along `[z₀, z]`,
+    // the induced cuts are exactly the rays from each `bₖ` pointing away from `z₀`, so they swing
+    // like shadows as the lamp moves. It needs no data structure, which is why it is a toggle over a
+    // derivation rather than a second cut representation to keep in step — and why the cut vertices
+    // stop being draggable while it is on: there, a cut is a consequence.
+    const shadow = el("button", "preset", "shadow cuts");
+    shadow.type = "button";
+    shadow.setAttribute("aria-pressed", String(branch.shadow === true));
+    shadow.classList.toggle("on", branch.shadow === true);
+    shadow.addEventListener("click", () => {
+      branch = setShadow(branch, branch.shadow !== true);
+      recompute();
+      renderBranchCard();
+    });
+    tools.append(shadow);
     const add = el("button", "preset", "+ branch point");
+    // The mode's own sentence, present whenever it is on. It also carries the repair the LEDGER
+    // cannot: admissibility's advice is "run a cut from it to another branch point, or to infinity",
+    // which is right in general and names an action shadow mode does not offer — there a cut is a
+    // consequence, and what a reader moves is the lamp.
+    const shadowNote =
+      branch.shadow === true
+        ? el(
+            "p",
+            "muted small",
+            "the cuts are the rays pointing away from z₀ — drag the base point to swing them. A branch point sitting on z₀ casts no shadow, so move one clear of the other.",
+          )
+        : null;
     add.type = "button";
     add.addEventListener("click", () => {
       // Placed at the middle of the view rather than at the origin, so a second point does not land
@@ -1615,6 +1663,24 @@ export function mountApp(root: Element): void {
       tools.append(split);
     }
     branchCard.append(tools);
+    if (shadowNote !== null) branchCard.append(shadowNote);
+    // **THE SANDBOX'S CUT AND THE SANDBOX'S COLOURING ARE DIFFERENT OBJECTS**, and a reader can see
+    // both at once, so the app has to say it. The colouring comes from the expression that was
+    // typed, in `@cas/expr`'s principal branch of every sub-expression; the cut is a DECLARATION the
+    // reader made, and M4.7c's finding is that the determination a written expression is in cannot
+    // be inferred from it — so the app does not pretend the two agree by correcting one into the
+    // other. Under a record they DO agree, because a record declares its factorisation and the
+    // stage is built from it; here there is nothing to build from, and the honest report is that
+    // moving the cut changes the ledger's verdict and not the picture's seam.
+    if (branch.points.length > 0) {
+      branchCard.append(
+        el(
+          "p",
+          "muted small",
+          "the colouring is the principal branch of the expression above; the cut is your declaration, and the two need not coincide. Moving the cut changes the verdict, not the seam.",
+        ),
+      );
+    }
 
     if (branch.points.length === 0) {
       branchCard.append(
@@ -1922,10 +1988,13 @@ export function mountApp(root: Element): void {
     grab = again === undefined ? null : { kind: "branch", handle: again };
   }
 
-  const sameBranchGrab = (a: BranchGrab, b: BranchGrab): boolean =>
-    a.kind === b.kind &&
-    a.id === b.id &&
-    (a.kind !== "cut" || (b.kind === "cut" && a.index === b.index));
+  const sameBranchGrab = (a: BranchGrab, b: BranchGrab): boolean => {
+    // The base grab has no id: there is exactly one base point, so the kind identifies it.
+    if (a.kind !== b.kind) return false;
+    if (a.kind === "base") return true;
+    if (a.kind === "point") return b.kind === "point" && a.id === b.id;
+    return b.kind === "cut" && a.id === b.id && a.index === b.index;
+  };
 
   /** Enter / Space walks what the arrows act on: the view, the contour, then each radius handle. */
   function cycleGrab(): void {

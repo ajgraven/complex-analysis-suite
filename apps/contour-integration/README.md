@@ -248,6 +248,32 @@ whether the whole thing closes.
   infinite-order monodromy has no finite jump and a number there would be the app's first dishonest
   label.
 
+**M4.7d completes M4 with north-star #3 — drag a branch cut:**
+
+- **Nothing changes, and the app says so.** `∮` comes from `2πi Σ n·Res` with residues read in the
+  declared window, so it does not depend on the cut's geometry: with the cuts clear of the contour,
+  the value is EXACTLY invariant under any deformation of them, and that is a ledger row rather than
+  a number a reader has to watch not move. The reason is the correction's own definition, so the
+  invariance is a consequence of how the picture is computed. It is also what makes the jump
+  meaningful — a value that drifted under a drag would make a jump one more wobble.
+- **The crossing names its factor, in BOTH forms.** Research 06 §3.2 requires the app to refuse a
+  crossing or change sheet "with the multiplicative factor shown"; it refused from M4.1 and said
+  nothing, which teaches that a cut is a wall rather than a choice with a price. Now the refusal and
+  the Branch-cuts card both carry `e^{2πi(α−1)} = e^{2πiα}` — the literal exponent the integrand
+  gives and the textbook's reduced one, with the reason they agree — because a reader who only meets
+  the reduced form carries it to an `x^s` integrand where the `−1` is not there to cancel.
+- **The factor folds only when it can.** `e^{2πiJ}` is built in the app's output basis, so it becomes
+  `1`, `i`, `−1` or `−i` exactly when `4J ∈ ℤ` and is carried as an exponential otherwise — `e^{2πi/3}`
+  wants a cube root of unity neither ℚ(i) nor one quadratic extension has. An integral jump weight is
+  no crossing at all and reports nothing, rather than announcing a factor of 1.
+- **Shadow cuts** (research 06 §2.3): the cuts become the rays pointing away from the base point and
+  swing like shadows as you drag the lamp. Always admissible — every ray reaches infinity — which is
+  exactly why it cannot express the dogbone, so the declared arcs are kept underneath and the toggle
+  gives them back. A branch point sitting on the lamp casts no shadow and is refused by name.
+- In the sandbox the cut is your declaration and the colouring is the principal branch of what you
+  typed; the app says they need not coincide, because the determination a written expression is in
+  cannot be inferred from it. Under a record they do coincide, which is what M4.7c built.
+
 The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden

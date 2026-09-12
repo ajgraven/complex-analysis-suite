@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **502 test files / 4752 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **503 test files / 4764 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -474,8 +474,32 @@ measured: `|f|` is determination-independent to 1e-9 for D1/D2/D3/D6/D7, and dif
 app says which case it is showing. Writing the tests found three things a shader suite cannot
 otherwise see — an unused GLSL function links perfectly, `expect(x).toBeLessThan` without a call
 asserts nothing, and a grid never lands on a hair-thin isoline — and the browser found the label
-placed off-canvas on a clipped ray and underneath the contour on a dogbone. Sweeps: 14/14. Still to
-come in M4: drag-a-cut (M4.7d).
+placed off-canvas on a clipped ray and underneath the contour on a dogbone. Sweeps: 14/14.
+
+**M4.7d completes M4 with north-star #3.** Its two halves: `∮` comes from `2πi Σ n·Res` with residues
+read in the DECLARED window, so it cannot see the cut's geometry — with the cuts clear of the contour
+the value is exactly invariant under any deformation of them, now a ledger row rather than a number a
+reader must watch not move, and justified by the correction's own definition (a count of jump-weighted
+crossings of `[z₀, z]` changes at no point of γ under a deformation missing γ), which is also what
+makes a jump on crossing meaningful. And the crossing NAMES its factor: research 06 §3.2 requires
+"refuse the crossing or change sheet and say so, with the multiplicative factor shown", and the app
+had refused since M4.1 while saying nothing — teaching that a cut is a wall rather than a bookkeeping
+choice with a price. It now prints `e^{2πi(α−1)} = e^{2πiα}` in BOTH of §3.4's forms with the reason
+they agree, since a reader who only meets the reduced one carries it to an `x^s` integrand where the
+`−1` is not there to cancel; `e^{2πiJ}` is built in the output basis so it folds to `1, i, −1, −i`
+exactly when `4J ∈ ℤ` and is carried otherwise, and an integral jump weight reports nothing rather
+than announcing a factor of 1. **Shadow-cut mode** (§2.3) lands with it — the cuts become the rays
+away from the base point and swing as the lamp is dragged, derived rather than represented so no
+downstream module is shadow-aware; always admissible because every ray reaches infinity, which is
+precisely why it cannot express the dogbone, so the declared arcs are kept underneath and the toggle
+gives them back. Running it found the sandbox's default lamp sitting on its own first branch point
+(shadow mode refusing on its first click, correctly and uselessly), the ledger's repair naming an
+action the mode does not offer, and the sandbox drawing a declared cut beside a principal-branch
+colour seam with nothing to say they are different objects. Sweeps: 12/12 and 10/11 (one equivalent
+mutant). Research 06 §5.3's **sheet spinner is deferred with its reason**: under a record the
+determination is the record's, and the sandbox has no declared branch FACTOR for a sheet index to
+multiply — giving it one means letting the sandbox declare `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing
+one expression, which is a real extension of what the sandbox is. M4 is complete.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

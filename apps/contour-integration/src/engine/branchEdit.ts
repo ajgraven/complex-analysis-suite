@@ -173,7 +173,9 @@ export function splitToRays(branch: BranchChoice, cutId: string): BranchChoice |
 
 export type BranchGrab =
   | { readonly kind: "point"; readonly id: string }
-  | { readonly kind: "cut"; readonly id: string; readonly index: number };
+  | { readonly kind: "cut"; readonly id: string; readonly index: number }
+  /** The base point `z₀` — the lamp whose shadows the cuts are, in research 06 §2.3's mode. */
+  | { readonly kind: "base" };
 
 export interface BranchHandle {
   readonly at: Cx;
@@ -182,11 +184,23 @@ export interface BranchHandle {
   readonly label: string;
 }
 
-/** Every draggable part of the cut system: each branch point, and each cut's control vertex. */
+/**
+ * Every draggable part of the cut system: each branch point, each cut's control vertex, and — in
+ * shadow mode — the base point.
+ *
+ * **The cut vertices are NOT offered in shadow mode**, and that is the mode's whole shape. There the
+ * cuts are a CONSEQUENCE of where `z₀` is, so a handle on one would be a handle on a consequence:
+ * the drag would be silently undone by the next derivation, which is the worst kind of control.
+ * What moves instead is the lamp.
+ */
 export function branchHandles(branch: BranchChoice): BranchHandle[] {
   const out: BranchHandle[] = [];
   for (const p of branch.points) {
     out.push({ at: p.at, grab: { kind: "point", id: p.id }, label: `branch point ${p.id}` });
+  }
+  if (branch.shadow === true) {
+    out.push({ at: branch.basePoint, grab: { kind: "base" }, label: "the base point z₀" });
+    return out;
   }
   for (const c of branch.cuts) {
     c.via.forEach((v, index) => {
@@ -198,7 +212,21 @@ export function branchHandles(branch: BranchChoice): BranchHandle[] {
 
 /** Apply a move to whatever the grab names. Unknown ids are left alone rather than throwing. */
 export function applyBranchGrab(branch: BranchChoice, grab: BranchGrab, to: Cx): BranchChoice {
+  if (grab.kind === "base") return { ...branch, basePoint: to };
   return grab.kind === "point"
     ? moveBranchPoint(branch, grab.id, to)
     : moveCutVertex(branch, grab.id, grab.index, to);
 }
+
+/**
+ * Turn shadow mode on or off, keeping whichever description survives the switch.
+ *
+ * Turning it ON keeps the declared arcs in place — untouched and ignored — so turning it off again
+ * restores exactly the cut system the reader built, including a dogbone shadow mode cannot express.
+ * The alternative is to derive over the top of them, and then the mode is a one-way door that
+ * silently destroys a bounded arc.
+ */
+export const setShadow = (branch: BranchChoice, shadow: boolean): BranchChoice => ({
+  ...branch,
+  shadow,
+});

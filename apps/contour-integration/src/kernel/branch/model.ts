@@ -69,6 +69,19 @@ export interface BranchChoice {
   readonly cuts: readonly CutArc[];
   /** Where the continuation starts. Research 06 §2.3's shadow-cut mode derives the cuts from it. */
   readonly basePoint: Cx;
+  /**
+   * Shadow-cut mode: the cuts are DERIVED from {@link basePoint} rather than declared.
+   *
+   * Research 06 §2.3's result — if `f(z)` is defined by continuing along the straight segment
+   * `[z₀, z]`, the induced cut system is exactly the ray from each `bₖ` pointing directly away from
+   * `z₀`, so the cuts "swing like shadows around a lamp" as the base point moves. It "requires no
+   * cut data structure at all", which is why this is a flag and {@link shadowCuts} a derivation
+   * rather than a second representation to keep in step.
+   *
+   * When set, {@link cuts} is IGNORED — a UI that let a user drag a shadow cut directly would be
+   * offering a handle on a consequence.
+   */
+  readonly shadow?: boolean;
   /** Which sheet the answer is reported on. For a closed contour in ℂ∖Γ only this integer matters. */
   readonly sheet: number;
 }
@@ -84,6 +97,54 @@ export const NO_BRANCH: BranchChoice = {
 
 const pointAt = (branch: BranchChoice, id: string): Cx | null =>
   branch.points.find((p) => p.id === id)?.at ?? null;
+
+/** How far a shadow ray is drawn before {@link cutPolyline} clips it for a geometric test. */
+const SHADOW_REACH = 1e4;
+
+/**
+ * The cut system a base point casts — research 06 §2.3, "free", with no data structure of its own.
+ *
+ * One ray from each GENUINE branch point, pointing directly away from `z₀`. Returned as an ordinary
+ * {@link BranchChoice} with `shadow` cleared, so everything downstream — admissibility, the crossing
+ * classifier, the jump weights, the correction, the drawing — reads it exactly as it reads a declared
+ * system. There is no shadow-aware path anywhere else, which is the point of deriving rather than
+ * branching.
+ *
+ * **Two facts worth stating, because they are what the mode teaches.**
+ *
+ * Every shadow ray reaches infinity, so no component of Γ is bounded and admissibility's rules (b)
+ * and (c) are satisfied automatically; rule (a) holds because every genuine point gets a ray. So a
+ * shadow system is ALWAYS admissible — which is exactly why it cannot express the dogbone, whose
+ * whole content is a BOUNDED arc between two points that individually carry `−1/2`. §2.3 says as
+ * much: "the explicit mode is needed for the dogbone".
+ *
+ * And a point sitting exactly ON the base point casts no shadow — there is no direction away from
+ * `z₀` — so it gets no ray at all and admissibility refuses it as unplaced, by name. Inventing a
+ * direction there would put a cut somewhere the definition does not, and the definition is in
+ * trouble anyway: continuing from a base point that IS a singularity does not start.
+ */
+export function shadowCuts(branch: BranchChoice): BranchChoice {
+  const [bx, by] = branch.basePoint;
+  const cuts: CutArc[] = [];
+  for (const p of branch.points) {
+    if (p.order.kind === "power" && p.order.alpha.d === 1n) continue; // integral: single-valued
+    const dx = p.at[0] - bx;
+    const dy = p.at[1] - by;
+    const len = Math.hypot(dx, dy);
+    if (len === 0) continue; // no shadow to cast; admissibility will name it
+    cuts.push({
+      id: `Γ${p.id}`,
+      from: p.id,
+      to: INFINITY,
+      via: [[p.at[0] + (dx / len) * SHADOW_REACH, p.at[1] + (dy / len) * SHADOW_REACH]],
+    });
+  }
+  return { ...branch, cuts, shadow: false };
+}
+
+/** The system to analyse and draw: the shadow of the base point, or the declared arcs. */
+export const effectiveBranch = (branch: BranchChoice): BranchChoice =>
+  branch.shadow === true ? shadowCuts(branch) : branch;
 
 /**
  * A cut as a finite polyline, with any ray to infinity clipped at `radius` from the origin.

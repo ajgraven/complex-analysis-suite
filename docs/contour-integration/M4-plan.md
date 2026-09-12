@@ -155,7 +155,7 @@ before D2.
 | **M4.4** ✅ | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** ✅ | `ln(ℚ₊)` exponents and radical factors → **D2**; D7's algebraic half is ready and waits on M4.6's contour | S–M |
 | **M4.6** ✅ | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** | M |
-| **M4.7** | the GPU picture: `cutCorrection`, `cargCut`/`clogCut`/`cpowCut` twins, `DUAL_BACKEND_CORPUS`, monodromy readout, sheet badge, shadow-cut mode, **drag-a-cut** | M–L |
+| **M4.7** ✅ | the GPU picture: `cutCorrection` + the `cargCut`/`clogCut`/`cpowCut` twins and their parity gate · the DECLARED determination on the stage · the monodromy readout in both forms · the cut-geometry invariance certificate · shadow-cut mode · **drag-a-cut** (the sheet badge deferred, §15) | M–L |
 
 ### Gates
 
@@ -183,10 +183,12 @@ before D2.
 - **M4.6** ✅ — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
   magnitude 1.216. The residue at infinity is not an edge case, and D6 passing only because
   `Res(f,∞) = 0` is the coincidence that would hide the bug.
-- **M4.7** — **north-star #3**; CPU/GPU parity green in a browser suite. **M4.7a–b (§13) did the
-  parity half and M4.7c (§14) put the declared determination on the stage: 75 assertions in real
-  WebGL2 across three files, and mutation sweeps at 17/17 and 14/14.** `DUAL_BACKEND_CORPUS` in the
-  table above is superseded — see §13's last note. North-star #3 itself waits on M4.7d.
+- **M4.7** ✅ — **north-star #3**, in both its halves (§15): `∮` is certified invariant under any
+  deformation of the cut system that stays clear of the contour, and a crossing names its factor in
+  both of §3.4's forms rather than only refusing. CPU/GPU parity green in a browser suite — 75
+  assertions in real WebGL2 across three files (M4.7a–b, §13) — and the declared determination is on
+  the stage (M4.7c, §14). Shadow mode lands with it. `DUAL_BACKEND_CORPUS` in the table above is
+  superseded (§13's last note); §5.3's sheet spinner is deferred with its reason (§15's last note).
 
 ### Two prerequisites
 
@@ -895,3 +897,94 @@ printing a number for it would be the first dishonest label in the app.
 died on the first pass. The survivor was the overlay — driven by `fract(hue)` instead of
 `fract(log2|f|)` it would trace the seam rather than cross it, making the card's sentence false, and
 every test passed because they all switched the overlay off. Closed by the isoline test above; 14/14.
+
+## 15. What M4.7d landed, and what it taught
+
+North-star #3, and the two halves it is made of. Nothing changes while a cut is dragged clear of the
+contour — now a certificate rather than a number a reader has to watch not move — and the crossing
+names its factor instead of only refusing. Plus research 06 §2.3's shadow mode, free, as the paper
+promised.
+
+### "The answer jumps" is about the ANSWER, and the answer is a formula
+
+The tempting reading of #3 is a live picture: drag the cut and watch the colours change. That is not
+what the app should do and not what the north star says. `∮` comes from `2πi Σ n·Res` with residues
+read in the DECLARED window, so it does not depend on the cut's geometry at all — and that is the
+first half, stated exactly: with at least one cut and none of it touching the contour, `∮` is
+invariant under any deformation of the system. The reason is the correction's own definition (`m` is
+a count of jump-weighted crossings of `[z₀, z]`, so a deformation missing `γ` changes no crossing
+count at any point OF `γ`), which makes the invariance a consequence of how the picture is computed
+rather than a second assertion about it. It is also what makes the jump meaningful: a value that
+drifted under a drag would make a jump on crossing one more wobble.
+
+The second half is research 06 §3.2's contract, which the app had been meeting halfway since M4.1:
+"either **refuse** the crossing or **change sheet and say so**, with the multiplicative factor shown
+… silently continuing is the misconception generator". It refused, and said nothing about the factor
+— which teaches a reader that a cut is a wall rather than a bookkeeping choice with a price. The
+factor is now in the refusal AND in the Branch-cuts card, where it is the number that makes the drag
+legible before the reader drags into a wall.
+
+### BOTH forms, or the reader learns the wrong one
+
+§3.4: `f(x − i0) = e^{2πi(α−1)} f(x + i0) = e^{2πiα} f(x + i0)`, and "students who see only
+`e^{2πiα}` often mis-generalise it to `x^s` integrands, where the factor is `e^{2πis}` and the `−1`
+does not appear". So both are printed with the reason they agree (`e^{−2πi} = 1`) — the literal form
+the integrand's exponent gives, and the textbook's reduced one. Nothing special-cases a value:
+`e^{2πiJ}` is built as an `Exponent` in the output basis and folds to `1, i, −1, −i` exactly when
+`4J ∈ ℤ` by the same rule an ANSWER folds under, and is CARRIED otherwise, since `e^{2πi/3}` wants a
+cube root of unity that neither ℚ(i) nor one quadratic extension has. An integral jump weight returns
+null rather than announcing a factor of 1 — §5.1's own criterion for an arc being a cut at all.
+
+### Shadow mode is free, always admissible, and CANNOT do the dogbone — one fact, three ways
+
+§2.3's result: continuing along `[z₀, z]` induces exactly the ray from each `bₖ` away from `z₀`, so
+the cuts swing like shadows as the lamp moves, with no cut data structure at all. Implemented as a
+derivation returning an ordinary `BranchChoice` with the flag CLEARED, so there is no shadow-aware
+path in admissibility, the crossing classifier, the jump weights, the correction or the ink layer —
+deriving rather than branching is what keeps that true. Every ray reaches infinity, so no component is
+bounded, rules (b) and (c) hold for free and (a) holds because every genuine point casts one: a shadow
+system is **always admissible**, which is exactly why it cannot express the dogbone, whose content is
+a bounded arc between two points that individually carry `−1/2`. The freedom and the limitation are
+the same fact, and §2.3 says so: "the explicit mode is needed for the dogbone". The declared arcs are
+therefore kept underneath rather than wiped, so the toggle is not a one-way door that destroys a
+bounded arc a reader spent a gesture building — and the cut vertices stop being draggable while the
+mode is on, because there a cut is a consequence and a handle on one would be undone by the next
+derivation.
+
+### Four things found by running it
+
+- **A point sitting ON the lamp casts no shadow**, so it gets no ray and admissibility refuses it as
+  unplaced, by name. Inventing a direction would put a cut where the definition does not — and the
+  definition is in trouble anyway, since a continuation from a base point that IS a singularity does
+  not start. But the sandbox's default base point was `[0,0]` and the first branch point a reader
+  adds lands at the origin too, so shadow mode refused on its first click: correct, and useless. The
+  sandbox now puts its lamp at `i`, as every record does.
+- **The ledger's repair names an action shadow mode does not offer.** "Run a cut from it to another
+  branch point, or to infinity" is right in general and wrong there, where what a reader moves is the
+  lamp. The mode carries its own sentence instead of teaching admissibility about modes.
+- **The sandbox's cut and the sandbox's colouring are different objects**, and a reader sees both at
+  once: the shadow ray pointed down while the colour seam ran along ℝ₋, because the colouring is the
+  principal branch of the typed expression and M4.7c's finding is that the determination a written
+  expression is in cannot be inferred from it. So the app says so rather than correcting one into the
+  other. Under a record they agree, because a record declares its factorisation and the stage is built
+  from it; in the sandbox there is nothing to build from, and the honest report is that moving the cut
+  changes the verdict and not the seam.
+- **Two guards were true by accident.** Nothing asserted that the refusal names the cost — §3.2's
+  whole contract — and the invariance row would have been claimed for a system with no cuts at all,
+  reachable because an integer-exponent branch point is not genuine and needs no cut to reach it. Two
+  more were weak fixtures: the shadow-mode handle test used a declared arc with no interior vertex, so
+  "the cut handles disappear" was a claim about an empty list, and the round-trip test set the flag by
+  hand rather than through `setShadow`, so a `setShadow` that wiped the arcs on the way IN passed it.
+  Sweeps after: 12/12 and 10/11, the survivor an equivalent mutant (two spellings of a function that
+  replaces `cuts` either way).
+
+### What M4.7d does NOT land, and why it is a design question rather than a gap
+
+Research 06 §5.3's **sheet spinner** — `sheet: s` multiplying by `e^{2πiαs}`, "one integer, one
+spinner, one badge" — is the other arm of §3.2's disjunction ("change sheet and say so"), and it has
+nowhere honest to act yet. Under a record the determination is the record's, and changing it would be
+editing a worked example. In the sandbox there is no declared branch FACTOR at all — `analyse` takes
+the rational route and the branch reaches only LEGALITY — so there is nothing for a sheet index to
+multiply. Giving it one means letting the sandbox declare `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing a
+single expression, which is a real extension of what the sandbox is and belongs to a slice of its own.
+`BranchChoice.sheet` is already carried, unread, for it.
