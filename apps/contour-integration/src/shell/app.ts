@@ -42,6 +42,9 @@ import {
   setShadow,
 } from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
+import { runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
+import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
+import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declaration.js";
 import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
@@ -383,7 +386,8 @@ export function mountApp(root: Element): void {
     });
     presetWrap.append(b);
   }
-  sandboxGroup.append(el("span", "flabel", "f(z) ="), input, presetWrap);
+  const fLabel = el("span", "flabel", "f(z) =");
+  sandboxGroup.append(fLabel, input, presetWrap);
 
   // A `<select>` with one `<optgroup>` per tier, not a wall of buttons. The tiers ARE the gallery's
   // ordering — each adds exactly one engine capability — and a native select is keyboard- and
@@ -652,6 +656,53 @@ export function mountApp(root: Element): void {
     requestDraw();
   }
 
+  /**
+   * **THE SANDBOX'S DECLARED FACTORISATION** — M5.1c, and the reason the integrand box changes
+   * meaning.
+   *
+   * Null until the reader declares one, and then the box holds only `R(z)` while this holds the
+   * rest. It is an explicit step rather than a consequence of having branch points, because the
+   * keyhole and dogbone TEMPLATES already seed a cut system (M4.6): inferring a factorisation from
+   * "there are branch points" would silently reinterpret whatever was typed the moment a template
+   * was picked.
+   *
+   * The exponent is NOT stored here. It lives on the branch point itself, where the existing picker
+   * already edits it, so there is one place a reader changes `α` and no way for two copies to
+   * disagree about it.
+   */
+  let declaration: {
+    readonly pointId: string;
+    readonly window: readonly [Frac, Frac];
+    readonly sign: 1 | -1;
+    readonly constant: Cx;
+    /** `m` in `log^m`. Ignored for a power factor; kept so toggling the order does not lose it. */
+    readonly logPower: number;
+  } | null = null;
+
+  /**
+   * What the box held at the moment the factor was declared — the split check's reference.
+   *
+   * Without it the declaration would be unfalsifiable: the app cannot verify a reader's INTENT, but
+   * it can verify that `declared · R(z)` is the expression they had a moment ago, and refuse to
+   * pretend otherwise. See `engine/splitCheck.ts`.
+   */
+  let beforeDeclaration: Node | null = null;
+  /** The same expression as SOURCE, so undeclaring can put back what the reader actually typed. */
+  let beforeDeclarationSrc: string | null = null;
+  let splitCheck: SplitCheck | null = null;
+  /** Why the declared run refused, when it did — shown in place of an answer, never beside one. */
+  let declaredRefusal: string | null = null;
+
+  /** The declared order, read off the branch point the factor sits on. */
+  function declaredOrder(): DeclaredOrder | null {
+    if (declaration === null) return null;
+    const point = effective().points.find((q) => q.id === declaration?.pointId);
+    if (point === undefined) return null;
+    return point.order.kind === "log"
+      ? { kind: "log", power: declaration.logPower }
+      : { kind: "power", alpha: point.order.alpha, sign: declaration.sign };
+  }
+
   function clearComputed(): void {
     recordBranch = null;
     // The stage keeps whatever program it last built — this function clears the COMPUTED state, not
@@ -665,6 +716,7 @@ export function mountApp(root: Element): void {
     derivation = null;
     acc = null;
     solved = null;
+    declaredRefusal = null;
   }
 
   /**
@@ -741,7 +793,43 @@ export function mountApp(root: Element): void {
       recomputeRecord();
     } else {
       resolved = resolveAll(contour);
-      if (!f || !ast || !poles) {
+      const order = declaredOrder();
+      if (declaration !== null && ast && order !== null) {
+        // **THE DECLARED ROUTE.** `ast` is the COFACTOR here, not the integrand — the box changed
+        // meaning when the factor was declared — so the residues come from the declaration and the
+        // poles from `R(z)`, exactly as they do for a gallery record.
+        const spec: SandboxDeclaration = {
+          constant: declaration.constant,
+          pointId: declaration.pointId,
+          order,
+          window: declaration.window,
+          cofactor: ast,
+        };
+        const budget = budgetNow();
+        const r = runDeclared(spec, contour, effective(), budget);
+        if (!r.ok) {
+          clearComputed();
+          declaredRefusal = r.reason;
+          splitCheck = null;
+        } else {
+          declaredRefusal = null;
+          resolved = r.analysis.resolved;
+          integral = r.analysis.integral;
+          theorem = r.analysis.theorem;
+          ledger = r.analysis.ledger;
+          acc = accumulateForIntegral(r.f, resolved, integral, undefined, r.analysis.sides);
+          solved = null;
+          // The split is checked against what the box held a moment before the declaration, which
+          // is the only falsifiable form of "this factorisation is the integrand I meant".
+          splitCheck = beforeDeclaration === null ? null : checkSplit(r.declared, ast, beforeDeclaration);
+          // The picture becomes the DECLARED determination, as it already is under a record — so
+          // the sandbox's colour seam and its declared cut stop being different objects.
+          if (declaredOnStage !== r.declared) {
+            declaredOnStage = r.declared;
+            stage?.setIntegrand(ast, r.declared);
+          }
+        }
+      } else if (!f || !ast || !poles) {
         clearComputed();
       } else {
         const budget = budgetNow();
@@ -903,8 +991,12 @@ export function mountApp(root: Element): void {
       // move together or not at all — a failed parse leaves the previous program on screen, and
       // clearing the flag without clearing the program would have the card describe a picture that
       // is not there.
-      declaredOnStage = null;
-      stage?.setIntegrand(ast);
+      // With a factor declared the box holds `R(z)`, and `recompute` puts the DECLARED product on
+      // the stage instead — so the program is not built here and the flag is not cleared here.
+      if (declaration === null) {
+        declaredOnStage = null;
+        stage?.setIntegrand(ast);
+      }
       errorBox.hidden = true;
     } catch (e) {
       ast = null;
@@ -1693,7 +1785,9 @@ export function mountApp(root: Element): void {
         el(
           "p",
           "muted small",
-          "the colouring is the principal branch of the expression above; the cut is your declaration, and the two need not coincide. Moving the cut changes the verdict, not the seam.",
+          declaration === null
+            ? "the colouring is the principal branch of the expression above; the cut is your declaration, and the two need not coincide. Moving the cut changes the verdict, not the seam."
+            : "the colouring is built from the factorisation you declared, each factor in its own window — so the seam IS your cut, as it is under a gallery record. Moving the cut still changes the verdict and not the seam, because ∮ reads the window and never the geometry.",
         ),
       );
     }
@@ -1704,6 +1798,8 @@ export function mountApp(root: Element): void {
       );
       return;
     }
+
+    renderDeclaration(branch);
 
     const report = checkAdmissibility(branch);
     const head = el("p", "verdict");
@@ -1743,11 +1839,162 @@ export function mountApp(root: Element): void {
     branchCard.append(list);
   }
 
+  /**
+   * **THE DECLARED FACTORISATION, AS AN EDITABLE OBJECT** (M5.1c).
+   *
+   * Declaring is an explicit act with a visible cost: the integrand box stops holding the integrand
+   * and starts holding `R(z)`. That trade is what buys an exact answer — `findPoles` on
+   * `z^0.3/(1+z)` reports `rational: false` and no poles at all, so without a declared split the
+   * sandbox has no residues and no `∮` — and it is stated rather than implied, with the assembled
+   * form shown alongside so the reader can see what they are now claiming.
+   */
+  function renderDeclaration(branch: BranchChoice): void {
+    const wrap = el("div", "declaration");
+    const order = declaredOrder();
+
+    if (declaration === null || order === null) {
+      wrap.append(
+        el(
+          "p",
+          "muted small",
+          "The integrand above is taken whole, in the principal branch of every sub-expression — so " +
+            "its residues are not decidable and there is no ∮. Declare a factorisation to get one: " +
+            "the box then holds R(z) and the factor is read in its own window.",
+        ),
+      );
+      for (const point of branch.points) {
+        const b = el("button", "preset", `declare a factor on ${point.label}`);
+        b.type = "button";
+        b.addEventListener("click", () => {
+          beforeDeclaration = ast;
+          beforeDeclarationSrc = input.value;
+          declaration = {
+            pointId: point.id,
+            window: [Frac.ZERO, Frac.of(2n)],
+            sign: 1,
+            constant: [1, 0],
+            logPower: 2,
+          };
+          fLabel.textContent = "R(z) =";
+          input.setAttribute("aria-label", "rational cofactor R(z)");
+          recompute();
+        });
+        wrap.append(b);
+      }
+      branchCard.append(wrap);
+      return;
+    }
+
+    // ---- the declared factor, editable ----------------------------------------------------
+    const head = el("p", "verdict");
+    head.append(el("strong", undefined, "Declared factor"));
+    wrap.append(head);
+
+    const row = el("div", "contrasts");
+    const windows: readonly { readonly label: string; readonly value: readonly [Frac, Frac] }[] = [
+      { label: "arg ∈ [0, 2π)", value: [Frac.ZERO, Frac.of(2n)] },
+      { label: "arg ∈ [−π, π)", value: [Frac.of(-1n), Frac.ONE] },
+    ];
+    const windowPick = el("select", "picker");
+    windowPick.setAttribute("aria-label", "argument window of the declared factor");
+    for (const w of windows) {
+      const opt = document.createElement("option");
+      opt.value = w.label;
+      opt.textContent = w.label;
+      opt.selected = declaration.window[0].equals(w.value[0]);
+      windowPick.append(opt);
+    }
+    windowPick.addEventListener("change", () => {
+      const chosen = windows.find((w) => w.label === windowPick.value);
+      // **Declaring the determination IS declaring the cut**, so the cut system is rebuilt from the
+      // new window rather than left where it was — otherwise the two would disagree about where the
+      // discontinuity is, silently.
+      if (chosen && declaration) {
+        declaration = { ...declaration, window: chosen.value };
+        const rebuilt = buildDeclaration({
+          constant: declaration.constant,
+          at: 0,
+          window: chosen.value,
+          order: declaredOrder() ?? { kind: "power", alpha: Frac.of(1n, 2n), sign: 1 },
+        });
+        if (rebuilt.ok) branch = rebuilt.choice;
+      }
+      recompute();
+    });
+    row.append(el("span", "muted small", "window:"), windowPick);
+
+    if (order.kind === "power") {
+      const orient = el("button", "preset", declaration.sign === 1 ? "(z − b)" : "(b − z)");
+      orient.type = "button";
+      orient.setAttribute("aria-label", "orientation of the declared factor");
+      orient.addEventListener("click", () => {
+        if (declaration) declaration = { ...declaration, sign: declaration.sign === 1 ? -1 : 1 };
+        recompute();
+      });
+      row.append(el("span", "muted small", "written:"), orient);
+    } else {
+      const m = el("input", "expr small");
+      m.type = "number";
+      m.min = "1";
+      m.step = "1";
+      m.value = String(declaration.logPower);
+      m.setAttribute("aria-label", "power m of log^m");
+      m.addEventListener("change", () => {
+        const v = Math.round(Number(m.value));
+        if (declaration && Number.isFinite(v)) declaration = { ...declaration, logPower: Math.max(1, v) };
+        recompute();
+      });
+      row.append(el("span", "muted small", "log^m, m ="), m);
+    }
+    wrap.append(row);
+
+    // Short label, explanation beneath: at the rail's width the sentence-length version was clipped
+    // mid-word ("…back in th"), which a browser pass caught and no test could.
+    const drop = el("button", "preset", "undeclare");
+    drop.type = "button";
+    drop.setAttribute("aria-label", "undeclare the factor and put the whole integrand back in the box");
+    drop.addEventListener("click", () => {
+      // **Put back what was TYPED, not what is in the box.** The box holds `R(z)` now, so leaving it
+      // alone and merely changing the label would take the cofactor and call it the integrand —
+      // silently a different problem, and one that still looks plausible. A browser pass found
+      // exactly that: after undeclaring, `1/(1+z)` was being integrated as though it were
+      // `z^(−1/2)/(1+z)`, with a perfectly reasonable `2πi` beside it.
+      if (beforeDeclarationSrc !== null) input.value = beforeDeclarationSrc;
+      declaration = null;
+      splitCheck = null;
+      beforeDeclaration = null;
+      beforeDeclarationSrc = null;
+      fLabel.textContent = "f(z) =";
+      input.setAttribute("aria-label", "integrand f(z)");
+      applyExpression();
+    });
+    wrap.append(drop, el("p", "muted small", "puts the whole integrand back in the box."));
+
+    // ---- is the split the integrand it claims to be? ---------------------------------------
+    if (declaredRefusal !== null) {
+      const bad = el("p", "verdict");
+      bad.append(badge("⚠"), ` ${declaredRefusal}`);
+      wrap.append(bad);
+    }
+    if (splitCheck !== null) {
+      const line = el("p", "verdict");
+      line.append(badge(splitCheck.ok ? "≤" : "⚠"), ` ${splitCheck.detail}`);
+      wrap.append(line);
+    }
+    branchCard.append(wrap);
+  }
+
   function renderPoles(): void {
     poleCard.replaceChildren(el("h2", undefined, "Poles"));
     if (!poles) {
       poleCard.append(el("p", "muted", "No integrand."));
       return;
+    }
+    // With a factor declared these are the poles of `R(z)` and not of the integrand, which matters:
+    // a branch point is not a pole and carries no residue, so the two lists are genuinely different
+    // and a reader comparing this card to the expression box would otherwise be misled.
+    if (mode === "sandbox" && declaration !== null) {
+      poleCard.append(el("p", "muted small", "of the cofactor R(z) — the branch point carries no residue of its own."));
     }
     const verdict = assembleVerdict(poles.certificates);
     const head = el("p", "verdict");

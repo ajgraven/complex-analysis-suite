@@ -116,7 +116,7 @@ cross-check *disagree* (which is the test that the tag is honoured rather than m
 > in the principal determination whatever its lips say. Nothing regressed there and nothing improved;
 > `AnalysisInput.f`'s doc names the gap, and M5.1 closes it.
 
-### M5.1 — the sandbox declares a branch factor · *M*
+### M5.1 — the sandbox declares a branch factor · *M* — **a, b, c DONE**
 
 The sandbox's editor declares branch points, exponents and cuts — **not the factorisation.** So the
 cut system reaches LEGALITY and the picture, and no sandbox value depends on it: `analyse` takes the
@@ -138,6 +138,25 @@ reachable by hand for the first time. The sheet spinner follows: one integer, on
 **Gate:** north-star #3 verbatim in the sandbox — drag a cut, nothing changes; drag it across the
 contour, the answer jumps by the monodromy factor and the app says so. `BranchChoice.sheet` stops
 being carried-unread.
+
+> **CORRECTION (M5.1b): the second half of that gate cannot happen, and M4.7d's own result is why.**
+> `∮` comes from `2πi Σ n·Res` with residues read in the declared WINDOW, and `powerAtPole` takes no
+> geometry at all — so no deformation of a cut, crossing or not, can move the value. Measured:
+> swinging the ray across the contour leaves D1's `2πi·e^(−7iπ/10)` **bit-identical** and fails
+> LEGALITY, which names the piece and the cut. That is not a shortfall; it is the invariance M4.7d
+> certified, arriving as a property of the call graph.
+>
+> The jump is real and belongs to the **determination**. Change the window and the pole's argument
+> moves a full turn, so the answer jumps by exactly `e^{−2πiJ}` — asserted to twelve decimal places,
+> with `J` the number already printed on the cut. In the browser: `∮ = 2π` at `arg ∈ [0, 2π)`, and
+> `⚠ −2π` at `arg ∈ [−π, π)` with LEGALITY refusing, which is D1's `wrong-branch` trap reachable by
+> one dropdown.
+>
+> **The gate as it should read:** drag a cut clear of the contour and the value is bit-identical;
+> drag it across and the value is WITHHELD, with the crossing and its factor named; change the
+> determination and the value jumps by the monodromy factor. All three are asserted in
+> `test/declaredRun.test.ts`. `BranchChoice.sheet` is still carried-unread — the sheet spinner is
+> M5.1d, and it now has a factor to multiply.
 
 ### M5.2 — one predicate for two lemmas, and the corrected L6 · *S–M*
 

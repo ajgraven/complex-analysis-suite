@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **507 test files / 4873 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **508 test files / 4886 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -526,6 +526,38 @@ uncorroborated record can no longer hide behind a special case. One skip survive
 cut running *vertically* through a piece pins no limit ("above" displaces along it), so
 `sideResolves` refuses it **by name** rather than answering it. The sandbox is deliberately not
 covered — it can declare cuts but not a branch FACTOR, which is M5.1.
+
+**M5.1 (a–c) gives the sandbox a branch FACTOR, and D1's trap becomes reachable by hand.** The gap was
+bigger than it read: `findPoles` on `z^0.3/(1+z)` reports `rational: false` and ZERO poles, so there
+was no `exactValue` at all and the ledger failed at KILL — the sandbox produced no answer for a
+multivalued integrand rather than a wrong one, which is why "dragging a cut changes the answer" had
+nothing to be true of. **M5.1a** extracts `kernel/branch/declaration.ts` (one factor → the
+`PowerFactor`/`LogFactor`, the `BranchChoice`, the `DeclaredProduct`) on the second-consumer rule, a
+no-op PROVEN by dumping all seven records' declarations before and after and diffing them byte for
+byte; the multi-point builder is deliberately left alone (its positions are exact `SqrtExt`, and a
+dragged float's `simplestRational` has a sixteen-digit denominator). Having one place to state the
+invariants closed two latent bugs: a window must be exactly **one turn** wide (`PowerFactor.argRange`'s
+own contract, unchecked), and a single factor must sit at the **ORIGIN** — `branchResidue` is
+`Res(z^α·R, z₀) = z₀^α·Res(R, z₀)`, literally `z^α`, and a `PowerFactor` has nowhere to put `b`, so a
+factor at `b ≠ 0` would draw its cut in the right place and read its residue about the wrong point.
+**M5.1b** adds `engine/declaredRun.ts`, the sandbox's `runFamily`, sharing `declaredEvaluator` with the
+record path so both sample the identical integrand: a declaration assembled from a keyhole and five
+field values reproduces D1's own closed form `2πi·e^(−7iπ/10)` — the record's exact TEXT — with an
+agreeing quadrature. **The plan's gate asked for something that cannot happen**, and M4.7d's own result
+is why: `∮` reads the declared WINDOW and `powerAtPole` takes no geometry, so no deformation of a cut
+can move the value. Measured — swinging the ray across the contour leaves the value bit-identical and
+fails LEGALITY, naming the piece and the cut; changing the DETERMINATION jumps it by exactly
+`e^{−2πiJ}` (asserted to twelve decimal places). **M5.1c** is the editing surface: declaring is an
+explicit act (the keyhole and dogbone templates already seed cut systems, so inferring a
+factorisation from "there are branch points" would silently reinterpret what was typed), after which
+the integrand box holds only `R(z)` — and `engine/splitCheck.ts` makes that claim falsifiable by
+checking `declared · R(z)` against the expression the box held a moment earlier, **only where the two
+determinations agree**, a region computed by evaluating the product a second time in the principal
+window rather than assumed. In a browser: type `z^(-0.5)/(1+z)`, declare, and the split reads
+`⚠ NOT the expression that was in the box`; fix the cofactor and it reads `≤ reproduces … to 2.50e-16
+over 48 sample points` beside `∮ = 2π`; switch the determination to principal and the answer jumps to
+`⚠ −2π` while LEGALITY refuses — D1's `wrong-branch` trap, one dropdown. The sandbox's colouring is
+now built from the declared factorisation, so its seam and its cut stop being different objects.
 
 A follow-on fixed the **partial-sum panel's size**, where the defect was not the one it looked like: the
 frame fitted `[−max, max]` on both axes with `0` pinned to the canvas centre, tight only for a walk
