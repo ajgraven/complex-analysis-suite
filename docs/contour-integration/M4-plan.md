@@ -180,10 +180,12 @@ before D2.
   symbolic `ln 2`, and folds back to `i√2` because the weight is a half. `π − π√2/2`, which is the
   record's `π(1 − 1/√2)`. Dropping the modulus — what a basis carrying only the argument does —
   returns `π/2`: plausible, and the one a reader would not question.
-- **M4.6** — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
+- **M4.6** ✅ — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
   magnitude 1.216. The residue at infinity is not an edge case, and D6 passing only because
   `Res(f,∞) = 0` is the coincidence that would hide the bug.
-- **M4.7** — **north-star #3**; CPU/GPU parity green in a browser suite.
+- **M4.7** — **north-star #3**; CPU/GPU parity green in a browser suite. **The parity half is
+  done (M4.7a–b, §13): 40 assertions in real WebGL2 and a mutation sweep at 17/17.** `DUAL_BACKEND_CORPUS`
+  in the table above is superseded — see §13's last note.
 
 ### Two prerequisites
 
@@ -723,3 +725,92 @@ with a branch carries a line stating that the colouring is the principal branch 
 The distinction matters — every number on the right comes from exact residues in the DECLARED
 determination, which is also why the quadrature is skipped — and an app that draws one branch while
 computing in another must not leave the reader to notice.
+
+## 13. What M4.7a–b landed, and what it taught
+
+The app's `test:browser`, the branch-cut layer in both backends (`kernel/branch/correction.ts` and
+`ui/stage/cut.glsl.ts`), and the parity gate between them — 40 assertions in real WebGL2, and a
+mutation sweep that kills 17 of 17 deliberate defects in the shader. No picture has changed yet; what
+exists now is the machinery M4.7c will draw with, and a gate that can tell you it draws the branch the
+ledger computes in.
+
+### The correction is a DIFFERENCE of crossing counts, and the shadow cancels
+
+Research 06 §5.2's mechanism, taken at its word: continuing `f` along `[z₀, z]` defines the *shadow*
+determination, and any cut system Γ differs from it by `exp(2πi·m_Γ(z))` with `m_Γ = −Σ σⱼ·Jⱼ` over
+jump-weighted signed crossings. The reference system is *also* a cut system, so subtracting two copies
+of the same formula removes the shadow, the base lift, and every question about continuing along a
+straight line. What is left is one loop over one array — declared arcs at `+J`, reference rays at `−α`
+— which is why `cutSegments` returns a single list and the GLSL needs a single uniform block. Γ equal
+to the reference gives exactly zero term by term, so a picture already in the declared determination
+cannot regress.
+
+### WHAT THE REFERENCE IS CANNOT BE INFERRED, and assuming it drew D6 wrong
+
+The first version assumed one reference ray per branch point along `ℝ₋` — C99's principal cut, which is
+what `@cas/expr` compiles. It is not what `@cas/expr` compiles for D6: `csqrt(1 − z·z)` is principal in
+its ARGUMENT, so its cut is where `1 − z² ∈ ℝ₋`, which is `(−∞,−1] ∪ [1,∞)` — two rays pointing
+OUTWARD. Written as `(z−1)^{−1/2}(z+1)^{−1/2}` the same function has the other reference. So the
+reference determination is a fact about how the EXPRESSION IS WRITTEN, and an engine that guessed it
+would be M4.1's incomplete detector wearing a different hat. `ReferenceDirections` is therefore a
+declared map, fed from each factor's `argRange` — the record already says where its cuts run, because
+declaring a determination *is* declaring that — and a point the caller declares nothing for gets no
+reference ray at all.
+
+### An integer correction is no discontinuity — which is admissibility, seen
+
+For D6 the declared bounded cut `[−1,1]` and the per-factor `[0,2π)` window rays are the same
+determination. What proves it is that the correction comes out an INTEGER everywhere: `α₁ + α₂ ∈ ℤ`,
+research 06 §2.1(b), the admissibility condition arriving as a property of the picture rather than as a
+second check on it. `jumpWeights` is what makes this come out: it walks the `from` side of an arc with
+the arc removed, so the dogbone's arc carries `α_{b₁} = −1/2` and not the sum — and taking the other
+side gives `−1/2` too, agreeing modulo 1 exactly when the sum is an integer.
+
+### `argCut` adds whole TURNS, and research 06 is wrong twice about it
+
+Its `argCut(z, θ₀) = θ₀ + mod(arg z − θ₀, 2π)` claims to "reproduce the principal branch exactly" at
+`θ₀ = −π`. It does not: at `[3,4]` the round trip through the modulus is one ulp off `atan2`, and the
+paper's `θ₀ = π` is not the principal window's origin in the first place (`arg ∈ (−π, π]`). Adding
+`2π·⌈(θ₀ − arg z)/2π⌉` returns `atan2` bit-for-bit, and gives the half-open convention on `ℝ₋` for
+free — exactly one turn, which is the convention and not a rounding error.
+
+### THE PARITY GATE'S FLOOR IS `sin`/`cos`, NOT float32 — and the first draft asserted below it
+
+`cpowCut` agreed with its twin to 1.9e-4 relative, uniformly, and the test asserted 3e-5. The
+temptation is to loosen until green; the number is in GLSL ES 3.0 §4.5.1, whose precision table is ULP
+counts throughout except for `sin` and `cos`, which are required only to hold an **absolute** error
+below `2^-11` = 4.9e-4 — four orders of magnitude looser than float32's eps. SwiftShader spends 39% of
+it (measured `|sin|` 1.89e-4), while `atan`, allowed 4096 ULP, delivers 8.5e-7. So `cargCut` may be
+asserted four orders tighter than `cpowCut`, and `cpowCut`'s bound is derived — `√2·2^-11` plus the
+`log`/`exp` chain, compared RELATIVE because the absolute sin/cos error arrives multiplied by the
+modulus. It costs the gate nothing: the defect it exists to catch moves the value by a whole monodromy
+step, `2|sin πα|` = 1.4 at `α = ±1/2`, so three orders of magnitude separate noise from the wrong
+branch.
+
+**The tolerance has two shapes, and the correction's is POSITION.** `cutCorrection` is piecewise
+constant with rational jumps, so "agrees to 1e-6" is the wrong claim about it — either the two backends
+put a pixel on the same side of a cut or they do not. Disagreement is excused only within a rounding
+error's distance of some segment, and the test counts how many samples that excused, because an
+exclusion nobody counts is one that grows.
+
+### The two claims a generic grid cannot reach, and the sweep that found them
+
+Thirteen of the first fifteen mutations died on the grid. The two survivors were both comments in the
+shader that nothing checked: replacing the turn count with a modulus (a ~1e-7 difference, under every
+tolerance in the file), and loosening `<` to `<=` in the crossing predicate so a touch counts as a
+crossing (no point of a generic grid lies exactly on a cut). Both are now asserted directly — the
+first as **exact equality** with `atan()` computed in float32 on the GPU, the second over hand-picked
+samples lying exactly on a cut, on a vertex, and on a branch point, in the two configurations whose
+geometry is exactly representable in both backends. The dragged arc is deliberately excluded from that
+block: its vertices are `0.9` and `−0.4`, so "a point on the cut" there is a point within float32
+rounding of it, which is the position tolerance and not this claim. Sweep, after: 17/17.
+
+### `DUAL_BACKEND_CORPUS` is not where these belong
+
+§3's table names it, written before ADR-0007's arithmetic applied. There is ONE consumer of `cargCut`
+and friends, and adding them to `@cas/gpu`'s corpus would also drag a JS twin into `@cas/expr`'s
+`complexJs.ts` — widening a second shared package for the same single caller. The app's own parity
+suite replaces it and is stronger for this purpose: the corpus compares a package's GLSL against that
+package's own JS reference, while this compares the shader against **the twin the ledger actually
+uses**, which is the drift that would make the app draw one branch and report another. If the
+plotter's monodromy view ever wants a rotatable cut, that is the trigger to move them.

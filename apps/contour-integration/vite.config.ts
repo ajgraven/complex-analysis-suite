@@ -1,5 +1,9 @@
-/// <reference types="vitest/config" />
 import { defineConfig } from "vite";
+// `configDefaults` (for the test.exclude below) is a value import from vitest/config, and it also
+// pulls in vitest's augmentation of Vite's UserConfig — so the `test` block type-checks without the
+// `/// <reference types="vitest/config" />` this file used to carry, which
+// @typescript-eslint/triple-slash-reference forbids once an equivalent import is present. Same
+// resolution as apps/complex-dynamics/vite.config.ts, which met it first.
 import { configDefaults } from "vitest/config";
 
 // Relative base so the production build also works when served from a Pages sub-path, matching every

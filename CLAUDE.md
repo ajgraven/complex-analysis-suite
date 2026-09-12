@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **499 test files / 4689 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **500 test files / 4705 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -433,7 +433,29 @@ domain-colouring backdrop comes from the compiled evaluator, which uses the PRIN
 sub-expression, so it shows a seam on `(b, ∞)` where the composite is continuous — research 06 §2.2's
 `rendering-the-union-of-sub-cuts`, true since D1 and M4.7's to fix. What changed is that a record with a
 branch now says so, since an app that draws one determination while computing in another must not leave
-the reader to notice. Still to come in M4: the GPU cut picture (M4.7).
+the reader to notice.
+
+**M4.7 is the GPU cut picture, and M4.7a–b have landed.** The app gained a `test:browser` — its real
+GLSL compiled and linked for the first time (the sandbox's presets and all twenty records' contour
+integrands, 28 programs the node gate structurally could not build) — and the branch-cut layer now
+exists in both backends with a parity gate between them, because an app that draws one determination
+while computing in another is not merely imprecise. The correction is a DIFFERENCE of two crossing
+counts, so the shadow determination cancels: `f_Γ = f_ref·exp(2πi·[m_Γ − m_ref])` with the declared
+arcs entering one array at `+J` and the reference rays entering the SAME array at `−α`, which is why
+it is one loop and one uniform block, and why Γ equal to the reference is exactly zero term by term.
+Three things it settled: **what the reference IS cannot be inferred from the branch points** —
+`csqrt(1 − z·z)` is principal in its *argument*, so its cut runs OUTWARD along `(−∞,−1] ∪ [1,∞)` while
+`(z−1)^{−1/2}(z+1)^{−1/2}` has the other reference for the same function, and assuming C99's
+principal cut drew D6 wrong, so the reference is declared per factor and a point with nothing declared
+gets no ray rather than an invented one; **an integer correction is no discontinuity**, which is
+admissibility (`Σα ∈ ℤ`) arriving as a property of the picture rather than a second check on it; and
+**the parity gate's floor is `sin`/`cos`, not float32** — GLSL ES 3.0 §4.5.1 is ULP counts throughout
+except there, where the requirement is an *absolute* `2^-11` (4.9e-4, four orders looser than float32's
+eps, of which SwiftShader spends 39% while `atan` delivers 8.5e-7), so the first draft asserted 3e-5
+and went red on a correct shader. A mutation sweep on the shader kills 17 of 17; the two that survived
+the first pass were both comments nothing checked — the turn count replaced by a modulus, and `<`
+loosened to `<=` so a grazing touch counts as a crossing — and are asserted directly now. Still to
+come in M4: rendering the declared determination (M4.7c) and drag-a-cut (M4.7d).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

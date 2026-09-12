@@ -195,6 +195,36 @@ whether the whole thing closes.
   them. A `Scalar`'s `add` may now be another `Scalar`, which keeps the picture live under a drag where
   a derived value would go stale.
 
+**M4.7a–b bring the branch-cut layer to the GPU, and a gate that can tell the two apart:**
+
+- **The app has a `test:browser`.** Its real GLSL is compiled and linked for the first time — the
+  sandbox's presets and all twenty records' contour integrands, 28 programs the node gate structurally
+  could not build — and the branch-cut layer is executed in real WebGL2 against its TS twin.
+- **The correction is a DIFFERENCE of two crossing counts, so the shadow cancels.** `f_Γ = f_ref ·
+  exp(2πi·[m_Γ − m_ref])` with `m = −Σ σⱼ·Jⱼ` over jump-weighted signed crossings of `[z₀, z]`: the
+  declared arcs enter one array at `+J` and the reference rays enter the same array at `−α`, which is
+  why it is one loop and one uniform block. Γ equal to the reference gives exactly zero, term by term.
+- **What the reference IS cannot be inferred from the branch points.** `csqrt(1 − z·z)` is principal in
+  its *argument*, so its cut is where `1 − z² ∈ ℝ₋` — two rays pointing OUTWARD, not two pointing left
+  — while `(z−1)^{−1/2}(z+1)^{−1/2}` has the other reference for the same function. Assuming C99's
+  principal cut per branch point drew D6 wrong. The reference is now declared, read off each factor's
+  `argRange`, and a point with nothing declared gets no reference ray rather than an invented one.
+- **An integer correction is no discontinuity — which is admissibility, seen.** D6's bounded cut
+  `[−1,1]` and its `[0,2π)` window rays are the same determination, and what *proves* it is that the
+  correction comes out an integer everywhere: `α₁ + α₂ ∈ ℤ`, arriving as a property of the picture.
+- **`argCut` adds whole turns rather than taking a modulus**, so at `θ₀ = −π` it returns `atan2`
+  bit-for-bit instead of one ulp away, and gives the half-open convention on `ℝ₋` for free.
+- **The parity gate's floor is `sin`/`cos`, not float32.** GLSL ES 3.0 §4.5.1 is ULP counts throughout
+  except there, where the requirement is an *absolute* error below `2^-11` — 4.9e-4, four orders looser
+  than float32's eps, and SwiftShader spends 39% of it while `atan` delivers 8.5e-7. The first draft
+  asserted 3e-5 and went red on a correct shader; the bound is now derived from the spec rather than
+  fitted, and still three orders below a wrong branch (`2|sin πα|` = 1.4 at `α = ±1/2`).
+- **A mutation sweep kills 17 of 17.** Two of the first fifteen survived, and both were comments in the
+  shader that nothing checked: the turn count replaced by a modulus (~1e-7, under every tolerance), and
+  `<` loosened to `<=` so a grazing touch counts as a crossing (no point of a generic grid lies exactly
+  on a cut). Both are asserted directly now — exact equality with `atan()` in float32, and hand-picked
+  samples lying exactly on a cut, a vertex and a branch point.
+
 The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
@@ -226,7 +256,8 @@ release reconciles against it and logs a disagreement past the estimator's own b
 either way — it comes from `2πi Σ n·Res`, not from the quadrature.
 
 Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
-contour from nothing), branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6).
+contour from nothing), the rest of M4 (the GPU cut picture: rendering the declared determination, then
+drag-a-cut with its monodromy readout), the rest of the gallery (M5), the teaching layer (M6).
 
 ## Documentation
 
