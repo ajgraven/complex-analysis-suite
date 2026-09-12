@@ -24,6 +24,8 @@ import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
 import { branchArcBound } from "../kernel/bounds/branchArc.js";
+import { logArcBound } from "../kernel/bounds/logArc.js";
+import type { LogFactor } from "../kernel/logResidue.js";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { Piece } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
@@ -167,6 +169,33 @@ function disposeBranchArc(
   });
 }
 
+/**
+ * The same ML bound as `disposeBranchArc`, for `R(z)·log^m z`.
+ *
+ * The log changes no exponent — it is weaker than every power — so the two circles of D4's keyhole
+ * are killed by the decay of `R` alone, which is what its `decay-beats-log-squared` and
+ * `regular-at-origin` hypotheses say. `logArc.ts` carries the one place it does matter.
+ */
+function disposeLogArc(
+  log: { readonly factor: LogFactor; readonly rational: Node },
+  g: Resolved,
+  lemma: Piece["lemma"],
+): ArcBound | null {
+  if (g.kind !== "arc") return null;
+  const R = arcRadius(g);
+  const extent = arcExtent(g);
+  if (!R || !extent) return null;
+  const limit = lemma === "L1" ? "0+" : lemma === "L2" ? "inf" : null;
+  if (limit === null) return null;
+  const rational = toExactRational(log.rational);
+  if (!rational.ok) return null;
+  return logArcBound(log.factor.power, rational.value.num, rational.value.den, R, {
+    limit,
+    piMultiple: extent,
+    argRange: log.factor.argRange,
+  });
+}
+
 const rowFrom = (
   constraint: ConstraintId,
   status: LedgerRow["status"],
@@ -187,6 +216,8 @@ export interface LedgerInput {
   readonly branch?: BranchChoice;
   /** The branch factor `z^α` and its rational cofactor — see `analyse.ts`. */
   readonly power?: { readonly factor: PowerFactor; readonly rational: Node };
+  /** The branch factor `log^m z` and its rational cofactor — the other half of the same seat. */
+  readonly log?: { readonly factor: LogFactor; readonly rational: Node };
 }
 
 /**
@@ -592,7 +623,12 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
-    const disposal = input.power === undefined ? disposeArc(ast, geom) : disposeBranchArc(input.power, geom, piece.lemma);
+    const disposal =
+      input.log !== undefined
+        ? disposeLogArc(input.log, geom, piece.lemma)
+        : input.power === undefined
+          ? disposeArc(ast, geom)
+          : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
       push(
@@ -602,7 +638,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           `${piece.name} must vanish, but no lemma here applies to this integrand`,
           unknown(
             `the arc ${piece.name}`,
-            input.power === undefined
+            input.power === undefined && input.log === undefined
               ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
               : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),

@@ -20,6 +20,13 @@ import { Exponent } from "../src/kernel/exponent.js";
 import { divideCarryingSine } from "../src/kernel/sineForm.js";
 import { SqrtExt } from "@cas/exact";
 
+/** D3 is a one-unknown family, so its solve takes the scalar route; asserting that is how we say so. */
+const scalar = (r: ReturnType<typeof solveFamily>) => {
+  if (!r.ok) throw new Error(`D3 refused: ${r.reason}`);
+  if (r.route !== "scalar") throw new Error("D3 should solve by division, not as a system");
+  return r;
+};
+
 const alg = (n: number): SqrtExt => SqrtExt.fromGauss(Gauss.int(n));
 const iPi = (n: number, d: number): Exponent =>
   Exponent.piTimes(Gauss.rat(0n, 1n, BigInt(n), BigInt(d)));
@@ -77,9 +84,7 @@ describe("(π/n)/sin(πa/n) — the geometric sum cancels the keyhole's own fact
   it("gives sin(πa/n) and NOT sin(πa) — the cancellation is the whole content", () => {
     // Without it the answer is `(π/n)·(Σₖ e^{…})/sin(πa)`: numerically right, and in a form nothing
     // would recognise as the record's. At a = 3/2 the two sines are `sin(3π/8)` and `sin(3π/2)`.
-    const r = solveFamily(D3, at(1.5, 4));
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    const r = scalar(solveFamily(D3, at(1.5, 4)));
     expect(r.solved.form.sine?.equals(Frac.of(3n, 8n))).toBe(true);
     // …and the sum collapsed to a single rational term, `1/n`, with no leftover exponential.
     expect(r.solved.form.sum.terms).toHaveLength(1);
@@ -108,9 +113,7 @@ describe("n = 5, where no individual root can be written down", () => {
   });
 
   it("matches the record's sine argument exactly — 23/50, not a nearby float", () => {
-    const r = solveFamily(D3, at(2.3, 5));
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
+    const r = scalar(solveFamily(D3, at(2.3, 5)));
     expect(r.solved.form.sine?.n).toBe(23n);
     expect(r.solved.form.sine?.d).toBe(50n);
   });

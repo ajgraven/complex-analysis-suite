@@ -3669,10 +3669,18 @@ code path.
        what turns `sin(πa)` into `sin(πa/n)`. It is declared and bounded the same way, and it may
        never rescue a degenerate derivation — the degeneracy is decided on the original denominator
        before anything cancels.
-3. [ ] Generalise `families/linear.ts` over a `Field`; instantiate at `Frac` and at ℚ(i)(π), with the
-       loader's invariant-4 tests green either side (M4.3).
-4. [ ] Retire `exactConstant`'s "deferred to M4" docstring once the symbolic entry lands, so the
-       parked decision does not read as still open (M4.3).
+3. [x] Generalise `families/linear.ts` over a `Field`; instantiate at `Frac` and at ℚ(i)(π), with the
+       loader's invariant-4 tests green either side — **done in M4.3**. Two things the item did not
+       anticipate, both forced by D4. `SolveReport.determined`: rank deficiency is not
+       all-or-nothing, and D4's realified system has rank 2 in three unknowns while determining two
+       of them, so a report that offered a solution only at full rank would refuse to state the very
+       answer the contour was built for. And **the ring is chosen by the record, not discovered**:
+       `e^{2πiα}` is not a rational function of π and `π²` is not an algebraic multiple of an
+       exponential, so neither coefficient ring contains the other, and a family's crossing phase —
+       MULTIPLICATIVE or ADDITIVE — says which seat its coefficients take.
+4. [x] Retire `exactConstant`'s "deferred to M4" docstring once the symbolic entry lands, so the
+       parked decision does not read as still open — **done in M4.3**; the docstring now records
+       which way the choice went and where the other ring lives.
 5. [x] The four `Family["branch"]` schema changes, before D1 loads — **done in M4.2**, validated
        against D1 and D3 rather than added ahead of them. A fifth change was needed and is recorded
        with them: `branch.rationalPart`, the cofactor the engine splits `z^α·R(z)` on, because the

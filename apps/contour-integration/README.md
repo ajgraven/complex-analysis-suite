@@ -66,7 +66,26 @@ whether the whole thing closes.
   continuity*, the app refuses the keyhole route rather than printing a right number from a collapsed
   argument. `Golden.refuses` is how a fixture says that about itself.
 
-The thirteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+**M4.3 has landed with it** — D4, and the first record that is not solved by dividing:
+
+- `∫₀^∞ log x/(1+x²)² dx` prints **`−π/4`**, and the SAME contour returns `∫₀^∞ dx/(1+x²)² = π/4`
+  for free. One complex identity in three unknowns: read as one equation its rank is 1 and two of
+  the three integrals are invisible; split into real and imaginary parts — legitimate only because
+  the unknowns are real, which the record must declare — its rank is 2.
+- **Pass 5 is a linear system over ℚ(i)(π)**, not a division. π is transcendental, so ℚ(i)[π] is a
+  polynomial ring and elimination in its fraction field is exact: the rank stays DECIDED, which is
+  the whole reason `linear.ts` exists. `∫R log²x` is reported as invisible — `?`, not a refusal and
+  not a number.
+- `Res(R·log^m z, z₀)` comes from the Laurent principal part of `R` convolved with the expansion of
+  `log^m` about the pole, so a double pole mixes both halves: `Res(log²z/(1+z²)², i) = −π/4 + iπ²/16`,
+  as the record states. Checked against an independent quadrature to 1e−12.
+- **The coefficient row is derived from the declared crossing increment** and compared with what the
+  record wrote: `−(log x + 2πi)² = −log²x − 4πi log x + 4π²`. Three of D4's traps stop being
+  detectors and become arithmetic, and the same derivation at one log lower is the
+  `plain-log-loses-the-log-integral` trap — its row is `[−2πi, 0]`, and that zero IS the log
+  integral going invisible.
+
+The sixteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered

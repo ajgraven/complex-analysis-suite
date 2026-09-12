@@ -30,6 +30,7 @@ import { a6SemicircleQuartic } from "./records/a6-semicircle-quartic.js";
 import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
 import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
 import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
+import { d4LogSquaredKeyhole } from "./records/d4-log-squared-keyhole.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export {
@@ -83,6 +84,7 @@ export const FAMILIES: readonly Family[] = [
   c3PvSineOverXTimesQuadratic,
   d1MellinKeyhole,
   d3KeyholeXToTheN,
+  d4LogSquaredKeyhole,
 ];
 
 /**

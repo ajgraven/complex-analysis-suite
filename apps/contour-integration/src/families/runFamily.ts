@@ -23,8 +23,15 @@ import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
 import type { Family, Golden } from "./schema.js";
-import { solveTarget, type SolvedTarget } from "./solveTarget.js";
-import { powerFactorOf } from "./branchFactor.js";
+import {
+  piPieceLimits,
+  solvePiTargets,
+  solveTarget,
+  type PiSolvedTargets,
+  type SolvedTarget,
+  type SolvedValue,
+} from "./solveTarget.js";
+import { logFactorOf, powerFactorOf } from "./branchFactor.js";
 import { legalityRefusal } from "../engine/ledger.js";
 import type { Bindings } from "./system.js";
 
@@ -67,7 +74,23 @@ export type RunFamilyResult =
   | { readonly ok: false; readonly reason: string };
 
 export type SolveFamilyResult =
-  | { readonly ok: true; readonly run: FamilyRun; readonly solved: SolvedTarget }
+  /** One unknown, solved by division in units of π — tiers A–D3. */
+  | { readonly ok: true; readonly route: "scalar"; readonly run: FamilyRun; readonly solved: SolvedTarget }
+  /**
+   * Several unknowns at once, solved as `M t = r` over ℚ(i)(π) — the log families.
+   *
+   * `solved` is the PRIMARY target, so a caller that only wants to print the answer reads the same
+   * field either way; `targets` is every unknown this contour determined, plus a sentence for each
+   * combination it did not. D4 determines two of its three and is right to say nothing about the
+   * third, so dropping that report would either hide the bonus integral or invent the missing one.
+   */
+  | {
+      readonly ok: true;
+      readonly route: "system";
+      readonly run: FamilyRun;
+      readonly solved: SolvedValue;
+      readonly targets: PiSolvedTargets;
+    }
   /**
    * Pass 5 can refuse while the RUN is perfectly good — a degenerate target coefficient, a relation
    * the solver has no symbolic route for. The run comes back anyway so a caller can show the ledger
@@ -131,21 +154,28 @@ export function runFamily(
   // origin and no Laurent series there, so a pole-finder pointed at the full integrand is being
   // asked a category-error question — and `findPoles` would in any case report nothing, since
   // `z^{α−1}/(1+z)` is not a rational function at all.
-  const power = powerFactorOf(family, bindings);
-  const poles = findPoles(power.ok ? power.rational : built.ast);
+  // WHICH FACTOR, decided by what the record declares rather than by trying one and catching the
+  // failure. A family declares `z^α` or `log^m z`; the two are different branch structures, and a
+  // record with both is not a harder case of either.
+  const isLog = family.branch?.factors.some((x) => x.order.kind === "log") ?? false;
+  const power = isLog ? { ok: false as const, reason: "the family's branch factor is a log" } : powerFactorOf(family, bindings);
+  const log = isLog ? logFactorOf(family, bindings) : { ok: false as const, reason: "the family's branch factor is a power" };
+  const cofactor = power.ok ? power.rational : log.ok ? log.rational : null;
+  const poles = findPoles(cofactor ?? built.ast);
 
   // And no quadrature: sampling `z^{α−1}` needs a determination, and the compiled evaluator uses
   // the principal one — which for a keyhole makes the two lips cancel and answers a different
   // question with confidence. See `QuadratureBudget.skip`.
-  const budget = power.ok
-    ? {
-        ...options.budget,
-        skip:
-          "the integrand is multivalued: sampling z^α needs a determination, and a compiled " +
-          "evaluator uses the principal one — so a quadrature of this contour would answer a " +
-          "different question. The exact route is the residue theorem.",
-      }
-    : options.budget;
+  const budget =
+    cofactor === null
+      ? options.budget
+      : {
+          ...options.budget,
+          skip:
+            `the integrand is multivalued: sampling ${power.ok ? "z^α" : "log^m z"} needs a ` +
+            "determination, and a compiled evaluator uses the principal one — so a quadrature of " +
+            "this contour would answer a different question. The exact route is the residue theorem.",
+        };
 
   return {
     ok: true,
@@ -166,6 +196,7 @@ export function runFamily(
         ...(power.ok
           ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }
           : {}),
+        ...(log.ok ? { log: { factor: log.factor, rational: log.rational }, branch: log.choice } : {}),
       }),
     },
   };
@@ -200,6 +231,12 @@ export function solveFamily(
     };
   }
 
+  // THE LOG FAMILIES TAKE THE SYSTEM ROUTE. Not a variant of the scalar one: there is no single `a`
+  // to divide by, because D4's lower edge reproduces an affine combination of three real integrals.
+  if (family.branch?.factors.some((x) => x.order.kind === "log") ?? false) {
+    return solveLogFamily(family, r.run);
+  }
+
   const piUnits = r.run.theorem.piUnits;
   if (piUnits === undefined) {
     return {
@@ -219,7 +256,62 @@ export function solveFamily(
   if (!solved.ok) {
     return { ok: false, run: r.run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
   }
-  return { ok: true, run: r.run, solved: solved.solved };
+  return { ok: true, route: "scalar", run: r.run, solved: solved.solved };
+}
+
+/** Pass 5 for a log family: `M t = r` over ℚ(i)(π), reported per unknown. */
+function solveLogFamily(family: Family, run: FamilyRun): SolveFamilyResult {
+  const closedContour = run.theorem.exactInPi;
+  if (closedContour === undefined) {
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: the residue theorem produced no exact closed-contour value in ℚ(i)(π), so there is nothing for Pass 5 to solve`,
+    };
+  }
+
+  const carried = piPieceLimits(run.ledger.pieceLimits);
+  if (!carried.ok) {
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: piece '${carried.pieceId}' contributes a limit that is not π times a Gaussian rational, so it cannot be carried into ℚ(i)(π)`,
+    };
+  }
+
+  const solved = solvePiTargets(family, {
+    closedContour,
+    pieceLimits: carried.limits,
+    bindings: run.bindings,
+  });
+  if (!solved.ok) return { ok: false, run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
+
+  const primaryId = (family.targets.find((t) => t.role === "primary") ?? family.targets[0]).id;
+  const primary = solved.targets.solved.find((x) => x.targetId === primaryId);
+  if (primary === undefined) {
+    const why = solved.targets.invisible.join("; ");
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: this contour does not determine ${primaryId}${why === "" ? "" : ` — ${why}`}`,
+    };
+  }
+
+  return {
+    ok: true,
+    route: "system",
+    run,
+    // The PRIMARY's evidence, not the system's. `?` on an unknown this contour cannot see is a true
+    // statement about that unknown and says nothing about this one; meeting the two would badge an
+    // exact answer `?`, which is the failure `residueTheorem.ts`'s `crossCheck` note describes from
+    // the other direction.
+    solved: {
+      value: primary.value,
+      text: primary.text,
+      certificates: [primary.certificate],
+    },
+    targets: solved.targets,
+  };
 }
 
 export interface OfferedTier {

@@ -17,9 +17,11 @@ const flagship = D1.golden[0];
 /** A golden value may be complex; every one of D1's is real. */
 const real = (n: number | readonly [number, number]): number => (typeof n === "number" ? n : n[0]);
 
+/** D1 is a one-unknown family, so its solve takes the scalar route; asserting that is how we say so. */
 const solved = (golden = flagship) => {
   const r = solveFamily(D1, golden);
   if (!r.ok) throw new Error(`D1 refused: ${r.reason}`);
+  if (r.route !== "scalar") throw new Error(`D1 should solve by division, not as a system`);
   return r;
 };
 

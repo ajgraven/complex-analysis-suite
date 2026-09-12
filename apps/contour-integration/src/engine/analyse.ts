@@ -28,7 +28,9 @@ import { resolveAll, type Contour } from "./contour/model.js";
 import { evaluateLedger, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
 import { applyBranchTheorem } from "./branchTheorem.js";
+import { applyLogTheorem } from "./logTheorem.js";
 import type { PowerFactor } from "../kernel/branchResidue.js";
+import type { LogFactor } from "../kernel/logResidue.js";
 
 export interface AnalysisInput {
   /** The CONTOUR integrand — post-substitution, Jacobian attached (`engine/substitution.ts`). */
@@ -56,6 +58,17 @@ export interface AnalysisInput {
    */
   readonly power?: { readonly factor: PowerFactor; readonly rational: Node };
   /**
+   * The branch factor `log^m z` multiplying a rational cofactor — the log families' seat.
+   *
+   * Changes the same two things `power` does and for the same reasons: the residue theorem routes
+   * through `logTheorem.ts`, because the branch point at the origin carries no residue and each
+   * pole's contribution mixes the whole Laurent principal part of `R` with the expansion of `log^m`
+   * about it; and `poles` describes the RATIONAL COFACTOR. Exactly one of `power` and `log` may be
+   * present — a record with both would be a different branch structure, not a harder case of this
+   * one.
+   */
+  readonly log?: { readonly factor: LogFactor; readonly rational: Node };
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -81,22 +94,24 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget, branch, power }: AnalysisInput): Analysis {
+export function analyse({ ast, f, poles, contour, budget, branch, power, log }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
   const integral = integrateContour(f, resolved, singular, budget);
   // Two routes that share no machinery: the theorem computes `2πi Σ n·Res` from exact residues, and
   // then CHECKS itself against the quadrature above. Agreement is the strongest evidence the app has.
   const theorem =
-    power === undefined
-      ? applyResidueTheorem(poles, integral)
-      : applyBranchTheorem({
-          poles,
-          integral,
-          factor: power.factor,
-          rational: power.rational,
-          pieces: resolved,
-        });
+    log !== undefined
+      ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
+      : power === undefined
+        ? applyResidueTheorem(poles, integral)
+        : applyBranchTheorem({
+            poles,
+            integral,
+            factor: power.factor,
+            rational: power.rational,
+            pieces: resolved,
+          });
   const ledger = evaluateLedger({
     ast,
     pieces: resolved,
@@ -106,6 +121,7 @@ export function analyse({ ast, f, poles, contour, budget, branch, power }: Analy
     theorem,
     branch,
     power,
+    log,
   });
   return { resolved, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }

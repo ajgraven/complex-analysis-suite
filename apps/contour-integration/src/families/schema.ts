@@ -40,7 +40,7 @@ export interface BranchFactor {
   readonly at: string;
   readonly order:
     | { readonly kind: "power"; readonly alpha: string }
-    | { readonly kind: "log"; readonly power: 1 | 2 };
+    | { readonly kind: "log"; readonly power: number };
   /** The determination this factor is evaluated in. Displayed always, never implicit. */
   readonly argRange: readonly [string, string];
 }

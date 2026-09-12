@@ -37,13 +37,16 @@ const BONUS_ZERO = 1e-12;
 /**
  * Evaluate a variable-free constant expression to a Gaussian rational, or REFUSE.
  *
- * ── SCHEMA FINDING (3 of 3) ───────────────────────────────────────────────────────────────────
+ * ── SCHEMA FINDING (3 of 3), and how it was settled ───────────────────────────────────────────
  * Pass 5's `M` is not always rational. Every coefficient in tiers A and B is `1` or `0`, but the log
  * keyhole's lower edge reproduces `∫R log + 2πi∫R`, so its coefficient row carries a `2π` and no
  * rational matrix can hold it. This function refuses in that case rather than rounding `2π` to a
  * fraction — which would make a rank a matter of tuning, the exact thing `linear.ts` exists to
- * avoid. Tier D will need either a symbolic matrix entry or a documented rational rescaling of the
- * unknowns; the decision is deferred to M4, where a record that needs it actually exists.
+ * avoid. The finding parked the choice between a symbolic matrix entry and a rational rescaling of
+ * the unknowns; **ADR-0041 took the symbolic entry**, because the rescaling does not generalise, and
+ * M4.3 built it: `piConstant.ts` walks such a coefficient into ℚ(i)(π) and `buildSystem` routes a
+ * record there on its own declared ADDITIVE crossing phase. This walk stays as it is — it is the
+ * exponential basis's, and the two rings are incomparable.
  */
 export function exactConstant(ast: Node, bindings: Bindings): ExactConstant {
   const walk = (n: Node): Gauss => {

@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **486 test files / 4476 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **489 test files / 4524 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -297,7 +297,7 @@ the value jumps by exactly `2πi·Res`, park it on the pole and there is no numb
 come: the pen tool (free-hand path editing), branch cuts (M4), the rest of the gallery (M5), the
 teaching layer (M6).
 
-**M4 (branch cuts): the decisions are taken and M4.1 has landed** — ADR-0041 and
+**M4 (branch cuts): M4.1–M4.3 have landed** — ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
 **carried, not reduced** (a form labelled `=`, decimal `≈`, as tier B already carries `e^{β}`), and
 Pass 5 moves to **ℚ(i)(π)** with π an indeterminate so that rank stays decided. No new number field. Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
@@ -333,9 +333,27 @@ LEGALITY catches both untagged circles; integer `α` makes the coefficient exact
 cancellation may simplify a derivation but never rescue one — `Golden.refuses` is the schema
 consequence, and invariant 4's rank rule inverts for such a fixture rather than being lifted. Two
 guardrail holes closed on the way: `solveFamily` now gates on LEGALITY as the result card does, and
-no skipped quadrature is ever rendered as agreement. Still to come in M4: ℚ(i)(π) in Pass 5 with
-`linear.ts` over a `Field` (M4.3, → D4), prerequisite chaining (M4.4, → D5), the `ln(ℚ₊)` exponent
-half (M4.5, → D2), the dogbone and `Res(f,∞)` (M4.6, → D6/D7), and the GPU cut picture (M4.7).
+no skipped quadrature is ever rendered as agreement.
+
+**M4.3** lands **D4**, the sixteenth record and the first that is not solved by dividing:
+`∫₀^∞ log x/(1+x²)² dx = −π/4`, with `∫₀^∞ dx/(1+x²)² = π/4` free from the same contour and
+`∫R log²x` honestly reported as invisible. Its one complex identity in three unknowns has rank 1 read
+as one equation and rank 2 split into real and imaginary parts — a split the record must DECLARE,
+since it is legitimate only because the unknowns are real. Pass 5 becomes a linear system:
+`linear.ts` runs over a `Field<T>` (`families/field.ts`) instantiated at ℚ and at **ℚ(i)(π)**
+(`kernel/ratPi.ts`), where π is transcendental so elimination is exact and rank stays DECIDED. Three
+things the plan did not anticipate: `SolveReport.determined`, because rank deficiency is not
+all-or-nothing (D4 pins two of three unknowns and is right to say nothing about the third, so
+invariant 4 became a per-unknown check in both directions); **the record chooses the coefficient
+ring**, since `e^{2πiα}` is not a rational function of π and `π²` is not an algebraic multiple of an
+exponential — a MULTIPLICATIVE crossing phase means the exponential basis, an ADDITIVE one means
+ℚ(i)(π); and **the coefficient row is derived from the declared increment** and checked against the
+record, which turns three of D4's traps into arithmetic. `kernel/logResidue.ts` computes
+`Res(R·log^m z, z₀)` at a pole of any order (the Laurent principal part convolved with the expansion
+of `log^m`, so a double pole mixes both halves), checked against an independent quadrature to 1e−12;
+`kernel/bounds/logArc.ts` kills the circles, where a log moves no exponent but does take the boundary
+case away. Still to come in M4: prerequisite chaining (M4.4, → D5), the `ln(ℚ₊)` exponent half
+(M4.5, → D2), the dogbone and `Res(f,∞)` (M4.6, → D6/D7), and the GPU cut picture (M4.7).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

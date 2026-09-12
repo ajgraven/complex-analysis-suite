@@ -32,7 +32,23 @@ import type { Bindings } from "./system.js";
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
 
-export interface SolvedTarget {
+/**
+ * What every consumer of a solved family needs: a number, its exact form when there is one, and the
+ * evidence for both.
+ *
+ * The two Pass-5 routes agree on exactly this much and on nothing else. The scalar route works in
+ * UNITS OF π and carries a sine; the system route works in ℚ(i)(π) and carries several unknowns at
+ * once, one of which is the primary. A caller that only wants to print the answer takes this.
+ */
+export interface SolvedValue {
+  /** The real number the target's relation extracts. `≈` by construction: π is evaluated here. */
+  readonly value: number;
+  /** The exact form, when the relation can be applied symbolically — `π/2`, not 1.5707963. */
+  readonly text?: string;
+  readonly certificates: readonly Certificate[];
+}
+
+export interface SolvedTarget extends SolvedValue {
   /** `t/π`, exactly — the unknown in units of π, before the relation is applied. */
   readonly piUnits: ExpSum;
   /**
@@ -43,11 +59,6 @@ export interface SolvedTarget {
    * express it.
    */
   readonly form: SineForm;
-  /** The real number the target's relation extracts. `≈` by construction: π is evaluated here. */
-  readonly value: number;
-  /** The exact form, when the relation can be applied symbolically — `π/2`, not 1.5707963. */
-  readonly text?: string;
-  readonly certificates: readonly Certificate[];
 }
 
 export type SolveTargetResult =
@@ -269,6 +280,15 @@ export interface PiSolveInputs {
 
 export interface PiSolvedTarget {
   readonly targetId: string;
+  /**
+   * The evidence for THIS unknown, and no other.
+   *
+   * Separated from `PiSolvedTargets.certificates` because a verdict is a meet: a caller that badged
+   * one answer with the whole system's evidence would cap an exact value at `?` on the strength of a
+   * statement about a DIFFERENT unknown. `residueTheorem.ts` records the same lesson about
+   * corroboration — a claim is never weakened by something it does not depend on.
+   */
+  readonly certificate: Certificate;
   /** The exact value: `π/4`, not `0.7853981`. */
   readonly text: string;
   readonly exact: RatPi;
@@ -286,6 +306,30 @@ export interface PiSolvedTargets {
 export type SolvePiResult =
   | { readonly ok: true; readonly targets: PiSolvedTargets }
   | { readonly ok: false; readonly reason: string; readonly certificate: Certificate };
+
+/**
+ * A ledger's piece limits, carried from UNITS OF π into ℚ(i)(π).
+ *
+ * Everywhere else in the app a piece's limit is `π` times an algebraic number, because every
+ * contribution in tiers A–C is; here the values are elements of ℚ(i)(π) and **the multiplication by
+ * π has to be done rather than assumed**. That factor is precisely the kind of silent error the
+ * suite's convention-neutrality guardrail exists to prevent, so it is a function with a test rather
+ * than a line inside a longer one. A limit that is not π times a Gaussian rational refuses, because
+ * carrying it would mean guessing which power of π it is.
+ */
+export function piPieceLimits(
+  limits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[],
+):
+  | { readonly ok: true; readonly limits: readonly { pieceId: string; contribution: RatPi }[] }
+  | { readonly ok: false; readonly pieceId: string } {
+  const out: { pieceId: string; contribution: RatPi }[] = [];
+  for (const arc of limits) {
+    const algebraic = arc.contribution.asSqrtExt()?.asGauss() ?? null;
+    if (algebraic === null) return { ok: false, pieceId: arc.pieceId };
+    out.push({ pieceId: arc.pieceId, contribution: RatPi.piPower(1, algebraic) });
+  }
+  return { ok: true, limits: out };
+}
 
 /** Solve `M t = r` over ℚ(i)(π) for every unknown this contour determines. */
 export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiResult {
@@ -337,22 +381,21 @@ export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiRe
     return { ok: false, reason, certificate: refuse("the targets", reason) };
   }
 
-  const certificates: Certificate[] = [];
   const solved = report.determined.map((d) => {
     const pinned = combineOver(RAT_PI_FIELD, d.weights, rhs);
     const targetId = system.targetIds[d.column];
     const text = formatRatPi(pinned);
     const [re, im] = pinned.toNumber();
-    certificates.push(
-      exact(
-        `${targetId} is ${text}`,
-        "Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly",
-      ),
+    const certificate = exact(
+      `${targetId} is ${text}`,
+      "Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly",
     );
     // The unknowns of a log family are real by hypothesis, and the realified system says so: a
     // non-zero imaginary part here would be an engine fault, not a value to report.
-    return { targetId, text, exact: pinned, value: im === 0 ? re : Number.NaN };
+    return { targetId, certificate, text, exact: pinned, value: im === 0 ? re : Number.NaN };
   });
+
+  const certificates: Certificate[] = solved.map((x) => x.certificate);
 
   const invisible = describeKernel(RAT_PI_FIELD, report, system.targetIds);
   for (const sentence of invisible) {

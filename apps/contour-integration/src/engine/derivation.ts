@@ -28,7 +28,7 @@ import {
   type Verdict,
 } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
-import { formatPiExpSum, type ExpSum } from "../kernel/expSum.js";
+import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { Piece } from "./contour/model.js";
@@ -148,8 +148,6 @@ export interface DerivationStage extends StageSpec {
  * sandbox has no family — an engine that needed one could not serve the sandbox at all.
  */
 export interface SolvedSummary {
-  /** `t/π`, exactly. Printed as the identity Pass 5 actually solved. */
-  readonly piUnits: ExpSum;
   readonly value: number;
   readonly text?: string;
   readonly certificates: readonly Certificate[];

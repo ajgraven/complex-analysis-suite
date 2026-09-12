@@ -14,7 +14,7 @@ import {
   solveFamily,
   type FamilyRun,
 } from "../src/families/runFamily.js";
-import type { SolvedTarget } from "../src/families/solveTarget.js";
+import type { SolvedValue } from "../src/families/solveTarget.js";
 import type { Cx } from "../src/kernel/geom.js";
 import type { Family, Golden } from "../src/families/schema.js";
 
@@ -37,7 +37,7 @@ function solve(
   family: Family,
   g: Golden,
   geometry: Record<string, number> = {},
-): FamilyRun & { solved: SolvedTarget } {
+): FamilyRun & { solved: SolvedValue } {
   const r = solveFamily(family, g, { geometry });
   if (!r.ok) throw new Error(r.reason);
   return { ...r.run, solved: r.solved };
@@ -123,6 +123,7 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "pv-sine-over-x-times-quadratic",
       "mellin-keyhole",
       "keyhole-x-to-the-n",
+      "log-squared-keyhole",
     ]);
   });
 });
@@ -258,6 +259,10 @@ describe("the closed form each record establishes", () => {
     // cancels the keyhole's own `(1 − e^{2πia})`, and without that cancellation the answer is
     // numerically right in a form no reader would recognise.
     "keyhole-x-to-the-n": "(π/4)/sin(3π/8)",
+    // D4, whose answer is not reached by dividing at all: `M t = r` over ℚ(i)(π), solved for the
+    // two unknowns of three that this contour determines. The primary is `∫₀^∞ log x/(1+x²)² dx`;
+    // `∫₀^∞ dx/(1+x²)² = π/4` comes free from the same identity and is checked in `test/d4.test.ts`.
+    "log-squared-keyhole": "−π/4",
   };
 
   it("covers every loaded record", () => {

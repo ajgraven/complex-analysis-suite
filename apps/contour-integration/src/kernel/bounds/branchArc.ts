@@ -31,44 +31,13 @@
 // exponent, not on any evaluated power.
 import { Frac, QiPoly } from "@cas/exact";
 import { bound, estimate, refuse, type Certificate } from "@cas/rigor";
-import { coefficientUpperBound, denominatorLowerBound, type ArcBound } from "./mlRational.js";
-import { sqrtDown, sqrtUp } from "./ratBound.js";
-
-/** The lowest index with a non-zero coefficient — `ord₀ p`, the order of vanishing at the origin. */
-function orderAtZero(p: QiPoly): number {
-  for (let k = 0; k <= p.degree(); k++) if (!p.coeff(k).isZero()) return k;
-  return 0; // the zero polynomial; the caller has already refused that case
-}
-
-/**
- * `|b_m|ρ^m − Σ_{k>m}|bₖ|ρᵏ` with `m = ord₀ Q`, rounded DOWN — a lower bound on `|Q|` for SMALL `ρ`.
- *
- * `mlRational.ts`'s `denominatorLowerBound` is the mirror image of this and only works for LARGE
- * `ρ`: it keeps the leading term and subtracts the rest, which for `1 + z` at `ρ = 1/1000` gives
- * `ρ − 1 < 0` and refuses a bound that plainly exists. Near the origin it is the LOWEST term that
- * dominates, so the roles swap — `1 − ρ` here — and a positive result again does double duty, since
- * it certifies that no root of `Q` lies inside `|z| = ρ`.
- *
- * It lives beside its only consumer rather than next to its sibling (ADR-0007): the at-infinity
- * bound is what every other lemma in this directory needs, and the keyhole's inner circle is the
- * first piece in the corpus whose radius goes the other way.
- */
-function denominatorLowerBoundNearZero(q: QiPoly, rho: Frac): Frac {
-  const low = orderAtZero(q);
-  if (q.degree() < 0) return Frac.ZERO;
-  const modulus = (k: number): Frac => {
-    const c = q.coeff(k);
-    return c.re.mul(c.re).add(c.im.mul(c.im));
-  };
-  let power = Frac.ONE;
-  for (let k = 0; k < low; k++) power = power.mul(rho);
-  let total = sqrtDown(modulus(low)).mul(power);
-  for (let k = low + 1; k <= q.degree(); k++) {
-    power = power.mul(rho);
-    if (!q.coeff(k).isZero()) total = total.sub(sqrtUp(modulus(k)).mul(power));
-  }
-  return total;
-}
+import {
+  coefficientUpperBound,
+  denominatorLowerBound,
+  denominatorLowerBoundNearZero,
+  orderAtZero,
+  type ArcBound,
+} from "./mlRational.js";
 
 export interface BranchArcOptions {
   /** Which limit the arc's radius is heading to. The hypothesis it spends depends on this. */

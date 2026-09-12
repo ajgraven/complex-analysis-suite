@@ -64,7 +64,7 @@ import {
   type FamilyRun,
 } from "../families/runFamily.js";
 import type { Family, FamilyTarget, Golden } from "../families/schema.js";
-import type { SolvedTarget } from "../families/solveTarget.js";
+import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
@@ -241,7 +241,16 @@ export function mountApp(root: Element): void {
   let bindingOverrides: Bindings = {};
   /** A move on a LIMIT parameter. Geometry only; never substituted into the integrand. */
   let geometryOverrides: Record<string, number> = {};
-  let solved: SolvedTarget | null = null;
+  let solved: SolvedValue | null = null;
+  /**
+   * The rest of a SYSTEM solve — the other unknowns this contour determined, and the ones it did not.
+   *
+   * D4's title promises `∫₀^∞ R(x) dx` "for free", and it IS free: the same identity determines it.
+   * Showing only the primary would make the record's own headline invisible, and dropping the
+   * invisible-combination report would leave a reader unable to tell "the app cannot" from "this
+   * contour does not".
+   */
+  let systemTargets: PiSolvedTargets | null = null;
   /** What the record could not do, when it could not do it. Shown, never swallowed. */
   let recordNote: string | null = null;
   /**
@@ -675,6 +684,7 @@ export function mountApp(root: Element): void {
   function recomputeRecord(): void {
     recordNote = null;
     solved = null;
+    systemTargets = null;
     if (!family || !golden) {
       clearComputed();
       return;
@@ -688,6 +698,7 @@ export function mountApp(root: Element): void {
     if (r.ok) {
       adopt(r.run);
       solved = r.solved;
+      systemTargets = r.route === "system" ? r.targets : null;
       errorBox.hidden = true;
       return;
     }
@@ -893,6 +904,28 @@ export function mountApp(root: Element): void {
           : ` DISAGREES with the golden value by ${off.toExponential(2)} — one of them is wrong`,
       );
       recordCard.append(agree);
+      // The REST of a system solve: every other unknown this identity determines, and every
+      // combination it does not. Both are answers about this contour, and each keeps its own badge.
+      if (systemTargets !== null) {
+        const targets = family.targets;
+        const primaryId = (targets.find((t) => t.role === "primary") ?? targets[0]).id;
+        const describe = (id: string): string => {
+          const target = targets.find((t) => t.id === id);
+          return target === undefined ? id : targetText(target);
+        };
+        for (const other of systemTargets.solved) {
+          if (other.targetId === primaryId) continue;
+          const line = el("p", "resultValue exactValue bonusValue");
+          line.append(badge(assembleVerdict([other.certificate]).level), ` ${other.text}`);
+          recordCard.append(line, el("p", "muted small", `${describe(other.targetId)} — from the same contour`));
+        }
+        for (const sentence of systemTargets.invisible) {
+          const line = el("p", "restriction");
+          line.append(badge("?"), ` ${sentence}`);
+          recordCard.append(line);
+        }
+      }
+
       // `method` is a paragraph, by design — GALLERY §2's whole point is that a golden value with no
       // method is an assertion. It is still not what a reader needs first, so it folds.
       const how = el("details", "method");

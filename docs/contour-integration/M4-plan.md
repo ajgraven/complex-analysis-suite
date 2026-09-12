@@ -151,7 +151,7 @@ before D2.
 |---|---|---|
 | **M4.1** ✅ | `BranchChoice`, the admissibility validator, CPU continuous-argument lift, `side` tags, LEGALITY steps 2–3, and the sandbox's cut editor | M |
 | **M4.2** ✅ | the four `Family["branch"]` schema changes of §1.3 · keyhole template · the power-residue reader · `iπ·ℚ` exponents · the sine recogniser · **the cyclotomic sum and the geometric cancellation** → **D1, D3** | **L** |
-| **M4.3** | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` → **D4** | M–L |
+| **M4.3** ✅ | `linear.ts` over a `Field` · ℚ(i)(π) · the rank/kernel report · the additive `crossingPhase` · **the log-residue engine and the log arc bound** → **D4** | M–L |
 | **M4.4** | `prerequisites` chaining, a borrowed verdict *meeting* into the final one → **D5** | S |
 | **M4.5** | `ln(ℚ₊)` exponents and radical factors → **D2, D7's algebraic half** | S–M |
 | **M4.6** | dogbone template · `Res(f,∞)` as a first-class row → **D6, D7** | M |
@@ -166,9 +166,10 @@ before D2.
 - **M4.2** ✅ — **north-star #4, verbatim.** D1's `arg ∈ (−π,π]` trap is reported as the earliest of
   its three refusals that this engine can see: the cut swings onto ℝ₋ and both untagged circles cross
   it (LEGALITY step 2). D3 lands with it, including the two integer-`a` fixtures that must refuse.
-- **M4.3** — D4's three targets solve, and the wrong `argRange` reports *"this contour carries no
-  information about `∫₀^∞ R(x) log x dx`"* as a computed rank statement rather than a hand-written
-  detector.
+- **M4.3** ✅ — D4 determines two of its three targets (`∫R log x = −π/4` and, free, `∫R = π/4`) and
+  reports the third as invisible; and the plain-`log` variant says *"this contour does not determine
+  T1 — this contour carries no information about T1"* as a computed consequence of a zero column,
+  not as a hand-written detector.
 - **M4.4** — D5 refuses to close **alone**, names `T0` as the missing input, and closes when D4
   supplies it — with the borrowed value's rigor meeting into the result, never silently upgrading it.
 - **M4.6** — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
@@ -205,7 +206,7 @@ hand-off for a branch system, which stays gated on a receiving tool (ADR-0007).
 
 ---
 
-## 4. What M4.1 actually landed, and what it taught
+## 5. What M4.1 actually landed, and what it taught
 
 Four kernel modules (`src/kernel/branch/`), a pure editor (`src/engine/branchEdit.ts`), the two
 LEGALITY rows, and a sandbox card. Four things are worth recording because they changed a decision
@@ -255,7 +256,7 @@ fails softly still withholds the value.
 
 ---
 
-## 5. What M4.2 landed, and what it taught
+## 6. What M4.2 landed, and what it taught
 
 Six commits: the widened basis, the sine recogniser, the schema plus the coefficient walk, the
 crossing correction, the power-residue reader, D1, and D3. Five things changed a decision.
@@ -305,4 +306,71 @@ under the principal determination it produced a confident COMPLEX number for a r
 - **D2** needs the `ln(ℚ₊)` half of the exponent (poles at `−1` and `−2`, so `ln|z₀| ≠ 0`) — M4.5,
   per ADR-0041 Action Item 1.
 - **D4/D5** need Pass 5 over ℚ(i)(π) and `linear.ts` over a `Field` — M4.3. `buildSystem` refuses
-  them by name today: a coefficient outside ℚ(i) with more than one unknown says so.
+  them by name today: a coefficient outside ℚ(i) with more than one unknown says so. *(D4 landed in
+  M4.3; D5 waits on M4.4's `prerequisites`, and on `ln(ℚ₊)` for its second fixture.)*
+
+---
+
+## 7. What M4.3 landed, and what it taught
+
+**D4 is the first record in the corpus that is not solved by dividing.** Its contour gives ONE
+complex identity in three unknowns, and everything else follows from that.
+
+### Neither coefficient ring contains the other, so the record chooses
+
+`e^{2πiα}` is not a rational function of π; `π²` is not an algebraic multiple of an exponential. So
+there is no single seat for a coefficient, and "try one and catch the failure" would make the choice
+an accident of which walker was tried first. The family's **crossing phase** decides it — a
+MULTIPLICATIVE phase (`z^α ↦ e^{2πiα}z^α`) puts the row in the exponential basis, an ADDITIVE one
+(`log z ↦ log z + 2πi`) puts it in ℚ(i)(π) — and `buildSystem` routes on that declaration. This is
+what §1.3's tagged `CrossingPhase` was for, one level further than it was written to reach.
+
+### The coefficient row is DERIVED from the increment, not taken on trust
+
+`−(log x + Δ)^k` expanded gives `[−C(k,k)Δ^k, …, −C(k,1)Δ, 0]`, so for `k = 2, Δ = 2πi` the row must
+be `[4π², −4πi, 0]`. `buildSystem` computes that and compares it with what the record declared.
+Three of D4's six traps stop being detectors and become arithmetic: `four-pi-squared-dropped`,
+`wrong-sign-of-the-shift`, and a lost binomial coefficient. The vanishing last entry is the
+`plain-log-loses-the-log-integral` trap in the same breath — at `k = 1` the row is `[−Δ, 0]`, and
+that zero IS the log integral going invisible.
+
+### Rank deficiency is not all-or-nothing
+
+D4's realified system has rank 2 in three unknowns and is CORRECT: `∫R log²x` has an identically zero
+column. A report that offered a solution only at full rank would have refused to state the very
+answer the contour was built for, so `SolveReport` gained `determined` — the unknowns a system pins
+down outright, each with the functional extracting it. Invariant 4 moved onto it and is now a
+per-unknown check in both directions: a `primary` or `bonus` target the contour does not pin is a
+broken record, and so is a `cancels` target that it does.
+
+### A log is weaker than every power, and that shows exactly once
+
+The two circles of D4's keyhole are killed by the decay of `R` alone — the log moves no exponent.
+What it takes away is the boundary case: at exponent 0 a rational arc bound is `O(1)`, merely failing
+to discharge, while the same arc with `m ≥ 1` DIVERGES. `logArc.ts` reports that difference rather
+than inheriting the rational reading.
+
+### A check nobody can break is a check nobody is running
+
+The break pass found one guard whose deletion no test noticed: the numeric cross-check inside each of
+the three coefficient walks. A correct walker never disagrees with the evaluator, so no ordinary
+input can tell a wired check from a deleted one. The seam that can is that the walk and the evaluator
+read the bindings SEPARATELY — a binding whose getter answers differently the second time makes them
+see different parameters. Deliberately exotic, and better than a check that could be deleted silently
+inside a walker whose whole job is to be exact.
+
+### The residues are checked by a second computation, in the tests and not in production
+
+`logResidue.ts` is verified against an independent trapezoid quadrature of `(1/2πi)∮ R log^m dz`,
+which shares no arithmetic with it and agrees to 1e−12 relative. That check is NOT in production,
+because a safe radius is a property of the whole pole configuration and not of the pole being asked
+about: a default small enough to be safe everywhere does not exist, and one that silently enclosed a
+second pole would turn a correct answer into a refusal.
+
+### Transcription note: a symbol the schema cannot bind
+
+D4's gallery record varies `R` across fixtures (`1/(1+x²)²`, `1/(1+x²)`). A `symbol` is documentation
+in this schema — nothing binds a function into an integrand — so the one degree of freedom those
+fixtures actually use is transcribed as an integer parameter `p`, the power of `1 + x²`. Its third
+golden (`T0 = π/4`, "the free bonus from the same contour") is not a fixture at all: it is the other
+unknown of the same solve, and `solveFamily`'s `targets` reports it.

@@ -15,6 +15,7 @@ import { Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
 import { ExpSum, formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
+import type { RatPi } from "../kernel/ratPi.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 
@@ -29,6 +30,16 @@ export interface ResidueTheoremResult {
    * evaluated, so `π/2` stays `π/2` instead of becoming 1.5707963.
    */
   readonly piUnits?: ExpSum;
+  /**
+   * `2πi Σ n·Res` itself as an element of ℚ(i)(π) — the LOG families' route.
+   *
+   * Not the same field in different clothes. `piUnits` is the value DIVIDED by π, because every
+   * contribution in tiers A–C is π times an algebraic number and working in those units is what
+   * keeps π unevaluated. A log family's residues are polynomials in π of degree up to `m`, so there
+   * is no single power to divide out — `Res(log²z/(1+z²)², i) = −π/4 + iπ²/16` — and ℚ(i)(π) holds
+   * the value directly instead. Exactly one of the two is present.
+   */
+  readonly exactInPi?: RatPi;
   /** Distance between the exact value and the quadrature, when both exist. */
   readonly disagreement?: number;
   /** True when the two independent computations agree to the quadrature's own estimate. */
