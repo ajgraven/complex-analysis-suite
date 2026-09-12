@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **500 test files / 4705 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **501 test files / 4736 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -454,8 +454,28 @@ except there, where the requirement is an *absolute* `2^-11` (4.9e-4, four order
 eps, of which SwiftShader spends 39% while `atan` delivers 8.5e-7), so the first draft asserted 3e-5
 and went red on a correct shader. A mutation sweep on the shader kills 17 of 17; the two that survived
 the first pass were both comments nothing checked — the turn count replaced by a modulus, and `<`
-loosened to `<=` so a grazing touch counts as a crossing — and are asserted directly now. Still to
-come in M4: rendering the declared determination (M4.7c) and drag-a-cut (M4.7d).
+loosened to `<=` so a grazing touch counts as a crossing — and are asserted directly now.
+
+**M4.7c** then put the declared determination on the stage: the phase portrait is BUILT from the
+record's own factorisation `c·∏(sⱼ(z−bⱼ))^{αⱼ}`, each factor in its declared window, on the CPU and
+in GLSL emitted per record — so D7's seam on `(b, ∞)`, where the composite is continuous and the
+compiled evaluator drew a jump anyway, is gone and the picture is on the ledger's sheet. Constructing
+beats correcting because `cutCorrection`'s reference would have to be the determination `@cas/expr`
+compiled, and for D6's `csqrt(1 − z·z)` that is where `1 − z² ∈ ℝ₋` — in general a CURVE, not rays
+from the branch points, so a ray-based correction is right about D6 by luck; the correction keeps its
+job one level up, where the declared product is the reference and a dragged cut is measured from it.
+The shader is generated so the declaration sits in the program text, since a uniform array would make
+the orientation runtime data and `(b − z)^ν` is the same number as `−(z − b)^ν` and not the same
+power. Research 06 §5.1's two honest counter-devices land with it: the cut carries its jump weight
+(`J = 3/4` on D7's dogbone, `J = ∞` on a log's keyhole, because infinite-order monodromy has no
+finite jump), and modulus contours are one toggle away — **whose claim holds only for the powers**,
+measured: `|f|` is determination-independent to 1e-9 for D1/D2/D3/D6/D7, and differs by 18.7× and
+80.7× for D4/D5 because a log's monodromy is additive, so the contours break at the cut there and the
+app says which case it is showing. Writing the tests found three things a shader suite cannot
+otherwise see — an unused GLSL function links perfectly, `expect(x).toBeLessThan` without a call
+asserts nothing, and a grid never lands on a hair-thin isoline — and the browser found the label
+placed off-canvas on a clipped ray and underneath the contour on a dogbone. Sweeps: 14/14. Still to
+come in M4: drag-a-cut (M4.7d).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

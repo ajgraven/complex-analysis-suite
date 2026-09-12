@@ -225,6 +225,29 @@ whether the whole thing closes.
   on a cut). Both are asserted directly now — exact equality with `atan()` in float32, and hand-picked
   samples lying exactly on a cut, a vertex and a branch point.
 
+**M4.7c puts the DECLARED determination on the stage:**
+
+- **The phase portrait is built from the record's own factorisation, not corrected into it.** Each
+  factor `(sⱼ(z − bⱼ))^{αⱼ}` is evaluated in the argument window the record declares, on the CPU and
+  in GLSL, so the picture and the ledger are on the same sheet. D7's seam on `(b, ∞)` — where the
+  composite is continuous and the compiled evaluator drew a jump anyway — is gone.
+- **Constructing beats correcting, and D6 says why.** Multiplying the compiled value by
+  `exp(2πi·m(z))` needs the reference to be a system of rays from the branch points, and
+  `csqrt(1 − z·z)` is one principal square root of a quadratic whose cut is where `1 − z² ∈ ℝ₋`. In
+  general the principal cut of a composite is a curve; a ray-based correction is right about D6 by
+  luck. The declared product has no reference to get wrong.
+- **The shader is generated per record**, so the record's declaration lives in the program text. A
+  uniform array would make the orientation runtime data, and `(b − z)^ν` is the same number as
+  `−(z − b)^ν` and not the same power — D7's trap, one wrong uniform away.
+- **Modulus contours, and the right sentence beside them.** `|f|` cannot see the determination for a
+  power product, so its level curves cross the seam — the clearest evidence that the seam is a choice
+  (research 06 §5.1's device #2). Over a `log^m` that is FALSE: the monodromy is additive, the two
+  determinations differ in modulus by 18.7× for D4 and 80.7× for D5, and the contours break at the
+  cut. The card says which case is on screen; the suite asserts both.
+- **The cut carries its jump weight** — `J = 3/4` on D7's dogbone, `J = ∞` on a log's keyhole, since
+  infinite-order monodromy has no finite jump and a number there would be the app's first dishonest
+  label.
+
 The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden

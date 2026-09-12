@@ -36,6 +36,7 @@ import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
+import type { DeclaredProduct } from "../kernel/branch/declared.js";
 
 export interface RunOptions {
   /**
@@ -69,6 +70,17 @@ export interface FamilyRun extends Analysis {
   readonly f: (z: Cx) => Cx;
   readonly poles: PoleReport;
   readonly contour: Contour;
+  /**
+   * The branch half of the integrand as a renderable product, plus the single-valued half it
+   * multiplies — present exactly when the record declares a branch factor.
+   *
+   * Carried so the PICTURE can be built from the declaration instead of from the compiled AST, which
+   * takes the principal branch of every sub-expression and therefore draws a seam where D7's
+   * composite is continuous (research 06 §2.2). `kernel/branch/declared.ts` says why constructing
+   * beats correcting. Both halves travel together because they are one split: `cofactor` is NOT the
+   * whole integrand and rendering it alone would be a picture of a different function.
+   */
+  readonly declared?: { readonly product: DeclaredProduct; readonly cofactor: Node };
 }
 
 export type RunFamilyResult =
@@ -184,6 +196,16 @@ export function runFamily(
             "this contour would answer a different question. The exact route is the residue theorem.",
         };
 
+  // The declaration, for the picture. One of the three at most: the routing above already made them
+  // mutually exclusive, and a record with two branch structures is not a harder case of either.
+  const declared = power.ok
+    ? { product: power.declared, cofactor: power.rational }
+    : log.ok
+      ? { product: log.declared, cofactor: log.rational }
+      : multi.ok
+        ? { product: multi.declared, cofactor: multi.rational }
+        : undefined;
+
   return {
     ok: true,
     run: {
@@ -194,6 +216,7 @@ export function runFamily(
       f,
       poles,
       contour,
+      ...(declared === undefined ? {} : { declared }),
       ...analyse({
         ast: built.ast,
         f,

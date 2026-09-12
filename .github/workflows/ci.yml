@@ -121,7 +121,10 @@ jobs:
   #     record's contour integrand, plus M4.7's CPU↔GPU branch-cut parity gate: the cut correction
   #     that decides which DETERMINATION the phase portrait draws is computed twice, once in TS and
   #     once in GLSL, and a picture drawn in a branch the ledger does not compute in is the defect
-  #     this catches.
+  #     this catches. From M4.7c it also builds each branch record's GENERATED declared-product
+  #     shader, checks it against its CPU twin, and compares rendered PIXELS between the declared and
+  #     principal programs — the one assertion that sees a shader emitting a function it never calls,
+  #     which links without complaint and draws the old picture.
   #
   # Kept SEPARATE from `build` so it never slows the main gate.
   # NOT covered: apps/correspondences' shaders are still never compiled (unpublished app).

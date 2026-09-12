@@ -1,7 +1,10 @@
 import { COMPLEX_DERIVED_GLSL, COMPLEX_SINGLE_GLSL, createProgram } from "@cas/gpu";
 import { compileF, type Node } from "@cas/expr";
 import { plotRange, type View, type Viewport } from "../../kernel/camera.js";
+import type { DeclaredProduct } from "../../kernel/branch/declared.js";
 import { buildPhaseFrag, PHASE_VERT } from "./phase.glsl.js";
+import { CUT_GLSL } from "./cut.glsl.js";
+import { declaredProductGlsl } from "./declared.glsl.js";
 
 /**
  * The Stage's WebGL2 layer: a phase portrait of the integrand, rendered from the same AST the CPU
@@ -51,14 +54,30 @@ export class GLStage {
    * the exact failure `@cas/expr`'s `paramAlias` note records having hit before — the GPU kept
    * rendering the old map under the new name.
    */
-  setIntegrand(ast: Node): void {
+  setIntegrand(ast: Node, declared?: DeclaredProduct): void {
     const { gl } = this;
-    const stdlib = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n`;
-    const next = createProgram(gl, PHASE_VERT, buildPhaseFrag(stdlib, compileF(ast)));
+    // CUT_GLSL comes in unconditionally: it carries `cpowCut`/`clogCut`, which the declared product
+    // is built out of, and with `uCutCount` left at 0 its correction is identically zero and costs
+    // one comparison per pixel. Including it always keeps ONE program shape, so the sandbox and a
+    // record compile the same stdlib and a defect cannot hide in the branch that is rarely built.
+    const stdlib = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n${CUT_GLSL}\n`;
+    // **WITH A DECLARED PRODUCT, `ast` IS THE RATIONAL COFACTOR AND NOT THE WHOLE INTEGRAND.** The
+    // branch half is generated from the record's declaration (`declared.glsl.ts`) so the picture is
+    // in the determination the ledger computes in; the single-valued half stays on `@cas/expr`'s
+    // compile path, which is the one source of truth for everything with no determination to choose.
+    const next = createProgram(
+      gl,
+      PHASE_VERT,
+      buildPhaseFrag(
+        stdlib,
+        compileF(ast),
+        declared === undefined ? undefined : declaredProductGlsl(declared),
+      ),
+    );
     if (this.program) gl.deleteProgram(this.program);
     this.program = next;
     this.uniforms = {};
-    for (const name of ["uRange", "uParamC", "uA", "uModulusDepth", "uGridStrength"]) {
+    for (const name of ["uRange", "uParamC", "uA", "uModulusDepth", "uGridStrength", "uIsoStrength", "uCutCount"]) {
       this.uniforms[name] = gl.getUniformLocation(next, name);
     }
   }
@@ -74,7 +93,17 @@ export class GLStage {
     }
   }
 
-  render(view: View, vp: Viewport, opts: { paramC?: readonly [number, number]; modulusDepth?: number; grid?: number } = {}): void {
+  render(
+    view: View,
+    vp: Viewport,
+    opts: {
+      paramC?: readonly [number, number];
+      modulusDepth?: number;
+      grid?: number;
+      /** Modulus contours — research 06 §5.1's device #2. 0 is off. */
+      iso?: number;
+    } = {},
+  ): void {
     const { gl, program } = this;
     if (!program) return;
     this.resize(vp);
@@ -89,6 +118,11 @@ export class GLStage {
     gl.uniform2f(this.uniforms.uA ?? null, 0, 0);
     gl.uniform1f(this.uniforms.uModulusDepth ?? null, opts.modulusDepth ?? 1);
     gl.uniform1f(this.uniforms.uGridStrength ?? null, opts.grid ?? 1);
+    gl.uniform1f(this.uniforms.uIsoStrength ?? null, opts.iso ?? 0);
+    // No cut segments yet — M4.7d uploads them. Zero here means `cutCorrection` is identically zero,
+    // so the declared product is drawn exactly as declared and a dragged cut is the only thing that
+    // can move it.
+    gl.uniform1i(this.uniforms.uCutCount ?? null, 0);
 
     gl.drawArrays(gl.TRIANGLES, 0, 3);
     gl.bindVertexArray(null);

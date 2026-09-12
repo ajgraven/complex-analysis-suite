@@ -183,9 +183,10 @@ before D2.
 - **M4.6** ✅ — D7's outer circle contributes `2πi·(17/4)·e^{3πi/4}`, magnitude 26.7 in an answer of
   magnitude 1.216. The residue at infinity is not an edge case, and D6 passing only because
   `Res(f,∞) = 0` is the coincidence that would hide the bug.
-- **M4.7** — **north-star #3**; CPU/GPU parity green in a browser suite. **The parity half is
-  done (M4.7a–b, §13): 40 assertions in real WebGL2 and a mutation sweep at 17/17.** `DUAL_BACKEND_CORPUS`
-  in the table above is superseded — see §13's last note.
+- **M4.7** — **north-star #3**; CPU/GPU parity green in a browser suite. **M4.7a–b (§13) did the
+  parity half and M4.7c (§14) put the declared determination on the stage: 75 assertions in real
+  WebGL2 across three files, and mutation sweeps at 17/17 and 14/14.** `DUAL_BACKEND_CORPUS` in the
+  table above is superseded — see §13's last note. North-star #3 itself waits on M4.7d.
 
 ### Two prerequisites
 
@@ -814,3 +815,83 @@ suite replaces it and is stronger for this purpose: the corpus compares a packag
 package's own JS reference, while this compares the shader against **the twin the ledger actually
 uses**, which is the drift that would make the app draw one branch and report another. If the
 plotter's monodromy view ever wants a rotatable cut, that is the trigger to move them.
+
+## 14. What M4.7c landed, and what it taught
+
+The phase portrait is now drawn in the determination the record DECLARES. D7's seam on `(b, ∞)` — the
+`rendering-the-union-of-sub-cuts` trap §12 found the app drawing about its own example — is gone, and
+the two honest counter-devices of research 06 §5.1 are in: the cut carries its jump weight as a label,
+and modulus contours are one toggle away.
+
+### CONSTRUCT, do not CORRECT — and D6 is why
+
+M4.7b built `cutCorrection` and the obvious next step is to multiply the compiled value by
+`exp(2πi·m(z))` and be done. That repair is subtly wrong. The correction's reference has to be the
+determination `@cas/expr` actually compiled, and for D6 that is not a ray system at all:
+`csqrt(1 − z·z)` is ONE principal square root of a quadratic, whose cut is where `1 − z² ∈ ℝ₋`. In
+general the principal cut of a composite is a CURVE, and a correction whose reference is a union of
+rays from the branch points would be right about D6 by luck and wrong about the next record with
+nothing to warn you.
+
+So there is nothing to correct: the declared product `c·∏ⱼ(sⱼ(z − bⱼ))^{αⱼ}` IS the definition, and
+both backends evaluate it directly — `kernel/branch/declared.ts` on the CPU and a GLSL twin emitted
+per record. `cutCorrection` keeps its job one level up, where the reference is this product and a
+dragged cut is measured from it, which makes M4.7d's correction exact by construction rather than by
+a guess about what the evaluator did.
+
+### The shader is GENERATED, because a uniform would make D7's trap a data error
+
+A fixed shader with a uniform array of `(bⱼ, αⱼ, windowⱼ, signⱼ)` would work and is worse: the
+orientation would become runtime data, and `(b − z)^ν` is the same NUMBER as `−(z − b)^ν` and not the
+same POWER — D7's own trap, one wrong uniform away. Generated code puts the record's declaration in
+the program text, where a malformed factor fails to compile instead of drawing quietly. The split is
+along the same line: the branch half is emitted, and the single-valued cofactor stays on
+`@cas/expr`'s compile path, which remains the one source of truth for everything with no
+determination to choose.
+
+### `|f|` IS DETERMINATION-INDEPENDENT — for the powers, and the research says so precisely
+
+Research 06 §5.1's device #2 states it for `f = ∏(z−bₖ)^{αₖ}`, and the first draft of this slice
+generalised it to the whole module. Measured: for D1, D2, D3, D6 and D7 the declared and principal
+pictures agree in modulus to 1e-9 at every sample while differing in phase below the cut — so the
+level curves cross the seam, which is the most direct possible demonstration that the seam is a
+choice. For D4 and D5 they differ in MODULUS by factors of **18.7 and 80.7**: a log's monodromy is
+additive, `(L + 2πi)^m` is not `L^m` times a phase, and the contours break at the cut. Both are
+honest and they are not the same claim, so the app carries two sentences and the suite asserts both
+directions — a refactor folding the log path into the power path fails rather than lies.
+
+### Three things a shader test cannot see, found by writing the test
+
+- **An unused GLSL function links perfectly.** A `buildPhaseFrag` that emits `casDeclared` and never
+  calls it compiles, links, and draws the old picture. Nothing but a rendered PIXEL catches that, so
+  the suite renders the real fragment program and compares the colour above and below the cut: the
+  same above (where the windows coincide), different below.
+- **`expect(x).toBeLessThan` without a call is a property access.** It parses, it runs, it asserts
+  nothing. One line of this file was written that way and 23 tests passed; it is the same shape of
+  defect as the unused function, one level up.
+- **A grid never lands on an isoline.** The probe renders a 1×1 viewport, so `fwidth(log2|f|)` is a
+  hair and the contour is a hair wide. The first version of the overlay test compared the two
+  determinations over a grid, passed, and measured ZERO ink at every sample — agreement about
+  nothing. The points have to be solved for, and solved for in `t = log2|f|` rather than in
+  `fract(t)`: `fract` is a sawtooth, so the sign of `fract(t) − ½` flips at the `1 → 0` wrap as well
+  as at a real crossing, and a bisection on it converges onto the wrap, where the shader correctly
+  inks nothing and the test reports a defect that is not there.
+
+### And two the browser found, both about the label
+
+Research 06 §5.1's device #1 is a cut drawn as an explicit stroked, **labelled**, draggable curve.
+Stroked and hatched since M4.1; the label is this slice, and it earns its ink because a candidate arc
+is a real cut exactly when its jump weight is not an integer. It was wrong twice on screen. The
+midpoint by arc length of the whole polyline is far off the canvas for a ray clipped at four times
+the view extent, so D4's keyhole had no visible label at all — it is now the midpoint of the cut's
+VISIBLE length, Liang–Barsky against the canvas. And it sat under the contour: D7's dogbone hugs
+`[0, b]` and the path is drawn on top of the cut, so `J = 3/4` was illegible until the label stepped
+onto the normal. A log prints `J = ∞`, because infinite-order monodromy has no finite jump and
+printing a number for it would be the first dishonest label in the app.
+
+### The sweep
+
+14 deliberate defects in the emitter, the CPU twin, the factor readers, the run and the shader; 13
+died on the first pass. The survivor was the overlay — driven by `fract(hue)` instead of
+`fract(log2|f|)` it would trace the seam rather than cross it, making the card's sentence false, and
+every test passed because they all switched the overlay off. Closed by the isoline test above; 14/14.

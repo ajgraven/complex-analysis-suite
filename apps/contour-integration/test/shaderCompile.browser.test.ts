@@ -6,6 +6,11 @@
 // on a compile or link failure and the shell shows it, which is the right behaviour and no substitute
 // for knowing the programs build.
 //
+// The stdlib here is the one `GLStage.setIntegrand` assembles, `CUT_GLSL` included — it comes in
+// unconditionally from M4.7c, because the declared branch product is built out of `cpowCut` and one
+// program shape is better than two. Drifting from it would make this file assert that a program
+// nobody builds compiles.
+//
 // It mirrors `apps/complex-function-plotter/test/shaderCompile.browser.test.ts` and
 // `apps/complex-dynamics/test/shaderCompile.browser.test.ts`, and rides the same Playwright/Chromium
 // harness and the same CI job — no new infrastructure. It reconstructs the exact pipeline
@@ -19,6 +24,7 @@ import { describe, expect, it } from "vitest";
 import { compileF, parse } from "@cas/expr";
 import { COMPLEX_DERIVED_GLSL, COMPLEX_SINGLE_GLSL, createProgram } from "@cas/gpu";
 import { buildPhaseFrag, PHASE_VERT } from "../src/ui/stage/phase.glsl.js";
+import { CUT_GLSL } from "../src/ui/stage/cut.glsl.js";
 import { FAMILIES } from "../src/families/index.js";
 import { contourIntegrandOf } from "../src/families/instantiate.js";
 import { primaryGolden } from "../src/families/runFamily.js";
@@ -37,7 +43,7 @@ function context(): WebGL2RenderingContext {
 
 /** Exactly what `GLStage.setIntegrand` builds, minus the uniform lookups. */
 function buildProgram(gl: WebGL2RenderingContext, src: string): WebGLProgram {
-  const stdlib = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n`;
+  const stdlib = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n${CUT_GLSL}\n`;
   return createProgram(gl, PHASE_VERT, buildPhaseFrag(stdlib, compileF(parse(src))));
 }
 
@@ -65,7 +71,7 @@ describe("every record's contour integrand compiles", () => {
 
   it.each(cases)("%s", (_id, ast) => {
     const gl = context();
-    const stdlib = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n`;
+    const stdlib = `${COMPLEX_SINGLE_GLSL}\n${COMPLEX_DERIVED_GLSL}\nuniform vec2 uA;\n${CUT_GLSL}\n`;
     expect(() => createProgram(gl, PHASE_VERT, buildPhaseFrag(stdlib, compileF(ast)))).not.toThrow();
   });
 });

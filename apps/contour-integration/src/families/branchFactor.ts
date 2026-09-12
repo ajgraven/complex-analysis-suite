@@ -23,6 +23,7 @@ import { parse, substitute, type Node } from "@cas/expr";
 import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 import { INFINITY, type BranchChoice, type BranchPoint } from "../kernel/branch/model.js";
+import type { DeclaredFactor, DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Cx } from "../kernel/geom.js";
 import { exactConstant, type Bindings } from "./system.js";
 import type { BranchFactor as BranchFactorSpec, Family } from "./schema.js";
@@ -34,6 +35,8 @@ export type BranchFactorResult =
       readonly rational: Node;
       /** The cut system, with its geometry derived from the determination — see `cutFromDetermination`. */
       readonly choice: BranchChoice;
+      /** The same declaration as a renderable product — see {@link DeclaredProduct}. */
+      readonly declared: DeclaredProduct;
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -154,6 +157,18 @@ export function powerFactorOf(family: Family, bindings: Bindings): BranchFactorR
     factor: { alpha, argRange: [common.lo, common.hi] },
     rational: common.rational,
     choice: cutFromDetermination(common.atX, common.lo, common.hi, { kind: "power", alpha }),
+    declared: {
+      constant: [1, 0],
+      factors: [
+        {
+          kind: "power",
+          at: [common.atX, 0],
+          alpha: alpha.toNumber(),
+          sign: common.only.orientation === "b-minus-z" ? -1 : 1,
+          window: common.lo,
+        },
+      ],
+    },
   };
 }
 
@@ -163,6 +178,7 @@ export type LogFactorResult =
       readonly factor: LogFactor;
       readonly rational: Node;
       readonly choice: BranchChoice;
+      readonly declared: DeclaredProduct;
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -187,6 +203,10 @@ export function logFactorOf(family: Family, bindings: Bindings): LogFactorResult
     factor: { power, argRange: [common.lo, common.hi] },
     rational: common.rational,
     choice: cutFromDetermination(common.atX, common.lo, common.hi, { kind: "log" }),
+    declared: {
+      constant: [1, 0],
+      factors: [{ kind: "log", at: [common.atX, 0], power, window: common.lo }],
+    },
   };
 }
 
@@ -196,6 +216,7 @@ export type MultiFactorResult =
       readonly factor: MultiPowerFactor;
       readonly rational: Node;
       readonly choice: BranchChoice;
+      readonly declared: DeclaredProduct;
     }
   | { readonly ok: false; readonly reason: string };
 
@@ -235,6 +256,7 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
 
   const points: MultiPowerFactor["points"][number][] = [];
   const geometry: BranchPoint[] = [];
+  const declaredFactors: DeclaredFactor[] = [];
   let lo = Frac.ZERO;
   let hi = Frac.of(2n);
   for (let k = 0; k < powers.length; k++) {
@@ -264,6 +286,13 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
     if (typeof alpha === "string") return { ok: false, reason: alpha };
 
     const label = `z = ${factor.at}`;
+    declaredFactors.push({
+      kind: "power",
+      at: at.value.toTuple() as Cx,
+      alpha: alpha.toNumber(),
+      sign: factor.orientation === "b-minus-z" ? -1 : 1,
+      window: ownLo,
+    });
     points.push({
       at: SqrtExt.fromGauss(at.value),
       alpha,
@@ -306,6 +335,7 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
     ok: true,
     factor: { constant, points },
     rational,
+    declared: { constant: constant.toTuple() as Cx, factors: declaredFactors },
     choice: {
       convention: lo.isZero() ? "zeroToTwoPi" : hi.equals(Frac.ONE) ? "principal" : "custom",
       points: geometry,

@@ -16,6 +16,9 @@ import {
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
+import { jumpWeights } from "../kernel/branch/correction.js";
+import type { DeclaredProduct } from "../kernel/branch/declared.js";
+import { formatFrac } from "../kernel/formatExact.js";
 import {
   INFINITY as INFINITY_ID,
   NO_BRANCH,
@@ -246,6 +249,24 @@ export function mountApp(root: Element): void {
   let branch: BranchChoice = NO_BRANCH;
   /** The open record's cut system, when it declares one. Drawn, never edited. */
   let recordBranch: BranchChoice | null = null;
+  /**
+   * The declared branch product on the stage, when the open record has one — research 06 §5.1 #2.
+   *
+   * Held so the Branch-cuts card can say WHICH of the two honest cases the modulus contours are
+   * showing: over a power product `|f|` cannot see the determination and the contours run straight
+   * through the seam, and over a `log^m` the monodromy is additive so they break at it. Both are
+   * honest and they are not the same claim.
+   */
+  let declaredOnStage: DeclaredProduct | null = null;
+  /**
+   * Modulus contours: `null` follows the context, a boolean is the reader's own choice.
+   *
+   * Default-on under a record with a branch and off elsewhere, because that is the case the device
+   * exists for — a seam on the stage with nothing to tell the reader it is a choice. An explicit
+   * click sticks, so the default never overrides a decision.
+   */
+  let isoPref: boolean | null = null;
+  const isoOn = (): boolean => isoPref ?? declaredOnStage !== null;
   let bHandles: readonly BranchHandle[] = [];
   /** The branch handle under the pointer, for the cursor. −1 for none. */
   let bHovered = -1;
@@ -470,7 +491,7 @@ export function mountApp(root: Element): void {
     frame = requestAnimationFrame(() => {
       frame = 0;
       const vp = viewport();
-      stage?.render(view, vp);
+      stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
       const ctx = sizeCanvas(inkCanvas, vp.width, vp.height);
       if (ctx) {
         drawContour(ctx, resolved, view, vp, {
@@ -504,7 +525,7 @@ export function mountApp(root: Element): void {
    * drawing: a ray has to leave the visible plane, and the ledger's own clipping (which is about the
    * geometry, not the picture) is computed separately from the contour's extent.
    */
-  function cutPolylines(): { points: readonly Cx[]; refused: boolean }[] {
+  function cutPolylines(): { points: readonly Cx[]; refused: boolean; label?: string }[] {
     // THE RECORD'S OWN CUT, under a record. D1's `argRange` decides where the cut runs and the whole
     // record is about what happens when it runs somewhere else, so a figure without it is missing
     // the thing it is teaching. In the sandbox the cut is the user's.
@@ -518,10 +539,19 @@ export function mountApp(root: Element): void {
     // ONE reading of legality for the picture and the rail: the ledger's LEGALITY row and this
     // colour must never disagree about whether a cut system is admissible.
     const refused = !checkAdmissibility(drawn).ok;
-    const out: { points: readonly Cx[]; refused: boolean }[] = [];
+    // The jump weight, from the same `jumpWeights` the correction sums over — so the number on the
+    // arc is the number the picture is corrected by, not a second computation of it. `null` is a
+    // log's side: infinite-order monodromy has no finite jump, and the label says so rather than
+    // printing a number for it.
+    const weights = jumpWeights(drawn);
+    const out: { points: readonly Cx[]; refused: boolean; label?: string }[] = [];
     for (const cut of drawn.cuts) {
       const poly = cutPolyline(drawn, cut, reach);
-      if (poly !== null) out.push({ points: poly, refused });
+      if (poly === null) continue;
+      const jump = weights.get(cut.id);
+      const label =
+        jump === undefined ? undefined : jump === null ? "J = ∞" : `J = ${formatFrac(jump)}`;
+      out.push({ points: poly, refused, ...(label === undefined ? {} : { label }) });
     }
     return out;
   }
@@ -663,7 +693,13 @@ export function mountApp(root: Element): void {
     // A partial sum through a singularity is meaningless rather than merely rough, so this is null
     // whenever the integral refused — showing one beside a refusal hands back the withheld number.
     acc = accumulateForIntegral(run.f, run.resolved, run.integral);
-    stage?.setIntegrand(run.ast);
+    // **THE PICTURE IN THE DECLARED DETERMINATION.** With a branch factor the stage is handed the
+    // record's declaration and the rational cofactor SEPARATELY, so the branch half is built from
+    // what the record says and not from the compiled AST's principal branch — see
+    // `kernel/branch/declared.ts`. Without one (tiers A–C) this is the same call it always was.
+    declaredOnStage = run.declared?.product ?? null;
+    if (run.declared === undefined) stage?.setIntegrand(run.ast);
+    else stage?.setIntegrand(run.declared.cofactor, run.declared.product);
   }
 
   /** The work ceiling for this pass: draft while a contour is being dragged, full otherwise. */
@@ -829,6 +865,15 @@ export function mountApp(root: Element): void {
       ast = parse(input.value.trim());
       const fn = makeComplexFn(ast);
       f = (z: Cx) => fn(z as [number, number], [0, 0]) as Cx;
+      // No declaration in the sandbox, and that is correct rather than a gap: the expression the
+      // user typed IS the definition, so its principal branch is the function they asked for.
+      //
+      // Set on the line before `setIntegrand` deliberately, here and in `adopt`. The invariant is
+      // that `declaredOnStage` describes the program the stage is CURRENTLY holding, so the two
+      // move together or not at all — a failed parse leaves the previous program on screen, and
+      // clearing the flag without clearing the program would have the card describe a picture that
+      // is not there.
+      declaredOnStage = null;
       stage?.setIntegrand(ast);
       errorBox.hidden = true;
     } catch (e) {
@@ -1424,25 +1469,70 @@ export function mountApp(root: Element): void {
    * to see the consequence. Both readings come from the same `checkAdmissibility` call the ledger
    * makes, so they cannot say different things.
    */
+  /**
+   * The modulus-contour toggle, and the one sentence that says what it proves.
+   *
+   * **The claim is not the same in the two cases, so the sentence is not either.** For a power
+   * product `|f| = |c|·∏|z−bₖ|^{αₖ}·|R|` is single-valued: the determination enters only through
+   * the argument, so a level curve of `|f|` crosses the seam without noticing it, which is the most
+   * direct possible demonstration that the seam is a choice (research 06 §5.1's device #2, "the
+   * strongest honest device available"). For a `log^m` it is FALSE — the monodromy is additive and
+   * `|(L + 2πi)^m| ≠ |L^m|` — so the contours break at the cut, by a factor of 18.7 for D4 and 80.7
+   * for D5, and the app says that instead. Claiming continuity over a log would be using an honest
+   * device to tell a lie.
+   */
+  function modulusToggle(): HTMLElement {
+    const wrap = el("div");
+    const tools = el("div", "presets");
+    const b = el("button", "preset", "modulus contours");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(isoOn()));
+    b.classList.toggle("on", isoOn());
+    b.addEventListener("click", () => {
+      isoPref = !isoOn();
+      renderBranchCard();
+      requestDraw();
+    });
+    tools.append(b);
+    wrap.append(tools);
+    if (isoOn()) {
+      const logged = (declaredOnStage?.factors ?? []).some((factor) => factor.kind === "log");
+      wrap.append(
+        el(
+          "p",
+          "muted small",
+          logged
+            ? "|f| carries a log, so it is NOT single-valued: crossing the cut adds 2πi and the modulus jumps with it. These contours break at the cut, and no choice of argument window can make them meet."
+            : "|f| does not depend on the determination, so these contours run straight through any cut — which is the clearest evidence that a seam in the colour is a choice about the argument and not something the function does.",
+        ),
+      );
+    }
+    return wrap;
+  }
+
   function renderBranchCard(): void {
     branchCard.replaceChildren(el("h2", undefined, "Branch cuts"));
+    // The modulus-contour toggle belongs to both modes: under a record it is the device that
+    // answers the seam, and in the sandbox it is the same device over the user's own expression.
+    branchCard.append(modulusToggle());
     if (mode !== "sandbox") {
       branchCard.append(
         el("p", "muted small", "A record's cuts are the record's. Switch to the sandbox to draw one."),
       );
-      // **THE BACKDROP IS DRAWN IN THE PRINCIPAL BRANCH, NOT THE DECLARED ONE**, and saying so is the
-      // difference between a picture and a claim. The colouring comes from the compiled evaluator,
-      // which uses principal determinations for every sub-expression — so for D7 it shows a seam on
-      // `(b, ∞)` where the composite is in fact continuous, which is that record's own
-      // `rendering-the-union-of-sub-cuts` trap looking back at the reader. The LEDGER is unaffected:
-      // every number on the right comes from exact residues in the DECLARED determination, and the
-      // quadrature is skipped for exactly this reason. Rendering the declared branch is M4.7's work.
+      // **THE BACKDROP IS NOW DRAWN IN THE DECLARED DETERMINATION** (M4.7c), which is what this
+      // line says. Until then it came from the compiled evaluator's principal branch and showed a
+      // seam on D7's `(b, ∞)` where the composite is continuous — that record's own
+      // `rendering-the-union-of-sub-cuts` trap looking back at the reader. It is built from the
+      // record's own factor list now, each factor in its declared window, so the picture and the
+      // ledger are in the same determination. See `kernel/branch/declared.ts`.
       if (family?.branch !== undefined) {
         branchCard.append(
           el(
             "p",
             "muted small",
-            "⚠ the colouring behind the contour is drawn in the PRINCIPAL branch of each factor, not the determination this record declares — so it can show a seam where the composite is continuous. Every number in the ledger comes from the declared one.",
+            declaredOnStage === null
+              ? "the colouring behind the contour is drawn in the principal branch of each factor; this record's determination is declared but not on the stage."
+              : "the colouring behind the contour is drawn in the determination this record DECLARES — each factor in its own argument window — so the picture and the ledger are on the same sheet.",
           ),
         );
       }

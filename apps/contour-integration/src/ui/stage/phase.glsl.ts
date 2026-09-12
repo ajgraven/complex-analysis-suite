@@ -61,8 +61,17 @@ vec3 linearToSrgb(vec3 c) {
  * `fBody` is `@cas/expr`'s `compileF` output — a `cvec fFn(cvec z, cvec c)` — so the shader is
  * generated from the same AST the CPU evaluates, which is what the dual-backend agreement harness
  * in `@cas/gpu` exists to keep honest.
+ *
+ * `declaredBody`, when present, is `ui/stage/declared.glsl.ts`'s `cvec casDeclared(cvec z)` and
+ * `fFn` is then the RATIONAL COFACTOR alone: the value drawn is `casDeclared(z)·fFn(z)`, which is
+ * the integrand in the determination the record declares rather than in the principal branch of
+ * every sub-expression. Absent — the sandbox, and every single-valued record — nothing changes and
+ * the compiled AST is the whole integrand, which is correct there because the expression the user
+ * typed IS the definition.
  */
-export function buildPhaseFrag(stdlib: string, fBody: string): string {
+export function buildPhaseFrag(stdlib: string, fBody: string, declaredBody?: string): string {
+  const value =
+    declaredBody === undefined ? "fFn(z, uParamC)" : "cmul(casDeclared(z), fFn(z, uParamC))";
   return `#version 300 es
 precision highp float;
 
@@ -73,14 +82,16 @@ uniform vec4 uRange;        // xmin, xmax, ymin, ymax
 uniform vec2 uParamC;
 uniform float uModulusDepth; // 0 = flat phase only
 uniform float uGridStrength;
+uniform float uIsoStrength;  // 0 = no modulus contours
 
 ${stdlib}
 ${OKLAB_GLSL}
 ${fBody}
+${declaredBody ?? ""}
 
 void main() {
   vec2 z = vec2(mix(uRange.x, uRange.y, vUv.x), mix(uRange.z, uRange.w, vUv.y));
-  cvec w = fFn(z, uParamC);
+  cvec w = ${value};
 
   float re = w.x;
   float im = w.y;
@@ -106,6 +117,30 @@ void main() {
   L = mix(L, 1.0, smoothstep(16.0, 24.0, t));
 
   vec3 rgb = linearToSrgb(oklchToLinearSrgb(L, 0.125, hue));
+
+  // MODULUS CONTOURS - research 06 s5.1 device #2, the strongest honest one available.
+  // For f = c * prod (z-b_k)^a_k * R, |f| = |c| * prod |z-b_k|^a_k * |R| is SINGLE-VALUED: the
+  // determination enters only through the argument, so two determinations differ by a unimodular
+  // factor and |f| does not notice. A level curve of |f| therefore runs straight through a phase
+  // seam, which is the most direct possible demonstration that the seam is a choice about the
+  // argument rather than anything the function does. Drawn in lightness only, like the grid below,
+  // so it can never be read as phase.
+  //
+  // NOT so over a log^m factor, where the monodromy is additive: |(L + 2*pi*i)^m| is not |L^m|, so
+  // these contours BREAK at the cut, and that break is the honest picture of an infinite-order
+  // monodromy rather than a defect. The shader draws the contours of whatever |f| actually is; the
+  // app caption says which of the two cases the reader is looking at.
+  //
+  // One isoline per doubling of |f| (the same t = log2|f| the lightness band uses), placed at the
+  // band MIDPOINT rather than at fract(t) = 0, which is where the lightness sawtooth resets and
+  // where a line is therefore least visible. Width is screen-space-constant via fwidth, so zooming
+  // does not thin them into aliasing.
+  if (uIsoStrength > 0.0) {
+    float dIso = abs(fract(t) - 0.5);
+    float wIso = max(fwidth(t), 1e-6);
+    float iso = 1.0 - smoothstep(0.0, wIso * 1.5, dIso);
+    rgb = mix(rgb, rgb * 0.6, iso * uIsoStrength);
+  }
 
   // Faint unit grid, drawn in lightness only so it cannot be mistaken for a phase feature.
   if (uGridStrength > 0.0) {
