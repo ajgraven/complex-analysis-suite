@@ -317,6 +317,44 @@ whether the whole thing closes.
   deliberately not covered — it can declare cuts but not a branch *factor*, so its quadrature stays
   in the principal determination whatever its lips say; that is M5.1.
 
+**The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
+one it looked like:
+
+- **The frame was symmetric about the origin.** It fitted `[−max, max]` on both axes with `0` pinned
+  to the canvas centre, which is tight only for a walk reaching equally far in all four directions —
+  and almost none does. D1's keyhole runs `0 → 4.39 − 3.19i` and never leaves one quadrant, so it
+  used half the frame's width and 36% of its height *before* the panel's shape cost it anything.
+  Fitting the data's real bounding box (with the origin always in it, since both axes are drawn
+  through it and `Σ Δz` closing back to it is the point of the contrast) and centring **the box**
+  rather than the origin recovers that, and puts the picture in the middle so the space left over
+  reads as framing.
+- **The scale is still one number for both axes, and must stay so.** The angle between consecutive
+  terms is content — a quarter-turn between two of them means `f` rotated by a quarter-turn — so
+  stretching an axis to fill the panel would draw angles the integrand does not have. The real trail
+  and the contrast trail share one frame for the same reason.
+- **Measured, on the corpus:** every one of the twenty records now fills at least 95% of whichever
+  dimension binds (it was at best 5% of the panel's area, usually under 2%); the trail's area grows
+  2.3× to 10.6× linearly. The strip also went 12rem → 16rem and the side panel 15rem → 19rem, which
+  is what lets a roughly square walk use more than the panel's height — and stops the readout
+  (`4.38688763 − 3.18726043i`, 24 characters of tabular monospace) wrapping onto two lines.
+- **It found a bug older than itself.** `removable-one-minus-cos` integrates `(1 − cos z)/z²` along
+  `[−4, 4]`, and the accumulator samples midpoints — so an even step count puts one sample *exactly*
+  on `z = 0`, where the compiled expression evaluates `0/0`. Every partial sum after it is `NaN`, the
+  readout prints `NaN + NaNi`, and the old fit's `Math.max(max, NaN)` made the whole panel blank,
+  losing the 119 good steps too. The quadrature is unaffected and correct (Gauss–Legendre's nodes sit
+  at irrational positions inside each panel and never land there; it returns 6.7e-12). Fitting from
+  the finite points draws the prefix that exists, but the app still has nothing honest to *say* about
+  the term it could not evaluate — `integrateContour` refuses a contour through a singularity and
+  names it, and this deserves the same. Recorded in `engine/contour/accumulate.ts` and left as its
+  own slice rather than smuggled into a layout fix.
+- `src/ui/` had **no tests of any kind** before this. It has two suites now: the fit's arithmetic in
+  node, and — because `drawAccumulator` needs a real `CanvasRenderingContext2D` and this app is not a
+  jsdom project — the ink it actually lays down, measured in Chromium on the M4.7a harness. The first
+  draft of that one was **vacuous**: `drawAccumulator` opens with `clearRect`, so the canvas is
+  transparent and `getImageData` returns the axes' 16%-alpha stroke as bright un-premultiplied RGB.
+  A filter reading only RGB measured the axes, which span the whole canvas, and passed with the trail
+  blanked entirely. The alpha channel is the discriminator.
+
 The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden

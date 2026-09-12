@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **504 test files / 4817 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **505 test files / 4832 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -525,7 +525,24 @@ corpus's fork on `family.branch !== undefined` is **gone**, which is the real pa
 uncorroborated record can no longer hide behind a special case. One skip survives and is narrower: a
 cut running *vertically* through a piece pins no limit ("above" displaces along it), so
 `sideResolves` refuses it **by name** rather than answering it. The sandbox is deliberately not
-covered — it can declare cuts but not a branch FACTOR, which is M5.1. Reviewing it found a regression
+covered — it can declare cuts but not a branch FACTOR, which is M5.1.
+
+A follow-on fixed the **partial-sum panel's size**, where the defect was not the one it looked like: the
+frame fitted `[−max, max]` on both axes with `0` pinned to the canvas centre, tight only for a walk
+reaching equally far in all four directions, and D1's keyhole never leaves one quadrant — so it used
+half the frame's width and 36% of its height before the panel's 4.75:1 shape cost it anything. Fitting
+the data's real bounding box (origin always in it) and centring the BOX rather than the origin puts
+every one of the twenty records at ≥95% of whichever dimension binds, up from at best 5% of the panel's
+area; the scale stays one number for both axes, because the angle between consecutive terms is content.
+The strip went 12rem → 16rem and the side panel 15rem → 19rem (which also stops the complex readout
+wrapping). It found a bug older than itself: `removable-one-minus-cos` samples a midpoint EXACTLY on the
+removable singularity of `(1 − cos z)/z²`, so `0/0` makes every later partial sum `NaN` — the quadrature
+is unaffected and correct, but the panel needs `integrateContour`'s posture (refuse and name it) and
+that is left as its own slice, recorded in the code. `src/ui/` gained its first tests: the fit in node,
+and the ink `drawAccumulator` actually lays down measured in Chromium — whose first draft was VACUOUS,
+since `clearRect` leaves the canvas transparent and `getImageData` returns the axes' 16%-alpha stroke as
+bright un-premultiplied RGB, so an RGB-only filter measured the full-canvas axes and passed with the
+trail blanked. Sweeps: 9/9. Reviewing it found a regression
 and a bad method: `FamilyRun.f` had been the compiled AST and `declaredProduct.test.ts` read that as
 "the principal determination" — true by accident — so with `f` now the DECLARED evaluator both halves
 of its central claim compared a function with itself, one going red and the other passing

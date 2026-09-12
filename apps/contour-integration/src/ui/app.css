@@ -12,7 +12,12 @@
   --c-warn: #f0b45e;
   --rail: 22rem;
   --bar: 3rem;
-  --strip: 12rem;
+  /* The accumulator strip's height.
+     It is the BINDING dimension of the trail's isotropic fit — the walk is about as tall as it is
+     wide, the strip is several times wider than tall, so the height alone decides how big the
+     picture gets (`ui/accumulator.ts`). At 12rem the trail was 155 px across in a 908 px panel. This
+     buys it back without taking the stage below the ~2:1 it needs to show a contour and its cuts. */
+  --strip: 16rem;
 }
 
 * {
@@ -376,7 +381,10 @@ ul.pieces li:hover {
 .strip {
   grid-area: strip;
   display: grid;
-  grid-template-columns: 1fr 15rem;
+  /* 19rem, not 15: the readout is a full complex number in tabular monospace at 1rem
+     (`4.38688763 − 3.18726043i` is 24 characters) and wrapped onto two lines at the old width. The
+     canvas gives up the difference, which its isotropic fit was not using anyway. */
+  grid-template-columns: 1fr 19rem;
   min-height: 0;
   border-top: 1px solid var(--c-border);
   background: var(--c-panel);

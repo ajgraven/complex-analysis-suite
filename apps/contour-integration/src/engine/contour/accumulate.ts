@@ -93,6 +93,23 @@ export function accumulate(
       const b = pointAt(g, t1);
       const dz: Cx = [b[0] - a[0], b[1] - a[1]];
       const zm = pointAt(g, tm);
+      // **A NON-FINITE TERM POISONS EVERY PARTIAL SUM AFTER IT, AND NOTHING SAYS SO.** Known gap,
+      // found while re-fitting the panel's frame. `removable-one-minus-cos` integrates
+      // `(1 − cos z)/z²` along `[−4, 4]`; these samples are MIDPOINTS, so an even step count puts
+      // one exactly on `z = 0`, where the compiled expression evaluates `0/0` and returns `NaN` —
+      // even though the singularity is removable and the integral is correct (Gauss–Legendre's
+      // nodes are at irrational positions inside each panel and never land there, so
+      // `integrateContour` returns 6.7e-12 as it should). From that step on `running` is `NaN`, the
+      // readout prints `NaN`, and the trail stops being drawn.
+      //
+      // NaN propagation is arguably the RIGHT arithmetic — an undefined term does make the total
+      // undefined — so this is not a sign error to patch quietly. What is missing is the app's own
+      // posture: `integrateContour` REFUSES a contour through a singularity and names the reason,
+      // and `accumulateForIntegral` below withholds the whole picture rather than showing a
+      // meaningless partial sum beside a refusal. This deserves the same treatment — steps up to the
+      // bad term plus a refusal naming it — which is a change to `Accumulation`'s contract and is
+      // left as its own slice rather than smuggled into a layout fix. `ui/accumulator.ts`'s frame
+      // skips non-finite points so that the FIT is still well defined meanwhile.
       const fz = f(zm, sides?.[p]);
       const term = cmul(fz, dz);
 
