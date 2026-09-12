@@ -22,7 +22,10 @@ import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { parse, substitute, type Node } from "@cas/expr";
 import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
+// `INFINITY` and `BranchPoint` are still needed by `multiFactorOf`, which builds its own
+// multi-point cut system — deliberately not extracted; see `kernel/branch/declaration.ts`.
 import { INFINITY, type BranchChoice, type BranchPoint } from "../kernel/branch/model.js";
+import { buildDeclaration } from "../kernel/branch/declaration.js";
 import type { DeclaredFactor, DeclaredProduct } from "../kernel/branch/declared.js";
 import type { Cx } from "../kernel/geom.js";
 import { exactConstant, type Bindings } from "./system.js";
@@ -82,29 +85,6 @@ function cofactorOf(family: Family, source: string, bindings: Bindings): Node | 
   return rational;
 }
 
-/**
- * The cut system a determination implies.
- *
- * **The cut lies along the argRange's lower boundary**, because that is where the determination
- * jumps: `arg z ∈ [0, 2π)` puts it on ℝ₊ and `arg z ∈ (−π, π]` puts it on ℝ₋. So a record does not
- * state the cut's position twice — declaring the determination IS declaring where the cut runs,
- * which is what makes D1's `wrong-branch` trap structural: ask for the principal determination and
- * the cut moves under the contour, and LEGALITY says so.
- */
-function cutFromDetermination(atX: number, lo: Frac, hi: Frac, order: BranchPoint["order"]): BranchChoice {
-  // Far enough to leave any picture.
-  const REACH = 1e4;
-  const theta = lo.toNumber() * Math.PI;
-  const via: Cx = [atX + REACH * Math.cos(theta), REACH * Math.sin(theta)];
-  return {
-    convention: lo.isZero() ? "zeroToTwoPi" : hi.equals(Frac.ONE) ? "principal" : "custom",
-    points: [{ id: "b", at: [atX, 0], order, label: `z = ${atX}` }],
-    cuts: [{ id: "Γ", from: "b", to: INFINITY, via: [via] }],
-    basePoint: [atX, 1],
-    sheet: 0,
-  };
-}
-
 /** The determination and the cofactor, which both factor kinds need identically. */
 function commonOf(
   family: Family,
@@ -152,26 +132,23 @@ export function powerFactorOf(family: Family, bindings: Bindings): BranchFactorR
   const alpha = realRational(common.only.order.alpha, bindings, "the branch exponent");
   if (typeof alpha === "string") return { ok: false, reason: alpha };
 
+  // The shared builder (`kernel/branch/declaration.ts`), whose second consumer is the sandbox. What
+  // is record-specific is everything ABOVE this line: resolving the record's strings against the
+  // fixture's bindings. What a declared factor *becomes* is not record-specific at all.
+  const built = buildDeclaration({
+    constant: [1, 0],
+    at: common.atX,
+    window: [common.lo, common.hi],
+    order: { kind: "power", alpha, sign: common.only.orientation === "b-minus-z" ? -1 : 1 },
+  });
+  if (!built.ok) return built;
+  if (built.factor.kind !== "power") return { ok: false, reason: "unreachable" };
   return {
     ok: true,
-    factor: { alpha, argRange: [common.lo, common.hi] },
+    factor: built.factor.value,
     rational: common.rational,
-    choice: cutFromDetermination(common.atX, common.lo, common.hi, { kind: "power", alpha }),
-    declared: {
-      constant: [1, 0],
-      factors: [
-        {
-          kind: "power",
-          // The SAME id `cutFromDetermination` gives the geometry's single point — one source of
-          // truth, so `declaredReference` cannot key a map the cut system does not answer to.
-          id: "b",
-          at: [common.atX, 0],
-          alpha: alpha.toNumber(),
-          sign: common.only.orientation === "b-minus-z" ? -1 : 1,
-          window: common.lo,
-        },
-      ],
-    },
+    choice: built.choice,
+    declared: built.declared,
   };
 }
 
@@ -196,20 +173,21 @@ export function logFactorOf(family: Family, bindings: Bindings): LogFactorResult
   if (!common.ok) return common;
   if (common.only.order.kind !== "log") return { ok: false, reason: "unreachable" };
 
-  const power = common.only.order.power;
-  if (!Number.isInteger(power) || power < 1) {
-    return { ok: false, reason: `log^${power} is not a positive integer power` };
-  }
-
+  // The multiplicity's own check now lives in the shared builder, so both callers get it.
+  const built = buildDeclaration({
+    constant: [1, 0],
+    at: common.atX,
+    window: [common.lo, common.hi],
+    order: { kind: "log", power: common.only.order.power },
+  });
+  if (!built.ok) return built;
+  if (built.factor.kind !== "log") return { ok: false, reason: "unreachable" };
   return {
     ok: true,
-    factor: { power, argRange: [common.lo, common.hi] },
+    factor: built.factor.value,
     rational: common.rational,
-    choice: cutFromDetermination(common.atX, common.lo, common.hi, { kind: "log" }),
-    declared: {
-      constant: [1, 0],
-      factors: [{ kind: "log", id: "b", at: [common.atX, 0], power, window: common.lo }],
-    },
+    choice: built.choice,
+    declared: built.declared,
   };
 }
 
