@@ -18,7 +18,7 @@
 import { Frac, Gauss } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import { simplestRational } from "../kernel/exactRational.js";
-import { RatPi } from "./field.js";
+import { RatPi } from "../kernel/ratPi.js";
 import { crossCheckNumeric } from "./crossCheck.js";
 import type { Bindings } from "./schema.js";
 

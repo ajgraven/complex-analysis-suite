@@ -4,13 +4,8 @@
 // `4π² − 4π²` is zero because the polynomials cancel, not because a difference fell under 1e−12.
 import { describe, expect, it } from "vitest";
 import { Frac, Gauss, QiPoly } from "@cas/exact";
-import {
-  FRAC_FIELD,
-  RAT_PI_FIELD,
-  RatPi,
-  formatRatPi,
-  type Field,
-} from "../src/families/field.js";
+import { FRAC_FIELD, RAT_PI_FIELD, type Field } from "../src/families/field.js";
+import { RatPi, formatRatPi } from "../src/kernel/ratPi.js";
 
 const g = (re: number, im = 0): Gauss => Gauss.int(re, im);
 const pi = (k: number, re = 1, im = 0): RatPi => RatPi.piPower(k, g(re, im));

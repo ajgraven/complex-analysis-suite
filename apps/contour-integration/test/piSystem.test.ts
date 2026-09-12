@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { parse } from "@cas/expr";
 import { Gauss } from "@cas/exact";
 import { exactPiConstant } from "../src/families/piConstant.js";
-import { RatPi, formatRatPi } from "../src/families/field.js";
+import { RatPi, formatRatPi } from "../src/kernel/ratPi.js";
 import { buildSystem, type PiSystem } from "../src/families/system.js";
 import { describeKernel } from "../src/families/linear.js";
 import { RAT_PI_FIELD } from "../src/families/field.js";

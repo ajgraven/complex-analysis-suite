@@ -142,35 +142,60 @@ function argumentMultiple(at: SqrtExt, range: readonly [Frac, Frac]): Frac | nul
 }
 
 /**
+ * `arg z₀ / π`, decided in the declared determination — the one place that question is answered.
+ *
+ * Both bounds of the module header live here, because both are about the POLE and the RANGE and
+ * neither is about what is raised to what: `z₀^α` and `log z₀` need exactly the same fact, and a
+ * second copy of this reasoning is a second place for the determination to drift.
+ */
+export function argumentOfPole(
+  at: SqrtExt,
+  argRange: readonly [Frac, Frac],
+): { readonly ok: true; readonly r: Frac } | { readonly ok: false; readonly reason: string } {
+  const width = argRange[1].sub(argRange[0]);
+  if (!width.equals(Frac.of(2n))) {
+    return {
+      ok: false,
+      reason: `the declared argument range has width ${width.n}/${width.d}·π, but a determination of arg covers exactly one turn (2π)`,
+    };
+  }
+
+  const mod2 = modulusSquared(at);
+  if (mod2 === null || !mod2.equals(SqrtExt.ONE)) {
+    return {
+      ok: false,
+      reason:
+        `the pole ${formatSqrtExt(at)} is not on the unit circle, so its argument alone does not ` +
+        "determine log z₀ or z₀^α — both need ln|z₀|, and no basis here carries a logarithm yet (M4.5)",
+    };
+  }
+
+  const r = argumentMultiple(at, argRange);
+  if (r === null) {
+    return {
+      ok: false,
+      reason:
+        `arg(${formatSqrtExt(at)}) was not verified to be a rational multiple of π with denominator ` +
+        `1, 2, 3, 4 or 6 inside the declared range — those are the only roots of unity one quadratic ` +
+        "extension of ℚ(i) can hold, and a fifth or seventh root reaches its answer by summing the " +
+        "residues as a geometric series instead",
+    };
+  }
+  return { ok: true, r };
+}
+
+/**
  * `z₀^α` in the declared determination, as a one-term element of the output basis.
  *
  * `z₀ = e^{irπ}` on the unit circle, so `z₀^α = e^{iαrπ}` — an exponent with a π component and
  * nothing else, which is exactly what {@link Exponent} carries.
  */
 export function powerAtPole(at: SqrtExt, factor: PowerFactor): BranchResidue {
-  const width = factor.argRange[1].sub(factor.argRange[0]);
-  if (!width.equals(Frac.of(2n))) {
-    const reason = `the declared argument range has width ${width.n}/${width.d}·π, but a determination of arg covers exactly one turn (2π)`;
-    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
+  const argument = argumentOfPole(at, factor.argRange);
+  if (!argument.ok) {
+    return { ok: false, reason: argument.reason, certificate: refuse("the branch factor", argument.reason) };
   }
-
-  const mod2 = modulusSquared(at);
-  if (mod2 === null || !mod2.equals(SqrtExt.ONE)) {
-    const reason =
-      `the pole ${formatSqrtExt(at)} is not on the unit circle, so z₀^α needs ln|z₀| — ` +
-      "the exponent basis carries no logarithm yet (M4.5)";
-    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
-  }
-
-  const r = argumentMultiple(at, factor.argRange);
-  if (r === null) {
-    const reason =
-      `arg(${formatSqrtExt(at)}) was not verified to be a rational multiple of π with denominator ` +
-      `1, 2, 3, 4 or 6 inside the declared range — those are the only roots of unity one quadratic ` +
-      "extension of ℚ(i) can hold, and a fifth or seventh root reaches its answer by summing the " +
-      "residues as a geometric series instead";
-    return { ok: false, reason, certificate: refuse("the branch factor", reason) };
-  }
+  const r = argument.r;
 
   const exponent = Exponent.piTimes(new Gauss(Frac.ZERO, factor.alpha.mul(r)));
   return {

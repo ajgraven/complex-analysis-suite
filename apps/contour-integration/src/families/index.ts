@@ -51,13 +51,8 @@ export {
   type RatMatrix,
   type SolveReport,
 } from "./linear.js";
-export {
-  FRAC_FIELD,
-  RAT_PI_FIELD,
-  RatPi,
-  formatRatPi,
-  type Field,
-} from "./field.js";
+export { FRAC_FIELD, RAT_PI_FIELD, type Field } from "./field.js";
+export { RatPi, formatRatPi } from "../kernel/ratPi.js";
 
 /**
  * The records, in gallery order.

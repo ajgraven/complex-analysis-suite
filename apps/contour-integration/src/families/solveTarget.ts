@@ -25,7 +25,8 @@ import {
 } from "../kernel/sineForm.js";
 import { exactBasisConstant } from "./basisConstant.js";
 import { combineOver, describeKernel, realifyRhs, solveOver } from "./linear.js";
-import { RAT_PI_FIELD, RatPi, formatRatPi } from "./field.js";
+import { RAT_PI_FIELD } from "./field.js";
+import { RatPi, formatRatPi } from "../kernel/ratPi.js";
 import { buildSystem } from "./system.js";
 import type { Bindings } from "./system.js";
 import { parse } from "@cas/expr";

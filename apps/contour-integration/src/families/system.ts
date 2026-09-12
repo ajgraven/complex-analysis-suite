@@ -19,7 +19,8 @@ import {
   type RatMatrix,
   type SolveReport,
 } from "./linear.js";
-import { RAT_PI_FIELD, RatPi, formatRatPi } from "./field.js";
+import { RAT_PI_FIELD } from "./field.js";
+import { RatPi, formatRatPi } from "../kernel/ratPi.js";
 import { exactPiConstant } from "./piConstant.js";
 import { exactBasisConstant } from "./basisConstant.js";
 import { ExpSum } from "../kernel/expSum.js";

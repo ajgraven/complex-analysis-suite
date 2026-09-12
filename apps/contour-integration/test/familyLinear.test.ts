@@ -8,7 +8,8 @@ import {
   solveExact,
   solveOver,
 } from "../src/families/linear.js";
-import { FRAC_FIELD, RAT_PI_FIELD, RatPi, formatRatPi } from "../src/families/field.js";
+import { FRAC_FIELD, RAT_PI_FIELD } from "../src/families/field.js";
+import { RatPi, formatRatPi } from "../src/kernel/ratPi.js";
 
 const f = (n: number | bigint, d: number | bigint = 1): Frac => Frac.of(BigInt(n), BigInt(d));
 const nums = (v: readonly Frac[]): number[] => v.map((x) => x.toNumber());

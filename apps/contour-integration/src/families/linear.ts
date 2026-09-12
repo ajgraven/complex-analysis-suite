@@ -21,7 +21,8 @@
 // is written once over `Field<T>` and instantiated twice — at ℚ, where `solveExact` keeps its old name
 // and signature so DESIGN §5's invariant 4 runs exactly as it did, and at ℚ(i)(π) for D4 and D5.
 import { Frac } from "@cas/exact";
-import { FRAC_FIELD, RatPi, type Field } from "./field.js";
+import { FRAC_FIELD, type Field } from "./field.js";
+import { RatPi } from "../kernel/ratPi.js";
 
 /** A `k × m` matrix over `T`, row-major. */
 export type Matrix<T> = readonly (readonly T[])[];
