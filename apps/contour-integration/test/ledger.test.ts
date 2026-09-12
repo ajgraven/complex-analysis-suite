@@ -244,15 +244,77 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     expect(cutRows(run("1/(1+z^2)", semicircleTemplate(200)))).toHaveLength(0);
   });
 
-  it("passes an admissible cut the contour stays clear of", () => {
+  it("passes an admissible cut the contour stays clear of, and says ∮ cannot see where it runs", () => {
     // The cut runs down ℝ₋; the contour is a circle of radius 1 about z = 3, nowhere near it.
     const r = run("1/(z-3)", circleTemplate([3, 0], 1), keyhole([-1, 0]));
     const rows = cutRows(r);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(3);
     expect(rows.every((x) => x.status === "satisfied")).toBe(true);
     expect(rows[0].claim).toMatch(/admissible/);
     expect(rows[1].claim).toMatch(/no piece of the contour meets a branch cut/);
+    // **NORTH-STAR #3's FIRST HALF.** The third row is the one that makes dragging legible: with the
+    // cuts clear of the contour, `∮` does not depend on where they run, so the answer is EXACTLY
+    // unchanged under a drag and a jump on crossing is the whole content of the monodromy.
+    expect(rows[2].claim).toMatch(/∮ is unchanged by moving this cut/);
+    expect(rows[2].evidence.method).toMatch(/count of jump-weighted crossings/);
     expect(r.failedAt).toBeNull();
+  });
+
+  it("does NOT emit the invariance row once a piece declares a side against a cut", () => {
+    // The claim is about a contour CLEAR of the cuts. A keyhole's lips run along the cut and declare
+    // their sides, and there `∮` very much does depend on where the cut is — it is what the lips are
+    // limits from. A row asserting invariance there would be false, so it is emitted only when the
+    // contour is clear, and this pins that rather than trusting the condition to stay written.
+    const r = run("1/(z-3)", crossedBy("above"), keyhole([-1, 0]));
+    expect(cutRows(r).every((x) => x.status === "satisfied")).toBe(true);
+    expect(cutRows(r).some((x) => x.claim.includes("declares the side"))).toBe(true);
+    expect(cutRows(r).some((x) => x.claim.includes("∮ is unchanged"))).toBe(false);
+  });
+
+  it("names what the crossing COSTS in the refusal itself — research 06 §3.2's contract", () => {
+    // The half that was missing until M4.7d. "The app must either REFUSE the crossing or change
+    // sheet and say so, WITH THE MULTIPLICATIVE FACTOR SHOWN … silently continuing is the
+    // misconception generator." It refused from M4.1 and said nothing about the factor, which
+    // teaches a reader that a cut is a wall rather than a bookkeeping choice with a price.
+    const r = run("1/(z-3)", crossedBy(), keyhole([-1, 0]));
+    const row = cutRows(r).find((x) => x.status === "failed");
+    expect(row).toBeDefined();
+    const lines = (row?.evidence.provenance ?? []).map((x) => x.text);
+    expect(lines.some((t) => t.includes("multiplies the integrand by e^(2πi·1/3)"))).toBe(true);
+    // And it is marked as the cost of a FAILURE, not as a satisfied step.
+    expect((row?.evidence.provenance ?? []).every((x) => !x.ok)).toBe(true);
+    expect(r.failedAt).toBe("LEGALITY");
+  });
+
+  it("does not claim ∮ is unchanged by moving cuts when there are none to move", () => {
+    // Reachable, narrowly: a branch point with an INTEGER exponent is not genuine, so admissibility
+    // does not require a cut to reach it (rule (a)) and the system can legally have no cuts at all.
+    // The invariance sentence would then be about an empty set — true but absurd, and the kind of
+    // row that makes a reader distrust the others.
+    const noCuts: BranchChoice = {
+      convention: "principal",
+      points: [{ id: "0", at: [0, 0], order: { kind: "power", alpha: Frac.of(2n) }, label: "z = 0" }],
+      cuts: [],
+      basePoint: [0, 1],
+      sheet: 0,
+    };
+    const r = run("1/(z-3)", circleTemplate([3, 0], 1), noCuts);
+    expect(cutRows(r).some((x) => x.claim.includes("∮ is unchanged"))).toBe(false);
+  });
+
+  it("names what a crossing would COST, on a cut the contour is clear of", () => {
+    // Research 06 §3.2: refuse the crossing or change sheet, with the factor SHOWN. Knowing the
+    // factor before the crossing is what lets a reader see it coming.
+    const r = run("1/(z-3)", circleTemplate([3, 0], 1), keyhole([-1, 0]));
+    const row = cutRows(r).find((x) => x.claim.includes("no piece of the contour meets"));
+    const lines = (row?.evidence.provenance ?? []).map((x) => x.text);
+    // α = 1/3 on this fixture's branch point, so J = 1/3 and the factor is e^(2πi·1/3). `4J ∉ ℤ`,
+    // so it is CARRIED as an exponential rather than folded into ℚ(i) — the same rule
+    // `Exponent.asAlgebraicFactor` applies to an answer, applied here to a crossing, so the app
+    // never invents a radical it cannot write down.
+    expect(lines.some((t) => t.includes("multiplies the integrand by e^(2πi·1/3)"))).toBe(true);
+    expect(lines.some((t) => t.includes("4J ∉ ℤ"))).toBe(true);
+    expect(lines.some((t) => t.includes("folds to"))).toBe(false);
   });
 
   it("refuses an inadmissible cut system with NO value, before any geometry is read", () => {

@@ -17,8 +17,9 @@ import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { jumpWeights } from "../kernel/branch/correction.js";
+import { allCrossingMonodromy } from "../kernel/branch/monodromy.js";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
-import { formatFrac } from "../kernel/formatExact.js";
+import { formatFrac, formatSqrtExt } from "../kernel/formatExact.js";
 import {
   INFINITY as INFINITY_ID,
   NO_BRANCH,
@@ -1510,11 +1511,51 @@ export function mountApp(root: Element): void {
     return wrap;
   }
 
+  /**
+   * What crossing each cut would cost, beside the cut editor — research 06 §3.2's factor, in front
+   * of the reader BEFORE they drag into a refusal rather than inside it.
+   *
+   * The refusal names it too (`engine/ledger.ts`), but a reader who only meets it there meets it as
+   * a punishment. Here it is the number that makes the drag legible: nothing changes while the cut
+   * stays clear of the contour, and this is exactly what changes when it does not.
+   */
+  function monodromyReadout(): HTMLElement | null {
+    const drawn = mode === "sandbox" ? branch : (recordBranch ?? NO_BRANCH);
+    const all = allCrossingMonodromy(drawn);
+    if (all.length === 0) return null;
+    const wrap = el("div");
+    wrap.append(el("h3", "small muted", "Crossing a cut"));
+    const list = el("ul", "pieces");
+    for (const m of all) {
+      const li = el("li");
+      li.append(el("span", "pieceName num", m.cut));
+      li.append(
+        el(
+          "span",
+          "pieceValue",
+          m.kind === "additive"
+            ? "adds 2πi — infinite order, so no factor and no sheet count closes the loop"
+            : // BOTH forms, §3.4: the literal one is what the integrand's exponent gives, and a
+              // reader who only ever sees the reduced one carries it to an `x^s` integrand where
+              // the `−1` is not there to cancel.
+              m.literal === m.reduced
+              ? `× ${m.literal}${m.value === null ? "" : ` = ${formatSqrtExt(m.value)}`}`
+              : `× ${m.literal} = ${m.reduced}${m.value === null ? "" : ` = ${formatSqrtExt(m.value)}`}`,
+        ),
+      );
+      list.append(li);
+    }
+    wrap.append(list);
+    return wrap;
+  }
+
   function renderBranchCard(): void {
     branchCard.replaceChildren(el("h2", undefined, "Branch cuts"));
     // The modulus-contour toggle belongs to both modes: under a record it is the device that
     // answers the seam, and in the sandbox it is the same device over the user's own expression.
     branchCard.append(modulusToggle());
+    const readout = monodromyReadout();
+    if (readout !== null) branchCard.append(readout);
     if (mode !== "sandbox") {
       branchCard.append(
         el("p", "muted small", "A record's cuts are the record's. Switch to the sandbox to draw one."),

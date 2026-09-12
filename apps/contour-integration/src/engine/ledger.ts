@@ -19,6 +19,7 @@ import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
 import { clearance, windingNumber } from "../kernel/winding.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
+import { allCrossingMonodromy, crossingMonodromy, cutGeometryInvariance } from "../kernel/branch/monodromy.js";
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
@@ -508,6 +509,8 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
 
     const offending: string[] = [];
     const undecidable: string[] = [];
+    /** What each offending crossing would COST — research 06 §3.2's other half. */
+    const costs: string[] = [];
     let declared = 0;
     for (const cut of branch.cuts) {
       const poly = cutPolyline(branch, cut, 4 * extent);
@@ -524,6 +527,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         } else if (piece?.side === undefined) {
           const how = c.kind === "along" ? "runs along" : "crosses";
           offending.push(`${label} ${how} the cut '${cut.id}'`);
+          // **AND WHAT IT WOULD COST.** Research 06 §3.2: the app must "either refuse the crossing
+          // or change sheet and say so, WITH THE MULTIPLICATIVE FACTOR SHOWN … silently continuing
+          // is the misconception generator". It has refused since M4.1 and said nothing about the
+          // factor, which teaches a reader that a cut is a wall rather than a bookkeeping choice
+          // with a price. Named once per offending cut, not per piece.
+          const cost = crossingMonodromy(branch, cut.id);
+          if (cost !== null && !costs.includes(cost.detail)) costs.push(cost.detail);
         } else if (needsSide(c.kind)) {
           declared += 1;
         }
@@ -546,12 +556,30 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           ? exact(
               "each piece is on a definite side of each cut",
               "exact-sign segment predicates, and the circle–line quadratic for arcs",
+              {
+                // Every cut's factor, whether or not the contour is near one: this is the number
+                // that WOULD apply, and knowing it in advance is what lets a reader see the
+                // crossing coming instead of meeting a refusal.
+                //
+                // Each one's own provenance comes with it, flattened, because that is where §3.4's
+                // two forms live — `e^{2πi(α−1)}` as the integrand's exponent gives it and
+                // `e^{2πiα}` reduced — and a reader who only ever meets the reduced form carries it
+                // over to an `x^s` integrand where the `−1` is not there to cancel. Printing the
+                // one-line summary and dropping the rest would drop exactly the half that teaches.
+                provenance: allCrossingMonodromy(branch).flatMap((m) => [
+                  { ok: true, text: m.detail },
+                  ...(m.certificate.provenance ?? []),
+                ]),
+              },
             )
           : refuse(
               "LEGALITY",
               undecidable.length > 0
                 ? `${undecidable.join("; ")} — a grazing contact has no side, so no tag would pin anything`
                 : `${offending.join("; ")}`,
+              {
+                provenance: costs.map((text) => ({ ok: false, text })),
+              },
             ),
         undefined,
         cutOk
@@ -561,6 +589,24 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             : "tag this segment `above` or `below`, or move the cut",
       ),
     );
+    // **NORTH-STAR #3's FIRST HALF, AS ITS OWN ROW.** With at least one cut and none of it touching
+    // the contour, `∮` does not depend on where the cuts run — so dragging one moves the picture's
+    // seam and not the answer. Its own line rather than a note on the row above, because it is a
+    // different claim about a different object: that one is about the pieces, this is about the
+    // VALUE, and it is the claim that makes the jump on crossing meaningful (a value that drifted
+    // under a drag would make a jump one more wobble). Emitted only when it is the operative fact —
+    // there are cuts, and the contour is clear of them — so it is not a permanent row of noise.
+    if (cutOk && declared === 0 && branch.cuts.length > 0) {
+      push(
+        rowFrom(
+          "LEGALITY",
+          "satisfied",
+          `∮ is unchanged by moving ${branch.cuts.length === 1 ? "this cut" : "these cuts"}, while they stay clear of the contour`,
+          cutGeometryInvariance(branch.cuts.length),
+        ),
+      );
+    }
+
     if (!cutOk) {
       return {
         rows,
