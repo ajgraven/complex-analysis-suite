@@ -160,6 +160,17 @@ export interface FamilyPiece {
 /** One of the family's unknowns. Usually one; the log family has three; tier G's is a sum. */
 export interface FamilyTarget {
   readonly id: string;
+  /**
+   * What the record CLAIMS about this unknown, which invariant 4 then checks against `M`.
+   *
+   * A one-unknown family says nothing and is `primary` by default. D4 is the first record that has
+   * to distinguish: its `log²` keyhole determines `∫R log x` (**primary**, the integral it was built
+   * for) and `∫R dx` (**bonus**, free from the same contour) while the `log²` terms **cancel**, so
+   * `∫R log²x` has an identically zero column and is invisible. All three facts are claims about the
+   * contour, and invariant 4 checks them in both directions — a `primary` or `bonus` target that the
+   * contour does not pin is a broken record, and so is a `cancels` target that it does.
+   */
+  readonly role?: "primary" | "bonus" | "cancels";
   readonly kind: "integral" | "sum";
   readonly variable: "x" | "theta" | "n";
   readonly lower: string;

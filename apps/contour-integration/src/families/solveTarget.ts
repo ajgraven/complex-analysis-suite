@@ -24,6 +24,9 @@ import {
   type SineForm,
 } from "../kernel/sineForm.js";
 import { exactBasisConstant } from "./basisConstant.js";
+import { combineOver, describeKernel, realifyRhs, solveOver } from "./linear.js";
+import { RAT_PI_FIELD, RatPi, formatRatPi } from "./field.js";
+import { buildSystem } from "./system.js";
 import type { Bindings } from "./system.js";
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
@@ -232,4 +235,128 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
   }
 
   return { ok: true, solved: { piUnits, form, value, text, certificates } };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+// Pass 5 over ℚ(i)(π): a LOG family, several unknowns at once.
+//
+// Everything above solves `a·t = S − Σbᵢ` — one unknown, one division, and a sine recogniser for the
+// keyhole's `1 − e^{2πiα}`. D4 is the first record that cannot be put in that shape: its lower edge
+// reproduces `−(T2 + 4πi·T1 − 4π²·T0)`, an AFFINE COMBINATION of three real integrals, so there is
+// no single `a` to divide by. It is `M t = r`, and `linear.ts` has been over a `Field` since M4.3a
+// precisely so that `M` can carry the `4π²`.
+//
+// NOT IN UNITS OF π. The solve above works in units of π throughout because every contribution there
+// is π times an algebraic number. Here that is false and unnecessary in the same breath: the
+// residues of `R(z)log²z` are polynomials in π, and `RatPi` holds π natively, so `π/4` is an element
+// of the coefficient ring rather than a convention about how to read one.
+//
+// WHAT COMES BACK IS PER-UNKNOWN, AND THE GAPS ARE NAMED. D4's contour determines two of its three
+// unknowns and is CORRECT to say nothing about the third. A solve that returned one value would have
+// to choose between reporting the bonus integral it also establishes and refusing the record; a
+// solve that returned three would have to invent `∫R log²x`. So it returns what it determined, plus
+// one sentence per combination it did not — computed from `kernel`, not written by hand.
+// ──────────────────────────────────────────────────────────────────────────────────────────────────
+
+export interface PiSolveInputs {
+  /** `∮ f dz`, exactly, as an element of ℚ(i)(π). */
+  readonly closedContour: RatPi;
+  /** The exact limits of the pieces that do not vanish (L4, L5). Zero for a vanishing piece. */
+  readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: RatPi }[];
+  readonly bindings?: Bindings;
+}
+
+export interface PiSolvedTarget {
+  readonly targetId: string;
+  /** The exact value: `π/4`, not `0.7853981`. */
+  readonly text: string;
+  readonly exact: RatPi;
+  /** The decimal, which is `≈` by construction: π is evaluated here and nowhere before. */
+  readonly value: number;
+}
+
+export interface PiSolvedTargets {
+  readonly solved: readonly PiSolvedTarget[];
+  /** One sentence per combination of unknowns this contour cannot see. Usually empty. */
+  readonly invisible: readonly string[];
+  readonly certificates: readonly Certificate[];
+}
+
+export type SolvePiResult =
+  | { readonly ok: true; readonly targets: PiSolvedTargets }
+  | { readonly ok: false; readonly reason: string; readonly certificate: Certificate };
+
+/** Solve `M t = r` over ℚ(i)(π) for every unknown this contour determines. */
+export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiResult {
+  const bindings = inputs.bindings ?? {};
+
+  const built = buildSystem(family, bindings);
+  if (!built.ok) {
+    return { ok: false, reason: built.reason, certificate: refuse("the targets", built.reason) };
+  }
+  if (built.system.field !== "Q(i)(pi)") {
+    const reason =
+      "this solve is for a log family, whose crossing phase is additive; a family over ℚ(i) or " +
+      "the exponential basis goes through `solveTarget`";
+    return { ok: false, reason, certificate: refuse("the targets", reason) };
+  }
+  const system = built.system;
+
+  // A `free` piece would contribute a quadrature value, which is `≈` and would cap every unknown in
+  // the system rather than just one. No family in the corpus has one.
+  const free = family.contour.pieces.filter((p) => p.role === "free");
+  if (free.length > 0) {
+    const reason = `piece '${free[0].id}' has role 'free', which this solve does not yet carry`;
+    return { ok: false, reason, certificate: refuse("the targets", reason) };
+  }
+
+  // `M t = S − Σbᵢ`, then the same Re/Im split the matrix was built with.
+  const total = inputs.pieceLimits.reduce(
+    (acc, piece) => acc.sub(piece.contribution),
+    inputs.closedContour,
+  );
+  const rhs = realifyRhs([total]);
+  const report = solveOver(RAT_PI_FIELD, system.matrix, system.unknowns, rhs);
+
+  // CONTRADICTION IS NOT RANK DEFICIENCY. A zero row against a non-zero right-hand side means the
+  // identity does not hold — for these families that is the reality condition failing, and the
+  // honest response is to report it rather than to solve the rows that did survive.
+  if (report.contradictions.length > 0) {
+    // WHICH part, read off the weights rather than the row index. `rref` swaps rows, so a reduced
+    // row number names nothing; the weights say which of the two realified equations — the value or
+    // the reality condition — the residue sum failed.
+    const parts = report.contradictions.map((c) => {
+      const live = c.weights.flatMap((w, j) => (w.isZero() ? [] : [j]));
+      if (live.length !== 1) return "a combination of its real and imaginary";
+      return live[0] % 2 === 0 ? "real" : "imaginary";
+    });
+    const reason =
+      `the contour identity is contradicted in its ${parts.join(" and ")} part: the row reads ` +
+      "`0 = (non-zero)`, so the residue sum and the piece limits cannot both be right";
+    return { ok: false, reason, certificate: refuse("the targets", reason) };
+  }
+
+  const certificates: Certificate[] = [];
+  const solved = report.determined.map((d) => {
+    const pinned = combineOver(RAT_PI_FIELD, d.weights, rhs);
+    const targetId = system.targetIds[d.column];
+    const text = formatRatPi(pinned);
+    const [re, im] = pinned.toNumber();
+    certificates.push(
+      exact(
+        `${targetId} is ${text}`,
+        "Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly",
+      ),
+    );
+    // The unknowns of a log family are real by hypothesis, and the realified system says so: a
+    // non-zero imaginary part here would be an engine fault, not a value to report.
+    return { targetId, text, exact: pinned, value: im === 0 ? re : Number.NaN };
+  });
+
+  const invisible = describeKernel(RAT_PI_FIELD, report, system.targetIds);
+  for (const sentence of invisible) {
+    certificates.push(unknown("an unknown of this system", sentence));
+  }
+
+  return { ok: true, targets: { solved, invisible, certificates } };
 }

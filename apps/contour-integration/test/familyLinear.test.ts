@@ -34,7 +34,7 @@ describe("solveExact — rank and kernel", () => {
     const rhs = [f(5), f(1)];
     const r = solveExact(M, 2, rhs);
     expect(r.rank).toBe(2);
-    expect(r.inconsistentRows).toEqual([]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([]);
     const t = must(r.combination, "a combination").map((w) => applyCombination(w, rhs).toNumber());
     expect(t).toEqual([2, 1]);
   });
@@ -63,7 +63,7 @@ describe("solveExact — rank and kernel", () => {
     expect(r.kernel).toHaveLength(1);
     expect(nums(r.kernel[0])).toEqual([1]);
     // Rank-deficient is NOT the same as contradicted: nothing here forces 0 = nonzero.
-    expect(r.inconsistentRows).toEqual([]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([]);
   });
 });
 
@@ -72,13 +72,13 @@ describe("solveExact — contradiction is distinct from rank deficiency", () => 
     // The real-axis families' shape: M = [[1],[0]], so row 1 asserts the answer is real.
     const r = solveExact([[f(1)], [f(0)]], 1, [f(3), f(7, 2)]);
     expect(r.rank).toBe(1);
-    expect(r.inconsistentRows).toEqual([1]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([1]);
   });
 
   it("accepts the same system when the imaginary part vanishes", () => {
     const r = solveExact([[f(1)], [f(0)]], 1, [f(3), f(0)]);
     expect(r.rank).toBe(1);
-    expect(r.inconsistentRows).toEqual([]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([]);
     expect(applyCombination(must(r.combination, "a combination")[0], [f(3), f(0)]).toNumber()).toBe(3);
   });
 
@@ -86,7 +86,7 @@ describe("solveExact — contradiction is distinct from rank deficiency", () => 
     // Row 1 is 2× row 0 in M but not in r, so the contradiction only appears once reduced.
     const r = solveExact([[f(1)], [f(2)]], 1, [f(1), f(3)]);
     expect(r.rank).toBe(1);
-    expect(r.inconsistentRows).toEqual([1]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([1]);
   });
 });
 
@@ -97,16 +97,16 @@ describe("solveExact — the over-determined case the design anticipates", () =>
     const M = [[f(1)], [f(0)], [f(2)]];
     const consistent = solveExact(M, 1, [f(3), f(0), f(6)]);
     expect(consistent.rank).toBe(1);
-    expect(consistent.inconsistentRows).toEqual([]);
+    expect(consistent.contradictions.map((c) => c.row)).toEqual([]);
     expect(applyCombination(must(consistent.combination, "a combination")[0], [f(3), f(0), f(6)]).toNumber()).toBe(3);
 
     // Row 1 now asserts 0 = 1; row 2 is still the consistent multiple of row 0.
     const contradicted = solveExact(M, 1, [f(3), f(1), f(6)]);
-    expect(contradicted.inconsistentRows).toEqual([1]);
+    expect(contradicted.contradictions.map((c) => c.row)).toEqual([1]);
 
     // Row 2 disagreeing with row 0 is a contradiction too, and a different one.
     const disagreeing = solveExact(M, 1, [f(3), f(0), f(7)]);
-    expect(disagreeing.inconsistentRows).toEqual([2]);
+    expect(disagreeing.contradictions.map((c) => c.row)).toEqual([2]);
   });
 });
 
@@ -245,7 +245,7 @@ describe("solveOver ℚ(i)(π) — D4's system", () => {
 
     expect(r.rank).toBe(2);
     expect(r.pivotColumns).toEqual([0, 1]);
-    expect(r.inconsistentRows).toEqual([]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([]);
     // Rank 2 in three unknowns, so there is no whole-system solution — and yet two of the three
     // unknowns are pinned. `combination` alone would have refused to state either.
     expect(r.combination).toBeUndefined();
@@ -290,7 +290,7 @@ describe("solveOver ℚ(i)(π) — D4's system", () => {
     // `π·π − π²` is zero because the polynomials cancel. No tolerance was consulted.
     const r = solveOver(RAT_PI_FIELD, [[pi(1).mul(pi(1)).sub(pi(2))]], 1, [RatPi.ONE]);
     expect(r.rank).toBe(0);
-    expect(r.inconsistentRows).toEqual([0]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([0]);
   });
 
   it("separates contradiction from rank deficiency in the widened field too", () => {
@@ -298,7 +298,7 @@ describe("solveOver ℚ(i)(π) — D4's system", () => {
     const r = solveOver(RAT_PI_FIELD, [[RatPi.ONE], [RatPi.ZERO]], 1, [RatPi.ONE, pi(1)]);
     expect(r.rank).toBe(1);
     expect(r.kernel).toHaveLength(0);
-    expect(r.inconsistentRows).toEqual([1]);
+    expect(r.contradictions.map((c) => c.row)).toEqual([1]);
   });
 });
 

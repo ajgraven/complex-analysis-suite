@@ -136,8 +136,10 @@ describe("invariant 4 — rank(M) = m for the family's own goldens", () => {
     }));
     const hits = checkFamily(f).filter((v) => v.invariant === 4);
     expect(hits.length).toBeGreaterThan(0);
-    expect(hits[0].message).toMatch(/rank\(M\) = 0 but the family has 1 unknown/);
-    expect(hits[0].message).toMatch(/1 combination\(s\) of them are invisible/);
+    // Named, not counted: the message says WHICH unknown, and the kernel's own sentence says why.
+    expect(hits[0].message).toMatch(/does not determine I/);
+    expect(hits[0].message).toMatch(/rank\(M\) = 0 of 1 unknown/);
+    expect(hits[0].message).toMatch(/carries no information about I/);
   });
 
   it("fires when a second unknown has no row of its own", () => {
@@ -152,7 +154,7 @@ describe("invariant 4 — rank(M) = m for the family's own goldens", () => {
       },
     }));
     const hits = checkFamily(f).filter((v) => v.invariant === 4);
-    expect(hits[0].message).toMatch(/rank\(M\) = 1 but the family has 2 unknown/);
+    expect(hits[0].message).toMatch(/does not determine J — rank\(M\) = 1 of 2 unknown/);
   });
 
   it("reports a coefficient it cannot decide exactly, rather than rounding it", () => {
@@ -171,7 +173,8 @@ describe("invariant 4 — rank(M) = m for the family's own goldens", () => {
     // belongs rather than only what is wrong with it: π is an exponent component in this basis, not
     // a coefficient, so the plain-log keyhole's row needs Pass 5 over ℚ(i)(π) — which is M4.3's.
     expect(hits[0].message).toMatch(/bare π/);
-    expect(hits[0].message).toMatch(/M4\.3/);
+    // And it names the seat that DOES hold it: a family declaring an additive crossing phase.
+    expect(hits[0].message).toMatch(/ADDITIVE/);
   });
 });
 
@@ -291,6 +294,7 @@ describe("a fixture that documents a refusal must actually be refused", () => {
     }));
     const hits = checkFamily(f).filter((v) => v.invariant === 4);
     expect(hits[0]?.message).toMatch(/marked as documenting a refusal/);
-    expect(hits[0]?.message).toMatch(/does NOT collapse there/);
+    expect(hits[0]?.message).toMatch(/determines I there/);
+    expect(hits[0]?.message).toMatch(/does NOT\s+collapse/);
   });
 });

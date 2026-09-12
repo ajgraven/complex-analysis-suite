@@ -132,12 +132,13 @@ describe("π lives in an exponent and nowhere else", () => {
   });
 
   it("refuses a bare π as a coefficient, naming where that belongs", () => {
-    // The plain-log keyhole's coefficient row is literally `2π`, and it needs Pass 5 over ℚ(i)(π).
+    // The plain-log keyhole's coefficient row is literally `2π`, and it lives in ℚ(i)(π) — a ring
+    // this basis does not contain and is not a subring of. The refusal names the seat that holds it.
     const r = walk("2*pi");
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.reason).toMatch(/bare π/);
-    expect(r.reason).toMatch(/M4\.3/);
+    expect(r.reason).toMatch(/ADDITIVE/);
   });
 
   it("refuses π², which has no seat in the basis", () => {

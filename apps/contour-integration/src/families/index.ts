@@ -13,6 +13,8 @@
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem } from "./system.js";
+import { describeKernel } from "./linear.js";
+import { FRAC_FIELD, RAT_PI_FIELD } from "./field.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
 import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
 import { a3CircleCosNTheta } from "./records/a3-circle-cos-n-theta.js";
@@ -30,7 +32,14 @@ import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
 import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
-export { buildSystem, exactConstant, type FamilySystem } from "./system.js";
+export {
+  buildSystem,
+  exactConstant,
+  type FamilySystem,
+  type PiSystem,
+  type RationalSystem,
+} from "./system.js";
+export { exactPiConstant } from "./piConstant.js";
 export {
   applyCombination,
   combineOver,
@@ -345,21 +354,42 @@ function checkInvariant4(family: Family): Violation[] {
       fail(`golden ${i}: M could not be decided exactly — ${built.reason}`);
       continue;
     }
-    const { rank } = built.system.report;
+    // The check is per-unknown, not a rank count. D4 is why: its contour has rank 2 in three
+    // unknowns and is CORRECT — `∫R log²x` has an identically zero column and the record says so
+    // (`role: "cancels"`) — while `rank === m` would drop it. What must hold is that every unknown
+    // the record claims to determine is one this contour actually pins, which `determined` answers
+    // directly; a rank equal to the number of claims can still pin the wrong columns.
+    const names = family.targets.map((t) => t.id);
+    const determined = new Set(built.system.report.determined.map((d) => d.column));
+    const claimed = family.targets.flatMap((t, j) => (t.role === "cancels" ? [] : [j]));
+    const missing = claimed.filter((j) => !determined.has(j));
+    const invisible =
+      built.system.field === "Q"
+        ? describeKernel(FRAC_FIELD, built.system.report, names)
+        : describeKernel(RAT_PI_FIELD, built.system.report, names);
+
     if (fixture.refuses !== undefined) {
-      if (rank === m) {
+      if (missing.length === 0) {
         fail(
-          `golden ${i} is marked as documenting a refusal (${fixture.refuses}), but rank(M) = ${m} ` +
-            "— the derivation does NOT collapse there, so the fixture documents nothing",
+          `golden ${i} is marked as documenting a refusal (${fixture.refuses}), but this contour ` +
+            `determines ${claimed.map((j) => names[j]).join(", ")} there — the derivation does NOT ` +
+            "collapse, so the fixture documents nothing",
         );
       }
       continue;
     }
-    if (rank !== m) {
-      const undetermined = built.system.report.kernel.length;
+    if (missing.length > 0) {
       fail(
-        `golden ${i}: rank(M) = ${rank} but the family has ${m} unknown(s); ` +
-          `${undetermined} combination(s) of them are invisible to this contour`,
+        `golden ${i}: this contour does not determine ${missing.map((j) => names[j]).join(", ")} ` +
+          `— rank(M) = ${built.system.report.rank} of ${m} unknown(s). ${invisible.join("; ")}`,
+      );
+    }
+    // The other direction. A record claiming a cancellation that does not happen is documenting
+    // nothing, exactly as a `refuses` fixture at full rank is.
+    const pinned = family.targets.flatMap((t, j) => (t.role === "cancels" && determined.has(j) ? [t.id] : []));
+    if (pinned.length > 0) {
+      fail(
+        `golden ${i}: ${pinned.join(", ")} is marked as cancelling, but this contour determines it`,
       );
     }
   }

@@ -29,6 +29,21 @@ export type Matrix<T> = readonly (readonly T[])[];
 /** A `k × m` matrix of exact rationals, row-major. */
 export type RatMatrix = Matrix<Frac>;
 
+/** A combination of the equations that forces `0 = nonzero`. */
+export interface Contradiction<T> {
+  /** The reduced row that reads `0 = nonzero`. */
+  readonly row: number;
+  /**
+   * The combination of the ORIGINAL equations that produced it: `Σ weightsⱼ · (equation j)`.
+   *
+   * The row index alone is post-elimination and says little a caller can act on, because `rref`
+   * swaps rows — reduced row 1 is commonly original row 0. The WEIGHTS identify the contradiction:
+   * for a realified complex identity `[1, 0]` is its real part and `[0, 1]` its imaginary one, so a
+   * caller can say which of the two the residue sum failed rather than that one of them did.
+   */
+  readonly weights: readonly T[];
+}
+
 export interface SolveReport<T = Frac> {
   /** Exact — decided, never thresholded. */
   readonly rank: number;
@@ -63,12 +78,14 @@ export interface SolveReport<T = Frac> {
    */
   readonly combination?: readonly (readonly T[])[];
   /**
-   * Rows that force `0 = nonzero`. Distinct from rank deficiency, and a different failure: the
-   * family is not underdetermined, it is CONTRADICTED. For the real-axis families this is where
-   * "the answer must come out real" lives — the imaginary row is `0 · t = Im(S)`, so a non-real
-   * residue sum lands here rather than silently vanishing.
+   * Combinations of the equations that force `0 = nonzero`.
+   *
+   * Distinct from rank deficiency, and a different failure: the family is not underdetermined, it is
+   * CONTRADICTED. For the real-axis families this is where "the answer must come out real" lives —
+   * the imaginary row is `0 · t = Im(S)`, so a non-real residue sum lands here rather than silently
+   * vanishing.
    */
-  readonly inconsistentRows: readonly number[];
+  readonly contradictions: readonly Contradiction<T>[];
 }
 
 /**
@@ -171,7 +188,7 @@ export function solveOver<T>(
   });
 
   // Contradiction: a reduced row that is zero across every unknown but carries a non-zero rhs.
-  const inconsistentRows: number[] = [];
+  const contradictions: Contradiction<T>[] = [];
   if (rhs !== undefined) {
     for (let r = 0; r < rows.length; r++) {
       if (!rows[r].every((c) => field.isZero(c))) continue;
@@ -180,7 +197,7 @@ export function solveOver<T>(
         (acc, w, j) => field.add(acc, field.mul(w, rhs[j])),
         field.zero,
       );
-      if (!field.isZero(value)) inconsistentRows.push(r);
+      if (!field.isZero(value)) contradictions.push({ row: r, weights: [...transform[r]] });
     }
   }
 
@@ -193,7 +210,7 @@ export function solveOver<T>(
 
   const combination = rank === unknowns ? determined.map((d) => d.weights) : undefined;
 
-  return { rank, unknowns, pivotColumns, kernel, determined, combination, inconsistentRows };
+  return { rank, unknowns, pivotColumns, kernel, determined, combination, contradictions };
 }
 
 /** Apply a `combination` row to a right-hand side, exactly. */
@@ -275,4 +292,16 @@ export function applyCombination(weights: readonly Frac[], rhs: readonly Frac[])
  */
 export function realifyRows(matrix: Matrix<RatPi>): Matrix<RatPi> {
   return matrix.flatMap((row) => [row.map((c) => c.re()), row.map((c) => c.im())]);
+}
+
+/**
+ * The right-hand side of the same split — `[Re(r₀), Im(r₀), Re(r₁), …]`.
+ *
+ * Beside `realifyRows` so the ORDER lives in one place. A matrix split one way and a right-hand side
+ * split the other would solve a system nobody wrote, and for a real-axis family the two rows are the
+ * value and the reality condition, so swapping them is not a permutation of the answer — it reports
+ * the wrong number and contradicts the wrong row.
+ */
+export function realifyRhs(rhs: readonly RatPi[]): RatPi[] {
+  return rhs.flatMap((r) => [r.re(), r.im()]);
 }

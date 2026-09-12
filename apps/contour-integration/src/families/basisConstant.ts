@@ -27,10 +27,11 @@
 // The differential cross-check against the numeric evaluator is kept from `exactConstant`, and for
 // the same reason: the two share no arithmetic, so agreement is evidence rather than a restatement.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
-import { evaluate, type Node } from "@cas/expr";
+import { type Node } from "@cas/expr";
 import { ExpSum } from "../kernel/expSum.js";
 import { Exponent } from "../kernel/exponent.js";
 import { simplestRational } from "../kernel/exactRational.js";
+import { crossCheckNumeric } from "./crossCheck.js";
 import type { Bindings } from "./schema.js";
 
 export type BasisConstant =
@@ -45,15 +46,14 @@ type Walked =
 const linear = (value: Exponent): Walked => ({ kind: "linear", value });
 const basis = (value: ExpSum): Walked => ({ kind: "basis", value });
 
-/** How far the exact walk and the numeric evaluator may differ before it is reported. RELATIVE. */
-const CROSS_CHECK_TOL = 1e-9;
-
 /**
  * A `linear` value as a coefficient of the output basis — which requires it to be π-free.
  *
  * `π` is not an element of ℚ(i)(√d), so a coefficient carrying one cannot be represented. Refusing
  * is right rather than inconvenient: a family whose coefficient row is literally `2π` (the plain-log
- * keyhole's) needs Pass 5 over ℚ(i)(π), which is M4.3's work and not this walk's.
+ * keyhole's) belongs in ℚ(i)(π), which `piConstant.ts` walks — and `system.ts` routes it there on
+ * the family's own declaration, an ADDITIVE crossing phase. The two rings are incomparable, so this
+ * walk refusing is how a record ends up in the right one rather than in the convenient one.
  */
 function asCoefficient(x: Exponent): SqrtExt | null {
   return x.pi.isZero() ? x.algebraic : null;
@@ -208,7 +208,10 @@ export function exactBasisConstant(ast: Node, bindings: Bindings): BasisConstant
     if (asSum === null) {
       return {
         ok: false,
-        reason: "the coefficient carries a bare π, which is not an element of this basis — Pass 5 over ℚ(i)(π) is M4.3's work",
+        reason:
+          "the coefficient carries a bare π, which is not an element of this basis; a coefficient " +
+          "in ℚ(i)(π) belongs to a family whose crossing phase is ADDITIVE (log z ↦ log z + 2πi), " +
+          "and this family does not declare one",
       };
     }
     value = asSum;
@@ -216,26 +219,6 @@ export function exactBasisConstant(ast: Node, bindings: Bindings): BasisConstant
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
 
-  // The same differential check `exactConstant` runs, for the same reason: BigInt rationals against
-  // float64 share no arithmetic, so agreement is evidence.
-  const numericParams: Record<string, [number, number]> = {};
-  for (const [k, v] of Object.entries(bindings)) {
-    if (typeof v === "number") numericParams[k] = [v, 0];
-    else if (typeof v === "string" && Number.isFinite(Number(v))) numericParams[k] = [Number(v), 0];
-  }
-  const got = evaluate(ast, [0, 0], [0, 0], undefined, numericParams);
-  if (typeof got !== "boolean") {
-    const [re, im] = value.toTuple();
-    const scale = Math.max(1, Math.abs(re), Math.abs(im));
-    if (
-      Math.abs(got[0] - re) > CROSS_CHECK_TOL * scale ||
-      Math.abs(got[1] - im) > CROSS_CHECK_TOL * scale
-    ) {
-      return {
-        ok: false,
-        reason: `the exact and numeric evaluations of the coefficient disagree (${re}+${im}i vs ${got[0]}+${got[1]}i)`,
-      };
-    }
-  }
-  return { ok: true, value };
+  const disagreement = crossCheckNumeric(ast, bindings, value.toTuple());
+  return disagreement === null ? { ok: true, value } : { ok: false, reason: disagreement };
 }
