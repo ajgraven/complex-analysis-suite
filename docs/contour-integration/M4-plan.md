@@ -722,7 +722,7 @@ The domain-colouring backdrop is drawn by the compiled evaluator, which uses the
 every sub-expression — so behind D7's dogbone it shows a seam on `(b, ∞)`, where `z^μ` and `(b−z)^ν`
 each jump and their product does NOT. That is `rendering-the-union-of-sub-cuts` verbatim, research 06
 §2.2's Maple lesson, drawn by the app about its own record. It has been true since D1 (a keyhole's
-`[0,2π)` is not the principal window either) and it is M4.7's to fix, since rendering a declared
+`[0,2π)` is not the principal window either) and it was M4.7's to fix — **done, §14** — since rendering a declared
 determination is exactly what the GPU slice is for. What changed now is that the app says so: a record
 with a branch carries a line stating that the colouring is the principal branch and the ledger is not.
 The distinction matters — every number on the right comes from exact residues in the DECLARED

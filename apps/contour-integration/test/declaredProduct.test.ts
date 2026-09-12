@@ -184,6 +184,28 @@ describe("the picture agrees with the ANSWER at every pole", () => {
 });
 
 describe("the reference the correction will measure a dragged cut from", () => {
+  it.each(branchRuns().map((r) => [r.id, r] as const))(
+    "%s — its keys are EXACTLY the geometry's point ids",
+    (_id, { run }) => {
+      // **THE TEST THAT WOULD HAVE CAUGHT IT.** `declaredReference` keyed its map `b1, b2, …` by
+      // position, which is right for a multi-point record and wrong for every single-point one:
+      // `branchFactor.ts` names that point `"b"`. `cutSegments` looks each direction up by
+      // `point.id`, so for D1–D5 it found nothing and added NO reference ray — the correction
+      // silently becoming `m_Γ` rather than `m_Γ − m_ref`. The old test used D6, which is
+      // multi-point, and passed.
+      //
+      // Every record, and equality both ways: a reference with a key the geometry lacks is a ray
+      // that never gets added, and a point the reference lacks is a determination the app does not
+      // know, which `correction.ts` is explicit must not be invented.
+      const reference = declaredReference(run.declared?.product ?? { constant: [1, 0], factors: [] });
+      const geometry = (run.branch?.points ?? [])
+        .filter((point) => point.order.kind === "log" || point.order.alpha.d !== 1n)
+        .map((point) => point.id);
+      expect([...reference.keys()].sort()).toEqual([...geometry].sort());
+      expect(geometry.length).toBeGreaterThan(0);
+    },
+  );
+
   it("names one direction per branch point, keyed as the geometry is", () => {
     const { run } = branchRuns().find((r) => r.id === "dogbone-inverse-sqrt") ?? { run: null };
     expect(run).not.toBeNull();

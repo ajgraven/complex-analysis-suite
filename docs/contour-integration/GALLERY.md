@@ -151,30 +151,44 @@ implementation decision.
 **The loader and its four invariants are implemented** (`apps/contour-integration/src/families/`),
 together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
 substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
-`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`). Thirteen
-records are loaded: **A1–A7** (circle and semicircle), **B1–B3** (Jordan) and **C1–C3** (indentation,
-removability, and the two-singularity ledger) — **every entry in tiers A, B and C**, which is the
-M3 gate's thirteen.
+`Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`).
+**Twenty records are loaded, none dropped:** **A1–A7** (circle and semicircle), **B1–B3** (Jordan),
+**C1–C3** (indentation, removability, and the two-singularity ledger) — the M3 gate's thirteen — and
+**D1–D7** (branch cuts), which is the M4 gate's seven. **Every entry in tiers A, B, C and D.**
 
-Each solves to a **symbolic closed form**, asserted by name in `familyGolden.test.ts`:
+Each solves to a **symbolic closed form**, asserted by name in `familyGolden.test.ts` and, for tier
+D, in one test per record (`test/d1.test.ts` … `d7.test.ts`):
 
-| | | | |
+| tier | | | |
 |---|---|---|---|
-| `2π√3/3` | `8π/3` | `π/6` | `π/2` |
-| `π√2/2` | `π/8` | `π/e` | `π/e` |
-| `π/2` | `π/2` | `π − π/e` | `2π` |
-| B3: decimal only | | | |
+| A–C | `2π√3/3` · `8π/3` · `π/6` · `π/2` | `π√2/2` · `π/8` · `π/e` · `π/e` | `π/2` · `π/2` · `π − π/e` · `2π` |
+| D | D1 `π/sin(3π/10)` · D2 `π − π√2/2` | D3 `(π/5)/sin(23π/50)` · D4 `−π/4` (and `π/4` free) | D5 `π³/8` · D6 `π√2/2` · D7 `(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)` |
 
-B3 is the one without a symbolic form, and its own record says why: its exponents are complex, so
-`Re` does not distribute over the terms and `e^{β}` contributes `cos` and `sin` of an irrational.
+Each tier-D form is at that record's primary fixture; the parameterised ones are solved at every
+fixture they declare, and D1's five run `π/sin(3π/10)`, `π`, `π/sin(3π/4)`, `π/sin(π/10)`,
+`π/sin(9π/10)`.
 
-**A4 is deliberately absent.** Its integrand `e^{cos θ} cos(sin θ − nθ)` complexifies to
-`e^z/(i z^{n+1})`, whose exact residue is the Taylor coefficient of an *entire* function — `1/n!` —
-and the residue engine's exact path stops at rational functions over ℚ(i) and one quadratic
-extension of it. A4 needs a table of known entire functions with exact truncated ℚ(i) series, which
-is its own piece of work. Tier B needs the Jordan branch wired to a family; C–G need indentation,
-branch cuts and the kernel families of M4/M5. A record loaded before its machinery exists would be a
-worked example that cannot be worked.
+B3 is the one entry in A–C without a symbolic form, and its own record says why: its exponents are
+complex, so `Re` does not distribute over the terms and `e^{β}` contributes `cos` and `sin` of an
+irrational.
+
+**Two things about tier D that the table cannot show.**
+
+Its forms are **carried, not reduced** (ADR-0041): `π/sin(3π/10)` is the exact answer, not a step
+before one, because reducing it would need a general algebraic number field — D3's `sin(23π/50)` is
+degree 20. The FORM is `=` and the decimal is `≈`, exactly as tier B carries `e^{β}`.
+
+And **the quadrature cross-check is SKIPPED for all seven**, by an explicit decision the run reports
+rather than by omission: sampling `z^α` needs a determination, and `@cas/expr`'s compiled evaluator
+uses the principal one, so a quadrature of a keyhole would answer a different question with
+confidence. Tiers A–C are corroborated by an independent numeric route and tier D is not — which is
+the one respect in which tier D's evidence is thinner than tier A's, and it is now closable rather
+than structural: M4.7c's `kernel/branch/declared.ts` evaluates the DECLARED determination on the CPU,
+which is the evaluator the cross-check was missing. See §5.2.
+
+**Tier E–G need the kernel families of M5** (rectangle/strip quasi-period, wedge, `πcot`/`πcsc`
+summation). A record loaded before its machinery exists would be a worked example that cannot be
+worked.
 
 Each loaded record is **executed against the engine in the test suite**, not merely parsed. *Every*
 fixture is run, not only the flagship one — which is where the parameterised families earn their
@@ -183,6 +197,38 @@ A2's `|a| ≶ 1` switch and its `a = 0` pole-*count* change, and A3's order ladd
 `n = 0…4`. The residue-theorem value is also checked to be *identical* at `R = 3` and `R = 40`
 (which is what makes the instantiation radius a display default rather than a claim), the quadrature
 cross-check is required to agree, and A6's `closing-down-disagrees` trap is executed directly.
+
+### 5.2 The two limits tier D leaves, named
+
+Both are about the same missing piece, and both were found by reviewing M4 rather than by a test
+going red — which is why they are written down here instead of being carried as intentions.
+
+**1. `side` is declared, validated, and not honoured.** Research 06 §3.3 is emphatic about the
+mechanism: *"Don't offset the contour; offset the branch"* — give each piece a `side: 'above' |
+'below'` tag and let the evaluator pin `θₖ` to its limiting value from that side, so the contour lies
+exactly on `ℝ₊` and the integrand is exactly the limiting boundary value, "the same idea as C99's
+signed zero, lifted from a float bit to a data field". The field exists (`contour/model.ts`), records
+declare it, `instantiate.ts` carries it onto the resolved piece, and LEGALITY requires it of any
+piece that meets a cut. **Nothing reads it to evaluate anything.** The exact answers do not need it —
+a lip's determination reaches the algebra through the record's declared `crossingPhase` and its
+role's coefficient, which M4.3 derives and checks — so no tier-D value is wrong. But the tag is
+currently a well-formedness requirement rather than the branch-offsetting device §3.3 specifies.
+
+**2. Which is why the quadrature is skipped for all seven.** The two are one gap: the cross-check
+needs an evaluator that can sample the declared determination, and on the lips it needs `side` to say
+which edge of the window a point on the cut belongs to. `runFamily` reports the skip in full rather
+than quietly not integrating, and the exact route is unaffected — but it means tier D is the one tier
+whose values have no independent numeric corroboration, while every other record's `∮` is checked
+against floating Gauss–Legendre panels that share no machinery with it.
+
+**What changed, and why this is now a slice rather than a limitation.** M4.7c built
+`kernel/branch/declared.ts` to draw the picture in the declared determination, and it evaluates
+`c·∏ⱼ(sⱼ(z − bⱼ))^{αⱼ}` on the CPU with each factor in its own window — which is exactly the
+evaluator both gaps were waiting on. Closing them is: give `evaluateDeclared` a `side` parameter
+(a point on the cut takes `θ₀` or `θ₀ + 2π`), hand `analyse` that evaluator instead of the compiled
+one for a branch record, and drop the skip. The payoff is seven records gaining the corroboration
+the other thirteen already have, and `side` becoming load-bearing instead of merely required. It is
+the first item of M5's plan for that reason.
 
 ### 5.0b C1 is where `∮` stops being the answer
 

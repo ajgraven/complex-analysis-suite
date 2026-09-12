@@ -54,6 +54,18 @@ import { logCut, powCut } from "./correction.js";
  * rounding error off the cut it is meant to cancel.
  */
 export type DeclaredFactor = {
+  /**
+   * The id of this factor's branch point in the `BranchChoice` geometry.
+   *
+   * **Carried, not derived, and review found out why.** {@link declaredReference} used to key its
+   * map `b1, b2, …` by position — which is right for a multi-point record and WRONG for every
+   * single-point one, because `branchFactor.ts` names that point `"b"`. `cutSegments` looks the
+   * direction up by `point.id`, finds nothing, and adds no reference ray at all: the correction then
+   * silently becomes `m_Γ` instead of `m_Γ − m_ref` for five of the seven records. Both the product
+   * and the geometry are built in one place, so the id travels with the factor and there is one
+   * source of truth for it.
+   */
+  readonly id: string;
   /** `bⱼ`. */
   readonly at: Cx;
   /** The window's lower edge, in multiples of π. */
@@ -120,13 +132,13 @@ export function evaluateDeclared(product: DeclaredProduct, z: Cx): Cx {
  * Where each factor's cut runs, as a direction per branch point — the correction's reference, for
  * the system the picture is now drawn in.
  *
- * Keyed by the `BranchChoice` point ids `bₖ`, in the order the factors were declared, because that
- * is the order `branchFactor.ts` builds the geometry in. A cut dragged away from here is measured
- * from here, which is what makes M4.7d's correction exact by construction rather than by a guess
- * about what `@cas/expr` compiled.
+ * Keyed by each factor's own {@link DeclaredFactor.id} — the id `branchFactor.ts` gave that point in
+ * the geometry — so `cutSegments`' `reference.get(point.id)` finds it. A cut dragged away from here
+ * is measured from here, which is what makes the correction exact by construction rather than by a
+ * guess about what `@cas/expr` compiled.
  */
 export function declaredReference(product: DeclaredProduct): ReadonlyMap<string, Frac> {
   const out = new Map<string, Frac>();
-  for (let k = 0; k < product.factors.length; k++) out.set(`b${k + 1}`, product.factors[k].window);
+  for (const factor of product.factors) out.set(factor.id, factor.window);
   return out;
 }

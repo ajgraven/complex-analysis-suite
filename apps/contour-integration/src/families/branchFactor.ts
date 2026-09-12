@@ -162,6 +162,9 @@ export function powerFactorOf(family: Family, bindings: Bindings): BranchFactorR
       factors: [
         {
           kind: "power",
+          // The SAME id `cutFromDetermination` gives the geometry's single point — one source of
+          // truth, so `declaredReference` cannot key a map the cut system does not answer to.
+          id: "b",
           at: [common.atX, 0],
           alpha: alpha.toNumber(),
           sign: common.only.orientation === "b-minus-z" ? -1 : 1,
@@ -205,7 +208,7 @@ export function logFactorOf(family: Family, bindings: Bindings): LogFactorResult
     choice: cutFromDetermination(common.atX, common.lo, common.hi, { kind: "log" }),
     declared: {
       constant: [1, 0],
-      factors: [{ kind: "log", at: [common.atX, 0], power, window: common.lo }],
+      factors: [{ kind: "log", id: "b", at: [common.atX, 0], power, window: common.lo }],
     },
   };
 }
@@ -288,6 +291,8 @@ export function multiFactorOf(family: Family, bindings: Bindings): MultiFactorRe
     const label = `z = ${factor.at}`;
     declaredFactors.push({
       kind: "power",
+      // Built here so it cannot drift from `geometry.push` below, which uses the same expression.
+      id: `b${k + 1}`,
       at: at.value.toTuple() as Cx,
       alpha: alpha.toNumber(),
       sign: factor.orientation === "b-minus-z" ? -1 : 1,

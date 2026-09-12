@@ -672,6 +672,49 @@ so*; the `arg ∈ (−π,π]` trap is detected and explained; CPU/GPU parity gre
 >
 > The staging is reordered by **which machinery each record needs**, so D1 and D3 land before D2, and
 > D5 waits on the prerequisite chaining rather than on more algebra.
+>
+> **✅ GATE MET, with one clause delivered differently and said so.** Per-slice detail is in
+> [`M4-plan.md`](M4-plan.md) §§5–15.
+>
+> - **D1–D7 exact** ✓ — all seven solve to symbolic closed forms, each asserted by name in its own
+>   test (`test/d1.test.ts` … `d7.test.ts`), every declared fixture run, and the forms CARRIED rather
+>   than reduced per ADR-0041. Closed forms are tabulated in [`GALLERY.md`](GALLERY.md) §5.
+> - **The `arg ∈ (−π,π]` trap is detected and explained** ✓ — M4.2, north-star #4 verbatim: D1's
+>   wrong `argRange` swings the cut onto ℝ₋ and LEGALITY catches both untagged circles, which is the
+>   earliest of that record's three declared refusals the engine can see.
+> - **CPU/GPU parity green in the browser suite** ✓ — the app gained a `test:browser` (M4.7a) and it
+>   runs 75 assertions in real WebGL2 across three files, with mutation sweeps at 17/17 and 14/14.
+>   *Deviation:* the twins are NOT in `DUAL_BACKEND_CORPUS`. There is one consumer, and adding them
+>   to `@cas/gpu`'s corpus would drag a JS twin into `@cas/expr` for the same single caller
+>   (ADR-0007); the app's own suite is also stronger here, since it compares the shader against the
+>   twin the LEDGER uses rather than against a package's own reference. M4-plan §13's last note.
+> - **Jump weights** are verified against the continuous-argument lift (`kernel/branch/lift.ts`) in
+>   the suite rather than probed numerically at runtime. `liftArgument` is the mechanism the ANSWER
+>   depends on, so agreement with it is the statement that the picture and the ledger are in the same
+>   branch — and a runtime probe would re-derive an exact rational decision from a measurement, which
+>   inverts this app's whole posture.
+> - **"Dragging a cut across the contour CHANGES THE ANSWER and says so"** — half delivered, and the
+>   missing half is one named cause rather than an omission. It **says so**: a crossing refuses and
+>   NAMES its factor in both of research 06 §3.4's forms (M4-plan §15), which is §3.2's own contract
+>   ("either refuse the crossing or change sheet and say so, with the multiplicative factor shown").
+>   And the complementary fact is now certified: while the cuts stay clear of the contour `∮` is
+>   *exactly* invariant under any deformation of them, which is what makes a jump meaningful at all.
+>   What does not happen is the answer CHANGING, and the reason is that **the sandbox cannot declare a
+>   branch factor.** Its editor declares branch points, exponents and cuts — so the cut system reaches
+>   LEGALITY and the picture, but no sandbox value depends on it, because `analyse` takes the rational
+>   route and there is no `z^α` whose determination a residue could be read in. Under a gallery record
+>   the dependence is real (moving the cut moves `argRange`, which is D1's entire trap), but a
+>   record's cuts are the record's and editing them would be editing a worked example.
+>
+>   **This is the same root cause as the one deferral M4.7d records** — research 06 §5.3's sheet
+>   spinner has nothing to multiply for exactly the same reason. Letting the sandbox declare
+>   `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing one expression closes both at once, and it is a real
+>   extension of what the sandbox is, so it is an M5 slice rather than a corner of M4.
+> - Two further limits tier D leaves are named in [`GALLERY.md`](GALLERY.md) §5.2: `side` is declared
+>   and validated but never honoured (research 06 §3.3's branch-offsetting evaluator is specified and
+>   unbuilt), and consequently the quadrature cross-check is skipped for all seven records. Both are
+>   now closable rather than structural — M4.7c built the declared-determination evaluator they were
+>   waiting on — and both head M5's plan.
 
 ### M5 — The rest of the taxonomy · *M*
 Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–F2), series summation via

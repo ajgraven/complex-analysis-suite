@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **503 test files / 4764 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **503 test files / 4771 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -273,7 +273,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 3** and published. `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 4** and published (M1–M4 complete; 20 of the 28 gallery records loaded). `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -294,10 +294,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), branch cuts (M4), the rest of the gallery (M5), the
-teaching layer (M6).
+come: the pen tool (free-hand path editing), the rest of the gallery (M5), the teaching layer (M6).
 
-**M4 (branch cuts): M4.1–M4.3 have landed** — ADR-0041 and
+**M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
 **carried, not reduced** (a form labelled `=`, decimal `≈`, as tier B already carries `e^{β}`), and
 Pass 5 moves to **ℚ(i)(π)** with π an indeterminate so that rank stays decided. No new number field. Its residues reach ℚ(i)(√d) and, for `g(z)·e^{iaz}` at simple poles, the
@@ -381,7 +380,7 @@ silently dropped `ln r` for a log family (ℚ(i)(π) has no seat for it) and now
 record whose poles sit on the default contour radius opens refusing, so `limitParams[].start` lets a
 record say where its own contour must start.
 
-**M4.6** is the dogbone's, and **M4.6a–b have landed**. `Res(f,∞)` is exact over ℚ(i) by one polynomial
+**M4.6** is the dogbone's. `Res(f,∞)` is exact over ℚ(i) by one polynomial
 division, with `Σ_finite Res + Res(f,∞) = 0` as a differential check between two computations that share
 no arithmetic; and ONE number — the order at infinity `p = Σαⱼ − (deg D − deg N)` — decides both whether
 the outer circle vanishes (L2 needs `p < −1`) and whether the residue there is zero (`p ≤ −2`), which is
@@ -431,11 +430,11 @@ yields its `−1` while carrying the logarithm, and a logarithm folds **prime by
 edge runs to `b − η`. Verifying it in a browser found the app drawing **D7's own trap**: the
 domain-colouring backdrop comes from the compiled evaluator, which uses the PRINCIPAL branch of every
 sub-expression, so it shows a seam on `(b, ∞)` where the composite is continuous — research 06 §2.2's
-`rendering-the-union-of-sub-cuts`, true since D1 and M4.7's to fix. What changed is that a record with a
+`rendering-the-union-of-sub-cuts`, true since D1 and **fixed in M4.7c** (below). What changed then is that a record with a
 branch now says so, since an app that draws one determination while computing in another must not leave
 the reader to notice.
 
-**M4.7 is the GPU cut picture, and M4.7a–b have landed.** The app gained a `test:browser` — its real
+**M4.7 is the GPU cut picture.** The app gained a `test:browser` — its real
 GLSL compiled and linked for the first time (the sandbox's presets and all twenty records' contour
 integrands, 28 programs the node gate structurally could not build) — and the branch-cut layer now
 exists in both backends with a parity gate between them, because an app that draws one determination

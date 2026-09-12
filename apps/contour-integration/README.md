@@ -10,7 +10,7 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 3, and published.** See the milestone table in
+**Through Milestone 4, and published.** M1–M4 are complete and 20 of the 28 gallery records are loaded. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -120,7 +120,7 @@ whether the whole thing closes.
   sine is `sin(π/2) = 1`. A real-valued phase looks like no phase, which is exactly when a reader
   concludes the edges must cancel.
 
-**M4.6 is the dogbone's, and M4.6a–b have landed:**
+**M4.6 is the dogbone's:**
 
 - `Res(f,∞)` is exact over ℚ(i) by one polynomial division, and `Σ_finite Res + Res(f,∞) = 0` checks it
   against a computation sharing none of its arithmetic. **One number decides two rows**: the order at
@@ -195,7 +195,7 @@ whether the whole thing closes.
   them. A `Scalar`'s `add` may now be another `Scalar`, which keeps the picture live under a drag where
   a derived value would go stale.
 
-**M4.7a–b bring the branch-cut layer to the GPU, and a gate that can tell the two apart:**
+**M4.7a–b bring the branch-cut layer to the GPU, with a gate that can tell the two apart:**
 
 - **The app has a `test:browser`.** Its real GLSL is compiled and linked for the first time — the
   sandbox's presets and all twenty records' contour integrands, 28 programs the node gate structurally

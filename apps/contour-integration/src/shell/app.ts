@@ -654,6 +654,11 @@ export function mountApp(root: Element): void {
 
   function clearComputed(): void {
     recordBranch = null;
+    // The stage keeps whatever program it last built — this function clears the COMPUTED state, not
+    // the picture — so the flag has to go to null even though `adopt` and `applyExpression` move the
+    // two together. Here the card is about to describe a record whose program was never built, and
+    // null is what makes it say "declared but not on the stage", which is then true.
+    declaredOnStage = null;
     integral = null;
     theorem = null;
     ledger = null;
@@ -1627,7 +1632,7 @@ export function mountApp(root: Element): void {
         ? el(
             "p",
             "muted small",
-            "the cuts are the rays pointing away from z₀ — drag the base point to swing them. A branch point sitting on z₀ casts no shadow, so move one clear of the other.",
+            "the cuts are the rays pointing away from z₀ — drag the base point to swing them. A branch point sitting on z₀ casts no shadow, so move one clear of the other. Every shadow reaches infinity, so a bounded arc — the dogbone — cannot be one: switch this off to build it.",
           )
         : null;
     add.type = "button";
@@ -1640,10 +1645,19 @@ export function mountApp(root: Element): void {
     });
     tools.append(add);
 
-    // The dogbone gesture, offered exactly when it means something: two points, and a shape to
-    // toggle between. Whether the JOIN is admissible is the ledger's call, not this button's.
+    // The dogbone gesture, offered exactly when it means something: two points, a shape to toggle
+    // between, and EXPLICIT cuts. Whether the JOIN is admissible is the ledger's call, not this
+    // button's.
+    //
+    // **Not in shadow mode**, and review is why. It read `branch.cuts` — the declaration — which
+    // shadow mode ignores, so "split into two rays" edited something invisible and changed nothing
+    // on screen: the same handle-on-a-consequence defect `branchHandles` excludes the cut vertices
+    // to avoid, left standing here. Worse for the JOIN, which offers the one shape a shadow system
+    // structurally cannot express — every ray reaches infinity, so there is no bounded arc to make.
     const bounded = branch.cuts.find((c) => c.from !== INFINITY_ID && c.to !== INFINITY_ID);
-    if (branch.points.length === 2 && bounded === undefined) {
+    if (branch.shadow === true) {
+      // nothing: the cuts are a consequence here, and the note below says where to go for a dogbone
+    } else if (branch.points.length === 2 && bounded === undefined) {
       const join = el("button", "preset", "join into one cut");
       join.type = "button";
       join.addEventListener("click", () => {
