@@ -721,6 +721,30 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 `πcot`/`πcsc` including the kernel/`f` pole-collision case (G1–G3).
 **Gate:** all 28 gallery integrals; the cross-family invariants (§8) green.
 
+> **M5.0 is done: the one engine decision is taken** ([ADR-0042](../DECISIONS.md) — an exactly-known
+> IMPORTED value is `=` on its form, with the import in its provenance), and the staging plan beneath
+> it is [`M5-plan.md`](M5-plan.md) — **read it before starting M5.**
+>
+> **The eight records are not the work.** [`gallery/tier-efg.md`](gallery/tier-efg.md) §10 already did
+> the analysis: **six schema gaps** (§10.2) and **four errors in research 03's lemma statements**
+> (§10.1). Two of those errors are guardrail-critical — **L6's arc range is wrong as written** (the
+> stated majorant diverges, measured `2.7×10¹⁵` at `n = 2, R = 6`) and **the square-contour bound
+> drops a `π` and is therefore not an upper bound** (it fails at every `N` tested, by 30–40%, which is
+> §9 R2's certification theatre exactly). One is the ADR above. And one is a unification: `cos φ ≥
+> 1 − 2φ/π` (L6) and `sin ψ ≥ 2ψ/π` (Jordan) are **the same inequality**, so one predicate should
+> discharge both.
+>
+> **M5 also absorbs the two edges M4 left**, by decision: `side` is declared and never honoured, so
+> tier D's quadrature cross-check is skipped and tier D is the one tier without independent numeric
+> corroboration ([`GALLERY.md`](GALLERY.md) §5.2); and the sandbox cannot declare a branch FACTOR,
+> which is the single root cause of M4's half-met gate clause *and* of research 06 §5.3's deferred
+> sheet spinner. Both are now closable rather than structural — M4.7c built the
+> declared-determination evaluator they were waiting on — and they head the plan as M5.0 and M5.1.
+>
+> **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
+> is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
+> results.
+
 ### M6 — Presentation, teaching layer, publish · *M*
 Figure & share export (QD's `_pal` indirection, `renderToCanvas`, sync `ClipboardItem`);
 `#vs=` codec with diff-from-defaults and full re-validation on restore; a11y pass; launcher card

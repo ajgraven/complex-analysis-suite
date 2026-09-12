@@ -3696,3 +3696,67 @@ code path.
        engine cannot do this yet" must not look the same in the corpus.
 6. [ ] **Revisit if** a tier-E/F/G record needs a form outside the basis — G1–G3's `πcot`/`πcsc`
        kernels are the likely first test, and they are M5's, not M4's.
+
+---
+
+## ADR-0042: An exactly-known IMPORTED value is `=` on its form, with the import in its provenance
+
+**Status:** Accepted  **Date:** 2026-09  **Deciders:** Andrew
+
+*The one engine decision M5 (the rest of the taxonomy) cannot start without. It is
+[`gallery/tier-efg.md`](contour-integration/gallery/tier-efg.md) §10.2's schema gap **SG-2**,
+promoted to a decision because it puts the honest-labelling guardrail in direct conflict with the
+correct verdict for two of tier E–F's five entries.*
+
+### Context
+
+Two records in tiers E and F have a contour piece whose value is **exactly known and not derived by
+the contour**:
+
+- **E3's top side** is `√π e^{−b²/4}` — the Gaussian, which comes from polar coordinates.
+- **F2's return ray** is `e^{iπ/(2n)}·Γ(1+1/n)` — which comes from the real substitution `u = tⁿ`.
+
+Both are exact. Neither is a residue, neither vanishes, and neither is proved by the argument the app
+is checking. Under the v1 schema the only role left for them is `free`, which DESIGN §4's Pass 3
+prices by quadrature at `≈`.
+
+**So a perfectly exact argument is capped at `≈` by its most certain step** — the one step whose value
+is known in closed form. That is the inverse of the failure `@cas/rigor` exists to prevent, and it is
+not cosmetic: the verdict is what a reader is told the answer is worth.
+
+The opposite error is worse. If an imported value simply reads `=` with nothing said, the app has
+**laundered an import as a derivation**: `√π` becomes something this contour established, which it did
+not, and the gallery's whole claim — that the app shows you why an argument closes — is weakened at
+exactly the point where it is handing you a result from elsewhere.
+
+### Decision
+
+`Family["pieces"][].knownValue?: { expr: string; method: string; rigor: Level }`, and:
+
+1. **The piece's certificate is minted at its declared `rigor`** — `=` for these two — so an exact
+   argument is not capped by its most certain step, and Pass 5 consumes the value symbolically rather
+   than through a quadrature.
+2. **`method` is REQUIRED and carries the provenance**, and the derivation renders it as a step whose
+   text begins **"imported, not derived here"**. The claim and the reason it is believed travel
+   together, which is what every other certificate in the app already does.
+3. **`rigor` may not exceed the level the record can justify**, and the loader checks it against a
+   closed set of accepted import methods rather than trusting a free string — the same posture as the
+   predicate-namespace guard (`tier-efg.md` §10.3 finding 10: a closed set is only as good as the
+   sample it was closed over, so it is stated as data and reviewed when a record needs a new one).
+4. **A `knownValue` is never a `vanish` and never a `residue`.** Those roles have their own evidence
+   (a certified bound; exact arithmetic), and a piece may not claim both a bound and an import.
+
+### Consequences
+
+- **E3 and F2 can carry `=`.** Their arguments are exact and now read exact.
+- **The derivation gains a fourth kind of step** beside COVER/KILL/CATCH's own: an *imported* one. A
+  reader can see precisely which part of the argument came from outside it, which is strictly more
+  information than either of the two behaviours it replaces.
+- **`free` keeps its meaning** — a piece with a value nobody has pinned, priced by quadrature at `≈`.
+  The gap was never that `free` was wrong; it was that there was nothing else.
+- **The import is a named, reviewable set.** Adding `Γ(1+1/n)` is a decision recorded in the schema,
+  not a string a record can invent — so "what does this app take on faith" has an answer that can be
+  read off the code.
+- **It does not license a general escape hatch.** A record cannot import the answer: invariant 4 still
+  requires the contour to DETERMINE what the record claims, and a `knownValue` on the target piece
+  would leave the solve with nothing to do and is refused by the loader.

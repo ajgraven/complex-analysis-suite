@@ -294,7 +294,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (M5), the teaching layer (M6).
+come: the pen tool (free-hand path editing), the rest of the gallery (M5 — plan and its one engine
+decision taken: [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
+**read the plan before starting M5**), the teaching layer (M6).
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
