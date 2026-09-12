@@ -37,7 +37,8 @@ whether the whole thing closes.
 - **LEGALITY steps 2–3**: the cut system must be admissible, and any piece meeting a cut must declare
   which side it runs on. A crossing with no `side` tag refuses and names the repair; a *grazing*
   contact refuses too, because it has no side for a tag to pin. Neither row is emitted at all for a
-  rational integrand.
+  rational integrand. (From **M5.0** the tag is also *honoured* — see below — so it decides a number
+  rather than only passing a check.)
 - The sandbox's **Branch cuts** card declares points and cuts. Points and cuts are draggable by
   pointer and keyboard, and the dogbone gesture — one bounded arc ⟷ two rays to ∞ — is the round trip
   research 06 calls the most valuable interaction in the app. Whether a given join is *legal* is the
@@ -273,6 +274,48 @@ whether the whole thing closes.
 - In the sandbox the cut is your declaration and the colouring is the principal branch of what you
   typed; the app says they need not coincide, because the determination a written expression is in
   cannot be inferred from it. Under a record they do coincide, which is what M4.7c built.
+
+**M5.0 honours the `side` tag, and tier D gains the second opinion it never had:**
+
+- **A signed zero, not an offset contour.** Research 06 §3.3 says to offset the *branch* rather than
+  the contour, and objects to an `ε`-offset path twice over: it injects an `O(ε)` error, and near a
+  branch point the integrand varies on scale `ε` so the quadrature cost explodes. Both objections are
+  about a geometric `ε ~ 1e-6`. This is neither — the displacement is `1e-30` and lives inside the
+  evaluator, so the contour's nodes and its `dz` are untouched and exact. Every lip in the corpus
+  runs from `η ≈ 0.1` outward, so it moves `arg` by `~1e-29` (enough for `atan2` to return `θ₀ + 0⁺`
+  rather than a coin toss) and `|·|` by `O(1e-60)`, below float64's resolution. The value is the
+  limiting boundary value *to full precision*, which is exactly what §3.3 asks for.
+- **Seven records, seven agreeing quadratures**, where before there were none: sampling `z^α` needs a
+  determination and a compiled evaluator silently takes the principal one, so a keyhole's two lips
+  returned the same value, cancelled, and a "second opinion" answered a different question with
+  confidence — worse than none, and honestly skipped. Each lip is now evaluated at the limit from its
+  own declared side, so the corroboration is of the same integral.
+- **The claim is a ratio, not a magnitude.** Tier D's gap is `1e-3…1e0`, four orders looser than
+  tiers A–C's `1e-14`, because a lip carries an endpoint singularity that Gauss–Legendre converges
+  slowly against. What makes it evidence is that it stays within a small multiple of the quadrature's
+  *own* error estimate — ~1.5× on every record — since a systematic error in either route would show
+  as a gap the estimator cannot explain. A flat tolerance loose enough to pass would assert nothing.
+- **Mis-declaring a side reaches the VERDICT**, and that is a test rather than a remark. "Seven
+  records agree" would also pass against an evaluator that ignored the tag and happened to be right,
+  so the suite runs each record a second time with both lips forced `"above"` — the old cancellation
+  — and requires the honest declaration to be more than 10× closer to the exact value *and* the
+  mangled one to drop from `=` to **`⚠`** with no corroboration offered. The contradiction goes into
+  the verdict because the exact route and the quadrature cannot both be right and the app must not
+  pick a favourite.
+- **The picture is in the determination the number is in.** The accumulation panel is a head-to-tail
+  sum of `f(zₖ)·Δzₖ`, so without the sides a keyhole's two lips draw as retracing each other — a
+  trail visibly closing to nothing beside a result card saying the integral is `π√2`. `Analysis`
+  hands back the `sides` it integrated with, so both come from one array rather than two paths that
+  can drift; measured, the trail tracks the integral 4.7×–441× better with them than without.
+- **One skip survives, narrower and better.** A side pins no limit where the cut runs *vertically*
+  through the piece: "above" then displaces **along** it, `arg` does not move, and `atan2` picks a
+  limit by coin toss. No record is in that shape, but the question is asked per record rather than
+  assumed, and one that were would be refused **by name**.
+- The golden corpus's fork on "does this record have a branch factor" is **gone**, which is the real
+  payoff: every one of the twenty is now checked against floating panels that share no machinery with
+  the exact route, so an uncorroborated record cannot hide behind a special case. The **sandbox** is
+  deliberately not covered — it can declare cuts but not a branch *factor*, so its quadrature stays
+  in the principal determination whatever its lips say; that is M5.1.
 
 The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which

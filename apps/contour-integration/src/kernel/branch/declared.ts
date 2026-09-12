@@ -41,8 +41,9 @@
 // `test/declaredProduct.test.ts` asserts both — equality for the powers, inequality for the logs —
 // so a refactor that folded the log path into the power path would fail rather than lie.
 import type { Frac } from "@cas/exact";
+import type { CutSide } from "./model.js";
 import type { Cx } from "../geom.js";
-import { logCut, powCut } from "./correction.js";
+import { argCut, logCut, powCut } from "./correction.js";
 
 /**
  * One factor of the declared product, as both backends need it.
@@ -92,6 +93,64 @@ export interface DeclaredProduct {
 
 const cmul = (a: Cx, b: Cx): Cx => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
 
+/**
+ * **THE SIGNED ZERO, TAKEN LITERALLY** — how a `side` is honoured.
+ *
+ * Research 06 §3.3 says to offset the BRANCH rather than the contour, and objects to an `ε`-offset
+ * contour on two counts: it injects an `O(ε)` error into the answer, and near a branch point the
+ * integrand varies on scale `ε` so the quadrature cost explodes. Both objections are about a
+ * GEOMETRIC offset at `ε ~ 1e-6`. This is neither: the contour's nodes and its `dz` are untouched and
+ * exact, and the displacement exists only inside the evaluator, for the one purpose of telling
+ * `argCut` which edge of the window the point belongs to.
+ *
+ * At `1e-30` it is the sign of a zero and nothing else. Every lip in the corpus runs from `η ≈ 0.1`
+ * outward, so `|sⱼ(z − bⱼ)| ≥ 0.1`: the displacement moves `arg` by `~1e-29` — enough for `atan2` to
+ * return `θ₀ + 0⁺` or `θ₀ + 2π − 0⁺` rather than a coin toss — and moves `|·|` by `O(1e-60)`, which
+ * is below float64's resolution. So the VALUE is the limiting boundary value to full precision, which
+ * is exactly what §3.3 asks for and what an `ε`-offset contour cannot give.
+ *
+ * Deriving the edge by parity instead (from `sⱼ`, the window direction and the side) is possible and
+ * was the first design; it is four XORs that are easy to write backwards and impossible to check by
+ * reading. Taking the limit computes the same thing and cannot be inverted by accident.
+ */
+const SIDE_DISPLACEMENT = 1e-30;
+
+const displaced = (z: Cx, side: CutSide | undefined): Cx =>
+  side === undefined ? z : [z[0], z[1] + (side === "above" ? SIDE_DISPLACEMENT : -SIDE_DISPLACEMENT)];
+
+/**
+ * Whether `side` actually resolves every factor's determination at `z`.
+ *
+ * It does not when a factor's cut runs VERTICALLY through `z`: "above" then displaces along the cut
+ * rather than across it, `arg` does not move, and one of the two limits is chosen by whatever
+ * `atan2` happens to return — a wrong answer half the time, silently. No record declares such a cut,
+ * and the honest response to one is to refuse by name rather than to answer it.
+ *
+ * ONE condition, asked per factor: the point was on this factor's cut ray and is STILL on it after
+ * the displacement. `argCut(d, θ₀) === θ₀` is that test exactly — the window's own lower edge is the
+ * only argument `argCut` returns for a point on the ray — so it needs no tolerance, and it says
+ * nothing at all about a point that was never on a ray, where no side was needed.
+ *
+ * **The first clause is the QUESTION, not an optimisation, and a mutation sweep is right to call it
+ * redundant.** Deleting it changes no answer at `SIDE_DISPLACEMENT = 1e-30`: a point that was off the
+ * ray lands off it too, so the second clause never fires and the loop still returns `true`. The two
+ * are separable only for a point within the displacement of the ray, which at `1e-30` is on it. It
+ * stays because the predicate's meaning is "was this point on the cut, and did the side move it
+ * off", and because the redundancy is a property of the CONSTANT rather than of the logic — at
+ * `1e-6` (the geometric offset §3.3 rejects) a point a micron off the cut would start being refused.
+ * So the sweep's surviving mutant here is recorded as equivalent rather than chased with a
+ * contrived test.
+ */
+export function sideResolves(product: DeclaredProduct, z: Cx, side: CutSide): boolean {
+  const moved = displaced(z, side);
+  for (const factor of product.factors) {
+    const theta0 = windowOrigin(factor);
+    if (argCut(difference(factor, z), theta0) !== theta0) continue;
+    if (argCut(difference(factor, moved), theta0) === theta0) return false;
+  }
+  return true;
+}
+
 /** This factor's window origin as an angle — the only place the exact `Frac` becomes a float. */
 export const windowOrigin = (factor: DeclaredFactor): number => factor.window.toNumber() * Math.PI;
 
@@ -107,8 +166,14 @@ const difference = (factor: DeclaredFactor, z: Cx): Cx =>
  * The CPU twin of `ui/stage/declared.glsl.ts`. Not the route the ANSWER takes — that is
  * `multiPowerAtPole`, in exact arithmetic — but the route a reader's eye takes, and the two are
  * checked against each other at the poles, which is the one place both are defined.
+ *
+ * `side` pins the limit where `z` lies exactly on a factor's cut, which is where the keyhole's two
+ * lips are; see {@link SIDE_DISPLACEMENT}. Without it the two lips return the SAME value, cancel,
+ * and a quadrature of the keyhole answers a different question with confidence — which is why the
+ * cross-check was skipped for the whole of tier D until this argument existed.
  */
-export function evaluateDeclared(product: DeclaredProduct, z: Cx): Cx {
+export function evaluateDeclared(product: DeclaredProduct, at: Cx, side?: CutSide): Cx {
+  const z = displaced(at, side);
   let acc = product.constant;
   for (const factor of product.factors) {
     const d = difference(factor, z);

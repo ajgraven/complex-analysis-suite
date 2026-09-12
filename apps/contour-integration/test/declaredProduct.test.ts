@@ -48,6 +48,22 @@ function drawn(run: FamilyRun, z: Cx): Cx {
   return cmul(evaluateDeclared(declared.product, z), co(z as [number, number], [0, 0]) as Cx);
 }
 
+/**
+ * The integrand in `@cas/expr`'s PRINCIPAL determination — named explicitly, and review found out why.
+ *
+ * These comparisons used to read `run.f`, which WAS the compiled AST until M5.0 made it the DECLARED
+ * evaluator for a branch record (so the quadrature could sample the determination the ledger computes
+ * in). Both claims below then compared a function with itself. The "differs below the cut" half went
+ * red, which is how this was found; the "agrees above the cut" half kept passing **vacuously**, which
+ * is the worse outcome and the reason this helper exists as a named thing. The principal branch is
+ * `makeComplexFn(run.ast)` and nothing else, so the test says so rather than borrowing whatever `f`
+ * happens to mean this milestone.
+ */
+function principalOf(run: FamilyRun): (z: Cx) => Cx {
+  const fn = makeComplexFn(run.ast);
+  return (z) => fn(z as [number, number], [0, 0]) as Cx;
+}
+
 /** Whether every factor is a power — the case in which `|f|` cannot see the determination. */
 const allPowers = (run: FamilyRun): boolean =>
   (run.declared?.product.factors ?? []).every((f) => f.kind === "power");
@@ -86,9 +102,10 @@ describe("the declared product is the record's own integrand", () => {
   it.each(branchRuns().map((r) => [r.id, r] as const))(
     "%s — declared · cofactor IS the compiled integrand where the windows agree",
     (_id, { run }) => {
+      const principal = principalOf(run);
       for (const z of ABOVE) {
         const mine = drawn(run, z);
-        const theirs = run.f(z);
+        const theirs = principal(z);
         // Exactly the same function, to float precision: any Jacobian or missing factor in the
         // split would show up here as a ratio that is not 1.
         expect(Math.hypot(mine[0] - theirs[0], mine[1] - theirs[1])).toBeLessThan(
@@ -101,10 +118,11 @@ describe("the declared product is the record's own integrand", () => {
   it.each(branchRuns().map((r) => [r.id, r] as const))(
     "%s — and DIFFERS from it below the cut, which is the whole point",
     (_id, { run }) => {
+      const principal = principalOf(run);
       let differed = 0;
       for (const z of BELOW) {
         const mine = drawn(run, z);
-        const theirs = run.f(z);
+        const theirs = principal(z);
         if (Math.hypot(mine[0] - theirs[0], mine[1] - theirs[1]) > 1e-6 * Math.max(1, abs(theirs))) {
           differed += 1;
         }
@@ -121,9 +139,10 @@ describe("|f| sees the determination only when a log is involved", () => {
   it.each(branchRuns().filter((r) => allPowers(r.run)).map((r) => [r.id, r] as const))(
     "%s — a power product's modulus is determination-independent (device #2 is honest here)",
     (_id, { run }) => {
+      const principal = principalOf(run);
       for (const z of [...ABOVE, ...BELOW]) {
         const mine = abs(drawn(run, z));
-        const theirs = abs(run.f(z));
+        const theirs = abs(principal(z));
         // The two determinations differ by exp(2πi·Σα), which is unimodular — so the level curves
         // of |f| drawn over the declared picture are the level curves of the principal one, and
         // they run straight through the seam. This is the assertion behind the app's claim.
@@ -137,7 +156,8 @@ describe("|f| sees the determination only when a log is involved", () => {
     (_id, { run }) => {
       // Above the cut the two agree (checked in the suite above), so a test that only looked there
       // would find the log indistinguishable from a power. Below, |(L + 2πi)^m| ≠ |L^m|.
-      const ratios = BELOW.map((z) => abs(drawn(run, z)) / abs(run.f(z)));
+      const principal = principalOf(run);
+      const ratios = BELOW.map((z) => abs(drawn(run, z)) / abs(principal(z)));
       expect(ratios.every((r) => Math.abs(r - 1) > 0.01)).toBe(true);
       // And the largest is large, not marginal: 18.7 for log², 80.7 for log³ at 0.6 − 1.3i.
       expect(Math.max(...ratios)).toBeGreaterThan(5);

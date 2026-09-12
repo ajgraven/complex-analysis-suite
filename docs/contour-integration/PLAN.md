@@ -710,11 +710,14 @@ so*; the `arg ∈ (−π,π]` trap is detected and explained; CPU/GPU parity gre
 >   spinner has nothing to multiply for exactly the same reason. Letting the sandbox declare
 >   `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing one expression closes both at once, and it is a real
 >   extension of what the sandbox is, so it is an M5 slice rather than a corner of M4.
-> - Two further limits tier D leaves are named in [`GALLERY.md`](GALLERY.md) §5.2: `side` is declared
->   and validated but never honoured (research 06 §3.3's branch-offsetting evaluator is specified and
->   unbuilt), and consequently the quadrature cross-check is skipped for all seven records. Both are
->   now closable rather than structural — M4.7c built the declared-determination evaluator they were
->   waiting on — and both head M5's plan.
+> - Two further limits tier D left were named in [`GALLERY.md`](GALLERY.md) §5.2 and are **closed in
+>   M5.0**: `side` was declared and validated but never honoured (research 06 §3.3's
+>   branch-offsetting evaluator specified and unbuilt), and consequently the quadrature cross-check
+>   was skipped for all seven records. It is honoured now — as a `1e-30` displacement inside the
+>   evaluator, a signed zero rather than an offset contour — and **all seven records report an
+>   agreeing quadrature**, each within ~1.5× the quadrature's own error estimate. §5.2.1 records what
+>   closing them cost, including the one skip that survives (a cut running *vertically* through a
+>   piece pins no limit, and is refused by name rather than answered).
 
 ### M5 — The rest of the taxonomy · *M*
 Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–F2), series summation via
@@ -734,12 +737,13 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > 1 − 2φ/π` (L6) and `sin ψ ≥ 2ψ/π` (Jordan) are **the same inequality**, so one predicate should
 > discharge both.
 >
-> **M5 also absorbs the two edges M4 left**, by decision: `side` is declared and never honoured, so
-> tier D's quadrature cross-check is skipped and tier D is the one tier without independent numeric
-> corroboration ([`GALLERY.md`](GALLERY.md) §5.2); and the sandbox cannot declare a branch FACTOR,
-> which is the single root cause of M4's half-met gate clause *and* of research 06 §5.3's deferred
-> sheet spinner. Both are now closable rather than structural — M4.7c built the
-> declared-determination evaluator they were waiting on — and they head the plan as M5.0 and M5.1.
+> **M5 also absorbs the two edges M4 left**, by decision, and **the first is done**: `side` was
+> declared and never honoured, so tier D's quadrature cross-check was skipped and tier D was the one
+> tier without independent numeric corroboration ([`GALLERY.md`](GALLERY.md) §5.2) — **M5.0 honours
+> it, and all seven tier-D records now agree with an independent quadrature** (§5.2.1). Still open is
+> M5.1: the sandbox cannot declare a branch FACTOR, which is the single root cause of M4's half-met
+> gate clause *and* of research 06 §5.3's deferred sheet spinner. M4.7c built the
+> declared-determination evaluator both were waiting on.
 >
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not

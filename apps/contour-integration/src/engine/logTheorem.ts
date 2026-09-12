@@ -25,7 +25,7 @@ import { toExactRational } from "../kernel/exactRational.js";
 import type { Node } from "@cas/expr";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
-import type { ResidueTheoremResult } from "./residueTheorem.js";
+import { checkAgainstQuadrature, type ResidueTheoremResult } from "./residueTheorem.js";
 
 /** `2πi`, as an element of ℚ(i)(π). */
 const TWO_PI_I = RatPi.piPower(1, new Gauss(Frac.ZERO, Frac.of(2n)));
@@ -109,9 +109,24 @@ export function applyLogTheorem(input: LogTheoremInput): ResidueTheoremResult {
     ),
   );
 
+  const text = formatRatPi(value);
+  // **THE CROSS-CHECK, WHICH THIS ROUTE COULD NEVER HAVE (M5.0).** The quadrature was skipped for
+  // every branch record, so there was nothing to compare against and no comparison was written.
+  // `kernel/branch/declared.ts` now samples the DECLARED determination, with each piece's `side`
+  // pinning the limit on the cut — so two computations sharing no machinery (exact residues in the
+  // output basis; floating Gauss–Legendre over the declared branch) can be put side by side, which
+  // is what tiers A–C have always had and tier D never did.
+  //
+  // Corroboration never strengthens the label and a contradiction still refuses it —
+  // `checkAgainstQuadrature`'s own contract, unchanged.
+  const check = checkAgainstQuadrature([re, im], text, input.integral);
+  if (check?.contradiction !== undefined) certificates.push(check.contradiction);
+
   return {
-    exactValue: { value: [re, im], text: formatRatPi(value) },
+    exactValue: { value: [re, im], text },
     exactInPi: value,
+    ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
+    ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
     verdict: assembleVerdict(certificates),
   };
 }

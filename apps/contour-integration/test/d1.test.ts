@@ -181,15 +181,29 @@ describe("a certified bound on each vanishing arc", () => {
   });
 });
 
-describe("and no quadrature pretends to corroborate it", () => {
-  it("skips the quadrature, saying why", () => {
-    // Sampling `z^{α−1}` needs a determination, and a compiled evaluator uses the principal one —
-    // which for this contour makes the two lips cancel and answers a different question. A
-    // cross-check against a different branch is not a second opinion.
+describe("and the quadrature corroborates it — in the DECLARED determination", () => {
+  it("no longer skips: the lips are sampled on the sides the record declares", () => {
+    // **This assertion is the inverse of the one it replaces, and deliberately so.** Until M5.0 the
+    // quadrature was skipped here, because sampling `z^{α−1}` needs a determination and a compiled
+    // evaluator uses the principal one — which for this contour makes the two lips return the same
+    // value, cancel, and answer a different question with confidence. A cross-check against a
+    // different branch is not a second opinion, so `unknown` was the honest verdict.
+    //
+    // `evaluateDeclared(product, z, side)` removed the premise rather than the check: each lip is
+    // evaluated at the limit from ITS declared side, so the corroboration is of the same integral.
     const { run } = solved();
-    expect(run.integral.quadratureSkipped).toMatch(/multivalued/);
-    expect(run.theorem.crossCheck).toBeUndefined();
-    expect(run.theorem.agrees).toBeUndefined();
+    expect(run.integral.quadratureSkipped).toBeUndefined();
+    expect(run.theorem.crossCheck).toBeDefined();
+    expect(run.theorem.agrees).toBe(true);
+  });
+
+  it("and the gap is what the estimator says it is, not merely small", () => {
+    // Tier D's lips carry an endpoint singularity, so Gauss–Legendre converges far more slowly than
+    // on tiers A–C (1e-1 here, not 1e-14). What makes it evidence is the RATIO: a systematic error
+    // in either route would show as a gap the quadrature's own estimate does not explain.
+    const { run } = solved();
+    const worst = Math.max(0, ...run.integral.pieces.map((x) => x.errorEstimate));
+    expect(run.theorem.disagreement).toBeLessThan(2 * worst);
   });
 
   it("does not let the skip read as a refusal — LEGALITY is untouched", () => {

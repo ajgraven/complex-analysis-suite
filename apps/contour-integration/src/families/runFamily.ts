@@ -16,9 +16,9 @@
 // this app's honest refusals, which is the one thing a refusal must never be confused with.
 import { makeComplexFn, type Node } from "@cas/expr";
 import { analyse, type Analysis } from "../engine/analyse.js";
-import type { QuadratureBudget } from "../engine/contour/integrate.js";
-import type { Contour } from "../engine/contour/model.js";
-import type { Cx } from "../kernel/geom.js";
+import type { PathFn, QuadratureBudget } from "../engine/contour/integrate.js";
+import { resolveAll, type Contour, type CutSide } from "../engine/contour/model.js";
+import { pointAt, type Cx } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
@@ -36,7 +36,7 @@ import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
-import type { DeclaredProduct } from "../kernel/branch/declared.js";
+import { evaluateDeclared, sideResolves, type DeclaredProduct } from "../kernel/branch/declared.js";
 
 export interface RunOptions {
   /**
@@ -67,7 +67,8 @@ export interface FamilyRun extends Analysis {
   readonly bindings: Bindings;
   /** The contour integrand — what was integrated, which is not the posed integrand. */
   readonly ast: Node;
-  readonly f: (z: Cx) => Cx;
+  /** A {@link PathFn}: the DECLARED determination for a branch record, the compiled AST otherwise. */
+  readonly f: PathFn;
   readonly poles: PoleReport;
   readonly contour: Contour;
   /**
@@ -151,7 +152,7 @@ export function runFamily(
   const built = contourIntegrandOf(family, bindings);
   if (!built.ok) return { ok: false, reason: built.reason };
 
-  let f: (z: Cx) => Cx;
+  let f: PathFn;
   let contour: Contour;
   try {
     const fn = makeComplexFn(built.ast);
@@ -182,22 +183,9 @@ export function runFamily(
   const cofactor = power.ok ? power.rational : log.ok ? log.rational : multi.ok ? multi.rational : null;
   const poles = findPoles(cofactor ?? built.ast);
 
-  // And no quadrature: sampling `z^{α−1}` needs a determination, and the compiled evaluator uses
-  // the principal one — which for a keyhole makes the two lips cancel and answers a different
-  // question with confidence. See `QuadratureBudget.skip`.
-  const budget =
-    cofactor === null
-      ? options.budget
-      : {
-          ...options.budget,
-          skip:
-            `the integrand is multivalued: sampling ${power.ok ? "z^α" : log.ok ? "log^m z" : "∏(z−bⱼ)^{αⱼ}"} needs a ` +
-            "determination, and a compiled evaluator uses the principal one — so a quadrature of " +
-            "this contour would answer a different question. The exact route is the residue theorem.",
-        };
-
-  // The declaration, for the picture. One of the three at most: the routing above already made them
-  // mutually exclusive, and a record with two branch structures is not a harder case of either.
+  // The declaration, for the picture AND — from M5.0 — for the quadrature. One of the three at most:
+  // the routing above already made them mutually exclusive, and a record with two branch structures
+  // is not a harder case of either.
   const declared = power.ok
     ? { product: power.declared, cofactor: power.rational }
     : log.ok
@@ -205,6 +193,45 @@ export function runFamily(
       : multi.ok
         ? { product: multi.declared, cofactor: multi.rational }
         : undefined;
+
+  // **THE QUADRATURE GETS THE DECLARED DETERMINATION** (M5.0), which is what it was missing.
+  //
+  // It was skipped for every branch record, for a stated and correct reason: sampling `z^α` needs a
+  // determination and `@cas/expr`'s compiled evaluator silently uses the principal one, so a
+  // keyhole's two lips returned the same value, cancelled, and the "second opinion" was a confident
+  // answer to a different question — worse than none. `kernel/branch/declared.ts` removes the
+  // premise: it evaluates `c·∏ⱼ(sⱼ(z − bⱼ))^{αⱼ}` with each factor in ITS OWN declared window, and
+  // takes the piece's `side` to pick the limit on the cut itself. So tier D gains the independent
+  // numeric corroboration every other tier already had.
+  //
+  // The skip does not simply disappear. It survives for the one case the side cannot resolve — a cut
+  // running vertically through a lip, where "above" displaces ALONG the cut rather than across it
+  // (`sideResolves`) — and it names that rather than the old general reason, because a record in that
+  // shape would otherwise get a quadrature that picked a limit by coin toss.
+  let unresolved: string | null = null;
+  if (declared !== undefined) {
+    const co = makeComplexFn(declared.cofactor);
+    const product = declared.product;
+    f = (z: Cx, side?: CutSide): Cx => {
+      const b = evaluateDeclared(product, z, side);
+      const r = co(z as [number, number], [0, 0]) as Cx;
+      return [b[0] * r[0] - b[1] * r[1], b[0] * r[1] + b[1] * r[0]];
+    };
+    // Sampled once per side-declaring piece, at its midpoint: a lip runs ALONG a cut by
+    // construction, so whether the side resolves is a property of the pair and not of the point.
+    const resolvedPieces = resolveAll(contour);
+    contour.pieces.forEach((piece, k) => {
+      if (piece.side === undefined || unresolved !== null) return;
+      if (!sideResolves(product, pointAt(resolvedPieces[k], 0.5), piece.side)) {
+        unresolved =
+          `${piece.name} declares side '${piece.side}', but the cut it runs along is vertical there: ` +
+          `"above" displaces along the cut rather than across it, so no limit is pinned and a ` +
+          `quadrature would choose one by coin toss. The exact route is the residue theorem.`;
+      }
+    });
+  }
+  const budget =
+    unresolved === null ? options.budget : { ...options.budget, skip: unresolved };
 
   return {
     ok: true,

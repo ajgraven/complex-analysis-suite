@@ -15,7 +15,8 @@
 // mistakes to be hidden. `Σ Δz` closing visibly to zero on a closed contour is free, immediate, and
 // makes the point that what is being summed is a product, not a displacement.
 import { arcLength, pointAt, type Cx, type Resolved } from "../../kernel/geom.js";
-import type { ContourIntegral } from "./integrate.js";
+import type { ContourIntegral, PathFn } from "./integrate.js";
+import type { CutSide } from "./model.js";
 
 export interface AccumulationStep {
   /** Where on the contour this term came from. */
@@ -57,9 +58,10 @@ const cmul = (a: Cx, b: Cx): Cx => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1
  * result card says `∮`.
  */
 export function accumulate(
-  f: (z: Cx) => Cx,
+  f: PathFn,
   pieces: readonly Resolved[],
   steps = 240,
+  sides?: readonly (CutSide | undefined)[],
 ): Accumulation {
   const lengths = pieces.map(arcLength);
   const total = lengths.reduce((a, b) => a + b, 0);
@@ -91,7 +93,7 @@ export function accumulate(
       const b = pointAt(g, t1);
       const dz: Cx = [b[0] - a[0], b[1] - a[1]];
       const zm = pointAt(g, tm);
-      const fz = f(zm);
+      const fz = f(zm, sides?.[p]);
       const term = cmul(fz, dz);
 
       run = [run[0] + term[0], run[1] + term[1]];
@@ -122,11 +124,20 @@ export function accumulate(
  * instead of resting on every future panel remembering to ask.
  */
 export function accumulateForIntegral(
-  f: (z: Cx) => Cx,
+  f: PathFn,
   pieces: readonly Resolved[],
   integral: ContourIntegral,
   steps?: number,
+  /**
+   * Each piece's declared `side`, parallel to `pieces`.
+   *
+   * The accumulator draws the same head-to-tail sum the quadrature integrates, so it has to be in
+   * the same determination — otherwise a keyhole's two lips would draw as retracing each other
+   * while the value beside them says they do not cancel, and the picture would contradict the
+   * number. Omitted for a single-valued integrand, which is every record in tiers A–C.
+   */
+  sides?: readonly (CutSide | undefined)[],
 ): Accumulation | null {
   if (integral.value === undefined) return null;
-  return accumulate(f, pieces, steps);
+  return accumulate(f, pieces, steps, sides);
 }

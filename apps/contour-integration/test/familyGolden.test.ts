@@ -172,22 +172,22 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
 describe("the quadrature agrees with the residue theorem, as the records claim", () => {
   it.each(cases)("%s", (_id, family) => {
     const r = run(family, primary(family));
-    // A MULTIVALUED integrand has no quadrature to agree with, and that is not a gap to paper over.
-    // Sampling `z^α` needs a determination at every node and a compiled evaluator uses the principal
-    // one, so for a keyhole the two lips return the same value, cancel, and the "second opinion"
-    // answers a different question with confidence. `runFamily` therefore skips it outright, and the
-    // absence is stated rather than left to look like agreement.
-    if (family.branch !== undefined) {
-      expect(r.integral.quadratureSkipped).toMatch(/multivalued/);
-      expect(r.theorem.agrees).toBeUndefined();
-      expect(r.theorem.crossCheck).toBeUndefined();
-      // …and the exact route still produced a value, which is the point.
-      expect(r.theorem.exactValue).toBeDefined();
-      return;
-    }
+    // **THE BRANCH CASE IS NO LONGER SPECIAL, AND THAT IS THE ASSERTION.** Until M5.0 this block
+    // forked: a multivalued integrand had no quadrature to agree with, because sampling `z^α` needs
+    // a determination at every node and a compiled evaluator uses the principal one — so a
+    // keyhole's two lips returned the same value, cancelled, and a "second opinion" answered a
+    // different question with confidence. The absence was stated rather than dressed as agreement,
+    // but it left tier D as the one tier whose values had no independent numeric corroboration.
+    //
+    // `evaluateDeclared(product, z, side)` removed the premise. Every record in the corpus, tier D
+    // included, is now checked against floating Gauss–Legendre panels that share no machinery with
+    // the exact route — so the fork is gone and an uncorroborated record cannot hide behind it.
+    //
     // Two routes that share no machinery. `agrees` is the engine's own comparison against the
     // quadrature's error estimate, which is the claim each record's `method` field records.
-    expect(r.theorem.agrees).toBe(true);
+    expect({ id: _id, agrees: r.theorem.agrees }).toEqual({ id: _id, agrees: true });
+    expect({ id: _id, skipped: r.integral.quadratureSkipped }).toEqual({ id: _id, skipped: undefined });
+    expect(r.theorem.crossCheck).toBeDefined();
   });
 });
 

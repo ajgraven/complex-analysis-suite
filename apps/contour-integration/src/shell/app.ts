@@ -720,7 +720,9 @@ export function mountApp(root: Element): void {
     recordBranch = run.branch ?? null;
     // A partial sum through a singularity is meaningless rather than merely rough, so this is null
     // whenever the integral refused — showing one beside a refusal hands back the withheld number.
-    acc = accumulateForIntegral(run.f, run.resolved, run.integral);
+    // `run.sides` rather than a re-read of the spec: the panel draws the same sum the quadrature
+    // integrated, so both come from the one array `analyse` used (see `Analysis.sides`).
+    acc = accumulateForIntegral(run.f, run.resolved, run.integral, undefined, run.sides);
     // **THE PICTURE IN THE DECLARED DETERMINATION.** With a branch factor the stage is handed the
     // record's declaration and the rational cofactor SEPARATELY, so the branch half is built from
     // what the record says and not from the compiled AST's principal branch — see
@@ -755,7 +757,7 @@ export function mountApp(root: Element): void {
         integral = a.integral;
         theorem = a.theorem;
         ledger = a.ledger;
-        acc = accumulateForIntegral(f, resolved, integral);
+        acc = accumulateForIntegral(f, resolved, integral, undefined, a.sides);
         solved = null;
       }
     }

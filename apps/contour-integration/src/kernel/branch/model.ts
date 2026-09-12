@@ -14,6 +14,20 @@ import type { Frac } from "@cas/exact";
 import type { Cx } from "../geom.js";
 
 /**
+ * Which limiting value something lying ON a cut carries.
+ *
+ * **It lives here, one layer below the piece that declares it, and lint is why.** The declaration is
+ * `Piece.side` in `engine/contour/model.ts`, so that looks like its home — but the evaluator that
+ * HONOURS it is `kernel/branch/declared.ts`, and `kernel/` imports only `@cas/*` (DESIGN.md §1). A
+ * type owned by the engine and needed by the kernel is an upward import, which `no-restricted-imports`
+ * refuses; and it is the right refusal, because what a side *is* belongs to the branch model — it is
+ * meaningless without a cut — while which side a *piece* runs on belongs to the contour. So the
+ * definition is here and `engine/contour/model.ts` re-exports it, exactly as `geom.ts` re-exports
+ * `Pt`: one definition, not two that can drift.
+ */
+export type CutSide = "above" | "below";
+
+/**
  * The local order of a branch point.
  *
  * A `log` point has infinite-order monodromy — research 06 writes its exponent as "∞" — which is why

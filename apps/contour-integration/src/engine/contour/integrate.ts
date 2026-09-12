@@ -31,6 +31,7 @@ import {
   periodicTrapezoid,
 } from "../../kernel/quadrature.js";
 import { clearance, windingNumber, RELATIVE_CLEARANCE_FLOOR } from "../../kernel/winding.js";
+import type { CutSide } from "./model.js";
 
 export interface Singularity {
   readonly at: Cx;
@@ -97,6 +98,17 @@ export interface QuadratureBudget {
    */
   readonly skip?: string;
 }
+
+/**
+ * The integrand along a path — and, where the path lies ON a branch cut, which limit it carries.
+ *
+ * `side` is `Piece.side`, threaded per piece rather than baked into one closure because it IS per
+ * piece: a keyhole's two lips are the same points of the plane and different boundary values, which
+ * is the whole reason research 06 §3.3 makes it a data field rather than a geometric offset. An
+ * evaluator that ignores the second argument is a perfectly good `PathFn` — every single-valued
+ * integrand in tiers A–C is one, and none of them changed.
+ */
+export type PathFn = (z: Cx, side?: CutSide) => Cx;
 
 /** Integrate one piece, with the rule chosen by the geometry (see kernel/quadrature.ts). */
 export function integratePiece(
@@ -184,10 +196,12 @@ export function integratePiece(
  * to suppress, because nothing was computed.
  */
 export function integrateContour(
-  f: (z: Cx) => Cx,
+  f: PathFn,
   pieces: readonly Resolved[],
   singularities: readonly Singularity[] = [],
   budget?: QuadratureBudget,
+  /** Each piece's declared `side`, parallel to `pieces`. Omitted for a single-valued integrand. */
+  sides?: readonly (CutSide | undefined)[],
 ): ContourIntegral {
   const closed = isClosed(pieces);
   const windings = singularities.map((s) => {
@@ -241,7 +255,11 @@ export function integrateContour(
   }
 
   // --- quadrature ----------------------------------------------------------------------------
-  const results = pieces.map((g, k) => integratePiece(f, g, `piece ${k + 1}`, singularities, budget));
+  // Each piece is integrated through its OWN evaluator, with the side it declares bound here — so a
+  // quadrature rule never has to know that branch cuts exist.
+  const results = pieces.map((g, k) =>
+    integratePiece((z) => f(z, sides?.[k]), g, `piece ${k + 1}`, singularities, budget),
+  );
   const total = compensatedSum(results.map((r) => r.value));
 
   const certificates: Certificate[] = results.map((r) => r.certificate);

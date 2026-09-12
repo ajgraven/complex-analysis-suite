@@ -16,15 +16,16 @@
 // It decides nothing about presentation and returns everything it computed, including `resolved`,
 // which the caller would otherwise recompute to draw the contour it just integrated.
 import type { Node } from "@cas/expr";
-import type { Cx, Resolved } from "../kernel/geom.js";
+import type { Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { BranchChoice } from "../kernel/branch/model.js";
 import {
   integrateContour,
   type ContourIntegral,
+  type PathFn,
   type QuadratureBudget,
 } from "./contour/integrate.js";
-import { resolveAll, type Contour } from "./contour/model.js";
+import { resolveAll, type Contour, type CutSide } from "./contour/model.js";
 import { evaluateLedger, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
 import { applyBranchTheorem } from "./branchTheorem.js";
@@ -39,7 +40,23 @@ export interface AnalysisInput {
   readonly ast: Node;
   /** The same expression, compiled. Passed in rather than compiled here so a caller that already
    *  holds one (the shell, every frame) does not recompile it. */
-  readonly f: (z: Cx) => Cx;
+  /**
+   * The same expression, compiled — and, for a multivalued integrand, the DECLARED determination.
+   *
+   * A {@link PathFn}: its second argument is the piece's `side`, which `analyse` supplies from the
+   * contour spec below. `runFamily` hands a branch record `evaluateDeclared × R` here, so the
+   * quadrature samples the determination the ledger computes in rather than `@cas/expr`'s principal
+   * branch — which is what lets the cross-check run over tier D at all (M5.0).
+   *
+   * **THE SANDBOX STILL PASSES A FUNCTION THAT IGNORES IT, AND THAT GAP IS NAMED, NOT CLOSED HERE.**
+   * A sandbox integrand is one typed expression compiled by `@cas/expr`, so there is no declared
+   * product to evaluate and the side has nothing to act on — the sandbox can declare CUTS but not a
+   * branch FACTOR. Its quadrature is therefore in the principal determination whatever its lips say,
+   * exactly as it was before M5.0; nothing regressed, but nothing improved either. Closing it means
+   * letting the sandbox declare `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing one expression, which is a
+   * real extension of what the sandbox is and is M5.1's subject (and §5.3's sheet spinner with it).
+   */
+  readonly f: PathFn;
   readonly poles: PoleReport;
   readonly contour: Contour;
   /**
@@ -100,6 +117,16 @@ export interface Analysis {
    * ledger about where the cut runs — which for D1 is the entire lesson.
    */
   readonly branch?: BranchChoice;
+  /**
+   * The `side` each piece was EVALUATED on, parallel to {@link resolved} — handed back for the same
+   * reason `branch` is.
+   *
+   * The accumulation panel draws the same head-to-tail sum the quadrature integrates, so it has to
+   * be in the same determination; if it recomputed these from the spec, a keyhole's two lips could
+   * draw as retracing each other while the value beside them said they do not cancel. One array,
+   * computed once, used by both.
+   */
+  readonly sides: readonly (CutSide | undefined)[];
   readonly integral: ContourIntegral;
   readonly theorem: ResidueTheoremResult;
   readonly ledger: LedgerResult;
@@ -108,7 +135,11 @@ export interface Analysis {
 export function analyse({ ast, f, poles, contour, budget, branch, power, log, multi }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
-  const integral = integrateContour(f, resolved, singular, budget);
+  // **THE SIDES COME FROM THE SPEC, PARALLEL TO THE GEOMETRY.** `resolveAll` maps `contour.pieces`
+  // one-to-one, so index `k` is the same piece in both — which is what makes a positional array the
+  // honest shape here rather than a lookup that could silently miss.
+  const sides = contour.pieces.map((piece) => piece.side);
+  const integral = integrateContour(f, resolved, singular, budget, sides);
   // Two routes that share no machinery: the theorem computes `2πi Σ n·Res` from exact residues, and
   // then CHECKS itself against the quadrature above. Agreement is the strongest evidence the app has.
   //
@@ -152,5 +183,5 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log, mu
     log,
     multi,
   });
-  return { resolved, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
+  return { resolved, sides, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }

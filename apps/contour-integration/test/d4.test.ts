@@ -160,10 +160,15 @@ describe("the ledger closes", () => {
     expect(arcs.every((r) => r.evidence.level === "≤")).toBe(true);
   });
 
-  it("runs no quadrature, and does not pretend to have one", () => {
+  it("runs a quadrature in the declared determination, and reports the gap", () => {
+    // Inverted by M5.0. The old assertion was that D4 had NO second opinion, because a compiled
+    // evaluator samples `log` on its principal branch and the keyhole's two lips then cancel. Now
+    // each lip is sampled at the limit from its declared side, so the corroboration is of the same
+    // integral — and a `log`'s ADDITIVE monodromy makes this the case that most needed it.
     const { run } = solved();
-    expect(run.integral.quadratureSkipped).toBeDefined();
-    expect(run.theorem.disagreement).toBeUndefined();
+    expect(run.integral.quadratureSkipped).toBeUndefined();
+    expect(run.theorem.disagreement).toBeDefined();
+    expect(run.theorem.agrees).toBe(true);
   });
 });
 

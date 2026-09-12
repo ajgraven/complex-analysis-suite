@@ -28,9 +28,9 @@ import { toExactRational } from "../kernel/exactRational.js";
 import type { Node } from "@cas/expr";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
-import type { Resolved } from "../kernel/geom.js";
+import type { Cx, Resolved } from "../kernel/geom.js";
 import { windingNumber } from "../kernel/winding.js";
-import type { ResidueTheoremResult } from "./residueTheorem.js";
+import { checkAgainstQuadrature, type ResidueTheoremResult } from "./residueTheorem.js";
 
 /** `2πi` in units of π, i.e. `2i` — what the solve multiplies the residue sum by. */
 const TWO_I = SqrtExt.fromGauss(new Gauss(Frac.ZERO, Frac.of(2n)));
@@ -77,10 +77,19 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
       }
       const piUnits = sum.value.scale(TWO_I);
       const [re, im] = piUnits.toTuple();
+      const value: Cx = [Math.PI * re, Math.PI * im];
+      const text = formatTwoPiIExpSum(sum.value);
+      const check = checkAgainstQuadrature(value, text, integral);
       return {
-        exactValue: { value: [Math.PI * re, Math.PI * im], text: formatTwoPiIExpSum(sum.value) },
+        exactValue: { value, text },
         piUnits,
-        verdict: assembleVerdict([sum.certificate, enclosed]),
+        ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
+        ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
+        verdict: assembleVerdict([
+          sum.certificate,
+          enclosed,
+          ...(check?.contradiction === undefined ? [] : [check.contradiction]),
+        ]),
       };
     }
   }
@@ -139,9 +148,25 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
     ),
   );
 
+  const value: Cx = [Math.PI * re, Math.PI * im];
+  const text = formatTwoPiIExpSum(residueSum);
+  // **THE CROSS-CHECK, WHICH THIS ROUTE COULD NEVER HAVE (M5.0).** The quadrature was skipped for
+  // every branch record, so there was nothing to compare against and no comparison was written.
+  // `kernel/branch/declared.ts` now samples the DECLARED determination, with each piece's `side`
+  // pinning the limit on the cut — so two computations sharing no machinery (exact residues in the
+  // output basis; floating Gauss–Legendre over the declared branch) can be put side by side, which
+  // is what tiers A–C have always had and tier D never did.
+  //
+  // Corroboration never strengthens the label and a contradiction still refuses it —
+  // `checkAgainstQuadrature`'s own contract, unchanged.
+  const check = checkAgainstQuadrature(value, text, integral);
+  if (check?.contradiction !== undefined) certificates.push(check.contradiction);
+
   return {
-    exactValue: { value: [Math.PI * re, Math.PI * im], text: formatTwoPiIExpSum(residueSum) },
+    exactValue: { value, text },
     piUnits,
+    ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
+    ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
     verdict: assembleVerdict(certificates),
   };
 }

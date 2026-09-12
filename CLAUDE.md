@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **503 test files / 4771 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **504 test files / 4817 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -501,6 +501,41 @@ mutant). Research 06 §5.3's **sheet spinner is deferred with its reason**: unde
 determination is the record's, and the sandbox has no declared branch FACTOR for a sheet index to
 multiply — giving it one means letting the sandbox declare `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing
 one expression, which is a real extension of what the sandbox is. M4 is complete.
+
+**M5 has begun, and M5.0 closes the one evidence gap M4 shipped with.** Plan:
+[`docs/contour-integration/M5-plan.md`](docs/contour-integration/M5-plan.md) (ADR-0042 records its one
+engine decision — an exactly-known IMPORTED value is `=` on its form, with the import in its
+provenance). `side` had been declared, validated by LEGALITY and **never read**, so research 06 §3.3's
+*"don't offset the contour; offset the branch"* was specified and unbuilt — and the quadrature
+cross-check was therefore skipped for **all seven tier-D records**, leaving tier D the one tier whose
+values had no independent numeric corroboration. It is honoured now, as a `1e-30` displacement
+*inside the evaluator*: §3.3's two objections to an offset contour are both about a geometric `ε ~
+1e-6`, and this leaves the contour's nodes and `dz` exact while moving `arg` by `~1e-29` — enough for
+`atan2` to return `θ₀ + 0⁺` rather than a coin toss, and `|·|` by `O(1e-60)`, below float64's
+resolution. So the value is the limiting boundary value to full precision, which an offset contour
+cannot give. **All seven records now report an agreeing quadrature**, each within ~1.5× the
+quadrature's own error estimate; the claim pinned is that RATIO, because tier D's gap is 1e-3…1e0
+rather than tiers A–C's 1e-14 (a lip carries an endpoint singularity) and a flat tolerance loose
+enough to pass would assert nothing. Three things it forced: the tag must be shown to **decide** the
+number, so the suite integrates each record again with both lips forced `"above"` — the pre-M5.0
+cancellation — and requires the honest declaration to be >10× closer; `branchTheorem.ts` and
+`logTheorem.ts` had **never called** `checkAgainstQuadrature` (there had been nothing to compare
+against), so dropping the skip alone would have produced a quadrature nothing read; and the golden
+corpus's fork on `family.branch !== undefined` is **gone**, which is the real payoff — an
+uncorroborated record can no longer hide behind a special case. One skip survives and is narrower: a
+cut running *vertically* through a piece pins no limit ("above" displaces along it), so
+`sideResolves` refuses it **by name** rather than answering it. The sandbox is deliberately not
+covered — it can declare cuts but not a branch FACTOR, which is M5.1. Reviewing it found a regression
+and a bad method: `FamilyRun.f` had been the compiled AST and `declaredProduct.test.ts` read that as
+"the principal determination" — true by accident — so with `f` now the DECLARED evaluator both halves
+of its central claim compared a function with itself, one going red and the other passing
+**vacuously**; and the first mutation sweep reported 16/16 while nine tests were already failing on
+the clean tree, so re-run against a verified-green baseline it was 13/17. The four survivors were
+real (nothing asserted `agrees` could be `false`; neither the accumulation panel's determination nor
+`Analysis.sides` was checked), and closing them bought the slice's two strongest claims: a
+mis-declared side drops the **verdict** from `=` to `⚠` on all seven records, and the accumulation
+trail tracks the integral 4.7×–441× better with the sides than without. Sweeps: 16/17 (one equivalent
+mutant).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

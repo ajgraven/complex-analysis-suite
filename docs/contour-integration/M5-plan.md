@@ -44,12 +44,12 @@ records to land on an honest `≈`. That is an outcome, not a failure.
 
 ## 1. The slices
 
-### M5.0 — the two edges M4 left · *S*
+### M5.0 — the two edges M4 left · *S* — **DONE**
 
-[`GALLERY.md`](GALLERY.md) §5.2 names them. They are one gap: **`side` is declared, validated and
-never honoured**, so research 06 §3.3's *"don't offset the contour; offset the branch"* is specified
-and unbuilt — and **consequently the quadrature cross-check is skipped for all seven tier-D
-records**, leaving tier D the one tier whose values have no independent numeric corroboration.
+[`GALLERY.md`](GALLERY.md) §5.2 named them. They were one gap: **`side` was declared, validated and
+never honoured**, so research 06 §3.3's *"don't offset the contour; offset the branch"* was specified
+and unbuilt — and **consequently the quadrature cross-check was skipped for all seven tier-D
+records**, leaving tier D the one tier whose values had no independent numeric corroboration.
 
 - **M5.0a** — `evaluateDeclared` takes a `side`: a point exactly on the cut takes `θ₀` or `θ₀ + 2π`,
   which is the C99-signed-zero idea as a data field. Then a declared-determination `f` for a branch
@@ -64,6 +64,57 @@ would be about M4, so it is worth learning before M5's records are built on the 
 
 **Gate:** D1–D7 each report an agreeing quadrature; a deliberately mis-declared `side` makes the
 cross-check *disagree* (which is the test that the tag is honoured rather than merely read).
+
+> **Outcome.** Both parts landed as planned, and the gate is met on all seven records: each reports
+> an agreeing quadrature, and integrating with both lips forced to `"above"` — the pre-M5.0
+> cancellation — lands **more than 10× further** from the exact value. `Analysis` now hands back the
+> `sides` it used, so the accumulation panel draws the same head-to-tail sum the quadrature
+> integrated instead of recomputing them and risking a picture that contradicts its own number.
+>
+> Four things the plan did not anticipate, all in [`GALLERY.md`](GALLERY.md) §5.2.1:
+>
+> 1. **The cross-check found nothing wrong, and the reason it still earned its place is a ratio.**
+>    Tier D's gap is **1e-3…1e0**, four orders looser than tiers A–C's 1e-14, because a lip carries
+>    an endpoint singularity that Gauss–Legendre converges slowly against. So what the suite pins is
+>    that the disagreement stays within a small multiple of the quadrature's *own* error estimate —
+>    it is within ~1.5× on every record. A flat tolerance loose enough to pass would have asserted
+>    nothing at all.
+> 2. **One skip survives, narrower and better.** A side pins no limit where the cut runs *vertically*
+>    through the piece: "above" displaces **along** it, `arg` does not move, and `atan2` picks a limit
+>    by coin toss. `sideResolves` asks per record rather than assuming; no record is in that shape,
+>    and one that were would be refused **by name**.
+> 3. **The cross-check had to be wired into two more theorem routes.** `branchTheorem.ts` and
+>    `logTheorem.ts` had never called `checkAgainstQuadrature` at all — there had been nothing to
+>    compare against, so the comparison was simply absent, and dropping the skip alone would have
+>    produced a quadrature nothing read. Only D6/D7 (the exterior route) reported one before this.
+> 4. **Three test suites asserted the OLD behaviour**, and inverting them is the honest record of the
+>    change: `familyGolden.test.ts` forked on `family.branch !== undefined` and that fork is now
+>    **gone**, which is the real payoff — an uncorroborated record can no longer hide behind a
+>    special case.
+>
+> 5. **`FamilyRun.f` changed meaning, and one suite had been relying on what it used to be.** It was
+>    the compiled AST; `declaredProduct.test.ts` read that as "the principal determination" — true by
+>    accident. Now that `f` is the DECLARED evaluator for a branch record, both halves of that
+>    suite's central claim compared a function with itself: **"differs below the cut" went red, and
+>    "agrees above the cut" passed VACUOUSLY.** The vacuous half is the one worth remembering. The
+>    fix names `makeComplexFn(run.ast)` explicitly rather than borrowing whatever `f` means.
+> 6. **The mutation sweep was unsound, and being unsound is what found items 1–4 of this list.** Its
+>    first pass reported 16/16 killed while nine tests were already red on the clean tree, so "a test
+>    failed" was true of every run including the unmutated one. Re-run against a verified-green
+>    baseline: **13/17**, four real survivors, two new tests, then **16/17** with the last recorded as
+>    equivalent (`sideResolves`' first clause is redundant *at* `1e-30` and kept because it is the
+>    question being asked). Lesson for later slices: a sweep must assert its baseline is green, not
+>    merely grep the output for "failed".
+>
+> The two tests those survivors bought are the strongest in the slice: a mis-declared side drops the
+> **verdict** from `=` to `⚠` on all seven records (the contradiction certificate reaches the verdict,
+> so the app cannot print an exact value beside a quadrature that denies it), and the accumulation
+> trail tracks the integral **4.7× to 441×** better with the sides than without — which is the
+> *picture* being in the determination the *number* is in, not just the number being right.
+>
+> The sandbox is *not* covered: it can declare cuts but not a branch FACTOR, so its quadrature stays
+> in the principal determination whatever its lips say. Nothing regressed there and nothing improved;
+> `AnalysisInput.f`'s doc names the gap, and M5.1 closes it.
 
 ### M5.1 — the sandbox declares a branch factor · *M*
 
