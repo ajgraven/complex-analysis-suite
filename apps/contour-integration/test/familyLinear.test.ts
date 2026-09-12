@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { Frac } from "@cas/exact";
-import { applyCombination, solveExact } from "../src/families/linear.js";
+import { Frac, Gauss } from "@cas/exact";
+import {
+  applyCombination,
+  combineOver,
+  describeKernel,
+  realifyRows,
+  solveExact,
+  solveOver,
+} from "../src/families/linear.js";
+import { FRAC_FIELD, RAT_PI_FIELD, RatPi, formatRatPi } from "../src/families/field.js";
 
 const f = (n: number | bigint, d: number | bigint = 1): Frac => Frac.of(BigInt(n), BigInt(d));
 const nums = (v: readonly Frac[]): number[] => v.map((x) => x.toNumber());
@@ -152,6 +160,148 @@ describe("solveExact — guards", () => {
 
 /** Narrow an optional without a non-null assertion — the repo forbids `!`, and a thrown message
  *  names what was missing instead of producing a TypeError three lines later. */
+describe("solveExact — a pivot is determined only when the free columns leave it alone", () => {
+  it("determines the pivot unknown when no free column reaches it", () => {
+    // The plain-log keyhole's shape: `∫R dx` pinned, `∫R log x dx` invisible.
+    const r = solveExact([[f(1), f(0)], [f(0), f(0)]], 2, [f(5), f(0)]);
+    expect(r.rank).toBe(1);
+    expect(r.determined.map((d) => d.column)).toEqual([0]);
+    expect(applyCombination(r.determined[0].weights, [f(5), f(0)]).toNumber()).toBe(5);
+  });
+
+  it("determines nothing when the pivot row reaches into a free column", () => {
+    // t₀ + t₁ = c constrains the SUM; neither unknown is pinned, and saying t₀ = c would be false.
+    const r = solveExact([[f(1), f(1)], [f(2), f(2)]], 2);
+    expect(r.rank).toBe(1);
+    expect(r.determined).toEqual([]);
+  });
+
+  it("agrees with `combination` at full rank", () => {
+    const M = [
+      [f(2), f(1)],
+      [f(1), f(-1)],
+    ];
+    const r = solveExact(M, 2);
+    expect(r.determined.map((d) => d.column)).toEqual([0, 1]);
+    expect(must(r.combination, "a combination")).toEqual(r.determined.map((d) => d.weights));
+  });
+});
+
+describe("describeKernel — the rank statement in the gallery's own words", () => {
+  it("names the unknown a zero column leaves invisible", () => {
+    const r = solveExact([[f(1), f(0)], [f(0), f(0)]], 2);
+    expect(describeKernel(FRAC_FIELD, r, ["∫₀^∞ R(x) dx", "∫₀^∞ R(x) log x dx"])).toEqual([
+      "this contour carries no information about ∫₀^∞ R(x) log x dx",
+    ]);
+  });
+
+  it("says nothing at all when the system is determined", () => {
+    const r = solveExact([[f(1)]], 1);
+    expect(describeKernel(FRAC_FIELD, r, ["T"])).toEqual([]);
+  });
+
+  it("names a genuine COMBINATION when that is what is invisible", () => {
+    const r = solveExact([[f(1), f(1)]], 2);
+    expect(describeKernel(FRAC_FIELD, r, ["T0", "T1"])).toEqual([
+      "this contour carries no information about −T0 + T1",
+    ]);
+    // A weight that is neither ±1 is spelled out rather than dropped.
+    const scaled = solveExact([[f(2), f(1)]], 2);
+    expect(describeKernel(FRAC_FIELD, scaled, ["T0", "T1"])).toEqual([
+      "this contour carries no information about −1/2·T0 + T1",
+    ]);
+  });
+
+  it("refuses a name list that does not match the system", () => {
+    const r = solveExact([[f(1), f(0)]], 2);
+    expect(() => describeKernel(FRAC_FIELD, r, ["T0"])).toThrow(/1 names for 2 unknowns/);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// The same elimination over ℚ(i)(π) — D4, whose coefficients are `4π²` and `−4πi`.
+// ---------------------------------------------------------------------------------------------
+
+const pi = (k: number, re = 1, im = 0): RatPi => RatPi.piPower(k, Gauss.int(re, im));
+
+/** D4's single identity, in the unknowns (T0, T1, T2) = (∫R, ∫R log, ∫R log²). */
+const D4_ROW: readonly RatPi[] = [pi(2, 4), pi(1, 0, -4), RatPi.ZERO];
+/** `2πi·Σ` with `Σ = π/2 − iπ²/2` for `R = 1/(1+x²)²`: `2πi(π/2 − iπ²/2) = π³ + iπ²`. */
+const D4_RHS: RatPi = pi(3).add(pi(2, 0, 1));
+
+describe("solveOver ℚ(i)(π) — D4's system", () => {
+  it("reads rank 1 from the complex row, which is why the Re/Im split is not decoration", () => {
+    const r = solveOver(RAT_PI_FIELD, [D4_ROW], 3);
+    expect(r.rank).toBe(1);
+    // Two of the three integrals invisible — and the one the contour was built for among them.
+    expect(r.kernel).toHaveLength(2);
+    expect(r.determined).toEqual([]);
+  });
+
+  it("reads rank 2 once realified, and determines T0 and T1 exactly", () => {
+    const M = realifyRows([D4_ROW]);
+    const rhs = [D4_RHS.re(), D4_RHS.im()];
+    const r = solveOver(RAT_PI_FIELD, M, 3, rhs);
+
+    expect(r.rank).toBe(2);
+    expect(r.pivotColumns).toEqual([0, 1]);
+    expect(r.inconsistentRows).toEqual([]);
+    // Rank 2 in three unknowns, so there is no whole-system solution — and yet two of the three
+    // unknowns are pinned. `combination` alone would have refused to state either.
+    expect(r.combination).toBeUndefined();
+    expect(r.determined.map((d) => d.column)).toEqual([0, 1]);
+
+    const at = (column: number): string => {
+      const d = must(r.determined.find((e) => e.column === column), `column ${column}`);
+      return formatRatPi(combineOver(RAT_PI_FIELD, d.weights, rhs));
+    };
+    // The gallery's numbers: T0 = ∫dx/(1+x²)² = π/4 (the free bonus), T1 = ∫log x/(1+x²)² = −π/4.
+    expect(at(0)).toBe("π/4");
+    expect(at(1)).toBe("−π/4");
+  });
+
+  it("names T2 as the one combination the contour cannot see", () => {
+    const r = solveOver(RAT_PI_FIELD, realifyRows([D4_ROW]), 3);
+    expect(describeKernel(RAT_PI_FIELD, r, ["T0", "T1", "T2"])).toEqual([
+      "this contour carries no information about T2",
+    ]);
+  });
+
+  it("reports the plain-log keyhole's loss as the same rank statement, one column over", () => {
+    // With a single log the lower edge gives −(T1 + 2πi·T0): the T1 terms CANCEL and what survives
+    // is −2πi·T0 = 2πi ΣRes. This is the gate's sentence, computed rather than written by hand.
+    const row: readonly RatPi[] = [pi(1, 0, -2), RatPi.ZERO];
+    const r = solveOver(RAT_PI_FIELD, realifyRows([row]), 2);
+    expect(r.rank).toBe(1);
+    expect(r.determined.map((d) => d.column)).toEqual([0]);
+    expect(describeKernel(RAT_PI_FIELD, r, ["∫₀^∞ R(x) dx", "∫₀^∞ R(x) log x dx"])).toEqual([
+      "this contour carries no information about ∫₀^∞ R(x) log x dx",
+    ]);
+  });
+
+  it("splits rows in the documented order — real part first, then imaginary", () => {
+    const M = realifyRows([D4_ROW]);
+    expect(M).toHaveLength(2);
+    expect(M[0].map(formatRatPi)).toEqual(["4π²", "0", "0"]);
+    expect(M[1].map(formatRatPi)).toEqual(["0", "−4π", "0"]);
+  });
+
+  it("decides a zero coefficient structurally, because π is transcendental", () => {
+    // `π·π − π²` is zero because the polynomials cancel. No tolerance was consulted.
+    const r = solveOver(RAT_PI_FIELD, [[pi(1).mul(pi(1)).sub(pi(2))]], 1, [RatPi.ONE]);
+    expect(r.rank).toBe(0);
+    expect(r.inconsistentRows).toEqual([0]);
+  });
+
+  it("separates contradiction from rank deficiency in the widened field too", () => {
+    // Row 1 is `0·t = π`, which no `t` satisfies: CONTRADICTED, not underdetermined.
+    const r = solveOver(RAT_PI_FIELD, [[RatPi.ONE], [RatPi.ZERO]], 1, [RatPi.ONE, pi(1)]);
+    expect(r.rank).toBe(1);
+    expect(r.kernel).toHaveLength(0);
+    expect(r.inconsistentRows).toEqual([1]);
+  });
+});
+
 function must<T>(v: T | undefined, what: string): T {
   if (v === undefined) throw new Error(`expected ${what} to be present`);
   return v;

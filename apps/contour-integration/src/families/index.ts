@@ -31,7 +31,24 @@ import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export { buildSystem, exactConstant, type FamilySystem } from "./system.js";
-export { solveExact, applyCombination, type SolveReport, type RatMatrix } from "./linear.js";
+export {
+  applyCombination,
+  combineOver,
+  describeKernel,
+  realifyRows,
+  solveExact,
+  solveOver,
+  type Matrix,
+  type RatMatrix,
+  type SolveReport,
+} from "./linear.js";
+export {
+  FRAC_FIELD,
+  RAT_PI_FIELD,
+  RatPi,
+  formatRatPi,
+  type Field,
+} from "./field.js";
 
 /**
  * The records, in gallery order.

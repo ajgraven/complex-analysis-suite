@@ -265,6 +265,7 @@ export function buildSystem(family: Family, bindings: Bindings = {}): BuildResul
         unknowns: 1,
         pivotColumns: nonZero ? [0] : [],
         kernel: nonZero ? [] : [[Frac.ONE]],
+        determined: nonZero ? [{ column: 0, weights: [Frac.ONE] }] : [],
         ...(nonZero ? { combination: [[Frac.ONE]] } : {}),
         inconsistentRows: [],
       },
