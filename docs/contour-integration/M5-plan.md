@@ -331,7 +331,10 @@ The maths prerequisite for tier F, and a correction to the research.
 - The `πcot`/`πcsc` kernel pair.
 - The **square** template — and `limitParams[].to` able to say **"through half-integers only"**, which
   is not cosmetic: it is the constraint that refutes *"the square may be taken at any radius"*, one of
-  the tier's two real traps, and is currently unrepresentable (**SG-5**).
+  the tier's two real traps. *(Stale as written: `limitParams[].through` was added to the schema
+  before this plan's M5.5 was reached, so the gap was never "unrepresentable" — it was declared and
+  unread. And the SG-5 attribution is the gallery's own overloading: §10.2 defines SG-5 as the G
+  tier's target being a SUM rather than an integral, which is M5.7's.)*
 - **The corrected square bound** `8π coth(π/2)·M·(N+½)^{1−k}`, with D-2 recorded: the research's
   version is not an upper bound and printing it would be certification theatre.
 
@@ -351,8 +354,10 @@ The maths prerequisite for tier F, and a correction to the research.
 > - **M5.5c — the bound, and D-2.** `8π·coth(π/2)·(N+½)·max|f|` exact in ℚ, with `max|f|` read at
 >   `|z| = N+½` bounding `|f|` on the whole square by a term-by-term inequality rather than any
 >   monotonicity, and `coth(π/2)` bracketed from a certified lower bound on `e^π` with both
->   truncations erring upward. **`through: "halfIntegers"` is READ at last** — the bound refuses any
->   other half-width by name, which is SG-5's substance if not its schema shape.
+>   truncations erring upward. The bound **refuses** any other half-width by name, which ENFORCES
+>   what `through: "halfIntegers"` declares — from the geometry, not from the field, and stronger for
+>   it (a dragged contour is caught too). **The field is still unread**, and SG-5 proper (the G
+>   tier's target is a SUM, not an integral) is untouched and stays in M5.7.
 >
 > **D-2 executed, and corrected.** Research 03 §8's bound reads 3.392 against a measured 3.567 at
 > `N = 3` and 0.356 against 0.493 at `N = 25` — not a bound. But `tier-efg.md` §6 calls that "30–40 %

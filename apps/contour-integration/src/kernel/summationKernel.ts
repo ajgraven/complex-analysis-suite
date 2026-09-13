@@ -122,7 +122,14 @@ export function asSummationKernel(ast: Node): SummationKernel | null {
   // `cot(pi*z)*pi/z^2` and `(pi/z^2)*cot(pi*z)` are one case rather than three patterns.
   const cofactor = rationalOf(rest, den);
   if (cofactor === null) return null;
-  return { kind, num: cofactor.num, den: cofactor.den };
+  // **REDUCE, BECAUSE THE COLLISION TEST ASKS THE DENOMINATOR.** `toExactRational` does not cancel
+  // common factors, so `z/(z(z²+1))` arrives with `den` vanishing at 0 while `f = 1/(z²+1)` is
+  // perfectly regular there — and `kernelResidues` would then refuse it saying "the cofactor has a
+  // pole at z = 0", which is false. A conservative refusal would be tolerable; a refusal that names
+  // a pole that is not there is the kind of row this whole arc has been removing.
+  const g = cofactor.num.gcd(cofactor.den);
+  if (g.degree() < 1) return { kind, num: cofactor.num, den: cofactor.den };
+  return { kind, num: cofactor.num.divExact(g), den: cofactor.den.divExact(g) };
 }
 
 /** The remaining factors as one exact rational function, or null. */
@@ -158,7 +165,12 @@ export type KernelResidues =
  *
  * Refuses a COLLISION by name rather than dividing by zero, and refuses rather than skipping,
  * because a sum missing the term the record is about is the failure this whole tier could have and
- * not notice.
+ * not notice. The cofactor is reduced by {@link asSummationKernel}, so a denominator root here is a
+ * genuine pole of `f` rather than a factor that cancels.
+ *
+ * **Its consumer is M5.6**, where Pass 5 gains an unknown INSIDE the residue sum. Until then it is
+ * exercised only by the suite — said out loud so it does not become another export that is dead and
+ * quiet about it.
  */
 export function kernelResidues(kernel: SummationKernel, bound: bigint): KernelResidues {
   const terms: { n: bigint; residue: Gauss }[] = [];

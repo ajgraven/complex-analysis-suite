@@ -142,6 +142,21 @@ describe("kernelResidues", () => {
     expect(exact).toBeCloseTo(want, 14);
   });
 
+  it("does NOT call a cancelling factor a pole", () => {
+    // `toExactRational` does not reduce, so `z/(z(z²+1))` arrives with its denominator vanishing at
+    // 0 while `f = 1/(z²+1)` is perfectly regular there. Before the cofactor was reduced this was
+    // refused with "the cofactor has a pole at z = 0" — a conservative refusal would have been
+    // tolerable, but one that NAMES a pole that is not there is the row this arc keeps removing.
+    const k = must(asSummationKernel(parse("pi*cot(pi*z)*z/(z*(z^2+1))")), "a kernel");
+    expect(k.den.degree()).toBe(2);
+    const r = kernelResidues(k, 2n);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    for (const t of r.terms) {
+      expect(t.residue.toTuple()[0]).toBeCloseTo(1 / (Number(t.n) ** 2 + 1), 14);
+    }
+  });
+
   it("REFUSES a collision by name rather than dividing by zero", () => {
     // G1's `f = 1/z²` collides with the kernel at `n = 0`: the two poles merge into a triple one,
     // the true residue is `−π²/3`, and `Res(K·f, 0) = f(0)` is not merely inaccurate but undefined.
@@ -184,6 +199,7 @@ describe("the poles LEGALITY could not see", () => {
       poles: findPoles(ast),
       contour: setParam(squareTemplate(2), "N", n),
       ...(withKernel && kernel !== null ? { summation: { kernel } } : {}),
+      budget: { maxEvaluations: 2048 },
     });
   };
 
@@ -207,6 +223,22 @@ describe("the poles LEGALITY could not see", () => {
       const legality = a.ledger.rows.filter((r) => r.constraint === "LEGALITY");
       expect(legality.every((r) => r.status === "satisfied"), `N = ${n}`).toBe(true);
     }
+  });
+
+  it("REFUSES the window rather than truncating it, when the contour reaches too far", () => {
+    // A window on an infinite set must never be a PREFIX: the poles past the cut would go unlisted
+    // and LEGALITY would call the contour clear of singularities it runs straight through. A first
+    // draft clamped at 65536 and did exactly that. Refusing gives the ledger something to say — and
+    // the row is `?`, not a silent success.
+    const wide = run("pi*cot(pi*z)/(z^2+1)", 9000, true);
+    const row = wide.ledger.rows.find(
+      (r) => r.constraint === "LEGALITY" && /too many of them to check/.test(r.claim),
+    );
+    expect(row?.status).toBe("unknown");
+    expect(row?.repair).toMatch(/shrink the contour/);
+    // …and within the limit there is no such row, so it is not merely always present.
+    const near = run("pi*cot(pi*z)/(z^2+1)", 2, true);
+    expect(near.ledger.rows.some((r) => /too many of them to check/.test(r.claim))).toBe(false);
   });
 
   it("counts the enclosed integers, which a window on an infinite set must get right", () => {

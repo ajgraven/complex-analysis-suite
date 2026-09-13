@@ -130,6 +130,12 @@ export interface AnalysisInput {
    * a piece pass through one, and how many are enclosed — is local to the contour, so the integers
    * it could possibly reach are exactly the ones to list. A contour that moves gets a new window on
    * the same recompute, which a pole report computed once when the EXPRESSION changed could not do.
+   *
+   * **AND THE WINDOW MAY BE REFUSED.** Past a work limit the band is not truncated but abandoned,
+   * because a PREFIX of an infinite pole set is the one shape this must never take: the poles beyond
+   * the cut go unlisted and LEGALITY then calls a contour clear of singularities it runs straight
+   * through. The ledger is told which happened, so "no poles were listed" and "there are no poles"
+   * do not look the same.
    */
   readonly summation?: { readonly kernel: SummationKernel };
   /**
@@ -182,9 +188,10 @@ export function analyse({
   summation,
 }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
+  const band = summation === undefined ? null : kernelBand(resolved);
   const singular = [
     ...poles.poles.map((p) => ({ at: p.at, order: p.order })),
-    ...(summation === undefined ? [] : kernelPoles(kernelBand(resolved))),
+    ...(band === null ? [] : kernelPoles(band)),
   ];
   // **THE SIDES COME FROM THE SPEC, PARALLEL TO THE GEOMETRY.** `resolveAll` maps `contour.pieces`
   // one-to-one, so index `k` is the same piece in both — which is what makes a positional array the
@@ -241,23 +248,38 @@ export function analyse({
     power,
     log,
     multi,
-    ...(summation === undefined ? {} : { summation }),
+    // `band === null` with a kernel present means the window was REFUSED, not that there is no
+    // kernel — two different things, and the ledger has to be able to tell them apart.
+    ...(summation === undefined ? {} : { summation: { ...summation, windowed: band !== null } }),
   });
   return { resolved, sides, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }
 
 /**
- * How far along the real axis the kernel's poles must be listed, from the contour's own extent.
+ * The widest band of the kernel's poles this will list — a work limit, and a REFUSAL past it.
+ *
+ * Every integer is a pole, so a contour reaching `|x| = 10⁶` meets two million of them and no
+ * analysis of it is going to happen. What matters is what the app does at that point: a first draft
+ * CLAMPED, listing a prefix, which is the one thing a window on an infinite set must never do — the
+ * poles beyond the clamp go unlisted and LEGALITY then says a contour is clear of singularities it
+ * runs straight through. Returning null instead gives the ledger something to say.
+ */
+const MAX_KERNEL_BAND = 4096;
+
+/**
+ * How far along the real axis the kernel's poles must be listed, from the contour's own extent — or
+ * null when that is more than {@link MAX_KERNEL_BAND}.
  *
  * One past the furthest point the contour reaches, so a piece sitting exactly on an integer is
  * inside the window rather than one step outside it — which is the case the window exists for.
  */
-function kernelBand(pieces: readonly Resolved[]): bigint {
+function kernelBand(pieces: readonly Resolved[]): bigint | null {
   let reach = 0;
   for (const g of pieces) {
     if (g.kind === "segment") reach = Math.max(reach, Math.abs(g.from[0]), Math.abs(g.to[0]));
     else reach = Math.max(reach, Math.abs(g.center[0]) + g.radius);
   }
-  if (!Number.isFinite(reach)) return 0n;
-  return BigInt(Math.min(1 << 16, Math.floor(reach) + 1));
+  if (!Number.isFinite(reach)) return null;
+  const band = Math.floor(reach) + 1;
+  return band > MAX_KERNEL_BAND ? null : BigInt(band);
 }

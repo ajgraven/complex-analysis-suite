@@ -412,7 +412,16 @@ export interface LedgerInput {
    * can bound a transcendental times a rational, so before this such a side fell through to "no
    * lemma here applies to this integrand" — true, and the wrong thing to be true.
    */
-  readonly summation?: { readonly kernel: SummationKernel };
+  readonly summation?: {
+    readonly kernel: SummationKernel;
+    /**
+     * False when the contour reaches too far for the kernel's poles to be listed at all.
+     *
+     * Every integer is a pole, so this is a work limit — and the point of carrying it is that
+     * "no poles were listed" and "there are no poles" must not look the same to LEGALITY.
+     */
+    readonly windowed: boolean;
+  };
 }
 
 /**
@@ -492,6 +501,26 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         "satisfied",
         `every singularity is clear of the contour (nearest at ${minClearance.toPrecision(3)})`,
         exact("clearance", "distance from each pole to each piece"),
+      ),
+    );
+  }
+
+  // **A WINDOW THAT COULD NOT BE OPENED IS NOT AN EMPTY ONE.** The summation kernel has a pole at
+  // every integer, listed over a band read off the contour; past a work limit that band is refused
+  // rather than truncated, because a truncated list would leave LEGALITY calling a contour clear of
+  // singularities it runs straight through. The row exists so the refusal is visible instead.
+  if (input.summation !== undefined && !input.summation.windowed) {
+    push(
+      rowFrom(
+        "LEGALITY",
+        "unknown",
+        "the kernel has a pole at every integer, and this contour reaches too many of them to check",
+        unknown(
+          "clearance from the kernel's poles",
+          "the band is read off the contour's own extent and is refused past a work limit — listing a prefix of an infinite pole set would report a contour as clear of poles it passes through",
+        ),
+        undefined,
+        "shrink the contour, or reduce the limit parameter",
       ),
     );
   }

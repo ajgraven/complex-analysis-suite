@@ -378,6 +378,18 @@ export interface Family {
     readonly limitParams: readonly {
       readonly name: string;
       readonly to: "inf" | "0+";
+      /**
+       * That the limit is taken through contours whose HALF-WIDTH is a half-integer — tier G's `Γ_N`.
+       *
+       * **DECLARED AND STILL UNREAD, and this note exists so that is not mistaken for done.** The
+       * constraint itself IS enforced, but from the geometry rather than from here:
+       * `kernel/bounds/squareSide.ts` refuses any half-width that is not `N + ½`, because at an
+       * integer the kernel's sup is infinite and in between it is finite for one contour but not
+       * uniform as the width approaches an integer. That check is strictly stronger than reading
+       * this field would be — it catches a contour the user has DRAGGED, which a record's
+       * declaration cannot — so the field stays a statement of intent with no reader until a G
+       * record exists to declare it (M5.6).
+       */
       readonly through?: "halfIntegers";
       /**
        * Where this limit STARTS, when the global display default will not do.

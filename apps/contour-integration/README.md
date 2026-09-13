@@ -465,7 +465,9 @@ needing the same import machinery. See the milestone table in
   clear of the contour. The band is read off the geometry, so a contour that moves gets a new window.
 - **The bound is `8π·coth(π/2)·(N+½)·max|f|`,** exact in ℚ, with `coth(π/2)` bracketed from a
   certified lower bound on `e^π` and both truncations erring upward. It refuses a half-width that is
-  not `N + ½` by name — so `through: "halfIntegers"` is read at last.
+  not `N + ½` by name, which ENFORCES what `through: "halfIntegers"` declares — from the geometry,
+  not from the field, and stronger for it, since a dragged contour is caught too. The schema field
+  is still unread.
 - **D-2, executed.** Research 03 §8 drops the `π` from `π cot(πz)` and its bound is then not one:
   3.392 against a measured 3.567 at `N = 3`. **And a correction to that correction** — the gallery
   says "30–40 % at every N"; measured it is 4.9% at `N = 3` and 27.8% at `N = 25`, growing, because

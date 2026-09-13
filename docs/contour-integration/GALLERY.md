@@ -514,8 +514,11 @@ because dividing the reverse-triangle quotient by `r^{deg D}` leaves the numerat
 non-positive and shrinks the denominator's subtracted sum — a term-by-term inequality using only
 `|z| ≥ h`, with no monotonicity of `|f|` assumed. `coth(π/2) = 1 + 2/(e^π − 1)` is bracketed from a
 certified LOWER bound on `e^π` (`e^x ≥ Σ x^k/k!` at `piLower()`), and both truncations push the same
-way — the only direction a bound may err. It **refuses** a half-width that is not `N + ½` by name, so
-`limitParams[].through = "halfIntegers"`, declared in the schema since M3 and read nowhere, is read.
+way — the only direction a bound may err. It **refuses** a half-width that is not `N + ½` by name. That ENFORCES what
+`limitParams[].through = "halfIntegers"` declares — but from the GEOMETRY, not from the field, which
+is still unread. The distinction is worth keeping: a check on the geometry catches a contour the user
+has dragged, which a record's declaration cannot, so this is the stronger of the two and not a
+substitute waiting to be replaced.
 
 **D-2, executed rather than described — and a correction to the correction.** Research 03 §8's
 `(M/N^k)·coth(π/2)·4(2N+1)` drops the `π` from `π cot(πz)`, and is then not a bound: 3.392 against a

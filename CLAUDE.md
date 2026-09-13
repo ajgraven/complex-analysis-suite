@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **521 test files / 5128 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **521 test files / 5130 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -758,8 +758,9 @@ ones to list, and a contour that moves gets a new window on the same recompute. 
 whole square by a term-by-term inequality rather than by any monotonicity of `|f|`; `coth(π/2)` is
 bracketed from a certified LOWER bound on `e^π` (`e^x ≥ Σ x^k/k!` at `piLower()`), with both
 truncations pushing the same way — the only direction a bound may err. It **refuses** a half-width
-that is not `N + ½` by name, so `through: "halfIntegers"`, declared in the schema since M3 and read
-nowhere, is read at last. **D-2 is executed:** research 03 §8's `(M/N^k)·coth(π/2)·4(2N+1)` drops the
+that is not `N + ½` by name — which ENFORCES what `through: "halfIntegers"` declares, from the
+geometry rather than from the field, and is strictly stronger because it catches a dragged contour
+too. The schema field itself is still unread, and stays so until a G record declares it. **D-2 is executed:** research 03 §8's `(M/N^k)·coth(π/2)·4(2N+1)` drops the
 `π` from `π cot(πz)` and is then not a bound at all — 3.392 against a measured 3.567 at `N = 3`, 0.356
 against 0.493 at `N = 25`. **And a correction to the correction:** the gallery calls that "30–40 % at
 every N tested"; measured, it is 4.9% at `N = 3` and 27.8% at `N = 25`, GROWING, because the ratio
