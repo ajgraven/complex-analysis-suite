@@ -26,7 +26,7 @@ import {
   type QuadratureBudget,
 } from "./contour/integrate.js";
 import { resolveAll, type Contour, type CutSide } from "./contour/model.js";
-import { evaluateLedger, type LedgerResult } from "./ledger.js";
+import { evaluateLedger, type LedgerInput, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
 import { applyBranchTheorem } from "./branchTheorem.js";
 import { applyLogTheorem } from "./logTheorem.js";
@@ -153,6 +153,13 @@ export interface AnalysisInput {
     readonly escalation?: { readonly to: string; readonly collisions: number };
   };
   /**
+   * A `free` piece whose value is imported — ADR-0042. See {@link LedgerInput.imported}.
+   *
+   * Threaded through rather than computed here for the reason every other family input is: this is a
+   * statement the RECORD makes, and `analyse` also serves the sandbox, where there is no record.
+   */
+  readonly imported?: LedgerInput["imported"];
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -200,6 +207,7 @@ export function analyse({
   multi,
   strip,
   summation,
+  imported,
 }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const band = summation === undefined ? null : kernelBand(resolved);
@@ -280,6 +288,7 @@ export function analyse({
     // `band === null` with a kernel present means the window was REFUSED, not that there is no
     // kernel — two different things, and the ledger has to be able to tell them apart.
     ...(summation === undefined ? {} : { summation: { ...summation, windowed: band !== null } }),
+    ...(imported === undefined ? {} : { imported }),
   });
   return { resolved, sides, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }

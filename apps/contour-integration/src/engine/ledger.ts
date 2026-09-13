@@ -23,12 +23,17 @@ import { allCrossingMonodromy, crossingMonodromy, cutGeometryInvariance } from "
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
-import { asExponentialOfPower, asExponentialTimesRational } from "../kernel/exponentialFactor.js";
+import {
+  asExponentialOfPolynomial,
+  asExponentialOfPower,
+  asExponentialTimesRational,
+} from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
 import { wedgeArcBound } from "../kernel/bounds/wedgeArc.js";
 import { squareSideBound } from "../kernel/bounds/squareSide.js";
 import type { SummationKernel } from "../kernel/summationKernel.js";
 import { stripSideBound } from "../kernel/bounds/stripSide.js";
+import { gaussianSideBound } from "../kernel/bounds/gaussianSide.js";
 import { asExponentialLattice } from "../kernel/expLattice.js";
 import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
@@ -155,6 +160,26 @@ function arcRadius(g: Resolved): Frac | null {
  * that length*, which is the honest claim. Shared by the arc's radius and the square's half-width —
  * the second consumer is what moved it out of `arcRadius` (ADR-0007 at the function scale).
  */
+/** `|a − b|`, absolutely and relative to the larger of the two. Both zero is a perfect match. */
+function relativeGap(a: Cx, b: readonly [number, number]): { absolute: number; relative: number } {
+  const absolute = Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const scale = Math.max(Math.hypot(a[0], a[1]), Math.hypot(b[0], b[1]));
+  return { absolute, relative: scale === 0 ? (absolute === 0 ? 0 : Infinity) : absolute / scale };
+}
+
+/**
+ * A SIGNED coordinate as an exact rational — {@link asExactRadius} without the positivity.
+ *
+ * A radius is positive by definition and zero means the arc is a point; a coordinate is neither, and
+ * E3's left vertical sits at `Re z = −R`. Kept separate rather than relaxing the radius reader,
+ * because "r ≤ 0 is not a radius" is a real guard that three arc disposers rely on.
+ */
+function asExactCoordinate(x: number): Frac | null {
+  if (!Number.isFinite(x)) return null;
+  const rounded = Math.round(x * 1e6) / 1e6;
+  return Frac.of(BigInt(Math.round(rounded * 1e6)), 1000000n);
+}
+
 function asExactRadius(r: number): Frac | null {
   if (!Number.isFinite(r) || r <= 0) return null;
   const rounded = Math.round(r * 1e6) / 1e6;
@@ -268,6 +293,32 @@ function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
     length: Math.abs(y1 - y0),
     imagRange: [Math.min(y0, y1), Math.max(y0, y1)],
   });
+}
+
+/**
+ * L1 on a vertical side for a GAUSSIAN — E3's two verticals, which no other disposer sees.
+ *
+ * The dispatch is by geometry (a vertical segment) and by shape (`λ·e^{Q(z)}` with `Q` quadratic).
+ * `disposeStripSide` declines it because `e^{−z²}` is not `N(e^z)/D(e^z)`, and `disposeArc` because
+ * it is not an arc — so without this the record's KILL pass reports "no lemma here applies" for the
+ * only two pieces its argument needs killed.
+ *
+ * Unlike the strip's, this side may sit ANYWHERE, the imaginary axis included: `e^{−z²}` decays in
+ * `Re z` with no `R → ∞` hidden in a lattice, so `Re z = 0` is a perfectly ordinary place for a
+ * segment to be and the bound there is simply large.
+ */
+function disposeGaussianSide(ast: Node, g: Resolved): ArcBound | null {
+  if (g.kind !== "segment") return null;
+  const [x0, y0] = g.from;
+  const [x1, y1] = g.to;
+  if (Math.abs(x0 - x1) > 1e-9) return null; // not vertical
+  const form = asExponentialOfPolynomial(ast);
+  if (form === null || form.q.degree() !== 2) return null;
+  const c = asExactCoordinate(x0);
+  const a = asExactCoordinate(y0);
+  const b = asExactCoordinate(y1);
+  if (c === null || a === null || b === null) return null;
+  return gaussianSideBound(form.q, form.lambda, { c, y0: a, y1: b });
 }
 
 /**
@@ -440,6 +491,29 @@ export interface LedgerInput {
      */
     readonly escalation?: { readonly to: string; readonly collisions: number };
   };
+  /**
+   * A `free` piece whose value is exactly known and NOT derived by this contour — ADR-0042.
+   *
+   * **What it fixes is a row, not a number.** Without it a `free` piece takes the quadrature's
+   * certificate, so E3's argument — entire integrand, both verticals certified dead, `∮ = 0`
+   * exactly — came out `≈`, capped by its most certain step. The opposite failure is the reason the
+   * row is not simply `exact`: it carries the record's own `method` after "imported, not derived
+   * here", so the reader sees which part of the argument came from outside it.
+   *
+   * A plain structure rather than the `families/` type, because packages here import DOWNWARD only:
+   * `runFamily` resolves the expression (once — see `resolveImports`) and hands over what the row
+   * needs. `numeric` is here so the cross-check can happen where the piece's own quadrature is.
+   */
+  readonly imported?: readonly {
+    readonly pieceId: string;
+    /** How the value reads — `e^(−289/400)·√π`. */
+    readonly text: string;
+    readonly numeric: readonly [number, number];
+    /** The record's provenance sentence. */
+    readonly method: string;
+    /** The closed set's own sentence about the atom it rests on. */
+    readonly source: string;
+  }[];
 }
 
 /**
@@ -519,6 +593,21 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         "satisfied",
         `every singularity is clear of the contour (nearest at ${minClearance.toPrecision(3)})`,
         exact("clearance", "distance from each pole to each piece"),
+      ),
+    );
+  } else if (poles.entire) {
+    // **AN EMPTY SINGULAR SET IS INFORMATION, AND SO IS ITS CLEARANCE.** With nothing to measure,
+    // the row above is omitted and LEGALITY said NOTHING about singularities — for the one record
+    // whose whole content is that the set is empty (E3, and F2 after it). "There are none" and
+    // "none were looked for" then looked the same on the ledger, which is precisely the distinction
+    // `PoleReport.entire` was made a DECISION for in M5.3a. A refusal to decide still prints
+    // nothing, which is right: it is not a claim.
+    push(
+      rowFrom(
+        "LEGALITY",
+        "satisfied",
+        "the integrand is entire, so there is no singularity for the contour to be clear of",
+        exact("the singular set is empty", "decided — not the absence of a pole search"),
       ),
     );
   }
@@ -1023,6 +1112,47 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     }
 
     if (piece.role !== "vanish") {
+      // AN IMPORTED PIECE IS NOT A QUADRATURE. ADR-0042: its value is exactly known and comes from
+      // outside this argument, so the row carries `=` with the provenance attached — and the
+      // quadrature becomes what it should always have been here, an independent CHECK rather than
+      // the source. The gap is a limit against a finite limit parameter, so it is reported and only
+      // a visible discrepancy is marked ✗: it is evidence about the contour's tail as much as about
+      // the value, and what it rules out is a record having written the wrong expression.
+      const imported = input.imported?.find((x) => x.pieceId === piece.id);
+      if (imported !== undefined) {
+        const measured = integral.pieces[k]?.value;
+        const check = measured === null || measured === undefined ? null : relativeGap(measured, imported.numeric);
+        push(
+          rowFrom(
+            "KILL",
+            "satisfied",
+            `${piece.name} is ${imported.text} — imported, not derived here`,
+            exact(`${piece.name} = ${imported.text}`, `imported, not derived here — ${imported.method}`, {
+              provenance: [
+                { ok: true, text: imported.source },
+                ...(check === null
+                  ? []
+                  : [
+                      {
+                        // **RELATIVE, AND DELIBERATELY COARSE.** At a finite limit parameter the gap
+                        // is the piece's own TAIL as much as any error in the value, and the record
+                        // does not state how big that tail is — so no tight verdict is available
+                        // here. What the check CAN separate is a converging tail from a different
+                        // number: E3's is 1.5e-8 of the value at R = 4 and 1.6e-13 at R = 8, while
+                        // the same record with one factor dropped is off by half the value.
+                        ok: check.relative < 0.01,
+                        text:
+                          `an independent check: the quadrature of this piece is ${check.absolute.toExponential(2)} away ` +
+                          `(${(check.relative * 100).toPrecision(2)}% of it) — at a finite limit parameter that gap is the piece's own tail`,
+                      },
+                    ]),
+              ],
+            }),
+            piece.id,
+          ),
+        );
+        continue;
+      }
       push(
         rowFrom(
           "KILL",
@@ -1046,7 +1176,8 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
                 (input.summation === undefined
                   ? null
                   : disposeSquareSide(input.summation.kernel, geom)) ??
-                disposeStripSide(ast, geom))
+                disposeStripSide(ast, geom) ??
+                disposeGaussianSide(ast, geom))
             : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;

@@ -39,8 +39,10 @@ import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branc
 import { residueTermShape, solveResidueTerm, type SolvedResidueTerm } from "./solveResidueTerm.js";
 import {
   importedPieces,
+  resolveImports,
   solveImported,
   type ImportedSolveResult,
+  type ResolvedImport,
 } from "./solveImported.js";
 import { mergedResidue } from "../kernel/mergedResidue.js";
 import { checkDeclaredCollisions, escalations } from "./collisionCheck.js";
@@ -105,6 +107,14 @@ export interface FamilyRun extends Analysis {
    * the two disagree about what the cofactor is after `asSummationKernel`'s gcd reduction.
    */
   readonly summation?: SummationKernel;
+  /**
+   * The record's `knownValue` pieces, resolved at these bindings — empty for every other record.
+   *
+   * On the run rather than recomputed by each consumer, because the ledger's KILL row and Pass 5's
+   * fourth route both read it and a provenance claim that two paths could disagree about is worse
+   * than none.
+   */
+  readonly imports: readonly ResolvedImport[];
 }
 
 export type RunFamilyResult =
@@ -276,10 +286,17 @@ export function runFamily(
   // Null for every integrand that is not `π cot(πz)·f` or `π csc(πz)·f`, which is every record
   // outside tier G — so this is inert for the corpus that existed before it.
   const summation = asSummationKernel(built.ast);
+  // ADR-0042's imports, resolved ONCE — the ledger's KILL row and Pass 5 read the same values, so a
+  // row claiming one provenance and an answer built from another cannot happen. A record whose
+  // `knownValue` does not resolve fails the LOADER, so an unresolved one here is an empty list and
+  // the pieces keep their quadrature rows.
+  const resolved = resolveImports(family, bindings);
+  const imports = resolved.ok ? resolved.imports : [];
 
   return {
     ok: true,
     run: {
+      imports,
       family,
       golden,
       bindings,
@@ -318,6 +335,17 @@ export function runFamily(
               },
             }),
         ...(budget === undefined ? {} : { budget }),
+        ...(imports.length === 0
+          ? {}
+          : {
+              imported: imports.map((x) => ({
+                pieceId: x.pieceId,
+                text: x.text,
+                numeric: x.value.numeric,
+                method: x.method,
+                source: x.value.atom.provenance,
+              })),
+            }),
         ...(power.ok
           ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }
           : {}),
@@ -406,7 +434,7 @@ function solveWithin(
   // piece the contour did not derive, which is arithmetic in a module rather than in units of π —
   // `solveImported.ts` says why, and refuses the mixed case by name rather than adding π to √π.
   if (importedPieces(family).length > 0) {
-    return solveImportedFamily(family, r.run, piUnits);
+    return solveImportedFamily(family, r.run, piUnits, r.run.imports);
   }
 
   const solved = solveTarget(family, {
@@ -584,17 +612,16 @@ function solveSummationFamily(family: Family, run: FamilyRun): SolveFamilyResult
  * the same field on every route, and `imported` carries the rest: F2 determines both `∫cos(xⁿ)` and
  * `∫sin(xⁿ)` from one complex identity, and dropping either would lose half the record.
  */
-function solveImportedFamily(family: Family, run: FamilyRun, piUnits: ExpSum): SolveFamilyResult {
+function solveImportedFamily(
+  family: Family,
+  run: FamilyRun,
+  piUnits: ExpSum,
+  imports: readonly ResolvedImport[],
+): SolveFamilyResult {
   const solved = solveImported(family, {
     closedContourPiUnits: piUnits,
     pieceLimits: run.ledger.pieceLimits,
-    // BY INDEX, not by id. `integrateContour` takes resolved geometries and labels them `piece 1…n`
-    // positionally — it never sees a family — so `PieceIntegral.pieceId` is a label rather than a
-    // key, and matching on it would silently find nothing. The ledger's own loop aligns the same way.
-    pieceQuadratures: family.contour.pieces.flatMap((piece, k) => {
-      const measured = run.integral.pieces[k];
-      return measured === undefined ? [] : [{ pieceId: piece.id, value: measured.value }];
-    }),
+    imports,
     bindings: run.bindings,
   });
   if (!solved.ok) return { ok: false, run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };

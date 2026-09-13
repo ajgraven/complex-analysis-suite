@@ -12,13 +12,24 @@ import { ExpSum } from "../src/kernel/expSum.js";
 import { Exponent } from "../src/kernel/exponent.js";
 import { gammaImport, gaussianMomentByQuadrature, IMPORTS } from "../src/kernel/imported.js";
 import { importedValue } from "../src/families/importedValue.js";
-import { solveImported } from "../src/families/solveImported.js";
+import {
+  resolveImports,
+  solveImported,
+  type ImportedSolveInputs,
+} from "../src/families/solveImported.js";
 import { solveFamily } from "../src/families/runFamily.js";
 import { loadFamilies } from "../src/families/index.js";
 import { importedRecord } from "./helpers/importedRecord.js";
 
 const frac = (n: bigint, d: bigint): Frac => Frac.of(n, d);
 const ONE = ExpSum.of(SqrtExt.ONE, Exponent.ZERO);
+
+/** The record's imports, resolved at its flagship binding — what `runFamily` hands Pass 5. */
+function resolved(family: Parameters<typeof solveImported>[0]): ImportedSolveInputs["imports"] {
+  const got = resolveImports(family, family.golden[0].params);
+  if (!got.ok) throw new Error(got.reason);
+  return got.imports;
+}
 
 describe("the closed set of imports", () => {
   it("is one entry, and it is the Gamma function", () => {
@@ -175,15 +186,36 @@ describe("Pass 5's fourth route", () => {
     expect(byId.get("S")?.text).toBe("0");
   });
 
+  it("gives the imported piece an EXACT ledger row, not the quadrature's", () => {
+    // The whole of ADR-0042 in one assertion. `free` takes the quadrature's certificate, which is
+    // `≈`, so before this the ledger capped an argument whose every other step was exact — entire
+    // integrand, both verticals certified dead, `∮ = 0` — at its most certain step.
+    const family = importedRecord();
+    const solved = solveFamily(family, family.golden[0], { geometry: { R: 8 } });
+    expect(solved.ok).toBe(true);
+    if (!solved.ok) return;
+    const row = solved.run.ledger.rows.find((r) => r.pieceId === "top");
+    expect(row?.evidence.level).toBe("=");
+    expect(row?.claim).toContain("imported, not derived here");
+    // The LEDGER's verdict stays `≤`, and correctly: the two verticals' finite-R ML bounds are
+    // one-sided, exactly as E1's and every other ML-killed record's are. What the import fixes is
+    // this piece's own row, which is what Pass 5 and the answer's verdict read.
+    expect(solved.run.ledger.verdict.level).toBe("≤");
+  });
+
   it("checks the import against the contour's own quadrature, and the gap is the tail", () => {
-    const gaps = [4, 8].map((R) => {
+    const gapOf = (R: number): number => {
       const family = importedRecord();
       const solved = solveFamily(family, family.golden[0], { geometry: { R } });
-      if (!solved.ok || solved.route !== "imported") return Number.NaN;
-      return solved.imported.imports[0].quadratureGap ?? Number.NaN;
-    });
+      if (!solved.ok) return Number.NaN;
+      const step = solved.run.ledger.rows
+        .find((r) => r.pieceId === "top")
+        ?.evidence.provenance.find((p: { ok: boolean; text: string }) => p.text.includes("an independent check"));
+      return Number(/is ([0-9.e+-]+) away/.exec(step?.text ?? "")?.[1] ?? Number.NaN);
+    };
     // `∫ℝ` against `∫₋R^R` — the gap IS the tail, so it must fall with R rather than sit at a
     // tolerance. Measured 1.3e-8 → 1.4e-13 as R goes 4 → 8.
+    const gaps = [gapOf(4), gapOf(8)];
     expect(gaps[0]).toBeLessThan(1e-7);
     expect(gaps[1]).toBeLessThan(1e-11);
     expect(gaps[1]).toBeLessThan(gaps[0] / 1000);
@@ -195,12 +227,12 @@ describe("Pass 5's fourth route", () => {
     const family = importedRecord({ known: "-sqrt(pi)" });
     const solved = solveFamily(family, family.golden[0], { geometry: { R: 8 } });
     expect(solved.ok).toBe(true);
-    if (!solved.ok || solved.route !== "imported") return;
-    expect(solved.imported.imports[0].quadratureGap).toBeGreaterThan(0.9);
-    const step = solved.imported.certificates
-      .flatMap((c) => c.provenance)
-      .find((p) => p.text.includes("away from the imported value"));
+    if (!solved.ok) return;
+    const step = solved.run.ledger.rows
+      .find((r) => r.pieceId === "top")
+      ?.evidence.provenance.find((p: { ok: boolean; text: string }) => p.text.includes("an independent check"));
     expect(step?.ok).toBe(false);
+    expect(step?.text).toMatch(/9\.[0-9]+e-1 away/);
   });
 
   it("carries F2's rotation exactly when the root of unity is representable, and not otherwise", () => {
@@ -208,7 +240,11 @@ describe("Pass 5's fourth route", () => {
     // cross-check against the wrong contour would be evidence about nothing. What is under test is
     // that `e^{iπ/(2n)}` reaches the coefficient, which is what makes `√(π/8)` a closed form.
     const representable = importedRecord({ second: true, known: "-exp(i*pi/4)*gamma(3/2)" });
-    const got = solveImported(representable, { closedContourPiUnits: ExpSum.ZERO, pieceLimits: [] });
+    const got = solveImported(representable, {
+      closedContourPiUnits: ExpSum.ZERO,
+      pieceLimits: [],
+      imports: resolved(representable),
+    });
     expect(got.ok).toBe(true);
     if (!got.ok) return;
     for (const answer of got.result.solved) {
@@ -219,7 +255,11 @@ describe("Pass 5's fourth route", () => {
     // `e^{iπ/10}` needs ℚ(ζ₂₀), degree 4 over ℚ — outside this basis. The decimal stands and the
     // certificate says why, which is the same posture `solveTarget` takes about B3.
     const beyond = importedRecord({ second: true, known: "-exp(i*pi/10)*gamma(6/5)" });
-    const wide = solveImported(beyond, { closedContourPiUnits: ExpSum.ZERO, pieceLimits: [] });
+    const wide = solveImported(beyond, {
+      closedContourPiUnits: ExpSum.ZERO,
+      pieceLimits: [],
+      imports: resolved(beyond),
+    });
     expect(wide.ok).toBe(true);
     if (!wide.ok) return;
     const gamma = C.gamma([1.2, 0])[0];
@@ -231,13 +271,18 @@ describe("Pass 5's fourth route", () => {
 
   it("refuses to add π to √π, on either side of the identity", () => {
     const family = importedRecord();
-    const nonZero = solveImported(family, { closedContourPiUnits: ONE, pieceLimits: [] });
+    const nonZero = solveImported(family, {
+      closedContourPiUnits: ONE,
+      pieceLimits: [],
+      imports: resolved(family),
+    });
     expect(nonZero.ok).toBe(false);
     if (!nonZero.ok) expect(nonZero.reason).toMatch(/no ring in this app holds both/);
 
     const limit = solveImported(family, {
       closedContourPiUnits: ExpSum.ZERO,
       pieceLimits: [{ pieceId: "right", contribution: ONE }],
+      imports: resolved(family),
     });
     expect(limit.ok).toBe(false);
     if (!limit.ok) expect(limit.reason).toMatch(/'right'.*no ring in this app holds both/);

@@ -50,14 +50,7 @@ export interface SolvedImport extends SolvedValue {
 export interface ImportedSolveResult {
   readonly solved: readonly SolvedImport[];
   /** What the argument took on faith, per piece — rendered as the derivation's imported step. */
-  readonly imports: readonly {
-    readonly pieceId: string;
-    readonly value: ImportedValue;
-    readonly method: string;
-    readonly rigor: Level;
-    /** `|imported − quadrature|` on this piece, when a quadrature of it was available. */
-    readonly quadratureGap?: number;
-  }[];
+  readonly imports: readonly ResolvedImport[];
   /** One sentence per combination of unknowns this contour cannot see. Usually empty. */
   readonly invisible: readonly string[];
   readonly certificates: readonly Certificate[];
@@ -73,19 +66,59 @@ export interface ImportedSolveInputs {
   /** The exact limits of the pieces that do not vanish. Must all be zero, for the same reason. */
   readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
   /**
-   * The quadrature of each piece at the fixture's FINITE limit parameter — the import's cross-check.
+   * The record's imports, already RESOLVED — see {@link resolveImports}.
    *
-   * An import is the one value in this app that is not computed from anything, so the usual
-   * falsification (two routes that share no arithmetic) has to come from outside the symbolic
-   * engine entirely. This is that outside: `Γ`'s Lanczos series and a Gauss–Legendre panel on the
-   * piece agree or they do not, and a record that wrote the wrong expression — dropping E3's
-   * `e^{−b²/4}`, say — is caught by a number rather than by a reader.
-   *
-   * It is a LIMIT against a finite `R`, so the gap is the piece's own tail and the check reports it
-   * rather than asserting a tolerance the record has not stated.
+   * Passed in rather than walked here because the ledger needs the same values one pass earlier, for
+   * the KILL row that carries the import's `=`. Resolving twice would let the row and the answer
+   * disagree about what was imported, which is the one thing a provenance claim must never do.
    */
-  readonly pieceQuadratures?: readonly { readonly pieceId: string; readonly value: readonly [number, number] }[];
+  readonly imports: readonly ResolvedImport[];
   readonly bindings?: Bindings;
+}
+
+/** One piece's import, resolved at a binding. */
+export interface ResolvedImport {
+  readonly pieceId: string;
+  readonly value: ImportedValue;
+  /** The record's own provenance sentence — required, and rendered after "imported, not derived here". */
+  readonly method: string;
+  readonly rigor: Level;
+  /** How the value reads: `e^(−289/400)·√π`. */
+  readonly text: string;
+}
+
+/**
+ * Every `knownValue` on this family's pieces, walked into `(import) × (basis)` at one binding.
+ *
+ * The ONE place a `knownValue` expression is interpreted. Both the ledger (through `runFamily`) and
+ * Pass 5 read this, so "what does the row say was imported" and "what did the answer use" cannot
+ * come apart.
+ */
+export function resolveImports(
+  family: Family,
+  bindings: Bindings,
+): { readonly ok: true; readonly imports: readonly ResolvedImport[] } | { readonly ok: false; readonly reason: string } {
+  const out: ResolvedImport[] = [];
+  for (const piece of importedPieces(family)) {
+    const declared = piece.knownValue;
+    /* c8 ignore next */
+    if (declared === undefined) continue;
+    let value;
+    try {
+      value = importedValue(parse(declared.expr), bindings);
+    } catch (e) {
+      return { ok: false, reason: `piece '${piece.id}': '${declared.expr}' is not a readable expression: ${String(e)}` };
+    }
+    if (!value.ok) return { ok: false, reason: `piece '${piece.id}': ${value.reason}` };
+    out.push({
+      pieceId: piece.id,
+      value: value.value,
+      method: declared.method,
+      rigor: declared.rigor,
+      text: formatImported(value.value.coefficient, value.value.atom),
+    });
+  }
+  return { ok: true, imports: out };
 }
 
 /** The `free` pieces that carry an import — the shape half, needing no bindings and no residues. */
@@ -148,8 +181,7 @@ export function solveImported(family: Family, inputs: ImportedSolveInputs): Solv
     certificate: refuse("the targets", reason),
   });
 
-  const pieces = importedPieces(family);
-  if (pieces.length === 0) return no("no piece of this contour carries an imported value");
+  if (inputs.imports.length === 0) return no("no piece of this contour carries an imported value");
 
   // THE RING CHECK, and it is the record's own content. See the header.
   if (!inputs.closedContourPiUnits.isZero()) {
@@ -167,44 +199,19 @@ export function solveImported(family: Family, inputs: ImportedSolveInputs): Solv
     }
   }
 
-  // Every import, and they must be ONE atom: `a·√π + b·Γ(4/3)` is a rank-2 module.
-  const imports: ImportedSolveResult["imports"][number][] = [];
+  // They must be ONE atom: `a·√π + b·Γ(4/3)` is a rank-2 module.
+  const imports = inputs.imports;
   let atom: ImportedAtom | null = null;
   let total = ExpSum.ZERO;
-  for (const piece of pieces) {
-    const declared = piece.knownValue;
-    /* c8 ignore next */
-    if (declared === undefined) continue;
-    let value;
-    try {
-      value = importedValue(parse(declared.expr), bindings);
-    } catch (e) {
-      return no(`piece '${piece.id}': '${declared.expr}' is not a readable expression: ${String(e)}`);
-    }
-    if (!value.ok) return no(`piece '${piece.id}': ${value.reason}`);
-    if (atom !== null && atom.id !== value.value.atom.id) {
+  for (const entry of imports) {
+    if (atom !== null && atom.id !== entry.value.atom.id) {
       return no(
         `this contour closes on two different imported constants (${atom.text} and ` +
-          `${value.value.atom.text}); their span is a rank-2 module and this solve works in a rank-1 one`,
+          `${entry.value.atom.text}); their span is a rank-2 module and this solve works in a rank-1 one`,
       );
     }
-    atom = value.value.atom;
-    total = total.add(value.value.coefficient);
-    const measured = (inputs.pieceQuadratures ?? []).find((q) => q.pieceId === piece.id);
-    const gap =
-      measured === undefined
-        ? undefined
-        : Math.hypot(
-            measured.value[0] - value.value.numeric[0],
-            measured.value[1] - value.value.numeric[1],
-          );
-    imports.push({
-      pieceId: piece.id,
-      value: value.value,
-      method: declared.method,
-      rigor: declared.rigor,
-      ...(gap === undefined ? {} : { quadratureGap: gap }),
-    });
+    atom = entry.value.atom;
+    total = total.add(entry.value.coefficient);
   }
   /* c8 ignore next */
   if (atom === null) throw new Error("unreachable: at least one piece carried an import");
@@ -261,29 +268,15 @@ export function solveImported(family: Family, inputs: ImportedSolveInputs): Solv
     solved.push({ targetId, atom, value, ...(text === undefined ? {} : { text }), ...(multiple === undefined ? {} : { multiple }), certificates: [] });
   }
 
-  // The import's own row — the claim and the reason it is believed, travelling together.
+  // The import's own row — the claim and the reason it is believed, travelling together. The
+  // quadrature cross-check lives on the ledger's KILL row instead, where the piece is, so a reader
+  // meets the import and its corroboration in one place rather than two.
   for (const entry of imports) {
-    const gap = entry.quadratureGap;
     certificates.push(
       exact(
-        `the piece '${entry.pieceId}' is ${entry.value.atom.text} times a value this contour derived`,
+        `the piece '${entry.pieceId}' is ${entry.text}`,
         `imported, not derived here — ${entry.method}`,
-        {
-          provenance: [
-            { ok: true, text: entry.value.atom.provenance },
-            // A ✗ step is not a refusal here: the import is exact and the quadrature is a finite-`R`
-            // approximation of a limit, so a gap is evidence about the CONTOUR's tail as much as
-            // about the value. What it rules out is the value being wrong by a visible amount.
-            ...(gap === undefined
-              ? []
-              : [
-                  {
-                    ok: gap < 1e-8,
-                    text: `the quadrature of that piece is ${gap.toExponential(2)} away from the imported value`,
-                  },
-                ]),
-          ],
-        },
+        { provenance: [{ ok: true, text: entry.value.atom.provenance }] },
       ),
     );
   }

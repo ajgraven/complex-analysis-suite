@@ -189,3 +189,51 @@ export function asExponentialOfPower(ast: Node): PowerExponentialForm | null {
   if (d.isZero()) return null;
   return { w: exponent.w, n: exponent.n, lambda: rest.num.coeff(0).div(d) };
 }
+
+/** `λ·e^{Q(z)}` with `Q` a polynomial over ℚ(i) — the whole exponent, lower-order terms included. */
+export interface PolynomialExponentialForm {
+  /** `Q`, exactly. Degree 0 is a constant and declines; there is no exponential behaviour in it. */
+  readonly q: QiPoly;
+  readonly lambda: Gauss;
+}
+
+/**
+ * Read `f` as `λ·e^{Q(z)}`, or null — {@link asExponentialOfPower} with the lower-order terms KEPT.
+ *
+ * **Deliberately the other decision, and the geometry is why.** That reader refuses `e^{−z²+z}`
+ * because the wedge bound reasons about `e^{−cRⁿ h(nθ)}` and a linear term's sign flips across the
+ * sector, so approximating it away would certify the wrong number. On a VERTICAL segment nothing is
+ * approximated: `Re Q(c+iy)` is a real polynomial in `y` with exact coefficients, and every term of
+ * `Q` contributes to it exactly. Two readers for two bounds, each refusing what its own inequality
+ * cannot see.
+ */
+export function asExponentialOfPolynomial(ast: Node): PolynomialExponentialForm | null {
+  const { num, den } = splitFactors(ast);
+  if (den.some(isExp)) return null;
+  const exps = num.filter(isExp);
+  if (exps.length !== 1) return null;
+
+  const theExp = exps[0];
+  if (theExp.kind !== "call" || theExp.args.length !== 1) return null;
+  const arg = toExactRational(theExp.args[0]);
+  if (!arg.ok) return null;
+  // A rational EXPONENT is not a polynomial one: `e^{1/z}` has an essential singularity at the origin
+  // and no bound of this shape sees it.
+  if (arg.value.den.degree() !== 0) return null;
+  const scale = arg.value.den.coeff(0);
+  if (scale.isZero()) return null;
+  if (arg.value.num.degree() < 1) return null;
+  const q = arg.value.num.scale(Gauss.ONE.div(scale));
+
+  const rest = rationalProduct(
+    num.filter((f) => f !== theExp),
+    den,
+  );
+  if (rest === null) return null;
+  // As in `asExponentialOfPower`: a `z`-dependent cofactor changes the asymptotics and declines by
+  // name rather than being dropped.
+  if (rest.num.degree() !== 0 || rest.den.degree() !== 0) return null;
+  const d = rest.den.coeff(0);
+  if (d.isZero()) return null;
+  return { q, lambda: rest.num.coeff(0).div(d) };
+}

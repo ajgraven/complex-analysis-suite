@@ -164,6 +164,11 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       // small circle, because its singular set is a lattice rather than a point on the contour.
       "strip-exponential-quasiperiod",
       "strip-sech-fourier",
+      // E3's R is a half-width like E1's, and its independence is the strongest in the corpus:
+      // `∮ = 2πi·Σ(∅) = 0` at EVERY radius, because the singular set is empty. The property this
+      // test asserts — "once every selected pole is enclosed, more radius adds nothing" — holds
+      // vacuously, and a record that started reporting a non-zero `∮` would fail here first.
+      "gaussian-shift-zero-residue",
       // F1's R is a sector RADIUS again, as tier A's was — the rotational twin of the strip above,
       // and the first since D2 whose limit parameter is neither a half-width nor a shrinking ε.
       "wedge-rational-power",
@@ -366,6 +371,11 @@ describe("the closed form each record establishes", () => {
     // NEGATIVE REAL, so `1 − λ = 1 + e^{−πξ}` factors as a hyperbolic cosine instead. Which one a
     // contour produces is decided by the sign of its quasi-period, not by a simplifier.
     "strip-sech-fourier": "π/cosh(π)",
+    // E3, the first answer in the corpus assembled from a value the argument did NOT derive: the
+    // atom is `√π = Γ(1/2)`, imported by polar coordinates, and `e^{−1/4}` is what this contour
+    // contributed. ADR-0042 — the form is `=` and the import travels in the provenance, so a reader
+    // can see precisely which step came from outside.
+    "gaussian-shift-zero-residue": "e^(−1/4)·√π",
     // F1. The gallery writes this fixture's value `2π/(3√3)`, which is the SAME NUMBER — the engine's
     // normal form is the family's own closed form `(π/n)/sin(π/n)`, uniform in `n`, and the document
     // simply rendered `1/sin(π/3)` as `2/√3`. Nothing simplifies a sine into a radical here, and the

@@ -40,6 +40,7 @@ import { d6DogboneInverseSqrt } from "./records/d6-dogbone-inverse-sqrt.js";
 import { d7DogboneTwoFractionalPowers } from "./records/d7-dogbone-two-fractional-powers.js";
 import { e1StripExponentialQuasiperiod } from "./records/e1-strip-exponential-quasiperiod.js";
 import { e2StripSechFourier } from "./records/e2-strip-sech-fourier.js";
+import { e3GaussianShiftZeroResidue } from "./records/e3-gaussian-shift-zero-residue.js";
 import { f1WedgeRationalPower } from "./records/f1-wedge-rational-power.js";
 import { g2SquareCotKernel } from "./records/g2-square-cot-kernel.js";
 import { g1SquareCotCollision } from "./records/g1-square-cot-collision.js";
@@ -104,6 +105,7 @@ export const FAMILIES: readonly Family[] = [
   d7DogboneTwoFractionalPowers,
   e1StripExponentialQuasiperiod,
   e2StripSechFourier,
+  e3GaussianShiftZeroResidue,
   f1WedgeRationalPower,
   g2SquareCotKernel,
   g1SquareCotCollision,
