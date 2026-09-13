@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **511 test files / 4946 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **515 test files / 5038 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -294,9 +294,10 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.3 onward** — tier E's
-quasi-periodic strip, tier F's wedge template, tier G's summation kernel and the unknown inside `S`;
-M5.0–M5.2 are done, and the plan and its one engine decision are
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.4 onward** — tier F's
+wedge template, tier G's summation kernel and the unknown inside `S`, plus E3 and F2 together on
+ADR-0042's `knownValue`; M5.0–M5.3 are done and 22 of the 28 records are loaded, and the plan and its
+one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
 **read the plan before continuing M5**), the teaching layer (M6).
 
@@ -649,6 +650,50 @@ a sector's start angle as `0` certifies `π/(4R)` for the clockwise arc `[π/2 �
 integrand reaches `e^{+R²}`, and the first test written for it refused under the mutant anyway,
 pinning the outcome without pinning the reason. D-2 (the square-contour bound) stays a document-only
 correction until M5.5, said out loud rather than left to be noticed.
+
+**M5.3 opens tier E — E1 and E2 load and solve, and the sign of λ decides everything.** The plan
+called it "mostly wiring"; measuring first said otherwise. `findPoles` gave `e^{0.3z}/(1+e^z)`
+`rational: false` and ZERO poles — the same report it gave `1/cosh z`, which has infinitely many, and
+`e^{−z²}`, which genuinely has none — so E1 and E2 had no residue to take and E3's `poles: []` was
+true by accident. **M5.3a** therefore made entirety a DECISION (`kernel/entire.ts`, `PoleReport.entire`):
+a SUFFICIENT condition, with the type shaped so a refusal cannot be read as a claim (`sin(z)/z` is
+entire and refuses) and every refusal naming which of three walls it hit — a quotient, a function
+with poles or branch points, or one that is not holomorphic anywhere, which is not a singularity
+question at all. **M5.3b** is the substitution the whole tier rests on: `w = e^z` makes both
+integrands rational, their poles become vertical LATTICES (`e^z = ρ` has solutions every `2πi`), and
+`polesInStrip` takes the band because a list of infinitely many is not a list and truncating one
+silently is how a residue sum loses terms. Exactness rests on ONE stated restriction — each root of
+`D(w)` is a root of unity, so `log ρ = 2πi·q` exactly and `e^{az₀}` lands in M4.2's basis with **no new
+number field**; the order is decided exactly in `SqrtExt` and only `q`'s numerator read numerically,
+safe because the n-th roots of unity are `2π/n ≥ 2π/12` apart. **M5.3c** is the app's first vanishing
+SEGMENT — `disposeArc` declined anything that was not an arc, so a rectangle's verticals reached no
+lemma at all — and it makes E1's window `0 < a < 1` **DERIVED**: `κ = Re(a) + deg N − deg D` on the
+right and `−Re(a) − ord₀N + ord₀D` on the left, whose signs are `a < 1` and `a > 0`, which is the
+record's own "one condition, two jobs"; E2's contrasting "no condition at all" is the same expression
+at `Re(iξ) = 0`, since `Im(a)` cannot enter a limit on a strip of finite height. `stripTemplate` is a
+SIBLING of `rectangleTemplate` (the sandbox's free shape keeps its four free sides) with the top side
+carrying `reproduces`, so no lemma is ever asked to kill it — E1's first trap, structural. **M5.3d**
+lands both records and finds the tier's real content: **a strip has TWO denominator shapes, and which
+one is the SIGN of λ.** `1 − λ` factors as a sine when λ sits on the unit circle (E1 → `π/sin(3π/10)`,
+which is D1's own text, since `x = log t` carries one onto the other) and as a **hyperbolic cosine**
+when λ is a negative real (E2 → `π/cosh(π)`, i.e. `π sech(πξ/2)`). The sine recogniser refused E2
+correctly and by name; `sineForm.ts` now carries both with its one-rule warning spent deliberately —
+not a pattern accreting into a simplifier but the other half of one fact, selected by an exact
+comparison of two coefficients. A cosh **cannot degenerate** (it vanishes only at an imaginary
+argument), which is E2's "unconditionally well-posed" claim arriving as a property of the factoring
+rather than a range check, while E1 still divides by zero at integer `a`. The sharpest bug of the arc
+was a **RIGHT VALUE UNDER A WRONG FORM**: `solveTarget` rebuilt the solved form field by field and
+carried only `sine`, so E2's value divided by the cosh while its text printed a bare `π` for numbers
+that were 0.271, 1.252 and 0.590 — nothing about which looks wrong. The declared strip is CHECKED
+against the contour drawn (the lattice points one period either side are asked for their windings;
+enclosing one, or passing through one, refuses — E1's `wrong-strip-height` trap at run time), and that
+check was INERT when first written, because margin poles never reach `integrateContour`. Three wording
+defects older than the slices surfaced too: the pole card said "no poles are claimed" about an entire
+integrand, the ledger's CATCH row gave an UNCONDITIONAL reason naming a difficulty it never reached,
+and `PoleReport.rational`'s doc had drifted from its meaning. Sweeps: 13/14, 15/16, 14/14, 12/13 —
+four recorded equivalents, each kept with its reason. **E3 is deferred with F2**, not dropped: both
+need ADR-0042's `knownValue`, and doing them together implements the import set once against two
+consumers rather than once against one.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

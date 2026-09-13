@@ -223,7 +223,7 @@ The maths prerequisite for tier F, and a correction to the research.
 > **Not done here, and not silently:** D-2's square-contour bound is still a document-only correction.
 > It belongs with the summation kernel it is about, in M5.5.
 
-### M5.3 — tier E · *M*
+### M5.3 — tier E · *M* — **DONE for E1 and E2 (a–d); E3 deferred with F2**
 
 - **E1** `∫ℝ e^{ax}/(1+e^x) dx = π/sin(πa)` — the quasi-periodic strip on `rectangleTemplate`, with
   `reproduces` at `λ = e^{2πia}`. Mostly wiring: both pieces exist.
@@ -233,6 +233,49 @@ The maths prerequisite for tier F, and a correction to the research.
   COVER has nothing to cover, and the argument is carried by the `reproduces` relation alone. Needs
   **ADR-0042's `knownValue`** (the top side is the Gaussian) and **SG-3** (the rectangle's orientation
   flips with `sign(b)`; reduced by evenness here, and the record says so).
+
+> **Outcome — and "mostly wiring" was wrong, measured before anything was written.** `findPoles` on
+> `e^{0.3z}/(1+e^z)` reported `rational: false` and **zero poles** — the same answer it gave for
+> `1/cosh z`, which has infinitely many, and for `e^{−z²}`, which genuinely has none. So E1 and E2
+> had no residue to take, and E3's `poles: []` was true by accident. That inverted the plan's
+> ordering: deciding entirety is the PREREQUISITE for trusting a pole list, not the last slice.
+>
+> Four slices landed, each its own commit:
+>
+> - **M5.3a — entirety is a DECISION, not silence.** `kernel/entire.ts` decides it structurally and
+>   `PoleReport.entire` carries it. The condition is SUFFICIENT and the type is shaped so a refusal
+>   cannot be read as a claim: `sin(z)/z` is entire and refuses, and each refusal names which of
+>   three walls it hit. Two wording defects fell out — the pole card said "no poles are claimed"
+>   about an entire integrand, and the ledger's CATCH row gave an UNCONDITIONAL reason ("some poles
+>   are not expressible in ℚ(i)(√d)") for `1/cosh z`, a difficulty it never reached.
+> - **M5.3b — the strip's poles and residues.** `w = e^z` makes both integrands rational, the poles
+>   become vertical LATTICES, and `polesInStrip` takes the band because a list of infinitely many is
+>   not a list. Exactness rests on one stated restriction — each root of `D` is a root of unity — so
+>   `log ρ = 2πi·q` exactly and the residue lands in M4.2's basis with **no new number field**.
+> - **M5.3c — a vanishing SEGMENT, and E1's window DERIVED.** `disposeArc` declined anything that was
+>   not an arc, so a rectangle's verticals reached no lemma at all. L1 on a vertical side gives
+>   `κ = Re(a) + deg N − deg D` on the right and `−Re(a) − ord₀N + ord₀D` on the left — which read
+>   `a < 1` and `a > 0`, the record's "one condition, two jobs", out of the geometry rather than
+>   declared beside it. E2's "no condition at all" is the same expression at `Re(iξ) = 0`.
+> - **M5.3d — the records, and a SECOND denominator shape.** `1 − λ` factors as a sine when λ is on
+>   the unit circle and as a **hyperbolic cosine** when λ is a negative real — and E2 exists to teach
+>   that λ can be negative. The sine recogniser refused E2 by name; `sineForm.ts` now carries both,
+>   its one-rule warning spent deliberately. A cosh cannot degenerate (it vanishes only at an
+>   imaginary argument), which is E2's "unconditionally well-posed" claim as a property of the
+>   factoring rather than a range check.
+>
+> **The sharpest bug of the arc: a right value under a wrong form.** `solveTarget` rebuilt the solved
+> form field by field and carried only `sine`, so E2's VALUE divided by the cosh while its TEXT did
+> not — every fixture printed `π` for numbers that were 0.271, 1.252 and 0.590. Spreading instead of
+> rebuilding fixes it and makes the class impossible for the next field. The `|γ|` normalisation kept
+> as an equivalent mutant is insurance against exactly the same shape.
+>
+> **E3 is deferred, and not silently.** It needs ADR-0042's `knownValue`, which is decided and
+> unimplemented — and **F2 needs the identical machinery** for `Γ(1+1/n)`. Doing them together
+> implements the import set once against two consumers instead of once against one, which is this
+> repo's own extraction rule pointed at a schema field. SG-3's canonical-range reduction rides with
+> it. The plan's `M` sizing was low throughout: a–d were each engine work of M4.5's weight, and only
+> d was the wiring the plan imagined.
 
 ### M5.4 — tier F · *M*
 

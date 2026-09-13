@@ -10,10 +10,11 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 4, and published.** M1–M4 are complete and 20 of the 28 gallery records are loaded.
+**Through Milestone 4, and published.** M1–M4 are complete (20 of the 28 gallery records loaded).
 **M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
-factor) and M5.2 (one predicate for L3 and L6, and the corrected L6) are done; M5.3 opens tier E. See
-the milestone table in
+factor), M5.2 (one predicate for L3 and L6, and the corrected L6) and M5.3 (tier E's E1 and E2) are
+done; **22 of the 28 records are loaded**. E3 is deferred with F2, which needs the same import
+machinery. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -23,9 +24,9 @@ the milestone table in
   rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
 - The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
   a wrong contour fails diagnostically.
-- The **Family loader** and its four invariants run the gallery records as data. Twenty of the 28
+- The **Family loader** and its four invariants run the gallery records as data. Twenty-two of the 28
   load and are executed against the engine in the test suite — **every entry in tiers A, B, C and
-  D**. The thirteen of tiers A–C are:
+  D**, plus tier E's E1 and E2. The thirteen of tiers A–C are:
   A1–A7 (circle and semicircle, through the `z = e^{iθ}` substitution and the Cauchy integral
   formula), B1–B3 (Jordan, through the exponential basis `Σ cₖ e^{βₖ}`), and C1–C3 (the indentation
   and L4's `iα·Res`; removability detected, with L5's non-vanishing arc; and a real pole and a
@@ -383,6 +384,36 @@ the milestone table in
 - The arc-extent reader gains the wedge angles `π/n` and `π/(2n)` up to `n = 6`, which it could not
   previously measure, and refuses a degenerate extent: an ML bound of `0·π·R·max|f|` is a `≤ 0` on
   an arc whose integral is small and non-zero.
+
+**M5.3 opens tier E: E1 and E2 load and solve, and the sign of λ decides everything.**
+
+- **The plan said "mostly wiring"; measuring first said otherwise.** `findPoles` gave
+  `e^{0.3z}/(1+e^z)` `rational: false` and **zero poles** — the same report it gave `1/cosh z`
+  (infinitely many) and `e^{−z²}` (genuinely none). So **entirety became a DECISION** first
+  (`kernel/entire.ts`): a sufficient condition, shaped so a refusal cannot be read as a claim —
+  `sin(z)/z` is entire and refuses — with each refusal naming which of three walls it hit.
+- **`w = e^z` makes both integrands rational, and their poles LATTICES.** `e^z = ρ` has solutions
+  every `2πi`, so the record declares which band its argument is about; a list of infinitely many is
+  not a list. One stated restriction (each root of `D` is a root of unity) keeps it exact with **no
+  new number field** — `log ρ = 2πi·q` and the residue lands in M4.2's basis.
+- **E1's window `0 < a < 1` is DERIVED.** The app's first vanishing SEGMENT (a rectangle's verticals
+  reached no lemma at all before this) gives `κ = Re(a) + deg N − deg D` on the right and
+  `−Re(a) − ord₀N + ord₀D` on the left. Their signs are `a < 1` and `a > 0` — the record's "one
+  condition, two jobs", out of the geometry. E2's "no condition at all" is the same expression at
+  `Re(iξ) = 0`.
+- **A strip has TWO denominator shapes.** `1 − λ` factors as a sine when λ is on the unit circle
+  (`π/sin(3π/10)` — which is D1's text, since `x = log t` carries one onto the other) and as a
+  **hyperbolic cosine** when λ is a negative real (`π/cosh(π)` = `π sech(πξ/2)`). E2 exists to teach
+  the second. A cosh cannot degenerate, which is that record's "unconditionally well-posed" claim as
+  a property of the factoring rather than a range check.
+- **A right value under a wrong form, found and fixed.** `solveTarget` rebuilt the solved form field
+  by field and carried only `sine`, so E2's value divided by the cosh while its text printed a bare
+  `π` — for numbers that were 0.271, 1.252 and 0.590. Nothing about that looks wrong.
+- **The declared strip is checked against the contour that was drawn:** the lattice points one period
+  either side are asked for their winding numbers, and enclosing one — or passing through one —
+  refuses. E1's `wrong-strip-height` trap at run time. The check was inert when first written.
+- **E3 is deferred with F2**, not dropped: both need ADR-0042's `knownValue`, and doing them together
+  implements the import set once against two consumers rather than once against one.
 
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:

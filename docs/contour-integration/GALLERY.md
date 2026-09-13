@@ -341,6 +341,65 @@ terminated on it. The rule that works grades its mesh toward both endpoints (`ψ
 Jacobian vanishes there), which needs no case analysis about which end the spike is at — and the two
 faces put it at different ends.
 
+### 5.4 Tier E begins — **M5.3**, and the sign of λ decides everything
+
+E1 and E2 are a matched pair: one rectangle in a quasi-periodic strip, differing only in `λ`. Every
+contrast between them follows from that, and the engine now derives each rather than accepting it.
+
+**"Mostly wiring" was wrong, and measuring it first is what reordered the work.** `findPoles` gave
+`e^{0.3z}/(1+e^z)` `rational: false` and **zero poles** — the same report it gave `1/cosh z`, which
+has infinitely many, and `e^{−z²}`, which genuinely has none. E1 and E2 had no residue to take, and
+E3's `poles: []` was true by accident. So deciding **entirety** turned out to be the prerequisite for
+trusting any pole list, not the last slice.
+
+**`w = e^z` is the whole substitution, and the poles become LATTICES.** `e^z = ρ` has solutions every
+`2πi`, so a strip integrand has vertical lattices rather than finitely many poles, and the record has
+to declare which band its argument is about — a list of infinitely many is not a list, and truncating
+one silently is how a residue sum quietly loses terms. Exactness rests on one stated restriction:
+each root of `D(w)` is a root of unity, so `log ρ = 2πi·q` exactly and `e^{az₀}` lands in M4.2's
+existing basis with **no new number field**.
+
+**E1's parameter window is DERIVED.** The record asks for it in as many words — "*`a > 0` is exactly
+what makes the LEFT vertical side vanish and exactly what makes the integral converge at `x → −∞` …
+one condition, two jobs*" — and L1 on a vertical side gives `κ = Re(a) + deg N − deg D` on the right
+and `−Re(a) − ord₀N + ord₀D` on the left, whose signs are `a < 1` and `a > 0`. E2's contrasting "no
+condition at all" is the same expression at `Re(iξ) = 0`. Two claims, one exponent.
+
+**A strip has TWO denominator shapes, and which one is the SIGN of λ.** `1 − λ` factors as a sine
+when λ sits on the unit circle (E1, `π/sin(πa)`) and as a **hyperbolic cosine** when λ is a negative
+real (E2, `π/cosh(πξ/2)` — the record's `π sech(πξ/2)`). The sine recogniser refused E2 correctly and
+by name. `sineForm.ts`'s own header warns that "a second and third rule accreting into a simplifier
+is the failure mode", and that warning is spent deliberately here: this is not a pattern hunt but the
+other half of one fact, selected by an exact comparison of two coefficients, with everything else
+still refusing. Two consequences worth keeping — **a cosh cannot degenerate** (it vanishes only at an
+imaginary argument, and the branch requires γ real), which is E2's "unconditionally well-posed"
+claim arriving as a property of the factoring rather than a range check; and `1 + e^0 = 2` collapses
+to one term, so `ξ = 0` prints a bare `π`.
+
+**The sharpest bug of the arc was a RIGHT VALUE under a WRONG FORM.** `solveTarget` rebuilt the
+solved form field by field and carried only `sine`, so E2's value divided by the cosh while its text
+did not: every fixture printed `π` for numbers that were 0.271, 1.252 and 0.590. Nothing about that
+looks wrong. Spreading instead of rebuilding fixes it and makes the class impossible for the next
+field — and the one mutant kept as equivalent (normalising `|γ|`, since `ExpSum.sort` already orders
+the pair) is insurance against exactly the same shape, `cosh` being even.
+
+**The strip is declared and the declaration is CHECKED.** `stripTheorem.ts` asks the lattice points
+one period either side of the band for their winding numbers and refuses if the contour encloses one
+— or passes through one, which is worse. That is E1's `wrong-strip-height` trap at run time rather
+than at load time. The check was INERT when first written, because margin poles never reach
+`integrateContour` and so had no winding to look up; it computes them directly now.
+
+Three smaller things the slices found, each older than the slice that found it: the pole card said
+"no poles are claimed" about an entire integrand (understating what the engine had established); the
+ledger's CATCH row gave an **unconditional** reason, telling a reader of `1/cosh z` that "some poles
+are not expressible in ℚ(i)(√d)" — a difficulty it never reached; and `PoleReport.rational`'s doc had
+drifted from its meaning, since C2's `(1 − e^{iz} + iz)/z²` is not rational and sets it `true`.
+
+**E3 is deferred with F2, not dropped.** Both need ADR-0042's `knownValue`, which is decided and
+unimplemented, and doing them together implements the import set once against two consumers rather
+than once against one — this repo's own extraction rule pointed at a schema field. SG-3's
+canonical-range reduction rides with it.
+
 ### 5.0b C1 is where `∮` stops being the answer
 
 Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc

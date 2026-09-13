@@ -763,6 +763,18 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > **The square-contour bound (D-2) is still a document-only correction** and lands with the summation
 > kernel in M5.5. [`GALLERY.md`](GALLERY.md) §5.3 has the findings.
 >
+> **M5.3 is done for E1 and E2, and tier E has begun.** Both print their own closed forms —
+> `π/sin(3π/10)`, which is D1's text under `x = log t`, and `π/cosh(π)`, which is `π sech(πξ/2)`. It
+> took four slices rather than the "mostly wiring" the staging plan expected, because `findPoles`
+> gave `e^{0.3z}/(1+e^z)` the same empty pole list it gave `1/cosh z` and `e^{−z²}`: entirety had to
+> become a DECISION (M5.3a) before any pole list could be trusted, the strip's poles are LATTICES
+> that a declared band selects from (M5.3b), and a rectangle's verticals were the app's first
+> vanishing SEGMENT (M5.3c), which derives E1's `0 < a < 1` from the geometry instead of accepting
+> it. **A strip has two denominator shapes** — `1 − λ` is a sine on the unit circle and a hyperbolic
+> cosine at a negative real — and E2 exists to teach the second (M5.3d). **E3 is deferred with F2**,
+> since both need ADR-0042's `knownValue` and doing them together implements the import set once
+> against two consumers. [`M5-plan.md`](M5-plan.md) §M5.3 has the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.
