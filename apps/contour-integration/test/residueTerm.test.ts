@@ -7,7 +7,7 @@
 // structural ones are refusals, and each is asserted to name the thing that is wrong, because a
 // refusal whose message does not identify the defect is only marginally better than a wrong answer.
 import { describe, expect, it } from "vitest";
-import { SqrtExt } from "@cas/exact";
+import { Gauss, SqrtExt } from "@cas/exact";
 import { parse } from "@cas/expr";
 import { asSummationKernel, type SummationKernel } from "../src/kernel/summationKernel.js";
 import { cofactorResidues, ratioToTuple } from "../src/kernel/kernelResidue.js";
@@ -17,6 +17,7 @@ import { FAMILIES, loadFamilies } from "../src/families/index.js";
 import { contourIntegrandOf } from "../src/families/instantiate.js";
 import { primaryGolden, runFamily, solveFamily } from "../src/families/runFamily.js";
 import { summationRecord } from "./helpers/summationRecord.js";
+import { RatPi } from "../src/kernel/ratPi.js";
 import type { Family, FamilyPiece, FamilyTarget } from "../src/families/schema.js";
 
 const kernelOf = (src: string): SummationKernel => {
@@ -163,7 +164,10 @@ describe("the two-sided sum: Σ_{n∈ℤ} 1/(n²+a²)", () => {
     const r = solve(squareRecord(TWO_SIDED), "pi*cot(pi*z)/(z^2+(3/4)^2)");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const [re, im] = ratioToTuple(r.solved.piUnits);
+    // Tagged, because there are two rings and they are incomparable — this is G2's.
+    expect(r.solved.solvedIn.ring).toBe("exponential");
+    if (r.solved.solvedIn.ring !== "exponential") return;
+    const [re, im] = ratioToTuple(r.solved.solvedIn.piUnits);
     expect(im).toBeCloseTo(0, 12);
     expect(Math.PI * re).toBe(r.solved.value);
     // `T/π = coth(πa)/a` — the ratio, before anything names it.
@@ -321,9 +325,42 @@ describe("the refusals that keep the route inside its own ring", () => {
     expect(reason(r)).toMatch(/has imaginary part.*but its terms are real/s);
   });
 
-  it("refuses the predicate that excludes n = 0, because that term is in a different ring", () => {
+  it("refuses an excluded n = 0 where the cofactor is REGULAR there", () => {
+    // The excluded term is then `f(0)`, an ALGEBRAIC number, where the rest of the sum carries the
+    // kernel's π. M5.7 carries the OTHER case — a collision, whose residue is in ℚ(i)(π) — and this
+    // one belongs to no convergent record: a cofactor whose only poles are at integers has them all
+    // collide, and one with a pole elsewhere is the mixed case above.
     const r = solve(squareRecord({ ...TWO_SIDED, terms: "poles(K) ∩ Z \\ {0}" }), "pi*cot(pi*z)/(z^2+1)");
-    expect(reason(r)).toMatch(/exclude n = 0.*ℚ\(i\)\(π\)/s);
+    expect(reason(r)).toMatch(/exclude n = 0.*ALGEBRAIC/s);
+  });
+
+  it("refuses a merged residue supplied against target terms that claim every integer", () => {
+    const kernel = kernelOf("pi*cot(pi*z)/z^2");
+    const r = solveResidueTerm(squareRecord(TWO_SIDED), {
+      kernel,
+      known: knownOf(kernel),
+      excluded: RatPi.piPower(2, Gauss.int(-1)),
+      pieceLimits: [],
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toMatch(/on BOTH sides of the identity/);
+  });
+
+  it("refuses a merged residue ALONGSIDE a cofactor pole away from the integers", () => {
+    // `π cot(πz)·(z²+1+z²·…)`: one kernel whose cofactor has both a collision and an ordinary pole.
+    // The two residues are in incomparable rings, and adding them numerically would produce a
+    // decimal labelled exact.
+    const kernel = kernelOf("pi*cot(pi*z)/(z^2*(z^2+1))");
+    const r = solveResidueTerm(squareRecord({ ...TWO_SIDED, lower: "1", weight: 2 }), {
+      kernel,
+      known: knownOf(kernel),
+      excluded: RatPi.piPower(2, Gauss.int(-1)),
+      pieceLimits: [],
+    });
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toMatch(/no ring in this app holds both/);
   });
 
   it("refuses a predicate outside the vocabulary, and quotes the vocabulary", () => {

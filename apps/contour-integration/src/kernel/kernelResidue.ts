@@ -114,8 +114,11 @@ export type CofactorResidues =
  * `Res(K·f, z₀) = K(z₀)·Res(f, z₀)` at a SIMPLE pole of `f` where `K` is regular — the kernel is
  * holomorphic and non-zero there, so the residue of the product is the value times the residue, the
  * same identity `branchResidue.ts` uses for `z^α·R`. A higher-order pole of `f` would mix the
- * kernel's own derivatives in and is refused rather than approximated: no record in the tier has one,
- * and one that did would be a different computation rather than a harder case of this.
+ * kernel's own derivatives in and is refused rather than approximated: no record in the tier has one
+ * away from the integers, and one that did would be a different computation rather than a harder case.
+ *
+ * Poles AT integers are excluded: there the kernel is not regular, the two merge, and the residue is
+ * `mergedResidue.ts`'s. The two functions partition the pole set between them.
  */
 export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
   const report = exactPolesOf(kernel.num, kernel.den);
@@ -129,6 +132,14 @@ export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
   let total: ExpRatio = ratioOf(ExpSum.ZERO);
   const at: { z: SqrtExt; value: ExpRatio }[] = [];
   for (const pole of report.poles) {
+    // **A POLE AT AN INTEGER IS NOT THIS FUNCTION'S.** This is the set where the kernel is REGULAR
+    // and `Res(K·f, z₀) = K(z₀)·Res(f, z₀)` holds; at an integer the kernel has a pole too, the two
+    // MERGE, and `mergedResidue.ts` computes that instead. Skipping them by construction rather than
+    // by a parameter is what keeps the two lists a partition: before this, G1's `1/z²` reached the
+    // order-2 refusal below — true of the identity this function applies, and beside the point,
+    // because the identity that applies there is a different one.
+    const g = pole.at.asGauss();
+    if (g !== null && g.im.isZero() && g.re.d === 1n) continue;
     if (pole.order !== 1) {
       const reason =
         `the cofactor has a pole of order ${pole.order}, where Res(K·f, z₀) = K(z₀)·Res(f, z₀) does ` +
@@ -142,13 +153,12 @@ export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
         "Gaussian multiple of π) and the kernel cannot be evaluated there exactly";
       return { ok: false, reason, certificate: refuse("Σ Res(K·f, z_j)", reason) };
     }
+    // `kernelOverPi` returns null only at an INTEGER `z₀`, and the partition above has already
+    // skipped every one of those — so this cannot be null here. It is read as a value rather than
+    // guarded, because a refusal that cannot fire reads as a guard and is not one (M5.6d's lesson,
+    // from the invariant that asserted `rank(M) = 0`).
     const k = kernelOverPi(kernel.kind, z);
-    if (k === null) {
-      const reason =
-        `the cofactor has a pole at the integer ${z.re.n / z.re.d}, where the kernel has one too: ` +
-        "the two merge and K(z₀) is not a value at all";
-      return { ok: false, reason, certificate: refuse("Σ Res(K·f, z_j)", reason) };
-    }
+    if (k === null) throw new Error("unreachable: an integer pole is not in this partition");
     const value = scaleRatio(k, pole.residue);
     at.push({ z: pole.at, value });
     const next = addRatio(total, value);

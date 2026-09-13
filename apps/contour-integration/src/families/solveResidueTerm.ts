@@ -49,6 +49,7 @@ import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import type { ExpSum } from "../kernel/expSum.js";
 import { ratioToTuple, scaleRatio, type ExpRatio } from "../kernel/kernelResidue.js";
+import { RatPi, formatRatPi } from "../kernel/ratPi.js";
 import { asHyperbolicForm } from "../kernel/cothForm.js";
 import { formatSineForm, sineFormToNumber, type SineForm } from "../kernel/sineForm.js";
 import type { SummationKernel } from "../kernel/summationKernel.js";
@@ -74,6 +75,13 @@ export interface ResidueTermInputs {
   readonly kernel: SummationKernel;
   /** `Σ_j Res(K·f, z_j)/π` over the poles the record does not claim — `cofactorResidues`' total. */
   readonly known: ExpRatio;
+  /**
+   * `Σ Res(K·f, n)` over the EXCLUDED integers, in ℚ(i)(π) — the collisions.
+   *
+   * Absent for a record whose target terms are every integer (G2). Present, it is the other ring,
+   * and the two are mutually exclusive by the check below rather than by convention.
+   */
+  readonly excluded?: RatPi;
   /** The exact limits of the pieces, in units of π. Every one must be zero; see the header. */
   readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
 }
@@ -92,8 +100,19 @@ export interface SolvedResidueTerm extends SolvedValue {
   readonly targetId: string;
   /** `1` for a two-sided sum, `2` for a one-sided sum of an even summand — derived AND checked. */
   readonly weight: 1 | 2;
-  /** `T/π`, exactly — a RATIO, because `coth` is one. */
-  readonly piUnits: ExpRatio;
+  /**
+   * The exact value, IN THE RING IT WAS SOLVED IN — tagged, because there are two and they are
+   * incomparable.
+   *
+   * `exponential` is G2's: the cofactor's residues make `T/π` a quotient of basis elements, because
+   * `cot(πz₀)` is a Möbius function of `e^{2πiz₀}`. `Q(i)(pi)` is G1's: every residue comes from a
+   * COLLISION, where the kernel's even Laurent expansion puts the value in ℚ·π^{2k}. A single
+   * optional field for each would leave "exactly one is present" as an unenforced convention; this
+   * makes a reader pick.
+   */
+  readonly solvedIn:
+    | { readonly ring: "exponential"; readonly piUnits: ExpRatio }
+    | { readonly ring: "Q(i)(pi)"; readonly exact: RatPi };
   /**
    * The NAMED form, when `cothForm.ts` recognises the ratio — `c·coth(πr)` or `c·csch(πr)`.
    *
@@ -255,6 +274,14 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
   if (!structural.ok) return no(structural.reason);
   const { targetId, weight: forced, excludesZero } = structural.shape;
 
+  const excluded = inputs.excluded;
+  if (excluded !== undefined && !inputs.known.num.isZero()) {
+    return no(
+      "the residue sum has a term in ℚ(i)(π) (a merged pole) and a term in the exponential basis (a " +
+        "pole of the cofactor away from the integers), and no ring in this app holds both",
+    );
+  }
+
   const alive = inputs.pieceLimits.find((p) => !p.contribution.isZero());
   if (alive !== undefined) {
     return no(
@@ -262,12 +289,23 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
         "times an algebraic number and would compete with the residue sum's own π for the same slot",
     );
   }
-  if (excludesZero) {
+  // **THE EXCLUDED INTEGER IS A KNOWN TERM, AND WHICH RING IT LANDS IN DECIDES THE WHOLE SOLVE.**
+  // At a regular integer `Res(K·f, n) = f(n)` is ALGEBRAIC (the kernel's π spent on its own residue
+  // `π·(1/π) = 1`); where the cofactor also has a pole the two MERGE and the residue is in ℚ(i)(π).
+  // Only the second is carried, and the first is refused rather than given a third ring: a cofactor
+  // whose only poles are at integers has them all collide, and one with a pole elsewhere is the
+  // mixed case above — so an algebraic excluded term belongs to no convergent record.
+  if (excludesZero && excluded === undefined) {
     return no(
-      "the target terms exclude n = 0, so Res(K·f, 0) is a KNOWN term — and it is algebraic where the " +
-        "cofactor's residues carry the kernel's π (a regular integer spends it on the kernel's own " +
-        "residue π·(1/π) = 1), or, where the cofactor also has a pole there, the two MERGE and the " +
-        "residue lands in ℚ(i)(π). Either way it does not belong to this route's ring",
+      "the target terms exclude n = 0, so Res(K·f, 0) is a KNOWN term — and none was supplied, which " +
+        "means the cofactor is regular there and the residue is f(0), an ALGEBRAIC number where the " +
+        "rest of the sum carries the kernel's π",
+    );
+  }
+  if (!excludesZero && excluded !== undefined) {
+    return no(
+      "a merged residue was supplied, but the target terms claim every integer — so the collision's " +
+        "own term is on BOTH sides of the identity",
     );
   }
   if (forced === 2) {
@@ -279,7 +317,9 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
     }
     // With `0` inside the target terms, `Σ_ℤ = 2Σ_{n≥1}` also needs its `n = 0` term to vanish —
     // otherwise the identity is `Σ_ℤ = f(0) + 2Σ_{n≥1}` and the weight silently absorbs `f(0)`.
-    if (!inputs.kernel.num.eval(Gauss.ZERO).isZero()) {
+    // **Not asked when 0 is EXCLUDED**, which is G1: there `Σ_{n≠0} = 2Σ_{n≥1}` needs only evenness,
+    // and `f(0)` is not merely non-zero but infinite.
+    if (!excludesZero && !inputs.kernel.num.eval(Gauss.ZERO).isZero()) {
       return no(
         "the target is one-sided and n = 0 is among the target terms, but f(0) ≠ 0: the identity is " +
           "Σ_{n∈ℤ} = f(0) + 2·Σ_{n≥1}, so weight 2 alone would absorb the n = 0 term into the answer",
@@ -288,6 +328,57 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
   }
 
   // `w·(T/π) + ρ = 0`.
+  // ---- ℚ(i)(π): every known residue came from a COLLISION (G1, G3) -------------------------------
+  //
+  // `w·T + Σ merged = 0`, and there is no π to divide out — a merged residue is already `−π²/3`
+  // rather than π times something. So the value is the answer itself and `T/π` never appears, which
+  // is the clearest statement of why this is a second ROUTE and not a different formatter.
+  if (excluded !== undefined) {
+    const value = excluded.neg().mul(RatPi.fromGauss(Gauss.rat(1n, BigInt(forced))));
+    const [re, im] = value.toNumber();
+    if (im !== 0) {
+      return no(`the solved sum is ${formatRatPi(value)}, which is not real, but its terms are`);
+    }
+    return {
+      ok: true,
+      solved: {
+        targetId,
+        weight: forced,
+        solvedIn: { ring: "Q(i)(pi)", exact: value },
+        text: formatRatPi(value),
+        value: re,
+        certificates: [
+          exact(
+            `${targetId} = −(Σ Res at the merged poles)/${forced} = ${formatRatPi(value)}`,
+            "Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour " +
+              "vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out",
+            {
+              provenance: [
+                {
+                  ok: true,
+                  text: `the weight ${forced} is DERIVED from the target's own declared range and checked against the record, not read out of it`,
+                },
+                {
+                  ok: true,
+                  text: "the kernel's Laurent expansion at an integer is EVEN, so a merged residue is a rational multiple of an even power of π — this ring, and not the exponential basis G2 solves in",
+                },
+                ...(forced === 2
+                  ? [
+                      {
+                        ok: true,
+                        text: "the cofactor is even, decided exactly over ℚ(i), which is what makes Σ_{n≠0} = 2·Σ_{n≥1}; f(0) is not asked about, because n = 0 is excluded from the target's own terms",
+                      },
+                    ]
+                  : []),
+              ],
+            },
+          ),
+        ],
+      },
+    };
+  }
+
+  // ---- the exponential basis: the cofactor's poles carry the answer (G2) -------------------------
   const piUnits = scaleRatio(inputs.known, SqrtExt.fromGauss(new Gauss(Frac.of(-1n, BigInt(forced)), Frac.ZERO)));
   const [re, im] = ratioToTuple(piUnits);
   // The unknown is a sum of real terms, so this is zero by hypothesis — a guard against an engine
@@ -316,7 +407,7 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
     solved: {
       targetId,
       weight: forced,
-      piUnits,
+      solvedIn: { ring: "exponential", piUnits },
       ...(named.ok ? { form: named.form, text: formatSineForm(named.form) } : {}),
       value: named.ok ? sineFormToNumber(named.form, "re") : Math.PI * re,
       certificates: [

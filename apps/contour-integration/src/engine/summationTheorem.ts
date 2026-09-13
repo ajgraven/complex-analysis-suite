@@ -34,7 +34,9 @@ import { formatSqrtExt } from "../kernel/formatExact.js";
 import { asHyperbolicForm } from "../kernel/cothForm.js";
 import { formatSineForm } from "../kernel/sineForm.js";
 import { cofactorResidues, ratioToTuple, scaleRatio, type ExpRatio } from "../kernel/kernelResidue.js";
-import { kernelResidues, type SummationKernel } from "../kernel/summationKernel.js";
+import { collisionsOf, kernelResidues, type SummationKernel } from "../kernel/summationKernel.js";
+import { mergedResidue } from "../kernel/mergedResidue.js";
+import { RatPi, formatRatPi } from "../kernel/ratPi.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { windingNumber } from "../kernel/winding.js";
 import type { ContourIntegral } from "./contour/integrate.js";
@@ -75,8 +77,31 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
     return w === undefined ? { n: 0, decided: false } : { n: w.n, decided: w.decided };
   };
 
+  // ---- the COLLISIONS: integers where the cofactor has a pole too ------------------------------
+  //
+  // Their residues come from `mergedResidue` (orders ADD, and the value lands in ℚ(i)(π)), and they
+  // are skipped in the ordinary pass below so no integer is summed twice and none is missed — one
+  // list read by both, rather than two decisions about what a collision is.
+  const collisions = collisionsOf(kernel, band);
+  const merged: { n: bigint; value: RatPi }[] = [];
+  const mergedCertificates: Certificate[] = [];
+  for (const n of collisions) {
+    const w = windingOf([Number(n), 0]);
+    if (!w.decided) {
+      return declined(
+        "∮ K·f dz",
+        `the winding about the merged pole at z = ${n} could not be decided, so the contour may pass through it`,
+      );
+    }
+    if (w.n === 0) continue;
+    const r = mergedResidue(kernel.kind, kernel.num, kernel.den, n);
+    if (!r.ok) return declined("∮ K·f dz", r.reason);
+    merged.push({ n, value: r.value.mul(RatPi.fromGauss(Gauss.int(w.n))) });
+    mergedCertificates.push(r.certificate);
+  }
+
   // ---- the kernel's own poles: `Res(K·f, n) = f(n)·Res(K, n)`, exact over ℚ(i) -------------------
-  const integers = kernelResidues(kernel, band);
+  const integers = kernelResidues(kernel, band, new Set(collisions));
   if (!integers.ok) return declined("∮ K·f dz", integers.reason);
 
   let partial = Gauss.ZERO;
@@ -151,18 +176,44 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   // `∮ = 2πi[partial + π·ρ]`. The two halves carry different powers of π and are combined here, once,
   // in the numeric plane — see the header for why no ring holds both.
   const weighted = scaleRatio(cofactor.total, SqrtExt.fromGauss(Gauss.int(weight)));
+  // **A COLLISION FAMILY LIVES ENTIRELY IN ℚ(i)(π), AND SAYS SO.** `Σ f(n)` is rational and a merged
+  // residue is in ℚ(i)(π), which CONTAINS it — so when the cofactor has no pole away from the
+  // integers (`ρ = 0`) the whole identity is exact in the log families' ring and `exactInPi` is the
+  // seat it already has. With both present the two halves are the mixed case `solveResidueTerm.ts`
+  // refuses by name, and the refusal belongs here too: adding them in the numeric plane would
+  // produce a decimal labelled exact.
+  const mergedTotal = merged.reduce((acc, x) => acc.add(x.value), RatPi.ZERO);
+  if (merged.length > 0 && !cofactor.total.num.isZero()) {
+    return declined(
+      "∮ K·f dz",
+      "the contour encloses a MERGED pole, whose residue is in ℚ(i)(π), and a pole of the cofactor " +
+        "away from the integers, whose residue carries the kernel's π times a quotient of " +
+        "exponentials: no ring in this app holds both",
+    );
+  }
+
   const [rr, ri] = ratioToTuple(weighted);
+  const [mr, mi] = mergedTotal.toNumber();
   const [pr, pi] = partial.toTuple();
-  const inner: Cx = [pr + Math.PI * rr, pi + Math.PI * ri];
+  const inner: Cx = [pr + mr + Math.PI * rr, pi + mi + Math.PI * ri];
   const value: Cx = [-2 * Math.PI * inner[1], 2 * Math.PI * inner[0]];
+  // `2πi·(Σ f(n) + Σ merged)` in ℚ(i)(π), present exactly when every residue is in that ring.
+  const exactInPi =
+    merged.length > 0
+      ? RatPi.piPower(1, Gauss.int(0, 2)).mul(RatPi.fromGauss(partial).add(mergedTotal))
+      : undefined;
 
   // The TEXT is the gallery's own `closedContour` probe: `2πi[Σ_{|n|≤N} f(n) − T]`, with `T` the
   // infinite sum in its named form. `Σⱼ Res = −T/π·π = −T`, so the minus is the identity's own and
   // not a sign chosen to make the line read well.
   const infinite = scaleRatio(weighted, SqrtExt.fromGauss(new Gauss(Frac.of(-1n), Frac.ZERO)));
-  const text = `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} − ${describeCofactorSum(infinite)})`;
+  const text =
+    exactInPi === undefined
+      ? `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} − ${describeCofactorSum(infinite)})`
+      : `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} + ${formatRatPi(mergedTotal)})`;
 
   const certificates: Certificate[] = [
+    ...mergedCertificates,
     exact(
       `∮ = 2πi[Σ over ${counted} integer pole${counted === 1 ? "" : "s"} + Σ over ${cofactor.at.length} pole${cofactor.at.length === 1 ? "" : "s"} of the cofactor]`,
       "the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements",
@@ -188,6 +239,7 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
 
   return {
     exactValue: { value, text },
+    ...(exactInPi === undefined ? {} : { exactInPi }),
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
     ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
     identity: SUMMATION_THEOREM_IDENTITY,

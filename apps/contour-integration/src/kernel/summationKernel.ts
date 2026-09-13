@@ -172,9 +172,35 @@ export type KernelResidues =
  * exercised only by the suite — said out loud so it does not become another export that is dead and
  * quiet about it.
  */
-export function kernelResidues(kernel: SummationKernel, bound: bigint): KernelResidues {
+/**
+ * The integers in the band at which the cofactor ALSO has a pole — the collisions.
+ *
+ * Split out so the theorem and Pass 5 read one list rather than each deciding for itself what a
+ * collision is. Exact: the denominator is evaluated over ℚ(i) and `isZero` is a decision.
+ */
+export function collisionsOf(kernel: SummationKernel, bound: bigint): readonly bigint[] {
+  const out: bigint[] = [];
+  for (let n = -bound; n <= bound; n++) {
+    if (kernel.den.eval(new Gauss(Frac.of(n), Frac.ZERO)).isZero()) out.push(n);
+  }
+  return out;
+}
+
+export function kernelResidues(
+  kernel: SummationKernel,
+  bound: bigint,
+  /**
+   * Integers to leave out — the COLLISIONS, whose residues `mergedResidue` supplies instead.
+   *
+   * Empty by default, which is the shape this had before G1: a collision then refuses here, and the
+   * refusal is still what a caller that has not handled them gets. Passing the set is a caller
+   * saying it HAS, so the two cannot disagree about which integers were summed.
+   */
+  skip: ReadonlySet<bigint> = new Set(),
+): KernelResidues {
   const terms: { n: bigint; residue: Gauss }[] = [];
   for (let n = -bound; n <= bound; n++) {
+    if (skip.has(n)) continue;
     const at = new Gauss(Frac.of(n), Frac.ZERO);
     const d = kernel.den.eval(at);
     if (d.isZero()) {

@@ -179,11 +179,26 @@ describe("what the identity refuses", () => {
     expect(theorem.agrees).toBe(true);
   });
 
-  it("refuses a collision, rather than dividing by zero at the merged pole", () => {
-    // G1's shape: `1/z²` has its pole exactly where the kernel has one. M5.7's, refused by name.
+  it("MERGES a collision rather than refusing it, and lands in ℚ(i)(π)", () => {
+    // G1's shape: `1/z²` has its pole exactly where the kernel has one, orders ADD, and the residue
+    // is `−π²/3`. `Σ_{0<|n|≤4} 1/n² = 205/72`, so `∮ = 2πi(205/72 − π²/3)` — entirely in ℚ(i)(π),
+    // because `Σ f(n)` is rational and that ring contains it.
     const { theorem, ledger } = run("pi*cot(pi*z)/z^2", 4);
+    expect(ledger.closes).toBe(true);
+    expect(theorem.exactValue?.text).toBe("2πi(205/72 + −π²/3)");
+    expect(theorem.exactInPi).toBeDefined();
+    expect(theorem.agrees).toBe(true);
+    // And the value is the one the quadrature independently found.
+    const want = 2 * Math.PI * (205 / 72 - (Math.PI * Math.PI) / 3);
+    expect(theorem.exactValue?.value[1]).toBeCloseTo(want, 10);
+  });
+
+  it("and refuses a collision ALONGSIDE a pole away from the integers — two rings", () => {
+    const { theorem, ledger } = run("pi*cot(pi*z)/(z^2*(z^2+1))", 4);
     expect(theorem.exactValue).toBeUndefined();
     expect(ledger.closes).toBe(false);
-    expect(theorem.verdict.certificates.some((c) => /MERGE/.test(c.method))).toBe(true);
+    expect(theorem.verdict.certificates.some((c) => /no ring in this app holds both/.test(c.method))).toBe(
+      true,
+    );
   });
 });

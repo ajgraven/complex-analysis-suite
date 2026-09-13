@@ -196,12 +196,25 @@ describe("cofactorResidues — G2's two poles", () => {
     expect(r.reason).toMatch(/pole of order 2/);
   });
 
-  it("REFUSES the collision from this side too", () => {
-    // `f = 1/(z²−1)` has poles at `±1`, both integers. `summationKernel.ts` refuses it from the
-    // kernel's side; this refuses it from the cofactor's, and the two do not depend on each other.
+  it("leaves the collision to `mergedResidue` — the two PARTITION the pole set", () => {
+    // `f = 1/(z²−1)` has poles at `±1`, both integers, where the kernel has poles too. This function
+    // is the set where the kernel is REGULAR, so it reports neither and its total is zero — which is
+    // exactly G1's shape (`ρ = 0`, every residue merged) rather than a refusal. It used to refuse
+    // here, which was true of the identity this function applies and beside the point, because the
+    // identity that applies at an integer is a different one.
     const r = cofactorResidues(kernelOf("pi*cot(pi*z)/(z^2-1)"));
-    expect(r.ok).toBe(false);
-    if (r.ok) return;
-    expect(r.reason).toMatch(/pole at the integer/);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.at).toEqual([]);
+    expect(r.total.num.isZero()).toBe(true);
+  });
+
+  it("and still reports the poles that are NOT collisions, alongside one that is", () => {
+    // `1/(z²(z²+1))`: a collision at 0 and an ordinary pair at `±i`. The partition keeps the pair.
+    const r = cofactorResidues(kernelOf("pi*cot(pi*z)/(z^2*(z^2+1))"));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.at.length).toBe(2);
+    expect(r.at.every((x) => !x.z.asGauss()?.im.isZero())).toBe(true);
   });
 });

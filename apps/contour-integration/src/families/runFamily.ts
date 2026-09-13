@@ -35,7 +35,8 @@ import {
   type SolvedValue,
 } from "./solveTarget.js";
 import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branchFactor.js";
-import { solveResidueTerm, type SolvedResidueTerm } from "./solveResidueTerm.js";
+import { residueTermShape, solveResidueTerm, type SolvedResidueTerm } from "./solveResidueTerm.js";
+import { mergedResidue } from "../kernel/mergedResidue.js";
 import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
@@ -498,9 +499,21 @@ function solveSummationFamily(family: Family, run: FamilyRun): SolveFamilyResult
   if (!known.ok) {
     return { ok: false, run, reason: `${family.id}: ${known.reason}` };
   }
+  // The EXCLUDED integer's residue, when the record's predicate leaves one out — G1's and G3's
+  // `n = 0`, where the cofactor has a pole too and the two MERGE. Read from the predicate rather
+  // than from the contour, because the identity Pass 5 solves is the LIMIT's: `n = 0` is enclosed by
+  // every square, and asking the drawn one would make the answer depend on a radius the argument has
+  // already sent to infinity.
+  const shape = residueTermShape(family);
+  let excluded: RatPi | undefined;
+  if (shape.ok && shape.shape.excludesZero) {
+    const m = mergedResidue(run.summation.kind, run.summation.num, run.summation.den, 0n);
+    if (m.ok) excluded = m.value;
+  }
   const solved = solveResidueTerm(family, {
     kernel: run.summation,
     known: known.total,
+    ...(excluded === undefined ? {} : { excluded }),
     pieceLimits: run.ledger.pieceLimits,
   });
   if (!solved.ok) {
