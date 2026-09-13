@@ -31,8 +31,13 @@ export interface ExponentialForm {
   readonly den: QiPoly;
 }
 
-/** Flatten a product/quotient tree into numerator and denominator factors. */
-function splitFactors(node: Node): { num: Node[]; den: Node[] } {
+/**
+ * Flatten a product/quotient tree into numerator and denominator factors.
+ *
+ * Exported for `expLattice.ts`, which is the second reader that has to take an integrand apart
+ * before it can recognise anything (ADR-0007's rule at the function scale).
+ */
+export function splitFactors(node: Node): { num: Node[]; den: Node[] } {
   if (node.kind === "arith" && node.op === "*") {
     const l = splitFactors(node.left);
     const r = splitFactors(node.right);
