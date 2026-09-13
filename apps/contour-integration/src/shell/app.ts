@@ -62,21 +62,12 @@ import {
   translateContour,
   type Handle,
 } from "../engine/contour/edit.js";
-import {
-  circleTemplate,
-  dogboneTemplate,
-  indentedSemicircleTemplate,
-  keyholeTemplate,
-  rectangleTemplate,
-  stripTemplate,
-  squareTemplate,
-  wedgeTemplate,
-  semicircleTemplate,
-} from "../engine/contour/templates.js";
 import { isVariant, primaryGolden, type FamilyRun } from "../families/runFamily.js";
 import type { Family, FamilyTarget, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
+import { TEMPLATES } from "./templates.js";
+import { decodeShell, encodeShell } from "./viewState.js";
 import {
   compile,
   declaredOrder as orderOfState,
@@ -84,6 +75,7 @@ import {
   recordOf,
   resolveState,
   type Compiled,
+  type ContourSource,
   type ShellState,
   type StateResolution,
 } from "./state.js";
@@ -110,81 +102,6 @@ import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accum
  * number, because there is never a number to style.
  */
 
-type TemplateId =
-  | "circle"
-  | "semicircle"
-  | "semicircleDown"
-  | "indented"
-  | "rectangle"
-  | "keyhole"
-  | "dogbone";
-
-/**
- * `seed` is how a template whose SHAPE presupposes a cut declares one.
- *
- * A keyhole with no cut is four pieces with a coincidence in them, and a dogbone with no cut is a
- * closed curve enclosing nothing — which is to say `∮ = 0` and no lesson. So these two offer the cut
- * system they were drawn for. It stays a CHOICE in exactly the sense M4.1 fixed: the seeded points
- * and cut are ordinary declared objects, listed in the Branch cuts card, draggable, re-orderable and
- * removable, and the template only offers them when nothing is declared yet — it never overwrites a
- * cut the user placed.
- */
-const TEMPLATES: {
-  /**
-   * The sandbox's own preset id. It has borrowed the FAMILY schema's `TemplateId` by convenience
-   * until now, and `"strip"` is the first place the two vocabularies diverge: a record declares this
-   * shape as `"rectangle"` (E1, E2 and E3 all do), while the sandbox already uses that name for its
-   * free four-sided shape. Widening here rather than adding a sandbox-only name to the record schema.
-   */
-  id: TemplateId | "strip" | "wedge" | "square";
-  label: string;
-  build: () => Contour;
-  seed?: (branch: BranchChoice) => BranchChoice;
-}[] = [
-  { id: "circle", label: "circle", build: () => circleTemplate([0, 0], 1.5) },
-  { id: "semicircle", label: "semicircle ↑", build: () => semicircleTemplate(3, "upper") },
-  { id: "semicircleDown", label: "semicircle ↓", build: () => semicircleTemplate(3, "lower") },
-  // C1's contour, and the one that makes `∮` stop being the answer: it encloses nothing, so
-  // `∮ = 0` while the integral is π/2 and the entire value comes from the indentation's
-  // `iα·Res`. The engine has had this template since M3 with no way in.
-  {
-    id: "indented",
-    label: "indented semicircle",
-    build: () => indentedSemicircleTemplate(8, 0.05),
-  },
-  { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
-  // Tier E's shape, alongside tier D's two below: the quasi-periodic strip, whose top side
-  // REPRODUCES the bottom rather than vanishing. `exp(0.3*z)/(1 + exp(z))` on it is E1.
-  { id: "strip", label: "strip (2π)", build: () => stripTemplate(2 * Math.PI, 6) },
-  // Tier F's shape, and the rotational twin of the strip above: the return ray reproduces the
-  // outgoing one by `−ω·μ` rather than by `−λ`. `1/(1 + z^3)` on it is F1.
-  { id: "wedge", label: "wedge (2π/3)", build: () => wedgeTemplate(3, 4) },
-  // Tier G's shape, and the only one whose every side vanishes — `pi*cot(pi*z)/z^2` on it is G1's
-  // contour. The half-integer offset is the point: at half-width 2 the vertical sides run through
-  // the kernel's poles at `z = ±2`.
-  { id: "square", label: "square (N+½)", build: () => squareTemplate(2) },
-  // Tier D's two shapes, which the engine has had since M4.2 and M4.6 with no way in either.
-  {
-    id: "keyhole",
-    label: "keyhole",
-    build: () => keyholeTemplate(4, 0.15),
-    seed: (b) => setOrder(addBranchPoint(b, [0, 0]), "b1", { kind: "power", alpha: Frac.of(1n, 2n) }),
-  },
-  // The one that encloses nothing and is not zero — but only once the cut is inside it, which is
-  // why this is the template that seeds a BOUNDED cut rather than a ray.
-  {
-    id: "dogbone",
-    label: "dogbone",
-    build: () => dogboneTemplate(-1, 1, 0.12),
-    seed: (b) => {
-      const half = { kind: "power", alpha: Frac.of(-1n, 2n) } as const;
-      let next = setOrder(addBranchPoint(b, [-1, 0]), "b1", half);
-      next = setOrder(addBranchPoint(next, [1, 0]), "b2", half);
-      return joinToOneCut(next, "b1", "b2") ?? next;
-    },
-  },
-];
-
 /** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
 const GRAB_PX = 11;
 
@@ -197,6 +114,31 @@ const GRAB_PX = 11;
  * only the CROSS-CHECK is affected, since `∮` comes from a formula over exact residues either way.
  */
 const DRAFT_EVALUATIONS = 768;
+
+/**
+ * The pre-`navigator.clipboard` copy path: a hidden textarea and `document.execCommand("copy")`.
+ *
+ * Deprecated and still the only thing that works on a page served over plain HTTP or in an engine
+ * without the async clipboard, which is exactly where a reader most needs the link they were given.
+ * Returns whether it worked, so the caller can say "copied" or say it could not.
+ */
+function legacyCopy(text: string): boolean {
+  const box = document.createElement("textarea");
+  box.value = text;
+  box.setAttribute("readonly", "");
+  box.style.position = "fixed";
+  box.style.opacity = "0";
+  document.body.append(box);
+  box.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  box.remove();
+  return ok;
+}
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -371,6 +313,8 @@ export function mountApp(root: Element): ShellHandle {
   /** The contour as it was when the gesture began, so a translation is measured from an anchor rather
    *  than accumulated move by move. */
   let anchorContour: Contour | null = null;
+  /** The recipe's shift when the gesture began, so a drag is measured from an anchor here too. */
+  let anchorShift: Cx = [0, 0];
   let anchorAt: Cx = [0, 0];
 
   // --- gallery state -----------------------------------------------------------------------
@@ -387,6 +331,13 @@ export function mountApp(root: Element): ShellHandle {
    * a state either mode meant to produce, and the user did not ask for it.
    */
   let sandboxContour: Contour = contour;
+  /**
+   * The sandbox contour's PROVENANCE — see `ShellState.contourSource`.
+   *
+   * Not nulled by gallery mode, exactly as `branch` is not: it is the SANDBOX's, a record derives
+   * its own contour, and keeping it means the parked contour and its recipe come back together.
+   */
+  let contourSource: ContourSource | null = { template: TEMPLATES[0].id, shift: [0, 0] };
   let family: Family | null = null;
   let golden: Golden | null = null;
   /** A move on a family PARAMETER. These reach the integrand, not only the geometry. */
@@ -491,11 +442,70 @@ export function mountApp(root: Element): ShellHandle {
     sourceWrap.append(b);
   }
 
-  bar.append(el("span", "brand", "Contour Integration"), sourceWrap, sandboxGroup, galleryGroup);
+  /**
+   * Copy the permalink — the one place a reader ASKS for a link, and therefore the one place the
+   * codec's refusal has to be visible.
+   *
+   * `navigator.clipboard.writeText` synchronously inside the click, which is the suite's form (the
+   * plotter's, CD's, QD's): a clipboard write outside the user gesture is refused by the browser.
+   * Older engines have no async clipboard at all, so there is a `document.execCommand` fallback, and
+   * if even that fails the button says so rather than pretending.
+   */
+  const shareButton = el("button", "preset shareLink", "Copy link");
+  shareButton.type = "button";
+  shareButton.setAttribute("aria-label", "copy a permalink to this state");
+  const shareNote = el("span", "muted small shareNote");
+  shareNote.setAttribute("role", "status");
+  let shareTimer = 0;
+  const saySoon = (text: string): void => {
+    shareNote.textContent = text;
+    window.clearTimeout(shareTimer);
+    shareTimer = window.setTimeout(() => {
+      shareNote.textContent = "";
+    }, 6000);
+  };
+  shareButton.addEventListener("click", () => {
+    const enc = encodeShell(currentState());
+    if (!enc.ok) {
+      // The state cannot be linked to, and the reason is the interesting part — today that is the
+      // pen tool's contour, which has no recipe. Saying "copied" and handing over a link to
+      // something else would be the worst of the three outcomes.
+      saySoon(`No link: ${enc.reason}`);
+      return;
+    }
+    window.history.replaceState(null, "", enc.hash);
+    const url = window.location.href;
+    void navigator.clipboard?.writeText(url).then(
+      () => { saySoon("Link copied"); },
+      () => { saySoon(legacyCopy(url) ? "Link copied" : "Could not copy — the link is in the address bar"); },
+    );
+    if (navigator.clipboard === undefined) {
+      saySoon(legacyCopy(url) ? "Link copied" : "Could not copy — the link is in the address bar");
+    }
+  });
+
+  bar.append(
+    el("span", "brand", "Contour Integration"),
+    sourceWrap,
+    sandboxGroup,
+    galleryGroup,
+    shareButton,
+    shareNote,
+  );
 
   // Rail cards.
   const errorBox = el("div", "error");
   errorBox.hidden = true;
+  /**
+   * Why a shared link could not be opened — its OWN box, not the parse-error one.
+   *
+   * `errorBox` is cleared by the next successful `applyExpression`, and a link refusal wiped a
+   * moment after it appears is the same as no refusal at all. This one survives until the reader's
+   * first action (see `syncHash`), which is the moment the message stops being about their session.
+   */
+  const linkBox = el("div", "error linkError");
+  linkBox.hidden = true;
+  linkBox.setAttribute("role", "status");
   const recordCard = el("section", "card");
   const ledgerCard = el("section", "card");
   const derivationCard = el("section", "card");
@@ -504,6 +514,7 @@ export function mountApp(root: Element): ShellHandle {
   const branchCard = el("section", "card");
   const poleCard = el("section", "card");
   rail.append(
+    linkBox,
     errorBox,
     recordCard,
     ledgerCard,
@@ -855,6 +866,49 @@ export function mountApp(root: Element): ShellHandle {
     else stage?.setIntegrand(run.declared.cofactor, run.declared.product);
   }
 
+  // ── the permalink ─────────────────────────────────────────────────────────────────────────
+  //
+  // Boot-time read plus `history.replaceState` on settle, which is the house idiom across the suite
+  // — nothing in the repo re-hydrates from a live `hashchange`, and the app where a dropped field
+  // changes the ANSWER is not where that should start.
+
+  /** False until the boot-time link has been read, so the app's own first renders cannot clobber it. */
+  let hashReady = false;
+
+  /**
+   * Put the current state in the address bar.
+   *
+   * `replaceState`, never `pushState`: a contour drag would otherwise leave a hundred history
+   * entries between the reader and the page they came from. A state that cannot be encoded leaves
+   * the URL ALONE rather than half-writing one.
+   */
+  function syncHash(): void {
+    if (!hashReady) return;
+    // The reader has acted, so a message about the link they arrived on is no longer about them.
+    linkBox.hidden = true;
+    const enc = encodeShell(currentState());
+    if (!enc.ok) return;
+    if (enc.hash !== window.location.hash) {
+      window.history.replaceState(null, "", enc.hash);
+    }
+  }
+
+  /**
+   * Move the contour, and keep its RECIPE in step.
+   *
+   * One function because the shift is provenance: two call sites accumulating it by hand would be two
+   * chances for the recipe and the geometry to disagree, and a permalink minted from a stale recipe
+   * reopens a contour somewhere else. `from` is the contour the translation is measured against —
+   * the gesture's anchor for a pointer drag, the live contour for a keyboard nudge — and `fromShift`
+   * the recipe's shift at that same moment, so the two always describe the same starting point.
+   */
+  function moveContour(from: Contour, fromShift: Cx, d: Cx): void {
+    contour = translateContour(from, d);
+    if (contourSource !== null) {
+      contourSource = { ...contourSource, shift: [fromShift[0] + d[0], fromShift[1] + d[1]] };
+    }
+  }
+
   /** The work ceiling for this pass: draft while a contour is being dragged, full otherwise. */
   const budgetNow = (): { readonly maxEvaluations: number } | undefined =>
     gesture === "contour" ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined;
@@ -882,6 +936,7 @@ export function mountApp(root: Element): ShellHandle {
       beforeDeclaration: beforeDeclarationSrc,
       branch,
       contour,
+      contourSource,
       // Kept in either mode: which record the picker is on outlives a trip to the sandbox, as it
       // does on screen.
       record: open ? fam.id : null,
@@ -918,6 +973,7 @@ export function mountApp(root: Element): ShellHandle {
     declaration = next.declaration;
     beforeDeclarationSrc = next.beforeDeclaration;
     contour = next.contour;
+    contourSource = next.contourSource;
     sandboxContour = next.sandboxContour ?? next.contour;
     view = next.view;
     contrast = next.contrast;
@@ -1074,6 +1130,9 @@ export function mountApp(root: Element): ShellHandle {
     renderPoles();
     drawAcc();
     requestDraw();
+    // Not mid-gesture: a drag recomputes at draft quality on every frame, and the URL is for the
+    // state the reader stopped at. `endGesture` calls it once the gesture is over.
+    if (gesture === "none") syncHash();
   }
 
   function setMode(next: "sandbox" | "gallery"): void {
@@ -1663,6 +1722,7 @@ export function mountApp(root: Element): ShellHandle {
         b.type = "button";
         b.addEventListener("click", () => {
           contour = t.build();
+          contourSource = { template: t.id, shift: [0, 0] };
           if (t.seed !== undefined && branch.points.length === 0) branch = t.seed(branch);
           recompute();
           frameContour();
@@ -2380,6 +2440,7 @@ export function mountApp(root: Element): ShellHandle {
       // Anchored, not accumulated: a long drag measured from where it started cannot drift, and the
       // `add` offsets stay a single term instead of a sum of every pointer move.
       anchorContour = contour;
+      anchorShift = contourSource?.shift ?? [0, 0];
       anchorAt = at;
     } else {
       gesture = "view";
@@ -2421,7 +2482,7 @@ export function mountApp(root: Element): ShellHandle {
       branch = applyBranchGrab(branch, grab.handle.grab, at);
       recompute();
     } else if (grab?.kind === "body" && anchorContour !== null) {
-      contour = translateContour(anchorContour, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
+      moveContour(anchorContour, anchorShift, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
       recompute();
     } else if (grab?.kind === "radius") {
       // Out of range returns null rather than clamping, so the handle simply stops at the parameter's
@@ -2445,6 +2506,8 @@ export function mountApp(root: Element): ShellHandle {
       recompute();
       reconcileDraft(draft, worst);
     }
+    // Unconditionally, because a VIEW pan changes the camera and recomputes nothing.
+    syncHash();
     updateCursor();
   };
   stageWrap.addEventListener("pointerup", endGesture);
@@ -2520,7 +2583,7 @@ export function mountApp(root: Element): ShellHandle {
     const d: Cx = [dx * step, -dy * step];
     if (held.kind === "body") {
       if (!canMoveBody()) return;
-      contour = translateContour(contour, d);
+      moveContour(contour, contourSource?.shift ?? [0, 0], d);
       recompute();
     } else if (held.kind === "branch") {
       branch = applyBranchGrab(branch, held.handle.grab, [
@@ -2612,6 +2675,28 @@ export function mountApp(root: Element): ShellHandle {
   // Through `setMode` rather than straight to `applyExpression`, so the bar's two groups start in the
   // state the mode says they should be in instead of in whatever order they were appended.
   setMode(mode);
+
+  // **THE LINK IS READ LAST AND EXACTLY ONCE.** After the app has built itself, so a decoded state
+  // goes through the same `applyState` any other restore does; before `hashReady`, so none of the
+  // boot renders above has overwritten the very hash being read.
+  const link = decodeShell(window.location.hash);
+  if (link !== null) {
+    if (link.ok) {
+      // **NO `frameContour()` HERE**, and it was there for one draft: the link CARRIES the camera,
+      // and reframing would throw away the view the sharer chose. It is always a real view rather
+      // than the bare default, because opening a record or picking a template frames the contour
+      // first and `currentState()` reads the result.
+      applyState(link.state);
+    } else {
+      // Shown, never drawn over. A link that cannot be honoured must not open something plausible
+      // instead — that is the whole reason this codec refuses rather than defaulting.
+      linkBox.hidden = false;
+      linkBox.textContent =
+        `This shared link could not be opened: ${link.reason}. ` +
+        "Showing the app's own starting state instead.";
+    }
+  }
+  hashReady = true;
 
   return { currentState, applyState };
 }

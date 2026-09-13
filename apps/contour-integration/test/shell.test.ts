@@ -13,22 +13,24 @@
 import { describe, expect, it } from "vitest";
 import { mountApp, type ShellHandle } from "../src/shell/app.js";
 import { offeredCorpus, type ShellState } from "../src/shell/state.js";
+import { encodeShell } from "../src/shell/viewState.js";
 import { DEFAULT_VIEW } from "../src/kernel/camera.js";
 
 /** Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context. */
-function mount(): { root: HTMLElement; app: ShellHandle } {
+function mount(hash = ""): { root: HTMLElement; app: ShellHandle } {
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
+  window.history.replaceState(null, "", hash === "" ? window.location.pathname : hash);
   const root = document.createElement("div");
   document.body.replaceChildren(root);
   return { root, app: mountApp(root) };
 }
 
-const q = <T extends Element>(root: Element, sel: string): T => {
+const q = <T extends HTMLElement = HTMLElement>(root: Element, sel: string): T => {
   const e = root.querySelector<T>(sel);
   if (e === null) throw new Error(`no ${sel}`);
   return e;
 };
-const byLabel = <T extends Element>(root: Element, label: string): T =>
+const byLabel = <T extends HTMLElement = HTMLElement>(root: Element, label: string): T =>
   q<T>(root, `[aria-label="${label}"]`);
 const fire = (e: Element, kind: string): void => {
   e.dispatchEvent(new Event(kind, { bubbles: true }));
@@ -326,5 +328,113 @@ describe("the round trip is not vacuous", () => {
     const moved = screen(root);
     app.applyState(app.currentState());
     expect(screen(root)).toBe(moved);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The permalink, at the shell. `test/viewState.test.ts` judges the CODEC by verdict over the whole
+// corpus; what is left to check here is the wiring — that the link is read exactly once and late
+// enough not to be clobbered, that a refusal is SHOWN rather than drawn over, and that the address
+// bar tracks the state without a `pushState` per drag frame.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the `#vs=` permalink, at the shell", () => {
+  const link = (s: ShellState): string => {
+    const e = encodeShell(s);
+    if (!e.ok) throw new Error(e.reason);
+    return e.hash;
+  };
+
+  it("opens the state a link names, not the app's defaults", () => {
+    const wanted = mount();
+    clickIn(q(wanted.root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(wanted.root, "gallery record");
+    records.value = "log-cubed-keyhole";
+    fire(records, "change");
+    const target = wanted.app.currentState();
+    const want = screen(wanted.root);
+
+    // A FRESH app, which knows nothing of the above — the only thing it is given is the link.
+    const opened = mount(link(target));
+    expect(screen(opened.root)).toBe(want);
+    expect(opened.app.currentState().record).toBe("log-cubed-keyhole");
+    expect(q(opened.root, ".linkError").hidden).toBe(true);
+    // The CAMERA travels too. A draft reframed the contour after applying the link, which silently
+    // threw away the view the sharer had chosen; `screen()` cannot see a camera, so it is asserted.
+    expect(opened.app.currentState().view).toEqual(target.view);
+  });
+
+  it("opens a sandbox link carrying a declared factor and a sheet offset", () => {
+    const built = mount();
+    declaredKeyhole(built.root);
+    const base = built.app.currentState();
+    const target: ShellState = { ...base, branch: { ...base.branch, sheet: 2 } };
+    built.app.applyState(target);
+    const want = screen(built.root);
+    expect(want).toContain("Declared factor");
+
+    const opened = mount(link(target));
+    expect(screen(opened.root)).toBe(want);
+    expect(opened.app.currentState().branch.sheet).toBe(2);
+  });
+
+  it("SHOWS a refusal and keeps its own starting state — it never opens something plausible", () => {
+    const clean = mount();
+    const defaults = clean.app.currentState();
+
+    const opened = mount("#vs=" + btoa(JSON.stringify({ v: 1, app: "ci", state: { m: "g", r: "no-such-record" } }))
+      .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""));
+    const box = q(opened.root, ".linkError");
+    expect(box.hidden).toBe(false);
+    expect(box.textContent).toContain("no-such-record");
+    expect(box.textContent).toContain("could not be opened");
+    // And the app itself is exactly where it would have been with no link at all. Compared on the
+    // STATE rather than on the screen, because the refusal box lives in the rail and so the screen
+    // differs by precisely the message — which is the point, not a discrepancy.
+    expect(opened.app.currentState()).toEqual(defaults);
+    // Nothing of the refused link leaked in: not the mode, not the record.
+    expect(opened.app.currentState().mode).toBe("sandbox");
+    expect(opened.app.currentState().record).toBeNull();
+  });
+
+  it("says nothing at all when there is no link", () => {
+    const opened = mount();
+    expect(q(opened.root, ".linkError").hidden).toBe(true);
+  });
+
+  it("writes the address bar on settle, and the result reopens the same state", () => {
+    const app = mount();
+    clickIn(q(app.root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(app.root, "gallery record");
+    records.value = "dogbone-inverse-sqrt";
+    fire(records, "change");
+    expect(window.location.hash).toMatch(/^#vs=/);
+    const want = screen(app.root);
+
+    const reopened = mount(window.location.hash);
+    expect(screen(reopened.root)).toBe(want);
+  });
+
+  it("uses replaceState, so a session leaves ONE history entry rather than one per change", () => {
+    const before = window.history.length;
+    const app = mount();
+    const records = (): HTMLSelectElement => byLabel<HTMLSelectElement>(app.root, "gallery record");
+    clickIn(q(app.root, ".sourceToggle"), "Gallery");
+    for (const id of ["circle-poisson", "semicircle-order2", "jordan-strict", "mellin-keyhole"]) {
+      records().value = id;
+      fire(records(), "change");
+    }
+    expect(window.history.length).toBe(before);
+  });
+
+  it("the copy control says WHY when a state cannot be linked to", () => {
+    const app = mount();
+    // The pen tool's case, which is the only one today: a contour with no recipe behind it.
+    app.app.applyState({ ...app.app.currentState(), contourSource: null });
+    const button = byLabel<HTMLButtonElement>(app.root, "copy a permalink to this state");
+    button.click();
+    const note = q(app.root, ".shareNote");
+    expect(note.textContent).toContain("No link");
+    expect(note.textContent).toContain("pen tool");
   });
 });

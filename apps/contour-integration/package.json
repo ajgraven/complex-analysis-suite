@@ -21,6 +21,7 @@
     "@cas/exact": "workspace:*",
     "@cas/expr": "workspace:*",
     "@cas/gpu": "workspace:*",
+    "@cas/interchange": "workspace:*",
     "@cas/rigor": "workspace:*",
     "@cas/ui": "workspace:*"
   },

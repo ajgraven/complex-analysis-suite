@@ -701,6 +701,18 @@ records × every fixture and 7 expressions × 10 templates — byte-identical ov
 brings `test/shell.test.ts`, the first test that reaches `src/shell/app.ts` at all: `mountApp` runs
 under jsdom, because its WebGL2 stage is built inside a `try` and everything else is ordinary DOM.
 
+**M6.2** adds the `#vs=` permalink (`src/shell/viewState.ts`, on `@cas/interchange`). Two things make
+it more than a convenience here. The contour is **never serialised as geometry**: a gallery link
+carries `{record, fixture}` because the record derives its contour, and a sandbox link carries the
+RECIPE — `{template, params, shift}` — verified on encode by rebuilding it and comparing, so a link
+that would open a different shape is refused rather than minted. That is measured, not stylistic:
+serialising the piece list puts the worst case at 2,838 B of URL, over research 07 §6's warning, and
+the recipe lands it at 1,078 B. And the round trip is checked **by verdict** — 28 records × every
+fixture, encode → decode → re-run → the identical closed form and the identical ledger rows — because
+field equality would pass a codec that dropped `branch.window`, which is M5.1's bug. A link that
+cannot be honoured **refuses by name** and says so in its own box, rather than opening something
+plausible.
+
 Two findings came with it. The window picker was **silently dropping the declared factor** — it took
 `buildDeclaration`'s whole cut system, whose point is `"b"` where the reader's is `"b1"` — and the app
 then integrated the cofactor as the whole integrand under an `R(z) =` label. And the milestone's own

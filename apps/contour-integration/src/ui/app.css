@@ -664,3 +664,21 @@ ul.poleTable li {
   font-size: 15px;
   overflow-wrap: anywhere;
 }
+
+/* A shared link that could not be opened. The app's own accent rather than the warning amber:
+   nothing is wrong with the MATHS, and a reader who followed a stale link should not be told that
+   their integral is in doubt. */
+.linkError {
+  border-color: rgba(110, 168, 254, 0.4);
+  background: #6ea8fe14;
+  color: var(--c-text);
+}
+
+.shareLink {
+  margin-left: auto;
+}
+
+.shareNote {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}

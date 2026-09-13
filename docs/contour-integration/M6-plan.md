@@ -327,6 +327,44 @@ branch. A truncated or foreign hash refuses by name.
 > now, the M7 pen tool later) and the piece list as the fallback for it. Falsifiable on ENCODE: rebuild
 > from the recipe and compare against the live contour; carry the pieces if it does not reproduce.
 
+> **M6.2b–c DONE.** `src/shell/viewState.ts` on `@cas/interchange`, namespace `"ci"`; the sandbox's
+> template table extracted to `src/shell/templates.ts` on the second-consumer rule, because the codec
+> is DOM-free and cannot import a module that builds a WebGL2 stage; `ShellState` gains
+> `contourSource` provenance, kept in step by one `moveContour` helper so the recipe and the geometry
+> cannot drift; and the shell reads the link once at boot and writes it with `replaceState` on settle,
+> with a copy-link control that reports WHY when a state cannot be linked to.
+>
+> **The gate passes as stated** — 28 records × every fixture, encode → decode → re-run → identical
+> closed form and identical ledger rows, every decode landing in a FRESH default so §M6.1's
+> consistently-lossy trap cannot pass it. Measured payloads match §M6.2a: a gallery link is 60 B of
+> hash, the declared keyhole 608 B, the worst case 1,008 B.
+>
+> **Four findings.**
+>
+> **(1) `frameContour()` after applying a link silently discarded the sharer's camera.** Caught in the
+> draft, before it shipped: the link carries the view, and reframing overrode it. `screen()` cannot
+> see a camera, so the test now asserts it explicitly.
+>
+> **(2) A refusal is not an absence.** `decodeShell` returns `null` for "no link" and a named reason
+> for "a link I cannot honour", and the shell shows the second in its own box — not `errorBox`, which
+> the next successful parse clears, so a refusal would vanish a moment after appearing. The box
+> survives until the reader's first action, which is when the message stops being about their session.
+>
+> **(3) 23/27 on the first mutation sweep, and all four survivors were real.** `enc-params` (a sandbox
+> contour's parameter values) and `dec-shift` (the recipe's translation) both hid behind the same gap:
+> no test built a contour that was *genuinely* a moved template at moved parameters, so the only shift
+> test was the refusal path. `enc-record-sandbox` (the record the picker shows in sandbox mode) changes
+> no number, so no verdict comparison can catch it and it needed a field assertion. And **`dec-template`
+> pinned the outcome without pinning the reason**: removing the unknown-template check still refuses,
+> because `fromRecipe` returns null a few lines later — but the message becomes "names a parameter
+> template 'spiral' does not have", blaming a parameter for a missing template, and the test only
+> asserted that the id appeared. That is §M5.2's finding met again. **27/27** after the repair.
+>
+> **(4) The recipe's verification is what makes provenance falsifiable.** `contourOut` rebuilds from
+> the recipe and compares against the live contour, refusing rather than minting a link that would
+> open a different shape — the same posture the ledger takes to a record's own declarations. A sweep
+> that removes the check is killed by a state whose source and geometry disagree.
+
 ### M6.3 — the figure carries its own permalink · *S–M*
 
 - `@cas/export`'s `injectPngText`: `Software`, and `cas:state` = the permalink (the house

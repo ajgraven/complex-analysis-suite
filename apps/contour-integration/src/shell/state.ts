@@ -48,6 +48,7 @@ import { asSummationKernel } from "../kernel/summationKernel.js";
 import { DEFAULT_VIEW, type View } from "../kernel/camera.js";
 import type { ContrastMode } from "../ui/accumulator.js";
 import { Frac } from "@cas/exact";
+import { TEMPLATES, type TemplateId } from "./templates.js";
 
 /**
  * The branch FACTOR the sandbox has declared, if any.
@@ -87,6 +88,26 @@ export interface ShellState {
   readonly branch: BranchChoice;
   /** The contour on screen, in either mode: a template, or one the reader has dragged. */
   readonly contour: Contour;
+  /**
+   * Where the SANDBOX's contour came from — PROVENANCE, not a second copy of its geometry.
+   *
+   * `shell/viewState.ts` carries the contour as this recipe rather than as its piece list, which is
+   * what takes M6.2a's worst-case permalink from 2,838 B of URL — over research 07 §6's warning — to
+   * 1,078 B. It is expressible because every sandbox contour is exactly
+   * `translate(TEMPLATES[id].build() with params, shift)`: the only assignments to `contour` in
+   * sandbox mode are a template build, `setParam` (params only) and `translateContour` (a rigid
+   * shift). The params ride in `contour.params`, so only the id and the shift live here.
+   *
+   * It survives a mode switch, exactly as {@link branch} does and for the same reason: it is the
+   * SANDBOX's, and gallery mode simply has no use for it — a record derives its own contour, so a
+   * gallery link carries no contour at all.
+   *
+   * `null` means "not from a template", which is M7's pen tool. Nothing produces it today, and the
+   * codec REFUSES to encode rather than carrying a piece list for a case that cannot yet occur — the
+   * refusal being the signal that the pen tool needs its own serialisation, rather than forty lines
+   * of speculative one.
+   */
+  readonly contourSource: ContourSource | null;
   /** GALLERY: the open record's id, and which of its fixtures. */
   readonly record: string | null;
   readonly fixture: number;
@@ -107,6 +128,13 @@ export interface ShellState {
   readonly sandboxContour: Contour | null;
 }
 
+/** The recipe a sandbox contour was built from — see {@link ShellState.contourSource}. */
+export interface ContourSource {
+  readonly template: TemplateId;
+  /** The accumulated rigid translation since the template was built. */
+  readonly shift: Cx;
+}
+
 /** The state the app boots into, minus the contour, which the caller supplies from a template. */
 export function defaultState(contour: Contour): ShellState {
   return {
@@ -119,6 +147,9 @@ export function defaultState(contour: Contour): ShellState {
     // sitting ON the base point casts no shadow. Every gallery record puts its base point at `i`.
     branch: { ...NO_BRANCH, basePoint: [0, 1] },
     contour,
+    // `TEMPLATES[0]` is the circle, which is what the app boots with — stated here rather than
+    // passed in, so the default contour and the default recipe cannot disagree.
+    contourSource: { template: TEMPLATES[0].id, shift: [0, 0] },
     record: null,
     fixture: 0,
     bindings: {},

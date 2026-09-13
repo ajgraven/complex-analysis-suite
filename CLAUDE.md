@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **535 test files / 5419 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **536 test files / 5452 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -440,6 +440,42 @@ run — so a state carrying a stale contour is corrected rather than obeyed, whi
 family parameter changes the integrand as well as the geometry. That is M6.2's *"a gallery link is
 `{record, fixture}` and nothing else"* arriving as a property of the shell rather than as a size
 optimisation.
+
+**M6.2 — the `#vs=` permalink, verified by verdict.** `src/shell/viewState.ts` on `@cas/interchange`
+(namespace `"ci"`, the eight-app idiom). **The measurement came first and corrected M6.0's**, which was
+taken before `ShellState` existed: against the real state object the payload is 2.2× larger, and
+rounding floats — which M6.0 called "74% of the headroom" — is worth **4.0%**, because the bulk is
+structural (piece ids, names, roles, the `params` record) rather than decimal. **The headroom is that
+the contour is never serialised as geometry.** In gallery mode it is DERIVED and carried as nothing
+(M6.1's finding); in the sandbox it is carried as the RECIPE that produced it, `{template, params,
+shift}`, which is expressible because every assignment to `contour` in sandbox mode is a template
+build, `setParam` or a rigid `translateContour` and nothing else. That is research 07 §6's
+semantics-not-samples rule one level further up than the plan asked — the piece list is already
+sample-free, since `contour/model.ts` has no sampled-point representation at all — and it takes the
+worst case from **2,838 B of URL, over research 07's ~2 kB warning, to 1,078 B**; a gallery link is
+130 B. `ShellState` gains `contourSource` provenance (kept in step by one `moveContour` helper, so the
+recipe and the geometry cannot drift), and `src/shell/templates.ts` is extracted on the second-consumer
+rule because the codec is DOM-free. **The recipe is VERIFIED on encode** — rebuilt and compared against
+the live contour, refusing rather than minting a link that would open a different shape, which is the
+ledger's posture applied to the app's own provenance. **The gate is by VERDICT**: 28 records × every
+fixture, encode → decode → re-run → the identical closed form and the identical ledger rows, every
+decode landing in a FRESH default so M6.1's consistently-lossy trap cannot pass it; field equality
+would have passed M5.1's shadowed-`branch` bug. A link that cannot be honoured **refuses by name** —
+an unknown record, a fixture past the end, an unknown template, a non-finite number, a foreign app, a
+truncated hash, and a **declaration naming a branch point the link does not carry**, which is M6.1a's
+bug in permalink form. Four findings. **(1)** `frameContour()` after applying a link silently discarded
+the sharer's camera — caught in the draft, and `screen()` cannot see a camera so the test asserts it.
+**(2) A refusal is not an absence**: `decodeShell` returns `null` for "no link" and a named reason for
+"a link I cannot honour", and the latter gets its own box, because `errorBox` is cleared by the next
+successful parse and a refusal wiped a moment after appearing is no refusal. **(3) 23/27 on the first
+sweep, all four survivors real** — `enc-params` and `dec-shift` hid behind one hole (no test built a
+contour that was genuinely a moved template at moved parameters, so the only shift test was the refusal
+path), `enc-record-sandbox` changes no number so no verdict could catch it, and **`dec-template` pinned
+the outcome without pinning the reason**: removing the check still refuses, because `fromRecipe` returns
+null a few lines later, but the message then blames a parameter for a missing template. M5.2's finding
+met again; **27/27** after the repair. **(4)** The pen tool's contour has no recipe, so encoding
+**refuses by name** rather than carrying a piece list for a shape nothing can yet produce — the refusal
+being the signal M7 needs its own serialisation, instead of forty lines of speculative one.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
