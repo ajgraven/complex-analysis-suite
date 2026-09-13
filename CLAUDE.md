@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **515 test files / 5038 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **518 test files / 5089 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -294,10 +294,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.4 onward** — tier F's
-wedge template, tier G's summation kernel and the unknown inside `S`, plus E3 and F2 together on
-ADR-0042's `knownValue`; M5.0–M5.3 are done and 22 of the 28 records are loaded, and the plan and its
-one engine decision are
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.5 onward** — tier G's
+summation kernel and the unknown inside `S`, plus E3 and F2 together on ADR-0042's `knownValue`;
+M5.0–M5.4 are done and 23 of the 28 records are loaded, and the plan and its one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
 **read the plan before continuing M5**), the teaching layer (M6).
 
@@ -694,6 +693,46 @@ and `PoleReport.rational`'s doc had drifted from its meaning. Sweeps: 13/14, 15/
 four recorded equivalents, each kept with its reason. **E3 is deferred with F2**, not dropped: both
 need ADR-0042's `knownValue`, and doing them together implements the import set once against two
 consumers rather than once against one.
+
+**M5.4 opens tier F with F1, and finds three rows that were saying something false.** The wedge is
+the strip's ROTATIONAL twin — `f(ωz) = μ f(z)` makes the return ray reproduce the outgoing one by
+`−ω·μ` where E1's top side returned `−λ` — and `wedgeTemplate` takes `n` rather than an angle, so
+"the angle must be exactly `2π/n`" is unrepresentable rather than checked. **The affine `Scalar` did
+not cover it, and its own doc claimed it covered every template in the gallery**: the return ray's
+endpoint is `R·cos(2π/n)`, a product of two parameters. Neither route that looks like it avoids the
+widening works — `derived` is evaluated before the limit parameters exist, deliberately, and computed
+afterwards it would freeze at instantiation and leave the ray behind while the arc followed a drag,
+silently opening a contour the ledger had just certified closed. So `mul` may name a parameter, and
+the form stays affine in every LIVE one, because a `derived` coefficient never moves: until F1 there
+was no record in which "one parameter" and "one LIVE parameter" differed. **Then `1/(1 + zⁿ)` has
+exact poles at `n = 2, 3, 4` and none at `n = 5, 7`** (`ℚ(ζ₁₀)` has degree 4 over ℚ), which D3 met
+first and answered for a KEYHOLE — every root once. A wedge encircles ONE of the `n`, so the
+structural sum becomes what the residue theorem actually says, `Σ n(γ,zₖ)·Res`, with the all-roots case
+left as a wrapper; an undecided weight REFUSES rather than contributing zero, and `argRange` may be
+omitted only for an INTEGER power, since a determination is a property of the integrand and F1's has
+none to declare. The route is a FALLBACK on purpose: the per-pole one returns `2π/(3√3)` where the
+structural one returns `π/(3·sin(π/3))`, the same number carrying a transcendental it does not need.
+**Three rows were false, two of them older than the slice.** `2π/5` was not in the thirteen-entry
+angle whitelist, so KILL reported that no lemma applied TO THE INTEGRAND for the one integrand shape
+it discharges at `n = 4` — a cap replaces the list with the same guarantee (two rationals with
+denominator ≤ 12 differ by at least 1/144, so a `1e-12` window admits one candidate or none) and the
+row now distinguishes an unreadable sweep from an unsupported integrand. And CATCH read
+`poles.exactlyComplete` — *was every pole pinned?* — where the claim beside it is about the SUM, so
+**D3 at `(a,n) = (2.3, 5)` had printed the exact `(π/5)/sin(23π/50)` beside "not every residue is
+known exactly, so the total is an estimate" since M4.2e**, which is precisely what that route exists
+to deny. **F1's uniform answer took a fold, and the fold needed a rule.** At `n = 3` the sine
+recogniser leaves `(1/6 + i√3/6)·e^{−iπ/3}`, exactly `1/3`, which the old fold (`e^{iπr}` with
+`2r ∈ ℤ`) could not take — so the flagship fixture printed a decimal and no closed form. Folding every
+representable root of unity fixes it and breaks D7, whose residue-at-infinity row became
+`17√2/8 − 17i√2/8` where `17/4·e^{−iπ/4}` is the same number with its magnitude of 4.25 visible — and
+that row exists to say `2π·4.25 = 26.7` in an answer of 1.216. So: **a fold may COMBINE a radical the
+coefficient already carries, never INTRODUCE one**, which subsumes the old collision worry rather
+than answering it separately. All four F1 fixtures then print `(π/n)/sin(π/n)` by two routes the
+record cannot tell apart. Its real job is **cross-provenance**: `2π/(3√3)` is also D3 at `(a,n) =
+(1,3)`, computed by a keyhole with a cut, a `z^{a−1}` monodromy and a `−e^{2πia}` phase, where F1's
+wedge has no cut at all — and D3 REFUSES there, naming this record as the repair. `unitRoot` moved to
+its own module on the second-consumer rule, by which time there were three. Sweeps: 9/9, 18/18, 9/10.
+**F2 stays deferred with E3** (ADR-0042's `knownValue`).
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

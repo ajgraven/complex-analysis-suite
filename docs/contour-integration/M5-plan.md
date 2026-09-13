@@ -277,7 +277,7 @@ The maths prerequisite for tier F, and a correction to the research.
 > it. The plan's `M` sizing was low throughout: a–d were each engine work of M4.5's weight, and only
 > d was the wiring the plan imagined.
 
-### M5.4 — tier F · *M*
+### M5.4 — tier F · *M* — **DONE for F1 (a–d); F2 deferred with E3**
 
 - The **wedge** template.
 - **F1** `∫₀^∞ dx/(1+x³) = 2π/(3√3)` on the `2π/3` wedge, plus its `closing-the-other-way` invariant
@@ -285,6 +285,46 @@ The maths prerequisite for tier F, and a correction to the research.
 - **F2** `∫₀^∞cos(x²)dx = √(π/8)` — *"the bound everyone hand-waves"*. M5.2's corrected L6 at `n = 2`,
   ADR-0042's `knownValue` for the return ray's `Γ(1+1/n)`, and **SG-4** (`convergenceClass:
   "conditional"` — `∫₀^∞|cos x²|dx = ∞`, and research 03 §3 trap (ii) says the label must record it).
+
+> **Outcome — F1 lands, and the slice is mostly about what it broke.** Three slices, each its own
+> commit, and the pattern of M5.3 repeated: measuring first reordered them.
+>
+> - **M5.4a — the wedge, and a coefficient that is a parameter.** `wedgeTemplate` takes `n`, never an
+>   angle, so "the angle must be exactly `2π/n`" is unrepresentable rather than checked. **The affine
+>   `Scalar` did not cover it**, and `model.ts`'s own doc claimed it covered every template in the
+>   gallery: the return ray's endpoint is `R·cos(2π/n)`, a product of two parameters. `derived` is
+>   evaluated before the limit parameters exist, deliberately, and computed afterwards would freeze at
+>   instantiation — leaving the ray behind while the arc followed a drag, silently opening a contour
+>   the ledger had just certified closed. So `mul` may name a parameter, and the form stays affine in
+>   every LIVE one.
+> - **M5.4b — a residue theorem where no individual residue exists.** `1/(1+zⁿ)` has exact poles at
+>   `n = 2, 3, 4` and none at `n = 5, 7`. D3 answered that for a KEYHOLE (every root once); a wedge
+>   encircles ONE, so `cyclotomicResidueSum` became `Σ n(γ,zₖ)·Res` with the sum a wrapper. It is a
+>   FALLBACK on purpose — the per-pole route returns `2π/(3√3)` where the structural one returns
+>   `π/(3·sin(π/3))`, the same number carrying a transcendental it does not need. Two rows were false
+>   on the way: `2π/5` was not in the angle whitelist, so KILL blamed the INTEGRAND for a geometry
+>   failure (a cap replaces the list, with the same uniqueness guarantee); and CATCH asked "was every
+>   pole pinned?" where the claim is about the SUM — so **D3 at `(a,n) = (2.3, 5)` printed the exact
+>   `(π/5)/sin(23π/50)` beside "the total is an estimate" from M4.2e until now.**
+> - **M5.4c — F1, and a fold that combines without introducing.** At `n = 3` the sine recogniser
+>   leaves `(1/6 + i√3/6)·e^{−iπ/3}`, exactly `1/3`, which the old fold could not take — so the
+>   flagship fixture printed a decimal. Folding every representable root of unity fixes that and
+>   breaks D7's residue-at-infinity row, which became `17√2/8 − 17i√2/8` where `17/4·e^{−iπ/4}` shows
+>   the magnitude of 4.25 the row exists to state. **A fold may COMBINE a radical the coefficient
+>   already carries, never INTRODUCE one** — which subsumes the old collision worry rather than
+>   answering it separately. `unitRoot` moved to its own module on the second-consumer rule, by which
+>   time there were three.
+>
+> All four fixtures print `(π/n)/sin(π/n)`, by two routes the record cannot tell apart. The gallery
+> writes the `n = 3` value `2π/(3√3)`; that is the same number, and the engine's normal form is the
+> family's own closed form — nothing simplifies a sine into a radical, and the `n = 5` and `n = 7`
+> fixtures could not be written that way at all. Its three gallery invariants are executed: the
+> cross-provenance against D3, the `u = xⁿ` substitution (under which the wedge's `0 < a < n` IS the
+> Mellin fundamental strip `0 < s < 1`), and closing the other way.
+>
+> **F2 is deferred with E3, as M5.3 said.** Both need ADR-0042's `knownValue` — F2's return ray for
+> `Γ(1+1/n)`, E3's top side for the Gaussian — and doing them together implements the import set once
+> against two consumers. SG-3 and SG-4 ride with it.
 
 ### M5.5 — the summation kernel, the square, and the corrected bound · *M*
 

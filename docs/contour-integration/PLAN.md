@@ -775,6 +775,21 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > since both need ADR-0042's `knownValue` and doing them together implements the import set once
 > against two consumers. [`M5-plan.md`](M5-plan.md) §M5.3 has the findings.
 >
+> **M5.4 lands F1 and tier F has begun.** All four fixtures print `(π/n)/sin(π/n)` — by two routes
+> the record cannot tell apart, since `1/(1+zⁿ)` has expressible poles at `n = 2, 3` and not at
+> `n = 5, 7`. The slice is mostly about what it broke. **The affine `Scalar` did not cover the
+> gallery** and said it did: a wedge's return ray needs `R·cos(2π/n)`, a product of two parameters,
+> and both routes that look like they avoid the widening would leave the ray behind under a drag —
+> silently opening a contour the ledger had just certified closed. **The cyclotomic sum became the
+> residue theorem's own statement**, `Σ n(γ,zₖ)·Res`, because a wedge encircles one root where D3's
+> keyhole encircles every one. And **three ledger rows were false, two older than the slice**: KILL
+> blamed the integrand for an angle the geometry reader could not measure, and CATCH asked whether
+> every POLE was pinned where the claim beside it is about the SUM — so D3 at `(a,n) = (2.3, 5)` had
+> printed an exact closed form beside "the total is an estimate" since M4.2e. One rule closed the
+> last of it: **a fold may COMBINE a radical the coefficient already carries, never INTRODUCE one.**
+> **F2 is deferred with E3**; both need ADR-0042's `knownValue`. [`M5-plan.md`](M5-plan.md) §M5.4 and
+> [`GALLERY.md`](GALLERY.md) §5.5 have the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.

@@ -12,9 +12,9 @@ whether the whole thing closes.
 
 **Through Milestone 4, and published.** M1–M4 are complete (20 of the 28 gallery records loaded).
 **M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
-factor), M5.2 (one predicate for L3 and L6, and the corrected L6) and M5.3 (tier E's E1 and E2) are
-done; **22 of the 28 records are loaded**. E3 is deferred with F2, which needs the same import
-machinery. See the milestone table in
+factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2) and M5.4
+(tier F's F1, on the wedge) are done; **23 of the 28 records are loaded**. E3 and F2 are deferred
+together, needing the same import machinery. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -24,9 +24,9 @@ machinery. See the milestone table in
   rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
 - The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
   a wrong contour fails diagnostically.
-- The **Family loader** and its four invariants run the gallery records as data. Twenty-two of the 28
-  load and are executed against the engine in the test suite — **every entry in tiers A, B, C and
-  D**, plus tier E's E1 and E2. The thirteen of tiers A–C are:
+- The **Family loader** and its four invariants run the gallery records as data. Twenty-three of the
+  28 load and are executed against the engine in the test suite — **every entry in tiers A, B, C and
+  D**, plus tier E's E1 and E2 and tier F's F1. The thirteen of tiers A–C are:
   A1–A7 (circle and semicircle, through the `z = e^{iθ}` substitution and the Cauchy integral
   formula), B1–B3 (Jordan, through the exponential basis `Σ cₖ e^{βₖ}`), and C1–C3 (the indentation
   and L4's `iα·Res`; removability detected, with L5's non-vanishing arc; and a real pole and a
@@ -414,6 +414,39 @@ machinery. See the milestone table in
   refuses. E1's `wrong-strip-height` trap at run time. The check was inert when first written.
 - **E3 is deferred with F2**, not dropped: both need ADR-0042's `knownValue`, and doing them together
   implements the import set once against two consumers rather than once against one.
+
+**M5.4 opens tier F: F1, the wedge, and three rows that were saying something false.**
+
+- **The wedge is the strip's ROTATIONAL twin.** `f(ωz) = μ f(z)` makes the return ray reproduce the
+  outgoing one by `−ω·μ` where E1's top side returned `−λ`. The template takes `n`, never an angle:
+  at any other angle the return ray is not a rotation of the outgoing one and there is no factor at
+  all, so F1's first trap is unrepresentable rather than checked.
+- **The affine `Scalar` did not cover the gallery, and said it did.** The return ray's endpoint is
+  `R·cos(2π/n)` — a product of two parameters. `derived` is evaluated BEFORE the limit parameters
+  exist, deliberately; computed afterwards it would freeze at instantiation and leave the ray behind
+  while the arc followed a drag, silently opening a contour the ledger had just certified closed. So
+  a coefficient may name a parameter, and the form stays affine in every LIVE one — which was always
+  the real claim.
+- **A residue theorem where no individual residue exists.** `1/(1+zⁿ)` has exact poles at `n = 2, 3,
+  4` and none at `n = 5, 7`. D3 answered this for a keyhole, which encircles every root once; a wedge
+  encircles ONE, so the structural sum became `Σ n(γ,zₖ)·Res` with the all-roots case a wrapper. An
+  undecided weight refuses rather than contributing zero. It is a FALLBACK on purpose: the per-pole
+  route returns `2π/(3√3)` where this one returns `π/(3·sin(π/3))` — the same number carrying a
+  transcendental it does not need.
+- **Three false rows, two older than the slice.** `2π/5` was not in the angle whitelist, so KILL
+  reported that no lemma applied *to the integrand* for the one shape it discharges at `n = 4`; a cap
+  (denominator ≤ 12) replaces the list with the same guarantee and the row now says which of the two
+  failed. And CATCH asked "was every pole pinned?" where the claim is about the SUM — so D3 at
+  `(a,n) = (2.3, 5)` printed `(π/5)/sin(23π/50)` beside "the total is an estimate" from M4.2e until
+  now.
+- **A fold may COMBINE a radical, never INTRODUCE one.** At `n = 3` the sine recogniser leaves
+  `(1/6 + i√3/6)·e^{−iπ/3}`, which is exactly `1/3` — and the old fold could not take it, so the
+  flagship fixture printed a decimal. Folding every representable root of unity fixes that and breaks
+  D7, whose residue-at-infinity row became `17√2/8 − 17i√2/8` where `17/4·e^{−iπ/4}` shows the
+  magnitude of 4.25 the row exists to state. The rule fixes both, and subsumes the collision worry.
+- **F1's job is cross-provenance.** `2π/(3√3)` is also D3 at `(a,n) = (1,3)` — a keyhole with a cut,
+  a monodromy and a phase, against a wedge with none of the three. D3 refuses there and names this
+  record as the repair.
 
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:

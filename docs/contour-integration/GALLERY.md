@@ -400,6 +400,77 @@ unimplemented, and doing them together implements the import set once against tw
 than once against one — this repo's own extraction rule pointed at a schema field. SG-3's
 canonical-range reduction rides with it.
 
+### 5.5 Tier F begins — **M5.4**, and three rows that were saying something false
+
+F1 is the strip's ROTATION. Every structural fact about E1 has a twin here: `f(ωz) = μ f(z)` where
+`f(z + iP) = λ f(z)`, a return RAY where there was a top side, `−ω·μ` where there was `−λ`, and a
+Pass-5 denominator `1 − ω` where there was `1 − λ`. What is *not* a twin is everything below.
+
+**The affine `Scalar` did not cover the gallery, and its own doc said it did.** A wedge's return ray
+runs from `R·e^{2πi/n}` to `0`, so its endpoint is `R·cos(2π/n)` — a product of two parameters, which
+no affine form in one of them can write. The two routes that look like they avoid the widening both
+fail for reasons worth keeping. `derived` is evaluated in `instantiate.ts` BEFORE the limit parameters
+exist, deliberately, so `R·cos(2π/n)` cannot be one; and were it computed afterwards it would be
+frozen at instantiation, leaving the ray behind while the arc — bound to `{param:"R"}` — followed a
+drag, silently opening a contour the ledger had just certified closed. So a coefficient may now name
+a parameter. What the widening does NOT do is make the form nonlinear where it matters: a `derived`
+coefficient never moves under a drag, so the product still has exactly ONE live factor. That was
+always the real claim — until F1 there was no record in which "one parameter" and "one LIVE
+parameter" differed.
+
+**A residue theorem where no individual residue exists.** `1/(1 + zⁿ)` has poles in ℚ(i)(√d) at
+`n = 2, 3, 4` and none at `n = 5, 7`, because ℚ(ζ₁₀) has degree 4 over ℚ and ℚ(ζ₁₄) degree 6. D3 met
+this first and answered it for a KEYHOLE, which encircles every root once; F1's wedge encircles
+exactly ONE of the `n`, so "the sum over every root" had to become what the residue theorem actually
+says — `Σ n(γ,zₖ)·Res` — with the sum left as the wrapper `wₖ ≡ 1`. Two invariants came with it. An
+undecided weight REFUSES rather than contributing zero, because a term dropped that way is a term
+missing from a sum still reported as exact. And a determination may be omitted only for an INTEGER
+power: a window is a property of the integrand, and D3's `z^{a−1}` has one to declare where F1's plain
+`1/(1+zⁿ)` does not — defaulting one would put a convention on an integrand that admits none.
+
+**And the route is a FALLBACK on purpose.** Trying the structure first would work, and would be
+worse: the per-pole route returns `2π/(3√3)` in the algebraic basis where the structural one returns
+`π/(3·sin(π/3))`, the same number carrying a transcendental it does not need. The record's own
+goldens say exactly that — a radical at `n = 2, 3` and a sine at `n = 5, 7` — and the ordering falls
+out of the existing flow rather than needing a preference.
+
+**Three rows were false, and two of them older than the slice that found them.** `2π/5` was not among
+the thirteen fractions of the angle whitelist, so KILL reported that no lemma applied *to the
+integrand* — for `1/(1 + z⁵)`, which is precisely the integrand the plain ML bound is for, and whose
+degree gap is 5 ≥ 2. The same shape is discharged at `n = 4`. A CAP replaces the list and is the same
+guarantee: two distinct rationals with denominators at most 12 differ by at least 1/144, so a `1e-12`
+window admits one candidate or none, and every fraction the list held has denominator ≤ 12. The row
+now distinguishes an unreadable sweep from an unsupported integrand, because sending a reader to
+inspect the one thing that was fine is worse than saying nothing. **The third is the sharpest:** CATCH
+read `poles.exactlyComplete` — *was every pole pinned?* — where the claim beside it is about the SUM.
+So D3 at `(a, n) = (2.3, 5)` has printed the exact closed form `(π/5)/sin(23π/50)` beside "not every
+residue is known exactly, so the total is an estimate" **since M4.2e**, which is exactly what the
+cyclotomic route exists to deny. F1 would have been the third such record.
+
+**A fold may COMBINE a radical; it may never INTRODUCE one.** At `n = 3` the sine recogniser leaves
+`(1/6 + i√3/6)·e^{−iπ/3}` — a product that is exactly `1/3`, in the very extension the coefficient is
+already using — and the fold took only `e^{iπr}` with `2r ∈ ℤ`, so F1's flagship fixture printed a
+decimal and no closed form at all. Folding every representable root of unity fixes it and breaks two
+other things, which is how the rule was found: D7's residue-at-infinity row became
+`17√2/8 − 17i√2/8` where `17/4·e^{−iπ/4}` is the same number with its magnitude of 4.25 visible — and
+that row exists to say `2π·4.25 = 26.7` in an answer of 1.216. So the caller passes the coefficient's
+own radicand and a root needing a different one is CARRIED, which subsumes the collision question
+rather than answering it separately: matching radicands cannot collide. `asAlgebraicFactor`, asked in
+the abstract with no coefficient to match, keeps refusing.
+
+**What F1 is for.** All four fixtures then print `(π/n)/sin(π/n)` by two routes the record cannot tell
+apart — which is the strongest statement that the fallback is a route to the same answer and not a
+second answer. And `2π/(3√3)` is ALSO D3 at `(a, n) = (1, 3)`, computed by a keyhole with a branch
+cut along `[0,∞)`, a `z^{a−1}` monodromy and a `−e^{2πia}` phase, where F1's wedge has no cut at all.
+D3 REFUSES there — its phase collapses to `0/0` at integer `a` — and its own trap names this record as
+the repair, so the pair is a working relationship rather than a coincidence: the value stands, the
+keyhole's derivation does not, and the wedge's does. The record declares no `branch` block, and a
+test pins that absence, because two arguments agreeing is evidence only while they are actually
+different arguments.
+
+**F2 stays deferred with E3**, as M5.3 said: both need ADR-0042's `knownValue`, and doing them
+together implements the import set once against two consumers.
+
 ### 5.0b C1 is where `∮` stops being the answer
 
 Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc
