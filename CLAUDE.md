@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **521 test files / 5130 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **523 test files / 5192 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -294,9 +294,22 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.6 onward** — tier G's
-records and the unknown inside `S`, plus E3 and F2 together on ADR-0042's `knownValue`;
-M5.0–M5.5 are done and 23 of the 28 records are loaded, and the plan and its one engine decision are
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.6c onward** — tier G's
+records, plus E3 and F2 together on ADR-0042's `knownValue`;
+M5.0–M5.5 are done, and **M5.6a–b** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
+as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
+a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
+residue sum. **The plan's own one-equation generalisation cannot be built**: its coefficient adds a
+dimensionless `1 + Σⱼcⱼ` to a `2πi·w` carrying π, and neither the exponential basis nor ℚ(i)(π) holds
+both — and it is never needed, because `a = 0` is tier G's DEFINITION rather than an accident. So it
+is a third route, `T/π = −ρ/w`, with the mixed case refused by name; the weight is DERIVED from the
+target's declared range and checked, halving additionally requiring an even cofactor with a vanishing
+`n = 0` term (both decided exactly over ℚ(i)), which is research 03 §8's commonest error made
+arithmetic. The no-op for the existing corpus is PROVEN rather than inferred — 23 records × 79
+fixtures, ledger rows and all, dumped before and after and byte-identical over 1253 lines — and the
+sweep's one survivor that mattered was dropping the kernel from `analyse`, which left every test green
+while reintroducing the hole M5.5b closed: **a right answer is not evidence that the ledger is
+honest**. 23 of the 28 records are loaded, and the plan and its one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
 **read the plan before continuing M5**), the teaching layer (M6).
 

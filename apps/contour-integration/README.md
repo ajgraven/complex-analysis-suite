@@ -13,8 +13,9 @@ whether the whole thing closes.
 **Through Milestone 4, and published.** M1–M4 are complete (20 of the 28 gallery records loaded).
 **M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
 factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2), M5.4
-(tier F's F1, on the wedge) and M5.5 (tier G's machinery — the square, the summation kernels and the
-corrected bound) are done; **23 of the 28 records are loaded**. E3 and F2 are deferred together,
+(tier F's F1, on the wedge), M5.5 (tier G's machinery — the square, the summation kernels and the
+corrected bound) and M5.6a–b (tier G's solve: `Res(K·f, z₀)` as an exact quotient, and the unknown
+INSIDE the residue sum) are done; **23 of the 28 records are loaded**. E3 and F2 are deferred together,
 needing the same import machinery. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
@@ -472,6 +473,39 @@ needing the same import machinery. See the milestone table in
   3.392 against a measured 3.567 at `N = 3`. **And a correction to that correction** — the gallery
   says "30–40 % at every N"; measured it is 4.9% at `N = 3` and 27.8% at `N = 25`, growing, because
   the ratio between the bounds is exactly `π·(N/(N+½))^k`. 30% is the asymptote, not the typical case.
+
+**M5.6a–b build tier G's solve: the unknown INSIDE the residue sum.**
+
+- **`cot` and `csc` are Möbius functions of one exponential.** With `q = e^{2πiz₀}`,
+  `cot(πz₀) = i(q+1)/(q−1)` and `csc(πz₀) = 2i·e^{iπz₀}/(q−1)`, so `Res(K·f, z₀)` at a pole of the
+  cofactor is an exact QUOTIENT of basis elements and nothing new is needed to hold it. `coth` is the
+  *name* of that quotient at `z₀ = ia` — a property of the point, not of the arithmetic — so naming
+  belongs where the answer is formatted. The `2πi` of the residue theorem CANCELS here, because
+  `∮ → 0` takes the whole left-hand side with it; the kernel's own π is the one that survives.
+- **The generalisation the plan asks for cannot be built, and never needs to be.** Its coefficient
+  `1 + Σⱼcⱼ − 2πi·w` adds a DIMENSIONLESS number (a keyhole's is `1 − e^{2πiα}`, over `ℚ(i)(√d)`) to
+  one carrying π, and neither the exponential basis nor ℚ(i)(π) holds both. `a = 0` is not an accident
+  of tier G but its DEFINITION — SG-1 *is* "there is no target piece" — so the two halves are never
+  both present, and the honest build is a third route with the mixed case refused BY NAME. What is
+  left is one line: `0 = 2πi[w·T + π·ρ]`, hence **`T/π = −ρ/w`**.
+- **The weight is DERIVED, then checked.** `Σ_{n∈ℤ}` forces 1 and `Σ_{n≥1}` forces 2, read off the
+  target's own range; halving additionally needs the cofactor EVEN (`N(−z)D(z) = N(z)D(−z)` as
+  polynomials over ℚ(i)) and its `n = 0` term to vanish — otherwise `Σ_ℤ = f(0) + 2Σ_{n≥1}` and the
+  weight silently absorbs `f(0)`. Three decisions, which is research 03 §8's commonest error made
+  arithmetic rather than merely recorded.
+- **G1 is a different RING, not a harder case.** Excluding `n = 0` makes its residue a known term —
+  algebraic at a regular integer (the kernel's π spent on its own residue `π·(1/π) = 1`), or, where
+  the cofactor also has a pole there, merged and in ℚ(i)(π). G1's cofactor `1/z²` has no other pole,
+  so `ρ = 0` and its whole identity lives in ℚ(i)(π). Refused here by name, with its reason.
+- **The no-op is proven, not inferred.** 23 records × 79 fixtures dumped before and after — the
+  loader's violations, the system's rank and pivots, every ledger row with its status, claim, evidence
+  and repair, every piece limit, `piUnits`, the quadrature, and every certificate — 1253 lines,
+  byte-identical. (The first attempt was INVALID: the harness was fixed between the two runs, so the
+  diff measured the instrument.)
+- **A right answer is not evidence that the ledger is honest.** The sweep's one survivor that mattered
+  dropped the kernel from `analyse`: every test stayed green while the ledger went back to calling a
+  contour clear of the integers it runs through — the hole M5.5b closed — because the sum route reads
+  only LEGALITY and the piece limits and still returns the right number. Now asserted directly.
 
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:

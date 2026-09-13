@@ -394,6 +394,57 @@ Lands with **G2** `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)`, the clean case.
 The generalisation must be a provable no-op for them — so it goes behind the full corpus, and the
 whole golden suite is the regression test.
 
+> **Outcome — M5.6a and M5.6b, and the plan's own equation is the thing that turned out to be
+> wrong.**
+>
+> - **M5.6a — `Res(K·f, z₀)` at a pole of the cofactor.** The design question this plan left open
+>   (how to name `coth`) dissolved on measurement: with `q = e^{2πiz₀}`,
+>   `cot(πz₀) = i(q+1)/(q−1)` and `csc(πz₀) = 2i·e^{iπz₀}/(q−1)`, so both kernels are MÖBIUS
+>   functions of one basis element and the value is an exact quotient needing nothing new. `coth` is
+>   the *name* of that quotient at `z₀ = ia` — a property of the point, not of the arithmetic — so
+>   naming belongs where the answer is formatted and not where residues are summed. `ExpRatio` is
+>   that quotient; the `2πi` of the residue theorem CANCELS in this tier because `∮ → 0`, leaving
+>   only the kernel's own π. Sweep 10/10.
+> - **M5.6b — SG-1, and the generalisation as stated cannot be built.** The equation above,
+>   `T·(1 + Σⱼcⱼ − 2πi·w) + ΣVᵢ + ΣFₗ = 2πi Σ_known n·Res`, has a coefficient adding a DIMENSIONLESS
+>   number to one carrying π: `1 + Σⱼcⱼ` is a keyhole's `1 − e^{2πiα}`, whose coefficients are
+>   `ℚ(i)(√d)`, and that basis has no seat for π while ℚ(i)(π), which does, has none for `e^{2πiα}`
+>   — `system.ts`'s standing position that neither ring contains the other. **It is never needed**:
+>   `a = 0` is not an accident of tier G but its DEFINITION (SG-1 *is* "there is no target piece"),
+>   and `w` is absent everywhere else, so the two halves are never both present. The same argument
+>   disposes of `ΣVᵢ`. So the honest build is a third ROUTE with the mixed case refused BY NAME,
+>   and what is left is one line: `0 = 2πi[w·T + π·ρ]`, hence `T/π = −ρ/w`.
+> - **The weight is derived, then checked.** `Σ_{n∈ℤ}` forces `w = 1` and `Σ_{n≥1}` forces `w = 2`,
+>   read off the target's OWN declared range; halving additionally requires the cofactor to be even
+>   (`N(−z)D(z) = N(z)D(−z)` as polynomials over ℚ(i)) and its `n = 0` term to vanish — otherwise the
+>   identity is `Σ_ℤ = f(0) + 2Σ_{n≥1}` and the weight silently absorbs `f(0)`. All three are
+>   decisions, which is research 03 §8's commonest error made arithmetic rather than recorded.
+> - **The predicate is a closed VOCABULARY**, not an expression language: the corpus writes two
+>   strings, and a parser for two instances would be a language with one consumer. `poles(K) ∩ Z \ {0}`
+>   is accepted and then refused with its reason — an excluded integer's residue is `f(n)`, ALGEBRAIC
+>   (the kernel's π spent on its own residue `π·(1/π) = 1`), or, where the cofactor also has a pole
+>   there, the merged residue lands in ℚ(i)(π). Either way it is the mixed case a third time, and it
+>   is why **G1 is a ℚ(i)(π) solve rather than a harder case of G2** — its cofactor `1/z²` has no
+>   other pole, so `ρ = 0` and the whole identity lives in that ring. M5.7's shape, stated now.
+> - **The no-op is PROVEN, not inferred.** Every one of the 23 records × 79 fixtures was dumped
+>   before and after — the loader's violations, `buildSystem`'s field/rank/pivots/determined/kernel/
+>   contradictions, every ledger row with its status, claim, evidence level, method and repair, every
+>   piece limit, the theorem's `piUnits`, the quadrature's value, and the solve's route, value, text
+>   and certificates — 1253 lines, byte-identical. The first attempt was INVALID and worth recording:
+>   the harness itself was fixed between the two runs, so the diff measured the instrument.
+> - **A survivor that mattered.** Dropping the kernel from `analyse`'s inputs left every test green
+>   while reintroducing exactly the hole M5.5b closed — `findPoles` reports zero poles for a `cot`
+>   integrand, so the ledger would call a contour clear of the integers it runs through, and the sum
+>   route (which reads only LEGALITY and the piece limits) would still return the right number. **The
+>   answer being right is not evidence that the ledger is honest**, and that is now asserted directly.
+>   Sweep 25 mutants, 24 killed, one recorded equivalent: a global sign on `reflect` cancels because
+>   `isEven` uses it once on each side of an equality.
+>
+> Not yet done, and M5.6c's: the ledger does not CLOSE for such a record (CATCH cannot sum the
+> kernel's residues and COVER has no target piece), so the route is reached through `solveFamily`'s
+> LEGALITY gate and returns a value the ledger does not yet certify. G2, the `coth` formatter and the
+> summation theorem land together.
+
 ### M5.7 — SG-5 and SG-6: a sum, and the collision · *M–L*
 
 - **SG-5** — the G tier's target **is not an integral.** `target.variable` is typed `"x" | "theta"`,

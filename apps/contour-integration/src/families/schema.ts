@@ -435,7 +435,24 @@ export interface Family {
   readonly residueSelection: {
     readonly rule: "all" | "inside" | "upperHalfPlane" | "lowerHalfPlane" | "notOn";
     readonly set?: string;
-    /** Tier G: the unknown is a TERM of the residue sum, moved to the unknown side of `M t = r`. */
+    /**
+     * Tier G: the unknown is a TERM of the residue sum rather than a piece of the contour.
+     *
+     * **NOT "moved to the unknown side of `M t = r`"**, which is what this field's first draft said
+     * and what [M5-plan](../../../../docs/contour-integration/M5-plan.md) §M5.6 still states as one
+     * equation. `solveResidueTerm.ts` has the finding in full: that move needs a coefficient adding
+     * a DIMENSIONLESS number to one carrying π, and neither the exponential basis nor ℚ(i)(π) holds
+     * both. It is never needed — a record declaring this has no `target` piece, which is what SG-1
+     * IS — so the solve is a third route and the mixed case is refused by name.
+     *
+     * `terms` names the integers whose residues constitute the target, from a closed vocabulary; a
+     * predicate outside it is refused with the vocabulary quoted rather than parsed.
+     *
+     * `weight` is the halving bookkeeping (`1` two-sided, `2` one-sided of an even summand) — and it
+     * is DERIVED from the target's own declared range and then checked against what the record says,
+     * because research 03 §8 names that halving as the tier's commonest error and a field merely
+     * read would record the habit rather than catch it.
+     */
     readonly targetTerms?: readonly {
       readonly targetId: string;
       readonly terms: string;

@@ -20,6 +20,8 @@ import type { PathFn, QuadratureBudget } from "../engine/contour/integrate.js";
 import type { Contour } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
+import { asSummationKernel, type SummationKernel } from "../kernel/summationKernel.js";
+import { cofactorResidues } from "../kernel/kernelResidue.js";
 import { stripFactorOf } from "./stripFactor.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
@@ -33,6 +35,7 @@ import {
   type SolvedValue,
 } from "./solveTarget.js";
 import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branchFactor.js";
+import { solveResidueTerm, type SolvedResidueTerm } from "./solveResidueTerm.js";
 import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
@@ -84,6 +87,16 @@ export interface FamilyRun extends Analysis {
    * whole integrand and rendering it alone would be a picture of a different function.
    */
   readonly declared?: { readonly product: DeclaredProduct; readonly cofactor: Node };
+  /**
+   * The summation kernel `π cot(πz)` / `π csc(πz)` and its cofactor — present exactly when the
+   * contour integrand carries one.
+   *
+   * Recognised HERE rather than in `analyse` because two consumers need the same object: the ledger,
+   * which cannot otherwise see that every integer is a pole (`analyse`'s own note), and Pass 5's
+   * third route, where the cofactor's poles carry the whole answer. Recognising it twice would let
+   * the two disagree about what the cofactor is after `asSummationKernel`'s gcd reduction.
+   */
+  readonly summation?: SummationKernel;
 }
 
 export type RunFamilyResult =
@@ -108,6 +121,15 @@ export type SolveFamilyResult =
       readonly solved: SolvedValue;
       readonly targets: PiSolvedTargets;
     }
+  /**
+   * The unknown is a TERM of the residue sum, not a piece of the contour — tier G (SG-1).
+   *
+   * A third route rather than a case of the first, and `solveResidueTerm.ts` gives the reason in
+   * full: the coefficient the plan's one-equation generalisation asks for would add a dimensionless
+   * number to one carrying π, and no ring in this app holds both. It is never needed, because a
+   * record with `targetTerms` has no `target` piece — that is what SG-1 IS.
+   */
+  | { readonly ok: true; readonly route: "sum"; readonly run: FamilyRun; readonly solved: SolvedResidueTerm }
   /**
    * Pass 5 can refuse while the RUN is perfectly good — a degenerate target coefficient, a relation
    * the solver has no symbolic route for. The run comes back anyway so a caller can show the ledger
@@ -227,6 +249,10 @@ export function runFamily(
   const budget =
     unresolved === null ? options.budget : { ...options.budget, skip: unresolved };
 
+  // Null for every integrand that is not `π cot(πz)·f` or `π csc(πz)·f`, which is every record
+  // outside tier G — so this is inert for the corpus that existed before it.
+  const summation = asSummationKernel(built.ast);
+
   return {
     ok: true,
     run: {
@@ -238,11 +264,13 @@ export function runFamily(
       poles,
       contour,
       ...(declared === undefined ? {} : { declared }),
+      ...(summation === null ? {} : { summation }),
       ...analyse({
         ast: built.ast,
         f,
         poles,
         contour,
+        ...(summation === null ? {} : { summation: { kernel: summation } }),
         ...(budget === undefined ? {} : { budget }),
         ...(power.ok
           ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }
@@ -307,6 +335,14 @@ function solveWithin(
   // to divide by, because D4's lower edge reproduces an affine combination of three real integrals.
   if (family.branch?.factors.some((x) => x.order.kind === "log") ?? false) {
     return solveLogFamily(family, r.run, chain);
+  }
+
+  // AND TIER G TAKES THE THIRD, ahead of the `piUnits` check below rather than after it: its
+  // unknown is not on the left of the identity at all, so "the residue theorem produced no exact
+  // closed-contour value" would be both true and beside the point. Routed on the record's own
+  // declaration, so every record without one takes exactly the path it always took.
+  if (family.residueSelection.targetTerms !== undefined) {
+    return solveSummationFamily(family, r.run);
   }
 
   const piUnits = r.run.theorem.piUnits;
@@ -419,6 +455,48 @@ function resolvePrerequisites(
 
 /** `family:<id>`, with anything after the id treated as prose for the reader. */
 const FAMILY_PREFIX = /^family:([A-Za-z0-9-]+)/;
+
+/**
+ * Pass 5 for a summation family: the unknown is a term of the residue sum.
+ *
+ * The two things it must find are the kernel and the residues at the poles of its COFACTOR, and both
+ * come from the run rather than from the record — the kernel because `asSummationKernel` is what
+ * decides whether the integrand has one at all, the residues because they are the answer. A record
+ * that declares `targetTerms` over an integrand carrying no kernel is refused by name rather than
+ * solved against an empty sum, which would return 0 for every such record and look like a value.
+ */
+function solveSummationFamily(family: Family, run: FamilyRun): SolveFamilyResult {
+  if (run.summation === undefined) {
+    return {
+      ok: false,
+      run,
+      reason:
+        `${family.id}: the record puts its unknown inside the residue sum, but the contour integrand ` +
+        "carries no summation kernel — there are no integer residues for it to be a term of",
+    };
+  }
+  const known = cofactorResidues(run.summation);
+  if (!known.ok) {
+    return { ok: false, run, reason: `${family.id}: ${known.reason}` };
+  }
+  const solved = solveResidueTerm(family, {
+    kernel: run.summation,
+    known: known.total,
+    pieceLimits: run.ledger.pieceLimits,
+  });
+  if (!solved.ok) {
+    return { ok: false, run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
+  }
+  return {
+    ok: true,
+    route: "sum",
+    run,
+    solved: {
+      ...solved.solved,
+      certificates: [known.certificate, ...solved.solved.certificates],
+    },
+  };
+}
 
 /** Pass 5 for a log family: `M t = r` over ℚ(i)(π), reported per unknown. */
 function solveLogFamily(family: Family, run: FamilyRun, chain: ReadonlySet<string>): SolveFamilyResult {

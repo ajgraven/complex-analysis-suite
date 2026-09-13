@@ -803,6 +803,19 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > every N" is the asymptote rather than the typical case. [`M5-plan.md`](M5-plan.md) §M5.5 and
 > [`GALLERY.md`](GALLERY.md) §5.6 have the findings.
 >
+> **M5.6a–b build tier G's solve.** `cot`/`csc` are Möbius functions of `e^{2πiz₀}`, so `Res(K·f, z₀)`
+> at a pole of the cofactor is an exact quotient of basis elements and `coth` is a NAME for it at
+> `z₀ = ia`; the `2πi` cancels because `∮ → 0`. Then SG-1 — and **the plan's own one-equation
+> generalisation cannot be built**, because its coefficient adds a dimensionless number to one
+> carrying π and no ring here holds both. It is never needed (`a = 0` is tier G's definition), so the
+> solve is a third route giving `T/π = −ρ/w`, with the mixed case refused by name; the weight is
+> derived from the target's declared range and checked, halving also requiring an even cofactor with a
+> vanishing `n = 0` term. The no-op for the 23 loaded records is PROVEN byte-for-byte, and the sweep
+> found that dropping the kernel from `analyse` left every test green while reintroducing M5.5b's
+> hole — **a right answer is not evidence that the ledger is honest.** The ledger does not yet CLOSE
+> for such a record; G2, the `coth` formatter and the summation theorem are M5.6c.
+> [`M5-plan.md`](M5-plan.md) §M5.6 has the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.

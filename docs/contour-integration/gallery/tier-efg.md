@@ -1465,6 +1465,19 @@ changes a v1 field's meaning.
   it is worth noting that the `targetWeight` field is not bureaucracy: it is exactly the halving
   bookkeeping that research/03 §8 names as the tier's commonest error, promoted from a habit into a
   value the solve depends on.
+
+  > **BUILT (M5.6b), with two corrections to the above.** The weight is a per-entry `weight` field
+  > *inside* `targetTerms`, not a sibling `targetWeight` — the JSONC below and the paragraph here
+  > both name a field that does not exist; `DESIGN.md` §5 always had it nested, and nested is also
+  > strictly more expressive. And **the one-equation generalisation cannot be built**: its
+  > coefficient adds a dimensionless `1 + Σⱼcⱼ` (a keyhole's is `1 − e^{2πiα}`, whose coefficients
+  > are `ℚ(i)(√d)`) to a `2πi·w` carrying π, and neither the exponential basis nor ℚ(i)(π) holds
+  > both — this app's standing position that neither ring contains the other. It is never needed:
+  > `a = 0` is tier G's definition, not an accident, and `w` is absent everywhere else. So the solve
+  > is a third ROUTE (`families/solveResidueTerm.ts`), `0 = 2πi[w·T + π·ρ]` gives `T/π = −ρ/w`, and
+  > the mixed case is refused by name. The weight is DERIVED from the target's declared range and
+  > checked against the record; halving additionally requires the cofactor to be even and its `n = 0`
+  > term to vanish, both decided exactly over ℚ(i).
 - **SG-2 — no role for a piece with an exactly-known, externally-imported value.** E3's top side is
   `√π e^{−b²/4}` and F2's return ray is `e^{iπ/(2n)}Γ(1+1/n)`. Both are exact, neither is a residue,
   neither vanishes, and neither is proved by the contour: `Γ(1/2)` comes from polar coordinates and

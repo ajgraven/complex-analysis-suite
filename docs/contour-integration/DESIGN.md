@@ -476,7 +476,8 @@ export interface Family {
   residueSelection: {
     rule: "all" | "inside" | "upperHalfPlane" | "lowerHalfPlane" | "notOn";
     set?: string;
-    /** tier G: the unknown is a TERM of the residue sum, moved to the unknown side of M t = r */
+    /** tier G: the unknown is a TERM of the residue sum, solved by its OWN route — not moved to
+     *  the unknown side of M t = r, which would need a coefficient in no ring here (M5.6b) */
     targetTerms?: { targetId: string; terms: string; weight: 1 | 2 }[];
   };
 

@@ -539,6 +539,55 @@ against `1/Math.tanh(π/2)`: the nearest double to `coth(π/2)` is ABOVE both th
 bracket, so the assertion was testing float64's rounding. M5.2's `piUpper().toNumber() === Math.PI`
 again, with the same fix — compare in ℚ.
 
+### 5.7 Tier G's solve — **M5.6a–b**, and the gap this document specified wrongly
+
+SG-1 is §10.2's largest gap and the one that makes tier G possible. This document proposes the fix as
+one equation, `T·(1 + Σⱼcⱼ − 2πi·w) + ΣVᵢ + ΣFₗ = 2πi Σ_known n·Res` — **and that coefficient cannot
+be assembled.** `1 + Σⱼcⱼ` is dimensionless (a keyhole's is `1 − e^{2πiα}`, whose coefficients are
+`ℚ(i)(√d)`) while `2πi·w` carries a π, and the app's two coefficient rings are incomparable by a
+standing decision: the exponential basis has no seat for π, ℚ(i)(π) has none for `e^{2πiα}`. So the
+sum of the two is not an element of anything here.
+
+**It is never needed, and the reason is definitional rather than lucky.** `a = 0` is not an accident of
+tier G — SG-1 *is* "there is no target piece" — and `w` is absent everywhere else, so the two halves
+of the coefficient are never both present. The same argument disposes of `ΣVᵢ`. The honest build is
+therefore a third ROUTE with the mixed case refused BY NAME, rather than a ring invented for a record
+that does not exist. What is left is one line: `0 = 2πi[w·T + π·ρ]`, hence `T/π = −ρ/w`.
+
+`ρ` is a QUOTIENT, and that is M5.6a's finding: with `q = e^{2πiz₀}`, `cot(πz₀) = i(q+1)/(q−1)` and
+`csc(πz₀) = 2i·e^{iπz₀}/(q−1)`, so both kernels are Möbius functions of one basis element and
+`Res(K·f, z₀) = K(z₀)·Res(f, z₀)` is an exact ratio needing no new arithmetic. `coth` is the *name* of
+that ratio at `z₀ = ia` — a property of the point, not of the arithmetic — so naming it belongs where
+the answer is formatted. And the `2πi` of the residue theorem CANCELS in this tier, because `∮ → 0`
+takes the whole left-hand side with it; what survives is the kernel's own π.
+
+**The weight is derived, then checked** — which is what §10.2 asks for when it calls the field "not
+bureaucracy". `Σ_{n∈ℤ}` forces `w = 1` and `Σ_{n≥1}` forces `w = 2`, read off the target's own
+declared range rather than out of `weight`; and halving additionally requires the cofactor to be EVEN
+(`N(−z)D(z) = N(z)D(−z)` as polynomials over ℚ(i)) and its `n = 0` term to vanish, since otherwise the
+identity is `Σ_ℤ = f(0) + 2Σ_{n≥1}` and the weight quietly absorbs `f(0)`. Three decisions, not three
+measurements. Two smaller corrections came with it: the field is a per-entry `weight` inside
+`targetTerms`, **not** the sibling `targetWeight` this document and the tier-G JSONC both name; and the
+term predicate is a closed vocabulary of two strings, refused with the vocabulary quoted rather than
+parsed, because a language with one consumer is not a language.
+
+**G1 is a different ring, not a harder case** — stated here because it shapes M5.7. Excluding `n = 0`
+from the target terms makes that residue a KNOWN term, and it is algebraic at a regular integer (the
+kernel's π having been spent on its own residue `π·(1/π) = 1`) or, where the cofactor also has a pole
+there, merged and in ℚ(i)(π). G1's cofactor `1/z²` has no other pole, so `ρ = 0` and its whole identity
+lives in ℚ(i)(π): the collision route is a second solve rather than a harder instance of this one.
+
+Two things about the evidence. The no-op for the 23 loaded records is **proven**, not inferred: every
+record × fixture was dumped before and after — the loader's violations, the system's rank, pivots and
+kernel dimension, every ledger row with its status, claim, evidence level, method and repair, every
+piece limit, `piUnits`, the quadrature, and every certificate — 1253 lines, byte-identical. (The first
+attempt was invalid, and worth recording: the harness itself was fixed between the two runs, so the
+diff measured the instrument rather than the change.) And the mutation sweep's one survivor that
+mattered was dropping the kernel from `analyse`'s inputs: every test stayed green while the ledger
+went back to calling a contour clear of the integers it runs straight through — §5.6's own hole —
+because the sum route reads only LEGALITY and the piece limits and still returns the right number.
+**A right answer is not evidence that the ledger is honest.**
+
 ### 5.0b C1 is where `∮` stops being the answer
 
 Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc
