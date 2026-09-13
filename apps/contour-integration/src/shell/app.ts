@@ -2071,9 +2071,19 @@ export function mountApp(root: Element): void {
     head.append(badge(verdict.level), ` ${describeLevel(verdict.level)}`);
     poleCard.append(head);
 
+    // **"NO POLES" AND "NO CLAIM" ARE DIFFERENT SENTENCES, and until M5.3a the card printed the
+    // second for both.** An entire integrand HAS an answer — the singular set is empty — and saying
+    // "no poles are claimed" about it understates what the engine established, while saying "No
+    // poles." about an unread integrand overstates it. The decision is read first for that reason.
+    if (poles.entire) {
+      poleCard.append(
+        el("p", "muted", "No poles: f is entire, so the singular set is empty and Σ Res is the empty sum."),
+      );
+      return;
+    }
     if (!poles.rational) {
       poleCard.append(
-        el("p", "muted", "f is not a rational function of z, so no poles are claimed."),
+        el("p", "muted", "f could not be read exactly, so no poles are claimed — which is not the same as there being none."),
       );
       return;
     }

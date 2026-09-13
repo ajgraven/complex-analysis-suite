@@ -698,7 +698,16 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         : "not every residue is known exactly, so the total is an estimate",
       residuesExact
         ? exact("the residues", "exact arithmetic over ℚ(i) or one quadratic extension of it")
-        : unknown("the residues", "some poles are not expressible in ℚ(i)(√d); the numeric value stands"),
+        : unknown(
+            "the residues",
+            // **THE REASON WAS UNCONDITIONAL AND THEREFORE SOMETIMES INVENTED.** For `1/cosh z` no
+            // pole was found at all — the readers cannot see the function — and telling a reader
+            // that "some poles are not expressible in ℚ(i)(√d)" names a difficulty the engine never
+            // reached. Which of the two it is is exactly what `rational` records.
+            poles.rational
+              ? "some poles are not expressible in ℚ(i)(√d); the numeric value stands"
+              : "f could not be read exactly, so no pole list was established — which is not the same as there being no poles",
+          ),
     ),
   );
 
