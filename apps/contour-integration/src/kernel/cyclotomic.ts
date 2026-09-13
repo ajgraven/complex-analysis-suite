@@ -28,7 +28,7 @@ import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
 import { formatGauss } from "./formatExact.js";
-import { unitRoot } from "./branchResidue.js";
+import { unitRoot } from "./unitRoot.js";
 
 /** A denominator of the shape `b_n z^n + b₀`, with every root on the unit circle. */
 export interface CyclotomicForm {

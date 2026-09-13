@@ -37,6 +37,7 @@ import { d6DogboneInverseSqrt } from "./records/d6-dogbone-inverse-sqrt.js";
 import { d7DogboneTwoFractionalPowers } from "./records/d7-dogbone-two-fractional-powers.js";
 import { e1StripExponentialQuasiperiod } from "./records/e1-strip-exponential-quasiperiod.js";
 import { e2StripSechFourier } from "./records/e2-strip-sech-fourier.js";
+import { f1WedgeRationalPower } from "./records/f1-wedge-rational-power.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export {
@@ -97,6 +98,7 @@ export const FAMILIES: readonly Family[] = [
   d7DogboneTwoFractionalPowers,
   e1StripExponentialQuasiperiod,
   e2StripSechFourier,
+  f1WedgeRationalPower,
 ];
 
 /**

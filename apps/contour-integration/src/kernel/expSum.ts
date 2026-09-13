@@ -158,7 +158,10 @@ export class ExpSum {
       // PARTIAL folds count. D7's `e^{−iπ + (ln 2)/4 + (3 ln 5)/4}` has a `−iπ` that is the number
       // `−1` and a logarithm this basis carries; extracting only the first leaves a REAL exponent,
       // which is the difference between an answer with a closed form and an answer without one.
-      const { factor, rest } = t.exponent.splitAlgebraicFactor();
+      // The coefficient's own radicand goes in: a root of unity needing a √ may fold only into a
+      // coefficient already carrying THAT one — a fold combines, it never introduces. See
+      // `Exponent.splitAlgebraicFactor`, and F1's `n = 3` for what it buys.
+      const { factor, rest } = t.exponent.splitAlgebraicFactor(t.coefficient.d);
       const product = factor.equals(SqrtExt.ONE) ? t.coefficient : tryMul(t.coefficient, factor);
       // A fold that would leave one quadratic extension is skipped: the term stays as it was, which
       // is still correct and merely less reduced.

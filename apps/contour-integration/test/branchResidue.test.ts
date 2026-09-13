@@ -7,7 +7,8 @@
 // answers, and that each is the one its determination asks for.
 import { describe, expect, it } from "vitest";
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
-import { branchResidue, powerAtPole, unitRoot } from "../src/kernel/branchResidue.js";
+import { branchResidue, powerAtPole } from "../src/kernel/branchResidue.js";
+import { unitRoot } from "../src/kernel/unitRoot.js";
 import { formatExpSum } from "../src/kernel/expSum.js";
 import type { AlgebraicPole } from "../src/kernel/algebraic.js";
 

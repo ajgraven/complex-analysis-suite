@@ -27,6 +27,7 @@
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { formatSqrtExt } from "./formatExact.js";
 import { LogPart, formatLogPart } from "./logPart.js";
+import { unitRoot } from "./unitRoot.js";
 
 export class Exponent {
   /** The algebraic part, in ℚ(i)(√d). */
@@ -178,12 +179,28 @@ export class Exponent {
    * that is not real is one `Re` does not distribute over — so D7's answer came out as a decimal with
    * no closed form at all, for want of extracting a minus sign.
    *
-   * `e^{iπr}` folds when `2r ∈ ℤ`, where it cycles through `1, i, −1, −i`. Quarter-integer `r` is
-   * deliberately NOT folded: `e^{iπ/4} = (1+i)/√2` needs a quadratic extension, which could collide
-   * with a radicand the coefficients already carry. The logarithm folds when every weight has
-   * denominator 1 or 2 — `e^{ln 2}` is 2 and `e^{(ln 2)/2}` is `√2`.
+   * `e^{iπr}` folds unconditionally when `2r ∈ ℤ`, where it cycles through `1, i, −1, −i` inside
+   * ℚ(i) and can collide with nothing. The logarithm folds when every weight has denominator 1 or 2
+   * — `e^{ln 2}` is 2 and `e^{(ln 2)/2}` is `√2`.
+   *
+   * **A FOLD MAY COMBINE A RADICAL, NEVER INTRODUCE ONE**, which is what `radicand` is for.
+   * `e^{iπ/3} = (1 + i√3)/2` and `e^{iπ/4} = (1+i)/√2` are perfectly exact numbers, and folding
+   * either into a coefficient that is already in THAT extension can only stay there — often
+   * collapsing, which is the point. Folding one into a RATIONAL coefficient does the opposite: it
+   * replaces a compact polar term by a two-component rectangular one and hides the modulus, so D7's
+   * residue-at-infinity row reads `17√2/8 − 17i√2/8` where `17/4·e^{−iπ/4}` is the same number with
+   * its magnitude of 4.25 visible — and that row exists to say `2π·4.25 = 26.7` in an answer of 1.216.
+   * So the caller passes the coefficient's own radicand, and a root of unity needing a different one
+   * is CARRIED. It subsumes the collision question rather than answering it separately: matching
+   * radicands cannot collide.
+   *
+   * F1 is why it exists at all. Its wedge at `n = 3` leaves `(1/6 + i√3/6)·e^{−iπ/3}` once the sine
+   * is factored out — a product that is exactly `1/3`, in the very extension the coefficient is
+   * already using — and without the fold the record's flagship fixture printed a decimal and no
+   * closed form at all. {@link asAlgebraicFactor} is asked in the abstract, with no coefficient to
+   * match against, so it takes the default and keeps refusing.
    */
-  splitAlgebraicFactor(): { readonly factor: SqrtExt; readonly rest: Exponent } {
+  splitAlgebraicFactor(radicand = 1n): { readonly factor: SqrtExt; readonly rest: Exponent } {
     let factor = SqrtExt.ONE;
     let pi = this.pi;
     let log = this.log;
@@ -195,6 +212,16 @@ export class Exponent {
         const values = [Gauss.ONE, Gauss.I, Gauss.ONE.neg(), Gauss.I.neg()];
         factor = SqrtExt.fromGauss(values[Number(power)]);
         pi = Gauss.ZERO;
+      } else if (radicand !== 1n) {
+        // `Frac` is reduced, so its denominator IS the order of the root: 3, 4 and 6 are the only
+        // ones left that `unitRoot` can express, and it returns null for every other. `SqrtExt`
+        // normalises a Gaussian value to `d = 1`, so the guard above is exactly "the coefficient
+        // carries a radical" and the one below is "it is the same one".
+        const root = unitRoot(this.pi.im.n, this.pi.im.d);
+        if (root !== null && root.d === radicand) {
+          factor = root;
+          pi = Gauss.ZERO;
+        }
       }
     }
 
