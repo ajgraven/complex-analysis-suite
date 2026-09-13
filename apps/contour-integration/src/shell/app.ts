@@ -733,6 +733,13 @@ export function mountApp(root: Element): ShellHandle {
   function frameContour(): void {
     view = fitView(resolved, viewport());
     requestDraw();
+    // **A browser pass is why this line is here.** Opening a record refits the camera AFTER the
+    // recompute that wrote the URL, so the ADDRESS BAR kept the previous view — measured at
+    // `halfHeight 1.2` in the bar against 4.8 on screen. The copy button was unaffected, because it
+    // writes its own hash first, which is exactly what made the defect hard to see: the shared link
+    // was right and the URL a reader could select and paste was one step behind. `screen()` cannot
+    // see a camera, so no jsdom test could catch it either until one read the hash.
+    syncHash();
   }
 
   /**
@@ -882,7 +889,7 @@ export function mountApp(root: Element): ShellHandle {
    * entries between the reader and the page they came from. A state that cannot be encoded leaves
    * the URL ALONE rather than half-writing one.
    */
-  function syncHash(): void {
+  function writeHash(): void {
     if (!hashReady) return;
     // The reader has acted, so a message about the link they arrived on is no longer about them.
     linkBox.hidden = true;
@@ -891,6 +898,22 @@ export function mountApp(root: Element): ShellHandle {
     if (enc.hash !== window.location.hash) {
       window.history.replaceState(null, "", enc.hash);
     }
+  }
+
+  let hashTimer = 0;
+  /**
+   * The state has changed; the URL should catch up shortly.
+   *
+   * **COALESCED, and a real browser is why.** A wheel zoom has no gesture and no end event, so a
+   * fast spin is dozens of discrete settled changes in a second — and `replaceState` is rate-limited
+   * by the browser (Safari drops calls past roughly a hundred in thirty seconds), so writing per
+   * event would silently stop writing. One timer means every caller can simply say "this changed"
+   * and the URL lands once, shortly after things stop moving.
+   */
+  function syncHash(): void {
+    if (!hashReady) return;
+    window.clearTimeout(hashTimer);
+    hashTimer = window.setTimeout(writeHash, 250);
   }
 
   /**
@@ -2636,6 +2659,8 @@ export function mountApp(root: Element): ShellHandle {
         return;
       }
       requestDraw();
+      // Keyboard pan and zoom run outside any gesture, so `endGesture` never sees them.
+      syncHash();
     },
   });
 
@@ -2648,6 +2673,9 @@ export function mountApp(root: Element): ShellHandle {
       const rect = stageWrap.getBoundingClientRect();
       view = zoomAt(view, Math.exp(-ev.deltaY * 0.0015), ev.clientX - rect.left, ev.clientY - rect.top, viewport());
       requestDraw();
+      // A wheel has no gesture and no end event; the coalescing in `syncHash` is what makes this
+      // safe to call per tick.
+      syncHash();
     },
     { passive: false },
   );

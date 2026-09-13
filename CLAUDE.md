@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **536 test files / 5452 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **536 test files / 5453 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -463,17 +463,26 @@ decode landing in a FRESH default so M6.1's consistently-lossy trap cannot pass 
 would have passed M5.1's shadowed-`branch` bug. A link that cannot be honoured **refuses by name** —
 an unknown record, a fixture past the end, an unknown template, a non-finite number, a foreign app, a
 truncated hash, and a **declaration naming a branch point the link does not carry**, which is M6.1a's
-bug in permalink form. Four findings. **(1)** `frameContour()` after applying a link silently discarded
-the sharer's camera — caught in the draft, and `screen()` cannot see a camera so the test asserts it.
-**(2) A refusal is not an absence**: `decodeShell` returns `null` for "no link" and a named reason for
+bug in permalink form. Five findings. **(1) TWO camera bugs, in opposite directions, and only a real browser found the
+second.** `frameContour()` after APPLYING a link discarded the sharer's camera (caught in the draft —
+the link carries the view and reframing overrode it); then a Playwright pass found the converse, that
+`frameContour()` runs AFTER the recompute which writes the URL, so opening a record left the ADDRESS
+BAR a step behind — `halfHeight 1.2` in the bar against 4.8 on screen. The copy button hid it by
+writing its own hash first, so the SHARED link was right while the URL a reader could select and paste
+was stale. `screen()` cannot see a camera, so no jsdom test could either until one read the hash. The
+repair is one place rather than three, because keyboard pan/zoom and WHEEL zoom run outside any
+gesture and a wheel has no end event at all — which makes per-event writing unsafe, since
+`replaceState` is rate-limited by the browser and would silently stop — so `syncHash` coalesces on a
+250 ms timer and every caller simply says "this changed".
+**(3) A refusal is not an absence**: `decodeShell` returns `null` for "no link" and a named reason for
 "a link I cannot honour", and the latter gets its own box, because `errorBox` is cleared by the next
-successful parse and a refusal wiped a moment after appearing is no refusal. **(3) 23/27 on the first
+successful parse and a refusal wiped a moment after appearing is no refusal. **(4) 23/27 on the first
 sweep, all four survivors real** — `enc-params` and `dec-shift` hid behind one hole (no test built a
 contour that was genuinely a moved template at moved parameters, so the only shift test was the refusal
 path), `enc-record-sandbox` changes no number so no verdict could catch it, and **`dec-template` pinned
 the outcome without pinning the reason**: removing the check still refuses, because `fromRecipe` returns
 null a few lines later, but the message then blames a parameter for a missing template. M5.2's finding
-met again; **27/27** after the repair. **(4)** The pen tool's contour has no recipe, so encoding
+met again; **27/27** after the repair. **(5)** The pen tool's contour has no recipe, so encoding
 **refuses by name** rather than carrying a piece list for a shape nothing can yet produce — the refusal
 being the signal M7 needs its own serialisation, instead of forty lines of speculative one.
 

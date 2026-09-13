@@ -339,11 +339,30 @@ branch. A truncated or foreign hash refuses by name.
 > consistently-lossy trap cannot pass it. Measured payloads match §M6.2a: a gallery link is 60 B of
 > hash, the declared keyhole 608 B, the worst case 1,008 B.
 >
+> **Verified in a real browser** (Chromium, the built `dist` over a static server), because jsdom has
+> no clipboard and no real URL: a gallery link is **126 B** of full URL, `navigator.clipboard` writes
+> it and reads back identical to the address bar, reopening it in a fresh page gives a byte-identical
+> rail with no refusal, a wheel zoom reaches the URL and reopens identically, and a link naming an
+> unknown record shows the refusal with its reason. (The one console 404 is the throwaway server's
+> missing `/favicon.ico`, not the app's.)
+>
 > **Four findings.**
 >
-> **(1) `frameContour()` after applying a link silently discarded the sharer's camera.** Caught in the
-> draft, before it shipped: the link carries the view, and reframing overrode it. `screen()` cannot
-> see a camera, so the test now asserts it explicitly.
+> **(1) Two camera bugs, in opposite directions, and only a real browser found the second.**
+> `frameContour()` after *applying* a link silently discarded the sharer's camera — caught in the
+> draft, since the link carries the view and reframing overrode it. Then a Playwright pass found the
+> converse: `frameContour()` runs AFTER the recompute that writes the URL, so opening a record left
+> the **address bar** one step behind, `halfHeight 1.2` in the bar against 4.8 on screen. The copy
+> button hid it by writing its own hash first — so the *shared* link was right while the URL a reader
+> could select and paste was stale, which is why nothing noticed. `screen()` cannot see a camera, so
+> no jsdom test could either until one read the hash.
+>
+> The repair also had to be one place rather than three: keyboard pan/zoom and **wheel zoom run
+> outside any gesture**, so `endGesture` never saw them, and a wheel has no end event at all — which
+> makes per-event writing unsafe, because `replaceState` is rate-limited by the browser (Safari drops
+> calls past roughly a hundred in thirty seconds) and would silently stop. So `syncHash` coalesces on
+> a 250 ms timer and every caller simply says "this changed". Verified in Chromium: twelve wheel ticks
+> reach the URL once, and the result reopens byte-identically.
 >
 > **(2) A refusal is not an absence.** `decodeShell` returns `null` for "no link" and a named reason
 > for "a link I cannot honour", and the shell shows the second in its own box — not `errorBox`, which

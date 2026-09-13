@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { mountApp, type ShellHandle } from "../src/shell/app.js";
 import { offeredCorpus, type ShellState } from "../src/shell/state.js";
-import { encodeShell } from "../src/shell/viewState.js";
+import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { DEFAULT_VIEW } from "../src/kernel/camera.js";
 
 /** Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context. */
@@ -44,6 +44,14 @@ function clickIn(host: Element, text: string): void {
 }
 /** The CONTOUR card's template picker — the first `.presets` in the rail, before the branch card's. */
 const templates = (root: Element): HTMLElement => q(root, ".rail .presets");
+/**
+ * Wait out `syncHash`'s coalescing window.
+ *
+ * The URL write is debounced — a wheel zoom has no end event, and `replaceState` is rate-limited by
+ * the browser — so a test that reads `location.hash` has to let the timer fire.
+ */
+const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 320));
+
 /** What a reader can actually see: hidden cards contribute nothing, as on screen. */
 const visibleText = (root: Element, sel: string): string =>
   [...root.querySelectorAll<HTMLElement>(`${sel} > *`)]
@@ -402,12 +410,13 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(q(opened.root, ".linkError").hidden).toBe(true);
   });
 
-  it("writes the address bar on settle, and the result reopens the same state", () => {
+  it("writes the address bar on settle, and the result reopens the same state", async () => {
     const app = mount();
     clickIn(q(app.root, ".sourceToggle"), "Gallery");
     const records = byLabel<HTMLSelectElement>(app.root, "gallery record");
     records.value = "dogbone-inverse-sqrt";
     fire(records, "change");
+    await settle();
     expect(window.location.hash).toMatch(/^#vs=/);
     const want = screen(app.root);
 
@@ -415,7 +424,25 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(screen(reopened.root)).toBe(want);
   });
 
-  it("uses replaceState, so a session leaves ONE history entry rather than one per change", () => {
+  it("the URL carries the FRAMED camera, not the one the record replaced", async () => {
+    // Opening a record refits the camera after the recompute that writes the URL, so the address bar
+    // kept the previous view — measured in a browser at `halfHeight 1.2` in the bar against 4.8 on
+    // screen. The copy button hid it by writing its own hash first, so the SHARED link was right
+    // while the one a reader could select and paste was a step behind. `screen()` cannot see a
+    // camera, which is why this reads the hash itself.
+    const app = mount();
+    clickIn(q(app.root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(app.root, "gallery record");
+    records.value = "keyhole-two-poles";
+    fire(records, "change");
+    await settle();
+    const decoded = decodeShell(window.location.hash);
+    expect(decoded?.ok).toBe(true);
+    if (decoded?.ok !== true) return;
+    expect(decoded.state.view).toEqual(app.app.currentState().view);
+  });
+
+  it("uses replaceState, so a session leaves ONE history entry rather than one per change", async () => {
     const before = window.history.length;
     const app = mount();
     const records = (): HTMLSelectElement => byLabel<HTMLSelectElement>(app.root, "gallery record");
@@ -424,6 +451,11 @@ describe("the `#vs=` permalink, at the shell", () => {
       records().value = id;
       fire(records(), "change");
     }
+    await settle();
+    // The payload is base64, so the id is not a substring of the hash — decode it, which also
+    // checks the coalesced write landed on the LAST change rather than an earlier one.
+    const decoded = decodeShell(window.location.hash);
+    expect(decoded?.ok === true && decoded.state.record).toBe("mellin-keyhole");
     expect(window.history.length).toBe(before);
   });
 
