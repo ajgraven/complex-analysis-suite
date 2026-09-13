@@ -737,13 +737,21 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > 1 − 2φ/π` (L6) and `sin ψ ≥ 2ψ/π` (Jordan) are **the same inequality**, so one predicate should
 > discharge both.
 >
-> **M5 also absorbs the two edges M4 left**, by decision, and **the first is done**: `side` was
-> declared and never honoured, so tier D's quadrature cross-check was skipped and tier D was the one
-> tier without independent numeric corroboration ([`GALLERY.md`](GALLERY.md) §5.2) — **M5.0 honours
-> it, and all seven tier-D records now agree with an independent quadrature** (§5.2.1). Still open is
-> M5.1: the sandbox cannot declare a branch FACTOR, which is the single root cause of M4's half-met
-> gate clause *and* of research 06 §5.3's deferred sheet spinner. M4.7c built the
-> declared-determination evaluator both were waiting on.
+> **M5 absorbed the two edges M4 left, by decision, and BOTH are now done.** `side` was declared and
+> never honoured, so tier D's quadrature cross-check was skipped and tier D was the one tier without
+> independent numeric corroboration ([`GALLERY.md`](GALLERY.md) §5.2) — **M5.0 honours it, and all
+> seven tier-D records now agree with an independent quadrature** (§5.2.1). And the sandbox could not
+> declare a branch FACTOR, the single root cause of this section's half-met gate clause *and* of
+> research 06 §5.3's deferred sheet spinner — **M5.1 (a–d) closes both**. The sandbox reaches an exact
+> `∮` by hand (its declaration reproduces D1's own closed form), the split it claims is CHECKED
+> against the expression that was typed, and the sheet spinner reads `BranchChoice.sheet` at last.
+>
+> The gate clause itself needed correcting rather than meeting: *"dragging a cut across the contour
+> changes the answer"* cannot happen, because `∮` reads the declared WINDOW and `powerAtPole` takes no
+> geometry. Dragging a cut clear of the contour leaves the value bit-identical; dragging it across
+> WITHHOLDS the value and names the crossing; changing the DETERMINATION jumps it by exactly
+> `e^{−2πiJ}`. All three are asserted, and the correction is recorded in
+> [`M5-plan.md`](M5-plan.md) §M5.1 with the measurement behind it.
 >
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not

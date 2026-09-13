@@ -527,7 +527,7 @@ cut running *vertically* through a piece pins no limit ("above" displaces along 
 `sideResolves` refuses it **by name** rather than answering it. The sandbox is deliberately not
 covered — it can declare cuts but not a branch FACTOR, which is M5.1.
 
-**M5.1 (a–c) gives the sandbox a branch FACTOR, and D1's trap becomes reachable by hand.** The gap was
+**M5.1 (a–d) gives the sandbox a branch FACTOR, and D1's trap becomes reachable by hand.** The gap was
 bigger than it read: `findPoles` on `z^0.3/(1+z)` reports `rational: false` and ZERO poles, so there
 was no `exactValue` at all and the ledger failed at KILL — the sandbox produced no answer for a
 multivalued integrand rather than a wrong one, which is why "dragging a cut changes the answer" had
