@@ -368,3 +368,54 @@ export function stripTemplate(height = 2 * Math.PI, halfWidth = 6): Contour {
   ];
   return { pieces, params: { R: param("R", halfWidth, [0.5, 1e6], "log", { to: "inf" }) } };
 }
+
+/**
+ * The WEDGE: the sector `0 → R → R·e^{2πi/n} → 0`, with `R → ∞`.
+ *
+ * F1's contour, and the tier's cheapest lesson made geometric: **the angle must be exactly `2π/n`**,
+ * because what the argument needs is `f(ωz) = μ f(z)` with `ω = e^{2πi/n}`, and at any other angle
+ * the return ray is not a rotation of the outgoing one and relates to nothing. The template takes
+ * `n`, not an angle, so the constraint is unrepresentable rather than merely checked — the same
+ * reason {@link stripTemplate} takes a height in the units its quasi-period is stated in.
+ *
+ * It replaces the strip's TRANSLATION symmetry by a ROTATION, which is the whole of tier F: the
+ * outgoing ray is the target, the arc is killed by L2, and the return ray reproduces the target with
+ * factor `−ω·μ` — the minus being the reversed traversal, not part of the symmetry.
+ *
+ * The two rays are where the affine `Scalar` had to widen. Their far endpoint is `R·e^{2πi/n}`, a
+ * product of the live `R` and a rotation — see {@link Scalar}. Here the rotation is a literal,
+ * because a sandbox preset fixes `n`; under F1 it is a `derived` value, because the record's `n` is
+ * a parameter. Same geometry, and only the record needs the widening.
+ */
+export function wedgeTemplate(n = 3, radius = 4): Contour {
+  const angle = (2 * Math.PI) / n;
+  const pieces: Piece[] = [
+    {
+      id: "ray0",
+      name: "the positive real axis",
+      geom: { kind: "segment", from: pt(0, 0), to: pt(ref("R"), 0) },
+      role: "target",
+      colour: 0,
+    },
+    {
+      id: "arc",
+      name: "the R → ∞ sector arc",
+      geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: angle },
+      role: "vanish",
+      lemma: "L2",
+      colour: 1,
+    },
+    {
+      id: "ray1",
+      name: `the return ray arg z = 2π/${n}`,
+      geom: {
+        kind: "segment",
+        from: pt(ref("R", Math.cos(angle)), ref("R", Math.sin(angle))),
+        to: pt(0, 0),
+      },
+      role: "reproduces",
+      colour: 2,
+    },
+  ];
+  return { pieces, params: { R: param("R", radius, [0.5, 1e6], "log", { to: "inf" }) } };
+}

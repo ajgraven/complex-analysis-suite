@@ -8,8 +8,10 @@
 //
 // GEOMETRY IS THE RUNTIME TYPE, NOT A STRING. The gallery's JSONC writes `"x": "-R"`; this schema
 // reuses `engine/contour/model.ts`'s affine `Scalar`, so the same value that a record declares is
-// the value `resolve()` consumes — no parser, no glue, no second representation to drift. model.ts
-// already records that the affine subset covers every template in the gallery.
+// the value `resolve()` consumes — no parser, no glue, no second representation to drift. That
+// subset covered every template in the gallery until F1, whose wedge needs `R·cos(2π/n)` — a
+// product of two parameters — and so widened `Scalar`'s coefficient to name one; `Scalar`'s own
+// note has the finding, and the reason the form stays affine in every LIVE parameter.
 import type { Level } from "@cas/rigor";
 import type { Geom, LemmaId, PieceRole } from "../engine/contour/model.js";
 

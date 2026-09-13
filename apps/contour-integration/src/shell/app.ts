@@ -70,6 +70,7 @@ import {
   keyholeTemplate,
   rectangleTemplate,
   stripTemplate,
+  wedgeTemplate,
   semicircleTemplate,
 } from "../engine/contour/templates.js";
 import {
@@ -131,7 +132,7 @@ const TEMPLATES: {
    * shape as `"rectangle"` (E1, E2 and E3 all do), while the sandbox already uses that name for its
    * free four-sided shape. Widening here rather than adding a sandbox-only name to the record schema.
    */
-  id: TemplateId | "strip";
+  id: TemplateId | "strip" | "wedge";
   label: string;
   build: () => Contour;
   seed?: (branch: BranchChoice) => BranchChoice;
@@ -151,6 +152,9 @@ const TEMPLATES: {
   // Tier E's shape, alongside tier D's two below: the quasi-periodic strip, whose top side
   // REPRODUCES the bottom rather than vanishing. `exp(0.3*z)/(1 + exp(z))` on it is E1.
   { id: "strip", label: "strip (2π)", build: () => stripTemplate(2 * Math.PI, 6) },
+  // Tier F's shape, and the rotational twin of the strip above: the return ray reproduces the
+  // outgoing one by `−ω·μ` rather than by `−λ`. `1/(1 + z^3)` on it is F1.
+  { id: "wedge", label: "wedge (2π/3)", build: () => wedgeTemplate(3, 4) },
   // Tier D's two shapes, which the engine has had since M4.2 and M4.6 with no way in either.
   {
     id: "keyhole",
