@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **508 test files / 4886 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **509 test files / 4901 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -558,6 +558,31 @@ window rather than assumed. In a browser: type `z^(-0.5)/(1+z)`, declare, and th
 over 48 sample points` beside `∮ = 2π`; switch the determination to principal and the answer jumps to
 `⚠ −2π` while LEGALITY refuses — D1's `wrong-branch` trap, one dropdown. The sandbox's colouring is
 now built from the declared factorisation, so its seam and its cut stop being different objects.
+**M5.1d** is research 06 §5.3's **sheet spinner**, deferred in M4.7d for want of a factor to multiply
+— and it needed no new machinery at all, which is the claim worth keeping: **a sheet is a whole-turn
+offset of the declared window**, `[lo + 2s, hi + 2s]`. Everything follows rather than being arranged.
+The residues pick up `e^{2πisα}` exactly (because `powerAtPole` reads the window); a **log shifts
+ADDITIVELY** instead, for free, with no branch anywhere in the code; the cut does not move; and the
+window stays one turn wide, so M5.1a's invariant is untouched. `BranchChoice.sheet` is read at last.
+The geometry is computed from the window edge reduced modulo whole turns, which is the difference
+between "a sheet does not move the cut" being true and being true to rounding — at sheet 3
+`Math.sin(6π)` is `−7.3e-16`, and it drifts further the higher the sheet.
+
+Reviewing the arc found three shell bugs a browser pass caught and no test could, all of one kind.
+`renderDeclaration(branch)` **shadowed** the module-level `let branch` every handler assigns to, so
+the sheet spinner did nothing and — worse — changing the determination moved the ANSWER (which reads
+`declaration.window`) while leaving the cut drawn where it was, the two then disagreeing about where
+the discontinuity is: the one thing "declaring the determination IS declaring the cut" exists to
+prevent. With it fixed, switching to the principal window now REFUSES (`the R → ∞ circle crosses the
+cut 'Γ' without declaring which side it runs on`) and prints no `∮` at all, where before it printed
+`⚠ −2π`. The stage's rebuild guard compared object IDENTITY against a product `runDeclared` builds
+fresh every call, so the GLSL was recompiled and relinked on every recompute, every frame of a
+contour drag included; it is keyed by value now, and `adopt` clears that key so a gallery trip cannot
+leave a record's program under the sandbox's numbers (verified: the stage is byte-identical across the
+round trip). TypeScript catches none of this — assigning to a parameter is legal and both sides have
+the same type — so **`no-shadow` is now an error for `apps/contour-integration/**`**, which was three
+harmless cases (renamed) and catches the hazard at its source. `no-param-reassign` would be the
+broader rule and fires 268 times across `packages/`, nearly all of it legitimate.
 
 A follow-on fixed the **partial-sum panel's size**, where the defect was not the one it looked like: the
 frame fitted `[−max, max]` on both axes with `0` pinned to the canvas centre, tight only for a walk

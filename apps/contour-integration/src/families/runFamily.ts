@@ -214,9 +214,9 @@ export function runFamily(
   // a different function from the one the golden corpus checks and neither would say so.
   let unresolved: string | null = null;
   if (declared !== undefined) {
-    const built = declaredEvaluator(declared.product, declared.cofactor, contour);
-    f = built.f;
-    unresolved = built.unresolved;
+    const evaluator = declaredEvaluator(declared.product, declared.cofactor, contour);
+    f = evaluator.f;
+    unresolved = evaluator.unresolved;
   }
   const budget =
     unresolved === null ? options.budget : { ...options.budget, skip: unresolved };

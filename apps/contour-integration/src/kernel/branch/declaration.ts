@@ -87,6 +87,21 @@ const REACH = 1e4;
 export const SINGLE_POINT_ID = "b";
 
 /**
+ * A window edge reduced into `[0, 2)` turns — the same ray, with the sheet count dropped.
+ *
+ * In units of π, so a full turn is 2. `Frac` has no `mod`, and floor-division on a negative
+ * numerator is the usual place this kind of helper goes wrong, so it is written out.
+ */
+function turnsMod2(x: Frac): Frac {
+  const two = Frac.of(2n);
+  const q = x.div(two);
+  // Floor of `q`, correct for negatives: BigInt division truncates toward zero.
+  const t = q.n / q.d;
+  const floor = q.n < 0n && t * q.d !== q.n ? t - 1n : t;
+  return x.sub(two.mul(Frac.of(floor)));
+}
+
+/**
  * The cut system a determination implies.
  *
  * **The cut lies along the window's LOWER boundary**, because that is where the determination jumps:
@@ -107,10 +122,21 @@ export const SINGLE_POINT_ID = "b";
  * reason, which is why it is written here rather than left to be rediscovered.
  */
 function cutFromDetermination(at: number, lo: Frac, hi: Frac, order: BranchPoint["order"]): BranchChoice {
-  const theta = lo.toNumber() * Math.PI;
+  // **BOTH THE RAY AND THE LABEL ARE READ MODULO WHOLE TURNS, because a SHEET is a whole-turn
+  // offset** (M5.1d). Sheet 1 of the keyhole determination is `arg ∈ [2π, 4π)` — still the `[0, 2π)`
+  // convention, one sheet up — and labelling it "custom" would invent a third convention out of a
+  // bookkeeping integer.
+  //
+  // Reducing before the trigonometry rather than relying on 2π-periodicity is not fussiness: it is
+  // the difference between "the cut does not move" being TRUE and being true to rounding. At sheet 3
+  // `Math.sin(6π)` is `−7.3e-16` rather than `0`, so the ray tilts by a hair, and it tilts further
+  // the higher the sheet. Reduced, the geometry is bit-identical on every sheet — which is what the
+  // claim ought to mean in code and not only in prose.
+  const base = turnsMod2(lo);
+  const theta = base.toNumber() * Math.PI;
   const via: Cx = [at + REACH * Math.cos(theta), REACH * Math.sin(theta)];
   return {
-    convention: lo.isZero() ? "zeroToTwoPi" : hi.equals(Frac.ONE) ? "principal" : "custom",
+    convention: base.isZero() ? "zeroToTwoPi" : turnsMod2(hi).equals(Frac.ONE) ? "principal" : "custom",
     points: [{ id: SINGLE_POINT_ID, at: [at, 0], order, label: `z = ${at}` }],
     cuts: [{ id: "Γ", from: SINGLE_POINT_ID, to: INFINITY, via: [via] }],
     basePoint: [at, 1],

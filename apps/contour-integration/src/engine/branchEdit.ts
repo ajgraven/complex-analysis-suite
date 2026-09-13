@@ -230,3 +230,15 @@ export const setShadow = (branch: BranchChoice, shadow: boolean): BranchChoice =
   ...branch,
   shadow,
 });
+
+/**
+ * Which sheet the answer is reported on (research 06 §5.3).
+ *
+ * Read by `engine/declaredRun.ts` as a whole-turn offset of the declared window — so it changes the
+ * VALUE and not the geometry. Carried and unread from M4.1 until M5.1d, because until the sandbox
+ * could declare a branch factor there was nothing for the integer to multiply.
+ */
+export const setSheet = (branch: BranchChoice, sheet: number): BranchChoice => ({
+  ...branch,
+  sheet: Math.round(sheet),
+});

@@ -28,7 +28,7 @@
 // drag a cut clear of the contour and the value is bit-identical, because nothing in the chain that
 // produced it was given the cut's position.
 import { makeComplexFn, type Node } from "@cas/expr";
-import type { Frac } from "@cas/exact";
+import { Frac } from "@cas/exact";
 import { analyse, type Analysis } from "./analyse.js";
 import type { PathFn, QuadratureBudget } from "./contour/integrate.js";
 import { resolveAll, type Contour, type CutSide } from "./contour/model.js";
@@ -85,6 +85,25 @@ export function declaredEvaluator(
     }
   });
   return { f, unresolved };
+}
+
+/**
+ * A stable string identifying a declared product — for callers that must rebuild something
+ * expensive only when the declaration actually changes.
+ *
+ * **The shell needs this because a reference comparison silently never fires.** `runDeclared` builds
+ * `declared` fresh on every call, so `stageProduct !== r.declared` is always true, and the GLSL
+ * program was being recompiled and relinked on EVERY recompute — every frame of a contour drag
+ * included, which is exactly when the app can least afford it. `Frac` carries BigInts, so
+ * `JSON.stringify` throws on one; the key is written out instead.
+ */
+export function declaredKey(product: DeclaredProduct): string {
+  const parts = product.factors.map((f) =>
+    f.kind === "power"
+      ? `p:${f.id}:${f.at[0]},${f.at[1]}:${f.alpha}:${f.sign}:${f.window.n}/${f.window.d}`
+      : `l:${f.id}:${f.at[0]},${f.at[1]}:${f.power}:${f.window.n}/${f.window.d}`,
+  );
+  return `c:${product.constant[0]},${product.constant[1]}|${parts.join("|")}`;
 }
 
 /** What the sandbox declares: one branch factor on one of its points, times a rational cofactor. */
@@ -200,10 +219,26 @@ export function runDeclared(
     };
   }
 
+  // **THE SHEET IS A WHOLE-TURN OFFSET OF THE WINDOW, and that is the entire mechanism** (M5.1d).
+  //
+  // `BranchChoice.sheet` has been carried and never read since M4.1 — research 06 §5.3's spinner was
+  // deferred in M4.7d because there was no declared FACTOR for an integer to multiply. There is one
+  // now, and it turns out to need no new machinery at all: reporting the answer on sheet `s` is
+  // reading `arg ∈ [θ₀ + 2πs, θ₀ + 2π(s+1))`, which is the declared window shifted by `2s` in units
+  // of π. Everything follows from that one line:
+  //
+  //   - the residues pick up `e^{2πisα}` exactly, because `powerAtPole` reads `z₀^α` in the window;
+  //   - a LOG shifts additively instead (`log + 2πis`), for free, because `logCut` reads the same
+  //     window and a log's monodromy is additive — no branch in the code, which is the test that
+  //     this is the right mechanism rather than a convenient one;
+  //   - the CUT does not move, because `cos`/`sin` are 2π-periodic — correct, since changing sheet
+  //     is a statement about which value is reported and not about where the discontinuity is;
+  //   - the window stays exactly one turn wide, so `buildDeclaration`'s invariant is untouched.
+  const shift = Frac.of(2n).mul(Frac.of(BigInt(branch.sheet)));
   const built = buildDeclaration({
     constant: declaration.constant,
     at: point.at[0],
-    window: declaration.window,
+    window: [declaration.window[0].add(shift), declaration.window[1].add(shift)],
     order: declaration.order,
   });
   if (!built.ok) return built;

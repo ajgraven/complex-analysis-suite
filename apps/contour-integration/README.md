@@ -317,6 +317,38 @@ whether the whole thing closes.
   deliberately not covered — it can declare cuts but not a branch *factor*, so its quadrature stays
   in the principal determination whatever its lips say; that is M5.1.
 
+**M5.1 gives the sandbox a branch FACTOR — and D1's trap becomes something you can reach by hand:**
+
+- **The gap was bigger than it read.** `findPoles` on `z^0.3/(1+z)` reports `rational: false` and
+  ZERO poles, so there was no exact value at all and the ledger failed at KILL. The sandbox did not
+  compute a *wrong* answer for a multivalued integrand — it computed none, which is why "dragging a
+  cut changes the answer" had nothing to be true of.
+- **Declaring is an explicit act with a stated cost.** The keyhole and dogbone templates already
+  seed a cut system, so inferring a factorisation from "there are branch points" would silently
+  reinterpret whatever was typed the moment a template was picked. Once declared, the integrand box
+  holds only `R(z)` and the assembled form is shown beside it.
+- **The split is checked, not believed.** The app cannot verify intent; it can verify that
+  `declared · R(z)` is the expression the box held a moment earlier — and *where* that comparison is
+  legitimate is computed rather than assumed. `@cas/expr` compiles in its principal branch, a
+  keyhole window is `[0, 2π)`, and the two disagree on the whole lower half plane where the split is
+  *correct* and the numbers differ anyway. So the product is evaluated a second time in the
+  principal window, and only where those agree is anything claimed. An unverifiable split is
+  REFUSED rather than failed, and the three ways of being unverifiable read differently — including
+  the likeliest, an unbound parameter, since `@cas/expr` evaluates one to **zero** rather than
+  refusing and the integrand is then silently the zero function.
+- **The determination is a dropdown, and moving it is D1's `wrong-branch` trap.** `∮ = 2π` at
+  `arg ∈ [0, 2π)`; switch to `[−π, π)` and the cut swings onto ℝ₋ under the outer circle, LEGALITY
+  refuses by name, and no `∮` is printed. Dragging the cut *clear* of the contour changes the value
+  not at all — bit for bit — because `∮` reads the window and `powerAtPole` takes no geometry.
+- **The sheet spinner** (research 06 §5.3, deferred in M4.7d for want of a factor to multiply) needed
+  no new machinery: a sheet is a whole-turn offset of the declared window. The residues then pick up
+  `e^{2πisα}` exactly, a **log shifts additively instead** — for free, with no branch anywhere in the
+  code — and the cut does not move. At α = −1/2, sheet 1 turns `2π` into `−2π` and the badge names
+  the factor. `BranchChoice.sheet`, carried and unread since M4.1, is read at last.
+- The sandbox's colouring is now built from the declared factorisation, so its seam and its cut stop
+  being different objects, and the pole card says it lists the poles of `R(z)` — a branch point
+  carries no residue of its own.
+
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:
 

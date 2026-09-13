@@ -116,7 +116,7 @@ cross-check *disagree* (which is the test that the tag is honoured rather than m
 > in the principal determination whatever its lips say. Nothing regressed there and nothing improved;
 > `AnalysisInput.f`'s doc names the gap, and M5.1 closes it.
 
-### M5.1 — the sandbox declares a branch factor · *M* — **a, b, c DONE**
+### M5.1 — the sandbox declares a branch factor · *M* — **DONE (a–d)**
 
 The sandbox's editor declares branch points, exponents and cuts — **not the factorisation.** So the
 cut system reaches LEGALITY and the picture, and no sandbox value depends on it: `analyse` takes the
@@ -155,8 +155,21 @@ being carried-unread.
 > **The gate as it should read:** drag a cut clear of the contour and the value is bit-identical;
 > drag it across and the value is WITHHELD, with the crossing and its factor named; change the
 > determination and the value jumps by the monodromy factor. All three are asserted in
-> `test/declaredRun.test.ts`. `BranchChoice.sheet` is still carried-unread — the sheet spinner is
-> M5.1d, and it now has a factor to multiply.
+> `test/declaredRun.test.ts`.
+>
+> **M5.1d (the sheet spinner) is done, and `BranchChoice.sheet` is read at last.** It needed no new
+> machinery: **a sheet is a whole-turn offset of the declared window**, `[lo + 2s, hi + 2s]`. The
+> residues then pick up `e^{2πisα}` exactly because `powerAtPole` reads the window; a LOG shifts
+> ADDITIVELY instead, for free, with no branch anywhere in the code — which is the test that this is
+> the right mechanism rather than a convenient one; the cut does not move; and the window stays one
+> turn wide, so M5.1a's invariant is untouched. Verified in a browser at α = −1/2: sheet 1 turns
+> `∮ = 2π` into `−2π` (`e^{−iπ}`), sheet 2 back to `2π`, with the badge naming the factor.
+>
+> Two details the slice forced. The geometry is computed from the window edge **reduced modulo whole
+> turns**, because `Math.sin(6π)` is `−7.3e-16` and not `0` — the difference between "a sheet does not
+> move the cut" being true and being true to rounding, and it drifts further the higher the sheet.
+> And the convention LABEL is read modulo turns too, or sheet 1 of `[0, 2π)` would be called "custom"
+> and a bookkeeping integer would have invented a third argument convention.
 
 ### M5.2 — one predicate for two lemmas, and the corrected L6 · *S–M*
 

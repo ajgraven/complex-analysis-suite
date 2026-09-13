@@ -40,9 +40,10 @@ import {
   type BranchGrab,
   type BranchHandle,
   setShadow,
+  setSheet,
 } from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
-import { runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
+import { declaredKey, runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
 import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
 import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declaration.js";
 import { analyse } from "../engine/analyse.js";
@@ -469,18 +470,18 @@ export function mountApp(root: Element): void {
 
   const contrastLabel = el("span", "muted small", "compare with:");
   contrastWrap.append(contrastLabel);
-  for (const mode of ["none", "sumZ", "sumFz", "sumDz"] as ContrastMode[]) {
-    const b = el("button", "preset", CONTRAST_LABELS[mode]);
+  for (const contrastMode of ["none", "sumZ", "sumFz", "sumDz"] as ContrastMode[]) {
+    const b = el("button", "preset", CONTRAST_LABELS[contrastMode]);
     b.type = "button";
-    b.dataset.mode = mode;
+    b.dataset.mode = contrastMode;
     b.addEventListener("click", () => {
-      contrast = mode;
+      contrast = contrastMode;
       for (const other of contrastWrap.querySelectorAll("button")) {
-        other.classList.toggle("on", other.dataset.mode === mode);
+        other.classList.toggle("on", other.dataset.mode === contrastMode);
       }
       drawAcc();
     });
-    if (mode === "none") b.classList.add("on");
+    if (contrastMode === "none") b.classList.add("on");
     contrastWrap.append(b);
   }
 
@@ -690,6 +691,8 @@ export function mountApp(root: Element): void {
   /** The same expression as SOURCE, so undeclaring can put back what the reader actually typed. */
   let beforeDeclarationSrc: string | null = null;
   let splitCheck: SplitCheck | null = null;
+  /** What the stage's program was last built FROM — a value key, never an object identity. */
+  let stageKey: string | null = null;
   /** Why the declared run refused, when it did — shown in place of an answer, never beside one. */
   let declaredRefusal: string | null = null;
 
@@ -710,6 +713,7 @@ export function mountApp(root: Element): void {
     // two together. Here the card is about to describe a record whose program was never built, and
     // null is what makes it say "declared but not on the stage", which is then true.
     declaredOnStage = null;
+    stageKey = null;
     integral = null;
     theorem = null;
     ledger = null;
@@ -780,6 +784,10 @@ export function mountApp(root: Element): void {
     // what the record says and not from the compiled AST's principal branch — see
     // `kernel/branch/declared.ts`. Without one (tiers A–C) this is the same call it always was.
     declaredOnStage = run.declared?.product ?? null;
+    // The gallery builds its own program here, so the SANDBOX's key must not survive the trip: with
+    // it left in place, switching back to a sandbox whose declaration had not changed would skip the
+    // rebuild and leave the record's picture under the sandbox's numbers.
+    stageKey = null;
     if (run.declared === undefined) stage?.setIntegrand(run.ast);
     else stage?.setIntegrand(run.declared.cofactor, run.declared.product);
   }
@@ -824,7 +832,15 @@ export function mountApp(root: Element): void {
           splitCheck = beforeDeclaration === null ? null : checkSplit(r.declared, ast, beforeDeclaration);
           // The picture becomes the DECLARED determination, as it already is under a record — so
           // the sandbox's colour seam and its declared cut stop being different objects.
-          if (declaredOnStage !== r.declared) {
+          //
+          // Keyed BY VALUE, and a review found out why: `runDeclared` builds `declared` fresh on
+          // every call, so an identity test never fires and the GLSL was being recompiled and
+          // relinked on every recompute — every frame of a contour drag included, which is exactly
+          // when the app can least afford it. The key covers the cofactor's source too, since that
+          // goes into the program as well.
+          const key = `${declaredKey(r.declared)}::${input.value}`;
+          if (stageKey !== key) {
+            stageKey = key;
             declaredOnStage = r.declared;
             stage?.setIntegrand(ast, r.declared);
           }
@@ -995,6 +1011,7 @@ export function mountApp(root: Element): void {
       // the stage instead — so the program is not built here and the flag is not cleared here.
       if (declaration === null) {
         declaredOnStage = null;
+        stageKey = null;
         stage?.setIntegrand(ast);
       }
       errorBox.hidden = true;
@@ -1126,12 +1143,12 @@ export function mountApp(root: Element): void {
         // A borrowed input is part of the argument, not a detail of it: the record's own trap asks
         // for "the prerequisite as its own row with its own verdict", and the badge above already
         // meets that verdict into every answer that used it.
-        for (const input of systemTargets.borrowed) {
+        for (const borrowed of systemTargets.borrowed) {
           const line = el("p", "resultValue bonusValue");
-          line.append(badge(assembleVerdict([input.certificate]).level), ` ${input.text}`);
+          line.append(badge(assembleVerdict([borrowed.certificate]).level), ` ${borrowed.text}`);
           recordCard.append(
             line,
-            el("p", "muted small", `${describe(input.targetId)} — ${input.certificate.claim}`),
+            el("p", "muted small", `${describe(borrowed.targetId)} — ${borrowed.certificate.claim}`),
           );
         }
         for (const sentence of systemTargets.invisible) {
@@ -1262,8 +1279,8 @@ export function mountApp(root: Element): void {
     }
     derivationCard.hidden = false;
 
-    const shell = el("details", "derivation");
-    shell.open = !derivation.closes;
+    const panel = el("details", "derivation");
+    panel.open = !derivation.closes;
     const steps = derivation.stages.reduce((n, st) => n + st.lines.length, 0);
     const summary = el(
       "summary",
@@ -1272,7 +1289,7 @@ export function mountApp(root: Element): void {
         ? `Derivation — ${steps} steps, each with its evidence`
         : `Derivation — where it stops: ${derivation.failedAt ?? "incomplete"}`,
     );
-    shell.append(summary);
+    panel.append(summary);
 
     for (const st of derivation.stages) {
       const block = el("div", `derivStage${st.failed ? " failed" : ""}`);
@@ -1331,7 +1348,7 @@ export function mountApp(root: Element): void {
         if (line.repair !== undefined) li.append(el("p", "repair", line.repair));
         block.append(li);
       }
-      shell.append(block);
+      panel.append(block);
     }
 
     if (derivation.conclusion) {
@@ -1342,9 +1359,9 @@ export function mountApp(root: Element): void {
         badge(derivation.conclusion.level),
         ` ${derivation.conclusion.label} = ${derivation.conclusion.text}`,
       );
-      shell.append(end);
+      panel.append(end);
     }
-    derivationCard.append(shell);
+    derivationCard.append(panel);
   }
 
   function renderResult(): void {
@@ -1848,7 +1865,19 @@ export function mountApp(root: Element): void {
    * sandbox has no residues and no `∮` — and it is stated rather than implied, with the assembled
    * form shown alongside so the reader can see what they are now claiming.
    */
-  function renderDeclaration(branch: BranchChoice): void {
+  /**
+   * @param shown — the cut system being RENDERED (post-`effective`), never the state to edit.
+   *
+   * **Named `shown` and not `branch`, and a browser pass is why.** It was `branch`, which shadowed
+   * the module-level `let branch` that every handler here assigns to — so `branch = setSheet(…)` and
+   * `branch = rebuilt.choice` both wrote to the parameter and were discarded. The sheet spinner did
+   * nothing at all, and worse, changing the determination moved the ANSWER (which reads
+   * `declaration.window`) while leaving the cut drawn where it was (which reads this). The two then
+   * disagreed about where the discontinuity is, silently — precisely the thing "declaring the
+   * determination IS declaring the cut" exists to prevent. TypeScript cannot catch it: assigning to
+   * a parameter is legal.
+   */
+  function renderDeclaration(shown: BranchChoice): void {
     const wrap = el("div", "declaration");
     const order = declaredOrder();
 
@@ -1862,7 +1891,7 @@ export function mountApp(root: Element): void {
             "the box then holds R(z) and the factor is read in its own window.",
         ),
       );
-      for (const point of branch.points) {
+      for (const point of shown.points) {
         const b = el("button", "preset", `declare a factor on ${point.label}`);
         b.type = "button";
         b.addEventListener("click", () => {
@@ -1950,6 +1979,47 @@ export function mountApp(root: Element): void {
 
     // Short label, explanation beneath: at the rail's width the sentence-length version was clipped
     // mid-word ("…back in th"), which a browser pass caught and no test could.
+    // ---- the sheet spinner (research 06 §5.3) ---------------------------------------------
+    // Deferred in M4.7d with its reason — "the sandbox has no declared branch FACTOR for a sheet
+    // index to multiply" — and this is the slice that gives it one. A sheet is a whole-turn offset
+    // of the declared window, so the spinner moves the ANSWER and leaves the cut exactly where it
+    // is; the badge names the factor so that is visible rather than inferred.
+    const sheetRow = el("div", "contrasts");
+    const sheetIn = el("input", "expr small");
+    sheetIn.type = "number";
+    sheetIn.step = "1";
+    sheetIn.value = String(shown.sheet);
+    sheetIn.setAttribute("aria-label", "sheet the answer is reported on");
+    sheetIn.addEventListener("change", () => {
+      const v = Number(sheetIn.value);
+      if (Number.isFinite(v)) branch = setSheet(branch, v);
+      recompute();
+    });
+    sheetRow.append(el("span", "muted small", "sheet:"), sheetIn);
+    if (order.kind === "power") {
+      const j = order.alpha.mul(Frac.of(BigInt(shown.sheet)));
+      sheetRow.append(
+        el(
+          "span",
+          "muted small",
+          shown.sheet === 0
+            ? "sheet 0 — the determination as declared"
+            : `× e^(2πi·${formatFrac(j)}), and the cut does not move`,
+        ),
+      );
+    } else {
+      sheetRow.append(
+        el(
+          "span",
+          "muted small",
+          shown.sheet === 0
+            ? "sheet 0 — the determination as declared"
+            : `log + ${shown.sheet === 1 ? "" : `${shown.sheet}·`}2πi — a log's monodromy is ADDITIVE, so no factor closes it`,
+        ),
+      );
+    }
+    wrap.append(sheetRow);
+
     const drop = el("button", "preset", "undeclare");
     drop.type = "button";
     drop.setAttribute("aria-label", "undeclare the factor and put the whole integrand back in the box");

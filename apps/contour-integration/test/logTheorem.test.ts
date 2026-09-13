@@ -95,7 +95,7 @@ describe("applyLogTheorem", () => {
     // `1/((1+z²)(4+z²))` has poles at ±i and ±2i, and `log(2i)` needs `ln 2`, which no basis here
     // carries until M4.5. A contour enclosing only the unit-circle poles is a perfectly good
     // contour, and the theorem must not refuse it because of a pole it never encircled.
-    const rational = parse("1/((1+z^2)*(4+z^2))");
+    const twoPairs = parse("1/((1+z^2)*(4+z^2))");
     const two = SqrtExt.fromGauss(new Gauss(Frac.ZERO, Frac.of(2n)));
     const report: PoleReport = {
       ...poles(),
@@ -111,7 +111,7 @@ describe("applyLogTheorem", () => {
         { at: [0, 2], n: 0, decided: true },
       ]),
       factor: { power: 2, argRange: KEYHOLE },
-      rational,
+      rational: twoPairs,
     });
     expect(enclosed.exactInPi).toBeDefined();
 
@@ -123,7 +123,7 @@ describe("applyLogTheorem", () => {
         { at: [0, 2], n: 1, decided: true },
       ]),
       factor: { power: 2, argRange: KEYHOLE },
-      rational,
+      rational: twoPairs,
     });
     expect(both.exactInPi).toBeUndefined();
   });

@@ -297,7 +297,7 @@ describe("cpowCut agrees with the TS twin", () => {
 });
 
 describe("cutCorrection agrees with the TS twin", () => {
-  const cases: { name: string; branch: BranchChoice; reference: ReadonlyMap<string, Frac> }[] = [
+  const systems: { name: string; branch: BranchChoice; reference: ReadonlyMap<string, Frac> }[] = [
     { name: "a keyhole ray against the principal ray", branch: keyhole(), reference: new Map([["b", Frac.ONE]]) },
     {
       name: "D6's bounded cut against its window rays",
@@ -318,7 +318,7 @@ describe("cutCorrection agrees with the TS twin", () => {
     { name: "no reference at all", branch: dragged(), reference: new Map() },
   ];
 
-  it.each(cases.map((c) => [c.name, c] as const))("%s", (_name, kase) => {
+  it.each(systems.map((c) => [c.name, c] as const))("%s", (_name, kase) => {
     const gl = context();
     const segments = cutSegments(kase.branch, RADIUS, kase.reference);
     expect(segments.length).toBeGreaterThan(0);
@@ -358,7 +358,7 @@ describe("cutCorrection agrees with the TS twin", () => {
     // the position tolerance above and not this claim. Here every coordinate, every cross product and
     // every jump (±1/2, ±1) is exact in BOTH backends, so the comparison is `toBe`.
     const gl = context();
-    const cases: { name: string; branch: BranchChoice; reference: ReadonlyMap<string, Frac>; samples: Cx[] }[] = [
+    const onGpu: { name: string; branch: BranchChoice; reference: ReadonlyMap<string, Frac>; samples: Cx[] }[] = [
       {
         // Segments: (0,0)→(1,0) and (1,0)→(42,0) at +1/2, the reference ray (0,0)→(-40,0) at -1/2.
         name: "keyhole",
@@ -394,7 +394,7 @@ describe("cutCorrection agrees with the TS twin", () => {
     ];
 
     let nonzero = 0;
-    for (const kase of cases) {
+    for (const kase of onGpu) {
       const segments = cutSegments(kase.branch, RADIUS, kase.reference);
       const got = probe(gl, "vec4(cutCorrection(uZ), 0.0, 0.0, 1.0)", kase.samples, segments);
       for (let k = 0; k < kase.samples.length; k++) {
