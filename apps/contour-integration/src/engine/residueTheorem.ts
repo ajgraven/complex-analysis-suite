@@ -11,10 +11,13 @@
 // machinery — exact ℚ(i) arithmetic on one side, floating Gauss–Legendre panels on the other —
 // arriving at the same number is strong evidence that both are right, and a disagreement is a bug
 // report. This module is where they are compared, and a disagreement is reported as one.
-import { Gauss, SqrtExt } from "@cas/exact";
+import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
+import type { Node } from "@cas/expr";
 import type { Cx } from "../kernel/geom.js";
 import { ExpSum, formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
+import { asCyclotomic, cyclotomicWeightedSum } from "../kernel/cyclotomic.js";
+import { toExactRational } from "../kernel/exactRational.js";
 import type { RatPi } from "../kernel/ratPi.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
@@ -127,6 +130,13 @@ export function checkAgainstQuadrature(
 export function applyResidueTheorem(
   poles: PoleReport,
   integral: ContourIntegral,
+  /**
+   * The integrand, when the caller has it — which opens the CYCLOTOMIC route below.
+   *
+   * Optional for the same reason `applyBranchTheorem`'s `rational` is: every caller that can supply
+   * it does, and a caller that cannot still gets the per-pole route rather than an error.
+   */
+  ast?: Node,
 ): ResidueTheoremResult {
   const certificates: Certificate[] = [];
 
@@ -141,6 +151,48 @@ export function applyResidueTheorem(
     };
   }
   if (!poles.exactlyComplete || !poles.exactPoles) {
+    // **THE CYCLOTOMIC ROUTE, AND IT IS A FALLBACK ON PURPOSE.** `1/(1 + zⁿ)` has exact poles in
+    // ℚ(i)(√d) at `n = 2, 3, 4` and none at `n = 5, 7` — `ℚ(ζ₁₀)` has degree 4 over ℚ — so F1
+    // reaches an answer at the first three through the per-pole sum above and at the others only
+    // through the structure. Trying the structure FIRST would work too, and would be worse: the
+    // per-pole route returns `2π/(3√3)` in the algebraic basis where the structural one returns
+    // `π/(3·sin(π/3))`, the same number carrying a transcendental it does not need. The record's own
+    // goldens say exactly this — a radical at `n = 2, 3` and a sine at `n = 5, 7` — and the ordering
+    // falls out of the existing flow rather than needing a preference.
+    const cyclotomic = ast === undefined ? null : asCyclotomicDenominator(ast);
+    if (cyclotomic !== null) {
+      const sum = cyclotomicWeightedSum(cyclotomic, Frac.ZERO, undefined, (root) => {
+        const w = integral.windings.find(
+          (x) => Math.hypot(x.at[0] - root.at[0], x.at[1] - root.at[1]) < 1e-6,
+        );
+        // A root the contour was never asked about is not a root it encloses: `integrateContour`
+        // weighs every pole the report found, and these ARE those poles — found numerically even
+        // where they could not be pinned exactly. A missing entry means the geometry said nothing,
+        // which is `null` (a refusal) rather than 0.
+        if (w === undefined) return null;
+        return w.decided ? w.n : null;
+      });
+      if (sum.ok) {
+        const piUnits = sum.value.scale(SqrtExt.fromGauss(Gauss.int(0, 2)));
+        const [re, im] = piUnits.toTuple();
+        const value: Cx = [Math.PI * re, Math.PI * im];
+        const text = formatTwoPiIExpSum(sum.value);
+        const check = checkAgainstQuadrature(value, text, integral);
+        return {
+          exactValue: { value, text },
+          piUnits,
+          ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
+          ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
+          verdict: assembleVerdict([
+            sum.certificate,
+            ...(check?.contradiction === undefined ? [] : [check.contradiction]),
+          ]),
+        };
+      }
+      // A cyclotomic denominator whose sum REFUSED is not a case to fall through on: the refusal is
+      // about an undecided winding, which the per-pole route below would meet identically.
+      return { verdict: assembleVerdict([refuse("∮ f dz", sum.reason), sum.certificate]) };
+    }
     return {
       verdict: assembleVerdict([
         estimate(
@@ -209,4 +261,25 @@ export function applyResidueTheorem(
     ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
     verdict: assembleVerdict(certificates),
   };
+}
+
+/**
+ * `f` read as `1/(b_n zⁿ + b₀)`, or null.
+ *
+ * A NUMERATOR OF DEGREE ZERO ONLY, and it is the same restriction `branchTheorem.ts` states: the
+ * closed form `Res = −zₖ^a/(n b₀)` comes from `P/Q′` with `P` constant, and a numerator with a `z`
+ * in it is a different sum with no such form. A constant other than 1 scales through, so it is
+ * allowed here where the branch reader (which composes with `z^α`) required exactly 1.
+ */
+function asCyclotomicDenominator(ast: Node): ReturnType<typeof asCyclotomic> {
+  const split = toExactRational(ast);
+  if (!split.ok) return null;
+  if (split.value.num.degree() !== 0) return null;
+  const form = asCyclotomic(split.value.den);
+  if (form === null) return null;
+  // `c/(b_n zⁿ + b₀)` is `1/((b_n/c) zⁿ + (b₀/c))`, which has the same roots and scaled
+  // coefficients — so divide through rather than carry the numerator into the residue formula.
+  const c = split.value.num.coeff(0);
+  if (c.isZero()) return null;
+  return { ...form, constant: form.constant.div(c), leading: form.leading.div(c) };
 }

@@ -81,29 +81,24 @@ export interface LedgerResult {
 }
 
 /**
- * The rational multiples of π the app's contours actually produce.
+ * How large a denominator an angle may have before it is not a nameable multiple of π.
  *
- * A WHITELIST rather than a rational reconstruction, deliberately: a bound computed for the wrong
- * extent is worse than no bound, and `simplestRational` of a dragged float is a sixteen-digit
- * fraction that is honest and useless. The second block is the wedge angles — `π/n` and `π/(2n)` up
- * to `n = 6` — which L6 needs and which M5.4's wedge template will draw; before M5.2 an `e^{−z³}`
- * arc could not even be measured, let alone bounded.
+ * It was a WHITELIST of thirteen fractions until F1, with a good reason attached — a bound computed
+ * for the wrong extent is worse than no bound, and `simplestRational` of a dragged float is a
+ * sixteen-digit fraction that is honest and useless. The reason survives; the list did not. F1's
+ * wedge sweeps `2π/n` for the record's own `n`, so at `n = 5` and `n = 7` the arc of `1/(1 + z⁵)`
+ * could not be MEASURED and KILL reported that no lemma applied *to the integrand* — which was false,
+ * and false in the worst direction: the same integrand shape is discharged at `n = 4`.
+ *
+ * A CAP is the same guarantee as a list and covers what a list cannot enumerate. Two distinct
+ * rationals with denominators at most `Q` differ by at least `1/Q²`, which at `Q = 12` is `7e-3`, so
+ * the `1e-12` window below admits at most one candidate and the reading is a decision rather than a
+ * fit. Every fraction the old list held has denominator ≤ 12, so nothing it measured is lost.
  */
-const PI_MULTIPLES = [
-  [2n, 1n],
-  [1n, 1n],
-  [1n, 2n],
-  [1n, 3n],
-  [2n, 3n],
-  [1n, 4n],
-  [3n, 2n],
-  [4n, 1n],
-  [1n, 5n],
-  [1n, 6n],
-  [1n, 8n],
-  [1n, 10n],
-  [1n, 12n],
-] as const;
+const MAX_PI_DENOMINATOR = 12n;
+
+/** The widest sweep an arc may have and still be read: two full turns, as the old list's `4π` was. */
+const MAX_PI_MULTIPLE = 4;
 
 /**
  * One angle as an exact rational multiple of π, or null.
@@ -115,10 +110,11 @@ function asPiMultiple(radians: number): Frac | null {
   if (!Number.isFinite(radians)) return null;
   const t = radians / Math.PI;
   if (Math.abs(t) < 1e-12) return Frac.ZERO;
-  for (const [n, d] of PI_MULTIPLES) {
-    const v = Number(n) / Number(d);
-    if (Math.abs(t - v) < 1e-12) return Frac.of(n, d);
-    if (Math.abs(t + v) < 1e-12) return Frac.of(-n, d);
+  if (Math.abs(t) > MAX_PI_MULTIPLE) return null;
+  for (let d = 1n; d <= MAX_PI_DENOMINATOR; d++) {
+    const n = BigInt(Math.round(t * Number(d)));
+    if (n === 0n) continue;
+    if (Math.abs(t - Number(n) / Number(d)) < 1e-12) return Frac.of(n, d);
   }
   return null;
 }
@@ -720,26 +716,49 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     ),
   );
 
+  // **THE QUESTION IS ABOUT THE SUM, NOT ABOUT THE POLE LIST**, and asking the second one made this
+  // row FALSE on every record the cyclotomic route serves. D3 at `(a,n) = (2.3, 5)` has printed the
+  // exact closed form `(π/5)/sin(23π/50)` beside "not every residue is known exactly, so the total
+  // is an estimate" since M4.2e — which is the one thing that route exists to deny: `ℚ(ζ₁₀)` has
+  // degree 4 over ℚ so no individual residue is expressible, and the SUM needs none. F1 at `n = 5`
+  // and `n = 7` would have been the third such record. `Σ Res` is established exactly exactly when
+  // the theorem returned a value, so read that.
   const residuesExact = poles.exactlyComplete;
+  const sumExact = theorem.exactValue !== undefined;
   push(
     rowFrom(
       "CATCH",
-      residuesExact ? "satisfied" : "unknown",
+      residuesExact || sumExact ? "satisfied" : "unknown",
       residuesExact
         ? "every enclosed residue is known exactly"
-        : "not every residue is known exactly, so the total is an estimate",
+        : sumExact
+          ? "Σ Res is known exactly, though no individual residue is expressible"
+          : "not every residue is known exactly, so the total is an estimate",
       residuesExact
         ? exact("the residues", "exact arithmetic over ℚ(i) or one quadratic extension of it")
-        : unknown(
-            "the residues",
-            // **THE REASON WAS UNCONDITIONAL AND THEREFORE SOMETIMES INVENTED.** For `1/cosh z` no
-            // pole was found at all — the readers cannot see the function — and telling a reader
-            // that "some poles are not expressible in ℚ(i)(√d)" names a difficulty the engine never
-            // reached. Which of the two it is is exactly what `rational` records.
-            poles.rational
-              ? "some poles are not expressible in ℚ(i)(√d); the numeric value stands"
-              : "f could not be read exactly, so no pole list was established — which is not the same as there being no poles",
-          ),
+        : sumExact
+          ? exact(
+              "the residue SUM",
+              "the structural route: the roots of a rotated regular n-gon, whose residues sum in the exponent basis with no root ever represented",
+              {
+                provenance: [
+                  {
+                    ok: true,
+                    text: "a fifth or seventh root of −1 needs a degree-4 or degree-6 field — which is why the per-pole route declined, and why this one is not the same claim",
+                  },
+                ],
+              },
+            )
+          : unknown(
+              "the residues",
+              // **THE REASON WAS UNCONDITIONAL AND THEREFORE SOMETIMES INVENTED.** For `1/cosh z` no
+              // pole was found at all — the readers cannot see the function — and telling a reader
+              // that "some poles are not expressible in ℚ(i)(√d)" names a difficulty the engine never
+              // reached. Which of the two it is is exactly what `rational` records.
+              poles.rational
+                ? "some poles are not expressible in ℚ(i)(√d); the numeric value stands"
+                : "f could not be read exactly, so no pole list was established — which is not the same as there being no poles",
+            ),
     ),
   );
 
@@ -883,18 +902,29 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
+      // **WHICH OF THE TWO FAILED, THE INTEGRAND OR THE GEOMETRY?** Until M5.4b this row said "no
+      // lemma here applies to this integrand" whatever the cause, and for `1/(1 + z⁵)` on a `2π/5`
+      // arc that was false — the plain ML bound applies perfectly and the degree gap is 5 ≥ 2; what
+      // could not be done was READING the arc's sweep as an exact multiple of π. Blaming the
+      // integrand for that sends a reader to look at the one thing that was fine, and hides the
+      // one that was not.
+      const unreadable = geom.kind === "arc" && arcExtent(geom) === null && arcRadius(geom) !== null;
       push(
         rowFrom(
           "KILL",
           "unknown",
-          `${piece.name} must vanish, but no lemma here applies to this integrand`,
+          unreadable
+            ? `${piece.name} must vanish, but its sweep is not an exact multiple of π and no bound can be stated`
+            : `${piece.name} must vanish, but no lemma here applies to this integrand`,
           unknown(
             `the arc ${piece.name}`,
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
               ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
-              : input.power === undefined && input.log === undefined
-                ? "the certified bounds cover a rational integrand, one times e^{iaz}, λ·e^{w zⁿ} on a wedge measured from the positive real axis, or e^{az}·N(e^z)/D(e^z) on a vertical side of a strip; this is none of them"
-                : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
+              : unreadable
+                ? `an ML bound is the sweep times the radius times max|f|, so the sweep enters the number: it is read as an exact p/q·π with q ≤ ${MAX_PI_DENOMINATOR}, and this arc's is not one — a degenerate sweep included, whose bound would be a vacuous ≤ 0`
+                : input.power === undefined && input.log === undefined
+                  ? "the certified bounds cover a rational integrand, one times e^{iaz}, λ·e^{w zⁿ} on a wedge measured from the positive real axis, or e^{az}·N(e^z)/D(e^z) on a vertical side of a strip; this is none of them"
+                  : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",

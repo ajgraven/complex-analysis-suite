@@ -791,6 +791,70 @@ describe("L6 — the wedge lemma, routed and certified", () => {
   });
 });
 
+// **THE ANGLE READER IS A RULE, NOT A LIST (M5.4b).** A whitelist of thirteen fractions cannot
+// enumerate `2π/n` for a record's own `n`, and at `n = 5` KILL blamed the INTEGRAND for a failure
+// of the geometry reader — for the one integrand shape it discharges at `n = 4`.
+describe("an arc's sweep as an exact multiple of π", () => {
+  /** The `p·π/q` sector from the positive real axis — F1's wedge shape, at any angle. */
+  const sweep = (p: number, q: number) => sector(0, (p * Math.PI) / q);
+
+  it("reads every fraction the old whitelist held", () => {
+    // The thirteen, so a cap that lost one would be caught rather than inferred. The integrand's
+    // poles are `3 ± i`, at ±atan(1/3) = ±0.1024·π — no rational multiple with denominator ≤ 12, so
+    // no return ray of any sweep below lands ON one and LEGALITY never pre-empts KILL. (`1/(1+z⁴)`
+    // cannot be used here for exactly that reason: its own pole sits on the π/4 ray.)
+    for (const [p, q] of [
+      [2, 1],
+      [1, 1],
+      [1, 2],
+      [1, 3],
+      [2, 3],
+      [1, 4],
+      [3, 2],
+      [4, 1],
+      [1, 5],
+      [1, 6],
+      [1, 8],
+      [1, 10],
+      [1, 12],
+    ] as const) {
+      expect(arcRow(run("1/(z^2 - 6*z + 10)", sweep(p, q)))?.status, `${p}π/${q}`).toBe("satisfied");
+    }
+  });
+
+  it("reads 2π/5 and 2π/7, which no list of nice angles contained", () => {
+    // F1's own sweeps. The integrand is the same shape discharged at every angle above.
+    expect(arcRow(run("1/(1+z^5)", sweep(2, 5)))?.status).toBe("satisfied");
+    expect(arcRow(run("1/(1+z^7)", sweep(2, 7)))?.status).toBe("satisfied");
+    expect(arcRow(run("1/(1+z^9)", sweep(2, 9)))?.status).toBe("satisfied");
+  });
+
+  it("refuses a denominator past the cap, and an angle that is no rational multiple at all", () => {
+    // The cap is what makes the reading a DECISION: two rationals with denominators ≤ 12 differ by
+    // at least 1/144, so the 1e-12 window admits one candidate or none. Past it, `simplestRational`
+    // of a float is a sixteen-digit fraction that is honest and useless.
+    expect(arcRow(run("1/(1+z^4)", sector(0, Math.PI / 13)))?.status).toBe("unknown");
+    expect(arcRow(run("1/(1+z^4)", sector(0, Math.PI / Math.sqrt(2))))?.status).toBe("unknown");
+    // …and a sweep wider than two full turns.
+    expect(arcRow(run("1/(1+z^4)", sector(0, 5 * Math.PI)))?.status).toBe("unknown");
+  });
+
+  it("blames the GEOMETRY, not the integrand, when the sweep is what could not be read", () => {
+    // The row said "no lemma here applies to this integrand" whatever the cause. For `1/(1 + z⁴)`
+    // that is false twice over: the plain ML bound is exactly the lemma for it, and the degree gap
+    // is 4 ≥ 2. Sending a reader to inspect the one thing that was fine is worse than saying
+    // nothing.
+    const row = arcRow(run("1/(1+z^4)", sector(0, Math.PI / 13)));
+    expect(row?.claim).toMatch(/sweep is not an exact multiple of π/);
+    expect(row?.claim).not.toMatch(/integrand/);
+    expect(row?.evidence.method).toMatch(/the sweep enters the number/);
+
+    // …and an integrand no bound covers still says so, on an arc whose sweep reads perfectly.
+    const unsupported = arcRow(run("z*exp(-z^2)", sweep(1, 4)));
+    expect(unsupported?.claim).toMatch(/no lemma here applies to this integrand/);
+  });
+});
+
 // **A VANISHING SEGMENT REACHES A LEMMA (M5.3c).** Until now `disposeArc` declined anything that
 // was not an arc, so a rectangle's vertical side reported "no lemma here applies" — for the two
 // pieces tier E's entire argument needs killed.

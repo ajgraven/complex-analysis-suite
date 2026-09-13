@@ -189,7 +189,7 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log, mu
         : log !== undefined
           ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
           : power === undefined
-            ? applyResidueTheorem(poles, integral)
+            ? applyResidueTheorem(poles, integral, ast)
             : applyBranchTheorem({
                 poles,
                 integral,
