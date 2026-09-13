@@ -421,6 +421,16 @@ export interface LedgerInput {
      * "no poles were listed" and "there are no poles" must not look the same to LEGALITY.
      */
     readonly windowed: boolean;
+    /**
+     * The unknown the RECORD puts inside the residue sum — tier G's `residueSelection.targetTerms`.
+     *
+     * Absent in the sandbox, where a `cot` integrand on a square establishes a closed-contour value
+     * and nothing else. Present, it is what lets COVER distinguish the two: a target that is a TERM
+     * of the sum is covered by the argument just as surely as one that is a piece of the contour,
+     * and reporting "no piece is marked as the target" about a record that declares one would read
+     * as a gap where there is none.
+     */
+    readonly target?: { readonly id: string; readonly weight: 1 | 2 };
   };
 }
 
@@ -804,19 +814,34 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
   // degree 4 over ℚ so no individual residue is expressible, and the SUM needs none. F1 at `n = 5`
   // and `n = 7` would have been the third such record. `Σ Res` is established exactly exactly when
   // the theorem returned a value, so read that.
+  //
+  // **AND WHICH exact CLAIM IT IS DEPENDS ON THE ROUTE.** The sentence below about the sum being
+  // known while no individual residue is expressible belongs to the CYCLOTOMIC route and is false
+  // for tier G, where every residue is expressible — the kernel's at each integer over ℚ(i), the
+  // cofactor's as an exact quotient of basis elements. A row that says "no individual residue is
+  // expressible" about a record whose residues are all written down is the same kind of false row
+  // this arc keeps finding; `findPoles` reporting nothing for a `cot` integrand is why it would.
   const residuesExact = poles.exactlyComplete;
   const sumExact = theorem.exactValue !== undefined;
+  const summed = input.summation !== undefined && sumExact;
   push(
     rowFrom(
       "CATCH",
       residuesExact || sumExact ? "satisfied" : "unknown",
       residuesExact
         ? "every enclosed residue is known exactly"
-        : sumExact
-          ? "Σ Res is known exactly, though no individual residue is expressible"
-          : "not every residue is known exactly, so the total is an estimate",
+        : summed
+          ? "every enclosed residue is known exactly — the kernel's at each integer, the cofactor's as an exact quotient"
+          : sumExact
+            ? "Σ Res is known exactly, though no individual residue is expressible"
+            : "not every residue is known exactly, so the total is an estimate",
       residuesExact
         ? exact("the residues", "exact arithmetic over ℚ(i) or one quadratic extension of it")
+        : summed
+          ? exact(
+              "the residues",
+              "Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀}",
+            )
         : sumExact
           ? exact(
               "the residue SUM",
@@ -1037,17 +1062,32 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
   }
 
   // ---- COVER --------------------------------------------------------------------------------
-  const hasTarget = spec.some((p) => p.role === "target");
+  // THREE STATES, NOT TWO. A tier-G contour has no `target` piece — every side vanishes — and the
+  // unknown is a TERM of the residue sum instead (`families/solveResidueTerm.ts`). Reading only the
+  // piece list would report the same "no target" as the sandbox for a record that declares one
+  // perfectly well, and the headline would then say the closed-contour value was established where
+  // what the argument establishes is a series.
+  const onContour = spec.some((p) => p.role === "target");
+  const inSum = input.summation?.target;
+  const hasTarget = onContour || inSum !== undefined;
   push(
     rowFrom(
       "COVER",
       hasTarget ? "satisfied" : "unknown",
-      hasTarget
+      onContour
         ? "the target appears as a labelled piece of the closed contour"
-        : "no piece is marked as the target, so the ledger reports the closed-contour value itself",
-      hasTarget
+        : inSum !== undefined
+          ? `${inSum.id} is a TERM of the residue sum — the kernel's poles at the integers — not a piece of the contour` +
+            (inSum.weight === 1 ? "" : `, at weight ${inSum.weight}`)
+          : "no piece is marked as the target, so the ledger reports the closed-contour value itself",
+      onContour
         ? exact("the target is covered", "declared by the piece list")
-        : unknown("the target", "sandbox mode: there is no real integral being solved for"),
+        : inSum !== undefined
+          ? exact(
+              "the target is covered",
+              "declared by `residueSelection.targetTerms`: the contour's own sides all vanish, so ∮ → 0 and the identity is read backwards as a statement about the sum",
+            )
+          : unknown("the target", "sandbox mode: there is no real integral being solved for"),
     ),
   );
 

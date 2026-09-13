@@ -34,6 +34,8 @@ import { applyExteriorTheorem, enclosesTheCut } from "./exteriorTheorem.js";
 import { applyStripTheorem } from "./stripTheorem.js";
 import type { LatticePole } from "../kernel/expLattice.js";
 import { kernelPoles, type SummationKernel } from "../kernel/summationKernel.js";
+import { applySummationTheorem } from "./summationTheorem.js";
+import { cofactorPoles } from "../kernel/kernelResidue.js";
 import type { Certificate } from "@cas/rigor";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
@@ -137,7 +139,11 @@ export interface AnalysisInput {
    * through. The ledger is told which happened, so "no poles were listed" and "there are no poles"
    * do not look the same.
    */
-  readonly summation?: { readonly kernel: SummationKernel };
+  readonly summation?: {
+    readonly kernel: SummationKernel;
+    /** The unknown the record puts INSIDE the residue sum — carried through to COVER. */
+    readonly target?: { readonly id: string; readonly weight: 1 | 2 };
+  };
   /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
@@ -189,9 +195,22 @@ export function analyse({
 }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const band = summation === undefined ? null : kernelBand(resolved);
+  // **AND THE COFACTOR'S POLES, WHICH ARE THE OTHER HALF OF THE SAME HOLE.** M5.5b listed the
+  // kernel's — every integer — because `findPoles` sees no transcendental and reported none. It
+  // reports none of `1/(z²+a²)`'s either, for the same reason: the reader refuses the whole product,
+  // not just the `cot`. So a square dragged onto `±ia` had every singularity "clear of the contour"
+  // as surely as one dragged onto an integer did, and the enclosed count was short by exactly the
+  // poles that carry the answer. `exactPolesOf` reads them off the cofactor the kernel already
+  // carries, so this costs nothing and no second reader can disagree with the theorem's own list.
   const singular = [
     ...poles.poles.map((p) => ({ at: p.at, order: p.order })),
     ...(band === null ? [] : kernelPoles(band)),
+    ...(summation === undefined
+      ? []
+      : cofactorPoles(summation.kernel.num, summation.kernel.den).poles.map((p) => ({
+          at: p.at.toTuple(),
+          order: p.order,
+        }))),
   ];
   // **THE SIDES COME FROM THE SPEC, PARALLEL TO THE GEOMETRY.** `resolveAll` maps `contour.pieces`
   // one-to-one, so index `k` is the same piece in both — which is what makes a positional array the
@@ -218,8 +237,10 @@ export function analyse({
           ...(power === undefined ? {} : { factor: { kind: "power" as const } }),
           ...(log === undefined ? {} : { factor: { kind: "log" as const } }),
         })
-      : strip !== undefined
-        ? applyStripTheorem({
+      : summation !== undefined && band !== null
+        ? applySummationTheorem({ kernel: summation.kernel, band, integral, pieces: resolved })
+        : strip !== undefined
+          ? applyStripTheorem({
             poles: strip.poles,
             margin: strip.margin,
             integral,

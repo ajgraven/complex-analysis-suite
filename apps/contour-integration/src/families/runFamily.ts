@@ -270,7 +270,26 @@ export function runFamily(
         f,
         poles,
         contour,
-        ...(summation === null ? {} : { summation: { kernel: summation } }),
+        ...(summation === null
+          ? {}
+          : {
+              summation: {
+                kernel: summation,
+                // The record's own declaration, forwarded so COVER can say the target is a TERM of
+                // the sum rather than reporting the sandbox's "no target piece" about a record that
+                // declares one. Only the first entry: `solveResidueTerm` refuses more than one, and
+                // a ledger row claiming coverage of a system the solve will not touch would be
+                // exactly the kind of row this arc has been removing.
+                ...(family.residueSelection.targetTerms?.[0] === undefined
+                  ? {}
+                  : {
+                      target: {
+                        id: family.residueSelection.targetTerms[0].targetId,
+                        weight: family.residueSelection.targetTerms[0].weight,
+                      },
+                    }),
+              },
+            }),
         ...(budget === undefined ? {} : { budget }),
         ...(power.ok
           ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }

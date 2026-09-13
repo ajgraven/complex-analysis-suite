@@ -16,7 +16,7 @@ import { solveResidueTerm } from "../src/families/solveResidueTerm.js";
 import { FAMILIES } from "../src/families/index.js";
 import { contourIntegrandOf } from "../src/families/instantiate.js";
 import { primaryGolden, runFamily, solveFamily } from "../src/families/runFamily.js";
-import { squareTemplate } from "../src/engine/contour/templates.js";
+import { summationRecord } from "./helpers/summationRecord.js";
 import type { Family, FamilyPiece, FamilyTarget } from "../src/families/schema.js";
 
 const kernelOf = (src: string): SummationKernel => {
@@ -390,46 +390,7 @@ describe("through the family door — the route is reached, and reached FIRST", 
    * not on the left of the identity, so "the residue theorem produced no closed-contour value" would
    * refuse a record that is perfectly well posed.
    */
-  function runnable(integrand: string): Family {
-    const tpl = squareTemplate(2);
-    const pieces: FamilyPiece[] = tpl.pieces.map((piece) => ({
-      id: piece.id,
-      name: piece.name,
-      geom: piece.geom,
-      role: piece.role,
-      colour: piece.colour,
-      ...(piece.lemma === undefined ? {} : { lemma: piece.lemma }),
-    }));
-    return {
-      ...squareRecord(TWO_SIDED),
-      auxiliary: { integrand, relation: "Re", note: "the summation kernel times the cofactor" },
-      contour: {
-        template: "square",
-        limitParams: [{ name: "N", to: "inf", through: "halfIntegers" }],
-        pieces,
-        orientation: "ccw",
-        windings: [],
-      },
-      vanishingLemmas: pieces.map((piece) => ({
-        piece: piece.id,
-        lemma: "L2" as const,
-        sideCondition: "|f| = O(1/|z|²) on the square",
-        discharge: "8π·coth(π/2)·(N+½)·max|f| → 0",
-        rigorOfBound: "≤" as const,
-        rigorOfLimit: "=" as const,
-        rigorIfNumericOnly: "≈" as const,
-      })),
-      golden: [
-        {
-          params: {},
-          value: "(pi/a)*coth(pi*a)",
-          numeric: 4.26473,
-          verifiedTo: 1e-4,
-          method: "direct summation of the series",
-        },
-      ],
-    };
-  }
+  const runnable = (integrand: string): Family => summationRecord(integrand);
 
   it("solveFamily takes the sum route and lands on the series", () => {
     const family = runnable("pi*cot(pi*z)/(z^2+(3/4)^2)");
@@ -457,9 +418,11 @@ describe("through the family door — the route is reached, and reached FIRST", 
     expect(r.ok, r.ok ? "" : r.reason).toBe(true);
     if (!r.ok) return;
     expect(r.run.summation).toBeDefined();
-    // Half-width `N + ½ = 4.5`, so the integers −4…4 are enclosed: nine of them, every one a pole.
+    // Half-width `N + ½ = 4.5`, so the integers −4…4 are enclosed — nine of them, every one a pole
+    // — PLUS the cofactor's own `±(3/4)i`, which `findPoles` reports no more than it reports the
+    // integers. Eleven. The count was nine until the cofactor's half of the hole was closed too.
     const catches = r.run.ledger.rows.filter((row) => row.constraint === "CATCH");
-    expect(catches.some((row) => /9 singularities are enclosed/.test(row.claim))).toBe(true);
+    expect(catches.some((row) => /11 singularities are enclosed/.test(row.claim))).toBe(true);
     // And every side is killed by the SQUARE bound, which exists only because there is a kernel.
     const kills = r.run.ledger.rows.filter((row) => row.constraint === "KILL");
     expect(kills.length).toBe(4);
