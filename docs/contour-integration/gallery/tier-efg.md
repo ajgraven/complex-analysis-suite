@@ -1082,6 +1082,18 @@ verified: at `a = 0.75` the truth is `1.2434764324674408` and the naive halving 
 
 ## 8. G1 — `Σ_{n≥1} 1/n² = π²/6` — **the collision**
 
+> **LOADED AND SOLVING (M5.7)** as `series-cot-collision` — and SG-6's `escalate` is now READ. The record
+> declares the merged order and residue in `collisions[]`, and `families/collisionCheck.ts` falsifies
+> both against the Laurent route: declaring order 2 is refused with "the orders ADD to 3", and
+> declaring the wrong residue with the value the route gives. A record that escalates and declares
+> nothing to merge is DROPPED by the loader — the escalation is an obligation, not a licence.
+> Departures from the JSONC below: the template is `square` (half-integers enforced from the geometry
+> rather than from the field), the weight is a per-entry `weight` inside `targetTerms` as DESIGN §5
+> always had it, and the collision entry carries `at`/`mergedOrder`/`residue`/`note` rather than the
+> six fields sketched here. The merged residue `−π²/3` is computed from the kernel's EVEN
+> Laurent expansion — `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — and checked against a 4096-point circle
+> trapezoid. Its companion G3 is the same computation on the other kernel, and the two records differ by that one number.
+
 This is the most instructive entry in the gallery and the one that most stresses the schema. The
 theorem's hypothesis is *"`f` has no pole at an integer"*, and `f(z) = 1/z²` **violates it at the one
 point where the kernel also has a pole.** The correct response is neither to refuse nor to pretend:
@@ -1256,6 +1268,18 @@ catches in G2, here promoted to a field the solve depends on.
 ---
 
 ## 9. G3 — `Σ_{n≥1} (−1)ⁿ/n² = −π²/12`
+> **LOADED AND SOLVING (M5.7)** as `series-csc-kernel-collision` — and SG-6's `escalate` is now READ. The record
+> declares the merged order and residue in `collisions[]`, and `families/collisionCheck.ts` falsifies
+> both against the Laurent route: declaring order 2 is refused with "the orders ADD to 3", and
+> declaring the wrong residue with the value the route gives. A record that escalates and declares
+> nothing to merge is DROPPED by the loader — the escalation is an obligation, not a licence.
+> Departures from the JSONC below: the template is `square` (half-integers enforced from the geometry
+> rather than from the field), the weight is a per-entry `weight` inside `targetTerms` as DESIGN §5
+> always had it, and the collision entry carries `at`/`mergedOrder`/`residue`/`note` rather than the
+> six fields sketched here. The merged residue `+π²/6` is computed from the kernel's EVEN
+> Laurent expansion — `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — and checked against a 4096-point circle
+> trapezoid. Confirmed: G3 cost nothing once G1 existed — one number, and the alternation stays the KERNEL's.
+
 
 G3 costs almost nothing once G1 exists, and that is exactly what it is here to demonstrate: **the
 alternation is a property of the kernel, not of the problem.** `π csc(πz)` has the same simple poles

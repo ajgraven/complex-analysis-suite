@@ -108,6 +108,21 @@ describe("each residue is weighted by its winding number", () => {
     expect(got.value[1]).toBeCloseTo(-ccw.value[1], 10);
   });
 
+  it("a MERGED residue is weighted too — the same multiply, at a different pole", () => {
+    // `π cot(πz)/z²` has one merged pole at 0. A clockwise square winds `−1` about it, so `∮` negates
+    // exactly — and without the weight the merged term would keep its sign while every other term
+    // flipped, which is a wrong answer rather than a refused one.
+    const ccw = run("pi*cot(pi*z)/z^2", 4).theorem.exactValue;
+    const family = reversed("pi*cot(pi*z)/z^2");
+    const cw = runFamily(family, family.golden[0], { geometry: { N: 4 } });
+    expect(cw.ok).toBe(true);
+    if (!cw.ok || ccw === undefined) return;
+    const got = cw.run.theorem.exactValue;
+    expect(got).toBeDefined();
+    if (got === undefined) return;
+    expect(got.value[1]).toBeCloseTo(-ccw.value[1], 10);
+  });
+
   it("and the certificate counts the poles SUMMED, not the poles listed", () => {
     // `kernelBand` is `floor(reach) + 1`, so at N = 4 the list reaches `±5` — two integers the
     // square does not enclose. They carry winding 0 and must not be counted as summed.
@@ -185,7 +200,7 @@ describe("what the identity refuses", () => {
     // because `Σ f(n)` is rational and that ring contains it.
     const { theorem, ledger } = run("pi*cot(pi*z)/z^2", 4);
     expect(ledger.closes).toBe(true);
-    expect(theorem.exactValue?.text).toBe("2πi(205/72 + −π²/3)");
+    expect(theorem.exactValue?.text).toBe("2πi(205/72 − π²/3)");
     expect(theorem.exactInPi).toBeDefined();
     expect(theorem.agrees).toBe(true);
     // And the value is the one the quadrature independently found.

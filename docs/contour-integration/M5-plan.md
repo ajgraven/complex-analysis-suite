@@ -503,6 +503,49 @@ whole golden suite is the regression test.
   `m ≥ 3`. The schema's first three-valued hypothesis outcome.
 - **G1** `Σ_{n≥1}1/n² = π²/6` and **G3** `Σ_{n≥1}(−1)ⁿ/n² = −π²/12`, with D-3's correct `k = 1` story.
 
+> **Outcome — tier G is COMPLETE, and SG-5 was already done.**
+>
+> **SG-5 cost nothing.** This plan calls it "the widest blast radius in M5" — `kind: "sum"`, an
+> integer index, a `summand`, rippling into the invariants, the derivation and the UI. All of it
+> landed with D1's arc and its readers with G2: the schema has the fields, `targetText` branches on
+> them, `instantiate` refuses a sum with no auxiliary by name, and the invariants never touch
+> `integrand`. Measured before planning, which is why M5.7 is SG-6's alone.
+>
+> - **M5.7a — the merged residue.** `Res(π cot(πz)/z², 0) = −π²/3`, from the Laurent route DESIGN
+>   §6.3 mandates for `m ≥ 3` — and `m = 3` is the first case where it matters, so G1 is the entry
+>   that justifies the series layer. What makes it cheap is that the kernel's expansion is EVEN:
+>   `1/u + Σ t_k π^{2k} u^{2k−1}`, so reading the `u^{−1}` coefficient of the product picks out
+>   `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — only `f`'s constant term and its even negative coefficients,
+>   and finitely many. Bernoulli numbers from `Σ C(m+1,j) B_j = 0` in exact ℚ, in-app (ADR-0007).
+>   Every value checked twice, the second against a 4096-point circle trapezoid; two tests reach the
+>   SECOND Bernoulli number, where the gallery's records never go (`−π⁴/45` for cot, `7π⁴/360` for
+>   csc — more than a sign apart, which is the claim `2^{2k} − 2` makes).
+> - **M5.7b — a partition, not two refusals.** `cofactorResidues` is the poles where the kernel is
+>   REGULAR; at an integer the two merge. Before this both functions refused a collision from their
+>   own side, each true of the identity it applies and beside the point. Skipping integer poles by
+>   construction made one refusal unreachable, and it was removed. A collision family lives entirely
+>   in **ℚ(i)(π)** — `Σ f(n)` is rational and that ring contains it — so `exactInPi` is the seat it
+>   already has; with a cofactor pole away from the integers as well, the two halves are incomparable
+>   and refused by name on both sides.
+> - **M5.7c — SG-6, and the escalation is an OBLIGATION.** The hypothesis "f has no pole at an
+>   integer" is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour
+>   argument, so `refuse` stops a correct argument and `warn` flags a certainty. What makes
+>   `escalate` more than the permissive third option is that the record must then DECLARE the merged
+>   order and residue, and both are falsified against the Laurent route — a record that escalates and
+>   declares nothing is dropped, and so is one escalating to a target the engine does not implement.
+>   That turns two of G1's own traps into arithmetic.
+>
+> **The two records differ by ONE number.** Identical cofactor `1/z²`, contour and weight: `π cot`
+> gives `−π²/3` at the collision and `π csc` gives `+π²/6`, and halving each is the whole gap between
+> `ζ(2)` and `−η(2)`. The alternation is the KERNEL's, which is why `(−1)ⁿ` never appears in a
+> cofactor.
+>
+> Sweep 27 mutants, 27 killed, no equivalents — three survivors, each closed by a test that bought
+> something: `f`'s CONSTANT term is part of the residue and every bare `1/z^m` fixture hides that
+> (`1/(z²(z²+1))` gives `−1 − π²/3`); a merged residue is weighted by its winding like every other,
+> which a clockwise square shows; and a wrong declaration must STOP THE SOLVE rather than only fail
+> the checker.
+
 ### M5.8 — the invariants that are specifications, and the gate · *S–M*
 
 §10.3 lists what was reasoned and never run. Each becomes a result or an honest refusal:

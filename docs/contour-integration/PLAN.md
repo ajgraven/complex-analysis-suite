@@ -826,6 +826,16 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > shell; and the browser pass found the browser suite itself red on a record count stale since M5.3d.
 > [`M5-plan.md`](M5-plan.md) §M5.6 and [`GALLERY.md`](GALLERY.md) §5.8 have the findings.
 >
+> **M5.7 completes tier G with G1 and G3 — 26 of 28 records.** `Σ_{n≥1}1/n² = π²/6` and
+> `Σ_{n≥1}(−1)ⁿ/n² = −π²/12`, both `=`, the ledger closing and `∮ = 2πi(205/72 − π²/3)` corroborated
+> by the quadrature. The merged residue comes from the Laurent route (the kernel's expansion is EVEN,
+> so only `f`'s constant term and its even negative coefficients contribute), lands in ℚ(i)(π), and
+> makes a collision a different RING rather than a harder case. SG-6's `escalate` is an OBLIGATION:
+> the record must declare the merged order and residue, and both are falsified against the engine.
+> **SG-5 turned out already done** — the schema and its readers landed with D1's arc and G2 — so this
+> plan's "widest blast radius in M5" cost nothing. [`M5-plan.md`](M5-plan.md) §M5.7 and
+> [`GALLERY.md`](GALLERY.md) §5.9 have the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.

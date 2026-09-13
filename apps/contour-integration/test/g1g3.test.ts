@@ -111,6 +111,19 @@ describe("SG-6 — the escalation is an obligation, not a licence", () => {
     expect(r.reason).toMatch(/declares Res = pi\^2\/3 at z = 0, and the Laurent route gives −π²\/3/);
   });
 
+  it("and a wrong declaration STOPS THE SOLVE, not merely the checker", () => {
+    // The difference between the check existing and the check being wired. `+π²/3` would return
+    // `−π²/6` for ζ(2) — negative, plausible, and printed with a `=` badge if nothing refused.
+    const wrongSign: Family = {
+      ...G1,
+      collisions: [{ ...(G1.collisions ?? [])[0], residue: "pi^2/3" }],
+    };
+    const r = solveFamily(wrongSign, primaryGolden(G1));
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.reason).toMatch(/the Laurent route gives −π²\/3/);
+  });
+
   it("a record that escalates and declares NOTHING to merge is dropped by the loader", () => {
     const empty: Family = { ...G1, collisions: [] };
     const loaded = loadFamilies([empty]);

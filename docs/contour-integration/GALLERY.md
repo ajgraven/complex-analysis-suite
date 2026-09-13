@@ -636,6 +636,54 @@ One measurement corrected a claim of this document's own reading: the half-integ
 close at every `N`. At `a = 3/4` the square of half-width ½ leaves both cofactor poles outside, which
 is §7's own "once N+½ > a" made visible rather than assumed.
 
+### 5.9 The collision — **M5.7**, and tier G is complete
+
+G1 and G3 are the twenty-fifth and twenty-sixth loaded records. `Σ_{n≥1} 1/n² = π²/6` and
+`Σ_{n≥1} (−1)ⁿ/n² = −π²/12`, both labelled `=`, the ledger closing and the quadrature corroborating
+`∮ = 2πi(205/72 − π²/3)` at N = 4. Only E3 and F2 remain, deferred together on ADR-0042's
+`knownValue`.
+
+**The hypothesis FAILS and the argument is still rigorous.** `f = 1/z²` has its pole where the kernel
+has one, so *"f has no pole at an integer"* is false — and refusing would stop a correct argument
+while warning would flag a certainty. That hypothesis is SUFFICIENT for the clean form of the theorem
+and not NECESSARY for the contour argument: the product is meromorphic at 0 with a pole of order
+**1 + 2 = 3**, orders ADD, and the residue theorem applies to it. §10.2's `onFail: "escalate"` is the
+record saying so, and what makes it more than the permissive third outcome is that an escalating
+record must then DECLARE the merged order and residue — both falsified against the Laurent route. A
+record that escalates and declares nothing to merge is dropped, as is one escalating to a target the
+engine does not implement. Two of G1's own traps become arithmetic: declaring order 2 is refused with
+"the orders ADD to 3", and declaring `+π²/3` with the value the route gives — a sign error that
+returns `−π²/6` for ζ(2), negative and otherwise plausible.
+
+**The Laurent route is cheap because the kernel's expansion is EVEN.** `1/u + Σ t_k π^{2k} u^{2k−1}`,
+so reading the `u^{−1}` coefficient of the product picks out `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — only
+`f`'s constant term and its even negative coefficients, finitely many because `f` has a pole of order
+`m`. That is DESIGN §6.3's mandated formula (4), and `m = 3` is the first case where the order-`m`
+derivative formula's symbolic explosion matters, so G1 is also the entry that justifies the series
+layer. The Bernoulli numbers come from `Σ C(m+1,j) B_j = 0` in exact ℚ — no table to mistype.
+
+**A collision is a different RING, not a harder case.** `t_k` is rational and the powers of π are
+even, so a merged residue lands in ℚ(i)(π) where G2's `coth` is a quotient of exponentials. G1's
+cofactor has no pole but the collision, so `ρ = 0` and its whole identity lives there; `Σ f(n)` is
+rational and that ring contains it, so `exactInPi` — the log families' seat — is reused unchanged.
+With a cofactor pole away from the integers as well, the two halves are incomparable and refused by
+name on both sides rather than added in the numeric plane and labelled exact.
+
+**The two records differ by ONE number.** Identical cofactor `1/z²`, identical contour, identical
+weight: `π cot(πz) = 1/z − (π²/3)z − …` gives `−π²/3` and `π csc(πz) = 1/z + (π²/6)z + …` gives
+`+π²/6`, and halving each is the whole gap between `ζ(2)` and `−η(2)`. The alternation is the
+KERNEL's, which is why `(−1)ⁿ` never appears in a cofactor — it is not a function of a complex z.
+
+**`cofactorResidues` and `mergedResidue` PARTITION the pole set.** Before M5.7 both refused a
+collision from their own side, each true of the identity it applies and beside the point, because the
+identity that applies at an integer is a different one. Skipping integer poles by construction made
+one refusal unreachable, and it was removed — §5.8's lesson about assertions that cannot fire.
+
+**SG-5 was already done**, and §10.2 lists it as the widest remaining change. `kind: "sum"`, an
+integer index and a `summand` landed with D1's arc; their readers — `targetText`, `instantiate`'s
+"a family whose unknown is a sum needs an auxiliary", the invariants' indifference to `integrand` —
+landed with G2. Measured rather than assumed.
+
 ### 5.0b C1 is where `∮` stops being the answer
 
 Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc

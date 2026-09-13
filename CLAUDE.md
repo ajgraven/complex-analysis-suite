@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **526 test files / 5251 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **528 test files / 5291 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -303,9 +303,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.7 onward** — G1 and G3, the
-COLLISION, plus E3 and F2 together on ADR-0042's `knownValue`;
-M5.0–M5.6 are done and **24 of the 28 records are loaded**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.8** — the cross-family
+invariants that were reasoned and never run, plus E3 and F2 together on ADR-0042's `knownValue`;
+M5.0–M5.7 are done, **26 of the 28 records are loaded and TIER G IS COMPLETE**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
 a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
 residue sum. **The plan's own one-equation generalisation cannot be built**: its coefficient adds a
@@ -338,7 +338,36 @@ singularity "clear of the contour" as surely as one dragged onto an integer did 
 shell printed "the target is Re of ∮ f dz" about a record whose target is a TERM of the residue sum.
 The browser pass found the **browser suite itself red** on a hardcoded record count stale since M5.3d —
 the node gate deliberately does not launch a browser, so nothing could see it. Sweeps 25/25 and 32
-mutants with 29 killed, two recorded equivalents and one unreachable branch removed. 24 of the 28
+mutants with 29 killed, two recorded equivalents and one unreachable branch removed. **M5.7 then
+completed tier G with the COLLISION — G1 and G3**, `Σ_{n≥1}1/n² = π²/6` and `Σ_{n≥1}(−1)ⁿ/n² = −π²/12`.
+Its content is that **a stated hypothesis FAILS while the argument stays rigorous**: `f = 1/z²` has its
+pole where the kernel has one, so *"f has no pole at an integer"* is false — refusing would stop a
+correct argument and warning would flag a certainty — and that hypothesis is SUFFICIENT for the clean
+form of the theorem, not NECESSARY for the contour argument, since the product is meromorphic there
+with a pole of order **1 + 2 = 3** and orders ADD. SG-6's `escalate` is therefore an **OBLIGATION
+rather than a licence**: an escalating record must DECLARE the merged order and residue, and
+`collisionCheck.ts` falsifies both against the Laurent route (declaring order 2 is refused with "the
+orders ADD to 3"; declaring `+π²/3` returns `−π²/6` for ζ(2), negative and otherwise plausible), while
+a record that escalates and declares nothing is dropped by the loader. The residue comes from DESIGN
+§6.3's mandated formula (4) — the kernel's expansion is **EVEN**, so the `u^{−1}` coefficient of the
+product is `c₀ + Σ t_k π^{2k} c_{−2k}`, only `f`'s constant term and its even negative coefficients and
+finitely many of those; `m = 3` is the first case where the derivative formula's symbolic explosion
+matters, so G1 is the entry that justifies the series layer. Bernoulli numbers come from
+`Σ C(m+1,j) B_j = 0` in exact ℚ, in-app (ADR-0007), and every value is checked against a 4096-point
+circle trapezoid. **A collision is a different RING, not a harder case** — `t_k` is rational and the
+powers of π even, so the value is in ℚ(i)(π) where G2's `coth` is a quotient of exponentials, and
+since `Σ f(n)` is rational the whole identity reuses `exactInPi`, the log families' seat; with a
+cofactor pole away from the integers as well the two halves are incomparable and refused by name on
+both sides. `cofactorResidues` and `mergedResidue` now **PARTITION** the pole set (before, both refused
+a collision from their own side, each true of the identity it applies and beside the point), which made
+one refusal unreachable and it was removed. **The two records differ by ONE number** — identical
+cofactor `1/z²`, contour and weight, with `π cot` giving `−π²/3` and `π csc` `+π²/6` — the alternation
+being the KERNEL's, which is why `(−1)ⁿ` never appears in a cofactor. And **SG-5 turned out already
+done**: the plan's "widest blast radius in M5" (`kind: "sum"`, an integer index, a `summand`) landed
+with D1's arc and its readers with G2, measured rather than assumed. Sweep 27/27 with no equivalents;
+the three survivors each bought a test — `f`'s CONSTANT term is part of the residue and every bare
+`1/z^m` fixture hides it, a merged residue is winding-weighted like every other, and a wrong
+declaration must stop the SOLVE and not only fail the checker. 26 of the 28
 records are loaded, and the plan and its one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
 **read the plan before continuing M5**), the teaching layer (M6).

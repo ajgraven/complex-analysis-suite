@@ -14,7 +14,8 @@ whether the whole thing closes.
 **M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
 factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2), M5.4
 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the square, the summation kernels and the
-corrected bound) and M5.6 (tier G's solve, and G2) are done; **24 of the 28 records are loaded**. E3 and F2 are deferred together,
+corrected bound), M5.6 (tier G's solve, and G2) and M5.7 (the COLLISION — G1 and G3) are done;
+**26 of the 28 records are loaded, and tier G is complete**. E3 and F2 are deferred together,
 needing the same import machinery. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
@@ -534,6 +535,33 @@ twenty-fourth loaded record and the first whose unknown is not on the contour at
 - **The browser pass found the browser suite red**, on a `toHaveLength(20)` wrong since M5.3d — the
   node gate deliberately does not launch a browser, so nothing could see it. Derived from `FAMILIES`
   now.
+
+**M5.7 completes tier G with the COLLISION — G1 and G3.** `Σ_{n≥1} 1/n² = π²/6` and
+`Σ_{n≥1} (−1)ⁿ/n² = −π²/12`, the twenty-fifth and twenty-sixth records.
+
+- **The hypothesis FAILS and the argument is still rigorous.** `f = 1/z²` has its pole where the
+  kernel has one, so *"f has no pole at an integer"* is false — and refusing would stop a correct
+  argument while warning would flag a certainty. It is SUFFICIENT for the clean form of the theorem
+  and not NECESSARY for the contour argument: the product is meromorphic at 0 with a pole of order
+  **1 + 2 = 3**, orders ADD, and the residue theorem applies to it.
+- **`escalate` is an OBLIGATION, not a licence** — which is what makes it more than the permissive
+  third outcome. An escalating record must DECLARE the merged order and residue, and both are
+  falsified against the Laurent route: declaring order 2 is refused with "the orders ADD to 3", and
+  declaring `+π²/3` with the value the route gives — a sign error that returns `−π²/6` for ζ(2),
+  negative and otherwise plausible. Declare nothing, and the loader drops the record.
+- **The Laurent route is cheap because the kernel's expansion is EVEN.** Reading the `u^{−1}`
+  coefficient of the product picks out `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — only `f`'s constant term
+  and its even negative coefficients, finitely many. Bernoulli numbers from `Σ C(m+1,j) B_j = 0` in
+  exact ℚ; no table to mistype.
+- **A collision is a different RING, not a harder case.** The value lands in ℚ(i)(π) where G2's
+  `coth` is a quotient of exponentials, and `Σ f(n)` is rational, so the whole identity reuses
+  `exactInPi` — the log families' seat. With a cofactor pole away from the integers as well, the two
+  halves are incomparable and refused by name on both sides.
+- **The two records differ by ONE number.** Identical cofactor, contour and weight: `π cot` gives
+  `−π²/3` at the collision and `π csc` gives `+π²/6`. The alternation is the KERNEL's, which is why
+  `(−1)ⁿ` never appears in a cofactor.
+- **SG-5 was already done.** The plan's "widest blast radius in M5" — `kind: "sum"`, an integer index,
+  a `summand` — landed with D1's arc, and its readers with G2. Measured rather than assumed.
 
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:

@@ -94,6 +94,17 @@ describe("the kernel series is the thing being asserted", () => {
     expect(re).toBeCloseTo((7 * Math.PI ** 4) / 360, 8);
   });
 
+  it("f's own CONSTANT term is part of the residue, and every bare 1/z^m hides that", () => {
+    // `1/(z²(z²+1)) = 1/z² − 1 + …`, so `c₀ = −1` and `Res = −1 − π²/3`. Every fixture above has
+    // `c₀ = 0`, which is an accident of the bare `1/z^m` shape — and any cofactor with a second
+    // factor has it non-zero, so dropping the `c₀` term would be invisible in G1 and G3 alike.
+    const r = merged("pi*cot(pi*z)/(z^2*(z^2+1))", 0n);
+    expect(r.order).toBe(3);
+    expect(formatRatPi(r.value)).toBe("−π²/3 − 1");
+    const [re] = residueByQuadrature("pi*cot(pi*z)/(z^2*(z^2+1))", 0, 0.25);
+    expect(re).toBeCloseTo(-1 - (Math.PI * Math.PI) / 3, 9);
+  });
+
   it("an ODD-order collision picks up f's own constant term as well", () => {
     // `1/z³` merges to order 4; `c₀` is zero and `c_{−2}` is zero, so only `c_{−1}`… which the
     // kernel's EVEN expansion never multiplies. The residue is therefore 0 — a fact about parity,

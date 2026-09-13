@@ -66,6 +66,10 @@ function describeCofactorSum(total: ExpRatio): string {
   return `${(Math.PI * ratioToTuple(total)[0]).toPrecision(10)}`;
 }
 
+/** `+ x`, or `− |x|` when the term is already negative — `2πi(205/72 + −π²/3)` reads as neither. */
+const joinSigned = (text: string): string =>
+  text.startsWith("−") ? `− ${text.slice(1)}` : `+ ${text}`;
+
 export function applySummationTheorem(input: SummationTheoremInput): ResidueTheoremResult {
   const { kernel, band, integral, pieces } = input;
   if (!integral.closed) {
@@ -210,7 +214,7 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   const text =
     exactInPi === undefined
       ? `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} − ${describeCofactorSum(infinite)})`
-      : `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} + ${formatRatPi(mergedTotal)})`;
+      : `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} ${joinSigned(formatRatPi(mergedTotal))})`;
 
   const certificates: Certificate[] = [
     ...mergedCertificates,
