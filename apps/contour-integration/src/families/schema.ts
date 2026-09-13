@@ -356,6 +356,21 @@ export interface Family {
 
   readonly branch?: BranchSpec;
 
+  /**
+   * The quasi-periodic STRIP this family's contour lives in — tier E's seat.
+   *
+   * Present means `f = e^{az}·N(e^z)/D(e^z)` and its poles form vertical LATTICES rather than a
+   * finite set (`kernel/expLattice.ts`), so the record has to say which band of them its argument is
+   * about: `e^z = ρ` has solutions every `2πi`, and no engine can pick among infinitely many without
+   * being told. The height is in UNITS OF π, matching how `BranchSpec.argRange` states its window —
+   * `"2"` for E1's `0 < Im z < 2π`, `"1"` for E2's `0 < Im z < π`.
+   *
+   * It is a DECLARATION and it is checked: `stripTheorem.ts` asks the lattice points just outside
+   * the band for their winding numbers, so a contour that encloses one refuses rather than summing a
+   * set the record did not declare. E1's `wrong-strip-height` trap, at run time.
+   */
+  readonly strip?: { readonly heightOverPi: string };
+
   readonly contour: {
     readonly template: TemplateId;
     readonly limitParams: readonly {

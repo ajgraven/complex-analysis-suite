@@ -34,6 +34,7 @@
 // and `Res_w` is exactly what `exactPolesOf` already computes. E1: `Res_w = 1`, `ρ = −1`, giving
 // `−e^{iπa}` — the record's own expression. E2 at `ρ = i`: `Res_w = 1`, giving `−i·e^{−πξ/2}`.
 import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
+import { fracCmp } from "./bounds/ratBound.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
 import { toExactRational } from "./exactRational.js";
@@ -281,6 +282,18 @@ export function turnsOf(root: SqrtExt): Frac | null {
  */
 export function polesInStrip(form: LatticeForm, height: Frac): StripResult {
   if (height.n <= 0n) return { ok: false, reason: "the strip height must be positive" };
+  return polesInBand(form, Frac.ZERO, height.div(Frac.of(2n)));
+}
+
+/**
+ * The poles of `f` with `lo < turns < hi`, where `z₀ = 2πi·turns`.
+ *
+ * Turns rather than a height, because the MARGIN the strip theorem checks lives below the real axis
+ * as well as above it, and "a strip of height h" cannot name the band `(−1, 0)`. {@link polesInStrip}
+ * is this at `(0, h/2)`, which is what a record declares.
+ */
+export function polesInBand(form: LatticeForm, lo: Frac, hi: Frac): StripResult {
+  if (fracCmp(lo, hi) >= 0) return { ok: false, reason: "the band is empty" };
 
   const report = exactPolesOf(form.num, form.den);
   if (!report.complete) {
@@ -321,13 +334,13 @@ export function polesInStrip(form: LatticeForm, height: Frac): StripResult {
 
     // `Res_z = e^{az₀}·Res_w(N/D, ρ)/ρ`, from `d/dz D(e^z) = D′(e^z)·e^z`.
     const coefficient = p.residue.div(p.at);
-    // `0 < Im z₀ = 2π(q + m) < height·π`  ⟺  `0 < q + m < height/2`.
-    const limit = height.div(Frac.of(2n));
-    const lowest = -Math.floor(q.toNumber());
-    for (let m = lowest - 1; ; m++) {
+    // `Im z₀ = 2π(q + m)`, so the band is `lo < q + m < hi` — an OPEN interval, which is what makes
+    // E1's `no-pole-on-the-boundary` hypothesis arithmetic rather than a separate check.
+    const first = Math.floor(lo.toNumber() - q.toNumber());
+    for (let m = first; ; m++) {
       const turns = q.add(Frac.of(BigInt(m)));
-      if (turns.n <= 0n) continue;
-      if (turns.n * limit.d >= limit.n * turns.d) break;
+      if (fracCmp(turns, lo) <= 0) continue;
+      if (fracCmp(turns, hi) >= 0) break;
       // `a·z₀ = a·2πi·turns = (2i·a·turns)·π` — a Gaussian rational times π, which is exactly the
       // part of the exponent basis M4.2 built.
       const piCoefficient = Gauss.I.mul(Gauss.int(2)).mul(form.a).mul(new Gauss(turns, Frac.ZERO));
@@ -349,7 +362,7 @@ export function polesInStrip(form: LatticeForm, height: Frac): StripResult {
     ok: true,
     poles,
     certificate: exact(
-      `${poles.length} pole${poles.length === 1 ? "" : "s"} in the strip 0 < Im z < ${height.n}π/${height.d}, each simple, with exact residues`,
+      `${poles.length} pole${poles.length === 1 ? "" : "s"} with ${lo.n}/${lo.d} < Im z/2π < ${hi.n}/${hi.d}, each simple, with exact residues`,
       "w = e^z makes f rational in w; each root of D(w) is a root of unity, so log w is 2πi times an " +
         "exact rational, and Res_z = e^{az₀}·Res_w(N/D, w₀)/w₀ lands in ℚ(i)(√d) × e^{ℚ(i)·π}",
     ),

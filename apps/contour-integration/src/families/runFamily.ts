@@ -20,6 +20,7 @@ import type { PathFn, QuadratureBudget } from "../engine/contour/integrate.js";
 import type { Contour } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
+import { stripFactorOf } from "./stripFactor.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
 import type { Family, Golden } from "./schema.js";
@@ -182,7 +183,12 @@ export function runFamily(
   const log = isLog ? logFactorOf(family, bindings) : { ok: false as const, reason: "the family's branch factor is a power" };
   const multi = several ? multiFactorOf(family, bindings) : { ok: false as const, reason: "the family declares at most one branch point" };
   const cofactor = power.ok ? power.rational : log.ok ? log.rational : multi.ok ? multi.rational : null;
-  const poles = findPoles(cofactor ?? built.ast);
+  // **A STRIP FAMILY BRINGS ITS OWN POLE LIST**, and that is the difference between it and the three
+  // branch routes above. Those hand `findPoles` a rational COFACTOR and let it work; a strip's poles
+  // form vertical lattices that no pole-finder can enumerate without being told which band to look
+  // in, so the record's declared height is what makes the list finite (`families/stripFactor.ts`).
+  const strip = stripFactorOf(family, bindings, built.ast);
+  const poles = strip.ok ? strip.report : findPoles(cofactor ?? built.ast);
 
   // The declaration, for the picture AND — from M5.0 — for the quadrature. One of the three at most:
   // the routing above already made them mutually exclusive, and a record with two branch structures
@@ -243,6 +249,9 @@ export function runFamily(
           : {}),
         ...(log.ok ? { log: { factor: log.factor, rational: log.rational }, branch: log.choice } : {}),
         ...(multi.ok ? { multi: { factor: multi.factor, rational: multi.rational }, branch: multi.choice } : {}),
+        ...(strip.ok
+          ? { strip: { poles: strip.poles, margin: strip.margin, certificate: strip.certificate } }
+          : {}),
       }),
     },
   };

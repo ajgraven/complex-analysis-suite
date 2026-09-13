@@ -31,6 +31,9 @@ import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem
 import { applyBranchTheorem } from "./branchTheorem.js";
 import { applyLogTheorem } from "./logTheorem.js";
 import { applyExteriorTheorem, enclosesTheCut } from "./exteriorTheorem.js";
+import { applyStripTheorem } from "./stripTheorem.js";
+import type { LatticePole } from "../kernel/expLattice.js";
+import type { Certificate } from "@cas/rigor";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 import type { MultiPowerFactor } from "../kernel/branchResidue.js";
@@ -97,6 +100,21 @@ export interface AnalysisInput {
    */
   readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
   /**
+   * The quasi-periodic STRIP's poles, when the integrand lives on one — tier E's seat.
+   *
+   * Unlike `power`/`log`/`multi`, this does not change what `poles` describes: it IS the pole list,
+   * built by `families/stripFactor.ts` because only the record knows which band of the lattice its
+   * argument is about. What it changes is the route — `stripTheorem.ts` rather than the ordinary
+   * residue theorem — and the reason is the `margin`: a strip's pole set is declared, and a contour
+   * that encloses a lattice point outside the declaration has to refuse rather than sum the declared
+   * one.
+   */
+  readonly strip?: {
+    readonly poles: readonly LatticePole[];
+    readonly margin: readonly LatticePole[];
+    readonly certificate: Certificate;
+  };
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -132,7 +150,7 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget, branch, power, log, multi }: AnalysisInput): Analysis {
+export function analyse({ ast, f, poles, contour, budget, branch, power, log, multi, strip }: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
   const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
   // **THE SIDES COME FROM THE SPEC, PARALLEL TO THE GEOMETRY.** `resolveAll` maps `contour.pieces`
@@ -160,17 +178,25 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log, mu
           ...(power === undefined ? {} : { factor: { kind: "power" as const } }),
           ...(log === undefined ? {} : { factor: { kind: "log" as const } }),
         })
-      : log !== undefined
-        ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
-        : power === undefined
-          ? applyResidueTheorem(poles, integral)
-          : applyBranchTheorem({
-              poles,
-              integral,
-              factor: power.factor,
-              rational: power.rational,
-              pieces: resolved,
-            });
+      : strip !== undefined
+        ? applyStripTheorem({
+            poles: strip.poles,
+            margin: strip.margin,
+            integral,
+            pieces: resolved,
+            certificate: strip.certificate,
+          })
+        : log !== undefined
+          ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
+          : power === undefined
+            ? applyResidueTheorem(poles, integral)
+            : applyBranchTheorem({
+                poles,
+                integral,
+                factor: power.factor,
+                rational: power.rational,
+                pieces: resolved,
+              });
   const ledger = evaluateLedger({
     ast,
     pieces: resolved,

@@ -35,6 +35,8 @@ import { d4LogSquaredKeyhole } from "./records/d4-log-squared-keyhole.js";
 import { d5LogCubedKeyhole } from "./records/d5-log-cubed-keyhole.js";
 import { d6DogboneInverseSqrt } from "./records/d6-dogbone-inverse-sqrt.js";
 import { d7DogboneTwoFractionalPowers } from "./records/d7-dogbone-two-fractional-powers.js";
+import { e1StripExponentialQuasiperiod } from "./records/e1-strip-exponential-quasiperiod.js";
+import { e2StripSechFourier } from "./records/e2-strip-sech-fourier.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export {
@@ -93,6 +95,8 @@ export const FAMILIES: readonly Family[] = [
   d5LogCubedKeyhole,
   d6DogboneInverseSqrt,
   d7DogboneTwoFractionalPowers,
+  e1StripExponentialQuasiperiod,
+  e2StripSechFourier,
 ];
 
 /**

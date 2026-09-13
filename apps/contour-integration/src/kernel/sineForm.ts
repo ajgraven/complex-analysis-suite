@@ -36,11 +36,20 @@ import { ExpSum, formatPiExpSum } from "./expSum.js";
 import { Exponent, formatExponent } from "./exponent.js";
 import { formatPiSqrt } from "./formatExact.js";
 
-/** `Σ cₖ e^{βₖ}`, optionally over `sin(π r)`. In units of π, as every solved target is. */
+/** `Σ cₖ e^{βₖ}`, optionally over `sin(π r)` or `cosh(π r)`. In units of π, as every solved target is. */
 export interface SineForm {
   readonly sum: ExpSum;
   /** The `r` of `1/sin(π r)`. Absent when no sine factor was needed. */
   readonly sine?: Frac;
+  /**
+   * The `r` of `1/cosh(π r)` — the SECOND declared shape, and at most one of the two is present.
+   *
+   * `1 − e^{β}` factors as a sine and `1 + e^{β}` as a hyperbolic cosine, and **which one a contour
+   * produces is decided by the sign of its quasi-period `λ`**, not by a simplifier hunting for
+   * patterns. E1's `λ = e^{2πia}` is on the unit circle and gives `π/sin(πa)`; E2's `λ = −e^{−πξ}`
+   * is a negative real and gives `π/cosh(πξ/2)` — which is `π·sech(πξ/2)`, the record's own form.
+   */
+  readonly cosh?: Frac;
 }
 
 export type SineDivision =
@@ -241,9 +250,21 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
     });
   const [first, second] = pair;
   if (!second.coefficient.equals(first.coefficient.neg())) {
+    // **THE SECOND DECLARED SHAPE, AND THE MODULE'S ONE-RULE WARNING IS BEING SPENT DELIBERATELY.**
+    // The header above is emphatic that "a second and third rule accreting into a simplifier is the
+    // failure mode", and this is a second rule. What makes it a DECLARATION rather than accretion is
+    // that it is the other half of the same fact: a quasi-periodic contour's coefficient is `1 − λ`,
+    // and the two shapes are what that is when `λ` is on the unit circle and when it is a negative
+    // real. E1 is the first, E2 the second, and E2 exists precisely to teach that `λ` can be
+    // negative. Nothing is pattern-matched: the sign of the coefficient pair DECIDES which, in exact
+    // arithmetic, and everything else still refuses.
+    if (second.coefficient.equals(first.coefficient)) {
+      return divideCarryingCosh(effectiveNumerator(numerator), denominator, first, second);
+    }
     const reason =
-      `the two-term coefficient ${formatPiExpSum(denominator)} is not of the form c·(1 − e^{β}) — ` +
-      "its two coefficients are not negatives of one another, so no sine factors out";
+      `the two-term coefficient ${formatPiExpSum(denominator)} is not of the form c·(1 − e^{β}) or ` +
+      "c·(1 + e^{β}) — its two coefficients are neither negatives of one another (a sine) nor equal " +
+      "(a hyperbolic cosine), so no such factor comes out";
     return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
   }
 
@@ -324,11 +345,83 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
   };
 }
 
+/** The numerator, untouched — a hook so the cosh branch reads the same as the sine's does. */
+const effectiveNumerator = (numerator: ExpSum): ExpSum => numerator;
+
+/**
+ * `c·(e^{β₁} + e^{β₂}) = c·e^{(β₁+β₂)/2}·2cosh(γ)` with `γ = (β₁−β₂)/2` — E2's denominator.
+ *
+ * **THE GEOMETRIC CANCELLATION DOES NOT APPLY HERE and is deliberately not reached.** It exists for
+ * D3, where the keyhole's coefficient and its residue sum carry the SAME factor `1 − e^{2πia}`; a
+ * `1 + e^{β}` denominator has no such partner in any record, and running a cancellation looking for
+ * one is how a recogniser becomes a simplifier.
+ *
+ * **AND THERE IS NO DEGENERATE PATH, which is a result rather than an omission.** `cosh` vanishes
+ * only at `iπ(k + ½)` — a purely imaginary argument — and this branch requires `γ` REAL, so the
+ * denominator cannot vanish. That is E2's "unconditionally well-posed" claim, arriving as a property
+ * of the factoring: `1 − λ = 1 + e^{−πξ} > 0` for every real `ξ`, and the only `ξ` that would break
+ * it are `±i(2k+1)`, which are exactly the poles of the answer.
+ */
+function divideCarryingCosh(
+  numerator: ExpSum,
+  denominator: ExpSum,
+  first: { coefficient: SqrtExt; exponent: Exponent },
+  second: { coefficient: SqrtExt; exponent: Exponent },
+): SineDivision {
+  const gamma = first.exponent.sub(second.exponent).half();
+  if (!gamma.algebraic.isZero() || !gamma.pi.im.isZero()) {
+    const reason =
+      `the exponents of ${formatPiExpSum(denominator)} differ by ${formatExponent(gamma.scale(Gauss.int(2)))}, ` +
+      "which is not a real multiple of π, so the sum is a cosine of a complex argument rather than a cosh";
+    return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
+  }
+
+  // **`cosh` IS EVEN, so the sign of γ carries no information — and taking it is INSURANCE.** The
+  // pair was sorted on the imaginary part of the exponent, which is zero for BOTH terms here, so the
+  // order reaching this function is settled by `ExpSum.sort` rather than by anything meaningful.
+  // Measured, that sort puts the larger real π-exponent first whichever way the sum was built, so γ
+  // is already non-negative today and a sweep records this line as EQUIVALENT. It is kept for the
+  // reason the sine branch keeps its own re-sort: `ExpSum.sort`'s docstring says it exists "purely
+  // for reading", and a change to how terms are DISPLAYED must not be able to turn `cosh(3π/4)` into
+  // `cosh(−3π/4)` — which, cosh being even, would print wrongly while the VALUE stayed right. That
+  // is the same failure this slice already found once, in `solveTarget`'s form rebuild.
+  const r = gamma.pi.re.n < 0n ? gamma.pi.re.neg() : gamma.pi.re;
+
+  const two = SqrtExt.fromGauss(Gauss.int(2));
+  const scale = tryInv(first.coefficient.mul(two));
+  if (scale === null) {
+    const reason = `the coefficient ${formatPiExpSum(denominator)} does not invert inside one quadratic extension`;
+    return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
+  }
+  const halfSum = first.exponent.add(second.exponent).half();
+  const sum = numerator.scale(scale).shift(halfSum.neg()).foldSigns();
+
+  return {
+    ok: true,
+    // `cosh(0) = 1` leaves nothing to carry. It cannot arise — equal exponents would have merged
+    // into one term before this — and is handled rather than assumed away.
+    form: r.isZero() ? { sum } : { sum, cosh: r },
+    certificate: exact(
+      "the coefficient on the unknown factors as a hyperbolic cosine",
+      `${formatPiExpSum(denominator)} = c·e^{(β₁+β₂)/2}·2cosh(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(r, Frac.ZERO)))})`,
+      {
+        provenance: [
+          { ok: true, text: "a + b·e^{β} with a = b factors as e^{β/2}(e^{−β/2} + e^{β/2}); the sine's other half, for a NEGATIVE quasi-period" },
+          { ok: true, text: "cosh vanishes only at an imaginary argument, and γ is real here — so unlike the sine there is no degenerate case" },
+          { ok: true, text: "the cosh is CARRIED, never evaluated: the form is exact and only its decimal is an estimate" },
+        ],
+      },
+    ),
+  };
+}
+
 /** `π·Σ cₖ e^{βₖ} / sin(π r)`, written the way the gallery writes it: `π/sin(3π/10)`, `(π/4)/sin(3π/8)`. */
 export function formatSineForm(form: SineForm): string {
   const head = formatPiExpSum(form.sum);
-  if (form.sine === undefined) return head;
-  const denominator = `sin(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(form.sine, Frac.ZERO)))})`;
+  const factor = form.sine ?? form.cosh;
+  if (factor === undefined) return head;
+  const name = form.sine === undefined ? "cosh" : "sin";
+  const denominator = `${name}(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(factor, Frac.ZERO)))})`;
   // `π/4/sin(3π/8)` is two divisions in a row and reads as neither; the record itself writes
   // `(pi/4)/sin(3*pi/8)`.
   const compound = head.includes("/") || head.includes(" + ") || head.includes(" − ");
@@ -339,13 +432,13 @@ export function formatSineForm(form: SineForm): string {
 export function sineFormToNumber(form: SineForm, part: "re" | "im"): number {
   const [re, im] = form.sum.toTuple();
   const head = Math.PI * (part === "re" ? re : im);
+  if (form.cosh !== undefined) return head / Math.cosh(Math.PI * form.cosh.toNumber());
   if (form.sine === undefined) return head;
   return head / Math.sin(Math.PI * form.sine.toNumber());
 }
 
 /** The exponent of the sine's argument, for a caller that wants to show the factoring. */
 export function sineArgument(form: SineForm): Exponent | null {
-  return form.sine === undefined
-    ? null
-    : Exponent.piTimes(new Gauss(form.sine, Frac.ZERO));
+  const factor = form.sine ?? form.cosh;
+  return factor === undefined ? null : Exponent.piTimes(new Gauss(factor, Frac.ZERO));
 }

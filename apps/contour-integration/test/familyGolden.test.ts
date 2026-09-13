@@ -133,6 +133,11 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "keyhole-x-to-the-n",
       "log-squared-keyhole",
       "log-cubed-keyhole",
+      // E1's R is the strip's HALF-WIDTH rather than a radius, and it heads to infinity for the same
+      // reason: the two vertical sides have to leave. It has no shrinking partner — the strip has no
+      // small circle, because its singular set is a lattice rather than a point on the contour.
+      "strip-exponential-quasiperiod",
+      "strip-sech-fourier",
     ]);
   });
 
@@ -323,6 +328,15 @@ describe("the closed form each record establishes", () => {
     // record writes the same number as `40^{3/4}/4`, and recovering a record's own grouping would
     // mean remembering it. The sine is carried, never evaluated.
     "dogbone-two-fractional-powers": "(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)",
+    // E1, and the form is D1's — which is the record's own closing claim: `x = log t` carries one
+    // onto the other, and the keyhole's phase `e^{2πis}` and the strip's `λ` are the same number at
+    // `s = a`. The `sin(πa)` here is LITERALLY Pass 5's denominator `1 − e^{2πia}`, recognised.
+    "strip-exponential-quasiperiod": "π/sin(3π/10)",
+    // E2 — `π sech(πξ/2)` written the way the engine carries it, and the SECOND denominator shape.
+    // E1's `1 − λ` factors as a sine because λ sits on the unit circle; E2's λ = −e^{−πξ} is a
+    // NEGATIVE REAL, so `1 − λ = 1 + e^{−πξ}` factors as a hyperbolic cosine instead. Which one a
+    // contour produces is decided by the sign of its quasi-period, not by a simplifier.
+    "strip-sech-fourier": "π/cosh(π)",
   };
 
   it("covers every loaded record", () => {
