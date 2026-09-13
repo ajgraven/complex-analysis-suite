@@ -14,6 +14,7 @@ import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem, withoutColumns } from "./system.js";
 import { describeKernel } from "./linear.js";
+import { residueTermShape } from "./solveResidueTerm.js";
 import { FRAC_FIELD, RAT_PI_FIELD } from "./field.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
 import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
@@ -38,6 +39,7 @@ import { d7DogboneTwoFractionalPowers } from "./records/d7-dogbone-two-fractiona
 import { e1StripExponentialQuasiperiod } from "./records/e1-strip-exponential-quasiperiod.js";
 import { e2StripSechFourier } from "./records/e2-strip-sech-fourier.js";
 import { f1WedgeRationalPower } from "./records/f1-wedge-rational-power.js";
+import { g2SquareCotKernel } from "./records/g2-square-cot-kernel.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export {
@@ -99,6 +101,7 @@ export const FAMILIES: readonly Family[] = [
   e1StripExponentialQuasiperiod,
   e2StripSechFourier,
   f1WedgeRationalPower,
+  g2SquareCotKernel,
 ];
 
 /**
@@ -345,6 +348,37 @@ function checkInvariant4(family: Family): Violation[] {
     v.push({ family: family.id, invariant: 4, message });
   };
   const m = family.targets.length;
+
+  // **SG-1 INVERTS THIS INVARIANT.** A tier-G record puts its unknown inside the residue sum, so no
+  // piece of its contour touches the unknown and `M` is identically ZERO by construction — and
+  // `rank(M) = m` would drop every one of them for being what they are. Worse, full rank there
+  // would mean the record ALSO carries its target on the contour, which is the mixed case
+  // `solveResidueTerm` refuses by name. So the requirement flips: the DECLARATION must make sense
+  // (`residueTermShape`, which needs no residue and no kernel — the same property that lets this
+  // invariant run at load time) and `M` must be zero. D5's borrowing is the same shape: the honest
+  // test is the system without the column, not the one the record never claimed.
+  if (family.residueSelection.targetTerms !== undefined) {
+    const shape = residueTermShape(family);
+    if (!shape.ok) {
+      fail(`the unknown is declared inside the residue sum, but the declaration does not hold — ${shape.reason}`);
+      return v;
+    }
+    for (const [i, g] of (family.golden.length > 0 ? family.golden : [{ params: {} }]).entries()) {
+      const built = buildSystem(family, g.params);
+      if (!built.ok) {
+        fail(`golden ${i}: M could not be decided exactly — ${built.reason}`);
+        continue;
+      }
+      if (built.system.report.rank !== 0) {
+        fail(
+          `golden ${i}: the unknown is declared inside the residue sum, but rank(M) = ` +
+            `${built.system.report.rank} — some piece of the contour carries it too, and no ring here ` +
+            "holds a coefficient that is a dimensionless number plus one carrying π",
+        );
+      }
+    }
+    return v;
+  }
 
   // A family with no parameters still gets one pass, at the empty binding: `M` does not depend on a
   // fixture there, but the check must still run.

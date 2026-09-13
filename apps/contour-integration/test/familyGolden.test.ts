@@ -97,7 +97,16 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
   // which is the one thing R is allowed to do and the one thing these radii must not straddle.
   // The parameter heading to INFINITY, which is not always `limitParams[0]` and is not always
   // present: D6's dogbone has no outer circle at all, so its one limit parameter shrinks instead.
-  const withLimit = FAMILIES.filter((f) => f.contour.limitParams.some((p) => p.to === "inf"));
+  //
+  // **AND IT INVERTS FOR TIER G, WHICH IS WHY THAT TIER IS EXCLUDED HERE AND TESTED BELOW.** The
+  // property rests on "once every selected pole is enclosed, more radius adds nothing". A summation
+  // kernel has a pole at every integer, so more radius adds MORE POLES — `∮` is `2πi[S_N − T]` and
+  // its DEPENDENCE on N is the whole content of the argument, not a defect in it. Asserting equality
+  // there would demand that a partial sum not converge.
+  const summation = (f: Family): boolean => f.residueSelection.targetTerms !== undefined;
+  const withLimit = FAMILIES.filter(
+    (f) => f.contour.limitParams.some((p) => p.to === "inf") && !summation(f),
+  );
 
   it.each(withLimit.map((f) => [f.id, f] as const))("%s", (_id, family) => {
     const g = primary(family);
@@ -115,9 +124,26 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
     expect(far.text).toBe(near.text);
   });
 
+  it.each(FAMILIES.filter(summation).map((f) => [f.id, f] as const))(
+    "%s — where the value must DEPEND on the radius, and shrink",
+    (_id, family) => {
+      const g = primary(family);
+      const limit = must(family.contour.limitParams.find((p) => p.to === "inf"), "a limit parameter to ∞");
+      const near = must(run(family, g, { [limit.name]: 4 }).theorem.exactValue, "an exact value at N = 4");
+      const far = must(run(family, g, { [limit.name]: 40 }).theorem.exactValue, "an exact value at N = 40");
+      expect(far.value).not.toEqual(near.value);
+      // `2πi[S_N − T]` — the tail, so it shrinks toward zero as the square grows. A sign error or a
+      // dropped residue would make it grow, and equality would mean the partial sums did not move.
+      expect(Math.hypot(...far.value)).toBeLessThan(Math.hypot(...near.value));
+      expect(Math.hypot(...far.value)).toBeLessThan(0.5);
+    },
+  );
+
   it("names which families have a limit parameter at all", () => {
     // Guards the filter above from silently emptying if a record's limitParams were dropped — and
     // records that the circle families legitimately have none, their contour being closed already.
+    // A tier-G record is deliberately NOT here: it has a limit parameter and is excluded above,
+    // because for it the value must depend on the radius rather than be independent of it.
     expect(withLimit.map((f) => f.id)).toEqual([
       "semicircle-order2",
       "semicircle-quartic",
@@ -345,6 +371,10 @@ describe("the closed form each record establishes", () => {
     // simply rendered `1/sin(π/3)` as `2/√3`. Nothing simplifies a sine into a radical here, and the
     // `n = 5` and `n = 7` fixtures could not be written that way at all.
     "wedge-rational-power": "(π/3)/sin(π/3)",
+    // The first entry whose answer is a MULTIPLIER rather than a denominator — `(π/a)coth(πa)` is
+    // how the record writes it, and `1/tanh` shown as a second division would be the same number in
+    // a form no reader is looking for (`kernel/cothForm.ts`).
+    "series-cot-kernel": "(4π/3)·coth(3π/4)",
   };
 
   it("covers every loaded record", () => {

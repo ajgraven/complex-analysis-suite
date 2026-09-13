@@ -108,6 +108,18 @@ export type SolveResidueTermResult =
   | { readonly ok: true; readonly solved: SolvedResidueTerm }
   | { readonly ok: false; readonly reason: string; readonly certificate: Certificate };
 
+/** What {@link residueTermShape} establishes about a record, without a kernel or a residue. */
+export interface ResidueTermShape {
+  readonly targetId: string;
+  readonly weight: 1 | 2;
+  /** True when the predicate leaves `n = 0` out of the target's own terms. */
+  readonly excludesZero: boolean;
+}
+
+export type ShapeResult =
+  | { readonly ok: true; readonly shape: ResidueTermShape }
+  | { readonly ok: false; readonly reason: string };
+
 const no = (reason: string): SolveResidueTermResult => ({
   ok: false,
   reason,
@@ -156,38 +168,93 @@ function weightForRange(lower: string, upper: string): 1 | 2 | null {
 }
 
 /**
+ * The STRUCTURAL half — everything decidable from the record alone, with no kernel and no residue.
+ *
+ * Separated because invariant 4 needs exactly this and nothing more. SG-1 INVERTS that invariant:
+ * `M` is identically zero for a tier-G record by construction (no piece touches the unknown), so
+ * `rank(M) = m` would drop every one of them, and full rank would mean the record ALSO puts its
+ * target on the contour — the mixed case this route refuses. The check that belongs there is
+ * therefore "does the declaration make sense?", which is this, plus `rank(M) = 0`. The same shape
+ * as D5's borrowing, where the honest test is the system with a column REMOVED rather than the one
+ * the record does not claim.
+ */
+export function residueTermShape(family: Family): ShapeResult {
+  const declared = family.residueSelection.targetTerms;
+  if (declared === undefined || declared.length === 0) {
+    return {
+      ok: false,
+      reason: "the record declares no `residueSelection.targetTerms`, so no unknown sits inside the residue sum",
+    };
+  }
+  if (declared.length !== 1) {
+    return {
+      ok: false,
+      reason:
+        `this solve handles one unknown inside the sum; the record declares ${declared.length}, whose ` +
+        "residue terms would have to be separated before either could be read",
+    };
+  }
+  const entry = declared[0];
+  const target = family.targets.find((t) => t.id === entry.targetId);
+  if (target === undefined) {
+    return { ok: false, reason: `\`targetTerms\` names '${entry.targetId}', which is not one of this record's unknowns` };
+  }
+
+  // `a = 0`, refused by name: see the header for why the mixed coefficient is not an element of any
+  // ring this app has.
+  const onLeft = family.contour.pieces.find((p) => p.role === "target" || p.role === "reproduces");
+  if (onLeft !== undefined) {
+    return {
+      ok: false,
+      reason:
+        `piece '${onLeft.id}' carries the target on the LEFT of the identity while \`targetTerms\` puts ` +
+        "it inside the residue sum on the right: its coefficient would be a dimensionless number plus " +
+        "one carrying π, and neither the exponential basis nor ℚ(i)(π) holds both",
+    };
+  }
+
+  const predicate = TERM_PREDICATES[entry.terms];
+  if (predicate === undefined) {
+    return {
+      ok: false,
+      reason:
+        `the term predicate '${entry.terms}' is not one this engine executes; it reads ` +
+        `${Object.keys(TERM_PREDICATES).map((k) => `'${k}'`).join(" and ")}`,
+    };
+  }
+
+  const forced = weightForRange(target.lower, target.upper);
+  if (forced === null) {
+    return {
+      ok: false,
+      reason:
+        `the target runs from '${target.lower}' to '${target.upper}', and this route reads only the ` +
+        "two-sided sum (-inf, inf) and the one-sided (1, inf)",
+    };
+  }
+  if (entry.weight !== forced) {
+    return {
+      ok: false,
+      reason:
+        `the record declares weight ${entry.weight}, but a sum from '${target.lower}' to '${target.upper}' ` +
+        `forces ${forced}: Σ_{targetTerms} Res = ${forced}·T, and the halving bookkeeping is what the ` +
+        "weight IS rather than something it records",
+    };
+  }
+  return { ok: true, shape: { targetId: entry.targetId, weight: forced, excludesZero: predicate.excludesZero } };
+}
+
+/**
  * Solve `w·T + Σ_known = 0` for a target that is a TERM of the residue sum.
  *
  * Every refusal below is structural — a property of the record, decided without evaluating an
  * integral — except the last, which guards an engine fault.
  */
 export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): SolveResidueTermResult {
-  const declared = family.residueSelection.targetTerms;
-  if (declared === undefined || declared.length === 0) {
-    return no("the record declares no `residueSelection.targetTerms`, so no unknown sits inside the residue sum");
-  }
-  if (declared.length !== 1) {
-    return no(
-      `this solve handles one unknown inside the sum; the record declares ${declared.length}, whose ` +
-        "residue terms would have to be separated before either could be read",
-    );
-  }
-  const entry = declared[0];
-  const target = family.targets.find((t) => t.id === entry.targetId);
-  if (target === undefined) {
-    return no(`\`targetTerms\` names '${entry.targetId}', which is not one of this record's unknowns`);
-  }
+  const structural = residueTermShape(family);
+  if (!structural.ok) return no(structural.reason);
+  const { targetId, weight: forced, excludesZero } = structural.shape;
 
-  // `a = 0` and `Σbᵢ = 0`, each refused by name: see the header for why the mixed coefficient is not
-  // an element of any ring this app has.
-  const onLeft = family.contour.pieces.find((p) => p.role === "target" || p.role === "reproduces");
-  if (onLeft !== undefined) {
-    return no(
-      `piece '${onLeft.id}' carries the target on the LEFT of the identity while \`targetTerms\` puts ` +
-        "it inside the residue sum on the right: its coefficient would be a dimensionless number plus " +
-        "one carrying π, and neither the exponential basis nor ℚ(i)(π) holds both",
-    );
-  }
   const alive = inputs.pieceLimits.find((p) => !p.contribution.isZero());
   if (alive !== undefined) {
     return no(
@@ -195,35 +262,12 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
         "times an algebraic number and would compete with the residue sum's own π for the same slot",
     );
   }
-
-  const predicate = TERM_PREDICATES[entry.terms];
-  if (predicate === undefined) {
-    return no(
-      `the term predicate '${entry.terms}' is not one this engine executes; it reads ` +
-        `${Object.keys(TERM_PREDICATES).map((k) => `'${k}'`).join(" and ")}`,
-    );
-  }
-  if (predicate.excludesZero) {
+  if (excludesZero) {
     return no(
       "the target terms exclude n = 0, so Res(K·f, 0) is a KNOWN term — and it is algebraic where the " +
         "cofactor's residues carry the kernel's π (a regular integer spends it on the kernel's own " +
         "residue π·(1/π) = 1), or, where the cofactor also has a pole there, the two MERGE and the " +
         "residue lands in ℚ(i)(π). Either way it does not belong to this route's ring",
-    );
-  }
-
-  const forced = weightForRange(target.lower, target.upper);
-  if (forced === null) {
-    return no(
-      `the target runs from '${target.lower}' to '${target.upper}', and this route reads only the ` +
-        "two-sided sum (-inf, inf) and the one-sided (1, inf)",
-    );
-  }
-  if (entry.weight !== forced) {
-    return no(
-      `the record declares weight ${entry.weight}, but a sum from '${target.lower}' to '${target.upper}' ` +
-        `forces ${forced}: Σ_{targetTerms} Res = ${forced}·T, and the halving bookkeeping is what the ` +
-        "weight IS rather than something it records",
     );
   }
   if (forced === 2) {
@@ -270,7 +314,7 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
   return {
     ok: true,
     solved: {
-      targetId: entry.targetId,
+      targetId,
       weight: forced,
       piUnits,
       ...(named.ok ? { form: named.form, text: formatSineForm(named.form) } : {}),
@@ -278,14 +322,14 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
       certificates: [
         ...certificates,
         exact(
-          `${entry.targetId} = −(Σ_j Res(K·f, z_j))/${forced}`,
+          `${targetId} = −(Σ_j Res(K·f, z_j))/${forced}`,
           "Pass 5 with the unknown INSIDE the residue sum: every side of the contour vanishes, so " +
             "0 = 2πi[w·T + Σ_j Res] and the 2πi divides out, leaving the kernel's own π",
           {
             provenance: [
               {
                 ok: true,
-                text: `the weight ${forced} is DERIVED from the target's own range ${target.lower}…${target.upper} and checked against the record, not read out of it`,
+                text: `the weight ${forced} is DERIVED from the target's own declared range and checked against the record, not read out of it`,
               },
               ...(forced === 2
                 ? [
