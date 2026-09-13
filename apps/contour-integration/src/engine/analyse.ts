@@ -143,6 +143,14 @@ export interface AnalysisInput {
     readonly kernel: SummationKernel;
     /** The unknown the record puts INSIDE the residue sum — carried through to COVER. */
     readonly target?: { readonly id: string; readonly weight: 1 | 2 };
+    /**
+     * SG-6: a hypothesis that FAILS while a stronger argument applies — the record's `escalate`.
+     *
+     * Carried so CATCH can say so. Without a row the outcome would be invisible: the hypothesis
+     * "f has no pole at an integer" is false for G1, the answer is exactly right, and a ledger
+     * silent about both would leave a reader to reconcile them.
+     */
+    readonly escalation?: { readonly to: string; readonly collisions: number };
   };
   /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.

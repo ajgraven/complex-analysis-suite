@@ -431,6 +431,14 @@ export interface LedgerInput {
      * as a gap where there is none.
      */
     readonly target?: { readonly id: string; readonly weight: 1 | 2 };
+    /**
+     * SG-6: a hypothesis that FAILS while a stronger argument applies — the record's `escalate`.
+     *
+     * Carried so CATCH can say so. Without a row the outcome would be invisible: the hypothesis
+     * "f has no pole at an integer" is false for G1, the answer is exactly right, and a ledger
+     * silent about both would leave a reader to reconcile them.
+     */
+    readonly escalation?: { readonly to: string; readonly collisions: number };
   };
 }
 
@@ -831,7 +839,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       residuesExact
         ? "every enclosed residue is known exactly"
         : summed
-          ? "every enclosed residue is known exactly — the kernel's at each integer, the cofactor's as an exact quotient"
+          ? input.summation?.escalation === undefined
+            ? "every enclosed residue is known exactly — the kernel's at each integer, the cofactor's as an exact quotient"
+            : "every enclosed residue is known exactly — the kernel's at each integer, and the MERGED one from the Laurent route"
           : sumExact
             ? "Σ Res is known exactly, though no individual residue is expressible"
             : "not every residue is known exactly, so the total is an estimate",
@@ -840,7 +850,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         : summed
           ? exact(
               "the residues",
-              "Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀}",
+              input.summation?.escalation === undefined
+                ? "Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀}"
+                : "Res(K·f, n) is f(n) over ℚ(i) at every integer the kernel alone has a pole at; where the cofactor has one too the orders ADD and the merged residue is the z⁻¹ coefficient of the product's Laurent series, exact in ℚ(i)(π)",
             )
         : sumExact
           ? exact(
@@ -867,6 +879,32 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             ),
     ),
   );
+
+  // SG-6's row. Reported under CATCH because the escalated hypothesis is about whether the residue
+  // theorem catches every singularity: the answer is that it does, by merging the colliding pair
+  // rather than by the hypothesis holding.
+  const escalation = input.summation?.escalation;
+  if (escalation !== undefined) {
+    push(
+      rowFrom(
+        "CATCH",
+        "satisfied",
+        `a stated hypothesis FAILS and a stronger argument applies: ${escalation.to}, over ${escalation.collisions} declared collision${escalation.collisions === 1 ? "" : "s"}`,
+        exact(
+          "the escalation",
+          "the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument — the product is meromorphic there, orders ADD, and the merged residue is computed exactly",
+          {
+            provenance: [
+              {
+                ok: true,
+                text: "refusing would be wrong (the answer is correct) and warning would be wrong (nothing is uncertain); what the escalation costs the record is a DECLARED merged order and residue, both checked against the engine's own",
+              },
+            ],
+          },
+        ),
+      ),
+    );
+  }
 
   // ---- KILL ---------------------------------------------------------------------------------
   let killFailed = false;

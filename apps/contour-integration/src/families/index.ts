@@ -15,6 +15,7 @@ import type { Family } from "./schema.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem, withoutColumns } from "./system.js";
 import { describeKernel } from "./linear.js";
 import { residueTermShape } from "./solveResidueTerm.js";
+import { escalationRefusal } from "./collisionCheck.js";
 import { FRAC_FIELD, RAT_PI_FIELD } from "./field.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
 import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
@@ -40,6 +41,8 @@ import { e1StripExponentialQuasiperiod } from "./records/e1-strip-exponential-qu
 import { e2StripSechFourier } from "./records/e2-strip-sech-fourier.js";
 import { f1WedgeRationalPower } from "./records/f1-wedge-rational-power.js";
 import { g2SquareCotKernel } from "./records/g2-square-cot-kernel.js";
+import { g1SquareCotCollision } from "./records/g1-square-cot-collision.js";
+import { g3SquareCscCollision } from "./records/g3-square-csc-collision.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
 export {
@@ -102,6 +105,8 @@ export const FAMILIES: readonly Family[] = [
   e2StripSechFourier,
   f1WedgeRationalPower,
   g2SquareCotKernel,
+  g1SquareCotCollision,
+  g3SquareCscCollision,
 ];
 
 /**
@@ -183,6 +188,12 @@ function checkWellFormed(family: Family): Violation[] {
       fail(`vanishingLemmas entry ${lemma.lemma} names a piece '${lemma.piece}' that does not exist`);
     }
   }
+  // SG-6: `escalate` is the schema's first three-valued hypothesis outcome, and an escalation is an
+  // OBLIGATION rather than a licence — it must name an escalation this engine implements, and the
+  // record must then say what the merged pole is. Without this the outcome would be the most
+  // permissive of the three (refuse stops, warn flags, escalate would wave through).
+  const escalation = escalationRefusal(family);
+  if (escalation !== null) fail(escalation);
   // `windings` is specified as "per-pole, not a prose blurb" (DESIGN §5), so both halves must be
   // readable as expressions. Nothing evaluates them yet — which is exactly why this is checked here.
   // Transcribing A1–A3 produced three entries that did NOT parse (`sign(a)`, which the expression

@@ -37,6 +37,7 @@ import {
 import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branchFactor.js";
 import { residueTermShape, solveResidueTerm, type SolvedResidueTerm } from "./solveResidueTerm.js";
 import { mergedResidue } from "../kernel/mergedResidue.js";
+import { checkDeclaredCollisions, escalations } from "./collisionCheck.js";
 import { legalityRefusal } from "../engine/ledger.js";
 import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
 import type { RatPi } from "../kernel/ratPi.js";
@@ -281,6 +282,9 @@ export function runFamily(
                 // declares one. Only the first entry: `solveResidueTerm` refuses more than one, and
                 // a ledger row claiming coverage of a system the solve will not touch would be
                 // exactly the kind of row this arc has been removing.
+                ...(escalations(family).length === 0
+                  ? {}
+                  : { escalation: { to: escalations(family)[0].to, collisions: (family.collisions ?? []).length } }),
                 ...(family.residueSelection.targetTerms?.[0] === undefined
                   ? {}
                   : {
@@ -504,6 +508,15 @@ function solveSummationFamily(family: Family, run: FamilyRun): SolveFamilyResult
   // than from the contour, because the identity Pass 5 solves is the LIMIT's: `n = 0` is enclosed by
   // every square, and asking the drawn one would make the answer depend on a radius the argument has
   // already sent to infinity.
+  // SG-6: every declared collision is checked against the engine's own merged residue — order AND
+  // value. A record that escalates its hypothesis owes this arithmetic, and a mismatch is a refusal
+  // rather than a note, because the escalation's entire justification is that the merged pole is
+  // known exactly.
+  const declaredCollisions = checkDeclaredCollisions(family, run.summation, run.bindings);
+  if (!declaredCollisions.ok) {
+    return { ok: false, run, reason: `${family.id}: ${declaredCollisions.reason}` };
+  }
+
   const shape = residueTermShape(family);
   let excluded: RatPi | undefined;
   if (shape.ok && shape.shape.excludesZero) {
@@ -525,7 +538,11 @@ function solveSummationFamily(family: Family, run: FamilyRun): SolveFamilyResult
     run,
     solved: {
       ...solved.solved,
-      certificates: [known.certificate, ...solved.solved.certificates],
+      certificates: [
+        ...declaredCollisions.certificates,
+        known.certificate,
+        ...solved.solved.certificates,
+      ],
     },
   };
 }

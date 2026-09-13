@@ -375,6 +375,11 @@ describe("the closed form each record establishes", () => {
     // how the record writes it, and `1/tanh` shown as a second division would be the same number in
     // a form no reader is looking for (`kernel/cothForm.ts`).
     "series-cot-kernel": "(4π/3)·coth(3π/4)",
+    // The two COLLISION records, whose answers are in ℚ(i)(π) rather than the exponential basis —
+    // the kernel's Laurent expansion at an integer is even, so a merged residue is a rational
+    // multiple of an even power of π. Nothing in the app writes a `coth` here.
+    "series-cot-collision": "π²/6",
+    "series-csc-kernel-collision": "−π²/12",
   };
 
   it("covers every loaded record", () => {
