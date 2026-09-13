@@ -353,29 +353,20 @@ function checkInvariant4(family: Family): Violation[] {
   // piece of its contour touches the unknown and `M` is identically ZERO by construction — and
   // `rank(M) = m` would drop every one of them for being what they are. Worse, full rank there
   // would mean the record ALSO carries its target on the contour, which is the mixed case
-  // `solveResidueTerm` refuses by name. So the requirement flips: the DECLARATION must make sense
-  // (`residueTermShape`, which needs no residue and no kernel — the same property that lets this
-  // invariant run at load time) and `M` must be zero. D5's borrowing is the same shape: the honest
+  // `solveResidueTerm` refuses by name. So the requirement flips: what must hold is that the
+  // DECLARATION makes sense (`residueTermShape`, which needs no residue and no kernel — the same
+  // property that lets this invariant run at load time). D5's borrowing is the same shape: the honest
   // test is the system without the column, not the one the record never claimed.
+  //
+  // **AND `rank(M) = 0` IS IMPLIED, NOT CHECKED.** A first draft asserted it, and a mutation sweep
+  // found the assertion unreachable: only `target` and `reproduces` pieces contribute a coefficient
+  // row, `residueTermShape` refuses a record carrying either, and every other role contributes the
+  // empty row — so `M` is identically zero whenever the shape holds. An assertion that cannot fire
+  // reads as a guard and is not one.
   if (family.residueSelection.targetTerms !== undefined) {
     const shape = residueTermShape(family);
     if (!shape.ok) {
       fail(`the unknown is declared inside the residue sum, but the declaration does not hold — ${shape.reason}`);
-      return v;
-    }
-    for (const [i, g] of (family.golden.length > 0 ? family.golden : [{ params: {} }]).entries()) {
-      const built = buildSystem(family, g.params);
-      if (!built.ok) {
-        fail(`golden ${i}: M could not be decided exactly — ${built.reason}`);
-        continue;
-      }
-      if (built.system.report.rank !== 0) {
-        fail(
-          `golden ${i}: the unknown is declared inside the residue sum, but rank(M) = ` +
-            `${built.system.report.rank} — some piece of the contour carries it too, and no ring here ` +
-            "holds a coefficient that is a dimensionless number plus one carrying π",
-        );
-      }
     }
     return v;
   }

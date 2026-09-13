@@ -194,7 +194,7 @@ describe("square-at-arbitrary-radius — the half-width must be N + ½", () => {
     if (!r.ok) return;
     expect(r.run.ledger.closes).toBe(false);
     expect(
-      r.run.theorem.verdict.certificates.some((c) => /winds 0 times about the cofactor's pole/.test(c.method)),
+      r.run.theorem.verdict.certificates.some((c) => /does not enclose the cofactor's pole/.test(c.method)),
     ).toBe(true);
   });
 });

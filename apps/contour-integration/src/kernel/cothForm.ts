@@ -86,6 +86,13 @@ function numeratorSinh(num: ExpSum): { readonly c: SqrtExt; readonly d: Frac } |
   if (dx === null || dy === null || !dx.add(dy).isZero()) return null;
   // Orient on the POSITIVE exponent, so `c` is the coefficient of `e^{+δ}` and the sign of
   // `2c·sinh(δ)` is not a function of which term the normal form happened to put first.
+  //
+  // **A RECORDED EQUIVALENT MUTANT.** Dropping the branch and always taking `x` passes every test,
+  // and measurably so rather than for want of one: `ExpSum.normalise` re-sorts, so building the pair
+  // in either order yields the IDENTICAL object with `e^{+δ}` first, and no test constructed from an
+  // `ExpSum` can distinguish the two. The branch is kept because it states the contract — return the
+  // coefficient of `e^{+δ}` — rather than an ordering that happens to hold; the mutant would silently
+  // refuse every input if that ordering ever changed, and nothing here would say why.
   return dx.n > 0n ? { c: x.coefficient, d: dx } : { c: y.coefficient, d: dy };
 }
 

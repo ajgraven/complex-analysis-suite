@@ -13,7 +13,7 @@ import { asSummationKernel, type SummationKernel } from "../src/kernel/summation
 import { cofactorResidues, ratioToTuple } from "../src/kernel/kernelResidue.js";
 import { ExpSum } from "../src/kernel/expSum.js";
 import { solveResidueTerm } from "../src/families/solveResidueTerm.js";
-import { FAMILIES } from "../src/families/index.js";
+import { FAMILIES, loadFamilies } from "../src/families/index.js";
 import { contourIntegrandOf } from "../src/families/instantiate.js";
 import { primaryGolden, runFamily, solveFamily } from "../src/families/runFamily.js";
 import { summationRecord } from "./helpers/summationRecord.js";
@@ -363,6 +363,73 @@ describe("the refusals that keep the route inside its own ring", () => {
     const wrong = squareRecord(TWO_SIDED);
     const r = solve({ ...wrong, residueSelection: { rule: "all" } }, "pi*cot(pi*z)/(z^2+1)");
     expect(reason(r)).toMatch(/declares no `residueSelection\.targetTerms`/);
+  });
+});
+
+describe("the loader judges a declaration it cannot check with rank(M)", () => {
+  // **SG-1 INVERTS INVARIANT 4.** `M` is identically zero for a record whose unknown is inside the
+  // residue sum, so the usual `rank(M) = m` would drop every tier-G record for being what it is.
+  // What replaces it is the DECLARATION's own consistency — which means a record with a broken
+  // declaration must still be dropped, or the substitution has cost the invariant its teeth.
+  const G2 = (): Family => {
+    const found = FAMILIES.find((f) => f.id === "series-cot-kernel");
+    if (found === undefined) throw new Error("G2 is not loaded");
+    return found;
+  };
+
+  it("loads G2, which declares one", () => {
+    const loaded = loadFamilies([G2()]);
+    expect(loaded.violations).toEqual([]);
+    expect(loaded.families.size).toBe(1);
+  });
+
+  it.each([
+    [
+      "a weight its range does not force",
+      (f: Family): Family => ({
+        ...f,
+        residueSelection: {
+          ...f.residueSelection,
+          targetTerms: [{ targetId: "S", terms: "poles(K) ∩ Z", weight: 2 }],
+        },
+      }),
+    ],
+    [
+      "an unknown it does not declare",
+      (f: Family): Family => ({
+        ...f,
+        residueSelection: {
+          ...f.residueSelection,
+          targetTerms: [{ targetId: "T", terms: "poles(K) ∩ Z", weight: 1 }],
+        },
+      }),
+    ],
+    [
+      "a predicate outside the vocabulary",
+      (f: Family): Family => ({
+        ...f,
+        residueSelection: {
+          ...f.residueSelection,
+          targetTerms: [{ targetId: "S", terms: "all of them", weight: 1 }],
+        },
+      }),
+    ],
+    [
+      "the target ALSO on the contour, which is the mixed case",
+      (f: Family): Family => ({
+        ...f,
+        contour: {
+          ...f.contour,
+          pieces: f.contour.pieces.map((p, k) => (k === 0 ? { ...p, role: "target" as const } : p)),
+        },
+      }),
+    ],
+  ])("drops a record with %s", (_what, broken) => {
+    const loaded = loadFamilies([broken(G2())]);
+    expect(loaded.violations.length).toBeGreaterThan(0);
+    expect(loaded.violations[0].invariant).toBe(4);
+    expect(loaded.violations[0].message).toMatch(/the declaration does not hold/);
+    expect(loaded.families.size).toBe(0);
   });
 });
 

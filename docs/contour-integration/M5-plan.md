@@ -440,10 +440,53 @@ whole golden suite is the regression test.
 >   Sweep 25 mutants, 24 killed, one recorded equivalent: a global sign on `reflect` cancels because
 >   `isEven` uses it once on each side of an equality.
 >
-> Not yet done, and M5.6c's: the ledger does not CLOSE for such a record (CATCH cannot sum the
-> kernel's residues and COVER has no target piece), so the route is reached through `solveFamily`'s
-> LEGALITY gate and returns a value the ledger does not yet certify. G2, the `coth` formatter and the
-> summation theorem land together.
+> - **M5.6c — G2 loads and solves, and tier G has begun.** Three slices. **(1) the name.** A
+>   two-pole conjugate cofactor's residues cross-multiply into exactly `2c·sinh(δ)` over
+>   `−4sinh²(γ/2)`, and `δ` is `γ` or `γ/2` — *the two cases being the two KERNELS, not two patterns
+>   to search among*, so `cothForm.ts` never sees the kernel and decides by comparing two exponents
+>   exactly. `γ = 2πa`, so the halving prints the answer in the parameter the record declared.
+>   A hyperbolic form **multiplies** where a sine divides, so it takes its own slot on `SineForm` and
+>   `denominatorOf` becomes the single reader the formatter, the number and the argument accessor all
+>   go through — the E2 lesson made structural. **(2) the theorem.** `∮` at finite N is
+>   `2πi[S_N − T]`, a number the quadrature can be asked about: two routes sharing nothing agree to
+>   5.8e-15 at N = 4. No `piUnits`, because the integer residues are algebraic and the cofactor's
+>   carry a π. **(3) the record.** All four fixtures print their closed form labelled `=`, the ledger
+>   closes, and the engine's quadrature corroborates each.
+>
+> **SG-1 inverts TWO invariants, and both would have dropped the record.** `rank(M) = m` fails because
+> `M` is identically zero for a tier-G contour by construction — and full rank would mean the record
+> also carries its target on the contour, the mixed case. And the corpus's *radius-independence* —
+> `∮` identical at two widely separated radii — is false here for the same reason it is true
+> elsewhere: a summation kernel has a pole at every integer, so more radius adds more POLES, and
+> `∮`'s dependence on N is the argument's whole content rather than a defect in it. Asserting
+> equality would demand that a partial sum not converge.
+>
+> **Three rows were saying something false, each found by running it.** CATCH claimed "no individual
+> residue is expressible" — the cyclotomic route's sentence, where `ℚ(ζ₁₀)` has degree 4 over ℚ; here
+> every residue is written down. The enclosed COUNT was short by exactly the poles carrying the
+> answer, because `findPoles` reports none of `1/(z²+a²)`'s any more than it reports the integers' —
+> it refuses the whole product, not just the `cot` — so a square dragged onto `±ia` had every
+> singularity "clear of the contour" as surely as one dragged onto an integer did before M5.5b. And
+> the shell printed "the target is Re of ∮ f dz" about a record whose target is a TERM of the residue
+> sum and whose `∮` tends to zero.
+>
+> **The browser pass found the browser suite itself red**, on a hardcoded `toHaveLength(20)` that has
+> been wrong since M5.3d — E1, E2, F1 and G2 each added a record, and the node gate deliberately does
+> not run a browser. It is derived from `FAMILIES` now, so the next record cannot make it stale.
+> (Verified in Chromium: the GLSL for `pi*cot(pi*z)/(z²+a²)` compiles, the answer reads
+> `= (4π/3)·coth(3π/4)`, and the winding list shows `n(γ,±5) = 0` beside `n(γ,±4…0) = 1` — the band
+> reaching one integer past the corner, visible rather than asserted.)
+>
+> Sweeps: 10/10, then 32 mutants with 29 killed, two recorded equivalents (`ExpSum.normalise`
+> re-sorts, so orienting on the first term is indistinguishable from orienting on the positive
+> exponent; and a contour winding differently about two cofactor poles needs a self-intersection none
+> of the templates produces) and **one unreachable branch removed** — a `rank(M) = 0` assertion the
+> sweep showed could not fire, since only `target` and `reproduces` pieces contribute a coefficient
+> row and the shape check already refuses both.
+>
+> Still M5.7's: **G1 and G3**, the collision, which is a different RING rather than a harder case —
+> `1/z²` merges with the kernel at 0, the merged residue is `−π²/3` in ℚ(i)(π), and G1's cofactor has
+> no other pole, so `ρ = 0` and its whole identity lives there.
 
 ### M5.7 — SG-5 and SG-6: a sum, and the collision · *M–L*
 

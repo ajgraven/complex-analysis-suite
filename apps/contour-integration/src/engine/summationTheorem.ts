@@ -89,6 +89,12 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
         `the winding about the kernel's pole at z = ${t.n} could not be decided, so the contour may pass through it`,
       );
     }
+    // **TWO GUARDS, AND NEITHER IS REDUNDANT.** `kernelBand` is `floor(reach) + 1`, so the list
+    // reaches one integer PAST the square's corner: `±(N+1)` are here with winding 0. The multiply
+    // is what makes an enclosed pole's weight its winding — a clockwise contour negates every one —
+    // and the skip is what keeps `counted` the number of poles actually SUMMED, which the certificate
+    // reports. Dropping either alone changes nothing about the value; dropping both would add the
+    // outside integers at full weight, which is why they read as redundant and are not.
     if (w.n === 0) continue;
     partial = partial.add(t.residue.mul(Gauss.int(w.n)));
     counted += 1;
@@ -98,6 +104,15 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   const cofactor = cofactorResidues(kernel);
   if (!cofactor.ok) return declined("∮ K·f dz", cofactor.reason);
 
+  //
+  // **ONE WINDING FOR ALL OF THEM, AND IT NEED NOT BE `+1`.** `cofactorResidues` returns the total
+  // UNWEIGHTED, so it can be scaled by a common winding and by nothing else — and requiring that
+  // common value to be `+1` would refuse a CLOCKWISE square, which is a perfectly good contour the
+  // residue theorem handles by weighting every residue with `−1`. What the identity genuinely needs
+  // is that the contour treat every pole of the cofactor alike: "once N+½ > a" in the record's own
+  // words, plus an orientation. A pole left outside, or two poles wound differently, makes the
+  // unweighted total the wrong object rather than a scalable one.
+  let cofactorWinding: number | null = null;
   for (const pole of cofactor.at) {
     const at: Cx = pole.z.toTuple();
     const w = windingNumber(pieces, at);
@@ -107,19 +122,36 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
         `the winding about the cofactor's pole at z = ${formatSqrtExt(pole.z)} could not be decided, so the contour may pass through it`,
       );
     }
-    if (w.n !== 1) {
+    if (w.n === 0) {
       return declined(
         "∮ K·f dz",
-        `the contour winds ${w.n} time${w.n === 1 ? "" : "s"} about the cofactor's pole at z = ${formatSqrtExt(pole.z)}, ` +
-          "and this identity sums every one of them exactly once — the record's own 'once N+½ > a'. " +
-          "Summing them all against a contour that does not enclose them all would report a number for a different contour",
+        `the contour does not enclose the cofactor's pole at z = ${formatSqrtExt(pole.z)}, and this ` +
+          "identity sums every one of them — the record's own 'once N+½ > a'. Summing them all " +
+          "against a contour that leaves one outside would report a number for a different contour",
       );
     }
+    // **A RECORDED DEFENSIVE BRANCH.** Reaching it needs a single closed loop that winds differently
+    // about two poles of the cofactor, which means a self-intersection; none of the app's templates
+    // produces one and a disjoint second loop is refused earlier as not closed. It is kept because it
+    // is what makes `weight` well defined — without it a doubly-wound contour would silently take
+    // whichever winding came last — and removing it would be trading a stated precondition for an
+    // assumption no reader could see.
+    if (cofactorWinding !== null && w.n !== cofactorWinding) {
+      return declined(
+        "∮ K·f dz",
+        `the contour winds ${cofactorWinding} time(s) about one pole of the cofactor and ${w.n} about ` +
+          `z = ${formatSqrtExt(pole.z)}: the residue total is computed unweighted, so it can be scaled ` +
+          "by a common winding and not by two different ones",
+      );
+    }
+    cofactorWinding = w.n;
   }
+  const weight = cofactorWinding ?? 1;
 
   // `∮ = 2πi[partial + π·ρ]`. The two halves carry different powers of π and are combined here, once,
   // in the numeric plane — see the header for why no ring holds both.
-  const [rr, ri] = ratioToTuple(cofactor.total);
+  const weighted = scaleRatio(cofactor.total, SqrtExt.fromGauss(Gauss.int(weight)));
+  const [rr, ri] = ratioToTuple(weighted);
   const [pr, pi] = partial.toTuple();
   const inner: Cx = [pr + Math.PI * rr, pi + Math.PI * ri];
   const value: Cx = [-2 * Math.PI * inner[1], 2 * Math.PI * inner[0]];
@@ -127,7 +159,7 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   // The TEXT is the gallery's own `closedContour` probe: `2πi[Σ_{|n|≤N} f(n) − T]`, with `T` the
   // infinite sum in its named form. `Σⱼ Res = −T/π·π = −T`, so the minus is the identity's own and
   // not a sign chosen to make the line read well.
-  const infinite = scaleRatio(cofactor.total, SqrtExt.fromGauss(new Gauss(Frac.of(-1n), Frac.ZERO)));
+  const infinite = scaleRatio(weighted, SqrtExt.fromGauss(new Gauss(Frac.of(-1n), Frac.ZERO)));
   const text = `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} − ${describeCofactorSum(infinite)})`;
 
   const certificates: Certificate[] = [
@@ -138,7 +170,7 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
         provenance: [
           {
             ok: true,
-            text: "every pole of the cofactor was asked for its winding number and is enclosed exactly once — the record's 'once N+½ > a', checked rather than assumed",
+            text: `every pole of the cofactor was asked for its winding number and is enclosed ${weight === 1 ? "once" : `with winding ${weight}`} — the record's 'once N+½ > a', checked rather than assumed`,
           },
           {
             ok: true,

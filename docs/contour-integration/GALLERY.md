@@ -588,6 +588,54 @@ went back to calling a contour clear of the integers it runs straight through �
 because the sum route reads only LEGALITY and the piece limits and still returns the right number.
 **A right answer is not evidence that the ledger is honest.**
 
+### 5.8 G2 loads — **M5.6c**, and tier G has begun
+
+`Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)` is the twenty-fourth loaded record and the first whose unknown is
+not on the contour at all. All four fixtures print their closed form labelled `=`, the ledger closes,
+and the engine's own quadrature corroborates `∮` at each: `(4π/3)·coth(3π/4)`, `π·coth(π)`,
+`(10π/23)·coth(23π/10)`, `5π·coth(π/5)`, every one within 2.2e-16 of this document's independently
+summed value.
+
+**The name is decided by an exponent, not by a pattern.** A two-pole conjugate cofactor's residues
+cross-multiply into `2c·sinh(δ)` over `−4sinh²(γ/2)`, and `δ` is `γ` or `γ/2` — the two cases being
+the two KERNELS. `cothForm.ts` never sees which kernel it came from; it compares the two exponents
+exactly and names a `coth` or a `csch`. Since `γ = 2πa`, the halving prints the answer in the
+parameter the record declared. And a hyperbolic form **multiplies** where a sine divides — `(π/a)coth(πa)`
+is how this document writes it, and `1/tanh` shown as a second division would be the same number in a
+form no reader is looking for — so it takes its own slot, with one accessor that the formatter, the
+number and the argument reader all go through.
+
+**`∮` at finite N is worth computing, and it is this document's own `closedContour` probe.**
+`2πi[Σ_{|n|≤N} f(n) − (π/a)coth(πa)]`, printed exactly as
+`2πi(56621264/14798925 − (4π/3)·coth(3π/4))` at N = 4 — and the quadrature agrees to 5.8e-15. Two
+routes sharing nothing: one integrates four sides numerically, the other evaluates `2N+1` exact
+residues over ℚ(i) and a Möbius function of `e^{2πiz₀}`.
+
+**SG-1 inverts TWO invariants, and both would have dropped the record.** DESIGN §5's `rank(M) = m`
+fails because `M` is identically zero for a tier-G contour by construction, and full rank there would
+mean the record ALSO carries its target on the contour — the mixed case §5.7 describes. And the
+corpus's radius-independence is false here for exactly the reason it is true elsewhere: this kernel
+has a pole at every integer, so more radius adds more POLES, and `∮`'s dependence on N is the
+argument's content rather than a defect in it.
+
+**Three rows were saying something false**, each found by running it rather than by reading. CATCH
+claimed "no individual residue is expressible" — §5.7's cyclotomic sentence, where here every residue
+is written down. The enclosed COUNT was short by exactly the two poles that carry the answer, because
+`findPoles` reports none of `1/(z²+a²)`'s any more than it reports the integers': it refuses the whole
+product, not just the `cot`, so a square dragged onto `±ia` had every singularity "clear of the
+contour" as surely as one dragged onto an integer did before §5.6. And the shell printed "the target
+is Re of ∮ f dz" about a record whose target is a TERM of the residue sum and whose `∮` tends to zero.
+
+Three of the record's traps are about a single term or a single sign, and each is now checked against
+a number: the residues at `±ia` are EQUAL (cot and `1/z` are both odd, so the two flips cancel) where
+the conjugate-pair reflex returns 0 for a sum of 4.26; `Σ_{n∈ℤ}` includes `n = 0` contributing `1/a²`,
+invisible in the closed form; and `Σ_{n≥1}` is `½(Σ_ℤ − f(0))`, not `½Σ_ℤ` — and the engine REFUSES to
+halve this contour by name, because `f(0) ≠ 0`.
+
+One measurement corrected a claim of this document's own reading: the half-integer family does **not**
+close at every `N`. At `a = 3/4` the square of half-width ½ leaves both cofactor poles outside, which
+is §7's own "once N+½ > a" made visible rather than assumed.
+
 ### 5.0b C1 is where `∮` stops being the answer
 
 Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc

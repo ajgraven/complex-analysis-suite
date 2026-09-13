@@ -238,6 +238,27 @@ const targetText = (t: FamilyTarget): string => {
     : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
 };
 
+/**
+ * What the auxiliary integrand's relation to the target actually IS, in one line.
+ *
+ * **NOT ALWAYS "the target is Re of ∮ f dz", and printing that unconditionally was false for G2.**
+ * A tier-G record's target is a TERM of the residue sum — the kernel has residue 1 at every integer,
+ * so `Res(K·f, n)` IS the summand — and `∮` tends to zero, taking any real part of it with it. The
+ * record fills `relation` because `auxiliary` means "the contour integrand differs from the target's",
+ * which is true; what is not true is that a real-linear functional recovers the target from `∮`. The
+ * same declaration the COVER row reads decides which sentence this is, so the two cannot disagree.
+ */
+function relationText(family: Family): string {
+  const aux = family.auxiliary;
+  if (aux === undefined) return "";
+  const inSum = family.residueSelection.targetTerms?.[0];
+  const how =
+    inSum === undefined
+      ? `the target is ${aux.relation} of ∮ f dz`
+      : `${inSum.targetId} is a TERM of the residue sum, not a functional of ∮ f dz`;
+  return `${how} — ${aux.note}`;
+}
+
 export function mountApp(root: Element): void {
   let view: View = DEFAULT_VIEW;
   let ast: Node | null = null;
@@ -759,10 +780,7 @@ export function mountApp(root: Element): void {
     const out: Statement[] = family.targets.map((t) => ({ label: "target", text: targetText(t) }));
     out.push({ label: "contour integrand", text: contourIntegrandText(family) });
     if (family.auxiliary) {
-      out.push({
-        label: "relation",
-        text: `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`,
-      });
+      out.push({ label: "relation", text: relationText(family) });
     }
     return out;
   }
@@ -1120,9 +1138,7 @@ export function mountApp(root: Element): void {
       el("p", "num", contourIntegrandText(family)),
     );
     if (family.auxiliary) {
-      recordCard.append(
-        el("p", "muted small", `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`),
-      );
+      recordCard.append(el("p", "muted small", relationText(family)));
     }
 
     // The engine's answer, then the record's claim, then whether they agree.

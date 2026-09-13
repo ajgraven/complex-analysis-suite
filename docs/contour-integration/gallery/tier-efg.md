@@ -910,6 +910,19 @@ Pass 5 as specified cannot express — see finding **SG-1**.
 
 ## 7. G2 — `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)` — the clean case
 
+> **LOADED AND SOLVING (M5.6c)** as `series-cot-kernel` — the twenty-fourth record and the first in
+> tier G. All four fixtures print their closed form labelled `=` and the ledger closes. Four
+> departures from the JSONC below, each with its reason: the template is `square` (not `rectangle`)
+> and the half-integer constraint is enforced from the GEOMETRY, which catches a dragged contour as a
+> declared field could not; `targetWeight` is a per-entry `weight` inside `targetTerms`, as DESIGN §5
+> always had it; the `n = 0` hypothesis takes `onFail: "refuse"` rather than `escalate`, because a
+> collision is G1's theorem and not a recoverable case of this one (SG-6 belongs to the record that
+> needs it); and the four sides carry `L2` with the M5.5c square bound rather than `L1`. A fifth trap
+> is added — `residues-cancel-by-symmetry` — because the reflex that a conjugate pair cancels returns
+> 0 for a sum of 4.26, and nothing else in the record says so. **Measured, against this section's own
+> reading:** the half-integer family does not close at every `N`; at `a = 3/4` the square of
+> half-width ½ leaves both cofactor poles outside, which is the "once N+½ > a" above, enforced.
+
 Taken first because it is the *non-colliding* member and therefore the honest baseline: `f(z) =
 1/(z²+a²)` has its poles at `±ia`, which are never integers for real `a ≠ 0` (the only purely
 imaginary integer is `0`), so the theorem's hypothesis holds without argument and every residue in

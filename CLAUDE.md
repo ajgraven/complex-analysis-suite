@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **523 test files / 5192 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **526 test files / 5251 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -104,6 +104,15 @@ real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
 `vite` left running in the background.
+
+**The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
+the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
+`packages/gpu`). They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
+`apps/contour-integration/vitest.browser.config.ts` reads `CAS_CHROMIUM_EXECUTABLE`, so
+`CAS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:browser` works in a container that has one
+under a different version. **Run it when a slice adds a record or touches the stage:** the contour-integration
+browser suite was red for three milestones on a hardcoded record count, and the node gate structurally
+cannot see it.
 
 **Line endings are LF everywhere**, enforced by `.gitattributes`. The index was always LF; before
 that file existed, a Windows checkout produced a CRLF working tree and two gate tests failed locally
@@ -294,9 +303,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.6c onward** — tier G's
-records, plus E3 and F2 together on ADR-0042's `knownValue`;
-M5.0–M5.5 are done, and **M5.6a–b** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.7 onward** — G1 and G3, the
+COLLISION, plus E3 and F2 together on ADR-0042's `knownValue`;
+M5.0–M5.6 are done and **24 of the 28 records are loaded**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
 a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
 residue sum. **The plan's own one-equation generalisation cannot be built**: its coefficient adds a
@@ -309,7 +318,28 @@ arithmetic. The no-op for the existing corpus is PROVEN rather than inferred —
 fixtures, ledger rows and all, dumped before and after and byte-identical over 1253 lines — and the
 sweep's one survivor that mattered was dropping the kernel from `analyse`, which left every test green
 while reintroducing the hole M5.5b closed: **a right answer is not evidence that the ledger is
-honest**. 23 of the 28 records are loaded, and the plan and its one engine decision are
+honest**. **M5.6c** then landed **G2** — `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)`, the twenty-fourth record
+and the first in tier G — with `cothForm.ts` naming the quotient (a two-pole conjugate cofactor's
+residues cross-multiply into `2c·sinh(δ)` over `−4sinh²(γ/2)`, and `δ` is `γ` or `γ/2`: *the two cases
+are the two KERNELS, not two patterns to search among*, so the recogniser never sees which kernel it
+came from), `summationTheorem.ts` making `∮` at finite N the exact `2πi[S_N − T]` that the quadrature
+then corroborates to 5.8e-15, and a hyperbolic form MULTIPLYING where a sine divides — its own slot on
+`SineForm`, with `denominatorOf` the single reader the formatter, the number and the argument accessor
+all go through, which is the E2 lesson made structural. **SG-1 inverts TWO invariants and both would
+have dropped the record**: `rank(M) = m` fails because `M` is identically zero for a tier-G contour by
+construction (full rank would mean the record also carries its target on the contour), and the
+corpus's radius-independence is false here for the reason it is true elsewhere — this kernel has a pole
+at every integer, so more radius adds more POLES and `∮`'s dependence on N is the argument's content
+rather than a defect in it. Three rows were saying something false, each found by RUNNING it: CATCH
+claimed "no individual residue is expressible" (the cyclotomic route's sentence, where here every one
+is written down); the enclosed count was short by exactly the poles that carry the answer, because
+`findPoles` refuses the whole product and not just the `cot`, so a square dragged onto `±ia` had every
+singularity "clear of the contour" as surely as one dragged onto an integer did before M5.5b; and the
+shell printed "the target is Re of ∮ f dz" about a record whose target is a TERM of the residue sum.
+The browser pass found the **browser suite itself red** on a hardcoded record count stale since M5.3d —
+the node gate deliberately does not launch a browser, so nothing could see it. Sweeps 25/25 and 32
+mutants with 29 killed, two recorded equivalents and one unreachable branch removed. 24 of the 28
+records are loaded, and the plan and its one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
 **read the plan before continuing M5**), the teaching layer (M6).
 

@@ -816,6 +816,16 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > for such a record; G2, the `coth` formatter and the summation theorem are M5.6c.
 > [`M5-plan.md`](M5-plan.md) §M5.6 has the findings.
 >
+> **M5.6c lands G2 — tier G has begun, 24 of 28 records.** `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)`, all
+> four fixtures labelled `=` with the ledger closing and the quadrature corroborating `∮` (which at
+> finite N is `2πi[S_N − T]`, this spec's own probe, agreeing to 5.8e-15). The name is decided by
+> comparing two exponents exactly rather than by matching a pattern, and a hyperbolic form MULTIPLIES
+> where a sine divides. **SG-1 inverts two invariants** — `rank(M) = m` and radius-independence — and
+> both would have dropped the record: `M` is identically zero here by construction, and more radius
+> adds more POLES rather than nothing. Three rows were saying something false, one of them in the
+> shell; and the browser pass found the browser suite itself red on a record count stale since M5.3d.
+> [`M5-plan.md`](M5-plan.md) §M5.6 and [`GALLERY.md`](GALLERY.md) §5.8 have the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.

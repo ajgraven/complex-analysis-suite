@@ -80,6 +80,44 @@ describe("the value at finite N is 2πi times the partial sum minus the infinite
   });
 });
 
+describe("each residue is weighted by its winding number", () => {
+  /** The same square traversed CLOCKWISE: every winding becomes −1. */
+  function reversed(integrand: string) {
+    const family = summationRecord(integrand);
+    const pieces = [...family.contour.pieces].reverse().map((piece) => ({
+      ...piece,
+      geom:
+        piece.geom.kind === "segment"
+          ? { ...piece.geom, from: piece.geom.to, to: piece.geom.from }
+          : piece.geom,
+    }));
+    return { ...family, contour: { ...family.contour, pieces, orientation: "cw" as const } };
+  }
+
+  it("a clockwise square negates ∮ exactly — the multiply, not a sign written down once", () => {
+    const ccw = run(COT_A, 4).theorem.exactValue;
+    const family = reversed(COT_A);
+    const cw = runFamily(family, family.golden[0], { geometry: { N: 4 } });
+    expect(cw.ok).toBe(true);
+    if (!cw.ok || ccw === undefined) return;
+    // Refused rather than answered would also be honest; it is not what happens, so pin what does.
+    const got = cw.run.theorem.exactValue;
+    expect(got).toBeDefined();
+    if (got === undefined) return;
+    expect(got.value[0]).toBeCloseTo(-ccw.value[0], 10);
+    expect(got.value[1]).toBeCloseTo(-ccw.value[1], 10);
+  });
+
+  it("and the certificate counts the poles SUMMED, not the poles listed", () => {
+    // `kernelBand` is `floor(reach) + 1`, so at N = 4 the list reaches `±5` — two integers the
+    // square does not enclose. They carry winding 0 and must not be counted as summed.
+    const { theorem } = run(COT_A, 4);
+    const claim = theorem.verdict.certificates[0]?.claim ?? "";
+    expect(claim).toMatch(/Σ over 9 integer poles/);
+    expect(claim).not.toMatch(/Σ over 11 integer poles/);
+  });
+});
+
 describe("the ledger closes, and every row says something true", () => {
   it("closes, with the target covered as a TERM of the sum", () => {
     const { ledger } = run(COT_A, 4);
@@ -131,7 +169,7 @@ describe("what the identity refuses", () => {
     const { theorem } = run("pi*cot(pi*z)/(z^2+25)", 2);
     expect(theorem.exactValue).toBeUndefined();
     expect(
-      theorem.verdict.certificates.some((c) => /winds 0 times about the cofactor's pole/.test(c.method)),
+      theorem.verdict.certificates.some((c) => /does not enclose the cofactor's pole/.test(c.method)),
     ).toBe(true);
   });
 

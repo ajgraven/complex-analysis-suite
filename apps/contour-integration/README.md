@@ -14,8 +14,7 @@ whether the whole thing closes.
 **M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
 factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2), M5.4
 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the square, the summation kernels and the
-corrected bound) and M5.6a–b (tier G's solve: `Res(K·f, z₀)` as an exact quotient, and the unknown
-INSIDE the residue sum) are done; **23 of the 28 records are loaded**. E3 and F2 are deferred together,
+corrected bound) and M5.6 (tier G's solve, and G2) are done; **24 of the 28 records are loaded**. E3 and F2 are deferred together,
 needing the same import machinery. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
@@ -506,6 +505,35 @@ needing the same import machinery. See the milestone table in
   dropped the kernel from `analyse`: every test stayed green while the ledger went back to calling a
   contour clear of the integers it runs through — the hole M5.5b closed — because the sum route reads
   only LEGALITY and the piece limits and still returns the right number. Now asserted directly.
+
+**M5.6c lands G2, and tier G has begun.** `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)` is the
+twenty-fourth loaded record and the first whose unknown is not on the contour at all.
+
+- **The name is decided by an EXPONENT, not by a pattern.** A two-pole conjugate cofactor's residues
+  cross-multiply into `2c·sinh(δ)` over `−4sinh²(γ/2)`, and `δ` is `γ` or `γ/2` — the two cases being
+  the two KERNELS. The recogniser never sees which kernel it came from. `γ = 2πa`, so the halving
+  prints the answer in the parameter the record declared: `(4π/3)·coth(3π/4)`.
+- **A hyperbolic form MULTIPLIES where a sine divides**, so it takes its own slot on `SineForm` and
+  `denominatorOf` becomes the one reader the formatter, the number and the argument accessor all go
+  through — the E2 lesson (a right value under a wrong form) made structural rather than avoided.
+- **`∮` at finite N is `2πi[S_N − T]`, and the quadrature is asked about it.** Printed exactly as
+  `2πi(56621264/14798925 − (4π/3)·coth(3π/4))`, agreeing to 5.8e-15 with a route that shares nothing
+  with it. Tier G gets the corroboration every other tier has.
+- **SG-1 inverts TWO invariants, and both would have dropped the record.** `rank(M) = m` fails
+  because `M` is identically zero for such a contour by construction — full rank would mean the
+  record ALSO carries its target on the contour. And radius-independence is false here for the reason
+  it is true elsewhere: this kernel has a pole at every integer, so more radius adds more POLES, and
+  `∮`'s dependence on N is the argument's content. Asserting equality would demand that a partial sum
+  not converge.
+- **Three rows were saying something false.** CATCH claimed "no individual residue is expressible" —
+  the cyclotomic route's sentence, where here every residue is written down. The enclosed count was
+  short by exactly the poles that carry the answer, because `findPoles` refuses the whole product and
+  not just the `cot` — so a square dragged onto `±ia` had every singularity "clear of the contour" as
+  surely as one dragged onto an integer did before M5.5b. And the shell printed "the target is Re of
+  ∮ f dz" about a record whose target is a TERM of the residue sum and whose `∮` tends to zero.
+- **The browser pass found the browser suite red**, on a `toHaveLength(20)` wrong since M5.3d — the
+  node gate deliberately does not launch a browser, so nothing could see it. Derived from `FAMILIES`
+  now.
 
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:
