@@ -553,7 +553,8 @@ Compiled-evaluator spike (`Function` body vs register VM) benchmarked before com
 **Gate:** type a rational function, see its phase portrait and its poles. Lint + typecheck + test green.
 
 ### M1 — The contour object and the accumulator · *M*
-Path model (segments + arcs + parameter bindings); pen-tool editor; the piece list. Periodic
+Path model (segments + arcs + parameter bindings); pen-tool editor *(deferred at the time, and
+**now M7's** — see [`M7-plan.md`](M7-plan.md) §M7.2)*; the piece list. Periodic
 trapezoid + Clenshaw–Curtis per piece with the `4.4 points inside the pole distance` node
 controller and a live error estimator. Accumulator panel: head-to-tail `Σ f(zₖ)Δzₖ` in its own
 plane, plus the three wrong-sum contrasts. Exact-sign winding number (resolve the arc question).
@@ -575,10 +576,11 @@ Tier-1 exact-ℚ certified ML bounds (§3.2) + Jordan's constant. The Family sch
 validator. The Ledger UI. Derivation generation from family + ledger. Templates: circle,
 semicircle, indented semicircle. Half-plane residue selection with the §3.3 ladder, including
 `RootSum` output with a visible predicate. Schur–Cohn + Sturm ported from QD into `@cas/exact`.
-**Pólya work/flux toggle** (round 3): draw the conjugate field `f̄` on the Stage and read `∮f dz`
-as (work along) + i(flux across); Cauchy's theorem appears as source-free and irrotational. It
-belongs here rather than in M1 because it explains *why* the vanishing arcs vanish, which is the
-Ledger's subject.
+~~**Pólya work/flux toggle** (round 3): draw the conjugate field `f̄` on the Stage and read `∮f dz`
+as (work along) + i(flux across); Cauchy's theorem appears as source-free and irrotational.~~
+**DROPPED** — it was scoped here, never built, and the gate note below never mentioned it; the M6
+survey found the silence. Dropped deliberately in [`M6-plan.md`](M6-plan.md) §2 decision 3 and
+recorded under *Deferred* below.
 **Gate:** gallery tiers A + B + C (13 integrals) each produce a closed form labelled `=` with every
 arc certified; **the LHP semicircle for `∫cos x/(1+x²)` shows its bound diverging** and names the
 failing constraint; p.v. is a distinct result type from a convergent integral.
@@ -857,19 +859,32 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > answer in tiers E–G carries a symbolic closed form, and the decimals beside them are `≈` as every
 > decimal in this app is.
 
-### M6 — Presentation, teaching layer, publish · *M*
+### M6 — Presentation and publish · *M*
 Figure & share export (QD's `_pal` indirection, `renderToCanvas`, sync `ClipboardItem`);
 `#vs=` codec with diff-from-defaults and full re-validation on restore; a11y pass; launcher card
-live; the `deploy-pages.yml` line. **The teaching layer, scoped (round 3): contrasting triads and
-fading only.** Triads are gallery *organisation*, not lessons — `∫1/(1+x²)`, `∫cos x/(1+x²)`,
-`∫sin x/x` side by side: near-identical integrands, three different ledger outcomes (plain ML;
-Jordan; indentation + p.v.). The faded contour-choice drill runs in four stages — contour given +
-ledger filled → you fill the ledger → you pick from a menu → you draw freely — with fading tied to
-progress (expertise reversal). **No prose lessons, no prediction or self-explanation prompts**;
-everything else stays PhET-style implicit scaffolding in affordances, defaults and constraints.
+live; the `deploy-pages.yml` line.
 **Gate:** published, permalinks round-trip, keyboard and screen-reader pass.
 
-> **Staged in [`M6-plan.md`](M6-plan.md).** Read it before starting. Four findings shape it: the
+### M7 — The teaching layer, and the pen tool · *M–L*
+**The teaching layer, scoped (round 3): contrasting triads and fading only.** Triads are gallery
+*organisation*, not lessons — `∫1/(1+x²)`, `∫cos x/(1+x²)`, `∫sin x/x` side by side: near-identical
+integrands, different ledger outcomes (plain ML; Jordan; indentation + p.v.). The faded
+contour-choice drill runs in four stages — contour given + ledger filled → you fill the ledger → you
+pick from a menu → you draw freely — with fading tied to progress (expertise reversal). **No prose
+lessons, no prediction or self-explanation prompts**; everything else stays PhET-style implicit
+scaffolding in affordances, defaults and constraints. Plus the **pen tool**, inherited from M1.
+**Gate:** every declared contrast's difference set is verified against the engine; **every drill
+stage is addressable by permalink**, so it travels under M6's round-trip-by-verdict test; a
+hand-drawn contour closes and its ledger is indistinguishable in kind from a template's.
+
+> **Staged in [`M6-plan.md`](M6-plan.md) and [`M7-plan.md`](M7-plan.md).** Read them before starting.
+>
+> **M6 WAS SPLIT**, on the third finding below: PLAN's M6 carried the teaching layer in its scope
+> while its gate never mentioned it, so that half had no completion criterion at all. M6 is now
+> exactly its own gate; the teaching layer and the pen tool are M7, with a gate of their own whose
+> load-bearing clause is that **every drill stage is addressable by permalink** — the only
+> formulation that makes a teaching surface falsifiable in this app's idiom.
+> Four findings shape it: the
 > permalink is a CORRECTNESS surface here rather than a convenience (a dropped `branch.window`
 > restores the same picture computing a different integral — M5.1's shadowed-`branch` bug, which
 > field-by-field equality would pass), so the round trip is verified by VERDICT; `src/shell/app.ts`
@@ -882,6 +897,13 @@ everything else stays PhET-style implicit scaffolding in affordances, defaults a
 > M3 gate note does not mention).
 
 ### Deferred (explicitly out of v1)
+**Pólya work/flux toggle** — scoped into M3 (round 3), never built, dropped on the record in
+[`M6-plan.md`](M6-plan.md) §2: its stated job (*"it explains why the vanishing arcs vanish"*) is
+already carried, and carried better, by the arc's own KILL row, which shows the certified bound, its
+exponent and its limit as a **number**; it is a second picture of `f` where research 02 §8's own
+anti-pattern list warns the background picture is a seductive detail; and it would be this app's
+first surface with no falsifiable claim attached. Research 02 §8 P1 item 14 still stands — a future
+milestone that wants it should re-argue it against those three points. ·
 Argument principle / Rouché mode (research 03 §10) · Bromwich and inverse Mellin (§12) · algebraic
 functions `wⁿ = R(z)` · Arb/FLINT WASM tier 3, behind a "Prove it" button for non-rational `f` ·
 cross-app `@cas/interchange` hand-off (needs a new payload kind + `VERSION` bump — defer until a
