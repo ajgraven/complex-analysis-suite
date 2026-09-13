@@ -172,6 +172,11 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       // F1's R is a sector RADIUS again, as tier A's was — the rotational twin of the strip above,
       // and the first since D2 whose limit parameter is neither a half-width nor a shrinking ε.
       "wedge-rational-power",
+      // F2's is the last entry in the list and the sharpest case of the property: its `∮` is 0 at
+      // every radius (the integrand is entire) while the target PIECE never settles at all, because
+      // the integral converges only conditionally. Independence of R is a statement about the
+      // residue sum, not about the contour's pieces, and this record is where the two part company.
+      "wedge-fresnel",
     ]);
   });
 
@@ -376,6 +381,11 @@ describe("the closed form each record establishes", () => {
     // contributed. ADR-0042 — the form is `=` and the import travels in the provenance, so a reader
     // can see precisely which step came from outside.
     "gaussian-shift-zero-residue": "e^(−1/4)·√π",
+    // F2, the twenty-eighth record — the SAME atom as E3, reached by a different import. `Γ(3/2) =
+    // √π/2` and `e^{iπ/4}` folds to `√2/2 + i√2/2`, so `∫₀^∞cos(x²)dx` is `√2/4·√π`, which is
+    // `√(π/8)`. The engine's normal form keeps the coefficient it derived beside the constant it
+    // took on faith, which is the whole point of ADR-0042's split.
+    "wedge-fresnel": "√2/4·√π",
     // F1. The gallery writes this fixture's value `2π/(3√3)`, which is the SAME NUMBER — the engine's
     // normal form is the family's own closed form `(π/n)/sin(π/n)`, uniform in `n`, and the document
     // simply rendered `1/sin(π/3)` as `2/√3`. Nothing simplifies a sine into a radical here, and the

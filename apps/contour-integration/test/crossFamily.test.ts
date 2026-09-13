@@ -17,12 +17,13 @@
 // {cot, csc} × {collision, none} is one fact about one series.
 import { describe, expect, it } from "vitest";
 import { Frac } from "@cas/exact";
-import { parse } from "@cas/expr";
+import { C, parse } from "@cas/expr";
 import { primaryGolden, solveFamily } from "../src/families/runFamily.js";
 import { asSummationKernel } from "../src/kernel/summationKernel.js";
 import { kernelSeries, mergedResidue } from "../src/kernel/mergedResidue.js";
 import { formatRatPi } from "../src/kernel/ratPi.js";
 import { f1WedgeRationalPower as F1 } from "../src/families/records/f1-wedge-rational-power.js";
+import { f2WedgeFresnel as F2 } from "../src/families/records/f2-wedge-fresnel.js";
 import { g1SquareCotCollision as G1 } from "../src/families/records/g1-square-cot-collision.js";
 import { g2SquareCotKernel as G2 } from "../src/families/records/g2-square-cot-kernel.js";
 import { g3SquareCscCollision as G3 } from "../src/families/records/g3-square-csc-collision.js";
@@ -195,6 +196,46 @@ describe("the confluence a → 0, as a SERIES rather than an evaluation", () => 
       // …and the numeric limit agrees with it, which is the check §10.3 actually ran — kept as
       // corroboration of the series rather than as the argument.
       expect(row.none(1e-4) - 1e8).toBeCloseTo(leading, 6);
+    }
+  });
+});
+
+describe("F2.cos-equals-sin-only-at-n-2 — the half that needed the record to exist", () => {
+  // M5.8a ran every other §10.3 invariant and left this one's `differ` clause alone, because F2 was
+  // deferred with E3 on ADR-0042's `knownValue`. Both halves run now, and the point of the pair is
+  // that the ENGINE decides which case it is in rather than the reader: the record determines both
+  // `∫cos(xⁿ)` and `∫sin(xⁿ)` from one complex identity, so `agree` and `differ` are the same
+  // comparison asked at two values of `n`.
+  const components = (n: number): { cos: number; sin: number } => {
+    const r = solveFamily(F2, { ...primaryGolden(F2), params: { n } });
+    if (!r.ok || r.route !== "imported") throw new Error(`F2 at n = ${n}: ${r.ok ? r.route : r.reason}`);
+    const at = (id: string): number => r.imported.solved.find((x) => x.targetId === id)?.value ?? Number.NaN;
+    return { cos: at("C"), sin: at("S") };
+  };
+
+  it("agrees at n = 2 and DIFFERS at every other n", () => {
+    const two = components(2);
+    expect(two.cos).toBeCloseTo(two.sin, 14);
+    for (const n of [3, 4, 5]) {
+      const c = components(n);
+      // `cos(π/(2n)) = sin(π/(2n))` iff `n = 2`, so the gap is `Γ(1+1/n)·(cos − sin)` and grows with
+      // `n` as the wedge narrows. Nothing here is a tolerance: the two are far apart.
+      expect(Math.abs(c.cos - c.sin), `n = ${n}`).toBeGreaterThan(0.3);
+      expect(c.cos, `n = ${n}`).toBeGreaterThan(c.sin);
+    }
+  });
+
+  it("and the equality at n = 2 is the WEDGE ANGLE, not the integrand", () => {
+    // The same number two ways: `√(π/8)` is F2's value at `n = 2`, and it is also `Γ(3/2)·cos(π/4)`
+    // — the modulus the wedge rotates, times the angle it rotates it through. Reaching it from the
+    // record and from the two factors separately is what makes the coincidence visible as one.
+    const two = components(2);
+    expect(two.cos).toBeCloseTo(Math.sqrt(Math.PI / 8), 13);
+    expect(two.cos).toBeCloseTo(C.gamma([1.5, 0])[0] * Math.cos(Math.PI / 4), 13);
+    for (const n of [2, 3, 4, 5]) {
+      const c = components(n);
+      // `|T| = Γ(1+1/n)` at every `n`: the rotation does not change the modulus.
+      expect(Math.hypot(c.cos, c.sin), `n = ${n}`).toBeCloseTo(C.gamma([1 + 1 / n, 0])[0], 12);
     }
   });
 });

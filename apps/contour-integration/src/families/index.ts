@@ -42,6 +42,7 @@ import { e1StripExponentialQuasiperiod } from "./records/e1-strip-exponential-qu
 import { e2StripSechFourier } from "./records/e2-strip-sech-fourier.js";
 import { e3GaussianShiftZeroResidue } from "./records/e3-gaussian-shift-zero-residue.js";
 import { f1WedgeRationalPower } from "./records/f1-wedge-rational-power.js";
+import { f2WedgeFresnel } from "./records/f2-wedge-fresnel.js";
 import { g2SquareCotKernel } from "./records/g2-square-cot-kernel.js";
 import { g1SquareCotCollision } from "./records/g1-square-cot-collision.js";
 import { g3SquareCscCollision } from "./records/g3-square-csc-collision.js";
@@ -107,6 +108,7 @@ export const FAMILIES: readonly Family[] = [
   e2StripSechFourier,
   e3GaussianShiftZeroResidue,
   f1WedgeRationalPower,
+  f2WedgeFresnel,
   g2SquareCotKernel,
   g1SquareCotCollision,
   g3SquareCscCollision,
