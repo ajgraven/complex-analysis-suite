@@ -753,6 +753,16 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > `e^{−2πiJ}`. All three are asserted, and the correction is recorded in
 > [`M5-plan.md`](M5-plan.md) §M5.1 with the measurement behind it.
 >
+> **M5.2 is done: the unification and the first of the two guardrail-critical corrections.** L3 and
+> L6 now discharge through one predicate (`kernel/bounds/linearMinorant.ts`), and what it decides is
+> the SIDE CONDITION — decidable in exact ℚ, and precisely the half research 03 got wrong. The
+> corrected L6 is `kernel/bounds/wedgeArc.ts`, routed from KILL, where an `e^{±zⁿ}` arc previously
+> reached no lemma at all. The measured divergence is recomputed in the suite, so the wrong statement
+> cannot be re-derived from the research; the two faces' asymmetry past `π/2` — the sin face folds,
+> the cos face changes sign — is what makes the mistake unrepresentable rather than merely corrected.
+> **The square-contour bound (D-2) is still a document-only correction** and lands with the summation
+> kernel in M5.5. [`GALLERY.md`](GALLERY.md) §5.3 has the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.

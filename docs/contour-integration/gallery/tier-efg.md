@@ -1411,6 +1411,15 @@ because a Family record's `sideCondition` and `discharge` must be machine-checka
   Fresnel wedge is `π/4 = π/(2n)` at `n = 2`, consistent with the corrected form and with §7's
   generalised `∫₀^∞cos(xⁿ)dx = Γ(1+1/n)cos(π/(2n))`, whose wedge is `π/(2n)`. Both corrected forms
   are checked at `n = 2,3,4` and `R = 2,4,8,16` in F2's `golden`.
+  **Implemented in M5.2**, and the correction is structural rather than restated: the arc's range and
+  the inequality's range are ONE question, asked in `kernel/bounds/linearMinorant.ts`, and the two
+  faces part company past `π/2` (the sin face folds and costs a factor of two; the cos face changes
+  sign and costs everything). The divergence above is recomputed in `test/wedgeArc.test.ts` at
+  `n = 2,3,4`, and both corrected forms are checked against the true arc integral at `n = 2,3,4` and
+  `R = 2,4,8,16`. Note that research 03 §0.3 (as corrected) quotes the *oscillatory* range as
+  `[0, π/(2n)]` where this file quotes `[0, π/n]`: both are right — the first is the wedge Fresnel
+  uses, the second the largest range on which the form still vanishes — and the engine quotes
+  neither, reading the arc's range off the geometry.
 - **D-2 (substantive) — the §8 square-contour bound drops a `π`, and the result is not an upper
   bound.** §8 writes `(M/N^k)·coth(π/2)·4(2N+1)`. The kernel is `π cot(πz)`, not `cot(πz)`, so the
   constant must be `π coth(π/2)`; the perimeter `4(2N+1) = 8(N+½)` is right, and `|z| ≥ N+½` on `Γ_N`

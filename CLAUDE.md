@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **509 test files / 4901 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **511 test files / 4946 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -294,9 +294,11 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (M5 — plan and its one engine
-decision taken: [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
-**read the plan before starting M5**), the teaching layer (M6).
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.3 onward** — tier E's
+quasi-periodic strip, tier F's wedge template, tier G's summation kernel and the unknown inside `S`;
+M5.0–M5.2 are done, and the plan and its one engine decision are
+[`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
+**read the plan before continuing M5**), the teaching layer (M6).
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
@@ -610,6 +612,43 @@ real (nothing asserted `agrees` could be `false`; neither the accumulation panel
 mis-declared side drops the **verdict** from `=` to `⚠` on all seven records, and the accumulation
 trail tracks the integral 4.7×–441× better with the sides than without. Sweeps: 16/17 (one equivalent
 mutant).
+
+**M5.2 builds no record — it builds the inequality two of the eight lemmas SHARE, and corrects the
+one the research states wrongly.** `sin ψ ≥ 2ψ/π` (Jordan, L3) and `cos φ ≥ 1 − 2φ/π` (the wedge
+lemma, L6) are one statement under `φ = π/2 − ψ` (measured: the two slacks agree to 2.2e-16 on 5001
+points), and `kernel/bounds/linearMinorant.ts` is the single predicate both discharge through —
+`jordanArcBound` included, a provable no-op since the semicircle's range returns a constant of 1 and
+the arithmetic is identical in ℚ. **What the predicate decides is the SIDE CONDITION, not the
+inequality**: the inequality is a theorem about the concavity of `sin` and no arithmetic could
+establish it, while "does the range lie inside `[0, π/2]`?" is decidable in exact ℚ — and that is
+precisely the half research 03 got wrong. **D-1 is the two faces parting company past `π/2`:** `sin`
+stays non-negative to `π` and folds by `sin ψ = sin(π − ψ)`, so exceeding the range costs a factor of
+two; `cos` changes SIGN, so it costs everything, and the majorant the research states for `e^{−zⁿ}`
+on `[0, π/n]` is 2.7e15 at `n = 2, R = 6`, 1.1e93 at `n = 3` and float64 overflow at `n = 4` — all
+three recomputed in the suite, so the wrong statement is refuted by the tests and not only by a
+paragraph. The research applied the sin face's tolerance to the cos face's integrand, and asking the
+range ONCE makes that unrepresentable rather than merely corrected; in the app it is two ledger rows
+on one `π/2` wedge, `e^{iz²}` killed and `e^{−z²}` refused. `kernel/bounds/wedgeArc.ts` is the bound
+— `|∫| ≤ |λ|·k·π/(n·c·R^{n−1})` for `λ·e^{w zⁿ}`, exact in ℚ with π entering only through the
+certified upper bracket — routed from the ledger's KILL pass, where such an arc previously reached
+**no lemma at all** (Jordan's reader wants a linear exponent; the exact rational reader refuses a
+`call`). **Jordan turns out to be this bound at `n = 1`** — both give `π/|a|` on a semicircle,
+asserted in ℚ — and the two stay separate functions, because Jordan carries a rational cofactor's
+`max|g|` and the wedge carries none: ADR-0007's merge rule read in the direction it usually is not.
+Three things the slice forced: the two documents quote DIFFERENT oscillatory ranges (research 03's
+`[0, π/(2n)]` is the wedge Fresnel uses, `tier-efg.md`'s `[0, π/n]` the largest on which the form
+still vanishes — both right, and the engine quotes neither, reading the arc's range off the
+geometry); the arc-extent reader had no way to MEASURE a `π/6` or `π/8` sweep, one step before the
+missing lemma, and now refuses a degenerate extent because `0·π·R·max|f|` is a `≤ 0` that is false;
+and a uniform quadrature cannot check this bound at all — `e^{−κh}` is a spike of width `1/κ` with
+`κ` up to 65536, so a 40001-point rule measured 2.1e-4 where the true majorant is 1.2e-4 and called a
+**correct** bound violated, while textbook adaptive Simpson never terminated (a mesh graded toward
+both endpoints does it in 20001 points and needs no case analysis about which end the spike is at).
+Sweep 20/21, one equivalent; both real kills were about geometry rather than the inequality — reading
+a sector's start angle as `0` certifies `π/(4R)` for the clockwise arc `[π/2 → π/4]` where the
+integrand reaches `e^{+R²}`, and the first test written for it refused under the mutant anyway,
+pinning the outcome without pinning the reason. D-2 (the square-contour bound) stays a document-only
+correction until M5.5, said out loud rather than left to be noticed.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

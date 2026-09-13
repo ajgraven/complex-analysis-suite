@@ -121,8 +121,22 @@ again the right one, with $|e^{iz^n}|=e^{-R^n\sin n\theta}$ and **Jordan's** ine
 $\sin\psi\ge2\psi/\pi$ on $[0,\pi/2]$ giving the same $\pi/(2nR^{\,n-1})$ bound. For $n=2$ this is
 the classical $\pi/4$ wedge of the Fresnel integrals.
 
-*Engine note.* $\cos\phi\ge1-2\phi/\pi$ and $\sin\psi\ge2\psi/\pi$ are **the same inequality** under
-$\phi=\pi/2-\psi$. L3 and L6 should therefore share one dischargeable predicate rather than two.
+*Its maximal range, which is larger.* $\sin$ stays non-negative all the way to $\pi$ and is symmetric
+about $\pi/2$, so $\int_0^{\Psi}e^{-\kappa\sin\psi}d\psi\le\int_0^{\pi}=2\int_0^{\pi/2}\le\pi/\kappa$:
+the arc $\theta\in[0,\pi/n]$ is admissible too, at twice the constant,
+$\pi/(nR^{\,n-1})$. That is the range quoted in [`gallery/tier-efg.md`](../gallery/tier-efg.md)
+§10.1, and the two statements agree — $\pi/(2n)$ is the wedge the Fresnel derivation *uses*,
+$\pi/n$ is the largest one on which the form still vanishes. **The Gaussian form has no such
+latitude**, and that asymmetry is the whole of D-1: $\cos$ changes sign at $\pi/2$, so past it the
+modulus grows rather than merely being bounded worse.
+
+*Engine note — implemented in M5.2.* $\cos\phi\ge1-2\phi/\pi$ and $\sin\psi\ge2\psi/\pi$ are **the
+same inequality** under $\phi=\pi/2-\psi$; L3 and L6 share one dischargeable predicate rather than
+two (`kernel/bounds/linearMinorant.ts`, with `jordanArcBound` and `wedgeArcBound` both discharging
+through it). The engine quotes **no** range: it reads the arc's own range off the geometry and asks
+the predicate, so the difference between $\pi/(2n)$ and $\pi/n$ appears as the constant rather than
+as a choice anyone has to remember. What the predicate decides is the *side condition* — is the
+range inside $[0,\pi/2]$? — which is the decidable half and the half this document had wrong.
 
 **(L7) Periodic-side cancellation (not a vanishing lemma).** If $f(z+iP)=\lambda f(z)$, the top side
 of a rectangle does not vanish — it *reproduces* the bottom side with factor $-\lambda$, giving
@@ -656,6 +670,14 @@ Three agents independently re-derived and re-verified all 28 gallery entries whi
 (agreement 0–2.6e-14). Three **lemma statements** did not, and are corrected in place above. All
 three were caught by numerical evaluation, not by reading — which is the argument for the golden
 corpus in one line.
+
+**C1 is now carried by the engine, with its measurement (M5.2).** A correction that lives only in a
+document is one someone re-derives the old way, so the divergence is computed in the suite
+(`test/wedgeArc.test.ts` reproduces 2.7e15, 1.1e93 and the overflow) and the range test is a
+predicate rather than a quoted number (`kernel/bounds/linearMinorant.ts`). The bound itself is
+`kernel/bounds/wedgeArc.ts`, reachable from the ledger's KILL pass for any `λ·e^{w zⁿ}` arc measured
+from the positive real axis. C2's square-contour bound is still a document-only correction; it lands
+with the summation kernel in M5.5.
 
 | # | what was wrong | where | status |
 |---|---|---|---|

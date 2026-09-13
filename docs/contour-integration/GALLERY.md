@@ -125,7 +125,10 @@ implementation decision.
   is silently wrong on every Fourier twin.**
 - **L3 and L6 rest on the same inequality** under `φ = π/2 − ψ`. Two of the eight catalogued lemmas
   should share one dischargeable predicate — and the derivation panel should say so, since it is a
-  rare place where two apparently different contour tricks are visibly the same trick.
+  rare place where two apparently different contour tricks are visibly the same trick. **Done in
+  M5.2** (`kernel/bounds/linearMinorant.ts`; the certificates name the identity, so the derivation
+  panel shows it without a special case). What the sharing bought was not code reuse: it is that the
+  *side condition* is asked in one place, and that is the half of the lemma D-1 got wrong. See §5.3.
 - **The dogbone's winding numbers are 0-or-1, not otherwise.** `n(γ, pole) = 0` for *every* pole
   while `∮ ≠ 0` — homology is not pole-counting. (The genuine `n ∉ {0,1}` case is Pochhammer, which
   is v2.) This corrects an assumption in the original brief.
@@ -284,6 +287,59 @@ accumulation trail tracks the integral 4.7× to 441× better with the sides than
 unsound sweep cost a re-run and bought two tests. The survivor that remains is genuinely equivalent:
 `sideResolves`' first clause is redundant *at* `1e-30`, and is kept because it is the question being
 asked rather than an optimisation.
+
+### 5.3 Tier F's prerequisite — **M5.2**, and what one predicate is actually for
+
+M5.2 built no record. It built the inequality two of the eight lemmas share, and corrected the one
+the research states wrongly (**D-1**) — the maths F1 and F2 stand on.
+
+**The sharing is not code reuse.** `sin ψ ≥ 2ψ/π` and `cos φ ≥ 1 − 2φ/π` are one statement under
+`φ = π/2 − ψ` — measured on 5001 points, the two slacks agree to 2.2e-16 — but neither is something
+arithmetic could establish: they are theorems about the concavity of `sin`. What the predicate
+decides is the **side condition**, in exact ℚ: does the range asked about lie inside `[0, π/2]`?
+That is the decidable half, and it is precisely the half research 03 got wrong. A predicate that
+merely named the inequality would have shared a sentence; one that decides the range makes the
+mistake unrepresentable.
+
+**And the two faces part company past `π/2`, which IS D-1.** `sin` stays non-negative to `π` and is
+symmetric about `π/2`, so exceeding the range folds — `∫₀^Ψ ≤ ∫₀^π = 2∫₀^{π/2}` — and costs a factor
+of two. `cos` changes SIGN, so `e^{−κcos ψ}` stops being damped and starts growing; at `ψ = π` it is
+`e^{+κ}`. The research applied the sin face's tolerance to the cos face's integrand. Measured, the
+majorant it states for `e^{−zⁿ}` on `[0, π/n]` is **2.7e15** at `n = 2, R = 6`, **1.1e93** at
+`n = 3`, and **overflows float64** at `n = 4` — all three are computed in `test/wedgeArc.test.ts`, so
+the wrong statement is refuted by the suite and not only by a paragraph. In the app the two sit side
+by side as two ledger rows: on the `π/2` wedge, `e^{iz²}` is killed and `e^{−z²}` is refused.
+
+**Two ranges are quoted for the oscillatory form, and both are right.** Research 03 §0.3 (as
+corrected) gives `[0, π/(2n)]` with `π/(2nR^{n−1})`; §10.1 of [`tier-efg.md`](gallery/tier-efg.md)
+gives `[0, π/n]` with Jordan. The first is the wedge the Fresnel derivation actually uses; the second
+is the largest range on which the form still vanishes, at twice the constant. The engine quotes
+neither: it takes the arc's range from the geometry and asks the predicate, so `π/4` and `π/2` at
+`n = 2` both get the right answer and the difference shows up as the constant rather than as a
+disagreement between two documents.
+
+**Jordan turns out to be this bound at `n = 1`.** `π/(n·c·R^{n−1})` at `n = 1, c = a` is `π/|a|` —
+Jordan's own constant, asserted equal in ℚ. The two bound functions are still separate, because
+Jordan carries a rational cofactor's `max|g|` and the wedge carries none, and merging them would
+make one function's asymptotics come from two unrelated places (ADR-0007's rule, read the way it is
+meant to be read in both directions). One predicate, two lemmas.
+
+**What the sweep found.** 20 of 21 mutants killed; the survivor is equivalent (a zero rate cannot
+reach the clause that refuses it, because the face reader has already declined `w = 0`). Two kills
+were real and both were about geometry rather than about the inequality: reading a sector's START
+angle as `0` certifies `π/(4R)` for the CLOCKWISE arc `[π/2 → π/4]`, where `cos 2θ ≤ 0` and the
+integrand reaches `e^{+R²}` — a `≤` that is false, not merely loose — and a degenerate extent makes
+the plain ML bound `0·π·R·max|f| = 0`, a `≤ 0` on an arc whose integral is small and non-zero. The
+first survived a test that refused under the mutant anyway, by the range check firing first: the
+test pinned the outcome without pinning the reason.
+
+**And one finding on the test side.** `e^{−κ h(ψ)}` is a spike of width `~1/κ`, and `κ = c·Rⁿ`
+reaches 65536 at `n = 4, R = 16`. A uniform 40001-point Simpson rule has a step of 2e-5 against a
+spike 1.5e-5 wide: it measured the majorant at 2.1e-4 where the true value is 1.2e-4, and reported a
+**correct** bound as violated. Textbook adaptive Simpson halves its tolerance per level and never
+terminated on it. The rule that works grades its mesh toward both endpoints (`ψ ∝ u²(3 − 2u)`, whose
+Jacobian vanishes there), which needs no case analysis about which end the spike is at — and the two
+faces put it at different ends.
 
 ### 5.0b C1 is where `∮` stops being the answer
 

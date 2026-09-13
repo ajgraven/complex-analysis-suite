@@ -10,7 +10,10 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 4, and published.** M1–M4 are complete and 20 of the 28 gallery records are loaded. See the milestone table in
+**Through Milestone 4, and published.** M1–M4 are complete and 20 of the 28 gallery records are loaded.
+**M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
+factor) and M5.2 (one predicate for L3 and L6, and the corrected L6) are done; M5.3 opens tier E. See
+the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -20,14 +23,17 @@ whether the whole thing closes.
   rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
 - The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
   a wrong contour fails diagnostically.
-- The **Family loader** and its four invariants run the gallery records as data. Thirteen of the 28
-  load and are executed against the engine in the test suite — **every entry in tiers A, B and C**:
+- The **Family loader** and its four invariants run the gallery records as data. Twenty of the 28
+  load and are executed against the engine in the test suite — **every entry in tiers A, B, C and
+  D**. The thirteen of tiers A–C are:
   A1–A7 (circle and semicircle, through the `z = e^{iθ}` substitution and the Cauchy integral
   formula), B1–B3 (Jordan, through the exponential basis `Σ cₖ e^{βₖ}`), and C1–C3 (the indentation
   and L4's `iα·Res`; removability detected, with L5's non-vanishing arc; and a real pole and a
   complex pole in one ledger). Each solves to a symbolic closed form — `π/2`, `π√2/2`, `π/e`,
-  `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tiers D–G need
-  branch cuts and the kernel families of M4/M5.
+  `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tier D's seven
+  (branch cuts) landed in M4 and carry their forms rather than reducing them. Tiers E–G need the
+  kernel families of M5 — the quasi-periodic strip, the wedge, and the `πcot`/`πcsc` summation
+  kernel — of which M5.2 has built the wedge's arc bound.
 
 **M4.1 (branch cuts) has landed**, engine and editor:
 
@@ -349,6 +355,35 @@ whether the whole thing closes.
   being different objects, and the pole card says it lists the poles of `R(z)` — a branch point
   carries no residue of its own.
 
+**M5.2 gives L3 and L6 one predicate, and corrects L6 (finding D-1):**
+
+- **The two are the same inequality.** `sin ψ ≥ 2ψ/π` (Jordan) and `cos φ ≥ 1 − 2φ/π` (the wedge
+  lemma) are one statement under `φ = π/2 − ψ` — measured on 5001 points, the slacks agree to
+  2.2e-16. Two of the eight catalogued lemmas now discharge through one predicate, which the
+  derivation panel shows without a special case.
+- **What that predicate decides is the SIDE CONDITION, not the inequality.** The inequality is a
+  theorem about the concavity of `sin`; no arithmetic here could establish it. Whether the range
+  asked about lies inside `[0, π/2]` is decidable in exact ℚ — and that is exactly the half research
+  03 got wrong, which is why sharing it is worth more than sharing a sentence.
+- **D-1, and it is the two faces parting company.** The research stated L6 for `e^{−zⁿ}` on
+  `θ ∈ [0, π/n]` while justifying it with an inequality valid on `[0, π/2]`. Past `nθ = π/2` the
+  `cos` face changes SIGN and `e^{−Rⁿcos nθ}` grows — at `θ = π/n` it is `e^{+Rⁿ}` — while the `sin`
+  face merely folds by `sin ψ = sin(π − ψ)` and costs a factor of two. The stated majorant diverges:
+  **2.7e15** at `n = 2, R = 6`, **1.1e93** at `n = 3`, float64 overflow at `n = 4`, all three
+  recomputed in the suite. In the app they are two rows on one wedge: at `π/2`, `e^{iz²}` is killed
+  and `e^{−z²}` is refused.
+- **The bound is reachable, not a module nothing calls.** `|∫| ≤ |λ|·k·π/(n·c·R^{n−1})` for
+  `λ·e^{w zⁿ}`, exact in ℚ with π entering only through the certified upper bracket, routed from the
+  ledger's KILL pass — where such an arc previously reached **no lemma at all** (Jordan's reader
+  wants a linear exponent, and the exact rational reader refuses a `call`). The wedge template is
+  M5.4; until then the routing is exercised through hand-built sectors.
+- **Jordan is this bound at `n = 1`:** `π/(n·c·R^{n−1})` is `π/|a|` there, and the two agree in ℚ.
+  They stay separate functions — Jordan carries a rational cofactor's `max|g|` and the wedge carries
+  none — because merging them would make one function's asymptotics come from two unrelated places.
+- The arc-extent reader gains the wedge angles `π/n` and `π/(2n)` up to `n = 6`, which it could not
+  previously measure, and refuses a degenerate extent: an ML bound of `0·π·R·max|f|` is a `≤ 0` on
+  an arc whose integral is small and non-zero.
+
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:
 
@@ -418,8 +453,10 @@ release reconciles against it and logs a disagreement past the estimator's own b
 either way — it comes from `2πi Σ n·Res`, not from the quadrature.
 
 Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
-contour from nothing), the rest of M4 (the GPU cut picture: rendering the declared determination, then
-drag-a-cut with its monodromy readout), the rest of the gallery (M5), the teaching layer (M6).
+contour from nothing), the rest of the gallery (M5.3 onward — tier E's quasi-periodic strip, tier F's
+wedge template, tier G's summation kernel and the unknown inside `S`), the teaching layer (M6). M4 is
+complete: the GPU cut picture, the declared determination on the stage, and drag-a-cut with its
+monodromy readout all landed in M4.7.
 
 ## Documentation
 

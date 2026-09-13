@@ -97,6 +97,9 @@ describe("D-1: the range research 03 stated makes the majorant diverge", () => {
       expect(b.value).toBeUndefined();
       expect(b.certificate.level).toBe("⚠");
       expect(b.asymptotics).toBe("diverges");
+      // And the EXPONENT says so too. `1 − n` is negative for every n here, so carrying it would
+      // leave a field reading "it vanishes" beside a certificate refusing the whole bound.
+      expect(b.exponent).toBe(Number.POSITIVE_INFINITY);
     }
   });
 

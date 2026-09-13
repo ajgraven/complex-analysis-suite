@@ -171,7 +171,7 @@ being carried-unread.
 > And the convention LABEL is read modulo turns too, or sheet 1 of `[0, 2π)` would be called "custom"
 > and a bookkeeping integer would have invented a third argument convention.
 
-### M5.2 — one predicate for two lemmas, and the corrected L6 · *S–M*
+### M5.2 — one predicate for two lemmas, and the corrected L6 · *S–M* — **DONE**
 
 The maths prerequisite for tier F, and a correction to the research.
 
@@ -182,6 +182,46 @@ The maths prerequisite for tier F, and a correction to the research.
   π brackets.
 - Record D-1 against research 03, with the measured divergence, so the wrong statement cannot be read
   back out of the research and re-implemented.
+
+> **Outcome.** All three landed. `kernel/bounds/linearMinorant.ts` is the predicate,
+> `kernel/bounds/wedgeArc.ts` the bound, and the ledger routes an `e^{±zⁿ}` arc to it — which it had
+> to, because before this such an arc reached **no lemma at all**: Jordan's reader wants a linear
+> exponent and the exact rational reader refuses a `call`, so KILL reported "no lemma here applies"
+> for the one integrand L6 exists for. The wedge TEMPLATE is still M5.4; the routing is exercised now
+> through hand-built sectors rather than shipped as code nothing calls.
+>
+> Five things worth carrying forward, in [`GALLERY.md`](GALLERY.md) §5.3 in full:
+>
+> 1. **What the shared predicate decides is the SIDE CONDITION, not the inequality.** `sin ψ ≥ 2ψ/π`
+>    is a theorem about concavity and no arithmetic here could establish it; whether the range asked
+>    about lies inside `[0, π/2]` is decidable in exact ℚ — and that is exactly the half research 03
+>    got wrong. A predicate that merely *named* the inequality would have shared a sentence.
+> 2. **The two faces part company past `π/2`, and that asymmetry IS D-1.** `sin` folds by
+>    `sin ψ = sin(π − ψ)` and costs a factor of two; `cos` changes sign and costs everything. The
+>    research applied the sin face's tolerance to the cos face's integrand, which is now not
+>    expressible rather than merely corrected. In the app the two are two ledger rows on one wedge.
+> 3. **Two ranges are quoted for the oscillatory form and both are right** — research 03 §0.3's
+>    `[0, π/(2n)]` is the wedge Fresnel uses, `tier-efg.md` §10.1's `[0, π/n]` the largest on which
+>    the form still vanishes. The engine quotes neither and reads the arc's range off the geometry, so
+>    the difference surfaces as the constant rather than as a disagreement between two documents.
+> 4. **Jordan is this bound at `n = 1`** — both return `π/|a|` on a semicircle, asserted in ℚ. The two
+>    bound functions stay separate (Jordan carries a rational cofactor's `max|g|`; the wedge carries
+>    none), which is ADR-0007's merge rule read in the direction it is usually not.
+> 5. **A uniform quadrature is not good enough to check this bound.** `e^{−κh}` is a spike of width
+>    `1/κ`, and `κ` reaches 65536: a 40001-point uniform Simpson rule measured 2.1e-4 where the true
+>    majorant is 1.2e-4 and reported a **correct** bound as violated. Textbook adaptive Simpson never
+>    terminated. A mesh graded toward both endpoints does it in 20001 points and needs no case
+>    analysis about which end the spike is at — and the two faces put it at different ends.
+>
+> Sweep 20/21, one recorded equivalent. Both real kills were about GEOMETRY rather than the
+> inequality: reading a sector's start angle as `0` certifies `π/(4R)` for the clockwise arc
+> `[π/2 → π/4]`, where the integrand reaches `e^{+R²}`, and a degenerate extent makes the plain ML
+> bound `0·π·R·max|f| = 0` — a `≤ 0` on an arc whose integral is small and non-zero. The first
+> initially survived a test that refused under the mutant anyway (the range check fired first), which
+> is the lesson: a test can pin the outcome without pinning the reason.
+>
+> **Not done here, and not silently:** D-2's square-contour bound is still a document-only correction.
+> It belongs with the summation kernel it is about, in M5.5.
 
 ### M5.3 — tier E · *M*
 

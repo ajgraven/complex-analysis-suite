@@ -163,7 +163,18 @@ export function wedgeArcBound(form: WedgeExponential, R: Frac, arc: WedgeArc): A
   const psiRange = arc.to.mul(Frac.of(BigInt(form.n)));
   const damped = dampedArcIntegral(psiRange, face.face);
   if (damped.constant === null) {
-    return { ...base, asymptotics: "diverges", certificate: damped.certificate };
+    // **THE EXPONENT MUST NOT SAY `R^{1−n}` HERE.** There is no bound at all, and every way of
+    // reaching this line with a positive range is GROWTH rather than a bound that is merely weaker:
+    // past `π/2` the cos face's `e^{−κcos ψ}` is `e^{+κ|cos ψ|}`, and past `π` the sin face's is
+    // too. Reporting `−1` for D-1's own case would leave a field saying "it vanishes" beside a
+    // certificate refusing it — the kind of disagreement between a number and its label that this
+    // app exists to prevent. A non-positive range is the one degenerate case and keeps its exponent.
+    return {
+      ...base,
+      ...(psiRange.n > 0n ? { exponent: Number.POSITIVE_INFINITY } : {}),
+      asymptotics: "diverges",
+      certificate: damped.certificate,
+    };
   }
 
   const scale = modulusUpperBound(form.lambda);
