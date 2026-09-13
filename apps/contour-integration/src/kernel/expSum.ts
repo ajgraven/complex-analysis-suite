@@ -131,6 +131,29 @@ export class ExpSum {
     return new ExpSum(this.terms.map((t) => ({ ...t, coefficient: t.coefficient.neg() })));
   }
 
+  /**
+   * The product of two sums — or null when their coefficients do not share one quadratic extension.
+   *
+   * The basis is closed under multiplication (`e^{β₁}e^{β₂} = e^{β₁+β₂}`), which is what makes this
+   * exact; what it is not closed under is mixing radicands, and there the answer is NULL rather than
+   * the `add`-style "keep the terms separate". A sum can hold `√2` and `√3` in different terms; a
+   * PRODUCT of them is one coefficient in neither field, and pretending otherwise is the one thing
+   * `SqrtExt` throws to prevent.
+   *
+   * Added for tier G, where `π cot(πz₀)` is a RATIO of two sums and adding two ratios cross-multiplies.
+   */
+  mul(other: ExpSum): ExpSum | null {
+    let out = ExpSum.ZERO;
+    for (const a of this.terms) {
+      for (const b of other.terms) {
+        const coefficient = tryMul(a.coefficient, b.coefficient);
+        if (coefficient === null) return null;
+        out = out.add(ExpSum.of(coefficient, a.exponent.add(b.exponent)));
+      }
+    }
+    return out;
+  }
+
   /** Multiply every coefficient by an algebraic factor — how `2πi·Σ` is formed. */
   scale(factor: SqrtExt): ExpSum {
     if (factor.isZero()) return ExpSum.ZERO;
