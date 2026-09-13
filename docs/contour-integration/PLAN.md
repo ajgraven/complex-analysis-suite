@@ -869,6 +869,18 @@ progress (expertise reversal). **No prose lessons, no prediction or self-explana
 everything else stays PhET-style implicit scaffolding in affordances, defaults and constraints.
 **Gate:** published, permalinks round-trip, keyboard and screen-reader pass.
 
+> **Staged in [`M6-plan.md`](M6-plan.md).** Read it before starting. Four findings shape it: the
+> permalink is a CORRECTNESS surface here rather than a convenience (a dropped `branch.window`
+> restores the same picture computing a different integral — M5.1's shadowed-`branch` bug, which
+> field-by-field equality would pass), so the round trip is verified by VERDICT; `src/shell/app.ts`
+> is 2,511 lines reached by ZERO tests, so the first slice lifts its state out of the closure rather
+> than building a feature; **this gate says nothing about the teaching layer**, which is in the scope
+> paragraph above with no completion criterion; and the contrasting triad turns out to be **two
+> fixtures of ONE record plus one record** — measured — differing in exactly one ledger row between
+> the first two and in two places for the third. The plan also surfaces two items scoped in earlier
+> milestones and never built: the **pen tool** (M1) and the **Pólya work/flux toggle** (M3, which the
+> M3 gate note does not mention).
+
 ### Deferred (explicitly out of v1)
 Argument principle / Rouché mode (research 03 §10) · Bromwich and inverse Mellin (§12) · algebraic
 functions `wⁿ = R(z)` · Arb/FLINT WASM tier 3, behind a "Prove it" button for non-rational `f` ·
