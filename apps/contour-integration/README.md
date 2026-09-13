@@ -10,8 +10,8 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 5, and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
-of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
+**Through Milestone 5 and published, with M6 begun. THE GALLERY IS COMPLETE — all 28 records load,
+and every one of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
 M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
 L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
 square, the summation kernels and the corrected bound), M5.6 (tier G's solve, and G2), M5.7 (the
@@ -687,11 +687,27 @@ release reconciles against it and logs a disagreement past the estimator's own b
 either way — it comes from `2πi Σ n·Res`, not from the quadrature.
 
 Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
-contour from nothing) and the teaching layer (M6). M4 is complete: the GPU cut picture, the declared
-determination on the stage, and drag-a-cut with its monodromy readout all landed in M4.7. **M5 is
-complete too, and with it the gallery**: the quasi-periodic strip (E1, E2), the wedge (F1, F2), the
-summation kernel and the unknown inside `S` (G1–G3), and the two records whose singular set is empty
-(E3, F2).
+contour from nothing) and the teaching layer, both now **M7**. M4 is complete: the GPU cut picture,
+the declared determination on the stage, and drag-a-cut with its monodromy readout all landed in M4.7.
+**M5 is complete too, and with it the gallery**: the quasi-periodic strip (E1, E2), the wedge (F1,
+F2), the summation kernel and the unknown inside `S` (G1–G3), and the two records whose singular set
+is empty (E3, F2).
+
+**M6 (presentation and publish) has begun.** **M6.1** gives the shell a state object —
+`src/shell/state.ts` holds `ShellState` and `resolveState`, the app's three compute branches as one
+pure function of it, and `mountApp` returns `currentState()` / `applyState(s)` over the closure's
+locals. The refactor is proven a no-op by dumping the whole visible rail before and after across 28
+records × every fixture and 7 expressions × 10 templates — byte-identical over 710 lines. It also
+brings `test/shell.test.ts`, the first test that reaches `src/shell/app.ts` at all: `mountApp` runs
+under jsdom, because its WebGL2 stage is built inside a `try` and everything else is ordinary DOM.
+
+Two findings came with it. The window picker was **silently dropping the declared factor** — it took
+`buildDeclaration`'s whole cut system, whose point is `"b"` where the reader's is `"b1"` — and the app
+then integrated the cofactor as the whole integrand under an `R(z) =` label. And the milestone's own
+gate, *"`applyState(currentState())` is a fixed point"*, turns out to be **too weak to be worth
+passing**: a round trip that is consistently lossy is still a fixed point, so 11 of 20 mutants
+survived it. The test now restores a state the app is **not** in and requires it to land on the state
+that was applied — 20/20.
 
 ## Documentation
 

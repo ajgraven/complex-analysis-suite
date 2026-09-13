@@ -95,11 +95,12 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **534 test files / 5405 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **535 test files / 5419 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
-separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
-the only jsdom project. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
+`apps/contour-integration/test/shell.test.ts` are the only jsdom ones — the latter per-file, through a
+`// @vitest-environment jsdom` docblock. **Never pipe the gate through `tail` or `head`** — doing so has truncated
 real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
@@ -282,7 +283,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 5** and published — **M1–M5 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 5** and published, with **M6 begun** — **M1–M5 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -303,7 +304,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing) and the teaching layer (M6). **M5 is complete (M5.0–M5.8);
+come: M6's remaining slices (the `#vs=` codec, the figure export and the a11y pass), then M7 — the pen
+tool (free-hand path editing) and the teaching layer, split out of M6 because PLAN's M6 gate never
+mentioned them. **M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
 a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
@@ -403,6 +406,40 @@ into a column the contour must pin and makes F2's `∫cos = ∫sin` something th
 **SG-2** (built as proposed), **SG-3** (shipped as the record's own evenness reduction) and **SG-4**
 (the schema already had `convergence`) all close. The plan and its one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md).
+
+**M6 has begun — M6.1 gives the shell a state object, and its first test.** Plans:
+[`M6-plan.md`](docs/contour-integration/M6-plan.md) (presentation and publish) and
+[`M7-plan.md`](docs/contour-integration/M7-plan.md) — M6 was **split**, because PLAN's M6 carried the
+teaching layer in its scope while its gate never mentioned it, so that half had no completion criterion
+at all; the Pólya work/flux toggle is dropped on the record. `src/shell/state.ts` holds `ShellState` and
+`resolveState` — the app's three compute branches (a gallery record, a sandbox expression, a sandbox
+expression with a branch factor declared) as ONE pure function of that state — and `mountApp` returns
+`currentState()` / `applyState(s)` over the closure's locals. Proven a no-op the way M5.6b proves one:
+the whole visible rail and strip dumped before and after across 28 records × every fixture, 7
+expressions × 10 templates and the full declared block, **byte-identical over 710 lines**. It brings
+`test/shell.test.ts`, the **first test that reaches `src/shell/app.ts`** — 2,511 lines reached by
+nothing, because the stage is WebGL2 and that looked like a browser-only problem. It is not: `mountApp`
+builds its stage inside a `try`, the fatal boundary catches WebGL2's absence, `getContext` is stubbed to
+`null`, and everything else is ordinary DOM that jsdom runs. Three findings. **(1)** The argument-window
+picker was **silently dropping the declared factor**: it adopted `buildDeclaration`'s whole cut system,
+whose single point is `SINGLE_POINT_ID` = `"b"` while the reader's is `"b1"`, so `declaredOrder()` went
+null and the box went on holding the COFACTOR under an `R(z) =` label — the app then integrating `R(z)`
+as the whole integrand with a plausible number beside it, and M5.1c's own demonstration (switch to the
+principal window, watch LEGALITY refuse) not happening at all. `setCutFromWindow` rebuilds the cut's
+GEOMETRY on the point the declaration names and nothing else. **(2) The milestone's own gate is too weak
+to be worth passing.** *"`applyState(currentState())` is a fixed point"* survived **11 of 20 mutants**,
+and ten were one defect rather than ten: **a consistently LOSSY round trip is still a fixed point** — a
+`currentState` that forgets a field and an `applyState` that never reads it agree perfectly, and every
+state the test could reach was already inside the lossy image, so the sentence is satisfied by
+`currentState = () => ({})` and `applyState = () => {}`. The property a permalink actually needs is to
+**restore a state the app is NOT in and land on the state APPLIED**: two states as unlike as the app
+gets, applied in both directions with every field differing, **20/20**. M6.2's *"encode → decode → the
+same verdict"* has to be read the same way. **(3) In gallery mode the contour is an OUTPUT** — `adopt`
+takes `run.contour`, and the record rebuilds it from `(record, fixture, bindings, geometry)` on every
+run — so a state carrying a stale contour is corrected rather than obeyed, which is right, since a
+family parameter changes the integrand as well as the geometry. That is M6.2's *"a gallery link is
+`{record, fixture}` and nothing else"* arriving as a property of the shell rather than as a size
+optimisation.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

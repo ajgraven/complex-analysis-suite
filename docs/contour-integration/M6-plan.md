@@ -209,6 +209,58 @@ The enabling slice, and no user-visible change.
 **Gate:** `applyState(currentState())` is a fixed point for all 28 records and for a sandbox state
 carrying a declared branch, a sheet offset and a dragged cut.
 
+> **DONE — and the gate as written is too weak to be worth passing, which a mutation sweep is how we
+> know.**
+>
+> **(1) The driver found a bug before it did the job it was built for.** Changing the argument window
+> replaced the whole cut system with `buildDeclaration`'s canonical one, whose single point carries
+> `SINGLE_POINT_ID` — `"b"` — while the reader's is `"b1"` (`addBranchPoint` mints `b1`, `b2`, …; the
+> keyhole template seeds `b1`). So the id `declaration.pointId` names stopped existing,
+> `declaredOrder()` went null, and the declared factor was **silently dropped** while the integrand
+> box went on holding the COFACTOR under its `R(z) =` label — whereupon the app integrated `R(z)` as
+> the whole integrand and printed a plausible number beside it. That is the same defect the
+> "undeclare" button's own comment records a browser pass finding, reached through a different door,
+> and it meant **M5.1c's demonstration did not happen**: switching to the principal determination is
+> supposed to move the cut under the R → ∞ circle and refuse, and instead the refusal that appeared
+> came from an orphaned cut nobody owned. Fixed in its own commit with `setCutFromWindow`, which
+> rebuilds the cut's GEOMETRY on the point the declaration names and nothing else.
+>
+> **(2) A FIXED POINT ALONE PROVES ALMOST NOTHING.** The first version of the test asserted exactly
+> this gate's sentence — apply the state the app is already in, nothing moves — and **11 of 20
+> mutants survived it**. Ten were one defect, not ten: *a round trip that is CONSISTENTLY lossy is
+> still a fixed point.* A `currentState` that forgets `expr` and an `applyState` that never reads it
+> agree perfectly with each other, and every state the test could reach was already inside the lossy
+> image. Taken literally the gate is satisfied by `currentState = () => ({})` and
+> `applyState = () => {}`.
+>
+> **So the property is the one a permalink actually needs: restore a state the app is NOT in, and
+> land on the state that was APPLIED.** Two states as unlike as this app gets — A the sandbox with a
+> declared factor, sheet 2, a dragged cut and every view field off its default; B a record at a
+> **non-primary** fixture with both kinds of override moved, no declaration, a different integrand
+> and the view back at default — applied in both directions, with every field differing between them,
+> which is what makes each field's loss observable rather than mutually cancelling. **20/20** killed
+> after the repair. M6.2's gate should be read the same way: *"encode → decode → the same verdict"* on
+> a state the app already holds is the same trap.
+>
+> **(3) In gallery mode the contour is an OUTPUT, not an input** — `adopt` takes `run.contour`, and
+> the record rebuilds it from `(record, fixture, bindings, geometry)` on every run. A state carrying
+> a stale contour is corrected rather than obeyed, which is right: a family parameter changes the
+> integrand as well as the geometry, so the contour cannot be restored independently of the bindings
+> that produced it. This is §M6.2's *"a gallery link is `{record, fixture}` and nothing else"*
+> arriving as a property of the shell rather than as a size optimisation, and the test pins it
+> directly — hand the record the sandbox's keyhole and it still draws its own contour.
+>
+> **(4) The no-op is proven, not inferred.** The whole visible rail and strip, driven through 28
+> records × every fixture, 7 expressions × 10 templates, and declare → four orders → two windows →
+> three sheets → undeclare: **byte-identical before and after, 710 lines / 1,236,480 bytes.**
+>
+> **(5) `mountApp` runs under jsdom**, which is what makes any of this reachable from the node gate.
+> Its stage is built inside a `try` and the fatal boundary catches WebGL2's absence; `getContext` is
+> stubbed to `null` and the drawing code takes the guarded path it already has. `jsdom` joins the
+> app's devDependencies (`packages/ui` was the only jsdom project before this). The GPU stage is
+> still invisible to it — both `stage?.setIntegrand` call sites are covered by `pnpm test:browser`,
+> not by this.
+
 ### M6.2 — `#vs=`, verified by verdict · *M*
 
 - `src/shell/viewState.ts` on `@cas/interchange`, namespace `"ci"` — the 8-app idiom.

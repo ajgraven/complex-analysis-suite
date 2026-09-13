@@ -417,7 +417,8 @@ The app is supplying a missing referent, not decorating a well-understood one.
 
 Unguided sandboxes fail (Kirschner/Sweller/Clark) and animation per se doesn't help (Tversky);
 the mitigations that *are* supported — PhET-style implicit scaffolding, faded worked examples with
-self-explanation prompts, prediction-before-manipulation, contrasting triads — are in M6.
+self-explanation prompts, prediction-before-manipulation, contrasting triads — are in M7 (§7's round-3
+scoping takes two of them: contrasting triads and fading, without the prompts).
 
 ### 5.3 Colour and type
 
@@ -864,6 +865,19 @@ Figure & share export (QD's `_pal` indirection, `renderToCanvas`, sync `Clipboar
 `#vs=` codec with diff-from-defaults and full re-validation on restore; a11y pass; launcher card
 live; the `deploy-pages.yml` line.
 **Gate:** published, permalinks round-trip, keyboard and screen-reader pass.
+
+> **M6.1 is DONE** — the shell has a state object (`src/shell/state.ts`: `ShellState`, and
+> `resolveState` as the app's three compute branches in one pure function of it) and `mountApp` returns
+> `currentState()` / `applyState(s)`. Proven a no-op byte for byte over the whole visible rail, and
+> carrying `test/shell.test.ts`, the first test to reach `src/shell/app.ts`.
+>
+> **Its gate as written is too weak, and M6.2's should be read in the light of that.** *"`applyState
+> (currentState())` is a fixed point"* survived 11 of 20 mutants, because **a consistently lossy round
+> trip is still a fixed point** — the sentence is satisfied by `currentState = () => ({})` and
+> `applyState = () => {}`. What has to be asserted is that restoring a state the app is **not in**
+> lands on the state that was **applied**; on two maximally-unlike states in both directions that is
+> 20/20. The same reading applies to *"encode → decode → the same verdict"*: the decode must start from
+> a state the app does not already hold.
 
 ### M7 — The teaching layer, and the pen tool · *M–L*
 **The teaching layer, scoped (round 3): contrasting triads and fading only.** Triads are gallery

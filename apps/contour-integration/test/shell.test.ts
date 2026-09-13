@@ -11,15 +11,16 @@
 // What that buys is a test over the app as a USER reaches it: set the box, fire `change`, click the
 // template, read the rail. No seam between what is asserted and what is shown.
 import { describe, expect, it } from "vitest";
-import { mountApp } from "../src/shell/app.js";
+import { mountApp, type ShellHandle } from "../src/shell/app.js";
+import { offeredCorpus, type ShellState } from "../src/shell/state.js";
+import { DEFAULT_VIEW } from "../src/kernel/camera.js";
 
 /** Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context. */
-export function mount(): HTMLElement {
+function mount(): { root: HTMLElement; app: ShellHandle } {
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
   const root = document.createElement("div");
   document.body.replaceChildren(root);
-  mountApp(root);
-  return root;
+  return { root, app: mountApp(root) };
 }
 
 const q = <T extends Element>(root: Element, sel: string): T => {
@@ -72,7 +73,7 @@ describe("the argument window", () => {
   // door. It also meant M5.1c's own demonstration — switch to the principal window and watch
   // LEGALITY refuse — did not happen at all.
   it("keeps the declared factor when the determination changes", () => {
-    const root = mount();
+    const { root } = mount();
     declaredKeyhole(root);
     expect(visibleText(root, ".rail")).toContain("Declared factor");
 
@@ -89,7 +90,7 @@ describe("the argument window", () => {
   });
 
   it("moves the cut, so LEGALITY refuses and no ∮ is printed", () => {
-    const root = mount();
+    const { root } = mount();
     declaredKeyhole(root);
     // The keyhole's determination: the cut is on ℝ₊, down the middle of the two lips, and the
     // argument closes.
@@ -109,5 +110,221 @@ describe("the argument window", () => {
     // on its own passes for the wrong reason. The claim is that the determination the reader chose
     // moved the cut, not that something somewhere is broken.
     expect(rail).toContain("Declared factor");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// M6.1's gate: `applyState(currentState())` is a fixed point.
+//
+// **WHY THIS IS THE PROPERTY AND NOT SOMETHING WEAKER.** Everything M6 builds on top of the state
+// object is a round trip: a `#vs=` permalink is `currentState()` encoded and `applyState` decoded,
+// and a PNG carries the same bytes. A field dropped from either half is invisible to every other
+// test in the suite — the app draws the same picture and computes a DIFFERENT integral, which is
+// M5.1's shadowed-`branch` bug wearing new clothes. So the fixed point is asserted on what a reader
+// can SEE, the whole visible rail and strip, rather than on the state object alone; and it is
+// asserted alongside its converse, that perturbing a problem field does change what is on screen,
+// because a round trip that carried nothing at all would satisfy the first claim perfectly.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Everything a reader can see, in one string.
+ *
+ * The bar contributes its control VALUES rather than its text: the record `<select>`'s option list
+ * is 28 ids long, constant, and would bury every assertion failure in it.
+ */
+function screen(root: Element): string {
+  const value = (sel: string): string => {
+    const e = root.querySelector<HTMLSelectElement | HTMLInputElement>(sel);
+    return e === null ? "-" : e.value;
+  };
+  const pressed = [...q(root, ".sourceToggle").querySelectorAll("button")]
+    .map((b) => `${b.textContent}=${b.getAttribute("aria-pressed")}`)
+    .join(",");
+  return [
+    `${pressed}  box: ${value(".expr")}  label: ${q(root, ".flabel").textContent}`,
+    `record: ${value('[aria-label="gallery record"]')} #${value('[aria-label="fixture"]')}`,
+    visibleText(root, ".rail"),
+    visibleText(root, ".strip"),
+  ].join("\n");
+}
+
+describe("applyState(currentState()) is a fixed point", () => {
+  it("for all 28 gallery records at their primary fixture", () => {
+    const { root, app } = mount();
+    const ids = offeredCorpus().tiers.flatMap((t) => t.families.map((fam) => fam.id));
+    expect(ids).toHaveLength(28);
+
+    clickIn(q(root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(root, "gallery record");
+    for (const id of ids) {
+      records.value = id;
+      fire(records, "change");
+      const before = screen(root);
+      const state = app.currentState();
+      expect(state.record).toBe(id);
+
+      app.applyState(state);
+
+      expect(screen(root), id).toBe(before);
+      expect(app.currentState(), id).toEqual(state);
+    }
+  });
+
+  // **A FIXED POINT ALONE PROVES ALMOST NOTHING, AND A MUTATION SWEEP IS HOW THAT WAS FOUND.**
+  //
+  // The first version of this file asserted only the gate's own sentence — apply the state the app
+  // is already in, and nothing moves — and 11 of 20 mutants survived it. Ten were one defect, not
+  // ten: **a round trip that is CONSISTENTLY lossy is still a fixed point.** `currentState` that
+  // forgets `expr` and an `applyState` that never reads it agree perfectly with each other; every
+  // state the test could reach was already in the lossy image, so nothing moved. Taken literally the
+  // gate is satisfied by `currentState = () => ({})` and `applyState = () => {}`.
+  //
+  // So the property is the one a PERMALINK actually needs: restore a state the app is **not in**,
+  // and land on the state that was APPLIED. Two states as unlike as this app gets, applied in both
+  // directions, with every field differing between them — which is what makes each field's loss
+  // observable rather than mutually cancelling.
+  it("restores a state the app is NOT in — both directions, every field", () => {
+    const { root, app } = mount();
+
+    // ── A: the sandbox, with everything the gate names — a declared branch, a sheet offset and a
+    //      dragged cut — plus a moved camera and the view fields off their defaults.
+    declaredKeyhole(root);
+    const sandbox = app.currentState();
+    const a: ShellState = {
+      ...sandbox,
+      branch: {
+        ...sandbox.branch,
+        sheet: 2,
+        cuts: sandbox.branch.cuts.map((c) => ({ ...c, via: [[3, 2] as const] })),
+      },
+      view: { center: [1.25, -0.5], halfHeight: 7 },
+      contrast: "sumZ",
+      scrub: 0.25,
+      iso: true,
+    };
+    app.applyState(a);
+    const aScreen = screen(root);
+    expect(app.currentState()).toEqual(a);
+    expect(aScreen).toContain("Declared factor");
+
+    // ── B: a record, at a fixture that is NOT its primary, with both kinds of override moved, no
+    //      declaration, a different integrand in the box, and every view field back at its default.
+    clickIn(q(root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(root, "gallery record");
+    records.value = "jordan-cosine-kernel";
+    fire(records, "change");
+    const fixtures = byLabel<HTMLSelectElement>(root, "fixture");
+    fixtures.value = "1";
+    fire(fixtures, "change");
+    const gallery = app.currentState();
+    const b: ShellState = {
+      ...gallery,
+      fixture: 1,
+      expr: "1/(1+z^4)",
+      declaration: null,
+      beforeDeclaration: null,
+      // The sandbox's cut system survives a mode switch — `ShellState.branch` is the sandbox's, and
+      // gallery mode simply does not draw it — so `currentState()` hands back A's dragged, sheet-2
+      // one here. Put the undragged sheet-0 system back, so the pair differs in `branch` too.
+      branch: sandbox.branch,
+      bindings: { a: 1, b: 1 },
+      geometry: { R_lim: 9 },
+      view: DEFAULT_VIEW,
+      contrast: "none",
+      scrub: 1,
+      iso: null,
+    };
+    // Every field that can differ, does — otherwise the pair cannot see that field being dropped.
+    expect(b.mode).not.toBe(a.mode);
+    expect(b.expr).not.toBe(a.expr);
+    expect(b.record).not.toBe(a.record);
+    expect(b.contour).not.toBe(a.contour);
+    expect(b.sandboxContour).not.toBe(a.sandboxContour);
+    expect(b.branch).not.toEqual(a.branch);
+
+    app.applyState(b);
+    // **IN GALLERY MODE THE CONTOUR IS AN OUTPUT, NOT AN INPUT** — `adopt` takes `run.contour`, and
+    // the record rebuilds it from `(record, fixture, bindings, geometry)` on every run. So a state
+    // carrying a stale contour is CORRECTED rather than obeyed, and that is right: a family
+    // parameter changes the integrand as well as the geometry, so the contour cannot be restored
+    // independently of the bindings that produced it. Every other field must land exactly.
+    const bNorm = app.currentState();
+    expect({ ...bNorm, contour: b.contour }).toEqual(b);
+    expect(bNorm.contour.params["R_lim"]?.value).toBe(9);
+    expect(bNorm.contour.params["a"]?.value).toBe(1);
+    const bScreen = screen(root);
+    expect(bScreen).not.toBe(aScreen);
+
+    // Said out loud, because it is what makes M6.2's gallery link `{record, fixture}` and nothing
+    // else: hand the record the SANDBOX's keyhole and it still draws its own contour.
+    app.applyState({ ...bNorm, contour: a.contour });
+    expect(app.currentState().contour).toEqual(bNorm.contour);
+    expect(screen(root)).toBe(bScreen);
+
+    // ── and back. This is the direction a dropped field shows in: the app is in B and has to land
+    //      exactly on A, from a state that shares nothing with it.
+    app.applyState(a);
+    expect(app.currentState()).toEqual(a);
+    expect(screen(root)).toBe(aScreen);
+
+    app.applyState(bNorm);
+    expect(app.currentState()).toEqual(bNorm);
+    expect(screen(root)).toBe(bScreen);
+  });
+
+  it("and carries the VIEW, which no number may depend on", () => {
+    const { root, app } = mount();
+    const moved: ShellState = {
+      ...app.currentState(),
+      view: { center: [1.25, -0.5], halfHeight: 42 },
+    };
+    app.applyState(moved);
+    const before = screen(root);
+    app.applyState(app.currentState());
+    expect(app.currentState().view).toEqual({ center: [1.25, -0.5], halfHeight: 42 });
+    expect(screen(root)).toBe(before);
+  });
+});
+
+describe("the round trip is not vacuous", () => {
+  // Each of these drops or changes ONE problem field and requires the screen to move. Without them
+  // the fixed point above is satisfied by a `currentState` that returns nothing and an `applyState`
+  // that does nothing.
+  it("the declaration decides the integrand, so dropping it changes the answer", () => {
+    const { root, app } = mount();
+    declaredKeyhole(root);
+    const declared = screen(root);
+    app.applyState({ ...app.currentState(), declaration: null });
+    const bare = screen(root);
+    expect(bare).not.toBe(declared);
+    // And the cofactor is now being read as the whole integrand, which is what the label says.
+    expect(bare).toContain("declare a factor on");
+    expect(bare).not.toContain("Declared factor");
+  });
+
+  it("the sheet decides the value — M5.1d's e^(2πisα), through the shell", () => {
+    const { root, app } = mount();
+    declaredKeyhole(root);
+    const sheet0 = screen(root);
+    app.applyState({ ...app.currentState(), branch: { ...app.currentState().branch, sheet: 1 } });
+    // α = 1/2, so one whole turn multiplies the answer by e^(iπ) = −1: the same cut, a different
+    // number. If the round trip dropped `sheet` this would be the identity.
+    expect(screen(root)).not.toBe(sheet0);
+    expect(screen(root)).toContain("sheet");
+  });
+
+  it("a family binding decides a record's numbers, so a moved one shows", () => {
+    const { root, app } = mount();
+    clickIn(q(root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(root, "gallery record");
+    records.value = "circle-linear-cos";
+    fire(records, "change");
+    const at2 = screen(root);
+    app.applyState({ ...app.currentState(), bindings: { a: 3, b: 1 } });
+    expect(screen(root)).not.toBe(at2);
+    // Round-tripping the MOVED state is still a fixed point.
+    const moved = screen(root);
+    app.applyState(app.currentState());
+    expect(screen(root)).toBe(moved);
   });
 });

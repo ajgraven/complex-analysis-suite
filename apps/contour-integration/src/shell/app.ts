@@ -1,5 +1,4 @@
 import { Frac } from "@cas/exact";
-import { makeComplexFn, parse, type Node } from "@cas/expr";
 import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
 import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
 import {
@@ -14,8 +13,7 @@ import {
   type Viewport,
 } from "../kernel/camera.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { findPoles, type PoleReport } from "../kernel/poles.js";
-import { asSummationKernel } from "../kernel/summationKernel.js";
+import type { PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { jumpWeights } from "../kernel/branch/correction.js";
 import { allCrossingMonodromy } from "../kernel/branch/monodromy.js";
@@ -45,10 +43,9 @@ import {
   setSheet,
 } from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
-import { declaredKey, runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
-import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
+import { declaredKey } from "../engine/declaredRun.js";
+import type { SplitCheck } from "../engine/splitCheck.js";
 import type { DeclaredOrder } from "../kernel/branch/declaration.js";
-import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
 import { PRESETS } from "./presets.js";
@@ -76,16 +73,20 @@ import {
   wedgeTemplate,
   semicircleTemplate,
 } from "../engine/contour/templates.js";
-import {
-  isVariant,
-  offeredFamilies,
-  primaryGolden,
-  solveFamily,
-  type FamilyRun,
-} from "../families/runFamily.js";
+import { isVariant, primaryGolden, type FamilyRun } from "../families/runFamily.js";
 import type { Family, FamilyTarget, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
+import {
+  compile,
+  declaredOrder as orderOfState,
+  offeredCorpus,
+  recordOf,
+  resolveState,
+  type Compiled,
+  type ShellState,
+  type StateResolution,
+} from "./state.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
@@ -260,11 +261,35 @@ function relationText(family: Family): string {
   return `${how} — ${aux.note}`;
 }
 
-export function mountApp(root: Element): void {
+/**
+ * A mounted shell, from the outside.
+ *
+ * Two functions and no more, because there is exactly one thing a caller needs of a mounted app
+ * that it cannot get from the DOM: its state as data, and the ability to put one back. `main.ts`
+ * ignores this; `test/shell.test.ts` and M6.2's permalinks are what it is for.
+ */
+export interface ShellHandle {
+  readonly currentState: () => ShellState;
+  readonly applyState: (next: ShellState) => void;
+}
+
+export function mountApp(root: Element): ShellHandle {
   let view: View = DEFAULT_VIEW;
-  let ast: Node | null = null;
-  let f: ((z: Cx) => Cx) | null = null;
+  // NO `ast` / `f` LOCALS. They were the compiled integrand and its evaluator, and every reader of
+  // them is now downstream of `resolveState`, which carries whichever pair the branch that ran
+  // actually used — the record's, the declared product's, or the box's. Keeping shell-level copies
+  // meant three writers and a window in which they disagreed with the numbers on screen. `poles`
+  // stays because the poles CARD and the derivation read it directly.
   let poles: PoleReport | null = null;
+  /**
+   * The sandbox expression's parse, cached because the cost is not in the resolve.
+   *
+   * `findPoles` on a rational does root-finding, and re-running it on every frame of a contour drag
+   * is the one regression this app can least afford. Recomputed when the EXPRESSION changes, which
+   * is what `applyExpression` is. Gallery mode ignores it: a record's contour integrand comes from
+   * the record, substitution and Jacobian included, and never from the box.
+   */
+  let compiled: Compiled | null = null;
   let contour: Contour = TEMPLATES[0].build();
   let resolved: readonly Resolved[] = resolveAll(contour);
   let integral: ContourIntegral | null = null;
@@ -352,7 +377,7 @@ export function mountApp(root: Element): void {
   // ONE door into the corpus, and it is the loader's output rather than the raw `FAMILIES` array: a
   // record that failed an invariant must not be openable anywhere, because a worked example that
   // cannot be worked is worse than a missing one.
-  const offered = offeredFamilies();
+  const offered = offeredCorpus();
   let mode: "sandbox" | "gallery" = "sandbox";
   /**
    * The sandbox's own contour, parked while a record is open.
@@ -729,8 +754,11 @@ export function mountApp(root: Element): void {
    * it can verify that `declared · R(z)` is the expression they had a moment ago, and refuse to
    * pretend otherwise. See `engine/splitCheck.ts`.
    */
-  let beforeDeclaration: Node | null = null;
-  /** The same expression as SOURCE, so undeclaring can put back what the reader actually typed. */
+  /**
+   * Held as SOURCE and re-parsed where it is used, rather than kept as a second `Node` beside it.
+   * Two copies of one expression is exactly the shape M5.1's review found a bug in, and undeclaring
+   * needs the source anyway to put back what the reader actually typed.
+   */
   let beforeDeclarationSrc: string | null = null;
   let splitCheck: SplitCheck | null = null;
   /** What the stage's program was last built FROM — a value key, never an object identity. */
@@ -738,15 +766,13 @@ export function mountApp(root: Element): void {
   /** Why the declared run refused, when it did — shown in place of an answer, never beside one. */
   let declaredRefusal: string | null = null;
 
-  /** The declared order, read off the branch point the factor sits on. */
-  function declaredOrder(): DeclaredOrder | null {
-    if (declaration === null) return null;
-    const point = effective().points.find((q) => q.id === declaration?.pointId);
-    if (point === undefined) return null;
-    return point.order.kind === "log"
-      ? { kind: "log", power: declaration.logPower }
-      : { kind: "power", alpha: point.order.alpha, sign: declaration.sign };
-  }
+  /**
+   * The declared order, read off the branch point the factor sits on.
+   *
+   * Through `shell/state.ts`, so the order the RENDER shows and the order the RESOLVER computes
+   * from are one function of one state rather than two readings that agree by inspection.
+   */
+  const declaredOrder = (): DeclaredOrder | null => orderOfState(currentState());
 
   function clearComputed(): void {
     recordBranch = null;
@@ -804,8 +830,6 @@ export function mountApp(root: Element): void {
 
   /** Take a completed run as the app's state. Nothing is recomputed: `runFamily` already did it. */
   function adopt(run: FamilyRun): void {
-    ast = run.ast;
-    f = run.f;
     poles = run.poles;
     contour = run.contour;
     resolved = run.resolved;
@@ -835,81 +859,207 @@ export function mountApp(root: Element): void {
   const budgetNow = (): { readonly maxEvaluations: number } | undefined =>
     gesture === "contour" ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined;
 
-  function recompute(): void {
-    if (mode === "gallery") {
-      recomputeRecord();
+  // ── the shell's state, projected out and put back ─────────────────────────────────────────
+  //
+  // The closure keeps owning the locals; these two are the projection onto {@link ShellState} and
+  // the restoration from it. Everything M6 needs downstream rides here — a `#vs=` permalink is this
+  // object encoded, and a PNG carries the same bytes — so the one property worth pinning is that
+  // `applyState(currentState())` changes nothing, for every record and for a hand-built sandbox
+  // state. A field dropped from either half breaks exactly that, and nothing else would notice: the
+  // app would draw the same picture while computing a different integral, which is M5.1's shadowed
+  // `branch` bug in a new place.
+
+  /** The app's state, as plain data. */
+  function currentState(): ShellState {
+    const fam = family;
+    const g = golden;
+    const open = fam !== null && g !== null;
+    return {
+      mode,
+      // The box, verbatim — under a declaration this is the COFACTOR `R(z)` and not the integrand.
+      expr: input.value,
+      declaration,
+      beforeDeclaration: beforeDeclarationSrc,
+      branch,
+      contour,
+      // Kept in either mode: which record the picker is on outlives a trip to the sandbox, as it
+      // does on screen.
+      record: open ? fam.id : null,
+      fixture: open ? Math.max(0, fam.golden.indexOf(g)) : 0,
+      bindings: bindingOverrides,
+      geometry: geometryOverrides,
+      view,
+      contrast,
+      scrub,
+      iso: isoPref,
+      sandboxContour,
+    };
+  }
+
+  /**
+   * Take a state as the app's own, and rebuild from it.
+   *
+   * Deliberately NOT routed through `setMode`/`loadRecord`/`selectFixture`: those carry a gesture's
+   * side effects — `frameContour()`, dropped overrides — and a restored state brings its own view
+   * and its own overrides. The DOM controls are synced here instead, because a state that decides
+   * the numbers while the bar still shows the old mode is the same class of defect as a cut drawn
+   * where the answer is not.
+   */
+  function applyState(next: ShellState): void {
+    mode = next.mode;
+    for (const b of sourceWrap.querySelectorAll("button")) {
+      b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+      b.classList.toggle("on", b.dataset.mode === mode);
+    }
+    sandboxGroup.hidden = mode !== "sandbox";
+    galleryGroup.hidden = mode !== "gallery";
+
+    branch = next.branch;
+    declaration = next.declaration;
+    beforeDeclarationSrc = next.beforeDeclaration;
+    contour = next.contour;
+    sandboxContour = next.sandboxContour ?? next.contour;
+    view = next.view;
+    contrast = next.contrast;
+    scrub = next.scrub;
+    isoPref = next.iso;
+    scrubber.value = String(Math.round(scrub * 1000));
+    for (const b of contrastWrap.querySelectorAll("button")) {
+      b.classList.toggle("on", b.dataset.mode === contrast);
+    }
+
+    const found = recordOf(next);
+    family = found?.family ?? null;
+    golden = found?.golden ?? null;
+    bindingOverrides = { ...next.bindings };
+    geometryOverrides = { ...next.geometry };
+    // A state with no record puts the picker back to its first option rather than leaving a stale
+    // selection standing — which is also what it shows at boot, so `record: null` means one thing.
+    recordSelect.value = family?.id ?? offered.tiers[0]?.families[0]?.id ?? "";
+    renderFixtureOptions();
+
+    // The box, and the label that says what is in it. Both, or the app claims a cofactor is an
+    // integrand — the defect the "undeclare" button exists to prevent.
+    input.value = next.expr;
+    const declared = declaration !== null;
+    fLabel.textContent = declared ? "R(z) =" : "f(z) =";
+    input.setAttribute("aria-label", declared ? "rational cofactor R(z)" : "integrand f(z)");
+    compiled = compile(input.value);
+    if (compiled.ok) {
+      poles = compiled.poles;
+      errorBox.hidden = true;
     } else {
-      resolved = resolveAll(contour);
-      const order = declaredOrder();
-      if (declaration !== null && ast && order !== null) {
-        // **THE DECLARED ROUTE.** `ast` is the COFACTOR here, not the integrand — the box changed
-        // meaning when the factor was declared — so the residues come from the declaration and the
-        // poles from `R(z)`, exactly as they do for a gallery record.
-        const spec: SandboxDeclaration = {
-          constant: declaration.constant,
-          pointId: declaration.pointId,
-          order,
-          window: declaration.window,
-          cofactor: ast,
-        };
-        const budget = budgetNow();
-        const r = runDeclared(spec, contour, effective(), budget);
-        if (!r.ok) {
-          clearComputed();
-          declaredRefusal = r.reason;
-          splitCheck = null;
-        } else {
-          declaredRefusal = null;
-          resolved = r.analysis.resolved;
-          integral = r.analysis.integral;
-          theorem = r.analysis.theorem;
-          ledger = r.analysis.ledger;
-          acc = accumulateForIntegral(r.f, resolved, integral, undefined, r.analysis.sides);
-          solved = null;
-          // The split is checked against what the box held a moment before the declaration, which
-          // is the only falsifiable form of "this factorisation is the integrand I meant".
-          splitCheck = beforeDeclaration === null ? null : checkSplit(r.declared, ast, beforeDeclaration);
-          // The picture becomes the DECLARED determination, as it already is under a record — so
-          // the sandbox's colour seam and its declared cut stop being different objects.
-          //
-          // Keyed BY VALUE, and a review found out why: `runDeclared` builds `declared` fresh on
-          // every call, so an identity test never fires and the GLSL was being recompiled and
-          // relinked on every recompute — every frame of a contour drag included, which is exactly
-          // when the app can least afford it. The key covers the cofactor's source too, since that
-          // goes into the program as well.
-          const key = `${declaredKey(r.declared)}::${input.value}`;
-          if (stageKey !== key) {
-            stageKey = key;
-            declaredOnStage = r.declared;
-            stage?.setIntegrand(ast, r.declared);
-          }
-        }
-      } else if (!f || !ast || !poles) {
-        clearComputed();
-      } else {
-        const budget = budgetNow();
-        // A summation KERNEL is recognised from the typed expression, and its poles are then
-        // windowed on the contour inside `analyse` — which is why it is handed over as the kernel
-        // rather than as a pole list: the window has to follow a drag, and `poles` is computed once
-        // when the EXPRESSION changes.
-        const kernel = asSummationKernel(ast);
-        const a = analyse({
-          ast,
-          f,
-          poles,
-          contour,
-          branch: effective(),
-          ...(kernel === null ? {} : { summation: { kernel } }),
-          ...(budget === undefined ? {} : { budget }),
-        });
-        resolved = a.resolved;
-        integral = a.integral;
-        theorem = a.theorem;
-        ledger = a.ledger;
-        acc = accumulateForIntegral(f, resolved, integral, undefined, a.sides);
-        solved = null;
+      poles = null;
+      errorBox.hidden = false;
+      errorBox.textContent = compiled.error;
+    }
+    // A restored state has no relationship to whatever program the previous one left linked, so the
+    // stage is rebuilt rather than kept: `recompute` builds the declared one, and this builds the
+    // plain one, exactly as `applyExpression` does.
+    declaredOnStage = null;
+    stageKey = null;
+    if (compiled.ok && !declared && mode === "sandbox") stage?.setIntegrand(compiled.ast);
+
+    recompute();
+
+    // Frozen AFTER the run, from the contour on screen — the same rule `selectFixture` follows, and
+    // for the same reason: the track has to mean what the value beside it means.
+    frozenRanges = {};
+    if (mode === "gallery") {
+      for (const param of Object.values(contour.params)) {
+        frozenRanges[param.name] = { range: param.range, scale: param.scale };
       }
     }
+  }
+
+  /**
+   * Everything the resolver produced, taken as the app's state.
+   *
+   * The shell decides NOTHING here — which branch ran, and what each one produced, is
+   * `resolveState`'s call. This is the assignment half, and it is the only half that touches the
+   * DOM, the stage or the accumulator.
+   */
+  function applyResolution(res: StateResolution): void {
+    switch (res.kind) {
+      case "gallery": {
+        family = res.family;
+        golden = res.golden;
+        recordNote = res.note;
+        systemTargets = res.targets;
+        if (res.run !== null) {
+          adopt(res.run);
+          solved = res.solved;
+          errorBox.hidden = true;
+        } else {
+          clearComputed();
+          errorBox.hidden = false;
+          errorBox.textContent = res.fatal ?? "";
+        }
+        return;
+      }
+      case "declared": {
+        declaredRefusal = null;
+        resolved = res.analysis.resolved;
+        integral = res.analysis.integral;
+        theorem = res.analysis.theorem;
+        ledger = res.analysis.ledger;
+        acc = accumulateForIntegral(res.f, resolved, integral, undefined, res.analysis.sides);
+        solved = null;
+        splitCheck = res.split;
+        // The picture becomes the DECLARED determination, as it already is under a record — so the
+        // sandbox's colour seam and its declared cut stop being different objects.
+        //
+        // Keyed BY VALUE, and a review found out why: `runDeclared` builds `declared` fresh on every
+        // call, so an identity test never fires and the GLSL was being recompiled and relinked on
+        // every recompute — every frame of a contour drag included, which is exactly when the app
+        // can least afford it. The key covers the cofactor's source too, since that goes into the
+        // program as well.
+        const key = `${declaredKey(res.declared)}::${input.value}`;
+        if (stageKey !== key) {
+          stageKey = key;
+          declaredOnStage = res.declared;
+          stage?.setIntegrand(res.cofactor, res.declared);
+        }
+        return;
+      }
+      case "declared-refused":
+        clearComputed();
+        declaredRefusal = res.reason;
+        splitCheck = null;
+        return;
+      case "plain":
+        resolved = res.analysis.resolved;
+        integral = res.analysis.integral;
+        theorem = res.analysis.theorem;
+        ledger = res.analysis.ledger;
+        acc = accumulateForIntegral(res.f, resolved, integral, undefined, res.analysis.sides);
+        solved = null;
+        return;
+      case "empty":
+        clearComputed();
+        if (mode === "gallery") {
+          recordNote = null;
+          systemTargets = null;
+        }
+        return;
+    }
+  }
+
+  /**
+   * Rebuild everything the current state implies, and redraw.
+   *
+   * **The three compute branches are not here.** They live in `shell/state.ts` as one pure function
+   * of {@link ShellState}, which is what makes them reachable from a test at all — and what makes
+   * the fixed-point claim about `applyState(currentState())` a claim about the app rather than about
+   * a second implementation of it. M3.5a moved the gallery and the sandbox onto one `analyse` for
+   * the same reason, one level down.
+   */
+  function recompute(): void {
+    // Set BEFORE the resolve, as it always was: the gallery's resolution carries its own `resolved`
+    // through `adopt`, the plain and declared branches overwrite this with the analysis's copy, and
+    // a refusal leaves it — so a contour that produced no answer is still drawn.
+    if (mode === "sandbox") resolved = resolveAll(contour);
+    applyResolution(resolveState(currentState(), compiled, budgetNow()));
     handles = handlesOf(contour, resolved);
     if (hovered >= handles.length) hovered = -1;
     bHandles = mode === "sandbox" ? branchHandles(branch) : [];
@@ -924,47 +1074,6 @@ export function mountApp(root: Element): void {
     renderPoles();
     drawAcc();
     requestDraw();
-  }
-
-  /**
-   * Re-run the open record at the current bindings.
-   *
-   * Everything the gallery shows comes back from this one call, including the geometry: a family
-   * parameter changes the INTEGRAND as well as the contour (A1's `a` lives in `1/(a + b·cos θ)`), so
-   * "move a slider" is "rebuild the problem", not "move a point".
-   */
-  function recomputeRecord(): void {
-    recordNote = null;
-    solved = null;
-    systemTargets = null;
-    if (!family || !golden) {
-      clearComputed();
-      return;
-    }
-    const budget = budgetNow();
-    const r = solveFamily(family, golden, {
-      bindings: bindingOverrides,
-      geometry: geometryOverrides,
-      ...(budget === undefined ? {} : { budget }),
-    });
-    if (r.ok) {
-      adopt(r.run);
-      solved = r.solved;
-      systemTargets = r.route === "system" ? r.targets : null;
-      errorBox.hidden = true;
-      return;
-    }
-    // Pass 5 may refuse while the run itself is sound. Show what there is and say what is missing,
-    // rather than blanking a record whose ledger and contour are perfectly readable.
-    recordNote = r.reason;
-    if (r.run) {
-      adopt(r.run);
-      errorBox.hidden = true;
-    } else {
-      clearComputed();
-      errorBox.hidden = false;
-      errorBox.textContent = r.reason;
-    }
   }
 
   function setMode(next: "sandbox" | "gallery"): void {
@@ -1040,36 +1149,31 @@ export function mountApp(root: Element): void {
 
   function applyExpression(): void {
     if (mode === "gallery") return;
-    try {
-      ast = parse(input.value.trim());
-      const fn = makeComplexFn(ast);
-      f = (z: Cx) => fn(z as [number, number], [0, 0]) as Cx;
-      // No declaration in the sandbox, and that is correct rather than a gap: the expression the
-      // user typed IS the definition, so its principal branch is the function they asked for.
-      //
-      // Set on the line before `setIntegrand` deliberately, here and in `adopt`. The invariant is
-      // that `declaredOnStage` describes the program the stage is CURRENTLY holding, so the two
-      // move together or not at all — a failed parse leaves the previous program on screen, and
-      // clearing the flag without clearing the program would have the card describe a picture that
-      // is not there.
-      // With a factor declared the box holds `R(z)`, and `recompute` puts the DECLARED product on
-      // the stage instead — so the program is not built here and the flag is not cleared here.
-      if (declaration === null) {
-        declaredOnStage = null;
-        stageKey = null;
-        stage?.setIntegrand(ast);
-      }
-      errorBox.hidden = true;
-    } catch (e) {
-      ast = null;
-      f = null;
+    compiled = compile(input.value);
+    if (!compiled.ok) {
       poles = null;
       errorBox.hidden = false;
-      errorBox.textContent = e instanceof Error ? e.message : String(e);
+      errorBox.textContent = compiled.error;
       recompute();
       return;
     }
-    poles = findPoles(ast);
+    poles = compiled.poles;
+    // No declaration in the sandbox, and that is correct rather than a gap: the expression the
+    // user typed IS the definition, so its principal branch is the function they asked for.
+    //
+    // Set on the line before `setIntegrand` deliberately, here and in `adopt`. The invariant is
+    // that `declaredOnStage` describes the program the stage is CURRENTLY holding, so the two
+    // move together or not at all — a failed parse leaves the previous program on screen, and
+    // clearing the flag without clearing the program would have the card describe a picture that
+    // is not there.
+    // With a factor declared the box holds `R(z)`, and `recompute` puts the DECLARED product on
+    // the stage instead — so the program is not built here and the flag is not cleared here.
+    if (declaration === null) {
+      declaredOnStage = null;
+      stageKey = null;
+      stage?.setIntegrand(compiled.ast);
+    }
+    errorBox.hidden = true;
     recompute();
   }
 
@@ -1938,7 +2042,6 @@ export function mountApp(root: Element): void {
         const b = el("button", "preset", `declare a factor on ${point.label}`);
         b.type = "button";
         b.addEventListener("click", () => {
-          beforeDeclaration = ast;
           beforeDeclarationSrc = input.value;
           declaration = {
             pointId: point.id,
@@ -2076,7 +2179,6 @@ export function mountApp(root: Element): void {
       if (beforeDeclarationSrc !== null) input.value = beforeDeclarationSrc;
       declaration = null;
       splitCheck = null;
-      beforeDeclaration = null;
       beforeDeclarationSrc = null;
       fLabel.textContent = "f(z) =";
       input.setAttribute("aria-label", "integrand f(z)");
@@ -2510,4 +2612,6 @@ export function mountApp(root: Element): void {
   // Through `setMode` rather than straight to `applyExpression`, so the bar's two groups start in the
   // state the mode says they should be in instead of in whatever order they were appended.
   setMode(mode);
+
+  return { currentState, applyState };
 }
