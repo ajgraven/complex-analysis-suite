@@ -315,3 +315,56 @@ export function rectangleTemplate(
   });
   return { pieces, params: {} };
 }
+
+/**
+ * The quasi-periodic STRIP: `−R → R → R + iP → −R + iP → −R`, with `R → ∞`.
+ *
+ * A sibling of {@link rectangleTemplate} rather than a widening of it, deliberately. That one is the
+ * sandbox's free shape — four `free` sides at literal corners, editable in every direction — and
+ * this one is an ARGUMENT: the bottom is the target, the two verticals are killed by L1, and the top
+ * REPRODUCES the bottom with the factor `−λ` (research 03's L7, which is not a vanishing lemma).
+ * Collapsing them would make the sandbox's rectangle carry roles nobody asked it for.
+ *
+ * **The top side does not vanish, and mistaking it for a side that does is E1's first trap.** It is
+ * a translate of the bottom, so `|f|` on it is `|λ|` times `|f|` on the bottom — and `|λ| = 1` for a
+ * real quasi-period — which makes its ML bound proportional to the length `2R` and DIVERGENT. The
+ * role says `reproduces` so no lemma is ever asked to kill it.
+ *
+ * `height` is the strip's `P`, a real height in the `f(z + iP) = λ f(z)` convention (finding D-4:
+ * research 03 §6 writes E1's as `P = 2πi`, which under that convention would mean `f(z − 2π)`).
+ */
+export function stripTemplate(height = 2 * Math.PI, halfWidth = 6): Contour {
+  const pieces: Piece[] = [
+    {
+      id: "bottom",
+      name: "the real axis",
+      geom: { kind: "segment", from: pt(ref("R", -1), 0), to: pt(ref("R"), 0) },
+      role: "target",
+      colour: 0,
+    },
+    {
+      id: "right",
+      name: "the right vertical",
+      geom: { kind: "segment", from: pt(ref("R"), 0), to: pt(ref("R"), height) },
+      role: "vanish",
+      lemma: "L1",
+      colour: 1,
+    },
+    {
+      id: "top",
+      name: `the line Im z = ${height === 2 * Math.PI ? "2π" : height === Math.PI ? "π" : height.toPrecision(4)}`,
+      geom: { kind: "segment", from: pt(ref("R"), height), to: pt(ref("R", -1), height) },
+      role: "reproduces",
+      colour: 2,
+    },
+    {
+      id: "left",
+      name: "the left vertical",
+      geom: { kind: "segment", from: pt(ref("R", -1), height), to: pt(ref("R", -1), 0) },
+      role: "vanish",
+      lemma: "L1",
+      colour: 3,
+    },
+  ];
+  return { pieces, params: { R: param("R", halfWidth, [0.5, 1e6], "log", { to: "inf" }) } };
+}

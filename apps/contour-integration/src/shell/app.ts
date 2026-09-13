@@ -69,6 +69,7 @@ import {
   indentedSemicircleTemplate,
   keyholeTemplate,
   rectangleTemplate,
+  stripTemplate,
   semicircleTemplate,
 } from "../engine/contour/templates.js";
 import {
@@ -124,7 +125,13 @@ type TemplateId =
  * cut the user placed.
  */
 const TEMPLATES: {
-  id: TemplateId;
+  /**
+   * The sandbox's own preset id. It has borrowed the FAMILY schema's `TemplateId` by convenience
+   * until now, and `"strip"` is the first place the two vocabularies diverge: a record declares this
+   * shape as `"rectangle"` (E1, E2 and E3 all do), while the sandbox already uses that name for its
+   * free four-sided shape. Widening here rather than adding a sandbox-only name to the record schema.
+   */
+  id: TemplateId | "strip";
   label: string;
   build: () => Contour;
   seed?: (branch: BranchChoice) => BranchChoice;
@@ -141,6 +148,9 @@ const TEMPLATES: {
     build: () => indentedSemicircleTemplate(8, 0.05),
   },
   { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
+  // Tier E's shape, alongside tier D's two below: the quasi-periodic strip, whose top side
+  // REPRODUCES the bottom rather than vanishing. `exp(0.3*z)/(1 + exp(z))` on it is E1.
+  { id: "strip", label: "strip (2π)", build: () => stripTemplate(2 * Math.PI, 6) },
   // Tier D's two shapes, which the engine has had since M4.2 and M4.6 with no way in either.
   {
     id: "keyhole",

@@ -26,6 +26,8 @@ import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialOfPower, asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
 import { wedgeArcBound } from "../kernel/bounds/wedgeArc.js";
+import { stripSideBound } from "../kernel/bounds/stripSide.js";
+import { asExponentialLattice } from "../kernel/expLattice.js";
 import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
 import type { LogFactor } from "../kernel/logResidue.js";
@@ -196,6 +198,36 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   const rational = toExactRational(ast);
   if (!rational.ok) return null;
   return mlArcBound(rational.value.num, rational.value.den, R, extent);
+}
+
+/**
+ * L1 on a VERTICAL SIDE of a strip — the app's first vanishing piece that is not an arc.
+ *
+ * `disposeArc` declines anything whose geometry is not an arc, so until M5.3c a rectangle's vertical
+ * side reached no lemma at all and KILL reported "no lemma here applies" for the two pieces tier E's
+ * whole argument needs killed. The dispatch is by GEOMETRY — the piece either lies on a vertical
+ * line off the imaginary axis or it does not — and by SHAPE: the integrand has to read as
+ * `e^{az}·N(e^z)/D(e^z)`, which is what makes `|w| = e^{±R}` mean anything.
+ *
+ * A HORIZONTAL side gets nothing, and that is not an omission. In a strip argument the horizontal
+ * side opposite the target does not vanish, it REPRODUCES, and offering it a bound would invite
+ * E1's first trap: it is a translate of the bottom, so its ML bound is proportional to the length
+ * `2R` and DIVERGES.
+ */
+function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
+  if (g.kind !== "segment") return null;
+  const [x0, y0] = g.from;
+  const [x1, y1] = g.to;
+  if (Math.abs(x0 - x1) > 1e-9) return null; // not vertical
+  if (Math.abs(x0) < 1e-9) return null; // on the imaginary axis: there is no R → ∞ in it
+  const form = asExponentialLattice(ast);
+  if (form === null) return null;
+  return stripSideBound(form, {
+    side: x0 > 0 ? "right" : "left",
+    R: Math.abs(x0),
+    length: Math.abs(y1 - y0),
+    imagRange: [Math.min(y0, y1), Math.max(y0, y1)],
+  });
 }
 
 /**
@@ -847,7 +879,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         : input.log !== undefined
           ? disposeLogArc(input.log, geom, piece.lemma)
           : input.power === undefined
-            ? disposeArc(ast, geom)
+            ? (disposeArc(ast, geom) ?? disposeStripSide(ast, geom))
             : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
@@ -861,7 +893,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
               ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
               : input.power === undefined && input.log === undefined
-                ? "the certified bounds cover a rational integrand, one times e^{iaz}, or λ·e^{w zⁿ} on a wedge measured from the positive real axis; this is none of them"
+                ? "the certified bounds cover a rational integrand, one times e^{iaz}, λ·e^{w zⁿ} on a wedge measured from the positive real axis, or e^{az}·N(e^z)/D(e^z) on a vertical side of a strip; this is none of them"
                 : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,

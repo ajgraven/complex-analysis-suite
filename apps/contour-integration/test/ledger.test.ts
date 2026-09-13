@@ -13,6 +13,7 @@ import {
   dogboneTemplate,
   keyholeTemplate,
   semicircleTemplate,
+  stripTemplate,
 } from "../src/engine/contour/templates.js";
 import { INFINITY, type BranchChoice, type BranchPoint } from "../src/kernel/branch/model.js";
 import { Frac } from "@cas/exact";
@@ -790,3 +791,91 @@ describe("L6 — the wedge lemma, routed and certified", () => {
   });
 });
 
+// **A VANISHING SEGMENT REACHES A LEMMA (M5.3c).** Until now `disposeArc` declined anything that
+// was not an arc, so a rectangle's vertical side reported "no lemma here applies" — for the two
+// pieces tier E's entire argument needs killed.
+const sideRow = (r: ReturnType<typeof run>, id: string) =>
+  rowsFor(r, "KILL").find((x) => x.pieceId === id);
+
+describe("L1 on a strip's vertical sides", () => {
+  it("kills both of E1's verticals at a = 3/10", () => {
+    const r = run("exp((3/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    for (const id of ["right", "left"]) {
+      expect(sideRow(r, id)?.status).toBe("satisfied");
+      expect(sideRow(r, id)?.evidence.level).toBe("≤");
+      expect(sideRow(r, id)?.evidence.method).toMatch(/ML inequality on a vertical side/);
+    }
+  });
+
+  it("ONE CONDITION, TWO JOBS: a ≥ 1 breaks the right side and a ≤ 0 the left", () => {
+    // The record's own claim, as two rows a reader can put side by side. Neither window is declared
+    // anywhere; each is the sign of one exact rational exponent.
+    const tooBig = run("exp((6/5)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    expect(sideRow(tooBig, "right")?.status).toBe("failed");
+    expect(sideRow(tooBig, "left")?.status).toBe("satisfied");
+
+    const tooSmall = run("exp((-1/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    expect(sideRow(tooSmall, "right")?.status).toBe("satisfied");
+    expect(sideRow(tooSmall, "left")?.status).toBe("failed");
+  });
+
+  it("kills E2's verticals for a ξ of either sign, with no condition to state", () => {
+    for (const xi of ["2", "-2"]) {
+      const r = run(`exp(i*(${xi})*z)/cosh(z)`, stripTemplate(Math.PI, 9));
+      expect(sideRow(r, "right")?.status).toBe("satisfied");
+      expect(sideRow(r, "left")?.status).toBe("satisfied");
+    }
+  });
+
+  it("never asks the TOP side for a bound — it reproduces, and its ML bound diverges", () => {
+    const r = run("exp((3/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    const top = rowsFor(r, "KILL").find((x) => x.pieceId === "top");
+    expect(top?.status).toBe("satisfied");
+    expect(top?.claim).toMatch(/reproduces the target/);
+  });
+
+  it("declines a DIAGONAL side, where a bound read at one end would be the wrong geometry", () => {
+    // `|f|` varies along a diagonal, and the strip bound reasons about a FIXED `Re z`. Reading the
+    // start point's real part and bounding as though the whole piece sat there computes a `≤` from
+    // geometry the piece does not have — M4.6c's finding about off-centre arcs, in the other shape.
+    // The whole quadrilateral is slanted so it still CLOSES — an unclosed one stops at LEGALITY and
+    // never reaches KILL, which is what the first draft of this test measured.
+    const base = stripTemplate(2 * Math.PI, 9);
+    const P = 2 * Math.PI;
+    const diagonal: Contour = {
+      ...base,
+      pieces: base.pieces.map((piece) => {
+        if (piece.id === "right") {
+          return {
+            ...piece,
+            geom: {
+              kind: "segment" as const,
+              from: { x: { param: "R" }, y: 0 },
+              to: { x: { param: "R", mul: 0.5 }, y: P },
+            },
+          };
+        }
+        if (piece.id === "top") {
+          return {
+            ...piece,
+            geom: {
+              kind: "segment" as const,
+              from: { x: { param: "R", mul: 0.5 }, y: P },
+              to: { x: { param: "R", mul: -1 }, y: P },
+            },
+          };
+        }
+        return piece;
+      }),
+    };
+    const row = sideRow(run("exp((3/10)*z)/(1 + exp(z))", diagonal), "right");
+    expect(row?.status).toBe("unknown");
+    expect(row?.evidence.method).toMatch(/vertical side of a strip/);
+  });
+
+  it("still declines a vertical side whose integrand is not a strip integrand", () => {
+    const r = run("1/(1+z^2)", stripTemplate(2 * Math.PI, 9));
+    expect(sideRow(r, "right")?.status).toBe("unknown");
+    expect(sideRow(r, "right")?.evidence.method).toMatch(/vertical side of a strip/);
+  });
+});
