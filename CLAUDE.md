@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **518 test files / 5089 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **521 test files / 5128 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -294,9 +294,9 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.5 onward** — tier G's
-summation kernel and the unknown inside `S`, plus E3 and F2 together on ADR-0042's `knownValue`;
-M5.0–M5.4 are done and 23 of the 28 records are loaded, and the plan and its one engine decision are
+come: the pen tool (free-hand path editing), the rest of the gallery (**M5.6 onward** — tier G's
+records and the unknown inside `S`, plus E3 and F2 together on ADR-0042's `knownValue`;
+M5.0–M5.5 are done and 23 of the 28 records are loaded, and the plan and its one engine decision are
 [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
 **read the plan before continuing M5**), the teaching layer (M6).
 
@@ -733,6 +733,43 @@ record cannot tell apart. Its real job is **cross-provenance**: `2π/(3√3)` is
 wedge has no cut at all — and D3 REFUSES there, naming this record as the repair. `unitRoot` moved to
 its own module on the second-consumer rule, by which time there were three. Sweeps: 9/9, 18/18, 9/10.
 **F2 stays deferred with E3** (ADR-0042's `knownValue`).
+
+**M5.5 builds no record either — it builds tier G's machinery, and executes the second finding
+against the research.** The **square** `Γ_N` is the first contour in the gallery with NO target
+piece: `∮ → 0` is the result rather than the bookkeeping, and the sum being evaluated sits inside the
+residue list as the kernel's own poles at the integers. Its tests pin the MECHANISM rather than a
+number that shrinks — `∮ = 2πi(2·S_N − π²/3)`, so inverting it recovers the partial sum from the
+engine's own quadrature, and the residual is then the tail `Σ_{n>N}1/n²` bracketed in `(1/(N+1), 1/N)`.
+**The kernels are `π cot(πz)` and `π csc(πz)`**, with residue exactly `1` and exactly `(−1)ⁿ` at every
+integer: the alternation belongs to the KERNEL, not to `f`, which is why `Σ(−1)ⁿ/n²` will cost nothing
+once `Σ 1/n²` exists. What the module computes is `f(n)` exactly over ℚ(i); what it ASSERTS is the
+kernel's residue, checked against an independent contour quadrature rather than against itself. The
+leading `π` is **counted, not pattern-matched** — `cot(πz)` has residue `1/π` and is a different sum by
+a factor of π on every term — and a numeric coefficient goes to the COFACTOR, where `2π cot(πz)/z²` is
+the kernel times `2/z²`. A COLLISION is named rather than summed: G1's `f = 1/z²` merges with the
+kernel at `n = 0`, where the true residue is `−π²/3`, needs the Laurent expansion and lands in
+ℚ(i)(π) — the same wall the log families met — so it is M5.7's. **And a hole closes with it:**
+`findPoles` reports ZERO poles for a `cot` integrand (no reader sees a transcendental, and reporting
+nothing is honest), so a square at an INTEGER half-width ran its vertical sides exactly through
+`z = ±N` while LEGALITY said "every singularity is clear of the contour". The band is read off the
+GEOMETRY — the question is local to the contour drawn, so the integers it can reach are exactly the
+ones to list, and a contour that moves gets a new window on the same recompute. **The bound is
+`8π·coth(π/2)·(N+½)·max|f|`**, exact in ℚ, where `max|f|` read at `|z| = N+½` bounds `|f|` on the
+whole square by a term-by-term inequality rather than by any monotonicity of `|f|`; `coth(π/2)` is
+bracketed from a certified LOWER bound on `e^π` (`e^x ≥ Σ x^k/k!` at `piLower()`), with both
+truncations pushing the same way — the only direction a bound may err. It **refuses** a half-width
+that is not `N + ½` by name, so `through: "halfIntegers"`, declared in the schema since M3 and read
+nowhere, is read at last. **D-2 is executed:** research 03 §8's `(M/N^k)·coth(π/2)·4(2N+1)` drops the
+`π` from `π cot(πz)` and is then not a bound at all — 3.392 against a measured 3.567 at `N = 3`, 0.356
+against 0.493 at `N = 25`. **And a correction to the correction:** the gallery calls that "30–40 % at
+every N tested"; measured, it is 4.9% at `N = 3` and 27.8% at `N = 25`, GROWING, because the ratio
+between the two bounds is exactly `π·(N/(N+½))^k` — so 30% is the asymptote, not the typical case. The
+finding stands; only its magnitude was overstated at small N. Two performance/precision findings came
+with it: the ledger spent 3.1 s per square side recomputing a CONSTANT (`piLower()` is far more
+precise than a 40-term series needs, and `x^40/40!` over it makes thousand-digit BigInts), and the
+bracket is then so tight that comparing it to `1/Math.tanh(π/2)` tests float64's rounding rather than
+the arithmetic — M5.2's `piUpper().toNumber() === Math.PI` again, with the same fix. Sweeps: 7/7,
+15/15, 14/15.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

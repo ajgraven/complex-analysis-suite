@@ -790,6 +790,18 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > **F2 is deferred with E3**; both need ADR-0042's `knownValue`. [`M5-plan.md`](M5-plan.md) §M5.4 and
 > [`GALLERY.md`](GALLERY.md) §5.5 have the findings.
 >
+> **M5.5 builds tier G's machinery — the square, the kernels, and the corrected bound.** No record:
+> G2 needs Pass 5 generalised to an unknown INSIDE `S` (M5.6). The square is the first contour in the
+> gallery with no target piece, and `∮ → 0` is its whole content; the kernels carry the alternation
+> themselves, so G3 will cost nothing once G1 exists; and a hole closed on the way — `findPoles` sees
+> no transcendental, so a square at an INTEGER half-width ran its sides through the kernel's poles
+> while LEGALITY said every singularity was clear. **`through: "halfIntegers"`, declared since M3 and
+> read nowhere, is read at last**, by a bound that refuses any other half-width by name. **D-2 is
+> executed** — research 03 §8's bound is not a bound — **and corrected**: the shortfall is 4.9% at
+> `N = 3` and 27.8% at `N = 25`, growing toward the missing factor of π, so the gallery's "30–40 % at
+> every N" is the asymptote rather than the typical case. [`M5-plan.md`](M5-plan.md) §M5.5 and
+> [`GALLERY.md`](GALLERY.md) §5.6 have the findings.
+>
 > **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
 > is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
 > results.

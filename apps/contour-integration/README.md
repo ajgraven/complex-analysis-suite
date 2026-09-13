@@ -12,9 +12,10 @@ whether the whole thing closes.
 
 **Through Milestone 4, and published.** M1–M4 are complete (20 of the 28 gallery records loaded).
 **M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
-factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2) and M5.4
-(tier F's F1, on the wedge) are done; **23 of the 28 records are loaded**. E3 and F2 are deferred
-together, needing the same import machinery. See the milestone table in
+factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2), M5.4
+(tier F's F1, on the wedge) and M5.5 (tier G's machinery — the square, the summation kernels and the
+corrected bound) are done; **23 of the 28 records are loaded**. E3 and F2 are deferred together,
+needing the same import machinery. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -447,6 +448,28 @@ together, needing the same import machinery. See the milestone table in
 - **F1's job is cross-provenance.** `2π/(3√3)` is also D3 at `(a,n) = (1,3)` — a keyhole with a cut,
   a monodromy and a phase, against a wedge with none of the three. D3 refuses there and names this
   record as the repair.
+
+**M5.5 builds tier G's machinery, and executes the second finding against the research.**
+
+- **The square `Γ_N` has NO target piece.** `∮ → 0` is the result rather than the bookkeeping, and the
+  sum sits inside the residue list as the kernel's own poles at the integers. Its tests pin the
+  mechanism: `∮ = 2πi(2·S_N − π²/3)`, so inverting it recovers the partial sum from the engine's own
+  quadrature, and the residual is then the tail, bracketed in `(1/(N+1), 1/N)`.
+- **The alternation belongs to the KERNEL.** `π cot(πz)` has residue exactly 1 at every integer and
+  `π csc(πz)` exactly `(−1)ⁿ`, so `Σ(−1)ⁿ/n²` will cost nothing once `Σ 1/n²` exists. The leading `π`
+  is COUNTED, not pattern-matched — `cot(πz)` has residue `1/π` and is a different sum — and a numeric
+  coefficient goes to the cofactor. A COLLISION is named, not summed: G1's `1/z²` merges with the
+  kernel at the origin, and the merged residue lands in ℚ(i)(π).
+- **A hole in LEGALITY closes.** `findPoles` reports zero poles for a `cot` integrand, so a square at
+  an INTEGER half-width ran its sides through `z = ±N` while the ledger said every singularity was
+  clear of the contour. The band is read off the geometry, so a contour that moves gets a new window.
+- **The bound is `8π·coth(π/2)·(N+½)·max|f|`,** exact in ℚ, with `coth(π/2)` bracketed from a
+  certified lower bound on `e^π` and both truncations erring upward. It refuses a half-width that is
+  not `N + ½` by name — so `through: "halfIntegers"` is read at last.
+- **D-2, executed.** Research 03 §8 drops the `π` from `π cot(πz)` and its bound is then not one:
+  3.392 against a measured 3.567 at `N = 3`. **And a correction to that correction** — the gallery
+  says "30–40 % at every N"; measured it is 4.9% at `N = 3` and 27.8% at `N = 25`, growing, because
+  the ratio between the bounds is exactly `π·(N/(N+½))^k`. 30% is the asymptote, not the typical case.
 
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:

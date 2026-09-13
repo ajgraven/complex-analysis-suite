@@ -893,7 +893,11 @@ poles, none of them at an integer, and `|f(z)| ≤ M/|z|^k` with `k > 1` for `|z
 Research/03 §8 writes this bound as `(M/N^k)·coth(π/2)·4(2N+1)`, which drops the `π` from `π cot(πz)`
 (`4(2N+1) = 8(N+½)` is the perimeter and is right). **That is not a slack bound — it is not a bound:**
 against the measured `|∮_{Γ_N} π cot(πz)/z²dz|` it reads `3.392` vs `3.567` at `N = 3` and `0.356` vs
-`0.493` at `N = 25`, failing by 30–40 % at every `N` tested. See finding **D-2**. The derived bound
+`0.493` at `N = 25`, failing at every `N` tested. See finding **D-2**. *(M5.5 correction: the shortfall is 4.9% at
+`N = 3` and 27.8% at `N = 25` — it GROWS, because the ratio between the two bounds is exactly
+`π·(N/(N+½))^k`, so 30–40% is the ASYMPTOTE rather than the typical case. Both figures are
+recomputed in the app's own suite; the finding stands, only its magnitude was overstated at
+small `N`.)* The derived bound
 above was checked against the actual closed-contour integral at `N = 3..25` for all three entries and
 holds with slack `2.2×` (G1), `2.3×` (G2), `14×`–`62×` (G3, where `|csc| ≤ 1` beats `coth(π/2)` and
 the summand's alternation makes the partial sums oscillate toward the limit rather than climb to it).

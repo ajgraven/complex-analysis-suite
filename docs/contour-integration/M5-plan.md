@@ -326,7 +326,7 @@ The maths prerequisite for tier F, and a correction to the research.
 > `Γ(1+1/n)`, E3's top side for the Gaussian — and doing them together implements the import set once
 > against two consumers. SG-3 and SG-4 ride with it.
 
-### M5.5 — the summation kernel, the square, and the corrected bound · *M*
+### M5.5 — the summation kernel, the square, and the corrected bound · *M* — **DONE (a–c)**
 
 - The `πcot`/`πcsc` kernel pair.
 - The **square** template — and `limitParams[].to` able to say **"through half-integers only"**, which
@@ -334,6 +334,37 @@ The maths prerequisite for tier F, and a correction to the research.
   the tier's two real traps, and is currently unrepresentable (**SG-5**).
 - **The corrected square bound** `8π coth(π/2)·M·(N+½)^{1−k}`, with D-2 recorded: the research's
   version is not an upper bound and printing it would be certification theatre.
+
+> **Outcome — three slices, and the slice found that this plan's own source overstates a finding.**
+>
+> - **M5.5a — the square.** The first contour in the gallery with NO target piece: `∮ → 0` is the
+>   result, and the sum sits inside the residue list as the kernel's poles. Its tests pin the
+>   MECHANISM — `∮ = 2πi(2·S_N − π²/3)`, inverted to recover the partial sum from the engine's own
+>   quadrature, with the residual then the tail bracketed in `(1/(N+1), 1/N)`.
+> - **M5.5b — the kernels, and a hole in LEGALITY.** Residue exactly `1` and exactly `(−1)ⁿ` at every
+>   integer, the alternation the KERNEL's rather than `f`'s. The leading `π` is counted rather than
+>   pattern-matched, a numeric coefficient goes to the cofactor, and a COLLISION is named rather than
+>   summed (G1's `1/z²`, whose merged residue lands in ℚ(i)(π) — M5.7's). And `findPoles` reports zero
+>   poles for a `cot` integrand, so a square at an INTEGER half-width ran its sides through `z = ±N`
+>   while the ledger said every singularity was clear. The band is read off the GEOMETRY, so a
+>   contour that moves gets a new window on the same recompute.
+> - **M5.5c — the bound, and D-2.** `8π·coth(π/2)·(N+½)·max|f|` exact in ℚ, with `max|f|` read at
+>   `|z| = N+½` bounding `|f|` on the whole square by a term-by-term inequality rather than any
+>   monotonicity, and `coth(π/2)` bracketed from a certified lower bound on `e^π` with both
+>   truncations erring upward. **`through: "halfIntegers"` is READ at last** — the bound refuses any
+>   other half-width by name, which is SG-5's substance if not its schema shape.
+>
+> **D-2 executed, and corrected.** Research 03 §8's bound reads 3.392 against a measured 3.567 at
+> `N = 3` and 0.356 against 0.493 at `N = 25` — not a bound. But `tier-efg.md` §6 calls that "30–40 %
+> at every `N` tested", and measured it is **4.9% at `N = 3` and 27.8% at `N = 25`**, GROWING: the
+> ratio between the two bounds is exactly `π·(N/(N+½))^k`, so 30% is the asymptote. The finding stands;
+> its magnitude was overstated at small `N`, and the spec is corrected in place.
+>
+> Two arithmetic findings: the ledger spent 3.1 s per square side recomputing a CONSTANT (`piLower()`
+> is far more precise than a 40-term series needs, and `x^40/40!` over it makes thousand-digit
+> BigInts), and the resulting bracket is so tight that comparing it to `1/Math.tanh(π/2)` tests
+> float64's rounding rather than the arithmetic — M5.2's `piUpper().toNumber() === Math.PI` again.
+> Sweeps: 7/7, 15/15, 14/15 (one recorded equivalent).
 
 ### M5.6 — SG-1: the unknown inside `S` · *M–L*
 

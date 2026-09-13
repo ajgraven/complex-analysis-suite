@@ -471,6 +471,71 @@ different arguments.
 **F2 stays deferred with E3**, as M5.3 said: both need ADR-0042's `knownValue`, and doing them
 together implements the import set once against two consumers.
 
+### 5.6 Tier G's machinery — **M5.5**, and D-2 executed
+
+M5.5 builds no record. It builds the three things all three G entries share, and it finds that this
+document overstates its own finding.
+
+**The square is the first contour with no target piece.** `∮ → 0` IS the result, and the sum being
+evaluated sits inside the residue list as the kernel's own poles at the integers — the opposite of
+every other family in the gallery. So four `vanish` sides and nothing else is the shape of the
+argument rather than an omission, and a test pins the ABSENCE of a target as a positive claim about
+the tier. What the rest of the tests pin is the MECHANISM rather than a number that shrinks:
+`∮ = 2πi(2·S_N − π²/3)`, so inverting it recovers the partial sum from the engine's own quadrature,
+and the residual is then the tail `Σ_{n>N} 1/n²`, bracketed in `(1/(N+1), 1/N)`. That is why `∮ → 0`
+is the whole content: the square does not approximate the sum, it differs from it by exactly the
+contour integral. A first draft asserted `|∮| < 0.12` at `N = 30` and was simply wrong — the true
+value is `≈ 4π/N = 0.41` — which is what a guessed threshold buys.
+
+**The alternation belongs to the KERNEL, and that is the tier's economy.** `π cot(πz)` has residue
+exactly `1` at every integer and `π csc(πz)` exactly `(−1)ⁿ`, so `Res(K·f, n)` is `f(n)` or
+`(−1)ⁿ f(n)` and G3 costs nothing extra once G1 exists. What the module computes is `f(n)`, exactly
+over ℚ(i); what it ASSERTS is the kernel's own residue, with the derivation in the certificate and an
+independent contour quadrature as the check — deriving `1` from a limit numerically would be a worse
+claim about a better-known fact. Two things are structural: the leading `π` is COUNTED rather than
+pattern-matched, because `cot(πz)` has residue `1/π` and an integrand written without it is a
+different sum by a factor of π on every term; and a numeric coefficient goes to the COFACTOR, so
+`2π cot(πz)/z²` is the kernel times `2/z²`. A COLLISION is named, not summed — G1's `f = 1/z²` merges
+with the kernel at `n = 0`, where `Res(K·f, n) = Res(K,n)·f(n)` is not inaccurate but undefined, the
+true residue is `−π²/3`, and it lands in ℚ(i)(π) rather than the exponential basis (`π²` has no seat
+there, which is the same wall the log families met).
+
+**A hole in LEGALITY closes with it.** `findPoles` reports ZERO poles for `π cot(πz)/(z²+1)` — no
+reader in the app sees a transcendental, and reporting nothing is honest. What was not honest is the
+row built on top of it: a square at an INTEGER half-width runs its vertical sides exactly through
+`z = ±N`, and the ledger said "every singularity is clear of the contour" about a contour passing
+through infinitely many. Measured both ways: blind, every LEGALITY row is satisfied at half-width 2;
+with the kernel handed over, it refuses. The band is read off the GEOMETRY, which is what makes a
+window on an infinite set honest rather than arbitrary — the question is local to the contour drawn.
+
+**The bound, and the half-integers it forces.** `|∮| ≤ 8π·coth(π/2)·(N+½)·max|f|`, exact in ℚ. The
+subtle factor is the third: `max|f|` is read at `|z| = N+½` and bounds `|f|` on the whole square,
+because dividing the reverse-triangle quotient by `r^{deg D}` leaves the numerator's exponents
+non-positive and shrinks the denominator's subtracted sum — a term-by-term inequality using only
+`|z| ≥ h`, with no monotonicity of `|f|` assumed. `coth(π/2) = 1 + 2/(e^π − 1)` is bracketed from a
+certified LOWER bound on `e^π` (`e^x ≥ Σ x^k/k!` at `piLower()`), and both truncations push the same
+way — the only direction a bound may err. It **refuses** a half-width that is not `N + ½` by name, so
+`limitParams[].through = "halfIntegers"`, declared in the schema since M3 and read nowhere, is read.
+
+**D-2, executed rather than described — and a correction to the correction.** Research 03 §8's
+`(M/N^k)·coth(π/2)·4(2N+1)` drops the `π` from `π cot(πz)`, and is then not a bound: 3.392 against a
+measured 3.567 at `N = 3`, 0.356 against 0.493 at `N = 25`, both recomputed from the engine's own
+quadrature. **§6 above says it fails "by 30–40 % at every `N` tested", and that is wrong.** Measured,
+the shortfall is **4.9% at `N = 3` and 27.8% at `N = 25`**, and it GROWS — because the ratio between
+the two bounds is exactly `π·(N/(N+½))^k`, the missing π times a factor tending to 1. So 30% is the
+ASYMPTOTE, not the typical case. The finding itself is untouched: at every `N` the stated quantity is
+below the thing it is supposed to bound, which is what makes it not a bound. Only its magnitude was
+overstated at small `N`.
+
+Two findings about the arithmetic came with it. The ledger spent **3.1 seconds per square side
+recomputing a constant** — `piLower()` is accurate to far more digits than a 40-term series needs, and
+`x^40/40!` over it produces thousand-digit BigInts; truncating π to 20 digits (downward, so still a
+lower bound, so still sound) and memoising took the suite from 88 s to 2.7 s, and the bracket is still
+above the truth by 2.5e-22. And that tightness broke the first test, which compared `toNumber()`
+against `1/Math.tanh(π/2)`: the nearest double to `coth(π/2)` is ABOVE both the true value and the
+bracket, so the assertion was testing float64's rounding. M5.2's `piUpper().toNumber() === Math.PI`
+again, with the same fix — compare in ℚ.
+
 ### 5.0b C1 is where `∮` stops being the answer
 
 Tiers A and B never needed Pass 5. There the target piece IS the whole contour (A) or the arc
