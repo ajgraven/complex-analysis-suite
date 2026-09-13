@@ -11,7 +11,8 @@
 // itself as a worked example. Dropping it is the same refusal discipline the rest of the engine runs
 // on: withhold the thing that cannot be stood behind, and say why.
 import { parse } from "@cas/expr";
-import type { Family } from "./schema.js";
+import type { Family, FamilyPiece } from "./schema.js";
+import { importedValue } from "./importedValue.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem, withoutColumns } from "./system.js";
 import { describeKernel } from "./linear.js";
 import { residueTermShape } from "./solveResidueTerm.js";
@@ -182,6 +183,7 @@ function checkWellFormed(family: Family): Violation[] {
     if (piece.role === "vanish" && piece.lemma === undefined) {
       fail(`piece '${piece.id}' has role 'vanish' but names no lemma`);
     }
+    if (piece.knownValue !== undefined) checkKnownValue(family, piece, fail);
   }
   for (const lemma of family.vanishingLemmas) {
     if (!pieceIds.includes(lemma.piece)) {
@@ -270,6 +272,67 @@ function checkWellFormed(family: Family): Violation[] {
     }
   }
   return v;
+}
+
+/**
+ * ADR-0042's guards on an imported value — the four ways a `knownValue` can be dishonest.
+ *
+ * **The role.** `vanish` and `residue` have their own evidence (a certified bound; exact arithmetic)
+ * and may not also claim an import; and one on the `target` piece would leave Pass 5 with nothing to
+ * do, which is importing the answer. `free` is the only role whose meaning an import refines.
+ *
+ * **The closed set.** The expression must resolve to exactly one member of `kernel/imported.ts`'s
+ * list, at every one of the record's own bindings — so "what does this app take on faith" has an
+ * answer that can be read off the code rather than off a string a record invented.
+ *
+ * **The level, in BOTH directions.** The record's `rigor` must EQUAL what the import justifies, not
+ * merely not exceed it. A ceiling alone would be satisfied by every level (`=` is the lattice top)
+ * and would assert nothing; and under-claiming is not modesty — a record saying the app is less sure
+ * than it is documents a disagreement, and neither side of one should be silently preferred.
+ */
+function checkKnownValue(
+  family: Family,
+  piece: FamilyPiece,
+  fail: (message: string) => void,
+): void {
+  const known = piece.knownValue;
+  /* c8 ignore next */
+  if (known === undefined) return;
+  if (piece.role !== "free") {
+    fail(
+      `piece '${piece.id}' carries a knownValue but has role '${piece.role}': an import refines ` +
+        "'free' (a value nobody has pinned) and may not stand in for a lemma, a residue, or the target",
+    );
+    return;
+  }
+  if (known.method.trim() === "") {
+    fail(`piece '${piece.id}' declares a knownValue with no method — the provenance is what makes it honest`);
+  }
+  let ast;
+  try {
+    ast = parse(known.expr);
+  } catch (e) {
+    fail(
+      `piece '${piece.id}': the knownValue '${known.expr}' is not a readable expression: ${
+        e instanceof Error ? e.message : String(e)
+      }`,
+    );
+    return;
+  }
+  const fixtures = family.golden.length > 0 ? family.golden.map((g) => g.params) : [{}];
+  for (const [i, params] of fixtures.entries()) {
+    const resolved = importedValue(ast, params);
+    if (!resolved.ok) {
+      fail(`piece '${piece.id}' at golden ${i}: the knownValue is not an import — ${resolved.reason}`);
+      continue;
+    }
+    if (known.rigor !== resolved.value.atom.rigor) {
+      fail(
+        `piece '${piece.id}' at golden ${i} declares rigor '${known.rigor}', but ${resolved.value.atom.text} ` +
+          `is an import this app holds at '${resolved.value.atom.rigor}'`,
+      );
+    }
+  }
 }
 
 /**

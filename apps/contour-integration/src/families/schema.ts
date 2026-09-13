@@ -175,6 +175,30 @@ export interface FamilyPiece {
   readonly bonus?: string;
   /** Pins which limit is meant where the piece runs along a branch cut — never an ε-offset. */
   readonly side?: "above" | "below";
+  /**
+   * A `free` piece whose value is **exactly known and not derived by this contour** (ADR-0042).
+   *
+   * E3's top side is `√π e^{−b²/4}` — the Gaussian, which comes from polar coordinates — and F2's
+   * return ray is `e^{iπ/(2n)}Γ(1+1/n)`, which comes from the real substitution `u = tⁿ`. Under the
+   * v1 schema the only role left for such a piece was `free`, which Pass 3 prices by quadrature at
+   * `≈`: **a perfectly exact argument capped at `≈` by its most certain step**, the inverse of the
+   * failure `@cas/rigor` exists to prevent. The opposite error is worse — a bare `=` launders the
+   * import as a derivation — so the claim and its provenance travel together, which is what every
+   * other certificate in this app already does.
+   *
+   * `method` is REQUIRED and carries the provenance; the derivation renders it as a step beginning
+   * "imported, not derived here". `rigor` is what the record claims and may not exceed what the
+   * import can justify, which `kernel/imported.ts`'s closed set decides rather than a free string.
+   *
+   * **Only on a `free` piece.** A `vanish` and a `residue` piece have their own evidence (a certified
+   * bound; exact arithmetic) and may not claim both; and one on the `target` piece would leave the
+   * solve with nothing to do — importing the answer — which the loader refuses.
+   */
+  readonly knownValue?: {
+    readonly expr: string;
+    readonly method: string;
+    readonly rigor: Level;
+  };
   readonly colour: 0 | 1 | 2 | 3 | 4 | 5;
 }
 

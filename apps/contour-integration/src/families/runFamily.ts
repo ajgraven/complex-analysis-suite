@@ -19,6 +19,7 @@ import { analyse, type Analysis } from "../engine/analyse.js";
 import type { PathFn, QuadratureBudget } from "../engine/contour/integrate.js";
 import type { Contour } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
+import type { ExpSum } from "../kernel/expSum.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { asSummationKernel, type SummationKernel } from "../kernel/summationKernel.js";
 import { cofactorResidues } from "../kernel/kernelResidue.js";
@@ -36,6 +37,11 @@ import {
 } from "./solveTarget.js";
 import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branchFactor.js";
 import { residueTermShape, solveResidueTerm, type SolvedResidueTerm } from "./solveResidueTerm.js";
+import {
+  importedPieces,
+  solveImported,
+  type ImportedSolveResult,
+} from "./solveImported.js";
 import { mergedResidue } from "../kernel/mergedResidue.js";
 import { checkDeclaredCollisions, escalations } from "./collisionCheck.js";
 import { legalityRefusal } from "../engine/ledger.js";
@@ -132,6 +138,22 @@ export type SolveFamilyResult =
    * record with `targetTerms` has no `target` piece — that is what SG-1 IS.
    */
   | { readonly ok: true; readonly route: "sum"; readonly run: FamilyRun; readonly solved: SolvedResidueTerm }
+  /**
+   * The contour encloses NOTHING and closes on one imported value — E3 and F2 (ADR-0042).
+   *
+   * A fourth route for the same reason as the third: the arithmetic is in a different ring. `∮ = 0`
+   * and every arc vanishes, so what is left is a rank-1 module over the exponential basis generated
+   * by `√π` or `Γ(1+1/n)` — a number that carries no π, and that nothing in the argument can divide
+   * by. `solveImported.ts` gives it in full. `imported` carries every unknown the contour determined
+   * plus what the argument took on faith, so a reader can see exactly which step came from outside.
+   */
+  | {
+      readonly ok: true;
+      readonly route: "imported";
+      readonly run: FamilyRun;
+      readonly solved: SolvedValue;
+      readonly imported: ImportedSolveResult;
+    }
   /**
    * Pass 5 can refuse while the RUN is perfectly good — a degenerate target coefficient, a relation
    * the solver has no symbolic route for. The run comes back anyway so a caller can show the ledger
@@ -380,6 +402,13 @@ function solveWithin(
     };
   }
 
+  // AND THE FOURTH, on the record's own declaration. A `knownValue` means the answer comes from a
+  // piece the contour did not derive, which is arithmetic in a module rather than in units of π —
+  // `solveImported.ts` says why, and refuses the mixed case by name rather than adding π to √π.
+  if (importedPieces(family).length > 0) {
+    return solveImportedFamily(family, r.run, piUnits);
+  }
+
   const solved = solveTarget(family, {
     closedContourPiUnits: piUnits,
     pieceLimits: r.run.ledger.pieceLimits,
@@ -548,6 +577,41 @@ function solveSummationFamily(family: Family, run: FamilyRun): SolveFamilyResult
 }
 
 /** Pass 5 for a log family: `M t = r` over ℚ(i)(π), reported per unknown. */
+/**
+ * E3 and F2's route — the contour that encloses nothing and closes on one import.
+ *
+ * The PRIMARY target is reported as `solved` so a caller that only wants to print the answer reads
+ * the same field on every route, and `imported` carries the rest: F2 determines both `∫cos(xⁿ)` and
+ * `∫sin(xⁿ)` from one complex identity, and dropping either would lose half the record.
+ */
+function solveImportedFamily(family: Family, run: FamilyRun, piUnits: ExpSum): SolveFamilyResult {
+  const solved = solveImported(family, {
+    closedContourPiUnits: piUnits,
+    pieceLimits: run.ledger.pieceLimits,
+    // BY INDEX, not by id. `integrateContour` takes resolved geometries and labels them `piece 1…n`
+    // positionally — it never sees a family — so `PieceIntegral.pieceId` is a label rather than a
+    // key, and matching on it would silently find nothing. The ledger's own loop aligns the same way.
+    pieceQuadratures: family.contour.pieces.flatMap((piece, k) => {
+      const measured = run.integral.pieces[k];
+      return measured === undefined ? [] : [{ pieceId: piece.id, value: measured.value }];
+    }),
+    bindings: run.bindings,
+  });
+  if (!solved.ok) return { ok: false, run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
+
+  const primaryId = (family.targets.find((t) => t.role === "primary") ?? family.targets[0]).id;
+  const primary = solved.result.solved.find((x) => x.targetId === primaryId);
+  if (primary === undefined) {
+    const why = solved.result.invisible.join("; ");
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: this contour does not determine ${primaryId}${why === "" ? "" : ` — ${why}`}`,
+    };
+  }
+  return { ok: true, route: "imported", run, solved: primary, imported: solved.result };
+}
+
 function solveLogFamily(family: Family, run: FamilyRun, chain: ReadonlySet<string>): SolveFamilyResult {
   const closedContour = run.theorem.exactInPi;
   if (closedContour === undefined) {
