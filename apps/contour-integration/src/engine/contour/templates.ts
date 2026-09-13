@@ -419,3 +419,47 @@ export function wedgeTemplate(n = 3, radius = 4): Contour {
   ];
   return { pieces, params: { R: param("R", radius, [0.5, 1e6], "log", { to: "inf" }) } };
 }
+
+/**
+ * The SUMMATION square `Γ_N`: vertices `(N+½)(±1±i)`, counterclockwise, with `N → ∞`.
+ *
+ * Tier G's contour, and the one whose every side VANISHES — which for the first time in the gallery
+ * is the whole content rather than the bookkeeping. There is no `target` piece: `∮ → 0` is the
+ * result, and the sum being evaluated sits inside the residue list as the kernel's own poles at the
+ * integers. So four `vanish` sides and nothing else is not an omission here; it is the shape of the
+ * argument (`tier-efg.md` §6).
+ *
+ * **THE HALF-INTEGER OFFSET IS NOT A CONVENIENCE.** At an integer half-width the vertical sides pass
+ * exactly through the kernel's poles at `z = ±N`, where `|π cot πz|` is unbounded — measured `8.2e15`
+ * at half-width 1, which is float precision rather than a number. At a half-width that is neither, the
+ * sup is finite for each individual contour but not UNIFORMLY bounded as the half-width approaches an
+ * integer, so no limit argument exists. The half-integers are the unique choice that is both pole-free
+ * and uniformly bounded, with `sup|cot πz| = coth(π(N+½)) ≤ coth(π/2)` attained at `N = 0`. The
+ * template takes `N` and offsets by a half, which is the same move {@link wedgeTemplate} makes with
+ * its angle; scrubbing `N` off an integer is still possible, and `kernel/bounds/squareSide.ts`
+ * refuses it by name rather than certifying a bound from the wrong geometry.
+ */
+export function squareTemplate(n = 2): Contour {
+  // `N + ½` in both coordinates: affine in the one live parameter, so a scrub of `N` moves all four
+  // sides together and the square stays closed.
+  const hi = ref("N", 1, 0.5);
+  const lo = ref("N", -1, -0.5);
+  const corners: [Scalar, Scalar][] = [
+    [hi, lo],
+    [hi, hi],
+    [lo, hi],
+    [lo, lo],
+  ];
+  const pieces: Piece[] = corners.map((from, k) => {
+    const to = corners[(k + 1) % 4] ?? from;
+    return {
+      id: `side-${k + 1}`,
+      name: ["the right side x = N+½", "the top side y = N+½", "the left side x = −(N+½)", "the bottom side y = −(N+½)"][k] ?? `side ${k + 1}`,
+      geom: { kind: "segment", from: pt(from[0], from[1]), to: pt(to[0], to[1]) },
+      role: "vanish",
+      lemma: "L2",
+      colour: (k % 6) as 0 | 1 | 2 | 3 | 4 | 5,
+    };
+  });
+  return { pieces, params: { N: param("N", n, [0, 1e4], "linear", { to: "inf" }) } };
+}
