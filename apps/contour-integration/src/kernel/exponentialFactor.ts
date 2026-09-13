@@ -10,7 +10,7 @@
 //
 // Narrow on purpose: exactly one `exp` factor, whose argument is `i·a·z` with `a` rational, times a
 // rational function. `exp(z²)`, two exponentials, or a non-rational remainder all decline.
-import { Frac, QiPoly } from "@cas/exact";
+import { Frac, Gauss, QiPoly } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import { toExactRational } from "./exactRational.js";
 
@@ -112,4 +112,75 @@ export function asExponentialTimesRational(ast: Node): ExponentialForm | null {
     den,
   );
   return rest ? { a, num: rest.num, den: rest.den } : null;
+}
+
+/**
+ * `λ·e^{w·zⁿ}` — the shape the corrected L6 (the wedge/Gaussian arc lemma) is about.
+ *
+ * Deliberately a SEPARATE reader from {@link asExponentialTimesRational} rather than a widening of
+ * it. That one's `g(z)` is a rational cofactor whose degree gap does the decaying, and Jordan's
+ * bound is `(π/|a|)·max|g|`; here the exponential does all the work and the bound is
+ * `π/(n·c·R^{n−1})` with no cofactor in it at all. Merging them would mean one function whose
+ * asymptotics came from two unrelated places.
+ *
+ * `n = 1` is not excluded, and the overlap is the point: at `n = 1` with `w = ia` this is Jordan's
+ * own integrand, and the wedge bound at `n = 1` over a semicircle returns exactly `π/|a|` —
+ * asserted in `test/wedgeArc.test.ts`. The ledger still routes `n = 1` to `jordanArcBound`, because
+ * only that one carries the rational cofactor.
+ */
+export interface PowerExponentialForm {
+  /** `w` in `e^{w zⁿ}`, over ℚ(i). Its ARGUMENT decides which face of the minorant applies. */
+  readonly w: Gauss;
+  /** `n ≥ 1`. */
+  readonly n: number;
+  /** The constant prefactor `λ`. A `z`-dependent cofactor declines instead. */
+  readonly lambda: Gauss;
+}
+
+/** `w` and `n` when `arg` is exactly `w·zⁿ` with no lower-order terms, or null. */
+function powerExponentOf(arg: Node): { w: Gauss; n: number } | null {
+  const r = toExactRational(arg);
+  if (!r.ok) return null;
+  const { num, den } = r.value;
+  if (den.degree() !== 0) return null;
+  const scale = den.coeff(0);
+  if (scale.isZero()) return null;
+  const n = num.degree();
+  if (n < 1) return null; // a constant exponent is a constant factor, not a wedge
+  // A LOWER-ORDER TERM IS NOT A ROUNDING DETAIL. `e^{−z² + z}` has modulus `e^{−R²cos2θ + Rcosθ}`,
+  // and the linear term's sign flips across the wedge; the bound below reasons about `e^{−cRⁿh(nθ)}`
+  // and nothing else, so anything else declines rather than being approximated away.
+  for (let k = 0; k < n; k++) if (!num.coeff(k).isZero()) return null;
+  return { w: num.coeff(n).div(scale), n };
+}
+
+/**
+ * Read `f` as `λ·e^{w zⁿ}` with `λ, w ∈ ℚ(i)`, or null.
+ *
+ * Null is the ordinary outcome for everything the rest of the engine handles; only an entire
+ * integrand of this exact shape — F2's `e^{iz²}`, `∫₀^∞ e^{−xⁿ}dx`'s `e^{−zⁿ}` — answers.
+ */
+export function asExponentialOfPower(ast: Node): PowerExponentialForm | null {
+  const { num, den } = splitFactors(ast);
+  if (den.some(isExp)) return null;
+  const exps = num.filter(isExp);
+  if (exps.length !== 1) return null;
+
+  const theExp = exps[0];
+  if (theExp.kind !== "call" || theExp.args.length !== 1) return null;
+  const exponent = powerExponentOf(theExp.args[0]);
+  if (exponent === null) return null;
+
+  const rest = rationalProduct(
+    num.filter((f) => f !== theExp),
+    den,
+  );
+  if (rest === null) return null;
+  // A `z`-DEPENDENT COFACTOR DECLINES BY NAME rather than being dropped. No record in the corpus
+  // has one, and carrying it would change the asymptotics the bound reports: `R^{1−n}` would have
+  // to be `R^{1−n}·max|g|`, which is Jordan's story and not this one.
+  if (rest.num.degree() !== 0 || rest.den.degree() !== 0) return null;
+  const d = rest.den.coeff(0);
+  if (d.isZero()) return null;
+  return { w: exponent.w, n: exponent.n, lambda: rest.num.coeff(0).div(d) };
 }

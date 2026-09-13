@@ -23,8 +23,9 @@ import { allCrossingMonodromy, crossingMonodromy, cutGeometryInvariance } from "
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
-import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
+import { asExponentialOfPower, asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
+import { wedgeArcBound } from "../kernel/bounds/wedgeArc.js";
 import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
 import type { LogFactor } from "../kernel/logResidue.js";
@@ -77,25 +78,56 @@ export interface LedgerResult {
   readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
 }
 
+/**
+ * The rational multiples of π the app's contours actually produce.
+ *
+ * A WHITELIST rather than a rational reconstruction, deliberately: a bound computed for the wrong
+ * extent is worse than no bound, and `simplestRational` of a dragged float is a sixteen-digit
+ * fraction that is honest and useless. The second block is the wedge angles — `π/n` and `π/(2n)` up
+ * to `n = 6` — which L6 needs and which M5.4's wedge template will draw; before M5.2 an `e^{−z³}`
+ * arc could not even be measured, let alone bounded.
+ */
+const PI_MULTIPLES = [
+  [2n, 1n],
+  [1n, 1n],
+  [1n, 2n],
+  [1n, 3n],
+  [2n, 3n],
+  [1n, 4n],
+  [3n, 2n],
+  [4n, 1n],
+  [1n, 5n],
+  [1n, 6n],
+  [1n, 8n],
+  [1n, 10n],
+  [1n, 12n],
+] as const;
+
+/**
+ * One angle as an exact rational multiple of π, or null.
+ *
+ * Zero answers `0` rather than null: a wedge STARTS on the positive real axis, and "the arc begins
+ * at 0" has to be expressible for `wedgeArcBound` to be able to refuse an arc that does not.
+ */
+function asPiMultiple(radians: number): Frac | null {
+  if (!Number.isFinite(radians)) return null;
+  const t = radians / Math.PI;
+  if (Math.abs(t) < 1e-12) return Frac.ZERO;
+  for (const [n, d] of PI_MULTIPLES) {
+    const v = Number(n) / Number(d);
+    if (Math.abs(t - v) < 1e-12) return Frac.of(n, d);
+    if (Math.abs(t + v) < 1e-12) return Frac.of(-n, d);
+  }
+  return null;
+}
+
 /** How the arcs of a contour are disposed of. `piMultiple` is the arc's angular extent over π. */
 function arcExtent(g: Resolved): Frac | null {
   if (g.kind !== "arc") return null;
-  // Recognise the rational multiples of π the templates actually produce, by comparing against
-  // exact fractions rather than trusting a float ratio.
-  const sweep = Math.abs(g.theta1 - g.theta0) / Math.PI;
-  for (const [n, d] of [
-    [2n, 1n],
-    [1n, 1n],
-    [1n, 2n],
-    [1n, 3n],
-    [2n, 3n],
-    [1n, 4n],
-    [3n, 2n],
-    [4n, 1n],
-  ] as const) {
-    if (Math.abs(sweep - Number(n) / Number(d)) < 1e-12) return Frac.of(n, d);
-  }
-  return null;
+  const extent = asPiMultiple(Math.abs(g.theta1 - g.theta0));
+  // A degenerate arc gets no extent, as before: `asPiMultiple` answers `0` for the START angle's
+  // sake, and an ML bound of `0·π·R·max|f|` would be a vacuous `≤` rather than a useful one.
+  return extent === null || extent.isZero() ? null : extent;
 }
 
 /** The radius of an arc as an exact rational, when it is one. */
@@ -146,6 +178,20 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   // this case, and its trap is explicit that an engine treating π/0 as a failure "will paper over
   // exactly the case it was built to catch".
   if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent);
+
+  // **L6 — the wedge lemma (M5.2).** Nothing above reaches `e^{±zⁿ}` for `n ≥ 2`: Jordan's reader
+  // wants a LINEAR exponent and declines, and the exact rational reader declines a `call`, so until
+  // now such an arc fell through to `null` and KILL reported "no lemma here applies to this
+  // integrand" for the one integrand L6 exists for. The face — Gaussian or oscillatory — is read
+  // off `w` inside the bound, and with it the arc's admissible range; see `wedgeArc.ts` for why
+  // those are one question and not two (finding D-1).
+  const wedge = asExponentialOfPower(ast);
+  if (wedge) {
+    const from = asPiMultiple(g.theta0);
+    const to = asPiMultiple(g.theta1);
+    if (from === null || to === null) return null;
+    return wedgeArcBound(wedge, R, { from, to });
+  }
 
   const rational = toExactRational(ast);
   if (!rational.ok) return null;
@@ -806,7 +852,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
               ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
               : input.power === undefined && input.log === undefined
-                ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
+                ? "the certified bounds cover a rational integrand, one times e^{iaz}, or λ·e^{w zⁿ} on a wedge measured from the positive real axis; this is none of them"
                 : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,
