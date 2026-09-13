@@ -64,7 +64,17 @@ function bernoulli(n: number): Frac[] {
  * not depend on anything about the record.
  */
 const COEFFICIENTS = new Map<string, readonly Frac[]>();
-function kernelSeries(kind: KernelKind, upTo: number): readonly Frac[] {
+/**
+ * Exported for the CONFLUENCE invariant, which is its second consumer (ADR-0007).
+ *
+ * `a → 0` carries G2 onto G1 and G2's csc companion onto G3, and the rigorous form of that limit is
+ * not an evaluation at a small `a`: `(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}`, so
+ * the kernel's own Laurent coefficients ARE the Taylor coefficients of the non-colliding family's
+ * closed form once its pole part is removed. The `a⁰` term is then exactly `−Res₀` — the collision
+ * record's own answer — and the `a²` term is `Res₀` of the `1/z⁴` family, which is ζ(4)'s. One
+ * identity, three invariants, and no limit taken numerically.
+ */
+export function kernelSeries(kind: KernelKind, upTo: number): readonly Frac[] {
   const key = `${kind}:${upTo}`;
   const seen = COEFFICIENTS.get(key);
   if (seen !== undefined) return seen;
