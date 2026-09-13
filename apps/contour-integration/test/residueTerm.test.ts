@@ -170,13 +170,25 @@ describe("the two-sided sum: Σ_{n∈ℤ} 1/(n²+a²)", () => {
     expect(re).toBeCloseTo(1 / Math.tanh(Math.PI * 0.75) / 0.75, 12);
   });
 
-  it("has no closed-form text yet, and says so by omission rather than by a decimal", () => {
+  it("prints the NAMED form, and its value is the form's", () => {
     const r = solve(squareRecord(TWO_SIDED), "pi*cot(pi*z)/(z^2+1)");
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    // `SolvedValue.text` is optional exactly for this: the value is exact, the FORMATTER is missing.
-    expect(r.solved.text).toBeUndefined();
+    expect(r.solved.text).toBe("π·coth(π)");
+    expect(r.solved.value).toBeCloseTo(Math.PI / Math.tanh(Math.PI), 12);
     expect(r.solved.certificates.every((c) => c.level === "=")).toBe(true);
+  });
+
+  it("an unnameable ratio keeps its exact value and loses only the FORM", () => {
+    // A cofactor with a single pole off the imaginary axis: the quotient is exact, and nothing in
+    // `cothForm.ts`'s declared shape describes it. The answer is a decimal and the text is absent —
+    // a missing formatter, never a missing value.
+    const r = solve(squareRecord(TWO_SIDED), "pi*cot(pi*z)/(z-1/2)");
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.solved.text).toBeUndefined();
+    expect(r.solved.form).toBeUndefined();
+    expect(Number.isFinite(r.solved.value)).toBe(true);
   });
 
   it("the csc companion alternates, and the alternation belongs to the KERNEL", () => {

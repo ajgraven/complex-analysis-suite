@@ -50,6 +50,30 @@ export interface SineForm {
    * is a negative real and gives `π/cosh(πξ/2)` — which is `π·sech(πξ/2)`, the record's own form.
    */
   readonly cosh?: Frac;
+  /**
+   * A hyperbolic MULTIPLIER — `c·coth(π r)` or `c·csch(π r)` — tier G's shape (`cothForm.ts`).
+   *
+   * A third slot rather than a third `Frac` beside the two above, because it does the opposite job:
+   * `sine` and `cosh` are DENOMINATORS (`π/sin(πα)` is how D1's record writes its answer) and this
+   * is a FACTOR (`(π/a)·coth(πa)` is how G2's does). Shown as `1/tanh` it would be the same number
+   * in a form no reader is looking for. At most one of the three is ever present, which
+   * {@link denominatorOf} is the single reader of — the E2 lesson, which was a value and a text
+   * computed from different objects.
+   */
+  readonly hyperbolic?: { readonly kind: "coth" | "csch"; readonly r: Frac };
+}
+
+/**
+ * The one factor a form carries, whichever slot it is in — read by the formatter, the number and
+ * the argument accessor alike, so the three cannot drift apart.
+ */
+export function denominatorOf(
+  form: SineForm,
+): { readonly kind: "sin" | "cosh" | "coth" | "csch"; readonly r: Frac } | null {
+  if (form.sine !== undefined) return { kind: "sin", r: form.sine };
+  if (form.cosh !== undefined) return { kind: "cosh", r: form.cosh };
+  if (form.hyperbolic !== undefined) return form.hyperbolic;
+  return null;
 }
 
 export type SineDivision =
@@ -418,27 +442,40 @@ function divideCarryingCosh(
 /** `π·Σ cₖ e^{βₖ} / sin(π r)`, written the way the gallery writes it: `π/sin(3π/10)`, `(π/4)/sin(3π/8)`. */
 export function formatSineForm(form: SineForm): string {
   const head = formatPiExpSum(form.sum);
-  const factor = form.sine ?? form.cosh;
-  if (factor === undefined) return head;
-  const name = form.sine === undefined ? "cosh" : "sin";
-  const denominator = `${name}(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(factor, Frac.ZERO)))})`;
+  const factor = denominatorOf(form);
+  if (factor === null) return head;
+  const written = `${factor.kind}(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(factor.r, Frac.ZERO)))})`;
   // `π/4/sin(3π/8)` is two divisions in a row and reads as neither; the record itself writes
   // `(pi/4)/sin(3*pi/8)`.
   const compound = head.includes("/") || head.includes(" + ") || head.includes(" − ");
-  return `${compound ? `(${head})` : head}/${denominator}`;
+  const bracketed = compound ? `(${head})` : head;
+  // A hyperbolic form MULTIPLIES — see `SineForm.hyperbolic`.
+  return factor.kind === "coth" || factor.kind === "csch"
+    ? `${bracketed}·${written}`
+    : `${bracketed}/${written}`;
 }
 
 /** The decimal. `≈` by construction — this is where π and the sine are finally evaluated. */
 export function sineFormToNumber(form: SineForm, part: "re" | "im"): number {
   const [re, im] = form.sum.toTuple();
   const head = Math.PI * (part === "re" ? re : im);
-  if (form.cosh !== undefined) return head / Math.cosh(Math.PI * form.cosh.toNumber());
-  if (form.sine === undefined) return head;
-  return head / Math.sin(Math.PI * form.sine.toNumber());
+  const factor = denominatorOf(form);
+  if (factor === null) return head;
+  const x = Math.PI * factor.r.toNumber();
+  switch (factor.kind) {
+    case "sin":
+      return head / Math.sin(x);
+    case "cosh":
+      return head / Math.cosh(x);
+    case "coth":
+      return head / Math.tanh(x);
+    case "csch":
+      return head / Math.sinh(x);
+  }
 }
 
 /** The exponent of the sine's argument, for a caller that wants to show the factoring. */
 export function sineArgument(form: SineForm): Exponent | null {
-  const factor = form.sine ?? form.cosh;
-  return factor === undefined ? null : Exponent.piTimes(new Gauss(factor, Frac.ZERO));
+  const factor = denominatorOf(form);
+  return factor === null ? null : Exponent.piTimes(new Gauss(factor.r, Frac.ZERO));
 }

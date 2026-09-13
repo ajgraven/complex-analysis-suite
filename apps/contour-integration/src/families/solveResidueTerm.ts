@@ -49,6 +49,8 @@ import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import type { ExpSum } from "../kernel/expSum.js";
 import { ratioToTuple, scaleRatio, type ExpRatio } from "../kernel/kernelResidue.js";
+import { asHyperbolicForm } from "../kernel/cothForm.js";
+import { formatSineForm, sineFormToNumber, type SineForm } from "../kernel/sineForm.js";
 import type { SummationKernel } from "../kernel/summationKernel.js";
 import type { Family } from "./schema.js";
 import type { SolvedValue } from "./solveTarget.js";
@@ -92,6 +94,14 @@ export interface SolvedResidueTerm extends SolvedValue {
   readonly weight: 1 | 2;
   /** `T/π`, exactly — a RATIO, because `coth` is one. */
   readonly piUnits: ExpRatio;
+  /**
+   * The NAMED form, when `cothForm.ts` recognises the ratio — `c·coth(πr)` or `c·csch(πr)`.
+   *
+   * Absent is not a failure: the value is exact either way, and a ratio outside the declared shape
+   * is reported as a decimal with the naming refused by name. `text` is derived from this and from
+   * nothing else, so a value and a form cannot disagree (the E2 lesson).
+   */
+  readonly form?: SineForm;
 }
 
 export type SolveResidueTermResult =
@@ -247,14 +257,26 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
     );
   }
 
+  // NAMING IS THE LAST STEP, AND IT IS ALLOWED TO FAIL. `kernelResidue.ts` says why `coth` is a name
+  // for a quotient at a particular `z₀` rather than a fact about the arithmetic: the value is exact
+  // whether or not the shape is one this app writes down. A refusal here is a missing FORMATTER,
+  // never a missing value, so the decimal stands and the reason is carried.
+  const named = asHyperbolicForm(piUnits);
+  const certificates: Certificate[] = [];
+  if (named.ok) {
+    certificates.push(named.certificate);
+  }
+
   return {
     ok: true,
     solved: {
       targetId: entry.targetId,
       weight: forced,
       piUnits,
-      value: Math.PI * re,
+      ...(named.ok ? { form: named.form, text: formatSineForm(named.form) } : {}),
+      value: named.ok ? sineFormToNumber(named.form, "re") : Math.PI * re,
       certificates: [
+        ...certificates,
         exact(
           `${entry.targetId} = −(Σ_j Res(K·f, z_j))/${forced}`,
           "Pass 5 with the unknown INSIDE the residue sum: every side of the contour vanishes, so " +
