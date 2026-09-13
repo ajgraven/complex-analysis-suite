@@ -241,6 +241,7 @@ export function analyse({
     power,
     log,
     multi,
+    ...(summation === undefined ? {} : { summation }),
   });
   return { resolved, sides, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
 }

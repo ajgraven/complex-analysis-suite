@@ -26,6 +26,8 @@ import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialOfPower, asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
 import { wedgeArcBound } from "../kernel/bounds/wedgeArc.js";
+import { squareSideBound } from "../kernel/bounds/squareSide.js";
+import type { SummationKernel } from "../kernel/summationKernel.js";
 import { stripSideBound } from "../kernel/bounds/stripSide.js";
 import { asExponentialLattice } from "../kernel/expLattice.js";
 import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
@@ -143,6 +145,18 @@ function arcRadius(g: Resolved): Frac | null {
   if (!Number.isFinite(r) || r <= 0) return null;
   // The radius comes from a slider, so it is a double; the simplest rational that round-trips is the
   // honest reading of it, and the bound is then exact *for that radius*.
+  return asExactRadius(r);
+}
+
+/**
+ * A positive length as the simplest rational that round-trips it at 1e-6.
+ *
+ * The value comes from a slider, so it is a double; reading it this way makes the bound exact *for
+ * that length*, which is the honest claim. Shared by the arc's radius and the square's half-width —
+ * the second consumer is what moved it out of `arcRadius` (ADR-0007 at the function scale).
+ */
+function asExactRadius(r: number): Frac | null {
+  if (!Number.isFinite(r) || r <= 0) return null;
   const rounded = Math.round(r * 1e6) / 1e6;
   return Frac.of(BigInt(Math.round(rounded * 1e6)), 1000000n);
 }
@@ -194,6 +208,36 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   const rational = toExactRational(ast);
   if (!rational.ok) return null;
   return mlArcBound(rational.value.num, rational.value.den, R, extent);
+}
+
+/**
+ * The summation square's side, when the integrand carries a kernel — tier G's disposer.
+ *
+ * Reads the half-width off the SIDE itself and checks the square is a square: an axis-parallel
+ * segment whose constant coordinate has the same magnitude as half its length, centred at the
+ * origin. The check is not bureaucracy — `sup|cot πz| = coth(π(N+½))` is a statement about that
+ * geometry, and a side of some other rectangle gets the right formula on the wrong figure.
+ */
+function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | null {
+  if (g.kind !== "segment") return null;
+  const [x0, y0] = g.from;
+  const [x1, y1] = g.to;
+  const vertical = Math.abs(x1 - x0) < 1e-12;
+  const horizontal = Math.abs(y1 - y0) < 1e-12;
+  // EQUIVALENT UNDER MUTATION, and kept: `centred` below already rejects both cases this catches,
+  // since a diagonal fails the horizontal branch's `y0 = y1` and a degenerate point fails the
+  // vertical branch's `y0 = −y1`. It stays because reading a diagonal's "offset" off one coordinate
+  // is the class of error M4.6c found in every arc bound at once, and a guard at the top says so.
+  if (vertical === horizontal) return null; // diagonal, or a degenerate point
+  const offset = vertical ? Math.abs(x0) : Math.abs(y0);
+  const span = vertical ? Math.abs(y1 - y0) : Math.abs(x1 - x0);
+  const centred = vertical
+    ? Math.abs(y0 + y1) < 1e-9 && Math.abs(x0 - x1) < 1e-12
+    : Math.abs(x0 + x1) < 1e-9 && Math.abs(y0 - y1) < 1e-12;
+  if (!centred || Math.abs(span - 2 * offset) > 1e-9) return null;
+  const halfWidth = asExactRadius(offset);
+  if (halfWidth === null) return null;
+  return squareSideBound(kernel.kind, kernel.num, kernel.den, halfWidth);
 }
 
 /**
@@ -361,6 +405,14 @@ export interface LedgerInput {
   readonly log?: { readonly factor: LogFactor; readonly rational: Node };
   /** The multi-point branch factor `c·∏(z−bⱼ)^{αⱼ}` and its cofactor — the dogbone's seat. */
   readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
+  /**
+   * The summation kernel `π cot(πz)` / `π csc(πz)` and its cofactor — tier G's seat.
+   *
+   * Reaches only the KILL pass, and only for a side of a centred square: nothing else in the file
+   * can bound a transcendental times a rational, so before this such a side fell through to "no
+   * lemma here applies to this integrand" — true, and the wrong thing to be true.
+   */
+  readonly summation?: { readonly kernel: SummationKernel };
 }
 
 /**
@@ -898,7 +950,11 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         : input.log !== undefined
           ? disposeLogArc(input.log, geom, piece.lemma)
           : input.power === undefined
-            ? (disposeArc(ast, geom) ?? disposeStripSide(ast, geom))
+            ? (disposeArc(ast, geom) ??
+                (input.summation === undefined
+                  ? null
+                  : disposeSquareSide(input.summation.kernel, geom)) ??
+                disposeStripSide(ast, geom))
             : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
