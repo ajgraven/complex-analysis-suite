@@ -281,6 +281,52 @@ carrying a declared branch, a sheet offset and a dragged cut.
 identical ledger claims** (§0.1: by verdict, not by field). Plus sandbox states with a declared
 branch. A truncated or foreign hash refuses by name.
 
+> **M6.2a — MEASURED, and it corrects §M6.0's second measurement.** That one was taken before
+> `ShellState` existed, by building a payload by hand; run against the real state object the numbers
+> are 2.2× larger and the saving is in a different place. (JSON bytes, then base64 at 4/3 plus `#vs=`,
+> plus a 70-byte origin.)
+>
+> | payload | JSON | 4 dp | URL |
+> |---|---|---|---|
+> | boot (sandbox, `1/z`, circle) | 904 | 868 | **1 234** |
+> | gallery record, full state | 1 375 | 1 346 | **1 870** |
+> | gallery link, `{record, fixture}` | 42 | 42 | **130** |
+> | sandbox, declared keyhole, full | 1 936 | 1 893 | **2 598** |
+> | **worst case, full** | 2 159 | 2 073 | **2 838** |
+> | worst case, contour as a RECIPE | 1 109 | 1 059 | 1 486 |
+> | worst case, recipe + diff from defaults | 783 | 751 | **1 078** |
+> | declared keyhole, recipe + diff | 453 | 453 | **678** |
+>
+> Worst case = a dogbone, two branch points, side tags, a three-vertex dragged cut on each, a declared
+> factor with a `log³` power and an irrational constant, sheet 2, `convention: "custom"`, three
+> bindings, two geometry overrides, an off-origin camera, a contrast mode and a scrub position.
+>
+> **Three findings, each changing what gets built.**
+>
+> **(1) Serialising the contour verbatim puts the worst case OVER research 07 §6's ~2 kB warning** —
+> 2 838 B — and even an ordinary declared keyhole reaches 2 598 B. The contour is **1 098 of the
+> 2 159 JSON bytes**, and the biggest record's contour alone is 1 288 B (`series-cot-kernel`).
+>
+> **(2) Rounding is NOT the headroom.** §M6.0 put rounding to displayed precision at "74 % of the
+> headroom"; measured on the real state it is **4.0 %** (2 159 → 2 073). The bulk is *structural* —
+> piece ids, names, roles, colours, the `params` record — not float digits. So rounding stays a nicety
+> and is not load-bearing, and the schema does not have to be built around it.
+>
+> **(3) What IS the headroom: the contour is never serialised as geometry, in either mode.** In
+> gallery mode it is derived (M6.1's finding) and carried as nothing. In the sandbox every contour is
+> `translate(TEMPLATES[id].build() with params, shift)` — verified by reading every assignment to
+> `contour` in `app.ts`: a template build, `setParam` (params only), and `translateContour` (a rigid
+> shift), and nothing else. So it is carried as that RECIPE, which is research 07 §6's
+> *semantics-not-samples* rule applied one level further up than this plan asked: the piece list is
+> already sample-free (the model has no sampled-point representation at all — `contour/model.ts`'s own
+> header says so, so that half of the rule needs no code), and the recipe drops the *derived geometry*
+> too. **2.6× smaller, and the worst case lands at 1 078 B.**
+>
+> The recipe needs the template id, so `ShellState` gains `contourSource: {template, shift} | null` —
+> provenance, not a second copy of the geometry, with `null` meaning "not from a template" (gallery
+> now, the M7 pen tool later) and the piece list as the fallback for it. Falsifiable on ENCODE: rebuild
+> from the recipe and compare against the live contour; carry the pieces if it does not reproduce.
+
 ### M6.3 — the figure carries its own permalink · *S–M*
 
 - `@cas/export`'s `injectPngText`: `Software`, and `cas:state` = the permalink (the house
