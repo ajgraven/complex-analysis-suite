@@ -13,6 +13,7 @@
 // **where the cuts run is the user's choice**, so placing and dragging one is the teaching surface
 // whatever supplies the points.
 import { Frac } from "@cas/exact";
+import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declaration.js";
 import type { Cx } from "../kernel/geom.js";
 import {
   INFINITY,
@@ -242,3 +243,52 @@ export const setSheet = (branch: BranchChoice, sheet: number): BranchChoice => (
   ...branch,
   sheet: Math.round(sheet),
 });
+
+/**
+ * Rebuild the cut the DETERMINATION implies, on the reader's OWN branch point.
+ *
+ * **Declaring the determination is declaring the cut** (`kernel/branch/declaration.ts`), so changing
+ * the window has to move the cut. The shell used to do that by taking `buildDeclaration`'s whole
+ * `choice` — and that system carries the canonical single point `SINGLE_POINT_ID`, `"b"`, while the
+ * reader's point is `"b1"` (`addBranchPoint` mints `b1`, `b2`, … and the keyhole template seeds
+ * `b1`). So the id the declaration names stopped existing the moment the window changed:
+ * `declaredOrder()` went null, the Declared-factor card reverted to "declare a factor on …", and the
+ * integrand box went on holding the COFACTOR under its `R(z) =` label — whereupon the app integrated
+ * `R(z)` as the whole integrand and printed a perfectly plausible number beside it. That is the same
+ * defect the "undeclare" button's comment records a browser pass finding, reached through a
+ * different door, and it made M5.1c's own demonstration — switch to the principal window and watch
+ * LEGALITY refuse — not happen at all.
+ *
+ * So the GEOMETRY is rebuilt and nothing else is: the point keeps its id, its position and its
+ * order, other points are untouched, and the base point and sheet stay put.
+ *
+ * Only RAYS out of the named point are moved. A bounded arc between two points is the dogbone, whose
+ * shape is a second declaration the reader made; overwriting its vertices with a ray's would silently
+ * unmake it. The determination and a bounded cut can then disagree, and admissibility is where that
+ * shows — which is the same division of labour as everywhere else here.
+ *
+ * `null` when there is nothing to rebuild: no such point, or a window this builder will not draw for
+ * it (a point off the origin, which `runDeclared` refuses with its own reason — so leaving the cut
+ * alone is what keeps that reason the one on screen).
+ */
+export function setCutFromWindow(
+  branch: BranchChoice,
+  pointId: string,
+  window: readonly [Frac, Frac],
+  order: DeclaredOrder,
+): BranchChoice | null {
+  const point = branch.points.find((p) => p.id === pointId);
+  if (point === undefined) return null;
+  const built = buildDeclaration({ constant: [1, 0], at: point.at[0], window, order });
+  if (!built.ok) return null;
+  const implied = built.choice.cuts[0];
+  if (implied === undefined) return null;
+  const isRayFrom = (c: CutArc): boolean =>
+    (c.from === pointId && c.to === INFINITY) || (c.to === pointId && c.from === INFINITY);
+  if (!branch.cuts.some(isRayFrom)) return null;
+  return {
+    ...branch,
+    convention: built.choice.convention,
+    cuts: branch.cuts.map((c) => (isRayFrom(c) ? { ...c, via: implied.via } : c)),
+  };
+}

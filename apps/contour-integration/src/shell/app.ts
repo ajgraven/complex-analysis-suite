@@ -40,13 +40,14 @@ import {
   splitToRays,
   type BranchGrab,
   type BranchHandle,
+  setCutFromWindow,
   setShadow,
   setSheet,
 } from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
 import { declaredKey, runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
 import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
-import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declaration.js";
+import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
@@ -1977,18 +1978,19 @@ export function mountApp(root: Element): void {
     }
     windowPick.addEventListener("change", () => {
       const chosen = windows.find((w) => w.label === windowPick.value);
-      // **Declaring the determination IS declaring the cut**, so the cut system is rebuilt from the
-      // new window rather than left where it was — otherwise the two would disagree about where the
+      // **Declaring the determination IS declaring the cut**, so the cut is rebuilt from the new
+      // window rather than left where it was — otherwise the two would disagree about where the
       // discontinuity is, silently.
+      //
+      // Through `setCutFromWindow`, which rebuilds the cut's GEOMETRY on the point the declaration
+      // names. This used to take `buildDeclaration`'s whole `choice`, whose single point is `"b"`
+      // while the reader's is `"b1"` — so the declaration was orphaned on every window change and
+      // the app went on integrating the cofactor as though it were the integrand. See that
+      // function's note; a jsdom driver over the real shell is what found it.
       if (chosen && declaration) {
         declaration = { ...declaration, window: chosen.value };
-        const rebuilt = buildDeclaration({
-          constant: declaration.constant,
-          at: 0,
-          window: chosen.value,
-          order: declaredOrder() ?? { kind: "power", alpha: Frac.of(1n, 2n), sign: 1 },
-        });
-        if (rebuilt.ok) branch = rebuilt.choice;
+        const next = setCutFromWindow(branch, declaration.pointId, chosen.value, order);
+        if (next !== null) branch = next;
       }
       recompute();
     });
