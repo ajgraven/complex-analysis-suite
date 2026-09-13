@@ -77,7 +77,15 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
   const length = hi.sub(lo);
   const leading = q.coeff(2).re;
   const exponent = leading.toNumber();
-  const asymptotics = exponent < 0 ? "vanishes" : exponent === 0 ? "bounded" : "diverges";
+  // TWO OUTCOMES, NOT THREE. `"bounded"` would be `Re(q₂) = 0`, which the guard below refuses by
+  // name — so the third branch could not fire, and a mutation sweep found it unreachable. A branch
+  // that cannot run reads as a guard and is not one.
+  //
+  // EQUIVALENT UNDER MUTATION, and kept: loosening this to `exponent <= 0` calls `Re(q₂) = 0`
+  // "vanishing", and no test can see it, because `leading.isZero()` refuses before any path that
+  // reads `asymptotics` is reached. The strict comparison stays because it is the true statement —
+  // `e^{0·R²}` does not vanish — and the day that guard is relaxed is the day the difference bites.
+  const asymptotics = exponent < 0 ? "vanishes" : "diverges";
   const no = (why: string): ArcBound => ({
     R,
     asymptotics: "diverges",
@@ -127,7 +135,7 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
     asymptotics,
     exponent,
     certificate:
-      exponent < 0
+      asymptotics === "vanishes"
         ? bound(
             "≤",
             `${claim}, and → 0 as R → ∞ because the bound is O(e^{(${formatFrac(leading)})R²}) and that exponent is negative`,

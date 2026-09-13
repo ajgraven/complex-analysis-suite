@@ -223,7 +223,7 @@ The maths prerequisite for tier F, and a correction to the research.
 > **Not done here, and not silently:** D-2's square-contour bound is still a document-only correction.
 > It belongs with the summation kernel it is about, in M5.5.
 
-### M5.3 — tier E · *M* — **DONE for E1 and E2 (a–d); E3 deferred with F2**
+### M5.3 — tier E · *M* — **DONE for E1 and E2 (a–d); E3 landed in M5.8c**
 
 - **E1** `∫ℝ e^{ax}/(1+e^x) dx = π/sin(πa)` — the quasi-periodic strip on `rectangleTemplate`, with
   `reproduces` at `λ = e^{2πia}`. Mostly wiring: both pieces exist.
@@ -277,7 +277,7 @@ The maths prerequisite for tier F, and a correction to the research.
 > it. The plan's `M` sizing was low throughout: a–d were each engine work of M4.5's weight, and only
 > d was the wiring the plan imagined.
 
-### M5.4 — tier F · *M* — **DONE for F1 (a–d); F2 deferred with E3**
+### M5.4 — tier F · *M* — **DONE for F1 (a–d); F2 landed in M5.8d**
 
 - The **wedge** template.
 - **F1** `∫₀^∞ dx/(1+x³) = 2π/(3√3)` on the `2π/3` wedge, plus its `closing-the-other-way` invariant
@@ -546,7 +546,7 @@ whole golden suite is the regression test.
 > which a clockwise square shows; and a wrong declaration must STOP THE SOLVE rather than only fail
 > the checker.
 
-### M5.8 — the invariants that are specifications, and the gate · *S–M*
+### M5.8 — the invariants that are specifications, and the gate · *S–M* — **DONE (a–e)**
 
 §10.3 lists what was reasoned and never run. Each becomes a result or an honest refusal:
 
@@ -559,6 +559,59 @@ whole golden suite is the regression test.
 **Gate:** 28 records loaded and executed; the cross-family invariants green; every `=` in tiers E–G
 either earned or honestly demoted to `≈`.
 
+> **Outcome — the gate is met, and the gallery is complete.** Five slices.
+>
+> - **M5.8a — the invariants, run, and THREE OF THEM ARE ONE IDENTITY.** `(π/a)coth(πa) − 1/a² =
+>   Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with `t_k` the summation kernel's OWN Laurent coefficients —
+>   the ones `mergedResidue` already computes from the Bernoulli recurrence. So `a → 0` is not an
+>   evaluation at a small `a` (§10.3's own complaint) but a series: its `a⁰` term is exactly `−Res₀`,
+>   which is G1's answer, its `a²` term is ζ(4)'s, and the same statement on `csc` closes the other
+>   column. The 2×2 square of {cot, csc} × {collision, none} is one fact about one series, with no
+>   limit taken numerically. ζ(4) is summed independently from the `m = 5` Bernoulli row and checked
+>   against that `a²` coefficient, so the two routes share no arithmetic. And F1's invariant earns
+>   its place because the two routes print **different closed forms for the same number** —
+>   `(π/3)/sin(2π/3)` closing downward against `(π/3)/sin(π/3)` closing up, supplementary angles with
+>   equal sines, which a shared formatter could not have produced.
+> - **M5.8b — ADR-0042's `knownValue`, and the arithmetic of "imported".** The two errors are
+>   opposite and both fatal: pricing an exactly-known piece by quadrature caps an exact argument at
+>   `≈` by its most certain step, and a bare `=` launders the import as a derivation. **There is ONE
+>   import**, because E3's own record says `√π` IS `Γ(1/2)` — so the closed set is the Gamma function
+>   at a rational argument, and one independent check (`∫₀^∞e^{−tⁿ}dt`, F2's own declared method)
+>   covers both records. An imported value **has no inverse**, which is what "imported" means
+>   arithmetically: the solve works in the rank-1 module it generates, refusing a product of two
+>   atoms and a division by one, and it REQUIRES `∮ = 0` since `2πi Σ Res` carries π and an import
+>   does not. Three things the slice settled: the declared level is checked in BOTH directions (a
+>   ceiling alone is satisfied by every level, `=` being the lattice top, so it would assert
+>   nothing); the cross-check matches pieces by INDEX, since `integrateContour` labels them
+>   `piece 1…n` positionally and never sees a family; and "is this an import at all?" is asked BEFORE
+>   the leaves are walked, because a `knownValue` of `2*pi` otherwise gets a true and bewildering
+>   sentence about additive crossing phases.
+> - **M5.8c — E3, the contour that encloses NOTHING.** Its verticals needed the third integrand shape
+>   to have a vanishing SEGMENT, and the first bound in the app whose `max|f|` is ATTAINED rather than
+>   majorised: `Re Q(c+iy)` is an exact quadratic in `y`, so the maximum is a decision over three
+>   candidates. The vertex is a real candidate — `e^{z²}` on `Re z = 0` over `y ∈ [−1,1]` has
+>   `|∫| = 1.494` while an endpoint-only maximum certifies `0.736`, a FALSE bound rather than a loose
+>   one. LEGALITY gained a row for the empty singular set, because with nothing to measure it had
+>   said nothing at all — "there are none" and "none were looked for" looked the same on the ledger,
+>   for the one record whose point is the former. Measuring corrected a claim: the ML slack is NOT
+>   independent of the radius (6.84, 10.11, 7.69 at c = 3, 4, 6), because `Im Q` rotates at rate `2c`
+>   and the inequality throws that cancellation away.
+> - **M5.8d — F2, and it needed no new engine.** M5.2 built `linearMinorant.ts` as the single
+>   predicate L3 and L6 share, two slices before its consumer existed. Measuring the discharged bound
+>   gave the arc: it is asymptotically `1/(n R^{n−1})` against a certified `π/(2n R^{n−1})`, so **the
+>   bound is loose by exactly `π/2` — and that factor IS the minorant's own slack at the origin**,
+>   where the true `sin(nθ) ≈ nθ` against a claimed `≥ 2nθ/π`. The conditional convergence becomes
+>   arithmetic: the partial integral's error is `(sin R², −cos R²)/(2R)`, envelope `1/(2R)` and phase
+>   `R²`, so no component settles while the ANSWER is bit-identical at every radius — and `ray0 − T`
+>   is exactly `−arc`, which makes the arc bound a bound on the truncation error. The accumulator
+>   draws the **Cornu spiral**.
+> - **M5.8e — the sweep, the docs and the gate.** One thing the doc sweep found: **`DESIGN.md` §4
+>   Pass 3 had specified this all along** — its table reads *"`free` | quadrature, or an imported
+>   exact constant declared by the family | `≈`, or `=` for a declared constant"*. SG-2 was never a
+>   design gap; it was the v1 SCHEMA having no field with which a family could declare one. The
+>   decision ADR-0042 records is therefore about the two errors either side of the field, not about
+>   whether the behaviour was wanted.
+
 ---
 
 ## 2. Risks
@@ -570,6 +623,12 @@ either earned or honestly demoted to `≈`.
    is already general when the target stops being an integral.
 3. **Tier E–G's `=` labels are unverified claims** (§10.3). Plan for honest `≈` outcomes; the failure
    mode to avoid is quietly printing `=` because the record says so.
+
+   > **DISCHARGED (M5.8).** All eight records print a symbolic closed form and the decimals beside
+   > them are `≈`, as every decimal in this app is. Nothing was demoted; nothing was printed on the
+   > record's say-so either — every `=` is minted from a certificate the engine produced, and the two
+   > that rest on a value from outside the argument (E3, F2) carry the import in their provenance
+   > rather than in their label.
 4. **The research is wrong in two places that matter** (D-1, D-2), and in both cases the wrong version
    is the *plausible* one. Both corrections are measured, and both belong in the code with the
    measurement beside them, or they will be re-introduced.

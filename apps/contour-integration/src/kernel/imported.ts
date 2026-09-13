@@ -86,10 +86,15 @@ const SQRT_PI: ImportedAtom = {
  *   multiple of `√π`, so carrying it symbolically is the honest thing and evaluating it is not.
  */
 export function gammaImport(q: Frac): { readonly atom: ImportedAtom; readonly multiple: Frac } | null {
-  if (q.d === 1n && q.n <= 0n) return null;
+  // `Γ` is defined for every non-integer and every positive integer; REFUSED below `1/2` all the
+  // same. `Γ(1/2 − k) = (−4)^k k!/(2k)! √π` is a real value and four lines of code, and no record
+  // reaches it — an unexercised branch here would be one that silently returns `√π` where the answer
+  // is `−2√π`, which a mutation sweep found this function doing when the sign guard was relaxed.
+  // Refusing is honest and testable; the day a record needs `Γ(−1/2)` is the day to write it.
+  if (q.n <= 0n) return null;
 
   // A positive half-integer: `q = k + 1/2` with `k ≥ 0`. Decided on the denominator, exactly.
-  if (q.d === 2n && q.n > 0n) {
+  if (q.d === 2n) {
     const k = (q.n - 1n) / 2n;
     let multiple = Frac.ONE;
     // `Γ(k+½) = (k−½)(k−3/2)…(½)·Γ(½)`, accumulated in ℚ rather than through a factorial identity,

@@ -10,13 +10,13 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 4, and published.** M1–M4 are complete (20 of the 28 gallery records loaded).
-**M5 is under way:** M5.0 (tier D's quadrature cross-check), M5.1 (the sandbox declares a branch
-factor), M5.2 (one predicate for L3 and L6, and the corrected L6), M5.3 (tier E's E1 and E2), M5.4
-(tier F's F1, on the wedge), M5.5 (tier G's machinery — the square, the summation kernels and the
-corrected bound), M5.6 (tier G's solve, and G2) and M5.7 (the COLLISION — G1 and G3) are done;
-**26 of the 28 records are loaded, and tier G is complete**. E3 and F2 are deferred together,
-needing the same import machinery. See the milestone table in
+**Through Milestone 5, and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
+of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
+M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
+L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
+square, the summation kernels and the corrected bound), M5.6 (tier G's solve, and G2), M5.7 (the
+COLLISION — G1 and G3) and M5.8 (the cross-family invariants, ADR-0042's `knownValue`, and the last
+two records E3 and F2) are all done. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -26,17 +26,18 @@ needing the same import machinery. See the milestone table in
   rational brackets on π. `deg Q ≥ deg P + 2` is *derived* from the exponent, never asserted.
 - The **Closing Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and
   a wrong contour fails diagnostically.
-- The **Family loader** and its four invariants run the gallery records as data. Twenty-three of the
-  28 load and are executed against the engine in the test suite — **every entry in tiers A, B, C and
-  D**, plus tier E's E1 and E2 and tier F's F1. The thirteen of tiers A–C are:
+- The **Family loader** and its four invariants run the gallery records as data. **All 28 load and
+  are executed against the engine in the test suite** — every entry in every tier. The thirteen of
+  tiers A–C are:
   A1–A7 (circle and semicircle, through the `z = e^{iθ}` substitution and the Cauchy integral
   formula), B1–B3 (Jordan, through the exponential basis `Σ cₖ e^{βₖ}`), and C1–C3 (the indentation
   and L4's `iα·Res`; removability detected, with L5's non-vanishing arc; and a real pole and a
   complex pole in one ledger). Each solves to a symbolic closed form — `π/2`, `π√2/2`, `π/e`,
   `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tier D's seven
-  (branch cuts) landed in M4 and carry their forms rather than reducing them. Tiers E–G need the
-  kernel families of M5 — the quasi-periodic strip, the wedge, and the `πcot`/`πcsc` summation
-  kernel — of which M5.2 has built the wedge's arc bound.
+  (branch cuts) landed in M4 and carry their forms rather than reducing them. Tiers E–G landed in
+  M5, on the kernel families that tier needs — the quasi-periodic strip (E1, E2), the wedge (F1, F2),
+  the `πcot`/`πcsc` summation kernel (G1–G3), and the two Cauchy-theorem records whose singular set
+  is EMPTY (E3, F2), where the answer comes from one value the argument imports rather than derives.
 
 **M4.1 (branch cuts) has landed**, engine and editor:
 
@@ -563,6 +564,60 @@ twenty-fourth loaded record and the first whose unknown is not on the contour at
 - **SG-5 was already done.** The plan's "widest blast radius in M5" — `kind: "sum"`, an integer index,
   a `summand` — landed with D1's arc, and its readers with G2. Measured rather than assumed.
 
+**M5.8 completes M5, and with it the gallery: 28 of 28 records loaded and executed.**
+
+- **The cross-family invariants of `tier-efg.md` §10.3 are RUN** rather than reasoned — and three of
+  them turn out to be one identity. `(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with
+  `t_k` the summation kernel's own Laurent coefficients, so the `a → 0` confluence is a series rather
+  than an evaluation at a small `a`: its `a⁰` term is exactly `−Res₀`, which is G1's answer, and its
+  `a²` term is ζ(4)'s. The 2×2 square of {cot, csc} × {collision, none} is one fact about one series,
+  with no limit taken numerically. F1's invariant is worth more than a re-run because the two routes
+  print DIFFERENT closed forms for the same number — `(π/3)/sin(2π/3)` closing downward against
+  `(π/3)/sin(π/3)` closing up, supplementary angles with equal sines, which a shared formatter could
+  not have produced.
+- **ADR-0042's `knownValue` lands: an import is `=` on its form, with the import in its provenance.**
+  E3's top side is `√π` and F2's return ray carries `Γ(1+1/n)`. Neither is a residue, neither
+  vanishes, and neither is proved by the argument the app is checking — so under the v1 schema both
+  were `free`, which Pass 3 prices by quadrature at `≈`: **a perfectly exact argument capped by its
+  most certain step**. A bare `=` would be worse, laundering an import as a derivation. The row now
+  carries `=` with the record's own `method` after "imported, not derived here", and the quadrature
+  becomes what it should always have been here — an independent CHECK.
+- **There is ONE import, and both records name the same function.** E3's record says `√π` IS
+  `Γ(1/2)`, so the closed set is the Gamma function at a rational argument rather than a table of
+  constants — which is what lets one independent check cover both: `∫₀^∞e^{−tⁿ}dt = Γ(1+1/n)` is F2's
+  own declared method, and `Γ(1/2) = 2Γ(3/2) = 2∫₀^∞e^{−t²}dt` carries it onto E3.
+- **An imported value has no inverse, and that is the arithmetic of "imported".** Pass 5's fourth
+  route works in the rank-1 module `A·(exponential basis)`: addition and scaling by something the
+  argument derived stay inside it, multiplying two atoms and dividing by one do not. It REQUIRES
+  `∮ = 0`, since `2πi Σ Res` carries π and an import does not and `0` is the one value both rings
+  share — not a restriction but the empty singular set, which is these two records' whole content.
+- **E3 — `∫ℝ e^{−x²}cos(bx)dx = √π e^{−b²/4}`, the twenty-seventh record.** Its verticals needed the
+  third integrand shape to have a vanishing SEGMENT, and the first certified bound in the app whose
+  `max|f|` is ATTAINED rather than majorised: `Re Q(c+iy)` is an exact quadratic in `y`, so the
+  maximum on the segment is a decision over three candidates. The vertex is a real candidate, not a
+  defensive one — `e^{z²}` on `Re z = 0` over `y ∈ [−1,1]` has `|∫| = 1.494` while an endpoint-only
+  maximum certifies `0.736`, which is a FALSE bound rather than a loose one. LEGALITY also gained a
+  row for the empty singular set: with nothing to measure it had said nothing at all, so "there are
+  none" and "none were looked for" looked the same on the ledger, for the one record whose point is
+  the former.
+- **F2 — Fresnel by the `π/(2n)` wedge, the twenty-eighth, and it needed no new engine.** M5.2 built
+  `linearMinorant.ts` as the single predicate L3 and L6 share, two slices before its consumer
+  existed. Measuring the discharged bound gave the slice its sharpest fact: the arc integral is
+  asymptotically `1/(n R^{n−1})` while the certified bound is `π/(2n R^{n−1})`, so **the bound is
+  loose by exactly π/2 — and that factor IS the minorant's own slack at the origin**, where the true
+  `sin(nθ) ≈ nθ` against a claimed `≥ 2nθ/π`.
+- **The conditional convergence, made arithmetic.** `∫₀^∞|cos(x²)|dx = ∞`, and one integration by
+  parts says what that looks like: the partial integral's error is `(sin R², −cos R²)/(2R)` — envelope
+  `1/(2R)`, phase `R²`, so the distance shrinks while the DIRECTION keeps turning and no component
+  settles (measured `|error|·2R` = 0.9976 → 1.0000 over R = 4…20). The ANSWER is bit-identical across
+  every radius, because it comes from the import and a vanishing arc. And `ray0 − T` is exactly
+  `−arc`, so the arc bound IS a bound on the truncation error — which is what makes a conditionally
+  convergent integral computable at all. The accumulator panel draws the **Cornu spiral**.
+- **F2 determines BOTH real integrals from one complex identity** (`ray0 = C + iS`, coefficient row
+  `[1, i]`, realified into two real equations), so `∫cos = ∫sin` is something the app COMPARES rather
+  than asserts — and §10.3's `cos-equals-sin-only-at-n-2` gets the `differ` half it could not have
+  until this record existed.
+
 **The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
 one it looked like:
 
@@ -601,7 +656,7 @@ one it looked like:
   A filter reading only RGB measured the axes, which span the whole canvas, and passed with the trail
   blanked entirely. The alpha channel is the discriminator.
 
-The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+All twenty-eight are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered
@@ -632,10 +687,11 @@ release reconciles against it and logs a disagreement past the estimator's own b
 either way — it comes from `2πi Σ n·Res`, not from the quadrature.
 
 Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
-contour from nothing), the rest of the gallery (M5.3 onward — tier E's quasi-periodic strip, tier F's
-wedge template, tier G's summation kernel and the unknown inside `S`), the teaching layer (M6). M4 is
-complete: the GPU cut picture, the declared determination on the stage, and drag-a-cut with its
-monodromy readout all landed in M4.7.
+contour from nothing) and the teaching layer (M6). M4 is complete: the GPU cut picture, the declared
+determination on the stage, and drag-a-cut with its monodromy readout all landed in M4.7. **M5 is
+complete too, and with it the gallery**: the quasi-periodic strip (E1, E2), the wedge (F1, F2), the
+summation kernel and the unknown inside `S` (G1–G3), and the two records whose singular set is empty
+(E3, F2).
 
 ## Documentation
 

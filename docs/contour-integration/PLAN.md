@@ -836,9 +836,26 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > plan's "widest blast radius in M5" cost nothing. [`M5-plan.md`](M5-plan.md) §M5.7 and
 > [`GALLERY.md`](GALLERY.md) §5.9 have the findings.
 >
-> **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
-> is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
-> results.
+> **M5.8 completes M5 AND the gallery — 28 of 28 records.** §10.3's cross-family invariants are RUN
+> rather than reasoned, and three of them turn out to be one identity in the summation kernel's own
+> Laurent coefficients (so the `a → 0` confluence is a series, not an evaluation at a small `a`).
+> ADR-0042's `knownValue` lands: an exactly-known IMPORTED value is `=` on its form with the import
+> in its provenance, which un-caps two arguments that were exact everywhere except at their most
+> certain step. **There is one import**, the Gamma function at a rational argument — E3's `√π` IS
+> `Γ(1/2)` — so a single check against `∫₀^∞e^{−tⁿ}dt` covers both records. Pass 5 gains a fourth
+> route, in the rank-1 module an import generates: it may be added and scaled, never inverted, and it
+> requires `∮ = 0` because `2πi Σ Res` carries π and an import does not. **E3** brings a bound whose
+> `max|f|` is ATTAINED (an exact quadratic on a vertical line) and a LEGALITY row for the empty
+> singular set; **F2** needed no new engine at all — M5.2's `linearMinorant.ts` was built for it two
+> slices early — and measuring its discharged bound showed it loose by exactly `π/2`, which IS the
+> minorant's own slack at the origin. [`M5-plan.md`](M5-plan.md) §M5.8 and
+> [`GALLERY.md`](GALLERY.md) §5.10 have the findings.
+>
+> **The `≈` expectation above was the right posture and is now discharged.** §10.3's warning — "no
+> entry's **exact** path was exercised — every number above is float64" — meant tier E–G's `=` labels
+> were claims about what the engine *would* discharge. All eight records now discharge them: every
+> answer in tiers E–G carries a symbolic closed form, and the decimals beside them are `≈` as every
+> decimal in this app is.
 
 ### M6 — Presentation, teaching layer, publish · *M*
 Figure & share export (QD's `_pal` indirection, `renderToCanvas`, sync `ClipboardItem`);

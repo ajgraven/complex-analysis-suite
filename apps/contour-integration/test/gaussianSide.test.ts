@@ -85,6 +85,22 @@ describe("max|f| on the side is attained", () => {
     }
   });
 
+  it("includes the exponent's CONSTANT term, which every corpus fixture happens to hide", () => {
+    // E3's `Q = −z² + ibz` has `q₀ = 0`, and so does every polynomial in this file — so dropping
+    // `q₀.re` from `C` left the whole suite green, which a mutation sweep found. It is a real term:
+    // `e^{−z²+2}` is `e²` times `e^{−z²}` and its bound must be too.
+    const plain = gaussianSideBound(e3(Frac.ONE), Gauss.ONE, { c: f(3n), y0: Frac.ZERO, y1: f(1n, 2n) });
+    const shifted = gaussianSideBound(
+      poly(Gauss.int(2), new Gauss(Frac.ZERO, Frac.ONE), Gauss.int(-1)),
+      Gauss.ONE,
+      { c: f(3n), y0: Frac.ZERO, y1: f(1n, 2n) },
+    );
+    const at = (b: ReturnType<typeof gaussianSideBound>): number =>
+      Number(/≤ ([0-9.e+-]+) at/.exec(b.certificate.claim)?.[1]);
+    // Relatively, because the claim prints three significant figures.
+    expect(Math.abs(at(shifted) / at(plain) - Math.E ** 2) / Math.E ** 2).toBeLessThan(1e-3);
+  });
+
   it("takes the VERTEX when the parabola opens downward — where an endpoint-only max is FALSE", () => {
     // `e^{z²}` on the segment `Re z = 0`, `y ∈ [−1,1]`: there `Re Q = −y²`, maximal at the VERTEX
     // `y = 0` and strictly smaller at both endpoints. The integrand is real and positive there — no

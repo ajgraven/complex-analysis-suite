@@ -63,8 +63,13 @@ describe("the closed set of imports", () => {
     }
   });
 
-  it("refuses a pole and gives no value there", () => {
+  it("refuses everything at or below zero — poles AND the reflection", () => {
     for (const q of [0n, -1n, -2n, -7n]) expect(gammaImport(frac(q, 1n)), `Γ(${q})`).toBeNull();
+    // **A NEGATIVE HALF-INTEGER IS A REAL VALUE AND STILL REFUSED**, which a mutation sweep is why:
+    // relaxing the sign guard made `Γ(−1/2)` return `1·√π` where the answer is `−2√π`, because the
+    // recurrence loop runs zero times at a negative `k`. `Γ(1/2 − k) = (−4)^k k!/(2k)! √π` is four
+    // lines nobody needs — refusing is honest, and a wrong number is not.
+    for (const q of [-1n, -3n, -5n]) expect(gammaImport(frac(q, 2n)), `Γ(${q}/2)`).toBeNull();
     // A positive integer is NOT a pole, and is carried as its own symbol rather than as a factorial:
     // nothing in the corpus reaches it, and inventing a reduction for it would be a branch no record
     // exercises.
@@ -133,9 +138,18 @@ describe("splitting a knownValue into (import) × (what the contour derived)", (
     // fact rather than reaching for a Γ. (It is also outside `exactBasisConstant`'s reach, which no
     // record needs: E3 spells its radical `sqrt(pi)` and F2 has none. ADR-0007's posture — the day a
     // record needs `√2` in a coefficient is the day to widen the walker.)
+    //
+    // **ONE RECOGNISER DECIDES THIS, and a sweep is why.** Relaxing the `sqrt(pi)` guard in the
+    // reader alone left the scanner still refusing at the gate, so the corpus stayed green while
+    // `sqrt(2)` had quietly become `√π` inside a larger product; `importSpelling` is now the single
+    // place, so this assertion covers both halves.
     const algebraic = importedValue(parse("sqrt(2)"), {});
     expect(algebraic.ok).toBe(false);
     if (!algebraic.ok) expect(algebraic.reason).toMatch(/names no imported constant/);
+    // The same question inside a product that DOES name an import: `√2` must still not become an atom.
+    const mixed = importedValue(parse("sqrt(2)*gamma(3/2)"), {});
+    expect(mixed.ok).toBe(false);
+    if (!mixed.ok) expect(mixed.reason).not.toMatch(/rank-2/);
   });
 
   it("refuses what takes it outside the module, each by name", () => {
@@ -267,6 +281,24 @@ describe("Pass 5's fourth route", () => {
     expect(wide.result.solved[0].value).toBeCloseTo(Math.cos(Math.PI / 10) * gamma, 12);
     expect(wide.result.solved[1].value).toBeCloseTo(Math.sin(Math.PI / 10) * gamma, 12);
     expect(wide.result.certificates.some((c) => c.level === "?")).toBe(true);
+  });
+
+  it("refuses two DIFFERENT imported constants — a rank-2 module", () => {
+    // Every real record has exactly one import, so the comparison only runs from the second entry
+    // onward and nothing in the corpus reaches it. A sweep found the branch unexercised: inverting
+    // the test left every test green.
+    const family = importedRecord({ twoAtoms: true });
+    const got = solveImported(family, {
+      closedContourPiUnits: ExpSum.ZERO,
+      pieceLimits: [],
+      imports: resolved(family),
+    });
+    expect(got.ok).toBe(false);
+    if (!got.ok) {
+      expect(got.reason).toMatch(/two different imported constants/);
+      expect(got.reason).toMatch(/√π/);
+      expect(got.reason).toMatch(/Γ\(4\/3\)/);
+    }
   });
 
   it("refuses to add π to √π, on either side of the identity", () => {

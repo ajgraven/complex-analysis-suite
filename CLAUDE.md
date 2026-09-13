@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **528 test files / 5291 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **534 test files / 5405 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
@@ -282,7 +282,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 4** and published (M1–M4 complete; 20 of the 28 gallery records loaded). `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 5** and published — **M1–M5 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -292,9 +292,9 @@ with **no floating point in the chain** (including certified rational brackets o
 Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and a wrong contour
 fails diagnostically — closing `∫cos x/(1+x²)` downward shows the bound diverging and names KILL.
 The 28 gallery records load as **data** through a schema and a loader enforcing four invariants,
-with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; **thirteen**
-of them — **every entry in tiers A, B and C** — are executed against the engine in the suite, each
-solving to a symbolic closed form because the whole solve runs in units of π and never evaluates it.
+with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; **all of
+them — every entry in every tier** — are executed against the engine in the suite, each solving to a
+symbolic closed form because the whole solve runs in units of π and never evaluates it.
 A record that fails an invariant is dropped, not thrown on. **Extended M3 (M3.5a–c)** then made the
 engine's work reachable: the thirteen records are **browsable** (a `Sandbox | Gallery` switch, with
 one shared analysis path — `engine/analyse.ts` — that the golden corpus also runs, so the numbers on
@@ -303,9 +303,8 @@ ledger's own certificates, their methods and their ✓/✗ audit trails, with **
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (**M5.8** — the cross-family
-invariants that were reasoned and never run, plus E3 and F2 together on ADR-0042's `knownValue`;
-M5.0–M5.7 are done, **26 of the 28 records are loaded and TIER G IS COMPLETE**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
+come: the pen tool (free-hand path editing) and the teaching layer (M6). **M5 is complete (M5.0–M5.8);
+all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
 a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
 residue sum. **The plan's own one-equation generalisation cannot be built**: its coefficient adds a
@@ -367,10 +366,43 @@ done**: the plan's "widest blast radius in M5" (`kind: "sum"`, an integer index,
 with D1's arc and its readers with G2, measured rather than assumed. Sweep 27/27 with no equivalents;
 the three survivors each bought a test — `f`'s CONSTANT term is part of the residue and every bare
 `1/z^m` fixture hides it, a merged residue is winding-weighted like every other, and a wrong
-declaration must stop the SOLVE and not only fail the checker. 26 of the 28
-records are loaded, and the plan and its one engine decision are
-[`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
-**read the plan before continuing M5**), the teaching layer (M6).
+declaration must stop the SOLVE and not only fail the checker.
+
+**M5.8 completes M5 and the gallery — the last two records, and the import they both rest on.**
+§10.3's cross-family invariants are RUN rather than reasoned, and **three of them turn out to be one
+identity**: `(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with `t_k` the summation
+kernel's OWN Laurent coefficients, so `a → 0` is a series rather than an evaluation at a small `a` —
+its `a⁰` term is exactly `−Res₀` (G1's answer), its `a²` term is ζ(4)'s, and the same statement on
+`csc` closes the other column, making the 2×2 square of {cot, csc} × {collision, none} one fact about
+one series. F1's invariant earns its place because the two routes print **different closed forms for
+the same number** (supplementary angles with equal sines), which a shared formatter could not have
+produced. Then **ADR-0042's `knownValue`**: E3's top side is `√π` and F2's return ray carries
+`Γ(1+1/n)`, neither a residue, neither vanishing, neither proved by the argument being checked — so
+under the v1 schema both were `free`, which Pass 3 prices at `≈`, **capping a perfectly exact argument
+by its most certain step**, while a bare `=` would launder the import as a derivation. **There is ONE
+import**, because E3's own record says `√π` IS `Γ(1/2)`, so the closed set is the Gamma function at a
+rational argument and one independent check (`∫₀^∞e^{−tⁿ}dt`, F2's declared method) covers both. **An
+imported value has no inverse**, which is the arithmetic of "imported": Pass 5's fourth route works in
+the rank-1 module the atom generates and REQUIRES `∮ = 0`, since `2πi Σ Res` carries π and an import
+does not and `0` is the one value both rings share — not a restriction but these records' own content,
+the empty singular set. **E3** (`√π e^{−b²/4}`, the twenty-seventh) brought the first bound whose
+`max|f|` is ATTAINED rather than majorised — `Re Q(c+iy)` is an exact quadratic, so the maximum is a
+decision over three candidates, and the vertex is a real one (`e^{z²}` on `Re z = 0` over `[−1,1]` has
+`|∫| = 1.494` where an endpoint-only maximum certifies `0.736`, a FALSE bound rather than a loose one)
+— plus a LEGALITY row for the empty singular set, which had said nothing at all where "there are none"
+and "none were looked for" then looked the same. **F2** (Fresnel by the `π/(2n)` wedge, the
+twenty-eighth) needed **no new engine**: M5.2 built `linearMinorant.ts` two slices before its consumer
+existed, and measuring the discharged bound showed it **loose by exactly `π/2` — the minorant's own
+slack at the origin**, where the true `sin(nθ) ≈ nθ` against a claimed `≥ 2nθ/π`. Its conditional
+convergence is arithmetic rather than a footnote: the partial integral's error is
+`(sin R², −cos R²)/(2R)`, envelope `1/(2R)` and phase `R²`, so no component settles while the ANSWER is
+bit-identical at every radius — and `ray0 − T` is exactly `−arc`, which makes the arc bound a bound on
+the TRUNCATION ERROR, and the accumulator draws the **Cornu spiral**. Both records determine TWO
+unknowns from one complex identity (`[1, i]` realified), which turns E3's `target-is-real` hypothesis
+into a column the contour must pin and makes F2's `∫cos = ∫sin` something the app COMPARES. Schema gaps
+**SG-2** (built as proposed), **SG-3** (shipped as the record's own evenness reduction) and **SG-4**
+(the schema already had `convergence`) all close. The plan and its one engine decision are
+[`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md).
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

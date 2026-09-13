@@ -46,8 +46,11 @@ acceleration, cross-checked to 2.4e-13 by oscillation-resolved quadrature with a
    inequality holds only to `π/(2n)`. Past `nθ = π/2` the integrand's modulus *grows*; the stated
    majorant diverges (2.7e15 at `n=2, R=6`; overflow at `n=4`).
 2. **The tier-G square-contour "bound" was not a bound** — it dropped the `π` from `π cot(πz)`,
-   leaving it 30–40 % *below* the true integral at every `N`. The asymptotics were right; the
-   constant was not, and a ledger would have printed a false `≤`.
+   leaving it *below* the true integral at every `N`. The asymptotics were right; the constant was
+   not, and a ledger would have printed a false `≤`. *(This entry's own "30–40 % at every `N`" was
+   itself wrong, and §5.8 corrects it: measured, the shortfall is 4.9 % at `N = 3` and 27.8 % at
+   `N = 25`, GROWING toward `π·(N/(N+½))^k` — so 30 % is the asymptote rather than the typical case.
+   The finding stands; only its magnitude was overstated at small `N`.)*
 3. **`P = 2πi` should have been `P = 2π`** in the strip family, against the section's own convention.
 
 All three were caught by evaluation, not by reading. That is the argument for the golden corpus,
@@ -155,9 +158,12 @@ implementation decision.
 together with Pass 5's exact rational linear algebra, which invariant 4 rests on, the unit-circle
 substitution `z = e^{iθ}` (`src/engine/substitution.ts`), and the exponential output basis
 `Σ cₖ e^{βₖ}` (`src/kernel/expSum.ts`), and **Pass 5's solve** (`src/families/solveTarget.ts`).
-**Twenty records are loaded, none dropped:** **A1–A7** (circle and semicircle), **B1–B3** (Jordan),
-**C1–C3** (indentation, removability, and the two-singularity ledger) — the M3 gate's thirteen — and
-**D1–D7** (branch cuts), which is the M4 gate's seven. **Every entry in tiers A, B, C and D.**
+**ALL TWENTY-EIGHT RECORDS ARE LOADED, none dropped** — the gallery is complete as of §5.10:
+**A1–A7** (circle and semicircle), **B1–B3** (Jordan), **C1–C3** (indentation, removability, and the
+two-singularity ledger) — the M3 gate's thirteen — **D1–D7** (branch cuts), the M4 gate's seven, and
+tiers **E**, **F** and **G**, which M5 brought in: the quasi-periodic strip (E1, E2), the wedge (F1,
+F2), the `πcot`/`πcsc` summation kernel (G1–G3), and the two Cauchy-theorem records whose singular
+set is EMPTY (E3, F2).
 
 Each solves to a **symbolic closed form**, asserted by name in `familyGolden.test.ts` and, for tier
 D, in one test per record (`test/d1.test.ts` … `d7.test.ts`):
@@ -640,8 +646,8 @@ is §7's own "once N+½ > a" made visible rather than assumed.
 
 G1 and G3 are the twenty-fifth and twenty-sixth loaded records. `Σ_{n≥1} 1/n² = π²/6` and
 `Σ_{n≥1} (−1)ⁿ/n² = −π²/12`, both labelled `=`, the ledger closing and the quadrature corroborating
-`∮ = 2πi(205/72 − π²/3)` at N = 4. Only E3 and F2 remain, deferred together on ADR-0042's
-`knownValue`.
+`∮ = 2πi(205/72 − π²/3)` at N = 4. Only E3 and F2 remained at this point, deferred together on
+ADR-0042's `knownValue`; both landed in §5.10.
 
 **The hypothesis FAILS and the argument is still rigorous.** `f = 1/z²` has its pole where the kernel
 has one, so *"f has no pole at an integer"* is false — and refusing would stop a correct argument
@@ -881,3 +887,82 @@ traversal is clockwise, so its identity carries the opposite sign, and the two c
 same `π/√2` — exactly as the record's prose says ("both give 2.2214414690791831"). The test now also
 asserts the two contours enclose *different* poles, since agreement alone is the one thing an engine
 with both the orientation and the half-plane predicate backwards would also produce.
+
+### 5.10 The import, and the last two records — **M5.8**, and the gallery is complete
+
+E3 and F2 are the twenty-seventh and twenty-eighth. `∫ℝ e^{−x²}cos(bx)dx = √π e^{−b²/4}` and
+`∫₀^∞ cos(xⁿ)dx = Γ(1+1/n)cos(π/(2n))` — Fresnel at `n = 2` — both labelled `=`, both closing, both
+corroborated. **28 of 28 records load and are executed against the engine.**
+
+**Neither ends in a residue, and that is the content.** Both integrands are entire, so `∮ = 2πi·Σ(∅)
+= 0` — Cauchy's theorem, which is the residue theorem with an empty sum. `0` is a number, and it is
+the number that closes the argument. An engine built on "contour method ⇒ residues" mishandles this;
+one that treats an empty singular set as "nothing to compute, therefore refuse" is worse.
+
+**And the whole answer comes from a value the argument does NOT derive.** E3's top side leaves
+`∫ℝe^{−x²}dx = √π` (polar coordinates) and F2's return ray leaves `∫₀^∞e^{−tⁿ}dt = Γ(1+1/n)` (the
+substitution `u = tⁿ`). ADR-0042 is the decision; §10.2's **SG-2 is closed**. The two errors it sits
+between are opposite and both fatal: pricing the piece by quadrature caps a perfectly exact argument
+at `≈` **by its most certain step**, and a bare `=` launders the import as a derivation. The row
+carries `=` with the record's own `method` after *"imported, not derived here"*, and the quadrature
+becomes an independent CHECK instead of the source.
+
+**And `DESIGN.md` had specified this all along.** Its §4 Pass 3 table reads *"`free` | quadrature, or
+an imported exact constant declared by the family | `≈`, or `=` for a declared constant"* — so SG-2
+was never a design gap but a SCHEMA one: there was no field with which a family could declare the
+constant the design already expected. What ADR-0042 decides is therefore the shape of the honesty,
+not whether the behaviour was wanted.
+
+**There is ONE import.** E3's own record says `√π` IS `Γ(1/2)`, so the closed set is the Gamma
+function at a rational argument rather than a table of constants — which is what lets a single
+independent check cover both records, since `Γ(1/2) = 2Γ(3/2) = 2∫₀^∞e^{−t²}dt` carries F2's declared
+method onto E3. A positive half-integer reduces to an exact rational multiple of `√π` by the
+recurrence in ℚ (checked against the Lanczos series it does not use); anything else is carried as its
+own symbol, because `Γ(4/3)` is not an algebraic multiple of `√π`.
+
+**An imported value has no inverse, and that is the arithmetic of "imported".** Pass 5's fourth route
+works in the rank-1 module such a value generates: it may be added and scaled by something the
+argument derived, never multiplied by another atom and never divided by. And it REQUIRES `∮ = 0`,
+because `2πi Σ Res` carries π and an import does not — not a restriction but these two records' own
+content, since `0` is the one value both rings share.
+
+**E3's verticals needed a bound whose `max|f|` is ATTAINED.** `Re Q(c+iy)` is an exact quadratic in
+`y`, so the maximum on the segment is a decision over three candidates rather than an inequality —
+and the vertex is a real candidate, not a defensive one: `e^{z²}` on `Re z = 0` over `y ∈ [−1,1]` has
+`|∫| = 1.494` while an endpoint-only maximum certifies `0.736`, which is a FALSE bound rather than a
+loose one. LEGALITY also gained a row for the empty singular set: with nothing to measure it had said
+nothing at all, so "there are none" and "none were looked for" looked the same on the ledger.
+
+**F2 needed no new engine, and measuring its bound was the finding.** §9's corrected L6 was built in
+M5.2 — `linearMinorant.ts`, the single predicate L3 and L6 share — two slices before its consumer
+existed. The arc integral is asymptotically `1/(n R^{n−1})` against a certified `π/(2n R^{n−1})`, so
+**the bound is loose by exactly `π/2`, and that factor IS the minorant's own slack at the origin**,
+where the true `sin(nθ) ≈ nθ` against a claimed `≥ 2nθ/π`. Measured `|arc|·n·R^{n−1}` = 0.9976,
+0.9995, 0.9999 at R = 4, 6, 10, at both `n`.
+
+**The conditional convergence is arithmetic, not a footnote.** One integration by parts gives the
+partial integral's error as `(sin R², −cos R²)/(2R)`: envelope `1/(2R)`, phase `R²`, so the distance
+shrinks while the DIRECTION keeps turning and no component settles. The ANSWER is bit-identical at
+every radius, because it comes from the import and a vanishing arc — and `ray0 − T` is exactly
+`−arc`, which makes the arc bound a bound on the TRUNCATION ERROR. The app's accumulator panel draws
+the **Cornu spiral** without being asked to.
+
+**Both records determine TWO unknowns from one complex identity.** E3's bottom side is
+`∫ℝe^{−x²}e^{ibx}dx = C + iS` and F2's outgoing ray is `∫₀^R e^{ixⁿ}dx = C + iS`, so the coefficient
+row is `[1, i]` and the realified system pins both. That turns E3's `target-is-real` hypothesis from
+a sentence into a column the contour must pin (`S = 0`, exactly), and makes F2's `∫cos = ∫sin`
+something the app COMPARES rather than asserts — which is how §10.3's `cos-equals-sin-only-at-n-2`
+finally got its `differ` half.
+
+**§10.3's cross-family invariants are RUN, and three of them are one identity.**
+`(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with `t_k` the summation kernel's own
+Laurent coefficients: the `a → 0` confluence is therefore a series rather than an evaluation at a
+small `a`, its `a⁰` term is exactly `−Res₀` (G1's answer) and its `a²` term is ζ(4)'s, and the same
+statement on `csc` closes the other column. F1's `closing-the-other-way` earns its place because the
+two routes print **different closed forms for the same number** — supplementary angles with equal
+sines, which a shared formatter could not have produced.
+
+**Three schema gaps close with them.** **SG-2** is `knownValue`, above. **SG-3** — the rectangle's
+orientation flipping with `sign(b)` — is handled as E3's record proposed, by reducing to `b ≥ 0` at
+load time and saying so, so `contour.orientation` stays a constant. **SG-4** needed no new field:
+`FamilyTarget.convergence` already had `"conditional"`, and both of F2's targets declare it.

@@ -28,6 +28,15 @@ export interface ImportedOptions {
   readonly second?: boolean;
   /** Put the import on the TARGET piece instead, which the loader must refuse. */
   readonly onTarget?: boolean;
+  /**
+   * A SECOND `free` piece carrying a DIFFERENT imported atom — which the solve must refuse.
+   *
+   * `a·√π + b·Γ(4/3)` is an element of a rank-2 module, and no record in the corpus is in one. The
+   * refusal exists in `solveImported`; without this option nothing reached it, because every real
+   * record has exactly one import and the comparison only runs from the second entry onward. A
+   * mutation sweep found it unexercised.
+   */
+  readonly twoAtoms?: boolean;
   readonly height?: number;
 }
 
@@ -83,8 +92,18 @@ export function importedRecord(over: ImportedOptions = {}): Family {
         from: pt({ param: "R", mul: -1 }, h),
         to: pt({ param: "R", mul: -1 }, 0),
       },
-      role: "vanish",
-      lemma: "L1",
+      // A second import turns this side from a killed arc into a free piece, so the geometry is no
+      // longer an argument — which is fine, because what is under test is the SOLVE's arithmetic.
+      role: over.twoAtoms ? "free" : "vanish",
+      ...(over.twoAtoms
+        ? {
+            knownValue: {
+              expr: "gamma(4/3)",
+              method: "a second, DIFFERENT transcendental — the rank-2 case",
+              rigor: "=" as Level,
+            },
+          }
+        : { lemma: "L1" as const }),
       colour: 3,
     },
   ];
@@ -118,20 +137,24 @@ export function importedRecord(over: ImportedOptions = {}): Family {
       windings: [],
     },
     vanishingLemmas: [
+      ...(over.twoAtoms
+        ? []
+        : [
+            {
+              piece: "left",
+              lemma: "L1" as const,
+              sideCondition: "the same bound: Re(−z²+ibz) = −R² + y² − by at both x = ±R",
+              discharge: "symbolic:mlBound(piece=left, M=exp(-R^2), L=b/2, limit=R->inf, requires=[])",
+              rigorOfBound: "≤" as const,
+              rigorOfLimit: "=" as const,
+              rigorIfNumericOnly: "≈" as const,
+            },
+          ]),
       {
         piece: "right",
         lemma: "L1",
         sideCondition: "|f| ≤ e^{−R²} on the vertical, since y² − by ≤ 0 on [0,b]",
         discharge: "symbolic:mlBound(piece=right, M=exp(-R^2), L=b/2, limit=R->inf, requires=[])",
-        rigorOfBound: "≤",
-        rigorOfLimit: "=",
-        rigorIfNumericOnly: "≈",
-      },
-      {
-        piece: "left",
-        lemma: "L1",
-        sideCondition: "the same bound: Re(−z²+ibz) = −R² + y² − by at both x = ±R",
-        discharge: "symbolic:mlBound(piece=left, M=exp(-R^2), L=b/2, limit=R->inf, requires=[])",
         rigorOfBound: "≤",
         rigorOfLimit: "=",
         rigorIfNumericOnly: "≈",

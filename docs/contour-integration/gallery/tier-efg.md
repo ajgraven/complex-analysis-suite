@@ -428,7 +428,7 @@ it (finding **SG-2**).
         "from": "R", "to": "R + i*b/2", "role": "vanish", "lemma": "L1", "colour": 1 },
       { "id": "top", "name": "the saddle line Im z = b/2", "kind": "segment",
         "from": "R + i*b/2", "to": "-R + i*b/2", "role": "free", "colour": 2,
-        "knownValue": {                                  // ⚠ PROPOSED FIELD — see SG-2
+        "knownValue": {                                  // SG-2 — BUILT in M5.8b, as proposed
           "expr": "-sqrt(pi)*exp(-b^2/4)",
           "method": "on Im z = b/2 the integrand collapses to e^{−x²−b²/4}; the remaining ∫ℝe^{−x²}dx = Γ(1/2) = √π is IMPORTED, not derived here",
           "rigor": "=" } },
@@ -715,7 +715,7 @@ argument (**SG-2** again).
     "variable": "x", "lower": "0", "upper": "inf",
     "integrand": "exp(i*x^2)",
     "symbols": {},
-    "conditionallyConvergent": true,      // ⚠ PROPOSED FIELD — see SG-4
+    "conditionallyConvergent": true,      // SG-4 — the schema already had `convergence`
     "components": {                       // the one complex target carries BOTH real ones
       "cos": "Re(T) = int_0^inf cos(x^2) dx",
       "sin": "Im(T) = int_0^inf sin(x^2) dx"
@@ -756,7 +756,7 @@ argument (**SG-2** again).
         "radius": "R", "from": "0", "to": "pi/(2*n)", "role": "vanish", "lemma": "L6", "colour": 1 },
       { "id": "ray1", "name": "the return ray arg z = π/(2n)", "kind": "segment",
         "from": "exp(i*pi/(2*n))*R", "to": "0", "role": "free", "colour": 2,
-        "knownValue": {                                   // ⚠ PROPOSED FIELD — see SG-2
+        "knownValue": {                                   // SG-2 — BUILT in M5.8b, as proposed
           "expr": "-exp(i*pi/(2*n))*Gamma(1 + 1/n)",
           "method": "on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (real substitution u = tⁿ)",
           "rigor": "=" } }
@@ -1523,16 +1523,40 @@ changes a v1 field's meaning.
   step that is *most* certain. Proposed: `pieces[].knownValue: { expr, method, rigor }`, with
   `method` carrying provenance so the derivation can say **"imported, not derived here"**. Without
   it, honest labelling and the correct verdict are in direct conflict for two of the eight entries.
+
+  > **BUILT (M5.8b), exactly as proposed, with three things the field alone did not settle.**
+  > **There is ONE import, and the two records name the same function** — E3's own text says `√π` IS
+  > `Γ(1/2)` — so the closed set is the Gamma function at a rational argument rather than a table of
+  > constants, and one independent check (`∫₀^∞e^{−tⁿ}dt`, F2's declared method) covers both. **An
+  > imported value has no INVERSE**, which is what "imported" means arithmetically: Pass 5's fourth
+  > route (`families/solveImported.ts`) works in the rank-1 module the atom generates, refusing a
+  > product of two atoms and a division by one, and requiring `∮ = 0` because `2πi Σ Res` carries π
+  > and an import does not. And **`rigor` is checked in BOTH directions**: a ceiling alone ("may not
+  > exceed") is satisfied by every level, since `=` is the lattice top, so it would assert nothing —
+  > under-claiming is a disagreement with the engine too. The quadrature of the piece becomes an
+  > independent CHECK rather than the source, reported on the KILL row where the piece is.
 - **SG-3 — `contour.orientation` is a constant, but E3's rectangle flips with `sign(b)`.** The
   height `b/2` is negative for `b < 0` and the same vertex order is then clockwise. Worked around
   here by an evenness reduction to `b ≥ 0` declared in `parameters[].constraints` — legitimate, but
   only because `cos` happens to be even. A parameter-dependent orientation (or a documented rule that
   templates must be reduced to a canonical parameter range at load time) is the real answer.
+
+  > **SHIPPED AS THE WORKAROUND (M5.8c), deliberately.** E3's record declares `b >= 0` and says why,
+  > and `contour.orientation` stays a constant. The real answer is still the real answer, and it is
+  > not built because no record needs it: E3 is the only entry whose geometry flips with a
+  > parameter's sign, and its own integrand's evenness settles it. The day a record's does not is the
+  > day to add the rule (ADR-0007's posture).
 - **SG-4 — no convergence class on `target`.** F2's target converges conditionally
   (`∫₀^∞|cos x²|dx = ∞`), B2 is the same, and research/03 §3 trap (ii) says the label must record it.
   `principalValue?: boolean` exists but is a different notion. Proposed:
   `target.convergenceClass: "absolute" | "conditional" | "principalValue" | "symmetricSum"`, feeding
   `Verdict.restrictions` — which is also where `k = 1`'s symmetric sums (D-3) would land.
+
+  > **ALREADY PRESENT (checked in M5.8d).** `FamilyTarget.convergence` has carried
+  > `"absolute" | "conditional" | "principalValue"` since the schema's first version — the gap was
+  > in this file's reading of it, not in the schema. Both of F2's targets declare `"conditional"`
+  > and the shell renders "converges conditionally" beside each. `"symmetricSum"` is still absent
+  > and still unneeded: no loaded record declares one.
 - **SG-5 — the G tier's `target` is not an integral.** `target.variable` is typed `"x" | "theta"`,
   the field is named `integrand`, and `RealIntegral` in `DESIGN.md` §2.3 has the same shape. A sum
   needs `kind: "sum"`, an integer index, and a `summand`. Relatedly, `contour.template` has no
@@ -1561,3 +1585,22 @@ changes a v1 field's meaning.
 - No entry's **exact** (`ℚ(i)`/RUR) path was exercised — every number above is float64. The `=`
   labels in the records are claims about what the engine *will* be able to discharge symbolically,
   and remain `?` until the exact residue and exact ML machinery of M2/M3 exists.
+
+> **ALL OF THE ABOVE IS DISCHARGED (M5.8).** `test/crossFamily.test.ts` runs every invariant in the
+> first bullet, `ζ(4)` is summed independently from the `m = 5` Bernoulli row and checked against the
+> `a²` coefficient (so the two routes share no arithmetic), and the confluence is a SERIES rather
+> than an evaluation. And all eight tier-E–G records now discharge their `=` symbolically: every one
+> prints a closed form, the decimals beside them are `≈` as every decimal in this app is, and nothing
+> was demoted.
+>
+> **Three of these invariants turn out to be ONE identity**, which is the finding worth keeping:
+> `(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with `t_k` the summation kernel's own
+> Laurent coefficients — the ones `mergedResidue` computes from the Bernoulli recurrence. So the
+> `a → 0` confluence's `a⁰` term is exactly `−Res₀` (G1's answer), its `a²` term is ζ(4)'s, and the
+> same statement on `csc` closes the other column: the 2×2 square of {cot, csc} × {collision, none}
+> is one fact about one series, with no limit taken numerically.
+>
+> **F1's invariant earns its place for an unexpected reason.** The two routes print DIFFERENT closed
+> forms for the same number — `(π/3)/sin(2π/3)` closing downward against `(π/3)/sin(π/3)` closing up,
+> supplementary angles with equal sines. A shared formatter could not have produced both, so the
+> agreement is evidence rather than tautology.

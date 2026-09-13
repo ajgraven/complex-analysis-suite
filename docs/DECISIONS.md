@@ -3760,3 +3760,30 @@ exactly the point where it is handing you a result from elsewhere.
 - **It does not license a general escape hatch.** A record cannot import the answer: invariant 4 still
   requires the contour to DETERMINE what the record claims, and a `knownValue` on the target piece
   would leave the solve with nothing to do and is refused by the loader.
+
+### Built (M5.8b–d), with four things the decision did not settle
+
+1. **There is ONE import, and the two records name the same function.** E3's own record says `√π` IS
+   `Γ(1/2)`, so the closed set (`kernel/imported.ts`) is the Gamma function at a rational argument
+   rather than a table of constants — which is what lets a single independent check cover both
+   records: `∫₀^∞e^{−tⁿ}dt = Γ(1+1/n)` is F2's declared method, and `Γ(1/2) = 2Γ(3/2) = 2∫₀^∞e^{−t²}dt`
+   carries it onto E3. A positive half-integer reduces to an exact rational multiple of `√π` by the
+   recurrence in ℚ, checked against the Lanczos series it does not use.
+2. **An imported value has no INVERSE, and that is the arithmetic of "imported".** It generates a
+   rank-1 module over the app's own exponential basis: a solve may add two of them and scale either
+   by something it derived, and may never divide by one, because nothing in the argument produces it.
+   Pass 5's fourth route (`families/solveImported.ts`) therefore REQUIRES `∮ = 0` — `2πi Σ Res`
+   carries π and an import does not, and `0` is the one value both rings share. That is not a
+   limitation but the empty singular set, which is these two records' whole content.
+3. **The declared `rigor` is checked in BOTH directions.** Item 3 above says "may not exceed", and a
+   ceiling alone is satisfied by every level, since `=` is the lattice top — it would assert nothing
+   and read as a guard while being one. The loader requires EQUALITY with what the closed set
+   justifies: under-claiming is a record saying the app is less sure than it is, which is as much a
+   corpus error as over-claiming. The atom's own level is narrowed to `=` in the TYPE, so minting is
+   correct by construction and a weaker import would be a type error rather than a silent mislabel.
+4. **The `≈` the decision replaces becomes an independent CHECK.** The piece's quadrature is still
+   computed and still reported — on the KILL row, beside the import, as a relative gap. It is
+   deliberately coarse: at a finite limit parameter that gap is the piece's own tail as much as any
+   error in the value, so no tight verdict is available. What it separates is a converging tail from
+   a different number — E3's is 1.5e-8 of the value at R = 4 and 2.2e-11 at R = 6, while the same
+   record with one factor dropped is off by half the value.

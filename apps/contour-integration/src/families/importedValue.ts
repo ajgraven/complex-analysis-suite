@@ -42,23 +42,37 @@ export type ImportedValueResult =
   | { readonly ok: true; readonly value: ImportedValue }
   | { readonly ok: false; readonly reason: string };
 
-/** The atom a leaf names, or null when it names none. `null` is not a refusal — most leaves are not atoms. */
-function atomOf(node: Node, bindings: Bindings): ImportedValueResult | null {
+/**
+ * How a leaf SPELLS an import, or null — the single recogniser {@link atomOf} and
+ * {@link mentionsImport} both go through.
+ *
+ * **One place, because two would drift.** A mutation sweep found exactly that: relaxing `sqrt(pi)`
+ * to any `sqrt` in the reader alone left the scanner still refusing `sqrt(2)` at the gate, so the
+ * corpus stayed green while `sqrt(2)` had quietly become `√π` inside a larger product. The guard is
+ * the ARGUMENT being exactly the constant, never the function name: `sqrt(2)` is an algebraic number
+ * this app holds natively and `sqrt(pi)` is the one transcendental it takes on faith.
+ */
+function importSpelling(node: Node): { readonly fn: "sqrt-pi" } | { readonly fn: "gamma"; readonly arg: Node | undefined } | null {
   if (node.kind !== "call") return null;
-
-  // `sqrt(pi)` — and ONLY of `pi`. `sqrt(2)` is an algebraic number this app holds natively, so the
-  // guard is the argument being exactly the constant, not the function name.
   if (node.name === "sqrt") {
     const arg = node.args[0];
-    if (arg === undefined || arg.kind !== "const" || arg.name !== "pi") return null;
+    return arg !== undefined && arg.kind === "const" && arg.name === "pi" ? { fn: "sqrt-pi" } : null;
+  }
+  return node.name === "gamma" ? { fn: "gamma", arg: node.args[0] } : null;
+}
+
+/** The atom a leaf names, or null when it names none. `null` is not a refusal — most leaves are not atoms. */
+function atomOf(node: Node, bindings: Bindings): ImportedValueResult | null {
+  const spelling = importSpelling(node);
+  if (spelling === null) return null;
+
+  if (spelling.fn === "sqrt-pi") {
     const found = gammaImport(Frac.of(1n, 2n));
     /* c8 ignore next */
     if (found === null) throw new Error("unreachable: Γ(1/2) is not a pole");
     return { ok: true, value: { atom: found.atom, coefficient: ONE, numeric: [0, 0] } };
   }
-
-  if (node.name !== "gamma") return null;
-  const arg = node.args[0];
+  const arg = spelling.arg;
   if (arg === undefined) return { ok: false, reason: "`gamma` was written with no argument" };
 
   // The argument must be an exact rational — `Γ` at an irrational argument is a different import and
@@ -78,7 +92,13 @@ function atomOf(node: Node, bindings: Bindings): ImportedValueResult | null {
   }
   const found = gammaImport(algebraic.re);
   if (found === null) {
-    return { ok: false, reason: `Γ has a pole at ${algebraic.re.toNumber()}, so there is no value to import` };
+    return {
+      ok: false,
+      reason:
+        `Γ at ${algebraic.re.toNumber()} is not in the closed set: the import is Γ at a POSITIVE ` +
+        "rational, since Γ has poles at the non-positive integers and its reflection below 1/2 is a " +
+        "branch no record reaches",
+    };
   }
   return {
     ok: true,
@@ -92,10 +112,7 @@ function atomOf(node: Node, bindings: Bindings): ImportedValueResult | null {
 
 /** Does this subtree mention an import ANYWHERE? Used to name the refusal, not to accept the leaf. */
 function mentionsImport(node: Node): boolean {
-  if (node.kind === "call") {
-    if (node.name === "gamma") return true;
-    if (node.name === "sqrt" && node.args[0]?.kind === "const" && node.args[0].name === "pi") return true;
-  }
+  if (importSpelling(node) !== null) return true;
   switch (node.kind) {
     case "neg":
     case "not":
