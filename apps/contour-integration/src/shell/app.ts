@@ -15,6 +15,7 @@ import {
 } from "../kernel/camera.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
+import { asSummationKernel } from "../kernel/summationKernel.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { jumpWeights } from "../kernel/branch/correction.js";
 import { allCrossingMonodromy } from "../kernel/branch/monodromy.js";
@@ -868,12 +869,18 @@ export function mountApp(root: Element): void {
         clearComputed();
       } else {
         const budget = budgetNow();
+        // A summation KERNEL is recognised from the typed expression, and its poles are then
+        // windowed on the contour inside `analyse` — which is why it is handed over as the kernel
+        // rather than as a pole list: the window has to follow a drag, and `poles` is computed once
+        // when the EXPRESSION changes.
+        const kernel = asSummationKernel(ast);
         const a = analyse({
           ast,
           f,
           poles,
           contour,
           branch: effective(),
+          ...(kernel === null ? {} : { summation: { kernel } }),
           ...(budget === undefined ? {} : { budget }),
         });
         resolved = a.resolved;

@@ -33,6 +33,7 @@ import { applyLogTheorem } from "./logTheorem.js";
 import { applyExteriorTheorem, enclosesTheCut } from "./exteriorTheorem.js";
 import { applyStripTheorem } from "./stripTheorem.js";
 import type { LatticePole } from "../kernel/expLattice.js";
+import { kernelPoles, type SummationKernel } from "../kernel/summationKernel.js";
 import type { Certificate } from "@cas/rigor";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
@@ -115,6 +116,23 @@ export interface AnalysisInput {
     readonly certificate: Certificate;
   };
   /**
+   * The SUMMATION kernel, when the integrand is `π cot(πz)·f` or `π csc(πz)·f` — tier G's seat.
+   *
+   * It exists for one reason, and it is a hole rather than a feature: `findPoles` reports ZERO poles
+   * for `π cot(πz)/z²`, because no reader sees a transcendental. So a square at an INTEGER half-width
+   * runs its vertical sides exactly through `z = ±N` and the ledger said "every singularity is clear
+   * of the contour" — about a contour passing through infinitely many of them.
+   *
+   * **THE BAND IS READ OFF THE GEOMETRY, WHICH IS WHY THIS IS AN ANALYSIS INPUT AND NOT A POLE
+   * REPORT.** The kernel's poles are every integer, and a list of infinitely many is not a list
+   * (`expLattice.ts` says the same about the strip). What makes a window honest here rather than
+   * arbitrary is that it is derived from the contour actually drawn: the question being asked — does
+   * a piece pass through one, and how many are enclosed — is local to the contour, so the integers
+   * it could possibly reach are exactly the ones to list. A contour that moves gets a new window on
+   * the same recompute, which a pole report computed once when the EXPRESSION changed could not do.
+   */
+  readonly summation?: { readonly kernel: SummationKernel };
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -150,9 +168,24 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget, branch, power, log, multi, strip }: AnalysisInput): Analysis {
+export function analyse({
+  ast,
+  f,
+  poles,
+  contour,
+  budget,
+  branch,
+  power,
+  log,
+  multi,
+  strip,
+  summation,
+}: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
-  const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
+  const singular = [
+    ...poles.poles.map((p) => ({ at: p.at, order: p.order })),
+    ...(summation === undefined ? [] : kernelPoles(kernelBand(resolved))),
+  ];
   // **THE SIDES COME FROM THE SPEC, PARALLEL TO THE GEOMETRY.** `resolveAll` maps `contour.pieces`
   // one-to-one, so index `k` is the same piece in both — which is what makes a positional array the
   // honest shape here rather than a lookup that could silently miss.
@@ -210,4 +243,20 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log, mu
     multi,
   });
   return { resolved, sides, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
+}
+
+/**
+ * How far along the real axis the kernel's poles must be listed, from the contour's own extent.
+ *
+ * One past the furthest point the contour reaches, so a piece sitting exactly on an integer is
+ * inside the window rather than one step outside it — which is the case the window exists for.
+ */
+function kernelBand(pieces: readonly Resolved[]): bigint {
+  let reach = 0;
+  for (const g of pieces) {
+    if (g.kind === "segment") reach = Math.max(reach, Math.abs(g.from[0]), Math.abs(g.to[0]));
+    else reach = Math.max(reach, Math.abs(g.center[0]) + g.radius);
+  }
+  if (!Number.isFinite(reach)) return 0n;
+  return BigInt(Math.min(1 << 16, Math.floor(reach) + 1));
 }
