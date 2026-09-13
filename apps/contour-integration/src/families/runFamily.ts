@@ -16,15 +16,28 @@
 // this app's honest refusals, which is the one thing a refusal must never be confused with.
 import { makeComplexFn, type Node } from "@cas/expr";
 import { analyse, type Analysis } from "../engine/analyse.js";
-import type { QuadratureBudget } from "../engine/contour/integrate.js";
+import type { PathFn, QuadratureBudget } from "../engine/contour/integrate.js";
 import type { Contour } from "../engine/contour/model.js";
 import type { Cx } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
 import type { Family, Golden } from "./schema.js";
-import { solveTarget, type SolvedTarget } from "./solveTarget.js";
+import {
+  piPieceLimits,
+  solvePiTargets,
+  solveTarget,
+  type PiSolvedTargets,
+  type SolvedTarget,
+  type SolvedValue,
+} from "./solveTarget.js";
+import { isMultiPoint, logFactorOf, multiFactorOf, powerFactorOf } from "./branchFactor.js";
+import { legalityRefusal } from "../engine/ledger.js";
+import { assembleVerdict, estimate, exact, meet, type Certificate } from "@cas/rigor";
+import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
+import type { DeclaredProduct } from "../kernel/branch/declared.js";
+import { declaredEvaluator } from "../engine/declaredRun.js";
 
 export interface RunOptions {
   /**
@@ -55,9 +68,21 @@ export interface FamilyRun extends Analysis {
   readonly bindings: Bindings;
   /** The contour integrand — what was integrated, which is not the posed integrand. */
   readonly ast: Node;
-  readonly f: (z: Cx) => Cx;
+  /** A {@link PathFn}: the DECLARED determination for a branch record, the compiled AST otherwise. */
+  readonly f: PathFn;
   readonly poles: PoleReport;
   readonly contour: Contour;
+  /**
+   * The branch half of the integrand as a renderable product, plus the single-valued half it
+   * multiplies — present exactly when the record declares a branch factor.
+   *
+   * Carried so the PICTURE can be built from the declaration instead of from the compiled AST, which
+   * takes the principal branch of every sub-expression and therefore draws a seam where D7's
+   * composite is continuous (research 06 §2.2). `kernel/branch/declared.ts` says why constructing
+   * beats correcting. Both halves travel together because they are one split: `cofactor` is NOT the
+   * whole integrand and rendering it alone would be a picture of a different function.
+   */
+  readonly declared?: { readonly product: DeclaredProduct; readonly cofactor: Node };
 }
 
 export type RunFamilyResult =
@@ -65,7 +90,23 @@ export type RunFamilyResult =
   | { readonly ok: false; readonly reason: string };
 
 export type SolveFamilyResult =
-  | { readonly ok: true; readonly run: FamilyRun; readonly solved: SolvedTarget }
+  /** One unknown, solved by division in units of π — tiers A–D3. */
+  | { readonly ok: true; readonly route: "scalar"; readonly run: FamilyRun; readonly solved: SolvedTarget }
+  /**
+   * Several unknowns at once, solved as `M t = r` over ℚ(i)(π) — the log families.
+   *
+   * `solved` is the PRIMARY target, so a caller that only wants to print the answer reads the same
+   * field either way; `targets` is every unknown this contour determined, plus a sentence for each
+   * combination it did not. D4 determines two of its three and is right to say nothing about the
+   * third, so dropping that report would either hide the bonus integral or invent the missing one.
+   */
+  | {
+      readonly ok: true;
+      readonly route: "system";
+      readonly run: FamilyRun;
+      readonly solved: SolvedValue;
+      readonly targets: PiSolvedTargets;
+    }
   /**
    * Pass 5 can refuse while the RUN is perfectly good — a degenerate target coefficient, a relation
    * the solver has no symbolic route for. The run comes back anyway so a caller can show the ledger
@@ -112,7 +153,7 @@ export function runFamily(
   const built = contourIntegrandOf(family, bindings);
   if (!built.ok) return { ok: false, reason: built.reason };
 
-  let f: (z: Cx) => Cx;
+  let f: PathFn;
   let contour: Contour;
   try {
     const fn = makeComplexFn(built.ast);
@@ -124,7 +165,62 @@ export function runFamily(
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
 
-  const poles = findPoles(built.ast);
+  // A BRANCH FAMILY TAKES ITS POLES FROM THE RATIONAL COFACTOR, not from the whole integrand.
+  // D1's `branch-point-is-not-a-pole` trap is exactly this: `z^{α−1}` has a branch point at the
+  // origin and no Laurent series there, so a pole-finder pointed at the full integrand is being
+  // asked a category-error question — and `findPoles` would in any case report nothing, since
+  // `z^{α−1}/(1+z)` is not a rational function at all.
+  // WHICH FACTOR, decided by what the record declares rather than by trying one and catching the
+  // failure. A family declares `z^α` or `log^m z`; the two are different branch structures, and a
+  // record with both is not a harder case of either.
+  const isLog = family.branch?.factors.some((x) => x.order.kind === "log") ?? false;
+  const several = isMultiPoint(family);
+  const power =
+    isLog || several
+      ? { ok: false as const, reason: `the family's branch factor is a ${isLog ? "log" : "product over several branch points"}` }
+      : powerFactorOf(family, bindings);
+  const log = isLog ? logFactorOf(family, bindings) : { ok: false as const, reason: "the family's branch factor is a power" };
+  const multi = several ? multiFactorOf(family, bindings) : { ok: false as const, reason: "the family declares at most one branch point" };
+  const cofactor = power.ok ? power.rational : log.ok ? log.rational : multi.ok ? multi.rational : null;
+  const poles = findPoles(cofactor ?? built.ast);
+
+  // The declaration, for the picture AND — from M5.0 — for the quadrature. One of the three at most:
+  // the routing above already made them mutually exclusive, and a record with two branch structures
+  // is not a harder case of either.
+  const declared = power.ok
+    ? { product: power.declared, cofactor: power.rational }
+    : log.ok
+      ? { product: log.declared, cofactor: log.rational }
+      : multi.ok
+        ? { product: multi.declared, cofactor: multi.rational }
+        : undefined;
+
+  // **THE QUADRATURE GETS THE DECLARED DETERMINATION** (M5.0), which is what it was missing.
+  //
+  // It was skipped for every branch record, for a stated and correct reason: sampling `z^α` needs a
+  // determination and `@cas/expr`'s compiled evaluator silently uses the principal one, so a
+  // keyhole's two lips returned the same value, cancelled, and the "second opinion" was a confident
+  // answer to a different question — worse than none. `kernel/branch/declared.ts` removes the
+  // premise: it evaluates `c·∏ⱼ(sⱼ(z − bⱼ))^{αⱼ}` with each factor in ITS OWN declared window, and
+  // takes the piece's `side` to pick the limit on the cut itself. So tier D gains the independent
+  // numeric corroboration every other tier already had.
+  //
+  // The skip does not simply disappear. It survives for the one case the side cannot resolve — a cut
+  // running vertically through a lip, where "above" displaces ALONG the cut rather than across it
+  // (`sideResolves`) — and it names that rather than the old general reason, because a record in that
+  // shape would otherwise get a quadrature that picked a limit by coin toss.
+  // `declaredEvaluator` is shared with the sandbox (`engine/declaredRun.ts`) on the second-consumer
+  // rule: the two must sample the IDENTICAL integrand, or the sandbox's quadrature would be checking
+  // a different function from the one the golden corpus checks and neither would say so.
+  let unresolved: string | null = null;
+  if (declared !== undefined) {
+    const evaluator = declaredEvaluator(declared.product, declared.cofactor, contour);
+    f = evaluator.f;
+    unresolved = evaluator.unresolved;
+  }
+  const budget =
+    unresolved === null ? options.budget : { ...options.budget, skip: unresolved };
+
   return {
     ok: true,
     run: {
@@ -135,12 +231,18 @@ export function runFamily(
       f,
       poles,
       contour,
+      ...(declared === undefined ? {} : { declared }),
       ...analyse({
         ast: built.ast,
         f,
         poles,
         contour,
-        ...(options.budget === undefined ? {} : { budget: options.budget }),
+        ...(budget === undefined ? {} : { budget }),
+        ...(power.ok
+          ? { power: { factor: power.factor, rational: power.rational }, branch: power.choice }
+          : {}),
+        ...(log.ok ? { log: { factor: log.factor, rational: log.rational }, branch: log.choice } : {}),
+        ...(multi.ok ? { multi: { factor: multi.factor, rational: multi.rational }, branch: multi.choice } : {}),
       }),
     },
   };
@@ -158,8 +260,45 @@ export function solveFamily(
   golden: Golden,
   options: RunOptions = {},
 ): SolveFamilyResult {
+  return solveWithin(family, golden, options, new Set());
+}
+
+/**
+ * `solveFamily`, carrying the chain of records already being solved.
+ *
+ * The chain exists for one reason: a record may BORROW an unknown from another record, and a corpus
+ * in which two records borrow from each other would recurse forever. It is threaded rather than kept
+ * in module state so that two solves cannot interfere, and it is not part of `RunOptions` because it
+ * is not a caller's business.
+ */
+function solveWithin(
+  family: Family,
+  golden: Golden,
+  options: RunOptions,
+  chain: ReadonlySet<string>,
+): SolveFamilyResult {
   const r = runFamily(family, golden, options);
   if (!r.ok) return r;
+
+  // NOTHING MAY REPORT A VALUE WHILE A LEGALITY ROW REFUSES — the same gate the result card takes,
+  // and it belongs here for the same reason. Pass 5 reads the residue sum and the piece limits and
+  // knows nothing about whether the contour was legal; D1 under the principal determination is the
+  // case that proves it, since its circles cross the relocated cut untagged while the solve goes on
+  // to produce a perfectly confident complex number for a real integral.
+  const illegal = legalityRefusal(r.run.ledger);
+  if (illegal !== undefined) {
+    return {
+      ok: false,
+      run: r.run,
+      reason: `${family.id}: LEGALITY refuses — ${illegal.claim}${illegal.repair === undefined ? "" : ` (${illegal.repair})`}`,
+    };
+  }
+
+  // THE LOG FAMILIES TAKE THE SYSTEM ROUTE. Not a variant of the scalar one: there is no single `a`
+  // to divide by, because D4's lower edge reproduces an affine combination of three real integrals.
+  if (family.branch?.factors.some((x) => x.order.kind === "log") ?? false) {
+    return solveLogFamily(family, r.run, chain);
+  }
 
   const piUnits = r.run.theorem.piUnits;
   if (piUnits === undefined) {
@@ -180,7 +319,157 @@ export function solveFamily(
   if (!solved.ok) {
     return { ok: false, run: r.run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
   }
-  return { ok: true, run: r.run, solved: solved.solved };
+  return { ok: true, route: "scalar", run: r.run, solved: solved.solved };
+}
+
+/**
+ * A record's declared `prerequisites`, RESOLVED — each value run out of the record that supplies it.
+ *
+ * **Executable provenance.** D5's `log³` keyhole gives two real equations in three unknowns: it
+ * determines `∫R log x` outright and `∫R log²x` only MODULO `∫R dx`. The record says where that
+ * missing input comes from — `family:log-squared-keyhole`, D4, on the same `R` — and this runs it.
+ * Not a lookup table: the source record is solved at the SAME bindings, so `p = 1` here borrows
+ * `p = 1` there, and the borrowed value arrives with its own verdict attached.
+ *
+ * Nothing is upgraded on the way. The borrowed certificate travels with the value and meets into
+ * every answer that depends on it (`solvePiTargets` decides which those are), and the record's
+ * declared `rigor` meets with it too — a record cannot claim more rigor than its input had.
+ */
+function resolvePrerequisites(
+  family: Family,
+  bindings: Bindings,
+  chain: ReadonlySet<string>,
+):
+  | { ok: true; known: readonly { targetId: string; value: RatPi; certificate: Certificate }[] }
+  | { ok: false; reason: string } {
+  const needed = family.prerequisites ?? [];
+  if (needed.length === 0) return { ok: true, known: [] };
+
+  const known: { targetId: string; value: RatPi; certificate: Certificate }[] = [];
+  for (const need of needed) {
+    const sourceId = FAMILY_PREFIX.exec(need.from)?.[1];
+    if (sourceId === undefined) {
+      return {
+        ok: false,
+        reason:
+          `needs ${need.targetId}, which this contour cannot supply, and its source '${need.from}' ` +
+          `is not a record this engine can run${need.alternative === undefined ? "" : ` (the record also offers: ${need.alternative})`}`,
+      };
+    }
+    // The current record counts as part of the chain: a record borrowing from ITSELF would otherwise
+    // resolve to the registered copy of the same id and quietly answer a different question.
+    if (sourceId === family.id || chain.has(sourceId)) {
+      return { ok: false, reason: `prerequisite cycle: ${[...chain, family.id, sourceId].join(" → ")}` };
+    }
+    const source = FAMILIES.find((f) => f.id === sourceId);
+    if (source === undefined) {
+      return { ok: false, reason: `needs ${need.targetId} from '${sourceId}', which is not a loaded record` };
+    }
+
+    const from = solveWithin(source, primaryGolden(source), { bindings }, new Set([...chain, family.id]));
+    if (!from.ok) {
+      return { ok: false, reason: `needs ${need.targetId} from '${sourceId}', which did not solve — ${from.reason}` };
+    }
+    if (from.route !== "system") {
+      return {
+        ok: false,
+        reason: `needs ${need.targetId} from '${sourceId}', which solves a single unknown and cannot name one`,
+      };
+    }
+    const wanted = need.sourceTargetId ?? need.targetId;
+    const supplied = from.targets.solved.find((x) => x.targetId === wanted);
+    if (supplied === undefined) {
+      return {
+        ok: false,
+        reason: `needs ${need.targetId} from '${sourceId}', which does not determine ${wanted}`,
+      };
+    }
+
+    // The borrowed verdict, MET with what the record expected of it. A record asking for `≈` and
+    // getting `=` keeps `≈`, because it built its argument on the weaker claim; a record asking for
+    // `=` and getting `≈` keeps `≈` too. Neither direction upgrades.
+    const borrowed = assembleVerdict(supplied.certificates).level;
+    const level = meet(borrowed, need.rigor);
+    known.push({
+      targetId: need.targetId,
+      value: supplied.exact,
+      certificate:
+        level === "="
+          ? exact(
+              `${need.targetId} = ${supplied.text}, borrowed from '${sourceId}'`,
+              `resolved by running that record at the same bindings; its own verdict is ${borrowed}`,
+            )
+          : estimate(
+              `${need.targetId} = ${supplied.text}, borrowed from '${sourceId}' with rigor ${level}`,
+              `resolved by running that record at the same bindings; its verdict ${borrowed} meets with the ${need.rigor} this record expected`,
+            ),
+    });
+  }
+  return { ok: true, known };
+}
+
+/** `family:<id>`, with anything after the id treated as prose for the reader. */
+const FAMILY_PREFIX = /^family:([A-Za-z0-9-]+)/;
+
+/** Pass 5 for a log family: `M t = r` over ℚ(i)(π), reported per unknown. */
+function solveLogFamily(family: Family, run: FamilyRun, chain: ReadonlySet<string>): SolveFamilyResult {
+  const closedContour = run.theorem.exactInPi;
+  if (closedContour === undefined) {
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: the residue theorem produced no exact closed-contour value in ℚ(i)(π), so there is nothing for Pass 5 to solve`,
+    };
+  }
+
+  const carried = piPieceLimits(run.ledger.pieceLimits);
+  if (!carried.ok) {
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: piece '${carried.pieceId}' contributes a limit that is not π times a Gaussian rational, so it cannot be carried into ℚ(i)(π)`,
+    };
+  }
+
+  const prerequisites = resolvePrerequisites(family, run.bindings, chain);
+  if (!prerequisites.ok) {
+    return { ok: false, run, reason: `${family.id}: ${prerequisites.reason}` };
+  }
+
+  const solved = solvePiTargets(family, {
+    closedContour,
+    pieceLimits: carried.limits,
+    known: prerequisites.known,
+    bindings: run.bindings,
+  });
+  if (!solved.ok) return { ok: false, run, reason: `${family.id}: Pass 5 refused — ${solved.reason}` };
+
+  const primaryId = (family.targets.find((t) => t.role === "primary") ?? family.targets[0]).id;
+  const primary = solved.targets.solved.find((x) => x.targetId === primaryId);
+  if (primary === undefined) {
+    const why = solved.targets.invisible.join("; ");
+    return {
+      ok: false,
+      run,
+      reason: `${family.id}: this contour does not determine ${primaryId}${why === "" ? "" : ` — ${why}`}`,
+    };
+  }
+
+  return {
+    ok: true,
+    route: "system",
+    run,
+    // The PRIMARY's evidence, not the system's. `?` on an unknown this contour cannot see is a true
+    // statement about that unknown and says nothing about this one; meeting the two would badge an
+    // exact answer `?`, which is the failure `residueTheorem.ts`'s `crossCheck` note describes from
+    // the other direction.
+    solved: {
+      value: primary.value,
+      text: primary.text,
+      certificates: primary.certificates,
+    },
+    targets: solved.targets,
+  };
 }
 
 export interface OfferedTier {

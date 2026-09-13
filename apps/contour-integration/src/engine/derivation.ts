@@ -28,12 +28,12 @@ import {
   type Verdict,
 } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
-import { formatPiExpSum, type ExpSum } from "../kernel/expSum.js";
+import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { Piece } from "./contour/model.js";
 import type { ConstraintId, LedgerResult, LedgerRow } from "./ledger.js";
-import type { ResidueTheoremResult } from "./residueTheorem.js";
+import { RESIDUE_THEOREM_IDENTITY, type ResidueTheoremResult } from "./residueTheorem.js";
 
 export type StageId = "setup" | "legality" | "catch" | "kill" | "cover" | "solve" | "verdict";
 
@@ -148,8 +148,6 @@ export interface DerivationStage extends StageSpec {
  * sandbox has no family — an engine that needed one could not serve the sandbox at all.
  */
 export interface SolvedSummary {
-  /** `t/π`, exactly. Printed as the identity Pass 5 actually solved. */
-  readonly piUnits: ExpSum;
   readonly value: number;
   readonly text?: string;
   readonly certificates: readonly Certificate[];
@@ -274,9 +272,12 @@ export function buildDerivation(input: DerivationInput): Derivation {
   for (const row of ledger.rows) add(STAGE_OF[row.constraint], lineFromRow(row, spec));
 
   // ---- SOLVE --------------------------------------------------------------------------------
+  // The identity comes from the RESULT, not from this file: an exterior contour is solved by a
+  // different equation, and printing the plain one above its answer would state the very thing D6
+  // exists to show is inapplicable.
   say("solve", {
     label: "the residue theorem",
-    text: "∮ f dz = 2πi Σₖ n(γ,aₖ)·Res(f,aₖ)",
+    text: theorem.identity ?? RESIDUE_THEOREM_IDENTITY,
   });
   if (theorem.exactValue !== undefined) {
     add("solve", lineFromVerdict(`∮ f dz = ${theorem.exactValue.text}`, theorem.verdict, "satisfied"));

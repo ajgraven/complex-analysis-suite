@@ -204,3 +204,52 @@ export function weightedResidueSum(
   }
   return acc;
 }
+
+/**
+ * `Res(f, ∞)` for a rational `f = N/D`, exactly — the coefficient the finite poles cannot see.
+ *
+ * `Res(f,∞) = −[z⁻¹]f` in the expansion at infinity, with the minus sign because the contour about
+ * infinity runs the other way. Division makes it one coefficient read: `N = A·D + B` with
+ * `deg B < deg D = n`, the polynomial part `A` contributes no `z⁻¹` at all, and `B/D` expands as
+ * `Σ_{k≥1} cₖ z^{−k}` with `c₁ = b_{n−1}/dₙ`. So
+ *
+ *     Res(f, ∞) = −b_{n−1}/dₙ
+ *
+ * **"Regular at infinity" and "zero residue at infinity" are different statements**, which is D6's
+ * `forgot-the-residue-at-infinity` trap in one line: `f = 1/z` is regular at ∞ and has `Res = −1`.
+ * What DOES force the residue to vanish is the degree condition — `deg D − deg N ≥ 2` makes `B = N`
+ * of degree at most `n − 2`, so `b_{n−1} = 0` — and that is research 03 §9(d)'s unification made
+ * arithmetic: the same computation that discharges L2 on the outer circle proves `Res(f,∞) = 0`.
+ * The converse does not hold (`(z³+1)/(z³+z)` has degree drop 0 and residue 0 at ∞), so the row says
+ * which direction it establishes.
+ *
+ * Null when `D` is the zero polynomial, which is not a rational function.
+ */
+export function residueAtInfinity(num: QiPoly, den: QiPoly): Gauss | null {
+  if (den.isZero()) return null;
+  const n = den.degree();
+  if (n === 0) return Gauss.ZERO; // a polynomial: its expansion at ∞ has no z⁻¹ term at all
+  const { r: remainder } = num.divmod(den);
+  return remainder.coeff(n - 1).div(den.leadingCoeff()).neg();
+}
+
+/**
+ * The total-residue identity `Σ_finite Res + Res(f,∞) = 0`, as a differential check.
+ *
+ * Two computations that share no arithmetic: one is a Laurent coefficient read off a single
+ * polynomial division at infinity, the other a sum over poles each found by a squarefree
+ * factorisation and a series inversion. Agreement is evidence; disagreement is a bug in one of them
+ * and is reported rather than averaged. Null when the finite poles were not all pinned, in which
+ * case there is no sum to compare against.
+ */
+export function totalResidueCheck(
+  num: QiPoly,
+  den: QiPoly,
+  report: ExactResidueReport,
+): { readonly ok: boolean; readonly atInfinity: Gauss; readonly finiteSum: Gauss } | null {
+  if (!report.complete) return null;
+  const atInfinity = residueAtInfinity(num, den);
+  if (atInfinity === null) return null;
+  const finiteSum = residueSum(report.poles);
+  return { ok: finiteSum.add(atInfinity).isZero(), atInfinity, finiteSum };
+}

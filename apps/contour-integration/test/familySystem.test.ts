@@ -5,6 +5,19 @@ import { solveExact } from "../src/families/linear.js";
 import { buildSystem, exactConstant } from "../src/families/system.js";
 import { a5SemicircleOrder2 } from "../src/families/records/a5-semicircle-order2.js";
 import type { Family } from "../src/families/schema.js";
+import type { RationalSystem } from "../src/families/system.js";
+
+/**
+ * The ℚ arm of a built system, checked rather than cast.
+ *
+ * Two coefficient rings are in play and neither contains the other, so `matrix` is a union; every
+ * family in this file is rational, and asserting that is how the test says so.
+ */
+const rational = (built: ReturnType<typeof buildSystem>): RationalSystem => {
+  if (!built.ok) throw new Error(built.reason);
+  if (built.system.field !== "Q") throw new Error(`expected a rational system, got ${built.system.field}`);
+  return built.system;
+};
 
 const con = (src: string, bindings = {}): ReturnType<typeof exactConstant> =>
   exactConstant(parse(src), bindings);
@@ -79,16 +92,14 @@ describe("buildSystem — one complex identity as two real rows", () => {
 
   it("makes the imaginary row the reality condition", () => {
     // Row 1 is 0·t = Im(S − b). A residue sum with an imaginary part therefore lands in
-    // `inconsistentRows` rather than quietly disappearing, which is the behaviour the real-line
+    // `contradictions` rather than quietly disappearing, which is the behaviour the real-line
     // families need: ∫_ℝ dx/(1+x²)² is real, and an engine that produced −iπ/2 (A5's own trap) must
     // be contradicted by the system, not merely be surprising.
-    const built = buildSystem(a5SemicircleOrder2);
-    if (!built.ok) throw new Error(built.reason);
-    const M = built.system.matrix;
+    const M = rational(buildSystem(a5SemicircleOrder2)).matrix;
     const real = solveExact(M, 1, [Frac.of(157n, 100n), Frac.ZERO]);
-    expect(real.inconsistentRows).toEqual([]);
+    expect(real.contradictions.map((c) => c.row)).toEqual([]);
     const imaginary = solveExact(M, 1, [Frac.ZERO, Frac.of(-157n, 100n)]);
-    expect(imaginary.inconsistentRows).toEqual([1]);
+    expect(imaginary.contradictions.map((c) => c.row)).toEqual([1]);
   });
 
   it("gives a vanish piece no coefficient — its whole content is on the right-hand side", () => {

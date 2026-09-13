@@ -22,7 +22,18 @@ import type { Cx, Resolved } from "../../kernel/geom.js";
  * height) and keeps geometry independent of the complex expression evaluator. The type is shaped so
  * the general form can be added later without touching call sites.
  */
-export type Scalar = number | { readonly param: string; readonly mul?: number; readonly add?: number };
+/**
+ * A coordinate: a number, or an affine function of a parameter — with `add` allowed to be another.
+ *
+ * `add` was a number until D7, whose dogbone hugs `[0, b]` with `b` a PARAMETER: its upper edge runs
+ * to `b − η`, which is affine in two of them. One nesting is enough for every record in the gallery
+ * and keeps the type an affine form rather than an expression language, which is what `derived`
+ * already exists for — and unlike `derived`, this stays live under a drag, so scrubbing `η` does not
+ * leave the picture a hair open and the ledger refusing a contour that had been closed.
+ */
+export type Scalar =
+  | number
+  | { readonly param: string; readonly mul?: number; readonly add?: number | Scalar };
 
 export interface PointSpec {
   readonly x: Scalar;
@@ -43,6 +54,17 @@ export type Geom =
  *  multiple of the unknown, `residue` encircles poles, `free` is merely computed. */
 export type PieceRole = "target" | "vanish" | "reproduces" | "residue" | "free";
 
+/**
+ * Which limiting value a piece lying on a branch cut carries.
+ *
+ * Defined in `kernel/branch/model.ts` and re-exported here, so the declaration ({@link Piece.side}),
+ * the evaluator that honours it, and the quadrature that asks for it per piece all name one type.
+ * It is owned one layer down because the kernel's evaluator needs it and `kernel/` may not import
+ * upward — see the type's own doc for why that is the right layering rather than a lint workaround.
+ */
+import type { CutSide } from "../../kernel/branch/model.js";
+export type { CutSide };
+
 /** The eight vanishing lemmas of research 03 §14. L2 = the large-arc ML lemma, L3 = Jordan, L4 = the
  *  small-arc lemma, which is the one that does NOT vanish. */
 export type LemmaId = "L1" | "L2" | "L3" | "L4" | "L5" | "L6" | "L7" | "L8";
@@ -61,8 +83,19 @@ export interface Piece {
    * arc: in C1 the two share a centre, and only their radii differ.
    */
   readonly lemma?: LemmaId;
-  /** Pins which limit is meant where the piece runs along a branch cut. Unused until M4. */
-  readonly side?: "above" | "below";
+  /**
+   * Pins which limit is meant where the piece runs along a branch cut.
+   *
+   * Research 06 §3.3: *"Don't offset the contour; offset the branch."* The keyhole's two lips lie
+   * EXACTLY on `ℝ₊`, where the declared determination's argument is discontinuous, and this says
+   * which of the two limiting values the piece carries — "the same idea as C99's signed zero, lifted
+   * from a float bit to a data field", which also makes it serialisable and inspectable.
+   *
+   * LEGALITY has required it of any piece meeting a cut since M4.1. From M5.0 it is also HONOURED:
+   * `kernel/branch/declared.ts` reads it to choose the edge of the window, which is what lets the
+   * quadrature cross-check run over a multivalued integrand at all.
+   */
+  readonly side?: CutSide;
   readonly colour: 0 | 1 | 2 | 3 | 4 | 5;
 }
 
@@ -86,7 +119,7 @@ export function resolveScalar(s: Scalar, params: Params): number {
   if (typeof s === "number") return s;
   const p = params[s.param];
   if (p === undefined) throw new Error(`Contour references unknown parameter '${s.param}'`);
-  return p.value * (s.mul ?? 1) + (s.add ?? 0);
+  return p.value * (s.mul ?? 1) + resolveScalar(s.add ?? 0, params);
 }
 
 const resolvePoint = (p: PointSpec, params: Params): Cx => [

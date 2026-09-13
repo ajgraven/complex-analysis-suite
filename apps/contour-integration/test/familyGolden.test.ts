@@ -14,7 +14,7 @@ import {
   solveFamily,
   type FamilyRun,
 } from "../src/families/runFamily.js";
-import type { SolvedTarget } from "../src/families/solveTarget.js";
+import type { SolvedValue } from "../src/families/solveTarget.js";
 import type { Cx } from "../src/kernel/geom.js";
 import type { Family, Golden } from "../src/families/schema.js";
 
@@ -37,7 +37,7 @@ function solve(
   family: Family,
   g: Golden,
   geometry: Record<string, number> = {},
-): FamilyRun & { solved: SolvedTarget } {
+): FamilyRun & { solved: SolvedValue } {
   const r = solveFamily(family, g, { geometry });
   if (!r.ok) throw new Error(r.reason);
   return { ...r.run, solved: r.solved };
@@ -67,6 +67,19 @@ describe("every fixture of every record, not just the flagship one", () => {
       // `halfRange` / `closeDown` select a derivation the engine has no route for; the closing-down
       // one is executed directly below instead.
       if (isVariant(family, g)) continue;
+      // A fixture marked `refuses` documents a collapsed derivation, and its `value` records what
+      // the answer would be — which is exactly why it must not be printed. D3 carries two, at
+      // integer `a`, where the keyhole carries no information about the target while
+      // `(π/n)/sin(πa/n)` remains correct by continuity. The test is that the engine REFUSES and
+      // says so, not that it reproduces the number.
+      if (g.refuses !== undefined) {
+        const r = solveFamily(family, g);
+        expect(r.ok, `${family.id} at ${JSON.stringify(g.params)} should refuse: ${g.refuses}`).toBe(
+          false,
+        );
+        if (!r.ok) expect(r.reason).toMatch(/carries no information|is ZERO|exactly zero/);
+        continue;
+      }
       const want = typeof g.numeric === "number" ? g.numeric : g.numeric[0];
       const { solved } = solve(family, g);
       expect(
@@ -82,17 +95,24 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
   // true: once every selected pole is enclosed, 2πi Σ n·Res is independent of R, so the two runs
   // must agree EXACTLY — not to a tolerance. A difference would mean the winding numbers changed,
   // which is the one thing R is allowed to do and the one thing these radii must not straddle.
-  const withLimit = FAMILIES.filter((f) => f.contour.limitParams.length > 0);
+  // The parameter heading to INFINITY, which is not always `limitParams[0]` and is not always
+  // present: D6's dogbone has no outer circle at all, so its one limit parameter shrinks instead.
+  const withLimit = FAMILIES.filter((f) => f.contour.limitParams.some((p) => p.to === "inf"));
 
   it.each(withLimit.map((f) => [f.id, f] as const))("%s", (_id, family) => {
     const g = primary(family);
     // The limit parameter is NOT always called R — tier B names it `R_lim`, because `R` is the
     // rational function. Take the name from the record instead of assuming it.
-    const name = must(family.contour.limitParams[0], "a limit parameter").name;
-    const atThree = must(run(family, g, { [name]: 3 }).theorem.exactValue, "an exact value at R = 3");
-    const atForty = must(run(family, g, { [name]: 40 }).theorem.exactValue, "an exact value at R = 40");
-    expect(atForty.value).toEqual(atThree.value);
-    expect(atForty.text).toBe(atThree.text);
+    const limit = must(family.contour.limitParams.find((p) => p.to === "inf"), "a limit parameter to ∞");
+    // BOTH radii must enclose every selected pole, or the property under test does not hold: the
+    // value is independent of R once everything is inside, and changes when a pole crosses out. A
+    // record whose poles need more room says so with `start`, and D2's are at −2 and −4.
+    const small = Math.max(3, limit.start ?? 0);
+    const large = Math.max(40, small * 10);
+    const near = must(run(family, g, { [limit.name]: small }).theorem.exactValue, `an exact value at R = ${small}`);
+    const far = must(run(family, g, { [limit.name]: large }).theorem.exactValue, `an exact value at R = ${large}`);
+    expect(far.value).toEqual(near.value);
+    expect(far.text).toBe(near.text);
   });
 
   it("names which families have a limit parameter at all", () => {
@@ -108,15 +128,66 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "indented-sinc",
       "removable-one-minus-cos",
       "pv-sine-over-x-times-quadratic",
+      "mellin-keyhole",
+      "keyhole-two-poles",
+      "keyhole-x-to-the-n",
+      "log-squared-keyhole",
+      "log-cubed-keyhole",
+    ]);
+  });
+
+  // The mirror property, and D6 is why it is here: a dogbone has NO outer circle — the residue at
+  // infinity stands in for it — so its only limit parameter shrinks, and a test that assumed every
+  // limit was a radius heading outward simply could not run on it. Shrinking must not change the
+  // value either, and it would if `η` crossed a pole, reached the other branch point, or swallowed
+  // the segment the target runs along.
+  const withShrinking = FAMILIES.filter((f) => f.contour.limitParams.some((p) => p.to === "0+"));
+
+  it.each(withShrinking.map((f) => [f.id, f] as const))("%s, as its ε shrinks", (_id, family) => {
+    const g = primary(family);
+    const limit = must(family.contour.limitParams.find((p) => p.to === "0+"), "a limit parameter to 0⁺");
+    const coarse = Math.min(0.05, limit.start ?? 0.05);
+    const fine = coarse / 1000;
+    const near = must(run(family, g, { [limit.name]: coarse }).theorem.exactValue, `an exact value at ε = ${coarse}`);
+    const far = must(run(family, g, { [limit.name]: fine }).theorem.exactValue, `an exact value at ε = ${fine}`);
+    expect(far.value).toEqual(near.value);
+    expect(far.text).toBe(near.text);
+  });
+
+  it("names which families have a SHRINKING limit parameter", () => {
+    expect(withShrinking.map((f) => f.id)).toEqual([
+      "indented-sinc",
+      "pv-sine-over-x-times-quadratic",
+      "mellin-keyhole",
+      "keyhole-two-poles",
+      "keyhole-x-to-the-n",
+      "log-squared-keyhole",
+      "log-cubed-keyhole",
+      "dogbone-inverse-sqrt",
+      "dogbone-two-fractional-powers",
     ]);
   });
 });
 
 describe("the quadrature agrees with the residue theorem, as the records claim", () => {
   it.each(cases)("%s", (_id, family) => {
+    const r = run(family, primary(family));
+    // **THE BRANCH CASE IS NO LONGER SPECIAL, AND THAT IS THE ASSERTION.** Until M5.0 this block
+    // forked: a multivalued integrand had no quadrature to agree with, because sampling `z^α` needs
+    // a determination at every node and a compiled evaluator uses the principal one — so a
+    // keyhole's two lips returned the same value, cancelled, and a "second opinion" answered a
+    // different question with confidence. The absence was stated rather than dressed as agreement,
+    // but it left tier D as the one tier whose values had no independent numeric corroboration.
+    //
+    // `evaluateDeclared(product, z, side)` removed the premise. Every record in the corpus, tier D
+    // included, is now checked against floating Gauss–Legendre panels that share no machinery with
+    // the exact route — so the fork is gone and an uncorroborated record cannot hide behind it.
+    //
     // Two routes that share no machinery. `agrees` is the engine's own comparison against the
     // quadrature's error estimate, which is the claim each record's `method` field records.
-    expect(run(family, primary(family)).theorem.agrees).toBe(true);
+    expect({ id: _id, agrees: r.theorem.agrees }).toEqual({ id: _id, agrees: true });
+    expect({ id: _id, skipped: r.integral.quadratureSkipped }).toEqual({ id: _id, skipped: undefined });
+    expect(r.theorem.crossCheck).toBeDefined();
   });
 });
 
@@ -221,6 +292,37 @@ describe("the closed form each record establishes", () => {
     "indented-sinc": "π/2",
     "removable-one-minus-cos": "π/2",
     "pv-sine-over-x-times-quadratic": "π − π/e",
+    // D1, and the first answer in the corpus that is not π times an algebraic number: the
+    // keyhole's coefficient `1 − e^{2πiα}` factors through a sine, which is CARRIED rather than
+    // evaluated. North-star behaviour 4, in one string.
+    "mellin-keyhole": "π/sin(3π/10)",
+    // D2, the first record whose poles are off the unit circle: `(−2)^{1/2} = e^{(1/2)(ln 2 + iπ)}`,
+    // and the `ln 2` folds back to a radical because its weight is a half. Its crossing phase is
+    // REAL — `e^{iπ} = −1` — so the two edges add and the sine is `sin(π/2) = 1`, which is why the
+    // answer carries no sine at all.
+    "keyhole-two-poles": "π − π√2/2",
+    // D3, whose sine is `sin(πa/n)` and not `sin(πa)` — the geometric sum over the n roots
+    // cancels the keyhole's own `(1 − e^{2πia})`, and without that cancellation the answer is
+    // numerically right in a form no reader would recognise.
+    "keyhole-x-to-the-n": "(π/4)/sin(3π/8)",
+    // D4, whose answer is not reached by dividing at all: `M t = r` over ℚ(i)(π), solved for the
+    // two unknowns of three that this contour determines. The primary is `∫₀^∞ log x/(1+x²)² dx`;
+    // `∫₀^∞ dx/(1+x²)² = π/4` comes free from the same identity and is checked in `test/d4.test.ts`.
+    "log-squared-keyhole": "−π/4",
+    // D5, the first record that does not close alone: its log³ keyhole determines `∫R log²x` only
+    // modulo `∫R dx`, which D4's log² keyhole on the same R supplies. The borrowed value's verdict
+    // meets into this one — see `test/d5.test.ts`.
+    "log-cubed-keyhole": "π³/8",
+    // D6, the first record whose contour encloses NO pole — and whose answer is not zero. The value
+    // comes from the exterior identity, where every residue is weighted by `n − σ = 0 − (−1) = 1`,
+    // and the branch factor's two values `+√2/2` and `−√2/2` at the conjugate poles are what keeps
+    // them from cancelling. `π√2/2` is `π/√2`.
+    "dogbone-inverse-sqrt": "π√2/2",
+    // D7, where `Res(f,∞)` is most of the answer — and the first whose form carries a QUARTER power.
+    // `2^{1/4}·5^{3/4}` is `250^{1/4}` over primes, which is what keeps equality a decision; the
+    // record writes the same number as `40^{3/4}/4`, and recovering a record's own grouping would
+    // mean remembering it. The sine is carried, never evaluated.
+    "dogbone-two-fractional-powers": "(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)",
   };
 
   it("covers every loaded record", () => {

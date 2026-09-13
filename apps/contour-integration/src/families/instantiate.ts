@@ -17,6 +17,10 @@ import type { Bindings } from "./system.js";
  * the family selects is enclosed — `familyGolden.test.ts` asserts exactly that by instantiating each
  * record at two widely separated radii and requiring the exact value to be identical — so this
  * number decides what the user first sees and nothing else. `0+` starts small for the same reason.
+ *
+ * A record whose poles sit near this radius overrides it with `limitParams[].start`: the default
+ * knows nothing about where a family's poles are, and one landing exactly ON the outer circle leaves
+ * its winding number undecided, so the record would open refusing.
  */
 const DEFAULT_LIMIT_VALUE = { inf: 4, "0+": 0.05 } as const;
 
@@ -78,7 +82,7 @@ function buildParams(family: Family, values: Readonly<Record<string, number>>): 
   for (const l of family.contour.limitParams) {
     params[l.name] = {
       name: l.name,
-      value: values[l.name] ?? DEFAULT_LIMIT_VALUE[l.to],
+      value: values[l.name] ?? l.start ?? DEFAULT_LIMIT_VALUE[l.to],
       range: LIMIT_RANGE[l.to],
       scale: "log",
       limit: { to: l.to },

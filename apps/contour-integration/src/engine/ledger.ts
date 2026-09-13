@@ -12,14 +12,23 @@
 // The order of the passes is load-bearing. LEGALITY runs first and returns with **no value at all**
 // when it fails, so a singular configuration never produces a number that then has to be suppressed.
 import { assembleVerdict, exact, refuse, unknown, type Certificate, type Verdict } from "@cas/rigor";
-import { Frac } from "@cas/exact";
+import { Frac, SqrtExt } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { arcLength, isClosed } from "../kernel/geom.js";
-import { clearance } from "../kernel/winding.js";
+import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
+import { clearance, windingNumber } from "../kernel/winding.js";
+import { checkAdmissibility } from "../kernel/branch/admissibility.js";
+import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
+import { allCrossingMonodromy, crossingMonodromy, cutGeometryInvariance } from "../kernel/branch/monodromy.js";
+import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
+import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
+import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
+import { logArcBound } from "../kernel/bounds/logArc.js";
+import type { LogFactor } from "../kernel/logResidue.js";
+import type { MultiPowerFactor, PowerFactor } from "../kernel/branchResidue.js";
 import type { Piece } from "./contour/model.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -92,6 +101,14 @@ function arcExtent(g: Resolved): Frac | null {
 /** The radius of an arc as an exact rational, when it is one. */
 function arcRadius(g: Resolved): Frac | null {
   if (g.kind !== "arc") return null;
+  // **THE BOUND IS ABOUT `|z| = R`, SO THE ARC MUST BE CENTRED AT THE ORIGIN.** Every certified arc
+  // bound in `kernel/bounds/` reasons from `Σ|aₖ|R^k` over `|dₙ|Rⁿ − Σ|dₖ|R^k` — the reverse
+  // triangle inequality on the circle of radius `R` ABOUT 0 — and applying it to an arc centred
+  // elsewhere would compute a `≤` from the wrong geometry. Until M4.6b every `vanish` arc in the app
+  // happened to be centred at 0, so the hypothesis was true by accident; the dogbone's end caps sit
+  // at its branch points and are the first that are not. Returning null here reports honestly that
+  // no bound of this shape applies, instead of certifying one that does not.
+  if (g.center[0] !== 0 || g.center[1] !== 0) return null;
   const r = g.radius;
   if (!Number.isFinite(r) || r <= 0) return null;
   // The radius comes from a slider, so it is a double; the simplest rational that round-trips is the
@@ -135,6 +152,117 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   return mlArcBound(rational.value.num, rational.value.den, R, extent);
 }
 
+/**
+ * The same ML bound as `disposeArc`, for `z^α·R(z)`.
+ *
+ * WHICH LIMIT is not inferable from the geometry: an outer circle and an inner circle differ only in
+ * radius, and D1's two are 1e9 apart at one fixture and adjacent at another. So it is read off the
+ * DECLARED lemma — `L2` is the large arc, `L1` the small one — which is the same reason `L4` and `L5`
+ * are declared rather than guessed.
+ */
+function disposeBranchArc(
+  power: { readonly factor: PowerFactor; readonly rational: Node },
+  g: Resolved,
+  lemma: Piece["lemma"],
+): ArcBound | null {
+  if (g.kind !== "arc") return null;
+  const R = arcRadius(g);
+  const extent = arcExtent(g);
+  if (!R || !extent) return null;
+  const limit = lemma === "L1" ? "0+" : lemma === "L2" ? "inf" : null;
+  if (limit === null) return null;
+  const rational = toExactRational(power.rational);
+  if (!rational.ok) return null;
+  return branchArcBound(power.factor.alpha, rational.value.num, rational.value.den, R, {
+    limit,
+    piMultiple: extent,
+  });
+}
+
+/**
+ * The same ML bound as `disposeBranchArc`, for `R(z)·log^m z`.
+ *
+ * The log changes no exponent — it is weaker than every power — so the two circles of D4's keyhole
+ * are killed by the decay of `R` alone, which is what its `decay-beats-log-squared` and
+ * `regular-at-origin` hypotheses say. `logArc.ts` carries the one place it does matter.
+ */
+function disposeLogArc(
+  log: { readonly factor: LogFactor; readonly rational: Node },
+  g: Resolved,
+  lemma: Piece["lemma"],
+): ArcBound | null {
+  if (g.kind !== "arc") return null;
+  const R = arcRadius(g);
+  const extent = arcExtent(g);
+  if (!R || !extent) return null;
+  const limit = lemma === "L1" ? "0+" : lemma === "L2" ? "inf" : null;
+  if (limit === null) return null;
+  const rational = toExactRational(log.rational);
+  if (!rational.ok) return null;
+  return logArcBound(log.factor.power, rational.value.num, rational.value.den, R, {
+    limit,
+    piMultiple: extent,
+    argRange: log.factor.argRange,
+  });
+}
+
+/**
+ * The ML bound for `c·∏(z−bⱼ)^{αⱼ}·R(z)` on an end cap that sits ON one of its own branch points.
+ *
+ * The dispatch is by GEOMETRY and not by declaration, for once: the cap's centre either is a branch
+ * point of the factor or it is not, and that is a fact about the picture rather than a choice. A cap
+ * centred anywhere else gets no bound of this shape — every other bound in `kernel/bounds/` reasons
+ * about `|z| = R` from the ORIGIN, and applying one to an arc centred elsewhere computes a `≤` from
+ * the wrong geometry.
+ */
+function disposeDogboneArc(
+  multi: { readonly factor: MultiPowerFactor; readonly rational: Node },
+  g: Resolved,
+  lemma: Piece["lemma"],
+): ArcBound | null {
+  if (g.kind !== "arc" || lemma !== "L1") return null;
+  const radius = g.radius;
+  if (!Number.isFinite(radius) || radius <= 0) return null;
+  const extent = arcExtent(g);
+  if (!extent) return null;
+  const eta = Frac.of(BigInt(Math.round(Math.round(radius * 1e6) / 1e6 * 1e6)), 1000000n);
+
+  const here = multi.factor.points.findIndex((b) => {
+    const [x, y] = b.at.toTuple();
+    return Math.hypot(x - g.center[0], y - g.center[1]) < 1e-9;
+  });
+  if (here < 0) return null;
+  const centre = multi.factor.points[here].at.asGauss();
+  if (centre === null) return null; // the shift is exact over ℚ(i); a centre in ℚ(i)(√d) is not it
+
+  const rational = toExactRational(multi.rational);
+  if (!rational.ok) return null;
+
+  const others: { distanceSquared: Frac; alpha: Frac; label: string }[] = [];
+  for (let j = 0; j < multi.factor.points.length; j++) {
+    if (j === here) continue;
+    const gap = multi.factor.points[here].at.sub(multi.factor.points[j].at);
+    const squared = gap.mul(SqrtExt.of(gap.a.conj(), gap.b.conj(), gap.d)).asGauss();
+    if (squared === null || !squared.im.isZero()) return null;
+    others.push({ distanceSquared: squared.re, alpha: multi.factor.points[j].alpha, label: multi.factor.points[j].label });
+  }
+
+  const c = multi.factor.constant.mul(
+    SqrtExt.of(multi.factor.constant.a.conj(), multi.factor.constant.b.conj(), multi.factor.constant.d),
+  ).asGauss();
+  if (c === null || !c.im.isZero()) return null;
+
+  return dogboneArcBound({
+    alpha: multi.factor.points[here].alpha,
+    others,
+    constantModulusSquared: c.re,
+    num: rational.value.num.shift(centre),
+    den: rational.value.den.shift(centre),
+    eta,
+    piMultiple: extent,
+  });
+}
+
 const rowFrom = (
   constraint: ConstraintId,
   status: LedgerRow["status"],
@@ -151,6 +279,14 @@ export interface LedgerInput {
   readonly poles: PoleReport;
   readonly integral: ContourIntegral;
   readonly theorem: ResidueTheoremResult;
+  /** The cut system. Omitted for a rational integrand, which is {@link NO_BRANCH}. */
+  readonly branch?: BranchChoice;
+  /** The branch factor `z^α` and its rational cofactor — see `analyse.ts`. */
+  readonly power?: { readonly factor: PowerFactor; readonly rational: Node };
+  /** The branch factor `log^m z` and its rational cofactor — the other half of the same seat. */
+  readonly log?: { readonly factor: LogFactor; readonly rational: Node };
+  /** The multi-point branch factor `c·∏(z−bⱼ)^{αⱼ}` and its cofactor — the dogbone's seat. */
+  readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
 }
 
 /**
@@ -163,6 +299,7 @@ export interface LedgerInput {
  */
 export function evaluateLedger(input: LedgerInput): LedgerResult {
   const { ast, pieces, spec, poles, integral, theorem } = input;
+  const branch = input.branch ?? NO_BRANCH;
   const rows: LedgerRow[] = [];
   const certificates: Certificate[] = [];
   const pieceLimits: { pieceId: string; contribution: ExpSum }[] = [];
@@ -231,6 +368,255 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         exact("clearance", "distance from each pole to each piece"),
       ),
     );
+  }
+
+  // ---- LEGALITY, steps 2 and 3: the cut system ----------------------------------------------
+  //
+  // Validity BEFORE crossings, which inverts DESIGN §4 Pass 1's numbering for a reason: a malformed
+  // or inadmissible cut system has no polyline to test a piece against, so asking "does this piece
+  // cross that cut" of it would be answering a question about an object that does not exist. The two
+  // rows are omitted entirely for a rational integrand — a permanently green "no cuts to check" row
+  // teaches nothing and hides the rows that do.
+  if (branch.points.length > 0 || branch.cuts.length > 0) {
+    const admissible = checkAdmissibility(branch);
+    push(
+      rowFrom(
+        "LEGALITY",
+        admissible.ok ? "satisfied" : "failed",
+        admissible.ok
+          ? `the cut system is admissible — ${admissible.detail}`
+          : `the cut system is not admissible: ${admissible.detail}`,
+        admissible.certificate,
+        undefined,
+        admissible.repair,
+      ),
+    );
+    if (!admissible.ok) {
+      return {
+        rows,
+        closes: false,
+        verdict: assembleVerdict(certificates),
+        failedAt: "LEGALITY",
+        hasTarget: spec.some((p) => p.role === "target"),
+        pieceLimits,
+      };
+    }
+
+    // One scale for both the ray clipping and the "too close to say" floor, taken from the picture
+    // the user is actually looking at: the contour's own extent, plus every branch point, so a cut
+    // running out past the contour is still clipped beyond everything the test cares about.
+    const extent = Math.max(
+      1,
+      ...pieces.flatMap((g) => [startPoint(g), endPoint(g)]).map((q) => Math.hypot(q[0], q[1])),
+      ...branch.points.map((b) => Math.hypot(b.at[0], b.at[1])),
+    );
+
+    // FIRST, the topological question one piece of geometry cannot answer: is the contour a loop in
+    // ℂ∖Γ at all? It is exactly when the integrand comes back to the value it started with, and what
+    // decides that is the TOTAL monodromy — `exp(2πi Σⱼ n(γ,bⱼ)·αⱼ)` — not any one winding number.
+    //
+    // **THIS IS WHY THE DOGBONE IS LEGAL AND A NAKED CIRCLE IS NOT.** A dogbone winds `−1` about each
+    // end of `√(1−z²)`'s cut, so testing the branch points one at a time refuses it — and the refusal
+    // is wrong, because `Σ n·α = (−1)(−½) + (−1)(−½) = 1 ∈ ℤ` and `f` returns to itself. That is the
+    // same arithmetic as admissibility (research 06 §2.1(b)) read along a contour instead of along a
+    // component of the cut forest, and the same reason it is a DECISION: `αⱼ` are exact `Frac`s, so
+    // `Σ n·α` has denominator 1 or it does not, and there is no "nearly an integer".
+    //
+    // A `log` point is the one case no cancellation reaches: its monodromy adds `2πi` rather than
+    // multiplying by a root of unity, so any non-zero winding about one is a refusal on its own.
+    const turns: string[] = [];
+    let monodromy = Frac.ZERO;
+    const logTurns: string[] = [];
+    const undecidedTurns: string[] = [];
+    for (const point of branch.points) {
+      const genuine = point.order.kind === "log" || point.order.alpha.d !== 1n;
+      if (!genuine) continue;
+      const w = windingNumber(pieces, point.at);
+      if (!w.decided) {
+        undecidedTurns.push(`${point.label} (${w.reason})`);
+        continue;
+      }
+      if (w.n === 0) continue;
+      turns.push(`n(γ, ${point.label}) = ${formatFrac(Frac.of(BigInt(w.n)))}`);
+      if (point.order.kind === "log") logTurns.push(point.label);
+      else monodromy = monodromy.add(point.order.alpha.mul(Frac.of(BigInt(w.n))));
+    }
+
+    const monodromyFailure =
+      undecidedTurns.length > 0
+        ? `the winding number about a branch point could not be decided (${undecidedTurns.join("; ")}), so the monodromy along γ is not decided either`
+        : logTurns.length > 0
+          ? `the contour winds about the logarithmic branch point ${logTurns.join(", ")}: one turn adds 2πi to log(z − b), and no winding but zero brings it back`
+          : turns.length > 0 && monodromy.d !== 1n
+            ? `the contour's total monodromy is e^(2πi·${formatFrac(monodromy)}) ≠ 1: ${turns.join(", ")}, and Σ n(γ,bⱼ)·αⱼ = ${formatFrac(monodromy)} is not an integer, so the integrand does not return to the value it started with and no single sheet carries the answer`
+            : null;
+
+    if (monodromyFailure !== null) {
+      push(
+        rowFrom(
+          "LEGALITY",
+          "failed",
+          undecidedTurns.length > 0
+            ? "the winding about a branch point is undecided, so the monodromy along the contour is too"
+            : `the contour winds about a branch point and does not close on one sheet (${turns.join(", ")})`,
+          refuse("LEGALITY", monodromyFailure, {
+            provenance: [
+              { ok: false, text: "each winding number is decided exactly, by the same sign predicates the poles use" },
+              {
+                ok: true,
+                text: "the test is on the SUM Σ n(γ,bⱼ)·αⱼ, not on any single winding: a contour may encircle two branch points and still close on one sheet, which is what a dogbone does",
+              },
+            ],
+          }),
+          undefined,
+          "indent the contour around the branch point (a keyhole), or take in the whole bounded component so the exponents sum to an integer (a dogbone)",
+        ),
+      );
+      return {
+        rows,
+        closes: false,
+        verdict: assembleVerdict(certificates),
+        failedAt: "LEGALITY",
+        hasTarget: spec.some((p) => p.role === "target"),
+        pieceLimits,
+      };
+    }
+
+    // The positive row, emitted only when there is something to say: a contour that encircles nothing
+    // has no monodromy question to answer, and a row asserting that would be noise.
+    if (turns.length > 0) {
+      push(
+        rowFrom(
+          "LEGALITY",
+          "satisfied",
+          `the contour winds about a branch point and still closes on one sheet (Σ n(γ,bⱼ)·αⱼ = ${formatFrac(monodromy)} ∈ ℤ)`,
+          exact(
+            `the monodromy along γ is e^(2πi·${formatFrac(monodromy)}) = 1`,
+            "exact winding numbers against exact exponents, summed over ℚ — the admissibility arithmetic of research 06 §2.1(b), read along the contour",
+            {
+              provenance: [
+                { ok: true, text: `${turns.join(", ")} — non-zero, and the SUM is what has to be an integer` },
+                {
+                  ok: true,
+                  text: "this is the dogbone's licence: it winds about both ends of a bounded cut, and the two turns cancel in the exponent",
+                },
+              ],
+            },
+          ),
+        ),
+      );
+    }
+
+    const offending: string[] = [];
+    const undecidable: string[] = [];
+    /** What each offending crossing would COST — research 06 §3.2's other half. */
+    const costs: string[] = [];
+    let declared = 0;
+    for (const cut of branch.cuts) {
+      const poly = cutPolyline(branch, cut, 4 * extent);
+      if (poly === null) continue; // admissibility already proved every endpoint exists
+      for (let k = 0; k < pieces.length; k++) {
+        const c = classifyAgainstCut(cut.id, pieces[k], poly, extent);
+        // `clear` and `endpoint` are both fine: a piece ENDING on the cut is the contour arriving at
+        // it, which is where one piece of a keyhole hands over to the next.
+        if (c.kind === "clear" || c.kind === "endpoint") continue;
+        const piece = spec[k];
+        const label = piece?.name ?? `piece ${k + 1}`;
+        if (c.kind === "touches") {
+          undecidable.push(`${label} grazes the cut '${cut.id}'`);
+        } else if (piece?.side === undefined) {
+          const how = c.kind === "along" ? "runs along" : "crosses";
+          offending.push(`${label} ${how} the cut '${cut.id}'`);
+          // **AND WHAT IT WOULD COST.** Research 06 §3.2: the app must "either refuse the crossing
+          // or change sheet and say so, WITH THE MULTIPLICATIVE FACTOR SHOWN … silently continuing
+          // is the misconception generator". It has refused since M4.1 and said nothing about the
+          // factor, which teaches a reader that a cut is a wall rather than a bookkeeping choice
+          // with a price. Named once per offending cut, not per piece.
+          const cost = crossingMonodromy(branch, cut.id);
+          if (cost !== null && !costs.includes(cost.detail)) costs.push(cost.detail);
+        } else if (needsSide(c.kind)) {
+          declared += 1;
+        }
+      }
+    }
+
+    const cutOk = offending.length === 0 && undecidable.length === 0;
+    push(
+      rowFrom(
+        "LEGALITY",
+        cutOk ? "satisfied" : "failed",
+        cutOk
+          ? declared === 0
+            ? "no piece of the contour meets a branch cut, except where it ends on one"
+            : `every piece that meets a branch cut declares the side it runs on (${declared} piece${declared === 1 ? "" : "s"})`
+          : undecidable.length > 0
+            ? `${undecidable[0]}, so it has no side to declare`
+            : `${offending[0]} without declaring which side it runs on`,
+        cutOk
+          ? exact(
+              "each piece is on a definite side of each cut",
+              "exact-sign segment predicates, and the circle–line quadratic for arcs",
+              {
+                // Every cut's factor, whether or not the contour is near one: this is the number
+                // that WOULD apply, and knowing it in advance is what lets a reader see the
+                // crossing coming instead of meeting a refusal.
+                //
+                // Each one's own provenance comes with it, flattened, because that is where §3.4's
+                // two forms live — `e^{2πi(α−1)}` as the integrand's exponent gives it and
+                // `e^{2πiα}` reduced — and a reader who only ever meets the reduced form carries it
+                // over to an `x^s` integrand where the `−1` is not there to cancel. Printing the
+                // one-line summary and dropping the rest would drop exactly the half that teaches.
+                provenance: allCrossingMonodromy(branch).flatMap((m) => [
+                  { ok: true, text: m.detail },
+                  ...(m.certificate.provenance ?? []),
+                ]),
+              },
+            )
+          : refuse(
+              "LEGALITY",
+              undecidable.length > 0
+                ? `${undecidable.join("; ")} — a grazing contact has no side, so no tag would pin anything`
+                : `${offending.join("; ")}`,
+              {
+                provenance: costs.map((text) => ({ ok: false, text })),
+              },
+            ),
+        undefined,
+        cutOk
+          ? undefined
+          : undecidable.length > 0
+            ? "move the cut clear of the contour, or move the contour"
+            : "tag this segment `above` or `below`, or move the cut",
+      ),
+    );
+    // **NORTH-STAR #3's FIRST HALF, AS ITS OWN ROW.** With at least one cut and none of it touching
+    // the contour, `∮` does not depend on where the cuts run — so dragging one moves the picture's
+    // seam and not the answer. Its own line rather than a note on the row above, because it is a
+    // different claim about a different object: that one is about the pieces, this is about the
+    // VALUE, and it is the claim that makes the jump on crossing meaningful (a value that drifted
+    // under a drag would make a jump one more wobble). Emitted only when it is the operative fact —
+    // there are cuts, and the contour is clear of them — so it is not a permanent row of noise.
+    if (cutOk && declared === 0 && branch.cuts.length > 0) {
+      push(
+        rowFrom(
+          "LEGALITY",
+          "satisfied",
+          `∮ is unchanged by moving ${branch.cuts.length === 1 ? "this cut" : "these cuts"}, while they stay clear of the contour`,
+          cutGeometryInvariance(branch.cuts.length),
+        ),
+      );
+    }
+
+    if (!cutOk) {
+      return {
+        rows,
+        closes: false,
+        verdict: assembleVerdict(certificates),
+        failedAt: "LEGALITY",
+        hasTarget: spec.some((p) => p.role === "target"),
+        pieceLimits,
+      };
+    }
   }
 
   // ---- CATCH --------------------------------------------------------------------------------
@@ -365,6 +751,27 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
+    // A `reproduces` piece is not computed and does not vanish: it comes back as a MULTIPLE of the
+    // unknown, and that multiple is the whole mechanism of a keyhole. Its own row says so, rather
+    // than reporting a quadrature of a piece whose value the argument never uses.
+    if (piece.role === "reproduces") {
+      // The multiple itself is FAMILY data — the runtime piece has a role and no coefficient row —
+      // so the row names the mechanism and Pass 5 reports the factor. Same split as `solveTarget`'s.
+      push(
+        rowFrom(
+          "KILL",
+          "satisfied",
+          `${piece.name} reproduces the target, as a multiple the solve reads off the family`,
+          exact(
+            "the piece reproduces the unknown",
+            "declared by its role; the coefficient enters Pass 5's M rather than the right-hand side",
+          ),
+          piece.id,
+        ),
+      );
+      continue;
+    }
+
     if (piece.role !== "vanish") {
       push(
         rowFrom(
@@ -379,7 +786,14 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       continue;
     }
 
-    const disposal = disposeArc(ast, geom);
+    const disposal =
+      input.multi !== undefined
+        ? disposeDogboneArc(input.multi, geom, piece.lemma)
+        : input.log !== undefined
+          ? disposeLogArc(input.log, geom, piece.lemma)
+          : input.power === undefined
+            ? disposeArc(ast, geom)
+            : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
       push(
@@ -389,7 +803,11 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           `${piece.name} must vanish, but no lemma here applies to this integrand`,
           unknown(
             `the arc ${piece.name}`,
-            "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither",
+            geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
+              ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
+              : input.power === undefined && input.log === undefined
+                ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
+                : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",
@@ -455,6 +873,24 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
 }
 
 /** Exported for the UI's headline sentence — the thing a number alone cannot say. */
+/**
+ * The LEGALITY row that refuses, if there is one. **Nothing may report a value while this exists.**
+ *
+ * The ledger already withholds its own `value`, but that was only half the rule: the result card
+ * reached its `∮` through `residueTheorem` instead, so a LEGALITY failure the QUADRATURE knew nothing
+ * about — a contour that does not close, or one crossing a branch cut without declaring its side —
+ * printed a number anyway. Every LEGALITY failure used to be one the integral had already refused, so
+ * the two agreed by accident; M4's cut rows are the first that do not. This is the gate, in one
+ * place, so agreement is structural rather than a coincidence that held for a while.
+ */
+export function legalityRefusal(result: LedgerResult): LedgerRow | undefined {
+  // The ROW, not `failedAt`. Today the two agree — every failed LEGALITY row returns immediately, so
+  // it is always the first — but reading `failedAt` would make the gate depend on that, and the
+  // dependence points the wrong way: a LEGALITY row that one day fails softly must still withhold the
+  // value, and a gate keyed on `failedAt` would quietly stop doing so.
+  return result.rows.find((r) => r.constraint === "LEGALITY" && r.status === "failed");
+}
+
 export function ledgerHeadline(result: LedgerResult): string {
   if (result.closes) {
     // In sandbox mode there is no real integral being solved for, so "the argument closes" would

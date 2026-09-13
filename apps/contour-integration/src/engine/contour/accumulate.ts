@@ -15,7 +15,8 @@
 // mistakes to be hidden. `Σ Δz` closing visibly to zero on a closed contour is free, immediate, and
 // makes the point that what is being summed is a product, not a displacement.
 import { arcLength, pointAt, type Cx, type Resolved } from "../../kernel/geom.js";
-import type { ContourIntegral } from "./integrate.js";
+import type { ContourIntegral, PathFn } from "./integrate.js";
+import type { CutSide } from "./model.js";
 
 export interface AccumulationStep {
   /** Where on the contour this term came from. */
@@ -57,9 +58,10 @@ const cmul = (a: Cx, b: Cx): Cx => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1
  * result card says `∮`.
  */
 export function accumulate(
-  f: (z: Cx) => Cx,
+  f: PathFn,
   pieces: readonly Resolved[],
   steps = 240,
+  sides?: readonly (CutSide | undefined)[],
 ): Accumulation {
   const lengths = pieces.map(arcLength);
   const total = lengths.reduce((a, b) => a + b, 0);
@@ -91,7 +93,24 @@ export function accumulate(
       const b = pointAt(g, t1);
       const dz: Cx = [b[0] - a[0], b[1] - a[1]];
       const zm = pointAt(g, tm);
-      const fz = f(zm);
+      // **A NON-FINITE TERM POISONS EVERY PARTIAL SUM AFTER IT, AND NOTHING SAYS SO.** Known gap,
+      // found while re-fitting the panel's frame. `removable-one-minus-cos` integrates
+      // `(1 − cos z)/z²` along `[−4, 4]`; these samples are MIDPOINTS, so an even step count puts
+      // one exactly on `z = 0`, where the compiled expression evaluates `0/0` and returns `NaN` —
+      // even though the singularity is removable and the integral is correct (Gauss–Legendre's
+      // nodes are at irrational positions inside each panel and never land there, so
+      // `integrateContour` returns 6.7e-12 as it should). From that step on `running` is `NaN`, the
+      // readout prints `NaN`, and the trail stops being drawn.
+      //
+      // NaN propagation is arguably the RIGHT arithmetic — an undefined term does make the total
+      // undefined — so this is not a sign error to patch quietly. What is missing is the app's own
+      // posture: `integrateContour` REFUSES a contour through a singularity and names the reason,
+      // and `accumulateForIntegral` below withholds the whole picture rather than showing a
+      // meaningless partial sum beside a refusal. This deserves the same treatment — steps up to the
+      // bad term plus a refusal naming it — which is a change to `Accumulation`'s contract and is
+      // left as its own slice rather than smuggled into a layout fix. `ui/accumulator.ts`'s frame
+      // skips non-finite points so that the FIT is still well defined meanwhile.
+      const fz = f(zm, sides?.[p]);
       const term = cmul(fz, dz);
 
       run = [run[0] + term[0], run[1] + term[1]];
@@ -122,11 +141,20 @@ export function accumulate(
  * instead of resting on every future panel remembering to ask.
  */
 export function accumulateForIntegral(
-  f: (z: Cx) => Cx,
+  f: PathFn,
   pieces: readonly Resolved[],
   integral: ContourIntegral,
   steps?: number,
+  /**
+   * Each piece's declared `side`, parallel to `pieces`.
+   *
+   * The accumulator draws the same head-to-tail sum the quadrature integrates, so it has to be in
+   * the same determination — otherwise a keyhole's two lips would draw as retracing each other
+   * while the value beside them says they do not cancel, and the picture would contradict the
+   * number. Omitted for a single-valued integrand, which is every record in tiers A–C.
+   */
+  sides?: readonly (CutSide | undefined)[],
 ): Accumulation | null {
   if (integral.value === undefined) return null;
-  return accumulate(f, pieces, steps);
+  return accumulate(f, pieces, steps, sides);
 }

@@ -32,12 +32,13 @@ function times(f: Frac, symbol: string): string {
   return f.d === 1n ? head : `${head}/${f.d}`;
 }
 
-interface Term {
+export interface Term {
   readonly negative: boolean;
   readonly text: string;
 }
 
-function joinTerms(terms: readonly Term[]): string {
+/** Join rendered terms with the right signs: `−a + b − c`, or `0` for nothing. */
+export function joinTerms(terms: readonly Term[]): string {
   if (terms.length === 0) return "0";
   return terms
     .map((t, k) =>
@@ -47,7 +48,7 @@ function joinTerms(terms: readonly Term[]): string {
 }
 
 /** The terms of `g · symbol`: up to one real and one imaginary. */
-function gaussTerms(g: Gauss, symbol: string): Term[] {
+export function gaussTerms(g: Gauss, symbol: string): Term[] {
   const terms: Term[] = [];
   if (!g.re.isZero()) terms.push({ negative: g.re.n < 0n, text: times(g.re, symbol) });
   if (!g.im.isZero()) terms.push({ negative: g.im.n < 0n, text: times(g.im, `i${symbol}`) });

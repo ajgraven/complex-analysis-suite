@@ -15,6 +15,7 @@ import { Gauss, SqrtExt } from "@cas/exact";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Cx } from "../kernel/geom.js";
 import { ExpSum, formatTwoPiIExpSum, weightedExpSum } from "../kernel/expSum.js";
+import type { RatPi } from "../kernel/ratPi.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 
@@ -29,6 +30,16 @@ export interface ResidueTheoremResult {
    * evaluated, so `π/2` stays `π/2` instead of becoming 1.5707963.
    */
   readonly piUnits?: ExpSum;
+  /**
+   * `2πi Σ n·Res` itself as an element of ℚ(i)(π) — the LOG families' route.
+   *
+   * Not the same field in different clothes. `piUnits` is the value DIVIDED by π, because every
+   * contribution in tiers A–C is π times an algebraic number and working in those units is what
+   * keeps π unevaluated. A log family's residues are polynomials in π of degree up to `m`, so there
+   * is no single power to divide out — `Res(log²z/(1+z²)², i) = −π/4 + iπ²/16` — and ℚ(i)(π) holds
+   * the value directly instead. Exactly one of the two is present.
+   */
+  readonly exactInPi?: RatPi;
   /** Distance between the exact value and the quadrature, when both exist. */
   readonly disagreement?: number;
   /** True when the two independent computations agree to the quadrature's own estimate. */
@@ -47,11 +58,71 @@ export interface ResidueTheoremResult {
    * absorbs it, because then one of them is wrong and no number may be printed.
    */
   readonly crossCheck?: Certificate;
+  /**
+   * The identity this result was computed FROM, as the derivation panel should state it.
+   *
+   * Absent means the plain residue theorem, which is what three of the four routes apply (the branch
+   * and log theorems change what a residue IS, not the identity it is summed in). `exteriorTheorem.ts`
+   * applies a different one, and a panel that printed `∮ = 2πi Σ n·Res` above a dogbone's answer
+   * would be stating the very equation D6 exists to show is inapplicable.
+   */
+  readonly identity?: string;
   readonly verdict: Verdict;
 }
 
+/** What the derivation says it is applying when a result does not name its own identity. */
+export const RESIDUE_THEOREM_IDENTITY = "∮ f dz = 2πi Σₖ n(γ,aₖ)·Res(f,aₖ)";
+
 /** How far apart the two routes may be before the disagreement is reported as an inconsistency. */
 const AGREEMENT_SLACK = 32;
+
+/** The corroboration, and the refusal that replaces it when the two routes contradict each other. */
+export interface QuadratureCheck {
+  readonly disagreement: number;
+  readonly agrees: boolean;
+  /** The `≤` corroboration. Belongs BESIDE the verdict, never inside it — see {@link ResidueTheoremResult.crossCheck}. */
+  readonly crossCheck: Certificate;
+  /** Present only on disagreement, and then it goes INTO the verdict: one of the two is wrong. */
+  readonly contradiction?: Certificate;
+}
+
+/**
+ * Compare an exact value against the quadrature of the same contour.
+ *
+ * Extracted for its second consumer (`engine/exteriorTheorem.ts`), where the same comparison is
+ * available and is worth more, not less: the exterior identity moves a term from the contour to
+ * infinity, so a sign error there is invisible to every other check and obvious to this one.
+ */
+export function checkAgainstQuadrature(
+  value: Cx,
+  text: string,
+  integral: ContourIntegral,
+): QuadratureCheck | null {
+  if (integral.value === undefined) return null;
+  const worst = Math.max(0, ...integral.pieces.map((p) => p.errorEstimate));
+  const disagreement = Math.hypot(value[0] - integral.value[0], value[1] - integral.value[1]);
+  const tolerance = Math.max(AGREEMENT_SLACK * worst, 1e-9 * Math.max(1, Math.hypot(...value)));
+  const agrees = disagreement <= tolerance;
+  const crossCheck = bound(
+    "≤",
+    `the quadrature agrees with it to ${disagreement.toExponential(2)}`,
+    "independent cross-check: exact ℚ(i) arithmetic against floating Gauss–Legendre panels",
+    { restriction: "agreement is evidence, not proof — the two share no machinery, which is the point" },
+  );
+  return {
+    disagreement,
+    agrees,
+    crossCheck,
+    ...(agrees
+      ? {}
+      : {
+          contradiction: refuse(
+            "the two routes disagree",
+            `the residue theorem gives ${text} but the quadrature gives a value ${disagreement.toExponential(2)} away, which is beyond its own error estimate — one of them is wrong`,
+          ),
+        }),
+  };
+}
 
 export function applyResidueTheorem(
   poles: PoleReport,
@@ -127,33 +198,15 @@ export function applyResidueTheorem(
     ),
   );
 
-  const worst = Math.max(0, ...integral.pieces.map((p) => p.errorEstimate));
-  const disagreement = Math.hypot(value[0] - integral.value[0], value[1] - integral.value[1]);
-  const tolerance = Math.max(AGREEMENT_SLACK * worst, 1e-9 * Math.max(1, Math.hypot(...value)));
-  const agrees = disagreement <= tolerance;
-
-  const crossCheck = bound(
-    "≤",
-    `the quadrature agrees with it to ${disagreement.toExponential(2)}`,
-    "independent cross-check: exact ℚ(i) arithmetic against floating Gauss–Legendre panels",
-    { restriction: "agreement is evidence, not proof — the two share no machinery, which is the point" },
-  );
-  if (!agrees) {
-    certificates.push(
-      refuse(
-        "the two routes disagree",
-        `the residue theorem gives ${text} but the quadrature gives a value ${disagreement.toExponential(2)} away, which is beyond its own error estimate — one of them is wrong`,
-      ),
-    );
-  }
+  const check = checkAgainstQuadrature(value, text, integral);
+  if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
     exactValue: { value, text },
     // 2πi·Σ = π·(2i·Σ), and the scaling stays inside the exponential basis.
     piUnits: sum.scale(SqrtExt.fromGauss(Gauss.int(0, 2))),
-    disagreement,
-    agrees,
-    ...(agrees ? { crossCheck } : {}),
+    ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
+    ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
     verdict: assembleVerdict(certificates),
   };
 }

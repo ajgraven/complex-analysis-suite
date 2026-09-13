@@ -1,3 +1,4 @@
+import { Frac } from "@cas/exact";
 import { makeComplexFn, parse, type Node } from "@cas/expr";
 import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
 import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
@@ -14,12 +15,44 @@ import {
 } from "../kernel/camera.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { findPoles, type PoleReport } from "../kernel/poles.js";
+import { checkAdmissibility } from "../kernel/branch/admissibility.js";
+import { jumpWeights } from "../kernel/branch/correction.js";
+import { allCrossingMonodromy } from "../kernel/branch/monodromy.js";
+import type { DeclaredProduct } from "../kernel/branch/declared.js";
+import { formatFrac, formatSqrtExt } from "../kernel/formatExact.js";
+import {
+  INFINITY as INFINITY_ID,
+  NO_BRANCH,
+  cutPolyline,
+  effectiveBranch,
+  type BranchChoice,
+} from "../kernel/branch/model.js";
+import {
+  OFFERED_ORDERS,
+  addBranchPoint,
+  applyBranchGrab,
+  branchHandles,
+  joinToOneCut,
+  orderLabel,
+  removeBranchPoint,
+  setOrder,
+  splitToRays,
+  type BranchGrab,
+  type BranchHandle,
+  setShadow,
+  setSheet,
+} from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
+import { declaredKey, runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
+import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
+import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declaration.js";
 import { analyse } from "../engine/analyse.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
+import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
+import { PRESETS } from "./presets.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
-import { ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
+import { ledgerHeadline, legalityRefusal, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
   handlesOf,
@@ -32,7 +65,9 @@ import {
 } from "../engine/contour/edit.js";
 import {
   circleTemplate,
+  dogboneTemplate,
   indentedSemicircleTemplate,
+  keyholeTemplate,
   rectangleTemplate,
   semicircleTemplate,
 } from "../engine/contour/templates.js";
@@ -44,7 +79,7 @@ import {
   type FamilyRun,
 } from "../families/runFamily.js";
 import type { Family, FamilyTarget, Golden } from "../families/schema.js";
-import type { SolvedTarget } from "../families/solveTarget.js";
+import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
@@ -69,19 +104,31 @@ import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accum
  * number, because there is never a number to style.
  */
 
-const PRESETS: { label: string; src: string }[] = [
-  { label: "1/z", src: "1/z" },
-  { label: "1/(1+z^2)", src: "1/(1+z^2)" },
-  { label: "1/(1+z^4)", src: "1/(1+z^4)" },
-  { label: "1/(z-1)^2", src: "1/(z-1)^2" },
-  { label: "(3+4i)/(z^3-1)", src: "(3+4i)/(z^3-1)" },
-  { label: "z/(z^2+2*z+2)", src: "z/(z^2+2*z+2)" },
-  { label: "exp(i*z)/(1+z^2)", src: "exp(i*z)/(1+z^2)" },
-];
+type TemplateId =
+  | "circle"
+  | "semicircle"
+  | "semicircleDown"
+  | "indented"
+  | "rectangle"
+  | "keyhole"
+  | "dogbone";
 
-type TemplateId = "circle" | "semicircle" | "semicircleDown" | "indented" | "rectangle";
-
-const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
+/**
+ * `seed` is how a template whose SHAPE presupposes a cut declares one.
+ *
+ * A keyhole with no cut is four pieces with a coincidence in them, and a dogbone with no cut is a
+ * closed curve enclosing nothing — which is to say `∮ = 0` and no lesson. So these two offer the cut
+ * system they were drawn for. It stays a CHOICE in exactly the sense M4.1 fixed: the seeded points
+ * and cut are ordinary declared objects, listed in the Branch cuts card, draggable, re-orderable and
+ * removable, and the template only offers them when nothing is declared yet — it never overwrites a
+ * cut the user placed.
+ */
+const TEMPLATES: {
+  id: TemplateId;
+  label: string;
+  build: () => Contour;
+  seed?: (branch: BranchChoice) => BranchChoice;
+}[] = [
   { id: "circle", label: "circle", build: () => circleTemplate([0, 0], 1.5) },
   { id: "semicircle", label: "semicircle ↑", build: () => semicircleTemplate(3, "upper") },
   { id: "semicircleDown", label: "semicircle ↓", build: () => semicircleTemplate(3, "lower") },
@@ -94,6 +141,26 @@ const TEMPLATES: { id: TemplateId; label: string; build: () => Contour }[] = [
     build: () => indentedSemicircleTemplate(8, 0.05),
   },
   { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
+  // Tier D's two shapes, which the engine has had since M4.2 and M4.6 with no way in either.
+  {
+    id: "keyhole",
+    label: "keyhole",
+    build: () => keyholeTemplate(4, 0.15),
+    seed: (b) => setOrder(addBranchPoint(b, [0, 0]), "b1", { kind: "power", alpha: Frac.of(1n, 2n) }),
+  },
+  // The one that encloses nothing and is not zero — but only once the cut is inside it, which is
+  // why this is the template that seeds a BOUNDED cut rather than a ray.
+  {
+    id: "dogbone",
+    label: "dogbone",
+    build: () => dogboneTemplate(-1, 1, 0.12),
+    seed: (b) => {
+      const half = { kind: "power", alpha: Frac.of(-1n, 2n) } as const;
+      let next = setOrder(addBranchPoint(b, [-1, 0]), "b1", half);
+      next = setOrder(addBranchPoint(next, [1, 0]), "b2", half);
+      return joinToOneCut(next, "b1", "b2") ?? next;
+    },
+  },
 ];
 
 /** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
@@ -173,9 +240,63 @@ export function mountApp(root: Element): void {
    * to offer: every pointer drag panned, so north-star behaviour 1 — drag a contour across a pole and
    * watch the value jump by exactly `2πi·Res` — was unreachable except through a parameter slider.
    */
-  let grab: { readonly kind: "body" } | { readonly kind: "radius"; readonly handle: Handle } | null =
-    null;
+  let grab:
+    | { readonly kind: "body" }
+    | { readonly kind: "radius"; readonly handle: Handle }
+    | { readonly kind: "branch"; readonly handle: BranchHandle }
+    | null = null;
   let handles: readonly Handle[] = [];
+  /**
+   * The declared cut system — a SANDBOX object, not something read out of the integrand.
+   *
+   * `engine/branchEdit.ts` says why it is declared rather than detected. Under a gallery record it
+   * stays empty: a record's argument is the record's, and a cut drawn across it would be editing a
+   * worked example rather than exploring one.
+   */
+  /**
+   * The sandbox's own cut system. `NO_BRANCH` with its LAMP moved off the origin.
+   *
+   * `NO_BRANCH.basePoint` is `[0,0]`, which is right for a rational integrand where nothing reads
+   * it — and wrong here, because the first branch point a reader adds also lands at the origin and
+   * a point sitting ON the base point casts no shadow. Shadow mode then refused on its first click,
+   * correctly and uselessly. Every gallery record puts its base point at `i` for the same reason,
+   * so the sandbox does too rather than inventing a third convention.
+   */
+  let branch: BranchChoice = { ...NO_BRANCH, basePoint: [0, 1] };
+  /** The open record's cut system, when it declares one. Drawn, never edited. */
+  let recordBranch: BranchChoice | null = null;
+  /**
+   * The declared branch product on the stage, when the open record has one — research 06 §5.1 #2.
+   *
+   * Held so the Branch-cuts card can say WHICH of the two honest cases the modulus contours are
+   * showing: over a power product `|f|` cannot see the determination and the contours run straight
+   * through the seam, and over a `log^m` the monodromy is additive so they break at it. Both are
+   * honest and they are not the same claim.
+   */
+  let declaredOnStage: DeclaredProduct | null = null;
+  /**
+   * Modulus contours: `null` follows the context, a boolean is the reader's own choice.
+   *
+   * Default-on under a record with a branch and off elsewhere, because that is the case the device
+   * exists for — a seam on the stage with nothing to tell the reader it is a choice. An explicit
+   * click sticks, so the default never overrides a decision.
+   */
+  let isoPref: boolean | null = null;
+  const isoOn = (): boolean => isoPref ?? declaredOnStage !== null;
+  /**
+   * The cut system to ANALYSE and DRAW — the shadow of the base point, or the declared arcs.
+   *
+   * One accessor, because the alternative is for each of the ledger, the ink layer and the readout
+   * to remember to derive, and the first one that forgot would draw a cut the verdict is not about.
+   * The EDITOR and the handles deliberately read `branch` itself: the declaration is what a reader
+   * edits, and `shadowCuts` clears the flag on what it returns so a derived system cannot be edited
+   * as though it were declared.
+   */
+  const effective = (): BranchChoice =>
+    effectiveBranch(mode === "sandbox" ? branch : (recordBranch ?? NO_BRANCH));
+  let bHandles: readonly BranchHandle[] = [];
+  /** The branch handle under the pointer, for the cursor. −1 for none. */
+  let bHovered = -1;
   /** The handle under the pointer, for the ink layer and the cursor. −1 for none. */
   let hovered = -1;
   /** Which gesture is in flight. `contour` is the one that runs the quadrature at draft quality. */
@@ -205,7 +326,16 @@ export function mountApp(root: Element): void {
   let bindingOverrides: Bindings = {};
   /** A move on a LIMIT parameter. Geometry only; never substituted into the integrand. */
   let geometryOverrides: Record<string, number> = {};
-  let solved: SolvedTarget | null = null;
+  let solved: SolvedValue | null = null;
+  /**
+   * The rest of a SYSTEM solve — the other unknowns this contour determined, and the ones it did not.
+   *
+   * D4's title promises `∫₀^∞ R(x) dx` "for free", and it IS free: the same identity determines it.
+   * Showing only the primary would make the record's own headline invisible, and dropping the
+   * invisible-combination report would leave a reader unable to tell "the app cannot" from "this
+   * contour does not".
+   */
+  let systemTargets: PiSolvedTargets | null = null;
   /** What the record could not do, when it could not do it. Shown, never swallowed. */
   let recordNote: string | null = null;
   /**
@@ -257,7 +387,8 @@ export function mountApp(root: Element): void {
     });
     presetWrap.append(b);
   }
-  sandboxGroup.append(el("span", "flabel", "f(z) ="), input, presetWrap);
+  const fLabel = el("span", "flabel", "f(z) =");
+  sandboxGroup.append(fLabel, input, presetWrap);
 
   // A `<select>` with one `<optgroup>` per tier, not a wall of buttons. The tiers ARE the gallery's
   // ordering — each adds exactly one engine capability — and a native select is keyboard- and
@@ -303,8 +434,18 @@ export function mountApp(root: Element): void {
   const derivationCard = el("section", "card");
   const resultCard = el("section", "card");
   const contourCard = el("section", "card");
+  const branchCard = el("section", "card");
   const poleCard = el("section", "card");
-  rail.append(errorBox, recordCard, ledgerCard, derivationCard, resultCard, contourCard, poleCard);
+  rail.append(
+    errorBox,
+    recordCard,
+    ledgerCard,
+    derivationCard,
+    resultCard,
+    contourCard,
+    branchCard,
+    poleCard,
+  );
 
   // Strip: the accumulator.
   // The canvas needs a containing block with a definite size of its own. A `height: 100%` canvas
@@ -329,18 +470,18 @@ export function mountApp(root: Element): void {
 
   const contrastLabel = el("span", "muted small", "compare with:");
   contrastWrap.append(contrastLabel);
-  for (const mode of ["none", "sumZ", "sumFz", "sumDz"] as ContrastMode[]) {
-    const b = el("button", "preset", CONTRAST_LABELS[mode]);
+  for (const contrastMode of ["none", "sumZ", "sumFz", "sumDz"] as ContrastMode[]) {
+    const b = el("button", "preset", CONTRAST_LABELS[contrastMode]);
     b.type = "button";
-    b.dataset.mode = mode;
+    b.dataset.mode = contrastMode;
     b.addEventListener("click", () => {
-      contrast = mode;
+      contrast = contrastMode;
       for (const other of contrastWrap.querySelectorAll("button")) {
-        other.classList.toggle("on", other.dataset.mode === mode);
+        other.classList.toggle("on", other.dataset.mode === contrastMode);
       }
       drawAcc();
     });
-    if (mode === "none") b.classList.add("on");
+    if (contrastMode === "none") b.classList.add("on");
     contrastWrap.append(b);
   }
 
@@ -378,7 +519,7 @@ export function mountApp(root: Element): void {
     frame = requestAnimationFrame(() => {
       frame = 0;
       const vp = viewport();
-      stage?.render(view, vp);
+      stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
       const ctx = sizeCanvas(inkCanvas, vp.width, vp.height);
       if (ctx) {
         drawContour(ctx, resolved, view, vp, {
@@ -386,6 +527,7 @@ export function mountApp(root: Element): void {
           highlight,
           marker: acc && acc.steps.length > 0 ? scrub : undefined,
           refused: integral?.refusal !== undefined,
+          cuts: cutPolylines(),
           handles: handles.map((h, k) => ({
             at: h.at,
             emphasis:
@@ -396,10 +538,76 @@ export function mountApp(root: Element): void {
                   : "none",
           })),
         });
+        // Branch handles ride the same ring idiom as the radius handles, drawn after them so a cut
+        // vertex sitting under a contour handle is still takeable.
+        drawBranchHandles(ctx, vp);
       }
       drawPoleMarkers();
     });
   };
+
+  /**
+   * Each cut as a finite polyline, with its rays clipped beyond everything on screen.
+   *
+   * The clipping radius comes from the VIEW rather than from the contour, because this one is for
+   * drawing: a ray has to leave the visible plane, and the ledger's own clipping (which is about the
+   * geometry, not the picture) is computed separately from the contour's extent.
+   */
+  function cutPolylines(): { points: readonly Cx[]; refused: boolean; label?: string }[] {
+    // THE RECORD'S OWN CUT, under a record. D1's `argRange` decides where the cut runs and the whole
+    // record is about what happens when it runs somewhere else, so a figure without it is missing
+    // the thing it is teaching. In the sandbox the cut is the user's.
+    const drawn = effective();
+    if (drawn.cuts.length === 0) return [];
+    const vp = viewport();
+    const reach =
+      4 *
+      (Math.hypot(view.center[0], view.center[1]) +
+        view.halfHeight * (1 + Math.max(1, vp.width) / Math.max(1, vp.height)));
+    // ONE reading of legality for the picture and the rail: the ledger's LEGALITY row and this
+    // colour must never disagree about whether a cut system is admissible.
+    const refused = !checkAdmissibility(drawn).ok;
+    // The jump weight, from the same `jumpWeights` the correction sums over — so the number on the
+    // arc is the number the picture is corrected by, not a second computation of it. `null` is a
+    // log's side: infinite-order monodromy has no finite jump, and the label says so rather than
+    // printing a number for it.
+    const weights = jumpWeights(drawn);
+    const out: { points: readonly Cx[]; refused: boolean; label?: string }[] = [];
+    for (const cut of drawn.cuts) {
+      const poly = cutPolyline(drawn, cut, reach);
+      if (poly === null) continue;
+      const jump = weights.get(cut.id);
+      const label =
+        jump === undefined ? undefined : jump === null ? "J = ∞" : `J = ${formatFrac(jump)}`;
+      out.push({ points: poly, refused, ...(label === undefined ? {} : { label }) });
+    }
+    return out;
+  }
+
+  function drawBranchHandles(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+    bHandles.forEach((h, k) => {
+      const [x, y] = plotToScreen(h.at[0], h.at[1], view, vp);
+      const held = grab?.kind === "branch" && sameBranchGrab(grab.handle.grab, h.grab);
+      const r = held || k === bHovered ? 7 : 5;
+      ctx.beginPath();
+      // A branch POINT is a square and a cut vertex is a diamond, so the two are told apart without
+      // colour — and neither can be mistaken for the round poles, handles or integration marker.
+      if (h.grab.kind === "point") ctx.rect(x - r, y - r, 2 * r, 2 * r);
+      else {
+        ctx.moveTo(x, y - r);
+        ctx.lineTo(x + r, y);
+        ctx.lineTo(x, y + r);
+        ctx.lineTo(x - r, y);
+        ctx.closePath();
+      }
+      ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.strokeStyle = held ? "#ffffff" : "#c77dff";
+      ctx.lineWidth = held || k === bHovered ? 2.4 : 1.6;
+      ctx.stroke();
+    });
+  }
 
   function drawPoleMarkers(): void {
     overlay.replaceChildren();
@@ -449,13 +657,70 @@ export function mountApp(root: Element): void {
     requestDraw();
   }
 
+  /**
+   * **THE SANDBOX'S DECLARED FACTORISATION** — M5.1c, and the reason the integrand box changes
+   * meaning.
+   *
+   * Null until the reader declares one, and then the box holds only `R(z)` while this holds the
+   * rest. It is an explicit step rather than a consequence of having branch points, because the
+   * keyhole and dogbone TEMPLATES already seed a cut system (M4.6): inferring a factorisation from
+   * "there are branch points" would silently reinterpret whatever was typed the moment a template
+   * was picked.
+   *
+   * The exponent is NOT stored here. It lives on the branch point itself, where the existing picker
+   * already edits it, so there is one place a reader changes `α` and no way for two copies to
+   * disagree about it.
+   */
+  let declaration: {
+    readonly pointId: string;
+    readonly window: readonly [Frac, Frac];
+    readonly sign: 1 | -1;
+    readonly constant: Cx;
+    /** `m` in `log^m`. Ignored for a power factor; kept so toggling the order does not lose it. */
+    readonly logPower: number;
+  } | null = null;
+
+  /**
+   * What the box held at the moment the factor was declared — the split check's reference.
+   *
+   * Without it the declaration would be unfalsifiable: the app cannot verify a reader's INTENT, but
+   * it can verify that `declared · R(z)` is the expression they had a moment ago, and refuse to
+   * pretend otherwise. See `engine/splitCheck.ts`.
+   */
+  let beforeDeclaration: Node | null = null;
+  /** The same expression as SOURCE, so undeclaring can put back what the reader actually typed. */
+  let beforeDeclarationSrc: string | null = null;
+  let splitCheck: SplitCheck | null = null;
+  /** What the stage's program was last built FROM — a value key, never an object identity. */
+  let stageKey: string | null = null;
+  /** Why the declared run refused, when it did — shown in place of an answer, never beside one. */
+  let declaredRefusal: string | null = null;
+
+  /** The declared order, read off the branch point the factor sits on. */
+  function declaredOrder(): DeclaredOrder | null {
+    if (declaration === null) return null;
+    const point = effective().points.find((q) => q.id === declaration?.pointId);
+    if (point === undefined) return null;
+    return point.order.kind === "log"
+      ? { kind: "log", power: declaration.logPower }
+      : { kind: "power", alpha: point.order.alpha, sign: declaration.sign };
+  }
+
   function clearComputed(): void {
+    recordBranch = null;
+    // The stage keeps whatever program it last built — this function clears the COMPUTED state, not
+    // the picture — so the flag has to go to null even though `adopt` and `applyExpression` move the
+    // two together. Here the card is about to describe a record whose program was never built, and
+    // null is what makes it say "declared but not on the stage", which is then true.
+    declaredOnStage = null;
+    stageKey = null;
     integral = null;
     theorem = null;
     ledger = null;
     derivation = null;
     acc = null;
     solved = null;
+    declaredRefusal = null;
   }
 
   /**
@@ -508,10 +773,23 @@ export function mountApp(root: Element): void {
     integral = run.integral;
     theorem = run.theorem;
     ledger = run.ledger;
+    recordBranch = run.branch ?? null;
     // A partial sum through a singularity is meaningless rather than merely rough, so this is null
     // whenever the integral refused — showing one beside a refusal hands back the withheld number.
-    acc = accumulateForIntegral(run.f, run.resolved, run.integral);
-    stage?.setIntegrand(run.ast);
+    // `run.sides` rather than a re-read of the spec: the panel draws the same sum the quadrature
+    // integrated, so both come from the one array `analyse` used (see `Analysis.sides`).
+    acc = accumulateForIntegral(run.f, run.resolved, run.integral, undefined, run.sides);
+    // **THE PICTURE IN THE DECLARED DETERMINATION.** With a branch factor the stage is handed the
+    // record's declaration and the rational cofactor SEPARATELY, so the branch half is built from
+    // what the record says and not from the compiled AST's principal branch — see
+    // `kernel/branch/declared.ts`. Without one (tiers A–C) this is the same call it always was.
+    declaredOnStage = run.declared?.product ?? null;
+    // The gallery builds its own program here, so the SANDBOX's key must not survive the trip: with
+    // it left in place, switching back to a sandbox whose declaration had not changed would skip the
+    // rebuild and leave the record's picture under the sandbox's numbers.
+    stageKey = null;
+    if (run.declared === undefined) stage?.setIntegrand(run.ast);
+    else stage?.setIntegrand(run.declared.cofactor, run.declared.product);
   }
 
   /** The work ceiling for this pass: draft while a contour is being dragged, full otherwise. */
@@ -523,27 +801,81 @@ export function mountApp(root: Element): void {
       recomputeRecord();
     } else {
       resolved = resolveAll(contour);
-      if (!f || !ast || !poles) {
+      const order = declaredOrder();
+      if (declaration !== null && ast && order !== null) {
+        // **THE DECLARED ROUTE.** `ast` is the COFACTOR here, not the integrand — the box changed
+        // meaning when the factor was declared — so the residues come from the declaration and the
+        // poles from `R(z)`, exactly as they do for a gallery record.
+        const spec: SandboxDeclaration = {
+          constant: declaration.constant,
+          pointId: declaration.pointId,
+          order,
+          window: declaration.window,
+          cofactor: ast,
+        };
+        const budget = budgetNow();
+        const r = runDeclared(spec, contour, effective(), budget);
+        if (!r.ok) {
+          clearComputed();
+          declaredRefusal = r.reason;
+          splitCheck = null;
+        } else {
+          declaredRefusal = null;
+          resolved = r.analysis.resolved;
+          integral = r.analysis.integral;
+          theorem = r.analysis.theorem;
+          ledger = r.analysis.ledger;
+          acc = accumulateForIntegral(r.f, resolved, integral, undefined, r.analysis.sides);
+          solved = null;
+          // The split is checked against what the box held a moment before the declaration, which
+          // is the only falsifiable form of "this factorisation is the integrand I meant".
+          splitCheck = beforeDeclaration === null ? null : checkSplit(r.declared, ast, beforeDeclaration);
+          // The picture becomes the DECLARED determination, as it already is under a record — so
+          // the sandbox's colour seam and its declared cut stop being different objects.
+          //
+          // Keyed BY VALUE, and a review found out why: `runDeclared` builds `declared` fresh on
+          // every call, so an identity test never fires and the GLSL was being recompiled and
+          // relinked on every recompute — every frame of a contour drag included, which is exactly
+          // when the app can least afford it. The key covers the cofactor's source too, since that
+          // goes into the program as well.
+          const key = `${declaredKey(r.declared)}::${input.value}`;
+          if (stageKey !== key) {
+            stageKey = key;
+            declaredOnStage = r.declared;
+            stage?.setIntegrand(ast, r.declared);
+          }
+        }
+      } else if (!f || !ast || !poles) {
         clearComputed();
       } else {
         const budget = budgetNow();
-        const a = analyse({ ast, f, poles, contour, ...(budget === undefined ? {} : { budget }) });
+        const a = analyse({
+          ast,
+          f,
+          poles,
+          contour,
+          branch: effective(),
+          ...(budget === undefined ? {} : { budget }),
+        });
         resolved = a.resolved;
         integral = a.integral;
         theorem = a.theorem;
         ledger = a.ledger;
-        acc = accumulateForIntegral(f, resolved, integral);
+        acc = accumulateForIntegral(f, resolved, integral, undefined, a.sides);
         solved = null;
       }
     }
     handles = handlesOf(contour, resolved);
     if (hovered >= handles.length) hovered = -1;
+    bHandles = mode === "sandbox" ? branchHandles(branch) : [];
+    if (bHovered >= bHandles.length) bHovered = -1;
     rebuildDerivation();
     renderRecordCard();
     renderLedger();
     renderDerivation();
     renderResult();
     renderContourCard();
+    renderBranchCard();
     renderPoles();
     drawAcc();
     requestDraw();
@@ -559,6 +891,7 @@ export function mountApp(root: Element): void {
   function recomputeRecord(): void {
     recordNote = null;
     solved = null;
+    systemTargets = null;
     if (!family || !golden) {
       clearComputed();
       return;
@@ -572,6 +905,7 @@ export function mountApp(root: Element): void {
     if (r.ok) {
       adopt(r.run);
       solved = r.solved;
+      systemTargets = r.route === "system" ? r.targets : null;
       errorBox.hidden = true;
       return;
     }
@@ -665,7 +999,21 @@ export function mountApp(root: Element): void {
       ast = parse(input.value.trim());
       const fn = makeComplexFn(ast);
       f = (z: Cx) => fn(z as [number, number], [0, 0]) as Cx;
-      stage?.setIntegrand(ast);
+      // No declaration in the sandbox, and that is correct rather than a gap: the expression the
+      // user typed IS the definition, so its principal branch is the function they asked for.
+      //
+      // Set on the line before `setIntegrand` deliberately, here and in `adopt`. The invariant is
+      // that `declaredOnStage` describes the program the stage is CURRENTLY holding, so the two
+      // move together or not at all — a failed parse leaves the previous program on screen, and
+      // clearing the flag without clearing the program would have the card describe a picture that
+      // is not there.
+      // With a factor declared the box holds `R(z)`, and `recompute` puts the DECLARED product on
+      // the stage instead — so the program is not built here and the flag is not cleared here.
+      if (declaration === null) {
+        declaredOnStage = null;
+        stageKey = null;
+        stage?.setIntegrand(ast);
+      }
       errorBox.hidden = true;
     } catch (e) {
       ast = null;
@@ -777,6 +1125,39 @@ export function mountApp(root: Element): void {
           : ` DISAGREES with the golden value by ${off.toExponential(2)} — one of them is wrong`,
       );
       recordCard.append(agree);
+      // The REST of a system solve: every other unknown this identity determines, and every
+      // combination it does not. Both are answers about this contour, and each keeps its own badge.
+      if (systemTargets !== null) {
+        const targets = family.targets;
+        const primaryId = (targets.find((t) => t.role === "primary") ?? targets[0]).id;
+        const describe = (id: string): string => {
+          const target = targets.find((t) => t.id === id);
+          return target === undefined ? id : targetText(target);
+        };
+        for (const other of systemTargets.solved) {
+          if (other.targetId === primaryId) continue;
+          const line = el("p", "resultValue exactValue bonusValue");
+          line.append(badge(assembleVerdict(other.certificates).level), ` ${other.text}`);
+          recordCard.append(line, el("p", "muted small", `${describe(other.targetId)} — from the same contour`));
+        }
+        // A borrowed input is part of the argument, not a detail of it: the record's own trap asks
+        // for "the prerequisite as its own row with its own verdict", and the badge above already
+        // meets that verdict into every answer that used it.
+        for (const borrowed of systemTargets.borrowed) {
+          const line = el("p", "resultValue bonusValue");
+          line.append(badge(assembleVerdict([borrowed.certificate]).level), ` ${borrowed.text}`);
+          recordCard.append(
+            line,
+            el("p", "muted small", `${describe(borrowed.targetId)} — ${borrowed.certificate.claim}`),
+          );
+        }
+        for (const sentence of systemTargets.invisible) {
+          const line = el("p", "restriction");
+          line.append(badge("?"), ` ${sentence}`);
+          recordCard.append(line);
+        }
+      }
+
       // `method` is a paragraph, by design — GALLERY §2's whole point is that a golden value with no
       // method is an assertion. It is still not what a reader needs first, so it folds.
       const how = el("details", "method");
@@ -898,8 +1279,8 @@ export function mountApp(root: Element): void {
     }
     derivationCard.hidden = false;
 
-    const shell = el("details", "derivation");
-    shell.open = !derivation.closes;
+    const panel = el("details", "derivation");
+    panel.open = !derivation.closes;
     const steps = derivation.stages.reduce((n, st) => n + st.lines.length, 0);
     const summary = el(
       "summary",
@@ -908,7 +1289,7 @@ export function mountApp(root: Element): void {
         ? `Derivation — ${steps} steps, each with its evidence`
         : `Derivation — where it stops: ${derivation.failedAt ?? "incomplete"}`,
     );
-    shell.append(summary);
+    panel.append(summary);
 
     for (const st of derivation.stages) {
       const block = el("div", `derivStage${st.failed ? " failed" : ""}`);
@@ -967,7 +1348,7 @@ export function mountApp(root: Element): void {
         if (line.repair !== undefined) li.append(el("p", "repair", line.repair));
         block.append(li);
       }
-      shell.append(block);
+      panel.append(block);
     }
 
     if (derivation.conclusion) {
@@ -978,9 +1359,9 @@ export function mountApp(root: Element): void {
         badge(derivation.conclusion.level),
         ` ${derivation.conclusion.label} = ${derivation.conclusion.text}`,
       );
-      shell.append(end);
+      panel.append(end);
     }
-    derivationCard.append(shell);
+    derivationCard.append(panel);
   }
 
   function renderResult(): void {
@@ -990,15 +1371,23 @@ export function mountApp(root: Element): void {
       return;
     }
 
-    if (integral.refusal !== undefined || !mayReportValue(integral.verdict)) {
+    // Two independent reasons there may be no number, and the second is the one that used to be
+    // missed: the quadrature can be perfectly happy about a contour LEGALITY has already refused.
+    const illegal = ledger === null ? undefined : legalityRefusal(ledger);
+    if (integral.refusal !== undefined || !mayReportValue(integral.verdict) || illegal !== undefined) {
       // No number. Not a greyed-out number, not a number with a warning beside it — none.
       const row = el("p", "refusal");
       row.append(badge("⚠"), " Refused");
-      resultCard.append(row, el("p", "muted", integral.refusal ?? "the result was refused"));
-      const repair = integral.verdict.certificates
-        .flatMap((c) => c.provenance)
-        .find((s) => s.text.startsWith("suggested repair"));
-      if (repair) resultCard.append(el("p", "repair", repair.text));
+      resultCard.append(
+        row,
+        el("p", "muted", illegal?.claim ?? integral.refusal ?? "the result was refused"),
+      );
+      const repair =
+        illegal?.repair ??
+        integral.verdict.certificates
+          .flatMap((c) => c.provenance)
+          .find((s) => s.text.startsWith("suggested repair"))?.text;
+      if (repair !== undefined) resultCard.append(el("p", "repair", repair));
       return;
     }
 
@@ -1016,25 +1405,46 @@ export function mountApp(root: Element): void {
         poles?.radicand === null || poles?.radicand === undefined
           ? "ℚ(i)"
           : `ℚ(i)(√${poles.radicand})`;
+      // The IDENTITY, from the result rather than from a literal here. A dogbone is solved by a
+      // different equation — `2πi[Σ(n − σ)Res − σRes(f,∞)]` — and printing the plain one above its
+      // answer states the very equation D6 exists to show is inapplicable.
       resultCard.append(
-        el("p", "muted small", `2πi Σ n(γ,aₖ)·Res(f,aₖ), from exact residues over ${field}`),
+        el(
+          "p",
+          "muted small",
+          `${(theorem.identity ?? RESIDUE_THEOREM_IDENTITY).replace("∮ f dz = ", "")}, from exact residues over ${field}`,
+        ),
       );
-      const check = el("p", theorem.crossCheck !== undefined ? "crosscheck" : "restriction");
-      check.append(
-        badge(theorem.crossCheck?.level ?? "⚠"),
-        theorem.crossCheck !== undefined
-          ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
-          : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
-      );
-      resultCard.append(check);
+      // Three states, not two: agreement, disagreement, and NOTHING TO COMPARE. Folding the third
+      // into the second announced a disagreement of exactly 0.00e+0 for a keyhole, which reads as a
+      // contradiction where there was simply no second route.
+      if (integral.quadratureSkipped === undefined) {
+        const check = el("p", theorem.crossCheck !== undefined ? "crosscheck" : "restriction");
+        check.append(
+          badge(theorem.crossCheck?.level ?? "⚠"),
+          theorem.crossCheck !== undefined
+            ? ` quadrature agrees to ${(theorem.disagreement ?? 0).toExponential(2)}`
+            : ` the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of them is wrong`,
+        );
+        resultCard.append(check);
+      }
     }
 
-    const value = integral.value ?? [0, 0];
-    const head = el("p", theorem?.exactValue ? "num numericValue" : "resultValue num");
-    head.append(badge(integral.verdict.level), ` ${fmtCx(value)}`);
-    resultCard.append(head);
-    if (!theorem?.exactValue) {
-      resultCard.append(el("p", "muted small", describeLevel(integral.verdict.level)));
+    // NO NUMERIC LINE WHEN THERE IS NO QUADRATURE. `integral.value ?? [0,0]` would have printed
+    // `≈ 0.000 + 0.000i` beside the exact answer — a fabricated second opinion, and the one thing a
+    // corroboration line must never be. The skip states its own reason instead.
+    if (integral.quadratureSkipped !== undefined) {
+      const why = el("p", "restriction");
+      why.append(badge("?"), " no quadrature to compare against");
+      resultCard.append(why, el("p", "muted small", integral.quadratureSkipped));
+    } else {
+      const value = integral.value ?? [0, 0];
+      const head = el("p", theorem?.exactValue ? "num numericValue" : "resultValue num");
+      head.append(badge(integral.verdict.level), ` ${fmtCx(value)}`);
+      resultCard.append(head);
+      if (!theorem?.exactValue) {
+        resultCard.append(el("p", "muted small", describeLevel(integral.verdict.level)));
+      }
     }
 
     for (const r of integral.verdict.restrictions) {
@@ -1106,6 +1516,7 @@ export function mountApp(root: Element): void {
         b.type = "button";
         b.addEventListener("click", () => {
           contour = t.build();
+          if (t.seed !== undefined && branch.points.length === 0) branch = t.seed(branch);
           recompute();
           frameContour();
         });
@@ -1165,10 +1576,16 @@ export function mountApp(root: Element): void {
       swatch.style.background = PIECE_COLOURS[piece.colour % PIECE_COLOURS.length];
       const pieceIntegral = integral?.pieces[k];
       li.append(swatch, el("span", "pieceName", piece.name), el("span", "tag", piece.role));
-      if (pieceIntegral) {
+      // **A SKIPPED QUADRATURE HAS NO VALUE, AND `0 + 0i` IS NOT IT.** `integrateContour` fills the
+      // piece list with zeros when it declines to sample a multivalued integrand, which is fine as a
+      // placeholder and a lie on screen: D6's upper edge is worth 2.22, and printing `0 + 0i` beside
+      // it is exactly the number a reader would go looking for the bug in.
+      if (pieceIntegral && integral?.quadratureSkipped === undefined) {
         const v = el("span", "num pieceValue", fmtCx(pieceIntegral.value));
         li.append(v);
         if (pieceIntegral.capped) li.append(el("span", "tag warn", "resolution capped"));
+      } else if (pieceIntegral) {
+        li.append(el("span", "tag", "not sampled"));
       }
       li.addEventListener("pointerenter", () => {
         highlight = k;
@@ -1183,11 +1600,471 @@ export function mountApp(root: Element): void {
     contourCard.append(list);
   }
 
+  /**
+   * The declared cut system, and the one line that says whether it is legal.
+   *
+   * The verdict is shown HERE as well as in the ledger deliberately: it is the thing that changes as
+   * a cut is dragged, and a reader watching their own hand should not have to look across the rail
+   * to see the consequence. Both readings come from the same `checkAdmissibility` call the ledger
+   * makes, so they cannot say different things.
+   */
+  /**
+   * The modulus-contour toggle, and the one sentence that says what it proves.
+   *
+   * **The claim is not the same in the two cases, so the sentence is not either.** For a power
+   * product `|f| = |c|·∏|z−bₖ|^{αₖ}·|R|` is single-valued: the determination enters only through
+   * the argument, so a level curve of `|f|` crosses the seam without noticing it, which is the most
+   * direct possible demonstration that the seam is a choice (research 06 §5.1's device #2, "the
+   * strongest honest device available"). For a `log^m` it is FALSE — the monodromy is additive and
+   * `|(L + 2πi)^m| ≠ |L^m|` — so the contours break at the cut, by a factor of 18.7 for D4 and 80.7
+   * for D5, and the app says that instead. Claiming continuity over a log would be using an honest
+   * device to tell a lie.
+   */
+  function modulusToggle(): HTMLElement {
+    const wrap = el("div");
+    const tools = el("div", "presets");
+    const b = el("button", "preset", "modulus contours");
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(isoOn()));
+    b.classList.toggle("on", isoOn());
+    b.addEventListener("click", () => {
+      isoPref = !isoOn();
+      renderBranchCard();
+      requestDraw();
+    });
+    tools.append(b);
+    wrap.append(tools);
+    if (isoOn()) {
+      const logged = (declaredOnStage?.factors ?? []).some((factor) => factor.kind === "log");
+      wrap.append(
+        el(
+          "p",
+          "muted small",
+          logged
+            ? "|f| carries a log, so it is NOT single-valued: crossing the cut adds 2πi and the modulus jumps with it. These contours break at the cut, and no choice of argument window can make them meet."
+            : "|f| does not depend on the determination, so these contours run straight through any cut — which is the clearest evidence that a seam in the colour is a choice about the argument and not something the function does.",
+        ),
+      );
+    }
+    return wrap;
+  }
+
+  /**
+   * What crossing each cut would cost, beside the cut editor — research 06 §3.2's factor, in front
+   * of the reader BEFORE they drag into a refusal rather than inside it.
+   *
+   * The refusal names it too (`engine/ledger.ts`), but a reader who only meets it there meets it as
+   * a punishment. Here it is the number that makes the drag legible: nothing changes while the cut
+   * stays clear of the contour, and this is exactly what changes when it does not.
+   */
+  function monodromyReadout(): HTMLElement | null {
+    const all = allCrossingMonodromy(effective());
+    if (all.length === 0) return null;
+    const wrap = el("div");
+    wrap.append(el("h3", "small muted", "Crossing a cut"));
+    const list = el("ul", "pieces");
+    for (const m of all) {
+      const li = el("li");
+      li.append(el("span", "pieceName num", m.cut));
+      li.append(
+        el(
+          "span",
+          "pieceValue",
+          m.kind === "additive"
+            ? "adds 2πi — infinite order, so no factor and no sheet count closes the loop"
+            : // BOTH forms, §3.4: the literal one is what the integrand's exponent gives, and a
+              // reader who only ever sees the reduced one carries it to an `x^s` integrand where
+              // the `−1` is not there to cancel.
+              m.literal === m.reduced
+              ? `× ${m.literal}${m.value === null ? "" : ` = ${formatSqrtExt(m.value)}`}`
+              : `× ${m.literal} = ${m.reduced}${m.value === null ? "" : ` = ${formatSqrtExt(m.value)}`}`,
+        ),
+      );
+      list.append(li);
+    }
+    wrap.append(list);
+    return wrap;
+  }
+
+  function renderBranchCard(): void {
+    branchCard.replaceChildren(el("h2", undefined, "Branch cuts"));
+    // The modulus-contour toggle belongs to both modes: under a record it is the device that
+    // answers the seam, and in the sandbox it is the same device over the user's own expression.
+    branchCard.append(modulusToggle());
+    const readout = monodromyReadout();
+    if (readout !== null) branchCard.append(readout);
+    if (mode !== "sandbox") {
+      branchCard.append(
+        el("p", "muted small", "A record's cuts are the record's. Switch to the sandbox to draw one."),
+      );
+      // **THE BACKDROP IS NOW DRAWN IN THE DECLARED DETERMINATION** (M4.7c), which is what this
+      // line says. Until then it came from the compiled evaluator's principal branch and showed a
+      // seam on D7's `(b, ∞)` where the composite is continuous — that record's own
+      // `rendering-the-union-of-sub-cuts` trap looking back at the reader. It is built from the
+      // record's own factor list now, each factor in its declared window, so the picture and the
+      // ledger are in the same determination. See `kernel/branch/declared.ts`.
+      if (family?.branch !== undefined) {
+        branchCard.append(
+          el(
+            "p",
+            "muted small",
+            declaredOnStage === null
+              ? "the colouring behind the contour is drawn in the principal branch of each factor; this record's determination is declared but not on the stage."
+              : "the colouring behind the contour is drawn in the determination this record DECLARES — each factor in its own argument window — so the picture and the ledger are on the same sheet.",
+          ),
+        );
+      }
+      return;
+    }
+
+    const tools = el("div", "presets");
+    // **SHADOW MODE — research 06 §2.3, and free.** If `f` is defined by continuing along `[z₀, z]`,
+    // the induced cuts are exactly the rays from each `bₖ` pointing away from `z₀`, so they swing
+    // like shadows as the lamp moves. It needs no data structure, which is why it is a toggle over a
+    // derivation rather than a second cut representation to keep in step — and why the cut vertices
+    // stop being draggable while it is on: there, a cut is a consequence.
+    const shadow = el("button", "preset", "shadow cuts");
+    shadow.type = "button";
+    shadow.setAttribute("aria-pressed", String(branch.shadow === true));
+    shadow.classList.toggle("on", branch.shadow === true);
+    shadow.addEventListener("click", () => {
+      branch = setShadow(branch, branch.shadow !== true);
+      recompute();
+      renderBranchCard();
+    });
+    tools.append(shadow);
+    const add = el("button", "preset", "+ branch point");
+    // The mode's own sentence, present whenever it is on. It also carries the repair the LEDGER
+    // cannot: admissibility's advice is "run a cut from it to another branch point, or to infinity",
+    // which is right in general and names an action shadow mode does not offer — there a cut is a
+    // consequence, and what a reader moves is the lamp.
+    const shadowNote =
+      branch.shadow === true
+        ? el(
+            "p",
+            "muted small",
+            "the cuts are the rays pointing away from z₀ — drag the base point to swing them. A branch point sitting on z₀ casts no shadow, so move one clear of the other. Every shadow reaches infinity, so a bounded arc — the dogbone — cannot be one: switch this off to build it.",
+          )
+        : null;
+    add.type = "button";
+    add.addEventListener("click", () => {
+      // Placed at the middle of the view rather than at the origin, so a second point does not land
+      // on the first and a point never appears off screen.
+      const c = branch.points.length === 0 ? ([0, 0] as Cx) : ([view.center[0] + 1, view.center[1]] as Cx);
+      branch = addBranchPoint(branch, c);
+      recompute();
+    });
+    tools.append(add);
+
+    // The dogbone gesture, offered exactly when it means something: two points, a shape to toggle
+    // between, and EXPLICIT cuts. Whether the JOIN is admissible is the ledger's call, not this
+    // button's.
+    //
+    // **Not in shadow mode**, and review is why. It read `branch.cuts` — the declaration — which
+    // shadow mode ignores, so "split into two rays" edited something invisible and changed nothing
+    // on screen: the same handle-on-a-consequence defect `branchHandles` excludes the cut vertices
+    // to avoid, left standing here. Worse for the JOIN, which offers the one shape a shadow system
+    // structurally cannot express — every ray reaches infinity, so there is no bounded arc to make.
+    const bounded = branch.cuts.find((c) => c.from !== INFINITY_ID && c.to !== INFINITY_ID);
+    if (branch.shadow === true) {
+      // nothing: the cuts are a consequence here, and the note below says where to go for a dogbone
+    } else if (branch.points.length === 2 && bounded === undefined) {
+      const join = el("button", "preset", "join into one cut");
+      join.type = "button";
+      join.addEventListener("click", () => {
+        const next = joinToOneCut(branch, branch.points[0].id, branch.points[1].id);
+        if (next !== null) branch = next;
+        recompute();
+      });
+      tools.append(join);
+    } else if (bounded !== undefined) {
+      const split = el("button", "preset", "split into two rays");
+      split.type = "button";
+      split.addEventListener("click", () => {
+        const next = splitToRays(branch, bounded.id);
+        if (next !== null) branch = next;
+        recompute();
+      });
+      tools.append(split);
+    }
+    branchCard.append(tools);
+    if (shadowNote !== null) branchCard.append(shadowNote);
+    // **THE SANDBOX'S CUT AND THE SANDBOX'S COLOURING ARE DIFFERENT OBJECTS**, and a reader can see
+    // both at once, so the app has to say it. The colouring comes from the expression that was
+    // typed, in `@cas/expr`'s principal branch of every sub-expression; the cut is a DECLARATION the
+    // reader made, and M4.7c's finding is that the determination a written expression is in cannot
+    // be inferred from it — so the app does not pretend the two agree by correcting one into the
+    // other. Under a record they DO agree, because a record declares its factorisation and the
+    // stage is built from it; here there is nothing to build from, and the honest report is that
+    // moving the cut changes the ledger's verdict and not the picture's seam.
+    if (branch.points.length > 0) {
+      branchCard.append(
+        el(
+          "p",
+          "muted small",
+          declaration === null
+            ? "the colouring is the principal branch of the expression above; the cut is your declaration, and the two need not coincide. Moving the cut changes the verdict, not the seam."
+            : "the colouring is built from the factorisation you declared, each factor in its own window — so the seam IS your cut, as it is under a gallery record. Moving the cut still changes the verdict and not the seam, because ∮ reads the window and never the geometry.",
+        ),
+      );
+    }
+
+    if (branch.points.length === 0) {
+      branchCard.append(
+        el("p", "muted small", "No branch points declared, so the integrand is treated as single-valued."),
+      );
+      return;
+    }
+
+    renderDeclaration(branch);
+
+    const report = checkAdmissibility(branch);
+    const head = el("p", "verdict");
+    head.append(badge(report.certificate.level), ` ${report.detail}`);
+    branchCard.append(head);
+    if (!report.ok && report.repair !== undefined) {
+      branchCard.append(el("p", "muted small", report.repair));
+    }
+
+    const list = el("ul", "pieces");
+    for (const point of branch.points) {
+      const li = el("li");
+      const pick = el("select", "picker");
+      pick.setAttribute("aria-label", `order of branch point ${point.id}`);
+      for (const o of OFFERED_ORDERS) {
+        const opt = document.createElement("option");
+        opt.value = o.label;
+        opt.textContent = o.label;
+        opt.selected = orderLabel(o.order) === orderLabel(point.order);
+        pick.append(opt);
+      }
+      pick.addEventListener("change", () => {
+        const chosen = OFFERED_ORDERS.find((o) => o.label === pick.value);
+        if (chosen) branch = setOrder(branch, point.id, chosen.order);
+        recompute();
+      });
+      const drop = el("button", "preset", "remove");
+      drop.type = "button";
+      drop.setAttribute("aria-label", `remove branch point ${point.id}`);
+      drop.addEventListener("click", () => {
+        branch = removeBranchPoint(branch, point.id);
+        recompute();
+      });
+      li.append(el("span", "pieceName", point.label), pick, drop);
+      list.append(li);
+    }
+    branchCard.append(list);
+  }
+
+  /**
+   * **THE DECLARED FACTORISATION, AS AN EDITABLE OBJECT** (M5.1c).
+   *
+   * Declaring is an explicit act with a visible cost: the integrand box stops holding the integrand
+   * and starts holding `R(z)`. That trade is what buys an exact answer — `findPoles` on
+   * `z^0.3/(1+z)` reports `rational: false` and no poles at all, so without a declared split the
+   * sandbox has no residues and no `∮` — and it is stated rather than implied, with the assembled
+   * form shown alongside so the reader can see what they are now claiming.
+   */
+  /**
+   * @param shown — the cut system being RENDERED (post-`effective`), never the state to edit.
+   *
+   * **Named `shown` and not `branch`, and a browser pass is why.** It was `branch`, which shadowed
+   * the module-level `let branch` that every handler here assigns to — so `branch = setSheet(…)` and
+   * `branch = rebuilt.choice` both wrote to the parameter and were discarded. The sheet spinner did
+   * nothing at all, and worse, changing the determination moved the ANSWER (which reads
+   * `declaration.window`) while leaving the cut drawn where it was (which reads this). The two then
+   * disagreed about where the discontinuity is, silently — precisely the thing "declaring the
+   * determination IS declaring the cut" exists to prevent. TypeScript cannot catch it: assigning to
+   * a parameter is legal.
+   */
+  function renderDeclaration(shown: BranchChoice): void {
+    const wrap = el("div", "declaration");
+    const order = declaredOrder();
+
+    if (declaration === null || order === null) {
+      wrap.append(
+        el(
+          "p",
+          "muted small",
+          "The integrand above is taken whole, in the principal branch of every sub-expression — so " +
+            "its residues are not decidable and there is no ∮. Declare a factorisation to get one: " +
+            "the box then holds R(z) and the factor is read in its own window.",
+        ),
+      );
+      for (const point of shown.points) {
+        const b = el("button", "preset", `declare a factor on ${point.label}`);
+        b.type = "button";
+        b.addEventListener("click", () => {
+          beforeDeclaration = ast;
+          beforeDeclarationSrc = input.value;
+          declaration = {
+            pointId: point.id,
+            window: [Frac.ZERO, Frac.of(2n)],
+            sign: 1,
+            constant: [1, 0],
+            logPower: 2,
+          };
+          fLabel.textContent = "R(z) =";
+          input.setAttribute("aria-label", "rational cofactor R(z)");
+          recompute();
+        });
+        wrap.append(b);
+      }
+      branchCard.append(wrap);
+      return;
+    }
+
+    // ---- the declared factor, editable ----------------------------------------------------
+    const head = el("p", "verdict");
+    head.append(el("strong", undefined, "Declared factor"));
+    wrap.append(head);
+
+    const row = el("div", "contrasts");
+    const windows: readonly { readonly label: string; readonly value: readonly [Frac, Frac] }[] = [
+      { label: "arg ∈ [0, 2π)", value: [Frac.ZERO, Frac.of(2n)] },
+      { label: "arg ∈ [−π, π)", value: [Frac.of(-1n), Frac.ONE] },
+    ];
+    const windowPick = el("select", "picker");
+    windowPick.setAttribute("aria-label", "argument window of the declared factor");
+    for (const w of windows) {
+      const opt = document.createElement("option");
+      opt.value = w.label;
+      opt.textContent = w.label;
+      opt.selected = declaration.window[0].equals(w.value[0]);
+      windowPick.append(opt);
+    }
+    windowPick.addEventListener("change", () => {
+      const chosen = windows.find((w) => w.label === windowPick.value);
+      // **Declaring the determination IS declaring the cut**, so the cut system is rebuilt from the
+      // new window rather than left where it was — otherwise the two would disagree about where the
+      // discontinuity is, silently.
+      if (chosen && declaration) {
+        declaration = { ...declaration, window: chosen.value };
+        const rebuilt = buildDeclaration({
+          constant: declaration.constant,
+          at: 0,
+          window: chosen.value,
+          order: declaredOrder() ?? { kind: "power", alpha: Frac.of(1n, 2n), sign: 1 },
+        });
+        if (rebuilt.ok) branch = rebuilt.choice;
+      }
+      recompute();
+    });
+    row.append(el("span", "muted small", "window:"), windowPick);
+
+    if (order.kind === "power") {
+      const orient = el("button", "preset", declaration.sign === 1 ? "(z − b)" : "(b − z)");
+      orient.type = "button";
+      orient.setAttribute("aria-label", "orientation of the declared factor");
+      orient.addEventListener("click", () => {
+        if (declaration) declaration = { ...declaration, sign: declaration.sign === 1 ? -1 : 1 };
+        recompute();
+      });
+      row.append(el("span", "muted small", "written:"), orient);
+    } else {
+      const m = el("input", "expr small");
+      m.type = "number";
+      m.min = "1";
+      m.step = "1";
+      m.value = String(declaration.logPower);
+      m.setAttribute("aria-label", "power m of log^m");
+      m.addEventListener("change", () => {
+        const v = Math.round(Number(m.value));
+        if (declaration && Number.isFinite(v)) declaration = { ...declaration, logPower: Math.max(1, v) };
+        recompute();
+      });
+      row.append(el("span", "muted small", "log^m, m ="), m);
+    }
+    wrap.append(row);
+
+    // Short label, explanation beneath: at the rail's width the sentence-length version was clipped
+    // mid-word ("…back in th"), which a browser pass caught and no test could.
+    // ---- the sheet spinner (research 06 §5.3) ---------------------------------------------
+    // Deferred in M4.7d with its reason — "the sandbox has no declared branch FACTOR for a sheet
+    // index to multiply" — and this is the slice that gives it one. A sheet is a whole-turn offset
+    // of the declared window, so the spinner moves the ANSWER and leaves the cut exactly where it
+    // is; the badge names the factor so that is visible rather than inferred.
+    const sheetRow = el("div", "contrasts");
+    const sheetIn = el("input", "expr small");
+    sheetIn.type = "number";
+    sheetIn.step = "1";
+    sheetIn.value = String(shown.sheet);
+    sheetIn.setAttribute("aria-label", "sheet the answer is reported on");
+    sheetIn.addEventListener("change", () => {
+      const v = Number(sheetIn.value);
+      if (Number.isFinite(v)) branch = setSheet(branch, v);
+      recompute();
+    });
+    sheetRow.append(el("span", "muted small", "sheet:"), sheetIn);
+    if (order.kind === "power") {
+      const j = order.alpha.mul(Frac.of(BigInt(shown.sheet)));
+      sheetRow.append(
+        el(
+          "span",
+          "muted small",
+          shown.sheet === 0
+            ? "sheet 0 — the determination as declared"
+            : `× e^(2πi·${formatFrac(j)}), and the cut does not move`,
+        ),
+      );
+    } else {
+      sheetRow.append(
+        el(
+          "span",
+          "muted small",
+          shown.sheet === 0
+            ? "sheet 0 — the determination as declared"
+            : `log + ${shown.sheet === 1 ? "" : `${shown.sheet}·`}2πi — a log's monodromy is ADDITIVE, so no factor closes it`,
+        ),
+      );
+    }
+    wrap.append(sheetRow);
+
+    const drop = el("button", "preset", "undeclare");
+    drop.type = "button";
+    drop.setAttribute("aria-label", "undeclare the factor and put the whole integrand back in the box");
+    drop.addEventListener("click", () => {
+      // **Put back what was TYPED, not what is in the box.** The box holds `R(z)` now, so leaving it
+      // alone and merely changing the label would take the cofactor and call it the integrand —
+      // silently a different problem, and one that still looks plausible. A browser pass found
+      // exactly that: after undeclaring, `1/(1+z)` was being integrated as though it were
+      // `z^(−1/2)/(1+z)`, with a perfectly reasonable `2πi` beside it.
+      if (beforeDeclarationSrc !== null) input.value = beforeDeclarationSrc;
+      declaration = null;
+      splitCheck = null;
+      beforeDeclaration = null;
+      beforeDeclarationSrc = null;
+      fLabel.textContent = "f(z) =";
+      input.setAttribute("aria-label", "integrand f(z)");
+      applyExpression();
+    });
+    wrap.append(drop, el("p", "muted small", "puts the whole integrand back in the box."));
+
+    // ---- is the split the integrand it claims to be? ---------------------------------------
+    if (declaredRefusal !== null) {
+      const bad = el("p", "verdict");
+      bad.append(badge("⚠"), ` ${declaredRefusal}`);
+      wrap.append(bad);
+    }
+    if (splitCheck !== null) {
+      const line = el("p", "verdict");
+      line.append(badge(splitCheck.ok ? "≤" : "⚠"), ` ${splitCheck.detail}`);
+      wrap.append(line);
+    }
+    branchCard.append(wrap);
+  }
+
   function renderPoles(): void {
     poleCard.replaceChildren(el("h2", undefined, "Poles"));
     if (!poles) {
       poleCard.append(el("p", "muted", "No integrand."));
       return;
+    }
+    // With a factor declared these are the poles of `R(z)` and not of the integrand, which matters:
+    // a branch point is not a pole and carries no residue, so the two lists are genuinely different
+    // and a reader comparing this card to the expression box would otherwise be misled.
+    if (mode === "sandbox" && declaration !== null) {
+      poleCard.append(el("p", "muted small", "of the cofactor R(z) — the branch point carries no residue of its own."));
     }
     const verdict = assembleVerdict(poles.certificates);
     const head = el("p", "verdict");
@@ -1223,8 +2100,27 @@ export function mountApp(root: Element): void {
       list.append(li);
     }
     poleCard.append(list);
+    // **WHOSE RESIDUES THESE ARE.** A branch record's pole report describes the RATIONAL COFACTOR, not
+    // the integrand: the branch point carries no residue, and `Res(f, z₀)` is the cofactor's residue
+    // times the branch factor's value there. D6 is where the distinction stops being pedantic —
+    // `Σ Res(R) = 0` for it, printed unqualified beside a non-zero answer, reads as a contradiction.
+    if (family?.branch !== undefined) {
+      poleCard.append(
+        el(
+          "p",
+          "muted small",
+          "of the rational cofactor R — the branch point carries no residue, and Res(f, z₀) is this times the branch factor at z₀",
+        ),
+      );
+    }
     if (poles.exactResidueSum) {
-      poleCard.append(el("p", "muted small", `Σ Res = ${poles.exactResidueSum.text} (exact, over every pole)`));
+      poleCard.append(
+        el(
+          "p",
+          "muted small",
+          `Σ Res = ${poles.exactResidueSum.text} (exact, over every pole${family?.branch === undefined ? "" : " of R"})`,
+        ),
+      );
     }
   }
 
@@ -1267,7 +2163,9 @@ export function mountApp(root: Element): void {
     const at = plotAt(px, py);
     const tol = grabTolerance();
     const over =
-      nearestHandle(handles, at, tol) !== null || (canMoveBody() && onContour(resolved, at, tol));
+      nearestBranchHandle(at, tol) !== null ||
+      nearestHandle(handles, at, tol) !== null ||
+      (canMoveBody() && onContour(resolved, at, tol));
     stageWrap.style.cursor = over ? "grab" : "default";
   }
 
@@ -1291,12 +2189,33 @@ export function mountApp(root: Element): void {
     }
   }
 
+  /** The branch handle nearest `at` within `tol`, or null. Same rule as `nearestHandle`. */
+  function nearestBranchHandle(at: Cx, tol: number): BranchHandle | null {
+    let best: BranchHandle | null = null;
+    let bestD = tol;
+    for (const h of bHandles) {
+      const d = Math.hypot(h.at[0] - at[0], h.at[1] - at[1]);
+      if (d <= bestD) {
+        bestD = d;
+        best = h;
+      }
+    }
+    return best;
+  }
+
   stageWrap.addEventListener("pointerdown", (ev) => {
     const [px, py] = stagePoint(ev);
     const at = plotAt(px, py);
     const tol = grabTolerance();
-    const handle = nearestHandle(handles, at, tol);
-    if (handle !== null) {
+    // A cut vertex is checked BEFORE the contour's own handles: it is the smaller target, it is
+    // usually the thing sitting on top, and a drag that hits the contour instead would move the one
+    // object the user was trying to hold still.
+    const bHandle = nearestBranchHandle(at, tol);
+    const handle = bHandle === null ? nearestHandle(handles, at, tol) : null;
+    if (bHandle !== null) {
+      grab = { kind: "branch", handle: bHandle };
+      gesture = "contour";
+    } else if (handle !== null) {
       grab = { kind: "radius", handle };
       gesture = "contour";
     } else if (canMoveBody() && onContour(resolved, at, tol)) {
@@ -1319,10 +2238,15 @@ export function mountApp(root: Element): void {
   stageWrap.addEventListener("pointermove", (ev) => {
     const [px, py] = stagePoint(ev);
     if (gesture === "none") {
-      const handle = nearestHandle(handles, plotAt(px, py), grabTolerance());
+      const at = plotAt(px, py);
+      const tol = grabTolerance();
+      const bHandle = nearestBranchHandle(at, tol);
+      const bIndex = bHandle === null ? -1 : bHandles.indexOf(bHandle);
+      const handle = bHandle === null ? nearestHandle(handles, at, tol) : null;
       const index = handle === null ? -1 : handles.indexOf(handle);
-      if (index !== hovered) {
+      if (index !== hovered || bIndex !== bHovered) {
         hovered = index;
+        bHovered = bIndex;
         requestDraw();
       }
       updateCursor(px, py);
@@ -1337,7 +2261,10 @@ export function mountApp(root: Element): void {
     }
 
     const at = plotAt(px, py);
-    if (grab?.kind === "body" && anchorContour !== null) {
+    if (grab?.kind === "branch") {
+      branch = applyBranchGrab(branch, grab.handle.grab, at);
+      recompute();
+    } else if (grab?.kind === "body" && anchorContour !== null) {
       contour = translateContour(anchorContour, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
       recompute();
     } else if (grab?.kind === "radius") {
@@ -1373,29 +2300,50 @@ export function mountApp(root: Element): void {
       ? "the view"
       : grab.kind === "body"
         ? "the whole contour"
-        : `${grab.handle.pieceName} (${grab.handle.param})`;
+        : grab.kind === "branch"
+          ? grab.handle.label
+          : `${grab.handle.pieceName} (${grab.handle.param})`;
 
-  /** Re-point a radius grab at the rebuilt handle, so repeated key presses keep working. */
+  /** Re-point a handle grab at the rebuilt handle, so repeated key presses keep working. */
   function refreshGrab(): void {
     const held = grab;
-    if (held === null || held.kind !== "radius") return;
-    const again = handles.find(
-      (h) => h.param === held.handle.param && h.pieceIndex === held.handle.pieceIndex,
-    );
-    grab = again === undefined ? null : { kind: "radius", handle: again };
+    if (held === null) return;
+    if (held.kind === "radius") {
+      const again = handles.find(
+        (h) => h.param === held.handle.param && h.pieceIndex === held.handle.pieceIndex,
+      );
+      grab = again === undefined ? null : { kind: "radius", handle: again };
+      return;
+    }
+    if (held.kind !== "branch") return;
+    const want = held.handle.grab;
+    const again = bHandles.find((h) => sameBranchGrab(h.grab, want));
+    grab = again === undefined ? null : { kind: "branch", handle: again };
   }
+
+  const sameBranchGrab = (a: BranchGrab, b: BranchGrab): boolean => {
+    // The base grab has no id: there is exactly one base point, so the kind identifies it.
+    if (a.kind !== b.kind) return false;
+    if (a.kind === "base") return true;
+    if (a.kind === "point") return b.kind === "point" && a.id === b.id;
+    return b.kind === "cut" && a.id === b.id && a.index === b.index;
+  };
 
   /** Enter / Space walks what the arrows act on: the view, the contour, then each radius handle. */
   function cycleGrab(): void {
     const stops: (typeof grab)[] = [null];
     if (canMoveBody()) stops.push({ kind: "body" });
     for (const handle of handles) stops.push({ kind: "radius", handle });
-    const sameAs = (a: typeof grab): boolean =>
-      a === null
-        ? grab === null
-        : grab !== null &&
-          a.kind === grab.kind &&
-          (a.kind !== "radius" || (grab.kind === "radius" && a.handle.param === grab.handle.param));
+    for (const handle of bHandles) stops.push({ kind: "branch", handle });
+    const sameAs = (a: typeof grab): boolean => {
+      if (a === null) return grab === null;
+      if (grab === null || a.kind !== grab.kind) return false;
+      if (a.kind === "radius") return grab.kind === "radius" && a.handle.param === grab.handle.param;
+      if (a.kind === "branch") {
+        return grab.kind === "branch" && sameBranchGrab(a.handle.grab, grab.handle.grab);
+      }
+      return true;
+    };
     const index = stops.findIndex(sameAs);
     grab = stops[(index + 1) % stops.length] ?? null;
     announce(
@@ -1418,6 +2366,12 @@ export function mountApp(root: Element): void {
       if (!canMoveBody()) return;
       contour = translateContour(contour, d);
       recompute();
+    } else if (held.kind === "branch") {
+      branch = applyBranchGrab(branch, held.handle.grab, [
+        held.handle.at[0] + d[0],
+        held.handle.at[1] + d[1],
+      ]);
+      recompute();
     } else {
       const next = radiusDragValue(contour, held.handle, [
         held.handle.at[0] + d[0],
@@ -1434,8 +2388,9 @@ export function mountApp(root: Element): void {
   const stageA11y = attachCanvasA11y(inkCanvas, {
     label:
       "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
-      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour or one of its radius " +
-      "handles, after which the arrow keys move what you grabbed and shift with an arrow pans.",
+      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one of its radius " +
+      "handles, or a branch point or branch cut, after which the arrow keys move what you grabbed " +
+      "and shift with an arrow pans.",
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,

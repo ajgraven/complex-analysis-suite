@@ -653,10 +653,109 @@ probe before use**. CPU lift along path with `|Δθ| ≤ π/4` control; GPU `cut
 **Gate:** D1–D7 (7 integrals) exact; dragging a cut across the contour changes the answer *and says
 so*; the `arg ∈ (−π,π]` trap is detected and explained; CPU/GPU parity green in the browser suite.
 
+> **M4.0 is done: the two engine decisions are taken** (ADR-0041), and the staging plan beneath them
+> is [`M4-plan.md`](M4-plan.md) — **read it before starting M4**.
+>
+> **Tier D's output basis is CARRIED, not reduced.** `(π^k / sin(π r))·Σⱼ cⱼ ∏ₘ aⱼₘ^{qⱼₘ}` is
+> reported as a *form* labelled `=`, with the decimal `≈`, exactly as tier B carries `e^{β}`. The
+> fixtures are what decided it: reducing would need a general algebraic number field — `sin(3π/8)` is
+> the nested `√(2+√2)`, `sin(3π/7)` is degree 3, D3's `sin(23π/50)` is **degree 20**, and D7 needs
+> `40^{3/4}` and `10^{1/3}·6^{2/3}` — to express answers the records themselves write as
+> `"pi/sin(pi*alpha)"`. Mechanically it is `expSum.ts`'s exponent widened to admit `(ℚ(i))·π` and
+> `Σ(ℚ)·ln(ℚ₊)`, plus **one** recogniser for the two-term denominator that becomes a sine.
+>
+> **Pass 5 moves to ℚ(i)(π), with π an indeterminate**, because D4's row `−(1, 4πi, −4π²)` and D5's
+> `−(1, 6πi, −12π², −8π³i)` do not fit in ℚ. `linear.ts` is generalised over a `Field` rather than
+> rewritten, so rank stays *decided*. The cheaper alternative `system.ts`'s docstring names —
+> rescaling the unknowns by powers of π — does not generalise: the unknowns are not homogeneous in π
+> (`T0 = π/2` and `T2 = π³/8` for one R; `T0 = π/4` and `T1 = −π/4` both degree 1 for another).
+>
+> The staging is reordered by **which machinery each record needs**, so D1 and D3 land before D2, and
+> D5 waits on the prerequisite chaining rather than on more algebra.
+>
+> **✅ GATE MET, with one clause delivered differently and said so.** Per-slice detail is in
+> [`M4-plan.md`](M4-plan.md) §§5–15.
+>
+> - **D1–D7 exact** ✓ — all seven solve to symbolic closed forms, each asserted by name in its own
+>   test (`test/d1.test.ts` … `d7.test.ts`), every declared fixture run, and the forms CARRIED rather
+>   than reduced per ADR-0041. Closed forms are tabulated in [`GALLERY.md`](GALLERY.md) §5.
+> - **The `arg ∈ (−π,π]` trap is detected and explained** ✓ — M4.2, north-star #4 verbatim: D1's
+>   wrong `argRange` swings the cut onto ℝ₋ and LEGALITY catches both untagged circles, which is the
+>   earliest of that record's three declared refusals the engine can see.
+> - **CPU/GPU parity green in the browser suite** ✓ — the app gained a `test:browser` (M4.7a) and it
+>   runs 75 assertions in real WebGL2 across three files, with mutation sweeps at 17/17 and 14/14.
+>   *Deviation:* the twins are NOT in `DUAL_BACKEND_CORPUS`. There is one consumer, and adding them
+>   to `@cas/gpu`'s corpus would drag a JS twin into `@cas/expr` for the same single caller
+>   (ADR-0007); the app's own suite is also stronger here, since it compares the shader against the
+>   twin the LEDGER uses rather than against a package's own reference. M4-plan §13's last note.
+> - **Jump weights** are verified against the continuous-argument lift (`kernel/branch/lift.ts`) in
+>   the suite rather than probed numerically at runtime. `liftArgument` is the mechanism the ANSWER
+>   depends on, so agreement with it is the statement that the picture and the ledger are in the same
+>   branch — and a runtime probe would re-derive an exact rational decision from a measurement, which
+>   inverts this app's whole posture.
+> - **"Dragging a cut across the contour CHANGES THE ANSWER and says so"** — half delivered, and the
+>   missing half is one named cause rather than an omission. It **says so**: a crossing refuses and
+>   NAMES its factor in both of research 06 §3.4's forms (M4-plan §15), which is §3.2's own contract
+>   ("either refuse the crossing or change sheet and say so, with the multiplicative factor shown").
+>   And the complementary fact is now certified: while the cuts stay clear of the contour `∮` is
+>   *exactly* invariant under any deformation of them, which is what makes a jump meaningful at all.
+>   What does not happen is the answer CHANGING, and the reason is that **the sandbox cannot declare a
+>   branch factor.** Its editor declares branch points, exponents and cuts — so the cut system reaches
+>   LEGALITY and the picture, but no sandbox value depends on it, because `analyse` takes the rational
+>   route and there is no `z^α` whose determination a residue could be read in. Under a gallery record
+>   the dependence is real (moving the cut moves `argRange`, which is D1's entire trap), but a
+>   record's cuts are the record's and editing them would be editing a worked example.
+>
+>   **This is the same root cause as the one deferral M4.7d records** — research 06 §5.3's sheet
+>   spinner has nothing to multiply for exactly the same reason. Letting the sandbox declare
+>   `c·∏(z−bⱼ)^{αⱼ}·R(z)` rather than typing one expression closes both at once, and it is a real
+>   extension of what the sandbox is, so it is an M5 slice rather than a corner of M4.
+> - Two further limits tier D left were named in [`GALLERY.md`](GALLERY.md) §5.2 and are **closed in
+>   M5.0**: `side` was declared and validated but never honoured (research 06 §3.3's
+>   branch-offsetting evaluator specified and unbuilt), and consequently the quadrature cross-check
+>   was skipped for all seven records. It is honoured now — as a `1e-30` displacement inside the
+>   evaluator, a signed zero rather than an offset contour — and **all seven records report an
+>   agreeing quadrature**, each within ~1.5× the quadrature's own error estimate. §5.2.1 records what
+>   closing them cost, including the one skip that survives (a cut running *vertically* through a
+>   piece pins no limit, and is refused by name rather than answered).
+
 ### M5 — The rest of the taxonomy · *M*
 Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–F2), series summation via
 `πcot`/`πcsc` including the kernel/`f` pole-collision case (G1–G3).
 **Gate:** all 28 gallery integrals; the cross-family invariants (§8) green.
+
+> **M5.0 is done: the one engine decision is taken** ([ADR-0042](../DECISIONS.md) — an exactly-known
+> IMPORTED value is `=` on its form, with the import in its provenance), and the staging plan beneath
+> it is [`M5-plan.md`](M5-plan.md) — **read it before starting M5.**
+>
+> **The eight records are not the work.** [`gallery/tier-efg.md`](gallery/tier-efg.md) §10 already did
+> the analysis: **six schema gaps** (§10.2) and **four errors in research 03's lemma statements**
+> (§10.1). Two of those errors are guardrail-critical — **L6's arc range is wrong as written** (the
+> stated majorant diverges, measured `2.7×10¹⁵` at `n = 2, R = 6`) and **the square-contour bound
+> drops a `π` and is therefore not an upper bound** (it fails at every `N` tested, by 30–40%, which is
+> §9 R2's certification theatre exactly). One is the ADR above. And one is a unification: `cos φ ≥
+> 1 − 2φ/π` (L6) and `sin ψ ≥ 2ψ/π` (Jordan) are **the same inequality**, so one predicate should
+> discharge both.
+>
+> **M5 absorbed the two edges M4 left, by decision, and BOTH are now done.** `side` was declared and
+> never honoured, so tier D's quadrature cross-check was skipped and tier D was the one tier without
+> independent numeric corroboration ([`GALLERY.md`](GALLERY.md) §5.2) — **M5.0 honours it, and all
+> seven tier-D records now agree with an independent quadrature** (§5.2.1). And the sandbox could not
+> declare a branch FACTOR, the single root cause of this section's half-met gate clause *and* of
+> research 06 §5.3's deferred sheet spinner — **M5.1 (a–d) closes both**. The sandbox reaches an exact
+> `∮` by hand (its declaration reproduces D1's own closed form), the split it claims is CHECKED
+> against the expression that was typed, and the sheet spinner reads `BranchChoice.sheet` at last.
+>
+> The gate clause itself needed correcting rather than meeting: *"dragging a cut across the contour
+> changes the answer"* cannot happen, because `∮` reads the declared WINDOW and `powerAtPole` takes no
+> geometry. Dragging a cut clear of the contour leaves the value bit-identical; dragging it across
+> WITHHOLDS the value and names the crossing; changing the DETERMINATION jumps it by exactly
+> `e^{−2πiJ}`. All three are asserted, and the correction is recorded in
+> [`M5-plan.md`](M5-plan.md) §M5.1 with the measurement behind it.
+>
+> **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
+> is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
+> results.
 
 ### M6 — Presentation, teaching layer, publish · *M*
 Figure & share export (QD's `_pal` indirection, `renderToCanvas`, sync `ClipboardItem`);

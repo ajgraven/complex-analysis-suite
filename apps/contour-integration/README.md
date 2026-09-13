@@ -10,7 +10,7 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 3, and published.** See the milestone table in
+**Through Milestone 4, and published.** M1–M4 are complete and 20 of the 28 gallery records are loaded. See the milestone table in
 [`../../docs/contour-integration/PLAN.md`](../../docs/contour-integration/PLAN.md) §7.
 
 - `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*, not a quadrature — with exactly
@@ -29,7 +29,365 @@ whether the whole thing closes.
   `π − π/e`, `2π/n!` — because the solve runs in units of π and never evaluates it. Tiers D–G need
   branch cuts and the kernel families of M4/M5.
 
-The thirteen are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
+**M4.1 (branch cuts) has landed**, engine and editor:
+
+- A **cut is a choice**, not a property of `f`. `src/kernel/branch/` holds the model (exact `Frac`
+  exponents, because admissibility asks whether `Σ αₖ` is an *integer*), research 06 §2.1's
+  admissibility check, a continuous-argument lift, and the piece-versus-cut classifier.
+- **LEGALITY steps 2–3**: the cut system must be admissible, and any piece meeting a cut must declare
+  which side it runs on. A crossing with no `side` tag refuses and names the repair; a *grazing*
+  contact refuses too, because it has no side for a tag to pin. Neither row is emitted at all for a
+  rational integrand. (From **M5.0** the tag is also *honoured* — see below — so it decides a number
+  rather than only passing a check.)
+- The sandbox's **Branch cuts** card declares points and cuts. Points and cuts are draggable by
+  pointer and keyboard, and the dogbone gesture — one bounded arc ⟷ two rays to ∞ — is the round trip
+  research 06 calls the most valuable interaction in the app. Whether a given join is *legal* is the
+  rule's call, not the button's.
+- **LEGALITY also asks the topological question** one piece of geometry cannot: the winding number of
+  the whole contour about each branch point must be zero, or it is not a loop in ℂ∖Γ at all. That is
+  what makes a keyhole legal (`+1 − 1 = 0`) and a bare circle about a branch point not, and it is
+  decided by the same exact-sign predicates the poles use.
+
+**M4.2 (tier D begins) has landed** — north-star behaviour 4:
+
+- `∫₀^∞ x^(α−1)/(1+x) dx` prints **`π/sin(πα)` labelled `=`**, and
+  `∫₀^∞ x^(a−1)/(1+xⁿ) dx` prints **`(π/n)/sin(πa/n)`**. D1 and D3 are the fourteenth and fifteenth
+  loaded records.
+- The exponential basis carries π as an **indeterminate**: `β = ℚ(i)(√d) ⊕ ℚ(i)·π`, so `e^{2πiα}` and
+  `e^{iπ(α−1)}` are compared by exponent rather than by tolerance. One **sine recogniser** factors
+  `a − b·e^{β}` with `|a| = |b|`; everything outside that shape refuses by name.
+- Every residue is evaluated in the **declared `argRange`**, with the argument guessed numerically
+  and then verified in exact arithmetic — the same guess-then-verify discipline the pole-finder uses.
+  A point 0.003 off a quarter turn is refused, not rounded onto one.
+- D3's residue sum is computed **without naming a root**: at `n = 5` and `n = 7` no root of `1 + zⁿ`
+  fits one quadratic extension, and the sum needs none.
+- **Three refusals are structural**, not detected: the wrong `argRange` moves the cut under the
+  contour; integer `α` makes the coefficient exactly zero; and a cancellation may simplify a
+  derivation but never rescue one — so at integer `a`, where D3's closed form is still correct *by
+  continuity*, the app refuses the keyhole route rather than printing a right number from a collapsed
+  argument. `Golden.refuses` is how a fixture says that about itself.
+
+**M4.3 has landed with it** — D4, and the first record that is not solved by dividing:
+
+- `∫₀^∞ log x/(1+x²)² dx` prints **`−π/4`**, and the SAME contour returns `∫₀^∞ dx/(1+x²)² = π/4`
+  for free. One complex identity in three unknowns: read as one equation its rank is 1 and two of
+  the three integrals are invisible; split into real and imaginary parts — legitimate only because
+  the unknowns are real, which the record must declare — its rank is 2.
+- **Pass 5 is a linear system over ℚ(i)(π)**, not a division. π is transcendental, so ℚ(i)[π] is a
+  polynomial ring and elimination in its fraction field is exact: the rank stays DECIDED, which is
+  the whole reason `linear.ts` exists. `∫R log²x` is reported as invisible — `?`, not a refusal and
+  not a number.
+- `Res(R·log^m z, z₀)` comes from the Laurent principal part of `R` convolved with the expansion of
+  `log^m` about the pole, so a double pole mixes both halves: `Res(log²z/(1+z²)², i) = −π/4 + iπ²/16`,
+  as the record states. Checked against an independent quadrature to 1e−12.
+- **The coefficient row is derived from the declared crossing increment** and compared with what the
+  record wrote: `−(log x + 2πi)² = −log²x − 4πi log x + 4π²`. Three of D4's traps stop being
+  detectors and become arithmetic, and the same derivation at one log lower is the
+  `plain-log-loses-the-log-integral` trap — its row is `[−2πi, 0]`, and that zero IS the log
+  integral going invisible.
+
+**M4.4 adds D5, the first record that does not close alone:**
+
+- `∫₀^∞ (log x)²/(1+x²) dx = π³/8` — but its `log³` keyhole gives two real equations in three
+  unknowns. It determines `∫R log x` outright and `∫R log²x` only **modulo `∫R dx`**, which this
+  contour cannot supply. Remove the record's `prerequisites` and the app says so, naming `T0` from
+  the kernel rather than from a hand-written message.
+- **The dependency is executable.** `from: "family:log-squared-keyhole"` means the engine runs D4 at
+  **the same binding** and reads `∫R dx` out of it. Borrowing at D4's own fixture instead would
+  return `π/4` where `π/2` is needed, and answer a different question with confidence.
+- **The borrowed verdict meets into what depends on it, and nothing else.** Dependence is decided in
+  ℚ(i)(π): `∫R log x` comes off the real part of the identity, where the borrowed term's coefficient
+  is zero, and stays exact on its own contour; `∫R log²x` comes off the imaginary part and carries
+  the input's certificate. A record expecting `≈` keeps `≈` however exact its source turned out to be.
+- The second fixture exists because of a trap. D5's own record says the `1/i` sign error is invisible
+  at `R = 1/(1+x²)`, where the bonus is `0` either way; at `p = 2` the bonus is `−π/4` — **D4's own
+  primary answer at the same `p`**, reached by a different contour, so the two records cross-check
+  each other on a number neither takes from the other.
+
+**M4.5 completes the output basis, and lands D2:**
+
+- `∫₀^∞ √x/(x²+6x+8) dx = π(1 − 1/√2)` — the first record whose poles are **off the unit circle**.
+  `(−2)^{1/2} = e^{(1/2)(ln 2 + iπ)}`: the argument is decided in the declared determination as it
+  always was, and the modulus arrives as a symbolic `ln 2` in the same exponent. Dropping it — what a
+  basis carrying only the argument does — returns `π/2`, which is plausible and wrong.
+- **The logarithms are carried over PRIMES.** `ln 4 = 2ln 2`, so a representation keyed by the
+  rational it came from would hold their difference as a two-term sum that is not obviously zero, and
+  the sine recogniser would be comparing forms rather than numbers. Unique factorisation keeps
+  equality a decision; trial division **refuses** rather than returning an uncertified atom.
+- **And folds back out.** `e^{ln 2}` is the number 2 and `e^{(ln 2)/2}` is `√2`, so D2's answer reads
+  `π − π√2/2`. A weight with denominator 3 or 4 — `10^{1/3}`, `40^{3/4}` — is carried instead and
+  printed as a power, which is the whole thesis: the FORM is exact and only the decimal is `≈`.
+- D2's crossing phase is **real**: `e^{2πi(s−1)} = −1` at `s = 3/2`, so the two edges ADD and the
+  sine is `sin(π/2) = 1`. A real-valued phase looks like no phase, which is exactly when a reader
+  concludes the edges must cancel.
+
+**M4.6 is the dogbone's:**
+
+- `Res(f,∞)` is exact over ℚ(i) by one polynomial division, and `Σ_finite Res + Res(f,∞) = 0` checks it
+  against a computation sharing none of its arithmetic. **One number decides two rows**: the order at
+  infinity `p = Σαⱼ − (deg D − deg N)` says both whether the outer circle vanishes (L2 wants `p < −1`)
+  and whether the residue there is zero (`p ≤ −2`). The implication runs one way — `1/z` is regular at
+  infinity with `Res = −1` — so the certificate says which direction it establishes.
+- **The contour with the cut inside it does not satisfy the residue theorem.** A dogbone winds zero
+  times about every pole and its integral is not zero; the hypothesis that fails is holomorphy, because
+  the CUT is inside. What holds is `∮γ = 2πi[Σ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞)]` with `σ` the
+  winding about the branch points — and that is the *ordinary* residue theorem applied to `γ − σ·C_R`,
+  which winds zero times about the cut. `σ = 0` gives the plain theorem back term for term.
+- **The outer circle is not drawn, and its absence is the claim.** Drawing `C_R` would be two disjoint
+  loops called one path, and would make every winding number `1` — the fact the dogbone exists to deny.
+  `∮_{C_R,ccw} = −2πi·Res(f,∞)` is the definition of the residue at infinity, so the circle appears as
+  that row instead, exactly and not as an estimate.
+- **What the fixtures cannot test is said out loud.** `Σ Res + Res(f,∞) = 0` for every rational `f`, so
+  no rational fixture can falsify the SIGN of `σ` — it kills the whole `σ`-dependent term. The pole
+  weights and the residue at infinity are each falsified against the quadrature; the sign waits for D6,
+  and the certificate says so rather than leaving a reader to find out.
+- The sandbox gains the **keyhole** and the **dogbone**, each offering the cut system its shape
+  presupposes — declared objects in the Branch cuts card, draggable and removable, never overwriting a
+  cut already placed. Which theorem applies is then decided by the geometry: drag a keyhole until it
+  swallows its branch point and the identity changes with it.
+
+**M4.6c lands D6 — `∫₋₁¹ dx/((x²+a²)√(1−x²)) = π/(a√(1+a²))`, the nineteenth record:**
+
+- **The individual arguments need not be rational multiples of π. The weighted SUM is.** At the pole
+  `ia` the two are `π − arctan a` and `arctan a`, and nothing in this basis holds either; their
+  half-sum is `π/2` for every `a`, and that is the whole reason the dogbone has a closed form. So the
+  question is asked once about the PRODUCT: raising it to its exponents' common denominator clears
+  every fractional power, and the phase is then an exact quotient in ℚ(i)(√d) rather than a
+  measurement. The engine then checks itself against a direct evaluation of the declared branch,
+  sharing only the window — a disagreement refuses.
+- **The branch takes OPPOSITE signs at the conjugate poles.** `W(x + i0) = +√(1−x²)` forces
+  `W(+ia) = +√(1+a²)` and `W(−ia) = −√(1+a²)`. Using `+` at both — the natural symmetry reflex —
+  makes the residues cancel and returns exactly **0** instead of `π/(a√(1+a²))`, and nothing about the
+  result looks wrong. The record's constant `i` is load-bearing for the same reason: drop it and every
+  residue rotates, the answer turns imaginary, and only that shows.
+- **The cap bound is taken about the cap's OWN branch point**, by exact synthetic division — the first
+  bound in `kernel/bounds/` that is not about the origin. `|∫| = O(η^{1+α})` vanishes iff `α > −1`,
+  which is the integrability of the endpoint singularity, spent there. `η² < |b − bⱼ|²` is checked
+  exactly, because a cap reaching the far end of the cut has no bound of this form at all.
+- **`Res(f,∞) = 0` is certified, not assumed**: `f = O(|z|⁻³)`, the same number that would discharge an
+  outer circle. And the two edges **ADD** — `W` changes sign across the cut and the traversal is
+  reversed, two minus signs making one — so `∮ = 2T` where a reader expecting cancellation gets zero.
+
+**M4.6d lands D7 — `∫₀^b x^μ(b−x)^{1−μ}/(c−x) dx`, the twentieth record, and completes M4.6:**
+
+- **`Res(f,∞)` is not a correction here, it is most of the identity.** `f → e^{iπμ} ≠ 0` at infinity, so
+  `2πi·Res(f,∞)` has magnitude 26.7 in an answer of magnitude 1.216. Drop it and the answer is **still
+  perfectly real** — so the usual "it came out complex, I made a mistake" check does not fire — and it
+  is wrong by a factor of 14.5 and by a sign. The test computes that wrong number rather than asserting
+  the trap in prose.
+- **The residue at infinity comes from the binomial series, with its constant DERIVED.** For `|z|` past
+  every branch point, `Φ(z) = Λ·z^{Σα}·∏(1 − bⱼ/z)^{αⱼ}` with `Λ = c·e^{iπ[Σαⱼθⱼ − d·Σα]}`, where `θⱼ`
+  is the window-`j` argument along a reference direction `d`. Every `θⱼ` is an exact rational because
+  the direction is, so `Λ` is a root of unity decided rather than fitted; the direction is SEARCHED,
+  because a cut may run the obvious way. **`Σ αⱼ ∈ ℤ` is required and refused by name**: otherwise the
+  monodromy round a large circle is not 1, `f` is not single-valued there, and there is no residue at
+  infinity — not a hard one, none.
+- **Two windows, and one factor written backwards.** `z^μ` is read in `[0,2π)` and `(b−z)^ν` in the
+  principal window — and it is `(b − z)`, not `(z − b)`: the same number and not the same power,
+  because the argument read in the window is the argument of whichever difference the record wrote. At
+  `z = c > b` that is `arg = −π` and not `+π`, which rotates the residue by `e^{iπ/2}` and leaves the
+  answer real and plausible.
+- **A quarter power is the exact FORM.** The answer prints `(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)` —
+  the record's `(π/(2√2))(17 − 40^{3/4})`, with `250^{1/4}` factored over primes because that is what
+  keeps equality a decision. Two folds had to become partial for it to appear at all: `e^{−iπ + log}`
+  now yields its `−1` while carrying the logarithm, and a logarithm folds **prime by prime**, so one
+  quarter weight no longer disqualifies the whole one beside it.
+- The dogbone hugs `[0, b]` with `b` a PARAMETER, so its upper edge runs to `b − η` — affine in two of
+  them. A `Scalar`'s `add` may now be another `Scalar`, which keeps the picture live under a drag where
+  a derived value would go stale.
+
+**M4.7a–b bring the branch-cut layer to the GPU, with a gate that can tell the two apart:**
+
+- **The app has a `test:browser`.** Its real GLSL is compiled and linked for the first time — the
+  sandbox's presets and all twenty records' contour integrands, 28 programs the node gate structurally
+  could not build — and the branch-cut layer is executed in real WebGL2 against its TS twin.
+- **The correction is a DIFFERENCE of two crossing counts, so the shadow cancels.** `f_Γ = f_ref ·
+  exp(2πi·[m_Γ − m_ref])` with `m = −Σ σⱼ·Jⱼ` over jump-weighted signed crossings of `[z₀, z]`: the
+  declared arcs enter one array at `+J` and the reference rays enter the same array at `−α`, which is
+  why it is one loop and one uniform block. Γ equal to the reference gives exactly zero, term by term.
+- **What the reference IS cannot be inferred from the branch points.** `csqrt(1 − z·z)` is principal in
+  its *argument*, so its cut is where `1 − z² ∈ ℝ₋` — two rays pointing OUTWARD, not two pointing left
+  — while `(z−1)^{−1/2}(z+1)^{−1/2}` has the other reference for the same function. Assuming C99's
+  principal cut per branch point drew D6 wrong. The reference is now declared, read off each factor's
+  `argRange`, and a point with nothing declared gets no reference ray rather than an invented one.
+- **An integer correction is no discontinuity — which is admissibility, seen.** D6's bounded cut
+  `[−1,1]` and its `[0,2π)` window rays are the same determination, and what *proves* it is that the
+  correction comes out an integer everywhere: `α₁ + α₂ ∈ ℤ`, arriving as a property of the picture.
+- **`argCut` adds whole turns rather than taking a modulus**, so at `θ₀ = −π` it returns `atan2`
+  bit-for-bit instead of one ulp away, and gives the half-open convention on `ℝ₋` for free.
+- **The parity gate's floor is `sin`/`cos`, not float32.** GLSL ES 3.0 §4.5.1 is ULP counts throughout
+  except there, where the requirement is an *absolute* error below `2^-11` — 4.9e-4, four orders looser
+  than float32's eps, and SwiftShader spends 39% of it while `atan` delivers 8.5e-7. The first draft
+  asserted 3e-5 and went red on a correct shader; the bound is now derived from the spec rather than
+  fitted, and still three orders below a wrong branch (`2|sin πα|` = 1.4 at `α = ±1/2`).
+- **A mutation sweep kills 17 of 17.** Two of the first fifteen survived, and both were comments in the
+  shader that nothing checked: the turn count replaced by a modulus (~1e-7, under every tolerance), and
+  `<` loosened to `<=` so a grazing touch counts as a crossing (no point of a generic grid lies exactly
+  on a cut). Both are asserted directly now — exact equality with `atan()` in float32, and hand-picked
+  samples lying exactly on a cut, a vertex and a branch point.
+
+**M4.7c puts the DECLARED determination on the stage:**
+
+- **The phase portrait is built from the record's own factorisation, not corrected into it.** Each
+  factor `(sⱼ(z − bⱼ))^{αⱼ}` is evaluated in the argument window the record declares, on the CPU and
+  in GLSL, so the picture and the ledger are on the same sheet. D7's seam on `(b, ∞)` — where the
+  composite is continuous and the compiled evaluator drew a jump anyway — is gone.
+- **Constructing beats correcting, and D6 says why.** Multiplying the compiled value by
+  `exp(2πi·m(z))` needs the reference to be a system of rays from the branch points, and
+  `csqrt(1 − z·z)` is one principal square root of a quadratic whose cut is where `1 − z² ∈ ℝ₋`. In
+  general the principal cut of a composite is a curve; a ray-based correction is right about D6 by
+  luck. The declared product has no reference to get wrong.
+- **The shader is generated per record**, so the record's declaration lives in the program text. A
+  uniform array would make the orientation runtime data, and `(b − z)^ν` is the same number as
+  `−(z − b)^ν` and not the same power — D7's trap, one wrong uniform away.
+- **Modulus contours, and the right sentence beside them.** `|f|` cannot see the determination for a
+  power product, so its level curves cross the seam — the clearest evidence that the seam is a choice
+  (research 06 §5.1's device #2). Over a `log^m` that is FALSE: the monodromy is additive, the two
+  determinations differ in modulus by 18.7× for D4 and 80.7× for D5, and the contours break at the
+  cut. The card says which case is on screen; the suite asserts both.
+- **The cut carries its jump weight** — `J = 3/4` on D7's dogbone, `J = ∞` on a log's keyhole, since
+  infinite-order monodromy has no finite jump and a number there would be the app's first dishonest
+  label.
+
+**M4.7d completes M4 with north-star #3 — drag a branch cut:**
+
+- **Nothing changes, and the app says so.** `∮` comes from `2πi Σ n·Res` with residues read in the
+  declared window, so it does not depend on the cut's geometry: with the cuts clear of the contour,
+  the value is EXACTLY invariant under any deformation of them, and that is a ledger row rather than
+  a number a reader has to watch not move. The reason is the correction's own definition, so the
+  invariance is a consequence of how the picture is computed. It is also what makes the jump
+  meaningful — a value that drifted under a drag would make a jump one more wobble.
+- **The crossing names its factor, in BOTH forms.** Research 06 §3.2 requires the app to refuse a
+  crossing or change sheet "with the multiplicative factor shown"; it refused from M4.1 and said
+  nothing, which teaches that a cut is a wall rather than a choice with a price. Now the refusal and
+  the Branch-cuts card both carry `e^{2πi(α−1)} = e^{2πiα}` — the literal exponent the integrand
+  gives and the textbook's reduced one, with the reason they agree — because a reader who only meets
+  the reduced form carries it to an `x^s` integrand where the `−1` is not there to cancel.
+- **The factor folds only when it can.** `e^{2πiJ}` is built in the app's output basis, so it becomes
+  `1`, `i`, `−1` or `−i` exactly when `4J ∈ ℤ` and is carried as an exponential otherwise — `e^{2πi/3}`
+  wants a cube root of unity neither ℚ(i) nor one quadratic extension has. An integral jump weight is
+  no crossing at all and reports nothing, rather than announcing a factor of 1.
+- **Shadow cuts** (research 06 §2.3): the cuts become the rays pointing away from the base point and
+  swing like shadows as you drag the lamp. Always admissible — every ray reaches infinity — which is
+  exactly why it cannot express the dogbone, so the declared arcs are kept underneath and the toggle
+  gives them back. A branch point sitting on the lamp casts no shadow and is refused by name.
+- In the sandbox the cut is your declaration and the colouring is the principal branch of what you
+  typed; the app says they need not coincide, because the determination a written expression is in
+  cannot be inferred from it. Under a record they do coincide, which is what M4.7c built.
+
+**M5.0 honours the `side` tag, and tier D gains the second opinion it never had:**
+
+- **A signed zero, not an offset contour.** Research 06 §3.3 says to offset the *branch* rather than
+  the contour, and objects to an `ε`-offset path twice over: it injects an `O(ε)` error, and near a
+  branch point the integrand varies on scale `ε` so the quadrature cost explodes. Both objections are
+  about a geometric `ε ~ 1e-6`. This is neither — the displacement is `1e-30` and lives inside the
+  evaluator, so the contour's nodes and its `dz` are untouched and exact. Every lip in the corpus
+  runs from `η ≈ 0.1` outward, so it moves `arg` by `~1e-29` (enough for `atan2` to return `θ₀ + 0⁺`
+  rather than a coin toss) and `|·|` by `O(1e-60)`, below float64's resolution. The value is the
+  limiting boundary value *to full precision*, which is exactly what §3.3 asks for.
+- **Seven records, seven agreeing quadratures**, where before there were none: sampling `z^α` needs a
+  determination and a compiled evaluator silently takes the principal one, so a keyhole's two lips
+  returned the same value, cancelled, and a "second opinion" answered a different question with
+  confidence — worse than none, and honestly skipped. Each lip is now evaluated at the limit from its
+  own declared side, so the corroboration is of the same integral.
+- **The claim is a ratio, not a magnitude.** Tier D's gap is `1e-3…1e0`, four orders looser than
+  tiers A–C's `1e-14`, because a lip carries an endpoint singularity that Gauss–Legendre converges
+  slowly against. What makes it evidence is that it stays within a small multiple of the quadrature's
+  *own* error estimate — ~1.5× on every record — since a systematic error in either route would show
+  as a gap the estimator cannot explain. A flat tolerance loose enough to pass would assert nothing.
+- **Mis-declaring a side reaches the VERDICT**, and that is a test rather than a remark. "Seven
+  records agree" would also pass against an evaluator that ignored the tag and happened to be right,
+  so the suite runs each record a second time with both lips forced `"above"` — the old cancellation
+  — and requires the honest declaration to be more than 10× closer to the exact value *and* the
+  mangled one to drop from `=` to **`⚠`** with no corroboration offered. The contradiction goes into
+  the verdict because the exact route and the quadrature cannot both be right and the app must not
+  pick a favourite.
+- **The picture is in the determination the number is in.** The accumulation panel is a head-to-tail
+  sum of `f(zₖ)·Δzₖ`, so without the sides a keyhole's two lips draw as retracing each other — a
+  trail visibly closing to nothing beside a result card saying the integral is `π√2`. `Analysis`
+  hands back the `sides` it integrated with, so both come from one array rather than two paths that
+  can drift; measured, the trail tracks the integral 4.7×–441× better with them than without.
+- **One skip survives, narrower and better.** A side pins no limit where the cut runs *vertically*
+  through the piece: "above" then displaces **along** it, `arg` does not move, and `atan2` picks a
+  limit by coin toss. No record is in that shape, but the question is asked per record rather than
+  assumed, and one that were would be refused **by name**.
+- The golden corpus's fork on "does this record have a branch factor" is **gone**, which is the real
+  payoff: every one of the twenty is now checked against floating panels that share no machinery with
+  the exact route, so an uncorroborated record cannot hide behind a special case. The **sandbox** is
+  deliberately not covered — it can declare cuts but not a branch *factor*, so its quadrature stays
+  in the principal determination whatever its lips say; that is M5.1.
+
+**M5.1 gives the sandbox a branch FACTOR — and D1's trap becomes something you can reach by hand:**
+
+- **The gap was bigger than it read.** `findPoles` on `z^0.3/(1+z)` reports `rational: false` and
+  ZERO poles, so there was no exact value at all and the ledger failed at KILL. The sandbox did not
+  compute a *wrong* answer for a multivalued integrand — it computed none, which is why "dragging a
+  cut changes the answer" had nothing to be true of.
+- **Declaring is an explicit act with a stated cost.** The keyhole and dogbone templates already
+  seed a cut system, so inferring a factorisation from "there are branch points" would silently
+  reinterpret whatever was typed the moment a template was picked. Once declared, the integrand box
+  holds only `R(z)` and the assembled form is shown beside it.
+- **The split is checked, not believed.** The app cannot verify intent; it can verify that
+  `declared · R(z)` is the expression the box held a moment earlier — and *where* that comparison is
+  legitimate is computed rather than assumed. `@cas/expr` compiles in its principal branch, a
+  keyhole window is `[0, 2π)`, and the two disagree on the whole lower half plane where the split is
+  *correct* and the numbers differ anyway. So the product is evaluated a second time in the
+  principal window, and only where those agree is anything claimed. An unverifiable split is
+  REFUSED rather than failed, and the three ways of being unverifiable read differently — including
+  the likeliest, an unbound parameter, since `@cas/expr` evaluates one to **zero** rather than
+  refusing and the integrand is then silently the zero function.
+- **The determination is a dropdown, and moving it is D1's `wrong-branch` trap.** `∮ = 2π` at
+  `arg ∈ [0, 2π)`; switch to `[−π, π)` and the cut swings onto ℝ₋ under the outer circle, LEGALITY
+  refuses by name, and no `∮` is printed. Dragging the cut *clear* of the contour changes the value
+  not at all — bit for bit — because `∮` reads the window and `powerAtPole` takes no geometry.
+- **The sheet spinner** (research 06 §5.3, deferred in M4.7d for want of a factor to multiply) needed
+  no new machinery: a sheet is a whole-turn offset of the declared window. The residues then pick up
+  `e^{2πisα}` exactly, a **log shifts additively instead** — for free, with no branch anywhere in the
+  code — and the cut does not move. At α = −1/2, sheet 1 turns `2π` into `−2π` and the badge names
+  the factor. `BranchChoice.sheet`, carried and unread since M4.1, is read at last.
+- The sandbox's colouring is now built from the declared factorisation, so its seam and its cut stop
+  being different objects, and the pole card says it lists the poles of `R(z)` — a branch point
+  carries no residue of its own.
+
+**The partial-sum panel is drawn at a size you can read.** A follow-on, and the defect was not the
+one it looked like:
+
+- **The frame was symmetric about the origin.** It fitted `[−max, max]` on both axes with `0` pinned
+  to the canvas centre, which is tight only for a walk reaching equally far in all four directions —
+  and almost none does. D1's keyhole runs `0 → 4.39 − 3.19i` and never leaves one quadrant, so it
+  used half the frame's width and 36% of its height *before* the panel's shape cost it anything.
+  Fitting the data's real bounding box (with the origin always in it, since both axes are drawn
+  through it and `Σ Δz` closing back to it is the point of the contrast) and centring **the box**
+  rather than the origin recovers that, and puts the picture in the middle so the space left over
+  reads as framing.
+- **The scale is still one number for both axes, and must stay so.** The angle between consecutive
+  terms is content — a quarter-turn between two of them means `f` rotated by a quarter-turn — so
+  stretching an axis to fill the panel would draw angles the integrand does not have. The real trail
+  and the contrast trail share one frame for the same reason.
+- **Measured, on the corpus:** every one of the twenty records now fills at least 95% of whichever
+  dimension binds (it was at best 5% of the panel's area, usually under 2%); the trail's area grows
+  2.3× to 10.6× linearly. The strip also went 12rem → 16rem and the side panel 15rem → 19rem, which
+  is what lets a roughly square walk use more than the panel's height — and stops the readout
+  (`4.38688763 − 3.18726043i`, 24 characters of tabular monospace) wrapping onto two lines.
+- **It found a bug older than itself.** `removable-one-minus-cos` integrates `(1 − cos z)/z²` along
+  `[−4, 4]`, and the accumulator samples midpoints — so an even step count puts one sample *exactly*
+  on `z = 0`, where the compiled expression evaluates `0/0`. Every partial sum after it is `NaN`, the
+  readout prints `NaN + NaNi`, and the old fit's `Math.max(max, NaN)` made the whole panel blank,
+  losing the 119 good steps too. The quadrature is unaffected and correct (Gauss–Legendre's nodes sit
+  at irrational positions inside each panel and never land there; it returns 6.7e-12). Fitting from
+  the finite points draws the prefix that exists, but the app still has nothing honest to *say* about
+  the term it could not evaluate — `integrateContour` refuses a contour through a singularity and
+  names it, and this deserves the same. Recorded in `engine/contour/accumulate.ts` and left as its
+  own slice rather than smuggled into a layout fix.
+- `src/ui/` had **no tests of any kind** before this. It has two suites now: the fit's arithmetic in
+  node, and — because `drawAccumulator` needs a real `CanvasRenderingContext2D` and this app is not a
+  jsdom project — the ink it actually lays down, measured in Chromium on the M4.7a harness. The first
+  draft of that one was **vacuous**: `drawAccumulator` opens with `clearRect`, so the canvas is
+  transparent and `getImageData` returns the axes' 16%-alpha stroke as bright un-premultiplied RGB.
+  A filter reading only RGB measured the axes, which span the whole canvas, and passed with the trail
+  blanked entirely. The alpha channel is the discriminator.
+
+The twenty are **browsable**, not only testable: a `Sandbox | Gallery` switch opens any record by
 tier and fixture, showing its target, the contour integrand it is actually integrated against (which
 is not the posed one), the closed form the engine derives, and whether that agrees with the golden
 value. A fixture that selects an alternative *derivation* rather than binding parameters is offered
@@ -60,7 +418,8 @@ release reconciles against it and logs a disagreement past the estimator's own b
 either way — it comes from `2πi Σ n·Res`, not from the quadrature.
 
 Still to come: the pen tool (free-hand path editing — adding and removing points, and drawing a
-contour from nothing), branch cuts (M4), the rest of the gallery (M5), the teaching layer (M6).
+contour from nothing), the rest of M4 (the GPU cut picture: rendering the declared determination, then
+drag-a-cut with its monodromy readout), the rest of the gallery (M5), the teaching layer (M6).
 
 ## Documentation
 
@@ -78,6 +437,8 @@ Four layers, strictly downward-depending, with the boundary enforced by this pac
 
 ```
 src/kernel/   pure maths — no DOM, no upward imports. Where the golden corpus points.
+              `branch/` is the cut system: model, admissibility, argument lift, crossings.
+              `exponent.ts` / `sineForm.ts` / `cyclotomic.ts` are tier D's output basis.
 src/engine/   problem semantics: contour, substitution, residue theorem, ledger.
 src/families/ the gallery records as data: schema, loader + invariants, Pass-5 solve.
 src/ui/       Stage (WebGL2) and panels.

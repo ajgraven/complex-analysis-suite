@@ -1,4 +1,4 @@
-// `Σ cₖ · e^{βₖ}` with `cₖ, βₖ ∈ ℚ(i)(√d)` — the exact output basis Jordan's families need.
+// `Σ cₖ · e^{βₖ}` with `cₖ ∈ ℚ(i)(√d)` and `βₖ` an {@link Exponent} — the exact output basis.
 //
 // WHY THIS TYPE EXISTS. The residue of `g(z)·e^{iaz}` at a simple pole `z₀` of `g` is
 // `Res(g,z₀)·e^{iaz₀}`. The algebraic factor is already exact; the exponential factor is not an
@@ -13,18 +13,29 @@
 // the two. PLAN §3.3 already fixes the convention: a decimal rendering of an exact result is itself
 // labelled `≈`.
 //
+// THE EXPONENT IS ITS OWN TYPE (`kernel/exponent.ts`), which is where tier D enters: `β` carries a
+// π component alongside its algebraic part, so the keyhole's `e^{2πiα}` and its residue's
+// `e^{i(α−1)π}` live in the same basis as tier B's `e^{iaz₀}` and are compared by exponent rather
+// than by tolerance. Nothing about tiers A–C changed: their exponents simply have a zero π part.
+//
 // SIMPLE POLES ONLY. At a pole of order `m > 1` the residue is `p(z₀)·e^{iaz₀}` for a polynomial `p`
 // built from derivatives, which is representable here but needs the derivative machinery; the caller
 // refuses and falls back rather than guessing. Every tier-B denominator is squarefree, so nothing in
 // the corpus is lost by that.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
 import { formatPiSqrt, formatSqrtExt, formatTwoPiISqrt } from "./formatExact.js";
+import { Exponent, formatExponent, jordanExponent } from "./exponent.js";
+import { formatLogPower } from "./logPart.js";
 import type { AlgebraicPole } from "./algebraic.js";
+
+// Re-exported so `expSum.ts` stays the one import for the basis, as it was before the exponent
+// grew its own module.
+export { Exponent, jordanExponent, formatExponent } from "./exponent.js";
 
 export interface ExpTerm {
   readonly coefficient: SqrtExt;
   /** The exponent `β` in `e^{β}`. Zero means the term is purely algebraic. */
-  readonly exponent: SqrtExt;
+  readonly exponent: Exponent;
 }
 
 /** Add two elements, or report that they do not share one quadratic extension. */
@@ -38,6 +49,15 @@ function tryAdd(x: SqrtExt, y: SqrtExt): SqrtExt | null {
   }
 }
 
+/** Multiply two elements, or report that they do not share one quadratic extension. */
+function tryMul(x: SqrtExt, y: SqrtExt): SqrtExt | null {
+  try {
+    return x.mul(y);
+  } catch {
+    return null;
+  }
+}
+
 export class ExpSum {
   /** Normalised: exponents pairwise distinct where combinable, no zero coefficients. */
   readonly terms: readonly ExpTerm[];
@@ -47,6 +67,22 @@ export class ExpSum {
   }
 
   static readonly ZERO = new ExpSum([]);
+
+  /** The normal form: no two terms sharing an exponent, no zero coefficients, biggest exponent first. */
+  private static normalise(terms: readonly ExpTerm[]): ExpTerm[] {
+    const out: ExpTerm[] = [];
+    for (const t of terms) {
+      const at = out.findIndex((x) => x.exponent.equals(t.exponent));
+      if (at === -1) {
+        out.push({ ...t });
+        continue;
+      }
+      const combined = tryAdd(out[at].coefficient, t.coefficient);
+      if (combined === null) out.push({ ...t });
+      else out[at] = { coefficient: combined, exponent: out[at].exponent };
+    }
+    return ExpSum.sort(out.filter((t) => !t.coefficient.isZero()));
+  }
 
   /**
    * Largest exponent first, so the `e^0` term leads.
@@ -62,13 +98,14 @@ export class ExpSum {
     });
   }
 
-  static of(coefficient: SqrtExt, exponent: SqrtExt): ExpSum {
-    return coefficient.isZero() ? ExpSum.ZERO : new ExpSum([{ coefficient, exponent }]);
+  static of(coefficient: SqrtExt, exponent: Exponent): ExpSum {
+    if (coefficient.isZero()) return ExpSum.ZERO;
+    return new ExpSum(ExpSum.normalise([{ coefficient, exponent }]));
   }
 
   /** An algebraic number, as the one-term sum `x·e^0`. */
   static fromSqrtExt(x: SqrtExt): ExpSum {
-    return ExpSum.of(x, SqrtExt.ZERO);
+    return ExpSum.of(x, Exponent.ZERO);
   }
 
   add(other: ExpSum): ExpSum {
@@ -83,7 +120,7 @@ export class ExpSum {
       if (combined === null) terms.push({ ...incoming });
       else terms[at] = { coefficient: combined, exponent: terms[at].exponent };
     }
-    return new ExpSum(ExpSum.sort(terms.filter((t) => !t.coefficient.isZero())));
+    return new ExpSum(ExpSum.normalise(terms));
   }
 
   sub(other: ExpSum): ExpSum {
@@ -99,6 +136,58 @@ export class ExpSum {
     if (factor.isZero()) return ExpSum.ZERO;
     return new ExpSum(
       this.terms.map((t) => ({ ...t, coefficient: t.coefficient.mul(factor) })),
+    );
+  }
+
+  /**
+   * Fold every exponent that is secretly a sign into its coefficient — `e^{iπ} ↦ −1`, `e^{iπ/2} ↦ i`.
+   *
+   * **A REDUCTION OF A RESULT, NOT PART OF THE NORMAL FORM**, and the distinction cost a design
+   * mistake to learn. Doing this during construction destroys the shape the sine recogniser reads:
+   * D1 at α = 3/4 has coefficient `1 − e^{3iπ/2}`, whose second exponent folds to `−i` and collapses
+   * the whole two-term denominator to `1 + i` — after which no sine factors out, and the answer
+   * prints as `π(1 + i)·e^(−iπ/4)` instead of `π/sin(3π/4)`. Both are exact and only one is the
+   * record's. So the fold runs on the way OUT, once nothing is going to be factored again.
+   *
+   * Its job on the way out is the mirror image: the solve leaves a residual `e^{−iπ}` on every
+   * keyhole answer, and carrying that prints `−π·e^(−iπ)/sin(3π/10)` for `π/sin(3π/10)`.
+   */
+  foldSigns(): ExpSum {
+    const folded: ExpTerm[] = [];
+    for (const t of this.terms) {
+      // PARTIAL folds count. D7's `e^{−iπ + (ln 2)/4 + (3 ln 5)/4}` has a `−iπ` that is the number
+      // `−1` and a logarithm this basis carries; extracting only the first leaves a REAL exponent,
+      // which is the difference between an answer with a closed form and an answer without one.
+      const { factor, rest } = t.exponent.splitAlgebraicFactor();
+      const product = factor.equals(SqrtExt.ONE) ? t.coefficient : tryMul(t.coefficient, factor);
+      // A fold that would leave one quadratic extension is skipped: the term stays as it was, which
+      // is still correct and merely less reduced.
+      folded.push(product === null ? t : { coefficient: product, exponent: rest });
+    }
+    return new ExpSum(ExpSum.normalise(folded));
+  }
+
+  /**
+   * NOT reduced modulo `2πi`, deliberately. `e^{β}` depends on its π part only mod `2i`, so a normal
+   * form could fold `e^{7iπ/3}` onto `e^{iπ/3}` — but halving an exponent is what the sine recogniser
+   * does, and halving is not well defined modulo `2i`: `e^{2iπ} = 1` while `e^{iπ} = −1`. Two terms
+   * whose exponents differ by `2iπ` therefore stay separate, and the sum stays correct — the same
+   * posture `tryAdd` takes about two different radicands. Every hypothesis in the gallery keeps its
+   * exponent inside one period anyway.
+   */
+
+  /**
+   * Multiply every term by `e^{by}` — the one operation the sine recogniser needs that `scale` is not.
+   *
+   * Factoring `a − b·e^{β}` as `e^{(β₁+β₂)/2}·2i·sin(…)` leaves a leftover exponential on the
+   * denominator, and dividing by it shifts every exponent of the numerator. Terms that were distinct
+   * stay distinct (a shift is injective) and terms that were equal stay equal, so the normal form
+   * survives untouched.
+   */
+  shift(by: Exponent): ExpSum {
+    if (by.isZero()) return this;
+    return new ExpSum(
+      ExpSum.normalise(this.terms.map((t) => ({ ...t, exponent: t.exponent.add(by) }))),
     );
   }
 
@@ -141,18 +230,18 @@ export class ExpSum {
   }
 }
 
-/** `i·a·z₀` — the exponent of the factor `e^{iaz₀}` a Jordan residue carries. */
-export function jordanExponent(a: Frac, at: SqrtExt): SqrtExt {
-  return at.mul(SqrtExt.fromGauss(new Gauss(Frac.ZERO, a)));
-}
-
-/** Render `e^{β}`, with the two exponents worth a nicer name than the general form. */
-function formatExponential(exponent: SqrtExt): string {
+/** Render `e^{β}`, with the exponents worth a nicer name than the general form. */
+function formatExponential(exponent: Exponent): string {
   if (exponent.isZero()) return "";
-  const one = SqrtExt.fromGauss(Gauss.ONE);
+  const one = Exponent.fromSqrtExt(SqrtExt.fromGauss(Gauss.ONE));
   if (exponent.equals(one)) return "e";
   if (exponent.equals(one.neg())) return "1/e";
-  return `e^(${formatSqrtExt(exponent)})`;
+  // A purely logarithmic exponent is a POWER, and writing it as an exponential hides what it is:
+  // `e^{(3/4)ln 40}` is `40^{3/4}`, which is the form the record states and the reader can check.
+  // (The fold in `Exponent.asAlgebraicFactor` has already taken the cases that land in ℚ or one
+  // quadratic extension, so what reaches here is the genuinely carried remainder.)
+  if (exponent.algebraic.isZero() && exponent.pi.isZero()) return formatLogPower(exponent.log);
+  return `e^(${formatExponent(exponent)})`;
 }
 
 /**
@@ -202,7 +291,7 @@ const isCompound = (text: string): boolean => text.includes(" + ") || text.inclu
  * compound coefficient is bracketed. This was caught by looking at B3's output, not by a test: the
  * value was right and the rendering was wrong, which is the failure mode a numeric check cannot see.
  */
-function attachExponential(coefficient: string, exponent: SqrtExt): string {
+function attachExponential(coefficient: string, exponent: Exponent): string {
   const exponential = formatExponential(exponent);
   if (exponential === "") return coefficient;
   if (coefficient === "1") return exponential;

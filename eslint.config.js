@@ -67,4 +67,24 @@ export default tseslint.config(
       "no-restricted-imports": ["error", { patterns: noCrossAppImports }],
     },
   },
+  {
+    // **Shadowing, in the one app whose shell is a long closure over mutable state.**
+    //
+    // `apps/contour-integration/src/shell/app.ts` holds its whole state — `branch`, `contour`,
+    // `mode`, `input` — as `let` bindings in one module closure, and its renderers take pieces of
+    // that state as parameters. A parameter named after the state it was passed therefore SHADOWS
+    // it, and an assignment inside the renderer writes to the parameter and is silently discarded.
+    // That happened: `renderDeclaration(branch)` made the sheet spinner do nothing, and made
+    // changing the declared determination move the ANSWER while leaving the cut drawn where it was
+    // — the two then disagreeing about where the discontinuity is, which is the one thing
+    // "declaring the determination IS declaring the cut" exists to prevent. TypeScript cannot catch
+    // it; assigning to a parameter is legal, and both sides had the same type.
+    //
+    // Scoped to this app rather than the repo: `no-param-reassign` would be the broader rule and
+    // fires 268 times across `packages/`, nearly all of it legitimate (Euclid's algorithm
+    // reassigning `a` and `b`). `no-shadow` here was three harmless cases, now renamed, and catches
+    // the hazard at its source.
+    files: ["apps/contour-integration/**/*.{ts,tsx,mts,cts}"],
+    rules: { "no-shadow": "error" },
+  },
 );

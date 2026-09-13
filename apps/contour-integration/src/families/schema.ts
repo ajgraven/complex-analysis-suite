@@ -15,7 +15,102 @@ import type { Geom, LemmaId, PieceRole } from "../engine/contour/model.js";
 
 export type { LemmaId } from "../engine/contour/model.js";
 
+/**
+ * A parameter binding taken from a golden fixture.
+ *
+ * Here rather than in `system.ts` because both the rational coefficient walk and the widened one
+ * need it, and `system.ts` needs the widened walk — which made the two modules import each other.
+ * It is schema vocabulary anyway: a binding is what a `Golden`'s `params` is.
+ */
+export type Bindings = Readonly<Record<string, string | number | boolean>>;
+
 /** GALLERY.md §1: six templates plus `square` for tier G. Everything else is parameterisation. */
+/**
+ * How a branch point acts, and with which argument convention.
+ *
+ * **`argRange` BELONGS TO THE FACTOR, NOT THE CUT** ([M4-plan](../../../../docs/contour-integration/M4-plan.md)
+ * §1.3, GAP G4). D7 is the record that forces it: `z^μ(1−z)^ν` has two branch points with different
+ * exponents *and two different conventions* — `[0,2π)` for `z^μ` and `(−π,π]` for `(b−z)^ν` — so a
+ * single range on the cut cannot say what the record says. Every residue is evaluated in ITS OWN
+ * factor's range, which is D1's `residue-with-the-wrong-argument` trap made structural: "the check
+ * is arithmetic, not a convention".
+ */
+export interface BranchFactor {
+  /** Where the branch point sits, as an expression — `0`, `1`, `-1`, `exp(i*pi/n)`. */
+  readonly at: string;
+  readonly order:
+    | { readonly kind: "power"; readonly alpha: string }
+    | { readonly kind: "log"; readonly power: number };
+  /** The determination this factor is evaluated in. Displayed always, never implicit. */
+  readonly argRange: readonly [string, string];
+  /**
+   * Which difference the record actually wrote: `(z − b)` (default) or `(b − z)`.
+   *
+   * D7's integrand is `x^μ(b − x)^ν`, and the two are NOT the same power even though `b − z` and
+   * `−(z − b)` are the same number: the argument read in the window is the argument of whichever one
+   * was written. Its own trap is exactly that — at `z = c > b` approached from above,
+   * `arg(b − z) = −π` and not `+π`, and using `+π` rotates the residue by `e^{iπ/2}` while leaving
+   * the final answer real and entirely plausible.
+   */
+  readonly orientation?: "z-minus-b" | "b-minus-z";
+}
+
+/**
+ * The phase a factor picks up crossing the cut — and **whether it multiplies or adds**.
+ *
+ * A tagged union, because the two are genuinely different operations and `string` could not tell
+ * them apart (M4-plan §1.3). D1/D2/D3/D7's `z^α` is MULTIPLICATIVE: `f ↦ f·e^{2πiα}`. D4/D5's
+ * `log z` is ADDITIVE: `log z ↦ log z + 2πi`, and D4 carries an explicit `log-phase-is-additive`
+ * trap for exactly this confusion. Writing an additive phase where a multiplicative one is expected
+ * produces a plausible finite wrong answer, which is the failure mode worth a type.
+ */
+export type CrossingPhase =
+  | { readonly kind: "multiplicative"; readonly factor: string }
+  | { readonly kind: "additive"; readonly increment: string };
+
+export interface BranchSpec {
+  readonly function: string;
+  /**
+   * The rational cofactor, in `z`: the integrand is `(the branch function)·R(z)`.
+   *
+   * Declared rather than derived. The engine needs the split — the branch point carries no residue
+   * while `R`'s poles carry all of them — and recovering it by dividing `z^α` out of the auxiliary
+   * integrand symbolically would be fragile in exactly the cases that matter. The record already
+   * names `R` among its target's `symbols`, but that is the subject of the HYPOTHESES (a structural
+   * predicate about a function) and carries no expression; this is the expression.
+   */
+  readonly rationalPart: string;
+  /** The branch points, each with its own exponent and its own argument convention. */
+  readonly factors: readonly BranchFactor[];
+  /**
+   * The constant in front of `∏ⱼ (z − bⱼ)^{αⱼ}`, when the branch is pinned by one. Default `1`.
+   *
+   * Not decoration. D6's `W(z) := −i·exp(½(Log(z−1) + Log(z+1)))` is `−i` times the product, and the
+   * `−i` is exactly what makes `W(x + i0) = +√(1−x²)` on the upper lip rather than `+i√(1−x²)`. Drop
+   * it and every residue is off by a factor of `i`, the answer comes out imaginary, and the only
+   * thing that looks wrong is a number that should have been real.
+   */
+  readonly constant?: string;
+  readonly cuts: readonly { readonly from: string; readonly to: string }[];
+  readonly crossingPhase: CrossingPhase;
+  /**
+   * research 06 §2.1 — every component of Γ not touching ∞ has `Σα ∈ ℤ`, and no `log` is bounded.
+   *
+   * A SEAT for the record's own statement of the rule, checked by `kernel/branch/admissibility.ts`.
+   */
+  readonly admissibility: string;
+  /**
+   * What the discontinuity set of the COMPOSITE actually is, when it is not the union of the
+   * sub-expressions' cuts.
+   *
+   * Research 06 §2.2's lesson, learned from Maple's `BranchCuts`: rendering the union is dishonest,
+   * because cuts can cancel — `log z + log(1/z)` is continuous across ℝ₋ even though each term is
+   * not. A record with nothing to say here omits it; a record that needs it can no longer only
+   * gesture at it in prose.
+   */
+  readonly effectiveCut?: string;
+}
+
 export type TemplateId =
   | "circle"
   | "semicircle"
@@ -84,6 +179,23 @@ export interface FamilyPiece {
 /** One of the family's unknowns. Usually one; the log family has three; tier G's is a sum. */
 export interface FamilyTarget {
   readonly id: string;
+  /**
+   * What the record CLAIMS about this unknown, which invariant 4 then checks against `M`.
+   *
+   * A one-unknown family says nothing and is `primary` by default. D4 is the first record that has
+   * to distinguish: its `log²` keyhole determines `∫R log x` (**primary**, the integral it was built
+   * for) and `∫R dx` (**bonus**, free from the same contour) while the `log²` terms **cancel**, so
+   * `∫R log²x` has an identically zero column and is invisible. All three facts are claims about the
+   * contour, and invariant 4 checks them in both directions — a `primary` or `bonus` target that the
+   * contour does not pin is a broken record, and so is a `cancels` target that it does.
+   *
+   * **`input` is the fourth, and D5 is why.** Its `log³` keyhole gives two real equations in three
+   * unknowns: it determines `∫R log x` outright and `∫R log²x` only MODULO `∫R dx`, which must come
+   * from elsewhere — the record's `prerequisites`. An `input` target is therefore required NOT to be
+   * determined by this contour alone, on the same principle as the other three: a record that
+   * borrows a value its own contour supplies is documenting a dependency that is not there.
+   */
+  readonly role?: "primary" | "bonus" | "cancels" | "input";
   readonly kind: "integral" | "sum";
   readonly variable: "x" | "theta" | "n";
   readonly lower: string;
@@ -139,6 +251,22 @@ export interface Golden {
   readonly verifiedTo: number;
   /** How it was verified — two independent methods are required for the primary fixture. */
   readonly method: string;
+  /**
+   * This fixture documents a **REFUSAL**, not a value — and `value`/`numeric` record what the answer
+   * would be, which is precisely why it is dangerous.
+   *
+   * *Added for D3*, the record that forces the distinction. At integer `a` its integrand has no
+   * branch point at all: the keyhole's two edges are the same integral traversed both ways,
+   * `1 + Σcⱼ = 0` exactly, and the contour carries no information about the target — while the closed
+   * form `(π/n)/sin(πa/n)` stays perfectly finite and *correct by continuity*. The record's own words:
+   * "The value survives; the derivation does not. […] A correct value obtained from a collapsed
+   * derivation is not a proof; print the wedge's derivation or print nothing."
+   *
+   * So a fixture carrying this is REQUIRED to be rank-deficient, and one not carrying it is required
+   * to have full rank. Both directions, because "the derivation collapses here" and "the engine
+   * cannot do this yet" must not look the same in the corpus.
+   */
+  readonly refuses?: string;
 }
 
 export interface Family {
@@ -173,12 +301,30 @@ export interface Family {
     readonly note: string;
   };
 
-  /** Values this family may assume as known, each with its own provenance and rigor. */
+  /**
+   * Values this family may assume as known, each with its own provenance and rigor.
+   *
+   * **Declared, then RESOLVED.** `from` naming `family:<id>` is executable: the engine runs that
+   * record at the same bindings and reads the named target out of it. `rigor` is what the record
+   * EXPECTS, and the borrowed verdict meets with it rather than overriding it, so a record can never
+   * claim more rigor than its input actually had. D5's whole lesson is that this must be visible:
+   * assuming `T0 = 0` instead of borrowing `π/2` returns `−13π³/24` in place of `π³/8`, and nothing
+   * about the arithmetic complains.
+   *
+   * `value` is the FLAGSHIP's value, for a reader — not the engine's check. The borrowed number is
+   * verified twice over without it: the source record carries its own goldens and the corpus runs
+   * them, and this record's own golden fails if the wrong target was borrowed.
+   */
   readonly prerequisites?: readonly {
     readonly targetId: string;
+    /** `family:<id>` to resolve by running that record; anything else is prose for the reader. */
     readonly from: string;
+    /** The unknown to read out of the SOURCE, when it is not named the same there. */
+    readonly sourceTargetId?: string;
     readonly value: string;
     readonly rigor: Level;
+    /** Where else the value could come from, when the named family is not the only route. */
+    readonly alternative?: string;
   }[];
 
   /** Exact constants imported rather than derived — E3's and F2's `√π` — so they escape `≈`. */
@@ -208,23 +354,7 @@ export interface Family {
     readonly note: string;
   }[];
 
-  readonly branch?: {
-    readonly function: string;
-    readonly branchPoints: readonly {
-      readonly at: string;
-      readonly order:
-        | { readonly kind: "power"; readonly alpha: string }
-        | { readonly kind: "log"; readonly power: 1 | 2 };
-    }[];
-    readonly cuts: readonly {
-      readonly from: string;
-      readonly to: string;
-      readonly argRange: readonly [string, string];
-    }[];
-    readonly crossingPhase: string;
-    /** research 06 §2.1 — every non-∞-touching component has `Σα ∈ ℤ`. */
-    readonly admissibilityCheck: string;
-  };
+  readonly branch?: BranchSpec;
 
   readonly contour: {
     readonly template: TemplateId;
@@ -232,6 +362,17 @@ export interface Family {
       readonly name: string;
       readonly to: "inf" | "0+";
       readonly through?: "halfIntegers";
+      /**
+       * Where this limit STARTS, when the global display default will not do.
+       *
+       * `instantiate.ts`'s default radius is 4, which is a display choice and knows nothing about a
+       * record's poles. D2's sit at `−2` and `−4`, so the default puts one exactly ON the outer
+       * circle and the winding about it is undecided — the record opens refusing. The value is still
+       * only a starting point: the residue-theorem answer is independent of it once every selected
+       * pole is enclosed, which the corpus asserts by running each record at two widely separated
+       * radii and requiring the exact value to be IDENTICAL.
+       */
+      readonly start?: number;
     }[];
     readonly pieces: readonly FamilyPiece[];
     /**

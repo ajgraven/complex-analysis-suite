@@ -12,7 +12,9 @@
 // on: withhold the thing that cannot be stood behind, and say why.
 import { parse } from "@cas/expr";
 import type { Family } from "./schema.js";
-import { BONUS_ZERO, bonusMagnitudes, buildSystem } from "./system.js";
+import { BONUS_ZERO, bonusMagnitudes, buildSystem, withoutColumns } from "./system.js";
+import { describeKernel } from "./linear.js";
+import { FRAC_FIELD, RAT_PI_FIELD } from "./field.js";
 import { a1CircleLinearCos } from "./records/a1-circle-linear-cos.js";
 import { a2CirclePoisson } from "./records/a2-circle-poisson.js";
 import { a3CircleCosNTheta } from "./records/a3-circle-cos-n-theta.js";
@@ -26,10 +28,36 @@ import { b2JordanStrict } from "./records/b2-jordan-strict.js";
 import { b3JordanQuartic } from "./records/b3-jordan-quartic.js";
 import { a6SemicircleQuartic } from "./records/a6-semicircle-quartic.js";
 import { a7SemicircleOrder3 } from "./records/a7-semicircle-order3.js";
+import { d1MellinKeyhole } from "./records/d1-mellin-keyhole.js";
+import { d2KeyholeTwoPoles } from "./records/d2-keyhole-two-poles.js";
+import { d3KeyholeXToTheN } from "./records/d3-keyhole-x-to-the-n.js";
+import { d4LogSquaredKeyhole } from "./records/d4-log-squared-keyhole.js";
+import { d5LogCubedKeyhole } from "./records/d5-log-cubed-keyhole.js";
+import { d6DogboneInverseSqrt } from "./records/d6-dogbone-inverse-sqrt.js";
+import { d7DogboneTwoFractionalPowers } from "./records/d7-dogbone-two-fractional-powers.js";
 
 export type { Family, FamilyPiece, FamilyTarget, Golden, LemmaId, TemplateId } from "./schema.js";
-export { buildSystem, exactConstant, type FamilySystem } from "./system.js";
-export { solveExact, applyCombination, type SolveReport, type RatMatrix } from "./linear.js";
+export {
+  buildSystem,
+  exactConstant,
+  type FamilySystem,
+  type PiSystem,
+  type RationalSystem,
+} from "./system.js";
+export { exactPiConstant } from "./piConstant.js";
+export {
+  applyCombination,
+  combineOver,
+  describeKernel,
+  realifyRows,
+  solveExact,
+  solveOver,
+  type Matrix,
+  type RatMatrix,
+  type SolveReport,
+} from "./linear.js";
+export { FRAC_FIELD, RAT_PI_FIELD, type Field } from "./field.js";
+export { RatPi, formatRatPi } from "../kernel/ratPi.js";
 
 /**
  * The records, in gallery order.
@@ -39,8 +67,10 @@ export { solveExact, applyCombination, type SolveReport, type RatMatrix } from "
  * formula; B1–B3 with the exponential basis `Σ cₖ e^{βₖ}`, which lets a Jordan residue be exact
  * without being evaluated; C1–C3 with L4, L5 and Pass 5's solve.
  *
- * Tiers D–G need branch cuts and the kernel families of M4/M5. A record loaded before its machinery
- * exists would be a worked example that cannot be worked.
+ * D1 joins them with M4.2: the widened exponential basis, the sine recogniser, the power-residue
+ * reader and Pass 5 over the `reproduces` role. Tiers E–G, and the rest of D, need the machinery of
+ * M4.3 onward and M5 — a record loaded before its machinery exists would be a worked example that
+ * cannot be worked.
  */
 export const FAMILIES: readonly Family[] = [
   a1CircleLinearCos,
@@ -56,6 +86,13 @@ export const FAMILIES: readonly Family[] = [
   c1IndentedSinc,
   c2RemovableOneMinusCos,
   c3PvSineOverXTimesQuadratic,
+  d1MellinKeyhole,
+  d2KeyholeTwoPoles,
+  d3KeyholeXToTheN,
+  d4LogSquaredKeyhole,
+  d5LogCubedKeyhole,
+  d6DogboneInverseSqrt,
+  d7DogboneTwoFractionalPowers,
 ];
 
 /**
@@ -305,19 +342,85 @@ function checkInvariant4(family: Family): Violation[] {
 
   // A family with no parameters still gets one pass, at the empty binding: `M` does not depend on a
   // fixture there, but the check must still run.
-  const bindings = family.golden.length > 0 ? family.golden.map((g) => g.params) : [{}];
-  for (const [i, params] of bindings.entries()) {
+  //
+  // A fixture marked `refuses` inverts the rule rather than escaping it. D3 carries two: at integer
+  // `a` its keyhole genuinely carries no information about the target, so `rank(M) = 0` is the
+  // CORRECT report and demanding full rank there would drop a record for telling the truth. The
+  // requirement becomes the other one — a `refuses` fixture that turned out to have full rank is not
+  // documenting a degeneracy at all, and that is just as much a corpus error.
+  const fixtures =
+    family.golden.length > 0
+      ? family.golden.map((g) => ({ params: g.params, refuses: g.refuses }))
+      : [{ params: {}, refuses: undefined }];
+  for (const [i, fixture] of fixtures.entries()) {
+    const params = fixture.params;
     const built = buildSystem(family, params);
     if (!built.ok) {
       fail(`golden ${i}: M could not be decided exactly — ${built.reason}`);
       continue;
     }
-    const { rank } = built.system.report;
-    if (rank !== m) {
-      const undetermined = built.system.report.kernel.length;
+    // The check is per-unknown, not a rank count. D4 is why: its contour has rank 2 in three
+    // unknowns and is CORRECT — `∫R log²x` has an identically zero column and the record says so
+    // (`role: "cancels"`) — while `rank === m` would drop it. What must hold is that every unknown
+    // the record claims to determine is one this contour actually pins, which `determined` answers
+    // directly; a rank equal to the number of claims can still pin the wrong columns.
+    //
+    // A record that BORROWS an unknown is judged on the system WITHOUT it. D5's `log³` keyhole
+    // determines `∫R log²x` only modulo `∫R dx`, so requiring its whole four-column system to be
+    // determined would drop it for being honest about the dependency — and the reduction is
+    // structural, so this still runs without evaluating a single residue.
+    const borrowed = (family.prerequisites ?? []).map((p) => p.targetId);
+    const full = built.system;
+    if (borrowed.length > 0 && full.field !== "Q(i)(pi)") {
+      fail(`golden ${i}: prerequisites are carried only for a log family, and this one is over ${full.field}`);
+      continue;
+    }
+    const system =
+      full.field === "Q(i)(pi)" && borrowed.length > 0 ? withoutColumns(full, borrowed) : full;
+
+    const names = system.targetIds;
+    const determined = new Set(system.report.determined.map((d) => names[d.column]));
+    const claimed = family.targets
+      .filter((t) => t.role !== "cancels" && t.role !== "input")
+      .map((t) => t.id);
+    const missing = claimed.filter((id) => !determined.has(id));
+    const invisible =
+      system.field === "Q"
+        ? describeKernel(FRAC_FIELD, system.report, names)
+        : describeKernel(RAT_PI_FIELD, system.report, names);
+
+    if (fixture.refuses !== undefined) {
+      if (missing.length === 0) {
+        fail(
+          `golden ${i} is marked as documenting a refusal (${fixture.refuses}), but this contour ` +
+            `determines ${claimed.join(", ")} there — the derivation does NOT ` +
+            "collapse, so the fixture documents nothing",
+        );
+      }
+      continue;
+    }
+    if (missing.length > 0) {
       fail(
-        `golden ${i}: rank(M) = ${rank} but the family has ${m} unknown(s); ` +
-          `${undetermined} combination(s) of them are invisible to this contour`,
+        `golden ${i}: this contour does not determine ${missing.join(", ")} ` +
+          `— rank(M) = ${system.report.rank} of ${m} unknown(s). ${invisible.join("; ")}`,
+      );
+    }
+    // The other direction. A record claiming a cancellation that does not happen is documenting
+    // nothing, exactly as a `refuses` fixture at full rank is.
+    const pinned = family.targets.filter((t) => t.role === "cancels" && determined.has(t.id));
+    if (pinned.length > 0) {
+      fail(
+        `golden ${i}: ${pinned.map((t) => t.id).join(", ")} is marked as cancelling, but this contour determines it`,
+      );
+    }
+    // And the third: a borrowed unknown must be one this contour genuinely cannot supply. Judged on
+    // the FULL system, where it is still a column — in the reduced one it is not there to ask about.
+    const fullDetermined = new Set(full.report.determined.map((d) => full.targetIds[d.column]));
+    const selfSupplied = family.targets.filter((t) => t.role === "input" && fullDetermined.has(t.id));
+    if (selfSupplied.length > 0) {
+      fail(
+        `golden ${i}: ${selfSupplied.map((t) => t.id).join(", ")} is borrowed as an input, but this ` +
+          "contour determines it on its own — the dependency the record documents is not there",
       );
     }
   }

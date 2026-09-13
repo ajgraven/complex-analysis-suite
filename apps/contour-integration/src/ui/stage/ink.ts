@@ -35,7 +35,112 @@ export interface InkOptions {
    * is two too many unless they differ in kind.
    */
   readonly handles?: readonly { readonly at: Cx; readonly emphasis: "none" | "hover" | "grabbed" }[];
+  /**
+   * Branch cuts, already reduced to finite polylines (`kernel/branch/model.cutPolyline`).
+   *
+   * Drawn UNDER the contour, hatched, and never in a piece colour: a cut is a barrier the contour is
+   * drawn against, not another piece of it. `refused` turns it the same amber the contour uses when
+   * LEGALITY refuses, so the app has one colour for "this does not close" rather than two.
+   */
+  readonly cuts?: readonly {
+    readonly points: readonly Cx[];
+    readonly refused: boolean;
+    /**
+     * The arc's jump weight, written out — the thing that makes it a real cut.
+     *
+     * Research 06 §5.1's first counter-device is a cut drawn as an explicit stroked, LABELLED,
+     * draggable curve, "visually distinct from anything the function does". Stroked and hatched
+     * since M4.1; the label closes the second word, and it earns its ink: a candidate arc is a cut
+     * exactly when its jump weight is not an integer (§5.1's last paragraph), so this is the number
+     * that answers "why is there a seam here" rather than a decoration.
+     */
+    readonly label?: string;
+  }[];
 }
+
+const CUT_INK = "#c77dff";
+/**
+ * Liang–Barsky: the part of the screen segment `a → b` that lies inside the canvas, or null.
+ *
+ * Needed because a cut to infinity is a polyline whose far vertex is clipped at four times the view
+ * extent — so in screen space it is a segment thousands of pixels long with one end far outside the
+ * canvas, and "halfway along it" is nowhere a reader can see. Verified in a browser: D4's keyhole
+ * cut had no visible label at all for exactly this reason.
+ */
+function clipSegment(
+  a: readonly [number, number],
+  b: readonly [number, number],
+  w: number,
+  h: number,
+  margin: number,
+): [[number, number], [number, number]] | null {
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  let t0 = 0;
+  let t1 = 1;
+  // Four half-planes: x ≥ m, x ≤ w−m, y ≥ m, y ≤ h−m.
+  const edges: readonly (readonly [number, number])[] = [
+    [-dx, a[0] - margin],
+    [dx, w - margin - a[0]],
+    [-dy, a[1] - margin],
+    [dy, h - margin - a[1]],
+  ];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return null; // parallel to this edge and outside it
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) {
+      if (r > t1) return null;
+      if (r > t0) t0 = r;
+    } else {
+      if (r < t0) return null;
+      if (r < t1) t1 = r;
+    }
+  }
+  return [
+    [a[0] + t0 * dx, a[1] + t0 * dy],
+    [a[0] + t1 * dx, a[1] + t1 * dy],
+  ];
+}
+
+/**
+ * Where a cut's label goes: halfway along its VISIBLE length, offset onto the normal.
+ *
+ * Both halves were found by looking at the app. Halfway along the visible length rather than along
+ * the whole polyline, because of the clipped ray above; and offset perpendicular rather than sitting
+ * on the curve, because D7's dogbone hugs `[0, b]` and the contour is drawn on top of the cut — the
+ * label came out legible in neither record until it stepped aside.
+ */
+function labelAnchor(
+  pts: readonly (readonly [number, number])[],
+  w: number,
+  h: number,
+): { at: [number, number]; normal: [number, number] } | null {
+  const visible: [[number, number], [number, number]][] = [];
+  for (let k = 0; k + 1 < pts.length; k++) {
+    const seg = clipSegment(pts[k], pts[k + 1], w, h, 24);
+    if (seg !== null) visible.push(seg);
+  }
+  let total = 0;
+  for (const [a, b] of visible) total += Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (total <= 1) return null;
+  let walked = 0;
+  for (const [a, b] of visible) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (walked + len >= total / 2) {
+      const t = len === 0 ? 0 : (total / 2 - walked) / len;
+      const ux = len === 0 ? 1 : (b[0] - a[0]) / len;
+      const uy = len === 0 ? 0 : (b[1] - a[1]) / len;
+      return { at: [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], normal: [-uy, ux] };
+    }
+    walked += len;
+  }
+  return null;
+}
+
+const REFUSED_INK = "#f0b45e";
 
 /** Screen-space sampling of one piece, fine enough that an arc reads as a curve. */
 function screenPath(g: Resolved, view: View, vp: Viewport): [number, number][] {
@@ -107,10 +212,65 @@ export function drawContour(
   opts: InkOptions,
 ): void {
   ctx.clearRect(0, 0, vp.width, vp.height);
-  if (pieces.length === 0) return;
-
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
+
+  // Cuts first, so the contour is legible where it crosses one — which is precisely where the
+  // reader is looking.
+  for (const cut of opts.cuts ?? []) {
+    if (cut.points.length < 2) continue;
+    const pts = cut.points.map((z): [number, number] => {
+      const [x, y] = plotToScreen(z[0], z[1], view, vp);
+      return [x, y];
+    });
+    tracePath(ctx, pts);
+    ctx.strokeStyle = "rgba(8, 10, 14, 0.85)";
+    ctx.lineWidth = 6;
+    ctx.stroke();
+    ctx.strokeStyle = cut.refused ? REFUSED_INK : CUT_INK;
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    // Hatching, the conventional mark for a cut in a textbook figure, and the one thing on this
+    // canvas that cannot be confused with a contour piece: dashes are already spoken for
+    // ("not certified"), and arrowheads mean orientation.
+    ctx.lineWidth = 1.6;
+    for (let k = 0; k + 1 < pts.length; k++) {
+      const [x0, y0] = pts[k];
+      const [x1, y1] = pts[k + 1];
+      const len = Math.hypot(x1 - x0, y1 - y0);
+      if (len < 1) continue;
+      const ux = (x1 - x0) / len;
+      const uy = (y1 - y0) / len;
+      for (let d = 7; d < len; d += 14) {
+        const cx = x0 + ux * d;
+        const cy = y0 + uy * d;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx - uy * 5 - ux * 3, cy + ux * 5 - uy * 3);
+        ctx.stroke();
+      }
+    }
+
+    // The label, at the midpoint of the cut's VISIBLE length by arc length rather than at its middle
+    // vertex: a cut dragged into a hook has its middle vertex anywhere, a keyhole's ray has one long
+    // segment and one short one, and a ray to infinity has most of its length off screen.
+    if (cut.label !== undefined && cut.label !== "") {
+      const anchor = labelAnchor(pts, vp.width, vp.height);
+      if (anchor !== null) {
+        const [ax, ay] = anchor.at;
+        const x = ax + anchor.normal[0] * 14;
+        const y = ay + anchor.normal[1] * 14;
+        ctx.font = "11px ui-monospace, Menlo, Consolas, monospace";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        const tw = ctx.measureText(cut.label).width;
+        ctx.fillStyle = "rgba(8, 10, 14, 0.85)";
+        ctx.fillRect(x - tw / 2 - 3, y - 8, tw + 6, 16);
+        ctx.fillStyle = cut.refused ? REFUSED_INK : CUT_INK;
+        ctx.fillText(cut.label, x, y);
+      }
+    }
+  }
 
   const paths = pieces.map((g) => screenPath(g, view, vp));
 
