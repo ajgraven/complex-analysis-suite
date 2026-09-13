@@ -257,9 +257,15 @@ carrying a declared branch, a sheet offset and a dragged cut.
 > **(5) `mountApp` runs under jsdom**, which is what makes any of this reachable from the node gate.
 > Its stage is built inside a `try` and the fatal boundary catches WebGL2's absence; `getContext` is
 > stubbed to `null` and the drawing code takes the guarded path it already has. `jsdom` joins the
-> app's devDependencies (`packages/ui` was the only jsdom project before this). The GPU stage is
-> still invisible to it — both `stage?.setIntegrand` call sites are covered by `pnpm test:browser`,
-> not by this.
+> app's devDependencies (`packages/ui` was the only jsdom project before this).
+>
+> **What this does NOT cover, said out loud:** under jsdom `stage` is `null`, so the `stageKey`
+> bookkeeping around `stage?.setIntegrand` is exercised but the GL call is not. `pnpm test:browser`
+> (114 tests, 36 shader compiles, green) proves the GLSL still compiles for every preset and record;
+> it does not mount the shell, so nothing yet asserts that `applyState` hands the stage the program
+> its state implies. That is zero risk today — no app path calls `applyState` until the codec exists —
+> and becomes real in M6.2, which is where the check belongs. M6.3 needs a browser-mounted shell
+> anyway, to composite the three canvases.
 
 ### M6.2 — `#vs=`, verified by verdict · *M*
 
