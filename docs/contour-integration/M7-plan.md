@@ -163,6 +163,120 @@ Three things this app adds to that grammar, each because the ledger is watching:
 a hand-drawn contour round-trips through `#vs=` as its **piece list** (M6.2's semantics-not-samples
 rule) and comes back the same contour.
 
+> **DONE (M7.2a–c). Both halves of the gate are met, and the second half is met in a different
+> representation than the one written above — measured, not preferred.**
+>
+> **THE PAYLOAD CHOSE THE WIRE FORM.** A twelve-corner path carried as its piece list is **2,028**
+> base64 characters, which is *at* research 07 §6's ~2 kB warning, and twenty corners is 4,635. The
+> same path as vertices plus a per-piece kind tag is **292**, and forty corners is 879. It round-trips
+> TO the same piece list — that is what the test asserts — but carrying one literally busts the
+> budget at a dozen corners, because ids, names, colours and every endpoint shared between
+> consecutive pieces are all derivable and a piece list carries each of them twice.
+>
+> **A BULGE, NOT A CENTRE.** An arc between two clicks needs one more number. The bulge — the apex's
+> signed offset from the chord's midpoint — is exactly what the drag measures and *cannot* disagree
+> with the endpoints, where a centre is two numbers and can. Zero degrades to a segment continuously,
+> so a drag that ends where it began leaves a straight line rather than an arc of absurd radius.
+>
+> **THE PLAN'S DEGENERACY CLAIM IS TRUE, verified rather than trusted.** On hand-built contours: an
+> unclosed path fails LEGALITY with *"the contour does not close"*, a vertex on a pole with *"the
+> contour must avoid every singularity of the integrand"*, and a cut crossing is M4.1's existing
+> step. A healthy hand-drawn square closes with one enclosed singularity, the same four constraints
+> as the circle template's ledger and **the same value** — the gate, asserted by comparing the two.
+>
+> **THE PATH IS DERIVED FROM THE GEOMETRY, NOT STORED**, and `penNodes` is deliberately not in
+> `ShellState`: a half-drawn path is not a state worth restoring, and storing the finished one beside
+> the contour it built would be two sources of truth for one fact — the shape of bug `contourSource`
+> had to grow a verification step to prevent.
+>
+> **AND THAT VERIFICATION CANNOT BE A BYTE COMPARISON**, which the first draft discovered by refusing
+> a perfectly good arc. The bulge is recovered through `atan2` and rebuilt through `cos`/`sin`:
+> bit-identical in three of four measured cases, off by 2.0e-13 in the fourth, moving sampled points
+> by at most **1.3e-12**. `sameShape` samples five parameters per piece against a 1e-9 floor, and a
+> test pins that it still catches a flipped bulge, a dropped arc and a 1e-6 nudge.
+>
+> **Contrasts is not a mode and neither is the pen** — but for a different reason. The pen is a third
+> top-level state rather than a fourth `grab` kind: `grab` answers "what does a MOVE act on?", and
+> click-to-place holds nothing between events. It takes the click BEFORE any grab test, or the tool
+> would silently stop working near a radius handle.
+>
+> **THE DEFECT THAT SHIPPED IN THE FIRST DRAFT, and the correction to why it survived.** The drag
+> bowed the piece *leaving* the new vertex, measured against a chord whose far end was still the click
+> itself — a zero chord, so nothing happened. It bows the INCOMING piece now, against a chord both of
+> whose ends are placed, and `penInk.browser.test.ts` is the guard — with a plain-click control, so
+> "one arc" cannot be something the pen does to every path.
+>
+> This was first recorded as **invisible to jsdom by construction**, a zero-sized rect collapsing
+> every screen point to the view centre. **That is false, and measuring it is what said so:**
+> `viewport()` guards with `|| 1`, so jsdom MAGNIFIES the geometry by 4 — pixel `p` lands at
+> `(p − 0.5)·4` world units and the grab tolerance is 44 of them — the chord in that test is 280 long,
+> and the same drag produces a real arc with a bulge of −358. The jsdom test **could** have caught the
+> bug and did not, because it asserted the piece COUNT where the defect shows in the KINDS. It asserts
+> the kinds now, which moves `pen-bow-bows-outgoing` from a browser kill to a node one; two further
+> claims resting on the same false premise (click-to-close "never fires" under jsdom — measured, it
+> does; every pixel going "to the view centre") are corrected in place.
+>
+> Two smaller findings. `bulgeFromApex` is **extracted** because the drag and `penPath` were two
+> copies of the same three lines — the second-consumer rule arriving inside a module. And the card
+> was **never refreshed after a click**, so the vertex count and the `Close` button stayed stale;
+> three assertions failed and all three were that one omission. The card is now rebuilt on a click,
+> on Undo, and on a move **only when the snap's NAME changes** — rebuilding per pointer sample would
+> be both wasteful and visibly unstable, and the name is the only thing a move can change in it.
+>
+> Research 07 rule 5 is honoured literally: every snap returns the name of the constraint that fired
+> and the card prints it — *"snapped to the real axis"*, *"snapped to the first vertex — click to
+> close"*, *"snapped to a pole — the contour may not pass through it"*. Snapping onto a pole is
+> allowed and named rather than prevented, because LEGALITY refuses a contour through a singularity
+> and a reader who wants to see that refusal has to be able to aim at it. **And the snap PLACES the
+> snapped point**, which is a separate claim from naming it and had no test until the sweep asked:
+> a badge over a raw position is a hint, not a snap.
+>
+> **THE HARNESS'S LAYOUT WAS THE DEFECT, and it cost two drafts.** Two measurements, both of the test
+> environment rather than the app. Vitest browser mode's viewport defaults to **414 × 896** — a phone
+> — in which this app's desktop grid (rail 19rem, strip 16rem) overflows; and mounting the shell
+> *without its stylesheets* does not give a plainer layout, it gives a different one, with `.stage` at
+> 1200 × 316 and `canvas.ink` at 1200 × **154** — two boxes that in the real app are the same box,
+> since the canvases are `position: absolute; inset: 0`. A test aiming at either was aiming at an
+> artefact: "vertices" landed outside the drawing surface, and the snap that then never fired read as
+> a pen defect until a Playwright probe against the dev server showed the product was fine. The
+> browser project now sets a desktop viewport and the file loads the two stylesheets `main.ts` loads;
+> measured with both, the stage is 928 × 564 at y = 80. **And the rect is read at call time rather
+> than captured**: in the unstyled harness the pen's own controls appearing moved the stage's `top`
+> from 349 to 304, so every point after the first click was 45 px out with nothing on screen to say so.
+>
+> **`sameShape`'s kind check: the test pinned the outcome without pinning the reason**, which
+> re-running the sweep against a verified-green tree is what said. It bowed a chord of 2 by 1e-8 and
+> asserted "not the same shape" — true, and still true with the kind check DELETED, because the
+> samples differ by 1.4e-8. Measured, the check *cannot* be the deciding vote for a chord of ordinary
+> size at the default tolerance: an arc exists only above the straightness floor, so its radius is at
+> least `h²/2e-9` — 5e8 at `h = 1` — and `pointAt`'s own cancellation there moves the samples by
+> **1.1e-7**, two orders above `SHAPE_EPS`, so the samples always disagree first. Where it decides is a
+> SHORT chord (`h = 5e-7`, radius 1.25e-5, arithmetic exact, bow inside the tolerance): the samples
+> agree to 1.0e-8 and the two are still not the same piece. For the codec's own use the check is
+> belt-and-braces, which is now said rather than implied.
+>
+> **And the encode-side verification had no test at all.** Every path the pen can draw round-trips —
+> which is the point of the check and also why nothing exercised it. What it guards is a contour whose
+> pieces are **not the chain its vertices describe**: `penPath` reads one vertex per piece START, so a
+> broken chain reads back as a path that closes through the gap, and the link would open a shape
+> nobody drew. It refuses by name, with its own vertex count.
+>
+> **The pen's drawing state audits CLEAN** — zero axe rules and zero nodes in all three states
+> (default, pen out, two vertices placed with a live snap note) against the built dist with real
+> pointer events, and no page errors. Measured by hand, because the a11y roster only ever sees a
+> page's default state (M7.1's finding, met again).
+>
+> **Sweep: 25/25, with five closed on a second pass and no equivalents.** All five survivors were real
+> gaps: `isPenContour` needs EVERY piece (it chooses a wire form, so a contour that merely *contains*
+> a drawn piece must fall through to the refusal); `sameShape`'s length check is the one difference
+> sampling cannot see, because the loop runs over the first contour's pieces and an open path of three
+> shares both with the first two of an open path of four; a snapped vertex must LAND on the constraint;
+> the card must NOT be rebuilt on a move that changes nothing — whose consequence is not cosmetic,
+> since `replaceChildren` destroys the buttons and a reader who has tabbed to `Cancel` loses focus the
+> moment the mouse crosses the stage; and `penCommit` must refuse a path of ONE, where the loosened
+> guard adopts an **empty** contour (Enter asks for an open commit and `penContour` builds zero pieces
+> from a single vertex).
+
 ### M7.3 — the faded drill · *M–L*
 
 Four stages over machinery that already exists — the ledger's rows and `DERIVATION_STAGES` are

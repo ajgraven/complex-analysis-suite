@@ -18,6 +18,15 @@ import { defineConfig } from "vitest/config";
 // The other three configs could take the same line and would be better for it.
 const executablePath = process.env.CAS_CHROMIUM_EXECUTABLE;
 
+// **THE DEFAULT VIEWPORT IS A PHONE, AND THIS APP'S LAYOUT DOES NOT FIT IN ONE.** Vitest browser
+// mode defaults to 414 x 896; the shell is a desktop grid whose rail is 19rem and whose strip is
+// 16rem, so at 414 px wide the rail alone takes 304 of them and the whole shell overflows — which is
+// a real defect (M7.1 recorded it) but not the layout any mounted-app test means to exercise. A
+// pointer test written against it is aiming at a stage that has already overflowed the window, which
+// is how M7.2c's first draft came to place "vertices" outside the drawing surface. Everything here
+// still MEASURES the stage rather than assuming it; this only puts the app in the shape it is for.
+const viewport = { width: 1280, height: 900 };
+
 export default defineConfig({
   test: {
     name: "contour-integration-browser",
@@ -27,6 +36,7 @@ export default defineConfig({
       provider: "playwright",
       name: "chromium",
       headless: true,
+      viewport,
       ...(executablePath === undefined ? {} : { providerOptions: { launch: { executablePath } } }),
     },
   },

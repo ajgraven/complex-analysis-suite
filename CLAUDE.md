@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **539 test files / 5531 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **540 test files / 5568 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -307,8 +307,8 @@ caps an exact `∮` at `≤`); and the **contour is an object you can grab** —
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
 complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
 so what a reader sees is now also what a reader can SHARE. **M7 has begun** — M7.1's contrast ladder
-is built; still to come are the pen tool (free-hand path editing) and the faded drill, split out of M6
-because PLAN's M6 gate never mentioned them.
+and M7.2's pen are built; still to come is the faded drill, split out of M6 because PLAN's M6 gate
+never mentioned them.
 **M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
@@ -629,6 +629,46 @@ DISAPPEARING is reported, because the ladder only runs forwards — and writing 
 `KILL/vanish#1` is C1's big arc rather than its indentation, the ordinal counting in PIECE order, so
 B1's arc pairs with C1's INDENTATION. Nothing false follows, both being in the declared set, but the
 pairing is by position within the role rather than by what a reader would call the same piece.
+
+**M7.2 — the pen: a contour you DRAW, and a link that carries what you drew.** M1's deferred item,
+and the grammar every reader already knows (research 07 rule 6) — click = corner, drag = arc, click
+the first vertex = close, Backspace/Escape/Enter, Alt suppresses snapping — in the sandbox only,
+since a record's contour is the record's. **An arc is pinned by a BULGE, not a centre**: the apex's
+signed offset from the chord's midpoint is one number, is exactly what the drag measures, and
+*cannot* disagree with the endpoints where a centre (two numbers) can; zero degrades to a segment
+continuously. Every drawn piece is a first-class object with an id, a name, a role and a colour, so
+the gate — a hand-drawn contour's ledger is indistinguishable IN KIND from a template's — is asserted
+by putting a drawn square and the circle template around the same simple pole and comparing both the
+constraint/status shape and the value (`2πi`). **The payload chose the wire form:** a twelve-corner
+path carried as its piece list is 2,028 base64 characters, *at* research 07 §6's ~2 kB warning, and
+twenty corners is 4,635 — the same path as vertices plus a per-piece kind tag is **292**, because
+ids, names, colours and every shared endpoint are DERIVED. It round-trips to the same piece list, and
+the path is read back out of the geometry rather than stored (one source of truth), so `contourOut`
+rebuilds and compares before minting a link — **by SHAPE, not by bytes**, which the first draft
+discovered by refusing a perfectly good arc: the bulge goes out through `atan2` and back through
+`cos`/`sin`, bit-identical in three of four measured cases and off by 2.0e-13 in the fourth, moving
+sampled points by at most 1.3e-12. Five findings. **(1) The defect that shipped in the first draft**
+— the drag bowing the piece *leaving* the new vertex against a chord whose far end was still the
+click, so the chord was zero — **and the correction to why it survived**, which measuring found: it
+was recorded as invisible to jsdom by construction, where in fact `viewport()`'s `|| 1` guard
+MAGNIFIES the geometry by 4 (the chord is 280 world units, the drag makes a real arc with bulge
+−358), and what let it through was a test asserting the piece COUNT where the defect shows in the
+KINDS. **(2) The browser harness's layout was then the defect itself**, twice: Vitest browser mode's
+viewport defaults to **414 × 896** — a phone, in which this app's desktop grid overflows — and
+mounting without the app's stylesheets gives not a plainer layout but a different one, `.stage` at
+1200 × 316 with `canvas.ink` at 1200 × **154**, two boxes that in the real app are the same box. Tests
+aimed at either were aiming at an artefact, and the snap that never fired read as a pen defect until
+a probe against the dev server showed the product was fine. **(3) `sameShape`'s kind check: the test
+pinned the outcome without pinning the reason** — measured, an arc above the straightness floor over
+a chord of 2 has radius 5e8, where `pointAt`'s own cancellation moves the samples by 1.1e-7, two
+orders above `SHAPE_EPS`, so the samples always disagree first and the check can only decide on a
+SHORT chord. **(4) The encode-side verification had no test at all**, because every path the pen can
+draw round-trips; what it guards is a contour whose pieces are not the chain its vertices describe.
+**(5) The pen's drawing state audits clean** (zero axe rules in all three states), measured by hand
+because the roster only ever sees a page's default state. Sweep **25/25**, five closed on a second
+pass and no equivalents — among them that the card must NOT be rebuilt on a move that changes
+nothing, whose consequence is not cosmetic: `replaceChildren` destroys the buttons, so a reader who
+has tabbed to `Cancel` loses focus the moment the mouse crosses the stage.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

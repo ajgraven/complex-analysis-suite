@@ -13,7 +13,7 @@ import {
   type View,
   type Viewport,
 } from "../kernel/camera.js";
-import type { Cx, Resolved } from "../kernel/geom.js";
+import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { jumpWeights } from "../kernel/branch/correction.js";
@@ -91,6 +91,7 @@ import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
 import { CONTRAST_CELLS, contrastTable } from "./contrastGrid.js";
+import { bulgeFromApex, penContour, penPath, type PenNode } from "../engine/contour/pen.js";
 
 /**
  * The shell: an integrand, a contour, and the integral accumulating along it — in two modes.
@@ -274,6 +275,27 @@ export function mountApp(root: Element): ShellHandle {
     | { readonly kind: "branch"; readonly handle: BranchHandle }
     | null = null;
   let handles: readonly Handle[] = [];
+
+  // --- the pen (M7.2c) ----------------------------------------------------------------------
+  /**
+   * The path being drawn, or `null` when the pen is not out.
+   *
+   * **A THIRD TOP-LEVEL STATE, not a fourth `grab` kind.** `grab` answers "what does a MOVE act
+   * on?", and the pen's grammar is click-to-place: there is nothing held between events, and a drag
+   * bows the piece just placed rather than moving anything. Filing it under `grab` would make every
+   * reader of that union ask whether the pen can be dragged.
+   *
+   * It is NOT in `ShellState`, deliberately: a half-drawn path is not a state worth sharing or
+   * restoring, and `contour` already holds every finished one. `penNodes` is the gesture; the
+   * contour is the result.
+   */
+  let penNodes: PenNode[] | null = null;
+  /** Where the pointer is while drawing, in plot coordinates — the pending piece's other end. */
+  let penAt: Cx | null = null;
+  /** The snap that fired for `penAt`, so the badge can name it (research 07 rule 5). */
+  let penSnap: string | null = null;
+  /** Held while a drag bows the piece just placed; `null` between clicks. */
+  let penDrag: { readonly from: Cx; readonly index: number } | null = null;
   /**
    * The declared cut system — a SANDBOX object, not something read out of the integrand.
    *
@@ -859,10 +881,205 @@ export function mountApp(root: Element): ShellHandle {
         // Branch handles ride the same ring idiom as the radius handles, drawn after them so a cut
         // vertex sitting under a contour handle is still takeable.
         drawBranchHandles(ctx, vp);
+        drawPen(ctx, vp);
       }
       drawPoleMarkers();
     });
   };
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // The pen's snapping, and the preview it draws.
+  //
+  // Research 07 rule 5: **snap with intent, never silently.** Every snap returns the name of the
+  // constraint that fired, the badge shows it, and holding a modifier suppresses the lot — because a
+  // reader who cannot place a vertex where they meant to has lost the tool, and one who does not
+  // know a vertex moved has lost the argument. The targets are the ones this app's ledger cares
+  // about: a POLE (a vertex there makes LEGALITY refuse, so it must be deliberate), the axes (a
+  // contour along ℝ is most of the gallery), and the path's own vertices (which is how it closes).
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+
+  /** What a snap moved the pointer to, and what to call it. */
+  function penSnapTo(at: Cx, free: boolean): { readonly at: Cx; readonly why: string | null } {
+    if (free) return { at, why: null };
+    const tol = grabTolerance();
+    // The path's own FIRST vertex wins over everything, because landing on it is how a path closes
+    // and a pole sitting near it must not steal the gesture that finishes the contour.
+    const first = penNodes?.[0];
+    if (first !== undefined && Math.hypot(at[0] - first.at[0], at[1] - first.at[1]) <= tol) {
+      return { at: [first.at[0], first.at[1]], why: "the first vertex — click to close" };
+    }
+    for (const node of (penNodes ?? []).slice(1)) {
+      if (Math.hypot(at[0] - node.at[0], at[1] - node.at[1]) <= tol) {
+        return { at: [node.at[0], node.at[1]], why: "a vertex already placed" };
+      }
+    }
+    for (const pole of poles?.poles ?? []) {
+      if (Math.hypot(at[0] - pole.at[0], at[1] - pole.at[1]) <= tol) {
+        // Snapping ONTO a pole is allowed and named, not prevented: LEGALITY refuses a contour
+        // through a singularity, and a reader who wants to see that refusal has to be able to aim.
+        return { at: [pole.at[0], pole.at[1]], why: "a pole — the contour may not pass through it" };
+      }
+    }
+    if (Math.abs(at[1]) <= tol && Math.abs(at[0]) <= tol) return { at: [0, 0], why: "the origin" };
+    if (Math.abs(at[1]) <= tol) return { at: [at[0], 0], why: "the real axis" };
+    if (Math.abs(at[0]) <= tol) return { at: [0, at[1]], why: "the imaginary axis" };
+    return { at, why: null };
+  }
+
+  /** The path as it stands plus the pending piece, so the preview is the same geometry as the result. */
+  function penPreview(): Contour | null {
+    if (penNodes === null || penNodes.length === 0) return null;
+    const pending = penAt === null ? [] : [{ at: [penAt[0], penAt[1]] as const }];
+    const nodes = [...penNodes, ...pending];
+    return nodes.length < 2 ? null : penContour({ nodes, closed: false });
+  }
+
+  function drawPen(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+    if (penNodes === null) return;
+    // The pending path, dashed so it reads as not-yet-a-contour: the ledger says nothing about it,
+    // and drawing it like a finished piece would claim otherwise.
+    const preview = penPreview();
+    if (preview !== null) {
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = "#7aa2f7";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (const g of resolveAll(preview)) {
+        const steps = g.kind === "segment" ? 1 : 48;
+        for (let i = 0; i <= steps; i++) {
+          const [wx, wy] = pointAt(g, i / steps);
+          const [x, y] = plotToScreen(wx, wy, view, vp);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    // The vertices: a ring each, the first one larger because it is the target that closes the path.
+    penNodes.forEach((node, i) => {
+      const [x, y] = plotToScreen(node.at[0], node.at[1], view, vp);
+      const r = i === 0 ? 6.5 : 4.5;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.strokeStyle = "#7aa2f7";
+      ctx.lineWidth = i === 0 ? 2.4 : 1.6;
+      ctx.stroke();
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // The pen's grammar (research 07 rule 6): click = corner, drag = arc, click-the-start = close,
+  // Backspace = drop the last, Esc = abort.
+  //
+  // **UNDO IS OBJECT-LEVEL** (rule 10): one gesture is one entry, so Backspace removes a VERTEX and
+  // not a pointer sample, and the URL is written when the path finishes rather than on every move —
+  // there is no `#vs=` form for a half-drawn path and `syncHash` is never called from here.
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+
+  function penStart(): void {
+    penNodes = [];
+    penAt = null;
+    penSnap = null;
+    penDrag = null;
+    renderContourCard();
+    requestDraw();
+  }
+
+  /** Leave the pen, keeping whatever contour is on screen. */
+  function penStop(): void {
+    penNodes = null;
+    penAt = null;
+    penSnap = null;
+    penDrag = null;
+    renderContourCard();
+    requestDraw();
+  }
+
+  /**
+   * Adopt the drawn path as the contour.
+   *
+   * `contourSource` goes NULL, which is the truth about a drawn contour rather than a gap: it has no
+   * recipe, and `viewState.ts` reads its vertices back out of the geometry when a link is minted.
+   */
+  function penCommit(closed: boolean): void {
+    if (penNodes === null || penNodes.length < 2) return;
+    const drawn = penContour({ nodes: penNodes, closed });
+    contour = drawn;
+    sandboxContour = drawn;
+    contourSource = null;
+    penStop();
+    recompute();
+  }
+
+  /** A click: place a vertex, or close the path if it landed on the first one. */
+  function penClick(at: Cx, free: boolean): void {
+    if (penNodes === null) return;
+    const snapped = penSnapTo(at, free);
+    const first = penNodes[0];
+    const closing =
+      first !== undefined &&
+      penNodes.length >= 3 &&
+      Math.hypot(snapped.at[0] - first.at[0], snapped.at[1] - first.at[1]) <= grabTolerance();
+    if (closing) {
+      penCommit(true);
+      return;
+    }
+    penNodes = [...penNodes, { at: [snapped.at[0], snapped.at[1]] as const }];
+    // **THE DRAG BOWS THE PIECE THAT ENDS AT THIS VERTEX, not the one leaving it**, and the first
+    // draft had it the other way round — which made the chord `(node → penAt)` with `penAt` still
+    // sitting on the click, so the chord was zero and `penBow` returned without doing anything. A
+    // browser pass found it, because the only script that had exercised the gesture never held the
+    // button down. Bowing the INCOMING piece is also the gesture the reader expects: press the new
+    // corner, pull the curve towards you, release.
+    penDrag =
+      penNodes.length >= 2 ? { from: penNodes[penNodes.length - 2].at, index: penNodes.length - 2 } : null;
+    penSnap = snapped.why;
+    // The card carries the vertex count and gates `Close` on it, so it is stale until re-rendered.
+    // Found by the test: three assertions failed and all three were this one omission.
+    renderContourCard();
+    requestDraw();
+  }
+
+  /**
+   * A drag after a click bows the piece that click STARTED — so the bulge is the pointer's own
+   * offset from the chord, which is the quantity `arcThroughBulge` takes.
+   *
+   * The piece being bowed is the one LEAVING the vertex just placed, and it only exists once there
+   * is a next vertex — so while drawing, the drag bows the PENDING piece, whose far end is the
+   * pointer. That makes the gesture self-consistent: drag away from the straight line and the
+   * preview bows away with you.
+   */
+  function penBow(at: Cx): void {
+    if (penNodes === null || penDrag === null) return;
+    const i = penDrag.index;
+    const from = penNodes[i];
+    const to = penNodes[i + 1];
+    if (from === undefined || to === undefined) return;
+    // Both ends are PLACED, so the chord is fixed and only the pointer's offset from it varies.
+    // Through `bulgeFromApex`, which is also how `penPath` reads a bulge back off a finished arc —
+    // one formula, so the gesture and its inverse cannot disagree about what a bulge means.
+    const bulge = bulgeFromApex(from.at, to.at, at);
+    if (bulge === 0) return;
+    const next = [...penNodes];
+    next[i] = { at: from.at, bulge };
+    penNodes = next;
+    requestDraw();
+  }
+
+  /** Backspace: one gesture, one entry. */
+  function penBack(): void {
+    if (penNodes === null || penNodes.length === 0) return;
+    penNodes = penNodes.slice(0, -1);
+    penDrag = null;
+    penSnap = null;
+    renderContourCard();
+    requestDraw();
+  }
 
   /**
    * Each cut as a finite polyline, with its rays clipped beyond everything on screen.
@@ -2043,6 +2260,65 @@ export function mountApp(root: Element): ShellHandle {
         picker.append(b);
       }
       contourCard.append(picker);
+
+      // ── the pen (M7.2c) ──
+      const penRow = el("div", "penRow");
+      if (penNodes === null) {
+        const draw = el("button", "preset", "Draw a contour");
+        draw.type = "button";
+        draw.setAttribute("aria-label", "draw a contour by hand");
+        draw.addEventListener("click", () => {
+          penStart();
+          inkCanvas.focus();
+        });
+        penRow.append(draw);
+        // Say so when the contour on screen IS hand-drawn, because "template: …" is what a reader
+        // sees under a record and its absence would otherwise be the only clue.
+        if (penPath(contour) !== null) {
+          penRow.append(el("span", "tag", `drawn · ${contour.pieces.length} pieces`));
+        }
+      } else {
+        // **THE GRAMMAR, WRITTEN DOWN** (research 07 rule 6). Not a lesson — the keys are the
+        // affordance, and a tool whose gestures are undiscoverable is a tool nobody finds.
+        penRow.append(
+          el("span", "num", `${penNodes.length} vertex${penNodes.length === 1 ? "" : "es"}`),
+        );
+        const close = el("button", "preset", "Close");
+        close.type = "button";
+        close.disabled = penNodes.length < 3;
+        close.setAttribute("aria-label", "close the drawn path and adopt it as the contour");
+        close.addEventListener("click", () => {
+          penCommit(true);
+        });
+        const back = el("button", "preset", "Undo");
+        back.type = "button";
+        back.disabled = penNodes.length === 0;
+        back.setAttribute("aria-label", "remove the last vertex");
+        back.addEventListener("click", penBack);
+        const abort = el("button", "preset", "Cancel");
+        abort.type = "button";
+        abort.setAttribute("aria-label", "abandon the drawn path");
+        abort.addEventListener("click", penStop);
+        penRow.append(close, back, abort);
+      }
+      contourCard.append(penRow);
+      if (penNodes !== null) {
+        contourCard.append(
+          el(
+            "p",
+            "muted small",
+            "Click to place a corner, drag to bow the piece into an arc, click the first vertex " +
+              "to close. Backspace drops the last corner, Escape abandons the path, Alt suppresses " +
+              "snapping.",
+          ),
+        );
+        // **THE SNAP NAMES ITSELF** (rule 5): a vertex that moved without saying so is a vertex the
+        // reader did not place, and on this stage that can be the difference between a contour the
+        // ledger certifies and one it refuses.
+        if (penSnap !== null) {
+          contourCard.append(el("p", "small snapNote", `snapped to ${penSnap}`));
+        }
+      }
     } else if (family) {
       contourCard.append(el("p", "muted small", `template: ${family.contour.template}`));
     }
@@ -2735,6 +3011,15 @@ export function mountApp(root: Element): ShellHandle {
   stageWrap.addEventListener("pointerdown", (ev) => {
     const [px, py] = stagePoint(ev);
     const at = plotAt(px, py);
+    // **THE PEN TAKES THE CLICK FIRST**, before any grab test. While it is out, the stage is a
+    // drawing surface: a click that happened to land on a radius handle must place a vertex, not
+    // start a drag, or the tool would silently stop working near anything else on screen.
+    if (penNodes !== null) {
+      penAt = at;
+      penClick(at, ev.altKey || ev.metaKey);
+      stageWrap.setPointerCapture(ev.pointerId);
+      return;
+    }
     const tol = grabTolerance();
     // A cut vertex is checked BEFORE the contour's own handles: it is the smaller target, it is
     // usually the thing sitting on top, and a drag that hits the contour instead would move the one
@@ -2767,6 +3052,29 @@ export function mountApp(root: Element): ShellHandle {
 
   stageWrap.addEventListener("pointermove", (ev) => {
     const [px, py] = stagePoint(ev);
+    if (penNodes !== null) {
+      const raw = plotAt(px, py);
+      const free = ev.altKey || ev.metaKey;
+      // A drag BOWS the piece just placed; a plain move only moves the pending end. The far end is
+      // snapped either way, so the preview and the committed piece are the same geometry.
+      if (penDrag !== null && (ev.buttons & 1) !== 0) {
+        penBow(raw);
+      } else {
+        const snapped = penSnapTo(raw, free);
+        penAt = [snapped.at[0], snapped.at[1]];
+        penDrag = null;
+        // **THE CARD IS REBUILT ONLY WHEN THE SNAP'S NAME CHANGES**, not on every move. The card
+        // replaces its children and rebuilds its controls, and doing that per pointer sample would
+        // be both wasteful and visibly unstable — while the only thing a move can change in it is
+        // which constraint is being named.
+        if (snapped.why !== penSnap) {
+          penSnap = snapped.why;
+          renderContourCard();
+        }
+        requestDraw();
+      }
+      return;
+    }
     if (gesture === "none") {
       const at = plotAt(px, py);
       const tol = grabTolerance();
@@ -2973,6 +3281,24 @@ export function mountApp(root: Element): ShellHandle {
     label: describeAccumulator(),
   });
 
+  /**
+   * Backspace and Escape, which `@cas/ui`'s key map does not carry.
+   *
+   * `attachCanvasA11y` translates arrows, `±`, Enter and Space into `CanvasKeyAction`s — a
+   * deliberately small vocabulary shared by every canvas in the suite — so the pen's two extra keys
+   * are a listener of this app's own rather than a widening of that contract for one consumer.
+   */
+  inkCanvas.addEventListener("keydown", (ev) => {
+    if (penNodes === null) return;
+    if (ev.key === "Backspace") {
+      ev.preventDefault();
+      penBack();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      penStop();
+    }
+  });
+
   const stageA11y = attachCanvasA11y(inkCanvas, {
     // The keys, then what is on screen — the second half regenerated on every recompute (see
     // `describeStage`), which is why the instructions are a constant the two places share.
@@ -2982,6 +3308,13 @@ export function mountApp(root: Element): ShellHandle {
     liveRegionHost: stageWrap,
     onKey: (action: CanvasKeyAction, ev: KeyboardEvent) => {
       const port = viewport();
+      // **WITH THE PEN OUT, ENTER CLOSES** rather than cycling the grab: there is nothing to grab
+      // while drawing, and the reader's next intention is to finish the path. Arrow keys still pan,
+      // which is what makes a vertex placeable outside the current view.
+      if (penNodes !== null && action.kind === "commit") {
+        penCommit(penNodes.length >= 3);
+        return;
+      }
       if (action.kind === "commit") {
         cycleGrab();
         return;

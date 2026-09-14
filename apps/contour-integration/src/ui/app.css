@@ -793,3 +793,18 @@ h1.brand {
   white-space: nowrap;
   border: 0;
 }
+
+/* ── The pen (M7.2c) ────────────────────────────────────────────────────────────────────────── */
+.penRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.4rem 0;
+}
+/* The snap's name. Research 07 rule 5: a vertex that moved must say it moved, so this is a live
+   readout and not a tooltip — it has to be visible at the moment the click would land. */
+.snapNote {
+  margin: 0.25rem 0 0;
+  color: var(--c-accent, #7aa2f7);
+}

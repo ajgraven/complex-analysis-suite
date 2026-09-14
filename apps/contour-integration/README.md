@@ -10,7 +10,7 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 5 and published, with M6 begun. THE GALLERY IS COMPLETE — all 28 records load,
+**Through Milestone 6 and published, with M7 begun. THE GALLERY IS COMPLETE — all 28 records load,
 and every one of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
 M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
 L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
@@ -738,6 +738,20 @@ starts changing a second row. Rows are aligned by `(constraint, role, ordinal)` 
 id — the record calls its target piece `realAxis` where the sandbox calls the same row's piece
 `diameter` — and the grid prints each column's **answer** rather than its `∮`, since C1's `∮` is 0
 while the integral it determines is `π/2`.
+
+**M7.2 — the pen.** A **Draw a contour** button turns the stage into a drawing surface, in the
+sandbox only (a record's contour is the record's). Research 07 rule 6's grammar: **click = corner,
+drag = arc, click the first vertex = close**, Backspace drops the last, Escape abandons, Enter
+closes, Alt suppresses snapping. An arc is pinned by a **bulge** — the apex's signed offset from the
+chord's midpoint, which is exactly what the drag measures and *cannot* disagree with the endpoints —
+and it degrades to a straight line continuously. Every piece it produces is a first-class object with
+an id, a name, a role and a colour, so a hand-drawn contour's ledger is **the same kind** as a
+template's: a drawn square around a simple pole closes with the same four constraints and the same
+`2πi` as the circle template, which is the milestone's gate and is asserted by comparing the two.
+Every snap NAMES the constraint that fired (*"snapped to the real axis"*, *"snapped to the first
+vertex — click to close"*) and places the snapped point rather than the pointer's. A drawn contour
+has no recipe, so `#vs=` carries its **vertices** (a twelve-corner path is 292 characters against
+2,028 as a piece list) and verifies on encode that they rebuild the shape on screen.
 
 **M6.4 completes M6.** The page now audits **clean** under `axe` — zero rules, zero nodes — with its
 baseline recorded as `{}`. Both findings it ever had were two missing elements: the grid holding the

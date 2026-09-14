@@ -115,6 +115,30 @@ export function arcThroughBulge(
   return { center, radius, theta0, theta1: theta0 + sweep };
 }
 
+/**
+ * The bulge that puts an arc's apex at `apex`, for the chord `from → to`.
+ *
+ * The inverse of {@link arcThroughBulge}'s definition, and the ONE place that formula lives: the
+ * drag gesture needs it to turn a pointer position into a bulge, and {@link penPath} needs it to
+ * read a bulge back off a finished arc. Those were two copies of the same three lines until the
+ * second one was written, which is the second-consumer rule arriving inside a module.
+ *
+ * `0` for a degenerate chord — there is no apex to measure against a point.
+ */
+export function bulgeFromApex(
+  from: readonly [number, number],
+  to: readonly [number, number],
+  apex: readonly [number, number],
+): number {
+  const dx = to[0] - from[0];
+  const dy = to[1] - from[1];
+  const chord = Math.hypot(dx, dy);
+  if (!(chord > 0)) return 0;
+  const mx = (from[0] + to[0]) / 2;
+  const my = (from[1] + to[1]) / 2;
+  return ((apex[0] - mx) * -dy + (apex[1] - my) * dx) / chord;
+}
+
 /** The role every pen piece starts with. */
 export const PEN_ROLE: PieceRole = "free";
 
@@ -200,17 +224,9 @@ export function penPath(contour: Contour): PenPath | null {
   const nodes: PenNode[] = resolved.map((g) => {
     const from = startOf(g);
     if (g.kind === "segment") return { at: [from[0], from[1]] as const };
-    // The bulge is the apex's signed offset from the chord's midpoint, along the LEFT normal — the
-    // same quantity the drag measured, read back off the arc.
-    const to = endOf(g);
-    const apex = pointAt(g, 0.5);
-    const dx = to[0] - from[0];
-    const dy = to[1] - from[1];
-    const chord = Math.hypot(dx, dy);
-    if (!(chord > 0)) return { at: [from[0], from[1]] as const };
-    const mx = (from[0] + to[0]) / 2;
-    const my = (from[1] + to[1]) / 2;
-    const bulge = ((apex[0] - mx) * -dy + (apex[1] - my) * dx) / chord;
+    // The bulge is the apex's signed offset from the chord's midpoint — the same quantity the drag
+    // measured, through the same function.
+    const bulge = bulgeFromApex(from, endOf(g), pointAt(g, 0.5));
     return { at: [from[0], from[1]] as const, bulge };
   });
 
