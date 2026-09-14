@@ -529,7 +529,7 @@ a matter of not implying the trail stops early.
 ledger.** Zero `axe` rules and zero nodes, baseline recorded as `{}`, `--strict` passing; re-measured
 first, so the claim that M6.1–M6.3's new controls added no findings is a measurement rather than a
 hope. Both findings fall to two elements — the grid holding the stage, the rail and the strip becomes
-a `<main>`, and the bar's brand becomes the page's `<h1>` above the cards' seven `<h2>`s, with the CSS
+a `<main>`, and the bar's brand becomes the page's `<h1>` above the page's seven `<h2>`s, with the CSS
 cancelling the heading's size and margin so the document structure changes and the picture does not.
 Research 02 §8 makes the head-to-tail partial sum this app's P0 picture and it was **completely
 unannounced**; it now carries `role="img"` and a sentence naming its step count and its endpoint,
@@ -558,7 +558,7 @@ where the real accessibility tree over CDP shows **45 interactive nodes in the s
 gallery, none unnamed** — a wrapping `<label>` names an input that carries no `aria-label`. Twice in
 one milestone: the accessibility tree is the instrument, not the DOM.
 
-**The review that closed M6 found four things, one of them in a package six apps depend on.**
+**The review that closed M6 found four things, one of them in a package seven apps depend on.**
 **(1) `@cas/export`'s `tEXt` chunk is LATIN-1**, and the coercion to `?` had been *documented* rather
 than fixed, which made it read as deliberate. It was destroying real content in every consumer — each
 one's `Software` string carries an em-dash, and this app stamps a figure's own verdict, where

@@ -474,7 +474,7 @@ every control; the stage announces its verdict.
 >
 > **Both axe findings are fixed by two elements.** The grid holding the stage, the rail and the strip
 > became a `<main>` — it was a bare `div` — and the bar's brand became the page's `<h1>`, above the
-> cards' seven `<h2>`s. The CSS cancels the heading's own size and margin, so this is a
+> page's seven `<h2>`s (the rail's six cards plus the strip's accumulator title). The CSS cancels the heading's own size and margin, so this is a
 > document-structure change and not a visual one.
 >
 > **The accumulator is named, and BOTH canvas descriptions are generated from the ledger.** Research

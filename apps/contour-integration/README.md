@@ -729,7 +729,7 @@ continuous pan (20.00 → 20.12 ms, best of three, under software rendering).
 **M6.4 completes M6.** The page now audits **clean** under `axe` — zero rules, zero nodes — with its
 baseline recorded as `{}`. Both findings it ever had were two missing elements: the grid holding the
 stage, the rail and the strip is now a `<main>`, and the bar's brand is the page's `<h1>` above the
-cards' `<h2>`s. The accumulator — research 02 §8's P0 picture, previously unannounced — carries
+seven `<h2>`s beneath it. The accumulator — research 02 §8's P0 picture, previously unannounced — carries
 `role="img"`, and **both canvas descriptions are generated from the ledger** rather than written, so
 they cannot describe the previous record. Three findings: the suite nav *looked* first and *read*
 last (`mountNavHeader` ends with `appendChild`, while `.cas-nav` is `position: fixed`) and a comment
