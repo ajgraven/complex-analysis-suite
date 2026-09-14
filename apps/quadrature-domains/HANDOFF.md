@@ -2290,6 +2290,62 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+65. **Schwarz GPU: the salmon speckle on tile boundaries was the MASK, not Newton (SHIPPED).**
+    The fractal view scattered `KIND_INV` "bad pixel" dots — `rgb(180,90,90)` — along
+    ∂Ω and every tile boundary. Entry 11 below read the same symptom as a Newton
+    convergence problem and widened `acceptZ` from `1e-7` to `1e-4` to damp it. That
+    diagnosis was wrong, and the widening became a second, smaller cause.
+    * **Measured, in the real shader** (deltoid `h = w²`, unbounded, `c = 0.5` — the
+      extremal cusped domain, `φ′ = 0` exactly on `|z| = 1`): 796 of 810,000 pixels.
+      Instrumenting `sigma()` with per-failure reason codes: **776 (97.5%) converged to
+      a preimage with `|z| ≤ 1`** — the wrong sheet; 20 (2.5%) converged into the `1e-4`
+      dead band; and **zero** diverged, hit the `z ≈ 0` guard, or went non-finite.
+      Newton never fails here. The CPU (float64, exact polygon test) reports 0.
+    * **Root cause: two inconsistent definitions of Ω.** `inOmega()` is a rasterised
+      polygon mask; `ψ = φ⁻¹` is exact and exists only on `φ(𝔻*)`. At `padFactor 5.0`
+      a mask texel was **3.17e-3 world units**, so the two disagree in a band along ∂Ω.
+      Emulating the mask in float64 and deciding preimage existence from exact cubic
+      roots: **723 of 796 (90.8%)** of the dots reach an orbit point the mask calls
+      "in Ω" where `φ(z) = w` has **no root with `|z| > 1` at all** — against **0 of
+      3000** control pixels. The shader was asking σ for points outside σ's domain and
+      painting the correct refusal as a numerical failure. The dots land on tile
+      boundaries because the tiles ARE `σ⁻ⁿ(∂Ω)`: failing pixels' orbits reach
+      `|z| − 1 ≈ 3.6e-3` (median) against 2.44 for the control.
+    * **It got worse on zoom** — the mask's error is fixed in world units while the
+      screen pixel shrinks: 796 / 2,125 / 2,764 dots at 1× / 6× / 30×.
+    * **Fix, in `buildMaskTexture`.** (a) `MASK_PAD = 1.05` replaces `padFactor` 5.0 /
+      2.4: the pad exists only to keep the polygon off the CLAMP_TO_EDGE border —
+      `inOmega()` already answers correctly outside the texture — so the rest was
+      thrown-away resolution (texel 3.17e-3 → 6.6e-4). (b) The outline is re-stroked
+      in the NOT-in-Ω colour (white for unbounded, where the polygon is K; black for
+      bounded, where it is Ω), so the rasteriser's own half-texel error resolves
+      AGAINST Ω and "the mask says in Ω" now implies "ψ exists". (c) `acceptZ`'s band
+      `1e-4 → 1e-6`: measured against the float64 engine, float32 Newton's error in
+      `|z|` is p99 **2.1e-7**, so the old band was ~485× the noise it absorbed.
+    * **Decoupling.** The mask's half-extent is now a RESOLUTION figure, so both
+      renderers stopped reading world sizes off it: the fallback `escapeR` comes from
+      the polygon's own half-extent (`ESCAPE_R_FACTOR = 30.0` reproduces the old
+      `5.0 × 6.0`), and `sphere-webgl.mjs`'s **fractal texture w-extent** — which was
+      literally `maskHalfExtent[0]` — keeps its own `coverFactor` of 5.0 / 2.4. Missing
+      this would have shrunk the sphere view's coverage 4.8× in silence.
+    * **Result, scored against the float64 engine** (exact polygon + exact ψ, no mask):
+      0 dots at every zoom on both the deltoid and the bounded cardioid, and agreement
+      UP — 99.896% → 99.992% at 1×, 99.588% → 99.750% at 6×. Dilating alone at the old
+      pad went the other way (98.866% at 6×), which is why the regression test pins
+      agreement as well as the dot count.
+    * **A correction to the label.** `describeKind(KIND_INV)` said *"Newton diverged"*,
+      which the reason-code measurement shows is false. It now reads *"σ undefined here
+      (ψ found no admissible preimage)"*. The class is deliberately KEPT and still
+      painted: it should not arise under a conservative mask, and if it ever does it
+      must stay visible.
+    * **Tests.** `vitest/browser/schwarz-mask.browser.test.ts` (3 specs, browser suite —
+      real GLSL) pins zero `KIND_INV` at 1× / 6× / 30× on the deltoid, zero on the
+      bounded cardioid (the eroding side of the margin), and GPU↔CPU class agreement
+      floors placed to reject BOTH the old mask and an over-dilated one. Verified to
+      fail on the pre-fix tree. Two source-contract specs in
+      `vitest/schwarz-shader-parity.test.ts` guard the `acceptZ` band and the mask's
+      conservatism from the NODE gate, since CI's browser job does not block a merge.
+
 64. **QOL pass — design tokens, responsive layout, copy-link, feedback (SHIPPED).**
     A focused, practitioner-first UI quality pass after a 3-agent review of the
     whole app. (The full prioritized review report lives in the plan file
@@ -5249,7 +5305,11 @@ In rough chronological order across recent sessions (newest first):
    verify σ ≈ id on ∂Ω at machine precision for every LQD family
    (358 total tests passing).
 
-11. **Schwarz GPU robustness pass** (post-shipping speckle fix). The first
+11. **Schwarz GPU robustness pass** (post-shipping speckle fix). *Partly superseded
+   by entry 65 above: the "wrong root's basin" reading below is right about the
+   mechanism but wrong about the cause — the seed was not the problem, the in-Ω mask
+   was asking ψ to invert points with no preimage. The `1e-7 → 1e-4` widening here
+   became a second cause and is now `1e-6`.* The first
    GPU build showed scattered single-pixel noise even in clearly-uniform
    tiles. Root cause was twofold: (a) Newton convergence and final-validation
    tolerances in the fragment shader were copied from the CPU (float64)

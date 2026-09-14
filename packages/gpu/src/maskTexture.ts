@@ -28,11 +28,18 @@ export interface PolygonMask extends MaskFrame {
 }
 
 export interface PolygonMaskOptions {
-  /** Square mask covers `max(bboxW, bboxH)/2 · padFactor` around the bbox center. Headroom for iterates
-   *  that wander past ∂Ω (QD uses 5 for the unbounded exterior, 2.4 for a bounded interior). Default 4. */
+  /** Square mask covers `max(bboxW, bboxH)/2 · padFactor` around the bbox center. Default 4.
+   *
+   *  A pad is NOT headroom for wandering iterates — a shader reads the mask only to classify a point, and
+   *  out-of-`[0,1]` uv already classifies correctly — so every factor above ~1 is spent boundary
+   *  resolution. QD's Schwarz renderer used 5 / 2.4 here and found the cost: a texel is a finite world
+   *  distance, and inside that band its mask claimed membership for points its exact ψ could not invert,
+   *  which the shader then painted as a numerical failure. It now pads 1.05 and resolves the rasteriser's
+   *  own error against Ω (apps/quadrature-domains/app/schwarz/README.md, "The in-Ω mask"). This helper's
+   *  default is left at 4 because its consumer (CD's σ view) has not been re-measured. */
   padFactor?: number;
-  /** Texture resolution (size×size). 1024 gives sub-pixel boundary fidelity at typical viewport sizes;
-   *  QD uses 2048. Default 1024. */
+  /** Texture resolution (size×size). 1024 gives sub-pixel boundary fidelity at typical viewport sizes.
+   *  Default 1024. Note this bounds ∂Ω's accuracy in WORLD units, so it does not improve on zoom. */
   size?: number;
 }
 
@@ -87,7 +94,9 @@ export function buildPolygonMaskTexture(
   const ctx = off.getContext("2d");
   if (!ctx) throw new Error("buildPolygonMaskTexture: no 2D context for the offscreen mask canvas");
 
-  // Hard binary classifier: no anti-aliasing on the fill, NEAREST sampling below. Together they give a
+  // Binary classifier: NEAREST sampling below, so no LINEAR blend straddles the 0.5 threshold. The fill
+  // itself is still anti-aliased — `imageSmoothingEnabled` governs drawImage, not path rasterisation — so
+  // the edge is decided by ~half-texel coverage. Together they give a
   // clean 0/1 per fragment with sub-pixel boundary precision (no ∂Ω speckle).
   ctx.imageSmoothingEnabled = false;
   ctx.fillStyle = "#000"; // 0 outside the polygon

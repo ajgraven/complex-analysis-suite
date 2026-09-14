@@ -273,7 +273,7 @@ const QD = _QD;
         // and the painter reads (schwarz-paint.mjs:126-130). describeKind() switches on
         // the RAW KIND_* enum, so undo the +1 before labeling; otherwise every class is
         // reported one off (a fundamental/escape-time pixel reads "in escaping set", an
-        // interior pixel "Newton diverged", etc.). An unresolved cell (0) maps to −1 →
+        // interior pixel reads the KIND_INV label, etc.). An unresolved cell (0) maps to −1 →
         // describeKind default → no class shown. (Review QD-schwarz-b-A-02)
         const kind = sState.fieldKind ? sState.fieldKind[idx] - 1 : KIND_OUTSIDE;
         info += '  ' + describeKind(kind, n);
@@ -330,7 +330,7 @@ const QD = _QD;
       case KIND_FUND:    return 'escape time n=' + n;
       case KIND_ESC:     return 'in escaping set';
       case KIND_INT:     return 'still in Ω after maxIter (tiling-set interior)';
-      case KIND_INV:     return 'Newton diverged';
+      case KIND_INV:     return 'σ undefined here (ψ found no admissible preimage)';
       case KIND_OUTSIDE: return 'in Ω^c (fundamental tile)';
       default:           return '';
     }

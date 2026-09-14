@@ -126,7 +126,7 @@ import { QD_UI } from '../ui/ui-registry.mjs';
       if (kind === KIND_OUTSIDE + 1)        { if (zMode) { r = 224; g = 226; b = 232; } else { r = 245; g = 245; b = 248; } }   // z: off-disk / plane: fundamental tile
       else if (kind === KIND_INT + 1)       { r = 28;  g = 28;  b = 36;  }     // interior (tiling-set limit)
       else if (kind === KIND_ESC + 1)       { r = 80;  g = 80;  b = 90;  }     // escaping set
-      else if (kind === KIND_INV + 1)       { r = 180; g = 90;  b = 90;  }     // bad pixel
+      else if (kind === KIND_INV + 1)       { r = 180; g = 90;  b = 90;  }     // ψ found no admissible preimage
       else if (kind === KIND_FUND + 1) {
         const t = cpuComputeT(n, maxIter, sState.grid.scaleMode, sState.grid.modK);
         const c = colormap(cmap, t);
