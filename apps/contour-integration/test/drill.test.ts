@@ -164,6 +164,59 @@ describe("rung ii — the KILL column", () => {
     expect(answers("indented")).toEqual(["target", "limit", "target", "vanishes"]);
   });
 
+  it("asks about the KILL column and NOTHING ELSE, even where another row names a piece", () => {
+    // A sweep survivor, and unreachable from the drill's own four tasks: their LEGALITY, CATCH and
+    // COVER rows name no piece, so the constraint filter never decides anything. It is not
+    // decorative — M4.1's LEGALITY step names the piece that crosses a cut without declaring its
+    // side — so a future drill task with a branch cut would be asked a question about a row that is
+    // not the KILL column at all. Built by hand, because no record in scope can produce it.
+    const cert = { level: "=", claim: "", method: "", provenance: [] } as never;
+    const piece = {
+      id: "lip",
+      name: "the upper lip",
+      geom: { kind: "segment" as const, from: { x: 0, y: 0 }, to: { x: 1, y: 0 } },
+      role: "target" as const,
+      colour: 0 as const,
+    };
+    const qs = pieceQuestions({
+      ledger: {
+        rows: [
+          { constraint: "LEGALITY", pieceId: "lip", status: "satisfied", claim: "runs above the cut", evidence: cert },
+          { constraint: "KILL", pieceId: "lip", status: "satisfied", claim: "is the target", evidence: cert },
+        ],
+      },
+      contour: { pieces: [piece] },
+    });
+    expect(qs).toHaveLength(1);
+    expect(qs[0].row.constraint).toBe("KILL");
+  });
+
+  it("asks about a piece ONCE, however many KILL rows name it", () => {
+    // The other half of the same survivor: an answer sheet with two questions keyed on one piece is
+    // ambiguous about which row the answer was for, and `gradePieces` reads the sheet by piece id.
+    const cert = { level: "≤", claim: "", method: "", provenance: [] } as never;
+    const piece = {
+      id: "arc",
+      name: "the arc",
+      geom: { kind: "segment" as const, from: { x: 0, y: 0 }, to: { x: 1, y: 0 } },
+      role: "vanish" as const,
+      colour: 0 as const,
+    };
+    const row = { constraint: "KILL" as const, pieceId: "arc", status: "satisfied" as const, evidence: cert };
+    const qs = pieceQuestions({
+      ledger: {
+        rows: [
+          { ...row, claim: "|∫| ≤ … at R = 4" },
+          { ...row, claim: "→ 0 as R → ∞" },
+        ],
+      },
+      contour: { pieces: [piece] },
+    });
+    expect(qs).toHaveLength(1);
+    // The FIRST row, which is the bound — the one that says how the piece dies.
+    expect(qs[0].row.claim).toContain("≤");
+  });
+
   it("says `fails` for a row the ledger did not satisfy, whatever the piece's role", () => {
     const row = {
       constraint: "KILL" as const,

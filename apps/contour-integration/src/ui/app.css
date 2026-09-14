@@ -743,7 +743,7 @@ h1.brand {
 }
 .contrastTable th,
 .contrastTable td {
-  border: 1px solid var(--c-line, #2a2f3a);
+  border: 1px solid var(--c-border);
   padding: 0.35rem 0.5rem;
   vertical-align: top;
   text-align: left;
@@ -810,6 +810,58 @@ h1.brand {
 .snapNote {
   margin: 0.25rem 0 0;
   color: var(--c-accent, #7aa2f7);
+}
+
+/* ── The faded drill (M7.3) ─────────────────────────────────────────────────────────────────── */
+/* The rung's card sits at the top of the rail, above the record it is about: everything below it is
+   what the rung has NOT masked, so the thing doing the masking has to be the first thing read. */
+.drillCard {
+  border-left: 3px solid var(--c-accent);
+}
+.drillHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.4rem;
+}
+.drillTasks {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.drillTasks li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.drillQ {
+  gap: 0.5rem;
+}
+.drillPick {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+/* The ledger's own claim, under the answer it contradicts. Indented so it reads as belonging to the
+   row above rather than as a new statement of this file's own. */
+.drillWhy {
+  margin: 0 0 0.5rem 0.75rem;
+  color: var(--c-muted);
+  border-left: 2px solid var(--c-border);
+  padding-left: 0.5rem;
+}
+.drillVerdict {
+  margin: 0.4rem 0;
+  font-weight: 500;
+}
+/* The same two colours the ledger's own glyphs use — a verdict about the ledger should not be a
+   third palette. `#7fd1a8` is `.ledgerRow.satisfied .glyph`'s. */
+.drillVerdict.ok {
+  color: #7fd1a8;
+}
+.drillVerdict.bad {
+  color: var(--c-warn);
 }
 
 /* ---- narrow viewports ---- */

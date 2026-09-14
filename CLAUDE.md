@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **540 test files / 5568 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **542 test files / 5616 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -306,9 +306,10 @@ computed from a verdict** (the last literal `=` is gone, and the corroborating q
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
 complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
-so what a reader sees is now also what a reader can SHARE. **M7 has begun** — M7.1's contrast ladder
-and M7.2's pen are built; still to come is the faded drill, split out of M6 because PLAN's M6 gate
-never mentioned them.
+so what a reader sees is now also what a reader can SHARE. **M7 is complete but for its closing
+slice** — M7.1's contrast ladder, M7.2's pen and M7.3's faded drill are built, and M7.4 (the sweep,
+docs and gate) is what remains; the milestone was split out of M6 because PLAN's M6 gate never
+mentioned the teaching layer it carried.
 **M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
@@ -669,6 +670,40 @@ because the roster only ever sees a page's default state. Sweep **25/25**, five 
 pass and no equivalents — among them that the card must NOT be rebuilt on a move that changes
 nothing, whose consequence is not cosmetic: `replaceChildren` destroys the buttons, so a reader who
 has tabbed to `Cancel` loses focus the moment the mouse crosses the stage.
+
+**M7.3 — the faded drill: four rungs, each supplying less.** Research 02 §7's contour-choice drill
+(item 11 of §8 minus its prompts, M7 §0): rung i is the worked argument, rung ii masks the ledger's
+KILL column, rung iii masks the contour as well and offers a menu, rung iv is a blank plane and the
+pen — scoped to M7.1's contrast set, fading on progress in a versioned `localStorage` key where
+absence and garbage read identically. Every rung is a `ShellState`, so **every rung is a permalink**
+(M7's gate clause 2) and rides M6.2's round-trip-by-verdict test. Four measurements changed what the
+rungs ASK. **(1) "Assert each ledger row" is not a task, structurally** — a faded worked example is
+faded from a CORRECT argument, so on these four tasks it is **30 rows, 30 satisfied** (26 exact), and
+ticking "satisfied" scores 30/30 without reading any mathematics. So rung ii asks the KILL column —
+what each PIECE is for, read off `(status, role, level)` — at target ×5, vanishes ×4, a known limit
+×1, where a constant answer scores exactly 5/10; the feedback on a wrong answer is the ledger's own
+row. **(2) The menu needs a membership rule**: running each record's integrand over all ten
+templates, FOUR of them (strip, wedge, keyhole, dogbone) close and report a target for B1 at `a = 1`,
+because each carries a `reproduces` piece and **the ledger takes that role on faith** — nothing checks
+`f(ωz) = μ f(z)`. The menu is drawn from the templates whose every role the ledger establishes, and a
+test pins that the wedge really does answer, so the rule is load-bearing. **(3) At `a = 0` the
+wrong-way contour is not wrong** — the rational case closes in either half-plane and both report `π`
+— so the menu declares a second right answer and rung iv's check relaxes with it, the two
+declarations cross-checked against each other. **(4) Rung iv cannot check what the others check, and
+not from a gap in the drill**: a drawn contour is a FIXED curve while the argument is about `R → ∞`,
+and comparing `∮` to the answer would pass a small circle round the pole — so it checks the
+ENCLOSURE, with the sign (a counter-clockwise loop about `−i` is refused where the record winds `−1`),
+and C1 declares no check because it encloses nothing at all. **The mask's first implementation was
+wrong in a way only a browser could find**: `drawContour` begins with `clearRect`, so masking by
+SKIPPING the call left the previous frame's contour standing — the ledger hidden, the value hidden and
+the answer still drawn. It draws an empty piece list now, measured at **14,429 ink pixels at rung i,
+0 at rung iii, 14,729 after a pick**, with the phase portrait untouched because the integrand is the
+question. The sandbox twin of each record's integrand is declared and **verified against the record's
+own compiled `f`** at 48 points (`@cas/expr` has no printer), which also closes a gap M7.1 left where
+its wrong-way cell transcribed B1's integrand unchecked. Every rung audits clean under `axe`,
+measured by hand since the roster only sees default states. Sweep **30/30**, three closed on a second
+pass — two unreachable from the drill's own tasks and built by hand, one the value card nothing
+asserted was masked.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

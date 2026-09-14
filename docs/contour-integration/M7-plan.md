@@ -303,6 +303,70 @@ introspectable data, so the drill masks and checks rather than reimplements.
 ii's check accepts a correct assertion and rejects a wrong one **for the reason the ledger gives**,
 not by string match.
 
+> **DONE (M7.3a–c). The shape is the plan's — four rungs, scoped to the contrast set, fading on
+> progress — and four measurements changed what the rungs ASK.**
+>
+> **1. "Assert each ledger row" is not a task, and the reason is structural.** A faded worked example
+> is faded from a CORRECT argument, so on the drill's own tasks every row is satisfied: measured,
+> **30 rows and 30 satisfied**, 26 of the 30 exact. Ticking "satisfied" scores 30/30 without reading
+> any mathematics; ticking "exact" scores 26/30. (The one failing row anywhere in the contrast set
+> belongs to the wrong-way cell, which is a contrast rung and not a task.) So rung ii asks the KILL
+> column instead — what each PIECE is for — decided from `(status, role, level)` and nothing else:
+> target ×5, vanishes-by-a-bound ×4, a known limit ×1, so a constant answer scores exactly 5/10. That
+> is research 02 §7's own generalisation ("the pieces you cannot compute either vanish or give you
+> back what you want times a constant"), with `reproduces` kept in the vocabulary though correct
+> nowhere in scope — a menu missing it would teach the one-case version — and `limit` the third case
+> C1 needs, since its indentation does not vanish, it contributes `iα·Res` exactly.
+>
+> **2. The menu needs a membership rule, and it is a measurement.** Running each record's own
+> integrand over all ten templates, FOUR of them — strip, wedge, keyhole, dogbone — close and report
+> a target for B1 at `a = 1`, because each carries a `reproduces` piece and **the ledger takes that
+> role on faith**: nothing checks `f(ωz) = μ f(z)`, which for a record is the record's declaration
+> and for a template under an arbitrary integrand is simply unverified. The menu is therefore drawn
+> from the templates whose every role the ledger establishes, and a test pins that the wedge really
+> does answer — so the rule is load-bearing rather than decorative.
+>
+> **3. At `a = 0` the wrong-way contour is not wrong.** The rational case closes in either half-plane
+> and both report `π`, so the menu declares `alsoAnswers` rather than one right choice, and rung iv's
+> check relaxes with it — `one-pole` (either pole, either orientation) where `as-recorded` applies
+> elsewhere. The two declarations are cross-checked against each other: `one-pole` exactly where
+> `alsoAnswers` is non-empty.
+>
+> **4. Rung iv cannot check what rungs i–iii check, and that is not a gap in the drill.** A drawn
+> contour is a FIXED curve; the argument is about `R → ∞`, and the whole KILL apparatus is written on
+> limit parameters a drawn piece does not have. Comparing `∮` against the answer instead would pass a
+> small circle round the pole — the misconception the app exists to prevent. What a fixed curve
+> decides exactly is the enclosure, so that is what rung iv checks, **with the sign** (the
+> forced-downward cell's contour has `n(γ, −i) = −1`, and a counter-clockwise loop about the same
+> pole is refused). C1 declares no check and says why: it encloses nothing at all.
+>
+> **THE MASKS ARE THE MECHANISM.** Rung ii takes the KILL rows off the ledger and folds the
+> derivation with them — the derivation says which lemma discharges which piece, so masking one and
+> not the other would be masking nothing. Rung iii takes the ledger, the value card **and the contour
+> on the stage**: at the rung whose question is "which contour?", the record's own contour is that
+> answer, drawn. The phase portrait stays, because the integrand is the question.
+>
+> **AND THE MASK'S FIRST IMPLEMENTATION WAS WRONG IN A WAY ONLY A BROWSER COULD FIND.**
+> `drawContour` begins with `clearRect`, so masking the contour by SKIPPING the call left the
+> previous frame's contour standing on the ink layer — the ledger hidden, the value hidden, and the
+> answer still on screen (131 non-transparent samples where there should have been none). It draws an
+> EMPTY piece list now, and the numbers are the guard: **14,429 ink pixels at rung i, 0 at rung iii,
+> 14,729 after a pick**, with the portrait's colour count unchanged throughout. jsdom has no canvas,
+> so `drillInk.browser.test.ts` is the only place that claim can live — and the sweep confirms it,
+> killing that mutant nowhere else.
+>
+> Two smaller things. The record's integrand as the sandbox holds it is **declared and verified**
+> against the record's own compiled `f` at 48 points — `@cas/expr` has no printer, so it cannot be
+> derived from the substituted AST — which also closes a gap M7.1 left, where its wrong-way cell
+> transcribes B1's integrand and nothing checked it. And the drill's rungs audit **clean** under
+> `axe` — zero rules, zero nodes, in all of default / panel open / rungs i–iv / mid-grading —
+> measured by hand, because the roster only ever sees a page's default state.
+>
+> **Sweep 30/30, three closed on a second pass.** Two were unreachable from the drill's own tasks and
+> had to be built by hand: no LEGALITY row names a piece for B1 or C1 (M4.1's does, for a record with
+> a cut), and no piece there carries two KILL rows. The third was the value card at rung iii, which
+> nothing asserted was hidden.
+
 ### M7.4 — sweep, docs, gate · *S*
 
 Mutation sweep against a verified-green baseline; browser verification; the doc sweep; the gate.

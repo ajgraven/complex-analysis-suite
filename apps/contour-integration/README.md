@@ -753,6 +753,18 @@ vertex — click to close"*) and places the snapped point rather than the pointe
 has no recipe, so `#vs=` carries its **vertices** (a twelve-corner path is 292 characters against
 2,028 as a piece list) and verifies on encode that they rebuild the shape on screen.
 
+**M7.3 — the faded drill.** A **Drill** button practises the one thing the app is for: choosing a
+contour. Four rungs, each supplying less — the worked argument; then the ledger's **KILL column**
+masked and filled in (what is each piece FOR: the target, something that vanishes, something that
+contributes a known limit, something that reproduces the target); then the contour masked too and a
+menu of four to pick from, which the ledger passes or fails in its own words; then a blank plane and
+the pen. Where a task opens is where it was left off, remembered in a versioned `localStorage` key.
+Every rung is a `ShellState`, so every rung is a permalink. What the rungs ask was measured rather
+than assumed: asserting each ledger ROW is free marks (a worked example's rows are all satisfied —
+30 of 30), the menu excludes the four templates whose `reproduces` role the ledger takes on faith,
+and rung iv checks the ENCLOSURE (with its sign) because a drawn contour is a fixed curve while the
+argument is about a limit.
+
 **M6.4 completes M6.** The page now audits **clean** under `axe` — zero rules, zero nodes — with its
 baseline recorded as `{}`. Both findings it ever had were two missing elements: the grid holding the
 stage, the rail and the strip is now a `<main>`, and the bar's brand is the page's `<h1>` above the

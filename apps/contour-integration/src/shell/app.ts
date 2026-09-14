@@ -92,6 +92,34 @@ import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
 import { CONTRAST_CELLS, contrastTable } from "./contrastGrid.js";
+import {
+  allCorrect,
+  checkDrawing,
+  DISPOSAL_LABEL,
+  DISPOSALS,
+  DRILL_TASKS,
+  gradePieces,
+  menuVerdict,
+  pickState,
+  pieceQuestions,
+  runTask,
+  taskById,
+  taskState,
+  type Disposal,
+  type DrawResult,
+  type DrillStage,
+  type DrillTask,
+  type Graded,
+} from "./drill.js";
+import {
+  isComplete,
+  LAST_STAGE,
+  readProgress,
+  stageFor,
+  withCleared,
+  writeProgress,
+  type KeyStore,
+} from "./drillProgress.js";
 import { bulgeFromApex, penContour, penPath, type PenNode } from "../engine/contour/pen.js";
 
 /**
@@ -526,6 +554,17 @@ export function mountApp(root: Element): ShellHandle {
   contrastButton.setAttribute("aria-label", "compare five arguments that differ one step at a time");
   contrastButton.setAttribute("aria-expanded", "false");
 
+  /**
+   * **THE DRILL IS A MASK, NOT A MODE** (M7.3) — the same reasoning as Contrasts one step further.
+   * Its four rungs are the app with progressively less of it supplied: the ledger's KILL column
+   * masked, then the contour not drawn at all, then a blank plane and a pen. Nothing about a rung
+   * changes a number, so `resolveState` never sees it; what it changes is what this file draws.
+   */
+  const drillButton = el("button", "preset drillOpen", "Drill");
+  drillButton.type = "button";
+  drillButton.setAttribute("aria-label", "practise choosing a contour, with less given each time");
+  drillButton.setAttribute("aria-expanded", "false");
+
   const shareButton = el("button", "preset shareLink", "Copy link");
   shareButton.type = "button";
   shareButton.setAttribute("aria-label", "copy a permalink to this state");
@@ -629,6 +668,7 @@ export function mountApp(root: Element): ShellHandle {
     sandboxGroup,
     galleryGroup,
     contrastButton,
+    drillButton,
     shareButton,
     saveButton,
     copyImageButton,
@@ -764,6 +804,383 @@ export function mountApp(root: Element): ShellHandle {
     }
   });
 
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // THE FADED DRILL (M7.3) — four rungs, each supplying less.
+  //
+  // `shell/drill.ts` owns the data and every verdict; this owns the DOM and the masks. The masks
+  // are the whole mechanism: rung ii hides the ledger's KILL column (its questions replace it) and
+  // the derivation with it, rung iii hides the ledger, the derivation, the value AND the contour on
+  // the stage — because at the rung whose question is "which contour?", the record's own contour is
+  // the answer, drawn. Masking that is the same act as masking the ledger one rung earlier.
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  const drillPanel = el("section", "contrastPanel drillPanel");
+  drillPanel.hidden = true;
+  drillPanel.setAttribute("aria-label", "contour-choice drill");
+  const drillClose = el("button", "preset contrastClose", "Close");
+  drillClose.type = "button";
+  let drillReturnFocus: HTMLElement | null = null;
+  /** The reader's answer sheet at rung ii, and the grading once they have asked for it. */
+  let drillAnswers: Record<string, Disposal | undefined> = {};
+  let drillGraded: readonly Graded[] | null = null;
+  /** Rung iv's last check, so the result survives a redraw. */
+  let drillDrawn: DrawResult | null = null;
+  /** The record a rung is about, cached: `as-recorded` needs its windings on every check. */
+  let drillRun: FamilyRun | null = null;
+  let drillRunFor: string | null = null;
+
+  const store = (): KeyStore | null => {
+    try {
+      return window.localStorage;
+    } catch {
+      // A private window throws on ACCESS, not on use. The drill still works; it just forgets.
+      return null;
+    }
+  };
+  let progress = readProgress(store());
+
+  /** The task a rung is about, and its solved record — one solve per task, kept. */
+  function drillTaskRun(task: DrillTask): FamilyRun | null {
+    if (drillRunFor !== task.id) {
+      drillRun = runTask(task);
+      drillRunFor = task.id;
+    }
+    return drillRun;
+  }
+
+  const openTask = (): DrillTask | null => (drill === null ? null : taskById(drill.task));
+
+  /** What the drill is hiding right now. Read by `renderLedger`, `renderDerivation`, `drawStage`. */
+  function mask(): "none" | "kill" | "argument" {
+    if (drill === null) return "none";
+    if (drill.stage === 2) return "kill";
+    // Rung iii, before a pick: the app is still on the record, so everything about it is the answer.
+    if (drill.stage === 3 && mode === "gallery") return "argument";
+    return "none";
+  }
+
+  function enterDrill(task: DrillTask, stage: DrillStage): void {
+    drillAnswers = {};
+    drillGraded = null;
+    drillDrawn = null;
+    applyState(taskState(task, stage));
+    frameContour();
+  }
+
+  function leaveDrill(): void {
+    drill = null;
+    drillAnswers = {};
+    drillGraded = null;
+    drillDrawn = null;
+    recompute();
+  }
+
+  /** Record a cleared rung and remember it. Never changes a number — see `drillProgress.ts`. */
+  function clearRung(task: DrillTask, stage: DrillStage): void {
+    progress = withCleared(progress, task.id, stage);
+    writeProgress(store(), progress);
+  }
+
+  function buildDrillPanel(): void {
+    const bar2 = el("div", "contrastBar");
+    bar2.append(el("h2", undefined, "Choosing a contour"), drillClose);
+    const legend = el("p", "muted small");
+    legend.textContent =
+      "Four rungs, each supplying less: the worked argument, then its KILL column to fill in, then " +
+      "a choice of contour, then a blank plane. Where you start is where you left off.";
+    const list = el("ul", "drillTasks");
+    for (const task of DRILL_TASKS) {
+      const li = el("li");
+      const stage = stageFor(progress, task.id);
+      const open = el("button", "preset", `${task.label} — rung ${stage} of ${LAST_STAGE}`);
+      open.type = "button";
+      open.setAttribute("aria-label", `open ${task.label} at rung ${stage}`);
+      open.addEventListener("click", () => {
+        closeDrill();
+        enterDrill(task, stage);
+      });
+      li.append(open);
+      if (isComplete(progress, task.id)) li.append(el("span", "tag", "all four done"));
+      list.append(li);
+    }
+    drillPanel.replaceChildren(bar2, legend, list);
+  }
+
+  function openDrill(): void {
+    // Rebuilt on every open, unlike the contrast grid: progress changes between opens, and the
+    // rung each task offers is the one thing this panel is for.
+    buildDrillPanel();
+    drillReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    drillPanel.hidden = false;
+    drillButton.setAttribute("aria-expanded", "true");
+    drillClose.focus();
+  }
+
+  function closeDrill(): void {
+    if (drillPanel.hidden) return;
+    drillPanel.hidden = true;
+    drillButton.setAttribute("aria-expanded", "false");
+    (drillReturnFocus ?? drillButton).focus();
+    drillReturnFocus = null;
+  }
+
+  drillButton.addEventListener("click", () => {
+    if (drillPanel.hidden) openDrill();
+    else closeDrill();
+  });
+  drillClose.addEventListener("click", closeDrill);
+  drillPanel.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      closeDrill();
+    }
+  });
+  shell.append(drillPanel);
+
+  /** The rung's own card: what is given, what to do, and what the ledger said about it. */
+  function renderDrill(): void {
+    const task = openTask();
+    if (task === null) {
+      drillCard.hidden = true;
+      drillCard.replaceChildren();
+      return;
+    }
+    const stage = drill?.stage ?? 1;
+    drillCard.hidden = false;
+    drillCard.replaceChildren(el("h2", undefined, "Drill"));
+    const head = el("p", "drillHead");
+    head.append(el("span", "num", task.label), el("span", "tag", `rung ${stage} of ${LAST_STAGE}`));
+    drillCard.append(head);
+
+    const leave = el("button", "preset", "Leave the drill");
+    leave.type = "button";
+    leave.setAttribute("aria-label", "leave the drill and keep this state");
+    leave.addEventListener("click", leaveDrill);
+
+    const next = (to: DrillStage, label: string): HTMLButtonElement => {
+      const b = el("button", "preset", label);
+      b.type = "button";
+      b.addEventListener("click", () => {
+        enterDrill(task, to);
+      });
+      return b;
+    };
+
+    if (stage === 1) {
+      drillCard.append(
+        el("p", "muted small", "The worked argument, as the gallery gives it: the contour, the ledger and the value."),
+      );
+      const row = el("div", "penRow");
+      const on = next(2, "Next rung");
+      on.addEventListener("click", () => {
+        clearRung(task, 1);
+      });
+      row.append(on, leave);
+      drillCard.append(row);
+      return;
+    }
+
+    if (stage === 2) {
+      renderDrillKill(task);
+      const row = el("div", "penRow");
+      row.append(next(3, "Next rung"), leave);
+      drillCard.append(row);
+      return;
+    }
+
+    if (stage === 3) {
+      renderDrillMenu(task);
+      const row = el("div", "penRow");
+      row.append(next(4, "Next rung"), leave);
+      drillCard.append(row);
+      return;
+    }
+
+    renderDrillDraw(task);
+    const row = el("div", "penRow");
+    row.append(next(1, "Start again"), leave);
+    drillCard.append(row);
+  }
+
+  /** Rung ii: the KILL column, as a question per piece. */
+  function renderDrillKill(task: DrillTask): void {
+    const run = drillTaskRun(task);
+    if (run === null) {
+      drillCard.append(el("p", "muted small", "This record did not solve, so there is nothing to mask."));
+      return;
+    }
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        "The contour is given. Say what each piece is FOR — the pieces you cannot compute must " +
+          "either vanish or give you back the target times a constant.",
+      ),
+    );
+    const questions = pieceQuestions(run);
+    for (const q of questions) {
+      const row = el("label", "paramRow drillQ");
+      row.append(el("span", "num", q.name));
+      const pick = el("select", "drillPick");
+      pick.setAttribute("aria-label", `what ${q.name} is for`);
+      const blank = el("option", undefined, "—");
+      blank.value = "";
+      pick.append(blank);
+      for (const d of DISPOSALS) {
+        const o = el("option", undefined, DISPOSAL_LABEL[d]);
+        o.value = d;
+        pick.append(o);
+      }
+      pick.value = drillAnswers[q.pieceId] ?? "";
+      pick.disabled = drillGraded !== null;
+      pick.addEventListener("change", () => {
+        drillAnswers = { ...drillAnswers, [q.pieceId]: (pick.value || undefined) as Disposal | undefined };
+      });
+      row.append(pick);
+      const graded = drillGraded?.find((g) => g.question.pieceId === q.pieceId);
+      if (graded !== undefined) {
+        const glyph = el("span", `glyph ${graded.ok ? "satisfied" : "failed"}`, graded.ok ? "✓" : "✗");
+        glyph.setAttribute("aria-hidden", "true");
+        row.append(glyph, el("span", "srOnly", graded.ok ? "correct" : "wrong"));
+      }
+      drillCard.append(row);
+      // **THE LEDGER'S OWN ROW IS THE FEEDBACK**, on a wrong answer and only then: this file never
+      // writes a sentence about why a piece does what it does, and a reader who was right does not
+      // need the claim spelled out before they move on.
+      if (graded !== undefined && !graded.ok) {
+        drillCard.append(el("p", "small drillWhy", q.row.claim));
+      }
+    }
+    if (drillGraded === null) {
+      const check = el("button", "preset", "Check");
+      check.type = "button";
+      check.setAttribute("aria-label", "check the KILL column against the ledger");
+      check.addEventListener("click", () => {
+        drillGraded = gradePieces(questions, drillAnswers);
+        if (allCorrect(drillGraded)) clearRung(task, 2);
+        renderDrill();
+        renderLedger();
+        renderDerivation();
+      });
+      drillCard.append(check);
+      return;
+    }
+    const all = allCorrect(drillGraded);
+    drillCard.append(
+      el("p", all ? "drillVerdict ok" : "drillVerdict bad", all ? "Every piece, as the ledger has it." : "Not every piece — the ledger's own claim is under each one."),
+    );
+    const again = el("button", "preset", "Try again");
+    again.type = "button";
+    again.addEventListener("click", () => {
+      drillAnswers = {};
+      drillGraded = null;
+      renderDrill();
+      renderLedger();
+      renderDerivation();
+    });
+    drillCard.append(again);
+  }
+
+  /** Rung iii: a menu of contours, judged by the ledger. */
+  function renderDrillMenu(task: DrillTask): void {
+    const run = drillTaskRun(task);
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        "Only the integral is given — the contour is not drawn. Pick one to close over; the ledger " +
+          "will say whether the argument closes and whether the target is on it.",
+      ),
+    );
+    const row = el("div", "penRow");
+    for (const option of task.menu) {
+      const spec = TEMPLATES.find((t) => t.id === option);
+      if (spec === undefined) continue;
+      const b = el("button", "preset", spec.label);
+      b.type = "button";
+      b.setAttribute("aria-label", `close over the ${spec.label}`);
+      if (mode === "sandbox" && contourSource?.template === option) b.classList.add("on");
+      b.addEventListener("click", () => {
+        const answers = run === null ? false : menuVerdict(run, option).answers;
+        if (answers) clearRung(task, 3);
+        applyState(pickState(task, option));
+        frameContour();
+      });
+      row.append(b);
+    }
+    drillCard.append(row);
+    // Once a pick is on screen the ledger is unmasked and says everything; the drill adds only the
+    // one thing the ledger cannot know — whether this contour answers the integral that was asked.
+    if (mode === "sandbox" && run !== null && contourSource !== null) {
+      const picked = task.menu.find((m) => m === contourSource?.template);
+      if (picked !== undefined) {
+        const v = menuVerdict(run, picked);
+        drillCard.append(
+          el(
+            "p",
+            v.answers ? "drillVerdict ok" : "drillVerdict bad",
+            v.answers
+              ? "The argument closes and the target is a piece of it."
+              : v.hasTarget
+                ? `${v.failedAt ?? "?"}: ${v.why ?? "the argument does not close"}`
+                : "The argument closes, but no piece of this contour is the target — so it is not the integral you were asked for.",
+          ),
+        );
+      }
+    }
+  }
+
+  /** Rung iv: draw one, and check what a drawn contour can decide — the enclosure. */
+  function renderDrillDraw(task: DrillTask): void {
+    const run = drillTaskRun(task);
+    const goal = typeof task.drawCheck === "object" ? null : task.drawCheck;
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        goal === "one-pole"
+          ? "Draw a closed contour that encloses exactly ONE of the singularities — either one, either way round."
+          : goal === "as-recorded"
+            ? "Draw a closed contour that winds about the singularities exactly as the worked one does."
+            : "Draw a closed contour. There is nothing here to check about the enclosure:",
+      ),
+    );
+    if (goal === null && typeof task.drawCheck === "object") {
+      drillCard.append(el("p", "small drillWhy", task.drawCheck.none));
+    }
+    // **WHAT A DRAWN CONTOUR CANNOT CARRY, said once.** The KILL half of the argument is about a
+    // limit (`R → ∞`) and a drawn piece has no limit parameter, so the ledger can certify `∮` here
+    // and not the target. Saying so is the alternative to implying it.
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        "A drawn contour is a fixed curve, so the ledger certifies ∮ over it — not the limit the " +
+          "target integral is defined by.",
+      ),
+    );
+    if (goal !== null) {
+      const check = el("button", "preset", "Check the enclosure");
+      check.type = "button";
+      check.addEventListener("click", () => {
+        const windings = integral?.windings ?? [];
+        const recorded = run?.integral.windings ?? [];
+        drillDrawn = checkDrawing(goal, recorded, windings);
+        if (drillDrawn.ok) clearRung(task, 4);
+        renderDrill();
+      });
+      drillCard.append(check);
+    }
+    if (drillDrawn !== null) {
+      drillCard.append(
+        el(
+          "p",
+          drillDrawn.ok ? "drillVerdict ok" : "drillVerdict bad",
+          drillDrawn.ok ? "Exactly that, and the winding numbers are decided exactly." : (drillDrawn.why ?? "not yet"),
+        ),
+      );
+    }
+  }
+
   // Rail cards.
   const errorBox = el("div", "error");
   errorBox.hidden = true;
@@ -777,6 +1194,8 @@ export function mountApp(root: Element): ShellHandle {
   const linkBox = el("div", "error linkError");
   linkBox.hidden = true;
   linkBox.setAttribute("role", "status");
+  const drillCard = el("section", "card drillCard");
+  drillCard.hidden = true;
   const recordCard = el("section", "card");
   const ledgerCard = el("section", "card");
   const derivationCard = el("section", "card");
@@ -787,6 +1206,7 @@ export function mountApp(root: Element): ShellHandle {
   rail.append(
     linkBox,
     errorBox,
+    drillCard,
     recordCard,
     ledgerCard,
     derivationCard,
@@ -870,27 +1290,40 @@ export function mountApp(root: Element): ShellHandle {
       const vp = viewport();
       stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
       const ctx = sizeCanvas(inkCanvas, vp.width, vp.height);
+      // **THE CONTOUR IS PART OF THE MASK** (M7.3, rung iii): the question there is which contour to
+      // close over, and the record's own contour is that answer, drawn. The poles and the portrait
+      // stay — they are the problem, not the solution.
+      //
+      // Masked by drawing an EMPTY piece list rather than by skipping the call, which is a defect a
+      // browser pass found and no jsdom test could (there is no canvas there at all):
+      // `drawContour` begins with `clearRect`, so skipping it leaves the PREVIOUS frame's contour
+      // standing on the ink layer — the mask would have hidden the ledger and left the answer drawn.
+      const hidden = mask() === "argument";
       if (ctx) {
-        drawContour(ctx, resolved, view, vp, {
-          colours: contour.pieces.map((p) => p.colour),
-          highlight,
-          marker: acc && acc.steps.length > 0 ? scrub : undefined,
-          refused: integral?.refusal !== undefined,
-          cuts: cutPolylines(),
-          handles: handles.map((h, k) => ({
-            at: h.at,
-            emphasis:
-              grab?.kind === "radius" && grab.handle.param === h.param
-                ? "grabbed"
-                : k === hovered
-                  ? "hover"
-                  : "none",
-          })),
+        drawContour(ctx, hidden ? [] : resolved, view, vp, {
+          colours: hidden ? [] : contour.pieces.map((p) => p.colour),
+          highlight: hidden ? undefined : highlight,
+          marker: !hidden && acc && acc.steps.length > 0 ? scrub : undefined,
+          refused: !hidden && integral?.refusal !== undefined,
+          cuts: hidden ? [] : cutPolylines(),
+          handles: hidden
+            ? []
+            : handles.map((h, k) => ({
+                at: h.at,
+                emphasis:
+                  grab?.kind === "radius" && grab.handle.param === h.param
+                    ? "grabbed"
+                    : k === hovered
+                      ? "hover"
+                      : "none",
+              })),
         });
         // Branch handles ride the same ring idiom as the radius handles, drawn after them so a cut
         // vertex sitting under a contour handle is still takeable.
-        drawBranchHandles(ctx, vp);
-        drawPen(ctx, vp);
+        if (!hidden) {
+          drawBranchHandles(ctx, vp);
+          drawPen(ctx, vp);
+        }
       }
       drawPoleMarkers();
     });
@@ -1663,6 +2096,7 @@ export function mountApp(root: Element): ShellHandle {
     bHandles = mode === "sandbox" ? branchHandles(branch) : [];
     if (bHovered >= bHandles.length) bHovered = -1;
     rebuildDerivation();
+    renderDrill();
     renderRecordCard();
     renderLedger();
     renderDerivation();
@@ -1956,6 +2390,13 @@ export function mountApp(root: Element): ShellHandle {
       ledgerCard.append(el("p", "muted", "No integrand."));
       return;
     }
+    const masked = mask();
+    if (masked === "argument") {
+      ledgerCard.append(
+        el("p", "muted", "Masked: the drill is asking which contour closes this integral."),
+      );
+      return;
+    }
 
     const head = el("p", ledger.closes ? "headline closes" : "headline open");
     head.textContent = ledgerHeadline(ledger);
@@ -2003,6 +2444,9 @@ export function mountApp(root: Element): ShellHandle {
 
     const list = el("ul", "ledger");
     for (const row of ledger.rows) {
+      // Rung ii's mask: the KILL rows are the question, and they are in the drill card instead —
+      // until it has been checked, at which point the ledger is the answer sheet.
+      if (masked === "kill" && row.constraint === "KILL" && drillGraded === null) continue;
       const li = el("li", `ledgerRow ${row.status}`);
       li.append(
         el("span", "constraint", row.constraint),
@@ -2025,7 +2469,10 @@ export function mountApp(root: Element): ShellHandle {
    */
   function renderDerivation(): void {
     derivationCard.replaceChildren();
-    if (!derivation) {
+    // **THE DERIVATION CARRIES RUNG ii's ANSWERS IN PROSE** — its KILL stage says which lemma
+    // discharges which piece — so masking the ledger's KILL column and leaving this open would be
+    // masking nothing at all. Hidden at both masked rungs, restored the moment one is checked.
+    if (!derivation || (mask() !== "none" && drillGraded === null)) {
       derivationCard.hidden = true;
       return;
     }
@@ -2118,6 +2565,11 @@ export function mountApp(root: Element): ShellHandle {
 
   function renderResult(): void {
     resultCard.replaceChildren(el("h2", undefined, "∮ f(z) dz"));
+    if (mask() === "argument") {
+      resultCard.hidden = true;
+      return;
+    }
+    resultCard.hidden = false;
     if (!integral) {
       resultCard.append(el("p", "muted", "No integrand."));
       return;

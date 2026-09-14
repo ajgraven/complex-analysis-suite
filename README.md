@@ -43,7 +43,7 @@ Quadrature-app-onto-Vite ESM-ification, and the shared-package extractions
 `@cas/dynamics`, and `@cas/export` on the ADR-0007 second-consumer rule, and `@cas/conformal`
 extracted *ahead* of its second consumer per [ADR-0018](docs/DECISIONS.md#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore))
 are all done; the Correspondences app exists through its parameter-space milestone plus a complete
-interactive mating visualizer. The whole workspace is green (**5568 Vitest tests** across 540
+interactive mating visualizer. The whole workspace is green (**5616 Vitest tests** across 542
 files, lint, typecheck, and per-app builds).
 
 What's **deferred / exploratory** (by design, not omission):
