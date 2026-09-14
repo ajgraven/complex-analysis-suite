@@ -371,6 +371,52 @@ not by string match.
 
 Mutation sweep against a verified-green baseline; browser verification; the doc sweep; the gate.
 
+> **DONE. Each slice swept as it landed (24/24, 25/25, 30/30), so this slice is the REVIEW — and it
+> found three defects, two of them in code that shipped green.**
+>
+> **1. The pen survived leaving the sandbox.** Its controls live in the Contour card and the card
+> offers them in the sandbox only, so switching to gallery mode took them off screen while
+> `penNodes` stayed non-null — and `pointerdown` takes the pen's click BEFORE any grab test, by
+> design. Measured, with two vertices placed: a click in gallery mode placed a THIRD into a path with
+> no visible controls, and Enter then COMMITTED it, leaving `contourSource` null and `sandboxContour`
+> a contour the reader never drew — which is what they would find on returning to the sandbox. Worse
+> in kind than it looks: the same click would otherwise have grabbed a record's radius handle. It is
+> put away now on leaving the sandbox and on every `applyState`, which is also the decision M7.2
+> already recorded — a half-drawn path is not state worth restoring, which is why it is not in
+> `ShellState`.
+>
+> **2. A grading could outlive its rung.** The derivation is unmasked once rung ii has been checked
+> (it is then the answer sheet), and `drillGraded` was a shell local `applyState` did not clear — so
+> a state restored while graded would show the whole derivation at rung iii, where the argument is
+> exactly what is masked. `enterDrill` happened to clear it and a link or a contrast cell did not,
+> which is the shape of latent defect a review finds by reading rather than by failing. Cleared in
+> `applyState`, where every rung change goes through.
+>
+> **3. `checkDrawing` passed VACUOUSLY on an empty singular set.** It mapped over the DRAWN windings
+> alone, so an integrand with no poles at all — and rung iv leaves the reader free to edit the box —
+> gave an empty row list, nothing wrong in it, and the rung reported the enclosure exactly right. The
+> set has to match in both directions; a recorded singularity the drawn contour does not have is now
+> refused by name.
+>
+> **And the a11y roster audits a MASKED rung, through its own permalink.** M7.1's finding — the
+> roster audits every page in its landing state, so a panel nobody opens is never audited — is closed
+> structurally for the drill rather than by hand once a year, which is the payoff of the gate's
+> addressability clause arriving somewhere unexpected. It is guarded: a hardcoded link the app stops
+> honouring would otherwise audit the default page under a name claiming otherwise, so the entry
+> declares a selector that must appear, and measured, a wrong task id makes the run exit 2 naming the
+> state it could not reach. The drill rung audits clean, like every other page.
+>
+> Two smaller things: `compileTwin` is dropped (one caller, and it was a test, so the test calls
+> `compile` itself), and CLAUDE.md's *"`apps/contour-integration/test/shell.test.ts` is the only jsdom
+> one"* was stale — there are three, all of them because they reach `src/shell/app.ts`.
+>
+> **M7's gate is met**, clause by clause: every declared contrast's difference set is derived from the
+> engine and required to match in both directions; every drill rung encodes, decodes into a fresh
+> default and re-runs to the identical verdict, opens masked when a link delivers it, and refuses by
+> name when the link names a rung this build does not have; and a hand-drawn contour closes with the
+> same four constraints, the same statuses and the same `2πi` as the circle template around the same
+> pole.
+
 ---
 
 ## 2. Risks

@@ -93,5 +93,6 @@
       "count": 3,
       "help": "All page content should be contained by landmarks"
     }
-  }
+  },
+  "contour-integration-drill": {}
 }

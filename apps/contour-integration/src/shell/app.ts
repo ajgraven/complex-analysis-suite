@@ -859,9 +859,8 @@ export function mountApp(root: Element): ShellHandle {
   }
 
   function enterDrill(task: DrillTask, stage: DrillStage): void {
-    drillAnswers = {};
-    drillGraded = null;
-    drillDrawn = null;
+    // The answer sheet, the grading and the last enclosure check are cleared by `applyState`, which
+    // every rung change goes through — stated there because a link and a contrast cell need it too.
     applyState(taskState(task, stage));
     frameContour();
   }
@@ -1935,6 +1934,14 @@ export function mountApp(root: Element): ShellHandle {
    * where the answer is not.
    */
   function applyState(next: ShellState): void {
+    // Same reason as `setMode`'s, and the same measurement: a restored state has no relationship to
+    // a path half-drawn under the previous one, and leaving `penNodes` set would let the stage keep
+    // taking clicks as pen clicks with the controls gone. The drill's own grading goes with it —
+    // an answer sheet belongs to the rung it was made on.
+    penStop();
+    drillAnswers = {};
+    drillGraded = null;
+    drillDrawn = null;
     mode = next.mode;
     for (const b of sourceWrap.querySelectorAll("button")) {
       b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
@@ -2117,6 +2124,15 @@ export function mountApp(root: Element): ShellHandle {
 
   function setMode(next: "sandbox" | "gallery"): void {
     const previous = mode;
+    // **LEAVING THE SANDBOX PUTS THE PEN AWAY**, which M7's closing review found it did not. The
+    // pen's controls live in the Contour card and the card only offers them in the sandbox, so a
+    // switch to gallery mode took them off screen while `penNodes` stayed non-null — and
+    // `pointerdown` takes the pen's click BEFORE any grab test, by design. Measured: with two
+    // vertices placed, a click in gallery mode placed a third into a path with no visible controls,
+    // and Enter then COMMITTED it, leaving `sandboxContour` a contour the reader never drew and
+    // `contourSource` null. Abandoning it is also the decision M7.2 already recorded — a half-drawn
+    // path is not state worth restoring, which is why it is not in `ShellState`.
+    if (next !== "sandbox") penStop();
     mode = next;
     for (const b of sourceWrap.querySelectorAll("button")) {
       b.setAttribute("aria-pressed", String(b.dataset.mode === next));

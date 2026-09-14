@@ -454,6 +454,12 @@ describe("drawing a contour by hand, at the shell", () => {
   };
   const byLabel2 = <T extends HTMLElement = HTMLElement>(root: Element, label: string): T =>
     q2<T>(root, `[aria-label="${label}"]`);
+  /** The button in `host` whose text is exactly `label`. */
+  const clickIn2 = (host: Element, label: string): void => {
+    const b = [...host.querySelectorAll("button")].find((x) => (x.textContent ?? "").trim() === label);
+    if (b === undefined) throw new Error(`no button '${label}'`);
+    b.click();
+  };
 
   /**
    * A click on the stage at a screen point — the same path a pointer takes.
@@ -661,6 +667,49 @@ describe("drawing a contour by hand, at the shell", () => {
     clickAt(root, 20, 20);
     ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
     expect(q2(root, ".penRow .num").textContent).toContain("1 vertex");
+  });
+
+  it("is PUT AWAY when the sandbox is left — M7's closing review found it was not", () => {
+    // **THE DEFECT, measured.** The pen's controls live in the Contour card and the card offers them
+    // in the sandbox only, so switching to gallery mode took them off screen while `penNodes` stayed
+    // non-null — and `pointerdown` takes the pen's click BEFORE any grab test, deliberately. With
+    // two vertices placed, a click in gallery mode placed a THIRD into a path with no visible
+    // controls, and Enter then committed it: `contourSource` went null and `sandboxContour` became a
+    // contour the reader never drew, which is what they would find on returning to the sandbox.
+    const { root, app } = setup();
+    const source = app.currentState().contourSource;
+    expect(source).not.toBeNull();
+    byLabel2<HTMLButtonElement>(root, "draw a contour by hand").click();
+    clickAt(root, 40, 40);
+    clickAt(root, 80, 40);
+    expect(q2(root, ".penRow .num").textContent).toContain("2 vertex");
+
+    clickIn2(q2(root, ".sourceToggle"), "Gallery");
+    // A click on the stage is the RECORD's now, not a third vertex, and Enter commits nothing.
+    clickAt(root, 120, 60);
+    q2(root, "canvas.ink").dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(app.currentState().mode).toBe("gallery");
+
+    // Back in the sandbox: the pen is offered afresh, and the recipe is the one that was there.
+    clickIn2(q2(root, ".sourceToggle"), "Sandbox");
+    expect(root.querySelector('[aria-label="draw a contour by hand"]')).not.toBeNull();
+    expect(root.querySelector(".penRow .num")).toBeNull();
+    expect(app.currentState().contourSource).toEqual(source);
+  });
+
+  it("and by a RESTORED state, which is the same defect through `applyState`", () => {
+    const { root, app } = setup();
+    byLabel2<HTMLButtonElement>(root, "draw a contour by hand").click();
+    clickAt(root, 40, 40);
+    // A contrast cell, a drill rung and a `#vs=` link all land here.
+    app.applyState({ ...defaultState(circleTemplate([0, 0], 1)), expr: "1/(1+z^2)" });
+    expect(root.querySelector('[aria-label="draw a contour by hand"]')).not.toBeNull();
+    // `.penRow` is the card's button row either way — what is gone is the vertex COUNT.
+    expect(root.querySelector(".penRow .num")).toBeNull();
+    clickAt(root, 90, 90);
+    // The click did not reach a stale pen: the contour is still the template's.
+    expect(app.currentState().contour.pieces.map((p) => p.id)).toEqual(["circle"]);
+    expect(app.currentState().contourSource).toEqual({ template: "circle", shift: [0, 0] });
   });
 
   it("and the adopted contour gets a LINK, which is what M7.2b's wire form is for", () => {

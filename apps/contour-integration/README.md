@@ -10,8 +10,8 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 6 and published, with M7 begun. THE GALLERY IS COMPLETE — all 28 records load,
-and every one of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
+**Through Milestone 7 and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
+of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
 M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
 L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
 square, the summation kernels and the corrected bound), M5.6 (tier G's solve, and G2), M5.7 (the

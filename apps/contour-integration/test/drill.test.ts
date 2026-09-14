@@ -15,7 +15,6 @@ import { describe, expect, it } from "vitest";
 import {
   allCorrect,
   checkDrawing,
-  compileTwin,
   disposalOf,
   DISPOSALS,
   DRILL_STAGES,
@@ -100,7 +99,7 @@ describe("the tasks", () => {
     for (const task of DRILL_TASKS) {
       const run = runTask(task);
       if (run === null) throw new Error(task.id);
-      const twin = compileTwin(task);
+      const twin = compile(task.twin);
       expect(twin.ok, `${task.id}: ${twin.ok ? "" : twin.error}`).toBe(true);
       if (!twin.ok) continue;
       let worst = 0;
@@ -428,6 +427,21 @@ describe("rung iv — the enclosure", () => {
     const twice = checkDrawing("one-pole", rec, [w([0, 1], 2), w([0, -1], 0)]);
     expect(twice.ok).toBe(false);
     expect(twice.why).toContain("winds 2 times");
+  });
+
+  it("refuses an EMPTY singular set rather than passing vacuously", () => {
+    // A closing-review find. The check mapped over the DRAWN windings alone, so an integrand with no
+    // poles at all — the reader has edited the box, which rung iv leaves them free to do — produced
+    // an empty list, nothing wrong in it, and a rung reported correct for a contour enclosing
+    // nothing. The set has to match in both directions.
+    const rec = [w([0, 1], 1), w([0, -1], 0)];
+    const empty = checkDrawing("as-recorded", rec, []);
+    expect(empty.ok).toBe(false);
+    expect(empty.why).toContain("cannot be compared");
+    // One of the two missing is the same failure, and named for the one that is missing.
+    const half = checkDrawing("as-recorded", rec, [w([0, 1], 1)]);
+    expect(half.ok).toBe(false);
+    expect(half.why).toContain("−i");
   });
 
   it("refuses an UNDECIDED winding by name rather than reading it as zero", () => {

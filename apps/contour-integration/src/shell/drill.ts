@@ -63,7 +63,7 @@ import { primaryGolden, solveFamily, type FamilyRun } from "../families/runFamil
 import type { Bindings } from "../families/schema.js";
 import type { Cx } from "../kernel/geom.js";
 import { CONTRAST_CELLS } from "./contrastGrid.js";
-import { compile, defaultState, type DrillState, type ShellState } from "./state.js";
+import { defaultState, type DrillState, type ShellState } from "./state.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
 
 /**
@@ -311,6 +311,22 @@ export function checkDrawing(
     const want = recorded.find((r) => Math.hypot(r.at[0] - w.at[0], r.at[1] - w.at[1]) < 1e-9);
     return { at: w.at, want: want?.n ?? null, got: w.n, decided: w.decided };
   });
+  // **EVERY RECORDED SINGULARITY HAS TO BE ACCOUNTED FOR, and M7's closing review found it was not.**
+  // Mapping over `drawn` alone made an EMPTY list vacuously correct: with the integrand edited to
+  // something with no poles at all, `rows` is empty, nothing is wrong, and the rung reported the
+  // enclosure as exactly right. The set has to match in both directions — this is the other one.
+  const missing = recorded.find(
+    (r) => !drawn.some((w) => Math.hypot(r.at[0] - w.at[0], r.at[1] - w.at[1]) < 1e-9),
+  );
+  if (missing !== undefined) {
+    return {
+      ok: false,
+      why:
+        `${fmtAt(missing.at)} is a singularity of the worked integrand and is not one of this ` +
+        "contour's — the enclosure cannot be compared",
+      rows,
+    };
+  }
   const wrong = rows.find((r) => r.want === null || r.want !== r.got);
   return {
     ok: wrong === undefined,
@@ -454,5 +470,3 @@ export function pickState(task: DrillTask, template: TemplateId): ShellState {
   };
 }
 
-/** Compile a task's twin, for a caller that wants to analyse it. Cached by the caller, as ever. */
-export const compileTwin = (task: DrillTask): ReturnType<typeof compile> => compile(task.twin);

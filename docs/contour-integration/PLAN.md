@@ -902,6 +902,20 @@ hand-drawn contour closes and its ledger is indistinguishable in kind from a tem
 
 > **Staged in [`M6-plan.md`](M6-plan.md) and [`M7-plan.md`](M7-plan.md).** Read them before starting.
 >
+> **M7 IS DONE (M7.1–M7.4), and its gate is met.** Every declared contrast's difference set is
+> derived from the engine and required to match in both directions (`test/contrastGrid.test.ts`);
+> every drill rung is a `ShellState`, so every rung encodes, decodes into a fresh default and re-runs
+> to the identical verdict and ledger rows (`test/drill.test.ts`), and one of them is audited by the
+> a11y roster through its own permalink; and a hand-drawn contour closes with the same four
+> constraints, the same statuses and the same `2πi` as the circle template around the same pole
+> (`test/pen.test.ts`). Each slice's findings are in [`M7-plan.md`](M7-plan.md); the three worth
+> carrying forward are that **asserting each ledger row is not a task** (a faded worked example is
+> faded from a correct argument, so all 30 of its rows are satisfied and ticking "satisfied" scores
+> 30/30 — the drill asks the KILL column instead), that **the ledger takes the `reproduces` role on
+> faith** (nothing checks `f(ωz) = μ f(z)`, so four templates close and report a target for an
+> integrand they do not fit), and that **the browser harness's own layout was twice the defect** —
+> a phone-sized default viewport and a stylesheet-less mount, each producing a picture no reader has.
+>
 > **M6 WAS SPLIT**, on the third finding below: PLAN's M6 carried the teaching layer in its scope
 > while its gate never mentioned it, so that half had no completion criterion at all. M6 is now
 > exactly its own gate; the teaching layer and the pen tool are M7, with a gate of their own whose

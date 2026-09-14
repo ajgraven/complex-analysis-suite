@@ -95,12 +95,13 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **542 test files / 5616 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **542 test files / 5623 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
-`apps/contour-integration/test/shell.test.ts` are the only jsdom ones — the latter per-file, through a
-`// @vitest-environment jsdom` docblock. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+three of Contour-Integration's specs are the only jsdom ones — `test/shell.test.ts`,
+`test/pen.test.ts` and `test/drillShell.test.ts`, each per-file through a
+`// @vitest-environment jsdom` docblock, because all three reach `src/shell/app.ts`. **Never pipe the gate through `tail` or `head`** — doing so has truncated
 real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
@@ -284,7 +285,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 6** and published — **M1–M6 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 7** and published — **M1–M7 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -306,9 +307,8 @@ computed from a verdict** (the last literal `=` is gone, and the corroborating q
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
 complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
-so what a reader sees is now also what a reader can SHARE. **M7 is complete but for its closing
-slice** — M7.1's contrast ladder, M7.2's pen and M7.3's faded drill are built, and M7.4 (the sweep,
-docs and gate) is what remains; the milestone was split out of M6 because PLAN's M6 gate never
+so what a reader sees is now also what a reader can SHARE. **M7 is complete (M7.1–M7.4)** — the contrast
+ladder, the pen and the faded drill, with the milestone split out of M6 because PLAN's M6 gate never
 mentioned the teaching layer it carried.
 **M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
@@ -704,6 +704,29 @@ its wrong-way cell transcribed B1's integrand unchecked. Every rung audits clean
 measured by hand since the roster only sees default states. Sweep **30/30**, three closed on a second
 pass — two unreachable from the drill's own tasks and built by hand, one the value card nothing
 asserted was masked.
+
+**M7.4 completes M7 — the review, and three defects in code that shipped green.** Each slice swept
+as it landed (24/24, 25/25, 30/30), so the closing slice is the review. **(1) The pen survived
+leaving the sandbox**: its controls live in the Contour card and the card offers them in the sandbox
+only, so switching to gallery mode took them off screen while `penNodes` stayed non-null — and
+`pointerdown` takes the pen's click BEFORE any grab test, deliberately. Measured with two vertices
+placed: a click in gallery mode placed a THIRD into a path with no visible controls, and Enter then
+COMMITTED it, leaving `contourSource` null and `sandboxContour` a contour the reader never drew; the
+same click would otherwise have grabbed a record's radius handle. It is put away now on leaving the
+sandbox and on every `applyState` — which is the decision M7.2 already recorded, a half-drawn path
+being no state worth restoring. **(2) A grading could outlive its rung**: the derivation is unmasked
+once rung ii has been checked (it is then the answer sheet), and `drillGraded` was a shell local
+`applyState` did not clear, so a state restored while graded would have shown the whole derivation at
+rung iii where the argument is exactly what is masked — `enterDrill` happened to clear it and a link
+did not, which is the shape of defect a review finds by reading rather than by failing. **(3)
+`checkDrawing` passed VACUOUSLY on an empty singular set**: it mapped over the DRAWN windings alone,
+so an integrand with no poles — and rung iv leaves the reader free to edit the box — gave an empty row
+list, nothing wrong in it, and the rung reported the enclosure exactly right; the set now has to match
+in both directions. **And the a11y roster audits a MASKED rung through its own permalink**, closing
+M7.1's "a panel nothing opens is never audited" structurally for the drill rather than by hand — the
+gate's addressability clause paying off somewhere unexpected — guarded by a selector that must appear,
+since a link the app stops honouring would otherwise audit the landing page under a name claiming
+otherwise (measured: a wrong task id exits 2 naming the state it could not reach).
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
