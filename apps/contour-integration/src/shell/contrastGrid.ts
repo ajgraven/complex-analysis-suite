@@ -18,7 +18,7 @@
 // round-trip-by-verdict test.
 
 import { semicircleTemplate } from "../engine/contour/templates.js";
-import type { ContrastSide, RowKey } from "../engine/contrast.js";
+import { rowKeys, type ContrastSide, type RowKey } from "../engine/contrast.js";
 import { TEMPLATES } from "./templates.js";
 import { compile, defaultState, resolveState, type ShellState } from "./state.js";
 
@@ -208,4 +208,150 @@ export function contrastSideOf(state: ShellState): ContrastSide | null {
     };
   }
   return null;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The table the grid draws.
+//
+// Pure, so the layout decision that matters — WHICH ROW LINES UP WITH WHICH — is testable in node
+// and not tangled with the DOM. `ui/accumulator.ts`'s split, and `figure.ts`'s.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** One ledger row as it appears in one column, or `null` where that argument has no such row. */
+export interface ContrastEntry {
+  readonly status: "satisfied" | "failed" | "unknown";
+  readonly claim: string;
+}
+
+export interface ContrastTableRow {
+  readonly key: RowKey;
+  /** `KILL · vanish`, or `KILL · vanish #1` where the bucket repeats. */
+  readonly label: string;
+  /** One per cell, positionally. `null` is an absence, and is drawn as one. */
+  readonly cells: readonly (ContrastEntry | null)[];
+  /** Cell indices where this row IS the declared difference from the cell before it. */
+  readonly highlight: readonly number[];
+  /** Cell indices where this row's wording moves incidentally — shown, but not as the contrast. */
+  readonly muted: readonly number[];
+}
+
+export interface ContrastTableCell {
+  readonly id: string;
+  readonly label: string;
+  readonly note: string;
+  /** The record's solved answer where there is one, NOT the ledger's `∮`. */
+  readonly answer: string | null;
+  readonly closes: boolean;
+  readonly failedAt: string | null;
+  /** What the step into this cell isolates. `null` on the first. */
+  readonly because: string | null;
+}
+
+export interface ContrastTable {
+  readonly cells: readonly ContrastTableCell[];
+  readonly rows: readonly ContrastTableRow[];
+}
+
+/**
+ * Merge the columns' row orders into one, preserving EVERY column's own order.
+ *
+ * **First appearance across the columns is not good enough, and drawing the table is what showed
+ * it.** C1 emits its rows as target, indentation, target, big arc, COVER; the four cells before it
+ * emit target, arc, COVER. Taking keys in first-appearance order puts COVER down at cell 1 and then
+ * has nowhere to put C1's second target and second arc but the very bottom, BELOW `COVER` — so the
+ * column that the grid's last rung exists to explain reads in an order its own argument never had.
+ *
+ * This is a topological merge instead: each column contributes `kᵢ → kᵢ₊₁` edges, and Kahn's
+ * algorithm emits a linear order satisfying all of them. Ties break by first appearance, so the
+ * result is deterministic. Two columns that genuinely disagree about the order of two shared rows
+ * would make a cycle, which cannot happen while the ledger emits rows in piece order and pieces are
+ * ordered by the contour — and if it ever does, the remaining keys are appended in first-appearance
+ * order rather than dropped, because a table missing a row is worse than one slightly out of order.
+ */
+function mergedRowOrder(keysPer: readonly (readonly RowKey[])[]): readonly RowKey[] {
+  const first: RowKey[] = [];
+  for (const keys of keysPer) for (const k of keys) if (!first.includes(k)) first.push(k);
+  const rank = new Map(first.map((k, i) => [k, i]));
+
+  const after = new Map<RowKey, Set<RowKey>>(first.map((k) => [k, new Set<RowKey>()]));
+  const indegree = new Map<RowKey, number>(first.map((k) => [k, 0]));
+  for (const keys of keysPer) {
+    for (let i = 0; i + 1 < keys.length; i++) {
+      const edges = after.get(keys[i]);
+      if (edges === undefined || edges.has(keys[i + 1])) continue;
+      edges.add(keys[i + 1]);
+      indegree.set(keys[i + 1], (indegree.get(keys[i + 1]) ?? 0) + 1);
+    }
+  }
+
+  const out: RowKey[] = [];
+  const ready = first.filter((k) => indegree.get(k) === 0);
+  while (ready.length > 0) {
+    ready.sort((a, b) => (rank.get(a) ?? 0) - (rank.get(b) ?? 0));
+    const k = ready.shift();
+    if (k === undefined) break;
+    out.push(k);
+    for (const next of after.get(k) ?? []) {
+      const n = (indegree.get(next) ?? 0) - 1;
+      indegree.set(next, n);
+      if (n === 0) ready.push(next);
+    }
+  }
+  for (const k of first) if (!out.includes(k)) out.push(k); // a cycle: keep the row, lose the order
+  return out;
+}
+
+/**
+ * Build the grid.
+ *
+ * Rows are ordered by {@link mergedRowOrder}, so every column reads in its own argument's order.
+ */
+export function contrastTable(cells: readonly ContrastCell[] = CONTRAST_CELLS): ContrastTable {
+  const sides = cells.map((c) => contrastSideOf(c.state()));
+  const keysPer = sides.map((s) => (s === null ? [] : rowKeys(s.ledger.rows, s.pieces)));
+  const order = mergedRowOrder(keysPer);
+
+  // A bucket that repeats anywhere gets its ordinal shown; one that never does stays unnumbered,
+  // because `KILL · vanish #0` on an argument with a single arc is noise.
+  const bucketCount = new Map<string, number>();
+  for (const key of order) {
+    const bucket = key.slice(0, key.lastIndexOf("#"));
+    bucketCount.set(bucket, (bucketCount.get(bucket) ?? 0) + 1);
+  }
+
+  const rows: ContrastTableRow[] = order.map((key) => {
+    const hash = key.lastIndexOf("#");
+    const bucket = key.slice(0, hash);
+    const ordinal = Number(key.slice(hash + 1));
+    const [constraint, role] = bucket.split("/");
+    const repeated = (bucketCount.get(bucket) ?? 0) > 1;
+    return {
+      key,
+      label: `${constraint} · ${role}${repeated ? ` #${ordinal + 1}` : ""}`,
+      cells: sides.map((side, i) => {
+        if (side === null) return null;
+        const at = keysPer[i].indexOf(key);
+        if (at < 0) return null;
+        const row = side.ledger.rows[at];
+        return { status: row.status, claim: row.claim };
+      }),
+      highlight: cells.flatMap((c, i) => ((c.differsAbove?.rows ?? []).includes(key) ? [i] : [])),
+      muted: cells.flatMap((c, i) =>
+        (c.differsAbove?.alsoDiffers ?? []).some((x) => x.key === key) ? [i] : [],
+      ),
+    };
+  });
+
+  return {
+    cells: cells.map((c, i) => ({
+      id: c.id,
+      label: c.label,
+      note: c.note,
+      answer: sides[i]?.answer ?? null,
+      closes: sides[i]?.ledger.closes ?? false,
+      failedAt: sides[i]?.ledger.failedAt ?? null,
+      because: c.differsAbove?.because ?? null,
+    })),
+    rows,
+  };
 }

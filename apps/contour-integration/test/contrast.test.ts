@@ -152,6 +152,29 @@ describe("diffLedgers", () => {
     expect(d.pieceLimits).toEqual({ from: [], to: ["indent"] });
   });
 
+  it("reports a row that DISAPPEARS, which the ladder never exercises", () => {
+    // A mutation sweep found this: deleting the `removed` branch left every test green, because the
+    // ladder only ever runs forwards and each rung adds rows or keeps them. Compared the other way,
+    // C1 loses its second target and its second vanishing piece — and a diff that reported "no
+    // difference" for an argument that shed two whole rows would be worse than useless.
+    const d = diffLedgers(record("indented-sinc"), record("jordan-cosine-kernel", { a: 1, b: 1 }));
+    const removed = d.rows.filter((r) => r.kind === "removed").map((r) => r.key);
+    expect(removed.sort()).toEqual(["KILL/target#1", "KILL/vanish#1"]);
+    // And the removal carries the claim that went away, so a caller can say what was lost.
+    //
+    // **WHICH ROW THAT IS, IS NOT THE OBVIOUS ONE, and writing this assertion wrongly is how I
+    // found out.** The ordinal counts within the role in PIECE order, and C1's pieces run left,
+    // indentation, right, big arc — so its indentation is `KILL/vanish#0` and its big arc is `#1`.
+    // Compared with B1, that lines B1's arc up with C1's INDENTATION and leaves C1's arc as an
+    // extra row. Nothing false follows: both rows are in the step's declared difference set, so the
+    // grid marks both. But the pairing is by position within the role, not by what a reader might
+    // call "the same piece", and that is worth knowing before trusting any single pairing.
+    expect(d.rows.find((r) => r.key === "KILL/vanish#1")?.from).toContain("semicircle");
+    const c1Keys = rowKeys(record("indented-sinc").ledger.rows, record("indented-sinc").pieces);
+    const c1 = record("indented-sinc");
+    expect(c1.ledger.rows[c1Keys.indexOf("KILL/vanish#0")].claim).toContain("indentation");
+  });
+
   it("is empty for a side compared with itself", () => {
     const b1 = record("jordan-cosine-kernel", { a: 1, b: 1 });
     const d = diffLedgers(b1, b1);

@@ -577,3 +577,125 @@ describe("the page's structure", () => {
     expect(Number(m?.[1])).toBeGreaterThan(8);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The contrast grid (M7.1d), at the shell.
+//
+// `contrastGrid.test.ts` owns the claim that the declared differences are real. This owns the claim
+// that the panel SHOWS them and that opening a cell puts the app in that cell's state — the half a
+// pure test cannot reach.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the contrast grid", () => {
+  const openGrid = (root: Element): HTMLElement => {
+    const button = byLabel<HTMLButtonElement>(root, "compare five arguments that differ one step at a time");
+    button.click();
+    return q(root, ".contrastPanel");
+  };
+
+  it("is closed at boot, and costs nothing until it is opened", () => {
+    const { root } = mount();
+    const panel = q(root, ".contrastPanel");
+    expect(panel.hidden).toBe(true);
+    // Not merely hidden: not BUILT. Five solves in front of the first frame would be the cost of
+    // rendering a panel most readers never open.
+    expect(panel.querySelector("table")).toBeNull();
+  });
+
+  it("opens on the button, and says so to a screen reader", () => {
+    const { root } = mount();
+    const button = byLabel<HTMLButtonElement>(root, "compare five arguments that differ one step at a time");
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    const panel = openGrid(root);
+    expect(panel.hidden).toBe(false);
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement?.textContent).toBe("Close");
+  });
+
+  it("draws five columns and every ledger row, each cell named for a screen reader", () => {
+    const { root } = mount();
+    const panel = openGrid(root);
+    const headers = [...panel.querySelectorAll("thead th")];
+    expect(headers).toHaveLength(6); // the row-label column plus five arguments
+    // The corner cell is NAMED. axe's `empty-table-header` fires on a bare one, and the a11y job
+    // is non-blocking — so the DOM fact is pinned here, where it does block. (M6.4's rule.)
+    expect(headers[0].textContent).toBe("ledger row");
+    expect(headers[1].textContent).toContain("∫ dx/(x²+1)");
+
+    const bodyRows = [...panel.querySelectorAll("tbody tr")];
+    expect(bodyRows.length).toBeGreaterThan(6);
+    for (const tr of bodyRows) {
+      expect(tr.querySelector("th")?.getAttribute("scope")).toBe("row");
+      const cells = [...tr.querySelectorAll("td")];
+      expect(cells).toHaveLength(5);
+      // A glyph is not a name: every cell carries the status in words too.
+      for (const td of cells) {
+        const words = td.textContent ?? "";
+        expect(/satisfied|failed|unknown|—/.test(words), words).toBe(true);
+      }
+    }
+  });
+
+  it("prints C1's ANSWER, π/2 — not the 0 its ∮ evaluates to", () => {
+    const { root } = mount();
+    const panel = openGrid(root);
+    const answers = [...panel.querySelectorAll("thead .cellAnswer")].map((e) => e.textContent);
+    expect(answers).toEqual(["π", "π/e", "⚠ does not close (KILL)", "π/e", "π/2"]);
+  });
+
+  it("marks the declared row as changed, and a rewording as merely reworded", () => {
+    const { root } = mount();
+    const panel = openGrid(root);
+    expect(panel.querySelectorAll("td.changed").length).toBeGreaterThan(0);
+    expect(panel.querySelectorAll("td.reworded").length).toBeGreaterThan(0);
+    // The wrong-way column's arc cell is both highlighted AND failed — the rung's whole content.
+    const failedAndChanged = panel.querySelectorAll("td.changed.failed");
+    expect(failedAndChanged.length).toBe(1);
+  });
+
+  it("OPENS a cell into the app, which is the only thing the grid does to the state", () => {
+    const { root, app } = mount();
+    const panel = openGrid(root);
+    const open = [...panel.querySelectorAll<HTMLButtonElement>("thead button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").includes("∫ sin x/x dx"),
+    );
+    expect(open).toBeDefined();
+    open?.click();
+    expect(panel.hidden).toBe(true);
+    const state = app.currentState();
+    expect(state.mode).toBe("gallery");
+    expect(state.record).toBe("indented-sinc");
+  });
+
+  it("opens the WRONG-WAY cell into the sandbox, since no record can be closed wrongly", () => {
+    const { root, app } = mount();
+    const panel = openGrid(root);
+    const open = [...panel.querySelectorAll<HTMLButtonElement>("thead button")].find((b) =>
+      (b.getAttribute("aria-label") ?? "").includes("closed downward"),
+    );
+    open?.click();
+    const state = app.currentState();
+    expect(state.mode).toBe("sandbox");
+    expect(state.contourSource?.template).toBe("semicircleDown");
+    expect(state.expr).toBe("exp(i*z)/(1+z^2)");
+  });
+
+  it("closes on Escape and gives focus back", () => {
+    const { root } = mount();
+    const button = byLabel<HTMLButtonElement>(root, "compare five arguments that differ one step at a time");
+    button.focus();
+    const panel = openGrid(root);
+    panel.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(panel.hidden).toBe(true);
+    expect(document.activeElement).toBe(button);
+  });
+
+  it("leaves M6.4's structure intact — still one <main> and one <h1>", () => {
+    const { root } = mount();
+    openGrid(root);
+    expect(root.querySelectorAll("main")).toHaveLength(1);
+    expect(root.querySelectorAll("h1")).toHaveLength(1);
+    // The panel's own heading is a level 2, under the page's one level 1.
+    expect(q(root, ".contrastPanel h2").textContent).toBe("One step at a time");
+  });
+});

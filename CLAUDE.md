@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **537 test files / 5480 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **539 test files / 5531 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -306,8 +306,9 @@ computed from a verdict** (the last literal `=` is gone, and the corroborating q
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
 complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
-so what a reader sees is now also what a reader can SHARE. Still to come: M7 — the pen tool (free-hand
-path editing) and the teaching layer, split out of M6 because PLAN's M6 gate never mentioned them.
+so what a reader sees is now also what a reader can SHARE. **M7 has begun** — M7.1's contrast ladder
+is built; still to come are the pen tool (free-hand path editing) and the faded drill, split out of M6
+because PLAN's M6 gate never mentioned them.
 **M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
@@ -587,6 +588,47 @@ established in another module. The doc sweep found the **root README** stale in 
 `@cas/rigor` in the package tree, no Contour Integration in either the tree or the app table, a test
 count from 436 files ago, and "ten applications riding twelve packages" where there are twelve and
 thirteen.
+
+**M7.1 — the contrast ladder: five arguments, each one declared row from the last.** Research 02
+§13's contrasting cases as gallery ORGANISATION rather than lessons (M7's scope excludes prose,
+prediction prompts and self-explanation prompts on the record). `engine/contrast.ts` aligns two
+ledgers and says how they differ; `shell/contrastGrid.ts` holds the five cells and their DECLARED
+difference sets, and the test derives the real set from the engine and requires equality **in both
+directions** — nothing undeclared differs, nothing declared agrees. **Measuring first changed four
+things.** **(1) The wrong-way cell is not a record and CANNOT be**: B1 derives its closing side from
+`sgnA = if(a < 0, -1, 1)` and a `derived` parameter is read-only precisely so the geometry cannot
+desync from its own definition, so the record is incapable of being closed wrongly — it is a SANDBOX
+state, which makes a cell a `ShellState`, the ladder span both modes, and the gate's
+permalink-addressability clause fall out for free. **(2) Rows cannot be aligned by `pieceId`** — the
+plan's own risk S-c, biting on the first pair: B1 names its target piece `realAxis` where the sandbox
+semicircle names the same row's piece `diameter`, so an id-keyed pairing reports a removal and an
+addition where one row changed STATUS. The key is `(constraint, role, ordinal)`, the ordinal forced
+because C1 carries two KILL/target rows and two KILL/vanish, and the alternative is implemented in
+the test and shown to mis-pair. **(3) The step to C1 moves FIVE things, not the plan's two** — CATCH
+`1 → 0` enclosed, the target row splitting ×1 → ×2, a new vanish row, `pieceLimits`, and the answer —
+and the last is a UI requirement, since C1's `∮` is exactly 0 while the integral it determines is
+`π/2`, so **the grid prints the record's ANSWER and not the ledger's value**. **(4) Running the
+ladder found a category with no field for it**: rows whose WORDING moves without the argument doing
+so (a renamed piece across the record/sandbox boundary; a quoted clearance). Widening the declared
+set would make the grid point at rows that did not change and ignoring them would leave a difference
+nobody watches, so they are declared apart, and **a STATUS change may never be filed there** — the
+one loophole that would empty the declaration of content. What survives is the premise: the first
+three rungs are ONE ROW apart and it is the same row all three times, the arc's. Three findings from
+the UI. **Contrasts is not a MODE** — a third one would make every mode check, the codec included,
+grow a case meaning "none of the above"; it is a panel, and opening a cell is `applyState`.
+**First-appearance row order is wrong and drawing the table is what showed it**, since C1's extra
+rows then land BELOW `COVER` in an order its own argument never had — a topological merge instead,
+with the failing alternative in the test. And **the a11y roster audits pages in their DEFAULT state,
+so a panel nothing opens is never audited**: run by hand, axe found `empty-table-header` on the
+corner cell, now named and pinned in the node gate because the axe job does not block. One defect
+measured and deliberately NOT absorbed: the page scrolls horizontally at phone width, identically
+with the panel open, shut and on the tree before this slice, with `footer.strip` the sole cause
+(removing it drops 656 → 400; the nav, rail and bar change nothing). Sweep **24/24**; the one
+first-pass survivor was real and unreachable from the ladder — nothing tested that a row
+DISAPPEARING is reported, because the ladder only runs forwards — and writing that test found that
+`KILL/vanish#1` is C1's big arc rather than its indentation, the ordinal counting in PIECE order, so
+B1's arc pairs with C1's INDENTATION. Nothing false follows, both being in the declared set, but the
+pairing is by position within the role rather than by what a reader would call the same piece.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

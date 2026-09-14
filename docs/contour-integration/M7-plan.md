@@ -77,6 +77,67 @@ Five cells, drawn from **two** records:
 **Gate:** every declared contrast's difference set is verified against the engine; the grid is
 reachable and readable at one screen width.
 
+> **DONE. Measuring the five cells first changed four things, and each would have been a silent
+> defect built to the letter of the table above.**
+>
+> **(1) The wrong-way cell is not a record and cannot be.** B1's contour derives its closing side
+> from `sgnA = if(a < 0, -1, 1)`, and a `derived` parameter is read-only precisely so the geometry
+> cannot desync from its own definition — so the record is *incapable* of being closed wrongly. It is
+> a SANDBOX state, the one M3's gate already pins. A cell is therefore a `ShellState` and the ladder
+> spans both modes, which buys clause 2 outright: a cell is a state, so a cell is a permalink, so
+> every cell already travels under M6.2's round-trip-by-verdict test.
+>
+> **(2) Rows cannot be aligned by `pieceId` — risk S-c, biting on the first pair.** B1 names its
+> target piece `realAxis`; the sandbox semicircle names the same row's piece `diameter`. An id-keyed
+> pairing reports a removal and an addition where one row changed status. The key is
+> `(constraint, role, ordinal)`; the ordinal is needed because `(constraint, role)` is not unique —
+> C1 carries two KILL/target rows and two KILL/vanish. The alternative is implemented in the test
+> and shown to mis-pair, so the choice is pinned by a failure rather than by a comment.
+>
+> **(3) The step to C1 moves five things, not two:** CATCH `1 → 0` enclosed, the target row splits
+> ×1 → ×2, a new vanish row for the indentation, `pieceLimits` gains it, and the answer changes. The
+> last is a UI requirement: **the grid prints the record's ANSWER, not the ledger's value**, because
+> C1's `∮` is exactly 0 while the integral it determines is π/2 — the cell's whole lesson.
+>
+> **(4) Running the ladder found a category this plan had no field for.** Two rows differ in WORDING
+> without the argument differing: crossing record→sandbox renames the target piece, and C1's LEGALITY
+> row quotes the clearance (`1.00`, then `0.0500`). Widening `rows` would make the grid point at rows
+> that did not change; ignoring them would leave a difference nobody watches. They are declared in
+> `alsoDiffers` with a reason, kept out of the highlighted set, and the test enforces that **nothing
+> filed there is really a status change** — the one loophole that would empty the declaration.
+>
+> What survives is the ladder's premise, now asserted over the run rather than cell by cell: the
+> first three rungs are ONE ROW apart and it is the same row all three times, the arc's.
+>
+> **Three more findings from building the UI.**
+>
+> **Contrasts is not a MODE.** A third `mode` would have to represent "showing the grid" as a
+> property of a state already in one of the two modes, and every mode check — the codec included —
+> would grow a case meaning "none of the above". It is a panel over the app, and opening a cell is
+> `applyState(cell.state())`.
+>
+> **First-appearance row order is wrong, and drawing the table is what showed it.** C1 emits target,
+> indentation, target, big arc, COVER; the cells before it emit target, arc, COVER — so taking keys
+> as they first appear puts COVER down at cell 1 and leaves C1's extra rows nowhere to go but the
+> bottom, BELOW `COVER`, in an order its own argument never had. It is a topological merge instead,
+> and the failing alternative is in the test.
+>
+> **The a11y roster audits pages in their DEFAULT state, so a panel nothing opens is never audited.**
+> Run by hand against the open grid, axe found `empty-table-header` on the corner cell — now named
+> `ledger row`, and pinned in `shell.test.ts` because the axe job does not block.
+>
+> One thing measured and deliberately NOT fixed here: the page scrolls horizontally at phone width
+> (`scrollWidth` 656 against a 400 client). It is **pre-existing** — identical with the panel open,
+> shut, and on the tree before this slice — and `footer.strip` is the sole cause (removing it drops
+> 656 → 400; the nav, the rail and the bar change nothing). Recorded rather than absorbed.
+>
+> Sweep **24/24**, no equivalents. The one first-pass survivor was real and unreachable from the
+> ladder: nothing tested that a row DISAPPEARING is reported, because the ladder only ever runs
+> forwards. Writing that test then found that `KILL/vanish#1` is C1's big arc rather than its
+> indentation — the ordinal counts in piece order, so B1's arc pairs with C1's INDENTATION and C1's
+> arc is the extra row. Nothing false follows (both are in the declared set), but the pairing is by
+> position within the role, not by what a reader would call the same piece.
+
 ### M7.2 — the pen tool · *M*
 
 M1's deferred item, and a prerequisite for M7.3's last stage being more than the sandbox's templates.

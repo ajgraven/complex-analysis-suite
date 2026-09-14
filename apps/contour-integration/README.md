@@ -726,6 +726,19 @@ so the GL layer read back **one distinct colour** where the ink layer read 44 �
 have been missing its whole backdrop. The flag fixes it and costs 0.6 % of a frame during a
 continuous pan (20.00 → 20.12 ms, best of three, under software rendering).
 
+**M7.1 — the contrast ladder.** A **Contrasts** button opens a grid of five arguments in which each
+column differs from the one on its left in a declared, *verified* set of ledger rows: `∫ dx/(x²+1)`
+→ `∫ cos x/(x²+1) dx` → the same closed downward → the same at `a < 0` → `∫ sin x/x dx`. The first
+three rungs are **one row apart, and it is the same row all three times** — the arc's: plain ML,
+Jordan, diverging, then satisfied on the lower arc. Opening a cell applies its state, so every cell
+is a permalink; Contrasts is not a mode. The declaration is the point: `contrastGrid.test.ts` derives
+each step's real difference set from the engine and requires it to match exactly in both directions,
+so an engine change that made the rational case cite Jordan fails, and so does one that quietly
+starts changing a second row. Rows are aligned by `(constraint, role, ordinal)` rather than by piece
+id — the record calls its target piece `realAxis` where the sandbox calls the same row's piece
+`diameter` — and the grid prints each column's **answer** rather than its `∮`, since C1's `∮` is 0
+while the integral it determines is `π/2`.
+
 **M6.4 completes M6.** The page now audits **clean** under `axe` — zero rules, zero nodes — with its
 baseline recorded as `{}`. Both findings it ever had were two missing elements: the grid holding the
 stage, the rail and the strip is now a `<main>`, and the bar's brand is the page's `<h1>` above the

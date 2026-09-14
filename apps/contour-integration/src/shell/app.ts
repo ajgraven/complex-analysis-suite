@@ -90,6 +90,7 @@ import {
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
+import { CONTRAST_CELLS, contrastTable } from "./contrastGrid.js";
 
 /**
  * The shell: an integrand, a contour, and the integral accumulating along it — in two modes.
@@ -481,6 +482,19 @@ export function mountApp(root: Element): ShellHandle {
    * Older engines have no async clipboard at all, so there is a `document.execCommand` fallback, and
    * if even that fails the button says so rather than pretending.
    */
+  /**
+   * **CONTRASTS IS NOT A MODE.** M7.1's ladder is five `ShellState`s, three of them gallery records
+   * and one a sandbox state, so a third `mode` would have to represent "showing the grid" as a
+   * property of a state that is already in one of the two modes — and every mode check in the file,
+   * the codec included, would grow a case that means "none of the above". It is a panel over the
+   * app instead, and opening a cell is `applyState(cell.state())`: the grid hands the reader a
+   * state and gets out of the way, which is also why every cell is already a permalink.
+   */
+  const contrastButton = el("button", "preset contrastOpen", "Contrasts");
+  contrastButton.type = "button";
+  contrastButton.setAttribute("aria-label", "compare five arguments that differ one step at a time");
+  contrastButton.setAttribute("aria-expanded", "false");
+
   const shareButton = el("button", "preset shareLink", "Copy link");
   shareButton.type = "button";
   shareButton.setAttribute("aria-label", "copy a permalink to this state");
@@ -583,11 +597,141 @@ export function mountApp(root: Element): ShellHandle {
     sourceWrap,
     sandboxGroup,
     galleryGroup,
+    contrastButton,
     shareButton,
     saveButton,
     copyImageButton,
     shareNote,
   );
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // The contrast grid (M7.1).
+  //
+  // Built ONCE, on first open, because every cell runs a full solve and four of the five are gallery
+  // records: doing that at mount would put five solves in front of the first frame for a panel most
+  // readers never open. It is not rebuilt afterwards either — the ladder is a constant, and nothing
+  // the reader does to the app can change what those five states resolve to.
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  const contrastPanel = el("section", "contrastPanel");
+  contrastPanel.hidden = true;
+  contrastPanel.setAttribute("aria-label", "contrasting arguments");
+  const contrastClose = el("button", "preset contrastClose", "Close");
+  contrastClose.type = "button";
+  let contrastBuilt = false;
+  let contrastReturnFocus: HTMLElement | null = null;
+
+  /** A status glyph with a real text alternative — the glyph alone names nothing. */
+  function statusCell(status: string, claim: string): HTMLElement {
+    const td = el("td", `st ${status}`);
+    const glyph = el("span", "glyph", status === "satisfied" ? "✓" : status === "failed" ? "✗" : "?");
+    glyph.setAttribute("aria-hidden", "true");
+    td.append(glyph, el("span", "srOnly", status));
+    td.title = claim;
+    return td;
+  }
+
+  function buildContrastPanel(): void {
+    const table = contrastTable();
+    const head = el("tr");
+    // NOT empty: axe's `empty-table-header` fires on a bare corner cell, and it is also the one
+    // place to say what the row headings are. Found by running axe against the OPEN panel — the
+    // a11y roster audits pages in their default state, so a panel nothing opens is never audited.
+    head.append(el("th", "rowHead", "ledger row"));
+    for (const cell of table.cells) {
+      const th = el("th", "colHead");
+      th.scope = "col";
+      th.append(el("div", "cellLabel", cell.label), el("div", "muted small", cell.note));
+      // The step's own sentence — what this column changes about the one before it.
+      if (cell.because !== null) th.append(el("div", "because small", `↑ ${cell.because}`));
+      // **THE ANSWER, NOT `∮`.** C1's `∮` is exactly 0 while the integral it determines is π/2.
+      const answer = el("div", "cellAnswer");
+      answer.textContent = cell.answer ?? (cell.closes ? "—" : `⚠ does not close (${cell.failedAt ?? "?"})`);
+      th.append(answer);
+      const open = el("button", "preset", "Open");
+      open.type = "button";
+      open.setAttribute("aria-label", `open ${cell.label} in the app`);
+      open.addEventListener("click", () => {
+        const found = CONTRAST_CELLS.find((c) => c.id === cell.id);
+        if (found === undefined) return;
+        closeContrast();
+        applyState(found.state());
+        frameContour();
+      });
+      th.append(open);
+      head.append(th);
+    }
+
+    const body = el("tbody");
+    for (const row of table.rows) {
+      const tr = el("tr");
+      const th = el("th", "rowHead");
+      th.scope = "row";
+      th.textContent = row.label;
+      tr.append(th);
+      row.cells.forEach((entry, i) => {
+        if (entry === null) {
+          const td = el("td", "st absent");
+          td.append(el("span", "glyph", "—"));
+          td.title = "this argument has no such row";
+          tr.append(td);
+          return;
+        }
+        const td = statusCell(entry.status, entry.claim);
+        // The declared contrast, and only it. An incidental rewording is marked apart, because a
+        // grid that highlights a row saying the same thing in other words stops meaning anything.
+        if (row.highlight.includes(i)) td.classList.add("changed");
+        else if (row.muted.includes(i)) td.classList.add("reworded");
+        tr.append(td);
+      });
+      body.append(tr);
+    }
+
+    const t = el("table", "contrastTable");
+    const thead = el("thead");
+    thead.append(head);
+    t.append(thead, body);
+
+    const bar2 = el("div", "contrastBar");
+    bar2.append(el("h2", undefined, "One step at a time"), contrastClose);
+    const legend = el("p", "muted small");
+    legend.textContent =
+      "Each column differs from the one on its left in the highlighted row, and in nothing else. " +
+      "A dotted cell is the same claim about a differently-named piece.";
+    contrastPanel.replaceChildren(bar2, legend, t);
+    contrastBuilt = true;
+  }
+
+  function openContrast(): void {
+    if (!contrastBuilt) buildContrastPanel();
+    contrastReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    contrastPanel.hidden = false;
+    contrastButton.setAttribute("aria-expanded", "true");
+    contrastClose.focus();
+  }
+
+  function closeContrast(): void {
+    if (contrastPanel.hidden) return;
+    contrastPanel.hidden = true;
+    contrastButton.setAttribute("aria-expanded", "false");
+    // Focus goes back where it came from, or the reader is dropped at the top of the document.
+    (contrastReturnFocus ?? contrastButton).focus();
+    contrastReturnFocus = null;
+  }
+
+  contrastButton.addEventListener("click", () => {
+    if (contrastPanel.hidden) openContrast();
+    else closeContrast();
+  });
+  contrastClose.addEventListener("click", closeContrast);
+  // Appended HERE rather than in the `shell.append` above, because `contrastPanel` is declared
+  // below that line and a `const` used before its declaration is a runtime error, not a hoist.
+  shell.append(contrastPanel);
+  contrastPanel.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      closeContrast();
+    }
+  });
 
   // Rail cards.
   const errorBox = el("div", "error");

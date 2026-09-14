@@ -9,8 +9,8 @@
 // isolates what, which is the only thing it is for. Declaring one that does not happen would let a
 // regression hide: if the engine stopped changing that row, the cell would go on claiming it does.
 import { describe, expect, it } from "vitest";
-import { diffLedgers } from "../src/engine/contrast.js";
-import { CONTRAST_CELLS, contrastSideOf } from "../src/shell/contrastGrid.js";
+import { diffLedgers, rowKeys } from "../src/engine/contrast.js";
+import { CONTRAST_CELLS, contrastSideOf, contrastTable } from "../src/shell/contrastGrid.js";
 import { compile, resolveState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 
@@ -182,5 +182,78 @@ describe("clause 2: every cell is addressable by permalink", () => {
     // The whole point of this rung: it fails, at KILL, on the arc.
     expect(res.analysis.ledger.closes).toBe(false);
     expect(res.analysis.ledger.failedAt).toBe("KILL");
+  });
+});
+
+describe("the table's row order", () => {
+  const table = contrastTable();
+  const keysOf = (i: number) => {
+    const side = sideOf(i);
+    return rowKeys(side.ledger.rows, side.pieces);
+  };
+
+  it("reads in EVERY column's own argument order, not just the first's", () => {
+    // The topological property, checked per column: the rows that column has, in the order the
+    // table puts them, are that ledger's own order.
+    for (let i = 0; i < CONTRAST_CELLS.length; i++) {
+      const mine = new Set(keysOf(i));
+      const asDrawn = table.rows.map((r) => r.key).filter((k) => mine.has(k));
+      expect(asDrawn, CONTRAST_CELLS[i].id).toEqual(keysOf(i));
+    }
+  });
+
+  it("which FIRST APPEARANCE would get wrong — C1's extra rows would fall below COVER", () => {
+    // The alternative, implemented so the choice is pinned by a failure rather than by a comment.
+    // C1 emits target, indentation, target, big arc, COVER; the cells before it emit target, arc,
+    // COVER — so taking keys as they first appear puts COVER down at cell 1, and C1's second target
+    // and second arc have nowhere to go but the bottom of the table.
+    const first: string[] = [];
+    for (let i = 0; i < CONTRAST_CELLS.length; i++) {
+      for (const k of keysOf(i)) if (!first.includes(k)) first.push(k);
+    }
+    expect(first.indexOf("COVER/argument#0")).toBeLessThan(first.indexOf("KILL/target#1"));
+    // The merge puts it back where the argument has it.
+    const drawn = table.rows.map((r) => r.key);
+    expect(drawn.indexOf("KILL/target#1")).toBeLessThan(drawn.indexOf("COVER/argument#0"));
+    expect(drawn.indexOf("KILL/vanish#1")).toBeLessThan(drawn.indexOf("COVER/argument#0"));
+  });
+
+  it("draws an absence as an absence", () => {
+    const row = table.rows.find((r) => r.key === "KILL/vanish#1");
+    expect(row).toBeDefined();
+    // Only C1 has a second vanishing piece.
+    expect(row?.cells.map((c) => c !== null)).toEqual([false, false, false, false, true]);
+  });
+
+  it("numbers a repeated bucket and leaves a unique one bare", () => {
+    expect(table.rows.find((r) => r.key === "COVER/argument#0")?.label).toBe("COVER · argument");
+    expect(table.rows.find((r) => r.key === "KILL/vanish#0")?.label).toBe("KILL · vanish #1");
+  });
+});
+
+describe("the table marks the contrast, and only the contrast", () => {
+  const table = contrastTable();
+
+  it("highlights the declared row in the column it is declared for", () => {
+    const arc = table.rows.find((r) => r.key === "KILL/vanish#0");
+    // Cells 1..4 each declare the arc row; cell 0 declares nothing.
+    expect(arc?.highlight).toEqual([1, 2, 3, 4]);
+  });
+
+  it("keeps an incidental rewording MUTED rather than highlighted", () => {
+    const target = table.rows.find((r) => r.key === "KILL/target#0");
+    expect(target?.muted).toEqual([2, 3]); // the two record↔sandbox crossings
+    expect(target?.highlight).toEqual([4]); // and C1's split, which IS content
+  });
+
+  it("carries the ANSWER per column, which for C1 is π/2 and not its ∮ of 0", () => {
+    expect(table.cells.map((c) => c.answer)).toEqual(["π", "π/e", null, "π/e", "π/2"]);
+    expect(table.cells.map((c) => c.closes)).toEqual([true, true, false, true, true]);
+    expect(table.cells[2].failedAt).toBe("KILL");
+  });
+
+  it("carries the step's own sentence on every cell but the first", () => {
+    expect(table.cells[0].because).toBeNull();
+    expect(table.cells.slice(1).every((c) => (c.because ?? "").length > 0)).toBe(true);
   });
 });
