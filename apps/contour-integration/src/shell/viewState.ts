@@ -39,6 +39,7 @@ import type { Cx } from "../kernel/geom.js";
 import type { ContrastMode } from "../ui/accumulator.js";
 import { defaultState, offeredCorpus, type ContourSource, type ShellState } from "./state.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
+import { penContour, penPath, sameShape, STRAIGHT } from "../engine/contour/pen.js";
 
 /** This app's namespace in the shared envelope. */
 const APP = "ci";
@@ -101,7 +102,7 @@ interface BranchWire {
 }
 
 /** The sandbox contour, as what PRODUCED it. */
-interface ContourWire {
+interface TemplateContourWire {
   /** The template id. */
   readonly t: TemplateId;
   /** Parameter values, when any differs from the template's own. */
@@ -109,6 +110,33 @@ interface ContourWire {
   /** The accumulated rigid translation, when non-zero. */
   readonly d?: readonly [number, number];
 }
+
+/**
+ * A hand-drawn contour: the vertices the reader clicked, and nothing that can be derived from them.
+ *
+ * **MEASURED BEFORE IT WAS BUILT, and the numbers chose this shape.** The same twelve-corner path
+ * carried as its piece list is 2,028 base64 characters — at research 07 §6's ~2 kB warning, with
+ * twenty corners reaching 4,635 — against **292** for the vertices, and forty corners still only
+ * 879. That is not compression: piece ids, names, colours and every endpoint shared between
+ * consecutive pieces are all *derivable*, so a piece list carries each of them twice over.
+ *
+ * `b` holds the arc bulges, keyed by piece index and present only for the pieces that bow, because
+ * a straight-sided path is the common case and should cost nothing for the feature it does not use.
+ */
+interface PenContourWire {
+  /** `[x, y]` per vertex, in order of drawing. */
+  readonly v: readonly (readonly [number, number])[];
+  /** Arc bulges by piece index — absent for a straight piece. */
+  readonly b?: Readonly<Record<string, number>>;
+  /** `1` when the path is OPEN. Absent means closed, which is what a finished contour is. */
+  readonly o?: 1;
+}
+
+/** Either form. The template one is unchanged, so every link minted before the pen still decodes. */
+type ContourWire = TemplateContourWire | PenContourWire;
+
+const isPenWire = (w: ContourWire): w is PenContourWire =>
+  (w as PenContourWire).v !== undefined;
 
 /** Every field optional: absent means "the default", which is the whole of diff-from-defaults. */
 interface Wire {
@@ -153,6 +181,14 @@ export type EncodeResult =
  * decode's restoration cannot disagree about what a recipe MEANS.
  */
 function fromRecipe(wire: ContourWire): Contour | null {
+  if (isPenWire(wire)) {
+    if (wire.v.length < 2) return null;
+    const nodes = wire.v.map((at, i) => {
+      const bulge = wire.b?.[String(i)];
+      return bulge === undefined ? { at } : { at, bulge };
+    });
+    return penContour({ nodes, closed: wire.o !== 1 });
+  }
   const template = TEMPLATES.find((t) => t.id === wire.t);
   if (template === undefined) return null;
   let contour = template.build();
@@ -164,20 +200,92 @@ function fromRecipe(wire: ContourWire): Contour | null {
   return d === undefined ? contour : translateContour(contour, [d[0], d[1]]);
 }
 
+/**
+ * Read a DRAWN contour out of a wire object, or say it is not one.
+ *
+ * `null` means "this is not the pen's form" and the caller should try the template one — which is
+ * also what keeps every link minted before the pen decoding unchanged, since a template wire has no
+ * `v`. Anything else is a decision about a pen wire: rebuilt, or refused by name.
+ */
+function penWireIn(
+  c: Record<string, unknown>,
+): { readonly ok: true; readonly contour: Contour } | { readonly ok: false; readonly reason: string } | null {
+  if (c.v === undefined) return null;
+  if (!Array.isArray(c.v)) return { ok: false, reason: "the drawn contour in this link is not a list of vertices" };
+  if (c.v.length < 2) {
+    return { ok: false, reason: `this link draws a contour with ${c.v.length} vertices, which is not a path` };
+  }
+  const vs: [number, number][] = [];
+  for (const v of c.v) {
+    if (!isPair(v)) return { ok: false, reason: "a vertex of the drawn contour in this link is not a pair of finite numbers" };
+    vs.push([v[0], v[1]]);
+  }
+  const bulges: Record<string, number> = {};
+  if (c.b !== undefined) {
+    if (c.b === null || typeof c.b !== "object") return { ok: false, reason: "the drawn contour's arcs in this link are not an object" };
+    for (const [k, v] of Object.entries(c.b as Record<string, unknown>)) {
+      const i = Number(k);
+      if (!Number.isInteger(i) || i < 0 || i >= vs.length) {
+        return { ok: false, reason: `this link bows piece ${k} of a drawn contour that has no such piece` };
+      }
+      if (!isNum(v)) return { ok: false, reason: `the arc on piece ${k} of the drawn contour in this link is not a finite number` };
+      bulges[k] = v;
+    }
+  }
+  if (c.o !== undefined && c.o !== 1) {
+    return { ok: false, reason: "the drawn contour's closure flag in this link is neither absent nor 1" };
+  }
+  const wire: PenContourWire = {
+    v: vs,
+    ...(Object.keys(bulges).length === 0 ? {} : { b: bulges }),
+    ...(c.o === 1 ? { o: 1 as const } : {}),
+  };
+  const drawn = fromRecipe(wire);
+  if (drawn === null) return { ok: false, reason: "the drawn contour in this link could not be rebuilt" };
+  return { ok: true, contour: drawn };
+}
+
 /** The sandbox contour as a recipe — and VERIFIED to reproduce it, or no link at all. */
 function contourOut(
   contour: Contour,
   source: ContourSource | null,
 ): { readonly ok: true; readonly wire: ContourWire } | { readonly ok: false; readonly reason: string } {
   if (source === null) {
-    return {
-      ok: false,
-      reason:
-        "this contour did not come from a template, so there is no recipe to put in a link. " +
-        "Serialising its pieces is the pen tool's job (M7) and is deliberately not built yet — a " +
-        "link that carried geometry for a shape nothing can yet produce would be untested code on " +
-        "the one surface where a dropped field changes the answer",
+    // **THE PEN'S CONTOUR HAS NO RECIPE, SO IT CARRIES ITS VERTICES** (M7.2). Until the pen existed
+    // this branch refused by name, and the refusal was the signal that M7 would need its own
+    // serialisation rather than forty lines of speculative one. This is that serialisation.
+    const path = penPath(contour);
+    if (path === null) {
+      return {
+        ok: false,
+        reason:
+          "this contour came from neither a template nor the pen, so there is nothing to put in a " +
+          "link — no recipe to rebuild it from, and no vertices to carry",
+      };
+    }
+    const bulges: Record<string, number> = {};
+    path.nodes.forEach((n, i) => {
+      if (n.bulge !== undefined && Math.abs(n.bulge) >= STRAIGHT) bulges[String(i)] = n.bulge;
+    });
+    const wire: PenContourWire = {
+      v: path.nodes.map((n) => [n.at[0], n.at[1]] as const),
+      ...(Object.keys(bulges).length === 0 ? {} : { b: bulges }),
+      ...(path.closed ? {} : { o: 1 as const }),
     };
+    // Verified exactly as a template's recipe is: rebuild it and compare the PIECES. A drawn path is
+    // read back out of its own geometry rather than stored, so this is the check that there is
+    // nothing to drift — and an arc whose bulge did not survive the round trip refuses rather than
+    // minting a link to a subtly different curve.
+    const rebuilt = fromRecipe(wire);
+    if (rebuilt === null || !sameShape(rebuilt, contour)) {
+      return {
+        ok: false,
+        reason:
+          `the drawn contour's ${path.nodes.length} vertices do not rebuild the shape on screen, ` +
+          "so a link made from them would open a different one",
+      };
+    }
+    return { ok: true, wire };
   }
   const template = TEMPLATES.find((t) => t.id === source.template);
   if (template === undefined) {
@@ -410,29 +518,38 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
     const raw = w.c;
     if (raw === null || typeof raw !== "object") return { ok: false, reason: "the contour in this link is not an object" };
     const c = raw as Record<string, unknown>;
-    if (!isStr(c.t) || !TEMPLATES.some((t) => t.id === c.t)) {
-      return { ok: false, reason: `this link names the contour template '${String(c.t)}', which this build does not have` };
-    }
-    const params: Record<string, number> = {};
-    if (c.p !== undefined) {
-      if (c.p === null || typeof c.p !== "object") return { ok: false, reason: "the contour's parameters in this link are not an object" };
-      for (const [k, v] of Object.entries(c.p as Record<string, unknown>)) {
-        if (!isNum(v)) return { ok: false, reason: `the contour parameter '${k}' in this link is not a finite number` };
-        params[k] = v;
+    const pen = penWireIn(c);
+    if (pen !== null) {
+      if (!pen.ok) return { ok: false, reason: pen.reason };
+      contour = pen.contour;
+      // No recipe, and that is the truth about it rather than a gap: `contourSource` stays null, and
+      // `contourOut` reads the vertices back out of the geometry when this state is re-encoded.
+      contourSource = null;
+    } else {
+      if (!isStr(c.t) || !TEMPLATES.some((t) => t.id === c.t)) {
+        return { ok: false, reason: `this link names the contour template '${String(c.t)}', which this build does not have` };
       }
+      const params: Record<string, number> = {};
+      if (c.p !== undefined) {
+        if (c.p === null || typeof c.p !== "object") return { ok: false, reason: "the contour's parameters in this link are not an object" };
+        for (const [k, v] of Object.entries(c.p as Record<string, unknown>)) {
+          if (!isNum(v)) return { ok: false, reason: `the contour parameter '${k}' in this link is not a finite number` };
+          params[k] = v;
+        }
+      }
+      if (c.d !== undefined && !isPair(c.d)) return { ok: false, reason: "the contour's shift in this link is not a pair of numbers" };
+      const wire: ContourWire = {
+        t: c.t as TemplateId,
+        ...(c.p === undefined ? {} : { p: params }),
+        ...(c.d === undefined ? {} : { d: c.d as [number, number] }),
+      };
+      const built = fromRecipe(wire);
+      if (built === null) {
+        return { ok: false, reason: `the contour recipe in this link names a parameter template '${String(c.t)}' does not have` };
+      }
+      contour = built;
+      contourSource = { template: c.t as TemplateId, shift: c.d === undefined ? [0, 0] : (c.d as [number, number]) };
     }
-    if (c.d !== undefined && !isPair(c.d)) return { ok: false, reason: "the contour's shift in this link is not a pair of numbers" };
-    const wire: ContourWire = {
-      t: c.t as TemplateId,
-      ...(c.p === undefined ? {} : { p: params }),
-      ...(c.d === undefined ? {} : { d: c.d as [number, number] }),
-    };
-    const built = fromRecipe(wire);
-    if (built === null) {
-      return { ok: false, reason: `the contour recipe in this link names a parameter template '${wire.t}' does not have` };
-    }
-    contour = built;
-    contourSource = { template: wire.t, shift: c.d === undefined ? [0, 0] : (c.d as [number, number]) };
   }
 
   // ── the cut system, then the declaration that must name a point in it ──

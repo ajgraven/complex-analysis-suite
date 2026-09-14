@@ -16,6 +16,7 @@ import { offeredCorpus, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { DEFAULT_VIEW } from "../src/kernel/camera.js";
 import { translateContour } from "../src/engine/contour/edit.js";
+import { penContour, sameShape } from "../src/engine/contour/pen.js";
 
 /** Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context. */
 function mount(hash = ""): { root: HTMLElement; app: ShellHandle } {
@@ -462,13 +463,32 @@ describe("the `#vs=` permalink, at the shell", () => {
 
   it("the copy control says WHY when a state cannot be linked to", () => {
     const app = mount();
-    // The pen tool's case, which is the only one today: a contour with no recipe behind it.
+    // A contour with no recipe whose pieces the pen did not draw either — the case M7.2 narrowed
+    // this refusal down to. (Before the pen existed it was "the pen tool's job, not built yet".)
     app.app.applyState({ ...app.app.currentState(), contourSource: null });
     const button = byLabel<HTMLButtonElement>(app.root, "copy a permalink to this state");
     button.click();
     const note = q(app.root, ".shareNote");
     expect(note.textContent).toContain("No link");
-    expect(note.textContent).toContain("pen tool");
+    expect(note.textContent).toContain("neither a template nor the pen");
+  });
+
+  it("but a DRAWN contour does get a link, which is the point of M7.2's wire form", () => {
+    const app = mount();
+    const drawn = penContour({ nodes: [{ at: [-2, -2] }, { at: [2, -2] }, { at: [0, 2] }], closed: true });
+    app.app.applyState({ ...app.app.currentState(), contour: drawn, contourSource: null, sandboxContour: drawn });
+    const button = byLabel<HTMLButtonElement>(app.root, "copy a permalink to this state");
+    button.click();
+    const note = q(app.root, ".shareNote");
+    expect(note.textContent).not.toContain("No link");
+    // And the link reopens the same shape.
+    const enc = encodeShell(app.app.currentState());
+    expect(enc.ok, enc.ok ? "" : enc.reason).toBe(true);
+    if (!enc.ok) return;
+    const back = decodeShell(enc.hash);
+    expect(back?.ok).toBe(true);
+    if (back === null || !back.ok) return;
+    expect(sameShape(back.state.contour, drawn)).toBe(true);
   });
 });
 
