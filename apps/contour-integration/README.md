@@ -10,8 +10,8 @@ whether the whole thing closes.
 
 ## Status
 
-**Through Milestone 5 and published, with M6 begun. THE GALLERY IS COMPLETE — all 28 records load,
-and every one of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
+**Through Milestone 7 and published. THE GALLERY IS COMPLETE — all 28 records load, and every one
+of them is executed against the engine in the test suite.** M5.0 (tier D's quadrature cross-check),
 M5.1 (the sandbox declares a branch factor), M5.2 (one predicate for L3 and L6, and the corrected
 L6), M5.3 (tier E's E1 and E2), M5.4 (tier F's F1, on the wedge), M5.5 (tier G's machinery — the
 square, the summation kernels and the corrected bound), M5.6 (tier G's solve, and G2), M5.7 (the
@@ -725,6 +725,45 @@ One measurement changed that slice: `GLStage` created its context without `prese
 so the GL layer read back **one distinct colour** where the ink layer read 44 — every figure would
 have been missing its whole backdrop. The flag fixes it and costs 0.6 % of a frame during a
 continuous pan (20.00 → 20.12 ms, best of three, under software rendering).
+
+**M7.1 — the contrast ladder.** A **Contrasts** button opens a grid of five arguments in which each
+column differs from the one on its left in a declared, *verified* set of ledger rows: `∫ dx/(x²+1)`
+→ `∫ cos x/(x²+1) dx` → the same closed downward → the same at `a < 0` → `∫ sin x/x dx`. The first
+three rungs are **one row apart, and it is the same row all three times** — the arc's: plain ML,
+Jordan, diverging, then satisfied on the lower arc. Opening a cell applies its state, so every cell
+is a permalink; Contrasts is not a mode. The declaration is the point: `contrastGrid.test.ts` derives
+each step's real difference set from the engine and requires it to match exactly in both directions,
+so an engine change that made the rational case cite Jordan fails, and so does one that quietly
+starts changing a second row. Rows are aligned by `(constraint, role, ordinal)` rather than by piece
+id — the record calls its target piece `realAxis` where the sandbox calls the same row's piece
+`diameter` — and the grid prints each column's **answer** rather than its `∮`, since C1's `∮` is 0
+while the integral it determines is `π/2`.
+
+**M7.2 — the pen.** A **Draw a contour** button turns the stage into a drawing surface, in the
+sandbox only (a record's contour is the record's). Research 07 rule 6's grammar: **click = corner,
+drag = arc, click the first vertex = close**, Backspace drops the last, Escape abandons, Enter
+closes, Alt suppresses snapping. An arc is pinned by a **bulge** — the apex's signed offset from the
+chord's midpoint, which is exactly what the drag measures and *cannot* disagree with the endpoints —
+and it degrades to a straight line continuously. Every piece it produces is a first-class object with
+an id, a name, a role and a colour, so a hand-drawn contour's ledger is **the same kind** as a
+template's: a drawn square around a simple pole closes with the same four constraints and the same
+`2πi` as the circle template, which is the milestone's gate and is asserted by comparing the two.
+Every snap NAMES the constraint that fired (*"snapped to the real axis"*, *"snapped to the first
+vertex — click to close"*) and places the snapped point rather than the pointer's. A drawn contour
+has no recipe, so `#vs=` carries its **vertices** (a twelve-corner path is 292 characters against
+2,028 as a piece list) and verifies on encode that they rebuild the shape on screen.
+
+**M7.3 — the faded drill.** A **Drill** button practises the one thing the app is for: choosing a
+contour. Four rungs, each supplying less — the worked argument; then the ledger's **KILL column**
+masked and filled in (what is each piece FOR: the target, something that vanishes, something that
+contributes a known limit, something that reproduces the target); then the contour masked too and a
+menu of four to pick from, which the ledger passes or fails in its own words; then a blank plane and
+the pen. Where a task opens is where it was left off, remembered in a versioned `localStorage` key.
+Every rung is a `ShellState`, so every rung is a permalink. What the rungs ask was measured rather
+than assumed: asserting each ledger ROW is free marks (a worked example's rows are all satisfied —
+30 of 30), the menu excludes the four templates whose `reproduces` role the ledger takes on faith,
+and rung iv checks the ENCLOSURE (with its sign) because a drawn contour is a fixed curve while the
+argument is about a limit.
 
 **M6.4 completes M6.** The page now audits **clean** under `axe` — zero rules, zero nodes — with its
 baseline recorded as `{}`. Both findings it ever had were two missing elements: the grid holding the

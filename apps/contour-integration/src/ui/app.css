@@ -697,6 +697,173 @@ h1.brand {
   display: contents;
 }
 
+/* ── The contrast grid (M7.1) ───────────────────────────────────────────────────────────────
+   An overlay rather than a mode: the ladder's five cells are ordinary `ShellState`s, and opening
+   one applies it. Above `.cas-nav`'s z-index 6, because while it is open it IS the page. */
+.contrastPanel {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: auto;
+  padding: 1rem clamp(0.75rem, 3vw, 2rem) 2rem;
+  background: var(--c-bg);
+}
+.contrastBar {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  position: sticky;
+  top: 0;
+  padding: 0.25rem 0 0.5rem;
+  background: var(--c-bg);
+}
+.contrastBar h2 {
+  margin: 0;
+  flex: 1 1 auto;
+}
+.contrastTable {
+  border-collapse: collapse;
+  width: 100%;
+  /* Five arguments plus a row-label column do not fit a phone, and squeezing them into one would
+     make every claim unreadable, so the table scrolls sideways inside the panel — and the PAGE does
+     not.
+
+     MEASURED TWICE, because the first draft of this comment asserted that second clause and it was
+     false at the time: at 400 px the document's scrollWidth was 656 with the panel open, 656 with it
+     shut, and 656 on the tree before the grid existed — so the panel added nothing, but the page
+     already scrolled, from the two rigid `rem` tracks below. That was left for its own slice rather
+     than absorbed into this one, and it is now fixed (the narrow-viewport rules at the end of this
+     file). Re-measured on the production build after them: page 400 with the panel shut and 400 with
+     it open, while the panel itself carries the overflow (its scrollWidth 760 against a clientWidth
+     of 400, the table 736 = 46rem). */
+  min-width: 46rem;
+}
+.contrastPanel > .contrastTable {
+  display: table;
+}
+.contrastTable th,
+.contrastTable td {
+  border: 1px solid var(--c-border);
+  padding: 0.35rem 0.5rem;
+  vertical-align: top;
+  text-align: left;
+}
+.contrastTable .colHead {
+  width: 17%;
+}
+.contrastTable .rowHead {
+  white-space: nowrap;
+  font-weight: 500;
+  font-size: 0.85em;
+}
+.contrastTable .cellLabel {
+  font-weight: 600;
+}
+.contrastTable .cellAnswer {
+  margin: 0.35rem 0;
+  font-variant-numeric: tabular-nums;
+}
+.contrastTable .because {
+  margin: 0.35rem 0;
+  color: var(--c-accent, #7aa2f7);
+}
+.contrastTable td.st {
+  text-align: center;
+  width: 17%;
+}
+.contrastTable td.absent {
+  color: var(--c-muted);
+}
+/* The declared contrast. Marked by a BORDER and a background, not by colour alone. */
+.contrastTable td.changed {
+  outline: 2px solid var(--c-accent, #7aa2f7);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--c-accent, #7aa2f7) 14%, transparent);
+}
+/* A rewording: the same claim about a differently-named piece. Dotted, and deliberately quieter. */
+.contrastTable td.reworded {
+  outline: 1px dotted var(--c-muted);
+  outline-offset: -2px;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── The pen (M7.2c) ────────────────────────────────────────────────────────────────────────── */
+.penRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin: 0.4rem 0;
+}
+/* The snap's name. Research 07 rule 5: a vertex that moved must say it moved, so this is a live
+   readout and not a tooltip — it has to be visible at the moment the click would land. */
+.snapNote {
+  margin: 0.25rem 0 0;
+  color: var(--c-accent, #7aa2f7);
+}
+
+/* ── The faded drill (M7.3) ─────────────────────────────────────────────────────────────────── */
+/* The rung's card sits at the top of the rail, above the record it is about: everything below it is
+   what the rung has NOT masked, so the thing doing the masking has to be the first thing read. */
+.drillCard {
+  border-left: 3px solid var(--c-accent);
+}
+.drillHead {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin: 0.2rem 0 0.4rem;
+}
+.drillTasks {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.drillTasks li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.drillQ {
+  gap: 0.5rem;
+}
+.drillPick {
+  flex: 1 1 10rem;
+  min-width: 0;
+}
+/* The ledger's own claim, under the answer it contradicts. Indented so it reads as belonging to the
+   row above rather than as a new statement of this file's own. */
+.drillWhy {
+  margin: 0 0 0.5rem 0.75rem;
+  color: var(--c-muted);
+  border-left: 2px solid var(--c-border);
+  padding-left: 0.5rem;
+}
+.drillVerdict {
+  margin: 0.4rem 0;
+  font-weight: 500;
+}
+/* The same two colours the ledger's own glyphs use — a verdict about the ledger should not be a
+   third palette. `#7fd1a8` is `.ledgerRow.satisfied .glyph`'s. */
+.drillVerdict.ok {
+  color: #7fd1a8;
+}
+.drillVerdict.bad {
+  color: var(--c-warn);
+}
+
 /* ---- narrow viewports ---- */
 /* The page scrolled SIDEWAYS on a phone, and the cause was two rigid `rem` tracks that nothing was
    ever written to relax: the shell's `var(--rail)` column and the strip's `19rem` readout column.

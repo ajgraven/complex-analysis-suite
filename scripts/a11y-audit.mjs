@@ -56,6 +56,19 @@ const BASELINE_PATH = join(HERE, "a11y-baseline.json");
 // (2d-electrostatics index/polygon; hele-shaw-flow index/twist/droplet; correspondences
 // index/mating). The three ADR-0036 apps carry the shared nav header (mountNavHeader) + the @cas/ui
 // canvas/boundary a11y, so all their pages are audited here.
+/**
+ * A `#vs=` permalink for this suite's view-state envelope, written out rather than pasted.
+ *
+ * One roster entry needs a page state that is NOT the default: M7.1 found that this roster audits
+ * every page in its landing state, so a panel nobody opens — or a drill rung nobody reaches — is
+ * never audited at all, and the alternative was measuring those states by hand once. Contour
+ * Integration's drill rungs are addressable by design (M7's gate clause 2), so the roster can simply
+ * ASK for one. The wire keys are the app's (`shell/viewState.ts`); if they ever change, the `expect`
+ * selector below fails loudly rather than quietly auditing the default page.
+ */
+const viewState = (app, state) =>
+  `#vs=${Buffer.from(JSON.stringify({ v: 1, app, state }), "utf8").toString("base64url")}`;
+
 const PAGES = [
   { id: "launcher", mount: "launcher", dist: "apps/launcher/dist", file: "index.html" },
   {
@@ -141,6 +154,19 @@ const PAGES = [
     mount: "contour-integration",
     dist: "apps/contour-integration/dist",
     file: "index.html",
+  },
+  {
+    // The faded drill at rung ii (M7.3), reached by its own permalink: the ledger's KILL column is
+    // masked and replaced by a question per piece, which is a different set of controls from
+    // anything the default page shows. `expect` is what keeps this honest — a link this build no
+    // longer honours leaves `.drillCard` hidden, and the run fails by name instead of auditing the
+    // landing state under a label that claims otherwise.
+    id: "contour-integration-drill",
+    mount: "contour-integration",
+    dist: "apps/contour-integration/dist",
+    file: "index.html",
+    hash: viewState("ci", { m: "g", r: "jordan-cosine-kernel", bi: { a: 1, b: 1 }, dr: ["oscillatory", 2] }),
+    expect: ".drillCard:not([hidden]) select.drillPick",
   },
   {
     id: "correspondences",
@@ -277,7 +303,7 @@ async function listen() {
 
 // ── Audit one page ───────────────────────────────────────────────────────────
 async function auditPage(context, baseUrl, page) {
-  const url = `${baseUrl}/${page.mount}/${page.file}`;
+  const url = `${baseUrl}/${page.mount}/${page.file}${page.hash ?? ""}`;
   const tab = await context.newPage();
   const consoleErrors = [];
   tab.on("pageerror", (e) => consoleErrors.push(String(e)));
@@ -290,6 +316,19 @@ async function auditPage(context, baseUrl, page) {
       await tab.goto(url, { waitUntil: "load", timeout: 20000 });
     }
     await tab.waitForTimeout(SETTLE_MS);
+    // A page audited in a NON-default state has to prove it got there. Loud on purpose: a silent
+    // fallback to the landing state would keep reporting "clean" about something else entirely.
+    if (page.expect !== undefined) {
+      try {
+        await tab.waitForSelector(page.expect, { timeout: 5000 });
+      } catch {
+        throw new Error(
+          `${page.id}: '${page.expect}' never appeared — the state this entry audits was not reached ` +
+            `(its permalink is probably no longer honoured), so the audit would have been of the ` +
+            `default page under the wrong name`,
+        );
+      }
+    }
     const results = await new AxeBuilder({ page: tab }).withTags(AXE_TAGS).analyze();
     // Collapse to a per-rule fingerprint: rule id → { impact, count of violating nodes, help }.
     const rules = {};

@@ -20,6 +20,7 @@ import {
   type ShellState,
   type StateResolution,
 } from "../src/shell/state.js";
+import { penContour } from "../src/engine/contour/pen.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { TEMPLATES } from "../src/shell/templates.js";
 import { NO_BRANCH, type BranchChoice } from "../src/kernel/branch/model.js";
@@ -358,13 +359,19 @@ describe("a link that cannot be honoured refuses BY NAME", () => {
     if (!e.ok) expect(e.reason).toContain("nothing to link to");
   });
 
-  it("a contour with no template behind it — the pen tool's case, named rather than half-built", () => {
+  it("a contour from NEITHER a template nor the pen — the refusal M7.2 narrowed but did not remove", () => {
+    // This test used to pin "the pen tool's job (M7) and is deliberately not built yet". It is built
+    // now, so the refusal narrows to what is genuinely unlinkable: a contour with no recipe whose
+    // pieces the pen did not draw either. Asserted in BOTH directions, so the narrowing is pinned
+    // rather than merely reworded.
     const e = encodeShell({ ...base(), contourSource: null });
     expect(e.ok).toBe(false);
-    if (!e.ok) {
-      expect(e.reason).toContain("did not come from a template");
-      expect(e.reason).toContain("pen tool");
-    }
+    if (!e.ok) expect(e.reason).toContain("neither a template nor the pen");
+
+    // And the pen's own contour now encodes, which is the other half of the same claim.
+    const drawn = penContour({ nodes: [{ at: [-1, -1] }, { at: [1, -1] }, { at: [0, 1] }], closed: true });
+    const ok = encodeShell({ ...base(), contour: drawn, contourSource: null, sandboxContour: drawn });
+    expect(ok.ok, ok.ok ? "" : ok.reason).toBe(true);
   });
 });
 

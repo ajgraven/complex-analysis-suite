@@ -95,12 +95,13 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **537 test files / 5480 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **542 test files / 5623 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
-`apps/contour-integration/test/shell.test.ts` are the only jsdom ones — the latter per-file, through a
-`// @vitest-environment jsdom` docblock. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+three of Contour-Integration's specs are the only jsdom ones — `test/shell.test.ts`,
+`test/pen.test.ts` and `test/drillShell.test.ts`, each per-file through a
+`// @vitest-environment jsdom` docblock, because all three reach `src/shell/app.ts`. **Never pipe the gate through `tail` or `head`** — doing so has truncated
 real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
@@ -284,7 +285,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 6** and published — **M1–M6 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 7** and published — **M1–M7 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -306,8 +307,9 @@ computed from a verdict** (the last literal `=` is gone, and the corroborating q
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
 the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
 complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
-so what a reader sees is now also what a reader can SHARE. Still to come: M7 — the pen tool (free-hand
-path editing) and the teaching layer, split out of M6 because PLAN's M6 gate never mentioned them.
+so what a reader sees is now also what a reader can SHARE. **M7 is complete (M7.1–M7.4)** — the contrast
+ladder, the pen and the faded drill, with the milestone split out of M6 because PLAN's M6 gate never
+mentioned the teaching layer it carried.
 **M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
@@ -587,6 +589,144 @@ established in another module. The doc sweep found the **root README** stale in 
 `@cas/rigor` in the package tree, no Contour Integration in either the tree or the app table, a test
 count from 436 files ago, and "ten applications riding twelve packages" where there are twelve and
 thirteen.
+
+**M7.1 — the contrast ladder: five arguments, each one declared row from the last.** Research 02
+§13's contrasting cases as gallery ORGANISATION rather than lessons (M7's scope excludes prose,
+prediction prompts and self-explanation prompts on the record). `engine/contrast.ts` aligns two
+ledgers and says how they differ; `shell/contrastGrid.ts` holds the five cells and their DECLARED
+difference sets, and the test derives the real set from the engine and requires equality **in both
+directions** — nothing undeclared differs, nothing declared agrees. **Measuring first changed four
+things.** **(1) The wrong-way cell is not a record and CANNOT be**: B1 derives its closing side from
+`sgnA = if(a < 0, -1, 1)` and a `derived` parameter is read-only precisely so the geometry cannot
+desync from its own definition, so the record is incapable of being closed wrongly — it is a SANDBOX
+state, which makes a cell a `ShellState`, the ladder span both modes, and the gate's
+permalink-addressability clause fall out for free. **(2) Rows cannot be aligned by `pieceId`** — the
+plan's own risk S-c, biting on the first pair: B1 names its target piece `realAxis` where the sandbox
+semicircle names the same row's piece `diameter`, so an id-keyed pairing reports a removal and an
+addition where one row changed STATUS. The key is `(constraint, role, ordinal)`, the ordinal forced
+because C1 carries two KILL/target rows and two KILL/vanish, and the alternative is implemented in
+the test and shown to mis-pair. **(3) The step to C1 moves FIVE things, not the plan's two** — CATCH
+`1 → 0` enclosed, the target row splitting ×1 → ×2, a new vanish row, `pieceLimits`, and the answer —
+and the last is a UI requirement, since C1's `∮` is exactly 0 while the integral it determines is
+`π/2`, so **the grid prints the record's ANSWER and not the ledger's value**. **(4) Running the
+ladder found a category with no field for it**: rows whose WORDING moves without the argument doing
+so (a renamed piece across the record/sandbox boundary; a quoted clearance). Widening the declared
+set would make the grid point at rows that did not change and ignoring them would leave a difference
+nobody watches, so they are declared apart, and **a STATUS change may never be filed there** — the
+one loophole that would empty the declaration of content. What survives is the premise: the first
+three rungs are ONE ROW apart and it is the same row all three times, the arc's. Three findings from
+the UI. **Contrasts is not a MODE** — a third one would make every mode check, the codec included,
+grow a case meaning "none of the above"; it is a panel, and opening a cell is `applyState`.
+**First-appearance row order is wrong and drawing the table is what showed it**, since C1's extra
+rows then land BELOW `COVER` in an order its own argument never had — a topological merge instead,
+with the failing alternative in the test. And **the a11y roster audits pages in their DEFAULT state,
+so a panel nothing opens is never audited**: run by hand, axe found `empty-table-header` on the
+corner cell, now named and pinned in the node gate because the axe job does not block. One defect
+measured and deliberately NOT absorbed: the page scrolls horizontally at phone width, identically
+with the panel open, shut and on the tree before this slice, with `footer.strip` the sole cause
+(removing it drops 656 → 400; the nav, rail and bar change nothing). Sweep **24/24**; the one
+first-pass survivor was real and unreachable from the ladder — nothing tested that a row
+DISAPPEARING is reported, because the ladder only runs forwards — and writing that test found that
+`KILL/vanish#1` is C1's big arc rather than its indentation, the ordinal counting in PIECE order, so
+B1's arc pairs with C1's INDENTATION. Nothing false follows, both being in the declared set, but the
+pairing is by position within the role rather than by what a reader would call the same piece.
+
+**M7.2 — the pen: a contour you DRAW, and a link that carries what you drew.** M1's deferred item,
+and the grammar every reader already knows (research 07 rule 6) — click = corner, drag = arc, click
+the first vertex = close, Backspace/Escape/Enter, Alt suppresses snapping — in the sandbox only,
+since a record's contour is the record's. **An arc is pinned by a BULGE, not a centre**: the apex's
+signed offset from the chord's midpoint is one number, is exactly what the drag measures, and
+*cannot* disagree with the endpoints where a centre (two numbers) can; zero degrades to a segment
+continuously. Every drawn piece is a first-class object with an id, a name, a role and a colour, so
+the gate — a hand-drawn contour's ledger is indistinguishable IN KIND from a template's — is asserted
+by putting a drawn square and the circle template around the same simple pole and comparing both the
+constraint/status shape and the value (`2πi`). **The payload chose the wire form:** a twelve-corner
+path carried as its piece list is 2,028 base64 characters, *at* research 07 §6's ~2 kB warning, and
+twenty corners is 4,635 — the same path as vertices plus a per-piece kind tag is **292**, because
+ids, names, colours and every shared endpoint are DERIVED. It round-trips to the same piece list, and
+the path is read back out of the geometry rather than stored (one source of truth), so `contourOut`
+rebuilds and compares before minting a link — **by SHAPE, not by bytes**, which the first draft
+discovered by refusing a perfectly good arc: the bulge goes out through `atan2` and back through
+`cos`/`sin`, bit-identical in three of four measured cases and off by 2.0e-13 in the fourth, moving
+sampled points by at most 1.3e-12. Five findings. **(1) The defect that shipped in the first draft**
+— the drag bowing the piece *leaving* the new vertex against a chord whose far end was still the
+click, so the chord was zero — **and the correction to why it survived**, which measuring found: it
+was recorded as invisible to jsdom by construction, where in fact `viewport()`'s `|| 1` guard
+MAGNIFIES the geometry by 4 (the chord is 280 world units, the drag makes a real arc with bulge
+−358), and what let it through was a test asserting the piece COUNT where the defect shows in the
+KINDS. **(2) The browser harness's layout was then the defect itself**, twice: Vitest browser mode's
+viewport defaults to **414 × 896** — a phone, in which this app's desktop grid overflows — and
+mounting without the app's stylesheets gives not a plainer layout but a different one, `.stage` at
+1200 × 316 with `canvas.ink` at 1200 × **154**, two boxes that in the real app are the same box. Tests
+aimed at either were aiming at an artefact, and the snap that never fired read as a pen defect until
+a probe against the dev server showed the product was fine. **(3) `sameShape`'s kind check: the test
+pinned the outcome without pinning the reason** — measured, an arc above the straightness floor over
+a chord of 2 has radius 5e8, where `pointAt`'s own cancellation moves the samples by 1.1e-7, two
+orders above `SHAPE_EPS`, so the samples always disagree first and the check can only decide on a
+SHORT chord. **(4) The encode-side verification had no test at all**, because every path the pen can
+draw round-trips; what it guards is a contour whose pieces are not the chain its vertices describe.
+**(5) The pen's drawing state audits clean** (zero axe rules in all three states), measured by hand
+because the roster only ever sees a page's default state. Sweep **25/25**, five closed on a second
+pass and no equivalents — among them that the card must NOT be rebuilt on a move that changes
+nothing, whose consequence is not cosmetic: `replaceChildren` destroys the buttons, so a reader who
+has tabbed to `Cancel` loses focus the moment the mouse crosses the stage.
+
+**M7.3 — the faded drill: four rungs, each supplying less.** Research 02 §7's contour-choice drill
+(item 11 of §8 minus its prompts, M7 §0): rung i is the worked argument, rung ii masks the ledger's
+KILL column, rung iii masks the contour as well and offers a menu, rung iv is a blank plane and the
+pen — scoped to M7.1's contrast set, fading on progress in a versioned `localStorage` key where
+absence and garbage read identically. Every rung is a `ShellState`, so **every rung is a permalink**
+(M7's gate clause 2) and rides M6.2's round-trip-by-verdict test. Four measurements changed what the
+rungs ASK. **(1) "Assert each ledger row" is not a task, structurally** — a faded worked example is
+faded from a CORRECT argument, so on these four tasks it is **30 rows, 30 satisfied** (26 exact), and
+ticking "satisfied" scores 30/30 without reading any mathematics. So rung ii asks the KILL column —
+what each PIECE is for, read off `(status, role, level)` — at target ×5, vanishes ×4, a known limit
+×1, where a constant answer scores exactly 5/10; the feedback on a wrong answer is the ledger's own
+row. **(2) The menu needs a membership rule**: running each record's integrand over all ten
+templates, FOUR of them (strip, wedge, keyhole, dogbone) close and report a target for B1 at `a = 1`,
+because each carries a `reproduces` piece and **the ledger takes that role on faith** — nothing checks
+`f(ωz) = μ f(z)`. The menu is drawn from the templates whose every role the ledger establishes, and a
+test pins that the wedge really does answer, so the rule is load-bearing. **(3) At `a = 0` the
+wrong-way contour is not wrong** — the rational case closes in either half-plane and both report `π`
+— so the menu declares a second right answer and rung iv's check relaxes with it, the two
+declarations cross-checked against each other. **(4) Rung iv cannot check what the others check, and
+not from a gap in the drill**: a drawn contour is a FIXED curve while the argument is about `R → ∞`,
+and comparing `∮` to the answer would pass a small circle round the pole — so it checks the
+ENCLOSURE, with the sign (a counter-clockwise loop about `−i` is refused where the record winds `−1`),
+and C1 declares no check because it encloses nothing at all. **The mask's first implementation was
+wrong in a way only a browser could find**: `drawContour` begins with `clearRect`, so masking by
+SKIPPING the call left the previous frame's contour standing — the ledger hidden, the value hidden and
+the answer still drawn. It draws an empty piece list now, measured at **14,429 ink pixels at rung i,
+0 at rung iii, 14,729 after a pick**, with the phase portrait untouched because the integrand is the
+question. The sandbox twin of each record's integrand is declared and **verified against the record's
+own compiled `f`** at 48 points (`@cas/expr` has no printer), which also closes a gap M7.1 left where
+its wrong-way cell transcribed B1's integrand unchecked. Every rung audits clean under `axe`,
+measured by hand since the roster only sees default states. Sweep **30/30**, three closed on a second
+pass — two unreachable from the drill's own tasks and built by hand, one the value card nothing
+asserted was masked.
+
+**M7.4 completes M7 — the review, and three defects in code that shipped green.** Each slice swept
+as it landed (24/24, 25/25, 30/30), so the closing slice is the review. **(1) The pen survived
+leaving the sandbox**: its controls live in the Contour card and the card offers them in the sandbox
+only, so switching to gallery mode took them off screen while `penNodes` stayed non-null — and
+`pointerdown` takes the pen's click BEFORE any grab test, deliberately. Measured with two vertices
+placed: a click in gallery mode placed a THIRD into a path with no visible controls, and Enter then
+COMMITTED it, leaving `contourSource` null and `sandboxContour` a contour the reader never drew; the
+same click would otherwise have grabbed a record's radius handle. It is put away now on leaving the
+sandbox and on every `applyState` — which is the decision M7.2 already recorded, a half-drawn path
+being no state worth restoring. **(2) A grading could outlive its rung**: the derivation is unmasked
+once rung ii has been checked (it is then the answer sheet), and `drillGraded` was a shell local
+`applyState` did not clear, so a state restored while graded would have shown the whole derivation at
+rung iii where the argument is exactly what is masked — `enterDrill` happened to clear it and a link
+did not, which is the shape of defect a review finds by reading rather than by failing. **(3)
+`checkDrawing` passed VACUOUSLY on an empty singular set**: it mapped over the DRAWN windings alone,
+so an integrand with no poles — and rung iv leaves the reader free to edit the box — gave an empty row
+list, nothing wrong in it, and the rung reported the enclosure exactly right; the set now has to match
+in both directions. **And the a11y roster audits a MASKED rung through its own permalink**, closing
+M7.1's "a panel nothing opens is never audited" structurally for the drill rather than by hand — the
+gate's addressability clause paying off somewhere unexpected — guarded by a selector that must appear,
+since a link the app stops honouring would otherwise audit the landing page under a name claiming
+otherwise (measured: a wrong task id exits 2 naming the state it could not reach).
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

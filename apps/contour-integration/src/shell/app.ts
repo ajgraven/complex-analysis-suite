@@ -13,7 +13,7 @@ import {
   type View,
   type Viewport,
 } from "../kernel/camera.js";
-import type { Cx, Resolved } from "../kernel/geom.js";
+import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { jumpWeights } from "../kernel/branch/correction.js";
@@ -84,12 +84,43 @@ import {
   resolveState,
   type Compiled,
   type ContourSource,
+  type DrillState,
   type ShellState,
   type StateResolution,
 } from "./state.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
+import { CONTRAST_CELLS, contrastTable } from "./contrastGrid.js";
+import {
+  allCorrect,
+  checkDrawing,
+  DISPOSAL_LABEL,
+  DISPOSALS,
+  DRILL_TASKS,
+  gradePieces,
+  menuVerdict,
+  pickState,
+  pieceQuestions,
+  runTask,
+  taskById,
+  taskState,
+  type Disposal,
+  type DrawResult,
+  type DrillStage,
+  type DrillTask,
+  type Graded,
+} from "./drill.js";
+import {
+  isComplete,
+  LAST_STAGE,
+  readProgress,
+  stageFor,
+  withCleared,
+  writeProgress,
+  type KeyStore,
+} from "./drillProgress.js";
+import { bulgeFromApex, penContour, penPath, type PenNode } from "../engine/contour/pen.js";
 
 /**
  * The shell: an integrand, a contour, and the integral accumulating along it — in two modes.
@@ -273,6 +304,35 @@ export function mountApp(root: Element): ShellHandle {
     | { readonly kind: "branch"; readonly handle: BranchHandle }
     | null = null;
   let handles: readonly Handle[] = [];
+
+  // --- the pen (M7.2c) ----------------------------------------------------------------------
+  /**
+   * The path being drawn, or `null` when the pen is not out.
+   *
+   * **A THIRD TOP-LEVEL STATE, not a fourth `grab` kind.** `grab` answers "what does a MOVE act
+   * on?", and the pen's grammar is click-to-place: there is nothing held between events, and a drag
+   * bows the piece just placed rather than moving anything. Filing it under `grab` would make every
+   * reader of that union ask whether the pen can be dragged.
+   *
+   * It is NOT in `ShellState`, deliberately: a half-drawn path is not a state worth sharing or
+   * restoring, and `contour` already holds every finished one. `penNodes` is the gesture; the
+   * contour is the result.
+   */
+  let penNodes: PenNode[] | null = null;
+  /** Where the pointer is while drawing, in plot coordinates — the pending piece's other end. */
+  let penAt: Cx | null = null;
+  /** The snap that fired for `penAt`, so the badge can name it (research 07 rule 5). */
+  let penSnap: string | null = null;
+  /**
+   * The faded drill's open rung (M7.3), or null.
+   *
+   * A shell local like every other piece of state: `currentState` projects it and `applyState`
+   * restores it, so a rung is a permalink. It decides what is MASKED and never a number — nothing
+   * downstream of `resolveState` reads it.
+   */
+  let drill: DrillState | null = null;
+  /** Held while a drag bows the piece just placed; `null` between clicks. */
+  let penDrag: { readonly from: Cx; readonly index: number } | null = null;
   /**
    * The declared cut system — a SANDBOX object, not something read out of the integrand.
    *
@@ -481,6 +541,30 @@ export function mountApp(root: Element): ShellHandle {
    * Older engines have no async clipboard at all, so there is a `document.execCommand` fallback, and
    * if even that fails the button says so rather than pretending.
    */
+  /**
+   * **CONTRASTS IS NOT A MODE.** M7.1's ladder is five `ShellState`s, three of them gallery records
+   * and one a sandbox state, so a third `mode` would have to represent "showing the grid" as a
+   * property of a state that is already in one of the two modes — and every mode check in the file,
+   * the codec included, would grow a case that means "none of the above". It is a panel over the
+   * app instead, and opening a cell is `applyState(cell.state())`: the grid hands the reader a
+   * state and gets out of the way, which is also why every cell is already a permalink.
+   */
+  const contrastButton = el("button", "preset contrastOpen", "Contrasts");
+  contrastButton.type = "button";
+  contrastButton.setAttribute("aria-label", "compare five arguments that differ one step at a time");
+  contrastButton.setAttribute("aria-expanded", "false");
+
+  /**
+   * **THE DRILL IS A MASK, NOT A MODE** (M7.3) — the same reasoning as Contrasts one step further.
+   * Its four rungs are the app with progressively less of it supplied: the ledger's KILL column
+   * masked, then the contour not drawn at all, then a blank plane and a pen. Nothing about a rung
+   * changes a number, so `resolveState` never sees it; what it changes is what this file draws.
+   */
+  const drillButton = el("button", "preset drillOpen", "Drill");
+  drillButton.type = "button";
+  drillButton.setAttribute("aria-label", "practise choosing a contour, with less given each time");
+  drillButton.setAttribute("aria-expanded", "false");
+
   const shareButton = el("button", "preset shareLink", "Copy link");
   shareButton.type = "button";
   shareButton.setAttribute("aria-label", "copy a permalink to this state");
@@ -583,11 +667,518 @@ export function mountApp(root: Element): ShellHandle {
     sourceWrap,
     sandboxGroup,
     galleryGroup,
+    contrastButton,
+    drillButton,
     shareButton,
     saveButton,
     copyImageButton,
     shareNote,
   );
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // The contrast grid (M7.1).
+  //
+  // Built ONCE, on first open, because every cell runs a full solve and four of the five are gallery
+  // records: doing that at mount would put five solves in front of the first frame for a panel most
+  // readers never open. It is not rebuilt afterwards either — the ladder is a constant, and nothing
+  // the reader does to the app can change what those five states resolve to.
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  const contrastPanel = el("section", "contrastPanel");
+  contrastPanel.hidden = true;
+  contrastPanel.setAttribute("aria-label", "contrasting arguments");
+  const contrastClose = el("button", "preset contrastClose", "Close");
+  contrastClose.type = "button";
+  let contrastBuilt = false;
+  let contrastReturnFocus: HTMLElement | null = null;
+
+  /** A status glyph with a real text alternative — the glyph alone names nothing. */
+  function statusCell(status: string, claim: string): HTMLElement {
+    const td = el("td", `st ${status}`);
+    const glyph = el("span", "glyph", status === "satisfied" ? "✓" : status === "failed" ? "✗" : "?");
+    glyph.setAttribute("aria-hidden", "true");
+    td.append(glyph, el("span", "srOnly", status));
+    td.title = claim;
+    return td;
+  }
+
+  function buildContrastPanel(): void {
+    const table = contrastTable();
+    const head = el("tr");
+    // NOT empty: axe's `empty-table-header` fires on a bare corner cell, and it is also the one
+    // place to say what the row headings are. Found by running axe against the OPEN panel — the
+    // a11y roster audits pages in their default state, so a panel nothing opens is never audited.
+    head.append(el("th", "rowHead", "ledger row"));
+    for (const cell of table.cells) {
+      const th = el("th", "colHead");
+      th.scope = "col";
+      th.append(el("div", "cellLabel", cell.label), el("div", "muted small", cell.note));
+      // The step's own sentence — what this column changes about the one before it.
+      if (cell.because !== null) th.append(el("div", "because small", `↑ ${cell.because}`));
+      // **THE ANSWER, NOT `∮`.** C1's `∮` is exactly 0 while the integral it determines is π/2.
+      const answer = el("div", "cellAnswer");
+      answer.textContent = cell.answer ?? (cell.closes ? "—" : `⚠ does not close (${cell.failedAt ?? "?"})`);
+      th.append(answer);
+      const open = el("button", "preset", "Open");
+      open.type = "button";
+      open.setAttribute("aria-label", `open ${cell.label} in the app`);
+      open.addEventListener("click", () => {
+        const found = CONTRAST_CELLS.find((c) => c.id === cell.id);
+        if (found === undefined) return;
+        closeContrast();
+        applyState(found.state());
+        frameContour();
+      });
+      th.append(open);
+      head.append(th);
+    }
+
+    const body = el("tbody");
+    for (const row of table.rows) {
+      const tr = el("tr");
+      const th = el("th", "rowHead");
+      th.scope = "row";
+      th.textContent = row.label;
+      tr.append(th);
+      row.cells.forEach((entry, i) => {
+        if (entry === null) {
+          const td = el("td", "st absent");
+          td.append(el("span", "glyph", "—"));
+          td.title = "this argument has no such row";
+          tr.append(td);
+          return;
+        }
+        const td = statusCell(entry.status, entry.claim);
+        // The declared contrast, and only it. An incidental rewording is marked apart, because a
+        // grid that highlights a row saying the same thing in other words stops meaning anything.
+        if (row.highlight.includes(i)) td.classList.add("changed");
+        else if (row.muted.includes(i)) td.classList.add("reworded");
+        tr.append(td);
+      });
+      body.append(tr);
+    }
+
+    const t = el("table", "contrastTable");
+    const thead = el("thead");
+    thead.append(head);
+    t.append(thead, body);
+
+    const bar2 = el("div", "contrastBar");
+    bar2.append(el("h2", undefined, "One step at a time"), contrastClose);
+    const legend = el("p", "muted small");
+    legend.textContent =
+      "Each column differs from the one on its left in the highlighted row, and in nothing else. " +
+      "A dotted cell is the same claim about a differently-named piece.";
+    contrastPanel.replaceChildren(bar2, legend, t);
+    contrastBuilt = true;
+  }
+
+  function openContrast(): void {
+    if (!contrastBuilt) buildContrastPanel();
+    contrastReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    contrastPanel.hidden = false;
+    contrastButton.setAttribute("aria-expanded", "true");
+    contrastClose.focus();
+  }
+
+  function closeContrast(): void {
+    if (contrastPanel.hidden) return;
+    contrastPanel.hidden = true;
+    contrastButton.setAttribute("aria-expanded", "false");
+    // Focus goes back where it came from, or the reader is dropped at the top of the document.
+    (contrastReturnFocus ?? contrastButton).focus();
+    contrastReturnFocus = null;
+  }
+
+  contrastButton.addEventListener("click", () => {
+    if (contrastPanel.hidden) openContrast();
+    else closeContrast();
+  });
+  contrastClose.addEventListener("click", closeContrast);
+  // Appended HERE rather than in the `shell.append` above, because `contrastPanel` is declared
+  // below that line and a `const` used before its declaration is a runtime error, not a hoist.
+  shell.append(contrastPanel);
+  contrastPanel.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      closeContrast();
+    }
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // THE FADED DRILL (M7.3) — four rungs, each supplying less.
+  //
+  // `shell/drill.ts` owns the data and every verdict; this owns the DOM and the masks. The masks
+  // are the whole mechanism: rung ii hides the ledger's KILL column (its questions replace it) and
+  // the derivation with it, rung iii hides the ledger, the derivation, the value AND the contour on
+  // the stage — because at the rung whose question is "which contour?", the record's own contour is
+  // the answer, drawn. Masking that is the same act as masking the ledger one rung earlier.
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  const drillPanel = el("section", "contrastPanel drillPanel");
+  drillPanel.hidden = true;
+  drillPanel.setAttribute("aria-label", "contour-choice drill");
+  const drillClose = el("button", "preset contrastClose", "Close");
+  drillClose.type = "button";
+  let drillReturnFocus: HTMLElement | null = null;
+  /** The reader's answer sheet at rung ii, and the grading once they have asked for it. */
+  let drillAnswers: Record<string, Disposal | undefined> = {};
+  let drillGraded: readonly Graded[] | null = null;
+  /** Rung iv's last check, so the result survives a redraw. */
+  let drillDrawn: DrawResult | null = null;
+  /** The record a rung is about, cached: `as-recorded` needs its windings on every check. */
+  let drillRun: FamilyRun | null = null;
+  let drillRunFor: string | null = null;
+
+  const store = (): KeyStore | null => {
+    try {
+      return window.localStorage;
+    } catch {
+      // A private window throws on ACCESS, not on use. The drill still works; it just forgets.
+      return null;
+    }
+  };
+  let progress = readProgress(store());
+
+  /** The task a rung is about, and its solved record — one solve per task, kept. */
+  function drillTaskRun(task: DrillTask): FamilyRun | null {
+    if (drillRunFor !== task.id) {
+      drillRun = runTask(task);
+      drillRunFor = task.id;
+    }
+    return drillRun;
+  }
+
+  const openTask = (): DrillTask | null => (drill === null ? null : taskById(drill.task));
+
+  /** What the drill is hiding right now. Read by `renderLedger`, `renderDerivation`, `drawStage`. */
+  function mask(): "none" | "kill" | "argument" {
+    if (drill === null) return "none";
+    if (drill.stage === 2) return "kill";
+    // Rung iii, before a pick: the app is still on the record, so everything about it is the answer.
+    if (drill.stage === 3 && mode === "gallery") return "argument";
+    return "none";
+  }
+
+  function enterDrill(task: DrillTask, stage: DrillStage): void {
+    // The answer sheet, the grading and the last enclosure check are cleared by `applyState`, which
+    // every rung change goes through — stated there because a link and a contrast cell need it too.
+    applyState(taskState(task, stage));
+    frameContour();
+  }
+
+  function leaveDrill(): void {
+    drill = null;
+    drillAnswers = {};
+    drillGraded = null;
+    drillDrawn = null;
+    recompute();
+  }
+
+  /** Record a cleared rung and remember it. Never changes a number — see `drillProgress.ts`. */
+  function clearRung(task: DrillTask, stage: DrillStage): void {
+    progress = withCleared(progress, task.id, stage);
+    writeProgress(store(), progress);
+  }
+
+  function buildDrillPanel(): void {
+    const bar2 = el("div", "contrastBar");
+    bar2.append(el("h2", undefined, "Choosing a contour"), drillClose);
+    const legend = el("p", "muted small");
+    legend.textContent =
+      "Four rungs, each supplying less: the worked argument, then its KILL column to fill in, then " +
+      "a choice of contour, then a blank plane. Where you start is where you left off.";
+    const list = el("ul", "drillTasks");
+    for (const task of DRILL_TASKS) {
+      const li = el("li");
+      const stage = stageFor(progress, task.id);
+      const open = el("button", "preset", `${task.label} — rung ${stage} of ${LAST_STAGE}`);
+      open.type = "button";
+      open.setAttribute("aria-label", `open ${task.label} at rung ${stage}`);
+      open.addEventListener("click", () => {
+        closeDrill();
+        enterDrill(task, stage);
+      });
+      li.append(open);
+      if (isComplete(progress, task.id)) li.append(el("span", "tag", "all four done"));
+      list.append(li);
+    }
+    drillPanel.replaceChildren(bar2, legend, list);
+  }
+
+  function openDrill(): void {
+    // Rebuilt on every open, unlike the contrast grid: progress changes between opens, and the
+    // rung each task offers is the one thing this panel is for.
+    buildDrillPanel();
+    drillReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    drillPanel.hidden = false;
+    drillButton.setAttribute("aria-expanded", "true");
+    drillClose.focus();
+  }
+
+  function closeDrill(): void {
+    if (drillPanel.hidden) return;
+    drillPanel.hidden = true;
+    drillButton.setAttribute("aria-expanded", "false");
+    (drillReturnFocus ?? drillButton).focus();
+    drillReturnFocus = null;
+  }
+
+  drillButton.addEventListener("click", () => {
+    if (drillPanel.hidden) openDrill();
+    else closeDrill();
+  });
+  drillClose.addEventListener("click", closeDrill);
+  drillPanel.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape") {
+      ev.stopPropagation();
+      closeDrill();
+    }
+  });
+  shell.append(drillPanel);
+
+  /** The rung's own card: what is given, what to do, and what the ledger said about it. */
+  function renderDrill(): void {
+    const task = openTask();
+    if (task === null) {
+      drillCard.hidden = true;
+      drillCard.replaceChildren();
+      return;
+    }
+    const stage = drill?.stage ?? 1;
+    drillCard.hidden = false;
+    drillCard.replaceChildren(el("h2", undefined, "Drill"));
+    const head = el("p", "drillHead");
+    head.append(el("span", "num", task.label), el("span", "tag", `rung ${stage} of ${LAST_STAGE}`));
+    drillCard.append(head);
+
+    const leave = el("button", "preset", "Leave the drill");
+    leave.type = "button";
+    leave.setAttribute("aria-label", "leave the drill and keep this state");
+    leave.addEventListener("click", leaveDrill);
+
+    const next = (to: DrillStage, label: string): HTMLButtonElement => {
+      const b = el("button", "preset", label);
+      b.type = "button";
+      b.addEventListener("click", () => {
+        enterDrill(task, to);
+      });
+      return b;
+    };
+
+    if (stage === 1) {
+      drillCard.append(
+        el("p", "muted small", "The worked argument, as the gallery gives it: the contour, the ledger and the value."),
+      );
+      const row = el("div", "penRow");
+      const on = next(2, "Next rung");
+      on.addEventListener("click", () => {
+        clearRung(task, 1);
+      });
+      row.append(on, leave);
+      drillCard.append(row);
+      return;
+    }
+
+    if (stage === 2) {
+      renderDrillKill(task);
+      const row = el("div", "penRow");
+      row.append(next(3, "Next rung"), leave);
+      drillCard.append(row);
+      return;
+    }
+
+    if (stage === 3) {
+      renderDrillMenu(task);
+      const row = el("div", "penRow");
+      row.append(next(4, "Next rung"), leave);
+      drillCard.append(row);
+      return;
+    }
+
+    renderDrillDraw(task);
+    const row = el("div", "penRow");
+    row.append(next(1, "Start again"), leave);
+    drillCard.append(row);
+  }
+
+  /** Rung ii: the KILL column, as a question per piece. */
+  function renderDrillKill(task: DrillTask): void {
+    const run = drillTaskRun(task);
+    if (run === null) {
+      drillCard.append(el("p", "muted small", "This record did not solve, so there is nothing to mask."));
+      return;
+    }
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        "The contour is given. Say what each piece is FOR — the pieces you cannot compute must " +
+          "either vanish or give you back the target times a constant.",
+      ),
+    );
+    const questions = pieceQuestions(run);
+    for (const q of questions) {
+      const row = el("label", "paramRow drillQ");
+      row.append(el("span", "num", q.name));
+      const pick = el("select", "drillPick");
+      pick.setAttribute("aria-label", `what ${q.name} is for`);
+      const blank = el("option", undefined, "—");
+      blank.value = "";
+      pick.append(blank);
+      for (const d of DISPOSALS) {
+        const o = el("option", undefined, DISPOSAL_LABEL[d]);
+        o.value = d;
+        pick.append(o);
+      }
+      pick.value = drillAnswers[q.pieceId] ?? "";
+      pick.disabled = drillGraded !== null;
+      pick.addEventListener("change", () => {
+        drillAnswers = { ...drillAnswers, [q.pieceId]: (pick.value || undefined) as Disposal | undefined };
+      });
+      row.append(pick);
+      const graded = drillGraded?.find((g) => g.question.pieceId === q.pieceId);
+      if (graded !== undefined) {
+        const glyph = el("span", `glyph ${graded.ok ? "satisfied" : "failed"}`, graded.ok ? "✓" : "✗");
+        glyph.setAttribute("aria-hidden", "true");
+        row.append(glyph, el("span", "srOnly", graded.ok ? "correct" : "wrong"));
+      }
+      drillCard.append(row);
+      // **THE LEDGER'S OWN ROW IS THE FEEDBACK**, on a wrong answer and only then: this file never
+      // writes a sentence about why a piece does what it does, and a reader who was right does not
+      // need the claim spelled out before they move on.
+      if (graded !== undefined && !graded.ok) {
+        drillCard.append(el("p", "small drillWhy", q.row.claim));
+      }
+    }
+    if (drillGraded === null) {
+      const check = el("button", "preset", "Check");
+      check.type = "button";
+      check.setAttribute("aria-label", "check the KILL column against the ledger");
+      check.addEventListener("click", () => {
+        drillGraded = gradePieces(questions, drillAnswers);
+        if (allCorrect(drillGraded)) clearRung(task, 2);
+        renderDrill();
+        renderLedger();
+        renderDerivation();
+      });
+      drillCard.append(check);
+      return;
+    }
+    const all = allCorrect(drillGraded);
+    drillCard.append(
+      el("p", all ? "drillVerdict ok" : "drillVerdict bad", all ? "Every piece, as the ledger has it." : "Not every piece — the ledger's own claim is under each one."),
+    );
+    const again = el("button", "preset", "Try again");
+    again.type = "button";
+    again.addEventListener("click", () => {
+      drillAnswers = {};
+      drillGraded = null;
+      renderDrill();
+      renderLedger();
+      renderDerivation();
+    });
+    drillCard.append(again);
+  }
+
+  /** Rung iii: a menu of contours, judged by the ledger. */
+  function renderDrillMenu(task: DrillTask): void {
+    const run = drillTaskRun(task);
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        "Only the integral is given — the contour is not drawn. Pick one to close over; the ledger " +
+          "will say whether the argument closes and whether the target is on it.",
+      ),
+    );
+    const row = el("div", "penRow");
+    for (const option of task.menu) {
+      const spec = TEMPLATES.find((t) => t.id === option);
+      if (spec === undefined) continue;
+      const b = el("button", "preset", spec.label);
+      b.type = "button";
+      b.setAttribute("aria-label", `close over the ${spec.label}`);
+      if (mode === "sandbox" && contourSource?.template === option) b.classList.add("on");
+      b.addEventListener("click", () => {
+        const answers = run === null ? false : menuVerdict(run, option).answers;
+        if (answers) clearRung(task, 3);
+        applyState(pickState(task, option));
+        frameContour();
+      });
+      row.append(b);
+    }
+    drillCard.append(row);
+    // Once a pick is on screen the ledger is unmasked and says everything; the drill adds only the
+    // one thing the ledger cannot know — whether this contour answers the integral that was asked.
+    if (mode === "sandbox" && run !== null && contourSource !== null) {
+      const picked = task.menu.find((m) => m === contourSource?.template);
+      if (picked !== undefined) {
+        const v = menuVerdict(run, picked);
+        drillCard.append(
+          el(
+            "p",
+            v.answers ? "drillVerdict ok" : "drillVerdict bad",
+            v.answers
+              ? "The argument closes and the target is a piece of it."
+              : v.hasTarget
+                ? `${v.failedAt ?? "?"}: ${v.why ?? "the argument does not close"}`
+                : "The argument closes, but no piece of this contour is the target — so it is not the integral you were asked for.",
+          ),
+        );
+      }
+    }
+  }
+
+  /** Rung iv: draw one, and check what a drawn contour can decide — the enclosure. */
+  function renderDrillDraw(task: DrillTask): void {
+    const run = drillTaskRun(task);
+    const goal = typeof task.drawCheck === "object" ? null : task.drawCheck;
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        goal === "one-pole"
+          ? "Draw a closed contour that encloses exactly ONE of the singularities — either one, either way round."
+          : goal === "as-recorded"
+            ? "Draw a closed contour that winds about the singularities exactly as the worked one does."
+            : "Draw a closed contour. There is nothing here to check about the enclosure:",
+      ),
+    );
+    if (goal === null && typeof task.drawCheck === "object") {
+      drillCard.append(el("p", "small drillWhy", task.drawCheck.none));
+    }
+    // **WHAT A DRAWN CONTOUR CANNOT CARRY, said once.** The KILL half of the argument is about a
+    // limit (`R → ∞`) and a drawn piece has no limit parameter, so the ledger can certify `∮` here
+    // and not the target. Saying so is the alternative to implying it.
+    drillCard.append(
+      el(
+        "p",
+        "muted small",
+        "A drawn contour is a fixed curve, so the ledger certifies ∮ over it — not the limit the " +
+          "target integral is defined by.",
+      ),
+    );
+    if (goal !== null) {
+      const check = el("button", "preset", "Check the enclosure");
+      check.type = "button";
+      check.addEventListener("click", () => {
+        const windings = integral?.windings ?? [];
+        const recorded = run?.integral.windings ?? [];
+        drillDrawn = checkDrawing(goal, recorded, windings);
+        if (drillDrawn.ok) clearRung(task, 4);
+        renderDrill();
+      });
+      drillCard.append(check);
+    }
+    if (drillDrawn !== null) {
+      drillCard.append(
+        el(
+          "p",
+          drillDrawn.ok ? "drillVerdict ok" : "drillVerdict bad",
+          drillDrawn.ok ? "Exactly that, and the winding numbers are decided exactly." : (drillDrawn.why ?? "not yet"),
+        ),
+      );
+    }
+  }
 
   // Rail cards.
   const errorBox = el("div", "error");
@@ -602,6 +1193,8 @@ export function mountApp(root: Element): ShellHandle {
   const linkBox = el("div", "error linkError");
   linkBox.hidden = true;
   linkBox.setAttribute("role", "status");
+  const drillCard = el("section", "card drillCard");
+  drillCard.hidden = true;
   const recordCard = el("section", "card");
   const ledgerCard = el("section", "card");
   const derivationCard = el("section", "card");
@@ -612,6 +1205,7 @@ export function mountApp(root: Element): ShellHandle {
   rail.append(
     linkBox,
     errorBox,
+    drillCard,
     recordCard,
     ledgerCard,
     derivationCard,
@@ -695,30 +1289,238 @@ export function mountApp(root: Element): ShellHandle {
       const vp = viewport();
       stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
       const ctx = sizeCanvas(inkCanvas, vp.width, vp.height);
+      // **THE CONTOUR IS PART OF THE MASK** (M7.3, rung iii): the question there is which contour to
+      // close over, and the record's own contour is that answer, drawn. The poles and the portrait
+      // stay — they are the problem, not the solution.
+      //
+      // Masked by drawing an EMPTY piece list rather than by skipping the call, which is a defect a
+      // browser pass found and no jsdom test could (there is no canvas there at all):
+      // `drawContour` begins with `clearRect`, so skipping it leaves the PREVIOUS frame's contour
+      // standing on the ink layer — the mask would have hidden the ledger and left the answer drawn.
+      const hidden = mask() === "argument";
       if (ctx) {
-        drawContour(ctx, resolved, view, vp, {
-          colours: contour.pieces.map((p) => p.colour),
-          highlight,
-          marker: acc && acc.steps.length > 0 ? scrub : undefined,
-          refused: integral?.refusal !== undefined,
-          cuts: cutPolylines(),
-          handles: handles.map((h, k) => ({
-            at: h.at,
-            emphasis:
-              grab?.kind === "radius" && grab.handle.param === h.param
-                ? "grabbed"
-                : k === hovered
-                  ? "hover"
-                  : "none",
-          })),
+        drawContour(ctx, hidden ? [] : resolved, view, vp, {
+          colours: hidden ? [] : contour.pieces.map((p) => p.colour),
+          highlight: hidden ? undefined : highlight,
+          marker: !hidden && acc && acc.steps.length > 0 ? scrub : undefined,
+          refused: !hidden && integral?.refusal !== undefined,
+          cuts: hidden ? [] : cutPolylines(),
+          handles: hidden
+            ? []
+            : handles.map((h, k) => ({
+                at: h.at,
+                emphasis:
+                  grab?.kind === "radius" && grab.handle.param === h.param
+                    ? "grabbed"
+                    : k === hovered
+                      ? "hover"
+                      : "none",
+              })),
         });
         // Branch handles ride the same ring idiom as the radius handles, drawn after them so a cut
         // vertex sitting under a contour handle is still takeable.
-        drawBranchHandles(ctx, vp);
+        if (!hidden) {
+          drawBranchHandles(ctx, vp);
+          drawPen(ctx, vp);
+        }
       }
       drawPoleMarkers();
     });
   };
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // The pen's snapping, and the preview it draws.
+  //
+  // Research 07 rule 5: **snap with intent, never silently.** Every snap returns the name of the
+  // constraint that fired, the badge shows it, and holding a modifier suppresses the lot — because a
+  // reader who cannot place a vertex where they meant to has lost the tool, and one who does not
+  // know a vertex moved has lost the argument. The targets are the ones this app's ledger cares
+  // about: a POLE (a vertex there makes LEGALITY refuse, so it must be deliberate), the axes (a
+  // contour along ℝ is most of the gallery), and the path's own vertices (which is how it closes).
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+
+  /** What a snap moved the pointer to, and what to call it. */
+  function penSnapTo(at: Cx, free: boolean): { readonly at: Cx; readonly why: string | null } {
+    if (free) return { at, why: null };
+    const tol = grabTolerance();
+    // The path's own FIRST vertex wins over everything, because landing on it is how a path closes
+    // and a pole sitting near it must not steal the gesture that finishes the contour.
+    const first = penNodes?.[0];
+    if (first !== undefined && Math.hypot(at[0] - first.at[0], at[1] - first.at[1]) <= tol) {
+      return { at: [first.at[0], first.at[1]], why: "the first vertex — click to close" };
+    }
+    for (const node of (penNodes ?? []).slice(1)) {
+      if (Math.hypot(at[0] - node.at[0], at[1] - node.at[1]) <= tol) {
+        return { at: [node.at[0], node.at[1]], why: "a vertex already placed" };
+      }
+    }
+    for (const pole of poles?.poles ?? []) {
+      if (Math.hypot(at[0] - pole.at[0], at[1] - pole.at[1]) <= tol) {
+        // Snapping ONTO a pole is allowed and named, not prevented: LEGALITY refuses a contour
+        // through a singularity, and a reader who wants to see that refusal has to be able to aim.
+        return { at: [pole.at[0], pole.at[1]], why: "a pole — the contour may not pass through it" };
+      }
+    }
+    if (Math.abs(at[1]) <= tol && Math.abs(at[0]) <= tol) return { at: [0, 0], why: "the origin" };
+    if (Math.abs(at[1]) <= tol) return { at: [at[0], 0], why: "the real axis" };
+    if (Math.abs(at[0]) <= tol) return { at: [0, at[1]], why: "the imaginary axis" };
+    return { at, why: null };
+  }
+
+  /** The path as it stands plus the pending piece, so the preview is the same geometry as the result. */
+  function penPreview(): Contour | null {
+    if (penNodes === null || penNodes.length === 0) return null;
+    const pending = penAt === null ? [] : [{ at: [penAt[0], penAt[1]] as const }];
+    const nodes = [...penNodes, ...pending];
+    return nodes.length < 2 ? null : penContour({ nodes, closed: false });
+  }
+
+  function drawPen(ctx: CanvasRenderingContext2D, vp: Viewport): void {
+    if (penNodes === null) return;
+    // The pending path, dashed so it reads as not-yet-a-contour: the ledger says nothing about it,
+    // and drawing it like a finished piece would claim otherwise.
+    const preview = penPreview();
+    if (preview !== null) {
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = "#7aa2f7";
+      ctx.lineWidth = 1.8;
+      ctx.beginPath();
+      for (const g of resolveAll(preview)) {
+        const steps = g.kind === "segment" ? 1 : 48;
+        for (let i = 0; i <= steps; i++) {
+          const [wx, wy] = pointAt(g, i / steps);
+          const [x, y] = plotToScreen(wx, wy, view, vp);
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+    // The vertices: a ring each, the first one larger because it is the target that closes the path.
+    penNodes.forEach((node, i) => {
+      const [x, y] = plotToScreen(node.at[0], node.at[1], view, vp);
+      const r = i === 0 ? 6.5 : 4.5;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.strokeStyle = "#7aa2f7";
+      ctx.lineWidth = i === 0 ? 2.4 : 1.6;
+      ctx.stroke();
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+  // The pen's grammar (research 07 rule 6): click = corner, drag = arc, click-the-start = close,
+  // Backspace = drop the last, Esc = abort.
+  //
+  // **UNDO IS OBJECT-LEVEL** (rule 10): one gesture is one entry, so Backspace removes a VERTEX and
+  // not a pointer sample, and the URL is written when the path finishes rather than on every move —
+  // there is no `#vs=` form for a half-drawn path and `syncHash` is never called from here.
+  // ──────────────────────────────────────────────────────────────────────────────────────────
+
+  function penStart(): void {
+    penNodes = [];
+    penAt = null;
+    penSnap = null;
+    penDrag = null;
+    renderContourCard();
+    requestDraw();
+  }
+
+  /** Leave the pen, keeping whatever contour is on screen. */
+  function penStop(): void {
+    penNodes = null;
+    penAt = null;
+    penSnap = null;
+    penDrag = null;
+    renderContourCard();
+    requestDraw();
+  }
+
+  /**
+   * Adopt the drawn path as the contour.
+   *
+   * `contourSource` goes NULL, which is the truth about a drawn contour rather than a gap: it has no
+   * recipe, and `viewState.ts` reads its vertices back out of the geometry when a link is minted.
+   */
+  function penCommit(closed: boolean): void {
+    if (penNodes === null || penNodes.length < 2) return;
+    const drawn = penContour({ nodes: penNodes, closed });
+    contour = drawn;
+    sandboxContour = drawn;
+    contourSource = null;
+    penStop();
+    recompute();
+  }
+
+  /** A click: place a vertex, or close the path if it landed on the first one. */
+  function penClick(at: Cx, free: boolean): void {
+    if (penNodes === null) return;
+    const snapped = penSnapTo(at, free);
+    const first = penNodes[0];
+    const closing =
+      first !== undefined &&
+      penNodes.length >= 3 &&
+      Math.hypot(snapped.at[0] - first.at[0], snapped.at[1] - first.at[1]) <= grabTolerance();
+    if (closing) {
+      penCommit(true);
+      return;
+    }
+    penNodes = [...penNodes, { at: [snapped.at[0], snapped.at[1]] as const }];
+    // **THE DRAG BOWS THE PIECE THAT ENDS AT THIS VERTEX, not the one leaving it**, and the first
+    // draft had it the other way round — which made the chord `(node → penAt)` with `penAt` still
+    // sitting on the click, so the chord was zero and `penBow` returned without doing anything. A
+    // browser pass found it, because the only script that had exercised the gesture never held the
+    // button down. Bowing the INCOMING piece is also the gesture the reader expects: press the new
+    // corner, pull the curve towards you, release.
+    penDrag =
+      penNodes.length >= 2 ? { from: penNodes[penNodes.length - 2].at, index: penNodes.length - 2 } : null;
+    penSnap = snapped.why;
+    // The card carries the vertex count and gates `Close` on it, so it is stale until re-rendered.
+    // Found by the test: three assertions failed and all three were this one omission.
+    renderContourCard();
+    requestDraw();
+  }
+
+  /**
+   * A drag after a click bows the piece that click STARTED — so the bulge is the pointer's own
+   * offset from the chord, which is the quantity `arcThroughBulge` takes.
+   *
+   * The piece being bowed is the one LEAVING the vertex just placed, and it only exists once there
+   * is a next vertex — so while drawing, the drag bows the PENDING piece, whose far end is the
+   * pointer. That makes the gesture self-consistent: drag away from the straight line and the
+   * preview bows away with you.
+   */
+  function penBow(at: Cx): void {
+    if (penNodes === null || penDrag === null) return;
+    const i = penDrag.index;
+    const from = penNodes[i];
+    const to = penNodes[i + 1];
+    if (from === undefined || to === undefined) return;
+    // Both ends are PLACED, so the chord is fixed and only the pointer's offset from it varies.
+    // Through `bulgeFromApex`, which is also how `penPath` reads a bulge back off a finished arc —
+    // one formula, so the gesture and its inverse cannot disagree about what a bulge means.
+    const bulge = bulgeFromApex(from.at, to.at, at);
+    if (bulge === 0) return;
+    const next = [...penNodes];
+    next[i] = { at: from.at, bulge };
+    penNodes = next;
+    requestDraw();
+  }
+
+  /** Backspace: one gesture, one entry. */
+  function penBack(): void {
+    if (penNodes === null || penNodes.length === 0) return;
+    penNodes = penNodes.slice(0, -1);
+    penDrag = null;
+    penSnap = null;
+    renderContourCard();
+    requestDraw();
+  }
 
   /**
    * Each cut as a finite polyline, with its rays clipped beyond everything on screen.
@@ -1117,6 +1919,7 @@ export function mountApp(root: Element): ShellHandle {
       contrast,
       scrub,
       iso: isoPref,
+      drill,
       sandboxContour,
     };
   }
@@ -1131,6 +1934,14 @@ export function mountApp(root: Element): ShellHandle {
    * where the answer is not.
    */
   function applyState(next: ShellState): void {
+    // Same reason as `setMode`'s, and the same measurement: a restored state has no relationship to
+    // a path half-drawn under the previous one, and leaving `penNodes` set would let the stage keep
+    // taking clicks as pen clicks with the controls gone. The drill's own grading goes with it —
+    // an answer sheet belongs to the rung it was made on.
+    penStop();
+    drillAnswers = {};
+    drillGraded = null;
+    drillDrawn = null;
     mode = next.mode;
     for (const b of sourceWrap.querySelectorAll("button")) {
       b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
@@ -1149,6 +1960,7 @@ export function mountApp(root: Element): ShellHandle {
     contrast = next.contrast;
     scrub = next.scrub;
     isoPref = next.iso;
+    drill = next.drill;
     scrubber.value = String(Math.round(scrub * 1000));
     for (const b of contrastWrap.querySelectorAll("button")) {
       b.classList.toggle("on", b.dataset.mode === contrast);
@@ -1291,6 +2103,7 @@ export function mountApp(root: Element): ShellHandle {
     bHandles = mode === "sandbox" ? branchHandles(branch) : [];
     if (bHovered >= bHandles.length) bHovered = -1;
     rebuildDerivation();
+    renderDrill();
     renderRecordCard();
     renderLedger();
     renderDerivation();
@@ -1311,6 +2124,15 @@ export function mountApp(root: Element): ShellHandle {
 
   function setMode(next: "sandbox" | "gallery"): void {
     const previous = mode;
+    // **LEAVING THE SANDBOX PUTS THE PEN AWAY**, which M7's closing review found it did not. The
+    // pen's controls live in the Contour card and the card only offers them in the sandbox, so a
+    // switch to gallery mode took them off screen while `penNodes` stayed non-null — and
+    // `pointerdown` takes the pen's click BEFORE any grab test, by design. Measured: with two
+    // vertices placed, a click in gallery mode placed a third into a path with no visible controls,
+    // and Enter then COMMITTED it, leaving `sandboxContour` a contour the reader never drew and
+    // `contourSource` null. Abandoning it is also the decision M7.2 already recorded — a half-drawn
+    // path is not state worth restoring, which is why it is not in `ShellState`.
+    if (next !== "sandbox") penStop();
     mode = next;
     for (const b of sourceWrap.querySelectorAll("button")) {
       b.setAttribute("aria-pressed", String(b.dataset.mode === next));
@@ -1584,6 +2406,13 @@ export function mountApp(root: Element): ShellHandle {
       ledgerCard.append(el("p", "muted", "No integrand."));
       return;
     }
+    const masked = mask();
+    if (masked === "argument") {
+      ledgerCard.append(
+        el("p", "muted", "Masked: the drill is asking which contour closes this integral."),
+      );
+      return;
+    }
 
     const head = el("p", ledger.closes ? "headline closes" : "headline open");
     head.textContent = ledgerHeadline(ledger);
@@ -1631,6 +2460,9 @@ export function mountApp(root: Element): ShellHandle {
 
     const list = el("ul", "ledger");
     for (const row of ledger.rows) {
+      // Rung ii's mask: the KILL rows are the question, and they are in the drill card instead —
+      // until it has been checked, at which point the ledger is the answer sheet.
+      if (masked === "kill" && row.constraint === "KILL" && drillGraded === null) continue;
       const li = el("li", `ledgerRow ${row.status}`);
       li.append(
         el("span", "constraint", row.constraint),
@@ -1653,7 +2485,10 @@ export function mountApp(root: Element): ShellHandle {
    */
   function renderDerivation(): void {
     derivationCard.replaceChildren();
-    if (!derivation) {
+    // **THE DERIVATION CARRIES RUNG ii's ANSWERS IN PROSE** — its KILL stage says which lemma
+    // discharges which piece — so masking the ledger's KILL column and leaving this open would be
+    // masking nothing at all. Hidden at both masked rungs, restored the moment one is checked.
+    if (!derivation || (mask() !== "none" && drillGraded === null)) {
       derivationCard.hidden = true;
       return;
     }
@@ -1746,6 +2581,11 @@ export function mountApp(root: Element): ShellHandle {
 
   function renderResult(): void {
     resultCard.replaceChildren(el("h2", undefined, "∮ f(z) dz"));
+    if (mask() === "argument") {
+      resultCard.hidden = true;
+      return;
+    }
+    resultCard.hidden = false;
     if (!integral) {
       resultCard.append(el("p", "muted", "No integrand."));
       return;
@@ -1899,6 +2739,65 @@ export function mountApp(root: Element): ShellHandle {
         picker.append(b);
       }
       contourCard.append(picker);
+
+      // ── the pen (M7.2c) ──
+      const penRow = el("div", "penRow");
+      if (penNodes === null) {
+        const draw = el("button", "preset", "Draw a contour");
+        draw.type = "button";
+        draw.setAttribute("aria-label", "draw a contour by hand");
+        draw.addEventListener("click", () => {
+          penStart();
+          inkCanvas.focus();
+        });
+        penRow.append(draw);
+        // Say so when the contour on screen IS hand-drawn, because "template: …" is what a reader
+        // sees under a record and its absence would otherwise be the only clue.
+        if (penPath(contour) !== null) {
+          penRow.append(el("span", "tag", `drawn · ${contour.pieces.length} pieces`));
+        }
+      } else {
+        // **THE GRAMMAR, WRITTEN DOWN** (research 07 rule 6). Not a lesson — the keys are the
+        // affordance, and a tool whose gestures are undiscoverable is a tool nobody finds.
+        penRow.append(
+          el("span", "num", `${penNodes.length} vertex${penNodes.length === 1 ? "" : "es"}`),
+        );
+        const close = el("button", "preset", "Close");
+        close.type = "button";
+        close.disabled = penNodes.length < 3;
+        close.setAttribute("aria-label", "close the drawn path and adopt it as the contour");
+        close.addEventListener("click", () => {
+          penCommit(true);
+        });
+        const back = el("button", "preset", "Undo");
+        back.type = "button";
+        back.disabled = penNodes.length === 0;
+        back.setAttribute("aria-label", "remove the last vertex");
+        back.addEventListener("click", penBack);
+        const abort = el("button", "preset", "Cancel");
+        abort.type = "button";
+        abort.setAttribute("aria-label", "abandon the drawn path");
+        abort.addEventListener("click", penStop);
+        penRow.append(close, back, abort);
+      }
+      contourCard.append(penRow);
+      if (penNodes !== null) {
+        contourCard.append(
+          el(
+            "p",
+            "muted small",
+            "Click to place a corner, drag to bow the piece into an arc, click the first vertex " +
+              "to close. Backspace drops the last corner, Escape abandons the path, Alt suppresses " +
+              "snapping.",
+          ),
+        );
+        // **THE SNAP NAMES ITSELF** (rule 5): a vertex that moved without saying so is a vertex the
+        // reader did not place, and on this stage that can be the difference between a contour the
+        // ledger certifies and one it refuses.
+        if (penSnap !== null) {
+          contourCard.append(el("p", "small snapNote", `snapped to ${penSnap}`));
+        }
+      }
     } else if (family) {
       contourCard.append(el("p", "muted small", `template: ${family.contour.template}`));
     }
@@ -2591,6 +3490,15 @@ export function mountApp(root: Element): ShellHandle {
   stageWrap.addEventListener("pointerdown", (ev) => {
     const [px, py] = stagePoint(ev);
     const at = plotAt(px, py);
+    // **THE PEN TAKES THE CLICK FIRST**, before any grab test. While it is out, the stage is a
+    // drawing surface: a click that happened to land on a radius handle must place a vertex, not
+    // start a drag, or the tool would silently stop working near anything else on screen.
+    if (penNodes !== null) {
+      penAt = at;
+      penClick(at, ev.altKey || ev.metaKey);
+      stageWrap.setPointerCapture(ev.pointerId);
+      return;
+    }
     const tol = grabTolerance();
     // A cut vertex is checked BEFORE the contour's own handles: it is the smaller target, it is
     // usually the thing sitting on top, and a drag that hits the contour instead would move the one
@@ -2623,6 +3531,29 @@ export function mountApp(root: Element): ShellHandle {
 
   stageWrap.addEventListener("pointermove", (ev) => {
     const [px, py] = stagePoint(ev);
+    if (penNodes !== null) {
+      const raw = plotAt(px, py);
+      const free = ev.altKey || ev.metaKey;
+      // A drag BOWS the piece just placed; a plain move only moves the pending end. The far end is
+      // snapped either way, so the preview and the committed piece are the same geometry.
+      if (penDrag !== null && (ev.buttons & 1) !== 0) {
+        penBow(raw);
+      } else {
+        const snapped = penSnapTo(raw, free);
+        penAt = [snapped.at[0], snapped.at[1]];
+        penDrag = null;
+        // **THE CARD IS REBUILT ONLY WHEN THE SNAP'S NAME CHANGES**, not on every move. The card
+        // replaces its children and rebuilds its controls, and doing that per pointer sample would
+        // be both wasteful and visibly unstable — while the only thing a move can change in it is
+        // which constraint is being named.
+        if (snapped.why !== penSnap) {
+          penSnap = snapped.why;
+          renderContourCard();
+        }
+        requestDraw();
+      }
+      return;
+    }
     if (gesture === "none") {
       const at = plotAt(px, py);
       const tol = grabTolerance();
@@ -2829,6 +3760,24 @@ export function mountApp(root: Element): ShellHandle {
     label: describeAccumulator(),
   });
 
+  /**
+   * Backspace and Escape, which `@cas/ui`'s key map does not carry.
+   *
+   * `attachCanvasA11y` translates arrows, `±`, Enter and Space into `CanvasKeyAction`s — a
+   * deliberately small vocabulary shared by every canvas in the suite — so the pen's two extra keys
+   * are a listener of this app's own rather than a widening of that contract for one consumer.
+   */
+  inkCanvas.addEventListener("keydown", (ev) => {
+    if (penNodes === null) return;
+    if (ev.key === "Backspace") {
+      ev.preventDefault();
+      penBack();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      penStop();
+    }
+  });
+
   const stageA11y = attachCanvasA11y(inkCanvas, {
     // The keys, then what is on screen — the second half regenerated on every recompute (see
     // `describeStage`), which is why the instructions are a constant the two places share.
@@ -2838,6 +3787,13 @@ export function mountApp(root: Element): ShellHandle {
     liveRegionHost: stageWrap,
     onKey: (action: CanvasKeyAction, ev: KeyboardEvent) => {
       const port = viewport();
+      // **WITH THE PEN OUT, ENTER CLOSES** rather than cycling the grab: there is nothing to grab
+      // while drawing, and the reader's next intention is to finish the path. Arrow keys still pan,
+      // which is what makes a vertex placeable outside the current view.
+      if (penNodes !== null && action.kind === "commit") {
+        penCommit(penNodes.length >= 3);
+        return;
+      }
       if (action.kind === "commit") {
         cycleGrab();
         return;
