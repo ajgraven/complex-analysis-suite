@@ -396,6 +396,60 @@ branch. A truncated or foreign hash refuses by name.
 **Gate:** a PNG round-trips — `readPngText` → `decodeViewState` → the same verdict as the session it
 came from.
 
+> **M6.3a MEASURED — and the first finding changed the slice.**
+>
+> **(1) The GL canvas cannot be read at all.** `glStage.ts` creates its context without
+> `preserveDrawingBuffer`, so `drawImage(canvas.gl, …)` after the browser has composited returns an
+> empty buffer: probing the live page, the GL layer reads back **1 distinct colour** where the ink
+> layer reads 44. Every exported figure would have been missing the phase portrait — the whole
+> backdrop — and would have looked merely plain rather than wrong. **Re-rendering synchronously
+> before the read does NOT fix it** (measured: still 1); the flag does (601). So the context changes,
+> and the synchronous render stays anyway, because the persisted buffer holds the LAST frame and a
+> `requestAnimationFrame`-driven redraw may not have happened since the state changed.
+>
+> **Its cost is 0.6 %, which is noise.** A continuous 60-frame pan over the stage, best of three, is
+> **20.00 ms/frame without the flag and 20.12 ms with it** — under SwiftShader software rendering,
+> which is the worst case for a buffer copy. Recorded because "an extra copy per composite" sounds
+> expensive and is not.
+>
+> **(2) The plan's metadata convention describes the doc, not the code.** `@cas/export`'s README and
+> its own tests specify `Software` + `cas:state`, and §0.6 called that "the house convention, 6
+> consumers". Measured, it has **one adopter**: Riemann Map. Argument Principle writes `ap:url`, 2D
+> Electrostatics `2de:url`, 2D Hydrodynamics `2dh:url`, Complex Dynamics `cdjs:state`, and the
+> plotter takes a caller-supplied record. This app writes the DOCUMENTED key — following the majority
+> would entrench an accident, and one reader should be able to open any figure in the suite — and the
+> discrepancy is left recorded rather than fixed from inside one app.
+>
+> **(3) The plate is not a naive stack.** On screen the accumulator is 744 px wide against the
+> stage's 1048, because its side panel takes the rest of the strip. Stacking them at their own sizes
+> would leave a ragged right edge and imply the trail stops early, so the accumulator is drawn at the
+> stage's width keeping its own aspect — legitimate because its axes are `Σ f·Δz`, not the plane, so
+> there is no shared scale to preserve.
+
+> **M6.3b–c DONE.** `src/shell/figure.ts`: `figureLayout` and `figureCaption` are pure and run in the
+> node gate, `drawFigure` is the thin canvas half and runs in the browser suite — the split
+> `ui/accumulator.ts` already uses. Two controls, **Save figure** and **Copy figure**, the latter
+> passing the export PROMISE into `ClipboardItem` so the blob resolves inside the user gesture
+> (Safari's requirement, and the plotter's form).
+>
+> **The caption goes through the same gate as the result card**, which is why `integralRefusal` was
+> lifted out of `renderResult` into `engine/ledger.ts`: a caption that re-derived "may a number be
+> shown?" would be one edit away from printing a value on a shareable image that the app itself
+> withholds. The verdict is carried BOTH ways — stamped in `cas:verdict` and **drawn on the plate** —
+> because the plan asked only for the metadata and nobody reads metadata.
+>
+> **IT TOOK THREE ATTEMPTS TO WRITE A TEST THAT IS NOT VACUOUS**, and that is the slice's real
+> lesson. (i) "the plate's upper band carries > 12 distinct colours" passes with the portrait
+> absent — the plate is drawn at 2× and `drawImage` interpolating the ink's 44 antialiased shades
+> manufactures hundreds; both runs read 601, the sampler's cap. (ii) A control plate with the GL
+> layer blanked, required to differ from the real one, reads **97.9 % in BOTH directions**: the real
+> plate has been through a PNG encode and an `Image` decode while the control was drawn straight to
+> a canvas, so they disagree almost everywhere for reasons unrelated to the portrait, and a tolerance
+> did not rescue it. (iii) What works is asserting the PRIMITIVE — `canvas.gl` reads back > 12
+> distinct colours — which fails at 1 with the flag removed and passes at 601 with it, while the
+> synthetic `drawFigure` tests assert exact pixels for the compositing order. A number is only
+> evidence if nothing else could have produced it.
+
 ### M6.4 — a11y to the gate · *S* — sized by M6.0, which found two findings and one real gap
 
 - **`<main>` and one `<h1>`** — the two axe findings, and the whole of them.

@@ -292,6 +292,9 @@ importers:
       '@cas/exact':
         specifier: workspace:*
         version: link:../../packages/exact
+      '@cas/export':
+        specifier: workspace:*
+        version: link:../../packages/export
       '@cas/expr':
         specifier: workspace:*
         version: link:../../packages/expr

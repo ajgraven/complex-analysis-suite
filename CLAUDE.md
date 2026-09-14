@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **536 test files / 5453 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **537 test files / 5463 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -485,6 +485,43 @@ null a few lines later, but the message then blames a parameter for a missing te
 met again; **27/27** after the repair. **(5)** The pen tool's contour has no recipe, so encoding
 **refuses by name** rather than carrying a piece list for a shape nothing can yet produce — the refusal
 being the signal M7 needs its own serialisation, instead of forty lines of speculative one.
+
+**M6.3 — the figure carries its own recipe, and its own verdict.** `src/shell/figure.ts` composites
+the stage (the phase portrait with the contour over it) above the accumulator's partial-sum trail,
+captions it, and stamps the PNG's `tEXt` with `Software`, the permalink under **`cas:state`** and the
+**verdict** — carried BOTH ways, because the plan asked only for metadata and nobody reads metadata,
+while a picture of a contour over a phase portrait looks identical whether the argument closes or not.
+Two controls (**Save figure**, **Copy figure**), the second passing the export PROMISE into
+`ClipboardItem` so the blob resolves inside the user gesture (Safari's requirement, the plotter's
+form). `figureLayout`/`figureCaption` are pure and run in the node gate; `drawFigure` is the thin
+canvas half and runs in the browser suite — `ui/accumulator.ts`'s split. **`integralRefusal` is lifted
+out of `renderResult` into `engine/ledger.ts`** on the second-consumer rule: the caption is its second
+reader, and one that re-derived "may a number be shown?" would be an edit away from printing a value
+on a shareable image the app itself withholds. **Four findings.** **(1) THE GL CANVAS COULD NOT BE READ
+AT ALL** — the context was created without `preserveDrawingBuffer`, so a read after the browser has
+composited returns an empty buffer: **1 distinct colour against the ink layer's 44**, so every figure
+would have been missing its whole backdrop and would have looked merely plain rather than wrong.
+Re-rendering synchronously first does NOT fix it (still 1); the flag does (601), and the synchronous
+render stays anyway because the persisted buffer holds the LAST frame. **Its cost is 0.6 %** — a
+continuous 60-frame pan is 20.00 ms/frame without and 20.12 ms with, best of three, under SwiftShader
+software rendering, which is the worst case for a buffer copy. **(2) IT TOOK THREE ATTEMPTS TO WRITE A
+TEST THAT IS NOT VACUOUS**, and the first two would have shipped: "the plate's upper band carries > 12
+distinct colours" passes with the portrait ABSENT, because the plate is drawn at 2× and `drawImage`
+interpolating the ink's 44 antialiased shades manufactures hundreds (both runs read 601, the sampler's
+own cap); and a control plate with the GL layer blanked, required to differ from the real one, reads
+**97.9 % in BOTH directions**, since the real plate has been through a PNG encode and an `Image` decode
+while the control was drawn straight to a canvas — a tolerance did not rescue it. What works is
+asserting the PRIMITIVE (`canvas.gl` reads back > 12 distinct colours), which fails at 1 with the flag
+removed, while the synthetic `drawFigure` tests assert exact pixels for the compositing order: **a
+number is only evidence if nothing else could have produced it.** **(3) The plan's metadata convention
+describes the DOC, not the code** — `@cas/export`'s README and tests specify `Software` + `cas:state`
+and have **one adopter of six** (Riemann Map; the others write `ap:url`, `2de:url`, `2dh:url`,
+`cdjs:state`, or a caller-supplied record). This app writes the documented key, so one reader can open
+any figure in the suite, and the discrepancy is recorded rather than fixed from inside one app.
+**(4)** The accumulator is NARROWER than the stage on screen (744 against 1048, its side panel taking
+the rest), so it is drawn at the stage's width keeping its own aspect — legitimate because its axes are
+`Σ f·Δz` rather than the plane, so there is no shared scale to preserve and matching the frame is only
+a matter of not implying the trail stops early.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

@@ -713,6 +713,19 @@ field equality would pass a codec that dropped `branch.window`, which is M5.1's 
 cannot be honoured **refuses by name** and says so in its own box, rather than opening something
 plausible.
 
+**M6.3** makes the figure carry its own recipe. **Save figure** and **Copy figure** composite the
+stage — the phase portrait with the contour over it — above the accumulator's partial-sum trail, and
+stamp the PNG's `tEXt` metadata with `Software`, the permalink (`cas:state`) and **the verdict**. The
+verdict is both stamped and *drawn on the plate*, because a picture of a contour over a phase
+portrait looks identical whether the argument closes or not, and nobody reads PNG metadata. The
+caption goes through the same `integralRefusal` gate the result card does, so it cannot print a
+number the app itself withholds.
+
+One measurement changed that slice: `GLStage` created its context without `preserveDrawingBuffer`,
+so the GL layer read back **one distinct colour** where the ink layer read 44 — every figure would
+have been missing its whole backdrop. The flag fixes it and costs 0.6 % of a frame during a
+continuous pan (20.00 → 20.12 ms, best of three, under software rendering).
+
 Two findings came with it. The window picker was **silently dropping the declared factor** — it took
 `buildDeclaration`'s whole cut system, whose point is `"b"` where the reader's is `"b1"` — and the app
 then integrated the cofactor as the whole integrand under an `R(z) =` label. And the milestone's own

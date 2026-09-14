@@ -11,7 +11,15 @@
 //
 // The order of the passes is load-bearing. LEGALITY runs first and returns with **no value at all**
 // when it fails, so a singular configuration never produces a number that then has to be suppressed.
-import { assembleVerdict, exact, refuse, unknown, type Certificate, type Verdict } from "@cas/rigor";
+import {
+  assembleVerdict,
+  exact,
+  mayReportValue,
+  refuse,
+  unknown,
+  type Certificate,
+  type Verdict,
+} from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
@@ -1300,6 +1308,38 @@ export function legalityRefusal(result: LedgerResult): LedgerRow | undefined {
   // dependence points the wrong way: a LEGALITY row that one day fails softly must still withhold the
   // value, and a gate keyed on `failedAt` would quietly stop doing so.
   return result.rows.find((r) => r.constraint === "LEGALITY" && r.status === "failed");
+}
+
+/**
+ * Why `∮` may not be printed at all, or `null` when it may.
+ *
+ * **THREE INDEPENDENT REASONS, and the whole point is that they are asked in ONE place.** The
+ * quadrature may have refused; the integral's verdict may not license reporting a value; and
+ * LEGALITY may have failed, which the quadrature can be perfectly happy about. The result card has
+ * asked all three since M4.1 — and the moment a SECOND surface wanted the same answer (M6.3's
+ * exported figure, whose caption must not claim a value the card withholds) the question had to stop
+ * being asked inline. A caption that re-derived it would be one edit away from printing a number on
+ * a shareable image that the app itself refuses to show.
+ *
+ * The repair comes back with it, because a refusal a reader cannot act on is half a message.
+ */
+export function integralRefusal(
+  integral: { readonly refusal?: string; readonly verdict: Verdict },
+  ledger: LedgerResult | null,
+): { readonly claim: string; readonly repair?: string } | null {
+  const illegal = ledger === null ? undefined : legalityRefusal(ledger);
+  if (integral.refusal === undefined && mayReportValue(integral.verdict) && illegal === undefined) {
+    return null;
+  }
+  const repair =
+    illegal?.repair ??
+    integral.verdict.certificates
+      .flatMap((c) => c.provenance)
+      .find((q) => q.text.startsWith("suggested repair"))?.text;
+  return {
+    claim: illegal?.claim ?? integral.refusal ?? "the result was refused",
+    ...(repair === undefined ? {} : { repair }),
+  };
 }
 
 export function ledgerHeadline(result: LedgerResult): string {

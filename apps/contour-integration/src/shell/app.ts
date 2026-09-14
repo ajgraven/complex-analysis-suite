@@ -1,5 +1,6 @@
 import { Frac } from "@cas/exact";
-import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
+import { assembleVerdict, describeLevel } from "@cas/rigor";
+import { injectPngText } from "@cas/export";
 import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
 import {
   DEFAULT_VIEW,
@@ -51,7 +52,7 @@ import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
 import { PRESETS } from "./presets.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
-import { ledgerHeadline, legalityRefusal, type LedgerResult } from "../engine/ledger.js";
+import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
   handlesOf,
@@ -68,6 +69,13 @@ import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
 import { TEMPLATES } from "./templates.js";
 import { decodeShell, encodeShell } from "./viewState.js";
+import {
+  drawFigure,
+  figureCaption,
+  figureLayout,
+  figureMetadata,
+  type FigureCaption,
+} from "./figure.js";
 import {
   compile,
   declaredOrder as orderOfState,
@@ -484,12 +492,75 @@ export function mountApp(root: Element): ShellHandle {
     }
   });
 
+  /** Download the plate. */
+  const saveButton = el("button", "preset", "Save figure");
+  saveButton.type = "button";
+  saveButton.setAttribute("aria-label", "download this figure as a PNG carrying its own permalink");
+  saveButton.addEventListener("click", () => {
+    void figureBytes()
+      .then((bytes) => {
+        if (bytes === null) {
+          saySoon("Could not render the figure");
+          return;
+        }
+        const buf = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(buf).set(bytes);
+        const href = URL.createObjectURL(new Blob([buf], { type: "image/png" }));
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = mode === "gallery" && family !== null ? `${family.id}.png` : "contour-integration.png";
+        document.body.append(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => {
+          URL.revokeObjectURL(href);
+        }, 1000);
+        saySoon("Figure saved");
+      })
+      .catch(() => {
+        saySoon("Could not render the figure");
+      });
+  });
+
+  /**
+   * Copy the plate to the clipboard.
+   *
+   * The PROMISE goes into `ClipboardItem`, not the resolved blob — Safari requires the write to be
+   * issued inside the user gesture, and awaiting the render first would put it outside. The
+   * plotter's form, and the reason it is written this way there too.
+   */
+  const copyImageButton = el("button", "preset", "Copy figure");
+  copyImageButton.type = "button";
+  copyImageButton.setAttribute("aria-label", "copy this figure to the clipboard");
+  copyImageButton.addEventListener("click", () => {
+    if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
+      saySoon("This browser cannot copy images — use Save figure");
+      return;
+    }
+    const png = figureBytes().then((bytes) => {
+      if (bytes === null) throw new Error("the figure could not be rendered");
+      const buf = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buf).set(bytes);
+      return new Blob([buf], { type: "image/png" });
+    });
+    void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(
+      () => {
+        saySoon("Figure copied");
+      },
+      () => {
+        saySoon("Could not copy the figure — use Save figure");
+      },
+    );
+  });
+
   bar.append(
     el("span", "brand", "Contour Integration"),
     sourceWrap,
     sandboxGroup,
     galleryGroup,
     shareButton,
+    saveButton,
+    copyImageButton,
     shareNote,
   );
 
@@ -914,6 +985,50 @@ export function mountApp(root: Element): ShellHandle {
     if (!hashReady) return;
     window.clearTimeout(hashTimer);
     hashTimer = window.setTimeout(writeHash, 250);
+  }
+
+  // ── the exported figure ───────────────────────────────────────────────────────────────────
+
+  /** What the plate is a figure OF — the record's own headline, or the typed integrand. */
+  function figureTitle(): string {
+    if (mode === "gallery" && family !== null) return `${family.id} — ${contourIntegrandText(family)}`;
+    return `∮ ${input.value.trim()} dz over ${contour.pieces.map((q) => q.name).join(", ")}`;
+  }
+
+  const captionNow = (): FigureCaption =>
+    figureCaption({ title: figureTitle(), integral, theorem, ledger, solved });
+
+  /**
+   * Composite the plate and hand back its PNG bytes, metadata and all.
+   *
+   * **THE GL LAYER IS RE-RENDERED HERE, SYNCHRONOUSLY, and that is not belt-and-braces.** `GLStage`
+   * creates its context without `preserveDrawingBuffer`, so the drawing buffer is gone once the
+   * browser has composited the frame: probing the live page, `canvas.gl` reads back a single
+   * distinct colour where the ink layer reads 44. Without this line the exported figure would be
+   * missing the phase portrait — the whole backdrop — and would look merely plain rather than wrong.
+   */
+  async function figureBytes(scale = 2): Promise<Uint8Array | null> {
+    const vp = viewport();
+    stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
+    const layout = figureLayout(
+      { w: glCanvas.width, h: glCanvas.height },
+      { w: accCanvas.width, h: accCanvas.height },
+      scale,
+    );
+    const style = getComputedStyle(shell);
+    const plate = document.createElement("canvas");
+    drawFigure(plate, layout, [glCanvas, inkCanvas], accCanvas, captionNow(), {
+      background: style.getPropertyValue("--c-bg").trim() || "#0f1115",
+      text: style.getPropertyValue("--c-text").trim() || "#e7e9ee",
+      muted: style.getPropertyValue("--c-muted").trim() || "#99a1b3",
+    });
+    const blob = await new Promise<Blob | null>((done) => {
+      plate.toBlob(done, "image/png");
+    });
+    if (blob === null) return null;
+    const enc = encodeShell(currentState());
+    const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
+    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, captionNow()));
   }
 
   /**
@@ -1600,23 +1715,18 @@ export function mountApp(root: Element): ShellHandle {
       return;
     }
 
-    // Two independent reasons there may be no number, and the second is the one that used to be
-    // missed: the quadrature can be perfectly happy about a contour LEGALITY has already refused.
-    const illegal = ledger === null ? undefined : legalityRefusal(ledger);
-    if (integral.refusal !== undefined || !mayReportValue(integral.verdict) || illegal !== undefined) {
+    // Three independent reasons there may be no number, asked in ONE place — `integralRefusal`, in
+    // `engine/ledger.ts`. It used to be asked here, inline, which was fine while this was the only
+    // surface; the exported figure's caption is the second, and a caption that re-derived the
+    // question would be one edit away from printing a number on a shareable image that the app
+    // itself withholds.
+    const refused = integralRefusal(integral, ledger);
+    if (refused !== null) {
       // No number. Not a greyed-out number, not a number with a warning beside it — none.
       const row = el("p", "refusal");
       row.append(badge("⚠"), " Refused");
-      resultCard.append(
-        row,
-        el("p", "muted", illegal?.claim ?? integral.refusal ?? "the result was refused"),
-      );
-      const repair =
-        illegal?.repair ??
-        integral.verdict.certificates
-          .flatMap((c) => c.provenance)
-          .find((s) => s.text.startsWith("suggested repair"))?.text;
-      if (repair !== undefined) resultCard.append(el("p", "repair", repair));
+      resultCard.append(row, el("p", "muted", refused.claim));
+      if (refused.repair !== undefined) resultCard.append(el("p", "repair", refused.repair));
       return;
     }
 
