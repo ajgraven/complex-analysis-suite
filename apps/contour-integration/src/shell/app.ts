@@ -84,6 +84,7 @@ import {
   resolveState,
   type Compiled,
   type ContourSource,
+  type DrillState,
   type ShellState,
   type StateResolution,
 } from "./state.js";
@@ -294,6 +295,14 @@ export function mountApp(root: Element): ShellHandle {
   let penAt: Cx | null = null;
   /** The snap that fired for `penAt`, so the badge can name it (research 07 rule 5). */
   let penSnap: string | null = null;
+  /**
+   * The faded drill's open rung (M7.3), or null.
+   *
+   * A shell local like every other piece of state: `currentState` projects it and `applyState`
+   * restores it, so a rung is a permalink. It decides what is MASKED and never a number — nothing
+   * downstream of `resolveState` reads it.
+   */
+  let drill: DrillState | null = null;
   /** Held while a drag bows the piece just placed; `null` between clicks. */
   let penDrag: { readonly from: Cx; readonly index: number } | null = null;
   /**
@@ -1478,6 +1487,7 @@ export function mountApp(root: Element): ShellHandle {
       contrast,
       scrub,
       iso: isoPref,
+      drill,
       sandboxContour,
     };
   }
@@ -1510,6 +1520,7 @@ export function mountApp(root: Element): ShellHandle {
     contrast = next.contrast;
     scrub = next.scrub;
     isoPref = next.iso;
+    drill = next.drill;
     scrubber.value = String(Math.round(scrub * 1000));
     for (const b of contrastWrap.querySelectorAll("button")) {
       b.classList.toggle("on", b.dataset.mode === contrast);

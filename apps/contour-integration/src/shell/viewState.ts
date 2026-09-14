@@ -37,7 +37,8 @@ import type { Bindings } from "../families/schema.js";
 import type { BranchChoice, BranchPoint, CutArc } from "../kernel/branch/model.js";
 import type { Cx } from "../kernel/geom.js";
 import type { ContrastMode } from "../ui/accumulator.js";
-import { defaultState, offeredCorpus, type ContourSource, type ShellState } from "./state.js";
+import { defaultState, offeredCorpus, type ContourSource, type DrillState, type ShellState } from "./state.js";
+import { DRILL_STAGES, taskById } from "./drill.js";
 import { TEMPLATES, type TemplateId } from "./templates.js";
 import { penContour, penPath, sameShape, STRAIGHT } from "../engine/contour/pen.js";
 
@@ -161,6 +162,15 @@ interface Wire {
   readonly k?: ContrastMode;
   readonly s?: number;
   readonly i?: boolean;
+  /**
+   * `drill` — `[task id, rung]`, the faded drill's open rung.
+   *
+   * M7's gate clause 2: every rung must be addressable, which is the only formulation that makes a
+   * teaching surface falsifiable in this app's idiom — a rung that can be linked to is already
+   * covered by the round-trip-by-verdict test below. It cannot change a number (the drill decides
+   * what is MASKED), so it is filed with the view.
+   */
+  readonly dr?: readonly [string, number];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -394,6 +404,7 @@ export function encodeShell(state: ShellState): EncodeResult {
   put("k", state.contrast, d.contrast);
   put("s", state.scrub, d.scrub);
   put("i", state.iso ?? undefined, undefined);
+  if (state.drill !== null) wire.dr = [state.drill.task, state.drill.stage] as const;
 
   return { ok: true, hash: encodeViewState(APP, wire) };
 }
@@ -643,6 +654,22 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
     if (typeof w.i !== "boolean") return { ok: false, reason: "the modulus-contour flag in this link is not a boolean" };
     iso = w.i;
   }
+  let drill = base.drill;
+  if (w.dr !== undefined) {
+    const d = w.dr;
+    if (!Array.isArray(d) || d.length !== 2 || !isStr(d[0]) || !isNum(d[1])) {
+      return { ok: false, reason: "the drill rung in this link is not [task, stage]" };
+    }
+    // Validated against the corpus exactly as a record id is: a link naming a task this build does
+    // not have would otherwise open the drill on nothing, masking the ledger with no way back.
+    if (taskById(d[0]) === null) {
+      return { ok: false, reason: `this link opens the drill on '${d[0]}', which is not one of its tasks` };
+    }
+    if (!DRILL_STAGES.includes(d[1] as (typeof DRILL_STAGES)[number])) {
+      return { ok: false, reason: `this link opens the drill at rung ${d[1]}, and there are ${DRILL_STAGES.length}` };
+    }
+    drill = { task: d[0], stage: d[1] as DrillState["stage"] };
+  }
 
   return {
     ok: true,
@@ -662,6 +689,7 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
       contrast,
       scrub,
       iso,
+      drill,
       // The parked sandbox contour is SESSION state, not the problem: a link opens with the contour
       // it names parked as the sandbox's, so coming back from a record lands somewhere meaningful.
       sandboxContour: gallery ? base.contour : contour,

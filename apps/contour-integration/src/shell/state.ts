@@ -102,10 +102,12 @@ export interface ShellState {
    * SANDBOX's, and gallery mode simply has no use for it — a record derives its own contour, so a
    * gallery link carries no contour at all.
    *
-   * `null` means "not from a template", which is M7's pen tool. Nothing produces it today, and the
-   * codec REFUSES to encode rather than carrying a piece list for a case that cannot yet occur — the
-   * refusal being the signal that the pen tool needs its own serialisation, rather than forty lines
-   * of speculative one.
+   * `null` means "not from a template", which is M7.2's pen tool — and the codec now has a second
+   * wire form for exactly that case, carrying the drawn path's VERTICES (a twelve-corner path is 292
+   * base64 characters against 2,028 as a piece list) and verifying on encode that they rebuild the
+   * shape on screen. Until the pen existed nothing produced this and the codec refused to encode it,
+   * the refusal being the signal that the pen would need its own serialisation rather than forty
+   * lines of speculative one.
    */
   readonly contourSource: ContourSource | null;
   /** GALLERY: the open record's id, and which of its fixtures. */
@@ -123,9 +125,33 @@ export interface ShellState {
   /** Modulus contours: `null` follows the context, a boolean is the reader's own choice. */
   readonly iso: boolean | null;
 
+  // ── the teaching layer — what is MASKED, never a number ────────────────────────────────────
+  /**
+   * The faded drill's open rung, or `null` for the app as it otherwise is.
+   *
+   * Filed with the view rather than with the problem because it cannot change a number:
+   * {@link resolveState} does not read it, and the drill's own risk register (M7-plan §2, S-e) makes
+   * that a rule — progress may decide what is masked and never what is reported. It is in the state
+   * at all because M7's gate clause 2 requires every rung to be addressable by permalink, which is
+   * also what puts it under M6.2's round-trip-by-verdict test.
+   */
+  readonly drill: DrillState | null;
+
   // ── session ────────────────────────────────────────────────────────────────────────────────
   /** The sandbox's contour, parked while a record is open. */
   readonly sandboxContour: Contour | null;
+}
+
+/**
+ * Which drill task is open, and at which rung.
+ *
+ * The stage is spelled out here rather than imported from `shell/drill.ts` because that module
+ * imports this one: the type belongs to the state, and the drill re-exports it as `DrillStage`.
+ */
+export interface DrillState {
+  /** The task's id — a contrast cell's id (`shell/drill.ts`'s `DRILL_TASKS`). */
+  readonly task: string;
+  readonly stage: 1 | 2 | 3 | 4;
 }
 
 /** The recipe a sandbox contour was built from — see {@link ShellState.contourSource}. */
@@ -158,6 +184,7 @@ export function defaultState(contour: Contour): ShellState {
     contrast: "none",
     scrub: 1,
     iso: null,
+    drill: null,
     sandboxContour: contour,
   };
 }

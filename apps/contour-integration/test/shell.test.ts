@@ -213,6 +213,9 @@ describe("applyState(currentState()) is a fixed point", () => {
       contrast: "sumZ",
       scrub: 0.25,
       iso: true,
+      // M7.3's rung, which is in the state for the same reason everything else here is: a field the
+      // pair does not differ in is a field whose loss this test cannot see.
+      drill: { task: "oscillatory", stage: 2 },
     };
     app.applyState(a);
     const aScreen = screen(root);
@@ -245,6 +248,7 @@ describe("applyState(currentState()) is a fixed point", () => {
       contrast: "none",
       scrub: 1,
       iso: null,
+      drill: null,
     };
     // Every field that can differ, does — otherwise the pair cannot see that field being dropped.
     expect(b.mode).not.toBe(a.mode);
@@ -253,6 +257,7 @@ describe("applyState(currentState()) is a fixed point", () => {
     expect(b.contour).not.toBe(a.contour);
     expect(b.sandboxContour).not.toBe(a.sandboxContour);
     expect(b.branch).not.toEqual(a.branch);
+    expect(b.drill).not.toEqual(a.drill);
 
     app.applyState(b);
     // **IN GALLERY MODE THE CONTOUR IS AN OUTPUT, NOT AN INPUT** — `adopt` takes `run.contour`, and
