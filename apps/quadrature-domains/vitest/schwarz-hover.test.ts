@@ -6,9 +6,17 @@
 // writers emit (schwarz-render.mjs / schwarz-worker-entry.mjs) and the painter reads (schwarz-paint.mjs).
 // The CPU-mode hover readout passed that raw KIND+1 value straight to describeKind(), which switches on
 // the RAW KIND_* enum, so every class label came out one off (a fundamental / escape-time pixel read
-// "in escaping set", an interior pixel "Newton diverged", etc.). The fix subtracts the offset. This
-// drives the real onMouseMove (exposed via the test hook) over a 1×1 field and asserts the label.
+// "in escaping set", an interior pixel read the KIND_INV label, etc.). The fix subtracts the offset.
+// This drives the real onMouseMove (exposed via the test hook) over a 1×1 field and asserts the label.
+//
+// What is under test is the OFFSET — that each class reads its own label and not its neighbour's — so
+// the KIND_INV wording is held in one constant rather than spelled out at four call sites. It used to
+// read "Newton diverged", which measurement showed was false: Newton converges, to a preimage on the
+// wrong sheet, and the pixel means ψ found none it could accept.
 import { describe, it, expect, beforeAll } from "vitest";
+
+/** Distinctive substring of describeKind(KIND_INV) — see the header note. */
+const INV_LABEL = "no admissible preimage";
 
 let T: any;
 
@@ -62,18 +70,18 @@ describe("Schwarz CPU hover readout: pixel-class labels (QD-schwarz-b-A-02)", ()
     expect(txt).not.toContain("in escaping set"); // the old off-by-one label for this pixel
   });
 
-  it("an interior pixel (KIND_INT+1) reads the interior label, NOT 'Newton diverged'", () => {
+  it("an interior pixel (KIND_INT+1) reads the interior label, NOT the invalid one", () => {
     const txt = readoutFor(KIND_INT + 1, 0);
     expect(txt).toContain("tiling-set interior");
-    expect(txt).not.toContain("Newton diverged");
+    expect(txt).not.toContain(INV_LABEL); // the old off-by-one label for this pixel
   });
 
   it("an escaping pixel (KIND_ESC+1) reads 'in escaping set'", () => {
     expect(readoutFor(KIND_ESC + 1, 0)).toContain("in escaping set");
   });
 
-  it("an invalid pixel (KIND_INV+1) reads 'Newton diverged'", () => {
-    expect(readoutFor(KIND_INV + 1, 0)).toContain("Newton diverged");
+  it("an invalid pixel (KIND_INV+1) reads the invalid label", () => {
+    expect(readoutFor(KIND_INV + 1, 0)).toContain(INV_LABEL);
   });
 
   it("an outside pixel (KIND_OUTSIDE+1) reads the Ω^c label, NOT a dropped/empty class", () => {
@@ -85,7 +93,7 @@ describe("Schwarz CPU hover readout: pixel-class labels (QD-schwarz-b-A-02)", ()
     const txt = readoutFor(0, 0);
     // Only the coordinate readout, no class phrase appended.
     expect(txt).toContain("w = (");
-    for (const s of ["escape time", "in escaping set", "interior", "Newton diverged", "Ω^c"]) {
+    for (const s of ["escape time", "in escaping set", "interior", INV_LABEL, "Ω^c"]) {
       expect(txt).not.toContain(s);
     }
   });

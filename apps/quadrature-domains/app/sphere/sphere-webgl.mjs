@@ -404,16 +404,25 @@ void main() { fragColor = u_color; }`;
         }
       }
 
-      // Build polygon mask texture.
-      const padFactor = phiState.unbounded ? 5.0 : 2.4;
+      // Build polygon mask texture. Its half-extent is sized for RESOLUTION of ∂Ω
+      // (schwarz-webgl's MASK_PAD) and is NOT a world-space coverage figure — the
+      // escape radius and the fractal texture's w-plane span below are sized from
+      // the polygon's own half-extent, with the factors the padded mask used to
+      // supply implicitly (5.0/2.4 coverage, ×6.0 escape).
       if (phiState.mask) gl.deleteTexture(phiState.mask);
+      // How much of the w-plane the fractal texture spans. With no polygon there is
+      // no scale to derive it from, so both keep what the mask-less path always used
+      // (maskHalfExtent[0] = 1, and 1 × 6.0 for the escape radius). sphere-ui calls
+      // setPhi WITHOUT an escapeR, so this fallback is live.
+      let coverR = 1.0;
       if (polyPts.length) {
-        const m = H.buildMaskTexture(gl, polyPts, padFactor);
+        const m = H.buildMaskTexture(gl, polyPts, phiState.unbounded);
         phiState.mask             = m.tex;
         phiState.maskCenter[0]    = m.maskCenter.re;
         phiState.maskCenter[1]    = m.maskCenter.im;
         phiState.maskHalfExtent[0] = m.maskHalfExtent.x;
         phiState.maskHalfExtent[1] = m.maskHalfExtent.y;
+        coverR = m.polyHalfExtent * (phiState.unbounded ? 5.0 : 2.4);
       } else {
         phiState.mask = null;
         phiState.maskCenter[0] = phiState.maskCenter[1] = 0;
@@ -421,11 +430,10 @@ void main() { fragColor = u_color; }`;
       }
 
       phiState.escapeR = opts.escapeR ||
-        (phiState.unbounded ? phiState.maskHalfExtent[0] * 6.0 : 1e10);
+        (phiState.unbounded ? coverR * 6.0 : 1e10);
 
       // The fractal texture covers [cx−R, cx+R]² in w-space.
-      // R is the mask half-extent (already includes the pad factor).
-      phiState.fractalR  = phiState.maskHalfExtent[0];
+      phiState.fractalR  = coverR;
       phiState.fractalCx = phiState.maskCenter[0];
       phiState.fractalCy = phiState.maskCenter[1];
 
