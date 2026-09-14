@@ -428,7 +428,7 @@ it (finding **SG-2**).
         "from": "R", "to": "R + i*b/2", "role": "vanish", "lemma": "L1", "colour": 1 },
       { "id": "top", "name": "the saddle line Im z = b/2", "kind": "segment",
         "from": "R + i*b/2", "to": "-R + i*b/2", "role": "free", "colour": 2,
-        "knownValue": {                                  // ⚠ PROPOSED FIELD — see SG-2
+        "knownValue": {                                  // SG-2 — BUILT in M5.8b, as proposed
           "expr": "-sqrt(pi)*exp(-b^2/4)",
           "method": "on Im z = b/2 the integrand collapses to e^{−x²−b²/4}; the remaining ∫ℝe^{−x²}dx = Γ(1/2) = √π is IMPORTED, not derived here",
           "rigor": "=" } },
@@ -715,7 +715,7 @@ argument (**SG-2** again).
     "variable": "x", "lower": "0", "upper": "inf",
     "integrand": "exp(i*x^2)",
     "symbols": {},
-    "conditionallyConvergent": true,      // ⚠ PROPOSED FIELD — see SG-4
+    "conditionallyConvergent": true,      // SG-4 — the schema already had `convergence`
     "components": {                       // the one complex target carries BOTH real ones
       "cos": "Re(T) = int_0^inf cos(x^2) dx",
       "sin": "Im(T) = int_0^inf sin(x^2) dx"
@@ -756,7 +756,7 @@ argument (**SG-2** again).
         "radius": "R", "from": "0", "to": "pi/(2*n)", "role": "vanish", "lemma": "L6", "colour": 1 },
       { "id": "ray1", "name": "the return ray arg z = π/(2n)", "kind": "segment",
         "from": "exp(i*pi/(2*n))*R", "to": "0", "role": "free", "colour": 2,
-        "knownValue": {                                   // ⚠ PROPOSED FIELD — see SG-2
+        "knownValue": {                                   // SG-2 — BUILT in M5.8b, as proposed
           "expr": "-exp(i*pi/(2*n))*Gamma(1 + 1/n)",
           "method": "on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (real substitution u = tⁿ)",
           "rigor": "=" } }
@@ -893,7 +893,11 @@ poles, none of them at an integer, and `|f(z)| ≤ M/|z|^k` with `k > 1` for `|z
 Research/03 §8 writes this bound as `(M/N^k)·coth(π/2)·4(2N+1)`, which drops the `π` from `π cot(πz)`
 (`4(2N+1) = 8(N+½)` is the perimeter and is right). **That is not a slack bound — it is not a bound:**
 against the measured `|∮_{Γ_N} π cot(πz)/z²dz|` it reads `3.392` vs `3.567` at `N = 3` and `0.356` vs
-`0.493` at `N = 25`, failing by 30–40 % at every `N` tested. See finding **D-2**. The derived bound
+`0.493` at `N = 25`, failing at every `N` tested. See finding **D-2**. *(M5.5 correction: the shortfall is 4.9% at
+`N = 3` and 27.8% at `N = 25` — it GROWS, because the ratio between the two bounds is exactly
+`π·(N/(N+½))^k`, so 30–40% is the ASYMPTOTE rather than the typical case. Both figures are
+recomputed in the app's own suite; the finding stands, only its magnitude was overstated at
+small `N`.)* The derived bound
 above was checked against the actual closed-contour integral at `N = 3..25` for all three entries and
 holds with slack `2.2×` (G1), `2.3×` (G2), `14×`–`62×` (G3, where `|csc| ≤ 1` beats `coth(π/2)` and
 the summand's alternation makes the partial sums oscillate toward the limit rather than climb to it).
@@ -905,6 +909,19 @@ Pass 5 as specified cannot express — see finding **SG-1**.
 ---
 
 ## 7. G2 — `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)` — the clean case
+
+> **LOADED AND SOLVING (M5.6c)** as `series-cot-kernel` — the twenty-fourth record and the first in
+> tier G. All four fixtures print their closed form labelled `=` and the ledger closes. Four
+> departures from the JSONC below, each with its reason: the template is `square` (not `rectangle`)
+> and the half-integer constraint is enforced from the GEOMETRY, which catches a dragged contour as a
+> declared field could not; `targetWeight` is a per-entry `weight` inside `targetTerms`, as DESIGN §5
+> always had it; the `n = 0` hypothesis takes `onFail: "refuse"` rather than `escalate`, because a
+> collision is G1's theorem and not a recoverable case of this one (SG-6 belongs to the record that
+> needs it); and the four sides carry `L2` with the M5.5c square bound rather than `L1`. A fifth trap
+> is added — `residues-cancel-by-symmetry` — because the reflex that a conjugate pair cancels returns
+> 0 for a sum of 4.26, and nothing else in the record says so. **Measured, against this section's own
+> reading:** the half-integer family does not close at every `N`; at `a = 3/4` the square of
+> half-width ½ leaves both cofactor poles outside, which is the "once N+½ > a" above, enforced.
 
 Taken first because it is the *non-colliding* member and therefore the honest baseline: `f(z) =
 1/(z²+a²)` has its poles at `±ia`, which are never integers for real `a ≠ 0` (the only purely
@@ -1064,6 +1081,18 @@ verified: at `a = 0.75` the truth is `1.2434764324674408` and the naive halving 
 ---
 
 ## 8. G1 — `Σ_{n≥1} 1/n² = π²/6` — **the collision**
+
+> **LOADED AND SOLVING (M5.7)** as `series-cot-collision` — and SG-6's `escalate` is now READ. The record
+> declares the merged order and residue in `collisions[]`, and `families/collisionCheck.ts` falsifies
+> both against the Laurent route: declaring order 2 is refused with "the orders ADD to 3", and
+> declaring the wrong residue with the value the route gives. A record that escalates and declares
+> nothing to merge is DROPPED by the loader — the escalation is an obligation, not a licence.
+> Departures from the JSONC below: the template is `square` (half-integers enforced from the geometry
+> rather than from the field), the weight is a per-entry `weight` inside `targetTerms` as DESIGN §5
+> always had it, and the collision entry carries `at`/`mergedOrder`/`residue`/`note` rather than the
+> six fields sketched here. The merged residue `−π²/3` is computed from the kernel's EVEN
+> Laurent expansion — `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — and checked against a 4096-point circle
+> trapezoid. Its companion G3 is the same computation on the other kernel, and the two records differ by that one number.
 
 This is the most instructive entry in the gallery and the one that most stresses the schema. The
 theorem's hypothesis is *"`f` has no pole at an integer"*, and `f(z) = 1/z²` **violates it at the one
@@ -1239,6 +1268,18 @@ catches in G2, here promoted to a field the solve depends on.
 ---
 
 ## 9. G3 — `Σ_{n≥1} (−1)ⁿ/n² = −π²/12`
+> **LOADED AND SOLVING (M5.7)** as `series-csc-kernel-collision` — and SG-6's `escalate` is now READ. The record
+> declares the merged order and residue in `collisions[]`, and `families/collisionCheck.ts` falsifies
+> both against the Laurent route: declaring order 2 is refused with "the orders ADD to 3", and
+> declaring the wrong residue with the value the route gives. A record that escalates and declares
+> nothing to merge is DROPPED by the loader — the escalation is an obligation, not a licence.
+> Departures from the JSONC below: the template is `square` (half-integers enforced from the geometry
+> rather than from the field), the weight is a per-entry `weight` inside `targetTerms` as DESIGN §5
+> always had it, and the collision entry carries `at`/`mergedOrder`/`residue`/`note` rather than the
+> six fields sketched here. The merged residue `+π²/6` is computed from the kernel's EVEN
+> Laurent expansion — `Res = c₀ + Σ t_k π^{2k} c_{−2k}` — and checked against a 4096-point circle
+> trapezoid. Confirmed: G3 cost nothing once G1 existed — one number, and the alternation stays the KERNEL's.
+
 
 G3 costs almost nothing once G1 exists, and that is exactly what it is here to demonstrate: **the
 alternation is a property of the kernel, not of the problem.** `π csc(πz)` has the same simple poles
@@ -1411,6 +1452,15 @@ because a Family record's `sideCondition` and `discharge` must be machine-checka
   Fresnel wedge is `π/4 = π/(2n)` at `n = 2`, consistent with the corrected form and with §7's
   generalised `∫₀^∞cos(xⁿ)dx = Γ(1+1/n)cos(π/(2n))`, whose wedge is `π/(2n)`. Both corrected forms
   are checked at `n = 2,3,4` and `R = 2,4,8,16` in F2's `golden`.
+  **Implemented in M5.2**, and the correction is structural rather than restated: the arc's range and
+  the inequality's range are ONE question, asked in `kernel/bounds/linearMinorant.ts`, and the two
+  faces part company past `π/2` (the sin face folds and costs a factor of two; the cos face changes
+  sign and costs everything). The divergence above is recomputed in `test/wedgeArc.test.ts` at
+  `n = 2,3,4`, and both corrected forms are checked against the true arc integral at `n = 2,3,4` and
+  `R = 2,4,8,16`. Note that research 03 §0.3 (as corrected) quotes the *oscillatory* range as
+  `[0, π/(2n)]` where this file quotes `[0, π/n]`: both are right — the first is the wedge Fresnel
+  uses, the second the largest range on which the form still vanishes — and the engine quotes
+  neither, reading the arc's range off the geometry.
 - **D-2 (substantive) — the §8 square-contour bound drops a `π`, and the result is not an upper
   bound.** §8 writes `(M/N^k)·coth(π/2)·4(2N+1)`. The kernel is `π cot(πz)`, not `cot(πz)`, so the
   constant must be `π coth(π/2)`; the perimeter `4(2N+1) = 8(N+½)` is right, and `|z| ≥ N+½` on `Γ_N`
@@ -1452,6 +1502,19 @@ changes a v1 field's meaning.
   it is worth noting that the `targetWeight` field is not bureaucracy: it is exactly the halving
   bookkeeping that research/03 §8 names as the tier's commonest error, promoted from a habit into a
   value the solve depends on.
+
+  > **BUILT (M5.6b), with two corrections to the above.** The weight is a per-entry `weight` field
+  > *inside* `targetTerms`, not a sibling `targetWeight` — the JSONC below and the paragraph here
+  > both name a field that does not exist; `DESIGN.md` §5 always had it nested, and nested is also
+  > strictly more expressive. And **the one-equation generalisation cannot be built**: its
+  > coefficient adds a dimensionless `1 + Σⱼcⱼ` (a keyhole's is `1 − e^{2πiα}`, whose coefficients
+  > are `ℚ(i)(√d)`) to a `2πi·w` carrying π, and neither the exponential basis nor ℚ(i)(π) holds
+  > both — this app's standing position that neither ring contains the other. It is never needed:
+  > `a = 0` is tier G's definition, not an accident, and `w` is absent everywhere else. So the solve
+  > is a third ROUTE (`families/solveResidueTerm.ts`), `0 = 2πi[w·T + π·ρ]` gives `T/π = −ρ/w`, and
+  > the mixed case is refused by name. The weight is DERIVED from the target's declared range and
+  > checked against the record; halving additionally requires the cofactor to be even and its `n = 0`
+  > term to vanish, both decided exactly over ℚ(i).
 - **SG-2 — no role for a piece with an exactly-known, externally-imported value.** E3's top side is
   `√π e^{−b²/4}` and F2's return ray is `e^{iπ/(2n)}Γ(1+1/n)`. Both are exact, neither is a residue,
   neither vanishes, and neither is proved by the contour: `Γ(1/2)` comes from polar coordinates and
@@ -1460,16 +1523,40 @@ changes a v1 field's meaning.
   step that is *most* certain. Proposed: `pieces[].knownValue: { expr, method, rigor }`, with
   `method` carrying provenance so the derivation can say **"imported, not derived here"**. Without
   it, honest labelling and the correct verdict are in direct conflict for two of the eight entries.
+
+  > **BUILT (M5.8b), exactly as proposed, with three things the field alone did not settle.**
+  > **There is ONE import, and the two records name the same function** — E3's own text says `√π` IS
+  > `Γ(1/2)` — so the closed set is the Gamma function at a rational argument rather than a table of
+  > constants, and one independent check (`∫₀^∞e^{−tⁿ}dt`, F2's declared method) covers both. **An
+  > imported value has no INVERSE**, which is what "imported" means arithmetically: Pass 5's fourth
+  > route (`families/solveImported.ts`) works in the rank-1 module the atom generates, refusing a
+  > product of two atoms and a division by one, and requiring `∮ = 0` because `2πi Σ Res` carries π
+  > and an import does not. And **`rigor` is checked in BOTH directions**: a ceiling alone ("may not
+  > exceed") is satisfied by every level, since `=` is the lattice top, so it would assert nothing —
+  > under-claiming is a disagreement with the engine too. The quadrature of the piece becomes an
+  > independent CHECK rather than the source, reported on the KILL row where the piece is.
 - **SG-3 — `contour.orientation` is a constant, but E3's rectangle flips with `sign(b)`.** The
   height `b/2` is negative for `b < 0` and the same vertex order is then clockwise. Worked around
   here by an evenness reduction to `b ≥ 0` declared in `parameters[].constraints` — legitimate, but
   only because `cos` happens to be even. A parameter-dependent orientation (or a documented rule that
   templates must be reduced to a canonical parameter range at load time) is the real answer.
+
+  > **SHIPPED AS THE WORKAROUND (M5.8c), deliberately.** E3's record declares `b >= 0` and says why,
+  > and `contour.orientation` stays a constant. The real answer is still the real answer, and it is
+  > not built because no record needs it: E3 is the only entry whose geometry flips with a
+  > parameter's sign, and its own integrand's evenness settles it. The day a record's does not is the
+  > day to add the rule (ADR-0007's posture).
 - **SG-4 — no convergence class on `target`.** F2's target converges conditionally
   (`∫₀^∞|cos x²|dx = ∞`), B2 is the same, and research/03 §3 trap (ii) says the label must record it.
   `principalValue?: boolean` exists but is a different notion. Proposed:
   `target.convergenceClass: "absolute" | "conditional" | "principalValue" | "symmetricSum"`, feeding
   `Verdict.restrictions` — which is also where `k = 1`'s symmetric sums (D-3) would land.
+
+  > **ALREADY PRESENT (checked in M5.8d).** `FamilyTarget.convergence` has carried
+  > `"absolute" | "conditional" | "principalValue"` since the schema's first version — the gap was
+  > in this file's reading of it, not in the schema. Both of F2's targets declare `"conditional"`
+  > and the shell renders "converges conditionally" beside each. `"symmetricSum"` is still absent
+  > and still unneeded: no loaded record declares one.
 - **SG-5 — the G tier's `target` is not an integral.** `target.variable` is typed `"x" | "theta"`,
   the field is named `integrand`, and `RealIntegral` in `DESIGN.md` §2.3 has the same shape. A sum
   needs `kind: "sum"`, an integer index, and a `summand`. Relatedly, `contour.template` has no
@@ -1498,3 +1585,22 @@ changes a v1 field's meaning.
 - No entry's **exact** (`ℚ(i)`/RUR) path was exercised — every number above is float64. The `=`
   labels in the records are claims about what the engine *will* be able to discharge symbolically,
   and remain `?` until the exact residue and exact ML machinery of M2/M3 exists.
+
+> **ALL OF THE ABOVE IS DISCHARGED (M5.8).** `test/crossFamily.test.ts` runs every invariant in the
+> first bullet, `ζ(4)` is summed independently from the `m = 5` Bernoulli row and checked against the
+> `a²` coefficient (so the two routes share no arithmetic), and the confluence is a SERIES rather
+> than an evaluation. And all eight tier-E–G records now discharge their `=` symbolically: every one
+> prints a closed form, the decimals beside them are `≈` as every decimal in this app is, and nothing
+> was demoted.
+>
+> **Three of these invariants turn out to be ONE identity**, which is the finding worth keeping:
+> `(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with `t_k` the summation kernel's own
+> Laurent coefficients — the ones `mergedResidue` computes from the Bernoulli recurrence. So the
+> `a → 0` confluence's `a⁰` term is exactly `−Res₀` (G1's answer), its `a²` term is ζ(4)'s, and the
+> same statement on `csc` closes the other column: the 2×2 square of {cot, csc} × {collision, none}
+> is one fact about one series, with no limit taken numerically.
+>
+> **F1's invariant earns its place for an unexpected reason.** The two routes print DIFFERENT closed
+> forms for the same number — `(π/3)/sin(2π/3)` closing downward against `(π/3)/sin(π/3)` closing up,
+> supplementary angles with equal sines. A shared formatter could not have produced both, so the
+> agreement is evidence rather than tautology.

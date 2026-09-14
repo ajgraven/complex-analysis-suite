@@ -245,7 +245,45 @@ describe("everything outside the declared shape refuses — R3, as a rule rather
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.degenerate).toBe(false);
-    expect(r.reason).toMatch(/not negatives of one another/);
+    // The message names BOTH declared shapes since M5.3d, because neither applies here: a sine wants
+    // the coefficients to be negatives and a hyperbolic cosine wants them equal, and `1` with `2` is
+    // neither.
+    expect(r.reason).toMatch(/neither negatives of one another \(a sine\) nor equal/);
+  });
+
+  it("takes the COSH branch when the coefficients are equal — E2's denominator", () => {
+    // `1 + e^{−2π}`, which is what a NEGATIVE quasi-period produces. `1 − e^{β}` factors as a sine
+    // and `1 + e^{β}` as a cosh; which one a contour gives is decided by the sign of λ, in exact
+    // arithmetic, not by a simplifier looking for a pattern.
+    const denominator = ExpSum.fromSqrtExt(alg(1)).add(ExpSum.of(alg(1), Exponent.piTimes(Gauss.int(-2))));
+    const r = divideCarryingSine(ExpSum.fromSqrtExt(alg(1)), denominator);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.form.cosh?.toNumber()).toBe(1);
+    expect(r.form.sine).toBeUndefined();
+    expect(formatSineForm(r.form)).toBe("(π/2·e^(π))/cosh(π)");
+  });
+
+  it("a cosh CANNOT degenerate, unlike a sine — which is a result, not an omission", () => {
+    // `cosh` vanishes only at an imaginary argument, and this branch requires γ real. So there is no
+    // ξ at which E2's solve divides by zero, which is that record's "unconditionally well-posed"
+    // claim arriving as a property of the factoring.
+    for (const k of [-6, -1, 1, 3, 8]) {
+      const d = ExpSum.fromSqrtExt(alg(1)).add(ExpSum.of(alg(1), Exponent.piTimes(Gauss.int(k))));
+      const r = divideCarryingSine(ExpSum.fromSqrtExt(alg(1)), d);
+      expect(r.ok).toBe(true);
+    }
+  });
+
+  it("refuses an equal-coefficient pair whose exponents differ imaginarily — a cosine, not a cosh", () => {
+    // `1 + e^{iπ/3}` is `e^{iπ/6}·2cos(π/6)`: a genuine cosine of a real angle, which the output
+    // basis has no seat for. The cosh branch requires the half-difference to be REAL.
+    const d = ExpSum.fromSqrtExt(alg(1)).add(ExpSum.of(alg(1), iPi(1, 3)));
+    const r = divideCarryingSine(ExpSum.fromSqrtExt(alg(1)), d);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.degenerate).toBe(false);
+    expect(r.reason).toMatch(/not a real multiple of π/);
   });
 
   it("refuses a REAL exponent difference, which is a sinh and not a sine", () => {

@@ -361,6 +361,23 @@ rank-deficient row — the mathematics still needs saying, it just no longer nee
 stated condition number, never a confident digit string. Exact rational `M` (the common case) is
 solved exactly and the question does not arise.
 
+> **AS BUILT: one equation, FOUR routes — and the split is about the RING, not the algebra.** The
+> statement above is right and stayed right; what the corpus forced is that `M` and `r` do not all
+> live in one coefficient field, and **no two of these rings contain each other**. So the solve is
+> routed on the record's own declaration rather than discovered by trying one and catching a failure:
+>
+> | route | ring | records | what forces it |
+> |---|---|---|---|
+> | `solveTarget` | units of π over the exponential basis `Σ cₖe^{βₖ}` | tiers A–C, D1–D3, D6, D7, E1, E2, F1 | a MULTIPLICATIVE crossing phase: `e^{2πiα}` is not a rational function of π |
+> | `solvePiTargets` | ℚ(i)(π), π an indeterminate | D4, D5 | an ADDITIVE crossing phase: `(log x + 2πi)²` carries a genuine `π²` |
+> | `solveResidueTerm` | either, selected per record | G1–G3 | the unknown is inside `S`, so there is no `target` piece and no left-hand side (SG-1) |
+> | `solveImported` | the rank-1 module `A·(exponential basis)` | E3, F2 | the answer rests on a constant the argument does not derive, and `A` has no inverse (ADR-0042) |
+>
+> The fourth is the sharpest statement of the pattern: it REQUIRES `∮ = 0`, because `2πi Σ Res`
+> carries π and `√π` does not, and `0` is the one value both rings share. That is not a limitation
+> working around a missing feature — it is the empty singular set, which is what those two records
+> are about.
+
 ### Pass 6 — VERDICT
 
 `assembleVerdict` over every row's certificate. `closes = rows.every(r => r.status === "satisfied")`.
@@ -476,7 +493,8 @@ export interface Family {
   residueSelection: {
     rule: "all" | "inside" | "upperHalfPlane" | "lowerHalfPlane" | "notOn";
     set?: string;
-    /** tier G: the unknown is a TERM of the residue sum, moved to the unknown side of M t = r */
+    /** tier G: the unknown is a TERM of the residue sum, solved by its OWN route — not moved to
+     *  the unknown side of M t = r, which would need a coefficient in no ring here (M5.6b) */
     targetTerms?: { targetId: string; terms: string; weight: 1 | 2 }[];
   };
 

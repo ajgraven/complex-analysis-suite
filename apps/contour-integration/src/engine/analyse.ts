@@ -26,11 +26,17 @@ import {
   type QuadratureBudget,
 } from "./contour/integrate.js";
 import { resolveAll, type Contour, type CutSide } from "./contour/model.js";
-import { evaluateLedger, type LedgerResult } from "./ledger.js";
+import { evaluateLedger, type LedgerInput, type LedgerResult } from "./ledger.js";
 import { applyResidueTheorem, type ResidueTheoremResult } from "./residueTheorem.js";
 import { applyBranchTheorem } from "./branchTheorem.js";
 import { applyLogTheorem } from "./logTheorem.js";
 import { applyExteriorTheorem, enclosesTheCut } from "./exteriorTheorem.js";
+import { applyStripTheorem } from "./stripTheorem.js";
+import type { LatticePole } from "../kernel/expLattice.js";
+import { kernelPoles, type SummationKernel } from "../kernel/summationKernel.js";
+import { applySummationTheorem } from "./summationTheorem.js";
+import { cofactorPoles } from "../kernel/kernelResidue.js";
+import type { Certificate } from "@cas/rigor";
 import type { PowerFactor } from "../kernel/branchResidue.js";
 import type { LogFactor } from "../kernel/logResidue.js";
 import type { MultiPowerFactor } from "../kernel/branchResidue.js";
@@ -97,6 +103,63 @@ export interface AnalysisInput {
    */
   readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
   /**
+   * The quasi-periodic STRIP's poles, when the integrand lives on one — tier E's seat.
+   *
+   * Unlike `power`/`log`/`multi`, this does not change what `poles` describes: it IS the pole list,
+   * built by `families/stripFactor.ts` because only the record knows which band of the lattice its
+   * argument is about. What it changes is the route — `stripTheorem.ts` rather than the ordinary
+   * residue theorem — and the reason is the `margin`: a strip's pole set is declared, and a contour
+   * that encloses a lattice point outside the declaration has to refuse rather than sum the declared
+   * one.
+   */
+  readonly strip?: {
+    readonly poles: readonly LatticePole[];
+    readonly margin: readonly LatticePole[];
+    readonly certificate: Certificate;
+  };
+  /**
+   * The SUMMATION kernel, when the integrand is `π cot(πz)·f` or `π csc(πz)·f` — tier G's seat.
+   *
+   * It exists for one reason, and it is a hole rather than a feature: `findPoles` reports ZERO poles
+   * for `π cot(πz)/z²`, because no reader sees a transcendental. So a square at an INTEGER half-width
+   * runs its vertical sides exactly through `z = ±N` and the ledger said "every singularity is clear
+   * of the contour" — about a contour passing through infinitely many of them.
+   *
+   * **THE BAND IS READ OFF THE GEOMETRY, WHICH IS WHY THIS IS AN ANALYSIS INPUT AND NOT A POLE
+   * REPORT.** The kernel's poles are every integer, and a list of infinitely many is not a list
+   * (`expLattice.ts` says the same about the strip). What makes a window honest here rather than
+   * arbitrary is that it is derived from the contour actually drawn: the question being asked — does
+   * a piece pass through one, and how many are enclosed — is local to the contour, so the integers
+   * it could possibly reach are exactly the ones to list. A contour that moves gets a new window on
+   * the same recompute, which a pole report computed once when the EXPRESSION changed could not do.
+   *
+   * **AND THE WINDOW MAY BE REFUSED.** Past a work limit the band is not truncated but abandoned,
+   * because a PREFIX of an infinite pole set is the one shape this must never take: the poles beyond
+   * the cut go unlisted and LEGALITY then calls a contour clear of singularities it runs straight
+   * through. The ledger is told which happened, so "no poles were listed" and "there are no poles"
+   * do not look the same.
+   */
+  readonly summation?: {
+    readonly kernel: SummationKernel;
+    /** The unknown the record puts INSIDE the residue sum — carried through to COVER. */
+    readonly target?: { readonly id: string; readonly weight: 1 | 2 };
+    /**
+     * SG-6: a hypothesis that FAILS while a stronger argument applies — the record's `escalate`.
+     *
+     * Carried so CATCH can say so. Without a row the outcome would be invisible: the hypothesis
+     * "f has no pole at an integer" is false for G1, the answer is exactly right, and a ledger
+     * silent about both would leave a reader to reconcile them.
+     */
+    readonly escalation?: { readonly to: string; readonly collisions: number };
+  };
+  /**
+   * A `free` piece whose value is imported — ADR-0042. See {@link LedgerInput.imported}.
+   *
+   * Threaded through rather than computed here for the reason every other family input is: this is a
+   * statement the RECORD makes, and `analyse` also serves the sandbox, where there is no record.
+   */
+  readonly imported?: LedgerInput["imported"];
+  /**
    * A work ceiling for the quadrature — set while a contour is being DRAGGED, left off for an answer.
    *
    * Only the cross-check is affected. `∮` itself comes from `2πi Σ n·Res`, which is a formula over
@@ -132,9 +195,39 @@ export interface Analysis {
   readonly ledger: LedgerResult;
 }
 
-export function analyse({ ast, f, poles, contour, budget, branch, power, log, multi }: AnalysisInput): Analysis {
+export function analyse({
+  ast,
+  f,
+  poles,
+  contour,
+  budget,
+  branch,
+  power,
+  log,
+  multi,
+  strip,
+  summation,
+  imported,
+}: AnalysisInput): Analysis {
   const resolved = resolveAll(contour);
-  const singular = poles.poles.map((p) => ({ at: p.at, order: p.order }));
+  const band = summation === undefined ? null : kernelBand(resolved);
+  // **AND THE COFACTOR'S POLES, WHICH ARE THE OTHER HALF OF THE SAME HOLE.** M5.5b listed the
+  // kernel's — every integer — because `findPoles` sees no transcendental and reported none. It
+  // reports none of `1/(z²+a²)`'s either, for the same reason: the reader refuses the whole product,
+  // not just the `cot`. So a square dragged onto `±ia` had every singularity "clear of the contour"
+  // as surely as one dragged onto an integer did, and the enclosed count was short by exactly the
+  // poles that carry the answer. `exactPolesOf` reads them off the cofactor the kernel already
+  // carries, so this costs nothing and no second reader can disagree with the theorem's own list.
+  const singular = [
+    ...poles.poles.map((p) => ({ at: p.at, order: p.order })),
+    ...(band === null ? [] : kernelPoles(band)),
+    ...(summation === undefined
+      ? []
+      : cofactorPoles(summation.kernel.num, summation.kernel.den).poles.map((p) => ({
+          at: p.at.toTuple(),
+          order: p.order,
+        }))),
+  ];
   // **THE SIDES COME FROM THE SPEC, PARALLEL TO THE GEOMETRY.** `resolveAll` maps `contour.pieces`
   // one-to-one, so index `k` is the same piece in both — which is what makes a positional array the
   // honest shape here rather than a lookup that could silently miss.
@@ -160,17 +253,27 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log, mu
           ...(power === undefined ? {} : { factor: { kind: "power" as const } }),
           ...(log === undefined ? {} : { factor: { kind: "log" as const } }),
         })
-      : log !== undefined
-        ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
-        : power === undefined
-          ? applyResidueTheorem(poles, integral)
-          : applyBranchTheorem({
-              poles,
-              integral,
-              factor: power.factor,
-              rational: power.rational,
-              pieces: resolved,
-            });
+      : summation !== undefined && band !== null
+        ? applySummationTheorem({ kernel: summation.kernel, band, integral, pieces: resolved })
+        : strip !== undefined
+          ? applyStripTheorem({
+            poles: strip.poles,
+            margin: strip.margin,
+            integral,
+            pieces: resolved,
+            certificate: strip.certificate,
+          })
+        : log !== undefined
+          ? applyLogTheorem({ poles, integral, factor: log.factor, rational: log.rational })
+          : power === undefined
+            ? applyResidueTheorem(poles, integral, ast)
+            : applyBranchTheorem({
+                poles,
+                integral,
+                factor: power.factor,
+                rational: power.rational,
+                pieces: resolved,
+              });
   const ledger = evaluateLedger({
     ast,
     pieces: resolved,
@@ -182,6 +285,39 @@ export function analyse({ ast, f, poles, contour, budget, branch, power, log, mu
     power,
     log,
     multi,
+    // `band === null` with a kernel present means the window was REFUSED, not that there is no
+    // kernel — two different things, and the ledger has to be able to tell them apart.
+    ...(summation === undefined ? {} : { summation: { ...summation, windowed: band !== null } }),
+    ...(imported === undefined ? {} : { imported }),
   });
   return { resolved, sides, integral, theorem, ledger, ...(branch === undefined ? {} : { branch }) };
+}
+
+/**
+ * The widest band of the kernel's poles this will list — a work limit, and a REFUSAL past it.
+ *
+ * Every integer is a pole, so a contour reaching `|x| = 10⁶` meets two million of them and no
+ * analysis of it is going to happen. What matters is what the app does at that point: a first draft
+ * CLAMPED, listing a prefix, which is the one thing a window on an infinite set must never do — the
+ * poles beyond the clamp go unlisted and LEGALITY then says a contour is clear of singularities it
+ * runs straight through. Returning null instead gives the ledger something to say.
+ */
+const MAX_KERNEL_BAND = 4096;
+
+/**
+ * How far along the real axis the kernel's poles must be listed, from the contour's own extent — or
+ * null when that is more than {@link MAX_KERNEL_BAND}.
+ *
+ * One past the furthest point the contour reaches, so a piece sitting exactly on an integer is
+ * inside the window rather than one step outside it — which is the case the window exists for.
+ */
+function kernelBand(pieces: readonly Resolved[]): bigint | null {
+  let reach = 0;
+  for (const g of pieces) {
+    if (g.kind === "segment") reach = Math.max(reach, Math.abs(g.from[0]), Math.abs(g.to[0]));
+    else reach = Math.max(reach, Math.abs(g.center[0]) + g.radius);
+  }
+  if (!Number.isFinite(reach)) return null;
+  const band = Math.floor(reach) + 1;
+  return band > MAX_KERNEL_BAND ? null : BigInt(band);
 }

@@ -1,6 +1,6 @@
 import { Frac } from "@cas/exact";
-import { makeComplexFn, parse, type Node } from "@cas/expr";
-import { assembleVerdict, describeLevel, mayReportValue } from "@cas/rigor";
+import { assembleVerdict, describeLevel } from "@cas/rigor";
+import { injectPngText } from "@cas/export";
 import { attachCanvasA11y, mountNavHeader, type CanvasKeyAction } from "@cas/ui";
 import {
   DEFAULT_VIEW,
@@ -14,7 +14,7 @@ import {
   type Viewport,
 } from "../kernel/camera.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { findPoles, type PoleReport } from "../kernel/poles.js";
+import type { PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
 import { jumpWeights } from "../kernel/branch/correction.js";
 import { allCrossingMonodromy } from "../kernel/branch/monodromy.js";
@@ -39,20 +39,20 @@ import {
   splitToRays,
   type BranchGrab,
   type BranchHandle,
+  setCutFromWindow,
   setShadow,
   setSheet,
 } from "../engine/branchEdit.js";
 import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
-import { declaredKey, runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
-import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
-import { buildDeclaration, type DeclaredOrder } from "../kernel/branch/declaration.js";
-import { analyse } from "../engine/analyse.js";
+import { declaredKey } from "../engine/declaredRun.js";
+import type { SplitCheck } from "../engine/splitCheck.js";
+import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
 import { PRESETS } from "./presets.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
-import { ledgerHeadline, legalityRefusal, type LedgerResult } from "../engine/ledger.js";
+import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
 import { resolveAll, type Contour } from "../engine/contour/model.js";
 import {
   handlesOf,
@@ -63,24 +63,30 @@ import {
   translateContour,
   type Handle,
 } from "../engine/contour/edit.js";
-import {
-  circleTemplate,
-  dogboneTemplate,
-  indentedSemicircleTemplate,
-  keyholeTemplate,
-  rectangleTemplate,
-  semicircleTemplate,
-} from "../engine/contour/templates.js";
-import {
-  isVariant,
-  offeredFamilies,
-  primaryGolden,
-  solveFamily,
-  type FamilyRun,
-} from "../families/runFamily.js";
+import { isVariant, primaryGolden, type FamilyRun } from "../families/runFamily.js";
 import type { Family, FamilyTarget, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
+import { TEMPLATES } from "./templates.js";
+import { decodeShell, encodeShell } from "./viewState.js";
+import {
+  drawFigure,
+  figureCaption,
+  figureLayout,
+  figureMetadata,
+  type FigureCaption,
+} from "./figure.js";
+import {
+  compile,
+  declaredOrder as orderOfState,
+  offeredCorpus,
+  recordOf,
+  resolveState,
+  type Compiled,
+  type ContourSource,
+  type ShellState,
+  type StateResolution,
+} from "./state.js";
 import { GLStage } from "../ui/stage/glStage.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
@@ -104,64 +110,15 @@ import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accum
  * number, because there is never a number to style.
  */
 
-type TemplateId =
-  | "circle"
-  | "semicircle"
-  | "semicircleDown"
-  | "indented"
-  | "rectangle"
-  | "keyhole"
-  | "dogbone";
-
 /**
- * `seed` is how a template whose SHAPE presupposes a cut declares one.
- *
- * A keyhole with no cut is four pieces with a coincidence in them, and a dogbone with no cut is a
- * closed curve enclosing nothing — which is to say `∮ = 0` and no lesson. So these two offer the cut
- * system they were drawn for. It stays a CHOICE in exactly the sense M4.1 fixed: the seeded points
- * and cut are ordinary declared objects, listed in the Branch cuts card, draggable, re-orderable and
- * removable, and the template only offers them when nothing is declared yet — it never overwrites a
- * cut the user placed.
+ * What the arrow keys do on the stage — a constant, because it is prepended to a description that
+ * IS regenerated, and two copies of the instructions would be two things to keep in step.
  */
-const TEMPLATES: {
-  id: TemplateId;
-  label: string;
-  build: () => Contour;
-  seed?: (branch: BranchChoice) => BranchChoice;
-}[] = [
-  { id: "circle", label: "circle", build: () => circleTemplate([0, 0], 1.5) },
-  { id: "semicircle", label: "semicircle ↑", build: () => semicircleTemplate(3, "upper") },
-  { id: "semicircleDown", label: "semicircle ↓", build: () => semicircleTemplate(3, "lower") },
-  // C1's contour, and the one that makes `∮` stop being the answer: it encloses nothing, so
-  // `∮ = 0` while the integral is π/2 and the entire value comes from the indentation's
-  // `iα·Res`. The engine has had this template since M3 with no way in.
-  {
-    id: "indented",
-    label: "indented semicircle",
-    build: () => indentedSemicircleTemplate(8, 0.05),
-  },
-  { id: "rectangle", label: "rectangle", build: () => rectangleTemplate(-1.6, -1.2, 1.6, 1.2) },
-  // Tier D's two shapes, which the engine has had since M4.2 and M4.6 with no way in either.
-  {
-    id: "keyhole",
-    label: "keyhole",
-    build: () => keyholeTemplate(4, 0.15),
-    seed: (b) => setOrder(addBranchPoint(b, [0, 0]), "b1", { kind: "power", alpha: Frac.of(1n, 2n) }),
-  },
-  // The one that encloses nothing and is not zero — but only once the cut is inside it, which is
-  // why this is the template that seeds a BOUNDED cut rather than a ray.
-  {
-    id: "dogbone",
-    label: "dogbone",
-    build: () => dogboneTemplate(-1, 1, 0.12),
-    seed: (b) => {
-      const half = { kind: "power", alpha: Frac.of(-1n, 2n) } as const;
-      let next = setOrder(addBranchPoint(b, [-1, 0]), "b1", half);
-      next = setOrder(addBranchPoint(next, [1, 0]), "b2", half);
-      return joinToOneCut(next, "b1", "b2") ?? next;
-    },
-  },
-];
+const STAGE_KEYS =
+  "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
+  "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one of its radius " +
+  "handles, or a branch point or branch cut, after which the arrow keys move what you grabbed " +
+  "and shift with an arrow pans.";
 
 /** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
 const GRAB_PX = 11;
@@ -175,6 +132,31 @@ const GRAB_PX = 11;
  * only the CROSS-CHECK is affected, since `∮` comes from a formula over exact residues either way.
  */
 const DRAFT_EVALUATIONS = 768;
+
+/**
+ * The pre-`navigator.clipboard` copy path: a hidden textarea and `document.execCommand("copy")`.
+ *
+ * Deprecated and still the only thing that works on a page served over plain HTTP or in an engine
+ * without the async clipboard, which is exactly where a reader most needs the link they were given.
+ * Returns whether it worked, so the caller can say "copied" or say it could not.
+ */
+function legacyCopy(text: string): boolean {
+  const box = document.createElement("textarea");
+  box.value = text;
+  box.setAttribute("readonly", "");
+  box.style.position = "fixed";
+  box.style.opacity = "0";
+  document.body.append(box);
+  box.select();
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  box.remove();
+  return ok;
+}
 
 const el = <K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -218,11 +200,56 @@ const targetText = (t: FamilyTarget): string => {
     : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
 };
 
-export function mountApp(root: Element): void {
+/**
+ * What the auxiliary integrand's relation to the target actually IS, in one line.
+ *
+ * **NOT ALWAYS "the target is Re of ∮ f dz", and printing that unconditionally was false for G2.**
+ * A tier-G record's target is a TERM of the residue sum — the kernel has residue 1 at every integer,
+ * so `Res(K·f, n)` IS the summand — and `∮` tends to zero, taking any real part of it with it. The
+ * record fills `relation` because `auxiliary` means "the contour integrand differs from the target's",
+ * which is true; what is not true is that a real-linear functional recovers the target from `∮`. The
+ * same declaration the COVER row reads decides which sentence this is, so the two cannot disagree.
+ */
+function relationText(family: Family): string {
+  const aux = family.auxiliary;
+  if (aux === undefined) return "";
+  const inSum = family.residueSelection.targetTerms?.[0];
+  const how =
+    inSum === undefined
+      ? `the target is ${aux.relation} of ∮ f dz`
+      : `${inSum.targetId} is a TERM of the residue sum, not a functional of ∮ f dz`;
+  return `${how} — ${aux.note}`;
+}
+
+/**
+ * A mounted shell, from the outside.
+ *
+ * Two functions and no more, because there is exactly one thing a caller needs of a mounted app
+ * that it cannot get from the DOM: its state as data, and the ability to put one back. `main.ts`
+ * ignores this; `test/shell.test.ts` and M6.2's permalinks are what it is for.
+ */
+export interface ShellHandle {
+  readonly currentState: () => ShellState;
+  readonly applyState: (next: ShellState) => void;
+}
+
+export function mountApp(root: Element): ShellHandle {
   let view: View = DEFAULT_VIEW;
-  let ast: Node | null = null;
-  let f: ((z: Cx) => Cx) | null = null;
+  // NO `ast` / `f` LOCALS. They were the compiled integrand and its evaluator, and every reader of
+  // them is now downstream of `resolveState`, which carries whichever pair the branch that ran
+  // actually used — the record's, the declared product's, or the box's. Keeping shell-level copies
+  // meant three writers and a window in which they disagreed with the numbers on screen. `poles`
+  // stays because the poles CARD and the derivation read it directly.
   let poles: PoleReport | null = null;
+  /**
+   * The sandbox expression's parse, cached because the cost is not in the resolve.
+   *
+   * `findPoles` on a rational does root-finding, and re-running it on every frame of a contour drag
+   * is the one regression this app can least afford. Recomputed when the EXPRESSION changes, which
+   * is what `applyExpression` is. Gallery mode ignores it: a record's contour integrand comes from
+   * the record, substitution and Jacobian included, and never from the box.
+   */
+  let compiled: Compiled | null = null;
   let contour: Contour = TEMPLATES[0].build();
   let resolved: readonly Resolved[] = resolveAll(contour);
   let integral: ContourIntegral | null = null;
@@ -304,13 +331,15 @@ export function mountApp(root: Element): void {
   /** The contour as it was when the gesture began, so a translation is measured from an anchor rather
    *  than accumulated move by move. */
   let anchorContour: Contour | null = null;
+  /** The recipe's shift when the gesture began, so a drag is measured from an anchor here too. */
+  let anchorShift: Cx = [0, 0];
   let anchorAt: Cx = [0, 0];
 
   // --- gallery state -----------------------------------------------------------------------
   // ONE door into the corpus, and it is the loader's output rather than the raw `FAMILIES` array: a
   // record that failed an invariant must not be openable anywhere, because a worked example that
   // cannot be worked is worse than a missing one.
-  const offered = offeredFamilies();
+  const offered = offeredCorpus();
   let mode: "sandbox" | "gallery" = "sandbox";
   /**
    * The sandbox's own contour, parked while a record is open.
@@ -320,6 +349,13 @@ export function mountApp(root: Element): void {
    * a state either mode meant to produce, and the user did not ask for it.
    */
   let sandboxContour: Contour = contour;
+  /**
+   * The sandbox contour's PROVENANCE — see `ShellState.contourSource`.
+   *
+   * Not nulled by gallery mode, exactly as `branch` is not: it is the SANDBOX's, a record derives
+   * its own contour, and keeping it means the parked contour and its recipe come back together.
+   */
+  let contourSource: ContourSource | null = { template: TEMPLATES[0].id, shift: [0, 0] };
   let family: Family | null = null;
   let golden: Golden | null = null;
   /** A move on a family PARAMETER. These reach the integrand, not only the geometry. */
@@ -350,7 +386,9 @@ export function mountApp(root: Element): void {
     {};
 
   // --- layout -------------------------------------------------------------------------------
-  const shell = el("div", "shell");
+  // `<main>`, which is one of the two axe findings this page has ever had: the grid holding the
+  // stage, the rail and the strip IS the document's main content, and it was a bare `div`.
+  const shell = el("main", "shell");
   const bar = el("header", "bar");
   const stageWrap = el("div", "stage");
   const glCanvas = el("canvas", "gl");
@@ -360,10 +398,20 @@ export function mountApp(root: Element): void {
   const strip = el("footer", "strip");
   stageWrap.append(glCanvas, inkCanvas, overlay);
   shell.append(bar, stageWrap, rail, strip);
-  root.replaceChildren(shell);
-  // The shared suite nav (ADR-0032): back to the launcher, and across to the sibling apps. Mounted
-  // before the stage so it sits above it in the document order a screen reader walks.
-  mountNavHeader(shell, { current: "contour-integration" });
+  /**
+   * The shared suite nav (ADR-0032), in its own host BEFORE `<main>`.
+   *
+   * **It used to be mounted into `shell` with a comment claiming that put it "before the stage in
+   * the document order a screen reader walks". It did the opposite.** `mountNavHeader` ends with
+   * `container.appendChild(nav)`, so the nav was the LAST child of the shell — after the bar, the
+   * stage, the rail and the strip — while `.cas-nav` is `position: fixed` and draws at the top. It
+   * looked first and read last, which is the visual-versus-DOM order mismatch that matters most to
+   * the reader who cannot see the first part. Its own host, prepended, is also what lets the shell
+   * be a `<main>` at all: a landmark containing the site navigation is not what `<main>` means.
+   */
+  const navHost = el("div", "navHost");
+  root.replaceChildren(navHost, shell);
+  mountNavHeader(navHost, { current: "contour-integration" });
 
   // Bar: where the problem comes from — a typed integrand, or one of the gallery's records.
   const sourceWrap = el("div", "sourceToggle");
@@ -424,11 +472,136 @@ export function mountApp(root: Element): void {
     sourceWrap.append(b);
   }
 
-  bar.append(el("span", "brand", "Contour Integration"), sourceWrap, sandboxGroup, galleryGroup);
+  /**
+   * Copy the permalink — the one place a reader ASKS for a link, and therefore the one place the
+   * codec's refusal has to be visible.
+   *
+   * `navigator.clipboard.writeText` synchronously inside the click, which is the suite's form (the
+   * plotter's, CD's, QD's): a clipboard write outside the user gesture is refused by the browser.
+   * Older engines have no async clipboard at all, so there is a `document.execCommand` fallback, and
+   * if even that fails the button says so rather than pretending.
+   */
+  const shareButton = el("button", "preset shareLink", "Copy link");
+  shareButton.type = "button";
+  shareButton.setAttribute("aria-label", "copy a permalink to this state");
+  const shareNote = el("span", "muted small shareNote");
+  shareNote.setAttribute("role", "status");
+  let shareTimer = 0;
+  const saySoon = (text: string): void => {
+    shareNote.textContent = text;
+    window.clearTimeout(shareTimer);
+    shareTimer = window.setTimeout(() => {
+      shareNote.textContent = "";
+    }, 6000);
+  };
+  shareButton.addEventListener("click", () => {
+    const enc = encodeShell(currentState());
+    if (!enc.ok) {
+      // The state cannot be linked to, and the reason is the interesting part — today that is the
+      // pen tool's contour, which has no recipe. Saying "copied" and handing over a link to
+      // something else would be the worst of the three outcomes.
+      saySoon(`No link: ${enc.reason}`);
+      return;
+    }
+    window.history.replaceState(null, "", enc.hash);
+    const url = window.location.href;
+    void navigator.clipboard?.writeText(url).then(
+      () => { saySoon("Link copied"); },
+      () => { saySoon(legacyCopy(url) ? "Link copied" : "Could not copy — the link is in the address bar"); },
+    );
+    if (navigator.clipboard === undefined) {
+      saySoon(legacyCopy(url) ? "Link copied" : "Could not copy — the link is in the address bar");
+    }
+  });
+
+  /** Download the plate. */
+  const saveButton = el("button", "preset", "Save figure");
+  saveButton.type = "button";
+  saveButton.setAttribute("aria-label", "download this figure as a PNG carrying its own permalink");
+  saveButton.addEventListener("click", () => {
+    void figureBytes()
+      .then((bytes) => {
+        if (bytes === null) {
+          saySoon("Could not render the figure");
+          return;
+        }
+        const buf = new ArrayBuffer(bytes.byteLength);
+        new Uint8Array(buf).set(bytes);
+        const href = URL.createObjectURL(new Blob([buf], { type: "image/png" }));
+        const a = document.createElement("a");
+        a.href = href;
+        a.download = mode === "gallery" && family !== null ? `${family.id}.png` : "contour-integration.png";
+        document.body.append(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => {
+          URL.revokeObjectURL(href);
+        }, 1000);
+        saySoon("Figure saved");
+      })
+      .catch(() => {
+        saySoon("Could not render the figure");
+      });
+  });
+
+  /**
+   * Copy the plate to the clipboard.
+   *
+   * The PROMISE goes into `ClipboardItem`, not the resolved blob — Safari requires the write to be
+   * issued inside the user gesture, and awaiting the render first would put it outside. The
+   * plotter's form, and the reason it is written this way there too.
+   */
+  const copyImageButton = el("button", "preset", "Copy figure");
+  copyImageButton.type = "button";
+  copyImageButton.setAttribute("aria-label", "copy this figure to the clipboard");
+  copyImageButton.addEventListener("click", () => {
+    if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
+      saySoon("This browser cannot copy images — use Save figure");
+      return;
+    }
+    const png = figureBytes().then((bytes) => {
+      if (bytes === null) throw new Error("the figure could not be rendered");
+      const buf = new ArrayBuffer(bytes.byteLength);
+      new Uint8Array(buf).set(bytes);
+      return new Blob([buf], { type: "image/png" });
+    });
+    void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(
+      () => {
+        saySoon("Figure copied");
+      },
+      () => {
+        saySoon("Could not copy the figure — use Save figure");
+      },
+    );
+  });
+
+  bar.append(
+    // An `<h1>`, which is the other axe finding: seven card headings started at level 2 with no
+    // level 1 above them. The CSS keeps it the size it always was — this is a document-structure
+    // change, not a visual one.
+    el("h1", "brand", "Contour Integration"),
+    sourceWrap,
+    sandboxGroup,
+    galleryGroup,
+    shareButton,
+    saveButton,
+    copyImageButton,
+    shareNote,
+  );
 
   // Rail cards.
   const errorBox = el("div", "error");
   errorBox.hidden = true;
+  /**
+   * Why a shared link could not be opened — its OWN box, not the parse-error one.
+   *
+   * `errorBox` is cleared by the next successful `applyExpression`, and a link refusal wiped a
+   * moment after it appears is the same as no refusal at all. This one survives until the reader's
+   * first action (see `syncHash`), which is the moment the message stops being about their session.
+   */
+  const linkBox = el("div", "error linkError");
+  linkBox.hidden = true;
+  linkBox.setAttribute("role", "status");
   const recordCard = el("section", "card");
   const ledgerCard = el("section", "card");
   const derivationCard = el("section", "card");
@@ -437,6 +610,7 @@ export function mountApp(root: Element): void {
   const branchCard = el("section", "card");
   const poleCard = el("section", "card");
   rail.append(
+    linkBox,
     errorBox,
     recordCard,
     ledgerCard,
@@ -655,6 +829,13 @@ export function mountApp(root: Element): void {
   function frameContour(): void {
     view = fitView(resolved, viewport());
     requestDraw();
+    // **A browser pass is why this line is here.** Opening a record refits the camera AFTER the
+    // recompute that wrote the URL, so the ADDRESS BAR kept the previous view — measured at
+    // `halfHeight 1.2` in the bar against 4.8 on screen. The copy button was unaffected, because it
+    // writes its own hash first, which is exactly what made the defect hard to see: the shared link
+    // was right and the URL a reader could select and paste was one step behind. `screen()` cannot
+    // see a camera, so no jsdom test could catch it either until one read the hash.
+    syncHash();
   }
 
   /**
@@ -687,8 +868,11 @@ export function mountApp(root: Element): void {
    * it can verify that `declared · R(z)` is the expression they had a moment ago, and refuse to
    * pretend otherwise. See `engine/splitCheck.ts`.
    */
-  let beforeDeclaration: Node | null = null;
-  /** The same expression as SOURCE, so undeclaring can put back what the reader actually typed. */
+  /**
+   * Held as SOURCE and re-parsed where it is used, rather than kept as a second `Node` beside it.
+   * Two copies of one expression is exactly the shape M5.1's review found a bug in, and undeclaring
+   * needs the source anyway to put back what the reader actually typed.
+   */
   let beforeDeclarationSrc: string | null = null;
   let splitCheck: SplitCheck | null = null;
   /** What the stage's program was last built FROM — a value key, never an object identity. */
@@ -696,15 +880,13 @@ export function mountApp(root: Element): void {
   /** Why the declared run refused, when it did — shown in place of an answer, never beside one. */
   let declaredRefusal: string | null = null;
 
-  /** The declared order, read off the branch point the factor sits on. */
-  function declaredOrder(): DeclaredOrder | null {
-    if (declaration === null) return null;
-    const point = effective().points.find((q) => q.id === declaration?.pointId);
-    if (point === undefined) return null;
-    return point.order.kind === "log"
-      ? { kind: "log", power: declaration.logPower }
-      : { kind: "power", alpha: point.order.alpha, sign: declaration.sign };
-  }
+  /**
+   * The declared order, read off the branch point the factor sits on.
+   *
+   * Through `shell/state.ts`, so the order the RENDER shows and the order the RESOLVER computes
+   * from are one function of one state rather than two readings that agree by inspection.
+   */
+  const declaredOrder = (): DeclaredOrder | null => orderOfState(currentState());
 
   function clearComputed(): void {
     recordBranch = null;
@@ -739,10 +921,7 @@ export function mountApp(root: Element): void {
     const out: Statement[] = family.targets.map((t) => ({ label: "target", text: targetText(t) }));
     out.push({ label: "contour integrand", text: contourIntegrandText(family) });
     if (family.auxiliary) {
-      out.push({
-        label: "relation",
-        text: `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`,
-      });
+      out.push({ label: "relation", text: relationText(family) });
     }
     return out;
   }
@@ -765,8 +944,6 @@ export function mountApp(root: Element): void {
 
   /** Take a completed run as the app's state. Nothing is recomputed: `runFamily` already did it. */
   function adopt(run: FamilyRun): void {
-    ast = run.ast;
-    f = run.f;
     poles = run.poles;
     contour = run.contour;
     resolved = run.resolved;
@@ -792,79 +969,323 @@ export function mountApp(root: Element): void {
     else stage?.setIntegrand(run.declared.cofactor, run.declared.product);
   }
 
+  // ── the permalink ─────────────────────────────────────────────────────────────────────────
+  //
+  // Boot-time read plus `history.replaceState` on settle, which is the house idiom across the suite
+  // — nothing in the repo re-hydrates from a live `hashchange`, and the app where a dropped field
+  // changes the ANSWER is not where that should start.
+
+  /** False until the boot-time link has been read, so the app's own first renders cannot clobber it. */
+  let hashReady = false;
+
+  /**
+   * Put the current state in the address bar.
+   *
+   * `replaceState`, never `pushState`: a contour drag would otherwise leave a hundred history
+   * entries between the reader and the page they came from. A state that cannot be encoded leaves
+   * the URL ALONE rather than half-writing one.
+   */
+  function writeHash(): void {
+    if (!hashReady) return;
+    // The reader has acted, so a message about the link they arrived on is no longer about them.
+    linkBox.hidden = true;
+    const enc = encodeShell(currentState());
+    if (!enc.ok) return;
+    if (enc.hash !== window.location.hash) {
+      window.history.replaceState(null, "", enc.hash);
+    }
+  }
+
+  let hashTimer = 0;
+  /**
+   * The state has changed; the URL should catch up shortly.
+   *
+   * **COALESCED, and a real browser is why.** A wheel zoom has no gesture and no end event, so a
+   * fast spin is dozens of discrete settled changes in a second — and `replaceState` is rate-limited
+   * by the browser (Safari drops calls past roughly a hundred in thirty seconds), so writing per
+   * event would silently stop writing. One timer means every caller can simply say "this changed"
+   * and the URL lands once, shortly after things stop moving.
+   */
+  function syncHash(): void {
+    if (!hashReady) return;
+    window.clearTimeout(hashTimer);
+    hashTimer = window.setTimeout(writeHash, 250);
+  }
+
+  // ── the exported figure ───────────────────────────────────────────────────────────────────
+
+  /** What the plate is a figure OF — the record's own headline, or the typed integrand. */
+  function figureTitle(): string {
+    if (mode === "gallery" && family !== null) return `${family.id} — ${contourIntegrandText(family)}`;
+    return `∮ ${input.value.trim()} dz over ${contour.pieces.map((q) => q.name).join(", ")}`;
+  }
+
+  const captionNow = (): FigureCaption =>
+    figureCaption({ title: figureTitle(), integral, theorem, ledger, solved });
+
+  /**
+   * Composite the plate and hand back its PNG bytes, metadata and all.
+   *
+   * **THE GL LAYER IS RE-RENDERED HERE, SYNCHRONOUSLY, and that is not belt-and-braces.** `GLStage`
+   * creates its context without `preserveDrawingBuffer`, so the drawing buffer is gone once the
+   * browser has composited the frame: probing the live page, `canvas.gl` reads back a single
+   * distinct colour where the ink layer reads 44. Without this line the exported figure would be
+   * missing the phase portrait — the whole backdrop — and would look merely plain rather than wrong.
+   */
+  async function figureBytes(scale = 2): Promise<Uint8Array | null> {
+    // **EVERYTHING THE PLATE CLAIMS IS CAPTURED BEFORE THE FIRST `await`, and a review of this
+    // function is why.** `toBlob` yields to the event loop, so a draft that called `captionNow()`
+    // once for the drawing and again for the metadata could have a pending recompute land between
+    // them — a figure whose drawn caption said one thing and whose stamped verdict said another,
+    // which is precisely the dishonesty the verdict key exists to prevent. Same for the permalink:
+    // a link encoded after the yield could describe a state the picture is not of.
+    const vp = viewport();
+    stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
+    const caption = captionNow();
+    const enc = encodeShell(currentState());
+    const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
+    const layout = figureLayout(
+      { w: glCanvas.width, h: glCanvas.height },
+      { w: accCanvas.width, h: accCanvas.height },
+      scale,
+    );
+    const style = getComputedStyle(shell);
+    const plate = document.createElement("canvas");
+    drawFigure(plate, layout, [glCanvas, inkCanvas], accCanvas, caption, {
+      background: style.getPropertyValue("--c-bg").trim() || "#0f1115",
+      text: style.getPropertyValue("--c-text").trim() || "#e7e9ee",
+      muted: style.getPropertyValue("--c-muted").trim() || "#99a1b3",
+    });
+    const blob = await new Promise<Blob | null>((done) => {
+      plate.toBlob(done, "image/png");
+    });
+    if (blob === null) return null;
+    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, caption));
+  }
+
+  /**
+   * Move the contour, and keep its RECIPE in step.
+   *
+   * One function because the shift is provenance: two call sites accumulating it by hand would be two
+   * chances for the recipe and the geometry to disagree, and a permalink minted from a stale recipe
+   * reopens a contour somewhere else. `from` is the contour the translation is measured against —
+   * the gesture's anchor for a pointer drag, the live contour for a keyboard nudge — and `fromShift`
+   * the recipe's shift at that same moment, so the two always describe the same starting point.
+   */
+  function moveContour(from: Contour, fromShift: Cx, d: Cx): void {
+    contour = translateContour(from, d);
+    if (contourSource !== null) {
+      contourSource = { ...contourSource, shift: [fromShift[0] + d[0], fromShift[1] + d[1]] };
+    }
+  }
+
   /** The work ceiling for this pass: draft while a contour is being dragged, full otherwise. */
   const budgetNow = (): { readonly maxEvaluations: number } | undefined =>
     gesture === "contour" ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined;
 
-  function recompute(): void {
-    if (mode === "gallery") {
-      recomputeRecord();
+  // ── the shell's state, projected out and put back ─────────────────────────────────────────
+  //
+  // The closure keeps owning the locals; these two are the projection onto {@link ShellState} and
+  // the restoration from it. Everything M6 needs downstream rides here — a `#vs=` permalink is this
+  // object encoded, and a PNG carries the same bytes — so the one property worth pinning is that
+  // `applyState(currentState())` changes nothing, for every record and for a hand-built sandbox
+  // state. A field dropped from either half breaks exactly that, and nothing else would notice: the
+  // app would draw the same picture while computing a different integral, which is M5.1's shadowed
+  // `branch` bug in a new place.
+
+  /** The app's state, as plain data. */
+  function currentState(): ShellState {
+    const fam = family;
+    const g = golden;
+    const open = fam !== null && g !== null;
+    return {
+      mode,
+      // The box, verbatim — under a declaration this is the COFACTOR `R(z)` and not the integrand.
+      expr: input.value,
+      declaration,
+      beforeDeclaration: beforeDeclarationSrc,
+      branch,
+      contour,
+      contourSource,
+      // Kept in either mode: which record the picker is on outlives a trip to the sandbox, as it
+      // does on screen.
+      record: open ? fam.id : null,
+      fixture: open ? Math.max(0, fam.golden.indexOf(g)) : 0,
+      bindings: bindingOverrides,
+      geometry: geometryOverrides,
+      view,
+      contrast,
+      scrub,
+      iso: isoPref,
+      sandboxContour,
+    };
+  }
+
+  /**
+   * Take a state as the app's own, and rebuild from it.
+   *
+   * Deliberately NOT routed through `setMode`/`loadRecord`/`selectFixture`: those carry a gesture's
+   * side effects — `frameContour()`, dropped overrides — and a restored state brings its own view
+   * and its own overrides. The DOM controls are synced here instead, because a state that decides
+   * the numbers while the bar still shows the old mode is the same class of defect as a cut drawn
+   * where the answer is not.
+   */
+  function applyState(next: ShellState): void {
+    mode = next.mode;
+    for (const b of sourceWrap.querySelectorAll("button")) {
+      b.setAttribute("aria-pressed", String(b.dataset.mode === mode));
+      b.classList.toggle("on", b.dataset.mode === mode);
+    }
+    sandboxGroup.hidden = mode !== "sandbox";
+    galleryGroup.hidden = mode !== "gallery";
+
+    branch = next.branch;
+    declaration = next.declaration;
+    beforeDeclarationSrc = next.beforeDeclaration;
+    contour = next.contour;
+    contourSource = next.contourSource;
+    sandboxContour = next.sandboxContour ?? next.contour;
+    view = next.view;
+    contrast = next.contrast;
+    scrub = next.scrub;
+    isoPref = next.iso;
+    scrubber.value = String(Math.round(scrub * 1000));
+    for (const b of contrastWrap.querySelectorAll("button")) {
+      b.classList.toggle("on", b.dataset.mode === contrast);
+    }
+
+    const found = recordOf(next);
+    family = found?.family ?? null;
+    golden = found?.golden ?? null;
+    bindingOverrides = { ...next.bindings };
+    geometryOverrides = { ...next.geometry };
+    // A state with no record puts the picker back to its first option rather than leaving a stale
+    // selection standing — which is also what it shows at boot, so `record: null` means one thing.
+    recordSelect.value = family?.id ?? offered.tiers[0]?.families[0]?.id ?? "";
+    renderFixtureOptions();
+
+    // The box, and the label that says what is in it. Both, or the app claims a cofactor is an
+    // integrand — the defect the "undeclare" button exists to prevent.
+    input.value = next.expr;
+    const declared = declaration !== null;
+    fLabel.textContent = declared ? "R(z) =" : "f(z) =";
+    input.setAttribute("aria-label", declared ? "rational cofactor R(z)" : "integrand f(z)");
+    compiled = compile(input.value);
+    if (compiled.ok) {
+      poles = compiled.poles;
+      errorBox.hidden = true;
     } else {
-      resolved = resolveAll(contour);
-      const order = declaredOrder();
-      if (declaration !== null && ast && order !== null) {
-        // **THE DECLARED ROUTE.** `ast` is the COFACTOR here, not the integrand — the box changed
-        // meaning when the factor was declared — so the residues come from the declaration and the
-        // poles from `R(z)`, exactly as they do for a gallery record.
-        const spec: SandboxDeclaration = {
-          constant: declaration.constant,
-          pointId: declaration.pointId,
-          order,
-          window: declaration.window,
-          cofactor: ast,
-        };
-        const budget = budgetNow();
-        const r = runDeclared(spec, contour, effective(), budget);
-        if (!r.ok) {
-          clearComputed();
-          declaredRefusal = r.reason;
-          splitCheck = null;
-        } else {
-          declaredRefusal = null;
-          resolved = r.analysis.resolved;
-          integral = r.analysis.integral;
-          theorem = r.analysis.theorem;
-          ledger = r.analysis.ledger;
-          acc = accumulateForIntegral(r.f, resolved, integral, undefined, r.analysis.sides);
-          solved = null;
-          // The split is checked against what the box held a moment before the declaration, which
-          // is the only falsifiable form of "this factorisation is the integrand I meant".
-          splitCheck = beforeDeclaration === null ? null : checkSplit(r.declared, ast, beforeDeclaration);
-          // The picture becomes the DECLARED determination, as it already is under a record — so
-          // the sandbox's colour seam and its declared cut stop being different objects.
-          //
-          // Keyed BY VALUE, and a review found out why: `runDeclared` builds `declared` fresh on
-          // every call, so an identity test never fires and the GLSL was being recompiled and
-          // relinked on every recompute — every frame of a contour drag included, which is exactly
-          // when the app can least afford it. The key covers the cofactor's source too, since that
-          // goes into the program as well.
-          const key = `${declaredKey(r.declared)}::${input.value}`;
-          if (stageKey !== key) {
-            stageKey = key;
-            declaredOnStage = r.declared;
-            stage?.setIntegrand(ast, r.declared);
-          }
-        }
-      } else if (!f || !ast || !poles) {
-        clearComputed();
-      } else {
-        const budget = budgetNow();
-        const a = analyse({
-          ast,
-          f,
-          poles,
-          contour,
-          branch: effective(),
-          ...(budget === undefined ? {} : { budget }),
-        });
-        resolved = a.resolved;
-        integral = a.integral;
-        theorem = a.theorem;
-        ledger = a.ledger;
-        acc = accumulateForIntegral(f, resolved, integral, undefined, a.sides);
-        solved = null;
+      poles = null;
+      errorBox.hidden = false;
+      errorBox.textContent = compiled.error;
+    }
+    // A restored state has no relationship to whatever program the previous one left linked, so the
+    // stage is rebuilt rather than kept: `recompute` builds the declared one, and this builds the
+    // plain one, exactly as `applyExpression` does.
+    declaredOnStage = null;
+    stageKey = null;
+    if (compiled.ok && !declared && mode === "sandbox") stage?.setIntegrand(compiled.ast);
+
+    recompute();
+
+    // Frozen AFTER the run, from the contour on screen — the same rule `selectFixture` follows, and
+    // for the same reason: the track has to mean what the value beside it means.
+    frozenRanges = {};
+    if (mode === "gallery") {
+      for (const param of Object.values(contour.params)) {
+        frozenRanges[param.name] = { range: param.range, scale: param.scale };
       }
     }
+  }
+
+  /**
+   * Everything the resolver produced, taken as the app's state.
+   *
+   * The shell decides NOTHING here — which branch ran, and what each one produced, is
+   * `resolveState`'s call. This is the assignment half, and it is the only half that touches the
+   * DOM, the stage or the accumulator.
+   */
+  function applyResolution(res: StateResolution): void {
+    switch (res.kind) {
+      case "gallery": {
+        family = res.family;
+        golden = res.golden;
+        recordNote = res.note;
+        systemTargets = res.targets;
+        if (res.run !== null) {
+          adopt(res.run);
+          solved = res.solved;
+          errorBox.hidden = true;
+        } else {
+          clearComputed();
+          errorBox.hidden = false;
+          errorBox.textContent = res.fatal ?? "";
+        }
+        return;
+      }
+      case "declared": {
+        declaredRefusal = null;
+        resolved = res.analysis.resolved;
+        integral = res.analysis.integral;
+        theorem = res.analysis.theorem;
+        ledger = res.analysis.ledger;
+        acc = accumulateForIntegral(res.f, resolved, integral, undefined, res.analysis.sides);
+        solved = null;
+        splitCheck = res.split;
+        // The picture becomes the DECLARED determination, as it already is under a record — so the
+        // sandbox's colour seam and its declared cut stop being different objects.
+        //
+        // Keyed BY VALUE, and a review found out why: `runDeclared` builds `declared` fresh on every
+        // call, so an identity test never fires and the GLSL was being recompiled and relinked on
+        // every recompute — every frame of a contour drag included, which is exactly when the app
+        // can least afford it. The key covers the cofactor's source too, since that goes into the
+        // program as well.
+        const key = `${declaredKey(res.declared)}::${input.value}`;
+        if (stageKey !== key) {
+          stageKey = key;
+          declaredOnStage = res.declared;
+          stage?.setIntegrand(res.cofactor, res.declared);
+        }
+        return;
+      }
+      case "declared-refused":
+        clearComputed();
+        declaredRefusal = res.reason;
+        splitCheck = null;
+        return;
+      case "plain":
+        resolved = res.analysis.resolved;
+        integral = res.analysis.integral;
+        theorem = res.analysis.theorem;
+        ledger = res.analysis.ledger;
+        acc = accumulateForIntegral(res.f, resolved, integral, undefined, res.analysis.sides);
+        solved = null;
+        return;
+      case "empty":
+        clearComputed();
+        if (mode === "gallery") {
+          recordNote = null;
+          systemTargets = null;
+        }
+        return;
+    }
+  }
+
+  /**
+   * Rebuild everything the current state implies, and redraw.
+   *
+   * **The three compute branches are not here.** They live in `shell/state.ts` as one pure function
+   * of {@link ShellState}, which is what makes them reachable from a test at all — and what makes
+   * the fixed-point claim about `applyState(currentState())` a claim about the app rather than about
+   * a second implementation of it. M3.5a moved the gallery and the sandbox onto one `analyse` for
+   * the same reason, one level down.
+   */
+  function recompute(): void {
+    // Set BEFORE the resolve, as it always was: the gallery's resolution carries its own `resolved`
+    // through `adopt`, the plain and declared branches overwrite this with the analysis's copy, and
+    // a refusal leaves it — so a contour that produced no answer is still drawn.
+    if (mode === "sandbox") resolved = resolveAll(contour);
+    applyResolution(resolveState(currentState(), compiled, budgetNow()));
     handles = handlesOf(contour, resolved);
     if (hovered >= handles.length) hovered = -1;
     bHandles = mode === "sandbox" ? branchHandles(branch) : [];
@@ -879,47 +1300,13 @@ export function mountApp(root: Element): void {
     renderPoles();
     drawAcc();
     requestDraw();
-  }
-
-  /**
-   * Re-run the open record at the current bindings.
-   *
-   * Everything the gallery shows comes back from this one call, including the geometry: a family
-   * parameter changes the INTEGRAND as well as the contour (A1's `a` lives in `1/(a + b·cos θ)`), so
-   * "move a slider" is "rebuild the problem", not "move a point".
-   */
-  function recomputeRecord(): void {
-    recordNote = null;
-    solved = null;
-    systemTargets = null;
-    if (!family || !golden) {
-      clearComputed();
-      return;
-    }
-    const budget = budgetNow();
-    const r = solveFamily(family, golden, {
-      bindings: bindingOverrides,
-      geometry: geometryOverrides,
-      ...(budget === undefined ? {} : { budget }),
-    });
-    if (r.ok) {
-      adopt(r.run);
-      solved = r.solved;
-      systemTargets = r.route === "system" ? r.targets : null;
-      errorBox.hidden = true;
-      return;
-    }
-    // Pass 5 may refuse while the run itself is sound. Show what there is and say what is missing,
-    // rather than blanking a record whose ledger and contour are perfectly readable.
-    recordNote = r.reason;
-    if (r.run) {
-      adopt(r.run);
-      errorBox.hidden = true;
-    } else {
-      clearComputed();
-      errorBox.hidden = false;
-      errorBox.textContent = r.reason;
-    }
+    // The two canvases' text alternatives describe what was just computed, so they are refreshed
+    // with it — a static label would go stale the first time a record changed.
+    inkCanvas.setAttribute("aria-label", `${STAGE_KEYS} ${describeStage()}`);
+    accCanvas.setAttribute("aria-label", describeAccumulator());
+    // Not mid-gesture: a drag recomputes at draft quality on every frame, and the URL is for the
+    // state the reader stopped at. `endGesture` calls it once the gesture is over.
+    if (gesture === "none") syncHash();
   }
 
   function setMode(next: "sandbox" | "gallery"): void {
@@ -995,36 +1382,31 @@ export function mountApp(root: Element): void {
 
   function applyExpression(): void {
     if (mode === "gallery") return;
-    try {
-      ast = parse(input.value.trim());
-      const fn = makeComplexFn(ast);
-      f = (z: Cx) => fn(z as [number, number], [0, 0]) as Cx;
-      // No declaration in the sandbox, and that is correct rather than a gap: the expression the
-      // user typed IS the definition, so its principal branch is the function they asked for.
-      //
-      // Set on the line before `setIntegrand` deliberately, here and in `adopt`. The invariant is
-      // that `declaredOnStage` describes the program the stage is CURRENTLY holding, so the two
-      // move together or not at all — a failed parse leaves the previous program on screen, and
-      // clearing the flag without clearing the program would have the card describe a picture that
-      // is not there.
-      // With a factor declared the box holds `R(z)`, and `recompute` puts the DECLARED product on
-      // the stage instead — so the program is not built here and the flag is not cleared here.
-      if (declaration === null) {
-        declaredOnStage = null;
-        stageKey = null;
-        stage?.setIntegrand(ast);
-      }
-      errorBox.hidden = true;
-    } catch (e) {
-      ast = null;
-      f = null;
+    compiled = compile(input.value);
+    if (!compiled.ok) {
       poles = null;
       errorBox.hidden = false;
-      errorBox.textContent = e instanceof Error ? e.message : String(e);
+      errorBox.textContent = compiled.error;
       recompute();
       return;
     }
-    poles = findPoles(ast);
+    poles = compiled.poles;
+    // No declaration in the sandbox, and that is correct rather than a gap: the expression the
+    // user typed IS the definition, so its principal branch is the function they asked for.
+    //
+    // Set on the line before `setIntegrand` deliberately, here and in `adopt`. The invariant is
+    // that `declaredOnStage` describes the program the stage is CURRENTLY holding, so the two
+    // move together or not at all — a failed parse leaves the previous program on screen, and
+    // clearing the flag without clearing the program would have the card describe a picture that
+    // is not there.
+    // With a factor declared the box holds `R(z)`, and `recompute` puts the DECLARED product on
+    // the stage instead — so the program is not built here and the flag is not cleared here.
+    if (declaration === null) {
+      declaredOnStage = null;
+      stageKey = null;
+      stage?.setIntegrand(compiled.ast);
+    }
+    errorBox.hidden = true;
     recompute();
   }
 
@@ -1094,9 +1476,7 @@ export function mountApp(root: Element): void {
       el("p", "num", contourIntegrandText(family)),
     );
     if (family.auxiliary) {
-      recordCard.append(
-        el("p", "muted small", `the target is ${family.auxiliary.relation} of ∮ f dz — ${family.auxiliary.note}`),
-      );
+      recordCard.append(el("p", "muted small", relationText(family)));
     }
 
     // The engine's answer, then the record's claim, then whether they agree.
@@ -1371,23 +1751,18 @@ export function mountApp(root: Element): void {
       return;
     }
 
-    // Two independent reasons there may be no number, and the second is the one that used to be
-    // missed: the quadrature can be perfectly happy about a contour LEGALITY has already refused.
-    const illegal = ledger === null ? undefined : legalityRefusal(ledger);
-    if (integral.refusal !== undefined || !mayReportValue(integral.verdict) || illegal !== undefined) {
+    // Three independent reasons there may be no number, asked in ONE place — `integralRefusal`, in
+    // `engine/ledger.ts`. It used to be asked here, inline, which was fine while this was the only
+    // surface; the exported figure's caption is the second, and a caption that re-derived the
+    // question would be one edit away from printing a number on a shareable image that the app
+    // itself withholds.
+    const refused = integralRefusal(integral, ledger);
+    if (refused !== null) {
       // No number. Not a greyed-out number, not a number with a warning beside it — none.
       const row = el("p", "refusal");
       row.append(badge("⚠"), " Refused");
-      resultCard.append(
-        row,
-        el("p", "muted", illegal?.claim ?? integral.refusal ?? "the result was refused"),
-      );
-      const repair =
-        illegal?.repair ??
-        integral.verdict.certificates
-          .flatMap((c) => c.provenance)
-          .find((s) => s.text.startsWith("suggested repair"))?.text;
-      if (repair !== undefined) resultCard.append(el("p", "repair", repair));
+      resultCard.append(row, el("p", "muted", refused.claim));
+      if (refused.repair !== undefined) resultCard.append(el("p", "repair", refused.repair));
       return;
     }
 
@@ -1516,6 +1891,7 @@ export function mountApp(root: Element): void {
         b.type = "button";
         b.addEventListener("click", () => {
           contour = t.build();
+          contourSource = { template: t.id, shift: [0, 0] };
           if (t.seed !== undefined && branch.points.length === 0) branch = t.seed(branch);
           recompute();
           frameContour();
@@ -1895,7 +2271,6 @@ export function mountApp(root: Element): void {
         const b = el("button", "preset", `declare a factor on ${point.label}`);
         b.type = "button";
         b.addEventListener("click", () => {
-          beforeDeclaration = ast;
           beforeDeclarationSrc = input.value;
           declaration = {
             pointId: point.id,
@@ -1935,18 +2310,19 @@ export function mountApp(root: Element): void {
     }
     windowPick.addEventListener("change", () => {
       const chosen = windows.find((w) => w.label === windowPick.value);
-      // **Declaring the determination IS declaring the cut**, so the cut system is rebuilt from the
-      // new window rather than left where it was — otherwise the two would disagree about where the
+      // **Declaring the determination IS declaring the cut**, so the cut is rebuilt from the new
+      // window rather than left where it was — otherwise the two would disagree about where the
       // discontinuity is, silently.
+      //
+      // Through `setCutFromWindow`, which rebuilds the cut's GEOMETRY on the point the declaration
+      // names. This used to take `buildDeclaration`'s whole `choice`, whose single point is `"b"`
+      // while the reader's is `"b1"` — so the declaration was orphaned on every window change and
+      // the app went on integrating the cofactor as though it were the integrand. See that
+      // function's note; a jsdom driver over the real shell is what found it.
       if (chosen && declaration) {
         declaration = { ...declaration, window: chosen.value };
-        const rebuilt = buildDeclaration({
-          constant: declaration.constant,
-          at: 0,
-          window: chosen.value,
-          order: declaredOrder() ?? { kind: "power", alpha: Frac.of(1n, 2n), sign: 1 },
-        });
-        if (rebuilt.ok) branch = rebuilt.choice;
+        const next = setCutFromWindow(branch, declaration.pointId, chosen.value, order);
+        if (next !== null) branch = next;
       }
       recompute();
     });
@@ -2032,7 +2408,6 @@ export function mountApp(root: Element): void {
       if (beforeDeclarationSrc !== null) input.value = beforeDeclarationSrc;
       declaration = null;
       splitCheck = null;
-      beforeDeclaration = null;
       beforeDeclarationSrc = null;
       fLabel.textContent = "f(z) =";
       input.setAttribute("aria-label", "integrand f(z)");
@@ -2071,9 +2446,19 @@ export function mountApp(root: Element): void {
     head.append(badge(verdict.level), ` ${describeLevel(verdict.level)}`);
     poleCard.append(head);
 
+    // **"NO POLES" AND "NO CLAIM" ARE DIFFERENT SENTENCES, and until M5.3a the card printed the
+    // second for both.** An entire integrand HAS an answer — the singular set is empty — and saying
+    // "no poles are claimed" about it understates what the engine established, while saying "No
+    // poles." about an unread integrand overstates it. The decision is read first for that reason.
+    if (poles.entire) {
+      poleCard.append(
+        el("p", "muted", "No poles: f is entire, so the singular set is empty and Σ Res is the empty sum."),
+      );
+      return;
+    }
     if (!poles.rational) {
       poleCard.append(
-        el("p", "muted", "f is not a rational function of z, so no poles are claimed."),
+        el("p", "muted", "f could not be read exactly, so no poles are claimed — which is not the same as there being none."),
       );
       return;
     }
@@ -2224,6 +2609,7 @@ export function mountApp(root: Element): void {
       // Anchored, not accumulated: a long drag measured from where it started cannot drift, and the
       // `add` offsets stay a single term instead of a sum of every pointer move.
       anchorContour = contour;
+      anchorShift = contourSource?.shift ?? [0, 0];
       anchorAt = at;
     } else {
       gesture = "view";
@@ -2265,7 +2651,7 @@ export function mountApp(root: Element): void {
       branch = applyBranchGrab(branch, grab.handle.grab, at);
       recompute();
     } else if (grab?.kind === "body" && anchorContour !== null) {
-      contour = translateContour(anchorContour, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
+      moveContour(anchorContour, anchorShift, [at[0] - anchorAt[0], at[1] - anchorAt[1]]);
       recompute();
     } else if (grab?.kind === "radius") {
       // Out of range returns null rather than clamping, so the handle simply stops at the parameter's
@@ -2289,6 +2675,8 @@ export function mountApp(root: Element): void {
       recompute();
       reconcileDraft(draft, worst);
     }
+    // Unconditionally, because a VIEW pan changes the camera and recomputes nothing.
+    syncHash();
     updateCursor();
   };
   stageWrap.addEventListener("pointerup", endGesture);
@@ -2364,7 +2752,7 @@ export function mountApp(root: Element): void {
     const d: Cx = [dx * step, -dy * step];
     if (held.kind === "body") {
       if (!canMoveBody()) return;
-      contour = translateContour(contour, d);
+      moveContour(contour, contourSource?.shift ?? [0, 0], d);
       recompute();
     } else if (held.kind === "branch") {
       branch = applyBranchGrab(branch, held.handle.grab, [
@@ -2385,12 +2773,66 @@ export function mountApp(root: Element): void {
   // The accessible-canvas contract (ADR-0032): the GL canvas is the RENDER surface and is hidden
   // from assistive tech; the ink overlay above it carries the name, the focus and the keyboard map,
   // so the stage is navigable without a pointer at all.
+  /**
+   * What the stage and the accumulator SHOW, in words, derived from the ledger.
+   *
+   * Research 02 §8 makes the head-to-tail partial sum the app's P0 picture, and it was completely
+   * unannounced — the one substantive gap M6.0's keyboard walk found. This is the `role="img"` case
+   * `@cas/ui`'s `attachCanvasA11y` exists for.
+   *
+   * **Generated, never written.** Every clause comes from something the engine computed: the caption
+   * the exported figure uses (so the two cannot disagree), the piece list, and the enclosed count.
+   * A hand-written alternative would drift from the picture the first time a record changed, and
+   * would be the one place in this app claiming something nothing checked.
+   */
+  function describeStage(): string {
+    const c = captionNow();
+    const pieces = contour.pieces.length;
+    // **"WOUND", not "enclosed", and the distinction is D6's.** This counts poles whose winding
+    // number the engine decided to be non-zero, which is exactly what it says. The ledger's CATCH
+    // row can differ: the exterior residue theorem re-weights each pole by `n − σ`, so a dogbone
+    // with the cut inside it encloses its poles and still contributes nothing from them. Describing
+    // this count as "enclosed" would put a claim in the text alternative that the ledger next to it
+    // does not make.
+    //
+    // `w.decided &&` is UNOBSERVABLE and kept deliberately — a mutation sweep survivor, recorded
+    // rather than deleted: every `decided: false` path in `kernel/winding.ts` returns `n: 0`, so the
+    // two conditions agree today. Dropping it would make this line depend on that invariant holding
+    // in another module, which is not a dependency a description should have.
+    const wound = integral?.windings.filter((w) => w.decided && w.n !== 0).length ?? 0;
+    return (
+      `${c.title}. ${pieces} piece${pieces === 1 ? "" : "s"}; ` +
+      `${wound === 0 ? "the contour winds about no pole" : `it winds about ${wound} pole${wound === 1 ? "" : "s"}`}. ` +
+      `${c.value}. ${c.verdict}`
+    );
+  }
+
+  function describeAccumulator(): string {
+    const c = captionNow();
+    if (acc === null) {
+      return "The partial sum of f(z)·Δz along the contour. Nothing is plotted: there is no value to accumulate.";
+    }
+    return (
+      `The partial sum Σ f(zₖ)·Δzₖ, plotted head to tail in the complex plane over ` +
+      `${acc.steps.length} steps along the contour. Its endpoint is the integral: ${c.value}.`
+    );
+  }
+
+  // Attached for its side effect: the role, the name and the live region. There is nothing to
+  // announce and no key to handle, so the handle itself is not kept.
+  attachCanvasA11y(accCanvas, {
+    // A STATIC view, so `role="img"` and no key handler: everything the reader can change about it —
+    // the scrub position and the comparison — is a labelled control in the strip beside it.
+    role: "img",
+    // Through the same generator `recompute` refreshes it with, so the label has one source even at
+    // this one moment before the first recompute has run.
+    label: describeAccumulator(),
+  });
+
   const stageA11y = attachCanvasA11y(inkCanvas, {
-    label:
-      "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
-      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one of its radius " +
-      "handles, or a branch point or branch cut, after which the arrow keys move what you grabbed " +
-      "and shift with an arrow pans.",
+    // The keys, then what is on screen — the second half regenerated on every recompute (see
+    // `describeStage`), which is why the instructions are a constant the two places share.
+    label: `${STAGE_KEYS} ${describeStage()}`,
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,
@@ -2417,6 +2859,8 @@ export function mountApp(root: Element): void {
         return;
       }
       requestDraw();
+      // Keyboard pan and zoom run outside any gesture, so `endGesture` never sees them.
+      syncHash();
     },
   });
 
@@ -2429,6 +2873,9 @@ export function mountApp(root: Element): void {
       const rect = stageWrap.getBoundingClientRect();
       view = zoomAt(view, Math.exp(-ev.deltaY * 0.0015), ev.clientX - rect.left, ev.clientY - rect.top, viewport());
       requestDraw();
+      // A wheel has no gesture and no end event; the coalescing in `syncHash` is what makes this
+      // safe to call per tick.
+      syncHash();
     },
     { passive: false },
   );
@@ -2456,4 +2903,28 @@ export function mountApp(root: Element): void {
   // Through `setMode` rather than straight to `applyExpression`, so the bar's two groups start in the
   // state the mode says they should be in instead of in whatever order they were appended.
   setMode(mode);
+
+  // **THE LINK IS READ LAST AND EXACTLY ONCE.** After the app has built itself, so a decoded state
+  // goes through the same `applyState` any other restore does; before `hashReady`, so none of the
+  // boot renders above has overwritten the very hash being read.
+  const link = decodeShell(window.location.hash);
+  if (link !== null) {
+    if (link.ok) {
+      // **NO `frameContour()` HERE**, and it was there for one draft: the link CARRIES the camera,
+      // and reframing would throw away the view the sharer chose. It is always a real view rather
+      // than the bare default, because opening a record or picking a template frames the contour
+      // first and `currentState()` reads the result.
+      applyState(link.state);
+    } else {
+      // Shown, never drawn over. A link that cannot be honoured must not open something plausible
+      // instead — that is the whole reason this codec refuses rather than defaulting.
+      linkBox.hidden = false;
+      linkBox.textContent =
+        `This shared link could not be opened: ${link.reason}. ` +
+        "Showing the app's own starting state instead.";
+    }
+  }
+  hashReady = true;
+
+  return { currentState, applyState };
 }

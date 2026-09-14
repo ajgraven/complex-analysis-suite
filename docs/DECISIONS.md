@@ -1467,6 +1467,30 @@ the `cvec`/`vec_` aliases it uses). Centralising the viewport map is load-bearin
 1. [x] `@cas/export` with `png.ts` + golden test; census / workspace / dep wiring; CD / CFP / RM migrated.
 2. [x] `FULLSCREEN_VERTEX_GLSL` / `HSV2RGB_GLSL` / `PLANE_FROM_FRAG_GLSL` added to `@cas/gpu/glsl`; all 7 / 2 / 4
    consumers migrated; a real-WebGL2 compile of the assembled shaders confirms the extraction.
+3. [x] **`iTXt` for text above Latin-1** (added during Contour Integration's M6.3). `tEXt` is Latin-1
+   only and the coercion to `?` was *documented rather than fixed*, which made it read as deliberate.
+   It was destroying real content in every consumer: each one's `Software` string carries an em-dash,
+   and Contour Integration stamps a figure's own verdict, where `= 2π√3/3` was being stored as
+   `= 2??3/3` — the mathematics gone from the one field whose job is to say what the figure claims.
+   `injectPngText` now chooses per entry (`tEXt` when lossless, so existing ASCII payloads are
+   byte-identical; `iTXt` otherwise) and `readPngText` reads both. UTF-8 is hand-rolled, because the
+   package compiles against `lib: ES2022` with no DOM and no Node types — deliberately, so it "can
+   run anywhere" — and it already hand-rolls CRC-32 and Latin-1.
+4. [ ] **The permalink KEY is not unified across consumers.** This package's README specifies
+   `Software` + `cas:state`; two apps follow it (Riemann Map, Contour Integration) and four each
+   minted their own prefix before the package existed — `ap:url`, `2de:url`, `2dh:url`,
+   `cdjs:state`. A reader wanting to open any figure in the suite therefore has four special cases.
+   Deliberately not fixed from inside one app; it wants a suite-wide slice.
+5. [ ] **`mountNavHeader`'s reading order depends on CALL ORDER, silently** — found in the same pass,
+   and belonging to ADR-0032. It ends with `container.appendChild(nav)`, so the nav reads wherever the
+   call happens to fall while `.cas-nav` is `position: fixed` and always draws at the top. Contour
+   Integration mounted it *after* filling its shell, so the nav was the last child: it looked first
+   and read last, after the entire rail. **Checked, and every other adopter is correct** — 2D
+   Electrostatics (both pages), Hele-Shaw (both), Potential Theory and 2D Hydrodynamics each call it
+   immediately before `app.append(bar, stage)`, so their nav is the first child. So this is not four
+   broken apps; it is one function whose contract is positional and unstated. `mountNavHeader` should
+   `prepend` (or say in its own doc that the caller must call it first), so the guarantee does not
+   rest on six call sites remembering.
 
 ## ADR-0017: The Complex-Dynamics → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer
 
@@ -3760,3 +3784,30 @@ exactly the point where it is handing you a result from elsewhere.
 - **It does not license a general escape hatch.** A record cannot import the answer: invariant 4 still
   requires the contour to DETERMINE what the record claims, and a `knownValue` on the target piece
   would leave the solve with nothing to do and is refused by the loader.
+
+### Built (M5.8b–d), with four things the decision did not settle
+
+1. **There is ONE import, and the two records name the same function.** E3's own record says `√π` IS
+   `Γ(1/2)`, so the closed set (`kernel/imported.ts`) is the Gamma function at a rational argument
+   rather than a table of constants — which is what lets a single independent check cover both
+   records: `∫₀^∞e^{−tⁿ}dt = Γ(1+1/n)` is F2's declared method, and `Γ(1/2) = 2Γ(3/2) = 2∫₀^∞e^{−t²}dt`
+   carries it onto E3. A positive half-integer reduces to an exact rational multiple of `√π` by the
+   recurrence in ℚ, checked against the Lanczos series it does not use.
+2. **An imported value has no INVERSE, and that is the arithmetic of "imported".** It generates a
+   rank-1 module over the app's own exponential basis: a solve may add two of them and scale either
+   by something it derived, and may never divide by one, because nothing in the argument produces it.
+   Pass 5's fourth route (`families/solveImported.ts`) therefore REQUIRES `∮ = 0` — `2πi Σ Res`
+   carries π and an import does not, and `0` is the one value both rings share. That is not a
+   limitation but the empty singular set, which is these two records' whole content.
+3. **The declared `rigor` is checked in BOTH directions.** Item 3 above says "may not exceed", and a
+   ceiling alone is satisfied by every level, since `=` is the lattice top — it would assert nothing
+   and read as a guard while being one. The loader requires EQUALITY with what the closed set
+   justifies: under-claiming is a record saying the app is less sure than it is, which is as much a
+   corpus error as over-claiming. The atom's own level is narrowed to `=` in the TYPE, so minting is
+   correct by construction and a weaker import would be a type error rather than a silent mislabel.
+4. **The `≈` the decision replaces becomes an independent CHECK.** The piece's quadrature is still
+   computed and still reported — on the KILL row, beside the import, as a relative gap. It is
+   deliberately coarse: at a finite limit parameter that gap is the piece's own tail as much as any
+   error in the value, so no tight verdict is available. What it separates is a converging tail from
+   a different number — E3's is 1.5e-8 of the value at R = 4 and 2.2e-11 at R = 6, while the same
+   record with one factor dropped is off by half the value.

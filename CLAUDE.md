@@ -95,15 +95,25 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **509 test files / 4901 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **537 test files / 5480 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
-separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is
-the only jsdom project. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
+`apps/contour-integration/test/shell.test.ts` are the only jsdom ones — the latter per-file, through a
+`// @vitest-environment jsdom` docblock. **Never pipe the gate through `tail` or `head`** — doing so has truncated
 real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
 `vite` left running in the background.
+
+**The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
+the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
+`packages/gpu`). They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
+`apps/contour-integration/vitest.browser.config.ts` reads `CAS_CHROMIUM_EXECUTABLE`, so
+`CAS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:browser` works in a container that has one
+under a different version. **Run it when a slice adds a record or touches the stage:** the contour-integration
+browser suite was red for three milestones on a hardcoded record count, and the node gate structurally
+cannot see it.
 
 **Line endings are LF everywhere**, enforced by `.gitattributes`. The index was always LF; before
 that file existed, a Windows checkout produced a CRLF working tree and two gate tests failed locally
@@ -145,12 +155,13 @@ conformal map ψ: 𝔻* → ext(B), the Joukowski/Kármán–Trefftz airfoil (Ku
 closed-form transplant gallery (flat plate / ellipse / deltoid / astroid / star), the airfoil promoted out
 of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the thirteen shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
-`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
+`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, `@cas/rigor`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
-`@cas/export` (PNG `tEXt` reproducibility metadata) by Complex-Dynamics, the plotter, the Riemann-map
-studio, and Argument-Principle. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
+`@cas/export` (PNG text-chunk reproducibility metadata) by **seven** apps — Complex-Dynamics, the
+plotter, the Riemann-map studio, Argument-Principle, 2D Electrostatics, 2D Hydrodynamics and
+Contour-Integration. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
 on `master` alongside the σ arc. (The launcher consumes no packages.)
 
 **`@cas/export` + CD → Riemann-Map hand-off + Riemann Map goes pure-2D (merged, #257):**
@@ -273,7 +284,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 4** and published (M1–M4 complete; 20 of the 28 gallery records loaded). `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 6** and published — **M1–M6 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -283,9 +294,9 @@ with **no floating point in the chain** (including certified rational brackets o
 Ledger** (COVER / KILL / CATCH / LEGALITY) answers "does this argument close?", and a wrong contour
 fails diagnostically — closing `∫cos x/(1+x²)` downward shows the bound diverging and names KILL.
 The 28 gallery records load as **data** through a schema and a loader enforcing four invariants,
-with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; **thirteen**
-of them — **every entry in tiers A, B and C** — are executed against the engine in the suite, each
-solving to a symbolic closed form because the whole solve runs in units of π and never evaluates it.
+with Pass 5's `M t = r` solved exactly over ℚ so rank is decided rather than thresholded; **all of
+them — every entry in every tier** — are executed against the engine in the suite, each solving to a
+symbolic closed form because the whole solve runs in units of π and never evaluates it.
 A record that fails an invariant is dropped, not thrown on. **Extended M3 (M3.5a–c)** then made the
 engine's work reachable: the thirteen records are **browsable** (a `Sandbox | Gallery` switch, with
 one shared analysis path — `engine/analyse.ts` — that the golden corpus also runs, so the numbers on
@@ -293,10 +304,289 @@ screen are the numbers the suite pins); every record carries a **derivation pane
 ledger's own certificates, their methods and their ✓/✗ audit trails, with **every badge in the app
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
-the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: the pen tool (free-hand path editing), the rest of the gallery (M5 — plan and its one engine
-decision taken: [`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md);
-**read the plan before starting M5**), the teaching layer (M6).
+the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
+complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
+so what a reader sees is now also what a reader can SHARE. Still to come: M7 — the pen tool (free-hand
+path editing) and the teaching layer, split out of M6 because PLAN's M6 gate never mentioned them.
+**M5 is complete (M5.0–M5.8);
+all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
+as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
+a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
+residue sum. **The plan's own one-equation generalisation cannot be built**: its coefficient adds a
+dimensionless `1 + Σⱼcⱼ` to a `2πi·w` carrying π, and neither the exponential basis nor ℚ(i)(π) holds
+both — and it is never needed, because `a = 0` is tier G's DEFINITION rather than an accident. So it
+is a third route, `T/π = −ρ/w`, with the mixed case refused by name; the weight is DERIVED from the
+target's declared range and checked, halving additionally requiring an even cofactor with a vanishing
+`n = 0` term (both decided exactly over ℚ(i)), which is research 03 §8's commonest error made
+arithmetic. The no-op for the existing corpus is PROVEN rather than inferred — 23 records × 79
+fixtures, ledger rows and all, dumped before and after and byte-identical over 1253 lines — and the
+sweep's one survivor that mattered was dropping the kernel from `analyse`, which left every test green
+while reintroducing the hole M5.5b closed: **a right answer is not evidence that the ledger is
+honest**. **M5.6c** then landed **G2** — `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)`, the twenty-fourth record
+and the first in tier G — with `cothForm.ts` naming the quotient (a two-pole conjugate cofactor's
+residues cross-multiply into `2c·sinh(δ)` over `−4sinh²(γ/2)`, and `δ` is `γ` or `γ/2`: *the two cases
+are the two KERNELS, not two patterns to search among*, so the recogniser never sees which kernel it
+came from), `summationTheorem.ts` making `∮` at finite N the exact `2πi[S_N − T]` that the quadrature
+then corroborates to 5.8e-15, and a hyperbolic form MULTIPLYING where a sine divides — its own slot on
+`SineForm`, with `denominatorOf` the single reader the formatter, the number and the argument accessor
+all go through, which is the E2 lesson made structural. **SG-1 inverts TWO invariants and both would
+have dropped the record**: `rank(M) = m` fails because `M` is identically zero for a tier-G contour by
+construction (full rank would mean the record also carries its target on the contour), and the
+corpus's radius-independence is false here for the reason it is true elsewhere — this kernel has a pole
+at every integer, so more radius adds more POLES and `∮`'s dependence on N is the argument's content
+rather than a defect in it. Three rows were saying something false, each found by RUNNING it: CATCH
+claimed "no individual residue is expressible" (the cyclotomic route's sentence, where here every one
+is written down); the enclosed count was short by exactly the poles that carry the answer, because
+`findPoles` refuses the whole product and not just the `cot`, so a square dragged onto `±ia` had every
+singularity "clear of the contour" as surely as one dragged onto an integer did before M5.5b; and the
+shell printed "the target is Re of ∮ f dz" about a record whose target is a TERM of the residue sum.
+The browser pass found the **browser suite itself red** on a hardcoded record count stale since M5.3d —
+the node gate deliberately does not launch a browser, so nothing could see it. Sweeps 25/25 and 32
+mutants with 29 killed, two recorded equivalents and one unreachable branch removed. **M5.7 then
+completed tier G with the COLLISION — G1 and G3**, `Σ_{n≥1}1/n² = π²/6` and `Σ_{n≥1}(−1)ⁿ/n² = −π²/12`.
+Its content is that **a stated hypothesis FAILS while the argument stays rigorous**: `f = 1/z²` has its
+pole where the kernel has one, so *"f has no pole at an integer"* is false — refusing would stop a
+correct argument and warning would flag a certainty — and that hypothesis is SUFFICIENT for the clean
+form of the theorem, not NECESSARY for the contour argument, since the product is meromorphic there
+with a pole of order **1 + 2 = 3** and orders ADD. SG-6's `escalate` is therefore an **OBLIGATION
+rather than a licence**: an escalating record must DECLARE the merged order and residue, and
+`collisionCheck.ts` falsifies both against the Laurent route (declaring order 2 is refused with "the
+orders ADD to 3"; declaring `+π²/3` returns `−π²/6` for ζ(2), negative and otherwise plausible), while
+a record that escalates and declares nothing is dropped by the loader. The residue comes from DESIGN
+§6.3's mandated formula (4) — the kernel's expansion is **EVEN**, so the `u^{−1}` coefficient of the
+product is `c₀ + Σ t_k π^{2k} c_{−2k}`, only `f`'s constant term and its even negative coefficients and
+finitely many of those; `m = 3` is the first case where the derivative formula's symbolic explosion
+matters, so G1 is the entry that justifies the series layer. Bernoulli numbers come from
+`Σ C(m+1,j) B_j = 0` in exact ℚ, in-app (ADR-0007), and every value is checked against a 4096-point
+circle trapezoid. **A collision is a different RING, not a harder case** — `t_k` is rational and the
+powers of π even, so the value is in ℚ(i)(π) where G2's `coth` is a quotient of exponentials, and
+since `Σ f(n)` is rational the whole identity reuses `exactInPi`, the log families' seat; with a
+cofactor pole away from the integers as well the two halves are incomparable and refused by name on
+both sides. `cofactorResidues` and `mergedResidue` now **PARTITION** the pole set (before, both refused
+a collision from their own side, each true of the identity it applies and beside the point), which made
+one refusal unreachable and it was removed. **The two records differ by ONE number** — identical
+cofactor `1/z²`, contour and weight, with `π cot` giving `−π²/3` and `π csc` `+π²/6` — the alternation
+being the KERNEL's, which is why `(−1)ⁿ` never appears in a cofactor. And **SG-5 turned out already
+done**: the plan's "widest blast radius in M5" (`kind: "sum"`, an integer index, a `summand`) landed
+with D1's arc and its readers with G2, measured rather than assumed. Sweep 27/27 with no equivalents;
+the three survivors each bought a test — `f`'s CONSTANT term is part of the residue and every bare
+`1/z^m` fixture hides it, a merged residue is winding-weighted like every other, and a wrong
+declaration must stop the SOLVE and not only fail the checker.
+
+**M5.8 completes M5 and the gallery — the last two records, and the import they both rest on.**
+§10.3's cross-family invariants are RUN rather than reasoned, and **three of them turn out to be one
+identity**: `(π/a)coth(πa) − 1/a² = Σ_{k≥1} (−1)^k t_k π^{2k} a^{2k−2}` with `t_k` the summation
+kernel's OWN Laurent coefficients, so `a → 0` is a series rather than an evaluation at a small `a` —
+its `a⁰` term is exactly `−Res₀` (G1's answer), its `a²` term is ζ(4)'s, and the same statement on
+`csc` closes the other column, making the 2×2 square of {cot, csc} × {collision, none} one fact about
+one series. F1's invariant earns its place because the two routes print **different closed forms for
+the same number** (supplementary angles with equal sines), which a shared formatter could not have
+produced. Then **ADR-0042's `knownValue`**: E3's top side is `√π` and F2's return ray carries
+`Γ(1+1/n)`, neither a residue, neither vanishing, neither proved by the argument being checked — so
+under the v1 schema both were `free`, which Pass 3 prices at `≈`, **capping a perfectly exact argument
+by its most certain step**, while a bare `=` would launder the import as a derivation. **There is ONE
+import**, because E3's own record says `√π` IS `Γ(1/2)`, so the closed set is the Gamma function at a
+rational argument and one independent check (`∫₀^∞e^{−tⁿ}dt`, F2's declared method) covers both. **An
+imported value has no inverse**, which is the arithmetic of "imported": Pass 5's fourth route works in
+the rank-1 module the atom generates and REQUIRES `∮ = 0`, since `2πi Σ Res` carries π and an import
+does not and `0` is the one value both rings share — not a restriction but these records' own content,
+the empty singular set. **E3** (`√π e^{−b²/4}`, the twenty-seventh) brought the first bound whose
+`max|f|` is ATTAINED rather than majorised — `Re Q(c+iy)` is an exact quadratic, so the maximum is a
+decision over three candidates, and the vertex is a real one (`e^{z²}` on `Re z = 0` over `[−1,1]` has
+`|∫| = 1.494` where an endpoint-only maximum certifies `0.736`, a FALSE bound rather than a loose one)
+— plus a LEGALITY row for the empty singular set, which had said nothing at all where "there are none"
+and "none were looked for" then looked the same. **F2** (Fresnel by the `π/(2n)` wedge, the
+twenty-eighth) needed **no new engine**: M5.2 built `linearMinorant.ts` two slices before its consumer
+existed, and measuring the discharged bound showed it **loose by exactly `π/2` — the minorant's own
+slack at the origin**, where the true `sin(nθ) ≈ nθ` against a claimed `≥ 2nθ/π`. Its conditional
+convergence is arithmetic rather than a footnote: the partial integral's error is
+`(sin R², −cos R²)/(2R)`, envelope `1/(2R)` and phase `R²`, so no component settles while the ANSWER is
+bit-identical at every radius — and `ray0 − T` is exactly `−arc`, which makes the arc bound a bound on
+the TRUNCATION ERROR, and the accumulator draws the **Cornu spiral**. Both records determine TWO
+unknowns from one complex identity (`[1, i]` realified), which turns E3's `target-is-real` hypothesis
+into a column the contour must pin and makes F2's `∫cos = ∫sin` something the app COMPARES. Schema gaps
+**SG-2** (built as proposed), **SG-3** (shipped as the record's own evenness reduction) and **SG-4**
+(the schema already had `convergence`) all close. The plan and its one engine decision are
+[`M5-plan.md`](docs/contour-integration/M5-plan.md) + [ADR-0042](docs/DECISIONS.md).
+
+**M6 has begun — M6.1 gives the shell a state object, and its first test.** Plans:
+[`M6-plan.md`](docs/contour-integration/M6-plan.md) (presentation and publish) and
+[`M7-plan.md`](docs/contour-integration/M7-plan.md) — M6 was **split**, because PLAN's M6 carried the
+teaching layer in its scope while its gate never mentioned it, so that half had no completion criterion
+at all; the Pólya work/flux toggle is dropped on the record. `src/shell/state.ts` holds `ShellState` and
+`resolveState` — the app's three compute branches (a gallery record, a sandbox expression, a sandbox
+expression with a branch factor declared) as ONE pure function of that state — and `mountApp` returns
+`currentState()` / `applyState(s)` over the closure's locals. Proven a no-op the way M5.6b proves one:
+the whole visible rail and strip dumped before and after across 28 records × every fixture, 7
+expressions × 10 templates and the full declared block, **byte-identical over 710 lines**. It brings
+`test/shell.test.ts`, the **first test that reaches `src/shell/app.ts`** — 2,511 lines reached by
+nothing, because the stage is WebGL2 and that looked like a browser-only problem. It is not: `mountApp`
+builds its stage inside a `try`, the fatal boundary catches WebGL2's absence, `getContext` is stubbed to
+`null`, and everything else is ordinary DOM that jsdom runs. Three findings. **(1)** The argument-window
+picker was **silently dropping the declared factor**: it adopted `buildDeclaration`'s whole cut system,
+whose single point is `SINGLE_POINT_ID` = `"b"` while the reader's is `"b1"`, so `declaredOrder()` went
+null and the box went on holding the COFACTOR under an `R(z) =` label — the app then integrating `R(z)`
+as the whole integrand with a plausible number beside it, and M5.1c's own demonstration (switch to the
+principal window, watch LEGALITY refuse) not happening at all. `setCutFromWindow` rebuilds the cut's
+GEOMETRY on the point the declaration names and nothing else. **(2) The milestone's own gate is too weak
+to be worth passing.** *"`applyState(currentState())` is a fixed point"* survived **11 of 20 mutants**,
+and ten were one defect rather than ten: **a consistently LOSSY round trip is still a fixed point** — a
+`currentState` that forgets a field and an `applyState` that never reads it agree perfectly, and every
+state the test could reach was already inside the lossy image, so the sentence is satisfied by
+`currentState = () => ({})` and `applyState = () => {}`. The property a permalink actually needs is to
+**restore a state the app is NOT in and land on the state APPLIED**: two states as unlike as the app
+gets, applied in both directions with every field differing, **20/20**. M6.2's *"encode → decode → the
+same verdict"* has to be read the same way. **(3) In gallery mode the contour is an OUTPUT** — `adopt`
+takes `run.contour`, and the record rebuilds it from `(record, fixture, bindings, geometry)` on every
+run — so a state carrying a stale contour is corrected rather than obeyed, which is right, since a
+family parameter changes the integrand as well as the geometry. That is M6.2's *"a gallery link is
+`{record, fixture}` and nothing else"* arriving as a property of the shell rather than as a size
+optimisation.
+
+**M6.2 — the `#vs=` permalink, verified by verdict.** `src/shell/viewState.ts` on `@cas/interchange`
+(namespace `"ci"`, the eight-app idiom). **The measurement came first and corrected M6.0's**, which was
+taken before `ShellState` existed: against the real state object the payload is 2.2× larger, and
+rounding floats — which M6.0 called "74% of the headroom" — is worth **4.0%**, because the bulk is
+structural (piece ids, names, roles, the `params` record) rather than decimal. **The headroom is that
+the contour is never serialised as geometry.** In gallery mode it is DERIVED and carried as nothing
+(M6.1's finding); in the sandbox it is carried as the RECIPE that produced it, `{template, params,
+shift}`, which is expressible because every assignment to `contour` in sandbox mode is a template
+build, `setParam` or a rigid `translateContour` and nothing else. That is research 07 §6's
+semantics-not-samples rule one level further up than the plan asked — the piece list is already
+sample-free, since `contour/model.ts` has no sampled-point representation at all — and it takes the
+worst case from **2,838 B of URL, over research 07's ~2 kB warning, to 1,078 B**; a gallery link is
+130 B. `ShellState` gains `contourSource` provenance (kept in step by one `moveContour` helper, so the
+recipe and the geometry cannot drift), and `src/shell/templates.ts` is extracted on the second-consumer
+rule because the codec is DOM-free. **The recipe is VERIFIED on encode** — rebuilt and compared against
+the live contour, refusing rather than minting a link that would open a different shape, which is the
+ledger's posture applied to the app's own provenance. **The gate is by VERDICT**: 28 records × every
+fixture, encode → decode → re-run → the identical closed form and the identical ledger rows, every
+decode landing in a FRESH default so M6.1's consistently-lossy trap cannot pass it; field equality
+would have passed M5.1's shadowed-`branch` bug. A link that cannot be honoured **refuses by name** —
+an unknown record, a fixture past the end, an unknown template, a non-finite number, a foreign app, a
+truncated hash, and a **declaration naming a branch point the link does not carry**, which is M6.1a's
+bug in permalink form. Five findings. **(1) TWO camera bugs, in opposite directions, and only a real browser found the
+second.** `frameContour()` after APPLYING a link discarded the sharer's camera (caught in the draft —
+the link carries the view and reframing overrode it); then a Playwright pass found the converse, that
+`frameContour()` runs AFTER the recompute which writes the URL, so opening a record left the ADDRESS
+BAR a step behind — `halfHeight 1.2` in the bar against 4.8 on screen. The copy button hid it by
+writing its own hash first, so the SHARED link was right while the URL a reader could select and paste
+was stale. `screen()` cannot see a camera, so no jsdom test could either until one read the hash. The
+repair is one place rather than three, because keyboard pan/zoom and WHEEL zoom run outside any
+gesture and a wheel has no end event at all — which makes per-event writing unsafe, since
+`replaceState` is rate-limited by the browser and would silently stop — so `syncHash` coalesces on a
+250 ms timer and every caller simply says "this changed".
+**(3) A refusal is not an absence**: `decodeShell` returns `null` for "no link" and a named reason for
+"a link I cannot honour", and the latter gets its own box, because `errorBox` is cleared by the next
+successful parse and a refusal wiped a moment after appearing is no refusal. **(4) 23/27 on the first
+sweep, all four survivors real** — `enc-params` and `dec-shift` hid behind one hole (no test built a
+contour that was genuinely a moved template at moved parameters, so the only shift test was the refusal
+path), `enc-record-sandbox` changes no number so no verdict could catch it, and **`dec-template` pinned
+the outcome without pinning the reason**: removing the check still refuses, because `fromRecipe` returns
+null a few lines later, but the message then blames a parameter for a missing template. M5.2's finding
+met again; **27/27** after the repair. **(5)** The pen tool's contour has no recipe, so encoding
+**refuses by name** rather than carrying a piece list for a shape nothing can yet produce — the refusal
+being the signal M7 needs its own serialisation, instead of forty lines of speculative one.
+
+**M6.3 — the figure carries its own recipe, and its own verdict.** `src/shell/figure.ts` composites
+the stage (the phase portrait with the contour over it) above the accumulator's partial-sum trail,
+captions it, and stamps the PNG's `tEXt` with `Software`, the permalink under **`cas:state`** and the
+**verdict** — carried BOTH ways, because the plan asked only for metadata and nobody reads metadata,
+while a picture of a contour over a phase portrait looks identical whether the argument closes or not.
+Two controls (**Save figure**, **Copy figure**), the second passing the export PROMISE into
+`ClipboardItem` so the blob resolves inside the user gesture (Safari's requirement, the plotter's
+form). `figureLayout`/`figureCaption` are pure and run in the node gate; `drawFigure` is the thin
+canvas half and runs in the browser suite — `ui/accumulator.ts`'s split. **`integralRefusal` is lifted
+out of `renderResult` into `engine/ledger.ts`** on the second-consumer rule: the caption is its second
+reader, and one that re-derived "may a number be shown?" would be an edit away from printing a value
+on a shareable image the app itself withholds. **Four findings.** **(1) THE GL CANVAS COULD NOT BE READ
+AT ALL** — the context was created without `preserveDrawingBuffer`, so a read after the browser has
+composited returns an empty buffer: **1 distinct colour against the ink layer's 44**, so every figure
+would have been missing its whole backdrop and would have looked merely plain rather than wrong.
+Re-rendering synchronously first does NOT fix it (still 1); the flag does (601), and the synchronous
+render stays anyway because the persisted buffer holds the LAST frame. **Its cost is 0.6 %** — a
+continuous 60-frame pan is 20.00 ms/frame without and 20.12 ms with, best of three, under SwiftShader
+software rendering, which is the worst case for a buffer copy. **(2) IT TOOK THREE ATTEMPTS TO WRITE A
+TEST THAT IS NOT VACUOUS**, and the first two would have shipped: "the plate's upper band carries > 12
+distinct colours" passes with the portrait ABSENT, because the plate is drawn at 2× and `drawImage`
+interpolating the ink's 44 antialiased shades manufactures hundreds (both runs read 601, the sampler's
+own cap); and a control plate with the GL layer blanked, required to differ from the real one, reads
+**97.9 % in BOTH directions**, since the real plate has been through a PNG encode and an `Image` decode
+while the control was drawn straight to a canvas — a tolerance did not rescue it. What works is
+asserting the PRIMITIVE (`canvas.gl` reads back > 12 distinct colours), which fails at 1 with the flag
+removed, while the synthetic `drawFigure` tests assert exact pixels for the compositing order: **a
+number is only evidence if nothing else could have produced it.** **(3) The plan's metadata convention
+describes the DOC, not the code** — `@cas/export`'s README and tests specify `Software` + `cas:state`
+and have **one adopter of six** (Riemann Map; the others write `ap:url`, `2de:url`, `2dh:url`,
+`cdjs:state`, or a caller-supplied record). This app writes the documented key, so one reader can open
+any figure in the suite, and the discrepancy is recorded rather than fixed from inside one app.
+**(4)** The accumulator is NARROWER than the stage on screen (744 against 1048, its side panel taking
+the rest), so it is drawn at the stage's width keeping its own aspect — legitimate because its axes are
+`Σ f·Δz` rather than the plane, so there is no shared scale to preserve and matching the frame is only
+a matter of not implying the trail stops early.
+
+**M6.4 completes M6 — the page audits CLEAN, and the two canvas descriptions are GENERATED from the
+ledger.** Zero `axe` rules and zero nodes, baseline recorded as `{}`, `--strict` passing; re-measured
+first, so the claim that M6.1–M6.3's new controls added no findings is a measurement rather than a
+hope. Both findings fall to two elements — the grid holding the stage, the rail and the strip becomes
+a `<main>`, and the bar's brand becomes the page's `<h1>` above the page's seven `<h2>`s, with the CSS
+cancelling the heading's size and margin so the document structure changes and the picture does not.
+Research 02 §8 makes the head-to-tail partial sum this app's P0 picture and it was **completely
+unannounced**; it now carries `role="img"` and a sentence naming its step count and its endpoint,
+while the stage's alternative appends a generated description — the piece count, how many poles the
+contour winds about, the value and the ledger's headline, every clause from something the engine
+computed and refreshed on each recompute, because a hand-written alternative drifts the first time a
+record changes. **Three findings.** **(1) The suite nav looked first and read LAST**, and the comment
+above the call claimed the opposite: `mountNavHeader` ends with `container.appendChild(nav)`, so with
+the call placed after the shell was filled the nav was its *final* child while `.cas-nav` is
+`position: fixed` and draws at the top — a screen-reader user reached "Back to the suite launcher"
+only after the entire rail. It has its own host prepended now, which is also what lets the shell be a
+landmark at all, since site navigation does not belong inside `<main>`. **Checked rather than assumed:
+every other adopter is FINE** (all six call sites mount the nav immediately before appending their
+content), so this is not four broken apps but one function whose contract is positional and unstated —
+[ADR-0016](docs/DECISIONS.md) action item 5. **(2)** `gl`'s `aria-hidden` was **already** set, by
+`@cas/ui`'s `attachCanvasA11y`; M6.0's table listed it as unnamed by reading the role and name columns
+and not that attribute. **(3) `prefers-reduced-motion` has nothing to act on, so it is deliberately
+not honoured** — measured: `app.css` carries **zero** `transition`, `animation` or `@keyframes` rules
+and the app's single `requestAnimationFrame` is a draw COALESCER rather than a loop, so research 07
+rule 7 is satisfied vacuously and a media query with nothing inside it would claim to have addressed
+something that was never there. Because the a11y job is **non-blocking** in CI, the four structural
+invariants (one `<main>`, one `<h1>`, the nav before the landmark, every canvas named or explicitly
+hidden) are asserted in `test/shell.test.ts`, which blocks. **And the keyboard re-measurement repeated
+M6.0's own probe bug**: a DOM walk reading `aria-label ?? textContent` reported one unnamed `<input>`,
+where the real accessibility tree over CDP shows **45 interactive nodes in the sandbox and 29 in the
+gallery, none unnamed** — a wrapping `<label>` names an input that carries no `aria-label`. Twice in
+one milestone: the accessibility tree is the instrument, not the DOM.
+
+**The review that closed M6 found four things, one of them in a package seven apps depend on.**
+**(1) `@cas/export`'s `tEXt` chunk is LATIN-1**, and the coercion to `?` had been *documented* rather
+than fixed, which made it read as deliberate. It was destroying real content in every consumer — each
+one's `Software` string carries an em-dash, and this app stamps a figure's own verdict, where
+`= 2π√3/3` was stored as `= 2??3/3`, the mathematics gone from the one field whose job is to say what
+the figure claims. `injectPngText` now chooses per entry (`tEXt` when lossless, so existing ASCII
+payloads are byte-identical; **`iTXt`** otherwise) and `readPngText` reads both, leaving a
+*compressed* `iTXt` **absent** rather than garbled since zlib is deliberately not carried. UTF-8 is
+hand-rolled, because the package compiles against `lib: ES2022` with no DOM and no Node types — so
+`TextEncoder` is not available — and it already hand-rolls CRC-32 and Latin-1. **The package test
+asserting the coercion as intended behaviour is replaced**: a test that documents a defect is how a
+defect survives seven consumers. **(2) `figureBytes` captured its caption and its permalink on either
+side of an `await`**, so a recompute landing in between would stamp a verdict the drawn caption
+disagreed with; everything the plate claims is now read before the first `await`. **(3) The caption
+printed a fabricated `≈ 0.0000000 + 0.0000000i`** when there was no quadrature to report, which is the
+honest-labelling guardrail inverted — it says so instead. **(4) `describeStage` said "enclosed"**
+where it counts poles of non-zero winding, and D6's exterior theorem re-weights by `n − σ`, so the
+word was wrong for the one record that most needs it right. **Sweeps: 24/25, one recorded
+equivalent** — and all three first-pass survivors were real: nothing asserted the caption prints *no
+number* without a quadrature (the sweep found the missing TEST for a fix the review had just made),
+nothing asserted the accumulator's step count, and nothing asserted that a pole counts only where its
+winding was DECIDED — whose test moves the circle by its OWN radius so the pole lands exactly on it,
+a hardcoded shift of 1 having merely enclosed it and passed for the wrong reason until measured. That
+last mutant is the equivalent one: every `decided: false` path in `kernel/winding.ts` returns `n: 0`,
+so the guard is unobservable and kept anyway, because a description should not depend on an invariant
+established in another module. The doc sweep found the **root README** stale in four places — no
+`@cas/rigor` in the package tree, no Contour Integration in either the tree or the app table, a test
+count from 436 files ago, and "ten applications riding twelve packages" where there are twelve and
+thirteen.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is
@@ -610,6 +900,165 @@ real (nothing asserted `agrees` could be `false`; neither the accumulation panel
 mis-declared side drops the **verdict** from `=` to `⚠` on all seven records, and the accumulation
 trail tracks the integral 4.7×–441× better with the sides than without. Sweeps: 16/17 (one equivalent
 mutant).
+
+**M5.2 builds no record — it builds the inequality two of the eight lemmas SHARE, and corrects the
+one the research states wrongly.** `sin ψ ≥ 2ψ/π` (Jordan, L3) and `cos φ ≥ 1 − 2φ/π` (the wedge
+lemma, L6) are one statement under `φ = π/2 − ψ` (measured: the two slacks agree to 2.2e-16 on 5001
+points), and `kernel/bounds/linearMinorant.ts` is the single predicate both discharge through —
+`jordanArcBound` included, a provable no-op since the semicircle's range returns a constant of 1 and
+the arithmetic is identical in ℚ. **What the predicate decides is the SIDE CONDITION, not the
+inequality**: the inequality is a theorem about the concavity of `sin` and no arithmetic could
+establish it, while "does the range lie inside `[0, π/2]`?" is decidable in exact ℚ — and that is
+precisely the half research 03 got wrong. **D-1 is the two faces parting company past `π/2`:** `sin`
+stays non-negative to `π` and folds by `sin ψ = sin(π − ψ)`, so exceeding the range costs a factor of
+two; `cos` changes SIGN, so it costs everything, and the majorant the research states for `e^{−zⁿ}`
+on `[0, π/n]` is 2.7e15 at `n = 2, R = 6`, 1.1e93 at `n = 3` and float64 overflow at `n = 4` — all
+three recomputed in the suite, so the wrong statement is refuted by the tests and not only by a
+paragraph. The research applied the sin face's tolerance to the cos face's integrand, and asking the
+range ONCE makes that unrepresentable rather than merely corrected; in the app it is two ledger rows
+on one `π/2` wedge, `e^{iz²}` killed and `e^{−z²}` refused. `kernel/bounds/wedgeArc.ts` is the bound
+— `|∫| ≤ |λ|·k·π/(n·c·R^{n−1})` for `λ·e^{w zⁿ}`, exact in ℚ with π entering only through the
+certified upper bracket — routed from the ledger's KILL pass, where such an arc previously reached
+**no lemma at all** (Jordan's reader wants a linear exponent; the exact rational reader refuses a
+`call`). **Jordan turns out to be this bound at `n = 1`** — both give `π/|a|` on a semicircle,
+asserted in ℚ — and the two stay separate functions, because Jordan carries a rational cofactor's
+`max|g|` and the wedge carries none: ADR-0007's merge rule read in the direction it usually is not.
+Three things the slice forced: the two documents quote DIFFERENT oscillatory ranges (research 03's
+`[0, π/(2n)]` is the wedge Fresnel uses, `tier-efg.md`'s `[0, π/n]` the largest on which the form
+still vanishes — both right, and the engine quotes neither, reading the arc's range off the
+geometry); the arc-extent reader had no way to MEASURE a `π/6` or `π/8` sweep, one step before the
+missing lemma, and now refuses a degenerate extent because `0·π·R·max|f|` is a `≤ 0` that is false;
+and a uniform quadrature cannot check this bound at all — `e^{−κh}` is a spike of width `1/κ` with
+`κ` up to 65536, so a 40001-point rule measured 2.1e-4 where the true majorant is 1.2e-4 and called a
+**correct** bound violated, while textbook adaptive Simpson never terminated (a mesh graded toward
+both endpoints does it in 20001 points and needs no case analysis about which end the spike is at).
+Sweep 20/21, one equivalent; both real kills were about geometry rather than the inequality — reading
+a sector's start angle as `0` certifies `π/(4R)` for the clockwise arc `[π/2 → π/4]` where the
+integrand reaches `e^{+R²}`, and the first test written for it refused under the mutant anyway,
+pinning the outcome without pinning the reason. D-2 (the square-contour bound) stays a document-only
+correction until M5.5, said out loud rather than left to be noticed.
+
+**M5.3 opens tier E — E1 and E2 load and solve, and the sign of λ decides everything.** The plan
+called it "mostly wiring"; measuring first said otherwise. `findPoles` gave `e^{0.3z}/(1+e^z)`
+`rational: false` and ZERO poles — the same report it gave `1/cosh z`, which has infinitely many, and
+`e^{−z²}`, which genuinely has none — so E1 and E2 had no residue to take and E3's `poles: []` was
+true by accident. **M5.3a** therefore made entirety a DECISION (`kernel/entire.ts`, `PoleReport.entire`):
+a SUFFICIENT condition, with the type shaped so a refusal cannot be read as a claim (`sin(z)/z` is
+entire and refuses) and every refusal naming which of three walls it hit — a quotient, a function
+with poles or branch points, or one that is not holomorphic anywhere, which is not a singularity
+question at all. **M5.3b** is the substitution the whole tier rests on: `w = e^z` makes both
+integrands rational, their poles become vertical LATTICES (`e^z = ρ` has solutions every `2πi`), and
+`polesInStrip` takes the band because a list of infinitely many is not a list and truncating one
+silently is how a residue sum loses terms. Exactness rests on ONE stated restriction — each root of
+`D(w)` is a root of unity, so `log ρ = 2πi·q` exactly and `e^{az₀}` lands in M4.2's basis with **no new
+number field**; the order is decided exactly in `SqrtExt` and only `q`'s numerator read numerically,
+safe because the n-th roots of unity are `2π/n ≥ 2π/12` apart. **M5.3c** is the app's first vanishing
+SEGMENT — `disposeArc` declined anything that was not an arc, so a rectangle's verticals reached no
+lemma at all — and it makes E1's window `0 < a < 1` **DERIVED**: `κ = Re(a) + deg N − deg D` on the
+right and `−Re(a) − ord₀N + ord₀D` on the left, whose signs are `a < 1` and `a > 0`, which is the
+record's own "one condition, two jobs"; E2's contrasting "no condition at all" is the same expression
+at `Re(iξ) = 0`, since `Im(a)` cannot enter a limit on a strip of finite height. `stripTemplate` is a
+SIBLING of `rectangleTemplate` (the sandbox's free shape keeps its four free sides) with the top side
+carrying `reproduces`, so no lemma is ever asked to kill it — E1's first trap, structural. **M5.3d**
+lands both records and finds the tier's real content: **a strip has TWO denominator shapes, and which
+one is the SIGN of λ.** `1 − λ` factors as a sine when λ sits on the unit circle (E1 → `π/sin(3π/10)`,
+which is D1's own text, since `x = log t` carries one onto the other) and as a **hyperbolic cosine**
+when λ is a negative real (E2 → `π/cosh(π)`, i.e. `π sech(πξ/2)`). The sine recogniser refused E2
+correctly and by name; `sineForm.ts` now carries both with its one-rule warning spent deliberately —
+not a pattern accreting into a simplifier but the other half of one fact, selected by an exact
+comparison of two coefficients. A cosh **cannot degenerate** (it vanishes only at an imaginary
+argument), which is E2's "unconditionally well-posed" claim arriving as a property of the factoring
+rather than a range check, while E1 still divides by zero at integer `a`. The sharpest bug of the arc
+was a **RIGHT VALUE UNDER A WRONG FORM**: `solveTarget` rebuilt the solved form field by field and
+carried only `sine`, so E2's value divided by the cosh while its text printed a bare `π` for numbers
+that were 0.271, 1.252 and 0.590 — nothing about which looks wrong. The declared strip is CHECKED
+against the contour drawn (the lattice points one period either side are asked for their windings;
+enclosing one, or passing through one, refuses — E1's `wrong-strip-height` trap at run time), and that
+check was INERT when first written, because margin poles never reach `integrateContour`. Three wording
+defects older than the slices surfaced too: the pole card said "no poles are claimed" about an entire
+integrand, the ledger's CATCH row gave an UNCONDITIONAL reason naming a difficulty it never reached,
+and `PoleReport.rational`'s doc had drifted from its meaning. Sweeps: 13/14, 15/16, 14/14, 12/13 —
+four recorded equivalents, each kept with its reason. **E3 is deferred with F2**, not dropped: both
+need ADR-0042's `knownValue`, and doing them together implements the import set once against two
+consumers rather than once against one.
+
+**M5.4 opens tier F with F1, and finds three rows that were saying something false.** The wedge is
+the strip's ROTATIONAL twin — `f(ωz) = μ f(z)` makes the return ray reproduce the outgoing one by
+`−ω·μ` where E1's top side returned `−λ` — and `wedgeTemplate` takes `n` rather than an angle, so
+"the angle must be exactly `2π/n`" is unrepresentable rather than checked. **The affine `Scalar` did
+not cover it, and its own doc claimed it covered every template in the gallery**: the return ray's
+endpoint is `R·cos(2π/n)`, a product of two parameters. Neither route that looks like it avoids the
+widening works — `derived` is evaluated before the limit parameters exist, deliberately, and computed
+afterwards it would freeze at instantiation and leave the ray behind while the arc followed a drag,
+silently opening a contour the ledger had just certified closed. So `mul` may name a parameter, and
+the form stays affine in every LIVE one, because a `derived` coefficient never moves: until F1 there
+was no record in which "one parameter" and "one LIVE parameter" differed. **Then `1/(1 + zⁿ)` has
+exact poles at `n = 2, 3, 4` and none at `n = 5, 7`** (`ℚ(ζ₁₀)` has degree 4 over ℚ), which D3 met
+first and answered for a KEYHOLE — every root once. A wedge encircles ONE of the `n`, so the
+structural sum becomes what the residue theorem actually says, `Σ n(γ,zₖ)·Res`, with the all-roots case
+left as a wrapper; an undecided weight REFUSES rather than contributing zero, and `argRange` may be
+omitted only for an INTEGER power, since a determination is a property of the integrand and F1's has
+none to declare. The route is a FALLBACK on purpose: the per-pole one returns `2π/(3√3)` where the
+structural one returns `π/(3·sin(π/3))`, the same number carrying a transcendental it does not need.
+**Three rows were false, two of them older than the slice.** `2π/5` was not in the thirteen-entry
+angle whitelist, so KILL reported that no lemma applied TO THE INTEGRAND for the one integrand shape
+it discharges at `n = 4` — a cap replaces the list with the same guarantee (two rationals with
+denominator ≤ 12 differ by at least 1/144, so a `1e-12` window admits one candidate or none) and the
+row now distinguishes an unreadable sweep from an unsupported integrand. And CATCH read
+`poles.exactlyComplete` — *was every pole pinned?* — where the claim beside it is about the SUM, so
+**D3 at `(a,n) = (2.3, 5)` had printed the exact `(π/5)/sin(23π/50)` beside "not every residue is
+known exactly, so the total is an estimate" since M4.2e**, which is precisely what that route exists
+to deny. **F1's uniform answer took a fold, and the fold needed a rule.** At `n = 3` the sine
+recogniser leaves `(1/6 + i√3/6)·e^{−iπ/3}`, exactly `1/3`, which the old fold (`e^{iπr}` with
+`2r ∈ ℤ`) could not take — so the flagship fixture printed a decimal and no closed form. Folding every
+representable root of unity fixes it and breaks D7, whose residue-at-infinity row became
+`17√2/8 − 17i√2/8` where `17/4·e^{−iπ/4}` is the same number with its magnitude of 4.25 visible — and
+that row exists to say `2π·4.25 = 26.7` in an answer of 1.216. So: **a fold may COMBINE a radical the
+coefficient already carries, never INTRODUCE one**, which subsumes the old collision worry rather
+than answering it separately. All four F1 fixtures then print `(π/n)/sin(π/n)` by two routes the
+record cannot tell apart. Its real job is **cross-provenance**: `2π/(3√3)` is also D3 at `(a,n) =
+(1,3)`, computed by a keyhole with a cut, a `z^{a−1}` monodromy and a `−e^{2πia}` phase, where F1's
+wedge has no cut at all — and D3 REFUSES there, naming this record as the repair. `unitRoot` moved to
+its own module on the second-consumer rule, by which time there were three. Sweeps: 9/9, 18/18, 9/10.
+**F2 stays deferred with E3** (ADR-0042's `knownValue`).
+
+**M5.5 builds no record either — it builds tier G's machinery, and executes the second finding
+against the research.** The **square** `Γ_N` is the first contour in the gallery with NO target
+piece: `∮ → 0` is the result rather than the bookkeeping, and the sum being evaluated sits inside the
+residue list as the kernel's own poles at the integers. Its tests pin the MECHANISM rather than a
+number that shrinks — `∮ = 2πi(2·S_N − π²/3)`, so inverting it recovers the partial sum from the
+engine's own quadrature, and the residual is then the tail `Σ_{n>N}1/n²` bracketed in `(1/(N+1), 1/N)`.
+**The kernels are `π cot(πz)` and `π csc(πz)`**, with residue exactly `1` and exactly `(−1)ⁿ` at every
+integer: the alternation belongs to the KERNEL, not to `f`, which is why `Σ(−1)ⁿ/n²` will cost nothing
+once `Σ 1/n²` exists. What the module computes is `f(n)` exactly over ℚ(i); what it ASSERTS is the
+kernel's residue, checked against an independent contour quadrature rather than against itself. The
+leading `π` is **counted, not pattern-matched** — `cot(πz)` has residue `1/π` and is a different sum by
+a factor of π on every term — and a numeric coefficient goes to the COFACTOR, where `2π cot(πz)/z²` is
+the kernel times `2/z²`. A COLLISION is named rather than summed: G1's `f = 1/z²` merges with the
+kernel at `n = 0`, where the true residue is `−π²/3`, needs the Laurent expansion and lands in
+ℚ(i)(π) — the same wall the log families met — so it is M5.7's. **And a hole closes with it:**
+`findPoles` reports ZERO poles for a `cot` integrand (no reader sees a transcendental, and reporting
+nothing is honest), so a square at an INTEGER half-width ran its vertical sides exactly through
+`z = ±N` while LEGALITY said "every singularity is clear of the contour". The band is read off the
+GEOMETRY — the question is local to the contour drawn, so the integers it can reach are exactly the
+ones to list, and a contour that moves gets a new window on the same recompute. **The bound is
+`8π·coth(π/2)·(N+½)·max|f|`**, exact in ℚ, where `max|f|` read at `|z| = N+½` bounds `|f|` on the
+whole square by a term-by-term inequality rather than by any monotonicity of `|f|`; `coth(π/2)` is
+bracketed from a certified LOWER bound on `e^π` (`e^x ≥ Σ x^k/k!` at `piLower()`), with both
+truncations pushing the same way — the only direction a bound may err. It **refuses** a half-width
+that is not `N + ½` by name — which ENFORCES what `through: "halfIntegers"` declares, from the
+geometry rather than from the field, and is strictly stronger because it catches a dragged contour
+too. The schema field itself is still unread, and stays so until a G record declares it. **D-2 is executed:** research 03 §8's `(M/N^k)·coth(π/2)·4(2N+1)` drops the
+`π` from `π cot(πz)` and is then not a bound at all — 3.392 against a measured 3.567 at `N = 3`, 0.356
+against 0.493 at `N = 25`. **And a correction to the correction:** the gallery calls that "30–40 % at
+every N tested"; measured, it is 4.9% at `N = 3` and 27.8% at `N = 25`, GROWING, because the ratio
+between the two bounds is exactly `π·(N/(N+½))^k` — so 30% is the asymptote, not the typical case. The
+finding stands; only its magnitude was overstated at small N. Two performance/precision findings came
+with it: the ledger spent 3.1 s per square side recomputing a CONSTANT (`piLower()` is far more
+precise than a 40-term series needs, and `x^40/40!` over it makes thousand-digit BigInts), and the
+bracket is then so tight that comparing it to `1/Math.tanh(π/2)` tests float64's rounding rather than
+the arithmetic — M5.2's `piUpper().toNumber() === Math.PI` again, with the same fix. Sweeps: 7/7,
+15/15, 14/15.
 
 It brought `@cas/rigor` ([ADR-0040](docs/DECISIONS.md)), the first package **created rather than
 extracted**: the honest-labelling guardrail above had no shared code at all, only ~6,000 lines of QD

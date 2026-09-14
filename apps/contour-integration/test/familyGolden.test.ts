@@ -97,7 +97,16 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
   // which is the one thing R is allowed to do and the one thing these radii must not straddle.
   // The parameter heading to INFINITY, which is not always `limitParams[0]` and is not always
   // present: D6's dogbone has no outer circle at all, so its one limit parameter shrinks instead.
-  const withLimit = FAMILIES.filter((f) => f.contour.limitParams.some((p) => p.to === "inf"));
+  //
+  // **AND IT INVERTS FOR TIER G, WHICH IS WHY THAT TIER IS EXCLUDED HERE AND TESTED BELOW.** The
+  // property rests on "once every selected pole is enclosed, more radius adds nothing". A summation
+  // kernel has a pole at every integer, so more radius adds MORE POLES — `∮` is `2πi[S_N − T]` and
+  // its DEPENDENCE on N is the whole content of the argument, not a defect in it. Asserting equality
+  // there would demand that a partial sum not converge.
+  const summation = (f: Family): boolean => f.residueSelection.targetTerms !== undefined;
+  const withLimit = FAMILIES.filter(
+    (f) => f.contour.limitParams.some((p) => p.to === "inf") && !summation(f),
+  );
 
   it.each(withLimit.map((f) => [f.id, f] as const))("%s", (_id, family) => {
     const g = primary(family);
@@ -115,9 +124,26 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
     expect(far.text).toBe(near.text);
   });
 
+  it.each(FAMILIES.filter(summation).map((f) => [f.id, f] as const))(
+    "%s — where the value must DEPEND on the radius, and shrink",
+    (_id, family) => {
+      const g = primary(family);
+      const limit = must(family.contour.limitParams.find((p) => p.to === "inf"), "a limit parameter to ∞");
+      const near = must(run(family, g, { [limit.name]: 4 }).theorem.exactValue, "an exact value at N = 4");
+      const far = must(run(family, g, { [limit.name]: 40 }).theorem.exactValue, "an exact value at N = 40");
+      expect(far.value).not.toEqual(near.value);
+      // `2πi[S_N − T]` — the tail, so it shrinks toward zero as the square grows. A sign error or a
+      // dropped residue would make it grow, and equality would mean the partial sums did not move.
+      expect(Math.hypot(...far.value)).toBeLessThan(Math.hypot(...near.value));
+      expect(Math.hypot(...far.value)).toBeLessThan(0.5);
+    },
+  );
+
   it("names which families have a limit parameter at all", () => {
     // Guards the filter above from silently emptying if a record's limitParams were dropped — and
     // records that the circle families legitimately have none, their contour being closed already.
+    // A tier-G record is deliberately NOT here: it has a limit parameter and is excluded above,
+    // because for it the value must depend on the radius rather than be independent of it.
     expect(withLimit.map((f) => f.id)).toEqual([
       "semicircle-order2",
       "semicircle-quartic",
@@ -133,6 +159,24 @@ describe("the residue-theorem value does not depend on the contour's limit radiu
       "keyhole-x-to-the-n",
       "log-squared-keyhole",
       "log-cubed-keyhole",
+      // E1's R is the strip's HALF-WIDTH rather than a radius, and it heads to infinity for the same
+      // reason: the two vertical sides have to leave. It has no shrinking partner — the strip has no
+      // small circle, because its singular set is a lattice rather than a point on the contour.
+      "strip-exponential-quasiperiod",
+      "strip-sech-fourier",
+      // E3's R is a half-width like E1's, and its independence is the strongest in the corpus:
+      // `∮ = 2πi·Σ(∅) = 0` at EVERY radius, because the singular set is empty. The property this
+      // test asserts — "once every selected pole is enclosed, more radius adds nothing" — holds
+      // vacuously, and a record that started reporting a non-zero `∮` would fail here first.
+      "gaussian-shift-zero-residue",
+      // F1's R is a sector RADIUS again, as tier A's was — the rotational twin of the strip above,
+      // and the first since D2 whose limit parameter is neither a half-width nor a shrinking ε.
+      "wedge-rational-power",
+      // F2's is the last entry in the list and the sharpest case of the property: its `∮` is 0 at
+      // every radius (the integrand is entire) while the target PIECE never settles at all, because
+      // the integral converges only conditionally. Independence of R is a statement about the
+      // residue sum, not about the contour's pieces, and this record is where the two part company.
+      "wedge-fresnel",
     ]);
   });
 
@@ -323,6 +367,39 @@ describe("the closed form each record establishes", () => {
     // record writes the same number as `40^{3/4}/4`, and recovering a record's own grouping would
     // mean remembering it. The sine is carried, never evaluated.
     "dogbone-two-fractional-powers": "(−π·2^(1/4)·5^(3/4) + 17π/4)/sin(3π/4)",
+    // E1, and the form is D1's — which is the record's own closing claim: `x = log t` carries one
+    // onto the other, and the keyhole's phase `e^{2πis}` and the strip's `λ` are the same number at
+    // `s = a`. The `sin(πa)` here is LITERALLY Pass 5's denominator `1 − e^{2πia}`, recognised.
+    "strip-exponential-quasiperiod": "π/sin(3π/10)",
+    // E2 — `π sech(πξ/2)` written the way the engine carries it, and the SECOND denominator shape.
+    // E1's `1 − λ` factors as a sine because λ sits on the unit circle; E2's λ = −e^{−πξ} is a
+    // NEGATIVE REAL, so `1 − λ = 1 + e^{−πξ}` factors as a hyperbolic cosine instead. Which one a
+    // contour produces is decided by the sign of its quasi-period, not by a simplifier.
+    "strip-sech-fourier": "π/cosh(π)",
+    // E3, the first answer in the corpus assembled from a value the argument did NOT derive: the
+    // atom is `√π = Γ(1/2)`, imported by polar coordinates, and `e^{−1/4}` is what this contour
+    // contributed. ADR-0042 — the form is `=` and the import travels in the provenance, so a reader
+    // can see precisely which step came from outside.
+    "gaussian-shift-zero-residue": "e^(−1/4)·√π",
+    // F2, the twenty-eighth record — the SAME atom as E3, reached by a different import. `Γ(3/2) =
+    // √π/2` and `e^{iπ/4}` folds to `√2/2 + i√2/2`, so `∫₀^∞cos(x²)dx` is `√2/4·√π`, which is
+    // `√(π/8)`. The engine's normal form keeps the coefficient it derived beside the constant it
+    // took on faith, which is the whole point of ADR-0042's split.
+    "wedge-fresnel": "√2/4·√π",
+    // F1. The gallery writes this fixture's value `2π/(3√3)`, which is the SAME NUMBER — the engine's
+    // normal form is the family's own closed form `(π/n)/sin(π/n)`, uniform in `n`, and the document
+    // simply rendered `1/sin(π/3)` as `2/√3`. Nothing simplifies a sine into a radical here, and the
+    // `n = 5` and `n = 7` fixtures could not be written that way at all.
+    "wedge-rational-power": "(π/3)/sin(π/3)",
+    // The first entry whose answer is a MULTIPLIER rather than a denominator — `(π/a)coth(πa)` is
+    // how the record writes it, and `1/tanh` shown as a second division would be the same number in
+    // a form no reader is looking for (`kernel/cothForm.ts`).
+    "series-cot-kernel": "(4π/3)·coth(3π/4)",
+    // The two COLLISION records, whose answers are in ℚ(i)(π) rather than the exponential basis —
+    // the kernel's Laurent expansion at an integer is even, so a merged residue is a rational
+    // multiple of an even power of π. Nothing in the app writes a `coth` here.
+    "series-cot-collision": "π²/6",
+    "series-csc-kernel-collision": "−π²/12",
   };
 
   it("covers every loaded record", () => {

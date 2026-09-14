@@ -11,7 +11,15 @@
 //
 // The order of the passes is load-bearing. LEGALITY runs first and returns with **no value at all**
 // when it fails, so a singular configuration never produces a number that then has to be suppressed.
-import { assembleVerdict, exact, refuse, unknown, type Certificate, type Verdict } from "@cas/rigor";
+import {
+  assembleVerdict,
+  exact,
+  mayReportValue,
+  refuse,
+  unknown,
+  type Certificate,
+  type Verdict,
+} from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
@@ -23,8 +31,18 @@ import { allCrossingMonodromy, crossingMonodromy, cutGeometryInvariance } from "
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { formatFrac } from "../kernel/formatExact.js";
 import { toExactRational } from "../kernel/exactRational.js";
-import { asExponentialTimesRational } from "../kernel/exponentialFactor.js";
+import {
+  asExponentialOfPolynomial,
+  asExponentialOfPower,
+  asExponentialTimesRational,
+} from "../kernel/exponentialFactor.js";
 import { jordanArcBound, mlArcBound, type ArcBound } from "../kernel/bounds/mlRational.js";
+import { wedgeArcBound } from "../kernel/bounds/wedgeArc.js";
+import { squareSideBound } from "../kernel/bounds/squareSide.js";
+import type { SummationKernel } from "../kernel/summationKernel.js";
+import { stripSideBound } from "../kernel/bounds/stripSide.js";
+import { gaussianSideBound } from "../kernel/bounds/gaussianSide.js";
+import { asExponentialLattice } from "../kernel/expLattice.js";
 import { branchArcBound, dogboneArcBound } from "../kernel/bounds/branchArc.js";
 import { logArcBound } from "../kernel/bounds/logArc.js";
 import type { LogFactor } from "../kernel/logResidue.js";
@@ -77,25 +95,52 @@ export interface LedgerResult {
   readonly pieceLimits: readonly { readonly pieceId: string; readonly contribution: ExpSum }[];
 }
 
+/**
+ * How large a denominator an angle may have before it is not a nameable multiple of π.
+ *
+ * It was a WHITELIST of thirteen fractions until F1, with a good reason attached — a bound computed
+ * for the wrong extent is worse than no bound, and `simplestRational` of a dragged float is a
+ * sixteen-digit fraction that is honest and useless. The reason survives; the list did not. F1's
+ * wedge sweeps `2π/n` for the record's own `n`, so at `n = 5` and `n = 7` the arc of `1/(1 + z⁵)`
+ * could not be MEASURED and KILL reported that no lemma applied *to the integrand* — which was false,
+ * and false in the worst direction: the same integrand shape is discharged at `n = 4`.
+ *
+ * A CAP is the same guarantee as a list and covers what a list cannot enumerate. Two distinct
+ * rationals with denominators at most `Q` differ by at least `1/Q²`, which at `Q = 12` is `7e-3`, so
+ * the `1e-12` window below admits at most one candidate and the reading is a decision rather than a
+ * fit. Every fraction the old list held has denominator ≤ 12, so nothing it measured is lost.
+ */
+const MAX_PI_DENOMINATOR = 12n;
+
+/** The widest sweep an arc may have and still be read: two full turns, as the old list's `4π` was. */
+const MAX_PI_MULTIPLE = 4;
+
+/**
+ * One angle as an exact rational multiple of π, or null.
+ *
+ * Zero answers `0` rather than null: a wedge STARTS on the positive real axis, and "the arc begins
+ * at 0" has to be expressible for `wedgeArcBound` to be able to refuse an arc that does not.
+ */
+function asPiMultiple(radians: number): Frac | null {
+  if (!Number.isFinite(radians)) return null;
+  const t = radians / Math.PI;
+  if (Math.abs(t) < 1e-12) return Frac.ZERO;
+  if (Math.abs(t) > MAX_PI_MULTIPLE) return null;
+  for (let d = 1n; d <= MAX_PI_DENOMINATOR; d++) {
+    const n = BigInt(Math.round(t * Number(d)));
+    if (n === 0n) continue;
+    if (Math.abs(t - Number(n) / Number(d)) < 1e-12) return Frac.of(n, d);
+  }
+  return null;
+}
+
 /** How the arcs of a contour are disposed of. `piMultiple` is the arc's angular extent over π. */
 function arcExtent(g: Resolved): Frac | null {
   if (g.kind !== "arc") return null;
-  // Recognise the rational multiples of π the templates actually produce, by comparing against
-  // exact fractions rather than trusting a float ratio.
-  const sweep = Math.abs(g.theta1 - g.theta0) / Math.PI;
-  for (const [n, d] of [
-    [2n, 1n],
-    [1n, 1n],
-    [1n, 2n],
-    [1n, 3n],
-    [2n, 3n],
-    [1n, 4n],
-    [3n, 2n],
-    [4n, 1n],
-  ] as const) {
-    if (Math.abs(sweep - Number(n) / Number(d)) < 1e-12) return Frac.of(n, d);
-  }
-  return null;
+  const extent = asPiMultiple(Math.abs(g.theta1 - g.theta0));
+  // A degenerate arc gets no extent, as before: `asPiMultiple` answers `0` for the START angle's
+  // sake, and an ML bound of `0·π·R·max|f|` would be a vacuous `≤` rather than a useful one.
+  return extent === null || extent.isZero() ? null : extent;
 }
 
 /** The radius of an arc as an exact rational, when it is one. */
@@ -113,6 +158,38 @@ function arcRadius(g: Resolved): Frac | null {
   if (!Number.isFinite(r) || r <= 0) return null;
   // The radius comes from a slider, so it is a double; the simplest rational that round-trips is the
   // honest reading of it, and the bound is then exact *for that radius*.
+  return asExactRadius(r);
+}
+
+/**
+ * A positive length as the simplest rational that round-trips it at 1e-6.
+ *
+ * The value comes from a slider, so it is a double; reading it this way makes the bound exact *for
+ * that length*, which is the honest claim. Shared by the arc's radius and the square's half-width —
+ * the second consumer is what moved it out of `arcRadius` (ADR-0007 at the function scale).
+ */
+/** `|a − b|`, absolutely and relative to the larger of the two. Both zero is a perfect match. */
+function relativeGap(a: Cx, b: readonly [number, number]): { absolute: number; relative: number } {
+  const absolute = Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const scale = Math.max(Math.hypot(a[0], a[1]), Math.hypot(b[0], b[1]));
+  return { absolute, relative: scale === 0 ? (absolute === 0 ? 0 : Infinity) : absolute / scale };
+}
+
+/**
+ * A SIGNED coordinate as an exact rational — {@link asExactRadius} without the positivity.
+ *
+ * A radius is positive by definition and zero means the arc is a point; a coordinate is neither, and
+ * E3's left vertical sits at `Re z = −R`. Kept separate rather than relaxing the radius reader,
+ * because "r ≤ 0 is not a radius" is a real guard that three arc disposers rely on.
+ */
+function asExactCoordinate(x: number): Frac | null {
+  if (!Number.isFinite(x)) return null;
+  const rounded = Math.round(x * 1e6) / 1e6;
+  return Frac.of(BigInt(Math.round(rounded * 1e6)), 1000000n);
+}
+
+function asExactRadius(r: number): Frac | null {
+  if (!Number.isFinite(r) || r <= 0) return null;
   const rounded = Math.round(r * 1e6) / 1e6;
   return Frac.of(BigInt(Math.round(rounded * 1e6)), 1000000n);
 }
@@ -147,9 +224,109 @@ function disposeArc(ast: Node, g: Resolved): ArcBound | null {
   // exactly the case it was built to catch".
   if (exponential) return mlArcBound(exponential.num, exponential.den, R, extent);
 
+  // **L6 — the wedge lemma (M5.2).** Nothing above reaches `e^{±zⁿ}` for `n ≥ 2`: Jordan's reader
+  // wants a LINEAR exponent and declines, and the exact rational reader declines a `call`, so until
+  // now such an arc fell through to `null` and KILL reported "no lemma here applies to this
+  // integrand" for the one integrand L6 exists for. The face — Gaussian or oscillatory — is read
+  // off `w` inside the bound, and with it the arc's admissible range; see `wedgeArc.ts` for why
+  // those are one question and not two (finding D-1).
+  const wedge = asExponentialOfPower(ast);
+  if (wedge) {
+    const from = asPiMultiple(g.theta0);
+    const to = asPiMultiple(g.theta1);
+    if (from === null || to === null) return null;
+    return wedgeArcBound(wedge, R, { from, to });
+  }
+
   const rational = toExactRational(ast);
   if (!rational.ok) return null;
   return mlArcBound(rational.value.num, rational.value.den, R, extent);
+}
+
+/**
+ * The summation square's side, when the integrand carries a kernel — tier G's disposer.
+ *
+ * Reads the half-width off the SIDE itself and checks the square is a square: an axis-parallel
+ * segment whose constant coordinate has the same magnitude as half its length, centred at the
+ * origin. The check is not bureaucracy — `sup|cot πz| = coth(π(N+½))` is a statement about that
+ * geometry, and a side of some other rectangle gets the right formula on the wrong figure.
+ */
+function disposeSquareSide(kernel: SummationKernel, g: Resolved): ArcBound | null {
+  if (g.kind !== "segment") return null;
+  const [x0, y0] = g.from;
+  const [x1, y1] = g.to;
+  const vertical = Math.abs(x1 - x0) < 1e-12;
+  const horizontal = Math.abs(y1 - y0) < 1e-12;
+  // EQUIVALENT UNDER MUTATION, and kept: `centred` below already rejects both cases this catches,
+  // since a diagonal fails the horizontal branch's `y0 = y1` and a degenerate point fails the
+  // vertical branch's `y0 = −y1`. It stays because reading a diagonal's "offset" off one coordinate
+  // is the class of error M4.6c found in every arc bound at once, and a guard at the top says so.
+  if (vertical === horizontal) return null; // diagonal, or a degenerate point
+  const offset = vertical ? Math.abs(x0) : Math.abs(y0);
+  const span = vertical ? Math.abs(y1 - y0) : Math.abs(x1 - x0);
+  const centred = vertical
+    ? Math.abs(y0 + y1) < 1e-9 && Math.abs(x0 - x1) < 1e-12
+    : Math.abs(x0 + x1) < 1e-9 && Math.abs(y0 - y1) < 1e-12;
+  if (!centred || Math.abs(span - 2 * offset) > 1e-9) return null;
+  const halfWidth = asExactRadius(offset);
+  if (halfWidth === null) return null;
+  return squareSideBound(kernel.kind, kernel.num, kernel.den, halfWidth);
+}
+
+/**
+ * L1 on a VERTICAL SIDE of a strip — the app's first vanishing piece that is not an arc.
+ *
+ * `disposeArc` declines anything whose geometry is not an arc, so until M5.3c a rectangle's vertical
+ * side reached no lemma at all and KILL reported "no lemma here applies" for the two pieces tier E's
+ * whole argument needs killed. The dispatch is by GEOMETRY — the piece either lies on a vertical
+ * line off the imaginary axis or it does not — and by SHAPE: the integrand has to read as
+ * `e^{az}·N(e^z)/D(e^z)`, which is what makes `|w| = e^{±R}` mean anything.
+ *
+ * A HORIZONTAL side gets nothing, and that is not an omission. In a strip argument the horizontal
+ * side opposite the target does not vanish, it REPRODUCES, and offering it a bound would invite
+ * E1's first trap: it is a translate of the bottom, so its ML bound is proportional to the length
+ * `2R` and DIVERGES.
+ */
+function disposeStripSide(ast: Node, g: Resolved): ArcBound | null {
+  if (g.kind !== "segment") return null;
+  const [x0, y0] = g.from;
+  const [x1, y1] = g.to;
+  if (Math.abs(x0 - x1) > 1e-9) return null; // not vertical
+  if (Math.abs(x0) < 1e-9) return null; // on the imaginary axis: there is no R → ∞ in it
+  const form = asExponentialLattice(ast);
+  if (form === null) return null;
+  return stripSideBound(form, {
+    side: x0 > 0 ? "right" : "left",
+    R: Math.abs(x0),
+    length: Math.abs(y1 - y0),
+    imagRange: [Math.min(y0, y1), Math.max(y0, y1)],
+  });
+}
+
+/**
+ * L1 on a vertical side for a GAUSSIAN — E3's two verticals, which no other disposer sees.
+ *
+ * The dispatch is by geometry (a vertical segment) and by shape (`λ·e^{Q(z)}` with `Q` quadratic).
+ * `disposeStripSide` declines it because `e^{−z²}` is not `N(e^z)/D(e^z)`, and `disposeArc` because
+ * it is not an arc — so without this the record's KILL pass reports "no lemma here applies" for the
+ * only two pieces its argument needs killed.
+ *
+ * Unlike the strip's, this side may sit ANYWHERE, the imaginary axis included: `e^{−z²}` decays in
+ * `Re z` with no `R → ∞` hidden in a lattice, so `Re z = 0` is a perfectly ordinary place for a
+ * segment to be and the bound there is simply large.
+ */
+function disposeGaussianSide(ast: Node, g: Resolved): ArcBound | null {
+  if (g.kind !== "segment") return null;
+  const [x0, y0] = g.from;
+  const [x1, y1] = g.to;
+  if (Math.abs(x0 - x1) > 1e-9) return null; // not vertical
+  const form = asExponentialOfPolynomial(ast);
+  if (form === null || form.q.degree() !== 2) return null;
+  const c = asExactCoordinate(x0);
+  const a = asExactCoordinate(y0);
+  const b = asExactCoordinate(y1);
+  if (c === null || a === null || b === null) return null;
+  return gaussianSideBound(form.q, form.lambda, { c, y0: a, y1: b });
 }
 
 /**
@@ -287,6 +464,64 @@ export interface LedgerInput {
   readonly log?: { readonly factor: LogFactor; readonly rational: Node };
   /** The multi-point branch factor `c·∏(z−bⱼ)^{αⱼ}` and its cofactor — the dogbone's seat. */
   readonly multi?: { readonly factor: MultiPowerFactor; readonly rational: Node };
+  /**
+   * The summation kernel `π cot(πz)` / `π csc(πz)` and its cofactor — tier G's seat.
+   *
+   * Reaches only the KILL pass, and only for a side of a centred square: nothing else in the file
+   * can bound a transcendental times a rational, so before this such a side fell through to "no
+   * lemma here applies to this integrand" — true, and the wrong thing to be true.
+   */
+  readonly summation?: {
+    readonly kernel: SummationKernel;
+    /**
+     * False when the contour reaches too far for the kernel's poles to be listed at all.
+     *
+     * Every integer is a pole, so this is a work limit — and the point of carrying it is that
+     * "no poles were listed" and "there are no poles" must not look the same to LEGALITY.
+     */
+    readonly windowed: boolean;
+    /**
+     * The unknown the RECORD puts inside the residue sum — tier G's `residueSelection.targetTerms`.
+     *
+     * Absent in the sandbox, where a `cot` integrand on a square establishes a closed-contour value
+     * and nothing else. Present, it is what lets COVER distinguish the two: a target that is a TERM
+     * of the sum is covered by the argument just as surely as one that is a piece of the contour,
+     * and reporting "no piece is marked as the target" about a record that declares one would read
+     * as a gap where there is none.
+     */
+    readonly target?: { readonly id: string; readonly weight: 1 | 2 };
+    /**
+     * SG-6: a hypothesis that FAILS while a stronger argument applies — the record's `escalate`.
+     *
+     * Carried so CATCH can say so. Without a row the outcome would be invisible: the hypothesis
+     * "f has no pole at an integer" is false for G1, the answer is exactly right, and a ledger
+     * silent about both would leave a reader to reconcile them.
+     */
+    readonly escalation?: { readonly to: string; readonly collisions: number };
+  };
+  /**
+   * A `free` piece whose value is exactly known and NOT derived by this contour — ADR-0042.
+   *
+   * **What it fixes is a row, not a number.** Without it a `free` piece takes the quadrature's
+   * certificate, so E3's argument — entire integrand, both verticals certified dead, `∮ = 0`
+   * exactly — came out `≈`, capped by its most certain step. The opposite failure is the reason the
+   * row is not simply `exact`: it carries the record's own `method` after "imported, not derived
+   * here", so the reader sees which part of the argument came from outside it.
+   *
+   * A plain structure rather than the `families/` type, because packages here import DOWNWARD only:
+   * `runFamily` resolves the expression (once — see `resolveImports`) and hands over what the row
+   * needs. `numeric` is here so the cross-check can happen where the piece's own quadrature is.
+   */
+  readonly imported?: readonly {
+    readonly pieceId: string;
+    /** How the value reads — `e^(−289/400)·√π`. */
+    readonly text: string;
+    readonly numeric: readonly [number, number];
+    /** The record's provenance sentence. */
+    readonly method: string;
+    /** The closed set's own sentence about the atom it rests on. */
+    readonly source: string;
+  }[];
 }
 
 /**
@@ -366,6 +601,41 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         "satisfied",
         `every singularity is clear of the contour (nearest at ${minClearance.toPrecision(3)})`,
         exact("clearance", "distance from each pole to each piece"),
+      ),
+    );
+  } else if (poles.entire) {
+    // **AN EMPTY SINGULAR SET IS INFORMATION, AND SO IS ITS CLEARANCE.** With nothing to measure,
+    // the row above is omitted and LEGALITY said NOTHING about singularities — for the one record
+    // whose whole content is that the set is empty (E3, and F2 after it). "There are none" and
+    // "none were looked for" then looked the same on the ledger, which is precisely the distinction
+    // `PoleReport.entire` was made a DECISION for in M5.3a. A refusal to decide still prints
+    // nothing, which is right: it is not a claim.
+    push(
+      rowFrom(
+        "LEGALITY",
+        "satisfied",
+        "the integrand is entire, so there is no singularity for the contour to be clear of",
+        exact("the singular set is empty", "decided — not the absence of a pole search"),
+      ),
+    );
+  }
+
+  // **A WINDOW THAT COULD NOT BE OPENED IS NOT AN EMPTY ONE.** The summation kernel has a pole at
+  // every integer, listed over a band read off the contour; past a work limit that band is refused
+  // rather than truncated, because a truncated list would leave LEGALITY calling a contour clear of
+  // singularities it runs straight through. The row exists so the refusal is visible instead.
+  if (input.summation !== undefined && !input.summation.windowed) {
+    push(
+      rowFrom(
+        "LEGALITY",
+        "unknown",
+        "the kernel has a pole at every integer, and this contour reaches too many of them to check",
+        unknown(
+          "clearance from the kernel's poles",
+          "the band is read off the contour's own extent and is refused past a work limit — listing a prefix of an infinite pole set would report a contour as clear of poles it passes through",
+        ),
+        undefined,
+        "shrink the contour, or reduce the limit parameter",
       ),
     );
   }
@@ -642,19 +912,96 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     ),
   );
 
+  // **THE QUESTION IS ABOUT THE SUM, NOT ABOUT THE POLE LIST**, and asking the second one made this
+  // row FALSE on every record the cyclotomic route serves. D3 at `(a,n) = (2.3, 5)` has printed the
+  // exact closed form `(π/5)/sin(23π/50)` beside "not every residue is known exactly, so the total
+  // is an estimate" since M4.2e — which is the one thing that route exists to deny: `ℚ(ζ₁₀)` has
+  // degree 4 over ℚ so no individual residue is expressible, and the SUM needs none. F1 at `n = 5`
+  // and `n = 7` would have been the third such record. `Σ Res` is established exactly exactly when
+  // the theorem returned a value, so read that.
+  //
+  // **AND WHICH exact CLAIM IT IS DEPENDS ON THE ROUTE.** The sentence below about the sum being
+  // known while no individual residue is expressible belongs to the CYCLOTOMIC route and is false
+  // for tier G, where every residue is expressible — the kernel's at each integer over ℚ(i), the
+  // cofactor's as an exact quotient of basis elements. A row that says "no individual residue is
+  // expressible" about a record whose residues are all written down is the same kind of false row
+  // this arc keeps finding; `findPoles` reporting nothing for a `cot` integrand is why it would.
   const residuesExact = poles.exactlyComplete;
+  const sumExact = theorem.exactValue !== undefined;
+  const summed = input.summation !== undefined && sumExact;
   push(
     rowFrom(
       "CATCH",
-      residuesExact ? "satisfied" : "unknown",
+      residuesExact || sumExact ? "satisfied" : "unknown",
       residuesExact
         ? "every enclosed residue is known exactly"
-        : "not every residue is known exactly, so the total is an estimate",
+        : summed
+          ? input.summation?.escalation === undefined
+            ? "every enclosed residue is known exactly — the kernel's at each integer, the cofactor's as an exact quotient"
+            : "every enclosed residue is known exactly — the kernel's at each integer, and the MERGED one from the Laurent route"
+          : sumExact
+            ? "Σ Res is known exactly, though no individual residue is expressible"
+            : "not every residue is known exactly, so the total is an estimate",
       residuesExact
         ? exact("the residues", "exact arithmetic over ℚ(i) or one quadratic extension of it")
-        : unknown("the residues", "some poles are not expressible in ℚ(i)(√d); the numeric value stands"),
+        : summed
+          ? exact(
+              "the residues",
+              input.summation?.escalation === undefined
+                ? "Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀}"
+                : "Res(K·f, n) is f(n) over ℚ(i) at every integer the kernel alone has a pole at; where the cofactor has one too the orders ADD and the merged residue is the z⁻¹ coefficient of the product's Laurent series, exact in ℚ(i)(π)",
+            )
+        : sumExact
+          ? exact(
+              "the residue SUM",
+              "the structural route: the roots of a rotated regular n-gon, whose residues sum in the exponent basis with no root ever represented",
+              {
+                provenance: [
+                  {
+                    ok: true,
+                    text: "a fifth or seventh root of −1 needs a degree-4 or degree-6 field — which is why the per-pole route declined, and why this one is not the same claim",
+                  },
+                ],
+              },
+            )
+          : unknown(
+              "the residues",
+              // **THE REASON WAS UNCONDITIONAL AND THEREFORE SOMETIMES INVENTED.** For `1/cosh z` no
+              // pole was found at all — the readers cannot see the function — and telling a reader
+              // that "some poles are not expressible in ℚ(i)(√d)" names a difficulty the engine never
+              // reached. Which of the two it is is exactly what `rational` records.
+              poles.rational
+                ? "some poles are not expressible in ℚ(i)(√d); the numeric value stands"
+                : "f could not be read exactly, so no pole list was established — which is not the same as there being no poles",
+            ),
     ),
   );
+
+  // SG-6's row. Reported under CATCH because the escalated hypothesis is about whether the residue
+  // theorem catches every singularity: the answer is that it does, by merging the colliding pair
+  // rather than by the hypothesis holding.
+  const escalation = input.summation?.escalation;
+  if (escalation !== undefined) {
+    push(
+      rowFrom(
+        "CATCH",
+        "satisfied",
+        `a stated hypothesis FAILS and a stronger argument applies: ${escalation.to}, over ${escalation.collisions} declared collision${escalation.collisions === 1 ? "" : "s"}`,
+        exact(
+          "the escalation",
+          "the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument — the product is meromorphic there, orders ADD, and the merged residue is computed exactly",
+          {
+            provenance: [
+              {
+                ok: true,
+                text: "refusing would be wrong (the answer is correct) and warning would be wrong (nothing is uncertain); what the escalation costs the record is a DECLARED merged order and residue, both checked against the engine's own",
+              },
+            ],
+          },
+        ),
+      ),
+    );
+  }
 
   // ---- KILL ---------------------------------------------------------------------------------
   let killFailed = false;
@@ -773,6 +1120,47 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     }
 
     if (piece.role !== "vanish") {
+      // AN IMPORTED PIECE IS NOT A QUADRATURE. ADR-0042: its value is exactly known and comes from
+      // outside this argument, so the row carries `=` with the provenance attached — and the
+      // quadrature becomes what it should always have been here, an independent CHECK rather than
+      // the source. The gap is a limit against a finite limit parameter, so it is reported and only
+      // a visible discrepancy is marked ✗: it is evidence about the contour's tail as much as about
+      // the value, and what it rules out is a record having written the wrong expression.
+      const imported = input.imported?.find((x) => x.pieceId === piece.id);
+      if (imported !== undefined) {
+        const measured = integral.pieces[k]?.value;
+        const check = measured === null || measured === undefined ? null : relativeGap(measured, imported.numeric);
+        push(
+          rowFrom(
+            "KILL",
+            "satisfied",
+            `${piece.name} is ${imported.text} — imported, not derived here`,
+            exact(`${piece.name} = ${imported.text}`, `imported, not derived here — ${imported.method}`, {
+              provenance: [
+                { ok: true, text: imported.source },
+                ...(check === null
+                  ? []
+                  : [
+                      {
+                        // **RELATIVE, AND DELIBERATELY COARSE.** At a finite limit parameter the gap
+                        // is the piece's own TAIL as much as any error in the value, and the record
+                        // does not state how big that tail is — so no tight verdict is available
+                        // here. What the check CAN separate is a converging tail from a different
+                        // number: E3's is 1.5e-8 of the value at R = 4 and 1.6e-13 at R = 8, while
+                        // the same record with one factor dropped is off by half the value.
+                        ok: check.relative < 0.01,
+                        text:
+                          `an independent check: the quadrature of this piece is ${check.absolute.toExponential(2)} away ` +
+                          `(${(check.relative * 100).toPrecision(2)}% of it) — at a finite limit parameter that gap is the piece's own tail`,
+                      },
+                    ]),
+              ],
+            }),
+            piece.id,
+          ),
+        );
+        continue;
+      }
       push(
         rowFrom(
           "KILL",
@@ -792,22 +1180,38 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         : input.log !== undefined
           ? disposeLogArc(input.log, geom, piece.lemma)
           : input.power === undefined
-            ? disposeArc(ast, geom)
+            ? (disposeArc(ast, geom) ??
+                (input.summation === undefined
+                  ? null
+                  : disposeSquareSide(input.summation.kernel, geom)) ??
+                disposeStripSide(ast, geom) ??
+                disposeGaussianSide(ast, geom))
             : disposeBranchArc(input.power, geom, piece.lemma);
     if (!disposal) {
       killFailed = true;
+      // **WHICH OF THE TWO FAILED, THE INTEGRAND OR THE GEOMETRY?** Until M5.4b this row said "no
+      // lemma here applies to this integrand" whatever the cause, and for `1/(1 + z⁵)` on a `2π/5`
+      // arc that was false — the plain ML bound applies perfectly and the degree gap is 5 ≥ 2; what
+      // could not be done was READING the arc's sweep as an exact multiple of π. Blaming the
+      // integrand for that sends a reader to look at the one thing that was fine, and hides the
+      // one that was not.
+      const unreadable = geom.kind === "arc" && arcExtent(geom) === null && arcRadius(geom) !== null;
       push(
         rowFrom(
           "KILL",
           "unknown",
-          `${piece.name} must vanish, but no lemma here applies to this integrand`,
+          unreadable
+            ? `${piece.name} must vanish, but its sweep is not an exact multiple of π and no bound can be stated`
+            : `${piece.name} must vanish, but no lemma here applies to this integrand`,
           unknown(
             `the arc ${piece.name}`,
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
               ? "every certified arc bound here reasons on |z| = R about the ORIGIN, and this arc is centred elsewhere — a dogbone's end caps need the bound taken about their own branch point instead"
-              : input.power === undefined && input.log === undefined
-                ? "the certified bounds cover a rational integrand, or one times e^{iaz}; this is neither"
-                : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
+              : unreadable
+                ? `an ML bound is the sweep times the radius times max|f|, so the sweep enters the number: it is read as an exact p/q·π with q ≤ ${MAX_PI_DENOMINATOR}, and this arc's is not one — a degenerate sweep included, whose bound would be a vacuous ≤ 0`
+                : input.power === undefined && input.log === undefined
+                  ? "the certified bounds cover a rational integrand, one times e^{iaz}, λ·e^{w zⁿ} on a wedge measured from the positive real axis, or e^{az}·N(e^z)/D(e^z) on a vertical side of a strip; this is none of them"
+                  : "a branch factor's arc bound needs the lemma declared as L1 (ε → 0) or L2 (R → ∞), and a rational cofactor",
           ),
           piece.id,
           "the numeric value still stands, but the limit is not established",
@@ -835,17 +1239,32 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
   }
 
   // ---- COVER --------------------------------------------------------------------------------
-  const hasTarget = spec.some((p) => p.role === "target");
+  // THREE STATES, NOT TWO. A tier-G contour has no `target` piece — every side vanishes — and the
+  // unknown is a TERM of the residue sum instead (`families/solveResidueTerm.ts`). Reading only the
+  // piece list would report the same "no target" as the sandbox for a record that declares one
+  // perfectly well, and the headline would then say the closed-contour value was established where
+  // what the argument establishes is a series.
+  const onContour = spec.some((p) => p.role === "target");
+  const inSum = input.summation?.target;
+  const hasTarget = onContour || inSum !== undefined;
   push(
     rowFrom(
       "COVER",
       hasTarget ? "satisfied" : "unknown",
-      hasTarget
+      onContour
         ? "the target appears as a labelled piece of the closed contour"
-        : "no piece is marked as the target, so the ledger reports the closed-contour value itself",
-      hasTarget
+        : inSum !== undefined
+          ? `${inSum.id} is a TERM of the residue sum — the kernel's poles at the integers — not a piece of the contour` +
+            (inSum.weight === 1 ? "" : `, at weight ${inSum.weight}`)
+          : "no piece is marked as the target, so the ledger reports the closed-contour value itself",
+      onContour
         ? exact("the target is covered", "declared by the piece list")
-        : unknown("the target", "sandbox mode: there is no real integral being solved for"),
+        : inSum !== undefined
+          ? exact(
+              "the target is covered",
+              "declared by `residueSelection.targetTerms`: the contour's own sides all vanish, so ∮ → 0 and the identity is read backwards as a statement about the sum",
+            )
+          : unknown("the target", "sandbox mode: there is no real integral being solved for"),
     ),
   );
 
@@ -889,6 +1308,38 @@ export function legalityRefusal(result: LedgerResult): LedgerRow | undefined {
   // dependence points the wrong way: a LEGALITY row that one day fails softly must still withhold the
   // value, and a gate keyed on `failedAt` would quietly stop doing so.
   return result.rows.find((r) => r.constraint === "LEGALITY" && r.status === "failed");
+}
+
+/**
+ * Why `∮` may not be printed at all, or `null` when it may.
+ *
+ * **THREE INDEPENDENT REASONS, and the whole point is that they are asked in ONE place.** The
+ * quadrature may have refused; the integral's verdict may not license reporting a value; and
+ * LEGALITY may have failed, which the quadrature can be perfectly happy about. The result card has
+ * asked all three since M4.1 — and the moment a SECOND surface wanted the same answer (M6.3's
+ * exported figure, whose caption must not claim a value the card withholds) the question had to stop
+ * being asked inline. A caption that re-derived it would be one edit away from printing a number on
+ * a shareable image that the app itself refuses to show.
+ *
+ * The repair comes back with it, because a refusal a reader cannot act on is half a message.
+ */
+export function integralRefusal(
+  integral: { readonly refusal?: string; readonly verdict: Verdict },
+  ledger: LedgerResult | null,
+): { readonly claim: string; readonly repair?: string } | null {
+  const illegal = ledger === null ? undefined : legalityRefusal(ledger);
+  if (integral.refusal === undefined && mayReportValue(integral.verdict) && illegal === undefined) {
+    return null;
+  }
+  const repair =
+    illegal?.repair ??
+    integral.verdict.certificates
+      .flatMap((c) => c.provenance)
+      .find((q) => q.text.startsWith("suggested repair"))?.text;
+  return {
+    claim: illegal?.claim ?? integral.refusal ?? "the result was refused",
+    ...(repair === undefined ? {} : { repair }),
+  };
 }
 
 export function ledgerHeadline(result: LedgerResult): string {

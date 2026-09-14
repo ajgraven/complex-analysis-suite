@@ -664,3 +664,35 @@ ul.poleTable li {
   font-size: 15px;
   overflow-wrap: anywhere;
 }
+
+/* A shared link that could not be opened. The app's own accent rather than the warning amber:
+   nothing is wrong with the MATHS, and a reader who followed a stale link should not be told that
+   their integral is in doubt. */
+.linkError {
+  border-color: rgba(110, 168, 254, 0.4);
+  background: #6ea8fe14;
+  color: var(--c-text);
+}
+
+.shareLink {
+  margin-left: auto;
+}
+
+.shareNote {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* The brand is an `<h1>` for document structure (one level-one heading above the rail's level-two
+   card headings), so its default heading size and margin are cancelled: this was an outline change,
+   not a visual one. */
+h1.brand {
+  font-size: 1em;
+  margin: 0 0.5rem 0 0;
+}
+
+/* The suite nav's own host, before `<main>` in the DOM so it reads where it draws. `.cas-nav` is
+   `position: fixed`, so the host itself occupies nothing. */
+.navHost {
+  display: contents;
+}

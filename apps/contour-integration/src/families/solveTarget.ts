@@ -229,7 +229,11 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
   let form: SineForm = divided.form;
   if (extracted !== null) {
     const folded = extracted.scale(SqrtExt.fromGauss(Gauss.rat(1n, spec.divisor)));
-    form = divided.form.sine === undefined ? { sum: folded } : { sum: folded, sine: divided.form.sine };
+    // **SPREAD, NOT REBUILD.** This line rebuilt the form field by field and carried only `sine`, so
+    // when M5.3d added `cosh` the VALUE (computed above, from `divided.form`) divided by it while
+    // the TEXT did not — E2 printed `π` for a number that was `π/cosh(π)`. A right number under a
+    // wrong form is the worst shape a bug here can take, since nothing about it looks wrong.
+    form = { ...divided.form, sum: folded };
     text = formatSineForm(form);
     certificates.push(
       exact(

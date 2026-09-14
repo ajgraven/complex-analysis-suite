@@ -13,6 +13,7 @@ import {
   joinToOneCut,
   orderLabel,
   removeBranchPoint,
+  setCutFromWindow,
   setOrder,
   splitToRays,
 } from "../src/engine/branchEdit.js";
@@ -197,5 +198,76 @@ describe("the offered orders", () => {
   it("labels a power by its exact fraction, never by a decimal", () => {
     expect(orderLabel(half)).toBe("α = 1/2");
     expect(orderLabel(minusHalf)).toBe("α = -1/2");
+  });
+});
+
+describe("rebuilding the cut from the declared window", () => {
+  const zeroToTwoPi: readonly [Frac, Frac] = [Frac.ZERO, Frac.of(2n)];
+  const principal: readonly [Frac, Frac] = [Frac.of(-1n), Frac.ONE];
+  const power = { kind: "power", alpha: Frac.of(1n, 2n), sign: 1 } as const;
+
+  /** The keyhole template's seed: one point at the origin, id `b1`, with a ray to infinity. */
+  const seeded = (): BranchChoice => setOrder(addBranchPoint(NO_BRANCH, [0, 0]), "b1", half);
+
+  it("KEEPS THE READER'S POINT — the defect that made the whole declaration vanish", () => {
+    // The id is the entire bug. `buildDeclaration`'s own system carries `SINGLE_POINT_ID` (`"b"`),
+    // the reader's point is `"b1"`, and the shell used to adopt the former wholesale — so the id
+    // `declaration.pointId` names stopped existing and the factor was silently dropped, leaving the
+    // cofactor in the box under an `R(z) =` label and being integrated as the whole integrand.
+    const next = setCutFromWindow(seeded(), "b1", principal, power);
+    if (next === null) throw new Error("expected a rebuild");
+    expect(next.points.map((p) => p.id)).toEqual(["b1"]);
+    expect(next.points[0].at).toEqual([0, 0]);
+    expect(next.points[0].order).toEqual(half);
+  });
+
+  it("moves the cut to the window's LOWER edge, which is where the determination jumps", () => {
+    const toZero = setCutFromWindow(seeded(), "b1", zeroToTwoPi, power);
+    const toPi = setCutFromWindow(seeded(), "b1", principal, power);
+    if (toZero === null || toPi === null) throw new Error("expected rebuilds");
+    // `arg ∈ [0, 2π)` cuts along ℝ₊; `arg ∈ [−π, π)` cuts along ℝ₋. The via vertex is the ray's
+    // direction, so its sign is the whole claim.
+    expect(toZero.cuts[0].via[0][0]).toBeGreaterThan(0);
+    expect(toPi.cuts[0].via[0][0]).toBeLessThan(0);
+    // Scale-free, because the ray's length is not the claim: its DIRECTION is. `sin(π)` is
+    // 1.2e-16 rather than 0, so an absolute tolerance would be a test of how far out the vertex
+    // happens to be placed.
+    const angle = (c: BranchChoice): number => Math.abs(Math.atan2(c.cuts[0].via[0][1], c.cuts[0].via[0][0]));
+    expect(angle(toZero)).toBeLessThan(1e-12);
+    expect(Math.abs(angle(toPi) - Math.PI)).toBeLessThan(1e-12);
+    expect(toZero.convention).toBe("zeroToTwoPi");
+    expect(toPi.convention).toBe("principal");
+  });
+
+  it("carries the sheet and the base point through, because neither is a determination", () => {
+    const from = { ...seeded(), sheet: 3, basePoint: [0, 2] as const };
+    const next = setCutFromWindow(from, "b1", principal, power);
+    if (next === null) throw new Error("expected a rebuild");
+    expect(next.sheet).toBe(3);
+    expect(next.basePoint).toEqual([0, 2]);
+  });
+
+  it("leaves a BOUNDED cut alone — the dogbone is a second declaration, not a stale ray", () => {
+    const rays = pair();
+    const joined = joinToOneCut(rays, "b1", "b2");
+    if (joined === null) throw new Error("expected a join");
+    // Nothing to rebuild: no ray leaves `b1`, so the window and the drawn cut are allowed to
+    // disagree and admissibility is where that shows.
+    expect(setCutFromWindow(joined, "b1", principal, power)).toBeNull();
+    expect(joined.cuts[0].from).toBe("b1");
+    expect(joined.cuts[0].to).toBe("b2");
+  });
+
+  it("declines a point that is not there, and one the single-factor builder will not draw for", () => {
+    expect(setCutFromWindow(seeded(), "ghost", principal, power)).toBeNull();
+    // A factor away from the origin: `buildDeclaration` refuses it by name (the residue reader is
+    // about the ORIGIN), and `runDeclared` refuses the same declaration — so leaving the cut where
+    // it is keeps that reason the one on screen instead of drawing a cut for an unrunnable factor.
+    const offOrigin = setOrder(addBranchPoint(NO_BRANCH, [1, 0]), "b1", half);
+    expect(setCutFromWindow(offOrigin, "b1", principal, power)).toBeNull();
+  });
+
+  it("refuses a window that is not one turn wide, rather than half-drawing it", () => {
+    expect(setCutFromWindow(seeded(), "b1", [Frac.ZERO, Frac.ONE], power)).toBeNull();
   });
 });

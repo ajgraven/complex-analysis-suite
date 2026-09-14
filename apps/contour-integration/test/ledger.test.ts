@@ -13,6 +13,7 @@ import {
   dogboneTemplate,
   keyholeTemplate,
   semicircleTemplate,
+  stripTemplate,
 } from "../src/engine/contour/templates.js";
 import { INFINITY, type BranchChoice, type BranchPoint } from "../src/kernel/branch/model.js";
 import { Frac } from "@cas/exact";
@@ -661,5 +662,284 @@ describe("the keyhole is LEGAL — the contour tier D is built on", () => {
       expect(isClosed(pieces)).toBe(true);
       expect(windingNumber(pieces, [0, 0]).n).toBe(0);
     }
+  });
+});
+
+// **L6 REACHES THE LEDGER (M5.2).** Before this the KILL pass had no bound for `e^{±zⁿ}` at all —
+// Jordan's reader wants a linear exponent and the exact rational reader refuses a `call` — so the
+// one integrand the wedge lemma exists for fell through to "no lemma here applies". The wedge
+// TEMPLATE is M5.4; these contours are built by hand so the routing is exercised now rather than
+// shipped as code nothing calls.
+function sector(from: number, to: number, R = 4): Contour {
+  return {
+    pieces: [
+      {
+        id: "out",
+        name: "the outward ray",
+        geom: {
+          kind: "segment",
+          from: { x: 0, y: 0 },
+          to: { x: { param: "R", mul: Math.cos(from) }, y: { param: "R", mul: Math.sin(from) } },
+        },
+        role: "target",
+        colour: 0,
+      },
+      {
+        id: "arc",
+        name: "the wedge arc",
+        geom: {
+          kind: "arc",
+          center: { x: 0, y: 0 },
+          radius: { param: "R" },
+          theta0: from,
+          theta1: to,
+        },
+        role: "vanish",
+        lemma: "L6",
+        colour: 1,
+      },
+      {
+        id: "back",
+        name: "the return ray",
+        geom: {
+          kind: "segment",
+          from: { x: { param: "R", mul: Math.cos(to) }, y: { param: "R", mul: Math.sin(to) } },
+          to: { x: 0, y: 0 },
+        },
+        role: "free",
+        colour: 2,
+      },
+    ],
+    params: { R: { name: "R", value: R, range: [0.5, 1e6], scale: "log", limit: { to: "inf" } } },
+  };
+}
+
+/** The `π/over` wedge, measured from the positive real axis — what L6 is stated on. */
+const wedge = (over: number, R = 4): Contour => sector(0, Math.PI / over, R);
+
+const arcRow = (r: ReturnType<typeof run>) => rowsFor(r, "KILL").find((x) => x.pieceId === "arc");
+
+describe("L6 — the wedge lemma, routed and certified", () => {
+  it("certifies the Fresnel arc: e^{iz²} on the π/4 wedge", () => {
+    const row = arcRow(run("exp(i*z^2)", wedge(4)));
+    expect(row?.status).toBe("satisfied");
+    expect(row?.evidence.level).toBe("≤");
+    expect(row?.evidence.method).toMatch(/L6 \(oscillatory form\)/);
+  });
+
+  it("certifies the Gaussian arc: e^{−z²} on the same π/4 wedge", () => {
+    const row = arcRow(run("exp(-z^2)", wedge(4)));
+    expect(row?.status).toBe("satisfied");
+    expect(row?.evidence.method).toMatch(/L6 \(Gaussian form\)/);
+  });
+
+  it("D-1, side by side on one contour: the π/2 wedge kills e^{iz²} and REFUSES e^{−z²}", () => {
+    // The same arc, the same n, the same lemma — and the face decides. This is the mistake research
+    // 03 §0.3 made, as two rows a reader can put next to each other.
+    const oscillatory = arcRow(run("exp(i*z^2)", wedge(2)));
+    expect(oscillatory?.status).toBe("satisfied");
+
+    const gaussian = arcRow(run("exp(-z^2)", wedge(2)));
+    expect(gaussian?.status).toBe("failed");
+    expect(gaussian?.evidence.level).toBe("⚠");
+    expect(gaussian?.evidence.method).toMatch(/GROWS/);
+    expect(gaussian?.evidence.method).toMatch(/D-1/);
+  });
+
+  it("reaches the wedge angles a π/(2n) wedge needs, which the extent reader could not measure", () => {
+    // `π/6` and `π/8` were not in the whitelist before M5.2, so an `e^{−z³}` arc got no bound for
+    // want of an EXTENT, one step before the missing lemma.
+    expect(arcRow(run("exp(-z^3)", wedge(6)))?.status).toBe("satisfied");
+    expect(arcRow(run("exp(-z^4)", wedge(8)))?.status).toBe("satisfied");
+    expect(arcRow(run("exp(i*z^3)", wedge(3)))?.status).toBe("satisfied");
+  });
+
+  it("refuses a sector that does not START on the positive real axis", () => {
+    // A closed, perfectly drawable sector — and not a wedge: the minorant is read about ψ = 0, so a
+    // bound computed here would be the right formula on the wrong geometry, which is the mistake
+    // M4.6c found in every arc bound at once when the dogbone's caps stopped being centred at 0.
+    const row = arcRow(run("exp(-z^2)", sector(Math.PI / 4, Math.PI / 2)));
+    expect(row?.status).not.toBe("satisfied");
+  });
+
+  it("…and the CLOCKWISE sector is why that refusal is not merely tidy", () => {
+    // `[π/2 → π/4]` for `e^{−z²}`: reading the start as 0 leaves a range of `π/4`, which passes the
+    // side condition and yields `π/(4R)` — while on the arc itself `2θ ∈ [π/2, π]`, `cos 2θ ≤ 0`,
+    // and the integrand reaches `e^{+R²}`. That is a `≤` that is FALSE, not merely loose, and it is
+    // what a mutation sweep found: the previous test refuses under the mutant too, by the range
+    // check firing first, so it was pinning the outcome without pinning the reason.
+    const row = arcRow(run("exp(-z^2)", sector(Math.PI / 2, Math.PI / 4)));
+    expect(row?.status).not.toBe("satisfied");
+    expect(row?.evidence.method).toMatch(/measured from the positive real axis/);
+  });
+
+  it("gives a DEGENERATE arc no extent, rather than a bound of ≤ 0 that is false", () => {
+    // `asPiMultiple` answers `0` near zero so a wedge's START angle is expressible, and an extent of
+    // `0` would make the ML bound `0·π·R·max|f| = 0` — a `≤ 0` on an arc whose integral is small and
+    // NOT zero. That is certification theatre (PLAN §9 R2) wearing the sign of rigour, so the extent
+    // reader refuses instead.
+    const row = arcRow(run("1/(1+z^2)", sector(0, 1e-13)));
+    expect(row?.status).toBe("unknown");
+  });
+
+  it("still reports no lemma for a shape none of them covers", () => {
+    // `z·e^{−z²}` has a cofactor the wedge bound declines by name, so the honest answer is the
+    // fallthrough — not a bound computed as though the cofactor were not there.
+    const row = arcRow(run("z*exp(-z^2)", wedge(4)));
+    expect(row?.status).toBe("unknown");
+    expect(row?.evidence.method).toMatch(/λ·e\{?\^?\{?w z/);
+  });
+});
+
+// **THE ANGLE READER IS A RULE, NOT A LIST (M5.4b).** A whitelist of thirteen fractions cannot
+// enumerate `2π/n` for a record's own `n`, and at `n = 5` KILL blamed the INTEGRAND for a failure
+// of the geometry reader — for the one integrand shape it discharges at `n = 4`.
+describe("an arc's sweep as an exact multiple of π", () => {
+  /** The `p·π/q` sector from the positive real axis — F1's wedge shape, at any angle. */
+  const sweep = (p: number, q: number) => sector(0, (p * Math.PI) / q);
+
+  it("reads every fraction the old whitelist held", () => {
+    // The thirteen, so a cap that lost one would be caught rather than inferred. The integrand's
+    // poles are `3 ± i`, at ±atan(1/3) = ±0.1024·π — no rational multiple with denominator ≤ 12, so
+    // no return ray of any sweep below lands ON one and LEGALITY never pre-empts KILL. (`1/(1+z⁴)`
+    // cannot be used here for exactly that reason: its own pole sits on the π/4 ray.)
+    for (const [p, q] of [
+      [2, 1],
+      [1, 1],
+      [1, 2],
+      [1, 3],
+      [2, 3],
+      [1, 4],
+      [3, 2],
+      [4, 1],
+      [1, 5],
+      [1, 6],
+      [1, 8],
+      [1, 10],
+      [1, 12],
+    ] as const) {
+      expect(arcRow(run("1/(z^2 - 6*z + 10)", sweep(p, q)))?.status, `${p}π/${q}`).toBe("satisfied");
+    }
+  });
+
+  it("reads 2π/5 and 2π/7, which no list of nice angles contained", () => {
+    // F1's own sweeps. The integrand is the same shape discharged at every angle above.
+    expect(arcRow(run("1/(1+z^5)", sweep(2, 5)))?.status).toBe("satisfied");
+    expect(arcRow(run("1/(1+z^7)", sweep(2, 7)))?.status).toBe("satisfied");
+    expect(arcRow(run("1/(1+z^9)", sweep(2, 9)))?.status).toBe("satisfied");
+  });
+
+  it("refuses a denominator past the cap, and an angle that is no rational multiple at all", () => {
+    // The cap is what makes the reading a DECISION: two rationals with denominators ≤ 12 differ by
+    // at least 1/144, so the 1e-12 window admits one candidate or none. Past it, `simplestRational`
+    // of a float is a sixteen-digit fraction that is honest and useless.
+    expect(arcRow(run("1/(1+z^4)", sector(0, Math.PI / 13)))?.status).toBe("unknown");
+    expect(arcRow(run("1/(1+z^4)", sector(0, Math.PI / Math.sqrt(2))))?.status).toBe("unknown");
+    // …and a sweep wider than two full turns.
+    expect(arcRow(run("1/(1+z^4)", sector(0, 5 * Math.PI)))?.status).toBe("unknown");
+  });
+
+  it("blames the GEOMETRY, not the integrand, when the sweep is what could not be read", () => {
+    // The row said "no lemma here applies to this integrand" whatever the cause. For `1/(1 + z⁴)`
+    // that is false twice over: the plain ML bound is exactly the lemma for it, and the degree gap
+    // is 4 ≥ 2. Sending a reader to inspect the one thing that was fine is worse than saying
+    // nothing.
+    const row = arcRow(run("1/(1+z^4)", sector(0, Math.PI / 13)));
+    expect(row?.claim).toMatch(/sweep is not an exact multiple of π/);
+    expect(row?.claim).not.toMatch(/integrand/);
+    expect(row?.evidence.method).toMatch(/the sweep enters the number/);
+
+    // …and an integrand no bound covers still says so, on an arc whose sweep reads perfectly.
+    const unsupported = arcRow(run("z*exp(-z^2)", sweep(1, 4)));
+    expect(unsupported?.claim).toMatch(/no lemma here applies to this integrand/);
+  });
+});
+
+// **A VANISHING SEGMENT REACHES A LEMMA (M5.3c).** Until now `disposeArc` declined anything that
+// was not an arc, so a rectangle's vertical side reported "no lemma here applies" — for the two
+// pieces tier E's entire argument needs killed.
+const sideRow = (r: ReturnType<typeof run>, id: string) =>
+  rowsFor(r, "KILL").find((x) => x.pieceId === id);
+
+describe("L1 on a strip's vertical sides", () => {
+  it("kills both of E1's verticals at a = 3/10", () => {
+    const r = run("exp((3/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    for (const id of ["right", "left"]) {
+      expect(sideRow(r, id)?.status).toBe("satisfied");
+      expect(sideRow(r, id)?.evidence.level).toBe("≤");
+      expect(sideRow(r, id)?.evidence.method).toMatch(/ML inequality on a vertical side/);
+    }
+  });
+
+  it("ONE CONDITION, TWO JOBS: a ≥ 1 breaks the right side and a ≤ 0 the left", () => {
+    // The record's own claim, as two rows a reader can put side by side. Neither window is declared
+    // anywhere; each is the sign of one exact rational exponent.
+    const tooBig = run("exp((6/5)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    expect(sideRow(tooBig, "right")?.status).toBe("failed");
+    expect(sideRow(tooBig, "left")?.status).toBe("satisfied");
+
+    const tooSmall = run("exp((-1/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    expect(sideRow(tooSmall, "right")?.status).toBe("satisfied");
+    expect(sideRow(tooSmall, "left")?.status).toBe("failed");
+  });
+
+  it("kills E2's verticals for a ξ of either sign, with no condition to state", () => {
+    for (const xi of ["2", "-2"]) {
+      const r = run(`exp(i*(${xi})*z)/cosh(z)`, stripTemplate(Math.PI, 9));
+      expect(sideRow(r, "right")?.status).toBe("satisfied");
+      expect(sideRow(r, "left")?.status).toBe("satisfied");
+    }
+  });
+
+  it("never asks the TOP side for a bound — it reproduces, and its ML bound diverges", () => {
+    const r = run("exp((3/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
+    const top = rowsFor(r, "KILL").find((x) => x.pieceId === "top");
+    expect(top?.status).toBe("satisfied");
+    expect(top?.claim).toMatch(/reproduces the target/);
+  });
+
+  it("declines a DIAGONAL side, where a bound read at one end would be the wrong geometry", () => {
+    // `|f|` varies along a diagonal, and the strip bound reasons about a FIXED `Re z`. Reading the
+    // start point's real part and bounding as though the whole piece sat there computes a `≤` from
+    // geometry the piece does not have — M4.6c's finding about off-centre arcs, in the other shape.
+    // The whole quadrilateral is slanted so it still CLOSES — an unclosed one stops at LEGALITY and
+    // never reaches KILL, which is what the first draft of this test measured.
+    const base = stripTemplate(2 * Math.PI, 9);
+    const P = 2 * Math.PI;
+    const diagonal: Contour = {
+      ...base,
+      pieces: base.pieces.map((piece) => {
+        if (piece.id === "right") {
+          return {
+            ...piece,
+            geom: {
+              kind: "segment" as const,
+              from: { x: { param: "R" }, y: 0 },
+              to: { x: { param: "R", mul: 0.5 }, y: P },
+            },
+          };
+        }
+        if (piece.id === "top") {
+          return {
+            ...piece,
+            geom: {
+              kind: "segment" as const,
+              from: { x: { param: "R", mul: 0.5 }, y: P },
+              to: { x: { param: "R", mul: -1 }, y: P },
+            },
+          };
+        }
+        return piece;
+      }),
+    };
+    const row = sideRow(run("exp((3/10)*z)/(1 + exp(z))", diagonal), "right");
+    expect(row?.status).toBe("unknown");
+    expect(row?.evidence.method).toMatch(/vertical side of a strip/);
+  });
+
+  it("still declines a vertical side whose integrand is not a strip integrand", () => {
+    const r = run("1/(1+z^2)", stripTemplate(2 * Math.PI, 9));
+    expect(sideRow(r, "right")?.status).toBe("unknown");
+    expect(sideRow(r, "right")?.evidence.method).toMatch(/vertical side of a strip/);
   });
 });

@@ -131,6 +131,29 @@ export class ExpSum {
     return new ExpSum(this.terms.map((t) => ({ ...t, coefficient: t.coefficient.neg() })));
   }
 
+  /**
+   * The product of two sums — or null when their coefficients do not share one quadratic extension.
+   *
+   * The basis is closed under multiplication (`e^{β₁}e^{β₂} = e^{β₁+β₂}`), which is what makes this
+   * exact; what it is not closed under is mixing radicands, and there the answer is NULL rather than
+   * the `add`-style "keep the terms separate". A sum can hold `√2` and `√3` in different terms; a
+   * PRODUCT of them is one coefficient in neither field, and pretending otherwise is the one thing
+   * `SqrtExt` throws to prevent.
+   *
+   * Added for tier G, where `π cot(πz₀)` is a RATIO of two sums and adding two ratios cross-multiplies.
+   */
+  mul(other: ExpSum): ExpSum | null {
+    let out = ExpSum.ZERO;
+    for (const a of this.terms) {
+      for (const b of other.terms) {
+        const coefficient = tryMul(a.coefficient, b.coefficient);
+        if (coefficient === null) return null;
+        out = out.add(ExpSum.of(coefficient, a.exponent.add(b.exponent)));
+      }
+    }
+    return out;
+  }
+
   /** Multiply every coefficient by an algebraic factor — how `2πi·Σ` is formed. */
   scale(factor: SqrtExt): ExpSum {
     if (factor.isZero()) return ExpSum.ZERO;
@@ -158,7 +181,10 @@ export class ExpSum {
       // PARTIAL folds count. D7's `e^{−iπ + (ln 2)/4 + (3 ln 5)/4}` has a `−iπ` that is the number
       // `−1` and a logarithm this basis carries; extracting only the first leaves a REAL exponent,
       // which is the difference between an answer with a closed form and an answer without one.
-      const { factor, rest } = t.exponent.splitAlgebraicFactor();
+      // The coefficient's own radicand goes in: a root of unity needing a √ may fold only into a
+      // coefficient already carrying THAT one — a fold combines, it never introduces. See
+      // `Exponent.splitAlgebraicFactor`, and F1's `n = 3` for what it buys.
+      const { factor, rest } = t.exponent.splitAlgebraicFactor(t.coefficient.d);
       const product = factor.equals(SqrtExt.ONE) ? t.coefficient : tryMul(t.coefficient, factor);
       // A fold that would leave one quadratic extension is skipped: the term stays as it was, which
       // is still correct and merely less reduced.

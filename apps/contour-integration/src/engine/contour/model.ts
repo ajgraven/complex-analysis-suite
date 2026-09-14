@@ -23,17 +23,38 @@ import type { Cx, Resolved } from "../../kernel/geom.js";
  * the general form can be added later without touching call sites.
  */
 /**
- * A coordinate: a number, or an affine function of a parameter — with `add` allowed to be another.
+ * A coordinate: a number, or an affine function of a parameter — with `add` allowed to be another,
+ * and the coefficient allowed to be a THIRD.
  *
  * `add` was a number until D7, whose dogbone hugs `[0, b]` with `b` a PARAMETER: its upper edge runs
  * to `b − η`, which is affine in two of them. One nesting is enough for every record in the gallery
  * and keeps the type an affine form rather than an expression language, which is what `derived`
  * already exists for — and unlike `derived`, this stays live under a drag, so scrubbing `η` does not
  * leave the picture a hair open and the ledger refusing a contour that had been closed.
+ *
+ * **`mul` was a literal until F1, and the claim above about covering every template was false.** A
+ * wedge's return ray runs from `R·e^{2πi/n}` to `0`, so its endpoint is `R·cos(2π/n)` — a PRODUCT of
+ * two parameters, which no affine form in one of them can write. The two routes that look like they
+ * would avoid it both fail for reasons worth keeping: `derived` is evaluated in `instantiate.ts`
+ * BEFORE the limit parameters exist, deliberately, so `R·cos(2π/n)` cannot be a derived value; and
+ * were it computed afterwards it would be frozen at instantiation, leaving the ray behind while the
+ * arc — bound to `{param:"R"}` — followed the drag, silently opening a contour the ledger had just
+ * certified closed.
+ *
+ * What the widening does NOT do is make the form nonlinear where it matters. A `derived` coefficient
+ * is computed once from the record's bindings and never moves under a drag, so a product like
+ * `R·wedgeX` still has exactly ONE live factor: the geometry stays affine in every parameter a user
+ * can actually scrub, which is the property the substrate needs. That was always the real claim —
+ * until F1 there was no record in which "one parameter" and "one LIVE parameter" differed.
  */
 export type Scalar =
   | number
-  | { readonly param: string; readonly mul?: number; readonly add?: number | Scalar };
+  | {
+      readonly param: string;
+      /** A literal coefficient, or a parameter supplying one — see the type's own note. */
+      readonly mul?: number | { readonly param: string };
+      readonly add?: number | Scalar;
+    };
 
 export interface PointSpec {
   readonly x: Scalar;
@@ -119,7 +140,17 @@ export function resolveScalar(s: Scalar, params: Params): number {
   if (typeof s === "number") return s;
   const p = params[s.param];
   if (p === undefined) throw new Error(`Contour references unknown parameter '${s.param}'`);
-  return p.value * (s.mul ?? 1) + resolveScalar(s.add ?? 0, params);
+  return p.value * coefficientOf(s.mul, params) + resolveScalar(s.add ?? 0, params);
+}
+
+/** A `mul`, resolved. An unknown parameter throws rather than defaulting to 1: a coefficient that
+ *  silently became the identity would draw a wedge as a straight line and call it closed. */
+function coefficientOf(mul: number | { readonly param: string } | undefined, params: Params): number {
+  if (mul === undefined) return 1;
+  if (typeof mul === "number") return mul;
+  const p = params[mul.param];
+  if (p === undefined) throw new Error(`Contour references unknown parameter '${mul.param}'`);
+  return p.value;
 }
 
 const resolvePoint = (p: PointSpec, params: Params): Cx => [

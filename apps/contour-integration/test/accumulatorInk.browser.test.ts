@@ -16,6 +16,7 @@ import { describe, expect, it } from "vitest";
 import { drawAccumulator } from "../src/ui/accumulator.js";
 import { accumulate, type Accumulation } from "../src/engine/contour/accumulate.js";
 import { offeredFamilies, primaryGolden, runFamily } from "../src/families/runFamily.js";
+import { FAMILIES } from "../src/families/index.js";
 
 /** The panel as the shell lays it out at a desktop width: `--strip` tall, less `.accSide`. */
 const W = 860;
@@ -101,8 +102,13 @@ function drawn(): { id: string; acc: Accumulation; colours: readonly number[] }[
 const CASES = drawn();
 
 describe("the trail is drawn at the size the fit promises", () => {
-  it("covers all twenty records", () => {
-    expect(CASES).toHaveLength(20);
+  it("covers every loaded record", () => {
+    // **DERIVED, NOT HARDCODED — and this assertion is why.** It read `toHaveLength(20)` and had
+    // been RED since M5.3d: E1, E2, F1 and G2 each added a record, and nothing in the node gate can
+    // see a browser suite that `pnpm test` deliberately does not run. The claim worth making is
+    // COVERAGE — that every record the app offers is drawn here — which is self-maintaining, so the
+    // next record cannot make it stale rather than false.
+    expect(CASES.map((c) => c.id)).toEqual(FAMILIES.map((f) => f.id));
   });
 
   it.each(CASES.map((c) => [c.id, c] as const))(

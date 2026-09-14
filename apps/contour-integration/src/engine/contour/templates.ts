@@ -315,3 +315,151 @@ export function rectangleTemplate(
   });
   return { pieces, params: {} };
 }
+
+/**
+ * The quasi-periodic STRIP: `−R → R → R + iP → −R + iP → −R`, with `R → ∞`.
+ *
+ * A sibling of {@link rectangleTemplate} rather than a widening of it, deliberately. That one is the
+ * sandbox's free shape — four `free` sides at literal corners, editable in every direction — and
+ * this one is an ARGUMENT: the bottom is the target, the two verticals are killed by L1, and the top
+ * REPRODUCES the bottom with the factor `−λ` (research 03's L7, which is not a vanishing lemma).
+ * Collapsing them would make the sandbox's rectangle carry roles nobody asked it for.
+ *
+ * **The top side does not vanish, and mistaking it for a side that does is E1's first trap.** It is
+ * a translate of the bottom, so `|f|` on it is `|λ|` times `|f|` on the bottom — and `|λ| = 1` for a
+ * real quasi-period — which makes its ML bound proportional to the length `2R` and DIVERGENT. The
+ * role says `reproduces` so no lemma is ever asked to kill it.
+ *
+ * `height` is the strip's `P`, a real height in the `f(z + iP) = λ f(z)` convention (finding D-4:
+ * research 03 §6 writes E1's as `P = 2πi`, which under that convention would mean `f(z − 2π)`).
+ */
+export function stripTemplate(height = 2 * Math.PI, halfWidth = 6): Contour {
+  const pieces: Piece[] = [
+    {
+      id: "bottom",
+      name: "the real axis",
+      geom: { kind: "segment", from: pt(ref("R", -1), 0), to: pt(ref("R"), 0) },
+      role: "target",
+      colour: 0,
+    },
+    {
+      id: "right",
+      name: "the right vertical",
+      geom: { kind: "segment", from: pt(ref("R"), 0), to: pt(ref("R"), height) },
+      role: "vanish",
+      lemma: "L1",
+      colour: 1,
+    },
+    {
+      id: "top",
+      name: `the line Im z = ${height === 2 * Math.PI ? "2π" : height === Math.PI ? "π" : height.toPrecision(4)}`,
+      geom: { kind: "segment", from: pt(ref("R"), height), to: pt(ref("R", -1), height) },
+      role: "reproduces",
+      colour: 2,
+    },
+    {
+      id: "left",
+      name: "the left vertical",
+      geom: { kind: "segment", from: pt(ref("R", -1), height), to: pt(ref("R", -1), 0) },
+      role: "vanish",
+      lemma: "L1",
+      colour: 3,
+    },
+  ];
+  return { pieces, params: { R: param("R", halfWidth, [0.5, 1e6], "log", { to: "inf" }) } };
+}
+
+/**
+ * The WEDGE: the sector `0 → R → R·e^{2πi/n} → 0`, with `R → ∞`.
+ *
+ * F1's contour, and the tier's cheapest lesson made geometric: **the angle must be exactly `2π/n`**,
+ * because what the argument needs is `f(ωz) = μ f(z)` with `ω = e^{2πi/n}`, and at any other angle
+ * the return ray is not a rotation of the outgoing one and relates to nothing. The template takes
+ * `n`, not an angle, so the constraint is unrepresentable rather than merely checked — the same
+ * reason {@link stripTemplate} takes a height in the units its quasi-period is stated in.
+ *
+ * It replaces the strip's TRANSLATION symmetry by a ROTATION, which is the whole of tier F: the
+ * outgoing ray is the target, the arc is killed by L2, and the return ray reproduces the target with
+ * factor `−ω·μ` — the minus being the reversed traversal, not part of the symmetry.
+ *
+ * The two rays are where the affine `Scalar` had to widen. Their far endpoint is `R·e^{2πi/n}`, a
+ * product of the live `R` and a rotation — see {@link Scalar}. Here the rotation is a literal,
+ * because a sandbox preset fixes `n`; under F1 it is a `derived` value, because the record's `n` is
+ * a parameter. Same geometry, and only the record needs the widening.
+ */
+export function wedgeTemplate(n = 3, radius = 4): Contour {
+  const angle = (2 * Math.PI) / n;
+  const pieces: Piece[] = [
+    {
+      id: "ray0",
+      name: "the positive real axis",
+      geom: { kind: "segment", from: pt(0, 0), to: pt(ref("R"), 0) },
+      role: "target",
+      colour: 0,
+    },
+    {
+      id: "arc",
+      name: "the R → ∞ sector arc",
+      geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: angle },
+      role: "vanish",
+      lemma: "L2",
+      colour: 1,
+    },
+    {
+      id: "ray1",
+      name: `the return ray arg z = 2π/${n}`,
+      geom: {
+        kind: "segment",
+        from: pt(ref("R", Math.cos(angle)), ref("R", Math.sin(angle))),
+        to: pt(0, 0),
+      },
+      role: "reproduces",
+      colour: 2,
+    },
+  ];
+  return { pieces, params: { R: param("R", radius, [0.5, 1e6], "log", { to: "inf" }) } };
+}
+
+/**
+ * The SUMMATION square `Γ_N`: vertices `(N+½)(±1±i)`, counterclockwise, with `N → ∞`.
+ *
+ * Tier G's contour, and the one whose every side VANISHES — which for the first time in the gallery
+ * is the whole content rather than the bookkeeping. There is no `target` piece: `∮ → 0` is the
+ * result, and the sum being evaluated sits inside the residue list as the kernel's own poles at the
+ * integers. So four `vanish` sides and nothing else is not an omission here; it is the shape of the
+ * argument (`tier-efg.md` §6).
+ *
+ * **THE HALF-INTEGER OFFSET IS NOT A CONVENIENCE.** At an integer half-width the vertical sides pass
+ * exactly through the kernel's poles at `z = ±N`, where `|π cot πz|` is unbounded — measured `8.2e15`
+ * at half-width 1, which is float precision rather than a number. At a half-width that is neither, the
+ * sup is finite for each individual contour but not UNIFORMLY bounded as the half-width approaches an
+ * integer, so no limit argument exists. The half-integers are the unique choice that is both pole-free
+ * and uniformly bounded, with `sup|cot πz| = coth(π(N+½)) ≤ coth(π/2)` attained at `N = 0`. The
+ * template takes `N` and offsets by a half, which is the same move {@link wedgeTemplate} makes with
+ * its angle; scrubbing `N` off an integer is still possible, and `kernel/bounds/squareSide.ts`
+ * refuses it by name rather than certifying a bound from the wrong geometry.
+ */
+export function squareTemplate(n = 2): Contour {
+  // `N + ½` in both coordinates: affine in the one live parameter, so a scrub of `N` moves all four
+  // sides together and the square stays closed.
+  const hi = ref("N", 1, 0.5);
+  const lo = ref("N", -1, -0.5);
+  const corners: [Scalar, Scalar][] = [
+    [hi, lo],
+    [hi, hi],
+    [lo, hi],
+    [lo, lo],
+  ];
+  const pieces: Piece[] = corners.map((from, k) => {
+    const to = corners[(k + 1) % 4] ?? from;
+    return {
+      id: `side-${k + 1}`,
+      name: ["the right side x = N+½", "the top side y = N+½", "the left side x = −(N+½)", "the bottom side y = −(N+½)"][k] ?? `side ${k + 1}`,
+      geom: { kind: "segment", from: pt(from[0], from[1]), to: pt(to[0], to[1]) },
+      role: "vanish",
+      lemma: "L2",
+      colour: (k % 6) as 0 | 1 | 2 | 3 | 4 | 5,
+    };
+  });
+  return { pieces, params: { N: param("N", n, [0, 1e4], "linear", { to: "inf" }) } };
+}
