@@ -1,0 +1,596 @@
+# M6 — presentation and publish: a staging plan
+
+> Read [`PLAN.md`](PLAN.md) §7 (M6's line and its gate), [`research/02-pedagogy-misconceptions.md`]
+> (research/02-pedagogy-misconceptions.md) §6–§8 and [`research/07-ux-explorables.md`]
+> (research/07-ux-explorables.md) §6–§7 first.
+>
+> Same shape as [`M5-plan.md`](M5-plan.md): slices ordered by what each needs, each a shippable
+> point, findings written as each lands.
+
+**Scope:** figure & share export; the `#vs=` codec with diff-from-defaults and full re-validation on
+restore; an a11y pass; the launcher card live; the `deploy-pages.yml` line.
+
+**Gate (PLAN §7, unchanged):** published, permalinks round-trip, keyboard and screen-reader pass.
+
+> **SPLIT, on §0.3's finding.** PLAN's M6 originally also carried the teaching layer, which its gate
+> never mentioned. The teaching layer and the pen tool are now **[M7](M7-plan.md)**, with a gate of
+> their own; M6 is exactly the milestone its gate describes. The Pólya work/flux toggle is
+> **dropped** — see §3.
+
+---
+
+## 0. The findings that shape this plan
+
+### 0.1 This is the first gate that is not a number — and the permalink is where that bites
+
+Every gate so far was *"these records solve to these values"*, falsifiable by arithmetic. M6's is
+*"published, permalinks round-trip, keyboard and screen-reader pass"*: one third already true, one
+third checkable by a job that exists, one third genuinely a judgement. The plan's job is to convert
+as much as possible into this app's own idiom — **a claim the engine can falsify** — and to be
+honest about the remainder.
+
+The sharpest instance is the permalink, and it is not a convenience feature here.
+
+> **In every other app in the suite, a dropped view-state field means a slightly different picture.
+> In this one it means the app draws the SAME contour and computes a DIFFERENT integral.**
+
+That is not hypothetical: it is M5.1's own shadowed-`branch` bug, where `renderDeclaration(branch)`
+shadowed the module-level `branch` every handler assigns to, so changing the determination moved the
+ANSWER while leaving the cut drawn where it was — the two then disagreeing about where the
+discontinuity is, which is the one thing "declaring the determination IS declaring the cut" exists to
+prevent. TypeScript caught none of it, because assigning to a parameter is legal and both sides have
+the same type.
+
+**So the round trip must be verified by VERDICT, not by field equality**: encode → decode → re-run →
+the same closed form and the same ledger rows. Field-by-field equality would have passed that bug.
+
+### 0.2 The one file M6 must edit has no tests
+
+`src/shell/app.ts` is **2,511 lines** and is reached by **zero** tests — grep for `mountApp` or
+`shell/app` across the app's 90 test files returns nothing. Every sibling app with a permalink has a
+`test/viewState.test.ts`; the closest full-shell precedent in the repo is QD's
+`vitest/qd-url-state.test.ts` (jsdom, `history.replaceState` spies, hostile-input cases).
+
+Three of M6's four workstreams land in that file. Its state — `mode`, the integrand, the record and
+fixture selection, the contrast mode, the `SandboxDeclaration`, the cut system, the contour, the
+camera — is currently a set of `let` locals inside `mountApp`'s closure, reachable by nothing.
+
+**So the first slice is not a feature.** It is lifting that state into a `currentState()` /
+`applyState()` pair, which is simultaneously what makes a codec possible and what makes the file
+testable at all. Everything after it is cheap; without it, everything after it is untestable.
+
+### 0.3 PLAN's M6 gate says nothing about the teaching layer
+
+Read it again: *"published, permalinks round-trip, keyboard and screen-reader pass."* All three
+clauses are presentation and publish. The teaching layer is in M6's **scope** paragraph with **no
+completion criterion at all** — the one part of this milestone that cannot be finished because
+"finished" is undefined for it.
+
+That is the case for splitting (§3, decision 1), and for the gate this plan proposes for it if it
+stays.
+
+### 0.4 The contrasting triad is two fixtures of ONE record plus one record — measured
+
+PLAN names the triad as `∫1/(1+x²)`, `∫cos x/(1+x²)`, `∫sin x/x`: *"near-identical integrands, three
+different ledger outcomes"*. Run against the corpus, "near-identical" turns out to be an
+understatement — the first two are **the same record at two bindings**:
+
+| cell | record @ fixture | the arc's KILL row | CATCH |
+|---|---|---|---|
+| `∫1/(1+x²)` | **B1** `jordan-cosine-kernel` @ `a=0, b=1` | plain **ML**, `deg Q − deg P = 2 ≥ 2`, bound 8.378e-1 | 1 enclosed |
+| `∫cos x/(1+x²)` | **B1** @ `a=1, b=1` | **Jordan**, `(π/\|a\|)·max\|g\|`, bound 2.094e-1, **upper** semicircle | 1 enclosed |
+| *(free fourth cell)* | **B1** @ `a=−1, b=1` | Jordan, **lower** semicircle — the half-plane FORCED by the sign of `a` | 1 enclosed |
+| `∫sin x/x` | **C1** `indented-sinc` | four KILL rows: `left`, **`indent`** (`iα·Res`, swept `−1π`), `right`, `bigarc` | **0 enclosed** |
+
+Three consequences for the design:
+
+1. **The contrast needs no new data, only a view.** Three of the four cells are one record at three
+   parameter values, so *"same integrand, different lemma"* is literal rather than approximate.
+2. **It is a two-step ladder, not a flat triad.** B1→B1 differs in **exactly one row** (the arc's,
+   and the engine switches lemma because Jordan's constant `π/|a|` is `∞` at `a = 0` and says
+   nothing). B1→C1 differs in **two places at once** — the piece list gains an indentation, and
+   CATCH drops from **1 enclosed to 0**, the whole answer coming from `iα·Res`. Presenting those as
+   one uniform "triad" would flatten the more interesting of the two differences.
+3. **The claim is checkable**, which is what makes this belong in this app: a contrast declares
+   *which rows differ*, and a test verifies that exactly those differ and the rest agree. An engine
+   change that made B1 @ `a=0` cite Jordan would fail it.
+
+And the fifth cell is already paid for: the **M3 gate** pins that closing `∫cos x/(1+x²)` *downward*
+makes the bound diverge and names KILL. Research 02 §7's *"let wrong contours fail informatively"*
+becomes a cell in the grid rather than a separate mode.
+
+### 0.5 Two items were scoped in earlier milestones and never built — one silently
+
+| item | scoped in | status |
+|---|---|---|
+| **Pen tool** (free-hand path editing) | **M1** — *"Path model …; pen-tool editor; the piece list"* | Not built. Named as outstanding in the app README, so at least it is visible. |
+| **Pólya work/flux toggle** | **M3** — *"**Pólya work/flux toggle** (round 3): draw the conjugate field `f̄` … It belongs here rather than in M1 because it explains *why* the vanishing arcs vanish"* | Not built, and **the M3 gate note does not mention it**. It simply is not there. |
+
+This is the one place the project's documentation has slipped, and the plan should not inherit it
+silently. Both are decisions (§3), not assumptions.
+
+### 0.6 What already exists, verified against the repo
+
+| | status |
+|---|---|
+| `deploy-pages.yml` line | **done** — `cp -r apps/contour-integration/dist _site/contour-integration` |
+| Launcher card live | **done** — and a stale duplicate *"Coming soon … not yet part of the published site"* card was still beside it, deleted on the way into this plan |
+| `@cas/interchange` view-state transport | **exists** — `encodeViewState`/`decodeViewState`, `#vs=`, forward-compat contract. **9 apps** carried their own schema on it when this was written (150–260 lines each, each with a test); this app is the **tenth**, as of §M6.2, so the "not a dependency of this app" that stood here is no longer true. |
+| `hashchange` re-hydration | **nothing in the repo does it.** Boot-time read + `history.replaceState` on settle is the house idiom; there is no live re-hydration precedent to copy. |
+| `@cas/export` PNG `tEXt` | **exists**, 6 consumers. Convention is two keys: `Software`, and **`cas:state` = the permalink** — so the figure carries its own link, and **the export is blocked on the codec**. *(Both halves of this row are wrong, and §M6.3a says how: `cas:state` had **one** adopter of six, and `tEXt` is Latin-1, so the metadata was being mangled.)* |
+| `ClipboardItem`, sync-in-gesture | 3 precedents (CD, the plotter, QD). The plotter's is the form PLAN names. |
+| `@cas/ui` | **3 of 4** primitives adopted — `runWithFatalBoundary`, `mountNavHeader`, `attachCanvasA11y` (on `inkCanvas`, with a live region and a full key handler). `mountCanvas` unused (canvases hand-rolled); `createComputeClient` unused. |
+| a11y audit roster | **the app IS in `scripts/a11y-audit.mjs`'s `PAGES`** … |
+| a11y **baseline** | … **and is ABSENT from `scripts/a11y-baseline.json`** (16 page entries, none of them this app). `diff()` treats a missing baseline as `{}`, so **every finding currently reports as a regression** — and **its violation count is unknown, because nothing has ever recorded it**. |
+| a11y, measured | **2 findings, 2 nodes** (`landmark-one-main`, `page-has-heading-one`) — M6.0. `accCanvas` unannounced. |
+| `prefers-reduced-motion` | **not honoured anywhere in this app.** Argument-Principle and Complex-Dynamics honour it; research 07 rule 7 requires it. |
+| The stage | **three** canvases — `glCanvas` (WebGL2 phase), `inkCanvas` (2-D contour), `accCanvas` (accumulator). A figure export must composite them; Riemann-Map's combined-plate export is the precedent. |
+| Teaching-layer code | **none.** Attach points are precise: the mode toggle (`setMode`, app.ts:969), the tier-grouped `<optgroup>` record picker (:434–456), the seven rail cards (:473–484), and `DERIVATION_STAGES` — already introspectable data. |
+
+---
+
+## 1. The slices
+
+### M6.0 — measure, before anything is built · *XS*
+
+The arc's own discipline: three numbers this plan should not guess.
+
+- **Record the a11y baseline.** Build, run `node scripts/a11y-audit.mjs`, read the count. M6.4 is
+  sized from that number and currently nobody knows it.
+- **Measure the worst-case permalink payload** against research 07 §6's ~2 kB warning: the sandbox
+  with a declared product, a multi-point dragged cut, a sheet offset and a camera. If it is over,
+  the schema changes before it is written, not after.
+- **Walk the app by keyboard only** and record where it stops.
+
+**Gate:** the three numbers are in this file.
+
+> **DONE — and two of the three resize the slices below.**
+>
+> **(1) a11y: 2 findings, 2 nodes — and both are structural.** The first run of the audit this app has
+> ever had (`PLAYWRIGHT_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium node scripts/a11y-audit.mjs
+> contour-integration`) reports `landmark-one-main` and `page-has-heading-one`, one node each,
+> moderate. Confirmed from the DOM: **`main: 0, h1: 0, h2: 7, nav: 1`** — seven card headings starting
+> at level 2 with no level 1 above them, and no `<main>`. **No `region` findings at all**, which the
+> sibling baselines are dominated by. For scale: riemann-map 6, argument-principle 16, faber-transform
+> 19. **This is the healthiest page in the suite bar the five that are clean**, so **M6.4 is `S`, not
+> `S–M`**, and its baseline should land at `{}` rather than at a recorded residue.
+>
+> **(2) The permalink fits, and rounding is most of the headroom.**
+>
+> | payload | full URL | hash | JSON |
+> |---|---|---|---|
+> | gallery link (`{mode, record, fixture}`) | **178 B** | 108 B | 51 B |
+> | sandbox worst case, floats at 4 dp | **960 B** | 890 B | 637 B |
+> | the same, floats unrounded | **1 670 B** | 1 600 B | 1 170 B |
+>
+> Worst case = a hand-drawn dogbone (4 pieces with `side` tags), a three-factor declared product with
+> per-factor windows and a sheet offset, two dragged cuts with midpoints, an off-origin camera and a
+> contrast mode. Base64 costs ~1.4×, so research 07 §6's ~2 kB warning is a **~1.4 kB JSON budget**.
+> Rounding to displayed precision is **74 % of the headroom** — not cosmetic, and it has to be in the
+> schema from the first commit rather than retrofitted after a few drags have widened every float.
+>
+> **(3) The keyboard walk is healthier than the missing baseline suggested — 43 stops in sandbox, 27
+> in gallery, wrapping cleanly with no trap and no dead end.** Every control is reachable: the mode
+> toggle, the integrand field, the presets, the templates, the parameter sliders, the scrubber, the
+> contrast toggles, both `<select>` pickers and the derivation's `<summary>`. Accessible names are
+> real and live — the parameter sliders read `"a = 2"`, `"b = 1"`. *(I had flagged them as unnamed
+> from a probe that read `aria-label ?? textContent`; an `<input>` has no text content, so that was
+> the probe's bug, not the app's. Checked before it reached this file.)*
+>
+> **The one substantive gap it did find: two of three canvases carry no accessible name.**
+>
+> | canvas | role | name | tabindex |
+> |---|---|---|---|
+> | `ink` | `application` | the full pan/zoom/grab instructions | `0` |
+> | `gl` (phase portrait) | — | — | — |
+> | `accCanvas` (the accumulator) | — | — | — |
+>
+> `gl` is defensible — it sits behind `ink`, which `attachCanvasA11y` already names as the interactive
+> surface with `render: glCanvas` — but it should say so with `aria-hidden` rather than merely be
+> unnamed. **`accCanvas` is not defensible**: the head-to-tail vector sum is research 02 §8's **P0
+> item 2**, the panel that document calls the hero, and it is completely unannounced. It is exactly
+> the `role="img"` static-view case `@cas/ui`'s `attachCanvasA11y` was written for.
+>
+> **(4) One thing the walk raised that is NOT M6's.** The app's cold start is the **sandbox**, and
+> research 07 §7.2 rule 1 is *"Example-first, sandbox last … the sandbox is reachable but never the
+> landing state."* It does open a *solved* preset (`1/z`, `∮ = 2πi`), so it is not the empty-plane
+> anti-pattern — but the landing mode is a **gallery-organisation** question, which is
+> [M7](M7-plan.md)'s subject, not this milestone's. Recorded here so it is not lost.
+
+### M6.1 — the shell gets a state object, and its first test · *M*
+
+The enabling slice, and no user-visible change.
+
+- `currentState()` / `applyState(s)` over `mountApp`'s locals; the closure keeps owning them.
+- `test/shell.test.ts` (jsdom), on QD's `qd-url-state.test.ts` model.
+- **A proven no-op**, by M5.6b's discipline: dump every record × fixture's rendered result before
+  and after and diff byte for byte, rather than inferring it from a green suite.
+
+**Gate:** `applyState(currentState())` is a fixed point for all 28 records and for a sandbox state
+carrying a declared branch, a sheet offset and a dragged cut.
+
+> **DONE — and the gate as written is too weak to be worth passing, which a mutation sweep is how we
+> know.**
+>
+> **(1) The driver found a bug before it did the job it was built for.** Changing the argument window
+> replaced the whole cut system with `buildDeclaration`'s canonical one, whose single point carries
+> `SINGLE_POINT_ID` — `"b"` — while the reader's is `"b1"` (`addBranchPoint` mints `b1`, `b2`, …; the
+> keyhole template seeds `b1`). So the id `declaration.pointId` names stopped existing,
+> `declaredOrder()` went null, and the declared factor was **silently dropped** while the integrand
+> box went on holding the COFACTOR under its `R(z) =` label — whereupon the app integrated `R(z)` as
+> the whole integrand and printed a plausible number beside it. That is the same defect the
+> "undeclare" button's own comment records a browser pass finding, reached through a different door,
+> and it meant **M5.1c's demonstration did not happen**: switching to the principal determination is
+> supposed to move the cut under the R → ∞ circle and refuse, and instead the refusal that appeared
+> came from an orphaned cut nobody owned. Fixed in its own commit with `setCutFromWindow`, which
+> rebuilds the cut's GEOMETRY on the point the declaration names and nothing else.
+>
+> **(2) A FIXED POINT ALONE PROVES ALMOST NOTHING.** The first version of the test asserted exactly
+> this gate's sentence — apply the state the app is already in, nothing moves — and **11 of 20
+> mutants survived it**. Ten were one defect, not ten: *a round trip that is CONSISTENTLY lossy is
+> still a fixed point.* A `currentState` that forgets `expr` and an `applyState` that never reads it
+> agree perfectly with each other, and every state the test could reach was already inside the lossy
+> image. Taken literally the gate is satisfied by `currentState = () => ({})` and
+> `applyState = () => {}`.
+>
+> **So the property is the one a permalink actually needs: restore a state the app is NOT in, and
+> land on the state that was APPLIED.** Two states as unlike as this app gets — A the sandbox with a
+> declared factor, sheet 2, a dragged cut and every view field off its default; B a record at a
+> **non-primary** fixture with both kinds of override moved, no declaration, a different integrand
+> and the view back at default — applied in both directions, with every field differing between them,
+> which is what makes each field's loss observable rather than mutually cancelling. **20/20** killed
+> after the repair. M6.2's gate should be read the same way: *"encode → decode → the same verdict"* on
+> a state the app already holds is the same trap.
+>
+> **(3) In gallery mode the contour is an OUTPUT, not an input** — `adopt` takes `run.contour`, and
+> the record rebuilds it from `(record, fixture, bindings, geometry)` on every run. A state carrying
+> a stale contour is corrected rather than obeyed, which is right: a family parameter changes the
+> integrand as well as the geometry, so the contour cannot be restored independently of the bindings
+> that produced it. This is §M6.2's *"a gallery link is `{record, fixture}` and nothing else"*
+> arriving as a property of the shell rather than as a size optimisation, and the test pins it
+> directly — hand the record the sandbox's keyhole and it still draws its own contour.
+>
+> **(4) The no-op is proven, not inferred.** The whole visible rail and strip, driven through 28
+> records × every fixture, 7 expressions × 10 templates, and declare → four orders → two windows →
+> three sheets → undeclare: **byte-identical before and after, 710 lines / 1,236,480 bytes.**
+>
+> **(5) `mountApp` runs under jsdom**, which is what makes any of this reachable from the node gate.
+> Its stage is built inside a `try` and the fatal boundary catches WebGL2's absence; `getContext` is
+> stubbed to `null` and the drawing code takes the guarded path it already has. `jsdom` joins the
+> app's devDependencies (`packages/ui` was the only jsdom project before this).
+>
+> **What this does NOT cover, said out loud:** under jsdom `stage` is `null`, so the `stageKey`
+> bookkeeping around `stage?.setIntegrand` is exercised but the GL call is not. `pnpm test:browser`
+> (114 tests, 36 shader compiles, green) proves the GLSL still compiles for every preset and record;
+> it does not mount the shell, so nothing yet asserts that `applyState` hands the stage the program
+> its state implies. That is zero risk today — no app path calls `applyState` until the codec exists —
+> and becomes real in M6.2, which is where the check belongs. M6.3 needs a browser-mounted shell
+> anyway, to composite the three canvases.
+>
+> *(Closed: §M6.3's `test/figureInk.browser.test.ts` mounts the shell in Chromium and drives the real
+> export, so the suite is 119 tests and the gap above is no longer open.)*
+
+### M6.2 — `#vs=`, verified by verdict · *M*
+
+- `src/shell/viewState.ts` on `@cas/interchange`, namespace `"ci"` — the 8-app idiom.
+- **Semantics, not samples** (research 07 §6): the contour serialises as its piece list, never as
+  sampled points. Resolution-independent, far smaller, and it survives a schema bump.
+- **Diff from defaults**: a gallery link is `{record, fixture}` and nothing else.
+- **Re-validation on restore**: the restored state goes back through the same loader and `analyse`
+  path the app always uses. An unknown record id, or a declaration that fails `splitCheck`, **refuses
+  and says so** rather than drawing something plausible.
+
+**Gate:** for all 28 records × every fixture, encode → decode → re-run → **identical closed form and
+identical ledger claims** (§0.1: by verdict, not by field). Plus sandbox states with a declared
+branch. A truncated or foreign hash refuses by name.
+
+> **M6.2a — MEASURED, and it corrects §M6.0's second measurement.** That one was taken before
+> `ShellState` existed, by building a payload by hand; run against the real state object the numbers
+> are 2.2× larger and the saving is in a different place. (JSON bytes, then base64 at 4/3 plus `#vs=`,
+> plus a 70-byte origin.)
+>
+> | payload | JSON | 4 dp | URL |
+> |---|---|---|---|
+> | boot (sandbox, `1/z`, circle) | 904 | 868 | **1 234** |
+> | gallery record, full state | 1 375 | 1 346 | **1 870** |
+> | gallery link, `{record, fixture}` | 42 | 42 | **130** |
+> | sandbox, declared keyhole, full | 1 936 | 1 893 | **2 598** |
+> | **worst case, full** | 2 159 | 2 073 | **2 838** |
+> | worst case, contour as a RECIPE | 1 109 | 1 059 | 1 486 |
+> | worst case, recipe + diff from defaults | 783 | 751 | **1 078** |
+> | declared keyhole, recipe + diff | 453 | 453 | **678** |
+>
+> Worst case = a dogbone, two branch points, side tags, a three-vertex dragged cut on each, a declared
+> factor with a `log³` power and an irrational constant, sheet 2, `convention: "custom"`, three
+> bindings, two geometry overrides, an off-origin camera, a contrast mode and a scrub position.
+>
+> **Three findings, each changing what gets built.**
+>
+> **(1) Serialising the contour verbatim puts the worst case OVER research 07 §6's ~2 kB warning** —
+> 2 838 B — and even an ordinary declared keyhole reaches 2 598 B. The contour is **1 098 of the
+> 2 159 JSON bytes**, and the biggest record's contour alone is 1 288 B (`series-cot-kernel`).
+>
+> **(2) Rounding is NOT the headroom.** §M6.0 put rounding to displayed precision at "74 % of the
+> headroom"; measured on the real state it is **4.0 %** (2 159 → 2 073). The bulk is *structural* —
+> piece ids, names, roles, colours, the `params` record — not float digits. So rounding stays a nicety
+> and is not load-bearing, and the schema does not have to be built around it.
+>
+> **(3) What IS the headroom: the contour is never serialised as geometry, in either mode.** In
+> gallery mode it is derived (M6.1's finding) and carried as nothing. In the sandbox every contour is
+> `translate(TEMPLATES[id].build() with params, shift)` — verified by reading every assignment to
+> `contour` in `app.ts`: a template build, `setParam` (params only), and `translateContour` (a rigid
+> shift), and nothing else. So it is carried as that RECIPE, which is research 07 §6's
+> *semantics-not-samples* rule applied one level further up than this plan asked: the piece list is
+> already sample-free (the model has no sampled-point representation at all — `contour/model.ts`'s own
+> header says so, so that half of the rule needs no code), and the recipe drops the *derived geometry*
+> too. **2.6× smaller, and the worst case lands at 1 078 B.**
+>
+> The recipe needs the template id, so `ShellState` gains `contourSource: {template, shift} | null` —
+> provenance, not a second copy of the geometry, with `null` meaning "not from a template" (gallery
+> now, the M7 pen tool later) and the piece list as the fallback for it. Falsifiable on ENCODE: rebuild
+> from the recipe and compare against the live contour; carry the pieces if it does not reproduce.
+
+> **M6.2b–c DONE.** `src/shell/viewState.ts` on `@cas/interchange`, namespace `"ci"`; the sandbox's
+> template table extracted to `src/shell/templates.ts` on the second-consumer rule, because the codec
+> is DOM-free and cannot import a module that builds a WebGL2 stage; `ShellState` gains
+> `contourSource` provenance, kept in step by one `moveContour` helper so the recipe and the geometry
+> cannot drift; and the shell reads the link once at boot and writes it with `replaceState` on settle,
+> with a copy-link control that reports WHY when a state cannot be linked to.
+>
+> **The gate passes as stated** — 28 records × every fixture, encode → decode → re-run → identical
+> closed form and identical ledger rows, every decode landing in a FRESH default so §M6.1's
+> consistently-lossy trap cannot pass it. Measured payloads match §M6.2a: a gallery link is 60 B of
+> hash, the declared keyhole 608 B, the worst case 1,008 B.
+>
+> **Verified in a real browser** (Chromium, the built `dist` over a static server), because jsdom has
+> no clipboard and no real URL: a gallery link is **126 B** of full URL, `navigator.clipboard` writes
+> it and reads back identical to the address bar, reopening it in a fresh page gives a byte-identical
+> rail with no refusal, a wheel zoom reaches the URL and reopens identically, and a link naming an
+> unknown record shows the refusal with its reason. (The one console 404 is the throwaway server's
+> missing `/favicon.ico`, not the app's.)
+>
+> **Four findings.**
+>
+> **(1) Two camera bugs, in opposite directions, and only a real browser found the second.**
+> `frameContour()` after *applying* a link silently discarded the sharer's camera — caught in the
+> draft, since the link carries the view and reframing overrode it. Then a Playwright pass found the
+> converse: `frameContour()` runs AFTER the recompute that writes the URL, so opening a record left
+> the **address bar** one step behind, `halfHeight 1.2` in the bar against 4.8 on screen. The copy
+> button hid it by writing its own hash first — so the *shared* link was right while the URL a reader
+> could select and paste was stale, which is why nothing noticed. `screen()` cannot see a camera, so
+> no jsdom test could either until one read the hash.
+>
+> The repair also had to be one place rather than three: keyboard pan/zoom and **wheel zoom run
+> outside any gesture**, so `endGesture` never saw them, and a wheel has no end event at all — which
+> makes per-event writing unsafe, because `replaceState` is rate-limited by the browser (Safari drops
+> calls past roughly a hundred in thirty seconds) and would silently stop. So `syncHash` coalesces on
+> a 250 ms timer and every caller simply says "this changed". Verified in Chromium: twelve wheel ticks
+> reach the URL once, and the result reopens byte-identically.
+>
+> **(2) A refusal is not an absence.** `decodeShell` returns `null` for "no link" and a named reason
+> for "a link I cannot honour", and the shell shows the second in its own box — not `errorBox`, which
+> the next successful parse clears, so a refusal would vanish a moment after appearing. The box
+> survives until the reader's first action, which is when the message stops being about their session.
+>
+> **(3) 23/27 on the first mutation sweep, and all four survivors were real.** `enc-params` (a sandbox
+> contour's parameter values) and `dec-shift` (the recipe's translation) both hid behind the same gap:
+> no test built a contour that was *genuinely* a moved template at moved parameters, so the only shift
+> test was the refusal path. `enc-record-sandbox` (the record the picker shows in sandbox mode) changes
+> no number, so no verdict comparison can catch it and it needed a field assertion. And **`dec-template`
+> pinned the outcome without pinning the reason**: removing the unknown-template check still refuses,
+> because `fromRecipe` returns null a few lines later — but the message becomes "names a parameter
+> template 'spiral' does not have", blaming a parameter for a missing template, and the test only
+> asserted that the id appeared. That is §M5.2's finding met again. **27/27** after the repair.
+>
+> **(4) The recipe's verification is what makes provenance falsifiable.** `contourOut` rebuilds from
+> the recipe and compares against the live contour, refusing rather than minting a link that would
+> open a different shape — the same posture the ledger takes to a record's own declarations. A sweep
+> that removes the check is killed by a state whose source and geometry disagree.
+
+### M6.3 — the figure carries its own permalink · *S–M*
+
+- `@cas/export`'s `injectPngText`: `Software`, and `cas:state` = the permalink (the house
+  convention, 6 apps).
+- Composite the three canvases (Riemann-Map's combined plate).
+- Sync `ClipboardItem` inside the user gesture (the plotter's form).
+- **The honest bit:** the metadata carries the **verdict** too, so a figure exported from an argument
+  that does not close says so in its own bytes rather than looking like one that does.
+
+**Gate:** a PNG round-trips — `readPngText` → `decodeViewState` → the same verdict as the session it
+came from.
+
+> **M6.3a MEASURED — and the first finding changed the slice.**
+>
+> **(1) The GL canvas cannot be read at all.** `glStage.ts` creates its context without
+> `preserveDrawingBuffer`, so `drawImage(canvas.gl, …)` after the browser has composited returns an
+> empty buffer: probing the live page, the GL layer reads back **1 distinct colour** where the ink
+> layer reads 44. Every exported figure would have been missing the phase portrait — the whole
+> backdrop — and would have looked merely plain rather than wrong. **Re-rendering synchronously
+> before the read does NOT fix it** (measured: still 1); the flag does (601). So the context changes,
+> and the synchronous render stays anyway, because the persisted buffer holds the LAST frame and a
+> `requestAnimationFrame`-driven redraw may not have happened since the state changed.
+>
+> **Its cost is 0.6 %, which is noise.** A continuous 60-frame pan over the stage, best of three, is
+> **20.00 ms/frame without the flag and 20.12 ms with it** — under SwiftShader software rendering,
+> which is the worst case for a buffer copy. Recorded because "an extra copy per composite" sounds
+> expensive and is not.
+>
+> **(2) The plan's metadata convention describes the doc, not the code.** `@cas/export`'s README and
+> its own tests specify `Software` + `cas:state`, and §0.6 called that "the house convention, 6
+> consumers". Measured, it has **one adopter**: Riemann Map. Argument Principle writes `ap:url`, 2D
+> Electrostatics `2de:url`, 2D Hydrodynamics `2dh:url`, Complex Dynamics `cdjs:state`, and the
+> plotter takes a caller-supplied record. This app writes the DOCUMENTED key — following the majority
+> would entrench an accident, and one reader should be able to open any figure in the suite — and the
+> discrepancy is left recorded rather than fixed from inside one app.
+>
+> **(3) The plate is not a naive stack.** On screen the accumulator is 744 px wide against the
+> stage's 1048, because its side panel takes the rest of the strip. Stacking them at their own sizes
+> would leave a ragged right edge and imply the trail stops early, so the accumulator is drawn at the
+> stage's width keeping its own aspect — legitimate because its axes are `Σ f·Δz`, not the plane, so
+> there is no shared scale to preserve.
+
+> **M6.3b–c DONE.** `src/shell/figure.ts`: `figureLayout` and `figureCaption` are pure and run in the
+> node gate, `drawFigure` is the thin canvas half and runs in the browser suite — the split
+> `ui/accumulator.ts` already uses. Two controls, **Save figure** and **Copy figure**, the latter
+> passing the export PROMISE into `ClipboardItem` so the blob resolves inside the user gesture
+> (Safari's requirement, and the plotter's form).
+>
+> **The caption goes through the same gate as the result card**, which is why `integralRefusal` was
+> lifted out of `renderResult` into `engine/ledger.ts`: a caption that re-derived "may a number be
+> shown?" would be one edit away from printing a value on a shareable image that the app itself
+> withholds. The verdict is carried BOTH ways — stamped in `cas:verdict` and **drawn on the plate** —
+> because the plan asked only for the metadata and nobody reads metadata.
+>
+> **IT TOOK THREE ATTEMPTS TO WRITE A TEST THAT IS NOT VACUOUS**, and that is the slice's real
+> lesson. (i) "the plate's upper band carries > 12 distinct colours" passes with the portrait
+> absent — the plate is drawn at 2× and `drawImage` interpolating the ink's 44 antialiased shades
+> manufactures hundreds; both runs read 601, the sampler's cap. (ii) A control plate with the GL
+> layer blanked, required to differ from the real one, reads **97.9 % in BOTH directions**: the real
+> plate has been through a PNG encode and an `Image` decode while the control was drawn straight to
+> a canvas, so they disagree almost everywhere for reasons unrelated to the portrait, and a tolerance
+> did not rescue it. (iii) What works is asserting the PRIMITIVE — `canvas.gl` reads back > 12
+> distinct colours — which fails at 1 with the flag removed and passes at 601 with it, while the
+> synthetic `drawFigure` tests assert exact pixels for the compositing order. A number is only
+> evidence if nothing else could have produced it.
+
+### M6.4 — a11y to the gate · *S* — sized by M6.0, which found two findings and one real gap
+
+- **`<main>` and one `<h1>`** — the two axe findings, and the whole of them.
+- **`accCanvas` gets `attachCanvasA11y` with `role: "img"`**, and `gl` gets `aria-hidden`. The
+  accumulator is the one canvas carrying the app's P0 picture and the one with nothing said about it.
+- **The stage's text alternative is GENERATED FROM THE LEDGER**, never hand-written: *"a rectangle
+  over the phase portrait of `e^{−z²+ibz}`; four pieces; encloses no singularities; the argument
+  closes and the integral is `√π·e^{−1/4}`."* Free, because the ledger already says every clause of
+  it — and it cannot drift, because it is derived rather than written.
+- `prefers-reduced-motion`, currently unhonoured here.
+- Baseline to **`{}`** — M6.0 says there is no residue to justify.
+
+**Gate:** `node scripts/a11y-audit.mjs --strict` passes for this page; a keyboard-only walk reaches
+every control; the stage announces its verdict.
+
+> **DONE, and the page now audits CLEAN — zero rules, zero nodes,** with its baseline recorded as
+> `{}` and `--strict` passing. Re-measured first: still exactly the two findings M6.0 reported, so
+> none of M6.1–M6.3's new controls added any.
+>
+> **Both axe findings are fixed by two elements.** The grid holding the stage, the rail and the strip
+> became a `<main>` — it was a bare `div` — and the bar's brand became the page's `<h1>`, above the
+> page's seven `<h2>`s (the rail's six cards plus the strip's accumulator title). The CSS cancels the heading's own size and margin, so this is a
+> document-structure change and not a visual one.
+>
+> **The accumulator is named, and BOTH canvas descriptions are generated from the ledger.** Research
+> 02 §8 makes the head-to-tail partial sum this app's P0 picture and it was completely unannounced;
+> it now carries `role="img"` and a sentence naming its step count and its endpoint. The stage's
+> alternative keeps its key instructions as a shared constant and appends a generated description —
+> the piece count, the enclosed count, the value and the ledger's headline, every clause from
+> something the engine computed, and refreshed on each recompute. A hand-written alternative would
+> have drifted the first time a record changed.
+>
+> **Three findings.**
+>
+> **(1) The suite nav looked first and read LAST**, and a comment in `app.ts` claimed the opposite:
+> *"mounted before the stage so it sits above it in the document order a screen reader walks"*.
+> `mountNavHeader` ends with `container.appendChild(nav)`, so the nav was the final child of the
+> shell — after the bar, the stage, the rail and the strip — while `.cas-nav` is `position: fixed`
+> and draws at the top. A screen-reader user reached "Back to the suite launcher" only after the
+> entire rail. It now has its own host prepended before `<main>`, which is also what lets the shell
+> be a landmark at all: `<main>` is not where the site navigation belongs.
+>
+> **Checked rather than assumed, and the other adopters are FINE.** 2D Electrostatics (both pages),
+> Hele-Shaw (both), Potential Theory and 2D Hydrodynamics each call `mountNavHeader` immediately
+> before `app.append(bar, stage)`, so their nav is the first child. This app called it *after*
+> filling the shell. So the defect is not four broken apps but one function whose contract is
+> positional and unstated — `mountNavHeader` should `prepend`, or say that the caller must call it
+> first. Recorded as [ADR-0016](../DECISIONS.md) action item 5, against ADR-0032.
+>
+> **(2) `gl`'s `aria-hidden` was already set**, by `@cas/ui` — `attachCanvasA11y` marks its `render`
+> canvas hidden. §M6.0's table listed it as unnamed and recommended adding one, which was reading the
+> role and name columns and not this attribute. Nothing to do; the table was wrong.
+>
+> **(3) `prefers-reduced-motion` has NOTHING TO ACT ON here, so it is deliberately not honoured.**
+> Measured: `app.css` contains **zero** `transition`, `animation` or `@keyframes` rules, and the
+> single `requestAnimationFrame` in the app is a draw COALESCER, not a loop — the app paints on
+> interaction and never on its own. Research 07 rule 7 is satisfied vacuously, and adding a media
+> query with nothing inside it would be a claim to have addressed something that was never there.
+> If M7's drill or any future surface animates, the rule applies then and the measurement above is
+> the thing to re-run.
+>
+> Guarded where it BLOCKS, too: `scripts/a11y-audit.mjs` is a non-blocking CI job, so the four
+> structural invariants — one `<main>`, one `<h1>`, the nav before the landmark, every canvas named
+> or explicitly hidden — are asserted in `test/shell.test.ts`, which does block. jsdom has no axe but
+> it has a DOM, and all four are DOM facts.
+>
+> **The keyboard walk is clean, and my first re-measurement of it was wrong in exactly the way
+> §M6.0's was.** A DOM probe reading `aria-label ?? textContent` reported one unnamed `<input>`; read
+> from the real accessibility tree over CDP it is **45 interactive nodes in sandbox and 29 in
+> gallery, none unnamed**, because a wrapping `<label>` names an input that carries no `aria-label`.
+> The sliders read `"R = 1.5"`, `"a = 2"`, `"b = 1"`. Second time this exact probe bug has been made
+> in this milestone; the accessibility tree is the instrument, not the DOM.
+>
+> **The sweep is 24/25 (one recorded equivalent), and the three first-pass survivors were all real.**
+> Nothing asserted that `figureCaption` prints *no number* when there is no quadrature — which is the
+> defect the review had just fixed, so the sweep found the missing test rather than the missing code.
+> Nothing asserted the accumulator's step COUNT (the description would have read "over 0 steps" and
+> passed). And nothing asserted that a pole is counted only where its winding was DECIDED: the test
+> written for it moves the circle by its OWN radius so the pole lands exactly on it — a hardcoded
+> shift of 1 merely encloses the pole at any other radius, and *did*, passing for the wrong reason
+> until it was measured. That third mutant (`w.decided &&` removed) then turns out to be
+> **equivalent**: every `decided: false` path in `kernel/winding.ts` returns `n: 0`, so the two
+> conditions agree. The guard stays, with that reason beside it — a description should not depend on
+> an invariant established in another module.
+>
+> **A `@cas/export` defect surfaced in the review and is fixed in the package** ([ADR-0016](../DECISIONS.md)
+> action item 3): `tEXt` is Latin-1, so every consumer's em-dash and this app's own `= 2π√3/3` were
+> being stored as `?`. `injectPngText` now picks `iTXt` per entry; the package test that asserted the
+> coercion as intended behaviour is replaced. Two smaller review findings: `figureBytes` captured its
+> caption and its permalink on opposite sides of an `await` (a recompute landing between would stamp
+> a verdict the drawn caption disagreed with), and `describeStage` said "enclosed" where it counts
+> poles of non-zero winding, which D6's exterior theorem re-weights by `n − σ`.
+
+> **This completes M6's gate.** The teaching layer follows as [M7](M7-plan.md).
+
+---
+
+## 2. Decisions taken
+
+Recorded here rather than left to be re-derived, because §0.5's finding is precisely that a scoping
+decision went unrecorded and was then invisible for two milestones.
+
+1. **M6 is split.** The teaching layer (contrasting triads, the faded drill) and the pen tool move to
+   **[`M7-plan.md`](M7-plan.md)**, with the gate PLAN never gave them. M6 becomes exactly its own
+   gate: published, permalinks round-trip, keyboard and screen-reader pass. §0.3 is the reason — a
+   scope item with no completion criterion cannot be finished, only abandoned or shipped on
+   judgement.
+
+2. **The pen tool is built, in M7.** It was M1's, deferred; the app README promises it; drill stage
+   (iv) — *"you draw freely"* — is thin without it. Research 07 rule 6 supplies the grammar outright.
+
+3. **The Pólya work/flux toggle is DROPPED.** Scoped into M3 ("round 3": *draw the conjugate field
+   `f̄` on the Stage and read `∮f dz` as (work along) + i(flux across)*), never built, and never
+   mentioned again — §0.5. It is now dropped **deliberately and on the record**, for three reasons:
+
+   - Its stated job was *"it explains **why** the vanishing arcs vanish"*. That is already carried,
+     and carried better, by the arc's own KILL row — which shows the certified bound, its exponent,
+     and what it does in the limit, as a number rather than as a picture to be read.
+   - It is a **second picture of `f`**, and research 02 §8's own anti-pattern list warns that the
+     background picture is a textbook seductive detail: *"Do not let GPU domain colouring dominate:
+     it is a picture of `f`, not of the integral."* A conjugate-field overlay is more of the same
+     surface competing with the accumulator, which is the hero.
+   - It would be the app's first visualisation with **no falsifiable claim attached** — nothing in it
+     the engine could contradict. Every other surface in this app renders evidence the ledger
+     produced.
+
+   Recorded in [`PLAN.md`](PLAN.md) §7's *Deferred* list so it is not silently re-inherited. It is a
+   drop, not a deletion of the idea: research 02 §8 P1 item 14 stands, and a future milestone that
+   wants it should re-argue it against the three points above.
+
+---
+
+## 3. Risks
+
+| # | risk | mitigation |
+|---|---|---|
+| R-a | **2,511 untested lines are where three of four workstreams land.** | M6.1 exists to retire this before anything else touches the file, with a proven-no-op refactor rather than a rewrite. |
+| R-b | **A permalink that silently drops branch state restores a different integral behind the same picture** (§0.1). | The round trip is checked by verdict across the whole corpus, and restore re-validates through the loader rather than trusting the payload. |
+| R-c | **The teaching layer had no falsifiable completion criterion** (§0.3). | Retired: split to [M7](M7-plan.md), which adopts the permalink-addressable-stage gate. M6 is now exactly its own gate. |
+| R-d | **The accumulator browser test carries 9 committed screenshots.** | Any export-palette indirection (QD's `_pal`) churns them; change the palette path in its own commit so the churn is reviewable. |
+| R-e | ~~`--strict` a11y is not enforced for this page, and its count is unknown.~~ | **Retired by M6.0:** measured at 2 findings / 2 nodes, both structural, with no residue to justify. |

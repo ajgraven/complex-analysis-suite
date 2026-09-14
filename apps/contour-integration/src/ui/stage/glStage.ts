@@ -22,7 +22,7 @@ export class GLStage {
   private uniforms: Record<string, WebGLUniformLocation | null> = {};
 
   constructor(private readonly canvas: HTMLCanvasElement) {
-    const gl = canvas.getContext("webgl2", { antialias: false, alpha: false });
+    const gl = canvas.getContext("webgl2", { antialias: false, alpha: false, preserveDrawingBuffer: true });
     if (!gl) throw new Error("WebGL2 is not available in this browser.");
     this.gl = gl;
     this.initGeometry();

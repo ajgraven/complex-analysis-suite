@@ -37,6 +37,7 @@ import { Exponent } from "./exponent.js";
 import { formatFrac, formatSqrtExt } from "./formatExact.js";
 import { LogPart, formatLogPart } from "./logPart.js";
 import type { AlgebraicPole } from "./algebraic.js";
+import { DENOMINATORS, unitRoot } from "./unitRoot.js";
 
 /** The branch factor `z^α`, and the determination it is read in. */
 export interface PowerFactor {
@@ -62,50 +63,6 @@ export type BranchResidue =
 
 /** Complex conjugate of `a + b√d`: conjugate each Gaussian coefficient, since `√d` is real. */
 const conjugate = (x: SqrtExt): SqrtExt => SqrtExt.of(x.a.conj(), x.b.conj(), x.d);
-
-/**
- * `e^{iπ/m}` for the five `m` whose primitive root lives in one quadratic extension of ℚ(i).
- *
- * These are not a convenient subset — they are all of them. `ℚ(i)(ζ)` for `ζ = e^{iπ/m}` is a
- * quadratic extension exactly when `m ∈ {1, 2, 3, 4, 6}`; `m = 5` needs degree 4 and `m = 7` degree 6.
- */
-const PRIMITIVE: Readonly<Record<number, SqrtExt>> = {
-  1: SqrtExt.fromGauss(Gauss.ONE.neg()),
-  2: SqrtExt.fromGauss(Gauss.I),
-  3: SqrtExt.of(Gauss.rat(1n, 2n), Gauss.rat(0n, 1n, 1n, 2n), 3n),
-  4: SqrtExt.of(Gauss.ZERO, Gauss.rat(1n, 2n, 1n, 2n), 2n),
-  6: SqrtExt.of(Gauss.rat(0n, 1n, 1n, 2n), Gauss.rat(1n, 2n), 3n),
-};
-
-/** `e^{i(k/m)π}` exactly, or null when `m` is outside the representable set. */
-export function unitRoot(k: bigint, m: bigint): SqrtExt | null {
-  const base = PRIMITIVE[Number(m)];
-  if (base === undefined) return null;
-  // `e^{iπ/m}` has order `2m`, so reduce the exponent first: it keeps the intermediate products
-  // small and makes a negative `k` no different from a positive one.
-  const period = 2n * m;
-  const e = ((k % period) + period) % period;
-  let acc = SqrtExt.ONE;
-  for (let j = 0n; j < e; j++) {
-    try {
-      acc = acc.mul(base);
-    } catch {
-      return null;
-    }
-  }
-  return acc;
-}
-
-/**
- * The denominators to try, smallest first — READ OFF {@link PRIMITIVE} rather than written again.
- *
- * A second list would be a second source of truth, and the kind that fails silently: adding a
- * denominator to it without a primitive root just makes every candidate at that denominator fail to
- * verify, so the list would look load-bearing while doing nothing.
- */
-const DENOMINATORS: readonly bigint[] = Object.keys(PRIMITIVE)
-  .map((k) => BigInt(k))
-  .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 
 /**
  * The POSITIVE REAL modulus `z₀·conj(ζ)` for a candidate root of unity `ζ` — or null.

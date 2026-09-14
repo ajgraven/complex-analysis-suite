@@ -16,6 +16,7 @@
 // so the bound behaves like `R^{p−q+1}`, which vanishes exactly when `deg Q ≥ deg P + 2`. The
 // textbook hypothesis falls out of the arithmetic instead of being checked alongside it.
 import { Frac, QiPoly, piUpper } from "@cas/exact";
+import { dampedArcIntegral } from "./linearMinorant.js";
 import { bound, refuse, type Certificate } from "@cas/rigor";
 import { fracCmp, sqrtDown, sqrtUp } from "./ratBound.js";
 
@@ -30,8 +31,16 @@ export interface ArcBound {
   readonly asymptotics: ArcAsymptotics;
   /** The bound behaves like `R^exponent`. Negative ⇒ it vanishes. */
   readonly exponent: number;
-  /** `deg Q − deg P`, the quantity the classical hypothesis is stated in. */
-  readonly degreeGap: number;
+  /**
+   * `deg Q − deg P`, the quantity the classical hypothesis is stated in.
+   *
+   * **Absent when the decay is not governed by a degree gap.** `wedgeArc.ts` bounds `λ·e^{w zⁿ}`,
+   * which has no rational cofactor at all: its decay comes from `n`, carried in {@link exponent}.
+   * Reporting `0` there would name a quantity that is not the hypothesis — and `0` is a meaningful
+   * value elsewhere in this file (it is what makes Jordan's bound fail to vanish), so it could not
+   * be read as "not applicable".
+   */
+  readonly degreeGap?: number;
   readonly certificate: Certificate;
 }
 
@@ -210,6 +219,9 @@ export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac):
  * Reporting that plainly is the point — it is the app's demonstration that a wrong contour fails for
  * a reason, rather than merely failing.
  */
+/** The semicircle's angular extent, in units of π — the range Jordan's bound is taken over. */
+const SEMICIRCLE = Frac.ONE;
+
 export function jordanArcBound(
   gNum: QiPoly,
   gDen: QiPoly,
@@ -268,7 +280,17 @@ export function jordanArcBound(
 
   const maxG = coefficientUpperBound(gNum, R).div(denLow);
   const absA = a.n < 0n ? a.neg() : a;
-  const value = piUpper().div(absA).mul(maxG);
+
+  // **THE ONE PREDICATE (M5.2).** Jordan's whole content is `∫₀^π e^{−κ sinθ}dθ ≤ π/κ`, and that is
+  // `dampedArcIntegral` at a range of π in the `sin` face — the SAME call the wedge lemma makes, in
+  // the same module, so `sin ψ ≥ 2ψ/π` is asserted in exactly one place in the engine. The constant
+  // is `1` here (the semicircle needs the symmetry fold), so this is byte-for-byte the bound it
+  // replaces; `test/jordanUnified.test.ts` pins that it is.
+  const damped = dampedArcIntegral(SEMICIRCLE, "sin");
+  if (damped.constant === null) {
+    return { R, asymptotics: "bounded", exponent: 0, degreeGap, certificate: damped.certificate };
+  }
+  const value = damped.constant.mul(piUpper()).div(absA).mul(maxG);
   const asymptotics: ArcAsymptotics = degreeGap >= 1 ? "vanishes" : "bounded";
 
   return {
@@ -285,7 +307,8 @@ export function jordanArcBound(
             "Jordan's lemma, with max|g| from the exact ℚ coefficient bound",
             {
               provenance: [
-                { ok: true, text: "∫₀^π e^{−κ sinθ}dθ ≤ π/κ, from sin θ ≥ 2θ/π on [0, π/2]" },
+                { ok: true, text: damped.certificate.claim },
+                { ok: true, text: `established by: ${damped.certificate.method}` },
                 { ok: true, text: `the bound is independent of R, beating plain ML by the factor |a|R` },
                 { ok: true, text: `deg Q − deg P = ${degreeGap} ≥ 1, so max|g| → 0` },
               ],

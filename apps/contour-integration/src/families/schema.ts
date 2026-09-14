@@ -8,8 +8,10 @@
 //
 // GEOMETRY IS THE RUNTIME TYPE, NOT A STRING. The gallery's JSONC writes `"x": "-R"`; this schema
 // reuses `engine/contour/model.ts`'s affine `Scalar`, so the same value that a record declares is
-// the value `resolve()` consumes — no parser, no glue, no second representation to drift. model.ts
-// already records that the affine subset covers every template in the gallery.
+// the value `resolve()` consumes — no parser, no glue, no second representation to drift. That
+// subset covered every template in the gallery until F1, whose wedge needs `R·cos(2π/n)` — a
+// product of two parameters — and so widened `Scalar`'s coefficient to name one; `Scalar`'s own
+// note has the finding, and the reason the form stays affine in every LIVE parameter.
 import type { Level } from "@cas/rigor";
 import type { Geom, LemmaId, PieceRole } from "../engine/contour/model.js";
 
@@ -173,6 +175,30 @@ export interface FamilyPiece {
   readonly bonus?: string;
   /** Pins which limit is meant where the piece runs along a branch cut — never an ε-offset. */
   readonly side?: "above" | "below";
+  /**
+   * A `free` piece whose value is **exactly known and not derived by this contour** (ADR-0042).
+   *
+   * E3's top side is `√π e^{−b²/4}` — the Gaussian, which comes from polar coordinates — and F2's
+   * return ray is `e^{iπ/(2n)}Γ(1+1/n)`, which comes from the real substitution `u = tⁿ`. Under the
+   * v1 schema the only role left for such a piece was `free`, which Pass 3 prices by quadrature at
+   * `≈`: **a perfectly exact argument capped at `≈` by its most certain step**, the inverse of the
+   * failure `@cas/rigor` exists to prevent. The opposite error is worse — a bare `=` launders the
+   * import as a derivation — so the claim and its provenance travel together, which is what every
+   * other certificate in this app already does.
+   *
+   * `method` is REQUIRED and carries the provenance; the derivation renders it as a step beginning
+   * "imported, not derived here". `rigor` is what the record claims and may not exceed what the
+   * import can justify, which `kernel/imported.ts`'s closed set decides rather than a free string.
+   *
+   * **Only on a `free` piece.** A `vanish` and a `residue` piece have their own evidence (a certified
+   * bound; exact arithmetic) and may not claim both; and one on the `target` piece would leave the
+   * solve with nothing to do — importing the answer — which the loader refuses.
+   */
+  readonly knownValue?: {
+    readonly expr: string;
+    readonly method: string;
+    readonly rigor: Level;
+  };
   readonly colour: 0 | 1 | 2 | 3 | 4 | 5;
 }
 
@@ -356,11 +382,38 @@ export interface Family {
 
   readonly branch?: BranchSpec;
 
+  /**
+   * The quasi-periodic STRIP this family's contour lives in — tier E's seat.
+   *
+   * Present means `f = e^{az}·N(e^z)/D(e^z)` and its poles form vertical LATTICES rather than a
+   * finite set (`kernel/expLattice.ts`), so the record has to say which band of them its argument is
+   * about: `e^z = ρ` has solutions every `2πi`, and no engine can pick among infinitely many without
+   * being told. The height is in UNITS OF π, matching how `BranchSpec.argRange` states its window —
+   * `"2"` for E1's `0 < Im z < 2π`, `"1"` for E2's `0 < Im z < π`.
+   *
+   * It is a DECLARATION and it is checked: `stripTheorem.ts` asks the lattice points just outside
+   * the band for their winding numbers, so a contour that encloses one refuses rather than summing a
+   * set the record did not declare. E1's `wrong-strip-height` trap, at run time.
+   */
+  readonly strip?: { readonly heightOverPi: string };
+
   readonly contour: {
     readonly template: TemplateId;
     readonly limitParams: readonly {
       readonly name: string;
       readonly to: "inf" | "0+";
+      /**
+       * That the limit is taken through contours whose HALF-WIDTH is a half-integer — tier G's `Γ_N`.
+       *
+       * **DECLARED AND STILL UNREAD, and this note exists so that is not mistaken for done.** The
+       * constraint itself IS enforced, but from the geometry rather than from here:
+       * `kernel/bounds/squareSide.ts` refuses any half-width that is not `N + ½`, because at an
+       * integer the kernel's sup is infinite and in between it is finite for one contour but not
+       * uniform as the width approaches an integer. That check is strictly stronger than reading
+       * this field would be — it catches a contour the user has DRAGGED, which a record's
+       * declaration cannot — so the field stays a statement of intent with no reader until a G
+       * record exists to declare it (M5.6).
+       */
       readonly through?: "halfIntegers";
       /**
        * Where this limit STARTS, when the global display default will not do.
@@ -406,7 +459,24 @@ export interface Family {
   readonly residueSelection: {
     readonly rule: "all" | "inside" | "upperHalfPlane" | "lowerHalfPlane" | "notOn";
     readonly set?: string;
-    /** Tier G: the unknown is a TERM of the residue sum, moved to the unknown side of `M t = r`. */
+    /**
+     * Tier G: the unknown is a TERM of the residue sum rather than a piece of the contour.
+     *
+     * **NOT "moved to the unknown side of `M t = r`"**, which is what this field's first draft said
+     * and what [M5-plan](../../../../docs/contour-integration/M5-plan.md) §M5.6 still states as one
+     * equation. `solveResidueTerm.ts` has the finding in full: that move needs a coefficient adding
+     * a DIMENSIONLESS number to one carrying π, and neither the exponential basis nor ℚ(i)(π) holds
+     * both. It is never needed — a record declaring this has no `target` piece, which is what SG-1
+     * IS — so the solve is a third route and the mixed case is refused by name.
+     *
+     * `terms` names the integers whose residues constitute the target, from a closed vocabulary; a
+     * predicate outside it is refused with the vocabulary quoted rather than parsed.
+     *
+     * `weight` is the halving bookkeeping (`1` two-sided, `2` one-sided of an even summand) — and it
+     * is DERIVED from the target's own declared range and then checked against what the record says,
+     * because research 03 §8 names that halving as the tier's commonest error and a field merely
+     * read would record the habit rather than catch it.
+     */
     readonly targetTerms?: readonly {
       readonly targetId: string;
       readonly terms: string;

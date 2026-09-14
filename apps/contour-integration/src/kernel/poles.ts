@@ -17,6 +17,7 @@ import { SqrtExt, type Frac } from "@cas/exact";
 import { fToRational, type Node } from "@cas/expr";
 import { estimate, exact as exactCert, unknown, type Certificate } from "@cas/rigor";
 import { toExactRational } from "./exactRational.js";
+import { decideEntire, entireRefusal } from "./entire.js";
 import { asExponentialTimesRational } from "./exponentialFactor.js";
 import { asExponentialSum, isEntire, residueAtZero, type ExpRationalForm } from "./exponentialSum.js";
 import { exactPolesOf, weightedSum, type AlgebraicPole } from "./algebraic.js";
@@ -42,8 +43,22 @@ export interface Pole {
 
 export interface PoleReport {
   readonly poles: readonly Pole[];
-  /** False when f is not a rational function of z, in which case nothing is claimed. */
+  /**
+   * Whether an EXACT reading of `f` was obtained — which is not quite "f is a rational function",
+   * and the two drifted apart before this doc was corrected: C2's `(1 − cos z)/z²` is not rational
+   * and sets this `true`, because the exponential-sum reader pins its structure exactly. Consumers
+   * read it only to WORD a refusal when {@link exactlyComplete} is false.
+   */
   readonly rational: boolean;
+  /**
+   * Set only when `f` was DECIDED entire — the singular set is empty, and `poles: []` is a result.
+   *
+   * **Its absence claims nothing.** `poles: []` also appears when no reader could see `f` at all,
+   * and the difference is the whole reason this field exists: E3's argument turns on an empty
+   * residue sum being *the number that closes it*, and a record must not close on evidence
+   * indistinguishable from the evidence for `1/cosh z`. See `kernel/entire.ts`.
+   */
+  readonly entire?: true;
   /** True when every pole was pinned exactly — the condition for an exact residue SUM. */
   readonly exactlyComplete: boolean;
   /** Σ Res over all poles, exact, present only when `exactlyComplete`. */
@@ -430,6 +445,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
         poles: [],
         rational: true,
         exactlyComplete: true,
+        entire: true,
         exactResidueSum: { value: [0, 0], text: "0" },
         exactPoles: [],
         exponentialSum: sumForm,
@@ -486,6 +502,23 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
   // --- the numeric path ----------------------------------------------------------------------
   const rat = fToRational(ast, c, a);
   if (!rat) {
+    // **BEFORE GIVING UP, ASK WHETHER THERE IS ANYTHING TO FIND.** Every reader above wants `f` in
+    // some rational shape, and `e^{−z²+ibz}` is in none of them — but it is ENTIRE, which is a
+    // stronger statement than any of them could have made, and it is decidable structurally. Until
+    // M5.3a this line returned the same `poles: []` for it as for `1/cosh z`, so an empty pole list
+    // carried no information and E3's whole argument had nothing to stand on (`kernel/entire.ts`).
+    const decision = decideEntire(ast);
+    if (decision.entire) {
+      return {
+        poles: [],
+        rational: false,
+        exactlyComplete: true,
+        entire: true,
+        exactResidueSum: { value: [0, 0], text: "0" },
+        exactPoles: [],
+        certificates: [decision.certificate],
+      };
+    }
     return {
       poles: [],
       rational: false,
@@ -495,6 +528,7 @@ export function findPoles(ast: Node, c: Cx = [0, 0], a: Cx = [0, 0]): PoleReport
           "the poles of f",
           `f is not a rational function of z (${exactForm.reason}); the numeric pole search is not implemented yet`,
         ),
+        entireRefusal(decision.reason),
       ],
     };
   }

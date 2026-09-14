@@ -232,6 +232,55 @@ describe("the logarithmic component — M4.5, and D2's poles off the unit circle
     expect(Exponent.fromLog(ln(10).scale(q(1, 3))).asAlgebraicFactor()).toBeNull();
   });
 
+  // **A FOLD COMBINES A RADICAL, IT NEVER INTRODUCES ONE (M5.4b).** `radicand` is the coefficient
+  // the caller holds one for, and it decides both halves of that sentence.
+  describe("splitAlgebraicFactor's radicand", () => {
+    /** `e^{iπ·p/q}`. */
+    const root = (p: number, r: number) => Exponent.piTimes(gi(0, 1, p, r));
+
+    it("folds nothing needing a √ when the coefficient carries none", () => {
+      // The default, and `asAlgebraicFactor`'s case: asked in the abstract, there is no coefficient
+      // to match, so `e^{iπ/4}` and `e^{iπ/3}` are CARRIED. D7's residue-at-infinity row depends on
+      // it — `17/4·e^{−iπ/4}` shows a magnitude of 4.25 that `17√2/8 − 17i√2/8` hides.
+      for (const [p, r] of [[1, 4], [1, 3], [1, 6], [2, 3]] as const) {
+        const split = root(p, r).splitAlgebraicFactor();
+        expect(split.factor.equals(SqrtExt.ONE), `e^{iπ·${p}/${r}}`).toBe(true);
+        expect(split.rest.equals(root(p, r))).toBe(true);
+      }
+    });
+
+    it("folds ONLY into the radicand it was given", () => {
+      // `e^{iπ/3}` is `(1 + i√3)/2`, so it folds against a √3 coefficient and is carried against a
+      // √2 one. Getting this wrong is caught downstream by `tryMul` too, but the method's own
+      // contract is the place it is decided — a `radicand` argument half-honoured is worse than none.
+      expect(root(1, 3).splitAlgebraicFactor(3n).factor.toTuple()).toEqual([0.5, Math.sqrt(3) / 2]);
+      expect(root(1, 3).splitAlgebraicFactor(2n).factor.equals(SqrtExt.ONE)).toBe(true);
+      // …and symmetrically: `e^{iπ/4}` is `(1+i)/√2`, a √2 number.
+      const quarter = root(1, 4).splitAlgebraicFactor(2n).factor.toTuple();
+      expect(quarter[0]).toBeCloseTo(Math.SQRT1_2, 15);
+      expect(quarter[1]).toBeCloseTo(Math.SQRT1_2, 15);
+      expect(root(1, 4).splitAlgebraicFactor(3n).factor.equals(SqrtExt.ONE)).toBe(true);
+    });
+
+    it("still folds the ℚ(i) cases whatever the radicand — they introduce nothing", () => {
+      // `e^{iπ}` and `e^{iπ/2}` are `−1` and `i`, already in every coefficient's field, so they are
+      // not gated at all: the rule is about introducing a NEW irrationality.
+      for (const d of [1n, 2n, 3n]) {
+        expect(root(1, 1).splitAlgebraicFactor(d).factor.equals(SqrtExt.ONE.neg())).toBe(true);
+        expect(root(1, 2).splitAlgebraicFactor(d).factor.toTuple()).toEqual([0, 1]);
+      }
+    });
+
+    it("carries an order no quadratic extension holds, whatever the radicand", () => {
+      // Fifths and sevenths: ℚ(ζ₁₀) has degree 4 over ℚ and ℚ(ζ₁₄) degree 6. F1 at `n = 5` and
+      // `n = 7` is exactly this case, and its answer carries a sine because of it.
+      for (const d of [1n, 2n, 3n, 5n]) {
+        expect(root(1, 5).splitAlgebraicFactor(d).factor.equals(SqrtExt.ONE)).toBe(true);
+        expect(root(1, 7).splitAlgebraicFactor(d).factor.equals(SqrtExt.ONE)).toBe(true);
+      }
+    });
+  });
+
   it("prints a carried power as a power, not as an exponential", () => {
     const sum = ExpSum.of(SqrtExt.ONE, Exponent.fromLog(ln(10).scale(q(1, 3))));
     expect(formatExpSum(sum)).toBe("2^(1/3)·5^(1/3)");

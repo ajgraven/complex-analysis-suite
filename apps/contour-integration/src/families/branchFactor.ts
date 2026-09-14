@@ -44,7 +44,7 @@ export type BranchFactorResult =
   | { readonly ok: false; readonly reason: string };
 
 /** A constant expression as a real rational, or a reason it is not one. */
-function realRational(src: string, bindings: Bindings, what: string): Frac | string {
+export function realRational(src: string, bindings: Bindings, what: string): Frac | string {
   let ast: Node;
   try {
     ast = parse(src);

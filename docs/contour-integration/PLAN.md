@@ -417,7 +417,8 @@ The app is supplying a missing referent, not decorating a well-understood one.
 
 Unguided sandboxes fail (Kirschner/Sweller/Clark) and animation per se doesn't help (Tversky);
 the mitigations that *are* supported — PhET-style implicit scaffolding, faded worked examples with
-self-explanation prompts, prediction-before-manipulation, contrasting triads — are in M6.
+self-explanation prompts, prediction-before-manipulation, contrasting triads — are in M7 (§7's round-3
+scoping takes two of them: contrasting triads and fading, without the prompts).
 
 ### 5.3 Colour and type
 
@@ -553,7 +554,8 @@ Compiled-evaluator spike (`Function` body vs register VM) benchmarked before com
 **Gate:** type a rational function, see its phase portrait and its poles. Lint + typecheck + test green.
 
 ### M1 — The contour object and the accumulator · *M*
-Path model (segments + arcs + parameter bindings); pen-tool editor; the piece list. Periodic
+Path model (segments + arcs + parameter bindings); pen-tool editor *(deferred at the time, and
+**now M7's** — see [`M7-plan.md`](M7-plan.md) §M7.2)*; the piece list. Periodic
 trapezoid + Clenshaw–Curtis per piece with the `4.4 points inside the pole distance` node
 controller and a live error estimator. Accumulator panel: head-to-tail `Σ f(zₖ)Δzₖ` in its own
 plane, plus the three wrong-sum contrasts. Exact-sign winding number (resolve the arc question).
@@ -575,10 +577,11 @@ Tier-1 exact-ℚ certified ML bounds (§3.2) + Jordan's constant. The Family sch
 validator. The Ledger UI. Derivation generation from family + ledger. Templates: circle,
 semicircle, indented semicircle. Half-plane residue selection with the §3.3 ladder, including
 `RootSum` output with a visible predicate. Schur–Cohn + Sturm ported from QD into `@cas/exact`.
-**Pólya work/flux toggle** (round 3): draw the conjugate field `f̄` on the Stage and read `∮f dz`
-as (work along) + i(flux across); Cauchy's theorem appears as source-free and irrotational. It
-belongs here rather than in M1 because it explains *why* the vanishing arcs vanish, which is the
-Ledger's subject.
+~~**Pólya work/flux toggle** (round 3): draw the conjugate field `f̄` on the Stage and read `∮f dz`
+as (work along) + i(flux across); Cauchy's theorem appears as source-free and irrotational.~~
+**DROPPED** — it was scoped here, never built, and the gate note below never mentioned it; the M6
+survey found the silence. Dropped deliberately in [`M6-plan.md`](M6-plan.md) §2 decision 3 and
+recorded under *Deferred* below.
 **Gate:** gallery tiers A + B + C (13 integrals) each produce a closed form labelled `=` with every
 arc certified; **the LHP semicircle for `∫cos x/(1+x²)` shows its bound diverging** and names the
 failing constraint; p.v. is a distinct result type from a convergent integral.
@@ -753,23 +756,177 @@ Rectangle/strip with quasi-period `λ` (E1–E3), wedge with the L6 bound (F1–
 > `e^{−2πiJ}`. All three are asserted, and the correction is recorded in
 > [`M5-plan.md`](M5-plan.md) §M5.1 with the measurement behind it.
 >
-> **Expect honest `≈` outcomes.** §10.3: "no entry's **exact** path was exercised — every number above
-> is float64", so tier E–G's `=` labels are claims about what the engine *will* discharge, not
-> results.
+> **M5.2 is done: the unification and the first of the two guardrail-critical corrections.** L3 and
+> L6 now discharge through one predicate (`kernel/bounds/linearMinorant.ts`), and what it decides is
+> the SIDE CONDITION — decidable in exact ℚ, and precisely the half research 03 got wrong. The
+> corrected L6 is `kernel/bounds/wedgeArc.ts`, routed from KILL, where an `e^{±zⁿ}` arc previously
+> reached no lemma at all. The measured divergence is recomputed in the suite, so the wrong statement
+> cannot be re-derived from the research; the two faces' asymmetry past `π/2` — the sin face folds,
+> the cos face changes sign — is what makes the mistake unrepresentable rather than merely corrected.
+> **The square-contour bound (D-2) is still a document-only correction** and lands with the summation
+> kernel in M5.5. [`GALLERY.md`](GALLERY.md) §5.3 has the findings.
+>
+> **M5.3 is done for E1 and E2, and tier E has begun.** Both print their own closed forms —
+> `π/sin(3π/10)`, which is D1's text under `x = log t`, and `π/cosh(π)`, which is `π sech(πξ/2)`. It
+> took four slices rather than the "mostly wiring" the staging plan expected, because `findPoles`
+> gave `e^{0.3z}/(1+e^z)` the same empty pole list it gave `1/cosh z` and `e^{−z²}`: entirety had to
+> become a DECISION (M5.3a) before any pole list could be trusted, the strip's poles are LATTICES
+> that a declared band selects from (M5.3b), and a rectangle's verticals were the app's first
+> vanishing SEGMENT (M5.3c), which derives E1's `0 < a < 1` from the geometry instead of accepting
+> it. **A strip has two denominator shapes** — `1 − λ` is a sine on the unit circle and a hyperbolic
+> cosine at a negative real — and E2 exists to teach the second (M5.3d). **E3 is deferred with F2**,
+> since both need ADR-0042's `knownValue` and doing them together implements the import set once
+> against two consumers. [`M5-plan.md`](M5-plan.md) §M5.3 has the findings.
+>
+> **M5.4 lands F1 and tier F has begun.** All four fixtures print `(π/n)/sin(π/n)` — by two routes
+> the record cannot tell apart, since `1/(1+zⁿ)` has expressible poles at `n = 2, 3` and not at
+> `n = 5, 7`. The slice is mostly about what it broke. **The affine `Scalar` did not cover the
+> gallery** and said it did: a wedge's return ray needs `R·cos(2π/n)`, a product of two parameters,
+> and both routes that look like they avoid the widening would leave the ray behind under a drag —
+> silently opening a contour the ledger had just certified closed. **The cyclotomic sum became the
+> residue theorem's own statement**, `Σ n(γ,zₖ)·Res`, because a wedge encircles one root where D3's
+> keyhole encircles every one. And **three ledger rows were false, two older than the slice**: KILL
+> blamed the integrand for an angle the geometry reader could not measure, and CATCH asked whether
+> every POLE was pinned where the claim beside it is about the SUM — so D3 at `(a,n) = (2.3, 5)` had
+> printed an exact closed form beside "the total is an estimate" since M4.2e. One rule closed the
+> last of it: **a fold may COMBINE a radical the coefficient already carries, never INTRODUCE one.**
+> **F2 is deferred with E3**; both need ADR-0042's `knownValue`. [`M5-plan.md`](M5-plan.md) §M5.4 and
+> [`GALLERY.md`](GALLERY.md) §5.5 have the findings.
+>
+> **M5.5 builds tier G's machinery — the square, the kernels, and the corrected bound.** No record:
+> G2 needs Pass 5 generalised to an unknown INSIDE `S` (M5.6). The square is the first contour in the
+> gallery with no target piece, and `∮ → 0` is its whole content; the kernels carry the alternation
+> themselves, so G3 will cost nothing once G1 exists; and a hole closed on the way — `findPoles` sees
+> no transcendental, so a square at an INTEGER half-width ran its sides through the kernel's poles
+> while LEGALITY said every singularity was clear. The half-integer constraint is now
+> ENFORCED, by a bound that refuses any other half-width — from the geometry rather than from
+> `through: "halfIntegers"`, which is still unread. **D-2 is
+> executed** — research 03 §8's bound is not a bound — **and corrected**: the shortfall is 4.9% at
+> `N = 3` and 27.8% at `N = 25`, growing toward the missing factor of π, so the gallery's "30–40 % at
+> every N" is the asymptote rather than the typical case. [`M5-plan.md`](M5-plan.md) §M5.5 and
+> [`GALLERY.md`](GALLERY.md) §5.6 have the findings.
+>
+> **M5.6a–b build tier G's solve.** `cot`/`csc` are Möbius functions of `e^{2πiz₀}`, so `Res(K·f, z₀)`
+> at a pole of the cofactor is an exact quotient of basis elements and `coth` is a NAME for it at
+> `z₀ = ia`; the `2πi` cancels because `∮ → 0`. Then SG-1 — and **the plan's own one-equation
+> generalisation cannot be built**, because its coefficient adds a dimensionless number to one
+> carrying π and no ring here holds both. It is never needed (`a = 0` is tier G's definition), so the
+> solve is a third route giving `T/π = −ρ/w`, with the mixed case refused by name; the weight is
+> derived from the target's declared range and checked, halving also requiring an even cofactor with a
+> vanishing `n = 0` term. The no-op for the 23 loaded records is PROVEN byte-for-byte, and the sweep
+> found that dropping the kernel from `analyse` left every test green while reintroducing M5.5b's
+> hole — **a right answer is not evidence that the ledger is honest.** The ledger does not yet CLOSE
+> for such a record; G2, the `coth` formatter and the summation theorem are M5.6c.
+> [`M5-plan.md`](M5-plan.md) §M5.6 has the findings.
+>
+> **M5.6c lands G2 — tier G has begun, 24 of 28 records.** `Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa)`, all
+> four fixtures labelled `=` with the ledger closing and the quadrature corroborating `∮` (which at
+> finite N is `2πi[S_N − T]`, this spec's own probe, agreeing to 5.8e-15). The name is decided by
+> comparing two exponents exactly rather than by matching a pattern, and a hyperbolic form MULTIPLIES
+> where a sine divides. **SG-1 inverts two invariants** — `rank(M) = m` and radius-independence — and
+> both would have dropped the record: `M` is identically zero here by construction, and more radius
+> adds more POLES rather than nothing. Three rows were saying something false, one of them in the
+> shell; and the browser pass found the browser suite itself red on a record count stale since M5.3d.
+> [`M5-plan.md`](M5-plan.md) §M5.6 and [`GALLERY.md`](GALLERY.md) §5.8 have the findings.
+>
+> **M5.7 completes tier G with G1 and G3 — 26 of 28 records.** `Σ_{n≥1}1/n² = π²/6` and
+> `Σ_{n≥1}(−1)ⁿ/n² = −π²/12`, both `=`, the ledger closing and `∮ = 2πi(205/72 − π²/3)` corroborated
+> by the quadrature. The merged residue comes from the Laurent route (the kernel's expansion is EVEN,
+> so only `f`'s constant term and its even negative coefficients contribute), lands in ℚ(i)(π), and
+> makes a collision a different RING rather than a harder case. SG-6's `escalate` is an OBLIGATION:
+> the record must declare the merged order and residue, and both are falsified against the engine.
+> **SG-5 turned out already done** — the schema and its readers landed with D1's arc and G2 — so this
+> plan's "widest blast radius in M5" cost nothing. [`M5-plan.md`](M5-plan.md) §M5.7 and
+> [`GALLERY.md`](GALLERY.md) §5.9 have the findings.
+>
+> **M5.8 completes M5 AND the gallery — 28 of 28 records.** §10.3's cross-family invariants are RUN
+> rather than reasoned, and three of them turn out to be one identity in the summation kernel's own
+> Laurent coefficients (so the `a → 0` confluence is a series, not an evaluation at a small `a`).
+> ADR-0042's `knownValue` lands: an exactly-known IMPORTED value is `=` on its form with the import
+> in its provenance, which un-caps two arguments that were exact everywhere except at their most
+> certain step. **There is one import**, the Gamma function at a rational argument — E3's `√π` IS
+> `Γ(1/2)` — so a single check against `∫₀^∞e^{−tⁿ}dt` covers both records. Pass 5 gains a fourth
+> route, in the rank-1 module an import generates: it may be added and scaled, never inverted, and it
+> requires `∮ = 0` because `2πi Σ Res` carries π and an import does not. **E3** brings a bound whose
+> `max|f|` is ATTAINED (an exact quadratic on a vertical line) and a LEGALITY row for the empty
+> singular set; **F2** needed no new engine at all — M5.2's `linearMinorant.ts` was built for it two
+> slices early — and measuring its discharged bound showed it loose by exactly `π/2`, which IS the
+> minorant's own slack at the origin. [`M5-plan.md`](M5-plan.md) §M5.8 and
+> [`GALLERY.md`](GALLERY.md) §5.10 have the findings.
+>
+> **The `≈` expectation above was the right posture and is now discharged.** §10.3's warning — "no
+> entry's **exact** path was exercised — every number above is float64" — meant tier E–G's `=` labels
+> were claims about what the engine *would* discharge. All eight records now discharge them: every
+> answer in tiers E–G carries a symbolic closed form, and the decimals beside them are `≈` as every
+> decimal in this app is.
 
-### M6 — Presentation, teaching layer, publish · *M*
+### M6 — Presentation and publish · *M*
 Figure & share export (QD's `_pal` indirection, `renderToCanvas`, sync `ClipboardItem`);
 `#vs=` codec with diff-from-defaults and full re-validation on restore; a11y pass; launcher card
-live; the `deploy-pages.yml` line. **The teaching layer, scoped (round 3): contrasting triads and
-fading only.** Triads are gallery *organisation*, not lessons — `∫1/(1+x²)`, `∫cos x/(1+x²)`,
-`∫sin x/x` side by side: near-identical integrands, three different ledger outcomes (plain ML;
-Jordan; indentation + p.v.). The faded contour-choice drill runs in four stages — contour given +
-ledger filled → you fill the ledger → you pick from a menu → you draw freely — with fading tied to
-progress (expertise reversal). **No prose lessons, no prediction or self-explanation prompts**;
-everything else stays PhET-style implicit scaffolding in affordances, defaults and constraints.
+live; the `deploy-pages.yml` line.
 **Gate:** published, permalinks round-trip, keyboard and screen-reader pass.
 
+> **M6.1 is DONE** — the shell has a state object (`src/shell/state.ts`: `ShellState`, and
+> `resolveState` as the app's three compute branches in one pure function of it) and `mountApp` returns
+> `currentState()` / `applyState(s)`. Proven a no-op byte for byte over the whole visible rail, and
+> carrying `test/shell.test.ts`, the first test to reach `src/shell/app.ts`.
+>
+> **M6.2, M6.3 and M6.4 are DONE too, so M6's gate is met**: permalinks round-trip by verdict across
+> the whole corpus, the exported figure carries its own link and verdict, and the page audits clean
+> under `axe` with a keyboard walk that reaches every control. Each slice's findings are recorded in
+> [`M6-plan.md`](M6-plan.md); the three worth carrying forward are that **the contour is never
+> serialised as geometry** (a gallery link is `{record, fixture}` because the record derives it), that
+> `@cas/export`'s `tEXt` chunk is **Latin-1** and was mangling every consumer's metadata until `iTXt`
+> was added, and that **it took three attempts to write a non-vacuous test** for "the phase portrait
+> is in the plate".
+>
+> **Its gate as written is too weak, and M6.2's should be read in the light of that.** *"`applyState
+> (currentState())` is a fixed point"* survived 11 of 20 mutants, because **a consistently lossy round
+> trip is still a fixed point** — the sentence is satisfied by `currentState = () => ({})` and
+> `applyState = () => {}`. What has to be asserted is that restoring a state the app is **not in**
+> lands on the state that was **applied**; on two maximally-unlike states in both directions that is
+> 20/20. The same reading applies to *"encode → decode → the same verdict"*: the decode must start from
+> a state the app does not already hold.
+
+### M7 — The teaching layer, and the pen tool · *M–L*
+**The teaching layer, scoped (round 3): contrasting triads and fading only.** Triads are gallery
+*organisation*, not lessons — `∫1/(1+x²)`, `∫cos x/(1+x²)`, `∫sin x/x` side by side: near-identical
+integrands, different ledger outcomes (plain ML; Jordan; indentation + p.v.). The faded
+contour-choice drill runs in four stages — contour given + ledger filled → you fill the ledger → you
+pick from a menu → you draw freely — with fading tied to progress (expertise reversal). **No prose
+lessons, no prediction or self-explanation prompts**; everything else stays PhET-style implicit
+scaffolding in affordances, defaults and constraints. Plus the **pen tool**, inherited from M1.
+**Gate:** every declared contrast's difference set is verified against the engine; **every drill
+stage is addressable by permalink**, so it travels under M6's round-trip-by-verdict test; a
+hand-drawn contour closes and its ledger is indistinguishable in kind from a template's.
+
+> **Staged in [`M6-plan.md`](M6-plan.md) and [`M7-plan.md`](M7-plan.md).** Read them before starting.
+>
+> **M6 WAS SPLIT**, on the third finding below: PLAN's M6 carried the teaching layer in its scope
+> while its gate never mentioned it, so that half had no completion criterion at all. M6 is now
+> exactly its own gate; the teaching layer and the pen tool are M7, with a gate of their own whose
+> load-bearing clause is that **every drill stage is addressable by permalink** — the only
+> formulation that makes a teaching surface falsifiable in this app's idiom.
+> Four findings shape it: the
+> permalink is a CORRECTNESS surface here rather than a convenience (a dropped `branch.window`
+> restores the same picture computing a different integral — M5.1's shadowed-`branch` bug, which
+> field-by-field equality would pass), so the round trip is verified by VERDICT; `src/shell/app.ts`
+> is 2,511 lines reached by ZERO tests, so the first slice lifts its state out of the closure rather
+> than building a feature; **this gate says nothing about the teaching layer**, which is in the scope
+> paragraph above with no completion criterion; and the contrasting triad turns out to be **two
+> fixtures of ONE record plus one record** — measured — differing in exactly one ledger row between
+> the first two and in two places for the third. The plan also surfaces two items scoped in earlier
+> milestones and never built: the **pen tool** (M1) and the **Pólya work/flux toggle** (M3, which the
+> M3 gate note does not mention).
+
 ### Deferred (explicitly out of v1)
+**Pólya work/flux toggle** — scoped into M3 (round 3), never built, dropped on the record in
+[`M6-plan.md`](M6-plan.md) §2: its stated job (*"it explains why the vanishing arcs vanish"*) is
+already carried, and carried better, by the arc's own KILL row, which shows the certified bound, its
+exponent and its limit as a **number**; it is a second picture of `f` where research 02 §8's own
+anti-pattern list warns the background picture is a seductive detail; and it would be this app's
+first surface with no falsifiable claim attached. Research 02 §8 P1 item 14 still stands — a future
+milestone that wants it should re-argue it against those three points. ·
 Argument principle / Rouché mode (research 03 §10) · Bromwich and inverse Mellin (§12) · algebraic
 functions `wⁿ = R(z)` · Arb/FLINT WASM tier 3, behind a "Prove it" button for non-rational `f` ·
 cross-app `@cas/interchange` hand-off (needs a new payload kind + `VERSION` bump — defer until a

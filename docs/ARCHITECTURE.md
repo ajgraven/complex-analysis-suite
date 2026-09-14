@@ -14,7 +14,9 @@ for why extraction is demand-driven rather than up-front.
 >   (`@cas/exact`: Complex Dynamics and
 >   Correspondences both needed exact polynomial arithmetic; `@cas/schwarz`: the Schwarz-reflection σ
 >   engine, shared by Complex Dynamics and Correspondences; `@cas/dynamics`: the inverse-Böttcher machinery,
->   ADR-0014; `@cas/export`: PNG `tEXt` metadata across four apps, ADR-0016; `@cas/conformal`: the
+>   ADR-0014; `@cas/export`: PNG text-chunk metadata, now across **seven** apps, ADR-0016 (and `tEXt` alone since
+>   M6.3, which found it is Latin-1 and was silently mangling every consumer's metadata — `iTXt` is
+>   written for anything above U+00FF); `@cas/conformal`: the
 >   conformal-map builder extracted *ahead* of demand, ADR-0018; `@cas/faber`: the exterior Faber engine,
 >   ADR-0024; and an **eleventh**, **`@cas/ui`** — the shared **browser shell** (canvas a11y, a fatal-error
 >   boundary, an off-thread compute client, a nav header) — extracted *ahead* of app adoption after a UX review

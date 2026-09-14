@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Frac, QiPoly } from "@cas/exact";
+import { Frac, piUpper, QiPoly } from "@cas/exact";
 import { parse } from "@cas/expr";
 import { mayReportValue, assembleVerdict } from "@cas/rigor";
 import {
@@ -201,5 +201,29 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
     const b = jordanArcBound(num, den, Frac.ZERO, "upper", q(50));
     expect(b.certificate.level).toBe("⚠");
     expect(b.certificate.method).toMatch(/non-zero frequency/);
+  });
+
+  // **M5.2 rewired this bound through `dampedArcIntegral`, and rewiring it had to change nothing.**
+  // The predicate returns `1` at the semicircle's range, so the arithmetic is identical — asserted
+  // in ℚ rather than to a few decimals, because "identical" is the claim.
+  it("is still exactly π·max|g|/|a| after discharging through the shared predicate", () => {
+    const { num, den } = exact("1/(1+z^2)");
+    for (const [a, R] of [
+      [1, 50],
+      [3, 7],
+      [2, 1000],
+    ] as const) {
+      const b = jordanArcBound(num, den, q(a), "upper", q(R));
+      const expected = piUpper().mul(maxModulusBound(num, den, q(R)) as Frac).div(q(a));
+      expect((b.value as Frac).equals(expected)).toBe(true);
+    }
+  });
+
+  it("quotes the shared predicate in its provenance, so the inequality has one home", () => {
+    const { num, den } = exact("1/(1+z^2)");
+    const b = jordanArcBound(num, den, q(1), "upper", q(50));
+    const texts = b.certificate.provenance.map((s) => s.text).join(" | ");
+    expect(texts).toMatch(/∫₀\^\{π\} e\^\{−κ sin ψ\} dψ ≤ π\/κ/);
+    expect(texts).toMatch(/sin ψ = sin\(π − ψ\)/);
   });
 });

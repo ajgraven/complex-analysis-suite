@@ -109,8 +109,13 @@ export function radiusDragValue(
   if (piece === undefined || piece.geom.kind !== "arc") return null;
   const scalar = piece.geom.radius;
   if (typeof scalar === "number") return null;
-  const mul = scalar.mul ?? 1;
-  if (mul === 0) return null;
+  // The coefficient may itself be a parameter (F1's wedge). That is still invertible — it is a
+  // FROZEN `derived` value, so `r = k·R + c` has one live unknown exactly as a literal `k` does —
+  // but a coefficient naming a parameter that is not there would otherwise read as `1` and move the
+  // handle to a radius the contour never had.
+  const mul =
+    typeof scalar.mul === "object" ? (contour.params[scalar.mul.param]?.value ?? null) : (scalar.mul ?? 1);
+  if (mul === null || mul === 0) return null;
   // A radius that is affine in a SECOND parameter is not a handle this gesture can move: solving for
   // one value would silently pin the other. Records that need it exist (D7's edges); a draggable
   // radius that does not is what this returns null for.

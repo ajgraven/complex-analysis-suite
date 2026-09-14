@@ -32,7 +32,7 @@ describe("offeredFamilies is the only door, and it is the loader's", () => {
     const offered = offeredFamilies();
     expect(offered.count).toBe(FAMILIES.length);
     expect(offered.dropped).toEqual([]);
-    expect(offered.tiers.map((t) => t.tier)).toEqual(["A", "B", "C", "D"]);
+    expect(offered.tiers.map((t) => t.tier)).toEqual(["A", "B", "C", "D", "E", "F", "G"]);
     expect(offered.tiers.flatMap((t) => t.families.map((f) => f.id))).toEqual(
       FAMILIES.map((f) => f.id),
     );
