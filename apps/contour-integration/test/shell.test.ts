@@ -15,6 +15,7 @@ import { mountApp, type ShellHandle } from "../src/shell/app.js";
 import { offeredCorpus, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { DEFAULT_VIEW } from "../src/kernel/camera.js";
+import { translateContour } from "../src/engine/contour/edit.js";
 
 /** Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context. */
 function mount(hash = ""): { root: HTMLElement; app: ShellHandle } {
@@ -468,5 +469,111 @@ describe("the `#vs=` permalink, at the shell", () => {
     const note = q(app.root, ".shareNote");
     expect(note.textContent).toContain("No link");
     expect(note.textContent).toContain("pen tool");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// Accessibility, in the node gate.
+//
+// `scripts/a11y-audit.mjs` is the authority and runs axe in a real browser — but it is a
+// NON-BLOCKING CI job, so nothing stops a regression from merging. These are the structural
+// invariants M6.4 established, asserted where they do block: one `<main>`, one `<h1>` above the
+// cards' `<h2>`s, the nav reading where it draws, and every canvas either named or explicitly
+// hidden. jsdom has no axe, but it has a DOM, and all four of these are DOM facts.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the page's structure", () => {
+  it("has exactly one <main> and exactly one <h1>", () => {
+    const { root } = mount();
+    expect(root.querySelectorAll("main")).toHaveLength(1);
+    expect(root.querySelectorAll("h1")).toHaveLength(1);
+    expect(q(root, "h1").textContent).toBe("Contour Integration");
+    // The two axe findings this page has ever had, and the whole of them.
+    expect(root.querySelectorAll("h2").length).toBeGreaterThan(3);
+  });
+
+  it("puts the suite nav BEFORE <main>, so it reads where it draws", () => {
+    // It used to be the last child of the shell — `mountNavHeader` ends with `appendChild` — while
+    // `.cas-nav` is `position: fixed` and draws at the top. It looked first and read last.
+    const { root } = mount();
+    const nav = q(root, "nav.cas-nav");
+    const main = q(root, "main");
+    expect(nav.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // And the landmark does not CONTAIN the site navigation, which is not what <main> means.
+    expect(main.contains(nav)).toBe(false);
+  });
+
+  it("names every canvas, or hides it explicitly", () => {
+    const { root } = mount();
+    const canvases = [...root.querySelectorAll("canvas")];
+    expect(canvases.length).toBe(3);
+    for (const c of canvases) {
+      const named = (c.getAttribute("aria-label") ?? "").length > 0;
+      const hidden = c.getAttribute("aria-hidden") === "true";
+      expect(named || hidden, `${c.className} is neither named nor hidden`).toBe(true);
+    }
+    // The phase portrait sits BEHIND the interactive overlay, which names the pair — so it is
+    // hidden rather than named. `@cas/ui` does that from `attachCanvasA11y`'s `render` option.
+    expect(q(root, "canvas.gl").getAttribute("aria-hidden")).toBe("true");
+    expect(q(root, "canvas.ink").getAttribute("role")).toBe("application");
+    // The accumulator is research 02 §8's P0 picture and was completely unannounced until M6.4.
+    expect(q(root, "canvas.accCanvas").getAttribute("role")).toBe("img");
+  });
+
+  it("DERIVES both canvas descriptions from the ledger, and keeps them current", () => {
+    const { root, app } = mount();
+    const ink = (): string => q(root, "canvas.ink").getAttribute("aria-label") ?? "";
+    const acc = (): string => q(root, "canvas.accCanvas").getAttribute("aria-label") ?? "";
+    // The sandbox's boot state: `1/z` on a circle, which closes at 2πi.
+    expect(ink()).toContain("Arrow keys pan");
+    expect(ink()).toContain("winds about 1 pole");
+    expect(ink()).toContain("2πi");
+    expect(acc()).toContain("partial sum");
+
+    // Open a record and both must follow — a hand-written alternative would now be describing the
+    // previous picture, which is the whole reason these are generated.
+    clickIn(q(root, ".sourceToggle"), "Gallery");
+    const records = byLabel<HTMLSelectElement>(root, "gallery record");
+    records.value = "indented-sinc";
+    fire(records, "change");
+    expect(ink()).toContain("indented-sinc");
+    expect(app.currentState().record).toBe("indented-sinc");
+    // C1's contour winds about NO pole — its whole answer comes from the indentation's iα·Res — so
+    // the description has to say so rather than implying a residue sum carried it.
+    expect(ink()).toContain("winds about no pole");
+  });
+
+  it("counts a pole's winding only where it was DECIDED, so a contour parked on one claims nothing", () => {
+    // The app's own headline property, in the text alternative: "park it on the pole and there is no
+    // number at all". Move the unit circle to be centred at 1 and the pole of `1/z` sits ON it, so
+    // its winding number is undecided — and an undecided winding is not a wound pole. Counting it
+    // would have the description assert exactly what the ledger next to it refuses to.
+    const { root, app } = mount();
+    const ink = (): string => q(root, "canvas.ink").getAttribute("aria-label") ?? "";
+    expect(ink()).toContain("winds about 1 pole"); // the pole is at the centre to begin with
+
+    const s = app.currentState();
+    // Shifted by the circle's OWN radius, read off the state, so the pole lands exactly on it — a
+    // hardcoded 1 would merely enclose it at any other R and the test would pass for the wrong
+    // reason (measured: it did, at the boot radius).
+    const r = s.contour.params.R.value;
+    app.applyState({
+      ...s,
+      contour: translateContour(s.contour, [r, 0]),
+      contourSource: { template: "circle", shift: [r, 0] },
+    });
+    // The value is withheld too — that is `integrateContour`'s doing and older than this slice — but
+    // the claim here is the COUNT, which is what the mutation sweep found unasserted.
+    expect(ink()).toContain("winds about no pole");
+    expect(ink()).not.toContain("winds about 1 pole");
+  });
+
+  it("reports the accumulator's REAL step count, not a placeholder", () => {
+    const { root } = mount();
+    const acc = q(root, "canvas.accCanvas").getAttribute("aria-label") ?? "";
+    const m = /over (\d+) steps/.exec(acc);
+    expect(m, acc).not.toBeNull();
+    // One sample per quadrature node along the contour: a real number, and not zero.
+    expect(Number(m?.[1])).toBeGreaterThan(8);
   });
 });

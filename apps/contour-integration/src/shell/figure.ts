@@ -130,7 +130,19 @@ export function figureCaption(input: {
     return { title: input.title, value: `${level} ∮ f dz = ${theorem.exactValue.text}`, verdict: headline, level };
   }
   const level = integral.verdict.level;
-  const [re, im] = integral.value ?? [0, 0];
+  // **NO NUMBER WHEN THERE IS NO QUADRATURE**, which `integral.value ?? [0, 0]` would have produced
+  // as `≈ 0.0000000 + 0.0000000i`. The result card states the rule in as many words — a fabricated
+  // second opinion is the one thing a corroboration line must never be — and a caption printing one
+  // onto a shareable image is the same error with a wider blast radius. Found reviewing this file.
+  if (integral.value === undefined) {
+    return {
+      title: input.title,
+      value: "no quadrature to report",
+      verdict: integral.quadratureSkipped ?? headline,
+      level: "?",
+    };
+  }
+  const [re, im] = integral.value;
   const sign = im < 0 ? "−" : "+";
   return {
     title: input.title,

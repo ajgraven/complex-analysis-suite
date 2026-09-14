@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **537 test files / 5463 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **537 test files / 5480 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -155,12 +155,13 @@ conformal map ψ: 𝔻* → ext(B), the Joukowski/Kármán–Trefftz airfoil (Ku
 closed-form transplant gallery (flat plate / ellipse / deltoid / astroid / star), the airfoil promoted out
 of 2D Electrostatics; riding `@cas/flow`, `@cas/gpu`, `@cas/export`, `@cas/interchange`, and `@cas/ui`) ride the thirteen shared `@cas/*` packages
 (`@cas/core`, `@cas/interchange`, `@cas/expr`, `@cas/gpu`, `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`,
-`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
+`@cas/export`, `@cas/conformal`, `@cas/faber`, `@cas/ui`, `@cas/flow`, `@cas/rigor`) — `@cas/exact`, `@cas/schwarz`, `@cas/dynamics`, and `@cas/export` were all extracted later
 than the phase plan, on the ADR-0007 second-consumer rule; `@cas/exact` and `@cas/schwarz` are each used by
 Complex-Dynamics and Correspondences, `@cas/dynamics` (Böttcher exterior maps + external rays) by
 Complex-Dynamics (its original second consumer, the Riemann-map studio, shed it — see below), and
-`@cas/export` (PNG `tEXt` reproducibility metadata) by Complex-Dynamics, the plotter, the Riemann-map
-studio, and Argument-Principle. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
+`@cas/export` (PNG text-chunk reproducibility metadata) by **seven** apps — Complex-Dynamics, the
+plotter, the Riemann-map studio, Argument-Principle, 2D Electrostatics, 2D Hydrodynamics and
+Contour-Integration. The plotter and Riemann-map apps plus `@cas/dynamics` (ADR-0010–0014) landed
 on `master` alongside the σ arc. (The launcher consumes no packages.)
 
 **`@cas/export` + CD → Riemann-Map hand-off + Riemann Map goes pure-2D (merged, #257):**
@@ -283,7 +284,7 @@ form. Plan, design and content spec are in [`docs/contour-integration/`](docs/co
 — **read `PLAN.md` then `DESIGN.md` before touching it**; the 28 gallery entries are the engine's
 specification, not examples added afterwards.
 
-Through **Milestone 5** and published, with **M6 begun** — **M1–M5 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
+Through **Milestone 6** and published — **M1–M6 complete, and THE GALLERY IS COMPLETE: all 28 records load and every one is executed against the engine.** `∮ f dz` comes from `2πi Σ n(γ,aₖ)·Res(f,aₖ)` — a *formula*,
 not a quadrature — with exactly-decided winding numbers (exact-sign predicates over a certified
 polygonisation) and exact residues over ℚ(i) or one quadratic extension of it, so `1/(1+z⁴)` reads
 `π√2/2`. Numerical quadrature is demoted to an independent **cross-check**; a disagreement beyond its
@@ -303,10 +304,11 @@ screen are the numbers the suite pins); every record carries a **derivation pane
 ledger's own certificates, their methods and their ✓/✗ audit trails, with **every badge in the app
 computed from a verdict** (the last literal `=` is gone, and the corroborating quadrature no longer
 caps an exact `∮` at `≤`); and the **contour is an object you can grab** — drag it across a pole and
-the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. Still to
-come: M6's remaining slices (the `#vs=` codec, the figure export and the a11y pass), then M7 — the pen
-tool (free-hand path editing) and the teaching layer, split out of M6 because PLAN's M6 gate never
-mentioned them. **M5 is complete (M5.0–M5.8);
+the value jumps by exactly `2πi·Res`, park it on the pole and there is no number at all. **M6 is
+complete (M6.0–M6.4)**: the state object, the `#vs=` permalink, the figure export and the a11y pass,
+so what a reader sees is now also what a reader can SHARE. Still to come: M7 — the pen tool (free-hand
+path editing) and the teaching layer, split out of M6 because PLAN's M6 gate never mentioned them.
+**M5 is complete (M5.0–M5.8);
 all 28 records are loaded and every tier is done**, and **M5.6** built the tier-G solve — `Res(K·f, z₀)` at a pole of the cofactor
 as an exact quotient of basis elements (both kernels are Möbius functions of `e^{2πiz₀}`, so `coth` is
 a NAME for that quotient at `z₀ = ia` rather than new arithmetic), then SG-1's unknown *inside* the
@@ -522,6 +524,69 @@ any figure in the suite, and the discrepancy is recorded rather than fixed from 
 the rest), so it is drawn at the stage's width keeping its own aspect — legitimate because its axes are
 `Σ f·Δz` rather than the plane, so there is no shared scale to preserve and matching the frame is only
 a matter of not implying the trail stops early.
+
+**M6.4 completes M6 — the page audits CLEAN, and the two canvas descriptions are GENERATED from the
+ledger.** Zero `axe` rules and zero nodes, baseline recorded as `{}`, `--strict` passing; re-measured
+first, so the claim that M6.1–M6.3's new controls added no findings is a measurement rather than a
+hope. Both findings fall to two elements — the grid holding the stage, the rail and the strip becomes
+a `<main>`, and the bar's brand becomes the page's `<h1>` above the cards' seven `<h2>`s, with the CSS
+cancelling the heading's size and margin so the document structure changes and the picture does not.
+Research 02 §8 makes the head-to-tail partial sum this app's P0 picture and it was **completely
+unannounced**; it now carries `role="img"` and a sentence naming its step count and its endpoint,
+while the stage's alternative appends a generated description — the piece count, how many poles the
+contour winds about, the value and the ledger's headline, every clause from something the engine
+computed and refreshed on each recompute, because a hand-written alternative drifts the first time a
+record changes. **Three findings.** **(1) The suite nav looked first and read LAST**, and the comment
+above the call claimed the opposite: `mountNavHeader` ends with `container.appendChild(nav)`, so with
+the call placed after the shell was filled the nav was its *final* child while `.cas-nav` is
+`position: fixed` and draws at the top — a screen-reader user reached "Back to the suite launcher"
+only after the entire rail. It has its own host prepended now, which is also what lets the shell be a
+landmark at all, since site navigation does not belong inside `<main>`. **Checked rather than assumed:
+every other adopter is FINE** (all six call sites mount the nav immediately before appending their
+content), so this is not four broken apps but one function whose contract is positional and unstated —
+[ADR-0016](docs/DECISIONS.md) action item 5. **(2)** `gl`'s `aria-hidden` was **already** set, by
+`@cas/ui`'s `attachCanvasA11y`; M6.0's table listed it as unnamed by reading the role and name columns
+and not that attribute. **(3) `prefers-reduced-motion` has nothing to act on, so it is deliberately
+not honoured** — measured: `app.css` carries **zero** `transition`, `animation` or `@keyframes` rules
+and the app's single `requestAnimationFrame` is a draw COALESCER rather than a loop, so research 07
+rule 7 is satisfied vacuously and a media query with nothing inside it would claim to have addressed
+something that was never there. Because the a11y job is **non-blocking** in CI, the four structural
+invariants (one `<main>`, one `<h1>`, the nav before the landmark, every canvas named or explicitly
+hidden) are asserted in `test/shell.test.ts`, which blocks. **And the keyboard re-measurement repeated
+M6.0's own probe bug**: a DOM walk reading `aria-label ?? textContent` reported one unnamed `<input>`,
+where the real accessibility tree over CDP shows **45 interactive nodes in the sandbox and 29 in the
+gallery, none unnamed** — a wrapping `<label>` names an input that carries no `aria-label`. Twice in
+one milestone: the accessibility tree is the instrument, not the DOM.
+
+**The review that closed M6 found four things, one of them in a package six apps depend on.**
+**(1) `@cas/export`'s `tEXt` chunk is LATIN-1**, and the coercion to `?` had been *documented* rather
+than fixed, which made it read as deliberate. It was destroying real content in every consumer — each
+one's `Software` string carries an em-dash, and this app stamps a figure's own verdict, where
+`= 2π√3/3` was stored as `= 2??3/3`, the mathematics gone from the one field whose job is to say what
+the figure claims. `injectPngText` now chooses per entry (`tEXt` when lossless, so existing ASCII
+payloads are byte-identical; **`iTXt`** otherwise) and `readPngText` reads both, leaving a
+*compressed* `iTXt` **absent** rather than garbled since zlib is deliberately not carried. UTF-8 is
+hand-rolled, because the package compiles against `lib: ES2022` with no DOM and no Node types — so
+`TextEncoder` is not available — and it already hand-rolls CRC-32 and Latin-1. **The package test
+asserting the coercion as intended behaviour is replaced**: a test that documents a defect is how a
+defect survives seven consumers. **(2) `figureBytes` captured its caption and its permalink on either
+side of an `await`**, so a recompute landing in between would stamp a verdict the drawn caption
+disagreed with; everything the plate claims is now read before the first `await`. **(3) The caption
+printed a fabricated `≈ 0.0000000 + 0.0000000i`** when there was no quadrature to report, which is the
+honest-labelling guardrail inverted — it says so instead. **(4) `describeStage` said "enclosed"**
+where it counts poles of non-zero winding, and D6's exterior theorem re-weights by `n − σ`, so the
+word was wrong for the one record that most needs it right. **Sweeps: 24/25, one recorded
+equivalent** — and all three first-pass survivors were real: nothing asserted the caption prints *no
+number* without a quadrature (the sweep found the missing TEST for a fix the review had just made),
+nothing asserted the accumulator's step count, and nothing asserted that a pole counts only where its
+winding was DECIDED — whose test moves the circle by its OWN radius so the pole lands exactly on it,
+a hardcoded shift of 1 having merely enclosed it and passed for the wrong reason until measured. That
+last mutant is the equivalent one: every `decided: false` path in `kernel/winding.ts` returns `n: 0`,
+so the guard is unobservable and kept anyway, because a description should not depend on an invariant
+established in another module. The doc sweep found the **root README** stale in four places — no
+`@cas/rigor` in the package tree, no Contour Integration in either the tree or the app table, a test
+count from 436 files ago, and "ten applications riding twelve packages" where there are twelve and
+thirteen.
 
 **M4 (branch cuts) is complete — D1–D7 loaded and solving.** ADR-0041 and
 [`docs/contour-integration/M4-plan.md`](docs/contour-integration/M4-plan.md): tier D's output basis is

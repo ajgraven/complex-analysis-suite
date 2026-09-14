@@ -1467,6 +1467,30 @@ the `cvec`/`vec_` aliases it uses). Centralising the viewport map is load-bearin
 1. [x] `@cas/export` with `png.ts` + golden test; census / workspace / dep wiring; CD / CFP / RM migrated.
 2. [x] `FULLSCREEN_VERTEX_GLSL` / `HSV2RGB_GLSL` / `PLANE_FROM_FRAG_GLSL` added to `@cas/gpu/glsl`; all 7 / 2 / 4
    consumers migrated; a real-WebGL2 compile of the assembled shaders confirms the extraction.
+3. [x] **`iTXt` for text above Latin-1** (added during Contour Integration's M6.3). `tEXt` is Latin-1
+   only and the coercion to `?` was *documented rather than fixed*, which made it read as deliberate.
+   It was destroying real content in every consumer: each one's `Software` string carries an em-dash,
+   and Contour Integration stamps a figure's own verdict, where `= 2π√3/3` was being stored as
+   `= 2??3/3` — the mathematics gone from the one field whose job is to say what the figure claims.
+   `injectPngText` now chooses per entry (`tEXt` when lossless, so existing ASCII payloads are
+   byte-identical; `iTXt` otherwise) and `readPngText` reads both. UTF-8 is hand-rolled, because the
+   package compiles against `lib: ES2022` with no DOM and no Node types — deliberately, so it "can
+   run anywhere" — and it already hand-rolls CRC-32 and Latin-1.
+4. [ ] **The permalink KEY is not unified across consumers.** This package's README specifies
+   `Software` + `cas:state`; two apps follow it (Riemann Map, Contour Integration) and four each
+   minted their own prefix before the package existed — `ap:url`, `2de:url`, `2dh:url`,
+   `cdjs:state`. A reader wanting to open any figure in the suite therefore has four special cases.
+   Deliberately not fixed from inside one app; it wants a suite-wide slice.
+5. [ ] **`mountNavHeader`'s reading order depends on CALL ORDER, silently** — found in the same pass,
+   and belonging to ADR-0032. It ends with `container.appendChild(nav)`, so the nav reads wherever the
+   call happens to fall while `.cas-nav` is `position: fixed` and always draws at the top. Contour
+   Integration mounted it *after* filling its shell, so the nav was the last child: it looked first
+   and read last, after the entire rail. **Checked, and every other adopter is correct** — 2D
+   Electrostatics (both pages), Hele-Shaw (both), Potential Theory and 2D Hydrodynamics each call it
+   immediately before `app.append(bar, stage)`, so their nav is the first child. So this is not four
+   broken apps; it is one function whose contract is positional and unstated. `mountNavHeader` should
+   `prepend` (or say in its own doc that the caller must call it first), so the guarantee does not
+   rest on six call sites remembering.
 
 ## ADR-0017: The Complex-Dynamics → Riemann-Map hand-off; Riemann Map becomes a pure-2D conformal consumer
 

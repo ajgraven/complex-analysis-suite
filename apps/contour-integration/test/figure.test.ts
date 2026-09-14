@@ -5,6 +5,7 @@
 // a Chromium one.
 import { describe, expect, it } from "vitest";
 import { assembleVerdict, refuse } from "@cas/rigor";
+import { PNG_SIGNATURE, injectPngText, pngChunk, readPngText } from "@cas/export";
 import { figureCaption, figureLayout, figureMetadata } from "../src/shell/figure.js";
 import { compile, defaultState, offeredCorpus, resolveState, type ShellState } from "../src/shell/state.js";
 import { TEMPLATES } from "../src/shell/templates.js";
@@ -77,6 +78,25 @@ describe("the plate's caption", () => {
     expect(c.value).toBe("⚠ Refused");
     expect(c.value).not.toMatch(/[0-9]/);
     expect(c.level).toBe("⚠");
+  });
+
+  it("prints NO NUMBER when there is no quadrature to print one from", () => {
+    // **The caption used to read `≈ 0.0000000 + 0.0000000i` here**, from an `integral.value ?? [0, 0]`
+    // — a fabricated second opinion, on a shareable image, agreeing with nothing. The result card
+    // already states the rule in as many words; the caption now does too. (Found by review, and then
+    // by a mutation sweep, which is the order that tells you the test was missing rather than wrong.)
+    const noValue = {
+      verdict: assembleVerdict([]),
+      pieces: [],
+      windings: [],
+      closed: true,
+      quadratureSkipped: "a cut runs vertically through a piece, so no side pins a limit",
+    } as unknown as ContourIntegral;
+    const c = figureCaption({ title: "t", integral: noValue, theorem: null, ledger: null, solved: null });
+    expect(c.value).toBe("no quadrature to report");
+    expect(c.value).not.toMatch(/[0-9]/);
+    // And the reason travels with it, rather than a headline about a number that was never computed.
+    expect(c.verdict).toContain("vertically");
   });
 
   it("says so when there is no integrand at all", () => {
@@ -179,3 +199,41 @@ function decodeShellSync(hash: string): ShellState {
   if (r === null || !r.ok) throw new Error("decode refused");
   return r.state;
 }
+
+describe("the metadata survives the PNG", () => {
+  /** A structurally-walkable PNG, so the round trip can be tested without a canvas. */
+  function makePng(): Uint8Array {
+    const parts = [
+      PNG_SIGNATURE,
+      pngChunk("IHDR", Uint8Array.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0])),
+      pngChunk("IDAT", Uint8Array.from([1, 2, 3])),
+      pngChunk("IEND", new Uint8Array(0)),
+    ];
+    const out = new Uint8Array(parts.reduce((n, q) => n + q.length, 0));
+    let off = 0;
+    for (const q of parts) { out.set(q, off); off += q.length; }
+    return out;
+  }
+
+  it("carries EVERY record's caption through the PNG intact, mathematics and all", () => {
+    // **This is the guard for a defect that shipped in six apps.** PNG `tEXt` is Latin-1, so before
+    // `@cas/export` grew `iTXt` the em-dash in `Software` became `?` and `= 2π√3/3` became
+    // `= 2??3/3` — the mathematical content of the one field whose job is to say what the figure
+    // claims. Asserted over the whole corpus, because the symbols vary by record: `π`, `√`, `∮`,
+    // `Σ`, `⁻`, `ₖ`, `≈`, `⚠`.
+    const families = offeredCorpus().tiers.flatMap((t) => t.families);
+    let withMaths = 0;
+    for (const fam of families) {
+      const res = resolveState({ ...base(), mode: "gallery", record: fam.id, fixture: 0 }, null);
+      if (res.kind !== "gallery" || res.run === null) continue;
+      const meta = figureMetadata("https://example/#vs=abc", figureCaption({
+        title: fam.id, integral: res.run.integral, theorem: res.run.theorem,
+        ledger: res.run.ledger, solved: res.solved,
+      }));
+      expect(readPngText(injectPngText(makePng(), meta)), fam.id).toEqual(meta);
+      if ([...Object.values(meta).join("")].some((c) => (c.codePointAt(0) ?? 0) > 255)) withMaths += 1;
+    }
+    // And the guard is not vacuous: most records' metadata genuinely needs more than Latin-1.
+    expect(withMaths).toBeGreaterThan(20);
+  });
+});

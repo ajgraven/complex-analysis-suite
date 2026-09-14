@@ -110,6 +110,16 @@ import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accum
  * number, because there is never a number to style.
  */
 
+/**
+ * What the arrow keys do on the stage — a constant, because it is prepended to a description that
+ * IS regenerated, and two copies of the instructions would be two things to keep in step.
+ */
+const STAGE_KEYS =
+  "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
+  "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one of its radius " +
+  "handles, or a branch point or branch cut, after which the arrow keys move what you grabbed " +
+  "and shift with an arrow pans.";
+
 /** How close a pointer must come to a handle or to the contour, in CSS px, to grab it. */
 const GRAB_PX = 11;
 
@@ -376,7 +386,9 @@ export function mountApp(root: Element): ShellHandle {
     {};
 
   // --- layout -------------------------------------------------------------------------------
-  const shell = el("div", "shell");
+  // `<main>`, which is one of the two axe findings this page has ever had: the grid holding the
+  // stage, the rail and the strip IS the document's main content, and it was a bare `div`.
+  const shell = el("main", "shell");
   const bar = el("header", "bar");
   const stageWrap = el("div", "stage");
   const glCanvas = el("canvas", "gl");
@@ -386,10 +398,20 @@ export function mountApp(root: Element): ShellHandle {
   const strip = el("footer", "strip");
   stageWrap.append(glCanvas, inkCanvas, overlay);
   shell.append(bar, stageWrap, rail, strip);
-  root.replaceChildren(shell);
-  // The shared suite nav (ADR-0032): back to the launcher, and across to the sibling apps. Mounted
-  // before the stage so it sits above it in the document order a screen reader walks.
-  mountNavHeader(shell, { current: "contour-integration" });
+  /**
+   * The shared suite nav (ADR-0032), in its own host BEFORE `<main>`.
+   *
+   * **It used to be mounted into `shell` with a comment claiming that put it "before the stage in
+   * the document order a screen reader walks". It did the opposite.** `mountNavHeader` ends with
+   * `container.appendChild(nav)`, so the nav was the LAST child of the shell — after the bar, the
+   * stage, the rail and the strip — while `.cas-nav` is `position: fixed` and draws at the top. It
+   * looked first and read last, which is the visual-versus-DOM order mismatch that matters most to
+   * the reader who cannot see the first part. Its own host, prepended, is also what lets the shell
+   * be a `<main>` at all: a landmark containing the site navigation is not what `<main>` means.
+   */
+  const navHost = el("div", "navHost");
+  root.replaceChildren(navHost, shell);
+  mountNavHeader(navHost, { current: "contour-integration" });
 
   // Bar: where the problem comes from — a typed integrand, or one of the gallery's records.
   const sourceWrap = el("div", "sourceToggle");
@@ -554,7 +576,10 @@ export function mountApp(root: Element): ShellHandle {
   });
 
   bar.append(
-    el("span", "brand", "Contour Integration"),
+    // An `<h1>`, which is the other axe finding: seven card headings started at level 2 with no
+    // level 1 above them. The CSS keeps it the size it always was — this is a document-structure
+    // change, not a visual one.
+    el("h1", "brand", "Contour Integration"),
     sourceWrap,
     sandboxGroup,
     galleryGroup,
@@ -1008,8 +1033,17 @@ export function mountApp(root: Element): ShellHandle {
    * missing the phase portrait — the whole backdrop — and would look merely plain rather than wrong.
    */
   async function figureBytes(scale = 2): Promise<Uint8Array | null> {
+    // **EVERYTHING THE PLATE CLAIMS IS CAPTURED BEFORE THE FIRST `await`, and a review of this
+    // function is why.** `toBlob` yields to the event loop, so a draft that called `captionNow()`
+    // once for the drawing and again for the metadata could have a pending recompute land between
+    // them — a figure whose drawn caption said one thing and whose stamped verdict said another,
+    // which is precisely the dishonesty the verdict key exists to prevent. Same for the permalink:
+    // a link encoded after the yield could describe a state the picture is not of.
     const vp = viewport();
     stage?.render(view, vp, { iso: isoOn() ? 1 : 0 });
+    const caption = captionNow();
+    const enc = encodeShell(currentState());
+    const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
     const layout = figureLayout(
       { w: glCanvas.width, h: glCanvas.height },
       { w: accCanvas.width, h: accCanvas.height },
@@ -1017,7 +1051,7 @@ export function mountApp(root: Element): ShellHandle {
     );
     const style = getComputedStyle(shell);
     const plate = document.createElement("canvas");
-    drawFigure(plate, layout, [glCanvas, inkCanvas], accCanvas, captionNow(), {
+    drawFigure(plate, layout, [glCanvas, inkCanvas], accCanvas, caption, {
       background: style.getPropertyValue("--c-bg").trim() || "#0f1115",
       text: style.getPropertyValue("--c-text").trim() || "#e7e9ee",
       muted: style.getPropertyValue("--c-muted").trim() || "#99a1b3",
@@ -1026,9 +1060,7 @@ export function mountApp(root: Element): ShellHandle {
       plate.toBlob(done, "image/png");
     });
     if (blob === null) return null;
-    const enc = encodeShell(currentState());
-    const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
-    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, captionNow()));
+    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, caption));
   }
 
   /**
@@ -1268,6 +1300,10 @@ export function mountApp(root: Element): ShellHandle {
     renderPoles();
     drawAcc();
     requestDraw();
+    // The two canvases' text alternatives describe what was just computed, so they are refreshed
+    // with it — a static label would go stale the first time a record changed.
+    inkCanvas.setAttribute("aria-label", `${STAGE_KEYS} ${describeStage()}`);
+    accCanvas.setAttribute("aria-label", describeAccumulator());
     // Not mid-gesture: a drag recomputes at draft quality on every frame, and the URL is for the
     // state the reader stopped at. `endGesture` calls it once the gesture is over.
     if (gesture === "none") syncHash();
@@ -2737,12 +2773,66 @@ export function mountApp(root: Element): ShellHandle {
   // The accessible-canvas contract (ADR-0032): the GL canvas is the RENDER surface and is hidden
   // from assistive tech; the ink overlay above it carries the name, the focus and the keyboard map,
   // so the stage is navigable without a pointer at all.
+  /**
+   * What the stage and the accumulator SHOW, in words, derived from the ledger.
+   *
+   * Research 02 §8 makes the head-to-tail partial sum the app's P0 picture, and it was completely
+   * unannounced — the one substantive gap M6.0's keyboard walk found. This is the `role="img"` case
+   * `@cas/ui`'s `attachCanvasA11y` exists for.
+   *
+   * **Generated, never written.** Every clause comes from something the engine computed: the caption
+   * the exported figure uses (so the two cannot disagree), the piece list, and the enclosed count.
+   * A hand-written alternative would drift from the picture the first time a record changed, and
+   * would be the one place in this app claiming something nothing checked.
+   */
+  function describeStage(): string {
+    const c = captionNow();
+    const pieces = contour.pieces.length;
+    // **"WOUND", not "enclosed", and the distinction is D6's.** This counts poles whose winding
+    // number the engine decided to be non-zero, which is exactly what it says. The ledger's CATCH
+    // row can differ: the exterior residue theorem re-weights each pole by `n − σ`, so a dogbone
+    // with the cut inside it encloses its poles and still contributes nothing from them. Describing
+    // this count as "enclosed" would put a claim in the text alternative that the ledger next to it
+    // does not make.
+    //
+    // `w.decided &&` is UNOBSERVABLE and kept deliberately — a mutation sweep survivor, recorded
+    // rather than deleted: every `decided: false` path in `kernel/winding.ts` returns `n: 0`, so the
+    // two conditions agree today. Dropping it would make this line depend on that invariant holding
+    // in another module, which is not a dependency a description should have.
+    const wound = integral?.windings.filter((w) => w.decided && w.n !== 0).length ?? 0;
+    return (
+      `${c.title}. ${pieces} piece${pieces === 1 ? "" : "s"}; ` +
+      `${wound === 0 ? "the contour winds about no pole" : `it winds about ${wound} pole${wound === 1 ? "" : "s"}`}. ` +
+      `${c.value}. ${c.verdict}`
+    );
+  }
+
+  function describeAccumulator(): string {
+    const c = captionNow();
+    if (acc === null) {
+      return "The partial sum of f(z)·Δz along the contour. Nothing is plotted: there is no value to accumulate.";
+    }
+    return (
+      `The partial sum Σ f(zₖ)·Δzₖ, plotted head to tail in the complex plane over ` +
+      `${acc.steps.length} steps along the contour. Its endpoint is the integral: ${c.value}.`
+    );
+  }
+
+  // Attached for its side effect: the role, the name and the live region. There is nothing to
+  // announce and no key to handle, so the handle itself is not kept.
+  attachCanvasA11y(accCanvas, {
+    // A STATIC view, so `role="img"` and no key handler: everything the reader can change about it —
+    // the scrub position and the comparison — is a labelled control in the strip beside it.
+    role: "img",
+    // Through the same generator `recompute` refreshes it with, so the label has one source even at
+    // this one moment before the first recompute has run.
+    label: describeAccumulator(),
+  });
+
   const stageA11y = attachCanvasA11y(inkCanvas, {
-    label:
-      "The complex plane: the integrand's phase portrait with the contour drawn over it. " +
-      "Arrow keys pan, plus and minus zoom. Press Enter to grab the contour, one of its radius " +
-      "handles, or a branch point or branch cut, after which the arrow keys move what you grabbed " +
-      "and shift with an arrow pans.",
+    // The keys, then what is on screen — the second half regenerated on every recompute (see
+    // `describeStage`), which is why the instructions are a constant the two places share.
+    label: `${STAGE_KEYS} ${describeStage()}`,
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,

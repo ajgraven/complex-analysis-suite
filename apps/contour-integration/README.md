@@ -715,7 +715,7 @@ plausible.
 
 **M6.3** makes the figure carry its own recipe. **Save figure** and **Copy figure** composite the
 stage — the phase portrait with the contour over it — above the accumulator's partial-sum trail, and
-stamp the PNG's `tEXt` metadata with `Software`, the permalink (`cas:state`) and **the verdict**. The
+stamp the PNG's text metadata with `Software`, the permalink (`cas:state`) and **the verdict**. The
 verdict is both stamped and *drawn on the plate*, because a picture of a contour over a phase
 portrait looks identical whether the argument closes or not, and nobody reads PNG metadata. The
 caption goes through the same `integralRefusal` gate the result card does, so it cannot print a
@@ -725,6 +725,17 @@ One measurement changed that slice: `GLStage` created its context without `prese
 so the GL layer read back **one distinct colour** where the ink layer read 44 — every figure would
 have been missing its whole backdrop. The flag fixes it and costs 0.6 % of a frame during a
 continuous pan (20.00 → 20.12 ms, best of three, under software rendering).
+
+**M6.4 completes M6.** The page now audits **clean** under `axe` — zero rules, zero nodes — with its
+baseline recorded as `{}`. Both findings it ever had were two missing elements: the grid holding the
+stage, the rail and the strip is now a `<main>`, and the bar's brand is the page's `<h1>` above the
+cards' `<h2>`s. The accumulator — research 02 §8's P0 picture, previously unannounced — carries
+`role="img"`, and **both canvas descriptions are generated from the ledger** rather than written, so
+they cannot describe the previous record. Three findings: the suite nav *looked* first and *read*
+last (`mountNavHeader` ends with `appendChild`, while `.cas-nav` is `position: fixed`) and a comment
+claimed the opposite; `gl`'s `aria-hidden` was already being set by `@cas/ui`; and
+`prefers-reduced-motion` has **nothing to act on** here, measured — zero `transition`, `animation` or
+`@keyframes` rules, and the app's single `requestAnimationFrame` is a draw coalescer, not a loop.
 
 Two findings came with it. The window picker was **silently dropping the declared factor** — it took
 `buildDeclaration`'s whole cut system, whose point is `"b"` where the reader's is `"b1"` — and the app

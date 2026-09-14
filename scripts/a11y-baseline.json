@@ -1,6 +1,65 @@
 {
-  "launcher": {},
+  "2d-electrostatics": {
+    "region": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "2d-electrostatics-polygon": {
+    "region": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "2d-hydrodynamics": {},
+  "argument-principle": {
+    "color-contrast": {
+      "impact": "serious",
+      "count": 3,
+      "help": "Elements must meet minimum color contrast ratio thresholds"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 13,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
   "complex-dynamics": {},
+  "complex-function-plotter": {},
+  "contour-integration": {},
+  "correspondences": {},
+  "correspondences-mating": {},
+  "faber-transform": {
+    "landmark-one-main": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "Document should have one main landmark"
+    },
+    "region": {
+      "impact": "moderate",
+      "count": 18,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "hele-shaw-flow": {},
+  "hele-shaw-flow-droplet": {
+    "region": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "hele-shaw-flow-twist": {
+    "region": {
+      "impact": "moderate",
+      "count": 1,
+      "help": "All page content should be contained by landmarks"
+    }
+  },
+  "launcher": {},
+  "potential-theory": {},
   "quadrature-domains": {
     "color-contrast": {
       "impact": "serious",
@@ -13,7 +72,6 @@
       "help": "Interactive controls must not be nested"
     }
   },
-  "complex-function-plotter": {},
   "riemann-map": {
     "color-contrast": {
       "impact": "serious",
@@ -35,62 +93,5 @@
       "count": 3,
       "help": "All page content should be contained by landmarks"
     }
-  },
-  "argument-principle": {
-    "color-contrast": {
-      "impact": "serious",
-      "count": 3,
-      "help": "Elements must meet minimum color contrast ratio thresholds"
-    },
-    "region": {
-      "impact": "moderate",
-      "count": 13,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
-  "faber-transform": {
-    "landmark-one-main": {
-      "impact": "moderate",
-      "count": 1,
-      "help": "Document should have one main landmark"
-    },
-    "region": {
-      "impact": "moderate",
-      "count": 18,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
-  "2d-electrostatics": {
-    "region": {
-      "impact": "moderate",
-      "count": 1,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
-  "2d-electrostatics-polygon": {
-    "region": {
-      "impact": "moderate",
-      "count": 1,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
-  "2d-hydrodynamics": {},
-  "hele-shaw-flow": {},
-  "hele-shaw-flow-twist": {
-    "region": {
-      "impact": "moderate",
-      "count": 1,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
-  "hele-shaw-flow-droplet": {
-    "region": {
-      "impact": "moderate",
-      "count": 1,
-      "help": "All page content should be contained by landmarks"
-    }
-  },
-  "potential-theory": {},
-  "correspondences": {},
-  "correspondences-mating": {}
+  }
 }

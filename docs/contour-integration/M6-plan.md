@@ -115,9 +115,9 @@ silently. Both are decisions (§3), not assumptions.
 |---|---|
 | `deploy-pages.yml` line | **done** — `cp -r apps/contour-integration/dist _site/contour-integration` |
 | Launcher card live | **done** — and a stale duplicate *"Coming soon … not yet part of the published site"* card was still beside it, deleted on the way into this plan |
-| `@cas/interchange` view-state transport | **exists** — `encodeViewState`/`decodeViewState`, `#vs=`, forward-compat contract. **8 apps** carry their own schema on it (150–260 lines each, each with a test). Not a dependency of this app. |
+| `@cas/interchange` view-state transport | **exists** — `encodeViewState`/`decodeViewState`, `#vs=`, forward-compat contract. **9 apps** carried their own schema on it when this was written (150–260 lines each, each with a test); this app is the **tenth**, as of §M6.2, so the "not a dependency of this app" that stood here is no longer true. |
 | `hashchange` re-hydration | **nothing in the repo does it.** Boot-time read + `history.replaceState` on settle is the house idiom; there is no live re-hydration precedent to copy. |
-| `@cas/export` PNG `tEXt` | **exists**, 6 consumers. Convention is two keys: `Software`, and **`cas:state` = the permalink** — so the figure carries its own link, and **the export is blocked on the codec**. |
+| `@cas/export` PNG `tEXt` | **exists**, 6 consumers. Convention is two keys: `Software`, and **`cas:state` = the permalink** — so the figure carries its own link, and **the export is blocked on the codec**. *(Both halves of this row are wrong, and §M6.3a says how: `cas:state` had **one** adopter of six, and `tEXt` is Latin-1, so the metadata was being mangled.)* |
 | `ClipboardItem`, sync-in-gesture | 3 precedents (CD, the plotter, QD). The plotter's is the form PLAN names. |
 | `@cas/ui` | **3 of 4** primitives adopted — `runWithFatalBoundary`, `mountNavHeader`, `attachCanvasA11y` (on `inkCanvas`, with a live region and a full key handler). `mountCanvas` unused (canvases hand-rolled); `createComputeClient` unused. |
 | a11y audit roster | **the app IS in `scripts/a11y-audit.mjs`'s `PAGES`** … |
@@ -266,6 +266,9 @@ carrying a declared branch, a sheet offset and a dragged cut.
 > its state implies. That is zero risk today — no app path calls `applyState` until the codec exists —
 > and becomes real in M6.2, which is where the check belongs. M6.3 needs a browser-mounted shell
 > anyway, to composite the three canvases.
+>
+> *(Closed: §M6.3's `test/figureInk.browser.test.ts` mounts the shell in Chromium and drives the real
+> export, so the suite is 119 tests and the gap above is no longer open.)*
 
 ### M6.2 — `#vs=`, verified by verdict · *M*
 
@@ -464,6 +467,84 @@ came from.
 
 **Gate:** `node scripts/a11y-audit.mjs --strict` passes for this page; a keyboard-only walk reaches
 every control; the stage announces its verdict.
+
+> **DONE, and the page now audits CLEAN — zero rules, zero nodes,** with its baseline recorded as
+> `{}` and `--strict` passing. Re-measured first: still exactly the two findings M6.0 reported, so
+> none of M6.1–M6.3's new controls added any.
+>
+> **Both axe findings are fixed by two elements.** The grid holding the stage, the rail and the strip
+> became a `<main>` — it was a bare `div` — and the bar's brand became the page's `<h1>`, above the
+> cards' seven `<h2>`s. The CSS cancels the heading's own size and margin, so this is a
+> document-structure change and not a visual one.
+>
+> **The accumulator is named, and BOTH canvas descriptions are generated from the ledger.** Research
+> 02 §8 makes the head-to-tail partial sum this app's P0 picture and it was completely unannounced;
+> it now carries `role="img"` and a sentence naming its step count and its endpoint. The stage's
+> alternative keeps its key instructions as a shared constant and appends a generated description —
+> the piece count, the enclosed count, the value and the ledger's headline, every clause from
+> something the engine computed, and refreshed on each recompute. A hand-written alternative would
+> have drifted the first time a record changed.
+>
+> **Three findings.**
+>
+> **(1) The suite nav looked first and read LAST**, and a comment in `app.ts` claimed the opposite:
+> *"mounted before the stage so it sits above it in the document order a screen reader walks"*.
+> `mountNavHeader` ends with `container.appendChild(nav)`, so the nav was the final child of the
+> shell — after the bar, the stage, the rail and the strip — while `.cas-nav` is `position: fixed`
+> and draws at the top. A screen-reader user reached "Back to the suite launcher" only after the
+> entire rail. It now has its own host prepended before `<main>`, which is also what lets the shell
+> be a landmark at all: `<main>` is not where the site navigation belongs.
+>
+> **Checked rather than assumed, and the other adopters are FINE.** 2D Electrostatics (both pages),
+> Hele-Shaw (both), Potential Theory and 2D Hydrodynamics each call `mountNavHeader` immediately
+> before `app.append(bar, stage)`, so their nav is the first child. This app called it *after*
+> filling the shell. So the defect is not four broken apps but one function whose contract is
+> positional and unstated — `mountNavHeader` should `prepend`, or say that the caller must call it
+> first. Recorded as [ADR-0016](../DECISIONS.md) action item 5, against ADR-0032.
+>
+> **(2) `gl`'s `aria-hidden` was already set**, by `@cas/ui` — `attachCanvasA11y` marks its `render`
+> canvas hidden. §M6.0's table listed it as unnamed and recommended adding one, which was reading the
+> role and name columns and not this attribute. Nothing to do; the table was wrong.
+>
+> **(3) `prefers-reduced-motion` has NOTHING TO ACT ON here, so it is deliberately not honoured.**
+> Measured: `app.css` contains **zero** `transition`, `animation` or `@keyframes` rules, and the
+> single `requestAnimationFrame` in the app is a draw COALESCER, not a loop — the app paints on
+> interaction and never on its own. Research 07 rule 7 is satisfied vacuously, and adding a media
+> query with nothing inside it would be a claim to have addressed something that was never there.
+> If M7's drill or any future surface animates, the rule applies then and the measurement above is
+> the thing to re-run.
+>
+> Guarded where it BLOCKS, too: `scripts/a11y-audit.mjs` is a non-blocking CI job, so the four
+> structural invariants — one `<main>`, one `<h1>`, the nav before the landmark, every canvas named
+> or explicitly hidden — are asserted in `test/shell.test.ts`, which does block. jsdom has no axe but
+> it has a DOM, and all four are DOM facts.
+>
+> **The keyboard walk is clean, and my first re-measurement of it was wrong in exactly the way
+> §M6.0's was.** A DOM probe reading `aria-label ?? textContent` reported one unnamed `<input>`; read
+> from the real accessibility tree over CDP it is **45 interactive nodes in sandbox and 29 in
+> gallery, none unnamed**, because a wrapping `<label>` names an input that carries no `aria-label`.
+> The sliders read `"R = 1.5"`, `"a = 2"`, `"b = 1"`. Second time this exact probe bug has been made
+> in this milestone; the accessibility tree is the instrument, not the DOM.
+>
+> **The sweep is 24/25 (one recorded equivalent), and the three first-pass survivors were all real.**
+> Nothing asserted that `figureCaption` prints *no number* when there is no quadrature — which is the
+> defect the review had just fixed, so the sweep found the missing test rather than the missing code.
+> Nothing asserted the accumulator's step COUNT (the description would have read "over 0 steps" and
+> passed). And nothing asserted that a pole is counted only where its winding was DECIDED: the test
+> written for it moves the circle by its OWN radius so the pole lands exactly on it — a hardcoded
+> shift of 1 merely encloses the pole at any other radius, and *did*, passing for the wrong reason
+> until it was measured. That third mutant (`w.decided &&` removed) then turns out to be
+> **equivalent**: every `decided: false` path in `kernel/winding.ts` returns `n: 0`, so the two
+> conditions agree. The guard stays, with that reason beside it — a description should not depend on
+> an invariant established in another module.
+>
+> **A `@cas/export` defect surfaced in the review and is fixed in the package** ([ADR-0016](../DECISIONS.md)
+> action item 3): `tEXt` is Latin-1, so every consumer's em-dash and this app's own `= 2π√3/3` were
+> being stored as `?`. `injectPngText` now picks `iTXt` per entry; the package test that asserted the
+> coercion as intended behaviour is replaced. Two smaller review findings: `figureBytes` captured its
+> caption and its permalink on opposite sides of an `await` (a recompute landing between would stamp
+> a verdict the drawn caption disagreed with), and `describeStage` said "enclosed" where it counts
+> poles of non-zero winding, which D6's exterior theorem re-weights by `n − σ`.
 
 > **This completes M6's gate.** The teaching layer follows as [M7](M7-plan.md).
 

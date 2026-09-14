@@ -682,3 +682,17 @@ ul.poleTable li {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+
+/* The brand is an `<h1>` for document structure (one level-one heading above the rail's level-two
+   card headings), so its default heading size and margin are cancelled: this was an outline change,
+   not a visual one. */
+h1.brand {
+  font-size: 1em;
+  margin: 0 0.5rem 0 0;
+}
+
+/* The suite nav's own host, before `<main>` in the DOM so it reads where it draws. `.cas-nav` is
+   `position: fixed`, so the host itself occupies nothing. */
+.navHost {
+  display: contents;
+}

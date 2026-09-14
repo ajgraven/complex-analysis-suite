@@ -871,6 +871,15 @@ live; the `deploy-pages.yml` line.
 > `currentState()` / `applyState(s)`. Proven a no-op byte for byte over the whole visible rail, and
 > carrying `test/shell.test.ts`, the first test to reach `src/shell/app.ts`.
 >
+> **M6.2, M6.3 and M6.4 are DONE too, so M6's gate is met**: permalinks round-trip by verdict across
+> the whole corpus, the exported figure carries its own link and verdict, and the page audits clean
+> under `axe` with a keyboard walk that reaches every control. Each slice's findings are recorded in
+> [`M6-plan.md`](M6-plan.md); the three worth carrying forward are that **the contour is never
+> serialised as geometry** (a gallery link is `{record, fixture}` because the record derives it), that
+> `@cas/export`'s `tEXt` chunk is **Latin-1** and was mangling every consumer's metadata until `iTXt`
+> was added, and that **it took three attempts to write a non-vacuous test** for "the phase portrait
+> is in the plate".
+>
 > **Its gate as written is too weak, and M6.2's should be read in the light of that.** *"`applyState
 > (currentState())` is a fixed point"* survived 11 of 20 mutants, because **a consistently lossy round
 > trip is still a fixed point** — the sentence is satisfied by `currentState = () => ({})` and

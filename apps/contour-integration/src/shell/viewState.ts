@@ -1,8 +1,8 @@
 // **THE `#vs=` PERMALINK.** The shell's state in a URL, and back again.
 //
-// On `@cas/interchange`'s app-namespaced, forward-compatible view-state envelope, which is the
-// eight-app house idiom — this app owns the SCHEMA, interchange owns the transport and the
-// versioning, and neither owns any DOM.
+// On `@cas/interchange`'s app-namespaced, forward-compatible view-state envelope, which nine other
+// apps already carry their own schema on — this app owns the SCHEMA, interchange owns the transport
+// and the versioning, and neither owns any DOM.
 //
 // **WHY THIS FILE IS A CORRECTNESS SURFACE AND NOT A CONVENIENCE.** In every other app in the suite
 // a dropped view-state field means a slightly different picture. In this one it means the app draws
