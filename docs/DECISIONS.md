@@ -1250,10 +1250,18 @@ recipe) and letting the new app own general construction, with the interchange h
 1. [x] Scaffold `apps/riemann-map` on the shared packages — P0 Genesis: the empty, tested, deployable
        shell (Vite/TS, the single serializable view-state over `@cas/interchange`, node parity-seed
        tests, launcher "Coming soon" card; local `lint`/`typecheck`/`test`/`build` gate green).
-2. [ ] Wire the Complex-Dynamics → riemann-map φ hand-off through `@cas/interchange` (plan Phase 2).
-3. [ ] Record the **numeric-linear-algebra seam** and the **`@cas/interchange` extension** (new
+2. [x] Wire the Complex-Dynamics → riemann-map φ hand-off through `@cas/interchange` (plan Phase 2).
+       — landed as [ADR-0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer)'s **B1** (CD's `src/interchange/exportMap.ts` + the "Riemann Map ↗"
+       deep link, exporting a filled Julia set's Böttcher map as a `kind:"map"` `LaurentMap`) and **B2**
+       (RM's `src/interchange/importMap.ts` + the "import" disk-image source), pinned from both sides by
+       the `CD_TO_RM_BOTTCHER_LINK` golden (`apps/complex-dynamics/test/exportMap.test.ts`,
+       `apps/riemann-map/test/importMap.test.ts`). The checkbox was simply never flipped.
+3. [x] Record the **numeric-linear-algebra seam** and the **`@cas/interchange` extension** (new
        `MapSpec` variants, minor version bump) as their own follow-on ADRs when they materialize
-       (plan Phases 2–3).
+       (plan Phases 2–3). — both materialized and both were recorded: the seam as
+       [ADR-0018](#adr-0018-extract-casconformal-ahead-of-demand-lift-lstsq-into-cascore) (extract `@cas/conformal`, lift `lstsqHouseholder` into `@cas/core`), and the
+       interchange extensions as [ADR-0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) (the `kind:"map"` `LaurentMap` hand-off) and
+       [ADR-0035](#adr-0035-the-conformal-casinterchange-form-polygon-schwarzchristoffel-maps-interchange-140) (the `conformal` form, interchange 1.4.0).
 
 ---
 
@@ -1335,7 +1343,11 @@ same rule symmetrically: don't extract what has only one consumer yet.
        `@cas/dynamics`; add the dependency to Complex Dynamics and Riemann Map; register the package in
        `vitest.workspace.ts` and the test-census gate. Verified: full workspace lint / typecheck / test
        (288 files across 11 projects) / build green — behavior-preserving.
-3. [ ] Build Riemann Map's capacity / exterior-coefficient / boundary-overlay readouts on it (P2b).
+3. [~] **Superseded, not pending** — Riemann Map is no longer a `@cas/dynamics` consumer. Its **B4**
+       under [ADR-0017](#adr-0017-the-complex-dynamics--riemann-map-hand-off-riemann-map-becomes-a-pure-2d-conformal-consumer) shed the whole dynamics stack and the dependency with it (`@cas/dynamics`
+       no longer appears in `apps/riemann-map/package.json`), and that ADR states the supersession of this
+       ADR's premise in its own text. P2b cannot be built on a package the app does not have; a future
+       readout would be a new decision, not this item.
 4. [x] Extract the **external-ray tracing** from `rays.ts` to `@cas/dynamics` when Riemann Map draws
        external rays (P2c). Done as a clean split: the pure z²+c ray-tracing (`parameterRay`, `dynamicRay`,
        `rayDepthForZoom`, `parseAngle`) moved to the package; CD's `render/rays.ts` became a re-export
@@ -2417,11 +2429,17 @@ for when one appears.
 1. [x] Write [`docs/design/riemann-surface-plan.md`](design/riemann-surface-plan.md) +
        [`riemann-surface-research-notes.md`](design/riemann-surface-research-notes.md) and this ADR at the
        M0 gate.
-2. [ ] Land M0 (spike) + M1 (parametrize-by-w mode) test-guarded on
+2. [x] Land M0 (spike) + M1 (parametrize-by-w mode) test-guarded on
        `claude/riemann-surface-rendering-fvybo6`; keep the existing top-down-3D≡2D golden green.
-3. [ ] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
+       — shipped. `detectRiemannForm` + `src/riemann/inverse.ts` are the parametrize-by-w recognizer, and
+       the dispatch tries M1 FIRST because its parametric surface is exact (`riemann/algebraicCurve.ts`
+       header); the top-down-3D≡2D golden is still green and every later stage kept it so.
+3. [x] When (and only when) approved, land M2 (algebraic curves) — record a follow-on ADR for the
        `P(z,w)=0` engine and any shared primitive it needs — then M3 (monodromy explorer, `≈`-labeled).
-       *(M2a approved + recorded as [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)*
+       *(M2a approved + recorded as [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing).)* — all of it landed, each half with the follow-on
+       ADR this item asked for: M2a/M2b under [ADR-0029](#adr-0029-algebraic-curve-riemann-surfaces-m2a-single-radical-npp-proximity-gluing), the `P(z,w)=0` engine as M2c under
+       [ADR-0031](#adr-0031-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer), and M3.1–M3.4 (hover-pick, linked base plane, monodromy explorer, branch-point
+       markers — `≈` throughout) under [ADR-0030](#adr-0030-riemann-surface-exploration-tools-m3--hover-pick-linked-base-plane-monodromy).
 4. [ ] On a second consumer of `src/riemann/`, extract `@cas/branch` and supersede this ADR's in-app note.
 
 ---
@@ -2522,8 +2540,11 @@ M1-preferred dispatch keeps the cheapest exact path for the primitives M1 alread
        degeneracy + `wCap`); existing tests (incl. top-down-3D≡2D) kept green.
 3. [x] Land M2b (radical sums / products / ratios) — via **root-of-unity branch injection**, not
        `@cas/exact` resultants; still zero new deps.
-4. [ ] When (and only when) approved, land M2c (implicit `F(w,z)=0` input) — the first consumer of
+4. [x] When (and only when) approved, land M2c (implicit `F(w,z)=0` input) — the first consumer of
        `@cas/core` per-vertex root-solving + `@cas/exact` discriminant here; follow-on ADR (plan §9).
+       — approved and landed as [ADR-0031](#adr-0031-implicit-fwz0-algebraic-riemann-surfaces-m2c--the-plotters-first-cascore--casexact-consumer): `riemann/implicitPoly.ts` + `implicitCurve.ts` (M2c.0/.1)
+       and `implicitExact.ts` (M2c.2, the `=`-labeled exact branch locus over `@cas/exact`'s
+       `discriminant`). That ADR's own items are ticked; this one, which asked for it, was not.
 
 ---
 
@@ -3001,7 +3022,10 @@ M3/D/B).
 
 ### Action Items
 1. [x] Write [`docs/design/riemann-surface-fundamental-group-plan.md`](design/riemann-surface-fundamental-group-plan.md) + this ADR (C0).
-2. [ ] C1 — `generatorLoop.ts` + branch-point chips (winding-certified) + tests; gate; pause for review.
+2. [x] C1 — `generatorLoop.ts` + branch-point chips (winding-certified) + tests; gate; pause for review.
+       — shipped: `src/riemann/generatorLoop.ts`, `renderGeneratorChips` in `src/main.ts` (shown with the
+       explorer, refreshed when the branch points move), and `test/generatorLoop.test.ts`. C2–C4 below
+       consume it and were ticked; this one was missed.
 3. [x] C3 — `permGroup.ts` (capped closure + orbit transitivity + Riemann–Hurwitz genus with the exact
        parity/bound consistency check) + lasso/enclosing loops (common-labeling generators + the ∞ loop) +
        `Plot.riemannSheetCount` + a **Monodromy group & genus** summary. `≈`, quarantined. Verified √(z²−1) →

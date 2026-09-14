@@ -502,9 +502,12 @@ layer, not its Gröbner/multivariate layer — so this is **not** grounds to ext
    fact.** `@cas/ui` was extracted ahead of adoption as the shared *browser shell* (canvas a11y, a
    fatal-error boundary, an off-thread compute client, a nav header) under ADR-0032, long before this
    plan was written; the plan was drafted against a checkout 581 commits stale (see the banner on
-   [`research/08`](research/08-repo-reuse-survey.md)). **Open item:** adopt `@cas/ui`'s shell in this
-   app rather than proposing a seed — the nav header in particular, so it sits in the suite the way
-   its siblings do.
+   [`research/08`](research/08-repo-reuse-survey.md)). **Done, M6.4:** the app is on `@cas/ui`'s shell —
+   `runWithFatalBoundary` in `src/main.ts`, `attachCanvasA11y` on both canvases, and `mountNavHeader`
+   into its own host **prepended** to the shell, which is what lets the grid be a `<main>` landmark at
+   all (site navigation does not belong inside one). `createComputeClient` is the one primitive not
+   taken, and deliberately: this app has no worker offload to client, so adopting it would be a seam
+   with nothing on the far side.
 
 ### 6.3 The overlap nobody saw: `apps/argument-principle`
 
