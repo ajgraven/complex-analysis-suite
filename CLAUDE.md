@@ -98,18 +98,19 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 Green is **542 test files / 5623 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
-separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
-three of Contour-Integration's specs are the only jsdom ones — `test/shell.test.ts`,
-`test/pen.test.ts` and `test/drillShell.test.ts`, each per-file through a
-`// @vitest-environment jsdom` docblock, because all three reach `src/shell/app.ts`. **Never pipe the gate through `tail` or `head`** — doing so has truncated
+separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` is the
+only project whose vitest config sets `environment: "jsdom"` wholesale. Everywhere else jsdom is
+opted into **per file** through a `// @vitest-environment jsdom` docblock over a `node` default — 33 of
+QD's specs and three of Contour-Integration's (`test/shell.test.ts`, `test/pen.test.ts` and
+`test/drillShell.test.ts`, because all three reach `src/shell/app.ts`). **Never pipe the gate through `tail` or `head`** — doing so has truncated
 real failures before.
 
 Dev servers go through `.claude/launch.json` (one entry per app, each with its port), not a bare
 `vite` left running in the background.
 
-**The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
-the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
-`packages/gpu`). They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
+**The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` at the
+root runs all six in order (`packages/gpu`, `packages/schwarz`, complex-dynamics, complex-function-plotter,
+quadrature-domains, contour-integration), or run one project's directly. They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
 `apps/contour-integration/vitest.browser.config.ts` reads `CAS_CHROMIUM_EXECUTABLE`, so
 `CAS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:browser` works in a container that has one
 under a different version. **Run it when a slice adds a record or touches the stage:** the contour-integration
@@ -271,8 +272,9 @@ fatal boundary + `JuliaMetricsClient` on `createComputeClient`), **faber-transfo
 pages), **riemann-map**, **argument-principle**, and the **plotter** — closing each app's a11y / fatal-error UX
 findings. **QD is deliberately NOT a consumer** (allowJs/vanilla and already product-mature; it took `@cas/schwarz`
 as a devDependency only, for the ADR-0026 σ drift-guard). **U8 is now done** — a **non-blocking `axe` CI job**
-(`a11y` in `ci.yml` → `scripts/a11y-audit.mjs` + `scripts/a11y-baseline.json`, or `pnpm a11y`) audits all nine
-built app pages in headless Chromium against a per-page baseline, surfacing a11y *regressions* as `::warning::`
+(`a11y` in `ci.yml` → `scripts/a11y-audit.mjs` + `scripts/a11y-baseline.json`, or `pnpm a11y`) audits **eighteen**
+built pages in headless Chromium against a per-page baseline (at least one from every `apps/*` directory,
+plus second pages and one permalinked drill state), surfacing a11y *regressions* as `::warning::`
 annotations + a step summary without ever blocking a merge (publishing stays gated only on lint/typecheck/test).
 Still open: **U7** (wire the nav header's hand-off picker to `@cas/interchange`'s known map kinds — the one place
 cross-app interop becomes user-visible). Two correctness guards also landed this arc: a **convention-neutral**
@@ -622,9 +624,14 @@ rows then land BELOW `COVER` in an order its own argument never had — a topolo
 with the failing alternative in the test. And **the a11y roster audits pages in their DEFAULT state,
 so a panel nothing opens is never audited**: run by hand, axe found `empty-table-header` on the
 corner cell, now named and pinned in the node gate because the axe job does not block. One defect
-measured and deliberately NOT absorbed: the page scrolls horizontally at phone width, identically
-with the panel open, shut and on the tree before this slice, with `footer.strip` the sole cause
-(removing it drops 656 → 400; the nav, rail and bar change nothing). Sweep **24/24**; the one
+measured and deliberately not absorbed **at the time**: the page scrolled horizontally at phone width,
+identically with the panel open, shut and on the tree before this slice — so the grid added nothing.
+**It has since been fixed, and the cause named here was wrong.** Not `footer.strip` but two rigid `rem`
+tracks nothing had ever been written to relax: the shell's `var(--rail)` column and the strip's `19rem`
+readout column, whose `352 + 304` IS the 656 that was measured. They stop paying at different widths, so
+they get a breakpoint each at the end of `app.css`; re-measured on the production build the page is 400
+with the panel open and shut, and the contrast table carries its own sideways overflow inside the panel,
+which is where a wide table belongs. Sweep **24/24**; the one
 first-pass survivor was real and unreachable from the ladder — nothing tested that a row
 DISAPPEARING is reported, because the ladder only runs forwards — and writing that test found that
 `KILL/vanish#1` is C1's big arc rather than its indentation, the ordinal counting in PIECE order, so
@@ -1215,14 +1222,17 @@ See [MIGRATION](docs/MIGRATION.md) for the phase specs and gates.
 and retargeted the QD → Hele-Shaw hand-off (golden `QD_TO_HELESHAW`); Stage 2 carved `apps/potential-theory`
 (the conductor view), leaving 2D Electrostatics as the field sandbox + airfoil + polygon (its now-unused
 `@cas/core`/`@cas/expr`/`@cas/faber`/`@cas/conformal` deps pruned); Stage 3 adopted the shared nav header
-(`mountNavHeader` + `@cas/ui/nav.css`) across all three apps — their first consumers, a suite-wide rollout to
-the other seven left as a follow-on — added all three to the non-blocking a11y roster (baseline refreshed),
+(`mountNavHeader` + `@cas/ui/nav.css`) across all three apps — their first consumers, with a suite-wide rollout
+left as a follow-on that has since reached **contour-integration** (M6.4) and **2d-hydrodynamics**
+(HD-0), leaving seven without it: CD, QD, the plotter, Riemann Map, Argument Principle, Faber Transform
+and Correspondences — added all three to the non-blocking a11y roster (baseline refreshed),
 and split the studio plan into three per-app plans. Per-app plans:
 [`docs/design/2d-electrostatics-plan.md`](docs/design/2d-electrostatics-plan.md),
 [`docs/design/hele-shaw-flow-plan.md`](docs/design/hele-shaw-flow-plan.md),
 [`docs/design/potential-theory-plan.md`](docs/design/potential-theory-plan.md).
 
-**In progress — ADR-0037 (2D Hydrodynamics, the eleventh app; the airfoil promoted out of 2D Electrostatics).**
+**Done, HD-4/HD-5 deferred — ADR-0037 (2D Hydrodynamics, the eleventh app; the airfoil promoted out of
+2D Electrostatics).**
 A new app, `apps/2d-hydrodynamics` — ideal flow past a body B as flow past 𝔻* through a conformal map ψ: 𝔻* →
 ext(B), the hydrodynamic twin of 2D Electrostatics — anchored by the Joukowski/Kármán–Trefftz airfoil and
 broadened by a closed-form transplant gallery (slit / ellipse / deltoid / astroid / star). No new package
@@ -1234,8 +1244,10 @@ removed), HD-2 (the closed-form transplant gallery `gallery.html` on `flowNet`+`
 Riemann-Map's `EXTERIOR_MAP_PRESETS` into `@cas/flow` on the second-consumer rule — Riemann-Map draws the
 maps, 2D Hydrodynamics transplants flow through them, golden + expr↔psi cross-check pinning both), and HD-3
 (the shareable/reproducible shell — `#vs=` permalinks + PNG export via `@cas/export`, on both pages, plus
-gallery stagnation-point markers) are done**; the polygon transplant stays in 2D Electrostatics for now
-(HD-4, deferred — it anchors the ADR-0035 `conformal` hand-off). 2D Electrostatics' ES-4 is reassigned to
+gallery stagnation-point markers) are done**, and so are HD-6 (ADR-0038, below) and HD-7. The two that
+remain are deferred behind named gates: the polygon transplant stays in 2D Electrostatics for now (HD-4 —
+it anchors the ADR-0035 `conformal` hand-off), and HD-5 (become the second consumer of the `flow`
+interchange kind) waits on 2D Electrostatics' ES-2 to define it. 2D Electrostatics' ES-4 is reassigned to
 this app.
 Plan: [`docs/design/2d-hydrodynamics-plan.md`](docs/design/2d-hydrodynamics-plan.md).
 
@@ -1251,7 +1263,13 @@ velocity W_ref′/ψ′ through one shared colormap), so no per-pixel inverse ψ
 have none). No new package (ADR-0007); `@cas/flow`'s `ExteriorMapPreset` gains a `psiPrime` closure (Riemann-Map,
 the other consumer, is unaffected). A unified `#vs=` decoder still reads every ADR-0037 airfoil / gallery /
 bare-`#id` permalink. **HD-6.0–6.4 done** (ADR + plan; the unified body model + airfoil-equivalence golden;
-the single-page shell; the domain-color render; the doc + PNG-export-verification sweep).
+the single-page shell; the domain-color render; the doc + PNG-export-verification sweep). **HD-7 is done
+too** — the single-page toolbar was overcrowded (a long Body `<select>` overflowed its fixed-width row; the
+stage top was a hardcoded toolbar height, so a wrapped toolbar overlapped the panes), fixed by grouping the
+controls and setting the stage top from the toolbar's **measured** height (a `ResizeObserver`), plus a
+**Display** group — flow-line density, equipotentials (the conjugate family φ = Re W_ref, branch-unwrapped
+along the polar angle so the vortex cut lands on the seam), streamlines and markers — all four carried in
+`#vs=` as **optional** fields, so every earlier permalink still decodes. App-local; no new package or ADR.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo
