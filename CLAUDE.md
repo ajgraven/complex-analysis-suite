@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **542 test files / 5623 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **542 test files / 5625 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -109,12 +109,14 @@ Dev servers go through `.claude/launch.json` (one entry per app, each with its p
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
-`packages/gpu`). They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
+`packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
 `apps/contour-integration/vitest.browser.config.ts` reads `CAS_CHROMIUM_EXECUTABLE`, so
 `CAS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:browser` works in a container that has one
 under a different version. **Run it when a slice adds a record or touches the stage:** the contour-integration
 browser suite was red for three milestones on a hardcoded record count, and the node gate structurally
-cannot see it.
+cannot see it. Anything about a shader's NUMBERS belongs there too — QD's Schwarz in-Ω mask claimed
+membership for points its exact ψ could not invert, which the node gate cannot reach because it never
+compiles the GLSL (`apps/quadrature-domains/vitest/browser/schwarz-mask.browser.test.ts`).
 
 **Line endings are LF everywhere**, enforced by `.gitattributes`. The index was always LF; before
 that file existed, a Windows checkout produced a CRLF working tree and two gate tests failed locally

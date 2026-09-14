@@ -495,9 +495,11 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     }
     if (escapeDegree < 2) escapeDegree = 2; // smooth's log(d) needs d ≥ 2; degree-1 escape isn't superattracting
     if (maskTex) ctx.deleteTexture(maskTex);
-    // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5). A
-    // bounded Ω is compact, so a tighter pad keeps the mask's resolution on ∂Ω (QD uses 2.4 for a bounded
-    // interior — @cas/gpu maskTexture).
+    // padFactor 5 / 2.4 — inherited from QD's Schwarz renderer, which has SINCE DROPPED ITS OWN PAD to
+    // 1.05: a pad is not headroom (out-of-mask uv already classifies correctly), it is spent boundary
+    // resolution, and inside that band the mask claims membership for points ψ cannot invert — which this
+    // shader would paint as a flat grey "invalid" pixel along every tile edge. Not re-measured here, so
+    // the numbers stand; see apps/quadrature-domains/app/schwarz/README.md, "The in-Ω mask".
     const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: boundedOmega ? 2.4 : 5, size: 1024 });
     maskTex = m.texture;
     maskCenter = m.center;

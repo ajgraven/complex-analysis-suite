@@ -695,7 +695,10 @@ view is active.
     MAX_K=8, MAX_LAURENT=12 (covers every shipped preset with
     headroom). Float32 precision — fine for iteration depths ≤ ~200
     at moderate zoom; for extreme zooms, switch to CPU mode or accept
-    minor banding.
+    minor banding. Its in-Ω test is a rasterised mask rather than the
+    CPU's exact polygon, and that mask must never claim membership for
+    a point ψ cannot invert — see
+    [`app/schwarz/README.md`](app/schwarz/README.md), *The in-Ω mask*.
   * **CPU** (fallback). Progressive 4×4 → 2×2 → 1×1 pyramid chunked
     across `requestAnimationFrame` ticks. Always available; used
     automatically when WebGL 2 is unavailable, when φ exceeds the
