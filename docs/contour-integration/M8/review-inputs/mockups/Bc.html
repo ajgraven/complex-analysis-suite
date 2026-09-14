@@ -1,0 +1,10 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="katex/katex.min.css"><script src="katex/katex.min.js"></script><link rel="stylesheet" href="layout.css"><script src="layout.js"></script><title>Bc</title><div class="suitebar"><b>Suite</b><span>Complex Dynamics</span><span>Quadrature Domains</span><span>Riemann Map</span><span>Argument Principle</span><span>Faber Transform</span><span>2D Electrostatics</span><span class="cur">Contour Integration</span></div><div class="appbar"><span class="title">Contour Integration</span><span class="seg"><span class="on">Explore</span><span>Worked example</span><span>Drill</span></span><span class="pick"><span class="tex" data-tex="\int_{-\infty}^{\infty}\frac{dx}{1+x^{4}}"></span><span style="color:var(--mut)">by a semicircle</span><span class="arrow">▾</span></span><span class="btn">Sandbox</span><span class="spacer"></span><span class="btn">Contrasts</span><span class="btn">Copy link</span><span class="btn">Save figure</span></div>
+<div class="frame" style="grid-template-columns:38px 1fr 360px;grid-template-rows:1fr 170px">
+ <div class="collapsed" style="grid-row:1/3"><span>Problem</span><span style="color:#4a5468">▸</span></div>
+ <div class="stage" id="stage" style="grid-column:2;grid-row:1"></div>
+ <div class="rail" style="grid-row:1/3" id="rail"></div>
+ <div class="strip" id="strip" style="grid-column:2;grid-row:2"></div>
+</div>
+<script>
+const {P,readout,strip}=window.MOCK;stage.innerHTML=readout();rail.innerHTML=P.verdict(false)+P.derivation()+P.share();document.getElementById('strip').innerHTML=strip();renderTex();
+</script>

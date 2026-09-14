@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="katex/katex.min.css"><script src="katex/katex.min.js"></script><link rel="stylesheet" href="layout.css"><script src="layout.js"></script><title>G</title><div class="suitebar"><b>Suite</b><span>Complex Dynamics</span><span>Quadrature Domains</span><span>Riemann Map</span><span>Argument Principle</span><span>Faber Transform</span><span>2D Electrostatics</span><span class="cur">Contour Integration</span></div><div class="appbar"><span class="title">Contour Integration</span><span class="seg"><span class="on">Explore</span><span>Worked example</span><span>Drill</span></span><span class="pick" style="background:#26314a"><span class="tex" data-tex="\int_{-\infty}^{\infty}\frac{dx}{1+x^{4}}"></span><span style="color:var(--mut)">by a semicircle</span><span class="arrow">▴</span></span><span class="btn">Sandbox</span><span class="spacer"></span><span class="btn">Contrasts</span><span class="btn">Copy link</span><span class="btn">Save figure</span></div>
+<div class="frame" style="grid-template-columns:300px 1fr 380px;grid-template-rows:1fr 190px"><div class="rail left" style="grid-row:1/3"></div><div class="stage" style="grid-column:2;grid-row:1"></div><div class="rail" style="grid-row:1/3"></div><div class="strip" style="grid-column:2;grid-row:2"></div></div>
+<div class="gal"><h1>Worked examples</h1><div class="sub">Eight classics first. All 28 below, grouped by the kind of integral. Each opens as a permalink.</div>
+<div class="cards" id="cards"></div>
+<div class="sec"><b>Trigonometric integrals over [0, 2π]</b> the unit circle, z = e^{iθ} <span class="n">4 examples ▸</span></div>
+<div class="sec"><b>Rational functions on ℝ</b> a semicircle, the ML bound <span class="n">3 examples ▸</span></div>
+<div class="sec"><b>Fourier-type integrals</b> Jordan's lemma <span class="n">3 examples ▸</span></div>
+<div class="sec"><b>Principal values and indented contours</b> a half-residue at a pole on the path <span class="n">3 examples ▸</span></div>
+<div class="sec"><b>Multivalued integrands</b> keyholes and dogbones, a branch cut declared <span class="n">7 examples ▸</span></div>
+<div class="sec"><b>Strips and wedges</b> a contour that reproduces the target up to a factor <span class="n">5 examples ▸</span></div>
+<div class="sec"><b>Series by the residue theorem</b> the square Γ_N and π cot πz <span class="n">3 examples ▸</span></div>
+</div>
+<script>
+const {T}=window.MOCK;
+const C=[[String.raw`\int_0^{2\pi}\frac{d\theta}{a+b\cos\theta}=\frac{2\pi}{\sqrt{a^2-b^2}}`,'The unit circle, z = e^{iθ}','A trigonometric integral becomes a residue at the one root inside |z| < 1.','Ahlfors §4.5.3 · Brown–Churchill §85'],
+[String.raw`\int_{-\infty}^{\infty}\frac{dx}{1+x^{4}}=\frac{\pi}{\sqrt2}`,'Upper semicircle','The ML bound kills the arc when deg Q ≥ deg P + 2.','Ahlfors §4.5.3 · Stein–Shakarchi Ch. 3 Ex. 2'],
+[String.raw`\int_{-\infty}^{\infty}\frac{\cos ax}{x^2+b^2}\,dx=\frac{\pi}{b}e^{-ab}`,'Upper semicircle, Jordan\'s lemma','The sign of a chooses the half-plane; the wrong choice fails visibly.','Stein–Shakarchi Ch. 3 §2.1'],
+[String.raw`\int_{-\infty}^{\infty}\frac{\sin x}{x}\,dx=\pi`,'Indented semicircle','A pole on the path contributes half a residue through the indentation.','Ahlfors §4.5.3 · Conway V.2'],
+[String.raw`\int_0^{\infty}\frac{x^{\alpha-1}}{1+x}\,dx=\frac{\pi}{\sin\pi\alpha}`,'Keyhole about the positive axis','The two edges differ by e^{2πiα}; the branch choice is declared, not assumed.','Ahlfors §4.5.3 · Stein–Shakarchi Ch. 3 Ex. 6'],
+[String.raw`\int_0^{\infty}\frac{\log x}{(1+x^2)^2}\,dx=-\frac{\pi}{4}`,'Keyhole with log² z','One complex identity determines two real integrals at once.','Brown–Churchill §90 [verify]'],
+[String.raw`\int_0^{\infty}\cos x^2\,dx=\int_0^{\infty}\sin x^2\,dx=\tfrac12\sqrt{\tfrac{\pi}{2}}`,'Wedge of angle π/4','The return ray reproduces the outgoing one; √π is imported, not derived.','Stein–Shakarchi Ch. 3 Ex. 9'],
+[String.raw`\sum_{n\ge1}\frac{1}{n^{2}}=\frac{\pi^{2}}{6}`,'Square Γ_N, kernel π cot πz','The kernel\'s poles carry the sum; f and the kernel collide at 0.','Ahlfors §5.2.2 · Stein–Shakarchi Ch. 3 Ex. 12']];
+const TH=['T-semicircle-quartic-quiet.jpg', 'T-semicircle-quartic-quiet.jpg', 'T-jordan-cosine-kernel-quiet.jpg', 'T-indented-sinc-quiet.jpg', 'T-mellin-keyhole-quiet.jpg', 'T-mellin-keyhole-quiet.jpg', 'T-semicircle-quartic-quiet.jpg', 'T-semicircle-quartic-quiet.jpg'];cards.innerHTML=C.map((c,i)=>'<div class="cardg"><div class="thumb" style="background-image:url('+TH[i]+')"></div><div class="int">'+T(c[0])+'</div><div class="how">'+c[1]+'</div><div class="what">'+c[2]+'</div><div class="ref">'+c[3]+'</div></div>').join('');
+renderTex();
+</script>
