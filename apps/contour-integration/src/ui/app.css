@@ -664,3 +664,123 @@ ul.poleTable li {
   font-size: 15px;
   overflow-wrap: anywhere;
 }
+
+/* ---- narrow viewports ---- */
+/* The page scrolled SIDEWAYS on a phone, and the cause was two rigid `rem` tracks that nothing was
+   ever written to relax: the shell's `var(--rail)` column and the strip's `19rem` readout column.
+   At a 400 px viewport `document.documentElement.scrollWidth` was 656 = 352 + 304 — and the arithmetic
+   is the diagnosis. The strip lives in the shell's `1fr` column, so the strip's minimum width IS that
+   column's minimum, and the rail's 352 px sits beside it whatever the rail contains: `display: none`
+   on the `.rail` ELEMENT moves nothing, because the track is declared on the container, not the item.
+   So both tracks have to reflow. They stop paying at different widths, so they get a breakpoint each.
+
+   Above 56rem nothing below applies and the desktop layout is exactly what it was. The two widths are
+   written out rather than held in custom properties because a media query's condition cannot read
+   `var()` — a `--fold` token here would look adjustable and would not be. */
+
+/* 56rem = 896 px. Below it the strip's canvas is `W − 352 − 304`, which is 240 px here and shrinking,
+   and the trail's fit is isotropic — so once the canvas is narrower than `--strip` is tall it is the
+   WIDTH that decides how big the picture gets. The readout goes underneath; both take the full width.
+   This is also the rule that removes the 304 px floor, and so the one that stops the page scrolling. */
+@media (max-width: 56rem) {
+  .strip {
+    grid-template-columns: 1fr;
+    /* The readout is `auto` — it takes the height it needs and the canvas takes the rest. `1fr` is
+       safe against the runaway `.accWrap` exists to stop (a track sized by an `inset: 0` canvas that
+       is sized by the track) because `.accWrap` already carries `min-height: 0`; measured, a
+       `minmax(0, 1fr)` floor here changes the canvas by exactly nothing. */
+    grid-template-rows: 1fr auto;
+  }
+
+  .accSide {
+    border-left: 0;
+    border-top: 1px solid var(--c-border);
+    /* Stacked, the readout is spending the strip's HEIGHT rather than its width, and the canvas is
+       what it is spending it on: flow the four controls into as few rows as the width allows and
+       tighten the padding, rather than keeping a column's worth of vertical rhythm. */
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.15rem 0.6rem;
+    padding: 0.4rem 0.7rem 0.5rem;
+  }
+
+  .accSide h2,
+  .accSide .accValue {
+    margin: 0;
+  }
+
+  /* The scrubber is the one control that wants a whole row — it is a position along the contour, and
+     a short track makes the far end unreachable by touch. */
+  .accSide .scrub {
+    flex: 1 1 100%;
+  }
+
+  .accSide .contrasts {
+    margin-top: 0;
+    flex: 1 1 100%;
+  }
+}
+
+/* 41rem = 656 px, the measured floor. Below it the rail's 352 px is more than half the viewport, so
+   the stage beside it is narrower than the rail is wide. The rail goes under the stage and the page
+   scrolls vertically — the one direction a phone is allowed to scroll. */
+@media (max-width: 41rem) {
+  /* Stacked, the shell is taller than the viewport by design, so the page — not the rail — is what
+     scrolls. `body { overflow: hidden }` would clip that away. */
+  body {
+    overflow: auto;
+  }
+
+  .shell {
+    grid-template-columns: 1fr;
+    /* The stage keeps a definite height so its two canvases still have something to resolve against;
+       `min-height` on the shell keeps a short page from leaving a bare strip of background. The bar's
+       row is `auto` because the bar wraps here — see below. */
+    grid-template-rows: auto minmax(14rem, 52vh) var(--strip) auto;
+    grid-template-areas: "bar" "stage" "strip" "rail";
+    height: auto;
+    min-height: calc(100vh - var(--cas-nav-h, 0px));
+  }
+
+  /* The bar is one nowrap flex row inside `overflow: hidden`, so at phone width it was not scrolling
+     the page — it was SWALLOWING itself: at 400 px the integrand field was cut off mid-box and all
+     seven presets were past the right edge with no way to reach them. That is a worse failure than
+     the one this section is named after, and it has the same cause (a row of rigid widths with
+     nothing written to reflow it), so it is fixed here rather than left behind the fix. */
+  .bar {
+    flex-wrap: wrap;
+    height: auto;
+    min-height: var(--bar);
+    padding: 0.4rem 0.6rem;
+  }
+
+  /* `flex: 0 1 18rem` shrinks but never grows, so on its own wrapped row the field left the rest of
+     the width empty. It is the app's primary input; let it take the row. */
+  .expr {
+    flex: 1 1 12rem;
+    min-width: 0;
+  }
+
+  /* Two words of label, and wrapping turned `f(z) =` into `f(z)` over `=`. */
+  .flabel {
+    white-space: nowrap;
+  }
+
+  /* Wrapping the BAR is not enough on its own: each mode's controls sit in a `.barGroup`, which is a
+     flex row of its own, and a flex line does not break unless the container says it may. Gallery
+     mode's group is two 16rem pickers and two labels on one unbreakable line, so with only the bar
+     wrapping the fixture picker was still off the edge while the sandbox's field was reachable — the
+     mode you happened to be in decided whether the app worked. */
+  .barGroup {
+    flex-wrap: wrap;
+  }
+
+  /* The rail's own `overflow-y: auto` is left alone: its row is `auto`, so the box is exactly its
+     content (measured: `clientHeight === scrollHeight === 1219`) and there is nothing for a nested
+     scroller to scroll. It flows into the page's scroll either way. */
+  .rail {
+    border-left: 0;
+    border-top: 1px solid var(--c-border);
+  }
+}
