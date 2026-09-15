@@ -43,7 +43,7 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
-| 2026-09-15 | **1.2** | (this commit) | the visual system: `theme.css` (tokens, five-size type scale, surfaces, controls, badges), `shell2.css` rewritten onto the tokens, `inkTheme.ts` (dark = the literals moved, light provided and not yet consumed); `drawContour`/`drawAccumulator` take a REQUIRED theme; 4 browser tests + sweep 8/8; screenshot committed |
+| 2026-09-15 | **1.2** | 4fb54cb | the visual system: `theme.css` (tokens, five-size type scale, surfaces, controls, badges), `shell2.css` rewritten onto the tokens, `inkTheme.ts` (dark = the literals moved, light provided and not yet consumed); `drawContour`/`drawAccumulator` take a REQUIRED theme; 4 browser tests + sweep 8/8; screenshot committed |
 
 | 2026-09-15 | **1.1** | 072f74b | the shell2 scaffold: the keyed builder (`dom.ts`), memoised KaTeX (`math.ts`), the `Session` (`session.ts`), `mountShell2` with one `commit` door, the grid, and `?shell=new`; `test/shell2.test.ts` (17) + `test/shell2.browser.test.ts` (3); sweeps 8/8, 5/5, 2/2 after four real survivors |
 
