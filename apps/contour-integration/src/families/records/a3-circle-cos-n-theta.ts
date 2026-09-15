@@ -14,9 +14,20 @@ import type { Family } from "../schema.js";
 
 export const a3CircleCosNTheta: Family = {
   id: "circle-cos-n-theta",
-  title: "∫₀^{2π} cos nθ/(5 − 4 cos θ) dθ — the order-n pole the substitution manufactures at z = 0",
-  taxonomySection: "1",
+  title: "∫₀^{2π} cos nθ dθ/(5 − 4 cos θ) by the unit circle",
+  titleLatex: "$\\int_0^{2\\pi}\\frac{\\cos n\\theta}{5-4\\cos\\theta}\\,d\\theta$ by the unit circle",
+  taxonomySection: "Trigonometric integrals over [0, 2π]",
   tier: "A",
+
+  description: {
+    contour: "the unit circle, $z=e^{i\\theta}$",
+    point:
+      "The substitution introduces a pole of order $n$ at $z=0$ that the real integrand does not show; omitting it gives $17\\pi/12$ at $n=2$ in place of $\\pi/6$.",
+    citations: [
+      { book: "Brown–Churchill", where: "§85", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {

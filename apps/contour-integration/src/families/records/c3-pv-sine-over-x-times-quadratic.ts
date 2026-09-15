@@ -21,9 +21,20 @@ import type { Family } from "../schema.js";
 
 export const c3PvSineOverXTimesQuadratic: Family = {
   id: "pv-sine-over-x-times-quadratic",
-  title: "∫_ℝ sin x/(x(x²+b²)) dx = (π/b²)(1 − e^{−b}) — a real pole and a complex pole together",
-  taxonomySection: "4",
+  title: "∫_{−∞}^{∞} sin x dx/(x(x²+b²)) by an indented semicircle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{\\sin x}{x(x^2+b^2)}\\,dx$ by an indented semicircle",
+  taxonomySection: "Principal values and indented contours",
   tier: "C",
+
+  description: {
+    contour: "real axis indented over $0$, closed by $\\Gamma_R$; integrand $e^{iz}/(z(z^2+b^2))$",
+    point:
+      "The pole at $ib$ contributes $2\\pi i\\operatorname{Res}$; the pole at $0$, on the path, contributes $-i\\pi\\operatorname{Res}$ through the indentation. The principal value belongs to the auxiliary integral; the target converges absolutely.",
+    citations: [
+      { book: "Brown–Churchill", where: "§82", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {

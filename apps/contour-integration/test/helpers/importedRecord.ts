@@ -110,8 +110,14 @@ export function importedRecord(over: ImportedOptions = {}): Family {
   return {
     id: "synthetic-imported",
     title: "a rectangle enclosing nothing, closing on one import",
-    taxonomySection: "§6",
+    titleLatex: "a rectangle enclosing nothing, closing on one import",
+    taxonomySection: "Rectangles and sectors",
     tier: "E",
+    description: {
+      contour: "a rectangle",
+      point: "A synthetic record: the contour encloses no pole, so the whole value comes from one imported constant.",
+      citations: [{ book: "Ahlfors", where: "Ch. 4 §5", text: "" }],
+    },
     targets: targets.map((t) => ({
       ...t,
       kind: "integral" as const,

@@ -19,9 +19,20 @@ import type { Family } from "../schema.js";
 
 export const d3KeyholeXToTheN: Family = {
   id: "keyhole-x-to-the-n",
-  title: "∫₀^∞ x^(a−1)/(1+xⁿ) dx = (π/n)/sin(πa/n): the two-parameter keyhole",
-  taxonomySection: "5.1",
+  title: "∫₀^{∞} x^{a−1} dx/(1+xⁿ) by a keyhole",
+  titleLatex: "$\\int_0^{\\infty}\\frac{x^{a-1}}{1+x^n}\\,dx$ by a keyhole",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$, $\\arg z\\in[0,2\\pi)$",
+    point:
+      "The residues at the $n$ roots of $-1$ form a geometric progression whose sum carries the factor $1-e^{2\\pi ia}$ that also multiplies the unknown, so it cancels; at integer $a$ the keyhole argument collapses and the wedge of angle $2\\pi/n$ must be used.",
+    citations: [
+      { book: "Conway", where: "Ch. V §2", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {

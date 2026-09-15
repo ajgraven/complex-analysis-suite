@@ -10,9 +10,22 @@ import type { Family } from "../schema.js";
 
 export const a6SemicircleQuartic: Family = {
   id: "semicircle-quartic",
-  title: "∫_ℝ dx/(1+x⁴) = π/√2 — algebraic poles, P·(Q′)⁻¹ mod Q, and the half-plane ladder",
-  taxonomySection: "2",
+  title: "∫_{−∞}^{∞} dx/(1+x⁴) by a semicircle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{dx}{1+x^4}$ by a semicircle",
+  taxonomySection: "Rational functions on ℝ",
   tier: "A",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$ in the upper half-plane",
+    point:
+      "Only the two poles $e^{i\\pi/4},e^{3i\\pi/4}$ in the upper half-plane are summed; the sum over all four residues is $0$.",
+    citations: [
+      { book: "Brown–Churchill", where: "§79", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+      { book: "Stein–Shakarchi", where: "Ch. 3 §2", text: "" },
+    ],
+  },
+  frontRow: 2,
 
   targets: [
     {
@@ -202,6 +215,7 @@ export const a6SemicircleQuartic: Family = {
     },
     {
       params: { closeDown: true },
+      label: "closing through the lower half-plane",
       value: "pi/sqrt(2)",
       numeric: 2.2214414690791831,
       verifiedTo: 1e-14,

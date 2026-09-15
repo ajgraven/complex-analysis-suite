@@ -14,9 +14,21 @@ import type { Family } from "../schema.js";
 
 export const b2JordanStrict: Family = {
   id: "jordan-strict",
-  title: "∫_ℝ x sin x/(1+x²) dx = π/e — where ML is not merely loose but useless",
-  taxonomySection: "3",
+  title: "∫_{−∞}^{∞} x sin x dx/(1+x²) by Jordan's lemma",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{x\\sin x}{1+x^2}\\,dx$ by Jordan's lemma",
+  taxonomySection: "Fourier-type integrals and Jordan's lemma",
   tier: "B",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$, integrand $ze^{iz}/(1+z^2)$",
+    point:
+      "$\\deg Q-\\deg P=1$, so the $ML$-estimate on $\\Gamma_R$ tends to $\\pi$, not $0$; Jordan's lemma, which needs only $\\max_{\\Gamma_R}|z/(1+z^2)|\\to0$, is required.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §5", text: "" },
+      { book: "Brown–Churchill", where: "§81", text: "Jordan's lemma" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -192,6 +204,7 @@ export const b2JordanStrict: Family = {
     },
     {
       params: { companion: "re" },
+      label: "the cosine companion",
       value: "0",
       numeric: 0,
       verifiedTo: 1e-14,

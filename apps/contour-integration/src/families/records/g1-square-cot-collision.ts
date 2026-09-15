@@ -51,9 +51,22 @@ const SIDE_NAMES = [
 
 export const g1SquareCotCollision: Family = {
   id: "series-cot-collision",
-  title: "Σ_{n≥1} 1/n² = π²/6: the π cot(πz) kernel, where its pole and f's COLLIDE",
-  taxonomySection: "8",
+  title: "Σ_{n≥1} 1/n² by π cot πz on squares",
+  titleLatex: "$\\sum_{n=1}^{\\infty}\\frac1{n^2}$ by $\\pi\\cot\\pi z$ on squares",
+  taxonomySection: "Series by the residue theorem",
   tier: "G",
+
+  description: {
+    contour: "the squares $\\Gamma_N$ with vertices $(\\pm1\\pm i)(N+\\tfrac12)$; integrand $\\pi\\cot(\\pi z)/z^2$",
+    point:
+      "$\\pi\\cot\\pi z$ has residue $1$ at every integer; at $0$ the kernel's pole and that of $1/z^2$ combine into a pole of order $3$ with residue $-\\pi^2/3$, and $\\oint_{\\Gamma_N}\\to0$ gives $2\\sum_{n\\ge1}n^{-2}=\\pi^2/3$.",
+    citations: [
+      { book: "Marsden–Hoffman", where: "§4", text: "summation of series" },
+      { book: "Freitag–Busam", where: "Ch. III §7", text: "" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+    ],
+  },
+  frontRow: 8,
 
   targets: [
     {
@@ -214,6 +227,7 @@ export const g1SquareCotCollision: Family = {
       // alternative derivation. It is the two-sided sum this contour establishes directly, before
       // the halving the target's declared range asks for.
       params: { sided: "two" },
+      label: "two-sided sum",
       value: "pi^2/3",
       numeric: 3.2898681336964528,
       verifiedTo: 1.4e-16,

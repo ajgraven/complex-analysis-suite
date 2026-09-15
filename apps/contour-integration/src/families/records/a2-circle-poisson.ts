@@ -12,9 +12,20 @@ import type { Family } from "../schema.js";
 
 export const a2CirclePoisson: Family = {
   id: "circle-poisson",
-  title: "∫₀^{2π} dθ/(1 + a² − 2a cos θ) — the Poisson kernel and its |a| ≶ 1 switch",
-  taxonomySection: "1",
+  title: "∫₀^{2π} dθ/(1 − 2a cos θ + a²) by the unit circle",
+  titleLatex: "$\\int_0^{2\\pi}\\frac{d\\theta}{1-2a\\cos\\theta+a^2}$ by the unit circle",
+  taxonomySection: "Trigonometric integrals over [0, 2π]",
   tier: "A",
+
+  description: {
+    contour: "the unit circle, $z=e^{i\\theta}$",
+    point:
+      "The integrand is $|1-ae^{i\\theta}|^{-2}$; the poles $a$ and $1/a$ exchange roles as $|a|$ crosses 1, and the enclosed one must be decided, not assumed.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §6", text: "the Poisson kernel" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+    ],
+  },
 
   targets: [
     {

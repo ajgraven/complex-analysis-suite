@@ -234,10 +234,21 @@ const fmt = (x: number): string => {
 const fmtCx = ([re, im]: Cx): string => `${fmt(re)} ${im < 0 ? "−" : "+"} ${fmt(Math.abs(im))}i`;
 
 /** A fixture's bindings, short enough for a `<select>` option: `a = 5, b = 3`. */
-const fixtureLabel = (g: Golden): string => {
-  const parts = Object.entries(g.params).map(
-    ([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`,
-  );
+/**
+ * How a fixture reads in the picker: `a = 2, b = 1`, `half-range corollary`, `a = 0.75, one-sided sum`.
+ *
+ * A variant fixture's `params` carry a FLAG rather than a binding, so the flag is printed from the
+ * golden's own `label` and the key is skipped — `halfRange = true` named the implementation where a
+ * reader is choosing between alternative derivations. Real bindings still come from `params`, so a
+ * fixture carrying both (`series-cot-kernel` at `a = 0.75`) prints the number once, from one place.
+ */
+const fixtureLabel = (family: Family, g: Golden): string => {
+  const declared = new Set(family.parameters.map((p) => p.name));
+  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
+  const parts = Object.entries(g.params)
+    .filter(([k]) => declared.has(k))
+    .map(([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`);
+  if (g.label !== undefined) parts.push(g.label);
   return parts.length > 0 ? parts.join(", ") : "no parameters";
 };
 
@@ -2187,8 +2198,8 @@ export function mountApp(root: Element): ShellHandle {
       // down) that the engine has no route for. Offering it and then failing would read as a bug in
       // the record; saying so is the honest version.
       opt.textContent = variant
-        ? `${fixtureLabel(g)} — alternative derivation, not executable`
-        : fixtureLabel(g);
+        ? `${fixtureLabel(family, g)} — alternative derivation, not executable`
+        : fixtureLabel(family, g);
       opt.disabled = variant;
       if (golden === g) opt.selected = true;
       fixtureSelect.append(opt);
@@ -2256,7 +2267,10 @@ export function mountApp(root: Element): ShellHandle {
 
     const head = el("p", "recordHead");
     head.append(el("span", "tag", `tier ${family.tier}`), el("span", "num", family.id));
-    recordCard.append(head, el("p", "muted small", family.title));
+    // The typeset sibling, because every other formula on this card and in the rail is typeset and
+    // a Unicode title beside them is the inconsistency step 0.5b removed. `title` stays the plain
+    // text: it is what the announcer speaks and what the figure caption prints.
+    recordCard.append(head, elMath("p", "muted small", family.titleLatex));
 
     for (const t of family.targets) {
       recordCard.append(el("p", "num targetLine", targetText(t)));

@@ -30,9 +30,21 @@ import type { Family } from "../schema.js";
 
 export const f1WedgeRationalPower: Family = {
   id: "wedge-rational-power",
-  title: "∫₀^∞ dx/(1+xⁿ) = (π/n)/sin(π/n): the 2π/n wedge",
-  taxonomySection: "7",
+  title: "∫₀^{∞} dx/(1+xⁿ) by a sector of angle 2π/n",
+  titleLatex: "$\\int_0^{\\infty}\\frac{dx}{1+x^n}$ by a sector of angle $2\\pi/n$",
+  taxonomySection: "Rectangles and sectors",
   tier: "F",
+
+  description: {
+    contour: "the sector $0\\le\\arg z\\le2\\pi/n$, $|z|\\le R$",
+    point:
+      "$f(\\omega z)=f(z)$ for $\\omega=e^{2\\pi i/n}$, so the return ray gives $-\\omega$ times the target; a single pole $e^{i\\pi/n}$ lies inside. No branch cut is needed, unlike the keyhole for $x^{a-1}/(1+x^n)$.",
+    citations: [
+      { book: "Freitag–Busam", where: "Ch. III §7", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+    ],
+  },
 
   targets: [
     {

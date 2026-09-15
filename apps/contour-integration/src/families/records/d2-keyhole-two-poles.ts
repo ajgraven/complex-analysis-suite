@@ -26,9 +26,20 @@ import type { Family } from "../schema.js";
 
 export const d2KeyholeTwoPoles: Family = {
   id: "keyhole-two-poles",
-  title: "∫₀^∞ x^(s−1)/((x+p)(x+q)) dx = (π/sin πs)·(p^(s−1) − q^(s−1))/(q − p)",
-  taxonomySection: "5.1",
+  title: "∫₀^{∞} x^{s−1} dx/((x+p)(x+q)) by a keyhole",
+  titleLatex: "$\\int_0^{\\infty}\\frac{x^{s-1}\\,dx}{(x+p)(x+q)}$ by a keyhole",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$, $\\arg z\\in[0,2\\pi)$",
+    point:
+      "Two poles on the negative axis, $-p=pe^{i\\pi}$, $-q=qe^{i\\pi}$: each $(-p)^{s-1}=p^{s-1}e^{i\\pi(s-1)}$ carries both the modulus and the branch argument.",
+    citations: [
+      { book: "Brown–Churchill", where: "§84", text: "" },
+      { book: "Ahlfors", where: "Ch. 4 §5", text: "" },
+    ],
+  },
 
   targets: [
     {

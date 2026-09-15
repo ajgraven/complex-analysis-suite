@@ -10,6 +10,46 @@
 
 ---
 
+## 0. What a record says on screen (M8 step 0.6)
+
+Each record carries a **four-line standard**, and it is data rather than prose in the record's header
+comment, so the screen and the corpus cannot drift:
+
+1. **The identity**, which is not a field — it is `targets` and `closedForm`, the two the engine
+   actually computes. A copy would be a second source of truth for the one thing that must be right.
+2. **`description.contour`** — the contour and the substitution: *the unit circle, $z=e^{i\theta}$,
+   $d\theta = dz/(iz)$.*
+3. **`description.point`** — what this entry teaches that its neighbours do not. One or two sentences.
+4. **`description.citations`** — where the argument can be read, as `{ book, where, text }` over a
+   closed enum of eight texts. **Chapter-level, never an exercise number:** the content review marked
+   every reference it could not confirm, and carrying an unconfirmed exercise would be a claim the
+   gallery cannot support. A reference whose section was itself unconfirmed is widened to its
+   chapter; one that was confirmed keeps its section, because citing `Ch. 4 §5` where `Ch. 4 §5.3`
+   was checked discards something true.
+
+`title` is the human title — *what the integral is and which contour does it* — with a `titleLatex`
+sibling for the card. The essay titles it replaced (`— the reciprocal-root pair`, `— where ML is not
+merely loose but useless`) told a reader the punchline before the example.
+
+`taxonomySection` is one of **eight groups**, replacing the research-document section numbers
+(`"1"`, `"5.1"`, …) that named a back-reference no reader has: *Trigonometric integrals over
+[0, 2π]* · *Rational functions on ℝ* · *Fourier-type integrals and Jordan's lemma* · *Principal
+values and indented contours* · *Multivalued integrands: keyholes* · *Multivalued integrands:
+dogbones and the residue at infinity* · *Rectangles and sectors* · *Series by the residue theorem*.
+
+`frontRow` ranks the eight classics 1–8 (A1, A6, B1, C1, D1, D4, F2, G1). Note that this is a
+selection of famous arguments rather than a tour of the taxonomy: D1 and D4 are both keyholes, so
+the dogbone group has no front-row entry.
+
+**Loader invariant 5** enforces what the type system cannot — a missing `description` and a
+`taxonomySection` outside the eight are compile errors, so the invariant checks that a citation is
+usable, that the description says something, that every `$…$` is balanced, and that a *variant*
+fixture (one whose `params` carry a flag such as `halfRange` rather than a binding) carries a `label`
+naming the alternative derivation it selects. Front-row rank collisions are corpus-level and checked
+in `loadFamilies`. A record that fails is **dropped, not thrown on**, like the other four.
+
+---
+
 ## 1. What the tiers establish
 
 | tier | entries | adds |

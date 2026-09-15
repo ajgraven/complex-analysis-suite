@@ -29,9 +29,22 @@ import type { Family } from "../schema.js";
 
 export const d4LogSquaredKeyhole: Family = {
   id: "log-squared-keyhole",
-  title: "∫₀^∞ R(x) log x dx by the log² keyhole — and ∫₀^∞ R(x) dx for free",
-  taxonomySection: "5.2",
+  title: "∫₀^{∞} log x dx/(1+x²)² by a keyhole with (log z)²",
+  titleLatex: "$\\int_0^{\\infty}\\frac{\\log x}{(1+x^2)^2}\\,dx$ by a keyhole with $(\\log z)^2$",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$; integrand $(\\log z)^2/(1+z^2)^2$, $\\arg z\\in[0,2\\pi)$",
+    point:
+      "With $\\log z$ alone the log-integral cancels between the two edges; with $(\\log z)^2$ the $(\\log x+2\\pi i)^2$ on the lower edge leaves an identity linear in $\\int R\\log x$ and $\\int R$, whose real and imaginary parts determine both.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 3", text: "" },
+      { book: "Ahlfors", where: "Ch. 4 §5 (the \\(R(x)\\log x\\) case, by the upper half-plane)", text: "" },
+      { book: "Brown–Churchill", where: "§83", text: "" },
+    ],
+  },
+  frontRow: 6,
 
   targets: [
     {

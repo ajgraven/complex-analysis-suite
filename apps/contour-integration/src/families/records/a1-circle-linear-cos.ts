@@ -12,9 +12,22 @@ import type { Family } from "../schema.js";
 
 export const a1CircleLinearCos: Family = {
   id: "circle-linear-cos",
-  title: "∫₀^{2π} dθ/(a + b cos θ) — the reciprocal-root pair",
-  taxonomySection: "1",
+  title: "∫₀^{2π} dθ/(a + b cos θ) by the unit circle",
+  titleLatex: "$\\int_0^{2\\pi}\\frac{d\\theta}{a+b\\cos\\theta}$ by the unit circle",
+  taxonomySection: "Trigonometric integrals over [0, 2π]",
   tier: "A",
+
+  description: {
+    contour: "the unit circle, $z=e^{i\\theta}$, $d\\theta = dz/(iz)$",
+    point:
+      "The two poles are reciprocal, so exactly one lies inside $|z|=1$; which one depends on the sign of $a$, and the familiar form $2\\pi/\\sqrt{a^2-b^2}$ holds only for $a>|b|$.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §5.3", text: "type (i)" },
+      { book: "Stein–Shakarchi", where: "Ch. 3", text: "" },
+      { book: "Brown–Churchill", where: "§85", text: "" },
+    ],
+  },
+  frontRow: 1,
 
   targets: [
     {

@@ -32,9 +32,20 @@ import type { Family } from "../schema.js";
 
 export const e3GaussianShiftZeroResidue: Family = {
   id: "gaussian-shift-zero-residue",
-  title: "∫ℝ e^(−x²)cos(bx) dx = √π e^(−b²/4): a shifted rectangle with an EMPTY singular set",
-  taxonomySection: "6",
+  title: "∫_{−∞}^{∞} e^{−x²} cos bx dx by a rectangle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}e^{-x^2}\\cos bx\\,dx$ by a rectangle",
+  taxonomySection: "Rectangles and sectors",
   tier: "E",
+
+  description: {
+    contour: "the rectangle with vertices $\\pm R,\\ \\pm R+ib/2$; integrand $e^{-z^2+ibz}$, entire",
+    point:
+      "Cauchy's theorem, not a residue: on $\\operatorname{Im}z=b/2$ the integrand reduces to $e^{-b^2/4}e^{-x^2}$, and $\\int e^{-x^2}dx=\\sqrt\\pi$ is taken as known.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 2 §1", text: "Fourier transform of the Gaussian" },
+      { book: "Needham", where: "Ch. 9", text: "" },
+    ],
+  },
 
   targets: [
     {

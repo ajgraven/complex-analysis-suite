@@ -35,9 +35,20 @@ import type { Family } from "../schema.js";
 
 export const d6DogboneInverseSqrt: Family = {
   id: "dogbone-inverse-sqrt",
-  title: "∫₋₁¹ dx/((x²+a²)√(1−x²)) = π/(a√(1+a²))",
-  taxonomySection: "5.3",
+  title: "∫_{−1}^{1} dx/((x²+a²)√(1−x²)) by a dogbone",
+  titleLatex: "$\\int_{-1}^{1}\\frac{dx}{(x^2+a^2)\\sqrt{1-x^2}}$ by a dogbone",
+  taxonomySection: "Multivalued integrands: dogbones and the residue at infinity",
   tier: "D",
+
+  description: {
+    contour: "the dogbone about the cut $[-1,1]$ — both edges and the circles $|z\\mp1|=\\eta$; $\\sqrt{1-z^2}$ taken positive on the upper edge",
+    point:
+      "The contour encloses no pole, yet $\\oint\\ne0$: the integrand is not holomorphic inside because the cut is. The exterior form of the residue theorem applies, with $\\operatorname{Res}(f,\\infty)=0$ here.",
+    citations: [
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+      { book: "Ahlfors", where: "Ch. 4 §5.3", text: "compare the substitution $x=\\sin\\theta$, which reduces it to a unit-circle integral" },
+    ],
+  },
 
   targets: [
     {

@@ -51,9 +51,19 @@ const SIDE_NAMES = [
 
 export const g3SquareCscCollision: Family = {
   id: "series-csc-kernel-collision",
-  title: "Σ_{n≥1} (−1)ⁿ/n² = −π²/12: the π csc(πz) kernel, same collision",
-  taxonomySection: "8",
+  title: "Σ_{n≥1} (−1)ⁿ/n² by π csc πz on squares",
+  titleLatex: "$\\sum_{n=1}^{\\infty}\\frac{(-1)^n}{n^2}$ by $\\pi\\csc\\pi z$ on squares",
+  taxonomySection: "Series by the residue theorem",
   tier: "G",
+
+  description: {
+    contour: "the squares $\\Gamma_N$; integrand $\\pi\\csc(\\pi z)/z^2$",
+    point:
+      "$\\pi\\csc\\pi z$ has residue $(-1)^n$ at $n$, so the alternation belongs to the kernel; at $0$ the merged pole of order $3$ has residue $+\\pi^2/6$.",
+    citations: [
+      { book: "Marsden–Hoffman", where: "§4", text: "the $\\pi\\csc\\pi z$ kernel" },
+    ],
+  },
 
   targets: [
     {
@@ -229,6 +239,7 @@ export const g3SquareCscCollision: Family = {
       // alternative derivation. It is the two-sided sum this contour establishes directly, before
       // the halving the target's declared range asks for.
       params: { sided: "two" },
+      label: "two-sided sum",
       value: "-pi^2/6",
       numeric: -1.6449340668482264,
       verifiedTo: 1.4e-16,

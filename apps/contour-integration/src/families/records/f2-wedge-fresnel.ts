@@ -33,10 +33,22 @@ export const f2WedgeFresnel: Family = {
   id: "wedge-fresnel",
   // Stated at general `n`, because the record runs there: the famous `∫cos = ∫sin` is the `n = 2`
   // case and a title naming only it would be false at the other fixture.
-  title:
-    "∫₀^∞ cos(xⁿ)dx = Γ(1+1/n)·cos(π/(2n)) — Fresnel at n = 2, with the hand-waved arc bound discharged",
-  taxonomySection: "7",
+  title: "∫₀^{∞} cos(xⁿ) dx and ∫₀^{∞} sin(xⁿ) dx by a sector of angle π/(2n)",
+  titleLatex: "$\\int_0^{\\infty}\\cos(x^n)\\,dx$ and $\\int_0^{\\infty}\\sin(x^n)\\,dx$ by a sector of angle $\\pi/(2n)$",
+  taxonomySection: "Rectangles and sectors",
   tier: "F",
+
+  description: {
+    contour: "the sector $0\\le\\arg z\\le\\pi/2n$, $|z|\\le R$; integrand $e^{iz^n}$, entire",
+    point:
+      "On the arc $|e^{iz^n}|=e^{-R^n\\sin n\\theta}$ and Jordan's inequality $\\sin\\phi\\ge2\\phi/\\pi$ on $[0,\\pi/2]$ gives $\\int_{\\Gamma_R}=O(R^{1-n})$; on the return ray $e^{iz^n}=e^{-t^n}$, and $\\int_0^\\infty e^{-t^n}dt=\\Gamma(1+1/n)$ is taken as known.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 2", text: "" },
+      { book: "Brown–Churchill", where: "§81", text: "" },
+      { book: "Remmert", where: "Ch. 14", text: "Fresnel integrals" },
+    ],
+  },
+  frontRow: 7,
 
   targets: [
     {

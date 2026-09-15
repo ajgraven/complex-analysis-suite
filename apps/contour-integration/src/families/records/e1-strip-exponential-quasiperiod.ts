@@ -27,9 +27,21 @@ const P = 2 * Math.PI;
 
 export const e1StripExponentialQuasiperiod: Family = {
   id: "strip-exponential-quasiperiod",
-  title: "∫ℝ e^(ax)/(1+e^x) dx = π/sin(πa): the quasi-periodic strip",
-  taxonomySection: "6",
+  title: "∫_{−∞}^{∞} e^{ax} dx/(1+eˣ) by a rectangle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{e^{ax}}{1+e^{x}}\\,dx$ by a rectangle",
+  taxonomySection: "Rectangles and sectors",
   tier: "E",
+
+  description: {
+    contour: "the rectangle with vertices $\\pm R,\\ \\pm R+2\\pi i$",
+    point:
+      "$f(z+2\\pi i)=e^{2\\pi ia}f(z)$, so the top side returns $-e^{2\\pi ia}$ times the target; one pole, $i\\pi$, lies inside. The substitution $x=\\log t$ turns this into the keyhole integral $\\int_0^\\infty t^{a-1}dt/(1+t)$.",
+    citations: [
+      { book: "Conway", where: "Ch. V §2", text: "" },
+      { book: "Freitag–Busam", where: "Ch. III §7", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {

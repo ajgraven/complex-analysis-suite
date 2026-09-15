@@ -17,9 +17,22 @@ import type { Family } from "../schema.js";
 
 export const c1IndentedSinc: Family = {
   id: "indented-sinc",
-  title: "Dirichlet integral: ∫₀^∞ sin x / x dx = π/2, by the indented semicircle",
-  taxonomySection: "4",
+  title: "∫₀^{∞} sin x dx/x by an indented semicircle",
+  titleLatex: "$\\int_0^{\\infty}\\frac{\\sin x}{x}\\,dx$ by an indented semicircle",
+  taxonomySection: "Principal values and indented contours",
   tier: "C",
+
+  description: {
+    contour: "$[-R,-\\rho]\\cup\\gamma_\\rho\\cup[\\rho,R]\\cup\\Gamma_R$, $\\gamma_\\rho$ the small semicircle over $0$; integrand $e^{iz}/z$",
+    point:
+      "No pole is enclosed, so $\\oint=0$; the answer comes entirely from the indentation, $\\int_{\\gamma_\\rho}\\to-i\\pi\\operatorname{Res}(f,0)$, a half of $2\\pi i\\operatorname{Res}$.",
+    citations: [
+      { book: "Brown–Churchill", where: "§82", text: "indented paths" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+      { book: "Stein–Shakarchi", where: "Ch. 2", text: "" },
+    ],
+  },
+  frontRow: 4,
 
   targets: [
     {
@@ -238,6 +251,7 @@ export const c1IndentedSinc: Family = {
     },
     {
       params: { form: "pv" },
+      label: "principal-value form",
       value: "i*pi",
       numeric: [0, 3.141592653589793],
       verifiedTo: 1e-5,

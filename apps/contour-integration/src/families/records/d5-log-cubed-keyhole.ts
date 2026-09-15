@@ -32,9 +32,20 @@ import type { Family } from "../schema.js";
 
 export const d5LogCubedKeyhole: Family = {
   id: "log-cubed-keyhole",
-  title: "∫₀^∞ R(x) (log x)² dx by the log³ keyhole — which does not close alone",
-  taxonomySection: "5.2",
+  title: "∫₀^{∞} (log x)² dx/(1+x²) by a keyhole with (log z)³",
+  titleLatex: "$\\int_0^{\\infty}\\frac{(\\log x)^2}{1+x^2}\\,dx$ by a keyhole with $(\\log z)^3$",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$; integrand $(\\log z)^3/(1+z^2)$",
+    point:
+      "The identity gives two real equations in three unknowns; $\\int(\\log x)^2R$ is determined only modulo $\\int R\\,dx=\\pi/2$, which must be supplied separately.",
+    citations: [
+      { book: "Brown–Churchill", where: "§83", text: "" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+    ],
+  },
 
   targets: [
     {

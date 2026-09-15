@@ -13,8 +13,9 @@ changed.
   sentences and the renderer), 0.5b-ii (the bound modules, the theorem identities and the solve) and
   0.5b-iii (the rest of `kernel/*`, `engine/*` and `families/*`). The review document reads
   **0 flagged, 0 unapplied**, against 191 flagged when the five decisions were approved.
-  **Next execution action: step 0.6** (record descriptions, citations, taxonomy), then the 0.7 phase
-  gate and the solo merge of Phase 0 to `master`.
+  **Step 0.6 is done** — all 28 records carry the four-line standard, the taxonomy is the eight
+  groups, and the front row is declared. **Next execution action: step 0.7**, the Phase 0 gate and
+  the solo merge of Phase 0 to `master`.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -38,6 +39,8 @@ changed.
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
+
+| 2026-09-15 | **0.6** | (this commit) | the four-line standard on all 28 records — human `title` + `titleLatex`, `description.{contour, point, citations}` over an eight-book enum, `taxonomySection` reduced to the eight groups, `frontRow` on the eight classics; `Golden.label` names each variant derivation; loader invariant 5 + corpus-level front-row uniqueness; `test/records.test.ts` (7 tests); GALLERY.md §0 |
 
 | 2026-09-15 | **0.5b-iii** | 788e292 | the five rules through the rest of `kernel/*`, `engine/*` and `families/*`; **152 → 0 flagged, 0 unapplied**; `everySentence` made the one corpus walk; two new corpus checks (balanced `$`, KaTeX strict); 41 wording-pinned node tests + 2 browser tests updated; new `ledger-dump.txt` baseline |
 
@@ -211,6 +214,45 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.6) THE FOUR-LINE STANDARD IS THREE FIELDS, because the fourth is already the engine's.** The
+  identity is `targets` + `closedForm` — the two things the app computes — so `description` carries
+  only the contour, the point and the citations. A `description.identity` would have been a second
+  source of truth for the one line that must agree with the number beside it, which is X1 (the
+  review's own first cross-cutting finding) rebuilt in a new field.
+- **(0.6) A literal reading of the plan's citation rule would have discarded VERIFIED precision.**
+  It says "use chapter-level citations and drop the `[verify]` markers by citing the chapter only";
+  taken literally that turns a confirmed `Ahlfors, Ch. 4 §5.3` into `Ch. 4 §5`. The review marks
+  `[verify]` on the narrowest clause it could not confirm, so the rule applied is: always drop the
+  exercise or example (never confirmed anywhere in the review), and widen a sub-section decimal only
+  where the reference itself was flagged. 67 citations across 28 records, every one with a non-empty
+  `where` and no exercise number.
+- **(0.6) Two of invariant 5's three stated conditions are TYPES, not checks.** A record without a
+  `description` and a `taxonomySection` outside the eight are compile errors once the fields are
+  required and the union is closed, so a runtime check for them would be unreachable — and a check
+  that cannot fail teaches a reader that it might. Invariant 5 asks what the type system cannot: a
+  citation with no chapter, an empty description, an unbalanced `$`, a rank outside 1–8, and an
+  unlabelled variant fixture. Front-row collisions are corpus-level and live in `loadFamilies`.
+  Every branch was probed and fires.
+- **(0.6) THE FRONT ROW IS NOT A TOUR OF THE TAXONOMY, and the test found it.** Eight classics and
+  eight groups look designed to pair, but the plan's list puts D1 and D4 both among the keyholes and
+  leaves *dogbones and the residue at infinity* unrepresented. I kept the plan's eight rather than
+  silently swapping D4 for D6, pinned the real number (7 distinct groups) so a later change is
+  deliberate, and raised it as an open question.
+- **(0.6) The variant fixture picker had been offering the IMPLEMENTATION's name.** `halfRange = true`,
+  `companion = re`, `form = pv` — flag keys sharing a field with parameter bindings (the schema's own
+  recorded finding 2 of 3). `Golden.label` names the derivation instead (`half-range corollary`, `the
+  cosine companion`, `principal-value form`), required on a variant by invariant 5 and forbidden
+  elsewhere, and `fixtureLabel` still prints real bindings from `params` — so `series-cot-kernel`
+  reads `a = 0.75, one-sided sum` with the number coming from one place.
+- **(0.6) My own first draft of the label test was too strong and would have banned a correct
+  label:** it refused any label containing a flag key, and `the cosine companion` contains
+  `companion`. What must never reach a reader is the MACHINE rendering, so the assertion is that the
+  label reads as prose — no `=`, no camelCase identifier.
+- **(0.6) Nothing in the suite pinned a record title before this step**, which is why rewriting all
+  28 broke no test. They are user-facing strings; `test/records.test.ts` now asserts their shape
+  (no ` — ` explainer, none of the words `trap`, `collide`, `hand-waved`, `switch`, `ladder`) and
+  runs every `$…$` in the record's own sentences through KaTeX at `strict: "error"`, the instrument
+  0.5b-iii built for the ledger's.
 - **(0.5b-iii) A BLANKET REPLACEMENT CORRUPTED A SENTENCE AND SHIPPED GREEN.** `branchArc.ts`'s
   float-honesty row read *"the limit depends only on the sign of the exponentt rests on the sign
   alone"* — the tail of the phrase it replaced, welded on mid-word — and it was committed in 0.5b-ii,
@@ -383,7 +425,12 @@ changed.
 
 ## Open questions for the owner
 
-- none open. The five blanket decisions are approved and **applied in full**: the review document reads 0 flagged, 0 unapplied.
+- **(0.6) Should the front row be a tour of the taxonomy?** The plan names A1, A6, B1, C1, D1, D4,
+  F2, G1 as the eight classics, and they cover seven of the eight groups — D1 and D4 are both
+  keyholes, and *dogbones and the residue at infinity* has no front-row entry. Swapping D4 for D6
+  would make the row one-per-group at the cost of dropping a more famous integral. Built as the plan
+  names it; one line in `d4-log-squared-keyhole.ts` and `d6-dogbone-inverse-sqrt.ts` either way.
+- Otherwise none open. The five blanket decisions are approved and **applied in full**: the review document reads 0 flagged, 0 unapplied.
   (Historic, kept for the record: **read [`claims.md`](claims.md) and say what you want changed.** It is every
   sentence the app composes — 202 of them — with what it says today, what is proposed, and which of
   the plan's wording rules each still breaks. **The fastest way through it is the section "The five
@@ -415,6 +462,14 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(0.6) `description` is three fields, not four** — the identity stays in `targets`/`closedForm`.
+- **(0.6) `Citation` is `{ text, book, where }` over a closed eight-book enum**, with `text` the
+  optional gloss (`Jordan's lemma`) and the display line composed from `book` + `where`. Composing
+  beats storing a third string that could disagree with the two beside it.
+- **(0.6) `TAXONOMY_SECTIONS` is the eight groups as a `const` array and `TaxonomySection` its union**,
+  so a ninth group is a compile error rather than a dropped record.
+- **(0.6) `Golden.label` names a variant derivation; `params` keeps every real binding.**
+
 - **(0.5b-iii) `everySentence` (in `test/helpers/claimsDoc.ts`) is the ONE walk over everything the
   app composes** — the ledger's rows and the derivation's lines and statements — and the review
   document, the `$`-balance check and the KaTeX-strict check all read it. Any future check over the

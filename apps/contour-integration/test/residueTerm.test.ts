@@ -68,8 +68,14 @@ function squareRecord(over: {
   return {
     id: "synthetic-square",
     title: "a square with the unknown inside the sum",
-    taxonomySection: "§8",
+    titleLatex: "a square with the unknown inside the sum",
+    taxonomySection: "Series by the residue theorem",
     tier: "G",
+    description: {
+      contour: "the squares $\\Gamma_N$",
+      point: "A synthetic record: the unknown sits inside the residue sum rather than on a piece of the contour.",
+      citations: [{ book: "Ahlfors", where: "Ch. 4 §5", text: "" }],
+    },
     targets: [target],
     parameters: [],
     hypotheses: [],
