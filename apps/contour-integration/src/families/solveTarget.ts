@@ -15,6 +15,7 @@
 // runtime `Piece` has a role but no coefficient row — and the ledger also serves the sandbox, where
 // there is no family at all. Moving it inward is a wiring change, not a redesign.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../kernel/notation.js";
 import { exact, refuse, unknown, type Certificate } from "@cas/rigor";
 import { ExpSum } from "../kernel/expSum.js";
 import {
@@ -45,6 +46,8 @@ export interface SolvedValue {
   readonly value: number;
   /** The exact form, when the relation can be applied symbolically — `π/2`, not 1.5707963. */
   readonly text?: string;
+  /** The same form typeset (M8 step 0.5b-ii), from the same formatter at `LATEX`. */
+  readonly latex?: string;
   readonly certificates: readonly Certificate[];
 }
 
@@ -226,6 +229,7 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
   // certificate says so — which is B3's situation stated as a rule rather than as a special case.
   const extracted = realPartOfSum(piUnits, spec.part);
   let text: string | undefined;
+  let latex: string | undefined;
   let form: SineForm = divided.form;
   if (extracted !== null) {
     const folded = extracted.scale(SqrtExt.fromGauss(Gauss.rat(1n, spec.divisor)));
@@ -235,22 +239,23 @@ export function solveTarget(family: Family, inputs: SolveInputs): SolveTargetRes
     // wrong form is the worst shape a bug here can take, since nothing about it looks wrong.
     form = { ...divided.form, sum: folded };
     text = formatSineForm(form);
+    latex = formatSineForm(form, LATEX);
     certificates.push(
       exact(
-        `the target is ${text}`,
-        `Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then ${relation} applied`,
+        `the target is $${latex}$`,
+        `solved from $\\sum_i (a_i t + b_i) = \\oint_\\gamma f\\,dz$ in units of $\\pi$, then ${relation} applied`,
       ),
     );
   } else {
     certificates.push(
       unknown(
         "the target's closed form",
-        "the solved value carries an exponential with a COMPLEX exponent, so e^{β} contributes cos and sin of an irrational and the real part is not in this basis; the decimal stands",
+        "the closed form involves $e^{\\beta}$ with complex $\\beta$, so its real part is not in this basis; only the decimal is given",
       ),
     );
   }
 
-  return { ok: true, solved: { piUnits, form, value, text, certificates } };
+  return { ok: true, solved: { piUnits, form, value, text, latex, certificates } };
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────────

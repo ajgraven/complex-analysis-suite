@@ -100,7 +100,7 @@ describe("L5 — the large arc that does not vanish", () => {
     expect(formatGauss(r.limit.L)).toBe("i");
     // iπ·i = −π, i.e. −1 in units of π.
     expect(formatExpSum(r.limit.contribution)).toBe("−1");
-    expect(r.limit.certificate.claim).toMatch(/NOT zero/);
+    expect(r.limit.certificate.claim).toMatch(/not zero/);
   });
 
   it("returns zero when the limit is zero — which is L1, and the arc really does vanish", () => {
@@ -116,7 +116,7 @@ describe("L5 — the large arc that does not vanish", () => {
     const r = largeArcLimit(formOf(C2_AUX), lowerArc, "lower");
     expect(r.ok).toBe(false);
     if (r.ok) return;
-    expect(r.certificate.method).toMatch(/GROWS on the lower arc/);
+    expect(r.certificate.method).toMatch(/grows on the lower arc/);
   });
 
   it("refuses a rational part that diverges rather than tending to a limit", () => {

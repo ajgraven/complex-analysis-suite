@@ -180,13 +180,13 @@ describe("two exponents on one cut", () => {
 
 describe("the end caps, at exponents that are not equal", () => {
   it("kills each by the bound about its OWN branch point, at its own rate", () => {
-    const caps = ran().ledger.rows.filter((r) => r.claim.includes("over the cap"));
+    const caps = ran().ledger.rows.filter((r) => r.claim.startsWith("the cap:"));
     expect(caps).toHaveLength(2);
     const byPiece = new Map(caps.map((c) => [c.pieceId, c]));
     // `μ = 3/4` at z = 0 gives `O(η^{7/4})`; `ν = 1/4` at z = b gives `O(η^{5/4})`. Different rates
     // from the same lemma, which is what having two different exponents on one cut means.
-    expect(must(byPiece.get("endA"), "the cap at 0").claim).toMatch(/O\(η\^\(7\/4\)\)/);
-    expect(must(byPiece.get("endB"), "the cap at b").claim).toMatch(/O\(η\^\(5\/4\)\)/);
+    expect(must(byPiece.get("endA"), "the cap at 0").claim).toMatch(/O\(\\eta\^\{7\/4\}\)/);
+    expect(must(byPiece.get("endB"), "the cap at b").claim).toMatch(/O\(\\eta\^\{5\/4\}\)/);
     for (const cap of caps) {
       expect(cap.status).toBe("satisfied");
       expect(cap.evidence.level).toBe("≤");

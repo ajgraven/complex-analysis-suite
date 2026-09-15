@@ -409,7 +409,7 @@ const DECLARED: Readonly<Record<string, Omit<DrillTask, "id" | "label" | "record
     alsoAnswers: [],
     drawCheck: {
       none:
-        "C1 encloses no singularity at all — its whole value comes from the indentation's iα·Res, " +
+        "C1 encloses no singularity at all — its whole value comes from the indentation's $i\\alpha\\operatorname{Res}$, " +
         "which is a limit a fixed drawn curve cannot take. There is nothing here to check about the " +
         "enclosure that any loop missing the origin would not also satisfy.",
     },

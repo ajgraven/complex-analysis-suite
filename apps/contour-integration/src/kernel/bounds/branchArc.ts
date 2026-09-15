@@ -109,15 +109,15 @@ export function branchArcBound(
     maxModulus.toNumber() *
     (opts.piMultiple.toNumber() / 2);
 
-  const at = `at ρ = ${rho.toNumber().toExponential(3)}`;
-  const claim = `|∫ over the arc| ≤ ${value.toExponential(3)} ${at}`;
-  const rho_ = opts.limit === "inf" ? "R → ∞" : "ε → 0⁺";
+  const at = `at $\\rho = ${rho.toNumber().toExponential(3)}$`;
+  const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
+  const rho_ = opts.limit === "inf" ? "$R \\to \\infty$" : "$\\varepsilon \\to 0^+$";
   const exponentText = `${rationalExponent.n}/${rationalExponent.d}`;
   const because = vanishes
-    ? `and → 0 as ${rho_}, because the bound is O(ρ^(${exponentText})) and that exponent's sign is ${opts.limit === "inf" ? "negative" : "positive"}`
+    ? `and $\\to 0$ as ${rho_}, because the bound is $O(\\rho^{${exponentText}})$ and that exponent's sign is ${opts.limit === "inf" ? "negative" : "positive"}`
     : asymptotics === "bounded"
-      ? `but it does NOT vanish: the bound is O(1), so this lemma establishes nothing in the limit`
-      : `and it DIVERGES as ${rho_}: the bound is O(ρ^(${exponentText}))`;
+      ? "but it does not vanish: the bound is $O(1)$, so this lemma establishes nothing in the limit"
+      : `and it diverges as ${rho_}: the bound is $O(\\rho^{${exponentText}})$`;
 
   const provenance = [
     { ok: true, text: "|R| bounded above by exact ℚ coefficient bounds, numerator and denominator separately" },
@@ -268,22 +268,22 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
     product;
 
   const exponentText = `${rationalExponent.n}/${rationalExponent.d}`;
-  const at = `at η = ${etaValue.toExponential(3)}`;
-  const claim = `|∫ over the cap| ≤ ${value.toExponential(3)} ${at}`;
+  const at = `at $\\eta = ${etaValue.toExponential(3)}$`;
+  const claim = `the cap: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const because = vanishes
-    ? `and → 0 as η → 0⁺, because the bound is O(η^(${exponentText})) and that exponent is positive`
+    ? `and $\\to 0$ as $\\eta \\to 0^+$, because the bound is $O(\\eta^{${exponentText}})$ and that exponent is positive`
     : asymptotics === "bounded"
-      ? "but it does NOT vanish: the bound is O(1), so this lemma establishes nothing in the limit"
-      : `and it DIVERGES as η → 0⁺: the bound is O(η^(${exponentText}))`;
+      ? "but it does not vanish: the bound is $O(1)$, so this lemma establishes nothing in the limit"
+      : `and it diverges as $\\eta \\to 0^+$: the bound is $O(\\eta^{${exponentText}})$`;
 
   const provenance = [
     {
       ok: true,
-      text: "the cofactor is shifted to the cap's own centre by exact synthetic division over ℚ(i), so the bound is the one this file already states, read about w = z − b",
+      text: "the cofactor is shifted to the cap's own centre by exact synthetic division over $\\mathbb{Q}(i)$, so the bound is the one this file already states, read about $w = z - b$",
     },
     {
       ok: true,
-      text: `the exponent ${exponentText} = α_b + 1 + (ord₀Ñ − ord₀D̃) is an exact rational, so its SIGN is decided; α_b > −1 is the integrability of the endpoint singularity, spent here`,
+      text: `the exponent ${exponentText} = α_b + 1 + (ord₀Ñ − ord₀D̃) is an exact rational, so its sign is decided; α_b > −1 is the integrability of the endpoint singularity, spent here`,
     },
     {
       ok: true,
@@ -294,7 +294,7 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
     },
     {
       ok: false,
-      text: "η^{α} and the other factors' powers are irrational powers of rationals, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone",
+      text: "$\\eta^{\\alpha}$ and the other factors' powers are irrational powers of rationals, so the bound's value is a float — the limit depends only on the sign of the exponentt rests on the sign alone",
     },
   ];
 

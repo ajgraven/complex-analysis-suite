@@ -44,7 +44,7 @@ import type { ContourIntegral } from "./contour/integrate.js";
 import { checkAgainstQuadrature, type ResidueTheoremResult } from "./residueTheorem.js";
 
 export const SUMMATION_THEOREM_IDENTITY =
-  "∮ K·f dz = 2πi[ Σ_{|n|≤N} Res(K·f, n) + Σⱼ Res(K·f, zⱼ) ],  K = π cot(πz) or π csc(πz)";
+  "$\\oint_{\\Gamma_N} Kf\\,dz = 2\\pi i\\left[\\sum_{|n| \\le N} \\operatorname{Res}(Kf, n) + \\sum_j \\operatorname{Res}(Kf, z_j)\\right]$, with $K = \\pi\\cot\\pi z$ or $\\pi\\csc\\pi z$";
 
 export interface SummationTheoremInput {
   readonly kernel: SummationKernel;

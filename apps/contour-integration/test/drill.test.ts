@@ -161,7 +161,7 @@ describe("rung ii — the KILL column", () => {
     expect(answers("oscillatory")).toEqual(["target", "vanishes"]);
     expect(answers("forced-downward")).toEqual(["target", "vanishes"]);
     // C1 is the entry that needs the third case: the indentation does NOT vanish, it contributes
-    // `iα·Res` exactly, which is why `∮` stops being the answer.
+    // `i\\alpha\\operatorname{Res}` exactly, which is why `∮` stops being the answer.
     expect(answers("indented")).toEqual(["target", "limit", "target", "vanishes"]);
   });
 
@@ -271,7 +271,7 @@ describe("rung ii — the KILL column", () => {
     expect(allCorrect(graded)).toBe(false);
     const bad = graded.find((g) => !g.ok);
     expect(bad?.question.pieceId).toBe("indent");
-    expect(bad?.question.row.claim).toContain("iα·Res");
+    expect(bad?.question.row.claim).toContain("i\\alpha\\operatorname{Res}");
 
     // Unanswered.
     const blank = gradePieces(qs, {});
@@ -344,7 +344,7 @@ describe("rung iii — the menu", () => {
     const bad = menuVerdict(run2, "semicircleDown");
     expect(bad.answers).toBe(false);
     expect(bad.failedAt).toBe("KILL");
-    expect(bad.why).toContain("DIVERGES");
+    expect(bad.why).toContain("diverges");
   });
 
   it("the circle CLOSES and still does not answer — COVER, not KILL", () => {
@@ -456,7 +456,7 @@ describe("rung iv — the enclosure", () => {
     expect(typeof task?.drawCheck).toBe("object");
     const r = checkDrawing(task?.drawCheck ?? "as-recorded", [], []);
     expect(r.ok).toBe(false);
-    expect(r.why).toContain("iα·Res");
+    expect(r.why).toContain("i\\alpha\\operatorname{Res}");
     // Measured: its own contour winds about nothing, so "wind about no pole" is free.
     const run = task === null ? null : runTask(task);
     expect(run?.integral.windings.map((x) => x.n)).toEqual([0]);

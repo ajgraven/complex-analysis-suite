@@ -75,7 +75,7 @@ describe("the ledger closes a correct argument", () => {
       const kill = rowsFor(run("1/(1+z^2)", semicircleTemplate(R)), "KILL").find((x) =>
         x.claim.includes("arc"),
       );
-      const m = /≤ ([0-9.e+-]+)/.exec(kill?.claim ?? "");
+      const m = /\\le ([0-9.e+-]+)/.exec(kill?.claim ?? "");
       return m ? Number(m[1]) : NaN;
     };
     expect(boundAt(1000)).toBeLessThan(boundAt(100));
@@ -93,7 +93,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
     expect(r.failedAt).toBe("KILL");
     expect(ledgerHeadline(r)).toBe(headlineFails("KILL"));
     const arc = rowsFor(r, "KILL").find((x) => x.status === "failed");
-    expect(arc?.claim).toMatch(/DIVERGES/);
+    expect(arc?.claim).toMatch(/diverges/);
     expect(arc?.repair).toMatch(/other half-plane/);
   });
 
@@ -131,7 +131,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
   });
 
   it("switches lemmas at a ZERO frequency rather than reporting π/0 as a failure", () => {
-    // Jordan's constant is π/|a|, which at a = 0 is ∞ and says nothing — correctly, since Jordan
+    // Jordan's constant is \\pi/|a|, which at a = 0 is ∞ and says nothing — correctly, since Jordan
     // has no content without exponential decay. But e^{i·0·z} = 1 leaves an ordinary rational
     // integrand that plain ML discharges. Gallery B1's own trap: an engine that treats π/0 as a
     // failure "will paper over exactly the case it was built to catch".
@@ -169,7 +169,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("KILL");
     const arc = rowsFor(r, "KILL").find((x) => x.status === "failed");
-    expect(arc?.claim).toMatch(/does NOT vanish/);
+    expect(arc?.claim).toMatch(/does not vanish/);
   });
 
   it("declines KILL rather than guessing when no lemma covers the integrand", () => {
@@ -748,13 +748,13 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     const row = arcRow(run("exp(i*z^2)", wedge(4)));
     expect(row?.status).toBe("satisfied");
     expect(row?.evidence.level).toBe("≤");
-    expect(row?.evidence.method).toMatch(/L6 \(oscillatory form\)/);
+    expect(row?.evidence.method).toMatch(/the wedge lemma \(oscillatory form\)/);
   });
 
   it("certifies the Gaussian arc: e^{−z²} on the same π/4 wedge", () => {
     const row = arcRow(run("exp(-z^2)", wedge(4)));
     expect(row?.status).toBe("satisfied");
-    expect(row?.evidence.method).toMatch(/L6 \(Gaussian form\)/);
+    expect(row?.evidence.method).toMatch(/the wedge lemma \(Gaussian form\)/);
   });
 
   it("D-1, side by side on one contour: the π/2 wedge kills e^{iz²} and REFUSES e^{−z²}", () => {
@@ -767,7 +767,7 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     expect(gaussian?.status).toBe("failed");
     expect(gaussian?.evidence.level).toBe("⚠");
     expect(gaussian?.evidence.method).toMatch(/GROWS/);
-    expect(gaussian?.evidence.method).toMatch(/D-1/);
+    expect(gaussian?.evidence.method).toMatch(/runs past π\/2/);
   });
 
   it("reaches the wedge angles a π/(2n) wedge needs, which the extent reader could not measure", () => {
@@ -891,7 +891,7 @@ describe("L1 on a strip's vertical sides", () => {
     for (const id of ["right", "left"]) {
       expect(sideRow(r, id)?.status).toBe("satisfied");
       expect(sideRow(r, id)?.evidence.level).toBe("≤");
-      expect(sideRow(r, id)?.evidence.method).toMatch(/ML inequality on a vertical side/);
+      expect(sideRow(r, id)?.evidence.method).toMatch(/ML-estimate on a vertical side/);
     }
   });
 

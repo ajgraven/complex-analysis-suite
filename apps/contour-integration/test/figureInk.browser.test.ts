@@ -49,7 +49,7 @@ function variety(c: HTMLCanvasElement, x: number, y: number, w: number, h: numbe
 
 const CAPTION: FigureCaption = {
   title: "∮ 1/z dz over the circle",
-  value: "= ∮ f dz = 2πi",
+  value: "= $\\oint_\\gamma f(z)\\,dz = 2πi",
   verdict: "The closed-contour value is established exactly.",
   level: "=",
 };

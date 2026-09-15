@@ -120,7 +120,7 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   const x = s.side === "right" ? s.R : -s.R;
   const r = Math.exp(x);
   const denLow = denominatorLower(form.den, r, s.side === "right" ? "inf" : "0");
-  const at = `at R = ${s.R}`;
+  const at = `at $R = ${s.R}$`;
   if (!(denLow > 0)) {
     return {
       R,
@@ -142,12 +142,12 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
   const value = carrier * (numeratorUpper(form.num, r) / denLow) * s.length;
 
   const exponentText = `${rationalExponent.n}/${rationalExponent.d}`;
-  const claim = `|∫ over the ${s.side} side| ≤ ${value.toExponential(3)} ${at}`;
+  const claim = `the ${s.side} side: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const because = vanishes
-    ? `and → 0 as R → ∞, because the bound is O(e^{(${exponentText})R}) and that exponent is negative`
+    ? `and $\\to 0$ as $R \\to \\infty$, because the bound is $O(e^{(${exponentText})R})$ and that exponent is negative`
     : asymptotics === "bounded"
-      ? "but it does NOT vanish: the bound is O(1), so this lemma establishes nothing in the limit"
-      : `and it DIVERGES as R → ∞: the bound is O(e^{(${exponentText})R})`;
+      ? "but it does not vanish: the bound is $O(1)$, so this lemma establishes nothing in the limit"
+      : `and it diverges as $R \\to \\infty$: the bound is $O(e^{(${exponentText})R})$`;
 
   const provenance = [
     {
@@ -175,10 +175,10 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
     exponent,
     degreeGap,
     certificate: vanishes
-      ? bound("≤", `${claim}, ${because}`, "L1, the ML inequality on a vertical side, with the exponent exact in ℚ", {
+      ? bound("≤", `${claim}, ${because}`, "the ML-estimate on a vertical side, with the exponent exact in $\\mathbb{Q}$", {
           provenance,
         })
-      : refuse(`${claim}, ${because}`, "L1 on a vertical side — the bound holds, the lemma does not discharge", {
+      : refuse(`${claim}, ${because}`, "the ML-estimate on a vertical side — the bound holds, the lemma does not discharge", {
           provenance: [
             { ok: true, text: `the bound itself is valid ${at}` },
             { ok: false, text: `but the exponent is ${exponentText}, so it does not tend to zero as R → ∞` },

@@ -147,12 +147,12 @@ export function wedgeArcBound(form: WedgeExponential, R: Frac, arc: WedgeArc): A
       asymptotics: "diverges",
       exponent: Number.POSITIVE_INFINITY,
       certificate: refuse(
-        `the wedge arc for ${describe(form)} DIVERGES`,
-        `|e^{w zⁿ}| = e^{${face.face === "cos" ? "−c Rⁿ cos nθ" : "−c Rⁿ sin nθ"}} with c = ${face.rate.toNumber()} ≤ 0, so the integrand grows like ${grows} — the wedge cannot be closed this way, and the failing constraint is KILL`,
+        `the wedge arc for ${describe(form)} diverges`,
+        `$|e^{wz^n}| = e^{${face.face === "cos" ? "-cR^n\\cos n\\theta" : "-cR^n\\sin n\\theta"}}$ with $c = ${face.rate.toNumber()} \\le 0$, so the integrand grows like ${grows} — the wedge cannot be closed this way, and the failing constraint is KILL`,
         {
           provenance: [
-            { ok: false, text: `c = ${face.rate.toNumber()} gives growth rather than damping` },
-            { ok: true, text: "suggested repair: reflect the wedge, or negate w" },
+            { ok: false, text: `$c = ${face.rate.toNumber()}$ gives growth rather than damping` },
+            { ok: true, text: "suggested repair: reflect the wedge, or negate $w$" },
           ],
         },
       ),
@@ -190,23 +190,23 @@ export function wedgeArcBound(form: WedgeExponential, R: Frac, arc: WedgeArc): A
       asymptotics === "vanishes"
         ? bound(
             "≤",
-            `|∫ over the wedge| ≤ |λ|·${damped.constant.n}/${damped.constant.d}·π/(n·c·R^{n−1}) ≤ ${value.toNumber().toExponential(3)} at R = ${R.toNumber()}, and → 0 as R → ∞ since n = ${form.n} > 1`,
-            `L6 (${face.face === "cos" ? "Gaussian" : "oscillatory"} form), with the range decided in exact ℚ`,
+            `the wedge arc: $\\left|\\int \\lambda e^{wz^n}\\,dz\\right| \\le |\\lambda|\\tfrac{${damped.constant.n}}{${damped.constant.d}}\\tfrac{\\pi}{ncR^{n-1}} \\le ${value.toNumber().toExponential(3)}$ at $R = ${R.toNumber()}$, and $\\to 0$ as $R \\to \\infty$ since $n = ${form.n} > 1$`,
+            `the wedge lemma (${face.face === "cos" ? "Gaussian" : "oscillatory"} form), with the range decided in exact $\\mathbb{Q}$`,
             {
               provenance: [
                 { ok: true, text: damped.certificate.claim },
                 { ok: true, text: `established by: ${damped.certificate.method}` },
                 {
                   ok: true,
-                  text: `ψ = nθ carries the arc's range ${arc.to.n}π/${arc.to.d} to ${psiRange.n}π/${psiRange.d}, which is what the predicate was asked about`,
+                  text: `$\\psi = n\\theta$ carries the arc's range $${arc.to.n}\\pi/${arc.to.d}$ to $${psiRange.n}\\pi/${psiRange.d}$, which is what the predicate was asked about`,
                 },
-                { ok: true, text: `the bound is O(R^${exponent}), and 1 − n < 0 exactly when n > 1` },
+                { ok: true, text: `the bound is $O(R^{${exponent}})$, and $1 - n < 0$ exactly when $n > 1$` },
               ],
             },
           )
         : refuse(
-            `the wedge bound does NOT vanish at n = ${form.n}: it is O(R^${exponent})`,
-            "L6 needs n > 1; at n = 1 the bound is the constant π/c and establishes nothing about the limit",
+            `the wedge bound does not vanish at $n = ${form.n}$: it is $O(R^{${exponent}})$`,
+            "the wedge lemma needs $n > 1$; at $n = 1$ the bound is the constant $\\pi/c$ and establishes nothing about the limit",
           ),
   };
 }

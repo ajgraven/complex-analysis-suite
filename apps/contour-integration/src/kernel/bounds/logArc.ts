@@ -112,15 +112,15 @@ export function logArcBound(
     Math.pow(Math.abs(Math.log(rhoValue)) + a, power) *
     maxModulus.toNumber();
 
-  const at = `at ρ = ${rhoValue.toExponential(3)}`;
-  const claim = `|∫ over the arc| ≤ ${value.toExponential(3)} ${at}`;
-  const heading = opts.limit === "inf" ? "R → ∞" : "ε → 0⁺";
+  const at = `at $\\rho = ${rhoValue.toExponential(3)}$`;
+  const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
+  const heading = opts.limit === "inf" ? "$R \\to \\infty$" : "$\\varepsilon \\to 0^+$";
   const exponentText = `${rationalExponent.n}`;
   const because = vanishes
-    ? `and → 0 as ${heading}, because the bound is O(ρ^(${exponentText})·(ln ρ)^${power}) and a logarithm is weaker than every power`
+    ? `and $\\to 0$ as ${heading}, because the bound is $O(\\rho^{${exponentText}}(\\ln \\rho)^{${power}})$ and a logarithm is weaker than every power`
     : asymptotics === "bounded"
-      ? "but it does NOT vanish: the bound is O(1), so this lemma establishes nothing in the limit"
-      : `and it DIVERGES as ${heading}: the bound is O(ρ^(${exponentText})·(ln ρ)^${power})`;
+      ? "but it does not vanish: the bound is $O(1)$, so this lemma establishes nothing in the limit"
+      : `and it diverges as ${heading}: the bound is $O(\\rho^{${exponentText}}(\\ln \\rho)^{${power}})$`;
 
   const provenance = [
     {

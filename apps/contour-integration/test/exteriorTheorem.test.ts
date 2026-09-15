@@ -314,8 +314,8 @@ describe("analyse routes on the geometry", () => {
       ...(solve?.statements ?? []).map((x) => x.text),
       ...(solve?.lines ?? []).map((l) => l.text),
     ].join(" | ");
-    expect(texts).toMatch(/Σₖ \(n\(γ,aₖ\) − σ\)·Res\(f,aₖ\) − σ·Res\(f,∞\)/);
-    expect(texts).not.toMatch(/∮ f dz = 2πi Σₖ n\(γ,aₖ\)·Res\(f,aₖ\)( |$)/);
+    expect(texts).toMatch(/\\operatorname\{Ind\}_\\gamma\(a_k\) - \\sigma/);
+    expect(texts).not.toMatch(/$\\oint_\\gamma f(z)\\,dz = 2πi Σₖ n\(γ,aₖ\)·Res\(f,aₖ\)( |$)/);
   });
 
   it("refuses rather than answering when a branch factor rides an exterior contour", () => {

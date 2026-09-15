@@ -40,7 +40,7 @@ function residueByQuadrature(src: string, centre: number, radius: number, n = 40
     const t = (2 * Math.PI * k) / n;
     const z: [number, number] = [centre + radius * Math.cos(t), radius * Math.sin(t)];
     const v = f(z, [0, 0]);
-    // `∮ f dz = ∫ f·(i ρ e^{it}) dt`, so `(1/2πi)∮ = (1/2π)∫ f·ρe^{it} dt` — the `i` CANCELS, and a
+    // `$\\oint_\\gamma f(z)\\,dz = ∫ f·(i ρ e^{it}) dt`, so `(1/2πi)∮ = (1/2π)∫ f·ρe^{it} dt` — the `i` CANCELS, and a
     // first draft that kept it returned the residue rotated a quarter turn, putting a real answer
     // entirely in the imaginary part. The weight is `ρe^{it}`, not `iρe^{it}`.
     const w: [number, number] = [radius * Math.cos(t), radius * Math.sin(t)];

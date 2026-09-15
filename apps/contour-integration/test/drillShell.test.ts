@@ -155,7 +155,7 @@ describe("rung ii — the KILL column is MASKED, and comes back", () => {
     expect(text(card)).toContain("Not every piece");
     // Exactly one row of feedback, and it is the LEDGER'S: Jordan's bound, in the row's own words.
     expect(root.querySelectorAll(".drillWhy")).toHaveLength(1);
-    expect(text(q(root, ".drillWhy"))).toContain("π/|a|");
+    expect(text(q(root, ".drillWhy"))).toContain("\\pi/|a|");
     // Rung 1 was cleared on the way here (reading it IS that rung's task); rung 2 was not.
     expect(readProgress(window.localStorage).oscillatory).toBe(1);
     // Try again puts the sheet back.
@@ -201,7 +201,7 @@ describe("rung iii — the contour is masked too", () => {
     expect(state.mode).toBe("sandbox");
     expect(state.contourSource?.template).toBe("semicircleDown");
     expect(state.drill).toEqual({ task: "oscillatory", stage: 3 });
-    expect(text(q(root, ".drillCard"))).toContain("DIVERGES");
+    expect(text(q(root, ".drillCard"))).toContain("diverges");
     // Not cleared: rung 1's own click is the 1 below, and a wrong pick adds nothing.
     expect(readProgress(window.localStorage).oscillatory).toBe(1);
     // And the ledger is unmasked, because now there is something of the reader's to judge.
@@ -274,7 +274,7 @@ describe("rung iv — a drawn contour, and what it can be checked against", () =
     toRungFour(root, "∫ sin x/x dx");
     const card = text(q(root, ".drillCard"));
     expect(card).toContain("nothing here to check about the enclosure");
-    expect(card).toContain("iα·Res");
+    expect(card).toContain("i\\alpha\\operatorname{Res}");
     // No check button at all, rather than one that always passes.
     expect([...q(root, ".drillCard").querySelectorAll("button")].map((b) => b.textContent)).not.toContain(
       "Check the enclosure",

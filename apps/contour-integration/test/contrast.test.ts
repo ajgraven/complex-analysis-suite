@@ -135,8 +135,8 @@ describe("diffLedgers", () => {
     const d = diffLedgers(record("jordan-cosine-kernel", { a: 0, b: 1 }), record("jordan-cosine-kernel", { a: 1, b: 1 }));
     expect(d.keys).toEqual(["KILL/vanish#0"]);
     expect(d.rows[0].kind).toBe("claim");
-    expect(d.rows[0].from).toContain("deg Q − deg P");
-    expect(d.rows[0].to).toContain("π/|a|");
+    expect(d.rows[0].from).toContain("\\deg Q - \\deg P");
+    expect(d.rows[0].to).toContain("\\pi/|a|");
     // The value moves too, and that is reported apart from the rows because it is not one.
     expect(d.answer).toEqual({ from: "π", to: "π/e" });
     expect(d.closes).toBeNull();

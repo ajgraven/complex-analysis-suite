@@ -32,6 +32,7 @@ import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { Piece } from "./contour/model.js";
+import { LATEX } from "../kernel/notation.js";
 import { constraintLabel, stageTitle, type StageId } from "./vocabulary.js";
 import type { ConstraintId, LedgerResult, LedgerRow } from "./ledger.js";
 import { RESIDUE_THEOREM_IDENTITY, type ResidueTheoremResult } from "./residueTheorem.js";
@@ -152,6 +153,8 @@ export interface DerivationStage extends StageSpec {
 export interface SolvedSummary {
   readonly value: number;
   readonly text?: string;
+  /** The same form typeset. */
+  readonly latex?: string;
   readonly certificates: readonly Certificate[];
 }
 
@@ -292,7 +295,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
     add(
       "solve",
       lineFromVerdict(
-        `∮ f dz = ${theorem.exactValue.text}`,
+        `$\\oint_\\gamma f(z)\\,dz = ${theorem.exactValue.latex}$`,
         theorem.verdict,
         "satisfied",
       ),
@@ -308,7 +311,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
       text:
         theorem.crossCheck !== undefined
           ? `${theorem.crossCheck.claim} — ${theorem.crossCheck.restriction ?? "corroboration"}`
-          : `the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of the two is wrong, so no value is reported`,
+          : `numerical check: the quadrature differs by ${(theorem.disagreement ?? 0).toExponential(2)}; no value is reported`,
     });
   }
 
@@ -322,22 +325,22 @@ export function buildDerivation(input: DerivationInput): Derivation {
       // `vanish` piece that does not vanish. C1's indentation and C2's arc are the same π, arriving
       // on different pieces, and both are the whole difference between π/2 and 0.
       say("solve", {
-        label: `from ${constraintLabel("KILL").toLowerCase()} · ${piece?.name ?? limit.pieceId}`,
-        text: `contributes ${formatPiExpSum(limit.contribution)} — a known limit, not zero`,
+        label: `${constraintLabel("KILL").toLowerCase()} · ${piece?.name ?? limit.pieceId}`,
+        text: `contributes $${formatPiExpSum(limit.contribution, LATEX)}$ — a known limit, not zero`,
       });
     }
   }
   if (solved !== undefined) {
     say("solve", {
       label: "the system",
-      text: "Σᵢ (aᵢ·t + bᵢ) = ∮ f dz, solved for t — worked in units of π, so π is never evaluated and π/2 stays π/2",
+      text: "$\\sum_i (a_i t + b_i) = \\oint_\\gamma f(z)\\,dz$, solved for $t$",
     });
     add(
       "solve",
       lineFromVerdict(
         solved.text === undefined
-          ? `the integral ≈ ${solved.value}`
-          : `the integral = ${solved.text}`,
+          ? `$I \\approx ${solved.value}$`
+          : `$I = ${solved.latex ?? solved.text}$`,
         assembleVerdict(solved.certificates),
         "satisfied",
       ),
@@ -366,7 +369,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
     ? [
         unknown(
           "the target integral",
-          "the closed-contour value is established, but a piece carries a known non-zero limit and Pass 5 did not run — so the target was never extracted from it",
+          "$\\oint_\\gamma f(z)\\,dz$ is established, but the target was not solved for",
         ),
       ]
     : [];

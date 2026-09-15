@@ -81,7 +81,7 @@ describe("the two verticals", () => {
       expect(side.status).toBe("satisfied");
       expect(side.evidence.level).toBe("≤");
       // The limit rests on `Re(q₂)` and nothing else — `e^{−R²}`.
-      expect(side.claim).toContain("O(e^{(−1)R²})");
+      expect(side.claim).toContain("O(e^{(−1)R^2})");
       expect(side.evidence.provenance.some((p) => p.text.includes("ATTAINED, not majorised"))).toBe(true);
     }
   });
@@ -93,7 +93,7 @@ describe("the two verticals", () => {
     if (!r.ok) return;
     const bounds = r.run.ledger.rows
       .filter((x) => x.claim.includes("vertical side"))
-      .map((x) => Number(/≤ ([0-9.e+-]+) at/.exec(x.claim)?.[1] ?? Number.NaN));
+      .map((x) => Number(/\\le ([0-9.e+-]+)\$/.exec(x.claim)?.[1] ?? Number.NaN));
     // Pieces 2 and 4 of the rectangle are the verticals (the ledger walks them in order).
     const measured = [1, 3].map((k) => Math.hypot(...(r.run.integral.pieces[k]?.value ?? [0, 0])));
     expect(measured[0]).toBeLessThan(bounds[0]);

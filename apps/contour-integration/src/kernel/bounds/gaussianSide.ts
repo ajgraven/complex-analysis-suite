@@ -110,8 +110,8 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
   const peak = maximumOn(A, B, C, lo, hi);
   const [lr, li] = lambda.toTuple();
   const value = Math.hypot(lr, li) * length.toNumber() * Math.exp(peak.value.toNumber());
-  const at = `at Re z = ${formatFrac(s.c)}`;
-  const claim = `|∫ over the vertical side| ≤ ${value.toExponential(3)} ${at}`;
+  const at = `at $\\operatorname{Re} z = ${formatFrac(s.c)}$`;
+  const claim = `the vertical side: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const provenance = [
     {
       ok: true,
@@ -138,13 +138,13 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
       asymptotics === "vanishes"
         ? bound(
             "≤",
-            `${claim}, and → 0 as R → ∞ because the bound is O(e^{(${formatFrac(leading)})R²}) and that exponent is negative`,
-            "L1, the ML inequality on a vertical side, with max|f| the exact maximum of a quadratic in ℚ",
+            `${claim}, and $\\to 0$ as $R \\to \\infty$ because the bound is $O(e^{(${formatFrac(leading)})R^2})$ and that exponent is negative`,
+            "the ML-estimate on a vertical side, with $\\max|f|$ the exact maximum of a quadratic in $\\mathbb{Q}$",
             { provenance },
           )
         : refuse(
-            `${claim}, and it DIVERGES as R → ∞: the bound is O(e^{(${formatFrac(leading)})R²})`,
-            "L1 on a vertical side — the bound holds, the lemma does not discharge",
+            `${claim}, and it diverges as $R \\to \\infty$: the bound is $O(e^{(${formatFrac(leading)})R^2})$`,
+            "the ML-estimate on a vertical side — the bound holds, the lemma does not discharge",
             {
               // THE SAME FIRST STEP AS THE DISCHARGING BRANCH. A diverging row is still a row about a
               // computed number, and dropping the one line that says how `max|f|` was found would

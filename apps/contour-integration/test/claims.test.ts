@@ -198,6 +198,29 @@ describe("the ledger's claims", () => {
     expect(renderArg({ kind: "text", text: "crosses" })).toBe("crosses");
   });
 
+  it("never ships an unbalanced `$`", () => {
+    // `splitMath` re-joins an odd trailing delimiter as TEXT rather than swallowing the rest of the
+    // line — the safe direction — so the defect shows as a stray dollar sign on screen and nothing
+    // else. Found in a browser at two per record; this is the check that keeps it found.
+    const unbalanced: string[] = [];
+    const look = (text: string, where: string): void => {
+      if ((text.match(/\$/g) ?? []).length % 2 === 1) unbalanced.push(`${where}: ${text}`);
+    };
+    for (const family of FAMILIES) {
+      for (const golden of family.golden) {
+        const r = solveFamily(family, golden);
+        if (!r.ok) continue;
+        for (const row of r.run.ledger.rows) {
+          look(row.claim, family.id);
+          look(row.evidence.method, family.id);
+          if (row.repair !== undefined) look(row.repair, family.id);
+          for (const p of row.evidence.provenance) look(p.text, family.id);
+        }
+      }
+    }
+    expect(unbalanced).toEqual([]);
+  });
+
   it("carries a LaTeX sibling on an exact argument that IS an expression", () => {
     // M8 step 0.4b. `exactArg` prints the LaTeX from the same text, so the ledger's rows can be
     // typeset without a second copy of any formula — and it withholds one where the text is not an

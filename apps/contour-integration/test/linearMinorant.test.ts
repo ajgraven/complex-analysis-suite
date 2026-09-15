@@ -89,7 +89,7 @@ describe("dampedArcIntegral — the side condition, decided in ℚ", () => {
     expect(refuses.constant).toBeNull();
     expect(refuses.certificate.level).toBe("⚠");
     expect(refuses.certificate.method).toMatch(/GROWS/);
-    expect(refuses.certificate.method).toMatch(/D-1/);
+    expect(refuses.certificate.method).toMatch(/runs past π\/2/);
   });
 
   it("refuses the cos face at the first rational past π/2, not merely far past it", () => {

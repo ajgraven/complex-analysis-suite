@@ -108,12 +108,12 @@ describe("what the dogbone teaches", () => {
   });
 
   it("kills each end cap by a bound taken about that cap's OWN branch point", () => {
-    const caps = ran().ledger.rows.filter((r) => r.claim.includes("over the cap"));
+    const caps = ran().ledger.rows.filter((r) => r.claim.startsWith("the cap:"));
     expect(caps).toHaveLength(2);
     for (const cap of caps) {
       expect(cap.status).toBe("satisfied");
       expect(cap.evidence.level).toBe("≤");
-      expect(cap.claim).toMatch(/O\(η\^\(1\/2\)\)/);
+      expect(cap.claim).toMatch(/O\(\\eta\^\{1\/2\}\)/);
       expect(cap.evidence.provenance.map((s) => s.text).join(" | ")).toMatch(
         /shifted to the cap's own centre by exact synthetic division/,
       );
@@ -243,14 +243,14 @@ describe("the cap bound is taken about the cap's OWN centre", () => {
     });
     if (!r.ok) throw new Error(r.reason);
     const eta = must(r.run.contour.params.eta, "the η parameter").value;
-    const caps = r.run.ledger.rows.filter((row) => row.claim.includes("over the cap"));
+    const caps = r.run.ledger.rows.filter((row) => row.claim.startsWith("the cap:"));
     expect(caps).toHaveLength(2);
     for (const [k, b] of [1, -1].entries()) {
       const cap = must(
         caps.find((row) => row.pieceId === (b === 1 ? "endB" : "endA")),
         `the cap at ${b}`,
       );
-      const claimed = Number(/≤ ([0-9.e+-]+)/.exec(cap.claim)?.[1] ?? "NaN");
+      const claimed = Number(/\\le ([0-9.e+-]+)/.exec(cap.claim)?.[1] ?? "NaN");
       const actual = capIntegral(b, eta);
       expect({ k, b, holds: actual <= claimed }).toEqual({ k, b, holds: true });
     }

@@ -147,7 +147,7 @@ describe("mlArcBound", () => {
     const b = mlArcBound(num, den, q(100), semicircle);
     expect(b.certificate.level).toBe("⚠");
     expect(mayReportValue(assembleVerdict([b.certificate]))).toBe(false);
-    expect(b.certificate.claim).toMatch(/does NOT vanish|DIVERGES/);
+    expect(b.certificate.claim).toMatch(/does not vanish|diverges/);
   });
 
   it("uses no floating point to produce the number", () => {
@@ -178,7 +178,7 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
     expect(b.asymptotics).toBe("diverges");
     expect(b.value).toBeUndefined();
     expect(b.certificate.level).toBe("⚠");
-    expect(b.certificate.method).toMatch(/KILL/);
+    expect(b.certificate.method).toMatch(/the arc cannot be closed this way/);
     expect(b.certificate.provenance.some((s) => s.text.includes("repair"))).toBe(true);
   });
 
@@ -190,7 +190,7 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
 
   it("reaches where plain ML cannot: g = z/(1+z²) has degree gap 1", () => {
     // ∫ x sin x/(1+x²) dx = π/e. The plain ML bound is O(1) here and establishes nothing; Jordan
-    // trades the factor R for the constant π/|a| and vanishes.
+    // trades the factor R for the constant \\pi/|a| and vanishes.
     const { num, den } = exact("z/(1+z^2)");
     expect(mlArcBound(num, den, q(100), q(1)).asymptotics).toBe("bounded");
     expect(jordanArcBound(num, den, q(1), "upper", q(100)).asymptotics).toBe("vanishes");

@@ -31,7 +31,7 @@ sentence that will ship.
 ones", or a rule you want applied that is not in the list.
 
 **Status:** 60 of 72 proposed in the ledger's own
-sentences; 191 sentences across the whole document still break at least one rule.
+sentences; 152 sentences across the whole document still break at least one rule.
 
 ---
 
@@ -41,25 +41,24 @@ Most of what the tables below flag is one habit repeated, so each rule is offere
 decision with its count and a sample. Approving a rule here settles every row it names; the tables
 are then only for the sentences you want to word differently.
 
-- **De-shout every emphasised word.** A single word in capitals for emphasis — `the orders ADD`, `the bound's VALUE` — becomes ordinary type. Names keep their capitals. **57 sentences.**
-  - `method 16` — division by a single-term coefficient · the solved value carries an exponential with a COMPLEX exponent, so e^{β} contributes cos and sin of an irrational and the real part is not in this basis; the decimal stands
+- **De-shout every emphasised word.** A single word in capitals for emphasis — `the orders ADD`, `the bound's VALUE` — becomes ordinary type. Names keep their capitals. **53 sentences.**
   - `method 21` — exact-sign crossing count at each branch point, the same predicate every winding number uses · exact-sign crossing count at each pole · the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement · f = O(z^(−3)) at infinity, and an order of −2 or less leaves no z⁻¹ coefficient · the ORDINARY residue theorem applied to γ − σ·C_R, which winds zero times about the cut and is therefore null-homologous in the cut-free plane; ∮_{C_R,ccw} = −2πi·Res(f,∞) by definition
+  - `method 22` — exact-sign crossing count at each branch point, the same predicate every winding number uses · exact-sign crossing count at each pole · the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement · the z⁻¹ coefficient of the expansion at infinity: the binomial series of the fractional powers against the cofactor's own series, with the branch constant derived from the declared determinations · the ORDINARY residue theorem applied to γ − σ·C_R, which winds zero times about the cut and is therefore null-homologous in the cut-free plane; ∮_{C_R,ccw} = −2πi·Res(f,∞) by definition
 
-- **Delete every internal citation.** `research 06 §2.1`, `Pass 5`, `finding D-2`: a reader has no such documents. Each is replaced by the statement it was citing, or removed. **26 sentences, 2 already drafted below.**
-  - `method 1` — −π·e^(13iπ/5) + π = c·e^{(β₁+β₂)/2}·2i·sin(23π/50) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied
-  - `method 2` — −π·e^(2iπ/3) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/3) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied
+- **Delete every internal citation.** `research 06 §2.1`, `Pass 5`, `finding D-2`: a reader has no such documents. Each is replaced by the statement it was citing, or removed. **9 sentences, 1 already drafted below.**
+  - `method 33` — orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out
+  - `method 34` — orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; csc(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out
 
-- **Name the lemmas rather than numbering them.** `L4` becomes *the indentation lemma*, `L5` *the large-arc lemma*, `L3` *Jordan’s lemma*. **8 sentences, 2 already drafted below.**
-  - `method 28` — L6 (oscillatory form), with the range decided in exact ℚ
-  - `method 29` — L4 at a simple pole; the sign comes from the signed swept angle (θ₁ − θ₀), which is the i·ε prescription in geometric form
+- **Name the lemmas rather than numbering them.** `L4` becomes *the indentation lemma*, `L5` *the large-arc lemma*, `L3` *Jordan’s lemma*. **3 sentences, 2 already drafted below.**
+  - `provenance 109` — the SAME computation discharges L2 on an outer circle — research 03 §9(d)'s unification, in one number
 
-- **Drop the house words.** `the solve`, `the family`, `the record`, `golden value` name parts of this program, not of the mathematics. **27 sentences.**
-  - `method 1` — −π·e^(13iπ/5) + π = c·e^{(β₁+β₂)/2}·2i·sin(23π/50) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied
-  - `method 2` — −π·e^(2iπ/3) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/3) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied
+- **Drop the house words.** `the solve`, `the family`, `the record`, `golden value` name parts of this program, not of the mathematics. **10 sentences.**
+  - `method 33` — orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out
+  - `method 34` — orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; csc(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out
 
-- **Every formula moves inside `$…$`** and is typeset. Text outside the dollars stays text. **176 sentences, 4 already drafted below.**
-  - `bound claim 1` — \|∫ over the arc\| ≤ 5.635e-2 at R = 4, and → 0 as R → ∞, because deg Q − deg P = 4 ≥ 2 makes the bound O(R^-3)
-  - `bound claim 2` — \|∫ over the arc\| ≤ 6.629e+0 at ρ = 4.000e+0, and → 0 as R → ∞, because the bound is O(ρ^(-3)·(ln ρ)^2) and a logarithm is weaker than every power
+- **Every formula moves inside `$…$`** and is typeset. Text outside the dollars stays text. **136 sentences, 3 already drafted below.**
+  - `method 1` — −π·e^(13iπ/5) + π = c·e^{(β₁+β₂)/2}·2i·sin(23π/50) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied
+  - `method 2` — −π·e^(2iπ/3) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/3) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied
 
 **A sixth, which no rule catches.** Several sentences argue with the reader rather than stating a
 result — *"one number implying the other is the conflation the dogbone exists to break"*, *"the
@@ -176,15 +175,15 @@ Lines the derivation states without a rigor label — an identity, a cross-check
 
 | where | today | proposed | flags |
 |---|---|---|---|
-| `statement 1` <br>*(1 record)* | from boundary terms · the indentation over the real pole z = 0 — contributes −iπ — a known limit, not zero | **—** | maths undelimited |
-| `statement 2` <br>*(1 record)* | from boundary terms · the indentation over the real pole z = 0 — contributes −iπ/4 — a known limit, not zero | **—** | maths undelimited |
-| `statement 3` <br>*(2 records)* | from boundary terms · the R → ∞ semicircle — contributes −π — a known limit, not zero | **—** | maths undelimited |
-| `statement 4` <br>*(2 records)* | from boundary terms · the ρ → 0 indentation over z = 0 — contributes −iπ — a known limit, not zero | **—** | maths undelimited |
+| `statement 1` <br>*(1 record)* | boundary terms · the indentation over the real pole z = 0 — contributes $-\frac{i\pi}{4}$ — a known limit, not zero | **—** | maths undelimited |
+| `statement 2` <br>*(1 record)* | boundary terms · the indentation over the real pole z = 0 — contributes $-i\pi$ — a known limit, not zero | **—** | maths undelimited |
+| `statement 3` <br>*(2 records)* | boundary terms · the R → ∞ semicircle — contributes $-\pi$ — a known limit, not zero | **—** | maths undelimited |
+| `statement 4` <br>*(2 records)* | boundary terms · the ρ → 0 indentation over z = 0 — contributes $-i\pi$ — a known limit, not zero | **—** | maths undelimited |
 | `statement 5` <br>*(92 records)* | independent cross-check — the quadrature agrees with it to 8.88e-16 — agreement is evidence, not proof — the two share no machinery, which is the point | **—** |  |
-| `statement 6` <br>*(8 records)* | the residue theorem — ∮ f dz = 2πi [ Σₖ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞) ],  σ = n(γ, branch point) | **—** | maths undelimited |
-| `statement 7` <br>*(75 records)* | the residue theorem — ∮ f dz = 2πi Σₖ n(γ,aₖ)·Res(f,aₖ) | **—** | maths undelimited |
-| `statement 8` <br>*(9 records)* | the residue theorem — ∮ K·f dz = 2πi[ Σ_{\|n\|≤N} Res(K·f, n) + Σⱼ Res(K·f, zⱼ) ],  K = π cot(πz) or π csc(πz) | **—** | maths undelimited |
-| `statement 9` <br>*(92 records)* | the system — Σᵢ (aᵢ·t + bᵢ) = ∮ f dz, solved for t — worked in units of π, so π is never evaluated and π/2 stays π/2 | **—** | maths undelimited |
+| `statement 6` <br>*(9 records)* | the residue theorem — $\oint_{\Gamma_N} Kf\,dz = 2\pi i\left[\sum_{\|n\| \le N} \operatorname{Res}(Kf, n) + \sum_j \operatorname{Res}(Kf, z_j)\right]$, with $K = \pi\cot\pi z$ or $\pi\csc\pi z$ | **—** |  |
+| `statement 7` <br>*(75 records)* | the residue theorem — $\oint_\gamma f(z)\,dz = 2\pi i \sum_k \operatorname{Ind}_\gamma(a_k)\operatorname{Res}(f, a_k)$ | **—** |  |
+| `statement 8` <br>*(8 records)* | the residue theorem — $\oint_\gamma f(z)\,dz = 2\pi i\left[\sum_k (\operatorname{Ind}_\gamma(a_k) - \sigma)\operatorname{Res}(f, a_k) - \sigma\operatorname{Res}(f, \infty)\right]$, with $\sigma = \operatorname{Ind}_\gamma(b)$ at the branch point | **—** |  |
+| `statement 9` <br>*(92 records)* | the system — $\sum_i (a_i t + b_i) = \oint_\gamma f(z)\,dz$, solved for $t$ | **—** |  |
 
 ## 6. Bound and limit claims
 
@@ -194,23 +193,23 @@ produced them. One row per distinct sentence, numerals masked.
 
 | where | today | proposed | flags |
 |---|---|---|---|
-| `bound claim 1` <br>*(11 records)* | \|∫ over the arc\| ≤ 5.635e-2 at R = 4, and → 0 as R → ∞, because deg Q − deg P = 4 ≥ 2 makes the bound O(R^-3) | **—** | maths undelimited |
-| `bound claim 2` <br>*(4 records)* | \|∫ over the arc\| ≤ 6.629e+0 at ρ = 4.000e+0, and → 0 as R → ∞, because the bound is O(ρ^(-3)·(ln ρ)^2) and a logarithm is weaker than every power | **—** | maths undelimited |
-| `bound claim 3` <br>*(10 records)* | \|∫ over the arc\| ≤ 3.175e+0 at ρ = 4.000e+0, and → 0 as R → ∞, because the bound is O(ρ^(-7/10)) and that exponent's sign is negative | **—** | maths undelimited |
-| `bound claim 4` <br>*(4 records)* | \|∫ over the arc\| ≤ 2.718e+1 at ρ = 5.000e-2, and → 0 as ε → 0⁺, because the bound is O(ρ^(1)·(ln ρ)^2) and a logarithm is weaker than every power | **—** | maths undelimited |
-| `bound claim 5` <br>*(10 records)* | \|∫ over the arc\| ≤ 2.692e+0 at ρ = 5.000e-2, and → 0 as ε → 0⁺, because the bound is O(ρ^(3/10)) and that exponent's sign is positive | **—** | maths undelimited |
-| `bound claim 6` <br>*(16 records)* | \|∫ over the cap\| ≤ 5.302e-1 at η = 5.000e-2, and → 0 as η → 0⁺, because the bound is O(η^(1/2)) and that exponent is positive | **—** | maths undelimited |
-| `bound claim 7` <br>*(8 records)* | \|∫ over the left side\| ≤ 1.928e+0 at R = 4, and → 0 as R → ∞, because the bound is O(e^{(-3/10)R}) and that exponent is negative | **—** | maths undelimited |
-| `bound claim 8` <br>*(1 record)* | \|∫ over the lower semicircle\| ≤ (π/\|a\|)·max\|g\| ≤ 2.094e-1 at R = 4, and → 0 as R → ∞ since max\|g\| = O(R^-2) | **—** | maths undelimited |
-| `bound claim 9` <br>*(8 records)* | \|∫ over the right side\| ≤ 3.892e-1 at R = 4, and → 0 as R → ∞, because the bound is O(e^{(-7/10)R}) and that exponent is negative | **—** | maths undelimited |
-| `bound claim 10` <br>*(12 records)* | \|∫ over the upper semicircle\| ≤ (π/\|a\|)·max\|g\| ≤ 2.094e-1 at R = 4, and → 0 as R → ∞ since max\|g\| = O(R^-2) | **—** | maths undelimited |
-| `bound claim 11` <br>*(4 records)* | \|∫ over the vertical side\| ≤ 1.160e-16 at Re z = 6, and → 0 as R → ∞ because the bound is O(e^{(−1)R²}) and that exponent is negative | **—** | maths undelimited |
-| `bound claim 12` <br>*(4 records)* | \|∫ over the vertical side\| ≤ 1.160e-16 at Re z = −6, and → 0 as R → ∞ because the bound is O(e^{(−1)R²}) and that exponent is negative | **—** | maths undelimited |
-| `bound claim 13` <br>*(2 records)* | \|∫ over the wedge\| ≤ \|λ\|·1/2·π/(n·c·R^{n−1}) ≤ 1.309e-1 at R = 6, and → 0 as R → ∞ since n = 2 > 1 | **—** | maths undelimited |
-| `bound claim 14` <br>*(36 records)* | \|∫ over this side\| ≤ 1.566e+0 at N = 4, and → 0 as N → ∞, because the bound is O((N+½)^-1) | **—** | maths undelimited |
-| `bound claim 15` <br>*(3 records)* | the indentation contributes iα·Res = π·(−i), swept angle α = −1π | **—** | maths undelimited |
-| `bound claim 16` <br>*(1 record)* | the indentation contributes iα·Res = π·(−i/4), swept angle α = −1π | **—** | maths undelimited |
-| `bound claim 17` <br>*(2 records)* | z·f(z) → i, so the arc contributes iα·L = π·(−1) — NOT zero | **—** | maths undelimited |
+| `bound claim 1` <br>*(2 records)* | $zf(z) \to i$, so the arc contributes $i\alpha L = \pi(-1)$ — not zero | **—** |  |
+| `bound claim 2` <br>*(4 records)* | the arc: $\left\|\int f\,dz\right\| \le 2.718e+1$ at $\rho = 5.000e-2$, and $\to 0$ as $\varepsilon \to 0^+$, because the bound is $O(\rho^{1}(\ln \rho)^{2})$ and a logarithm is weaker than every power | **—** |  |
+| `bound claim 3` <br>*(10 records)* | the arc: $\left\|\int f\,dz\right\| \le 2.692e+0$ at $\rho = 5.000e-2$, and $\to 0$ as $\varepsilon \to 0^+$, because the bound is $O(\rho^{3/10})$ and that exponent's sign is positive | **—** |  |
+| `bound claim 4` <br>*(4 records)* | the arc: $\left\|\int f\,dz\right\| \le 6.629e+0$ at $\rho = 4.000e+0$, and $\to 0$ as $R \to \infty$, because the bound is $O(\rho^{-3}(\ln \rho)^{2})$ and a logarithm is weaker than every power | **—** |  |
+| `bound claim 5` <br>*(10 records)* | the arc: $\left\|\int f\,dz\right\| \le 3.175e+0$ at $\rho = 4.000e+0$, and $\to 0$ as $R \to \infty$, because the bound is $O(\rho^{-7/10})$ and that exponent's sign is negative | **—** |  |
+| `bound claim 6` <br>*(11 records)* | the arc: $\left\|\int f\,dz\right\| \le 5.635e-2$ at $R = 4$, and $\to 0$ as $R \to \infty$, since $\deg Q - \deg P = 4 \ge 2$ makes the bound $O(R^{-3})$ | **—** |  |
+| `bound claim 7` <br>*(16 records)* | the cap: $\left\|\int f\,dz\right\| \le 5.302e-1$ at $\eta = 5.000e-2$, and $\to 0$ as $\eta \to 0^+$, because the bound is $O(\eta^{1/2})$ and that exponent is positive | **—** |  |
+| `bound claim 8` <br>*(1 record)* | the indentation contributes $i\alpha\operatorname{Res} = \pi(-\frac{i}{4})$, swept angle $\alpha = -1\pi$ | **—** |  |
+| `bound claim 9` <br>*(3 records)* | the indentation contributes $i\alpha\operatorname{Res} = \pi(-i)$, swept angle $\alpha = -1\pi$ | **—** |  |
+| `bound claim 10` <br>*(8 records)* | the left side: $\left\|\int f\,dz\right\| \le 1.928e+0$ at $R = 4$, and $\to 0$ as $R \to \infty$, because the bound is $O(e^{(-3/10)R})$ and that exponent is negative | **—** |  |
+| `bound claim 11` <br>*(1 record)* | the lower semicircle: $\left\|\int g(z)e^{iaz}\,dz\right\| \le (\pi/\|a\|)\max\|g\| \le 2.094e-1$ at $R = 4$, and $\to 0$ as $R \to \infty$ since $\max\|g\| = O(R^{-2})$ | **—** |  |
+| `bound claim 12` <br>*(8 records)* | the right side: $\left\|\int f\,dz\right\| \le 3.892e-1$ at $R = 4$, and $\to 0$ as $R \to \infty$, because the bound is $O(e^{(-7/10)R})$ and that exponent is negative | **—** |  |
+| `bound claim 13` <br>*(12 records)* | the upper semicircle: $\left\|\int g(z)e^{iaz}\,dz\right\| \le (\pi/\|a\|)\max\|g\| \le 2.094e-1$ at $R = 4$, and $\to 0$ as $R \to \infty$ since $\max\|g\| = O(R^{-2})$ | **—** |  |
+| `bound claim 14` <br>*(4 records)* | the vertical side: $\left\|\int f\,dz\right\| \le 1.160e-16$ at $\operatorname{Re} z = 6$, and $\to 0$ as $R \to \infty$ because the bound is $O(e^{(−1)R^2})$ and that exponent is negative | **—** |  |
+| `bound claim 15` <br>*(4 records)* | the vertical side: $\left\|\int f\,dz\right\| \le 1.160e-16$ at $\operatorname{Re} z = −6$, and $\to 0$ as $R \to \infty$ because the bound is $O(e^{(−1)R^2})$ and that exponent is negative | **—** |  |
+| `bound claim 16` <br>*(2 records)* | the wedge arc: $\left\|\int \lambda e^{wz^n}\,dz\right\| \le \|\lambda\|\tfrac{1}{2}\tfrac{\pi}{ncR^{n-1}} \le 1.309e-1$ at $R = 6$, and $\to 0$ as $R \to \infty$ since $n = 2 > 1$ | **—** |  |
+| `bound claim 17` <br>*(36 records)* | this side: $\left\|\int Kf\,dz\right\| \le 1.566e+0$ at $N = 4$, and $\to 0$ as $N \to \infty$, because the bound is $O((N+\tfrac12)^{-1})$ | **—** |  |
 
 ## 7. Methods
 
@@ -218,25 +217,25 @@ The "how do we know" line under every row.
 
 | where | today | proposed | flags |
 |---|---|---|---|
-| `method 1` <br>*(4 records)* | −π·e^(13iπ/5) + π = c·e^{(β₁+β₂)/2}·2i·sin(23π/50) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 2` <br>*(3 records)* | −π·e^(2iπ/3) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/3) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 3` <br>*(1 record)* | −π·e^(iπ) + π = c·e^{(β₁+β₂)/2}·2i·sin(3π/8) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 4` <br>*(5 records)* | −π·e^(iπ) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/2) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 5` <br>*(3 records)* | −π·e^(iπ/2) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/4) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
+| `method 1` <br>*(4 records)* | −π·e^(13iπ/5) + π = c·e^{(β₁+β₂)/2}·2i·sin(23π/50) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 2` <br>*(3 records)* | −π·e^(2iπ/3) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/3) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 3` <br>*(1 record)* | −π·e^(iπ) + π = c·e^{(β₁+β₂)/2}·2i·sin(3π/8) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 4` <br>*(5 records)* | −π·e^(iπ) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/2) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 5` <br>*(3 records)* | −π·e^(iπ/2) + π = c·e^{(β₁+β₂)/2}·2i·sin(π/4) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
 | `method 6` <br>*(16 records)* | $\sum_j \operatorname{Ind}_\gamma(b_j)\,\alpha_j$, over exact winding numbers and exact exponents | **—** |  |
-| `method 7` <br>*(16 records)* | decided — not the absence of a pole search | **—** |  |
-| `method 8` <br>*(18 records)* | declared by `residueSelection.targetTerms`: the contour's own sides all vanish, so ∮ → 0 and the identity is read backwards as a statement about the sum | **—** | maths undelimited |
-| `method 9` <br>*(174 records)* | declared by its role | **—** |  |
-| `method 10` <br>*(166 records)* | declared by the piece list | **—** |  |
-| `method 11` <br>*(150 records)* | distance from each pole to each piece | **—** |  |
-| `method 12` <br>*(4 records)* | division by a single-term coefficient · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Im applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 13` <br>*(2 records)* | division by a single-term coefficient · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Im/2 applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 14` <br>*(34 records)* | division by a single-term coefficient · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 15` <br>*(2 records)* | division by a single-term coefficient · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re/2 applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 16` <br>*(2 records)* | division by a single-term coefficient · the solved value carries an exponential with a COMPLEX exponent, so e^{β} contributes cos and sin of an irrational and the real part is not in this basis; the decimal stands | **—** | caps: COMPLEX; jargon: the solve; maths undelimited |
-| `method 17` <br>*(184 records)* | endpoint-to-endpoint check over the piece list | **—** |  |
-| `method 18` <br>*(160 records)* | exact arithmetic over ℚ(i) or one quadratic extension of it | **—** | maths undelimited |
-| `method 19` <br>*(22 records)* | exact ℚ coefficient bound; no floating point anywhere | **—** | maths undelimited |
+| `method 7` <br>*(22 records)* | an exact $\mathbb{Q}$ coefficient bound; no floating point anywhere | **—** |  |
+| `method 8` <br>*(16 records)* | decided — not the absence of a pole search | **—** |  |
+| `method 9` <br>*(18 records)* | declared by `residueSelection.targetTerms`: the contour's own sides all vanish, so ∮ → 0 and the identity is read backwards as a statement about the sum | **—** | maths undelimited |
+| `method 10` <br>*(174 records)* | declared by its role | **—** |  |
+| `method 11` <br>*(166 records)* | declared by the piece list | **—** |  |
+| `method 12` <br>*(150 records)* | distance from each pole to each piece | **—** |  |
+| `method 13` <br>*(4 records)* | division by a single-term coefficient · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Im applied | **—** | maths undelimited |
+| `method 14` <br>*(2 records)* | division by a single-term coefficient · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Im/2 applied | **—** | maths undelimited |
+| `method 15` <br>*(34 records)* | division by a single-term coefficient · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 16` <br>*(2 records)* | division by a single-term coefficient · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re/2 applied | **—** | maths undelimited |
+| `method 17` <br>*(2 records)* | division by a single-term coefficient · the closed form involves $e^{\beta}$ with complex $\beta$, so its real part is not in this basis; only the decimal is given | **—** | maths undelimited |
+| `method 18` <br>*(184 records)* | endpoint-to-endpoint check over the piece list | **—** |  |
+| `method 19` <br>*(160 records)* | exact arithmetic over ℚ(i) or one quadratic extension of it | **—** | maths undelimited |
 | `method 20` <br>*(51 records)* | exact residues over ℚ(i), exact winding numbers, and the residue theorem | **—** | maths undelimited |
 | `method 21` <br>*(4 records)* | exact-sign crossing count at each branch point, the same predicate every winding number uses · exact-sign crossing count at each pole · the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement · f = O(z^(−3)) at infinity, and an order of −2 or less leaves no z⁻¹ coefficient · the ORDINARY residue theorem applied to γ − σ·C_R, which winds zero times about the cut and is therefore null-homologous in the cut-free plane; ∮_{C_R,ccw} = −2πi·Res(f,∞) by definition | **—** | caps: WEIGHTED SUM ORDINARY; maths undelimited |
 | `method 22` <br>*(4 records)* | exact-sign crossing count at each branch point, the same predicate every winding number uses · exact-sign crossing count at each pole · the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement · the z⁻¹ coefficient of the expansion at infinity: the binomial series of the fractional powers against the cofactor's own series, with the branch constant derived from the declared determinations · the ORDINARY residue theorem applied to γ − σ·C_R, which winds zero times about the cut and is therefore null-homologous in the cut-free plane; ∮_{C_R,ccw} = −2πi·Res(f,∞) by definition | **—** | caps: WEIGHTED SUM ORDINARY; maths undelimited |
@@ -244,46 +243,46 @@ The "how do we know" line under every row.
 | `method 24` <br>*(44 records)* | exact-sign segment predicates, and the circle–line quadratic for arcs | **—** |  |
 | `method 25` <br>*(8 records)* | imported, not derived here — on Im z = b/2 the integrand collapses to e^{−x²−b²/4}; the remaining ∫ℝe^{−x²}dx = Γ(1/2) = √π is IMPORTED, not derived here | **—** | caps: IMPORTED; maths undelimited |
 | `method 26` <br>*(4 records)* | imported, not derived here — on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (the real substitution u = tⁿ), and the leading minus is the reversed traversal | **—** | caps: IMPORTED; maths undelimited |
-| `method 27` <br>*(26 records)* | Jordan's lemma, with max\|g\| from the exact ℚ coefficient bound | **—** | maths undelimited |
-| `method 28` <br>*(4 records)* | L6 (oscillatory form), with the range decided in exact ℚ | **—** | lemma number; maths undelimited |
-| `method 29` <br>*(8 records)* | L4 at a simple pole; the sign comes from the signed swept angle (θ₁ − θ₀), which is the i·ε prescription in geometric form | **—** | lemma number; maths undelimited |
-| `method 30` <br>*(16 records)* | L1, the ML inequality on a vertical side, with max\|f\| the exact maximum of a quadratic in ℚ | **—** | lemma number; maths undelimited |
-| `method 31` <br>*(32 records)* | L1, the ML inequality on a vertical side, with the exponent exact in ℚ | **—** | lemma number; maths undelimited |
-| `method 32` <br>*(4 records)* | L5: a uniform limit of z·f(z) along an arc of angle 1π | **—** | lemma number; maths undelimited |
-| `method 33` <br>*(32 records)* | ML bound for a branch factor on a cap about one of its own branch points | **—** |  |
-| `method 34` <br>*(16 records)* | ML bound for R·log^2, exact in ℚ except for ln ρ | **—** | maths undelimited |
-| `method 35` <br>*(40 records)* | ML bound for z^α·R, exact in ℚ except for the power ρ^α | **—** | maths undelimited |
-| `method 36` <br>*(16 records)* | ML on one side of Γ_N: sup\|K\|·length·max\|f\| = π · 2(N+½) · max\|f\|, exact in ℚ with π and coth(π/2) entering only through certified brackets | **—** | maths undelimited |
-| `method 37` <br>*(56 records)* | ML on one side of Γ_N: sup\|K\|·length·max\|f\| = π·coth(π/2) · 2(N+½) · max\|f\|, exact in ℚ with π and coth(π/2) entering only through certified brackets | **—** | maths undelimited |
-| `method 38` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements · π cot(πz) has a simple pole at every integer with residue 1, and f is regular there, so the residue of the product is the product of the two · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements | **—** | caps: ADD; maths undelimited |
-| `method 39` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements · π csc(πz) has a simple pole at every integer with residue (−1)ⁿ, and f is regular there, so the residue of the product is the product of the two · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; csc(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements | **—** | caps: ADD; maths undelimited |
-| `method 40` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out | **—** | caps: ADD INSIDE; citation; jargon: the record, Pass 5; maths undelimited |
-| `method 41` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; csc(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out | **—** | caps: ADD INSIDE; citation; jargon: the record, Pass 5; maths undelimited |
-| `method 42` <br>*(2 records)* | Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 43` <br>*(2 records)* | Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly · resolved by running that record at the same bindings; its own verdict is = | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 44` <br>*(4 records)* | Pass 5: the contour encloses nothing, so M t = −Σ(imported values), split into its real and imaginary parts and solved exactly over ℚ · imported, not derived here — on Im z = b/2 the integrand collapses to e^{−x²−b²/4}; the remaining ∫ℝe^{−x²}dx = Γ(1/2) = √π is IMPORTED, not derived here | **—** | caps: IMPORTED; citation; jargon: Pass 5; maths undelimited |
-| `method 45` <br>*(2 records)* | Pass 5: the contour encloses nothing, so M t = −Σ(imported values), split into its real and imaginary parts and solved exactly over ℚ · imported, not derived here — on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (the real substitution u = tⁿ), and the leading minus is the reversed traversal | **—** | caps: IMPORTED; citation; jargon: Pass 5; maths undelimited |
-| `method 46` <br>*(10 records)* | Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀} | **—** | maths undelimited |
-| `method 47` <br>*(8 records)* | Res(K·f, n) is f(n) over ℚ(i) at every integer the kernel alone has a pole at; where the cofactor has one too the orders ADD and the merged residue is the z⁻¹ coefficient of the product's Laurent series, exact in ℚ(i)(π) | **—** | caps: ADD; maths undelimited |
-| `method 48` <br>*(44 records)* | research 06 §2.1, decided over ℚ: every genuine branch point is on the forest, every bounded component sums to an integer, and no log is bounded | each bounded cut joins branch points whose exponents sum to an integer; every logarithmic branch point is joined to $\infty$ |  |
-| `method 49` <br>*(7 records)* | the argument is DECIDED: a rational multiple of π is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes z₀^α·Res(R, z₀) in the declared determination | **—** | caps: DECIDED; maths undelimited |
-| `method 50` <br>*(8 records)* | the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument — the product is meromorphic there, orders ADD, and the merged residue is computed exactly | **—** | caps: SUFFICIENT NECESSARY ADD |
-| `method 51` <br>*(5 records)* | the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · 2c·sinh(γ) / (−4 sinh²(γ/2)) = −c·coth(γ/2), by the double-angle identity sinh γ = 2 sinh(γ/2) cosh(γ/2) · Pass 5 with the unknown INSIDE the residue sum: every side of the contour vanishes, so 0 = 2πi[w·T + Σ_j Res] and the 2πi divides out, leaving the kernel's own π | **—** | caps: INSIDE; citation; jargon: Pass 5; maths undelimited |
-| `method 52` <br>*(5 records)* | the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements · π cot(πz) has a simple pole at every integer with residue 1, and f is regular there, so the residue of the product is the product of the two · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements | **—** | maths undelimited |
-| `method 53` <br>*(4 records)* | the Laurent principal part of R at z₀, convolved with the expansion of (log z₀ + log(1 + w/z₀))^m · each pole of the rational cofactor contributes its Laurent principal part convolved with the expansion of log^m about it, in the declared determination | **—** | maths undelimited |
-| `method 54` <br>*(92 records)* | the meet over 9 certificates — the weakest step in the argument, not the label of the answer | **—** |  |
-| `method 55` <br>*(68 records)* | the piece is a constant multiple of the target; its coefficient enters the linear system | **—** |  |
-| `method 56` <br>*(2 records)* | the roots of a rotated regular n-gon: each residue is −zₖ^a/(n b₀), and the sum is carried term by term with no root ever represented | **—** |  |
-| `method 57` <br>*(3 records)* | the roots of a rotated regular n-gon: each residue is −zₖ^a/(n b₀), and the sum is carried term by term with no root ever represented · exact-sign crossing count at each root of the rotated n-gon | **—** | maths undelimited |
-| `method 58` <br>*(6 records)* | the structural route: the roots of a rotated regular n-gon, whose residues sum in the exponent basis with no root ever represented | **—** |  |
+| `method 27` <br>*(26 records)* | Jordan's lemma, with $\max\|g\|$ from the exact $\mathbb{Q}$ coefficient bound | **—** |  |
+| `method 28` <br>*(32 records)* | ML bound for a branch factor on a cap about one of its own branch points | **—** |  |
+| `method 29` <br>*(16 records)* | ML bound for R·log^2, exact in ℚ except for ln ρ | **—** | maths undelimited |
+| `method 30` <br>*(40 records)* | ML bound for z^α·R, exact in ℚ except for the power ρ^α | **—** | maths undelimited |
+| `method 31` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements · π cot(πz) has a simple pole at every integer with residue 1, and f is regular there, so the residue of the product is the product of the two · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements | **—** | caps: ADD; maths undelimited |
+| `method 32` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements · π csc(πz) has a simple pole at every integer with residue (−1)ⁿ, and f is regular there, so the residue of the product is the product of the two · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; csc(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements | **—** | caps: ADD; maths undelimited |
+| `method 33` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out | **—** | caps: ADD INSIDE; citation; jargon: the record, Pass 5; maths undelimited |
+| `method 34` <br>*(2 records)* | orders ADD at a collision (the kernel's simple pole plus f's order-2 one), and the residue comes from the Laurent route rather than the order-m derivative formula, which explodes symbolically from m = 3 — the first case being exactly this one · the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; csc(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out | **—** | caps: ADD INSIDE; citation; jargon: the record, Pass 5; maths undelimited |
+| `method 35` <br>*(2 records)* | Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly | **—** | citation; jargon: Pass 5; maths undelimited |
+| `method 36` <br>*(2 records)* | Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly · resolved by running that record at the same bindings; its own verdict is = | **—** | citation; jargon: Pass 5; maths undelimited |
+| `method 37` <br>*(4 records)* | Pass 5: the contour encloses nothing, so M t = −Σ(imported values), split into its real and imaginary parts and solved exactly over ℚ · imported, not derived here — on Im z = b/2 the integrand collapses to e^{−x²−b²/4}; the remaining ∫ℝe^{−x²}dx = Γ(1/2) = √π is IMPORTED, not derived here | **—** | caps: IMPORTED; citation; jargon: Pass 5; maths undelimited |
+| `method 38` <br>*(2 records)* | Pass 5: the contour encloses nothing, so M t = −Σ(imported values), split into its real and imaginary parts and solved exactly over ℚ · imported, not derived here — on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (the real substitution u = tⁿ), and the leading minus is the reversed traversal | **—** | caps: IMPORTED; citation; jargon: Pass 5; maths undelimited |
+| `method 39` <br>*(10 records)* | Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀} | **—** | maths undelimited |
+| `method 40` <br>*(8 records)* | Res(K·f, n) is f(n) over ℚ(i) at every integer the kernel alone has a pole at; where the cofactor has one too the orders ADD and the merged residue is the z⁻¹ coefficient of the product's Laurent series, exact in ℚ(i)(π) | **—** | caps: ADD; maths undelimited |
+| `method 41` <br>*(44 records)* | research 06 §2.1, decided over ℚ: every genuine branch point is on the forest, every bounded component sums to an integer, and no log is bounded | each bounded cut joins branch points whose exponents sum to an integer; every logarithmic branch point is joined to $\infty$ |  |
+| `method 42` <br>*(7 records)* | the argument is DECIDED: a rational multiple of π is guessed numerically and then verified in exact arithmetic · the branch point carries no residue; each pole of the rational cofactor contributes z₀^α·Res(R, z₀) in the declared determination | **—** | caps: DECIDED; maths undelimited |
+| `method 43` <br>*(8 records)* | the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument — the product is meromorphic there, orders ADD, and the merged residue is computed exactly | **—** | caps: SUFFICIENT NECESSARY ADD |
+| `method 44` <br>*(8 records)* | the indentation lemma at a simple pole; the sign comes from the signed swept angle $\theta_1 - \theta_0$ | **—** |  |
+| `method 45` <br>*(5 records)* | the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements · 2c·sinh(γ) / (−4 sinh²(γ/2)) = −c·coth(γ/2), by the double-angle identity sinh γ = 2 sinh(γ/2) cosh(γ/2) · Pass 5 with the unknown INSIDE the residue sum: every side of the contour vanishes, so 0 = 2πi[w·T + Σ_j Res] and the 2πi divides out, leaving the kernel's own π | **—** | caps: INSIDE; citation; jargon: Pass 5; maths undelimited |
+| `method 46` <br>*(5 records)* | the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements · π cot(πz) has a simple pole at every integer with residue 1, and f is regular there, so the residue of the product is the product of the two · the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; cot(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements | **—** | maths undelimited |
+| `method 47` <br>*(4 records)* | the large-arc lemma: a uniform limit of $zf(z)$ along an arc of angle $1\pi$ | **—** |  |
+| `method 48` <br>*(4 records)* | the Laurent principal part of R at z₀, convolved with the expansion of (log z₀ + log(1 + w/z₀))^m · each pole of the rational cofactor contributes its Laurent principal part convolved with the expansion of log^m about it, in the declared determination | **—** | maths undelimited |
+| `method 49` <br>*(92 records)* | the meet over 9 certificates — the weakest step in the argument, not the label of the answer | **—** |  |
+| `method 50` <br>*(16 records)* | the ML-estimate on a vertical side, with $\max\|f\|$ the exact maximum of a quadratic in $\mathbb{Q}$ | **—** |  |
+| `method 51` <br>*(32 records)* | the ML-estimate on a vertical side, with the exponent exact in $\mathbb{Q}$ | **—** |  |
+| `method 52` <br>*(16 records)* | the ML-estimate on one side of $\Gamma_N$: $\sup\|K\| \cdot \text{length} \cdot \max\|f\| = \pi \cdot 2(N+\tfrac12) \cdot \max\|f\|$, exact in $\mathbb{Q}$ with $\pi$ and $\coth(\pi/2)$ entering only through certified brackets | **—** |  |
+| `method 53` <br>*(56 records)* | the ML-estimate on one side of $\Gamma_N$: $\sup\|K\| \cdot \text{length} \cdot \max\|f\| = \pi\coth(\pi/2) \cdot 2(N+\tfrac12) \cdot \max\|f\|$, exact in $\mathbb{Q}$ with $\pi$ and $\coth(\pi/2)$ entering only through certified brackets | **—** |  |
+| `method 54` <br>*(68 records)* | the piece is a constant multiple of the target; its coefficient enters the linear system | **—** |  |
+| `method 55` <br>*(2 records)* | the roots of a rotated regular n-gon: each residue is −zₖ^a/(n b₀), and the sum is carried term by term with no root ever represented | **—** |  |
+| `method 56` <br>*(3 records)* | the roots of a rotated regular n-gon: each residue is −zₖ^a/(n b₀), and the sum is carried term by term with no root ever represented · exact-sign crossing count at each root of the rotated n-gon | **—** | maths undelimited |
+| `method 57` <br>*(6 records)* | the structural route: the roots of a rotated regular n-gon, whose residues sum in the exponent basis with no root ever represented | **—** |  |
+| `method 58` <br>*(4 records)* | the wedge lemma (oscillatory form), with the range decided in exact $\mathbb{Q}$ | **—** |  |
 | `method 59` <br>*(8 records)* | w = e^z makes f rational in w; each root of D(w) is a root of unity, so log w is 2πi times an exact rational, and Res_z = e^{az₀}·Res_w(N/D, w₀)/w₀ lands in ℚ(i)(√d) × e^{ℚ(i)·π} · w = e^z makes f rational in w; each root of D(w) generates a vertical lattice, and the declared strip selects finitely many of them | **—** | maths undelimited |
-| `method 60` <br>*(1 record)* | π + π·e^(−2π) = c·e^{(β₁+β₂)/2}·2cosh(π) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 61` <br>*(1 record)* | π + π·e^(−π) = c·e^{(β₁+β₂)/2}·2cosh(π/2) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 62` <br>*(1 record)* | π − π·e^(−7iπ/5) = c·e^{(β₁+β₂)/2}·2i·sin(3π/10) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 63` <br>*(1 record)* | π − π·e^(−9iπ/5) = c·e^{(β₁+β₂)/2}·2i·sin(π/10) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 64` <br>*(6 records)* | π − π·e^(−iπ) = c·e^{(β₁+β₂)/2}·2i·sin(π/2) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 65` <br>*(2 records)* | π − π·e^(−iπ/2) = c·e^{(β₁+β₂)/2}·2i·sin(3π/4) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
-| `method 66` <br>*(1 record)* | π·e^(3π/2) + π = c·e^{(β₁+β₂)/2}·2cosh(3π/4) · Pass 5: a·t = ∮ − Σbᵢ solved in units of π, then Re applied | **—** | citation; jargon: Pass 5; maths undelimited |
+| `method 60` <br>*(1 record)* | π + π·e^(−2π) = c·e^{(β₁+β₂)/2}·2cosh(π) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 61` <br>*(1 record)* | π + π·e^(−π) = c·e^{(β₁+β₂)/2}·2cosh(π/2) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 62` <br>*(1 record)* | π − π·e^(−7iπ/5) = c·e^{(β₁+β₂)/2}·2i·sin(3π/10) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 63` <br>*(1 record)* | π − π·e^(−9iπ/5) = c·e^{(β₁+β₂)/2}·2i·sin(π/10) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 64` <br>*(6 records)* | π − π·e^(−iπ) = c·e^{(β₁+β₂)/2}·2i·sin(π/2) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 65` <br>*(2 records)* | π − π·e^(−iπ/2) = c·e^{(β₁+β₂)/2}·2i·sin(3π/4) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
+| `method 66` <br>*(1 record)* | π·e^(3π/2) + π = c·e^{(β₁+β₂)/2}·2cosh(3π/4) · solved from $\sum_i (a_i t + b_i) = \oint_\gamma f\,dz$ in units of $\pi$, then Re applied | **—** | maths undelimited |
 
 ## 8. Provenance steps
 
@@ -299,116 +298,116 @@ The ✓/✗ audit trail inside a row's evidence, shown when a row is expanded.
 | `provenance 6` <br>*(8 records)* | 4J ∉ ℤ, so the factor is carried as an exponential rather than folded | **—** | maths undelimited |
 | `provenance 7` <br>*(32 records)* | \|e^{az}\| = e^{Re(a)x − Im(a)y} is bounded on a strip of finite height whatever Im(a) is, so Im(a) cannot change the limit | **—** |  |
 | `provenance 8` <br>*(16 records)* | \|log z\| ≤ \|ln ρ\| + 6.283185 on the circle, from the DECLARED determination rather than an assumed 2π | **—** | caps: DECLARED; maths undelimited |
-| `provenance 9` <br>*(22 records)* | \|P\| ≤ Σ\|aₖ\|Rᵏ by the triangle inequality, with each \|aₖ\| bounded above in ℚ | **—** | maths undelimited |
-| `provenance 10` <br>*(22 records)* | \|Q\| ≥ 2.230e+2 > 0, which also certifies every pole lies strictly inside \|z\| = R | **—** | maths undelimited |
-| `provenance 11` <br>*(56 records)* | \|R\| bounded above by exact ℚ coefficient bounds, numerator and denominator separately | **—** | maths undelimited |
-| `provenance 12` <br>*(26 records)* | ∫₀^{π} e^{−κ sin ψ} dψ ≤ π/κ for every κ > 0 | **—** | maths undelimited |
-| `provenance 13` <br>*(4 records)* | ∫₀^{π/2} e^{−κ sin ψ} dψ ≤ π/(2κ) for every κ > 0 | **—** | maths undelimited |
-| `provenance 14` <br>*(3 records)* | a + b·e^{β} with a = b factors as e^{β/2}(e^{−β/2} + e^{β/2}); the sine's other half, for a NEGATIVE quasi-period | **—** | caps: NEGATIVE; maths undelimited |
-| `provenance 15` <br>*(26 records)* | a − b·e^{β} with \|a\| = \|b\| factors as e^{β/2}(e^{−β/2} − e^{β/2}); one rule, for one shape | **—** | maths undelimited |
-| `provenance 16` <br>*(6 records)* | a fifth or seventh root of −1 needs a degree-4 or degree-6 field — which is why the per-pole route declined, and why this one is not the same claim | **—** |  |
-| `provenance 17` <br>*(16 records)* | a rational integrand cannot falsify the SIGN of σ: Σ Res + Res(f,∞) = 0 for such an f, so the whole σ-dependent term vanishes whatever σ is. D6 is what pins it | **—** | caps: SIGN; maths undelimited |
-| `provenance 18` <br>*(12 records)* | an independent check: the quadrature of this piece is 3.07e-13 away (2.2e-11% of it) — at a finite limit parameter that gap is the piece's own tail | **—** |  |
-| `provenance 19` <br>*(1 record)* | arg(−4) = 1/1·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real modulus with ln = 2ln 2 | **—** | maths undelimited |
-| `provenance 20` <br>*(2 records)* | arg(−2) = 1/1·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real modulus with ln = ln 2 | **—** | maths undelimited |
-| `provenance 21` <br>*(6 records)* | arg(−1) = 1/1·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real of modulus 1 | **—** | maths undelimited |
-| `provenance 22` <br>*(9 records)* | at the contour drawn this is 2πi times the PARTIAL sum minus the infinite one; it is the limit N → ∞ that sends it to zero, and that limit is what the vanishing sides establish | **—** | caps: PARTIAL; maths undelimited |
-| `provenance 23` <br>*(16 records)* | bounded component {b1, b2}: Σα = -1/1 ∈ ℤ | **—** | maths undelimited |
-| `provenance 24` <br>*(3 records)* | cosh vanishes only at an imaginary argument, and γ is real here — so unlike the sine there is no degenerate case | **—** | maths undelimited |
-| `provenance 25` <br>*(8 records)* | crossing 'Γ' ADDS 2πi to the logarithm: its monodromy has infinite order, so no factor multiplies the integrand and no sheet count closes the loop | **—** | caps: ADDS; maths undelimited |
-| `provenance 26` <br>*(6 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·1/2) = −1 | **—** | maths undelimited |
-| `provenance 27` <br>*(2 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·13/10), which is e^(2πi·3/10) with the integer part of J dropped | **—** | maths undelimited |
-| `provenance 28` <br>*(4 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·−1/2) = −1, which is e^(2πi·1/2) with the integer part of J dropped | **—** | maths undelimited |
-| `provenance 29` <br>*(2 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·−1/4) = −i, which is e^(2πi·3/4) with the integer part of J dropped | **—** | maths undelimited |
-| `provenance 30` <br>*(6 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·−7/10), which is e^(2πi·3/10) with the integer part of J dropped | **—** | maths undelimited |
-| `provenance 31` <br>*(2 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·1/2) = −1 | **—** | maths undelimited |
-| `provenance 32` <br>*(2 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·3/4) = −i | **—** | maths undelimited |
-| `provenance 33` <br>*(4 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·1/4) = i | **—** | maths undelimited |
-| `provenance 34` <br>*(8 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·−1/2) = −1, which is e^(2πi·1/2) with the integer part of J dropped | **—** | maths undelimited |
-| `provenance 35` <br>*(26 records)* | deg Q − deg P = 2 ≥ 1, so max\|g\| → 0 | **—** | maths undelimited |
-| `provenance 36` <br>*(2 records)* | e^(2πi·13/10) = e^(2πi·3/10), because e^(−2πi) = 1 — the same number, and the literal form is the one the integrand's exponent gives | **—** | maths undelimited |
-| `provenance 37` <br>*(14 records)* | e^(2πi·1/2) is already reduced: J ∈ [0, 1) | **—** | maths undelimited |
-| `provenance 38` <br>*(20 records)* | e^(2πi·−7/10) = e^(2πi·3/10), because e^(−2πi) = 1 — the same number, and the literal form is the one the integrand's exponent gives | **—** | maths undelimited |
-| `provenance 39` <br>*(24 records)* | e^{max Re Q} is transcendental, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE |
-| `provenance 40` <br>*(48 records)* | e^{κR} is transcendental, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE |
-| `provenance 41` <br>*(8 records)* | each residue is Res_w(N/D, w₀)/w₀ times e^{az₀}, exact in ℚ(i)(√d) × e^{ℚ(i)·π} | **—** | maths undelimited |
-| `provenance 42` <br>*(8 records)* | each residue is weighted by n(γ,aₖ) − σ = n(γ,aₖ) − −1, which is its winding about γ − σ·C_R | **—** | maths undelimited |
-| `provenance 43` <br>*(2 records)* | each root's winding number was decided by the same exact-sign predicates every other winding uses; the roots are located numerically only to ASK that question | **—** | caps: ASK |
-| `provenance 44` <br>*(4 records)* | established by: Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2] | **—** | maths undelimited |
-| `provenance 45` <br>*(26 records)* | established by: Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2], extended to [0, π] by sin ψ = sin(π − ψ) | **—** | maths undelimited |
-| `provenance 46` <br>*(18 records)* | every pole is simple and Gaussian, which is what makes e^{2πiz₀} representable and K(z₀)·Res(f,z₀) the whole residue | **—** | maths undelimited |
-| `provenance 47` <br>*(9 records)* | every pole of the cofactor was asked for its winding number and is enclosed once — the record's 'once N+½ > a', checked rather than assumed | **—** | jargon: the record |
-| `provenance 48` <br>*(4 records)* | f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1 | **—** |  |
-| `provenance 49` <br>*(4 records)* | f(0) = —, and no cofactor pole lies on an integer in the band | **—** |  |
-| `provenance 50` <br>*(2 records)* | f(0) = 1, and no cofactor pole lies on an integer in the band | **—** |  |
-| `provenance 51` <br>*(3 records)* | f(0) = 16/9, and no cofactor pole lies on an integer in the band | **—** |  |
-| `provenance 52` <br>*(12 records)* | independent cross-check: a direct float evaluation of c·∏\|z₀−bⱼ\|^{αⱼ}·e^{iΣαⱼθⱼ} agrees to 1.19e-16, sharing no arithmetic with the exact route but the window | **—** | maths undelimited |
-| `provenance 53` <br>*(16 records)* | J = 1/2, exactly — Σα over the arc's "from" side | **—** | maths undelimited |
-| `provenance 54` <br>*(20 records)* | J = −7/10, exactly — Σα over the arc's "from" side | **—** | maths undelimited |
-| `provenance 55` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = 3ln 2/4 + ln 5/4, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 56` <br>*(4 records)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = −ln 2/2, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 57` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2 + 3ln 3/4 + ln 5/4, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 58` <br>*(2 records)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2 + ln 5 − ln 13/2 − ln 113/2, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 59` <br>*(2 records)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2 − ln 5/2, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 60` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2/4 + 3ln 5/4, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 61` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 5/2 + ln 7/2, over primes and therefore canonical | **—** | maths undelimited |
-| `provenance 62` <br>*(24 records)* | ln ρ is a float, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE; maths undelimited |
-| `provenance 63` <br>*(4 records)* | log(−i) = 3iπ/2 in the declared determination, its argument verified exactly rather than read off atan2 | **—** | maths undelimited |
-| `provenance 64` <br>*(4 records)* | log(i) = iπ/2 in the declared determination, its argument verified exactly rather than read off atan2 | **—** | maths undelimited |
-| `provenance 65` <br>*(72 records)* | max\|f\| is read at \|z\| = N+½ and bounds \|f\| on the whole square: U(r)/L(r) decreases in r once both are divided by r^{deg D}, so the closest point of Γ_N is the worst | **—** |  |
-| `provenance 66` <br>*(8 records)* | max\|f\| on the side is ATTAINED, not majorised: Re Q(c+iy) is the exact quadratic 1y² + −17/10y + −36, whose maximum on the segment is at y = 0 | **—** | caps: ATTAINED; maths undelimited |
-| `provenance 67` <br>*(8 records)* | max\|f\| on the side is ATTAINED, not majorised: Re Q(c+iy) is the exact quadratic 1y² + −1y + −36, whose maximum on the segment is at y = 0 | **—** | caps: ATTAINED; maths undelimited |
-| `provenance 68` <br>*(8 records)* | n(γ, z = -1) = −1, n(γ, z = 1) = −1 — non-zero, and the SUM is what has to be an integer | **—** | caps: SUM; maths undelimited |
-| `provenance 69` <br>*(8 records)* | n(γ, z = 0) = −1, n(γ, z = b) = −1 — non-zero, and the SUM is what has to be an integer | **—** | caps: SUM; maths undelimited |
-| `provenance 70` <br>*(5 records)* | no individual root is expressed: a fifth or seventh root of −1 needs a degree-4 or degree-6 field, and the SUM needs none | **—** | caps: SUM |
-| `provenance 71` <br>*(8 records)* | no pole is enclosed AND the integral is not zero: two rows, and neither implies the other — the hypothesis that fails is holomorphy, because the CUT is inside | **—** | caps: AND CUT |
-| `provenance 72` <br>*(8 records)* | no quadrature cross-check: sampling log^m z needs a determination, and a compiled evaluator would use the principal branch and answer a different question | **—** |  |
-| `provenance 73` <br>*(14 records)* | no quadrature cross-check: sampling z^α needs a determination, and a naive evaluator would use the principal branch and answer a different question | **—** | maths undelimited |
-| `provenance 74` <br>*(8 records)* | refusing would be wrong (the answer is correct) and warning would be wrong (nothing is uncertain); what the escalation costs the record is a DECLARED merged order and residue, both checked against the engine's own | **—** | caps: DECLARED; jargon: the record |
-| `provenance 75` <br>*(72 records)* | research 03 §8 states this bound without the π from π cot(πz), and it is then not an upper bound at all — 3.392 against a measured 3.567 at N = 3 (finding D-2) | *(delete)* |  |
-| `provenance 76` <br>*(56 records)* | sup\|cot πz\| = coth(π(N+½)) ≤ coth(π/2), attained at N = 0 — one constant for the whole family, which is what the limit needs | **—** | maths undelimited |
-| `provenance 77` <br>*(16 records)* | sup\|csc πz\| = 1 on Γ_N for EVERY N: ≤ 1/sinh(π/2) on the horizontal sides and ≤ 1 on the vertical ones | **—** | caps: EVERY; maths undelimited |
-| `provenance 78` <br>*(8 records)* | t_k is rational (Bernoulli, from Σ C(m+1,j) B_j = 0 in exact ℚ) and the powers of π are even, so the value lands in ℚ(i)(π) — a different RING from the exponential basis G2 solves in, not a harder case of it | **—** | caps: RING; maths undelimited |
-| `provenance 79` <br>*(2 records)* | T0 was supplied from elsewhere; its own verdict meets into this one | **—** |  |
-| `provenance 80` <br>*(18 records)* | the 2πi of the residue theorem CANCELS here, because the contour integral tends to zero and the identity is 0 = 2πi[Σ f(n) + Σ Res] — so the answer carries the kernel's own π and no other | **—** | caps: CANCELS; maths undelimited |
-| `provenance 81` <br>*(26 records)* | the bound is independent of R, beating plain ML by the factor \|a\|R | **—** |  |
-| `provenance 82` <br>*(4 records)* | the bound is O(R^-1), and 1 − n < 0 exactly when n > 1 | **—** |  |
-| `provenance 83` <br>*(4 records)* | the branch constant is c·e^(iπ·−1/4), derived along the direction arg z = 1/2·π where the declared windows give 1/2·π at z = 0, −1/2·π at z = b — every one an exact rational, so the constant is a root of unity and not a fit | **—** | maths undelimited |
-| `provenance 84` <br>*(4 records)* | the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take | **—** |  |
-| `provenance 85` <br>*(7 records)* | the branch point is NOT a pole: there is no Laurent series at it and no residue to take | **—** |  |
-| `provenance 86` <br>*(4 records)* | the cofactor is even, decided exactly over ℚ(i), which is what makes Σ_{n≠0} = 2·Σ_{n≥1}; f(0) is not asked about, because n = 0 is excluded from the target's own terms | **—** | maths undelimited |
-| `provenance 87` <br>*(32 records)* | the cofactor is shifted to the cap's own centre by exact synthetic division over ℚ(i), so the bound is the one this file already states, read about w = z − b | **—** | maths undelimited |
-| `provenance 88` <br>*(3 records)* | the cosh is CARRIED, never evaluated: the form is exact and only its decimal is an estimate | **—** | caps: CARRIED |
-| `provenance 89` <br>*(16 records)* | the crosscut is not drawn: its two traversals cancel because f is single-valued along them, which is a fact about the route chosen (clear of the cut), not about every route | **—** |  |
-| `provenance 90` <br>*(5 records)* | the denominator is the cross-multiplied (q − 1)(q′ − 1) of a conjugate pair of cofactor poles, which is exactly −4sinh²(γ/2) | **—** | maths undelimited |
-| `provenance 91` <br>*(9 records)* | the determination is an INPUT to the answer: the principal branch would change it by e^{2πiα} with nothing to warn you | **—** | caps: INPUT; maths undelimited |
-| `provenance 92` <br>*(12 records)* | the exact phase pins it modulo 1/2·π, and the declared determination picks which lift — the nearest alternative is 1/2·π away | **—** | maths undelimited |
-| `provenance 93` <br>*(8 records)* | the exponent -3 = 1 + (deg P − deg Q) is an exact integer, so its SIGN is decided; the log cannot change it | **—** | caps: SIGN |
-| `provenance 94` <br>*(8 records)* | the exponent 1 = 1 + (ord₀P − ord₀Q) is an exact integer, so its SIGN is decided; the log cannot change it | **—** | caps: SIGN |
-| `provenance 95` <br>*(16 records)* | the exponent -3/10 = −Re(a) − ord₀N + ord₀D is an exact rational, so its SIGN is decided | **—** | caps: SIGN |
-| `provenance 96` <br>*(16 records)* | the exponent -7/10 = Re(a) + deg N − deg D is an exact rational, so its SIGN is decided | **—** | caps: SIGN |
-| `provenance 97` <br>*(20 records)* | the exponent -7/10 = α + 1 + (deg P − deg Q) is an exact rational, so its SIGN is decided | **—** | caps: SIGN; maths undelimited |
-| `provenance 98` <br>*(20 records)* | the exponent 3/10 = α + 1 + (ord₀P − ord₀Q) is an exact rational, so its SIGN is decided | **—** | caps: SIGN; maths undelimited |
-| `provenance 99` <br>*(32 records)* | the exponent 1/2 = α_b + 1 + (ord₀Ñ − ord₀D̃) is an exact rational, so its SIGN is decided; α_b > −1 is the integrability of the endpoint singularity, spent here | **—** | caps: SIGN; maths undelimited |
-| `provenance 100` <br>*(4 records)* | the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument, which is why `escalate` is right where `refuse` and `warn` are both wrong | **—** | caps: SUFFICIENT NECESSARY |
-| `provenance 101` <br>*(4 records)* | the kernel is odd about every integer, so u·K(n+u) is even in u and the coefficient of u^(2k−1) is a rational multiple of π^(2k); the merged residue is therefore a rational multiple of an even power of π — this ring, and not the exponential basis G2 solves in | **—** | maths undelimited |
-| `provenance 102` <br>*(8 records)* | the kernel's expansion is EVEN — 1/u + Σ t_k π^{2k} u^{2k−1} — so only c₀ and the even negative coefficients of f contribute, and the sum is finite at k ≤ 1 | **—** | caps: EVEN; maths undelimited |
-| `provenance 103` <br>*(9 records)* | the kernel's residue is a theorem and is asserted; what is COMPUTED is f(n), exactly, over ℚ(i) | **—** | caps: COMPUTED; maths undelimited |
-| `provenance 104` <br>*(16 records)* | the limit rests on Re(q₂) = −1 alone: the rectangle's height is fixed, so as R → ∞ the vertex leaves the segment and the bound is O(e^{Re(q₂)R²}) | **—** | maths undelimited |
-| `provenance 105` <br>*(8 records)* | the pole has order 2, so 2 Laurent coefficient(s) of R meet 2 coefficient(s) of log^2 — at order 2 the answer mixes both, and either half alone is a plausible wrong number | **—** |  |
-| `provenance 106` <br>*(3 records)* | the roots are located numerically only to ASK the winding question; their residues are never evaluated | **—** | caps: ASK |
-| `provenance 107` <br>*(4 records)* | the SAME computation discharges L2 on an outer circle — research 03 §9(d)'s unification, in one number | **—** | caps: SAME; citation; lemma number |
-| `provenance 108` <br>*(26 records)* | the sine is CARRIED, never evaluated: the form is exact and only its decimal is an estimate | **—** | caps: CARRIED |
-| `provenance 109` <br>*(9 records)* | the weight 1 is DERIVED from the target's own declared range and checked against the record, not read out of it | **—** | caps: DERIVED; jargon: the record |
-| `provenance 110` <br>*(16 records)* | this is the dogbone's licence: it winds about both ends of a bounded cut, and the two turns cancel in the exponent | **—** |  |
-| `provenance 111` <br>*(8 records)* | this row says what is ENCLOSED and says nothing whatever about the value: the dogbone encloses nothing and its integral is not zero | **—** | caps: ENCLOSED |
-| `provenance 112` <br>*(5 records)* | which of the two the quotient is was decided by comparing two exponents exactly, not by matching a pattern: the π cot kernel puts δ = γ | **—** | maths undelimited |
-| `provenance 113` <br>*(5 records)* | zₖ^n = e^{i(1/1)π} was verified exactly, so arg zₖ = (ψ + 2k)π/n for k = 0…3 | **—** | maths undelimited |
-| `provenance 114` <br>*(15 records)* | Γ(1/2) = √π — the Gaussian ∫ℝ e^{−x²}dx = √π, established by polar coordinates, not by any contour | **—** | maths undelimited |
-| `provenance 115` <br>*(3 records)* | Γ(4/3) = ∫₀^∞ t^{1/3}e^{−t}dt — the Gamma function at a rational argument, established by the real substitution u = tⁿ and not by any contour | **—** | maths undelimited |
-| `provenance 116` <br>*(48 records)* | η^{α} and the other factors' powers are irrational powers of rationals, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE; maths undelimited |
-| `provenance 117` <br>*(32 records)* | η² < \|b − bⱼ\|² at every other branch point, checked exactly over ℚ, so the 1 remaining factor is bounded above and below and move the VALUE without moving the exponent | **—** | caps: VALUE; maths undelimited |
-| `provenance 118` <br>*(22 records)* | π bounded above by a certified rational (Machin + alternating series) | **—** | maths undelimited |
+| `provenance 9` <br>*(56 records)* | \|R\| bounded above by exact ℚ coefficient bounds, numerator and denominator separately | **—** | maths undelimited |
+| `provenance 10` <br>*(26 records)* | ∫₀^{π} e^{−κ sin ψ} dψ ≤ π/κ for every κ > 0 | **—** | maths undelimited |
+| `provenance 11` <br>*(4 records)* | ∫₀^{π/2} e^{−κ sin ψ} dψ ≤ π/(2κ) for every κ > 0 | **—** | maths undelimited |
+| `provenance 12` <br>*(26 records)* | $\deg Q - \deg P = 2 \ge 1$, so $\max\|g\| \to 0$ | **—** |  |
+| `provenance 13` <br>*(48 records)* | $\eta^{\alpha}$ and the other factors' powers are irrational powers of rationals, so the bound's value is a float — the limit depends only on the sign of the exponentt rests on the sign alone | **—** |  |
+| `provenance 14` <br>*(72 records)* | $\max\|f\|$ is read at $\|z\| = N+\tfrac12$ and bounds $\|f\|$ on the whole square: $U(r)/L(r)$ decreases in $r$ once both are divided by $r^{\deg D}$, so the closest point of $\Gamma_N$ is the worst | **—** |  |
+| `provenance 15` <br>*(22 records)* | $\pi$ bounded above by a certified rational (Machin's formula and an alternating series) | **—** |  |
+| `provenance 16` <br>*(4 records)* | $\psi = n\theta$ carries the arc's range $1\pi/4$ to $1\pi/2$, which is what the predicate was asked about | **—** |  |
+| `provenance 17` <br>*(56 records)* | $\sup\|\cot \pi z\| = \coth(\pi(N+\tfrac12)) \le \coth(\pi/2)$, attained at $N = 0$ — one constant for every $N$, which is what the limit needs | **—** |  |
+| `provenance 18` <br>*(16 records)* | $\sup\|\csc \pi z\| = 1$ on $\Gamma_N$ for every $N$: $\le 1/\sinh(\pi/2)$ on the horizontal sides and $\le 1$ on the vertical ones | **—** |  |
+| `provenance 19` <br>*(22 records)* | $\|P\| \le \sum_k \|a_k\| R^k$ by the triangle inequality, with each $\|a_k\|$ bounded above in $\mathbb{Q}$ | **—** |  |
+| `provenance 20` <br>*(22 records)* | $\|Q\| \ge 2.230e+2 > 0$, which also certifies that every pole lies strictly inside $\|z\| = R$ | **—** |  |
+| `provenance 21` <br>*(3 records)* | a + b·e^{β} with a = b factors as e^{β/2}(e^{−β/2} + e^{β/2}); the sine's other half, for a NEGATIVE quasi-period | **—** | caps: NEGATIVE; maths undelimited |
+| `provenance 22` <br>*(26 records)* | a − b·e^{β} with \|a\| = \|b\| factors as e^{β/2}(e^{−β/2} − e^{β/2}); one rule, for one shape | **—** | maths undelimited |
+| `provenance 23` <br>*(6 records)* | a fifth or seventh root of −1 needs a degree-4 or degree-6 field — which is why the per-pole route declined, and why this one is not the same claim | **—** |  |
+| `provenance 24` <br>*(16 records)* | a rational integrand cannot falsify the SIGN of σ: Σ Res + Res(f,∞) = 0 for such an f, so the whole σ-dependent term vanishes whatever σ is. D6 is what pins it | **—** | caps: SIGN; maths undelimited |
+| `provenance 25` <br>*(12 records)* | an independent check: the quadrature of this piece is 3.07e-13 away (2.2e-11% of it) — at a finite limit parameter that gap is the piece's own tail | **—** |  |
+| `provenance 26` <br>*(1 record)* | arg(−4) = 1/1·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real modulus with ln = 2ln 2 | **—** | maths undelimited |
+| `provenance 27` <br>*(2 records)* | arg(−2) = 1/1·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real modulus with ln = ln 2 | **—** | maths undelimited |
+| `provenance 28` <br>*(6 records)* | arg(−1) = 1/1·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real of modulus 1 | **—** | maths undelimited |
+| `provenance 29` <br>*(9 records)* | at the contour drawn this is 2πi times the PARTIAL sum minus the infinite one; it is the limit N → ∞ that sends it to zero, and that limit is what the vanishing sides establish | **—** | caps: PARTIAL; maths undelimited |
+| `provenance 30` <br>*(16 records)* | bounded component {b1, b2}: Σα = -1/1 ∈ ℤ | **—** | maths undelimited |
+| `provenance 31` <br>*(3 records)* | cosh vanishes only at an imaginary argument, and γ is real here — so unlike the sine there is no degenerate case | **—** | maths undelimited |
+| `provenance 32` <br>*(8 records)* | crossing 'Γ' ADDS 2πi to the logarithm: its monodromy has infinite order, so no factor multiplies the integrand and no sheet count closes the loop | **—** | caps: ADDS; maths undelimited |
+| `provenance 33` <br>*(6 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·1/2) = −1 | **—** | maths undelimited |
+| `provenance 34` <br>*(2 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·13/10), which is e^(2πi·3/10) with the integer part of J dropped | **—** | maths undelimited |
+| `provenance 35` <br>*(4 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·−1/2) = −1, which is e^(2πi·1/2) with the integer part of J dropped | **—** | maths undelimited |
+| `provenance 36` <br>*(2 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·−1/4) = −i, which is e^(2πi·3/4) with the integer part of J dropped | **—** | maths undelimited |
+| `provenance 37` <br>*(6 records)* | crossing 'Γ' multiplies the integrand by e^(2πi·−7/10), which is e^(2πi·3/10) with the integer part of J dropped | **—** | maths undelimited |
+| `provenance 38` <br>*(2 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·1/2) = −1 | **—** | maths undelimited |
+| `provenance 39` <br>*(2 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·3/4) = −i | **—** | maths undelimited |
+| `provenance 40` <br>*(4 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·1/4) = i | **—** | maths undelimited |
+| `provenance 41` <br>*(8 records)* | crossing 'Γ1' multiplies the integrand by e^(2πi·−1/2) = −1, which is e^(2πi·1/2) with the integer part of J dropped | **—** | maths undelimited |
+| `provenance 42` <br>*(2 records)* | e^(2πi·13/10) = e^(2πi·3/10), because e^(−2πi) = 1 — the same number, and the literal form is the one the integrand's exponent gives | **—** | maths undelimited |
+| `provenance 43` <br>*(14 records)* | e^(2πi·1/2) is already reduced: J ∈ [0, 1) | **—** | maths undelimited |
+| `provenance 44` <br>*(20 records)* | e^(2πi·−7/10) = e^(2πi·3/10), because e^(−2πi) = 1 — the same number, and the literal form is the one the integrand's exponent gives | **—** | maths undelimited |
+| `provenance 45` <br>*(24 records)* | e^{max Re Q} is transcendental, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE |
+| `provenance 46` <br>*(48 records)* | e^{κR} is transcendental, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE |
+| `provenance 47` <br>*(8 records)* | each residue is Res_w(N/D, w₀)/w₀ times e^{az₀}, exact in ℚ(i)(√d) × e^{ℚ(i)·π} | **—** | maths undelimited |
+| `provenance 48` <br>*(8 records)* | each residue is weighted by n(γ,aₖ) − σ = n(γ,aₖ) − −1, which is its winding about γ − σ·C_R | **—** | maths undelimited |
+| `provenance 49` <br>*(2 records)* | each root's winding number was decided by the same exact-sign predicates every other winding uses; the roots are located numerically only to ASK that question | **—** | caps: ASK |
+| `provenance 50` <br>*(4 records)* | established by: Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2] | **—** | maths undelimited |
+| `provenance 51` <br>*(26 records)* | established by: Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2], extended to [0, π] by sin ψ = sin(π − ψ) | **—** | maths undelimited |
+| `provenance 52` <br>*(18 records)* | every pole is simple and Gaussian, which is what makes e^{2πiz₀} representable and K(z₀)·Res(f,z₀) the whole residue | **—** | maths undelimited |
+| `provenance 53` <br>*(9 records)* | every pole of the cofactor was asked for its winding number and is enclosed once — the record's 'once N+½ > a', checked rather than assumed | **—** | jargon: the record |
+| `provenance 54` <br>*(4 records)* | f = O(z^(0)) at infinity, which is NOT enough to make the residue vanish — 1/z is regular there and has Res = −1 | **—** |  |
+| `provenance 55` <br>*(4 records)* | f(0) = —, and no cofactor pole lies on an integer in the band | **—** |  |
+| `provenance 56` <br>*(2 records)* | f(0) = 1, and no cofactor pole lies on an integer in the band | **—** |  |
+| `provenance 57` <br>*(3 records)* | f(0) = 16/9, and no cofactor pole lies on an integer in the band | **—** |  |
+| `provenance 58` <br>*(12 records)* | independent cross-check: a direct float evaluation of c·∏\|z₀−bⱼ\|^{αⱼ}·e^{iΣαⱼθⱼ} agrees to 1.19e-16, sharing no arithmetic with the exact route but the window | **—** | maths undelimited |
+| `provenance 59` <br>*(16 records)* | J = 1/2, exactly — Σα over the arc's "from" side | **—** | maths undelimited |
+| `provenance 60` <br>*(20 records)* | J = −7/10, exactly — Σα over the arc's "from" side | **—** | maths undelimited |
+| `provenance 61` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = 3ln 2/4 + ln 5/4, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 62` <br>*(4 records)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = −ln 2/2, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 63` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2 + 3ln 3/4 + ln 5/4, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 64` <br>*(2 records)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2 + ln 5 − ln 13/2 − ln 113/2, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 65` <br>*(2 records)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2 − ln 5/2, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 66` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 2/4 + 3ln 5/4, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 67` <br>*(1 record)* | ln ∏\|z₀ − bⱼ\|^{αⱼ} = ln 5/2 + ln 7/2, over primes and therefore canonical | **—** | maths undelimited |
+| `provenance 68` <br>*(24 records)* | ln ρ is a float, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE; maths undelimited |
+| `provenance 69` <br>*(4 records)* | log(−i) = 3iπ/2 in the declared determination, its argument verified exactly rather than read off atan2 | **—** | maths undelimited |
+| `provenance 70` <br>*(4 records)* | log(i) = iπ/2 in the declared determination, its argument verified exactly rather than read off atan2 | **—** | maths undelimited |
+| `provenance 71` <br>*(8 records)* | max\|f\| on the side is ATTAINED, not majorised: Re Q(c+iy) is the exact quadratic 1y² + −17/10y + −36, whose maximum on the segment is at y = 0 | **—** | caps: ATTAINED; maths undelimited |
+| `provenance 72` <br>*(8 records)* | max\|f\| on the side is ATTAINED, not majorised: Re Q(c+iy) is the exact quadratic 1y² + −1y + −36, whose maximum on the segment is at y = 0 | **—** | caps: ATTAINED; maths undelimited |
+| `provenance 73` <br>*(8 records)* | n(γ, z = -1) = −1, n(γ, z = 1) = −1 — non-zero, and the SUM is what has to be an integer | **—** | caps: SUM; maths undelimited |
+| `provenance 74` <br>*(8 records)* | n(γ, z = 0) = −1, n(γ, z = b) = −1 — non-zero, and the SUM is what has to be an integer | **—** | caps: SUM; maths undelimited |
+| `provenance 75` <br>*(5 records)* | no individual root is expressed: a fifth or seventh root of −1 needs a degree-4 or degree-6 field, and the SUM needs none | **—** | caps: SUM |
+| `provenance 76` <br>*(8 records)* | no pole is enclosed AND the integral is not zero: two rows, and neither implies the other — the hypothesis that fails is holomorphy, because the CUT is inside | **—** | caps: AND CUT |
+| `provenance 77` <br>*(8 records)* | no quadrature cross-check: sampling log^m z needs a determination, and a compiled evaluator would use the principal branch and answer a different question | **—** |  |
+| `provenance 78` <br>*(14 records)* | no quadrature cross-check: sampling z^α needs a determination, and a naive evaluator would use the principal branch and answer a different question | **—** | maths undelimited |
+| `provenance 79` <br>*(8 records)* | refusing would be wrong (the answer is correct) and warning would be wrong (nothing is uncertain); what the escalation costs the record is a DECLARED merged order and residue, both checked against the engine's own | **—** | caps: DECLARED; jargon: the record |
+| `provenance 80` <br>*(8 records)* | t_k is rational (Bernoulli, from Σ C(m+1,j) B_j = 0 in exact ℚ) and the powers of π are even, so the value lands in ℚ(i)(π) — a different RING from the exponential basis G2 solves in, not a harder case of it | **—** | caps: RING; maths undelimited |
+| `provenance 81` <br>*(2 records)* | T0 was supplied from elsewhere; its own verdict meets into this one | **—** |  |
+| `provenance 82` <br>*(18 records)* | the 2πi of the residue theorem CANCELS here, because the contour integral tends to zero and the identity is 0 = 2πi[Σ f(n) + Σ Res] — so the answer carries the kernel's own π and no other | **—** | caps: CANCELS; maths undelimited |
+| `provenance 83` <br>*(4 records)* | the bound is $O(R^{-1})$, and $1 - n < 0$ exactly when $n > 1$ | **—** |  |
+| `provenance 84` <br>*(26 records)* | the bound is independent of $R$ | **—** |  |
+| `provenance 85` <br>*(4 records)* | the branch constant is c·e^(iπ·−1/4), derived along the direction arg z = 1/2·π where the declared windows give 1/2·π at z = 0, −1/2·π at z = b — every one an exact rational, so the constant is a root of unity and not a fit | **—** | maths undelimited |
+| `provenance 86` <br>*(4 records)* | the branch point at the origin is NOT a pole: there is no Laurent series at it and no residue to take | **—** |  |
+| `provenance 87` <br>*(7 records)* | the branch point is NOT a pole: there is no Laurent series at it and no residue to take | **—** |  |
+| `provenance 88` <br>*(4 records)* | the cofactor is even, decided exactly over ℚ(i), which is what makes Σ_{n≠0} = 2·Σ_{n≥1}; f(0) is not asked about, because n = 0 is excluded from the target's own terms | **—** | maths undelimited |
+| `provenance 89` <br>*(32 records)* | the cofactor is shifted to the cap's own centre by exact synthetic division over $\mathbb{Q}(i)$, so the bound is the one this file already states, read about $w = z - b$ | **—** |  |
+| `provenance 90` <br>*(3 records)* | the cosh is CARRIED, never evaluated: the form is exact and only its decimal is an estimate | **—** | caps: CARRIED |
+| `provenance 91` <br>*(16 records)* | the crosscut is not drawn: its two traversals cancel because f is single-valued along them, which is a fact about the route chosen (clear of the cut), not about every route | **—** |  |
+| `provenance 92` <br>*(5 records)* | the denominator is the cross-multiplied (q − 1)(q′ − 1) of a conjugate pair of cofactor poles, which is exactly −4sinh²(γ/2) | **—** | maths undelimited |
+| `provenance 93` <br>*(9 records)* | the determination is an INPUT to the answer: the principal branch would change it by e^{2πiα} with nothing to warn you | **—** | caps: INPUT; maths undelimited |
+| `provenance 94` <br>*(12 records)* | the exact phase pins it modulo 1/2·π, and the declared determination picks which lift — the nearest alternative is 1/2·π away | **—** | maths undelimited |
+| `provenance 95` <br>*(8 records)* | the exponent -3 = 1 + (deg P − deg Q) is an exact integer, so its SIGN is decided; the log cannot change it | **—** | caps: SIGN |
+| `provenance 96` <br>*(8 records)* | the exponent 1 = 1 + (ord₀P − ord₀Q) is an exact integer, so its SIGN is decided; the log cannot change it | **—** | caps: SIGN |
+| `provenance 97` <br>*(16 records)* | the exponent -3/10 = −Re(a) − ord₀N + ord₀D is an exact rational, so its SIGN is decided | **—** | caps: SIGN |
+| `provenance 98` <br>*(16 records)* | the exponent -7/10 = Re(a) + deg N − deg D is an exact rational, so its SIGN is decided | **—** | caps: SIGN |
+| `provenance 99` <br>*(20 records)* | the exponent -7/10 = α + 1 + (deg P − deg Q) is an exact rational, so its SIGN is decided | **—** | caps: SIGN; maths undelimited |
+| `provenance 100` <br>*(20 records)* | the exponent 3/10 = α + 1 + (ord₀P − ord₀Q) is an exact rational, so its SIGN is decided | **—** | caps: SIGN; maths undelimited |
+| `provenance 101` <br>*(32 records)* | the exponent 1/2 = α_b + 1 + (ord₀Ñ − ord₀D̃) is an exact rational, so its sign is decided; α_b > −1 is the integrability of the endpoint singularity, spent here | **—** | maths undelimited |
+| `provenance 102` <br>*(4 records)* | the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument, which is why `escalate` is right where `refuse` and `warn` are both wrong | **—** | caps: SUFFICIENT NECESSARY |
+| `provenance 103` <br>*(4 records)* | the kernel is odd about every integer, so u·K(n+u) is even in u and the coefficient of u^(2k−1) is a rational multiple of π^(2k); the merged residue is therefore a rational multiple of an even power of π — this ring, and not the exponential basis G2 solves in | **—** | maths undelimited |
+| `provenance 104` <br>*(8 records)* | the kernel's expansion is EVEN — 1/u + Σ t_k π^{2k} u^{2k−1} — so only c₀ and the even negative coefficients of f contribute, and the sum is finite at k ≤ 1 | **—** | caps: EVEN; maths undelimited |
+| `provenance 105` <br>*(9 records)* | the kernel's residue is a theorem and is asserted; what is COMPUTED is f(n), exactly, over ℚ(i) | **—** | caps: COMPUTED; maths undelimited |
+| `provenance 106` <br>*(16 records)* | the limit rests on Re(q₂) = −1 alone: the rectangle's height is fixed, so as R → ∞ the vertex leaves the segment and the bound is O(e^{Re(q₂)R²}) | **—** | maths undelimited |
+| `provenance 107` <br>*(8 records)* | the pole has order 2, so 2 Laurent coefficient(s) of R meet 2 coefficient(s) of log^2 — at order 2 the answer mixes both, and either half alone is a plausible wrong number | **—** |  |
+| `provenance 108` <br>*(3 records)* | the roots are located numerically only to ASK the winding question; their residues are never evaluated | **—** | caps: ASK |
+| `provenance 109` <br>*(4 records)* | the SAME computation discharges L2 on an outer circle — research 03 §9(d)'s unification, in one number | **—** | caps: SAME; citation; lemma number |
+| `provenance 110` <br>*(26 records)* | the sine is CARRIED, never evaluated: the form is exact and only its decimal is an estimate | **—** | caps: CARRIED |
+| `provenance 111` <br>*(9 records)* | the weight 1 is DERIVED from the target's own declared range and checked against the record, not read out of it | **—** | caps: DERIVED; jargon: the record |
+| `provenance 112` <br>*(16 records)* | this is the dogbone's licence: it winds about both ends of a bounded cut, and the two turns cancel in the exponent | **—** |  |
+| `provenance 113` <br>*(8 records)* | this row says what is ENCLOSED and says nothing whatever about the value: the dogbone encloses nothing and its integral is not zero | **—** | caps: ENCLOSED |
+| `provenance 114` <br>*(5 records)* | which of the two the quotient is was decided by comparing two exponents exactly, not by matching a pattern: the π cot kernel puts δ = γ | **—** | maths undelimited |
+| `provenance 115` <br>*(5 records)* | zₖ^n = e^{i(1/1)π} was verified exactly, so arg zₖ = (ψ + 2k)π/n for k = 0…3 | **—** | maths undelimited |
+| `provenance 116` <br>*(15 records)* | Γ(1/2) = √π — the Gaussian ∫ℝ e^{−x²}dx = √π, established by polar coordinates, not by any contour | **—** | maths undelimited |
+| `provenance 117` <br>*(3 records)* | Γ(4/3) = ∫₀^∞ t^{1/3}e^{−t}dt — the Gamma function at a rational argument, established by the real substitution u = tⁿ and not by any contour | **—** | maths undelimited |
+| `provenance 118` <br>*(32 records)* | η² < \|b − bⱼ\|² at every other branch point, checked exactly over ℚ, so the 1 remaining factor is bounded above and below and move the VALUE without moving the exponent | **—** | caps: VALUE; maths undelimited |
 | `provenance 119` <br>*(60 records)* | ρ^α is an irrational power of a rational, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone | **—** | caps: VALUE; maths undelimited |
 | `provenance 120` <br>*(1 record)* | σ = −1, Σ Res over the 1 finite pole = −2·e^(−3iπ/4 + 3ln 3/4 + ln 5/4), and Res(f,∞) = 7·e^(−3iπ/4) is the outer circle exactly, not an estimate of it | **—** | maths undelimited |
 | `provenance 121` <br>*(1 record)* | σ = −1, Σ Res over the 1 finite pole = −e^(−3iπ/4 + 3ln 2/4 + ln 5/4), and Res(f,∞) = 11/4·e^(−3iπ/4) is the outer circle exactly, not an estimate of it | **—** | maths undelimited |
@@ -421,13 +420,12 @@ The ✓/✗ audit trail inside a row's evidence, shown when a row is expanded.
 | `provenance 128` <br>*(4 records)* | Σ αⱼ = 1 ∈ ℤ, so the monodromy round a large circle is 1 and f is single-valued there | **—** | maths undelimited |
 | `provenance 129` <br>*(4 records)* | Σ αⱼ = −1 ∈ ℤ, so f IS single-valued near infinity and the question has an answer | **—** | caps: IS; maths undelimited |
 | `provenance 130` <br>*(12 records)* | Σ αⱼ·arg(z₀ − bⱼ) = −1/2·π, and the individual arguments need not be rational multiples of π — at D6's pole they are π − arctan a and arctan a, and only the half-sum is | **—** | maths undelimited |
-| `provenance 131` <br>*(4 records)* | ψ = nθ carries the arc's range 1π/4 to 1π/2, which is what the predicate was asked about | **—** | maths undelimited |
 
 ## 9. Restrictions
 
 | where | today | proposed | flags |
 |---|---|---|---|
-| `restriction 1` <br>*(28 records)* | arg z ∈ [0/1·π, 2/1·π) | **—** | maths undelimited |
-| `restriction 2` <br>*(8 records)* | arg(z − 0) ∈ [0·π, 2·π); arg(b − z) ∈ [−1·π, 1·π) | **—** | maths undelimited |
-| `restriction 3` <br>*(8 records)* | arg(z − -1) ∈ [0·π, 2·π); arg(z − 1) ∈ [0·π, 2·π) | **—** | maths undelimited |
-| `restriction 4` <br>*(81 records)* | N + ½ = 9/2; deg D − deg N = 2 | **—** |  |
+| `restriction 1` <br>*(81 records)* | $N + \tfrac12 = 9/2$; $\deg D - \deg N = 2$ | **—** |  |
+| `restriction 2` <br>*(28 records)* | arg z ∈ [0/1·π, 2/1·π) | **—** | maths undelimited |
+| `restriction 3` <br>*(8 records)* | arg(z − 0) ∈ [0·π, 2·π); arg(b − z) ∈ [−1·π, 1·π) | **—** | maths undelimited |
+| `restriction 4` <br>*(8 records)* | arg(z − -1) ∈ [0·π, 2·π); arg(z − 1) ∈ [0·π, 2·π) | **—** | maths undelimited |

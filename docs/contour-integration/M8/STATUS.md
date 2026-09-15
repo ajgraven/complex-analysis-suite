@@ -9,11 +9,11 @@ changed.
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
 - **Execution:** Phase 0 in progress. The owner approved the five blanket decisions.
-  **Step 0.5b is SPLIT** (see Findings): **0.5b-i — the ledger's own sentences, and the renderer the
-  convention needs — is done.** **Next execution action: step 0.5b-ii** — carry the same five rules
-  through the bound, branch and solve strings (`kernel/bounds/*`, `kernel/branch/*`,
-  `families/solve*.ts`), which [`claims.md`](claims.md) now counts at 191 sentences. Then 0.6 and the
-  0.7 phase gate.
+  **Step 0.5b is SPLIT** (see Findings). **0.5b-i (the ledger's own sentences and the renderer) and
+  0.5b-ii (the bound modules, the theorem identities and the solve) are done** — the document's count
+  is **191 → 152**. **Next execution action: step 0.5b-iii**, the last of the five rules where they
+  still bite: 53 sentences shout a word and 136 carry undelimited mathematics, nearly all of them
+  provenance strings in `kernel/*` and the record modules. Then 0.6 and the 0.7 phase gate.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -37,6 +37,8 @@ changed.
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
+
+| 2026-09-15 | **0.5b-ii** | (this commit) | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -206,6 +208,21 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.5b-ii) 65 tests broke, and the reason is worth keeping: they SCRAPE the sentences.** A bound
+  test reads its number back out of the claim with `/≤ ([0-9.e+-]+)/`, and `≤` is now `\le` — so a
+  wording change silently turned a measured bound into `NaN` and the comparison into
+  `NaN < NaN`. The certificates already carry `value`, `asymptotics` and `exponent` as fields; the
+  tests read the prose instead. They are updated rather than restructured here, and the restructure
+  is worth its own slice.
+- **(0.5b-ii) A stray `$` was visible on every record, and only the browser found it.** One
+  provenance sentence in `branchArc.ts` opened a delimiter it never closed. `splitMath` re-joins an
+  odd trailing delimiter as TEXT — the safe direction, since the line renders plainly instead of the
+  rest of it disappearing — so the defect shows as a lone dollar sign and nothing else. There is now
+  a corpus test for it: no sentence may ship an unbalanced `$`.
+- **(0.5b-ii) The solved value now carries its LaTeX**, because the derivation's answer line
+  (`the integral = π/2` → `$I = \frac{\pi}{2}$`) is the one sentence in the app a reader is most
+  likely to copy. `SolvedValue`/`SolvedSummary` gained a `latex` sibling from the same formatter at
+  `LATEX`, which is 0.4b's arrangement applied one level up.
 - **(0.5b) THE CONVENTION NEEDS ITS RENDERER IN THE SAME STEP, and the plan has them two phases
   apart.** It puts the `$…$` delimiters in 0.5 and KaTeX in Phase 1. Applied in that order, Phase 0 —
   which merges to `master` alone — would ship a page of literal dollar signs; and writing the 200

@@ -530,7 +530,7 @@ describe("through the family door — the route is reached, and reached FIRST", 
     // And every side is killed by the SQUARE bound, which exists only because there is a kernel.
     const kills = r.run.ledger.rows.filter((row) => row.constraint === "KILL");
     expect(kills.length).toBe(4);
-    expect(kills.every((row) => row.status === "satisfied" && /O\(\(N\+½\)\^-1\)/.test(row.claim))).toBe(true);
+    expect(kills.every((row) => row.status === "satisfied" && /O\(\(N\+\\tfrac12\)\^\{-1\}\)/.test(row.claim))).toBe(true);
   });
 
   it("refuses a record that claims an unknown inside a sum with no kernel to sum", () => {

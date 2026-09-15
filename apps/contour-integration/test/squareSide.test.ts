@@ -234,13 +234,16 @@ describe("the ledger's KILL pass on a square side", () => {
     expect(rows).toHaveLength(4);
     expect(rows.every((r) => r.status === "satisfied")).toBe(true);
     expect(rows.every((r) => r.evidence.level === "≤")).toBe(true);
-    expect(rows[0]?.claim).toMatch(/→ 0 as N → ∞/);
+    expect(rows[0]?.claim).toMatch(/\\to 0\$ as \$N \\to \\infty/);
   });
 
-  it("names coth(π/2) in the certificate, and the π the research drops", () => {
+  it("names the kernel's own π and the coth(π/2) that bounds it", () => {
+    // The internal erratum that used to ride along in the provenance is gone (M8 step 0.5b-ii: no
+    // citations of research notes). What the method must still say is the two constants the bound
+    // is built from, since dropping the kernel's π is what makes it not a bound at all.
     const row = run("pi*cot(pi*z)/(z^2+1)", 3).ledger.rows.find((r) => r.constraint === "KILL");
-    expect(row?.evidence.method).toMatch(/coth\(π\/2\)/);
-    expect((row?.evidence.provenance ?? []).some((p) => /research 03 §8/.test(p.text))).toBe(true);
+    expect(row?.evidence.method).toMatch(/\\coth\(\\pi\/2\)/);
+    expect(row?.evidence.method).toMatch(/\\sup\|K\|/);
   });
 
   it("REFUSES every side at an integer half-width", () => {

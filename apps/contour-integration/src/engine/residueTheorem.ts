@@ -80,7 +80,8 @@ export interface ResidueTheoremResult {
 }
 
 /** What the derivation says it is applying when a result does not name its own identity. */
-export const RESIDUE_THEOREM_IDENTITY = "∮ f dz = 2πi Σₖ n(γ,aₖ)·Res(f,aₖ)";
+export const RESIDUE_THEOREM_IDENTITY =
+  "$\\oint_\\gamma f(z)\\,dz = 2\\pi i \\sum_k \\operatorname{Ind}_\\gamma(a_k)\\operatorname{Res}(f, a_k)$";
 
 /** How far apart the two routes may be before the disagreement is reported as an inconsistency. */
 const AGREEMENT_SLACK = 32;

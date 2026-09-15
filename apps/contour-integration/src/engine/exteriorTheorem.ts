@@ -71,7 +71,8 @@ const int = (n: number): string => formatFrac(Frac.of(BigInt(n)));
  * equation it stopped inside, and a refusal labelled with the plain residue theorem would send them
  * looking for the wrong mistake.
  */
-const EXTERIOR_IDENTITY = "∮ f dz = 2πi [ Σₖ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞) ],  σ = n(γ, branch point)";
+const EXTERIOR_IDENTITY =
+  "$\\oint_\\gamma f(z)\\,dz = 2\\pi i\\left[\\sum_k (\\operatorname{Ind}_\\gamma(a_k) - \\sigma)\\operatorname{Res}(f, a_k) - \\sigma\\operatorname{Res}(f, \\infty)\\right]$, with $\\sigma = \\operatorname{Ind}_\\gamma(b)$ at the branch point";
 
 export interface ExteriorTheoremInput {
   /** The poles of the integrand (or, with a branch factor, of its rational cofactor), exactly. */
