@@ -13,16 +13,22 @@
 // σ level curves, critical orbits, the cycle finder, the orbit-family sweep,
 // the z-panel ψ-pullback, and high-res PNG export. Bodies are VERBATIM moves.
 //
-// Deps via sCtx: sState + the paint fns (paintBoundaryOnTop / paintPreimageTree
-// / paintLimitSet, from schwarz-paint.js) + the GPU/canvas helpers used by the
-// exporter (activeRenderer / getCtx / getCanvas). `QD` is the global; `document`
-// / `performance` / `URL` / `console` are browser globals.
+// Deps via sCtx: sState + the paint fns (paintBoundaryOnTop / paintAll / paintOrbit
+// / paintZView, from schwarz-paint.js) + activeRenderer and setOverlayCapture, the
+// two the image exporter needs. `QD` is the global; `document` / `performance` /
+// `URL` / `console` are browser globals.
 // =============================================================================
 
 // ESM (Phase 2 port). QD_UI factory module.
 import { QD_UI } from '../ui/ui-registry.mjs';
 import _QD from '../solvers/solver.mjs';
+import { planExportSize, describeExportDetail, exportFileName } from './schwarz-export-plan.mjs';
 const QD = _QD;
+
+// Fallback edge cap when there is no GL context to ask (a CPU-only export). Browsers
+// cap 2D canvas AREA rather than edge, and do not publish the number; 8192 is the
+// smallest edge any WebGL2-capable target reports here, so it is the safe stand-in.
+const CANVAS_2D_MAX_EDGE = 8192;
 
 (function (global) {
   'use strict';
@@ -30,9 +36,13 @@ const QD = _QD;
   QD_UI.installSchwarzFeatures = function installSchwarzFeatures(s) {
     const sState             = s.sState;
     const paintBoundaryOnTop = s.paintBoundaryOnTop;
+    const paintAll           = s.paintAll;
+    const paintOrbit         = s.paintOrbit;
+    const paintZView         = s.paintZView;
     const activeRenderer     = s.activeRenderer;
-    const getCtx             = s.getCtx;
-    const getCanvas          = s.getCanvas;
+    // Redirects every painter's getCtx() at a capture context for the duration of
+    // one export, so the overlay re-renders at size instead of being upscaled.
+    const setOverlayCapture  = s.setOverlayCapture;
 
   function _recomputeDomainColoring() {
     if (!sState.schwarz) { sState.domainColor = null; return; }
@@ -155,93 +165,192 @@ const QD = _QD;
     }, 30);
   }
 
-  // S6 / F8: PNG export. Composites whatever is currently visible on the
-  // Schwarz tab into a single PNG download. For GPU mode, that means the
-  // fractal layer from #schwarz-gl-canvas + the overlay layer from #canvas.
-  // For CPU / domain-coloring modes, only the 2D canvas is needed.
+  // S6 / F8: high-resolution PNG export. Composites what the Schwarz tab is
+  // showing into one PNG at `mult` times the display size, for all three view
+  // modes (plane / z-disk / sphere).
   //
-  // High-res: when multiplier > 1, we briefly re-render the GPU canvas at
-  // multiplier·display-size, re-paint the 2D overlay onto an off-screen
-  // canvas of the same size, composite, export, restore.
-  function _exportPng() {
-    const mult = +(document.getElementById('schwarz-export-mult').value || 1);
-    const view  = sState.view;
-    const baseW = Math.round(view.cssW);
-    const baseH = Math.round(view.cssH);
-    const outW  = baseW * mult;
-    const outH  = baseH * mult;
+  // THREE THINGS THIS HAS TO GET RIGHT, each measured rather than assumed:
+  //
+  // 1. RE-RENDER, ALWAYS. Both GL contexts are created with
+  //    `preserveDrawingBuffer: false`, so once the browser has composited a
+  //    frame the canvas reads back EMPTY — measured 1 distinct colour against 26
+  //    (Schwarz) and 1 against 2858 (sphere). The export therefore renders
+  //    synchronously and copies before yielding; there is no fast path that
+  //    skips the render at 1×, which is what used to make a 1× export a picture
+  //    of nothing.
+  // 2. THE VIEW MODE IS PART OF THE FRAME. The z-disk view has its own camera
+  //    (sState.zView) and its own shader branch (viewMode:'z'); passing neither
+  //    exports the plane at the plane's camera — a different picture from the
+  //    one on screen.
+  // 3. OVERLAYS ARE RE-DRAWN, NOT UPSCALED. Scaling the display canvas gives a
+  //    blocky boundary and blocky markers, which is a big screenshot rather than
+  //    a high-resolution figure. `worldToPixel` yields display-space coordinates
+  //    and no painter touches the transform, so ONE setTransform(mult) on a
+  //    capture context makes every existing painter draw vector-crisp at size,
+  //    with no change to any of them. The painters clear their whole canvas, so
+  //    the overlay gets its own layer and is composited over the field.
+  //
+  // What cannot be made sharper is said out loud instead (describeExportDetail):
+  // a CPU escape-time field exists only at the resolution slider's size, and the
+  // sphere's fractal is a texture of a fixed size mapped onto geometry.
+  // The size + honest label for the CURRENT state, shared by the preview and the
+  // export itself so the line the user reads before clicking is the one the file
+  // is made to. Returns null when this view has nothing exportable.
+  function _planCurrentExport() {
+    const inZ      = sState.viewMode === 'z';
+    const onSphere = sState.viewMode === 'sphere';
+    const view     = inZ ? sState.zView : sState.view;
+    const onGpu    = !onSphere && activeRenderer() === 'gpu' && !!sState.gpu;
+    const sphere   = sState.sphereView;
+    if (onSphere && !(sphere && sphere.captureFrame)) return null;
 
-    // Off-screen composite canvas.
+    const el = document.getElementById('schwarz-export-mult');
+    const requested = +((el && el.value) || 1);
+    let maxDim = 0;
+    if (onSphere && sphere.maxOutputSize) maxDim = sphere.maxOutputSize() | 0;
+    else if (onGpu && sState.gpu.maxOutputSize) maxDim = sState.gpu.maxOutputSize() | 0;
+    if (!maxDim) maxDim = CANVAS_2D_MAX_EDGE;
+
+    const plan = planExportSize({ cssW: view.cssW, cssH: view.cssH, mult: requested, maxDim });
+    const detail = describeExportDetail({
+      view:    sState.viewMode,
+      onGpu,
+      outW:    plan.outW,
+      outH:    plan.outH,
+      fieldW:  sState.fieldW,
+      fieldH:  sState.fieldH,
+      texSize: onSphere && sphere.fractalTexSize ? sphere.fractalTexSize() : 0,
+    });
+    const clampNote = plan.clamped
+      ? '  \u26a0 capped at this renderer\u2019s ' + plan.maxDim + ' px limit (asked ' +
+        plan.requestedMult + '\u00d7, got ' + plan.mult.toFixed(2) + '\u00d7).'
+      : '';
+    return { inZ, onSphere, view, onGpu, sphere, plan, detail, clampNote };
+  }
+
+  // Live readout under the multiplier, so the output size and the cap are visible
+  // BEFORE the click rather than discovered in the saved file.
+  function _refreshExportPreview() {
+    const statusEl = document.getElementById('schwarz-export-png-status');
+    if (!statusEl) return;
+    const p = _planCurrentExport();
+    if (!p) { statusEl.textContent = 'Nothing to export in this view yet.'; statusEl.style.color = '#555'; return; }
+    statusEl.style.color = p.plan.clamped ? '#b06000' : '#555';
+    statusEl.textContent = p.plan.outW + '\u00d7' + p.plan.outH + ' \u2014 ' + p.detail.detail + '.' + p.clampNote;
+  }
+
+  function _exportPng() {
+    const statusEl = document.getElementById('schwarz-export-png-status');
+    const say = (msg, ok) => {
+      if (!statusEl) return;
+      statusEl.textContent = msg;
+      statusEl.style.color = ok === false ? '#b00020' : '#555';
+    };
+
+    const inZ      = sState.viewMode === 'z';
+    const onSphere = sState.viewMode === 'sphere';
+    const view     = inZ ? sState.zView : sState.view;
+    const onGpu    = !onSphere && activeRenderer() === 'gpu' && !!sState.gpu;
+    const sphere   = sState.sphereView;
+
+    const planned = _planCurrentExport();
+    if (!planned) {
+      say('The sphere view has no renderer to export.', false);
+      return;
+    }
+    const plan = planned.plan;
+    const outW = plan.outW, outH = plan.outH;
+
     const out    = document.createElement('canvas');
     out.width    = outW;
     out.height   = outH;
     const outCtx = out.getContext('2d');
+    if (!outCtx) { say('Could not allocate a ' + outW + '\u00d7' + outH + ' canvas.', false); return; }
 
-    // --- 1) Fractal layer ---
-    const glCanvas = document.getElementById('schwarz-gl-canvas');
-    const onGpu    = activeRenderer() === 'gpu' && glCanvas && sState.gpu;
-    if (onGpu && sState.mode === 'fractal') {
-      if (mult > 1) {
-        // Re-render at higher resolution. We construct a temporary view with
-        // larger css dimensions so the renderer chooses larger drawing-buffer.
-        const tmpView = Object.assign({}, view, { cssW: outW, cssH: outH });
+    let rendered = false;
+    if (onSphere) {
+      // The sphere draws its own overlay geometry in GL and clears opaque, so its
+      // frame IS the export — nothing to composite over it.
+      const cv = sphere.captureFrame({ W: outW, H: outH });
+      if (cv) { outCtx.drawImage(cv, 0, 0, outW, outH); rendered = true; }
+      if (sphere.restoreFrame) sphere.restoreFrame();
+      if (!rendered) { say('The sphere view is not ready to export.', false); return; }
+    } else {
+      // --- 1) Field layer ---
+      const glCanvas = document.getElementById('schwarz-gl-canvas');
+      if (onGpu && glCanvas) {
         try {
           sState.gpu.setColormap(sState.grid.colormap);
-          sState.gpu.render(tmpView, {
+          sState.gpu.render(view, {
             maxIter:   sState.grid.maxIter,
             scaleMode: sState.grid.scaleMode,
             modK:      sState.grid.modK,
+            viewMode:  inZ ? 'z' : 'w',
+            pixelSize: { W: outW, H: outH },
           });
-          outCtx.drawImage(glCanvas, 0, 0, outW, outH);
+          outCtx.drawImage(glCanvas, 0, 0, outW, outH);   // before any yield — see (1)
+          rendered = true;
         } catch (e) {
-          console.warn('[export] high-res GPU render failed:', e);
-          outCtx.drawImage(glCanvas, 0, 0, outW, outH);
+          console.warn('[schwarz export] high-res GPU render failed:', e);
         }
-      } else {
-        outCtx.drawImage(glCanvas, 0, 0, outW, outH);
       }
-    } else {
-      // CPU / domain-coloring: the 2D canvas already has the fractal layer
-      // (or there isn't one). Nothing extra here.
-      outCtx.fillStyle = '#fafafa';
-      outCtx.fillRect(0, 0, outW, outH);
+      if (!rendered) {
+        // CPU / domain-colouring: paintAll() below blits the field it has. Fill the
+        // painter's own backdrop first so the PNG is not transparent where nothing
+        // was drawn (schwarz-paint's paintField uses the same colour).
+        outCtx.fillStyle = '#fafafa';
+        outCtx.fillRect(0, 0, outW, outH);
+      }
+
+      // --- 2) Overlay layer, re-drawn at size --- see (3)
+      const ov = document.createElement('canvas');
+      ov.width = outW; ov.height = outH;
+      const ovCtx = ov.getContext('2d');
+      if (ovCtx) {
+        ovCtx.setTransform(plan.mult, 0, 0, plan.mult, 0, 0);
+        setOverlayCapture(ovCtx);
+        try {
+          // Exactly the painters the live render picks for this mode
+          // (schwarz-render.js), so the export cannot drift from the screen.
+          if (inZ)            paintZView(onGpu);
+          else if (onGpu)   { paintBoundaryOnTop(); paintOrbit(); }
+          else                paintAll();
+        } catch (e) {
+          console.warn('[schwarz export] overlay re-render failed:', e);
+        } finally {
+          setOverlayCapture(null);
+        }
+        outCtx.drawImage(ov, 0, 0);
+      }
+
+      // --- 3) Restore the display-size render ---
+      if (onGpu && glCanvas) {
+        try {
+          sState.gpu.render(view, {
+            maxIter:   sState.grid.maxIter,
+            scaleMode: sState.grid.scaleMode,
+            modK:      sState.grid.modK,
+            viewMode:  inZ ? 'z' : 'w',
+          });
+        } catch (_) { /* the next interaction re-renders anyway */ }
+      }
     }
 
-    // --- 2) 2D overlay (boundary, orbits, markers, z-panel, etc.) ---
-    const ctx2d = getCtx();
-    if (ctx2d) {
-      const mainCanvas = getCanvas();
-      // Render the 2D layer at the target resolution. Easiest: scale the
-      // existing canvas with imageSmoothingEnabled = false. Boundary lines
-      // will be 1-px regardless of multiplier — acceptable for typical
-      // print/share use; pure-vector boundaries would need a re-render.
-      outCtx.imageSmoothingEnabled = false;
-      outCtx.drawImage(mainCanvas, 0, 0, outW, outH);
-    }
+    // --- 4) Download, and say what the file actually contains ---
+    const detail = planned.detail, clampNote = planned.clampNote;
+    say('Exporting ' + outW + '\u00d7' + outH + ' \u2014 ' + detail.detail + '.' + clampNote);
 
-    // --- 3) Restore GPU canvas to its display size ---
-    if (onGpu && mult > 1) {
-      try {
-        sState.gpu.render(view, {
-          maxIter:   sState.grid.maxIter,
-          scaleMode: sState.grid.scaleMode,
-          modK:      sState.grid.modK,
-        });
-      } catch (_) { /* ignore */ }
-    }
-
-    // --- 4) Download ---
     out.toBlob((blob) => {
-      if (!blob) return;
+      if (!blob) { say('Export failed: the browser declined a ' + outW + '\u00d7' + outH + ' PNG.', false); return; }
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      a.download = `qd-schwarz-${ts}-${outW}x${outH}.png`;
+      a.download = exportFileName({ view: sState.viewMode, outW, outH });
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 1000);
+      say('Saved ' + outW + '\u00d7' + outH + ' \u2014 ' + detail.detail + '.' + clampNote);
     }, 'image/png');
   }
 
@@ -314,7 +423,7 @@ const QD = _QD;
     return {
       _recomputeDomainColoring, _rebuildPreimageTreeIfActive,
       _refreshPreimageTreeStats, _computeLimitSet, _clearLimitSet,
-      _recomputeCriticalOrbits, _findCycles, _exportPng,
+      _recomputeCriticalOrbits, _findCycles, _exportPng, _refreshExportPreview,
       _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves,
     };
   };

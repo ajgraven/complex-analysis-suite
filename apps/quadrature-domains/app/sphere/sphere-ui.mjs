@@ -136,6 +136,37 @@ const QD = _QD;
     // ---- Handle exposed to the host ----------------------------------------
     return {
       isAvailable: () => true,
+      /**
+       * Render one frame at an explicit pixel size and hand back the GL canvas for
+       * the caller to composite IMMEDIATELY, then restore the display size.
+       *
+       * Synchronous, and that is the point: this context is created with
+       * `preserveDrawingBuffer: false`, so once the browser composites a frame the
+       * canvas reads back EMPTY (measured: 2858 distinct colours right after a
+       * render, 1 after a compositing pass). The caller must therefore drawImage
+       * before yielding — an `await` between here and the copy loses the picture.
+       * Returns null when the sphere has no renderer or no φ yet.
+       */
+      captureFrame(size) {
+        if (!state.renderer || !state.glCanvas || !state.phiSnapshot) return null;
+        const W = Math.max(1, Math.round((size && size.W) || 0));
+        const H = Math.max(1, Math.round((size && size.H) || 0));
+        if (!W || !H) return null;
+        try {
+          state.renderer.render(state.camera, { W, H });
+        } catch (e) {
+          return null;
+        }
+        return state.glCanvas;
+      },
+      /** Largest edge this sphere context will render, device px (0 ⇒ unknown). */
+      maxOutputSize() {
+        return state.renderer && state.renderer.maxOutputSize ? state.renderer.maxOutputSize() : 0;
+      },
+      /** The sphere's fractal texture size — the cap on surface detail, whatever the frame. */
+      fractalTexSize() { return state.params ? (state.params.texSize | 0) : 0; },
+      /** Restore the display-size frame after a captureFrame(). */
+      restoreFrame() { _requestRender(state); },
       activate() {
         _showGLLayer(glC, true);
         _requestRender(state);

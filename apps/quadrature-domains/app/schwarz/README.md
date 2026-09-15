@@ -96,6 +96,59 @@ HANDOFF #26 added 5 round-trip tests asserting σ(w) ≈ w on ∂Ω at
 3e-13 for the previously-broken unbounded-LQD polyPart case; those
 live in [`app/node-test.js`](../node-test.js).
 
+## Image export (high resolution)
+
+The **Export image** card writes the current view to a PNG at 1× / 2× / 4× / 8× the
+display size, for all three view modes. It is its own card, deliberately NOT
+`.view-2d`: the export covers the sphere as well, and while it lived inside the
+2D-gated Dynamics card its control was simply absent in sphere mode.
+
+Three properties it has to hold, each measured rather than assumed:
+
+* **Re-render, always.** Both GL contexts are created with
+  `preserveDrawingBuffer: false`, so a canvas that the browser has composited reads
+  back EMPTY — measured 1 distinct colour against 26 (Schwarz) and 1 against 2858
+  (sphere). The export therefore renders synchronously and copies before yielding,
+  at *every* multiplier. There is no re-render-free fast path; the one that used to
+  exist at 1× is what made "1× (display)" save a picture with no fractal in it.
+  Anything between the render and the `drawImage` — an `await`, a `toBlob`
+  callback — loses the frame.
+* **The view mode is part of the frame.** The z-disk view has its own camera
+  (`sState.zView`) and its own shader branch (`viewMode: 'z'`); passing neither
+  exports the plane at the plane's camera, which looks entirely plausible and is a
+  different picture from the one on screen.
+* **Overlays are re-drawn, not upscaled.** This is the difference between a
+  high-resolution export and a big screenshot. `worldToPixel` yields display-space
+  coordinates and no painter touches the transform, so ONE `setTransform(mult)` on
+  a capture context makes every existing painter draw vector-crisp at size with no
+  change to any of them — `getCtx()` returns that context while
+  `setOverlayCapture` is armed (and a `finally` always disarms it, since leaving it
+  set would send the live app's painting into a detached canvas). The painters
+  clear their whole canvas, so the overlay gets its own layer composited over the
+  field. Measured by blockiness — a nearest-neighbour N× upscale makes every pixel
+  equal its N×N block's top-left, scoring 1.000, where the re-render scores 0.548.
+  Note that line *width* cannot check this: a figure drawn 4× bigger has 4× wider
+  strokes either way.
+
+`schwarz-export-plan.mjs` is the DOM-free half — the size plan and the honest
+label — so the node gate can hold both. The size is capped at the renderer's own
+`maxOutputSize()` (`MAX_VIEWPORT_DIMS` / `MAX_RENDERBUFFER_SIZE`), because a
+request past it fails the render rather than shrinking it; the effective
+multiplier stays fractional so the exported frame keeps the aspect ratio on screen.
+
+What cannot be sharpened is said rather than implied: a CPU escape-time field
+exists only at the resolution slider's size and is upscaled into the export, and
+the sphere's fractal arrives as a `texSize`-square texture mapped onto geometry —
+its silhouette, boundary curve and markers do sharpen with the frame, its surface
+detail does not. The card's status line names the real numbers in both cases, and
+reports the cap when it binds.
+
+Tests: [`vitest/schwarz-export-plan.test.ts`](../../vitest/schwarz-export-plan.test.ts)
+(node — the plan, the labels, and the two source invariants the design rests on) and
+[`vitest/browser/schwarz-export.browser.test.ts`](../../vitest/browser/schwarz-export.browser.test.ts)
+(real GLSL — the readback window, `pixelSize`, the cap, the sphere, and the
+overlay-crispness measurement with its upscale control).
+
 ## Source-φ capture (P0.1a integration)
 
 Schwarz pulls its source φ from the Inverse tab via `QD.PrimarySolution`:
