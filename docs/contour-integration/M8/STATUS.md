@@ -42,7 +42,7 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
-| 2026-09-15 | **0.7** | (this commit) | Phase 0 gate: 553 files / 5721 tests green on a base merged to `origin/master`, browser suite 8/132, a11y roster no regressions; front row swapped to one-per-group (D6 for D4, the 0.6 open question); `pnpm a11y` and the app's browser suite both run with nothing set; Phase 0 PR opened |
+| 2026-09-15 | **0.7** | 45cb6d5 | Phase 0 gate: 553 files / 5721 tests green on a base merged to `origin/master`, browser suite 8/132, a11y roster no regressions; front row swapped to one-per-group (D6 for D4, the 0.6 open question); `pnpm a11y` and the app's browser suite both run with nothing set; Phase 0 PR opened |
 
 | 2026-09-15 | **0.6** | 1732f42 | the four-line standard on all 28 records — human `title` + `titleLatex`, `description.{contour, point, citations}` over an eight-book enum, `taxonomySection` reduced to the eight groups, `frontRow` on the eight classics; `Golden.label` names each variant derivation; loader invariant 5 + corpus-level front-row uniqueness; `test/records.test.ts` (7 tests); GALLERY.md §0 |
 
