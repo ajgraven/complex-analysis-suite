@@ -59,7 +59,7 @@ describe("L4 — the one lemma whose piece does not vanish", () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.certificate.level).toBe("⚠");
-    expect(r.certificate.method).toMatch(/order 2.*FALSE for order ≥ 2/s);
+    expect(r.certificate.method).toMatch(/order 2.*false for order \$\\ge 2\$/s);
   });
 
   it("refuses when no pole sits at the centre — there is nothing being indented", () => {

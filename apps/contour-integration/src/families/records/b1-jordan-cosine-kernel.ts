@@ -14,9 +14,22 @@ import type { Family } from "../schema.js";
 
 export const b1JordanCosineKernel: Family = {
   id: "jordan-cosine-kernel",
-  title: "∫_ℝ cos(ax)/(x²+b²) dx = (π/b) e^{−ab} — Jordan, and the sign of a as a hard branch",
-  taxonomySection: "3",
+  title: "∫_{−∞}^{∞} cos(ax) dx/(x²+b²) by Jordan's lemma",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{\\cos ax}{x^2+b^2}\\,dx$ by Jordan's lemma",
+  taxonomySection: "Fourier-type integrals and Jordan's lemma",
   tier: "B",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$ in the half-plane $a\\operatorname{Im}z\\ge0$; integrand $e^{iaz}/(z^2+b^2)$",
+    point:
+      "$\\cos ax$ is replaced by $e^{iax}$, whose modulus is bounded in one half-plane only; the sign of $a$ fixes the side of closure, and Jordan's lemma disposes of $\\Gamma_R$.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §5 (type (iii))", text: "" },
+      { book: "Brown–Churchill", where: "§80–81", text: "" },
+      { book: "Stein–Shakarchi", where: "Ch. 3", text: "" },
+    ],
+  },
+  frontRow: 3,
 
   targets: [
     {
@@ -107,7 +120,7 @@ export const b1JordanCosineKernel: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle (upper when a > 0, lower when a < 0)",
+        name: "the $R \\to \\infty$ semicircle (upper when $a > 0$, lower when $a < 0$)",
         geom: {
           kind: "arc",
           center: pt(0, 0),

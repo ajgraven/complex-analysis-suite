@@ -18,9 +18,20 @@ import type { Family } from "../schema.js";
 
 export const c2RemovableOneMinusCos: Family = {
   id: "removable-one-minus-cos",
-  title: "∫₀^∞ (1 − cos x)/x² dx = π/2 — removability detected, indentation not needed",
-  taxonomySection: "4",
+  title: "∫₀^{∞} (1 − cos x) dx/x² by a semicircle",
+  titleLatex: "$\\int_0^{\\infty}\\frac{1-\\cos x}{x^2}\\,dx$ by a semicircle",
+  taxonomySection: "Principal values and indented contours",
   tier: "C",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$; integrand $(1-e^{iz}+iz)/z^2$, which is entire",
+    point:
+      "Subtracting the principal part $i/z$ removes the singularity at $0$, so no indentation is needed; the subtracted term reappears on $\\Gamma_R$, where $zf(z)\\to i$ and $\\int_{\\Gamma_R}\\to-\\pi$.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 2 §1", text: "same integral, by the indented route" },
+      { book: "Brown–Churchill", where: "§82", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -107,7 +118,7 @@ export const c2RemovableOneMinusCos: Family = {
       },
       {
         id: "bigarc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: Math.PI },
         // `vanish` with a KNOWN LIMIT rather than zero — DESIGN §4 Pass 5's `bᵢ = 0, or a known
         // limit`. The role says the piece touches no unknown, not that it contributes nothing.
@@ -184,6 +195,7 @@ export const c2RemovableOneMinusCos: Family = {
     },
     {
       params: { route: "indented" },
+      label: "the indented route",
       value: "pi/2",
       numeric: 1.5707963267948966,
       verifiedTo: 1e-6,

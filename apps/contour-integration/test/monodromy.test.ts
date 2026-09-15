@@ -54,10 +54,10 @@ describe("the multiplicative factor", () => {
     expect(m?.kind).toBe("multiplicative");
     if (m?.kind !== "multiplicative") return;
     expect(m.jump.equals(q(1n, 2n))).toBe(true);
-    expect(m.literal).toBe("e^(2πi·1/2)");
+    expect(m.literal).toBe("e^{2\\pi i \\cdot \\frac{1}{2}}");
     // `e^{iπ} = −1`, and the fold is `Exponent.asAlgebraicFactor`'s rather than a special case here.
     expect(m.value?.equals(SqrtExt.ONE.neg())).toBe(true);
-    expect(m.detail).toContain("−1");
+    expect(m.detail).toContain("-1");
   });
 
   it("gives i at a quarter and −i at three quarters, by the same rule", () => {
@@ -76,8 +76,8 @@ describe("the multiplicative factor", () => {
     const m = crossingMonodromy(keyhole(q(1n, 3n)), "Γ");
     if (m?.kind !== "multiplicative") throw new Error("expected a multiplicative crossing");
     expect(m.value).toBeNull();
-    expect(m.literal).toBe("e^(2πi·1/3)");
-    expect((m.certificate.provenance ?? []).some((x) => x.text.includes("4J ∉ ℤ"))).toBe(true);
+    expect(m.literal).toBe("e^{2\\pi i \\cdot \\frac{1}{3}}");
+    expect((m.certificate.provenance ?? []).some((x) => x.text.includes("4J \\notin \\mathbb{Z}$"))).toBe(true);
   });
 });
 
@@ -87,10 +87,10 @@ describe("BOTH forms, which is research 06 §3.4's point and not a flourish", ()
     // textbook writes `e^{2πiα} = e^{2πi·3/10}`, the reduced one. Same number, because `e^{−2πi} = 1`.
     const m = crossingMonodromy(keyhole(q(-7n, 10n)), "Γ");
     if (m?.kind !== "multiplicative") throw new Error("expected a multiplicative crossing");
-    expect(m.literal).toBe("e^(2πi·−7/10)");
-    expect(m.reduced).toBe("e^(2πi·3/10)");
+    expect(m.literal).toBe("e^{2\\pi i \\cdot -\\frac{7}{10}}");
+    expect(m.reduced).toBe("e^{2\\pi i \\cdot \\frac{3}{10}}");
     const lines = (m.certificate.provenance ?? []).map((x) => x.text);
-    expect(lines.some((t) => t.includes("e^(−2πi) = 1"))).toBe(true);
+    expect(lines.some((t) => t.includes("e^{-2\\pi i} = 1"))).toBe(true);
     expect(lines.some((t) => t.includes("the literal form is the one the integrand's exponent gives"))).toBe(true);
   });
 
@@ -105,7 +105,7 @@ describe("BOTH forms, which is research 06 §3.4's point and not a flourish", ()
   it("reduces a negative jump into [0,1) and not into (−1,0]", () => {
     const m = crossingMonodromy(keyhole(q(-1n, 3n)), "Γ");
     if (m?.kind !== "multiplicative") throw new Error("expected a multiplicative crossing");
-    expect(m.reduced).toBe("e^(2πi·2/3)");
+    expect(m.reduced).toBe("e^{2\\pi i \\cdot \\frac{2}{3}}");
   });
 });
 
@@ -113,7 +113,7 @@ describe("a log does not multiply", () => {
   it("reports an ADDITIVE crossing, with no factor to print", () => {
     const m = crossingMonodromy(logged(), "Γ");
     expect(m?.kind).toBe("additive");
-    expect(m?.detail).toContain("ADDS 2πi");
+    expect(m?.detail).toContain("adds $2\\pi i$");
     // The shapes are different on purpose: writing this as `exp(2πi·something)` is the type error
     // D4's own record warns about, and a `value: null` on a multiplicative result would let a
     // caller print "×1" for it.
@@ -164,8 +164,8 @@ describe("the dogbone's arc takes ONE side's exponent", () => {
     const all = allCrossingMonodromy(two);
     expect(all.map((m) => m.cut)).toEqual(["Γ1", "Γ2"]);
     expect(all.map((m) => (m.kind === "multiplicative" ? m.literal : "add"))).toEqual([
-      "e^(2πi·1/2)",
-      "e^(2πi·1/4)",
+      "e^{2\\pi i \\cdot \\frac{1}{2}}",
+      "e^{2\\pi i \\cdot \\frac{1}{4}}",
     ]);
   });
 });

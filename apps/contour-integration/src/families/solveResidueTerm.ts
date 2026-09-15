@@ -350,23 +350,24 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
         certificates: [
           exact(
             `${targetId} = −(Σ Res at the merged poles)/${forced} = ${formatRatPi(value)}`,
-            "Pass 5 with the unknown INSIDE the residue sum, over ℚ(i)(π): every side of the contour " +
-              "vanishes, so 0 = 2πi[w·T + Σ merged] and the 2πi divides out",
+            "the unknown sits inside the residue sum, over $\\mathbb{Q}(i)(\\pi)$: every side of the contour " +
+              "vanishes, so $0 = 2\\pi i[wT + \\sum \\text{merged}]$ and the $2\\pi i$ divides out",
             {
               provenance: [
                 {
                   ok: true,
-                  text: `the weight ${forced} is DERIVED from the target's own declared range and checked against the record, not read out of it`,
+                  text: `the weight $${forced}$ is derived from the target's own declared range and checked, not read out of it`,
                 },
                 {
                   ok: true,
-                  text: "the kernel's Laurent expansion at an integer is EVEN, so a merged residue is a rational multiple of an even power of π — this ring, and not the exponential basis G2 solves in",
+                  text:
+                    "the kernel is odd about every integer, so $uK(n+u)$ is even in $u$ and the coefficient of $u^{2k-1}$ is a rational multiple of $\\pi^{2k}$; the merged residue is therefore a rational multiple of an even power of $\\pi$ — this ring, and not the exponential basis the hyperbolic families solve in",
                 },
                 ...(forced === 2
                   ? [
                       {
                         ok: true,
-                        text: "the cofactor is even, decided exactly over ℚ(i), which is what makes Σ_{n≠0} = 2·Σ_{n≥1}; f(0) is not asked about, because n = 0 is excluded from the target's own terms",
+                        text: "the cofactor is even, decided exactly over $\\mathbb{Q}(i)$, which is what makes $\\sum_{n \\ne 0} = 2\\sum_{n \\ge 1}$; $f(0)$ is not asked about, because n = 0 is excluded from the target's own terms",
                       },
                     ]
                   : []),
@@ -414,19 +415,19 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
         ...certificates,
         exact(
           `${targetId} = −(Σ_j Res(K·f, z_j))/${forced}`,
-          "Pass 5 with the unknown INSIDE the residue sum: every side of the contour vanishes, so " +
-            "0 = 2πi[w·T + Σ_j Res] and the 2πi divides out, leaving the kernel's own π",
+          "the unknown sits inside the residue sum: every side of the contour vanishes, so " +
+            "$0 = 2\\pi i[wT + \\sum_j \\mathrm{Res}]$ and the $2\\pi i$ divides out, leaving the kernel's own $\\pi$",
           {
             provenance: [
               {
                 ok: true,
-                text: `the weight ${forced} is DERIVED from the target's own declared range and checked against the record, not read out of it`,
+                text: `the weight $${forced}$ is derived from the target's own declared range and checked, not read out of it`,
               },
               ...(forced === 2
                 ? [
                     {
                       ok: true,
-                      text: "the cofactor is even and f(0) = 0, both decided exactly over ℚ(i), which is what makes Σ_{n∈ℤ} = 2·Σ_{n≥1}",
+                      text: "the cofactor is even and $f(0) = 0$, both decided exactly over $\\mathbb{Q}(i)$, which is what makes $\\sum_{n \\in \\mathbb{Z}} = 2\\sum_{n \\ge 1}$",
                     },
                   ]
                 : []),

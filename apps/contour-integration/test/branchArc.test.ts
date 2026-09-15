@@ -34,18 +34,18 @@ describe("the outer circle spends α < 1", () => {
     const b = outer(q(1), q(1000));
     expect(b.asymptotics).toBe("bounded");
     expect(b.certificate.level).toBe("⚠");
-    expect(b.certificate.claim).toMatch(/does NOT vanish/);
+    expect(b.certificate.claim).toMatch(/does not vanish/);
   });
 
   it("diverges past α = 1", () => {
     const b = outer(q(3, 2), q(1000));
     expect(b.asymptotics).toBe("diverges");
-    expect(b.certificate.claim).toMatch(/DIVERGES/);
+    expect(b.certificate.claim).toMatch(/diverges/);
   });
 
   it("shrinks as R grows, so the limit is watched and not asserted", () => {
     const values = [q(10), q(100), q(1000), q(10000)].map((R) => {
-      const m = /≤ ([0-9.e+-]+)/.exec(outer(q(3, 10), R).certificate.claim);
+      const m = /\\le ([0-9.e+-]+)/.exec(outer(q(3, 10), R).certificate.claim);
       return m === null ? NaN : Number(m[1]);
     });
     for (let k = 1; k < values.length; k++) {
@@ -78,7 +78,7 @@ describe("the inner circle spends α > 0", () => {
     // D1's golden note: "the inner circle is still 1.1e-2 at eps=1e-9 — it vanishes only like
     // eps^alpha = eps^0.3, which is a good live demonstration of a slow limit."
     const at = (eps: Frac): number => {
-      const m = /≤ ([0-9.e+-]+)/.exec(inner(q(3, 10), eps).certificate.claim);
+      const m = /\\le ([0-9.e+-]+)/.exec(inner(q(3, 10), eps).certificate.claim);
       return m === null ? NaN : Number(m[1]);
     };
     const small = at(q(1, 1000000000));
@@ -120,9 +120,9 @@ describe("honesty about what is exact here", () => {
     const b = outer(q(3, 10), q(1000));
     expect(b.certificate.level).toBe("≤");
     const trail = b.certificate.provenance;
-    expect(trail.some((s) => s.ok && /exact ℚ coefficient bounds/.test(s.text))).toBe(true);
+    expect(trail.some((s) => s.ok && /exact \$\\mathbb\{Q\}\$ coefficient bounds/.test(s.text))).toBe(true);
     expect(trail.some((s) => !s.ok && /irrational power/.test(s.text))).toBe(true);
-    expect(trail.some((s) => s.ok && /its SIGN is decided/.test(s.text))).toBe(true);
+    expect(trail.some((s) => s.ok && /its sign is decided/.test(s.text))).toBe(true);
   });
 
   it("refuses a radius inside the denominator's root bound rather than reporting a wrong number", () => {

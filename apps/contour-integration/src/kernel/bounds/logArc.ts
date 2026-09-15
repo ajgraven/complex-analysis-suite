@@ -112,32 +112,32 @@ export function logArcBound(
     Math.pow(Math.abs(Math.log(rhoValue)) + a, power) *
     maxModulus.toNumber();
 
-  const at = `at ρ = ${rhoValue.toExponential(3)}`;
-  const claim = `|∫ over the arc| ≤ ${value.toExponential(3)} ${at}`;
-  const heading = opts.limit === "inf" ? "R → ∞" : "ε → 0⁺";
+  const at = `at $\\rho = ${rhoValue.toExponential(3)}$`;
+  const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
+  const heading = opts.limit === "inf" ? "$R \\to \\infty$" : "$\\varepsilon \\to 0^+$";
   const exponentText = `${rationalExponent.n}`;
   const because = vanishes
-    ? `and → 0 as ${heading}, because the bound is O(ρ^(${exponentText})·(ln ρ)^${power}) and a logarithm is weaker than every power`
+    ? `and $\\to 0$ as ${heading}, because the bound is $O(\\rho^{${exponentText}}(\\ln \\rho)^{${power}})$ and a logarithm is weaker than every power`
     : asymptotics === "bounded"
-      ? "but it does NOT vanish: the bound is O(1), so this lemma establishes nothing in the limit"
-      : `and it DIVERGES as ${heading}: the bound is O(ρ^(${exponentText})·(ln ρ)^${power})`;
+      ? "but it does not vanish: the bound is $O(1)$, so this lemma establishes nothing in the limit"
+      : `and it diverges as ${heading}: the bound is $O(\\rho^{${exponentText}}(\\ln \\rho)^{${power}})$`;
 
   const provenance = [
     {
       ok: true,
-      text: "|R| bounded above by exact ℚ coefficient bounds, numerator and denominator separately",
+      text: "$|R|$ bounded above by exact $\\mathbb{Q}$ coefficient bounds, numerator and denominator separately",
     },
     {
       ok: true,
-      text: `|log z| ≤ |ln ρ| + ${a.toFixed(6)} on the circle, from the DECLARED determination rather than an assumed 2π`,
+      text: `$|\\log z| \\le |\\ln \\rho| + ${a.toFixed(6)}$ on the circle, from the declared determination rather than an assumed $2\\pi$`,
     },
     {
       ok: true,
-      text: `the exponent ${exponentText} = 1 + (${opts.limit === "inf" ? "deg P − deg Q" : "ord₀P − ord₀Q"}) is an exact integer, so its SIGN is decided; the log cannot change it`,
+      text: `the exponent $${exponentText} = 1 + (${opts.limit === "inf" ? "deg P − deg Q" : "ord₀P − ord₀Q"})$ is an exact integer, so its sign is decided; the log cannot change it`,
     },
     {
       ok: false,
-      text: "ln ρ is a float, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone",
+      text: "$\\ln \\rho$ is a float, so the bound's value is a float — the limit depends only on the sign of the exponent",
     },
   ];
 
@@ -147,13 +147,13 @@ export function logArcBound(
     exponent,
     degreeGap,
     certificate: vanishes
-      ? bound("≤", `${claim}, ${because}`, `ML bound for R·log^${power}, exact in ℚ except for ln ρ`, {
+      ? bound("≤", `${claim}, ${because}`, `the ML-estimate for $R\\log^{${power}}$, exact in $\\mathbb{Q}$ except for $\\ln \\rho$`, {
           provenance,
         })
-      : refuse(`${claim}, ${because}`, `ML bound for R·log^${power} — the bound holds, the lemma does not discharge`, {
+      : refuse(`${claim}, ${because}`, `the ML-estimate for $R\\log^{${power}}$ — the bound holds, the lemma does not discharge`, {
           provenance: [
             { ok: true, text: `the bound itself is valid ${at}` },
-            { ok: false, text: `but the exponent is ${exponentText}, so it does not tend to zero in this limit` },
+            { ok: false, text: `but the exponent is $${exponentText}$, so it does not tend to zero in this limit` },
           ],
         }),
   };

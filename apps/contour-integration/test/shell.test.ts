@@ -11,6 +11,7 @@
 // What that buys is a test over the app as a USER reaches it: set the box, fire `change`, click the
 // template, read the rail. No seam between what is asserted and what is shown.
 import { describe, expect, it } from "vitest";
+import { constraintLabel, roleLabel } from "../src/engine/vocabulary.js";
 import { mountApp, type ShellHandle } from "../src/shell/app.js";
 import { offeredCorpus, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
@@ -115,7 +116,7 @@ describe("the argument window", () => {
     // Principal: the cut swings onto ℝ₋, straight through the R → ∞ circle, which declares no side.
     const rail = visibleText(root, ".rail");
     expect(rail).toContain("crosses the cut");
-    expect(rail).toContain("without declaring which side it runs on");
+    expect(rail).toContain("with no side assigned");
     expect(rail).toContain("⚠ Refused");
     // **AND the factor is still declared**, which is the half a mutation sweep says this test needs.
     // The pre-fix app ALSO refused here — its orphaned cut still crossed the circle — so a refusal
@@ -563,7 +564,7 @@ describe("the page's structure", () => {
     fire(records, "change");
     expect(ink()).toContain("indented-sinc");
     expect(app.currentState().record).toBe("indented-sinc");
-    // C1's contour winds about NO pole — its whole answer comes from the indentation's iα·Res — so
+    // C1's contour winds about NO pole — its whole answer comes from the indentation's i\\alpha\\operatorname{Res} — so
     // the description has to say so rather than implying a residue sum carried it.
     expect(ink()).toContain("winds about no pole");
   });
@@ -665,7 +666,13 @@ describe("the contrast grid", () => {
     const { root } = mount();
     const panel = openGrid(root);
     const answers = [...panel.querySelectorAll("thead .cellAnswer")].map((e) => e.textContent);
-    expect(answers).toEqual(["π", "π/e", "⚠ does not close (KILL)", "π/e", "π/2"]);
+    expect(answers).toEqual([
+      "π",
+      "π/e",
+      `⚠ does not close (${constraintLabel("KILL")})`,
+      "π/e",
+      "π/2",
+    ]);
   });
 
   it("marks the declared row as changed, and a rewording as merely reworded", () => {
@@ -722,5 +729,36 @@ describe("the contrast grid", () => {
     expect(root.querySelectorAll("h1")).toHaveLength(1);
     // The panel's own heading is a level 2, under the page's one level 1.
     expect(q(root, ".contrastPanel h2").textContent).toBe("One step at a time");
+  });
+});
+
+describe("the rail speaks the reader's vocabulary, not the engine's ids", () => {
+  it("tags a contour piece with its role's NAME", () => {
+    const { root } = mount();
+    // The sandbox opens on the circle template, whose single closed piece carries the `residue`
+    // role — measured, not assumed: the first draft of this test guessed `free` and was wrong.
+    const tags = [...root.querySelectorAll(".pieces li .tag")].map((t) => t.textContent?.trim());
+    expect(tags.length).toBeGreaterThan(0);
+    expect(tags).toContain(roleLabel("residue"));
+    expect(tags).not.toContain("residue");
+  });
+
+  it("tags a record's pieces with their roles' names too", () => {
+    const { root, app } = mount();
+    const state = app.currentState();
+    app.applyState({ ...state, mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 });
+    const tags = [...root.querySelectorAll(".pieces li .tag")].map((t) => t.textContent?.trim());
+    // B1's real segment is the target and its arc vanishes: two roles, both named.
+    expect(tags).toContain(roleLabel("target"));
+    expect(tags).toContain(roleLabel("vanish"));
+    expect(tags).not.toContain("vanish");
+  });
+
+  it("heads each ledger row with the group's label", () => {
+    const { root } = mount();
+    const groups = [...root.querySelectorAll(".ledgerRow .constraint")].map((c) => c.textContent?.trim());
+    expect(groups.length).toBeGreaterThan(0);
+    expect(groups).toContain(constraintLabel("LEGALITY"));
+    for (const id of ["LEGALITY", "CATCH", "KILL", "COVER"] as const) expect(groups).not.toContain(id);
   });
 });

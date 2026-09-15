@@ -218,12 +218,12 @@ export function kernelResidues(
     terms,
     certificate: exact(
       `Res(K·f, n) = ${kernel.kind === "cot" ? "f(n)" : "(−1)ⁿ·f(n)"} at each of the ${terms.length} integers with |n| ≤ ${bound}`,
-      `π ${kernel.kind}(πz) has a simple pole at every integer with residue ${kernel.kind === "cot" ? "1" : "(−1)ⁿ"}, and f is regular there, so the residue of the product is the product of the two`,
+      `$\\pi\\${kernel.kind}(\\pi z)$ has a simple pole at every integer with residue $${kernel.kind === "cot" ? "1" : "(-1)^n"}$, and $f$ is regular there, so the residue of the product is the product of the two`,
       {
         provenance: [
           {
             ok: true,
-            text: "the kernel's residue is a theorem and is asserted; what is COMPUTED is f(n), exactly, over ℚ(i)",
+            text: "the kernel's residue is a theorem and is asserted; what is computed is $f(n)$, exactly, over $\\mathbb{Q}(i)$",
           },
           {
             ok: true,

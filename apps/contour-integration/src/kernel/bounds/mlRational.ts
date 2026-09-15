@@ -164,8 +164,8 @@ export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac):
       exponent,
       degreeGap,
       certificate: refuse(
-        `the arc bound at R = ${R.toNumber()}`,
-        "the reverse triangle inequality gives no positive lower bound on |Q| there, so a pole may lie on or outside the arc — take a larger R",
+        `the arc bound at $R = ${R.toNumber()}$`,
+        "the reverse triangle inequality gives no positive lower bound on $|Q|$ there, so a pole may lie on or outside the arc — take a larger $R$",
       ),
     };
   }
@@ -174,13 +174,13 @@ export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac):
   const maxModulus = numHigh.div(denLow); // ≥ max |f| on |z| = R
   const value = piMultiple.mul(piUpper()).mul(R).mul(maxModulus);
 
-  const claim = `|∫ over the arc| ≤ ${value.toNumber().toExponential(3)} at R = ${R.toNumber()}`;
+  const claim = `the arc: $\\left|\\int f\\,dz\\right| \\le ${value.toNumber().toExponential(3)}$ at $R = ${R.toNumber()}$`;
   const because =
     asymptotics === "vanishes"
-      ? `and → 0 as R → ∞, because deg Q − deg P = ${degreeGap} ≥ 2 makes the bound O(R^${exponent})`
+      ? `and $\\to 0$ as $R \\to \\infty$, since $\\deg Q - \\deg P = ${degreeGap} \\ge 2$ makes the bound $O(R^{${exponent}})$`
       : asymptotics === "bounded"
-        ? `but it does NOT vanish: deg Q − deg P = ${degreeGap}, so the bound is O(1) and this lemma establishes nothing in the limit`
-        : `and it DIVERGES as R → ∞: deg Q − deg P = ${degreeGap}, so the bound is O(R^${exponent})`;
+        ? `but it does not vanish: $\\deg Q - \\deg P = ${degreeGap}$, so the bound is $O(1)$ and this lemma establishes nothing in the limit`
+        : `and it diverges as $R \\to \\infty$: $\\deg Q - \\deg P = ${degreeGap}$, so the bound is $O(R^{${exponent}})$`;
 
   return {
     R,
@@ -190,16 +190,16 @@ export function mlArcBound(num: QiPoly, den: QiPoly, R: Frac, piMultiple: Frac):
     degreeGap,
     certificate:
       asymptotics === "vanishes"
-        ? bound("≤", `${claim}, ${because}`, "exact ℚ coefficient bound; no floating point anywhere", {
+        ? bound("≤", `${claim}, ${because}`, "an exact $\\mathbb{Q}$ coefficient bound; no floating point anywhere", {
             provenance: [
-              { ok: true, text: "|P| ≤ Σ|aₖ|Rᵏ by the triangle inequality, with each |aₖ| bounded above in ℚ" },
-              { ok: true, text: `|Q| ≥ ${denLow.toNumber().toExponential(3)} > 0, which also certifies every pole lies strictly inside |z| = R` },
-              { ok: true, text: "π bounded above by a certified rational (Machin + alternating series)" },
+              { ok: true, text: "$|P| \\le \\sum_k |a_k| R^k$ by the triangle inequality, with each $|a_k|$ bounded above in $\\mathbb{Q}$" },
+              { ok: true, text: `$|Q| \\ge ${denLow.toNumber().toExponential(3)} > 0$, which also certifies that every pole lies strictly inside $|z| = R$` },
+              { ok: true, text: "$\\pi$ bounded above by a certified rational (Machin's formula and an alternating series)" },
             ],
           })
-        : refuse(`${claim}, ${because}`, "exact ℚ coefficient bound — the bound holds, the lemma does not discharge", {
+        : refuse(`${claim}, ${because}`, "an exact $\\mathbb{Q}$ coefficient bound — the bound holds, the lemma does not discharge", {
             provenance: [
-              { ok: true, text: `the bound itself is valid at R = ${R.toNumber()}` },
+              { ok: true, text: `the bound itself is valid at $R = ${R.toNumber()}$` },
               { ok: false, text: "but it does not tend to zero, so the lemma does not discharge" },
             ],
           }),
@@ -240,7 +240,7 @@ export function jordanArcBound(
       degreeGap,
       certificate: refuse(
         "Jordan's lemma",
-        "it needs a non-zero frequency; with a = 0 the exponential is 1 and the plain ML bound applies instead",
+        "it needs a non-zero frequency; at $a = 0$ the exponential is $1$ and the ML-estimate applies instead",
       ),
     };
   }
@@ -252,11 +252,11 @@ export function jordanArcBound(
       exponent: Number.POSITIVE_INFINITY,
       degreeGap,
       certificate: refuse(
-        `the ${half} semicircle DIVERGES for a = ${a.toNumber()}`,
-        `|e^{iaz}| = e^{−a·Im z} is bounded only where a·Im z ≥ 0, so on the ${half} half-plane it grows like e^{${Math.abs(a.toNumber())}R} — the arc cannot be closed this way, and the failing constraint is KILL`,
+        `the ${half} semicircle diverges for $a = ${a.toNumber()}$`,
+        `$|e^{iaz}| = e^{-a\\,\\operatorname{Im} z}$ is bounded only where $a\\,\\operatorname{Im} z \\ge 0$, so on the ${half} half-plane it grows like $e^{|a|R}$ — the arc cannot be closed this way`,
         {
           provenance: [
-            { ok: false, text: `a = ${a.toNumber()} requires the ${a.n > 0n ? "upper" : "lower"} half-plane` },
+            { ok: false, text: `$a = ${a.toNumber()}$ requires the ${a.n > 0n ? "upper" : "lower"} half-plane` },
             { ok: true, text: "suggested repair: close the contour through the other half-plane" },
           ],
         },
@@ -272,8 +272,8 @@ export function jordanArcBound(
       exponent: -degreeGap,
       degreeGap,
       certificate: refuse(
-        `Jordan's bound at R = ${R.toNumber()}`,
-        "no positive lower bound on |Q| there — take a larger R",
+        `Jordan's bound at $R = ${R.toNumber()}$`,
+        "no positive lower bound on $|Q|$ there — take a larger $R$",
       ),
     };
   }
@@ -303,19 +303,19 @@ export function jordanArcBound(
       asymptotics === "vanishes"
         ? bound(
             "≤",
-            `|∫ over the ${half} semicircle| ≤ (π/|a|)·max|g| ≤ ${value.toNumber().toExponential(3)} at R = ${R.toNumber()}, and → 0 as R → ∞ since max|g| = O(R^${-degreeGap})`,
-            "Jordan's lemma, with max|g| from the exact ℚ coefficient bound",
+            `the ${half} semicircle: $\\left|\\int g(z)e^{iaz}\\,dz\\right| \\le (\\pi/|a|)\\max|g| \\le ${value.toNumber().toExponential(3)}$ at $R = ${R.toNumber()}$, and $\\to 0$ as $R \\to \\infty$ since $\\max|g| = O(R^{${-degreeGap}})$`,
+            "Jordan's lemma, with $\\max|g|$ from the exact $\\mathbb{Q}$ coefficient bound",
             {
               provenance: [
                 { ok: true, text: damped.certificate.claim },
                 { ok: true, text: `established by: ${damped.certificate.method}` },
-                { ok: true, text: `the bound is independent of R, beating plain ML by the factor |a|R` },
-                { ok: true, text: `deg Q − deg P = ${degreeGap} ≥ 1, so max|g| → 0` },
+                { ok: true, text: "the bound is independent of $R$" },
+                { ok: true, text: `$\\deg Q - \\deg P = ${degreeGap} \\ge 1$, so $\\max|g| \\to 0$` },
               ],
             },
           )
         : refuse(
-            `Jordan's bound does NOT vanish: max|g| stays O(1) since deg Q − deg P = ${degreeGap}`,
+            `Jordan's bound does not vanish: $\\max|g|$ stays $O(1)$ since $\\deg Q - \\deg P = ${degreeGap}$`,
             "Jordan's lemma — the bound holds, the lemma does not discharge",
           ),
   };

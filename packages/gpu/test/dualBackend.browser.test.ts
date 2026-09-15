@@ -51,8 +51,11 @@ describe("@cas/gpu dual-backend: real GLSL ≈ JS across the corpus (browser Web
   // / `tanh` (and `asinh` / `sech` / …) are classified alongside `sin` / `exp` — not left on the
   // arithmetic-tight 2e-6 bound they can't meet in software float32 (they're derived from `exp`, ~3e-4 on
   // SwiftShader). Fixes a gap: `\bsin\b` never matched `sinh` (the trailing `h` blocks the word boundary).
+  // `factorial` is listed by NAME because the pattern classifies by SPELLING: `z!` is `Γ(z+1)`, as
+  // transcendental as `gamma` is, and nothing in the word says so — it would otherwise have been
+  // held to the arithmetic bound the Lanczos float32 series cannot meet.
   const isTranscendental = (src: string) =>
-    /\b(exp|log|lambertw|gamma|zeta|a?(sin|cos|tan|sec|csc|cot)h?)\b/.test(src);
+    /\b(exp|log|lambertw|gamma|factorial|zeta|a?(sin|cos|tan|sec|csc|cot)h?)\b/.test(src);
   it.each(DUAL_BACKEND_CORPUS)(
     "$name: GLSL matches the JS backend (renderer-appropriate ε)",
     (c) => {

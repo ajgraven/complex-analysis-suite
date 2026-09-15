@@ -71,9 +71,9 @@ describe("the ML bound about a branch point", () => {
     expect(r.asymptotics).toBe("vanishes");
     expect(r.exponent).toBeCloseTo(0.5, 15);
     expect(r.certificate.level).toBe("≤");
-    expect(r.certificate.claim).toMatch(/O\(η\^\(1\/2\)\)/);
+    expect(r.certificate.claim).toMatch(/O\(\\eta\^\{1\/2\}\)/);
     expect(r.certificate.provenance.map((s) => s.text).join(" | ")).toMatch(
-      /α_b > −1 is the integrability of the endpoint singularity/,
+      /\\alpha_b > -1\$ is the integrability of the endpoint singularity/,
     );
   });
 
@@ -93,7 +93,7 @@ describe("the ML bound about a branch point", () => {
       ] as [bigint, bigint][]) {
         const eta = q(n, d);
         const r = dogboneArcBound(d6Cap(aSquared, eta));
-        const claimed = Number(/≤ ([0-9.e+-]+)/.exec(r.certificate.claim)?.[1] ?? "NaN");
+        const claimed = Number(/\\le ([0-9.e+-]+)/.exec(r.certificate.claim)?.[1] ?? "NaN");
         const actual = capIntegral(a, eta.toNumber());
         expect({ a, eta: eta.toNumber(), holds: actual <= claimed }).toEqual({
           a,
@@ -106,7 +106,7 @@ describe("the ML bound about a branch point", () => {
 
   it("shrinks like √η, which is the whole claim about the limit", () => {
     const at = (n: bigint, d: bigint): number =>
-      Number(/≤ ([0-9.e+-]+)/.exec(dogboneArcBound(d6Cap(q(1n), q(n, d))).certificate.claim)?.[1] ?? "NaN");
+      Number(/\\le ([0-9.e+-]+)/.exec(dogboneArcBound(d6Cap(q(1n), q(n, d))).certificate.claim)?.[1] ?? "NaN");
     const coarse = at(1n, 100n);
     const fine = at(1n, 10000n);
     // A hundredfold smaller η is a tenfold smaller bound.
@@ -119,13 +119,13 @@ describe("the ML bound about a branch point", () => {
     expect(r.asymptotics).toBe("bounded");
     expect(r.exponent).toBe(0);
     expect(r.certificate.level).toBe("⚠");
-    expect(r.certificate.claim).toMatch(/does NOT vanish/);
+    expect(r.certificate.claim).toMatch(/does not vanish/);
   });
 
   it("diverges below α = −1, and says so", () => {
     const r = dogboneArcBound({ ...d6Cap(q(1n), q(3n, 25n)), alpha: q(-3n, 2n) });
     expect(r.asymptotics).toBe("diverges");
-    expect(r.certificate.claim).toMatch(/DIVERGES/);
+    expect(r.certificate.claim).toMatch(/diverges/);
   });
 
   it("refuses a cap that reaches the other branch point", () => {

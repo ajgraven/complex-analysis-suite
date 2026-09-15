@@ -67,3 +67,45 @@ describe("Γ — language wiring", () => {
     expect(() => differentiate(parse("gamma(z)"), "z")).toThrow(/not differentiable/);
   });
 });
+
+/**
+ * `z!` — a NAME for Γ(z+1), added for the Contour Integration gallery (M8 step 0.4).
+ *
+ * Cauchy's formula for the derivatives is written with `n!`, and `2\pi/\Gamma(n+1)` is correct and
+ * no longer the formula a reader knows — which is the whole reason the name exists rather than the
+ * records writing `gamma(n+1)`.
+ */
+describe("factorial", () => {
+  const ZERO_C: Complex = [0, 0];
+  const at = (src: string, z: Complex): Complex => makeComplexFn(parse(src))(z, ZERO_C);
+
+  it("is Γ(z+1), so the integers come out exactly", () => {
+    for (const [n, want] of [
+      [0, 1],
+      [1, 1],
+      [4, 24],
+      [7, 5040],
+    ] as const) {
+      const v = at("factorial(z)", [n, 0]);
+      expect(v[0]).toBeCloseTo(want, 6);
+      expect(v[1]).toBeCloseTo(0, 6);
+    }
+    // And off the integers it is the gamma function it is defined as — `(1/2)! = √π/2`.
+    expect(at("factorial(z)", [0.5, 0])[0]).toBeCloseTo(Math.sqrt(Math.PI) / 2, 10);
+    const z: Complex = [0.7, 0.35];
+    const a = at("factorial(z)", z);
+    const b = at("gamma(z + 1)", z);
+    expect(a[0]).toBeCloseTo(b[0], 10);
+    expect(a[1]).toBeCloseTo(b[1], 10);
+  });
+
+  it("compiles to the GLSL cfactorial builtin", () => {
+    expect(compileF(parse("factorial(z)"))).toContain("cfactorial(z)");
+  });
+
+  it("typesets as `n!`, bracketing its argument only when it needs to", () => {
+    expect(toLatex(parse("factorial(n)"))).toBe("n!");
+    expect(toLatex(parse("factorial(n + 1)"))).toBe("\\left(n + 1\\right)!");
+    expect(toLatex(parse("2*pi/factorial(n)"))).toBe("\\frac{2 \\cdot \\pi}{n!}");
+  });
+});

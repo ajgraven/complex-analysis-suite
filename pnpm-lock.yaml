@@ -310,6 +310,9 @@ importers:
       '@cas/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
     devDependencies:
       '@eslint/js':
         specifier: ^9.17.0

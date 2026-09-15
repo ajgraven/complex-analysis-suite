@@ -9,9 +9,21 @@ import type { Family } from "../schema.js";
 
 export const a5SemicircleOrder2: Family = {
   id: "semicircle-order2",
-  title: "∫_ℝ dx/(1+x²)² = π/2 — the large semicircle and an order-2 pole",
-  taxonomySection: "2",
+  title: "∫_{−∞}^{∞} dx/(1+x²)² by a semicircle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{dx}{(1+x^2)^2}$ by a semicircle",
+  taxonomySection: "Rational functions on ℝ",
   tier: "A",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$, the upper semicircle $|z|=R$",
+    point:
+      "A double pole at $i$: the residue needs the derivative formula (or the Laurent series); the simple-pole quotient $P/Q'$ is $0/0$ there.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §5.3", text: "type (ii)" },
+      { book: "Brown–Churchill", where: "§79", text: "" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -90,7 +102,7 @@ export const a5SemicircleOrder2: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -186,6 +198,7 @@ export const a5SemicircleOrder2: Family = {
     },
     {
       params: { halfRange: true },
+      label: "half-range corollary",
       value: "pi/4",
       numeric: 0.78539816339744828,
       verifiedTo: 1e-14,

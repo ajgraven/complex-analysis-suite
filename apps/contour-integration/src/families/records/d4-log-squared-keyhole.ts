@@ -29,9 +29,21 @@ import type { Family } from "../schema.js";
 
 export const d4LogSquaredKeyhole: Family = {
   id: "log-squared-keyhole",
-  title: "∫₀^∞ R(x) log x dx by the log² keyhole — and ∫₀^∞ R(x) dx for free",
-  taxonomySection: "5.2",
+  title: "∫₀^{∞} log x dx/(1+x²)² by a keyhole with (log z)²",
+  titleLatex: "$\\int_0^{\\infty}\\frac{\\log x}{(1+x^2)^2}\\,dx$ by a keyhole with $(\\log z)^2$",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$; integrand $(\\log z)^2/(1+z^2)^2$, $\\arg z\\in[0,2\\pi)$",
+    point:
+      "With $\\log z$ alone the log-integral cancels between the two edges; with $(\\log z)^2$ the $(\\log x+2\\pi i)^2$ on the lower edge leaves an identity linear in $\\int R\\log x$ and $\\int R$, whose real and imaginary parts determine both.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 3", text: "" },
+      { book: "Ahlfors", where: "Ch. 4 §5 (the \\(R(x)\\log x\\) case, by the upper half-plane)", text: "" },
+      { book: "Brown–Churchill", where: "§83", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -152,7 +164,7 @@ export const d4LogSquaredKeyhole: Family = {
     pieces: [
       {
         id: "upper",
-        name: "the upper edge, log z = log x",
+        name: "the upper edge, $\\log z = \\log x$",
         geom: { kind: "segment", from: pt({ param: "eps" }, 0), to: pt({ param: "R_lim" }, 0) },
         role: "target",
         side: "above",
@@ -161,7 +173,7 @@ export const d4LogSquaredKeyhole: Family = {
       },
       {
         id: "outer",
-        name: "the R → ∞ circle",
+        name: "the $R \\to \\infty$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -175,7 +187,7 @@ export const d4LogSquaredKeyhole: Family = {
       },
       {
         id: "lower",
-        name: "the lower edge, log z = log x + 2πi",
+        name: "the lower edge, $\\log z = \\log x + 2\\pi i$",
         geom: { kind: "segment", from: pt({ param: "R_lim" }, 0), to: pt({ param: "eps" }, 0) },
         role: "reproduces",
         side: "below",
@@ -191,7 +203,7 @@ export const d4LogSquaredKeyhole: Family = {
       },
       {
         id: "inner",
-        name: "the ε → 0 circle",
+        name: "the $\\varepsilon \\to 0$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -243,6 +255,7 @@ export const d4LogSquaredKeyhole: Family = {
   closedForm: {
     expr: "Sigma := Sum(Res(R(z)*log(z)^2, z_k));  T1 = -Re(Sigma)/2;  T0 = -Im(Sigma)/(2*pi)",
     simplified: "T1 = -pi/4 and T0 = pi/4 for R = 1/(1+x^2)^2",
+    simplifiedWhen: "p == 2",
   },
 
   rigor: {

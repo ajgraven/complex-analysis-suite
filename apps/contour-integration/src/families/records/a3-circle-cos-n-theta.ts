@@ -14,9 +14,20 @@ import type { Family } from "../schema.js";
 
 export const a3CircleCosNTheta: Family = {
   id: "circle-cos-n-theta",
-  title: "∫₀^{2π} cos nθ/(5 − 4 cos θ) dθ — the order-n pole the substitution manufactures at z = 0",
-  taxonomySection: "1",
+  title: "∫₀^{2π} cos nθ dθ/(5 − 4 cos θ) by the unit circle",
+  titleLatex: "$\\int_0^{2\\pi}\\frac{\\cos n\\theta}{5-4\\cos\\theta}\\,d\\theta$ by the unit circle",
+  taxonomySection: "Trigonometric integrals over [0, 2π]",
   tier: "A",
+
+  description: {
+    contour: "the unit circle, $z=e^{i\\theta}$",
+    point:
+      "The substitution introduces a pole of order $n$ at $z=0$ that the real integrand does not show; omitting it gives $17\\pi/12$ at $n=2$ in place of $\\pi/6$.",
+    citations: [
+      { book: "Brown–Churchill", where: "§85", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -79,7 +90,7 @@ export const a3CircleCosNTheta: Family = {
     pieces: [
       {
         id: "unitCircle",
-        name: "the unit circle |z| = 1",
+        name: "the unit circle $|z| = 1$",
         geom: { kind: "arc", center: pt(0, 0), radius: 1, theta0: 0, theta1: 2 * Math.PI },
         role: "target",
         colour: 0,
@@ -99,7 +110,10 @@ export const a3CircleCosNTheta: Family = {
 
   closedForm: {
     expr: "(2*pi/3)*2^(-n)",
-    simplified: "pi/6", // at n = 2, the gallery value
+    // `pi/6` until M8 step 0.1 — which is this family's value at `n = 2` and at no other `n`, so it
+    // was the gallery's headline number masquerading as the family's closed form. The general form
+    // is elementary here and holds for every `n ≥ 0`; `Golden.value` carries the per-fixture number.
+    simplified: "(2*pi/3)*2^(-n)",
   },
 
   rigor: {

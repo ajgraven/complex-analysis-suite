@@ -288,7 +288,7 @@ describe("the winding check is not decoration", () => {
 // **THE CATCH ROW ASKED THE WRONG QUESTION, AND HAD SINCE M4.2e (found in M5.4b).** It read
 // `poles.exactlyComplete` — "was every pole pinned?" — where the claim beside it is about the SUM.
 // So D3 at `(a, n) = (2.3, 5)` printed the exact closed form `(π/5)/sin(23π/50)` with a row saying
-// "not every residue is known exactly, so the total is an estimate", which is precisely what the
+// "some residues are numerical, so the total is an estimate", which is precisely what the
 // cyclotomic route exists to deny.
 describe("the CATCH row says what was established, not what was skipped", () => {
   const catchRow = (a: number, n: number) => {
@@ -300,13 +300,13 @@ describe("the CATCH row says what was established, not what was skipped", () => 
   it("reports Σ Res exact at n = 5, where ℚ(ζ₁₀) has degree 4 and no residue is expressible", () => {
     const row = catchRow(2.3, 5);
     expect(row?.status).toBe("satisfied");
-    expect(row?.claim).toBe("Σ Res is known exactly, though no individual residue is expressible");
+    expect(row?.claim).toBe("the residue sum is exact — the individual residues lie outside $\\mathbb{Q}(i)(\\sqrt{d})$, the sum does not");
     expect(row?.evidence.level).toBe("=");
     // And the closed form is beside it, which is the contradiction that made the old row visible.
     expect(scalar(solveFamily(D3, at(2.3, 5))).solved.text).toBe("(π/5)/sin(23π/50)");
   });
 
   it("keeps the simpler claim at n = 4, where each residue IS expressible", () => {
-    expect(catchRow(1.5, 4)?.claim).toBe("every enclosed residue is known exactly");
+    expect(catchRow(1.5, 4)?.claim).toBe("every enclosed residue is exact");
   });
 });

@@ -32,10 +32,13 @@ import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { Piece } from "./contour/model.js";
+import { LATEX } from "../kernel/notation.js";
+import { constraintLabel, stageTitle, type StageId } from "./vocabulary.js";
 import type { ConstraintId, LedgerResult, LedgerRow } from "./ledger.js";
 import { RESIDUE_THEOREM_IDENTITY, type ResidueTheoremResult } from "./residueTheorem.js";
 
-export type StageId = "setup" | "legality" | "catch" | "kill" | "cover" | "solve" | "verdict";
+// Declared in `vocabulary.ts` beside the titles it maps to (M8 step 0.2), re-exported here.
+export type { StageId };
 
 export interface StageSpec {
   readonly id: StageId;
@@ -57,38 +60,38 @@ export interface StageSpec {
 export const DERIVATION_STAGES: readonly StageSpec[] = [
   {
     id: "setup",
-    title: "The problem",
-    why: "What is being integrated, and over what. The contour integrand is not the posed integrand whenever the substitution has a Jacobian, and conflating the two is the single commonest error in the subject.",
+    title: stageTitle("setup"),
+    why: "The integral to be evaluated, the integrand on the contour, and how the two are related.",
   },
   {
     id: "legality",
-    title: "LEGALITY",
-    why: "The right to print anything at all: no piece may pass through a singularity, the contour must close, and its orientation must be declared. Run first, because everything downstream is meaningless if it fails.",
+    title: stageTitle("legality"),
+    why: "The contour is closed and meets no singularity; with a branch cut, the integrand is single-valued along it.",
   },
   {
     id: "catch",
-    title: "CATCH",
-    why: "The singular set and the residue sum. The winding number and the enclosed-pole count are separate rows on purpose — one number implying the other is the conflation the dogbone exists to break.",
+    title: stageTitle("catch"),
+    why: "The singularities, their winding numbers $\\operatorname{Ind}_\\gamma(a)$, and their residues.",
   },
   {
     id: "kill",
-    title: "KILL",
-    why: "Per-piece disposal. A vanishing piece owes two distinct statements: a bound at the finite limit parameter, and the limit itself. Only the second enters the solve.",
+    title: stageTitle("kill"),
+    why: "Each piece other than the target: a bound at finite $R$ (or $\\varepsilon$), and its limit.",
   },
   {
     id: "cover",
-    title: "COVER",
-    why: "The target appears as a labelled piece, under the declared substitution. In the sandbox there is no target, COVER is vacuous, and the closed-contour value is the result.",
+    title: stageTitle("cover"),
+    why: "The target integral as a piece of the contour.",
   },
   {
     id: "solve",
-    title: "SOLVE",
-    why: "The contour identity, solved for the real integral it was built to find. Worked in units of π throughout, so π is never evaluated and π/2 stays π/2.",
+    title: stageTitle("solve"),
+    why: "The residue theorem, solved for the target.",
   },
   {
     id: "verdict",
-    title: "VERDICT",
-    why: "The label is the meet over every step's certificate — computed from what was established, never chosen. One unknown step makes the whole claim unknown; one refusal refuses it.",
+    title: stageTitle("verdict"),
+    why: "The rigor of the conclusion is the weakest of its steps: $=$ exact, $\\le$ rigorous bound, $\\approx$ numerical.",
   },
 ];
 
@@ -150,6 +153,8 @@ export interface DerivationStage extends StageSpec {
 export interface SolvedSummary {
   readonly value: number;
   readonly text?: string;
+  /** The same form typeset. */
+  readonly latex?: string;
   readonly certificates: readonly Certificate[];
 }
 
@@ -188,13 +193,16 @@ const STAGE_OF: Readonly<Record<ConstraintId, StageId>> = {
 
 /** A line from a ledger row. Nothing is composed: the row already holds a claim and a certificate. */
 function lineFromRow(row: LedgerRow, spec: readonly Piece[]): DerivationLine {
-  const piece = row.pieceId === undefined ? undefined : spec.find((p) => p.id === row.pieceId);
+  const piece =
+    row.pieceId === undefined ? undefined : spec.find((p) => p.id === row.pieceId);
   return {
     text: row.claim,
     level: row.evidence.level,
     method: row.evidence.method,
     status: row.status,
-    ...(row.evidence.restriction === undefined ? {} : { restriction: row.evidence.restriction }),
+    ...(row.evidence.restriction === undefined
+      ? {}
+      : { restriction: row.evidence.restriction }),
     provenance: row.evidence.provenance,
     ...(piece === undefined ? {} : { pieceName: piece.name }),
     ...(row.repair === undefined ? {} : { repair: row.repair }),
@@ -219,7 +227,9 @@ function lineFromVerdict(
   return {
     text,
     level: verdict.level,
-    method: opts?.method ?? (methods.length > 0 ? methods.join(" · ") : "no evidence was supplied"),
+    method:
+      opts?.method ??
+      (methods.length > 0 ? methods.join(" · ") : "no evidence was supplied"),
     status,
     ...(restriction === "" ? {} : { restriction }),
     // `onlyFailedSteps` is what `@cas/rigor`'s `failures()` is for: on a summary line the ✓ steps are
@@ -235,7 +245,9 @@ function poleRows(poles: PoleReport, integral: ContourIntegral): PoleRow[] {
     // but a caller that did not would otherwise get a winding number attributed to the wrong pole.
     // Coordinate equality holds because the values are copied, not recomputed — and when it fails
     // the row reads "undecided" rather than reading a confident number off the wrong pole.
-    const w = integral.windings.find((x) => x.at[0] === pole.at[0] && x.at[1] === pole.at[1]);
+    const w = integral.windings.find(
+      (x) => x.at[0] === pole.at[0] && x.at[1] === pole.at[1],
+    );
     return {
       at: pole.at,
       order: pole.order,
@@ -280,7 +292,14 @@ export function buildDerivation(input: DerivationInput): Derivation {
     text: theorem.identity ?? RESIDUE_THEOREM_IDENTITY,
   });
   if (theorem.exactValue !== undefined) {
-    add("solve", lineFromVerdict(`∮ f dz = ${theorem.exactValue.text}`, theorem.verdict, "satisfied"));
+    add(
+      "solve",
+      lineFromVerdict(
+        `$\\oint_\\gamma f(z)\\,dz = ${theorem.exactValue.latex}$`,
+        theorem.verdict,
+        "satisfied",
+      ),
+    );
   }
   // The cross-check is a STATEMENT, not a levelled line. "The two routes agree to 2.7e-15" is an
   // observation about two computed numbers; no certificate was minted for the comparison, and
@@ -292,7 +311,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
       text:
         theorem.crossCheck !== undefined
           ? `${theorem.crossCheck.claim} — ${theorem.crossCheck.restriction ?? "corroboration"}`
-          : `the quadrature DISAGREES by ${(theorem.disagreement ?? 0).toExponential(2)} — one of the two is wrong, so no value is reported`,
+          : `numerical check: the quadrature differs by ${(theorem.disagreement ?? 0).toExponential(2)}; no value is reported`,
     });
   }
 
@@ -306,22 +325,22 @@ export function buildDerivation(input: DerivationInput): Derivation {
       // `vanish` piece that does not vanish. C1's indentation and C2's arc are the same π, arriving
       // on different pieces, and both are the whole difference between π/2 and 0.
       say("solve", {
-        label: `from KILL · ${piece?.name ?? limit.pieceId}`,
-        text: `contributes ${formatPiExpSum(limit.contribution)} — a known limit, not zero`,
+        label: `${constraintLabel("KILL").toLowerCase()} · ${piece?.name ?? limit.pieceId}`,
+        text: `contributes $${formatPiExpSum(limit.contribution, LATEX)}$ — a known limit, not zero`,
       });
     }
   }
   if (solved !== undefined) {
     say("solve", {
       label: "the system",
-      text: "Σᵢ (aᵢ·t + bᵢ) = ∮ f dz, solved for t — worked in units of π, so π is never evaluated and π/2 stays π/2",
+      text: "$\\sum_i (a_i t + b_i) = \\oint_\\gamma f(z)\\,dz$, solved for $t$",
     });
     add(
       "solve",
       lineFromVerdict(
         solved.text === undefined
-          ? `the integral ≈ ${solved.value}`
-          : `the integral = ${solved.text}`,
+          ? `$I \\approx ${solved.value}$`
+          : `$I = ${solved.latex ?? solved.text}$`,
         assembleVerdict(solved.certificates),
         "satisfied",
       ),
@@ -339,7 +358,8 @@ export function buildDerivation(input: DerivationInput): Derivation {
   // and is checked directly since it contributes no limit row.
   const extraPieces = spec.some((p) => p.role === "reproduces" || p.role === "residue");
   const targetIsClosedContour = ledger.pieceLimits.length === 0 && !extraPieces;
-  const targetUnreached = ledger.hasTarget && solved === undefined && !targetIsClosedContour;
+  const targetUnreached =
+    ledger.hasTarget && solved === undefined && !targetIsClosedContour;
 
   // THE ONE CERTIFICATE THIS FILE MINTS, and the reason it is allowed to: `unknown` is the weakest
   // level that is not a refusal, so minting it can only ever WEAKEN a verdict. A renderer that could
@@ -349,7 +369,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
     ? [
         unknown(
           "the target integral",
-          "the closed-contour value is established, but a piece carries a known non-zero limit and Pass 5 did not run — so the target was never extracted from it",
+          "$\\oint_\\gamma f(z)\\,dz$ is established, but the target was not solved for",
         ),
       ]
     : [];
@@ -385,11 +405,16 @@ export function buildDerivation(input: DerivationInput): Derivation {
   // and Pass 5 consumes only the limit. Carrying the argument's meet onto the answer would cap every
   // gallery result at `≤` and contradict PLAN §2's own worked ledger, which prints `[≤]` on the KILL
   // row and `[=]` on the conclusion.
-  const conclusionVerdict = solved !== undefined ? assembleVerdict(solved.certificates) : theorem.verdict;
+  const conclusionVerdict =
+    solved !== undefined ? assembleVerdict(solved.certificates) : theorem.verdict;
   const conclusion: Conclusion | undefined = !closes
     ? undefined
     : solved !== undefined
-      ? { label: "the integral", text: solved.text ?? `≈ ${solved.value}`, level: conclusionVerdict.level }
+      ? {
+          label: "the integral",
+          text: solved.text ?? `≈ ${solved.value}`,
+          level: conclusionVerdict.level,
+        }
       : ledger.value !== undefined
         ? { label: "∮ f dz", text: ledger.value.text, level: conclusionVerdict.level }
         : undefined;

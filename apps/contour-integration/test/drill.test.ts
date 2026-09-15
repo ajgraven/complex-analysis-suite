@@ -43,6 +43,8 @@ import {
   type KeyStore,
 } from "../src/shell/drillProgress.js";
 import { CONTRAST_CELLS } from "../src/shell/contrastGrid.js";
+import { rowFrom } from "../src/engine/ledger.js";
+import { certificateClaim } from "../src/engine/claims.js";
 import { compile, resolveState, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { TEMPLATES } from "../src/shell/templates.js";
@@ -159,7 +161,7 @@ describe("rung ii — the KILL column", () => {
     expect(answers("oscillatory")).toEqual(["target", "vanishes"]);
     expect(answers("forced-downward")).toEqual(["target", "vanishes"]);
     // C1 is the entry that needs the third case: the indentation does NOT vanish, it contributes
-    // `iα·Res` exactly, which is why `∮` stops being the answer.
+    // `i\\alpha\\operatorname{Res}` exactly, which is why `∮` stops being the answer.
     expect(answers("indented")).toEqual(["target", "limit", "target", "vanishes"]);
   });
 
@@ -180,8 +182,8 @@ describe("rung ii — the KILL column", () => {
     const qs = pieceQuestions({
       ledger: {
         rows: [
-          { constraint: "LEGALITY", pieceId: "lip", status: "satisfied", claim: "runs above the cut", evidence: cert },
-          { constraint: "KILL", pieceId: "lip", status: "satisfied", claim: "is the target", evidence: cert },
+          rowFrom("LEGALITY", "satisfied", certificateClaim("runs above the cut"), cert, "lip"),
+          rowFrom("KILL", "satisfied", certificateClaim("is the target"), cert, "lip"),
         ],
       },
       contour: { pieces: [piece] },
@@ -201,13 +203,11 @@ describe("rung ii — the KILL column", () => {
       role: "vanish" as const,
       colour: 0 as const,
     };
-    const row = { constraint: "KILL" as const, pieceId: "arc", status: "satisfied" as const, evidence: cert };
+    const row = (claim: string) =>
+      rowFrom("KILL", "satisfied", certificateClaim(claim), cert, "arc");
     const qs = pieceQuestions({
       ledger: {
-        rows: [
-          { ...row, claim: "|∫| ≤ … at R = 4" },
-          { ...row, claim: "→ 0 as R → ∞" },
-        ],
+        rows: [row("|∫| ≤ … at R = 4"), row("→ 0 as R → ∞")],
       },
       contour: { pieces: [piece] },
     });
@@ -217,13 +217,13 @@ describe("rung ii — the KILL column", () => {
   });
 
   it("says `fails` for a row the ledger did not satisfy, whatever the piece's role", () => {
-    const row = {
-      constraint: "KILL" as const,
-      pieceId: "arc",
-      status: "failed" as const,
-      claim: "the lower semicircle DIVERGES",
-      evidence: { level: "⚠", claim: "", method: "", provenance: [] } as never,
-    };
+    const row = rowFrom(
+      "KILL",
+      "failed",
+      certificateClaim("the lower semicircle DIVERGES"),
+      { level: "⚠", claim: "", method: "", provenance: [] } as never,
+      "arc",
+    );
     expect(disposalOf({ role: "vanish" }, row)).toBe("fails");
     expect(disposalOf({ role: "target" }, row)).toBe("fails");
     // And an `unknown` row is the same answer: the argument does not close there either.
@@ -271,7 +271,7 @@ describe("rung ii — the KILL column", () => {
     expect(allCorrect(graded)).toBe(false);
     const bad = graded.find((g) => !g.ok);
     expect(bad?.question.pieceId).toBe("indent");
-    expect(bad?.question.row.claim).toContain("iα·Res");
+    expect(bad?.question.row.claim).toContain("i\\alpha\\operatorname{Res}");
 
     // Unanswered.
     const blank = gradePieces(qs, {});
@@ -344,7 +344,7 @@ describe("rung iii — the menu", () => {
     const bad = menuVerdict(run2, "semicircleDown");
     expect(bad.answers).toBe(false);
     expect(bad.failedAt).toBe("KILL");
-    expect(bad.why).toContain("DIVERGES");
+    expect(bad.why).toContain("diverges");
   });
 
   it("the circle CLOSES and still does not answer — COVER, not KILL", () => {
@@ -456,7 +456,7 @@ describe("rung iv — the enclosure", () => {
     expect(typeof task?.drawCheck).toBe("object");
     const r = checkDrawing(task?.drawCheck ?? "as-recorded", [], []);
     expect(r.ok).toBe(false);
-    expect(r.why).toContain("iα·Res");
+    expect(r.why).toContain("i\\alpha\\operatorname{Res}");
     // Measured: its own contour winds about nothing, so "wind about no pole" is free.
     const run = task === null ? null : runTask(task);
     expect(run?.integral.windings.map((x) => x.n)).toEqual([0]);

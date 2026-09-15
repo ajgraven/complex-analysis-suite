@@ -159,7 +159,7 @@ describe("a certified bound on each vanishing arc", () => {
       const row = kill.find((x) => x.pieceId === id);
       expect(row?.status).toBe("satisfied");
       expect(row?.evidence.level).toBe("≤");
-      expect(row?.claim).toMatch(/→ 0 as/);
+      expect(row?.claim).toMatch(/\\to 0\$ as/);
     }
   });
 
@@ -168,8 +168,8 @@ describe("a certified bound on each vanishing arc", () => {
     // preamble". Each row names the exponent whose sign discharges it.
     const { run } = solved();
     const kill = run.ledger.rows.filter((x) => x.constraint === "KILL");
-    expect(kill.find((x) => x.pieceId === "outer")?.claim).toMatch(/O\(ρ\^\(-7\/10\)\)/);
-    expect(kill.find((x) => x.pieceId === "inner")?.claim).toMatch(/O\(ρ\^\(3\/10\)\)/);
+    expect(kill.find((x) => x.pieceId === "outer")?.claim).toMatch(/O\(\\rho\^\{-7\/10\}\)/);
+    expect(kill.find((x) => x.pieceId === "inner")?.claim).toMatch(/O\(\\rho\^\{3\/10\}\)/);
   });
 
   it("says in its own audit trail that ρ^α is the one float in the chain", () => {

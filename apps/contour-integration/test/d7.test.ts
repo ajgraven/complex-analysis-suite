@@ -110,12 +110,12 @@ describe("the residue at infinity carries the answer", () => {
 
 describe("two exponents on one cut", () => {
   it("needs Σ αⱼ ∈ ℤ, and says so where infinity is concerned", () => {
-    expect(reasons()).toMatch(/Σ αⱼ = 1 ∈ ℤ, so the monodromy round a large circle is 1/);
+    expect(reasons()).toMatch(/\\sum_j \\alpha_j = 1 \\in \\mathbb\{Z\}\$, so the monodromy round a large circle is \$1\$/);
     // And the contour's own version of the same arithmetic, in LEGALITY.
     const legality = ran().ledger.rows.filter((r) => r.constraint === "LEGALITY");
-    expect(legality.map((r) => r.claim).join(" | ")).toMatch(
-      /winds about a branch point and still closes on one sheet \(Σ n\(γ,bⱼ\)·αⱼ = −1 ∈ ℤ\)/,
-    );
+    const claims = legality.map((r) => r.claim).join(" | ");
+    expect(claims).toContain("is single-valued along the contour");
+    expect(claims).toContain("\\alpha_j = -1 \\in \\mathbb{Z}$");
   });
 
   it("refuses at infinity when the exponents do NOT sum to an integer", () => {
@@ -138,7 +138,7 @@ describe("two exponents on one cut", () => {
     );
     expect(at.ok).toBe(false);
     if (!at.ok) {
-      expect(at.reason).toMatch(/Σ αⱼ = 13\/12 is not an integer/);
+      expect(at.reason).toMatch(/\\sum_j \\alpha_j = \\frac\{13\}\{12\}\$ is not an integer/);
       expect(at.reason).toMatch(/not single-valued near infinity/);
     }
   });
@@ -149,7 +149,7 @@ describe("two exponents on one cut", () => {
       [1, [0, 2]],
       [-1, [-1, 1]],
     ]);
-    expect(reasons()).toMatch(/arg\(z − 0\) ∈ \[0·π, 2·π\); arg\(b − z\) ∈ \[−1·π, 1·π\)/);
+    expect(reasons()).toMatch(/\\arg\(z - 0\) \\in \[0\\pi, 2\\pi\)\$; \$\\arg\(b - z\) \\in \[-1\\pi, 1\\pi\)/);
   });
 
   it("takes arg(b − z) = −π at the pole, not +π — the residue trap, as arithmetic", () => {
@@ -180,13 +180,13 @@ describe("two exponents on one cut", () => {
 
 describe("the end caps, at exponents that are not equal", () => {
   it("kills each by the bound about its OWN branch point, at its own rate", () => {
-    const caps = ran().ledger.rows.filter((r) => r.claim.includes("over the cap"));
+    const caps = ran().ledger.rows.filter((r) => r.claim.startsWith("the cap:"));
     expect(caps).toHaveLength(2);
     const byPiece = new Map(caps.map((c) => [c.pieceId, c]));
     // `μ = 3/4` at z = 0 gives `O(η^{7/4})`; `ν = 1/4` at z = b gives `O(η^{5/4})`. Different rates
     // from the same lemma, which is what having two different exponents on one cut means.
-    expect(must(byPiece.get("endA"), "the cap at 0").claim).toMatch(/O\(η\^\(7\/4\)\)/);
-    expect(must(byPiece.get("endB"), "the cap at b").claim).toMatch(/O\(η\^\(5\/4\)\)/);
+    expect(must(byPiece.get("endA"), "the cap at 0").claim).toMatch(/O\(\\eta\^\{7\/4\}\)/);
+    expect(must(byPiece.get("endB"), "the cap at b").claim).toMatch(/O\(\\eta\^\{5\/4\}\)/);
     for (const cap of caps) {
       expect(cap.status).toBe("satisfied");
       expect(cap.evidence.level).toBe("≤");

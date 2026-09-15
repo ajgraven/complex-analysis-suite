@@ -351,8 +351,8 @@ function buildPiSystem(family: Family, bindings: Bindings, targetIds: readonly s
       return {
         ok: false,
         reason:
-          `the declared coefficient row is [${summed.totals.map(formatRatPi).join(", ")}] but a keyhole ` +
-          `crossing by ${formatRatPi(increment.value)} gives [${expected.map(formatRatPi).join(", ")}]` +
+          `the declared coefficient row is [${summed.totals.map((v) => formatRatPi(v)).join(", ")}] but a keyhole ` +
+          `crossing by ${formatRatPi(increment.value)} gives [${expected.map((v) => formatRatPi(v)).join(", ")}]` +
           ` — they differ on '${targetIds[mismatch]}'`,
       };
     }

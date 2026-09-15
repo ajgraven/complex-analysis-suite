@@ -215,7 +215,7 @@ describe("the argument is DECIDED, not measured", () => {
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.certificate.level).toBe("=");
-    expect(r.certificate.restriction).toMatch(/arg z ∈/);
+    expect(r.certificate.restriction).toMatch(/\\arg z \\in/);
     expect(r.certificate.method).toMatch(/verified in exact arithmetic/);
   });
 

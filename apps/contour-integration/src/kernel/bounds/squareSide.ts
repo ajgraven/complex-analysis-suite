@@ -170,29 +170,27 @@ export function squareSideBound(
     degreeGap: gap,
     certificate: bound(
       "≤",
-      `|∫ over this side| ≤ ${value.toNumber().toExponential(3)} at N = ${n}, and ${
-        vanishes ? `→ 0 as N → ∞, because the bound is O((N+½)^${exponent})` : "does NOT vanish"
+      `this side: $\\left|\\int Kf\\,dz\\right| \\le ${value.toNumber().toExponential(3)}$ at $N = ${n}$, and ${
+        vanishes
+          ? `$\\to 0$ as $N \\to \\infty$, because the bound is $O((N+\\tfrac12)^{${exponent}})$`
+          : "does not vanish"
       }`,
-      `ML on one side of Γ_N: sup|K|·length·max|f| = π${
-        kind === "csc" ? "" : "·coth(π/2)"
-      } · 2(N+½) · max|f|, exact in ℚ with π and coth(π/2) entering only through certified brackets`,
+      `the ML-estimate on one side of $\\Gamma_N$: $\\sup|K| \\cdot \\text{length} \\cdot \\max|f| = \\pi${
+        kind === "csc" ? "" : "\\coth(\\pi/2)"
+      } \\cdot 2(N+\\tfrac12) \\cdot \\max|f|$, exact in $\\mathbb{Q}$ with $\\pi$ and $\\coth(\\pi/2)$ entering only through certified brackets`,
       {
-        restriction: `N + ½ = ${halfWidth.n}/${halfWidth.d}; deg D − deg N = ${gap}`,
+        restriction: `$N + \\tfrac12 = ${halfWidth.n}/${halfWidth.d}$; $\\deg D - \\deg N = ${gap}$`,
         provenance: [
           {
             ok: true,
             text:
               kind === "csc"
-                ? "sup|csc πz| = 1 on Γ_N for EVERY N: ≤ 1/sinh(π/2) on the horizontal sides and ≤ 1 on the vertical ones"
-                : "sup|cot πz| = coth(π(N+½)) ≤ coth(π/2), attained at N = 0 — one constant for the whole family, which is what the limit needs",
+                ? "$\\sup|\\csc \\pi z| = 1$ on $\\Gamma_N$ for every $N$: $\\le 1/\\sinh(\\pi/2)$ on the horizontal sides and $\\le 1$ on the vertical ones"
+                : "$\\sup|\\cot \\pi z| = \\coth(\\pi(N+\\tfrac12)) \\le \\coth(\\pi/2)$, attained at $N = 0$ — one constant for every $N$, which is what the limit needs",
           },
           {
             ok: true,
-            text: "max|f| is read at |z| = N+½ and bounds |f| on the whole square: U(r)/L(r) decreases in r once both are divided by r^{deg D}, so the closest point of Γ_N is the worst",
-          },
-          {
-            ok: true,
-            text: "research 03 §8 states this bound without the π from π cot(πz), and it is then not an upper bound at all — 3.392 against a measured 3.567 at N = 3 (finding D-2)",
+            text: "$\\max|f|$ is read at $|z| = N+\\tfrac12$ and bounds $|f|$ on the whole square: $U(r)/L(r)$ decreases in $r$ once both are divided by $r^{\\deg D}$, so the closest point of $\\Gamma_N$ is the worst",
           },
         ],
       },

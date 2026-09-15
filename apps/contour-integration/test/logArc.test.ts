@@ -15,13 +15,13 @@ const PRINCIPAL: readonly [Frac, Frac] = [f(-1), f(1)];
 const FULL_CIRCLE = f(2);
 
 /** The bound's own number, read back out of the claim it states. */
-const boundValue = (claim: string): number => Number(/≤ ([\d.e+-]+)/.exec(claim)?.[1] ?? Number.NaN);
+const boundValue = (claim: string): number => Number(/\\le ([\d.e+-]+)/.exec(claim)?.[1] ?? Number.NaN);
 
 const ONE = QiPoly.constant(Gauss.ONE);
 const onePlusZSquared = QiPoly.fromCoeffs([Gauss.ONE, Gauss.ZERO, Gauss.ONE]);
 
 describe("D4's two circles", () => {
-  it("kills the outer one: deg Q − deg P = 4, so the bound is O(ρ⁻³·(ln ρ)²)", () => {
+  it("kills the outer one: \\deg Q - \\deg P = 4, so the bound is O(ρ⁻³·(ln ρ)²)", () => {
     const b = logArcBound(2, ONE, onePlusZSquared.pow(2), f(1000000000), {
       limit: "inf",
       piMultiple: FULL_CIRCLE,
@@ -62,7 +62,7 @@ describe("D4's two circles", () => {
 });
 
 describe("the boundary case is where the log shows", () => {
-  // `R = 1/(1+z²)`: deg Q − deg P = 2, so at ∞ the exponent is 1 − 2 = −1 and it vanishes.
+  // `R = 1/(1+z²)`: \\deg Q - \\deg P = 2, so at ∞ the exponent is 1 − 2 = −1 and it vanishes.
   // `R = 1/(1+z)`: the gap is 1, the exponent is 0, and the two readings part company.
   const onePlusZ = QiPoly.fromCoeffs([Gauss.ONE, Gauss.ONE]);
 
@@ -86,7 +86,7 @@ describe("the boundary case is where the log shows", () => {
     expect(b.exponent).toBe(0);
     expect(b.asymptotics).toBe("diverges");
     expect(b.certificate.level).toBe("⚠");
-    expect(b.certificate.claim).toMatch(/DIVERGES/);
+    expect(b.certificate.claim).toMatch(/diverges/);
   });
 
   it("and the bound itself grows, which is what that verdict is about", () => {

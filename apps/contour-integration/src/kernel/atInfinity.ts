@@ -19,6 +19,7 @@
 // the degree condition, and `(z³+1)/(z³+z)` is the witness — so the certificate says which direction
 // it establishes rather than claiming an equivalence.
 import { Frac, Gauss, QiPoly, SqrtExt, seriesInverse, seriesMul } from "@cas/exact";
+import { LATEX } from "./notation.js";
 import { exact, refuse, unknown, type Certificate } from "@cas/rigor";
 import { formatFrac, formatGauss } from "./formatExact.js";
 import { ExpSum, formatExpSum } from "./expSum.js";
@@ -70,12 +71,12 @@ export function residueAtInfinityOf(
       order,
       certificate: exact(
         "Res(f, ∞) = 0",
-        `f = O(z^(${formatFrac(order)})) at infinity, and an order of −2 or less leaves no z⁻¹ coefficient`,
+        `$f = O(z^{${formatFrac(order, LATEX)}})$ at infinity, and an order of $-2$ or less leaves no $z^{-1}$ coefficient`,
         {
           provenance: [
             {
               ok: true,
-              text: "the SAME computation discharges L2 on the outer circle — research 03 §9(d)'s unification, in one number",
+              text: "the same computation discharges the large-circle estimate on the outer circle, in one number",
             },
             {
               ok: true,
@@ -105,7 +106,7 @@ export function residueAtInfinityOf(
     order,
     certificate: exact(
       `Res(f, ∞) = ${formatGauss(value)}`,
-      "the z⁻¹ coefficient of the expansion at infinity, read off one polynomial division over ℚ(i)",
+      "the $z^{-1}$ coefficient of the expansion at infinity, read off one polynomial division over $\\mathbb{Q}(i)$",
       {
         provenance: [
           {
@@ -158,8 +159,8 @@ export function branchResidueAtInfinity(
 
   if (alphaSum.d !== 1n) {
     const reason =
-      `Σ αⱼ = ${formatFrac(alphaSum)} is not an integer, so the monodromy round a large circle is ` +
-      `e^(2πi·${formatFrac(alphaSum)}) ≠ 1: f is not single-valued near infinity, the circle is not a loop ` +
+      `$\\sum_j \\alpha_j = ${formatFrac(alphaSum, LATEX)}$ is not an integer, so the monodromy round a large circle is ` +
+      `$e^{2\\pi i \\cdot ${formatFrac(alphaSum, LATEX)}} \\ne 1$: $f$ is not single-valued near infinity, the circle is not a loop ` +
       "in its domain, and there is no residue there to compute";
     return { ok: false, reason, order, certificate: refuse("Res(f, ∞)", reason) };
   }
@@ -178,16 +179,16 @@ export function branchResidueAtInfinity(
       order,
       certificate: exact(
         "Res(f, ∞) = 0",
-        `f = O(z^(${formatFrac(order)})) at infinity, and an order of −2 or less leaves no z⁻¹ coefficient`,
+        `$f = O(z^{${formatFrac(order, LATEX)}})$ at infinity, and an order of $-2$ or less leaves no $z^{-1}$ coefficient`,
         {
           provenance: [
             {
               ok: true,
-              text: "the SAME computation discharges L2 on an outer circle — research 03 §9(d)'s unification, in one number",
+              text: "the same computation discharges the large-circle estimate on an outer circle, in one number",
             },
             {
               ok: true,
-              text: `Σ αⱼ = ${formatFrac(alphaSum)} ∈ ℤ, so f IS single-valued near infinity and the question has an answer`,
+              text: `$\\sum_j \\alpha_j = ${formatFrac(alphaSum, LATEX)} \\in \\mathbb{Z}$, so $f$ is single-valued near infinity and the question has an answer`,
             },
           ],
         },
@@ -230,7 +231,7 @@ export function branchResidueAtInfinity(
     order,
     certificate: exact(
       `Res(f, ∞) = ${formatExpSum(value)}`,
-      "the z⁻¹ coefficient of the expansion at infinity: the binomial series of the fractional powers against the cofactor's own series, with the branch constant derived from the declared determinations",
+      "the $z^{-1}$ coefficient of the expansion at infinity: the binomial series of the fractional powers against the cofactor's own series, with the branch constant derived from the declared determinations",
       {
         provenance: [
           {
@@ -239,7 +240,7 @@ export function branchResidueAtInfinity(
           },
           {
             ok: true,
-            text: `Σ αⱼ = ${formatFrac(alphaSum)} ∈ ℤ, so the monodromy round a large circle is 1 and f is single-valued there`,
+            text: `$\\sum_j \\alpha_j = ${formatFrac(alphaSum, LATEX)} \\in \\mathbb{Z}$, so the monodromy round a large circle is $1$ and $f$ is single-valued there`,
           },
           { ok: true, text: lambda.text },
         ],
@@ -308,7 +309,7 @@ function leadingConstant(
         break;
       }
       total = total.add(point.alpha.mul(lifted));
-      parts.push(`${formatFrac(lifted)}·π at ${point.label}`);
+      parts.push(`$${formatFrac(lifted, LATEX)}\\pi$ at ${point.label}`);
     }
     if (!clear) continue;
     const r = total.sub(direction.mul(alphaSum));
@@ -316,7 +317,7 @@ function leadingConstant(
       ok: true,
       value: ExpSum.of(factor.constant, Exponent.of(SqrtExt.ZERO, new Gauss(Frac.ZERO, r), LogPart.ZERO)).foldSigns(),
       text:
-        `the branch constant is c·e^(iπ·${formatFrac(r)}), derived along the direction arg z = ${formatFrac(direction)}·π ` +
+        `the branch constant is $c\\,e^{i\\pi\\cdot${formatFrac(r, LATEX)}}$, derived along the direction $\\arg z = ${formatFrac(direction, LATEX)}\\pi$ ` +
         `where the declared windows give ${parts.join(", ")} — every one an exact rational, so the constant is a root of unity and not a fit`,
     };
   }

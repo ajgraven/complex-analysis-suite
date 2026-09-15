@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **543 test files / 5644 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **553 test files / 5721 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -384,7 +384,8 @@ rather than a licence**: an escalating record must DECLARE the merged order and 
 `collisionCheck.ts` falsifies both against the Laurent route (declaring order 2 is refused with "the
 orders ADD to 3"; declaring `+π²/3` returns `−π²/6` for ζ(2), negative and otherwise plausible), while
 a record that escalates and declares nothing is dropped by the loader. The residue comes from DESIGN
-§6.3's mandated formula (4) — the kernel's expansion is **EVEN**, so the `u^{−1}` coefficient of the
+§6.3's mandated formula (4) — the kernel `K` is odd about every integer, so `u·K(n+u)` is **even** in `u`
+and the coefficient of `u^{2k−1}` is a rational multiple of `π^{2k}`; hence the `u^{−1}` coefficient of the
 product is `c₀ + Σ t_k π^{2k} c_{−2k}`, only `f`'s constant term and its even negative coefficients and
 finitely many of those; `m = 3` is the first case where the derivative formula's symbolic explosion
 matters, so G1 is the entry that justifies the series layer. Bernoulli numbers come from
@@ -1281,6 +1282,16 @@ have none). No new package (ADR-0007); `@cas/flow`'s `ExteriorMapPreset` gains a
 the other consumer, is unaffected). A unified `#vs=` decoder still reads every ADR-0037 airfoil / gallery /
 bare-`#id` permalink. **HD-6.0–6.4 done** (ADR + plan; the unified body model + airfoil-equivalence golden;
 the single-page shell; the domain-color render; the doc + PNG-export-verification sweep).
+
+**In progress — M8 (Contour Integration: the shell rebuild, ADR-0043).** The presentation layer of
+`apps/contour-integration` is being rebuilt on the existing engine: two rails, KaTeX, textbook vocabulary,
+stage modes, a worked-example mode, an editable piece list. Plan:
+[`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md) (complete: method, five
+phases in step detail, risks, step index). **Live state: [`docs/contour-integration/M8/STATUS.md`](docs/contour-integration/M8/STATUS.md)
+— a session working on M8 reads it first, does the one step it names, updates it, commits and pushes
+before ending; never more than one step without a push.** Branch `claude/inspiring-keller-5sizwl`. Phase 0
+merges to `master` alone; Phases 1–5 land in one merge. The owner's usage is metered, so steps are small and
+every session ends pushed.
 
 Work in small, reviewable commits. Pause at each phase/milestone gate for review before proceeding.
 When a command or path in the docs is marked `⚠ verify`, check it against the actual repo

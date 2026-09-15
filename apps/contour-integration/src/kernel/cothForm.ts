@@ -147,18 +147,18 @@ export function asHyperbolicForm(ratio: ExpRatio): CothRecognition {
     certificate: exact(
       `the residue sum is c·${kind}(π·${r.n}/${r.d})`,
       kind === "coth"
-        ? "2c·sinh(γ) / (−4 sinh²(γ/2)) = −c·coth(γ/2), by the double-angle identity sinh γ = 2 sinh(γ/2) cosh(γ/2)"
-        : "2c·sinh(γ/2) / (−4 sinh²(γ/2)) = −(c/2)·csch(γ/2)",
+        ? "$2c\\sinh(\\gamma) / (-4\\sinh^2(\\gamma/2)) = -c\\coth(\\gamma/2)$, by the double-angle identity $\\sinh\\gamma = 2\\sinh(\\gamma/2)\\cosh(\\gamma/2)$"
+        : "$2c\\sinh(\\gamma/2) / (-4\\sinh^2(\\gamma/2)) = -(c/2)\\operatorname{csch}(\\gamma/2)$",
       {
         provenance: [
           {
             ok: true,
-            text: "the denominator is the cross-multiplied (q − 1)(q′ − 1) of a conjugate pair of cofactor poles, which is exactly −4sinh²(γ/2)",
+            text: "the denominator is the cross-multiplied $(q-1)(q'-1)$ of a conjugate pair of cofactor poles, which is exactly $-4\\sinh^2(\\gamma/2)$",
           },
           {
             ok: true,
             text: `which of the two the quotient is was decided by comparing two exponents exactly, not by matching a pattern: ${
-              kind === "coth" ? "the π cot kernel puts δ = γ" : "the π csc kernel puts δ = γ/2"
+              kind === "coth" ? "the $\\pi\\cot$ kernel puts $\\delta = \\gamma$" : "the $\\pi\\csc$ kernel puts $\\delta = \\gamma/2$"
             }`,
           },
         ],

@@ -60,7 +60,7 @@ describe("max|f| on the side is attained", () => {
     const got = gaussianSideBound(e3(f(17n, 10n)), Gauss.ONE, { c: f(6n), y0: Frac.ZERO, y1: f(17n, 20n) });
     expect(got.certificate.level).toBe("≤");
     expect(got.certificate.provenance[0].text).toContain("y = 0");
-    const stated = Number(/≤ ([0-9.e+-]+) at/.exec(got.certificate.claim)?.[1]);
+    const stated = Number(/\\le ([0-9.e+-]+)\$/.exec(got.certificate.claim)?.[1]);
     // `L·M = (b/2)·e^{−36}`. Relatively, because the claim prints three significant figures.
     expect(Math.abs(stated - 0.85 * Math.exp(-36)) / stated).toBeLessThan(1e-3);
   });
@@ -74,7 +74,7 @@ describe("max|f| on the side is attained", () => {
     // at each radius, plus a slack that stays within one order — never that the two converge.
     const ratios = [3n, 4n, 6n].map((c) => {
       const got = gaussianSideBound(e3(f(17n, 10n)), Gauss.ONE, { c: f(c), y0: Frac.ZERO, y1: f(17n, 20n) });
-      const stated = Number(/≤ ([0-9.e+-]+) at/.exec(got.certificate.claim)?.[1]);
+      const stated = Number(/\\le ([0-9.e+-]+)\$/.exec(got.certificate.claim)?.[1]);
       const truth = verticalIntegral("exp(-z^2 + i*b*z)", { b: [1.7, 0] }, Number(c), 0, 0.85);
       expect(truth, `c = ${c}`).toBeLessThan(stated);
       return stated / truth;
@@ -96,7 +96,7 @@ describe("max|f| on the side is attained", () => {
       { c: f(3n), y0: Frac.ZERO, y1: f(1n, 2n) },
     );
     const at = (b: ReturnType<typeof gaussianSideBound>): number =>
-      Number(/≤ ([0-9.e+-]+) at/.exec(b.certificate.claim)?.[1]);
+      Number(/\\le ([0-9.e+-]+)\$/.exec(b.certificate.claim)?.[1]);
     // Relatively, because the claim prints three significant figures.
     expect(Math.abs(at(shifted) / at(plain) - Math.E ** 2) / Math.E ** 2).toBeLessThan(1e-3);
   });
@@ -117,7 +117,7 @@ describe("max|f| on the side is attained", () => {
       y1: Frac.ONE,
     });
     expect(got.certificate.provenance[0].text).toContain("y = 0");
-    const stated = Number(/≤ ([0-9.e+-]+) at/.exec(got.certificate.claim)?.[1]);
+    const stated = Number(/\\le ([0-9.e+-]+)\$/.exec(got.certificate.claim)?.[1]);
     expect(Math.abs(stated - 2) / stated).toBeLessThan(1e-3);
     const truth = verticalIntegral("exp(z^2)", {}, 0, -1, 1);
     expect(truth).toBeCloseTo(1.4936482656248538, 6);
@@ -141,8 +141,8 @@ describe("the limit rests on Re(q₂), and only its sign", () => {
     // The bound is still STATED — it holds at this `c`; what fails is the limit, and the row says
     // which. Reporting nothing would look like "no lemma applies", which is a different diagnosis.
     expect(grows.certificate.level).toBe("⚠");
-    expect(grows.certificate.claim).toMatch(/≤ [0-9.e+-]+ at Re z = 5/);
-    expect(grows.certificate.claim).toContain("DIVERGES");
+    expect(grows.certificate.claim).toMatch(/\\le [0-9.e+-]+\$ at \$\\operatorname\{Re\} z = 5/);
+    expect(grows.certificate.claim).toContain("diverges");
   });
 
   it("refuses when there is no sign to read", () => {

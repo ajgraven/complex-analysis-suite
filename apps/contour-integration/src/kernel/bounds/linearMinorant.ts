@@ -32,6 +32,7 @@
 import { Frac } from "@cas/exact";
 import { bound, refuse, type Certificate } from "@cas/rigor";
 import { fracCmp } from "./ratBound.js";
+import { LATEX, TEXT, type Notation } from "../notation.js";
 
 /**
  * Which reading of the one inequality a caller needs.
@@ -64,9 +65,10 @@ export interface DampedArcIntegral {
 }
 
 /** `Ψ/π`, rendered the way the certificates talk about it. */
-function asPi(turns: Frac): string {
-  if (turns.d === 1n) return turns.n === 1n ? "π" : `${turns.n}π`;
-  return turns.n === 1n ? `π/${turns.d}` : `${turns.n}π/${turns.d}`;
+function asPi(turns: Frac, n_: Notation = TEXT): string {
+  const pi = n_.pi;
+  if (turns.d === 1n) return turns.n === 1n ? pi : `${turns.n}${pi}`;
+  return n_.over(turns.n === 1n ? pi : `${turns.n}${pi}`, turns.d);
 }
 
 /**
@@ -98,20 +100,20 @@ export function dampedArcIntegral(upper: Frac, face: MinorantFace): DampedArcInt
       withinMinorant: true,
       certificate: bound(
         "≤",
-        `∫₀^{${asPi(upper)}} e^{−κ ${face} ψ} dψ ≤ π/(2κ) for every κ > 0`,
+        `$\\int_0^{${asPi(upper, LATEX)}} e^{-\\kappa\\${face}\\psi}\\,d\\psi \\le \\pi/(2\\kappa)$ for every $\\kappa > 0$`,
         face === "sin"
-          ? "Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2]"
-          : "cos φ ≥ 1 − 2φ/π on [0, π/2] — the SAME inequality under φ = π/2 − ψ",
+          ? "Jordan's inequality $\\sin\\psi \\ge 2\\psi/\\pi$ on $[0, \\pi/2]$"
+          : "$\\cos\\varphi \\ge 1 - 2\\varphi/\\pi$ on $[0, \\pi/2]$ — the same inequality under $\\varphi = \\pi/2 - \\psi$",
         {
           provenance: [
             { ok: true, text: `the range ${asPi(upper)} ≤ π/2, so the linear minorant applies on all of it` },
             {
               ok: true,
               text:
-                "sin ψ ≥ 2ψ/π and cos φ ≥ 1 − 2φ/π are one inequality under φ = π/2 − ψ; L3 and L6 " +
-                "discharge through this one predicate",
+                "$\\sin \\psi \\ge 2\\psi/\\pi$ and $\\cos \\varphi \\ge 1 - 2\\varphi/\\pi$ are one inequality under " +
+                "$\\varphi = \\pi/2 - \\psi$; Jordan's lemma and the wedge lemma discharge through this one predicate",
             },
-            { ok: true, text: "∫₀^{Ψ} e^{−2κψ/π} dψ = (π/2κ)(1 − e^{−2κΨ/π}) ≤ π/(2κ)" },
+            { ok: true, text: "$\\int_0^{\\Psi} e^{-2\\kappa\\psi/\\pi}\\,d\\psi = (\\pi/2\\kappa)(1 - e^{-2\\kappa\\Psi/\\pi}) \\le \\pi/(2\\kappa)$" },
           ],
         },
       ),
@@ -127,17 +129,17 @@ export function dampedArcIntegral(upper: Frac, face: MinorantFace): DampedArcInt
       certificate: refuse(
         `∫₀^{${asPi(upper)}} e^{−κ cos ψ} dψ`,
         `the range runs past π/2, where cos ψ < 0 and e^{−κ cos ψ} GROWS — at ψ = π it is e^{+κ}. ` +
-          "There is no bound of this shape at any constant, and cos φ ≥ 1 − 2φ/π reverses there " +
-          "(both sides agree at π/2 and at π, with cos below the chord between). Research 03 §0.3 " +
-          "stated L6 on exactly this range: its majorant measures 2.7e15 at n = 2, R = 6, 1.1e93 at " +
-          "n = 3, and overflows at n = 4 (finding D-1)",
+          "There is no bound of this shape at any constant, and $\\cos \\varphi \\ge 1 - 2\\varphi/\\pi$ " +
+          "reverses there: both sides agree at $\\pi/2$ and at $\\pi$, with $\\cos$ below the chord between. " +
+          "Stated on this range the majorant measures $2.7\\times10^{15}$ at $n = 2$, $R = 6$ and " +
+          "$1.1\\times10^{93}$ at $n = 3$, and overflows at $n = 4$",
         {
           provenance: [
             { ok: false, text: `the range ${asPi(upper)} exceeds π/2, where the minorant stops minorising` },
-            { ok: false, text: "cos changes SIGN there, so the damping becomes growth" },
+            { ok: false, text: "$\\cos$ changes sign there, so the damping becomes growth" },
             {
               ok: true,
-              text: "suggested repair: stop the arc at π/2 (a wedge of π/(2n) for e^{−zⁿ}), or use the oscillatory form e^{izⁿ}, whose face is sin",
+              text: "suggested repair: stop the arc at $\\pi/2$ (a wedge of $\\pi/(2n)$ for $e^{-z^n}$), or use the oscillatory form $e^{iz^n}$, whose face is $\\sin$",
             },
           ],
         },
@@ -162,8 +164,8 @@ export function dampedArcIntegral(upper: Frac, face: MinorantFace): DampedArcInt
     withinMinorant: false,
     certificate: bound(
       "≤",
-      `∫₀^{${asPi(upper)}} e^{−κ sin ψ} dψ ≤ π/κ for every κ > 0`,
-      "Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2], extended to [0, π] by sin ψ = sin(π − ψ)",
+      `$\\int_0^{${asPi(upper, LATEX)}} e^{-\\kappa\\sin\\psi}\\,d\\psi \\le \\pi/\\kappa$ for every $\\kappa > 0$`,
+      "Jordan's inequality $\\sin\\psi \\ge 2\\psi/\\pi$ on $[0, \\pi/2]$, extended to $[0, \\pi]$ by $\\sin\\psi = \\sin(\\pi - \\psi)$",
       {
         provenance: [
           {

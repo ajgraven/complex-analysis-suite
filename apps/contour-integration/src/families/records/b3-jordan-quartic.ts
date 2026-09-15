@@ -15,9 +15,20 @@ import type { Family } from "../schema.js";
 
 export const b3JordanQuartic: Family = {
   id: "jordan-quartic",
-  title: "∫_ℝ cos x/(1+x⁴) dx — algebraic poles with transcendental residues",
-  taxonomySection: "3",
+  title: "∫_{−∞}^{∞} cos x dx/(1+x⁴) by Jordan's lemma",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{\\cos x}{1+x^4}\\,dx$ by Jordan's lemma",
+  taxonomySection: "Fourier-type integrals and Jordan's lemma",
   tier: "B",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$, integrand $e^{iz}/(1+z^4)$",
+    point:
+      "The residues at $e^{i\\pi/4},e^{3i\\pi/4}$ carry $e^{iz_k}$; the identity $\\sum\\text{all residues}=0$ of the rational case no longer holds, since $e^{iz}$ is essentially singular at $\\infty$.",
+    citations: [
+      { book: "Brown–Churchill", where: "§80", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -111,7 +122,7 @@ export const b3JordanQuartic: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle (upper: a = 1 > 0)",
+        name: "the $R \\to \\infty$ semicircle (upper: $a = 1 > 0$)",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -210,6 +221,7 @@ export const b3JordanQuartic: Family = {
     },
     {
       params: { companion: "sin" },
+      label: "the sine companion",
       value: "0",
       numeric: 0,
       verifiedTo: 1e-14,

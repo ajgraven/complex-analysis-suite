@@ -1,18 +1,20 @@
 // The derivation panel's content, as data.
 //
-// These are the M3.5b gate: C1 naming L4 and its `iα·Res` while `∮` is 0, C2 landing the same π on a
+// These are the M3.5b gate: C1 naming L4 and its `i\\alpha\\operatorname{Res}` while `∮` is 0, C2 landing the same π on a
 // different piece, and the wrong half-plane showing its bound diverge. They also pin the two rules
 // that keep the panel from becoming PLAN §9's R2, *certification theatre*: a line may not be stronger
 // than the certificate it came from, and the answer's badge comes from the answer's own evidence
 // rather than from the argument-wide meet.
 import { describe, expect, it } from "vitest";
+import { constraintLabel } from "../src/engine/vocabulary.js";
 import { makeComplexFn, parse } from "@cas/expr";
 import { assembleVerdict, unknown } from "@cas/rigor";
 import { analyse } from "../src/engine/analyse.js";
 import { buildDerivation, DERIVATION_STAGES, type Derivation, type StageId } from "../src/engine/derivation.js";
 import type { Contour } from "../src/engine/contour/model.js";
 import { semicircleTemplate } from "../src/engine/contour/templates.js";
-import type { LedgerResult } from "../src/engine/ledger.js";
+import { rowFrom, type LedgerResult } from "../src/engine/ledger.js";
+import { claimOf } from "../src/engine/claims.js";
 import { findPoles } from "../src/kernel/poles.js";
 import type { Cx } from "../src/kernel/geom.js";
 import { FAMILIES } from "../src/families/index.js";
@@ -71,21 +73,21 @@ describe("C1 — the indentation, and where ∮ stops being the answer", () => {
     expect(must(d.conclusion, "a conclusion").text).toBe("π/2");
   });
 
-  it("names L4 and its iα·Res on the KILL line, with the swept angle that fixes the sign", () => {
+  it("names L4 and its i\\alpha\\operatorname{Res} on the KILL line, with the swept angle that fixes the sign", () => {
     const line = must(
-      linesOf(d, "kill").find((l) => l.text.includes("iα·Res")),
-      "an L4 line",
+      linesOf(d, "kill").find((l) => l.text.includes("i\\alpha\\operatorname{Res}")),
+      "an indentation line",
     );
-    expect(line.text).toContain("α = −1π");
-    expect(line.method).toContain("L4");
+    expect(line.text).toContain("\\alpha = -1\\pi");
+    expect(line.method).toContain("the indentation lemma");
     // The sign is geometry, not taste — the two classical wrong answers are each one factor away.
     expect(line.method).toContain("swept angle");
     expect(line.level).toBe("=");
   });
 
   it("shows ∮ = 0 in the same breath as the integral being π/2", () => {
-    expect(textsOf(d, "solve")).toContain("∮ f dz = 0");
-    expect(textsOf(d, "solve")).toContain("the integral = π/2");
+    expect(textsOf(d, "solve")).toContain("$\\oint_\\gamma f(z)\\,dz = 0$");
+    expect(textsOf(d, "solve")).toContain("$I = \\frac{\\pi}{2}$");
   });
 
   it("states the indentation's contribution as Pass 5's own input", () => {
@@ -93,7 +95,7 @@ describe("C1 — the indentation, and where ∮ stops being the answer", () => {
       saidIn(d, "solve").find((s) => s.includes("indentation")),
       "the indentation's bᵢ",
     );
-    expect(said).toContain("−iπ");
+    expect(said).toContain("-i\\pi");
     expect(said).toContain("not zero");
   });
 });
@@ -102,13 +104,13 @@ describe("C2 — the same π, moved onto a different piece", () => {
   const c1 = fromRecord("indented-sinc");
   const c2 = fromRecord("removable-one-minus-cos");
 
-  it("names L5 and a limit that is explicitly NOT zero", () => {
+  it("names the large-arc lemma and a limit that is explicitly not zero", () => {
     const line = must(
-      linesOf(c2, "kill").find((l) => l.text.includes("iα·L")),
-      "an L5 line",
+      linesOf(c2, "kill").find((l) => l.text.includes("i\\alpha L")),
+      "a large-arc line",
     );
-    expect(line.method).toContain("L5");
-    expect(line.text).toContain("NOT zero");
+    expect(line.method).toContain("the large-arc lemma");
+    expect(line.text).toContain("not zero");
     // L5 is DECLARED, not inferred: the degree test that would pick L2 is exactly the one that fails
     // here, so guessing would pick the wrong lemma and silently return 0 for the target.
     expect(line.level).toBe("=");
@@ -116,14 +118,16 @@ describe("C2 — the same π, moved onto a different piece", () => {
 
   it("lands on the same π/2 from a contour that also encloses nothing", () => {
     expect(must(c2.conclusion, "C2's conclusion").text).toBe("π/2");
-    expect(textsOf(c2, "solve")).toContain("∮ f dz = 0");
+    expect(textsOf(c2, "solve")).toContain("$\\oint_\\gamma f(z)\\,dz = 0$");
   });
 
   it("puts the non-zero contribution on the ARC, where C1 puts it on the indentation", () => {
     // GALLERY §5.0c's claim, executed: subtracting a principal part does not delete that term, it
     // MOVES its contribution onto the large arc. Same π, different piece.
-    const c1Piece = must(saidIn(c1, "solve").find((s) => s.includes("from KILL")), "C1's bᵢ");
-    const c2Piece = must(saidIn(c2, "solve").find((s) => s.includes("from KILL")), "C2's bᵢ");
+    // The label names the group in the reader's words (M8 step 0.2), so match through the map.
+    const from = constraintLabel("KILL").toLowerCase();
+    const c1Piece = must(saidIn(c1, "solve").find((s) => s.includes(from)), "C1's bᵢ");
+    const c2Piece = must(saidIn(c2, "solve").find((s) => s.includes(from)), "C2's bᵢ");
     expect(c1Piece).toContain("indentation");
     expect(c2Piece).toContain("semicircle");
     expect(c1Piece).not.toBe(c2Piece);
@@ -151,7 +155,7 @@ describe("the wrong half-plane fails diagnostically", () => {
       linesOf(lower, "kill").find((l) => l.status === "failed"),
       "a failed KILL line",
     );
-    expect(line.text).toContain("DIVERGES");
+    expect(line.text).toContain("diverges");
     expect(line.level).toBe("⚠");
     expect(must(line.repair, "a repair")).toContain("other half-plane");
     expect(lower.failedAt).toBe("KILL");
@@ -185,12 +189,12 @@ describe("a line is never stronger than the certificate it came from", () => {
   /** A ledger carrying exactly one row, whose evidence is `unknown`. */
   const oneUnknownRow: LedgerResult = {
     rows: [
-      {
-        constraint: "CATCH",
-        status: "unknown",
-        claim: "not every residue is known exactly, so the total is an estimate",
-        evidence: unknown("the residues", "some poles are not expressible in ℚ(i)(√d)"),
-      },
+      rowFrom(
+        "CATCH",
+        "unknown",
+        claimOf("catch.residues-inexact"),
+        unknown("the residues", "some poles are not expressible in ℚ(i)(√d)"),
+      ),
     ],
     closes: false,
     verdict: assembleVerdict([unknown("the residues", "some poles are not expressible")]),
@@ -210,7 +214,7 @@ describe("a line is never stronger than the certificate it came from", () => {
     const line = must(linesOf(d, "catch")[0], "the CATCH line");
     expect(line.level).toBe("?");
     expect(line.status).toBe("unknown");
-    expect(line.text).toBe("not every residue is known exactly, so the total is an estimate");
+    expect(line.text).toBe("some residues are numerical, so the total is an estimate");
     expect(d.closes).toBe(false);
     expect(d.conclusion).toBeUndefined();
   });

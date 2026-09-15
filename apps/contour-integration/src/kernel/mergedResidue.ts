@@ -36,6 +36,7 @@
 // Bernoulli numbers are computed here rather than in `@cas/exact` because this is their only
 // consumer (ADR-0007), from `Σ_{j=0}^{m} C(m+1,j) B_j = 0` — exact in ℚ, no table to mistype.
 import { Frac, Gauss, QiPoly } from "@cas/exact";
+import { LATEX } from "./notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { RatPi, formatRatPi } from "./ratPi.js";
 import type { KernelKind } from "./summationKernel.js";
@@ -179,19 +180,19 @@ export function mergedResidue(
     value,
     order,
     certificate: exact(
-      `Res(K·f, ${n}) = ${formatRatPi(value)}, at a merged pole of order ${order}`,
-      `orders ADD at a collision (the kernel's simple pole plus f's order-${m} one), and the residue ` +
-        "comes from the Laurent route rather than the order-m derivative formula, which explodes " +
-        "symbolically from m = 3 — the first case being exactly this one",
+      `$\\operatorname{Res}(Kf, ${n}) = ${formatRatPi(value, LATEX)}$, at a merged pole of order ${order}`,
+      `the orders add at a collision (the kernel's simple pole plus $f$'s order-$${m}$ one), and the ` +
+        "residue comes from the Laurent series of the product rather than the order-$m$ derivative " +
+        "formula, which explodes symbolically from $m = 3$ — the first case being exactly this one",
       {
         provenance: [
           {
             ok: true,
-            text: `the kernel's expansion is EVEN — 1/u + Σ t_k π^{2k} u^{2k−1} — so only c₀ and the even negative coefficients of f contribute, and the sum is finite at k ≤ ${maxK}`,
+            text: `the kernel's expansion is even — $1/u + \\sum_k t_k \\pi^{2k} u^{2k-1}$ — so only $c_0$ and the even negative coefficients of $f$ contribute, and the sum is finite at $k \\le ${maxK}$`,
           },
           {
             ok: true,
-            text: "t_k is rational (Bernoulli, from Σ C(m+1,j) B_j = 0 in exact ℚ) and the powers of π are even, so the value lands in ℚ(i)(π) — a different RING from the exponential basis G2 solves in, not a harder case of it",
+            text: "$t_k$ is rational (Bernoulli, from $\\sum_j \\binom{m+1}{j} B_j = 0$ in exact $\\mathbb{Q}$) and the powers of $\\pi$ are even, so the value lands in $\\mathbb{Q}(i)(\\pi)$ — a different ring from the exponential basis G2 solves in, not a harder case of it",
           },
         ],
       },

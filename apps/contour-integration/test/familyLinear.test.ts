@@ -283,8 +283,8 @@ describe("solveOver ℚ(i)(π) — D4's system", () => {
   it("splits rows in the documented order — real part first, then imaginary", () => {
     const M = realifyRows([D4_ROW]);
     expect(M).toHaveLength(2);
-    expect(M[0].map(formatRatPi)).toEqual(["4π²", "0", "0"]);
-    expect(M[1].map(formatRatPi)).toEqual(["0", "−4π", "0"]);
+    expect(M[0].map((v) => formatRatPi(v))).toEqual(["4π²", "0", "0"]);
+    expect(M[1].map((v) => formatRatPi(v))).toEqual(["0", "−4π", "0"]);
   });
 
   it("decides a zero coefficient structurally, because π is transcendental", () => {

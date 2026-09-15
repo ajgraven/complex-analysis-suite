@@ -21,9 +21,20 @@ import type { Family } from "../schema.js";
 
 export const c3PvSineOverXTimesQuadratic: Family = {
   id: "pv-sine-over-x-times-quadratic",
-  title: "∫_ℝ sin x/(x(x²+b²)) dx = (π/b²)(1 − e^{−b}) — a real pole and a complex pole together",
-  taxonomySection: "4",
+  title: "∫_{−∞}^{∞} sin x dx/(x(x²+b²)) by an indented semicircle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{\\sin x}{x(x^2+b^2)}\\,dx$ by an indented semicircle",
+  taxonomySection: "Principal values and indented contours",
   tier: "C",
+
+  description: {
+    contour: "real axis indented over $0$, closed by $\\Gamma_R$; integrand $e^{iz}/(z(z^2+b^2))$",
+    point:
+      "The pole at $ib$ contributes $2\\pi i\\operatorname{Res}$; the pole at $0$, on the path, contributes $-i\\pi\\operatorname{Res}$ through the indentation. The principal value belongs to the auxiliary integral; the target converges absolutely.",
+    citations: [
+      { book: "Brown–Churchill", where: "§82", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -97,7 +108,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
     pieces: [
       {
         id: "left",
-        name: "the real axis, x < −ρ",
+        name: "the real axis, $x < -\\rho$",
         geom: { kind: "segment", from: pt({ param: "R", mul: -1 }, 0), to: pt({ param: "rho", mul: -1 }, 0) },
         role: "target",
         // As in C1: only the SUM of the target coefficients is identifiable, since Pass 5 sums the
@@ -107,7 +118,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       },
       {
         id: "indent",
-        name: "the indentation over the real pole z = 0",
+        name: "the indentation over the real pole $z = 0$",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "rho" }, theta0: Math.PI, theta1: 0 },
         role: "vanish",
         lemma: "L4",
@@ -115,7 +126,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       },
       {
         id: "right",
-        name: "the real axis, x > ρ",
+        name: "the real axis, $x > \\rho$",
         geom: { kind: "segment", from: pt({ param: "rho" }, 0), to: pt({ param: "R" }, 0) },
         role: "target",
         coefficients: [{ targetId: "I", coefficient: "1/2" }],
@@ -123,7 +134,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       },
       {
         id: "bigarc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: Math.PI },
         role: "vanish",
         lemma: "L3",

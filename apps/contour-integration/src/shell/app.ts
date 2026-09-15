@@ -50,6 +50,7 @@ import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
 import { PRESETS } from "./presets.js";
+import { mathFragment, mathPlain } from "./math.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
@@ -64,9 +65,16 @@ import {
   type Handle,
 } from "../engine/contour/edit.js";
 import { isVariant, primaryGolden, type FamilyRun } from "../families/runFamily.js";
-import type { Family, FamilyTarget, Golden } from "../families/schema.js";
+import {
+  closedFormClaim,
+  contourIntegrandText,
+  relationText,
+  targetText,
+} from "../families/describe.js";
+import type { Family, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
+import { constraintLabel, roleLabel, type ConstraintId } from "../engine/vocabulary.js";
 import { TEMPLATES } from "./templates.js";
 import { decodeShell, encodeShell } from "./viewState.js";
 import {
@@ -200,6 +208,23 @@ const el = <K extends keyof HTMLElementTagNameMap>(
   return node;
 };
 
+/**
+ * `el`, for a sentence that may carry mathematics between dollars.
+ *
+ * Everything the ENGINE composes goes through this rather than through `el`'s `textContent`: a
+ * ledger claim, a method, a provenance step, a derivation line. Prose the shell writes itself does
+ * not need it, and is left on `el` so the difference is visible at the call site.
+ */
+const elMath = <K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  text?: string,
+): HTMLElementTagNameMap[K] => {
+  const node = el(tag, className);
+  if (text !== undefined) node.append(mathFragment(text));
+  return node;
+};
+
 const fmt = (x: number): string => {
   if (Object.is(x, -0)) return "0";
   const a = Math.abs(x);
@@ -209,48 +234,23 @@ const fmt = (x: number): string => {
 const fmtCx = ([re, im]: Cx): string => `${fmt(re)} ${im < 0 ? "−" : "+"} ${fmt(Math.abs(im))}i`;
 
 /** A fixture's bindings, short enough for a `<select>` option: `a = 5, b = 3`. */
-const fixtureLabel = (g: Golden): string => {
-  const parts = Object.entries(g.params).map(
-    ([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`,
-  );
+/**
+ * How a fixture reads in the picker: `a = 2, b = 1`, `half-range corollary`, `a = 0.75, one-sided sum`.
+ *
+ * A variant fixture's `params` carry a FLAG rather than a binding, so the flag is printed from the
+ * golden's own `label` and the key is skipped — `halfRange = true` named the implementation where a
+ * reader is choosing between alternative derivations. Real bindings still come from `params`, so a
+ * fixture carrying both (`series-cot-kernel` at `a = 0.75`) prints the number once, from one place.
+ */
+const fixtureLabel = (family: Family, g: Golden): string => {
+  const declared = new Set(family.parameters.map((p) => p.name));
+  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
+  const parts = Object.entries(g.params)
+    .filter(([k]) => declared.has(k))
+    .map(([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`);
+  if (g.label !== undefined) parts.push(g.label);
   return parts.length > 0 ? parts.join(", ") : "no parameters";
 };
-
-/**
- * The real quantity a record is about, rendered from the record's own fields.
- *
- * Deliberately built from `FamilyTarget` rather than written as prose per record: a second,
- * hand-written statement of what the integral is would be a second source of truth, and the first
- * time it disagreed with the executable one the app would be lying in the most legible place.
- */
-const targetText = (t: FamilyTarget): string => {
-  const bound = (x: string): string => (x === "inf" ? "∞" : x === "-inf" ? "−∞" : x);
-  const range = `(${bound(t.lower)} → ${bound(t.upper)})`;
-  return t.kind === "sum"
-    ? `Σ ${t.variable} ${range}  ${t.summand ?? "?"}`
-    : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
-};
-
-/**
- * What the auxiliary integrand's relation to the target actually IS, in one line.
- *
- * **NOT ALWAYS "the target is Re of ∮ f dz", and printing that unconditionally was false for G2.**
- * A tier-G record's target is a TERM of the residue sum — the kernel has residue 1 at every integer,
- * so `Res(K·f, n)` IS the summand — and `∮` tends to zero, taking any real part of it with it. The
- * record fills `relation` because `auxiliary` means "the contour integrand differs from the target's",
- * which is true; what is not true is that a real-linear functional recovers the target from `∮`. The
- * same declaration the COVER row reads decides which sentence this is, so the two cannot disagree.
- */
-function relationText(family: Family): string {
-  const aux = family.auxiliary;
-  if (aux === undefined) return "";
-  const inSum = family.residueSelection.targetTerms?.[0];
-  const how =
-    inSum === undefined
-      ? `the target is ${aux.relation} of ∮ f dz`
-      : `${inSum.targetId} is a TERM of the residue sum, not a functional of ∮ f dz`;
-  return `${how} — ${aux.note}`;
-}
 
 /**
  * A mounted shell, from the outside.
@@ -716,7 +716,11 @@ export function mountApp(root: Element): ShellHandle {
       if (cell.because !== null) th.append(el("div", "because small", `↑ ${cell.because}`));
       // **THE ANSWER, NOT `∮`.** C1's `∮` is exactly 0 while the integral it determines is π/2.
       const answer = el("div", "cellAnswer");
-      answer.textContent = cell.answer ?? (cell.closes ? "—" : `⚠ does not close (${cell.failedAt ?? "?"})`);
+      // `failedAt` is a ConstraintId — a data key. The cell names the GROUP (M8 step 0.2); an
+      // interpolated id is invisible to a grep over the source, and only the browser found it.
+      const failed = cell.failedAt === null ? null : constraintLabel(cell.failedAt as ConstraintId);
+      answer.textContent =
+        cell.answer ?? (cell.closes ? "—" : `⚠ does not close (${failed ?? "?"})`);
       th.append(answer);
       const open = el("button", "preset", "Open");
       open.type = "button";
@@ -884,7 +888,7 @@ export function mountApp(root: Element): ShellHandle {
     bar2.append(el("h2", undefined, "Choosing a contour"), drillClose);
     const legend = el("p", "muted small");
     legend.textContent =
-      "Four rungs, each supplying less: the worked argument, then its KILL column to fill in, then " +
+      "Four rungs, each supplying less: the worked argument, then its boundary terms to fill in, then " +
       "a choice of contour, then a blank plane. Where you start is where you left off.";
     const list = el("ul", "drillTasks");
     for (const task of DRILL_TASKS) {
@@ -1046,13 +1050,13 @@ export function mountApp(root: Element): ShellHandle {
       // writes a sentence about why a piece does what it does, and a reader who was right does not
       // need the claim spelled out before they move on.
       if (graded !== undefined && !graded.ok) {
-        drillCard.append(el("p", "small drillWhy", q.row.claim));
+        drillCard.append(elMath("p", "small drillWhy", q.row.claim));
       }
     }
     if (drillGraded === null) {
       const check = el("button", "preset", "Check");
       check.type = "button";
-      check.setAttribute("aria-label", "check the KILL column against the ledger");
+      check.setAttribute("aria-label", "check the boundary terms against the ledger");
       check.addEventListener("click", () => {
         drillGraded = gradePieces(questions, drillAnswers);
         if (allCorrect(drillGraded)) clearRung(task, 2);
@@ -2194,8 +2198,8 @@ export function mountApp(root: Element): ShellHandle {
       // down) that the engine has no route for. Offering it and then failing would read as a bug in
       // the record; saying so is the honest version.
       opt.textContent = variant
-        ? `${fixtureLabel(g)} — alternative derivation, not executable`
-        : fixtureLabel(g);
+        ? `${fixtureLabel(family, g)} — alternative derivation, not executable`
+        : fixtureLabel(family, g);
       opt.disabled = variant;
       if (golden === g) opt.selected = true;
       fixtureSelect.append(opt);
@@ -2244,26 +2248,6 @@ export function mountApp(root: Element): ShellHandle {
   };
 
   /**
-   * What is actually integrated, which is NOT the posed integrand.
-   *
-   * GALLERY §5.0 calls confusing the two "the single commonest error in the whole subject":
-   * `cos 2θ/(5 − 4cos θ)` is smooth at every real θ, and the contour integrand it becomes has a
-   * pole of order 2 at the origin. Read straight off the record, so the statement on screen is the
-   * one the engine acted on.
-   */
-  function contourIntegrandText(fam: Family): string {
-    if (fam.auxiliary) return fam.auxiliary.integrand;
-    const t = fam.targets[0];
-    if (t?.substitution) {
-      return (
-        `${t.integrand ?? "?"}   with  z = ${t.substitution.map},  ` +
-        `d${t.variable} = ${t.substitution.jacobian} dz`
-      );
-    }
-    return `${t?.integrand ?? "?"}   read in z — the real axis IS a piece of the contour`;
-  }
-
-  /**
    * The open record: what it claims, and what the engine independently got.
    *
    * Showing both is the point. The record's `closedForm` was derived and numerically verified by
@@ -2283,7 +2267,10 @@ export function mountApp(root: Element): ShellHandle {
 
     const head = el("p", "recordHead");
     head.append(el("span", "tag", `tier ${family.tier}`), el("span", "num", family.id));
-    recordCard.append(head, el("p", "muted small", family.title));
+    // The typeset sibling, because every other formula on this card and in the rail is typeset and
+    // a Unicode title beside them is the inconsistency step 0.5b removed. `title` stays the plain
+    // text: it is what the announcer speaks and what the figure caption prints.
+    recordCard.append(head, elMath("p", "muted small", family.titleLatex));
 
     for (const t of family.targets) {
       recordCard.append(el("p", "num targetLine", targetText(t)));
@@ -2313,8 +2300,19 @@ export function mountApp(root: Element): ShellHandle {
       dec.append(badge("≈"), ` ${fmt(solved.value)}`);
       recordCard.append(dec);
 
-      const claim = family.closedForm.simplified ?? family.closedForm.expr;
-      recordCard.append(el("p", "muted small", `the record claims  ${claim}`));
+      // The record's claim AT THIS FIXTURE, then the family's closed form where it holds. Both
+      // scopes are named, because a form valid for the family is not always valid here: see
+      // `families/describe.ts`.
+      const claim = closedFormClaim(family, golden);
+      // `claim.refusal` is deliberately NOT read here: a refusing fixture cannot reach this line.
+      // DESIGN §5's invariant 4 requires such a fixture to be rank-deficient, which is exactly what
+      // makes Pass 5 refuse, so `solved` is null and the whole block is skipped — measured on D3's
+      // two integer-`a` fixtures, where the card shows Pass 5's own refusal instead. A branch for it
+      // here would be unreachable code claiming to handle a case.
+      recordCard.append(el("p", "muted small", `the record claims  ${claim.atFixture}`));
+      if (claim.general !== null) {
+        recordCard.append(el("p", "muted small", `closed form  ${claim.general}`));
+      }
 
       const want = typeof golden.numeric === "number" ? golden.numeric : golden.numeric[0];
       const off = Math.abs(solved.value - want);
@@ -2415,7 +2413,7 @@ export function mountApp(root: Element): ShellHandle {
     }
 
     const head = el("p", ledger.closes ? "headline closes" : "headline open");
-    head.textContent = ledgerHeadline(ledger);
+    head.append(mathFragment(ledgerHeadline(ledger)));
     ledgerCard.append(head);
 
     // The headline IS the product — "does this argument close?" — so a screen-reader user should
@@ -2429,7 +2427,9 @@ export function mountApp(root: Element): ShellHandle {
         : ledgerHeadline(ledger);
     if (sentence !== announced) {
       announced = sentence;
-      announce(sentence);
+      // Spoken, not displayed: a screen reader reading KaTeX's markup would hear nothing useful, so
+      // this is one of `mathPlain`'s places — the sentence with its delimiters removed.
+      announce(mathPlain(sentence));
     }
 
     if (ledger.closes && ledger.value) {
@@ -2465,9 +2465,9 @@ export function mountApp(root: Element): ShellHandle {
       if (masked === "kill" && row.constraint === "KILL" && drillGraded === null) continue;
       const li = el("li", `ledgerRow ${row.status}`);
       li.append(
-        el("span", "constraint", row.constraint),
+        el("span", "constraint", constraintLabel(row.constraint)),
         el("span", "glyph", STATUS_GLYPH[row.status] ?? "?"),
-        el("span", "ledgerClaim", row.claim),
+        elMath("span", "ledgerClaim", row.claim),
       );
       if (row.repair !== undefined) li.append(el("span", "repair", row.repair));
       list.append(li);
@@ -2512,7 +2512,7 @@ export function mountApp(root: Element): ShellHandle {
 
       for (const statement of st.statements) {
         const row = el("p", "statement");
-        row.append(el("span", "stLabel", statement.label), el("span", "num", statement.text));
+        row.append(el("span", "stLabel", statement.label), elMath("span", "num", statement.text));
         block.append(row);
       }
 
@@ -2541,23 +2541,23 @@ export function mountApp(root: Element): ShellHandle {
       for (const line of st.lines) {
         const li = el("div", `derivLine ${line.status}`);
         const head = el("p", "derivClaim");
-        head.append(badge(line.level), ` ${line.text}`);
+        head.append(badge(line.level), " ", mathFragment(line.text));
         li.append(head);
         if (line.pieceName !== undefined) li.append(el("p", "muted small", line.pieceName));
-        li.append(el("p", "muted small method", line.method));
+        li.append(elMath("p", "muted small method", line.method));
         if (line.restriction !== undefined) li.append(el("p", "restriction", line.restriction));
 
         // A failed step is the diagnostic and is never folded away. The satisfied ones are the audit
         // trail — worth having, not worth reading first — so they go behind one disclosure.
         const failedSteps = line.provenance.filter((x) => !x.ok);
         const okSteps = line.provenance.filter((x) => x.ok);
-        for (const step of failedSteps) li.append(el("p", "provBad", `✗ ${step.text}`));
+        for (const step of failedSteps) li.append(elMath("p", "provBad", `✗ ${step.text}`));
         if (okSteps.length > 0) {
           const trail = el("details", "prov");
           trail.append(
             el("summary", "muted small", `audit trail (${okSteps.length} step${okSteps.length === 1 ? "" : "s"})`),
           );
-          for (const step of okSteps) trail.append(el("p", "provOk", `✓ ${step.text}`));
+          for (const step of okSteps) trail.append(elMath("p", "provOk", `✓ ${step.text}`));
           li.append(trail);
         }
         if (line.repair !== undefined) li.append(el("p", "repair", line.repair));
@@ -2850,7 +2850,7 @@ export function mountApp(root: Element): ShellHandle {
       const swatch = el("span", "chip");
       swatch.style.background = PIECE_COLOURS[piece.colour % PIECE_COLOURS.length];
       const pieceIntegral = integral?.pieces[k];
-      li.append(swatch, el("span", "pieceName", piece.name), el("span", "tag", piece.role));
+      li.append(swatch, el("span", "pieceName", piece.name), el("span", "tag", roleLabel(piece.role)));
       // **A SKIPPED QUADRATURE HAS NO VALUE, AND `0 + 0i` IS NOT IT.** `integrateContour` fills the
       // piece list with zeros when it declines to sample a multivalued integrand, which is fine as a
       // placeholder and a lie on screen: D6's upper edge is worth 2.22, and printing `0 + 0i` beside

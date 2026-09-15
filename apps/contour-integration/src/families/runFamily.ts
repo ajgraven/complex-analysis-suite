@@ -26,6 +26,7 @@ import { cofactorResidues } from "../kernel/kernelResidue.js";
 import { stripFactorOf } from "./stripFactor.js";
 import { FAMILIES, loadFamilies, type Violation } from "./index.js";
 import { contourIntegrandOf, instantiate } from "./instantiate.js";
+import { isVariant } from "./describe.js";
 import type { Family, Golden } from "./schema.js";
 import {
   piPieceLimits,
@@ -52,6 +53,11 @@ import type { RatPi } from "../kernel/ratPi.js";
 import type { Bindings } from "./system.js";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import { declaredEvaluator } from "../engine/declaredRun.js";
+
+// Moved to `describe.ts` in M8 step 0.1 — it reads the schema and nothing else, and the record card
+// needs it to decide whether a family's closed form is about the quantity THIS fixture computes.
+// Re-exported so every existing caller keeps its import.
+export { isVariant };
 
 export interface RunOptions {
   /**
@@ -178,21 +184,6 @@ export function numericBindings(bindings: Bindings): Record<string, number> {
     if (typeof value === "number") out[name] = value;
   }
   return out;
-}
-
-/**
- * Whether a fixture selects an alternative DERIVATION rather than binding parameters.
- *
- * Decided by NAME, not by type. `halfRange` and `closeDown` are booleans, but B2's
- * `companion: "re"` is a string, and keying off the type silently treats it as a parameter binding —
- * which made a test compare the wrong half of the contour value against zero. A declared SYMBOL is a
- * binding too: A4's fixtures name `g: "exp(z)"`, the entire function whose Taylor coefficients the
- * contour reads off, and counting that as a variant skipped every one of A4's fixtures.
- */
-export function isVariant(family: Family, golden: Golden): boolean {
-  const declared = new Set(family.parameters.map((p) => p.name));
-  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
-  return Object.keys(golden.params).some((k) => !declared.has(k));
 }
 
 /** The fixture to open a record at: the first that binds parameters rather than selecting a variant. */
@@ -341,6 +332,7 @@ export function runFamily(
               imported: imports.map((x) => ({
                 pieceId: x.pieceId,
                 text: x.text,
+                latex: x.latex,
                 numeric: x.value.numeric,
                 method: x.method,
                 source: x.value.atom.provenance,

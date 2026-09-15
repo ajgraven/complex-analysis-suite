@@ -460,10 +460,21 @@ async function main() {
 
   // Force software WebGL2 (SwiftShader) so the rendered DOM state — and therefore the audit — is the
   // same on any host GPU and matches the CI runner, keeping the committed baseline portable.
-  // PLAYWRIGHT_CHROMIUM_EXECUTABLE lets a host whose pre-installed Chromium build differs from the
-  // pinned Playwright (e.g. this sandbox: /opt/pw-browsers/chromium) drive that binary instead of a
-  // version-matched download; CI leaves it unset and uses the browser `playwright install` fetched.
-  const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
+  // Lets a host whose pre-installed Chromium build differs from the pinned Playwright (e.g. this
+  // sandbox: /opt/pw-browsers/chromium) drive that binary instead of a version-matched download; CI
+  // leaves both unset and uses the browser `playwright install` fetched.
+  //
+  // Two names and a probe, matching `packages/gpu/vitest.browser.config.ts`:
+  // `PLAYWRIGHT_CHROMIUM_EXECUTABLE` is this script's own, `CAS_CHROMIUM_EXECUTABLE` is the one the
+  // app browser suites use and the one CLAUDE.md documents, and `/opt/pw-browsers/chromium` is the
+  // managed dev container's path — so the roster runs there with nothing set at all. A documented
+  // variable that works for `pnpm test:browser` and silently not for `pnpm a11y` costs a session the
+  // time to find out why; in CI all three are absent and the provider uses its own build.
+  const LOCAL_CHROME = "/opt/pw-browsers/chromium";
+  const executablePath =
+    process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ||
+    process.env.CAS_CHROMIUM_EXECUTABLE ||
+    (existsSync(LOCAL_CHROME) ? LOCAL_CHROME : undefined);
   const browser = await chromium.launch({
     headless: true,
     executablePath,

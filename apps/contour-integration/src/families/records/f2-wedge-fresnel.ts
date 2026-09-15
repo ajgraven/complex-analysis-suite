@@ -33,10 +33,22 @@ export const f2WedgeFresnel: Family = {
   id: "wedge-fresnel",
   // Stated at general `n`, because the record runs there: the famous `∫cos = ∫sin` is the `n = 2`
   // case and a title naming only it would be false at the other fixture.
-  title:
-    "∫₀^∞ cos(xⁿ)dx = Γ(1+1/n)·cos(π/(2n)) — Fresnel at n = 2, with the hand-waved arc bound discharged",
-  taxonomySection: "7",
+  title: "∫₀^{∞} cos(xⁿ) dx and ∫₀^{∞} sin(xⁿ) dx by a sector of angle π/(2n)",
+  titleLatex: "$\\int_0^{\\infty}\\cos(x^n)\\,dx$ and $\\int_0^{\\infty}\\sin(x^n)\\,dx$ by a sector of angle $\\pi/(2n)$",
+  taxonomySection: "Rectangles and sectors",
   tier: "F",
+
+  description: {
+    contour: "the sector $0\\le\\arg z\\le\\pi/2n$, $|z|\\le R$; integrand $e^{iz^n}$, entire",
+    point:
+      "On the arc $|e^{iz^n}|=e^{-R^n\\sin n\\theta}$ and Jordan's inequality $\\sin\\phi\\ge2\\phi/\\pi$ on $[0,\\pi/2]$ gives $\\int_{\\Gamma_R}=O(R^{1-n})$; on the return ray $e^{iz^n}=e^{-t^n}$, and $\\int_0^\\infty e^{-t^n}dt=\\Gamma(1+1/n)$ is taken as known.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 2", text: "" },
+      { book: "Brown–Churchill", where: "§81", text: "" },
+      { book: "Remmert", where: "Ch. 14", text: "Fresnel integrals" },
+    ],
+  },
+  frontRow: 7,
 
   targets: [
     {
@@ -140,7 +152,7 @@ export const f2WedgeFresnel: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ sector arc, angle π/(2n)",
+        name: "the $R \\to \\infty$ sector arc, angle $\\pi/(2n)$",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -154,7 +166,7 @@ export const f2WedgeFresnel: Family = {
       },
       {
         id: "ray1",
-        name: "the return ray arg z = π/(2n)",
+        name: "the return ray $\\arg z = \\pi/(2n)$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: { param: "wedgeX" } }, { param: "R", mul: { param: "wedgeY" } }),
@@ -164,7 +176,7 @@ export const f2WedgeFresnel: Family = {
         knownValue: {
           expr: "-exp(i*pi/(2*n))*gamma(1 + 1/n)",
           method:
-            "on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (the real substitution u = tⁿ), and the leading minus is the reversed traversal",
+            "on this ray $e^{iz^n} = e^{-t^n}$; $\\int_0^\\infty e^{-t^n}dt = \\Gamma(1+1/n)$ is imported (the real substitution $u = t^n$), and the leading minus is the reversed traversal",
           rigor: "=",
         },
         colour: 2,
@@ -193,7 +205,12 @@ export const f2WedgeFresnel: Family = {
 
   closedForm: {
     expr: "-knownValue(ray1)",
-    simplified: "exp(i*pi/(2*n))*Gamma(1 + 1/n)",
+    // The PRIMARY target is `C = ∫cos(x^n)`, which is real; `e^{iπ/(2n)}Γ(1+1/n)` is the combined
+    // `C + iS`, and printing it as the claim put a complex number beside a real value. `C` is its
+    // real part, `S = sin(pi/(2*n))*Gamma(1 + 1/n)` its imaginary one.
+    // `gamma`, not `Gamma`: the app's parser spells the function in lower case and prints it `\Gamma`,
+    // so this is a spelling normalisation and not a change of form (M8 step 0.4).
+    simplified: "cos(pi/(2*n))*gamma(1 + 1/n)",
   },
 
   rigor: {
@@ -257,7 +274,7 @@ export const f2WedgeFresnel: Family = {
     },
     {
       params: { n: 3 },
-      value: "Gamma(4/3)*cos(pi/6)",
+      value: "gamma(4/3)*cos(pi/6)",
       numeric: 0.77334294207799015,
       verifiedTo: 7.2e-16,
       method: "alternating + CVZ, exercising the general n form where cos(π/(2n)) ≠ sin(π/(2n))",

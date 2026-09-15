@@ -4,15 +4,17 @@
 // `2.2214414` throw it away at the last step. The formatter is small, but it is the difference
 // between a result the reader can check and a decimal they have to take on trust.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { TEXT, type Notation } from "./notation.js";
 
-const MINUS = "−"; // a real minus sign, not a hyphen — these appear next to digits
-const RADICAL = "√";
+// M8 step 0.4b: every function here takes the NOTATION it writes in, defaulting to the text the app
+// has always printed. The LaTeX sibling is the same code at `LATEX`, so a term one form drops is a
+// term the other drops — see `notation.ts`.
 
 /** A rational as `p`, `p/q`, or `−p/q`. */
-export function formatFrac(f: Frac): string {
-  const sign = f.n < 0n ? MINUS : "";
+export function formatFrac(f: Frac, n_: Notation = TEXT): string {
+  const sign = f.n < 0n ? n_.minus : "";
   const n = f.n < 0n ? -f.n : f.n;
-  return f.d === 1n ? `${sign}${n}` : `${sign}${n}/${f.d}`;
+  return f.d === 1n ? `${sign}${n}` : `${sign}${n_.over(String(n), f.d)}`;
 }
 
 /**
@@ -26,10 +28,10 @@ export function formatFrac(f: Frac): string {
  * rather than a multiple of π or √d — dropping the `1` left the value 1 rendering as the empty
  * string, so a residue of exactly 1 printed as nothing at all.
  */
-function times(f: Frac, symbol: string): string {
+function times(f: Frac, symbol: string, n_: Notation): string {
   const n = f.n < 0n ? -f.n : f.n;
-  const head = n === 1n && symbol !== "" ? symbol : `${n}${symbol}`;
-  return f.d === 1n ? head : `${head}/${f.d}`;
+  const head = n === 1n && symbol !== "" ? symbol : n_.juxtapose(String(n), symbol);
+  return f.d === 1n ? head : n_.over(head, f.d);
 }
 
 export interface Term {
@@ -38,20 +40,25 @@ export interface Term {
 }
 
 /** Join rendered terms with the right signs: `−a + b − c`, or `0` for nothing. */
-export function joinTerms(terms: readonly Term[]): string {
+export function joinTerms(terms: readonly Term[], n_: Notation = TEXT): string {
   if (terms.length === 0) return "0";
   return terms
     .map((t, k) =>
-      k === 0 ? `${t.negative ? MINUS : ""}${t.text}` : ` ${t.negative ? MINUS : "+"} ${t.text}`,
+      k === 0 ? `${t.negative ? n_.minus : ""}${t.text}` : ` ${t.negative ? n_.minus : "+"} ${t.text}`,
     )
     .join("");
 }
 
 /** The terms of `g · symbol`: up to one real and one imaginary. */
-export function gaussTerms(g: Gauss, symbol: string): Term[] {
+export function gaussTerms(g: Gauss, symbol: string, n_: Notation = TEXT): Term[] {
   const terms: Term[] = [];
-  if (!g.re.isZero()) terms.push({ negative: g.re.n < 0n, text: times(g.re, symbol) });
-  if (!g.im.isZero()) terms.push({ negative: g.im.n < 0n, text: times(g.im, `i${symbol}`) });
+  if (!g.re.isZero()) terms.push({ negative: g.re.n < 0n, text: times(g.re, symbol, n_) });
+  if (!g.im.isZero()) {
+    terms.push({
+      negative: g.im.n < 0n,
+      text: times(g.im, n_.juxtapose(n_.imaginary, symbol), n_),
+    });
+  }
   return terms;
 }
 
@@ -60,15 +67,15 @@ export function gaussTerms(g: Gauss, symbol: string): Term[] {
  *
  * `0`, `3`, `−i/2`, `1 + 4i/3`, `1/2 − i`.
  */
-export function formatGauss(g: Gauss): string {
-  return joinTerms(gaussTerms(g, ""));
+export function formatGauss(g: Gauss, n_: Notation = TEXT): string {
+  return joinTerms(gaussTerms(g, "", n_), n_);
 }
 
 /** An element of ℚ(i)(√d): `a + b√d`, e.g. `−i√2/4`, `1/2 + √3/2`. */
-export function formatSqrtExt(x: SqrtExt): string {
-  const terms = [...gaussTerms(x.a, "")];
-  if (!x.b.isZero()) terms.push(...gaussTerms(x.b, `${RADICAL}${x.d}`));
-  return joinTerms(terms);
+export function formatSqrtExt(x: SqrtExt, n_: Notation = TEXT): string {
+  const terms = [...gaussTerms(x.a, "", n_)];
+  if (!x.b.isZero()) terms.push(...gaussTerms(x.b, n_.radical(x.d), n_));
+  return joinTerms(terms, n_);
 }
 
 /**
@@ -77,16 +84,22 @@ export function formatSqrtExt(x: SqrtExt): string {
  * `2πi·(a + bi) = −2πb + 2πa·i`, so the real and imaginary parts swap roles — which is why a purely
  * imaginary residue sum produces a purely *real* answer, as it must for a real integral.
  */
-function twoPiITerms(g: Gauss, radical: string): Term[] {
+function twoPiITerms(g: Gauss, radical: string, n_: Notation): Term[] {
   const two = Frac.of(2n);
   const piCoeff = g.im.neg().mul(two);
   const piICoeff = g.re.mul(two);
   const terms: Term[] = [];
   if (!piCoeff.isZero()) {
-    terms.push({ negative: piCoeff.n < 0n, text: times(piCoeff, `π${radical}`) });
+    terms.push({
+      negative: piCoeff.n < 0n,
+      text: times(piCoeff, n_.juxtapose(n_.pi, radical), n_),
+    });
   }
   if (!piICoeff.isZero()) {
-    terms.push({ negative: piICoeff.n < 0n, text: times(piICoeff, `πi${radical}`) });
+    terms.push({
+      negative: piICoeff.n < 0n,
+      text: times(piICoeff, n_.juxtapose(n_.pi, n_.imaginary, radical), n_),
+    });
   }
   return terms;
 }
@@ -97,15 +110,15 @@ function twoPiITerms(g: Gauss, radical: string): Term[] {
  * Every value in tiers A–C is π times an algebraic number, because `2πi Σ Res` and L4's `iα·Res` both
  * are. So the solve works in units of π throughout and π is never evaluated: `π/2`, not 1.5707963.
  */
-export function formatPiSqrt(x: SqrtExt): string {
-  const terms = [...gaussTerms(x.a, "π")];
-  if (!x.b.isZero()) terms.push(...gaussTerms(x.b, `π${RADICAL}${x.d}`));
-  return joinTerms(terms);
+export function formatPiSqrt(x: SqrtExt, n_: Notation = TEXT): string {
+  const terms = [...gaussTerms(x.a, n_.pi, n_)];
+  if (!x.b.isZero()) terms.push(...gaussTerms(x.b, n_.juxtapose(n_.pi, n_.radical(x.d)), n_));
+  return joinTerms(terms, n_);
 }
 
 /** `2πi · g`, simplified — the form a residue sum over ℚ(i) is reported in. */
-export function formatTwoPiI(g: Gauss): string {
-  return joinTerms(twoPiITerms(g, ""));
+export function formatTwoPiI(g: Gauss, n_: Notation = TEXT): string {
+  return joinTerms(twoPiITerms(g, "", n_), n_);
 }
 
 /**
@@ -114,8 +127,8 @@ export function formatTwoPiI(g: Gauss): string {
  * The case this exists for: the residues of `1/(1+z⁴)` sum over the upper half plane to `−i√2/4`,
  * and `2πi` times that is **`π√2/2`**. Printing `2.2214414` there would be correct and worthless.
  */
-export function formatTwoPiISqrt(x: SqrtExt): string {
-  const terms = [...twoPiITerms(x.a, "")];
-  if (!x.b.isZero()) terms.push(...twoPiITerms(x.b, `${RADICAL}${x.d}`));
-  return joinTerms(terms);
+export function formatTwoPiISqrt(x: SqrtExt, n_: Notation = TEXT): string {
+  const terms = [...twoPiITerms(x.a, "", n_)];
+  if (!x.b.isZero()) terms.push(...twoPiITerms(x.b, n_.radical(x.d), n_));
+  return joinTerms(terms, n_);
 }

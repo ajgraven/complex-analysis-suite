@@ -272,6 +272,15 @@ export interface Golden {
    * worth a separate `variant` field if a later tier needs one.
    */
   readonly params: Readonly<Record<string, string | number | boolean>>;
+  /**
+   * What this fixture IS, when its `params` carry a variant flag rather than a binding.
+   *
+   * Required on a variant (invariant 5) and absent otherwise. The picker printed `halfRange = true`
+   * and `companion = re` — the implementation's name for the alternative derivation, where a reader
+   * is choosing between *the half-range corollary* and *the cosine companion*. Real parameter
+   * bindings are still printed from `params`, so this never becomes a second copy of a number.
+   */
+  readonly label?: string;
   readonly value: string;
   readonly numeric: number | readonly [number, number];
   readonly verifiedTo: number;
@@ -295,12 +304,101 @@ export interface Golden {
   readonly refuses?: string;
 }
 
+/**
+ * A textbook a record's argument can be read in.
+ *
+ * A closed enum, so a citation cannot name a book the gallery has not settled on. Eight, because
+ * that is what the content review drew on; adding a ninth is a deliberate act.
+ */
+export type CitationBook =
+  | "Ahlfors"
+  | "Conway"
+  | "Stein–Shakarchi"
+  | "Brown–Churchill"
+  | "Marsden–Hoffman"
+  | "Needham"
+  | "Freitag–Busam"
+  | "Remmert";
+
+/**
+ * Where this argument can be read in a standard text.
+ *
+ * **Chapter-level, and never an exercise number.** The content review marked the references it could
+ * not confirm to the exercise; carrying one anyway would be a claim the gallery cannot support, and
+ * a reader who looks it up and finds nothing trusts the rest less. So the exercise clause is always
+ * dropped, and a reference whose section was itself unconfirmed is widened to its chapter — while
+ * one the review DID confirm keeps its section, because citing `Ch. 4 §5` where `Ch. 4 §5.3` was
+ * checked discards something true.
+ */
+export interface Citation {
+  /** What this reference covers, when naming it helps — `Jordan's lemma`. May be empty. */
+  readonly text: string;
+  readonly book: CitationBook;
+  /** `Ch. 4 §5.3`, `§85`, `Ch. V §2`. Never empty. */
+  readonly where: string;
+}
+
+/**
+ * The eight groups the gallery is organised into.
+ *
+ * These REPLACE the research-document section numbers (`"1"`, `"5.1"`, …) the records carried, which
+ * named a back-reference no reader has. The groups are the reader's, so they are sentences.
+ */
+export const TAXONOMY_SECTIONS = [
+  "Trigonometric integrals over [0, 2π]",
+  "Rational functions on ℝ",
+  "Fourier-type integrals and Jordan's lemma",
+  "Principal values and indented contours",
+  "Multivalued integrands: keyholes",
+  "Multivalued integrands: dogbones and the residue at infinity",
+  "Rectangles and sectors",
+  "Series by the residue theorem",
+] as const;
+
+export type TaxonomySection = (typeof TAXONOMY_SECTIONS)[number];
+
+/**
+ * What the record says about itself, on screen, in the same three parts every time.
+ *
+ * The identity itself is not here: it is `targets` and `closedForm`, and a copy would be a second
+ * source of truth for the one thing the engine computes. What a reader cannot derive from those is
+ * **which contour** and **what the example is FOR**, so those are the two sentences, and the
+ * citations say where to read the argument in full.
+ */
+export interface FamilyDescription {
+  /** The contour and substitution — `the unit circle, $z=e^{i\theta}$, $d\theta = dz/(iz)$`. */
+  readonly contour: string;
+  /** Why this entry exists: the thing it teaches that its neighbours do not. One or two sentences. */
+  readonly point: string;
+  /** At least one. */
+  readonly citations: readonly Citation[];
+}
+
 export interface Family {
   readonly id: string;
+  /**
+   * The human title: what the integral IS and which contour does it.
+   *
+   * `∫₀^{2π} dθ/(a + b cos θ) by the unit circle` — a name, not a lesson. The essay titles these
+   * replaced (`— the reciprocal-root pair`, `— where ML is not merely loose but useless`) told a
+   * reader the punchline before the example, and read as house voice rather than as a gallery.
+   */
   readonly title: string;
-  /** Back-reference into research/03. */
-  readonly taxonomySection: string;
+  /** The same title typeset, for the card. Text outside `$…$`, LaTeX inside, as everywhere else. */
+  readonly titleLatex: string;
+  /** Which of the eight groups this belongs to. */
+  readonly taxonomySection: TaxonomySection;
   readonly tier: "A" | "B" | "C" | "D" | "E" | "F" | "G";
+
+  /** The four-line standard: the identity (from `targets`), the contour, the point, the references. */
+  readonly description: FamilyDescription;
+
+  /**
+   * Rank in the gallery's front row, 1–8, on the eight classics — absent on the other twenty.
+   *
+   * One per group, so the front row is a tour of the taxonomy rather than a favourites list.
+   */
+  readonly frontRow?: number;
 
   readonly targets: readonly FamilyTarget[];
 
@@ -492,7 +590,25 @@ export interface Family {
     | "enclosure"
     | "rootSum";
 
-  readonly closedForm: { readonly expr: string; readonly simplified?: string };
+  /**
+   * What the record claims, in two forms.
+   *
+   * `expr` is the DERIVATION — `2*pi*i*Sum(Res(P(z)/Q(z), z_k), im(z_k) > 0)` — a statement of the
+   * method in the gallery's own notation, not an expression any evaluator can read. `simplified` is
+   * the answer in closed form, and it is what a reader wants to see.
+   *
+   * **`simplified` is not always valid across the family**, which is why the condition exists. Five
+   * records' forms are sign-restricted or fixture-specific (`2*pi/sqrt(a^2 - b^2)` holds for `a > 0`
+   * only; `pi/6` is A3 at `n = 2`), and the record card printed each of them beside the engine's
+   * number for a fixture that contradicted it. `simplifiedWhen` is an `@cas/expr` boolean in the
+   * family's parameters; absent means unrestricted. `families/describe.ts` decides it, and a
+   * condition it cannot decide withholds the form rather than showing it unguarded.
+   */
+  readonly closedForm: {
+    readonly expr: string;
+    readonly simplified?: string;
+    readonly simplifiedWhen?: string;
+  };
   readonly rigor: { readonly policy: "min"; readonly inputs: readonly string[] };
   readonly traps: readonly {
     readonly id: string;

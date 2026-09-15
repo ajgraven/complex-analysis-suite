@@ -29,6 +29,7 @@
 // why the windings are computed here rather than looked up (the same reason `stripTheorem` takes
 // `pieces` for its margin poles).
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX, TEXT, type Notation } from "../kernel/notation.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { formatSqrtExt } from "../kernel/formatExact.js";
 import { asHyperbolicForm } from "../kernel/cothForm.js";
@@ -43,7 +44,7 @@ import type { ContourIntegral } from "./contour/integrate.js";
 import { checkAgainstQuadrature, type ResidueTheoremResult } from "./residueTheorem.js";
 
 export const SUMMATION_THEOREM_IDENTITY =
-  "∮ K·f dz = 2πi[ Σ_{|n|≤N} Res(K·f, n) + Σⱼ Res(K·f, zⱼ) ],  K = π cot(πz) or π csc(πz)";
+  "$\\oint_{\\Gamma_N} Kf\\,dz = 2\\pi i\\left[\\sum_{|n| \\le N} \\operatorname{Res}(Kf, n) + \\sum_j \\operatorname{Res}(Kf, z_j)\\right]$, with $K = \\pi\\cot\\pi z$ or $\\pi\\csc\\pi z$";
 
 export interface SummationTheoremInput {
   readonly kernel: SummationKernel;
@@ -60,15 +61,15 @@ const declined = (claim: string, reason: string): ResidueTheoremResult => ({
 });
 
 /** `Σⱼ Res(K·f, zⱼ)/π` rendered as the gallery renders it — the named form, or a decimal. */
-function describeCofactorSum(total: ExpRatio): string {
+function describeCofactorSum(total: ExpRatio, n_: Notation = TEXT): string {
   const named = asHyperbolicForm(total);
-  if (named.ok) return formatSineForm(named.form);
+  if (named.ok) return formatSineForm(named.form, n_);
   return `${(Math.PI * ratioToTuple(total)[0]).toPrecision(10)}`;
 }
 
 /** `+ x`, or `− |x|` when the term is already negative — `2πi(205/72 + −π²/3)` reads as neither. */
-const joinSigned = (text: string): string =>
-  text.startsWith("−") ? `− ${text.slice(1)}` : `+ ${text}`;
+const joinSigned = (text: string, n_: Notation = TEXT): string =>
+  text.startsWith(n_.minus) ? `${n_.minus} ${text.slice(n_.minus.length)}` : `+ ${text}`;
 
 export function applySummationTheorem(input: SummationTheoremInput): ResidueTheoremResult {
   const { kernel, band, integral, pieces } = input;
@@ -211,25 +212,31 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   // infinite sum in its named form. `Σⱼ Res = −T/π·π = −T`, so the minus is the identity's own and
   // not a sign chosen to make the line read well.
   const infinite = scaleRatio(weighted, SqrtExt.fromGauss(new Gauss(Frac.of(-1n), Frac.ZERO)));
-  const text =
-    exactInPi === undefined
-      ? `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} − ${describeCofactorSum(infinite)})`
-      : `2πi(${formatSqrtExt(SqrtExt.fromGauss(partial))} ${joinSigned(formatRatPi(mergedTotal))})`;
+  // `2πi[Σ − T]` in either notation: the `2πi` head, the partial sum, and the infinite sum's named
+  // form. Written once over the notation rather than twice, like every other value in the app.
+  const closedContour = (n_: Notation): string =>
+    `${n_.juxtapose("2", n_.pi, n_.imaginary)}${n_.group(
+      exactInPi === undefined
+        ? `${formatSqrtExt(SqrtExt.fromGauss(partial), n_)} ${n_.minus} ${describeCofactorSum(infinite, n_)}`
+        : `${formatSqrtExt(SqrtExt.fromGauss(partial), n_)} ${joinSigned(formatRatPi(mergedTotal, n_), n_)}`,
+    )}`;
+  const text = closedContour(TEXT);
+  const latex = closedContour(LATEX);
 
   const certificates: Certificate[] = [
     ...mergedCertificates,
     exact(
       `∮ = 2πi[Σ over ${counted} integer pole${counted === 1 ? "" : "s"} + Σ over ${cofactor.at.length} pole${cofactor.at.length === 1 ? "" : "s"} of the cofactor]`,
-      "the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements",
+      "the kernel's residue is exactly $1$ ($\\cot$) or exactly $(-1)^n$ ($\\csc$) at every integer, so its term is $f(n)$ evaluated exactly over $\\mathbb{Q}(i)$; at a pole $z_j$ of $f$ it is $K(z_j)\\operatorname{Res}(f, z_j)$, exact as a quotient of basis elements",
       {
         provenance: [
           {
             ok: true,
-            text: `every pole of the cofactor was asked for its winding number and is enclosed ${weight === 1 ? "once" : `with winding ${weight}`} — the record's 'once N+½ > a', checked rather than assumed`,
+            text: `every pole of the cofactor was asked for its winding number and is enclosed ${weight === 1 ? "once" : `with winding ${weight}`} — checked rather than assumed`,
           },
           {
             ok: true,
-            text: "at the contour drawn this is 2πi times the PARTIAL sum minus the infinite one; it is the limit N → ∞ that sends it to zero, and that limit is what the vanishing sides establish",
+            text: "at the contour drawn this is $2\\pi i$ times the partial sum minus the infinite one; it is the limit $N \\to \\infty$ that sends it to zero, and that limit is what the vanishing sides establish",
           },
         ],
       },
@@ -242,7 +249,7 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
   if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
-    exactValue: { value, text },
+    exactValue: { value, text, latex },
     ...(exactInPi === undefined ? {} : { exactInPi }),
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
     ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),

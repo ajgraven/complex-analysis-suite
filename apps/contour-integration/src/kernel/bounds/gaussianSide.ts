@@ -29,6 +29,7 @@
 import { Frac, Gauss, QiPoly } from "@cas/exact";
 import { bound, refuse } from "@cas/rigor";
 import { formatFrac } from "../formatExact.js";
+import { LATEX } from "../notation.js";
 import type { ArcBound } from "./mlRational.js";
 
 export interface GaussianSide {
@@ -40,6 +41,26 @@ export interface GaussianSide {
 }
 
 /** `Re Q(c + iy)` as `A y² + B y + C`, exactly. Only `q₀, q₁, q₂` enter — see the degree guard. */
+/**
+ * `Ay² + By + C` written the way it would be by hand.
+ *
+ * The first draft interpolated three `formatFrac`s around literal `+`s and printed `1y² + −17/10y +
+ * −36`: a unit leading coefficient spelled out, and a negative term reached through a `+`. The
+ * quadratic is the evidence that the maximum is ATTAINED rather than majorised, so it is the one
+ * number on the row a reader checks by hand.
+ */
+function quadratic(A: Frac, B: Frac, C: Frac): string {
+  const term = (f: Frac, symbol: string, lead: boolean): string => {
+    if (f.n === 0n) return "";
+    const neg = f.n < 0n;
+    const mag = neg ? f.neg() : f;
+    const body = symbol !== "" && mag.n === mag.d ? symbol : `${formatFrac(mag, LATEX)}${symbol}`;
+    return lead ? `${neg ? "-" : ""}${body}` : ` ${neg ? "-" : "+"} ${body}`;
+  };
+  const head = term(A, "y^2", true);
+  return `${head}${term(B, "y", head === "")}${term(C, "", head === "" && B.n === 0n)}` || "0";
+}
+
 function realPartAlongLine(q: QiPoly, c: Frac): { A: Frac; B: Frac; C: Frac } {
   const q0 = q.coeff(0);
   const q1 = q.coeff(1);
@@ -110,23 +131,23 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
   const peak = maximumOn(A, B, C, lo, hi);
   const [lr, li] = lambda.toTuple();
   const value = Math.hypot(lr, li) * length.toNumber() * Math.exp(peak.value.toNumber());
-  const at = `at Re z = ${formatFrac(s.c)}`;
-  const claim = `|∫ over the vertical side| ≤ ${value.toExponential(3)} ${at}`;
+  const at = `at $\\operatorname{Re} z = ${formatFrac(s.c)}$`;
+  const claim = `the vertical side: $\\left|\\int f\\,dz\\right| \\le ${value.toExponential(3)}$ ${at}`;
   const provenance = [
     {
       ok: true,
       text:
-        `max|f| on the side is ATTAINED, not majorised: Re Q(c+iy) is the exact quadratic ` +
-        `${formatFrac(A)}y² + ${formatFrac(B)}y + ${formatFrac(C)}, whose maximum on the segment is at ` +
-        `y = ${formatFrac(peak.at)}`,
+        `$\\max|f|$ on the side is attained, not majorised: $\\operatorname{Re} Q(c+iy)$ is the exact quadratic ` +
+        `$${quadratic(A, B, C)}$, whose maximum on the segment is at ` +
+        `$y = ${formatFrac(peak.at, LATEX)}$`,
     },
     {
       ok: true,
-      text: `the limit rests on Re(q₂) = ${formatFrac(leading)} alone: the rectangle's height is fixed, so as R → ∞ the vertex leaves the segment and the bound is O(e^{Re(q₂)R²})`,
+      text: `the limit rests on $\\operatorname{Re}(q_2) = ${formatFrac(leading, LATEX)}$ alone: the rectangle's height is fixed, so as $R \\to \\infty$ the vertex leaves the segment and the bound is $O(e^{\\operatorname{Re}(q_2)R^2})$`,
     },
     {
       ok: false,
-      text: "e^{max Re Q} is transcendental, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone",
+      text: "$e^{\\max \\operatorname{Re} Q}$ is transcendental, so the bound's value is a float — the limit is what the lemma needs, and that rests on the sign alone",
     },
   ];
 
@@ -138,13 +159,13 @@ export function gaussianSideBound(q: QiPoly, lambda: Gauss, s: GaussianSide): Ar
       asymptotics === "vanishes"
         ? bound(
             "≤",
-            `${claim}, and → 0 as R → ∞ because the bound is O(e^{(${formatFrac(leading)})R²}) and that exponent is negative`,
-            "L1, the ML inequality on a vertical side, with max|f| the exact maximum of a quadratic in ℚ",
+            `${claim}, and $\\to 0$ as $R \\to \\infty$ because the bound is $O(e^{(${formatFrac(leading)})R^2})$ and that exponent is negative`,
+            "the ML-estimate on a vertical side, with $\\max|f|$ the exact maximum of a quadratic in $\\mathbb{Q}$",
             { provenance },
           )
         : refuse(
-            `${claim}, and it DIVERGES as R → ∞: the bound is O(e^{(${formatFrac(leading)})R²})`,
-            "L1 on a vertical side — the bound holds, the lemma does not discharge",
+            `${claim}, and it diverges as $R \\to \\infty$: the bound is $O(e^{(${formatFrac(leading)})R^2})$`,
+            "the ML-estimate on a vertical side — the bound holds, the lemma does not discharge",
             {
               // THE SAME FIRST STEP AS THE DISCHARGING BRANCH. A diverging row is still a row about a
               // computed number, and dropping the one line that says how `max|f|` was found would

@@ -37,9 +37,20 @@ import type { Family } from "../schema.js";
 
 export const d7DogboneTwoFractionalPowers: Family = {
   id: "dogbone-two-fractional-powers",
-  title: "∫₀^b x^μ (b−x)^(1−μ)/(c−x) dx = (π/sin πμ)·(c − (1−μ)b − c^μ(c−b)^(1−μ))",
-  taxonomySection: "5.3",
+  title: "∫₀^{b} x^{μ}(b−x)^{1−μ} dx/(c−x) by a dogbone",
+  titleLatex: "$\\int_0^{b}\\frac{x^{\\mu}(b-x)^{1-\\mu}}{c-x}\\,dx$ by a dogbone",
+  taxonomySection: "Multivalued integrands: dogbones and the residue at infinity",
   tier: "D",
+
+  description: {
+    contour: "the dogbone about $[0,b]$; $\\arg z\\in[0,2\\pi)$, $\\arg(b-z)\\in(-\\pi,\\pi]$",
+    point:
+      "The exponents sum to $1$, so the bounded cut is admissible; $f\\to e^{i\\pi\\mu}\\ne0$ at $\\infty$, and $\\operatorname{Res}(f,\\infty)$ is the larger part of the answer. No standard text treats this exact integral; the method is the dogbone with the residue at infinity.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §5", text: "residue at infinity" },
+      { book: "Marsden–Hoffman", where: "§4", text: "dogbone" },
+    ],
+  },
 
   targets: [
     {
@@ -136,7 +147,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
     pieces: [
       {
         id: "top",
-        name: "the upper edge, left to right (arg z = 0, arg(b−z) = 0)",
+        name: "the upper edge, left to right ($\\arg z = 0$, $\\arg(b-z) = 0$)",
         geom: {
           kind: "segment",
           from: pt({ param: "eta" }, 0),
@@ -148,7 +159,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       },
       {
         id: "endB",
-        name: "the η-circle round z = b, upper lip to lower",
+        name: "the $\\eta$-circle round $z = b$, upper lip to lower",
         geom: {
           kind: "arc",
           center: pt({ param: "b" }, 0),
@@ -162,7 +173,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       },
       {
         id: "bottom",
-        name: "the lower edge, right to left (arg z = 2π)",
+        name: "the lower edge, right to left ($\\arg z = 2\\pi$)",
         geom: {
           kind: "segment",
           from: pt({ param: "eta", mul: -1, add: { param: "b" } }, 0),
@@ -178,7 +189,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       },
       {
         id: "endA",
-        name: "the η-circle round z = 0, lower lip to upper",
+        name: "the $\\eta$-circle round $z = 0$, lower lip to upper",
         geom: {
           kind: "arc",
           center: pt(0, 0),

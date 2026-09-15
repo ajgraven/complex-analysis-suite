@@ -1,0 +1,79 @@
+<!doctype html><meta charset="utf-8">
+<style>body{margin:0;background:#111}canvas{display:block}</style>
+<canvas id="c" width="1248" height="664"></canvas>
+<script>
+const q = new URLSearchParams(location.search);
+const rec = q.get('rec'), t = q.get('t');
+const GEO = {
+  'semicircle-quartic': { ox: 624, oy: 592, ppu: 130, R: 4, kind: 'semi', poles: [[715,500],[532,500]], polesW: [[Math.SQRT1_2, Math.SQRT1_2],[-Math.SQRT1_2, Math.SQRT1_2]], labels: [['e','iπ/4'],['e','3iπ/4']] },
+  'mellin-keyhole': { ox: 624, oy: 332, ppu: 69.17, R: 4, eps: 0.5, kind: 'keyhole', poles: [[554,332]], polesW: [[-1,0]], labels: [['−1','']], branch: [[624,332]] },
+};
+const g = GEO[rec];
+const c = document.getElementById('c'), ctx = c.getContext('2d');
+const load = src => new Promise(r => { const i = new Image(); i.onload = () => r(i); i.src = src; });
+function hueOf(r,g,b){ const M=Math.max(r,g,b), m=Math.min(r,g,b), d=M-m; if(d===0) return 0; let h; if(M===r) h=((g-b)/d)%6; else if(M===g) h=(b-r)/d+2; else h=(r-g)/d+4; h*=60; if(h<0)h+=360; return h; }
+function lineArt(dark){
+  // textbook line drawing of the contour on a white/light plane
+  const {ox,oy,ppu,R} = g; const ink = dark ? '#111' : '#111';
+  ctx.strokeStyle = '#d8d8d8'; ctx.lineWidth = 1;
+  for (let x = ox % ppu; x < c.width; x += ppu) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,c.height); ctx.stroke(); }
+  for (let y = oy % ppu; y < c.height; y += ppu) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(c.width,y); ctx.stroke(); }
+  ctx.strokeStyle = '#777'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(0,oy); ctx.lineTo(c.width,oy); ctx.moveTo(ox,0); ctx.lineTo(ox,c.height); ctx.stroke();
+  ctx.font = 'italic 20px "Latin Modern Roman", "Times New Roman", serif'; ctx.fillStyle = '#444';
+  ctx.fillText('Re', c.width - 34, oy - 8); ctx.fillText('Im', ox + 8, 22);
+  const arrow = (x,y,ang,col) => { ctx.save(); ctx.translate(x,y); ctx.rotate(ang); ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(8,0); ctx.lineTo(-7,6); ctx.lineTo(-4,0); ctx.lineTo(-7,-6); ctx.closePath(); ctx.fill(); ctx.restore(); };
+  const target = '#1f5fbf', arc = '#c2571a';
+  ctx.lineWidth = 3; ctx.lineCap = 'round';
+  if (g.kind === 'semi') {
+    const r = R*ppu;
+    ctx.strokeStyle = target; ctx.beginPath(); ctx.moveTo(ox-r,oy); ctx.lineTo(ox+r,oy); ctx.stroke();
+    for (const f of [0.25,0.5,0.75]) arrow(ox-r+2*r*f, oy, 0, target);
+    ctx.strokeStyle = arc; ctx.beginPath(); ctx.arc(ox,oy,r,0,-Math.PI,true); ctx.stroke();
+    for (const a of [Math.PI/6, Math.PI/2, 5*Math.PI/6]) arrow(ox+r*Math.cos(a), oy-r*Math.sin(a), -a - Math.PI/2 + Math.PI, arc);
+    ctx.fillStyle = '#222'; ctx.font = 'italic 22px "Times New Roman", serif';
+    ctx.fillText('Γ', ox + r*Math.cos(Math.PI/4) + 14, oy - r*Math.sin(Math.PI/4) - 6); ctx.font = 'italic 15px "Times New Roman", serif'; ctx.fillText('R', ox + r*Math.cos(Math.PI/4) + 30, oy - r*Math.sin(Math.PI/4) + 1);
+    ctx.font = 'italic 20px "Times New Roman", serif'; ctx.fillText('−R', ox-r-10, oy+26); ctx.fillText('R', ox+r-6, oy+26);
+    // ticks
+    ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(ox-r,oy-7); ctx.lineTo(ox-r,oy+7); ctx.moveTo(ox+r,oy-7); ctx.lineTo(ox+r,oy+7); ctx.stroke();
+  } else {
+    const r = R*ppu, e = g.eps*ppu, gap = 6;
+    ctx.strokeStyle = target; ctx.beginPath(); ctx.moveTo(ox+e, oy-gap); ctx.lineTo(ox+r, oy-gap); ctx.stroke(); arrow(ox + r*0.55, oy-gap, 0, target);
+    ctx.strokeStyle = arc; ctx.beginPath(); ctx.arc(ox,oy,r,-0.02,2*Math.PI-0.02+0.0,false); ctx.stroke();
+    for (const a of [Math.PI/2, Math.PI, 3*Math.PI/2]) arrow(ox+r*Math.cos(a), oy+r*Math.sin(a), a + Math.PI/2, arc);
+    ctx.strokeStyle = '#2a9d5c'; ctx.beginPath(); ctx.moveTo(ox+r, oy+gap); ctx.lineTo(ox+e, oy+gap); ctx.stroke(); arrow(ox + r*0.55, oy+gap, Math.PI, '#2a9d5c');
+    ctx.strokeStyle = '#b8408a'; ctx.beginPath(); ctx.arc(ox,oy,e,0.25,2*Math.PI-0.25,false); ctx.stroke(); arrow(ox - e, oy, -Math.PI/2, '#b8408a');
+    ctx.fillStyle = '#222'; ctx.font = 'italic 22px "Times New Roman", serif';
+    ctx.fillText('Γ', ox + r*Math.cos(Math.PI/4) + 12, oy - r*Math.sin(Math.PI/4) - 6); ctx.font = 'italic 15px "Times New Roman", serif'; ctx.fillText('R', ox + r*Math.cos(Math.PI/4) + 28, oy - r*Math.sin(Math.PI/4) + 1);
+    ctx.font = 'italic 22px "Times New Roman", serif'; ctx.fillText('γ', ox - 14, oy - e - 10); ctx.font = 'italic 15px "Times New Roman", serif'; ctx.fillText('ε', ox + 1, oy - e - 4);
+    // branch cut zigzag
+    ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5; ctx.setLineDash([6,4]); ctx.beginPath(); ctx.moveTo(ox+r+4,oy); ctx.lineTo(c.width,oy); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle = '#222'; ctx.font = '18px "Times New Roman", serif'; ctx.fillText('branch cut, arg z ∈ (0, 2π)', ox + r + 30, oy - 12);
+  }
+  // poles
+  g.poles.forEach(([x,y],i) => { ctx.fillStyle = '#fff'; ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x,y,6,0,7); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x-4,y-4); ctx.lineTo(x+4,y+4); ctx.moveTo(x-4,y+4); ctx.lineTo(x+4,y-4); ctx.stroke(); ctx.fillStyle = '#111'; ctx.font = 'italic 19px "Times New Roman", serif'; ctx.fillText(g.labels[i][0], x + 12, y - 10); ctx.font = 'italic 13px "Times New Roman", serif'; ctx.fillText(g.labels[i][1], x + 12 + ctx.measureText('e').width + 4, y - 19); });
+  (g.branch||[]).forEach(([x,y]) => { ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(x,y,5,0,7); ctx.fill(); });
+}
+(async () => {
+  const gl = await load(`${rec}-gl.png`), ink = await load(`${rec}-ink.png`);
+  if (t === 'white') { ctx.fillStyle = '#fff'; ctx.fillRect(0,0,c.width,c.height); lineArt(); return; }
+  ctx.drawImage(gl, 0, 0);
+  const id = ctx.getImageData(0,0,c.width,c.height), d = id.data, W = c.width, H = c.height;
+  const grey = new Float32Array(W*H); const hue = (t === 'iso') ? new Float32Array(W*H) : null;
+  for (let i = 0, p = 0; i < d.length; i += 4, p++) { grey[p] = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2]; if (hue) hue[p] = hueOf(d[i],d[i+1],d[i+2]); }
+  const poles = (g.poles||[]).concat(g.branch||[]);
+  if (hue) { const sm = new Float32Array(W*H); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { let sx = 0, sy = 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const yy = Math.min(H-1, Math.max(0, y+dy)), xx = Math.min(W-1, Math.max(0, x+dx)); const h = hue[yy*W+xx] * Math.PI/180; sx += Math.cos(h); sy += Math.sin(h); } let h = Math.atan2(sy, sx) * 180/Math.PI; if (h < 0) h += 360; sm[y*W+x] = h; } hue.set(sm); }
+  for (let y = 0, p = 0; y < H; y++) for (let x = 0; x < W; x++, p++) {
+    const i = p*4; let r = d[i], gg = d[i+1], b = d[i+2]; const G = grey[p];
+    if (t === 'quiet') { const k = 0.42; r = (G + k*(r-G))*0.78; gg = (G + k*(gg-G))*0.78; b = (G + k*(b-G))*0.78; }
+    else if (t === 'iso') { const k = 0.75; r = G + k*(r-G); gg = G + k*(gg-G); b = G + k*(b-G);
+      const band = Math.floor(hue[p]/30); const bx = x+1 < W ? Math.floor(hue[p+1]/30) : band; const by = y+1 < H ? Math.floor(hue[p+W]/30) : band;
+      if ((band !== bx && Math.abs(hue[p]-hue[p+1]) < 180) || (band !== by && Math.abs(hue[p]-hue[p+W]) < 180)) { r = 22; gg = 22; b = 28; } }
+    else if (t === 'local') { let w = 0; for (const [px,py] of poles) { const dd = ((x-px)**2 + (y-py)**2) / (120*120); w = Math.max(w, Math.exp(-dd)); } const k = 0.15 + 0.85*w; r = (G + k*(r-G)); gg = (G + k*(gg-G)); b = (G + k*(b-G)); if (w < 0.5) { r*=0.85; gg*=0.85; b*=0.85; } }
+    else if (t === 'light') { const k = 0.55; r = G + k*(r-G); gg = G + k*(gg-G); b = G + k*(b-G); r = 255 - (255-r)*0.5; gg = 255 - (255-gg)*0.5; b = 255 - (255-b)*0.5; }
+    d[i] = r; d[i+1] = gg; d[i+2] = b;
+  }
+  ctx.putImageData(id, 0, 0);
+  if (t === 'light') lineArt(); else ctx.drawImage(ink, 0, 0);
+})();
+</script>

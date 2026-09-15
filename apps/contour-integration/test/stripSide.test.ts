@@ -33,12 +33,12 @@ const boundOf = (src: string, s: Partial<StripSide> = {}) =>
 
 /** The `≤` the reader is shown, read back out of the claim — the published surface, not an internal. */
 function claimedBound(src: string, s: Partial<StripSide> = {}): number {
-  const m = /≤ ([0-9.e+-]+)/.exec(boundOf(src, s).certificate.claim);
+  const m = /\\le ([0-9.e+-]+)/.exec(boundOf(src, s).certificate.claim);
   if (m === null) throw new Error("no bound in the claim");
   return Number(m[1]);
 }
 
-/** `|∫ over the vertical side|`, by quadrature: `∫ f(x+iy)·i dy`. */
+/** `the vertical side:`, by quadrature: `∫ f(x+iy)·i dy`. */
 function sideIntegral(src: string, x: number, y0: number, y1: number, n = 20001): number {
   const fn = makeComplexFn(parse(src));
   const h = (y1 - y0) / (n - 1);
@@ -70,14 +70,14 @@ describe("E1's window is the two exponents' signs, not a declaration", () => {
     expect(b.asymptotics).toBe("bounded");
     expect(b.exponent).toBe(0);
     expect(b.certificate.level).toBe("⚠");
-    expect(b.certificate.claim).toMatch(/does NOT vanish/);
+    expect(b.certificate.claim).toMatch(/does not vanish/);
   });
 
   it("…and DIVERGES past it — the record's a-out-of-range trap", () => {
     const b = boundOf(e1("6/5"), { side: "right" });
     expect(b.asymptotics).toBe("diverges");
     expect(b.exponent).toBeCloseTo(0.2, 12);
-    expect(b.certificate.claim).toMatch(/DIVERGES/);
+    expect(b.certificate.claim).toMatch(/diverges/);
   });
 
   it("the LEFT side vanishes exactly while a > 0, and not at a = 0", () => {
@@ -98,8 +98,8 @@ describe("E1's window is the two exponents' signs, not a declaration", () => {
   it("says which exponent it used, so the derivation can show the two jobs", () => {
     const right = boundOf(e1("3/10"), { side: "right" }).certificate.provenance[0].text;
     const left = boundOf(e1("3/10"), { side: "left" }).certificate.provenance[0].text;
-    expect(right).toMatch(/Re\(a\) \+ deg N − deg D/);
-    expect(left).toMatch(/−Re\(a\) − ord₀N \+ ord₀D/);
+    expect(right).toMatch(/\\operatorname\{Re\}\(a\) \+ \\deg N - \\deg D/);
+    expect(left).toMatch(/-\\operatorname\{Re\}\(a\) - \\operatorname\{ord\}_0 N \+ \\operatorname\{ord\}_0 D/);
   });
 });
 
@@ -184,7 +184,7 @@ describe("the bound is a bound, at finite R", () => {
   it("flags the float step in its own provenance rather than letting it pass", () => {
     const p = boundOf(e1("3/10")).certificate.provenance;
     const flagged = p.find((s) => !s.ok);
-    expect(flagged?.text).toMatch(/e\^\{κR\} is transcendental/);
+    expect(flagged?.text).toMatch(/\$e\^\{\\kappa R\}\$ is transcendental/);
   });
 
   it("carries no `value` field, because that one is documented exact", () => {

@@ -195,10 +195,10 @@ describe("the ledger's CATCH row stops inventing a reason", () => {
     // CATCH, and the string had been unconditional since the row was written.
     const unread = catchRow("1/cosh(z)");
     expect(unread?.evidence.level).toBe("?");
-    expect(unread?.evidence.method).toMatch(/could not be read exactly/);
+    expect(unread?.evidence.method).toMatch(/was not recognised as rational/);
 
     const inexact = catchRow("1/(1 + z^5 + z)");
-    expect(inexact?.evidence.method).toMatch(/ℚ\(i\)\(√d\)/);
+    expect(inexact?.evidence.method).toMatch(/\\mathbb\{Q\}\(i\)\(\\sqrt\{d\}\)/);
   });
 
   it("is SATISFIED for an entire integrand — the empty meet is the lattice top", () => {

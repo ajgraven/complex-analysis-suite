@@ -11,9 +11,20 @@ import type { Family } from "../schema.js";
 
 export const a7SemicircleOrder3: Family = {
   id: "semicircle-order3",
-  title: "∫_ℝ x² dx/(1+x²)³ = π/8 — an order-3 pole and why the series route wins",
-  taxonomySection: "2",
+  title: "∫_{−∞}^{∞} x² dx/(1+x²)³ by a semicircle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{x^2\\,dx}{(1+x^2)^3}$ by a semicircle",
+  taxonomySection: "Rational functions on ℝ",
   tier: "A",
+
+  description: {
+    contour: "$[-R,R]$ closed by $\\Gamma_R$",
+    point:
+      "A pole of order 3 at $i$: $\\operatorname{Res}(f,i)=\\tfrac1{2!}\\frac{d^2}{dz^2}\\bigl[(z-i)^3f\\bigr]_{z=i}$; omitting the $1/2!$ doubles the answer.",
+    citations: [
+      { book: "Brown–Churchill", where: "§79", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -88,7 +99,7 @@ export const a7SemicircleOrder3: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -180,6 +191,7 @@ export const a7SemicircleOrder3: Family = {
     },
     {
       params: { halfRange: true },
+      label: "half-range corollary",
       value: "pi/16",
       numeric: 0.19634954084936207,
       verifiedTo: 1e-14,

@@ -37,6 +37,7 @@
 // does not exist, and one that silently enclosed a second pole would turn a correct answer into a
 // refusal. The test knows the configuration; this function does not.
 import { Frac, Gauss, QiPoly, SqrtExt, seriesMul, type QiSeries } from "@cas/exact";
+import { LATEX } from "./notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { argumentOfPole } from "./branchResidue.js";
 import { exactPoleAt } from "./exactResidue.js";
@@ -178,7 +179,7 @@ export function logResidue(
       `Res(R(z)·log^${m} z, ${formatGauss(at)}) = ${formatRatPi(value)}`,
       "the Laurent principal part of R at z₀, convolved with the expansion of (log z₀ + log(1 + w/z₀))^m",
       {
-        restriction: `arg z ∈ [${factor.argRange[0].n}/${factor.argRange[0].d}·π, ${factor.argRange[1].n}/${factor.argRange[1].d}·π)`,
+        restriction: `$\\arg z \\in [\\tfrac{${factor.argRange[0].n}}{${factor.argRange[0].d}}\\pi, \\tfrac{${factor.argRange[1].n}}{${factor.argRange[1].d}}\\pi)$`,
         provenance: [
           {
             ok: true,
@@ -186,7 +187,7 @@ export function logResidue(
           },
           {
             ok: true,
-            text: `log(${formatGauss(at)}) = ${formatRatPi(L.value)} in the declared determination, its argument verified exactly rather than read off atan2`,
+            text: `$\\log(${formatGauss(at, LATEX)}) = ${formatRatPi(L.value, LATEX)}$ in the declared determination, its argument verified exactly rather than read off atan2`,
           },
         ],
       },

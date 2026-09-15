@@ -31,7 +31,7 @@ export function circleTemplate(centre: readonly [number, number] = [0, 0], radiu
   const pieces: Piece[] = [
     {
       id: "circle",
-      name: "the circle |z − a| = R",
+      name: "the circle $|z - a| = R$",
       geom: {
         kind: "arc",
         center: pt(centre[0], centre[1]),
@@ -111,7 +111,7 @@ export function indentedSemicircleTemplate(radius = 8, indent = 0.05): Contour {
     },
     {
       id: "indent",
-      name: "the ρ → 0 indentation over z = 0",
+      name: "the $\\rho \\to 0$ indentation over $z = 0$",
       // θ: π → 0 sweeps CLOCKWISE over the origin, which is what makes α negative.
       geom: { kind: "arc", center: pt(0, 0), radius: ref("rho"), theta0: Math.PI, theta1: 0 },
       role: "vanish",
@@ -127,7 +127,7 @@ export function indentedSemicircleTemplate(radius = 8, indent = 0.05): Contour {
     },
     {
       id: "bigarc",
-      name: "the R → ∞ semicircle",
+      name: "the $R \\to \\infty$ semicircle",
       geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: Math.PI },
       role: "vanish",
       colour: 1,
@@ -172,7 +172,7 @@ export function keyholeTemplate(outer = 4, inner = 0.15): Contour {
     },
     {
       id: "outer",
-      name: "the R → ∞ circle",
+      name: "the $R \\to \\infty$ circle",
       geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: 2 * Math.PI },
       role: "vanish",
       lemma: "L2",
@@ -188,7 +188,7 @@ export function keyholeTemplate(outer = 4, inner = 0.15): Contour {
     },
     {
       id: "inner",
-      name: "the ε → 0 circle",
+      name: "the $\\varepsilon \\to 0$ circle",
       geom: { kind: "arc", center: pt(0, 0), radius: ref("eps"), theta0: 2 * Math.PI, theta1: 0 },
       role: "vanish",
       lemma: "L1",
@@ -399,7 +399,7 @@ export function wedgeTemplate(n = 3, radius = 4): Contour {
     },
     {
       id: "arc",
-      name: "the R → ∞ sector arc",
+      name: "the $R \\to \\infty$ sector arc",
       geom: { kind: "arc", center: pt(0, 0), radius: ref("R"), theta0: 0, theta1: angle },
       role: "vanish",
       lemma: "L2",

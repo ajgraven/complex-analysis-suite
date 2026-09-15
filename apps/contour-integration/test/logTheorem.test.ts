@@ -192,7 +192,7 @@ describe("logFactorOf", () => {
 
 describe("piPieceLimits — the ×π that must be done rather than assumed", () => {
   it("carries a limit in units of π into ℚ(i)(π)", () => {
-    // C1's indentation contributes `iα·Res`, which the ledger reports as `−1/2` in units of π; in
+    // C1's indentation contributes `i\\alpha\\operatorname{Res}`, which the ledger reports as `−1/2` in units of π; in
     // ℚ(i)(π) that same limit is `−π/2`, and dropping the π would be a silent factor error.
     const half = ExpSum.fromSqrtExt(SqrtExt.fromGauss(Gauss.rat(-1n, 2n)));
     const got = piPieceLimits([{ pieceId: "indent", contribution: half }]);

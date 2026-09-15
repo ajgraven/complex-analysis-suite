@@ -73,27 +73,27 @@ describe("the record loads and solves", () => {
 describe("what the dogbone teaches", () => {
   it("encloses NO pole, and says so in a row that says nothing about the value", () => {
     const catches = ran().ledger.rows.filter((r) => r.constraint === "CATCH");
-    expect(catches[0].claim).toMatch(/0 singularities are enclosed/);
+    expect(catches[0].claim).toMatch(/at 0 singularities/);
     expect(catches[0].status).toBe("satisfied");
     // And the value is not zero, on the same run.
     expect(must(ran().theorem.exactValue, "an exact ∮").text).toBe("π√2");
-    expect(reasons()).toMatch(/says what is ENCLOSED and says nothing whatever about the value/);
+    expect(reasons()).toMatch(/says what is enclosed and says nothing whatever about the value/);
   });
 
   it("weights those poles by n − σ = 1, which is where the cut being inside is paid for", () => {
-    expect(reasons()).toMatch(/encloses the cut clockwise \(σ = −1 at every branch point\)/);
-    expect(reasons()).toMatch(/weighted by n\(γ,aₖ\) − σ = n\(γ,aₖ\) − −1/);
+    expect(reasons()).toMatch(/encloses the cut clockwise \(\$\\sigma = -1\$ at every branch point\)/);
+    expect(reasons()).toMatch(/weighted by \$\\operatorname\{Ind\}_\\gamma\(a_k\) - \\sigma\$ with \$\\sigma = -1\$/);
   });
 
   it("certifies Res(f,∞) = 0 from the degree rather than assuming it", () => {
     expect(reasons()).toMatch(/Res\(f, ∞\) = 0/);
-    expect(reasons()).toMatch(/f = O\(z\^\(−3\)\) at infinity/);
-    expect(reasons()).toMatch(/an order of −2 or less leaves no z⁻¹ coefficient/);
+    expect(reasons()).toMatch(/\$f = O\(z\^\{-3\}\)\$ at infinity/);
+    expect(reasons()).toMatch(/an order of \$-2\$ or less leaves no \$z\^\{-1\}\$ coefficient/);
     // The one-number unification: the same computation would discharge an outer circle by L2.
-    expect(reasons()).toMatch(/SAME computation discharges L2 on an outer circle/);
+    expect(reasons()).toMatch(/same computation discharges the large-circle estimate on an outer circle/);
     // And the condition that makes the question meaningful at all, now that a branch factor reaches
     // infinity too: `Σ αⱼ = −1 ∈ ℤ`, so the monodromy round a large circle is 1.
-    expect(reasons()).toMatch(/Σ αⱼ = −1 ∈ ℤ, so f IS single-valued near infinity/);
+    expect(reasons()).toMatch(/\\sum_j \\alpha_j = -1 \\in \\mathbb\{Z\}\$, so \$f\$ is single-valued near infinity/);
   });
 
   it("takes OPPOSITE signs at the conjugate poles — the trap that returns 0 and looks fine", () => {
@@ -108,12 +108,12 @@ describe("what the dogbone teaches", () => {
   });
 
   it("kills each end cap by a bound taken about that cap's OWN branch point", () => {
-    const caps = ran().ledger.rows.filter((r) => r.claim.includes("over the cap"));
+    const caps = ran().ledger.rows.filter((r) => r.claim.startsWith("the cap:"));
     expect(caps).toHaveLength(2);
     for (const cap of caps) {
       expect(cap.status).toBe("satisfied");
       expect(cap.evidence.level).toBe("≤");
-      expect(cap.claim).toMatch(/O\(η\^\(1\/2\)\)/);
+      expect(cap.claim).toMatch(/O\(\\eta\^\{1\/2\}\)/);
       expect(cap.evidence.provenance.map((s) => s.text).join(" | ")).toMatch(
         /shifted to the cap's own centre by exact synthetic division/,
       );
@@ -243,14 +243,14 @@ describe("the cap bound is taken about the cap's OWN centre", () => {
     });
     if (!r.ok) throw new Error(r.reason);
     const eta = must(r.run.contour.params.eta, "the η parameter").value;
-    const caps = r.run.ledger.rows.filter((row) => row.claim.includes("over the cap"));
+    const caps = r.run.ledger.rows.filter((row) => row.claim.startsWith("the cap:"));
     expect(caps).toHaveLength(2);
     for (const [k, b] of [1, -1].entries()) {
       const cap = must(
         caps.find((row) => row.pieceId === (b === 1 ? "endB" : "endA")),
         `the cap at ${b}`,
       );
-      const claimed = Number(/≤ ([0-9.e+-]+)/.exec(cap.claim)?.[1] ?? "NaN");
+      const claimed = Number(/\\le ([0-9.e+-]+)/.exec(cap.claim)?.[1] ?? "NaN");
       const actual = capIntegral(b, eta);
       expect({ k, b, holds: actual <= claimed }).toEqual({ k, b, holds: true });
     }

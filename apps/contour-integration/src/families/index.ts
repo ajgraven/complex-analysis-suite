@@ -11,6 +11,7 @@
 // itself as a worked example. Dropping it is the same refusal discipline the rest of the engine runs
 // on: withhold the thing that cannot be stood behind, and say why.
 import { parse } from "@cas/expr";
+import { isVariant } from "./describe.js";
 import type { Family, FamilyPiece } from "./schema.js";
 import { importedValue } from "./importedValue.js";
 import { BONUS_ZERO, bonusMagnitudes, buildSystem, withoutColumns } from "./system.js";
@@ -153,7 +154,7 @@ const PREDICATE_NAMESPACES: ReadonlySet<string> = new Set([
 ]);
 
 /** Which of DESIGN §5's numbered invariants failed, or the well-formedness that precedes them. */
-export type InvariantId = 1 | 2 | 3 | 4 | "well-formed";
+export type InvariantId = 1 | 2 | 3 | 4 | 5 | "well-formed";
 
 export interface Violation {
   readonly family: string;
@@ -536,6 +537,54 @@ function checkInvariant4(family: Family): Violation[] {
   return v;
 }
 
+/**
+ * Invariant 5 — the record says what it is, to a reader.
+ *
+ * **Two of the three conditions the M8 plan names for this invariant are TYPES, not checks.** A
+ * record without a `description` and a `taxonomySection` outside the eight are both compile errors
+ * once `FamilyDescription` is required and `TaxonomySection` is a union, and a runtime check for
+ * them would be unreachable — a check that cannot fail teaches a reader that it might. So this
+ * invariant asks the questions the type system cannot: is a citation actually usable, does the
+ * description say anything, and is a variant fixture labelled by what it IS.
+ *
+ * `frontRow` uniqueness is corpus-level rather than per-record and is checked in `loadFamilies`.
+ */
+function checkInvariant5(family: Family): Violation[] {
+  const v: Violation[] = [];
+  const fail = (message: string): void => {
+    v.push({ family: family.id, invariant: 5, message });
+  };
+  const d = family.description;
+  if (d.contour.trim() === "") fail("description.contour is empty");
+  if (d.point.trim() === "") fail("description.point is empty");
+  if (d.citations.length === 0) fail("no citation — say where this argument can be read");
+  d.citations.forEach((c, i) => {
+    if (c.where.trim() === "") fail(`citation ${i + 1} (${c.book}) has no chapter or section`);
+  });
+  // Balanced `$` on everything a card renders, for the reason `claims.test.ts` checks the ledger's
+  // sentences: `splitMath` re-joins an odd delimiter as text, so the defect ships as a stray dollar.
+  for (const [what, text] of [
+    ["titleLatex", family.titleLatex],
+    ["description.contour", d.contour],
+    ["description.point", d.point],
+    ...d.citations.map((c, i) => [`citation ${i + 1}`, c.text] as const),
+  ] as const) {
+    if (((text.match(/\$/g) ?? []).length & 1) === 1) fail(`${what} has an unbalanced $`);
+  }
+  if (family.frontRow !== undefined && (!Number.isInteger(family.frontRow) || family.frontRow < 1 || family.frontRow > 8)) {
+    fail(`frontRow ${family.frontRow} is not a rank in 1…8`);
+  }
+  // **A variant fixture must say what it IS.** Its `params` carry a flag name rather than a binding
+  // (`halfRange`, `companion: "re"`), and the fixture picker would otherwise offer `halfRange = true`
+  // — which names the implementation and not the alternative derivation the reader is choosing.
+  for (const g of family.golden) {
+    if (isVariant(family, g) && (g.label ?? "").trim() === "") {
+      fail(`the variant fixture {${Object.keys(g.params).join(", ")}} carries no label`);
+    }
+  }
+  return v;
+}
+
 /** Run every invariant against one record. Empty means it loads. */
 export function checkFamily(family: Family): Violation[] {
   const wellFormed = checkWellFormed(family);
@@ -547,6 +596,7 @@ export function checkFamily(family: Family): Violation[] {
     ...checkInvariant2(family),
     ...checkInvariant3(family),
     ...checkInvariant4(family),
+    ...checkInvariant5(family),
   ];
 }
 
@@ -585,6 +635,24 @@ export function loadFamilies(records: readonly Family[] = FAMILIES): LoadResult 
       continue;
     }
     families.set(record.id, record);
+  }
+
+  // **The front row is corpus-level**: a rank is only a rank if no two records claim the same one,
+  // which no per-record check can see. A collision drops the LATER record, like every other failure.
+  const ranks = new Map<number, string>();
+  for (const [id, record] of [...families]) {
+    if (record.frontRow === undefined) continue;
+    const held = ranks.get(record.frontRow);
+    if (held === undefined) {
+      ranks.set(record.frontRow, id);
+      continue;
+    }
+    violations.push({
+      family: id,
+      invariant: 5,
+      message: `front-row rank ${record.frontRow} is already held by '${held}'`,
+    });
+    families.delete(id);
   }
 
   return { families, violations };

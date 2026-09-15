@@ -148,6 +148,12 @@ export const sec = (z: Complex): Complex => div(ONE, cos(z));
 export const csc = (z: Complex): Complex => div(ONE, sin(z));
 /** cot(z) = cos(z) / sin(z). */
 export const cot = (z: Complex): Complex => div(cos(z), sin(z));
+/** sech(z) = 1 / cosh(z). */
+export const sech = (z: Complex): Complex => div(ONE, cosh(z));
+/** csch(z) = 1 / sinh(z). */
+export const csch = (z: Complex): Complex => div(ONE, sinh(z));
+/** coth(z) = cosh(z) / sinh(z). */
+export const coth = (z: Complex): Complex => div(cosh(z), sinh(z));
 
 /** Two-argument arctangent: angle of the vector (x, y) — matches CindyScript arctan2. */
 export const arctan2 = (x: Complex, y: Complex): Complex => [Math.atan2(y[0], x[0]), 0];
@@ -228,6 +234,15 @@ export function gamma(z: Complex): Complex {
   if (z[0] < 0.5) return div([PI, 0], mul(sin(mul([PI, 0], z)), gammaCore(sub(ONE, z))));
   return gammaCore(z);
 }
+
+/**
+ * `z!` — the factorial, extended to the complex plane as Γ(z+1).
+ *
+ * A NAME for `gamma(z + 1)` rather than a second implementation: Cauchy's formula for the
+ * derivatives is written with `n!`, and a printer that renders it `Γ(n+1)` is correct and no longer
+ * the formula a reader knows.
+ */
+export const factorial = (z: Complex): Complex => gamma(add(z, ONE));
 
 // --- Riemann zeta function -----------------------------------------------------
 // ζ(s) via Borwein's acceleration of the alternating (eta) series: with the d_k coefficients,

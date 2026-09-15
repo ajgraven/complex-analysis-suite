@@ -109,13 +109,13 @@ describe("the plate's caption", () => {
 describe("the plate's metadata", () => {
   it("carries `Software`, the permalink under @cas/export's DOCUMENTED key, and the verdict", () => {
     const meta = figureMetadata("https://example/#vs=abc", {
-      title: "t", value: "= 2πi", verdict: "This argument closes.", level: "=",
+      title: "t", value: "= 2πi", verdict: "The argument is complete.", level: "=",
     });
     expect(meta.Software).toContain("Contour Integration");
     // `cas:state`, which the package's README and its own tests specify. Of its six consumers only
     // Riemann Map uses it; the other four minted their own prefix before the package existed.
     expect(meta["cas:state"]).toBe("https://example/#vs=abc");
-    expect(meta["cas:verdict"]).toBe("= This argument closes.");
+    expect(meta["cas:verdict"]).toBe("= The argument is complete.");
     expect(meta["cas:value"]).toBe("= 2πi");
   });
 
@@ -149,7 +149,7 @@ describe("the gate: a figure's metadata agrees with the session it came from", (
       // prevent, and it is the half of M6.3's gate that needs no browser.
       const closes = res.run.ledger.closes;
       expect(meta["cas:verdict"], fam.id).toContain(
-        closes ? "argument closes" : "does not close",
+        closes ? "The argument is complete." : "does not close",
       );
       if (closes) {
         // And when it closes, the value printed is the one the app prints: the solved form for a

@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 
 // Browser-mode Vitest project for Contour Integration — the ONLY place this app's real GLSL is
@@ -16,7 +17,14 @@ import { defineConfig } from "vitest/config";
 // gate becomes a suite nobody can run outside CI. `CAS_CHROMIUM_EXECUTABLE` lets such an environment
 // name its own binary; unset (CI, where the `browser` job runs `playwright install`) nothing changes.
 // The other three configs could take the same line and would be better for it.
-const executablePath = process.env.CAS_CHROMIUM_EXECUTABLE;
+//
+// The `/opt/pw-browsers/chromium` probe is `packages/gpu`'s addition, taken here so the suite runs in
+// the managed dev container with NOTHING set — CLAUDE.md tells a session to run this suite whenever a
+// slice touches the stage, and a suite that needs an undocumented incantation first is one that gets
+// skipped. In CI the variable is unset and the path absent, so the provider uses its own build.
+const LOCAL_CHROME = "/opt/pw-browsers/chromium";
+const executablePath =
+  process.env.CAS_CHROMIUM_EXECUTABLE ?? (existsSync(LOCAL_CHROME) ? LOCAL_CHROME : undefined);
 
 // **THE DEFAULT VIEWPORT IS A PHONE, AND THIS APP'S LAYOUT DOES NOT FIT IN ONE.** Vitest browser
 // mode defaults to 414 x 896; the shell is a desktop grid whose rail is 19rem and whose strip is

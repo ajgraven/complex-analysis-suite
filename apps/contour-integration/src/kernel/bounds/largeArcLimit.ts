@@ -16,6 +16,7 @@
 //
 // UNITS OF π, like everything else in the solve: `iα·L` is `π·(i(α/π)L)`.
 import { Frac, Gauss, QiPoly, SqrtExt } from "@cas/exact";
+import { LATEX } from "../notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatExpSum } from "../expSum.js";
 import { formatFrac, formatGauss } from "../formatExact.js";
@@ -62,7 +63,7 @@ export function largeArcLimit(
   if (sweptAnglePi === null) {
     return {
       ok: false,
-      certificate: refuse("L5", "the swept angle is not a recognised rational multiple of π"),
+      certificate: refuse("the large-arc lemma", "the swept angle is not a recognised rational multiple of $\\pi$"),
     };
   }
 
@@ -78,8 +79,8 @@ export function largeArcLimit(
         return {
           ok: false,
           certificate: refuse(
-            "L5",
-            `z·f(z) has a rational part of degree ${numDegree} over ${denDegree}, so it diverges rather than tending to a limit`,
+            "the large-arc lemma",
+            `$zf(z)$ has a rational part of degree ${numDegree} over ${denDegree}, so it diverges rather than tending to a limit`,
           ),
         };
       }
@@ -96,8 +97,8 @@ export function largeArcLimit(
       return {
         ok: false,
         certificate: refuse(
-          "L5",
-          `the exponent ${formatGauss(term.lambda)}·z has a real part, so |e^{λz}| grows along the real axis and no arc lemma applies`,
+          "the large-arc lemma",
+          `the exponent $${formatGauss(term.lambda, LATEX)}z$ has a real part, so $|e^{\\lambda z}|$ grows along the real axis and no arc lemma applies`,
         ),
       };
     }
@@ -106,8 +107,8 @@ export function largeArcLimit(
       return {
         ok: false,
         certificate: refuse(
-          "L5",
-          `|e^{iaz}| = e^{−a·Im z} GROWS on the ${half} arc for a = ${formatFrac(a)}, so z·f has no limit there`,
+          "the large-arc lemma",
+          `$|e^{iaz}| = e^{-a\\,\\operatorname{Im} z}$ grows on the ${half} arc for $a = ${formatFrac(a, LATEX)}$, so $zf$ has no limit there`,
         ),
       };
     }
@@ -115,8 +116,8 @@ export function largeArcLimit(
       return {
         ok: false,
         certificate: refuse(
-          "L5",
-          `the term with a = ${formatFrac(a)} is bounded but does not decay (degree ${numDegree} over ${denDegree}); it oscillates rather than tending to a limit`,
+          "the large-arc lemma",
+          `the term with $a = ${formatFrac(a, LATEX)}$ is bounded but does not decay (degree ${numDegree} over ${denDegree}); it oscillates rather than tending to a limit`,
         ),
       };
     }
@@ -135,9 +136,9 @@ export function largeArcLimit(
       contribution,
       certificate: exact(
         L.isZero()
-          ? `z·f(z) → 0 on the arc, so it vanishes`
-          : `z·f(z) → ${formatGauss(L)}, so the arc contributes iα·L = π·(${formatExpSum(contribution)}) — NOT zero`,
-        `L5: a uniform limit of z·f(z) along an arc of angle ${formatFrac(sweptAnglePi)}π`,
+          ? "$zf(z) \\to 0$ on the arc, so it vanishes"
+          : `$zf(z) \\to ${formatGauss(L, LATEX)}$, so the arc contributes $i\\alpha L = \\pi(${formatExpSum(contribution, LATEX)})$ — not zero`,
+        `the large-arc lemma: a uniform limit of $zf(z)$ along an arc of angle $${formatFrac(sweptAnglePi, LATEX)}\\pi$`,
       ),
     },
   };

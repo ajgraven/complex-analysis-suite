@@ -21,9 +21,20 @@ import type { Family } from "../schema.js";
 
 export const a4CircleCifTaylor: Family = {
   id: "circle-cif-taylor",
-  title: "∫₀^{2π} e^{cos θ} cos(sin θ − nθ) dθ = 2π/n! — an entire integrand with no residue of its own",
-  taxonomySection: "1",
+  title: "∫₀^{2π} e^{cos θ} cos(sin θ − nθ) dθ by Cauchy's integral formula",
+  titleLatex: "$\\int_0^{2\\pi}e^{\\cos\\theta}\\cos(\\sin\\theta-n\\theta)\\,d\\theta$ by Cauchy's integral formula",
+  taxonomySection: "Trigonometric integrals over [0, 2π]",
   tier: "A",
+
+  description: {
+    contour: "the unit circle; the integrand is $\\operatorname{Re}\\bigl[e^{e^{i\\theta}}e^{-in\\theta}\\bigr]$, so $\\oint e^{z}\\,dz/(iz^{n+1})$",
+    point:
+      "The only singularity is supplied by $dz/(iz)$ and the factor $z^{-n}$; the residue is the $n$-th Taylor coefficient of $e^z$, i.e. Cauchy's formula for derivatives.",
+    citations: [
+      { book: "Ahlfors", where: "Ch. 4 §2.3", text: "Cauchy's integral formula, higher derivatives" },
+      { book: "Brown–Churchill", where: "§85", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -98,7 +109,7 @@ export const a4CircleCifTaylor: Family = {
     pieces: [
       {
         id: "unitCircle",
-        name: "the unit circle |z| = 1",
+        name: "the unit circle $|z| = 1$",
         geom: { kind: "arc", center: pt(0, 0), radius: 1, theta0: 0, theta1: 2 * Math.PI },
         role: "target",
         colour: 0,

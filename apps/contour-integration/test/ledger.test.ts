@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { headlineFails } from "../src/engine/vocabulary.js";
 import { makeComplexFn, parse } from "@cas/expr";
 import type { Cx } from "../src/kernel/geom.js";
 import { findPoles } from "../src/kernel/poles.js";
@@ -47,7 +48,7 @@ describe("the ledger closes a correct argument", () => {
     const r = run("1/(1+z^2)", semicircleTemplate(200));
     expect(r.closes).toBe(true);
     expect(r.value?.text).toBe("π");
-    expect(ledgerHeadline(r)).toBe("This argument closes.");
+    expect(ledgerHeadline(r)).toBe("The argument is complete.");
     expect(r.failedAt).toBeNull();
     expect(r.rows.every((x) => x.status !== "failed")).toBe(true);
   });
@@ -74,7 +75,7 @@ describe("the ledger closes a correct argument", () => {
       const kill = rowsFor(run("1/(1+z^2)", semicircleTemplate(R)), "KILL").find((x) =>
         x.claim.includes("arc"),
       );
-      const m = /≤ ([0-9.e+-]+)/.exec(kill?.claim ?? "");
+      const m = /\\le ([0-9.e+-]+)/.exec(kill?.claim ?? "");
       return m ? Number(m[1]) : NaN;
     };
     expect(boundAt(1000)).toBeLessThan(boundAt(100));
@@ -90,9 +91,9 @@ describe("the ledger fails visibly, and names which constraint", () => {
     const r = run("exp(i*z)/(1+z^2)", lower);
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("KILL");
-    expect(ledgerHeadline(r)).toMatch(/does not close: KILL fails/);
+    expect(ledgerHeadline(r)).toBe(headlineFails("KILL"));
     const arc = rowsFor(r, "KILL").find((x) => x.status === "failed");
-    expect(arc?.claim).toMatch(/DIVERGES/);
+    expect(arc?.claim).toMatch(/diverges/);
     expect(arc?.repair).toMatch(/other half-plane/);
   });
 
@@ -130,7 +131,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
   });
 
   it("switches lemmas at a ZERO frequency rather than reporting π/0 as a failure", () => {
-    // Jordan's constant is π/|a|, which at a = 0 is ∞ and says nothing — correctly, since Jordan
+    // Jordan's constant is \\pi/|a|, which at a = 0 is ∞ and says nothing — correctly, since Jordan
     // has no content without exponential decay. But e^{i·0·z} = 1 leaves an ordinary rational
     // integrand that plain ML discharges. Gallery B1's own trap: an engine that treats π/0 as a
     // failure "will paper over exactly the case it was built to catch".
@@ -168,7 +169,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("KILL");
     const arc = rowsFor(r, "KILL").find((x) => x.status === "failed");
-    expect(arc?.claim).toMatch(/does NOT vanish/);
+    expect(arc?.claim).toMatch(/does not vanish/);
   });
 
   it("declines KILL rather than guessing when no lemma covers the integrand", () => {
@@ -176,7 +177,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
     expect(r.closes).toBe(false);
     const arc = rowsFor(r, "KILL").find((x) => x.status === "unknown");
     expect(arc?.evidence.level).toBe("?");
-    expect(arc?.claim).toMatch(/no lemma here applies/);
+    expect(arc?.claim).toMatch(/no bound is available for this integrand/);
   });
 });
 
@@ -187,10 +188,10 @@ describe("sandbox mode", () => {
     const r = run("1/z", circleTemplate([0, 0], 1.5));
     const cover = rowsFor(r, "COVER")[0];
     expect(cover.status).toBe("unknown");
-    expect(cover.claim).toMatch(/no piece is marked as the target/);
+    expect(cover.claim).toMatch(/no target is designated/);
     // And the headline does not overclaim: nothing was "argued" to a real integral here.
     expect(r.hasTarget).toBe(false);
-    expect(ledgerHeadline(r)).toBe("The closed-contour value is established exactly.");
+    expect(ledgerHeadline(r)).toBe("$\\oint_\\gamma f(z)\\,dz$ is established exactly.");
   });
 });
 
@@ -220,11 +221,32 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     sheet: 0,
   });
 
+  // **Keyed on the TEMPLATE, not on the sentence.** These used to search the claim text for "cut"
+  // and for "admissible", which meant the wording pass of M8 step 0.5b silently re-pointed them: the
+  // admissibility row stopped containing the word, so `pieceRow` returned IT — satisfied — and four
+  // tests reported a refusal that had not happened. A template id is what the row IS.
+  const CUT_TEMPLATES = new Set([
+    "legality.cuts-admissible",
+    "legality.cuts-inadmissible",
+    "legality.cuts-clear",
+    "legality.cuts-sided",
+    "legality.cut-grazed",
+    "legality.cut-crossed",
+    "legality.cut-invariance-one",
+    "legality.cut-invariance-many",
+    "legality.monodromy-on-sheet",
+    "legality.monodromy-off-sheet",
+    "legality.monodromy-undecided",
+  ]);
   const cutRows = (r: ReturnType<typeof run>) =>
-    rowsFor(r, "LEGALITY").filter((x) => x.claim.includes("cut") || x.claim.includes("branch point"));
-  /** The per-piece row specifically — both cut rows mention "cut", and only one is about pieces. */
+    rowsFor(r, "LEGALITY").filter((x) => CUT_TEMPLATES.has(x.claimData.template));
+  /** The per-piece row specifically — the one about pieces meeting a cut, not about the cut system. */
   const pieceRow = (r: ReturnType<typeof run>) =>
-    cutRows(r).find((x) => !x.claim.includes("admissible"));
+    cutRows(r).find((x) =>
+      ["legality.cuts-clear", "legality.cuts-sided", "legality.cut-grazed", "legality.cut-crossed"].includes(
+        x.claimData.template,
+      ),
+    );
 
   /**
    * A circle around z = −3, which the cut down ℝ₋ runs straight through.
@@ -251,12 +273,12 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     const rows = cutRows(r);
     expect(rows).toHaveLength(3);
     expect(rows.every((x) => x.status === "satisfied")).toBe(true);
-    expect(rows[0].claim).toMatch(/admissible/);
-    expect(rows[1].claim).toMatch(/no piece of the contour meets a branch cut/);
+    expect(rows[0].claim).toMatch(/single-valued off them/);
+    expect(rows[1].claim).toMatch(/no piece crosses a branch cut/);
     // **NORTH-STAR #3's FIRST HALF.** The third row is the one that makes dragging legible: with the
     // cuts clear of the contour, `∮` does not depend on where they run, so the answer is EXACTLY
     // unchanged under a drag and a jump on crossing is the whole content of the monodromy.
-    expect(rows[2].claim).toMatch(/∮ is unchanged by moving this cut/);
+    expect(rows[2].claimData.template).toBe("legality.cut-invariance-one");
     expect(rows[2].evidence.method).toMatch(/count of jump-weighted crossings/);
     expect(r.failedAt).toBeNull();
   });
@@ -268,8 +290,8 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     // contour is clear, and this pins that rather than trusting the condition to stay written.
     const r = run("1/(z-3)", crossedBy("above"), keyhole([-1, 0]));
     expect(cutRows(r).every((x) => x.status === "satisfied")).toBe(true);
-    expect(cutRows(r).some((x) => x.claim.includes("declares the side"))).toBe(true);
-    expect(cutRows(r).some((x) => x.claim.includes("∮ is unchanged"))).toBe(false);
+    expect(cutRows(r).some((x) => x.claimData.template === "legality.cuts-sided")).toBe(true);
+    expect(cutRows(r).some((x) => x.claimData.template.startsWith("legality.cut-invariance"))).toBe(false);
   });
 
   it("names what the crossing COSTS in the refusal itself — research 06 §3.2's contract", () => {
@@ -281,7 +303,7 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     const row = cutRows(r).find((x) => x.status === "failed");
     expect(row).toBeDefined();
     const lines = (row?.evidence.provenance ?? []).map((x) => x.text);
-    expect(lines.some((t) => t.includes("multiplies the integrand by e^(2πi·1/3)"))).toBe(true);
+    expect(lines.some((t) => t.includes("multiplies the integrand by $e^{2\\pi i \\cdot \\frac{1}{3}}"))).toBe(true);
     // And it is marked as the cost of a FAILURE, not as a satisfied step.
     expect((row?.evidence.provenance ?? []).every((x) => !x.ok)).toBe(true);
     expect(r.failedAt).toBe("LEGALITY");
@@ -300,21 +322,21 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
       sheet: 0,
     };
     const r = run("1/(z-3)", circleTemplate([3, 0], 1), noCuts);
-    expect(cutRows(r).some((x) => x.claim.includes("∮ is unchanged"))).toBe(false);
+    expect(cutRows(r).some((x) => x.claimData.template.startsWith("legality.cut-invariance"))).toBe(false);
   });
 
   it("names what a crossing would COST, on a cut the contour is clear of", () => {
     // Research 06 §3.2: refuse the crossing or change sheet, with the factor SHOWN. Knowing the
     // factor before the crossing is what lets a reader see it coming.
     const r = run("1/(z-3)", circleTemplate([3, 0], 1), keyhole([-1, 0]));
-    const row = cutRows(r).find((x) => x.claim.includes("no piece of the contour meets"));
+    const row = cutRows(r).find((x) => x.claimData.template === "legality.cuts-clear");
     const lines = (row?.evidence.provenance ?? []).map((x) => x.text);
     // α = 1/3 on this fixture's branch point, so J = 1/3 and the factor is e^(2πi·1/3). `4J ∉ ℤ`,
     // so it is CARRIED as an exponential rather than folded into ℚ(i) — the same rule
     // `Exponent.asAlgebraicFactor` applies to an answer, applied here to a crossing, so the app
     // never invents a radical it cannot write down.
-    expect(lines.some((t) => t.includes("multiplies the integrand by e^(2πi·1/3)"))).toBe(true);
-    expect(lines.some((t) => t.includes("4J ∉ ℤ"))).toBe(true);
+    expect(lines.some((t) => t.includes("multiplies the integrand by $e^{2\\pi i \\cdot \\frac{1}{3}}"))).toBe(true);
+    expect(lines.some((t) => t.includes("4J \\notin \\mathbb{Z}$"))).toBe(true);
     expect(lines.some((t) => t.includes("folds to"))).toBe(false);
   });
 
@@ -353,10 +375,10 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("LEGALITY");
     expect(r.value).toBeUndefined();
-    const row = cutRows(r).find((x) => x.claim.includes("does not close on one sheet"));
+    const row = cutRows(r).find((x) => x.claimData.template === "legality.monodromy-off-sheet");
     expect(row?.status).toBe("failed");
-    expect(row?.claim).toMatch(/n\(γ, z = 0\) = 1/);
-    expect(row?.evidence.method).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = 1\/3 is not an integer/);
+    expect(row?.claim).toMatch(/\\operatorname\{Ind\}_\\gamma\(0\) = 1/);
+    expect(row?.evidence.method).toMatch(/\\alpha_j = \\frac\{1\}\{3\}\$ is not an integer/);
     expect(row?.repair).toMatch(/keyhole/);
     // And it fires FIRST: the per-piece row is never reached.
     expect(cutRows(r).some((x) => /declaring which side|declares the side|meets a branch cut/.test(x.claim))).toBe(false);
@@ -408,15 +430,15 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
       sheet: 0,
     };
     const r = run("(z+3)/(z^2+1)", dogboneTemplate(), cut);
-    const row = cutRows(r).find((x) => x.claim.includes("still closes on one sheet"));
+    const row = cutRows(r).find((x) => x.claimData.template === "legality.monodromy-on-sheet");
     expect(row?.status).toBe("satisfied");
-    expect(row?.claim).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = 1 ∈ ℤ/);
+    expect(row?.claim).toMatch(/\\alpha_j = 1 \\in \\mathbb\{Z\}/);
     expect(rowsFor(r, "LEGALITY").every((x) => x.status !== "failed")).toBe(true);
     // And a single end is not enough: half the dogbone leaves Σ n·α = 1/2.
     const oneEnd = run("(z+3)/(z^2+1)", circleTemplate([1, 0], 0.4), cut);
-    const bad = cutRows(oneEnd).find((x) => x.claim.includes("does not close on one sheet"));
+    const bad = cutRows(oneEnd).find((x) => x.claimData.template === "legality.monodromy-off-sheet");
     expect(bad?.status).toBe("failed");
-    expect(bad?.evidence.method).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = −1\/2 is not an integer/);
+    expect(bad?.evidence.method).toMatch(/\\alpha_j = -\\frac\{1\}\{2\}\$ is not an integer/);
   });
 
   it("does not apply the winding rule to a point that is not a branch point at all", () => {
@@ -447,13 +469,13 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     const row = pieceRow(r);
     expect(row?.status).toBe("failed");
     expect(row?.claim).toMatch(/crosses the cut/);
-    expect(row?.repair).toBe("tag this segment `above` or `below`, or move the cut");
+    expect(row?.repair).toBe("Assign the piece to the upper or lower side of the cut, or move the cut.");
   });
 
   it("accepts the same crossing once the piece declares which side it runs on", () => {
     const row = pieceRow(run("1/(z+3)", crossedBy("above"), keyhole([-1, 0])));
     expect(row?.status).toBe("satisfied");
-    expect(row?.claim).toMatch(/declares the side it runs on \(1 piece\)/);
+    expect(row?.claim).toMatch(/is assigned a side \(1 piece\)/);
   });
 
   it("accepts a TAGGED piece lying along the cut — that is what a keyhole lip is", () => {
@@ -496,8 +518,8 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     };
     const row = pieceRow(run("1/(z-9)", bare, alongPositiveAxis));
     expect(row?.status).toBe("failed");
-    expect(row?.claim).toMatch(/runs along the cut/);
-    expect(row?.repair).toBe("tag this segment `above` or `below`, or move the cut");
+    expect(row?.claim).toMatch(/crosses the cut/);
+    expect(row?.repair).toBe("Assign the piece to the upper or lower side of the cut, or move the cut.");
   });
 
   it("refuses a cut whose BEND rests on the contour's interior, tagged or not", () => {
@@ -511,8 +533,8 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     };
     const row = pieceRow(run("1/(z+3)", crossedBy("above"), bent));
     expect(row?.status).toBe("failed");
-    expect(row?.claim).toMatch(/grazes/);
-    expect(row?.repair).toBe("move the cut clear of the contour, or move the contour");
+    expect(row?.claim).toMatch(/touches the cut .* tangentially/);
+    expect(row?.repair).toBe("Move the cut clear of the contour, or move the contour.");
   });
 
   it("moves the cut instead, and the same contour becomes legal", () => {
@@ -561,7 +583,7 @@ describe("legalityRefusal — the one gate on printing a value at all", () => {
     const r = run("1/(z+3)", circleTemplate([-3, 0], 1), rayTo([-1, 0]));
     const row = legalityRefusal(r);
     expect(row?.claim).toMatch(/crosses the cut/);
-    expect(row?.repair).toMatch(/tag this segment/);
+    expect(row?.repair).toMatch(/Assign the piece to the upper or lower side/);
     expect(r.value).toBeUndefined();
   });
 
@@ -575,7 +597,7 @@ describe("legalityRefusal — the one gate on printing a value at all", () => {
       cuts: [{ id: "Γ", from: "0", to: "1", via: [] }],
     };
     expect(legalityRefusal(run("1/z", circleTemplate([0, 0], 1.5), bounded))?.claim).toMatch(
-      /not admissible/,
+      /do not make the integrand single-valued/,
     );
   });
 
@@ -618,7 +640,7 @@ describe("the keyhole is LEGAL — the contour tier D is built on", () => {
     const r = run("1/(z+1)", keyholeTemplate(4, 0.15), cutAlongPositiveAxis);
     const rows = cutRows(r);
     expect(rows.every((x) => x.status === "satisfied")).toBe(true);
-    expect(rows.some((x) => /declares the side it runs on \(2 pieces\)/.test(x.claim))).toBe(true);
+    expect(rows.some((x) => x.claimData.template === "legality.cuts-sided" && /\(2 pieces\)/.test(x.claim))).toBe(true);
     // It stops later, at KILL: nothing kills a keyhole's circles for a RATIONAL integrand, because
     // the lemmas that do (`ε^α → 0` needs α > 0, `R^{α−1} → 0` needs α < 1) are statements about the
     // branch exponent. That is D1's integrand, and it arrives with D1.
@@ -645,11 +667,13 @@ describe("the keyhole is LEGAL — the contour tier D is built on", () => {
       ...bare,
       pieces: bare.pieces.map((q) => untag(q)),
     };
-    const row = cutRows(run("1/(z+1)", untagged, cutAlongPositiveAxis)).find(
-      (x) => !x.claim.includes("admissible"),
+    const row = cutRows(run("1/(z+1)", untagged, cutAlongPositiveAxis)).find((x) =>
+      ["legality.cuts-clear", "legality.cuts-sided", "legality.cut-grazed", "legality.cut-crossed"].includes(
+        x.claimData.template,
+      ),
     );
     expect(row?.status).toBe("failed");
-    expect(row?.claim).toMatch(/runs along the cut/);
+    expect(row?.claim).toMatch(/crosses the cut/);
   });
 
   it("is closed, at every scale of its two limit parameters", () => {
@@ -724,13 +748,13 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     const row = arcRow(run("exp(i*z^2)", wedge(4)));
     expect(row?.status).toBe("satisfied");
     expect(row?.evidence.level).toBe("≤");
-    expect(row?.evidence.method).toMatch(/L6 \(oscillatory form\)/);
+    expect(row?.evidence.method).toMatch(/the wedge lemma \(oscillatory form\)/);
   });
 
   it("certifies the Gaussian arc: e^{−z²} on the same π/4 wedge", () => {
     const row = arcRow(run("exp(-z^2)", wedge(4)));
     expect(row?.status).toBe("satisfied");
-    expect(row?.evidence.method).toMatch(/L6 \(Gaussian form\)/);
+    expect(row?.evidence.method).toMatch(/the wedge lemma \(Gaussian form\)/);
   });
 
   it("D-1, side by side on one contour: the π/2 wedge kills e^{iz²} and REFUSES e^{−z²}", () => {
@@ -743,7 +767,7 @@ describe("L6 — the wedge lemma, routed and certified", () => {
     expect(gaussian?.status).toBe("failed");
     expect(gaussian?.evidence.level).toBe("⚠");
     expect(gaussian?.evidence.method).toMatch(/GROWS/);
-    expect(gaussian?.evidence.method).toMatch(/D-1/);
+    expect(gaussian?.evidence.method).toMatch(/runs past π\/2/);
   });
 
   it("reaches the wedge angles a π/(2n) wedge needs, which the extent reader could not measure", () => {
@@ -845,13 +869,13 @@ describe("an arc's sweep as an exact multiple of π", () => {
     // is 4 ≥ 2. Sending a reader to inspect the one thing that was fine is worse than saying
     // nothing.
     const row = arcRow(run("1/(1+z^4)", sector(0, Math.PI / 13)));
-    expect(row?.claim).toMatch(/sweep is not an exact multiple of π/);
+    expect(row?.claim).toMatch(/is not a rational multiple of/);
     expect(row?.claim).not.toMatch(/integrand/);
     expect(row?.evidence.method).toMatch(/the sweep enters the number/);
 
     // …and an integrand no bound covers still says so, on an arc whose sweep reads perfectly.
     const unsupported = arcRow(run("z*exp(-z^2)", sweep(1, 4)));
-    expect(unsupported?.claim).toMatch(/no lemma here applies to this integrand/);
+    expect(unsupported?.claimData.template).toBe("kill.no-lemma");
   });
 });
 
@@ -867,7 +891,7 @@ describe("L1 on a strip's vertical sides", () => {
     for (const id of ["right", "left"]) {
       expect(sideRow(r, id)?.status).toBe("satisfied");
       expect(sideRow(r, id)?.evidence.level).toBe("≤");
-      expect(sideRow(r, id)?.evidence.method).toMatch(/ML inequality on a vertical side/);
+      expect(sideRow(r, id)?.evidence.method).toMatch(/ML-estimate on a vertical side/);
     }
   });
 
@@ -895,7 +919,7 @@ describe("L1 on a strip's vertical sides", () => {
     const r = run("exp((3/10)*z)/(1 + exp(z))", stripTemplate(2 * Math.PI, 9));
     const top = rowsFor(r, "KILL").find((x) => x.pieceId === "top");
     expect(top?.status).toBe("satisfied");
-    expect(top?.claim).toMatch(/reproduces the target/);
+    expect(top?.claim).toMatch(/a constant multiple of the target/);
   });
 
   it("declines a DIAGONAL side, where a bound read at one end would be the wrong geometry", () => {

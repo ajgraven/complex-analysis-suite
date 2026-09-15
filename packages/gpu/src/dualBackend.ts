@@ -179,6 +179,14 @@ export const DUAL_BACKEND_CORPUS: DualCase[] = [
   { name: "sinh(z) + c", source: "sinh(z) + c" },
   { name: "cosh(z) + c", source: "cosh(z) + c" },
   { name: "tanh(z) + c", source: "tanh(z) + c" },
+  // The reciprocal hyperbolics (M8 step 0.4, for the Contour Integration gallery's `sech` and `coth`
+  // closed forms). Their GLSL bodies are one-line quotients, which the node suite can only check the
+  // NAME of — so the parity run is where a `csinh` written for a `ccosh` would show. The sample
+  // lattice never reaches a pole: its smallest |z| is 0.28 and the nearest singularity of `coth` and
+  // `csch` after 0 is `iπ`.
+  { name: "sech(z) + c", source: "sech(z) + c" },
+  { name: "csch(z) + c", source: "csch(z) + c" },
+  { name: "coth(z) + c", source: "coth(z) + c" },
   // Γ (Lanczos, B6): a real special-function implementation, not a base-op composition. The samples sit
   // in the right half-plane and the reflected left, exercising both branches of cgamma. JS is float64,
   // GLSL float32 with float32 coefficients, so its agreement is looser than the elementary maps' ~1e-7.
@@ -186,6 +194,10 @@ export const DUAL_BACKEND_CORPUS: DualCase[] = [
   // ζ (Borwein, B6): the critical strip (core) + the reflected left plane (via cgamma). Same float32
   // caveat as Γ, compounded — the loosest of the corpus (the plotter badges ζ's f32 precision).
   { name: "zeta(z) + c", source: "zeta(z) + c" },
+  // `z!` is `cgamma(z+1)` — a NAME, so what this pins is the shift. Without it the map is Γ(z), which
+  // is a perfectly good function and the wrong one, and no node test can tell (the emitted call is
+  // `cfactorial` either way).
+  { name: "factorial(z) + c", source: "factorial(z) + c" },
 ];
 
 /** Deterministic (z, c) sample grid over a modest disc — no RNG (Math.random is unavailable in some

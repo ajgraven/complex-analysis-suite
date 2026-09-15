@@ -1,0 +1,17 @@
+<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="katex/katex.min.css"><script src="katex/katex.min.js"></script><link rel="stylesheet" href="layout.css"><script src="layout.js"></script><title>D</title><div class="suitebar"><b>Suite</b><span>Complex Dynamics</span><span>Quadrature Domains</span><span>Riemann Map</span><span>Argument Principle</span><span>Faber Transform</span><span>2D Electrostatics</span><span class="cur">Contour Integration</span></div><div class="appbar"><span class="title">Contour Integration</span><span class="seg"><span class="on">Explore</span><span>Worked example</span><span>Drill</span></span><span class="pick"><span class="tex" data-tex="\int_{-\infty}^{\infty}\frac{dx}{1+x^{4}}"></span><span style="color:var(--mut)">by a semicircle</span><span class="arrow">▾</span></span><span class="btn">Sandbox</span><span class="spacer"></span><span class="btn">Contrasts</span><span class="btn">Copy link</span><span class="btn">Save figure</span></div>
+<style>.doc{position:absolute;top:80px;left:0;right:0;bottom:0;overflow:auto;padding:22px 40px}.doc .grid{display:grid;grid-template-columns:minmax(560px,58%) 1fr;gap:28px;max-width:1400px;margin:0 auto}.doc .stage{height:430px;border-radius:10px;border:1px solid var(--line)}.doc h1{font-size:20px;margin:0 0 4px;font-weight:600}.doc .lead{color:var(--mut);margin-bottom:14px}.doc .art{font-size:13.5px;line-height:1.6}.doc .art h3{font-size:14px;margin:14px 0 4px}.doc .sticky{position:sticky;top:0}</style>
+<div class="doc"><div class="grid">
+ <div><div class="sticky"><h1>The integral of 1/(1+x⁴) over the real line, by a semicircle</h1><div class="lead">Ahlfors §4.5.3 · Stein–Shakarchi Ch. 3 Ex. 2 · a rational function with no real poles and degree gap 4</div>
+  <div class="stage quiet" id="stage"></div>
+  <div class="strip" style="height:150px;margin-top:10px;border:1px solid var(--line);border-radius:10px;overflow:hidden" id="strip"></div></div></div>
+ <div class="art" id="art"></div>
+</div></div>
+<script>
+const {P,readout,T,tex,strip}=window.MOCK;stage.innerHTML=readout();document.getElementById('strip').innerHTML=strip();
+art.innerHTML=P.verdict(true)+'<h3>1. The problem</h3><p>We evaluate '+T(String.raw`I=\int_{-\infty}^{\infty}\frac{dx}{1+x^{4}}`)+' by integrating '+T(String.raw`f(z)=1/(1+z^{4})`)+' over the closed contour '+T(String.raw`\gamma_R=[-R,R]\cup\Gamma_R`)+'.</p>'+
+'<h3>2. Hypotheses</h3><p>'+T(String.raw`\gamma_R`)+' is closed and positively oriented; '+T(String.raw`f`)+' is meromorphic with simple poles at the fourth roots of −1, none on '+T(String.raw`\gamma_R`)+' for R > 1; no branch cuts.</p>'+
+'<h3>3. Bound the arc</h3>'+tex(String.raw`\Bigl|\int_{\Gamma_R} f\,dz\Bigr| \le \pi R\cdot\max_{\Gamma_R}|f| \le \frac{\pi R}{R^{4}-1}\xrightarrow[R\to\infty]{}0`,true,'c')+'<p>Let R = <span class="scrub">4</span>: the bound is <b class="num">0.0493</b>. On the stage the arc term is the small orange hook at the end of the trail.</p>'+
+'<h3>4. Residues</h3>'+tex(String.raw`\operatorname{Res}\bigl(f,e^{i\pi/4}\bigr)=-\tfrac14 e^{i\pi/4},\qquad \operatorname{Res}\bigl(f,e^{3i\pi/4}\bigr)=-\tfrac14 e^{3i\pi/4}`,true,'c')+
+'<h3>5. Conclude</h3>'+tex(String.raw`I=2\pi i\Bigl(-\tfrac14\Bigr)\bigl(e^{i\pi/4}+e^{3i\pi/4}\bigr)=2\pi i\cdot\Bigl(-\tfrac{i\sqrt2}{4}\Bigr)=\frac{\pi}{\sqrt2}`,true,'c')+P.share();
+renderTex();
+</script>

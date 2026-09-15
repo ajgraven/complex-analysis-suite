@@ -174,7 +174,7 @@ describe("the corrected bounds hold, at finite R and not only in the limit", () 
 });
 
 describe("Jordan is this lemma at n = 1, which is the check that the sharing is real", () => {
-  it("returns π/|a| on a semicircle, the same number jordanArcBound does", () => {
+  it("returns \\pi/|a| on a semicircle, the same number jordanArcBound does", () => {
     for (const a of [1, 2, 5]) {
       const wedge = wedgeArcBound({ w: Gauss.int(0, a), n: 1, lambda: ONE }, q(7), {
         from: Frac.ZERO,
@@ -190,7 +190,7 @@ describe("Jordan is this lemma at n = 1, which is the check that the sharing is 
     expect(b.asymptotics).toBe("bounded");
     expect(b.certificate.level).toBe("⚠");
     expect(b.exponent).toBe(0);
-    expect(b.certificate.claim).toMatch(/does NOT vanish/);
+    expect(b.certificate.claim).toMatch(/does not vanish/);
   });
 });
 
@@ -217,7 +217,7 @@ describe("what the wedge bound refuses, and by name", () => {
     for (const w of [Gauss.int(1), Gauss.int(0, -1)]) {
       const b = wedgeArcBound({ w, n: 2, lambda: ONE }, q(4), { from: Frac.ZERO, to: q(1, 4) });
       expect(b.value).toBeUndefined();
-      expect(b.certificate.claim).toMatch(/DIVERGES/);
+      expect(b.certificate.claim).toMatch(/diverges/);
       expect(b.certificate.provenance.some((s) => s.text.includes("repair"))).toBe(true);
       expect(b.exponent).toBe(Number.POSITIVE_INFINITY);
     }

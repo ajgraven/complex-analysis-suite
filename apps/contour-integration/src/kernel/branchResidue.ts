@@ -31,6 +31,7 @@
 // and D3's `n = 5` and `n = 7` fixtures reach their answer by summing the residues as a GEOMETRIC
 // SERIES instead, which never names an individual root.
 import { Frac, Gauss, SqrtExt, bigGcd } from "@cas/exact";
+import { LATEX } from "./notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatExpSum } from "./expSum.js";
 import { Exponent } from "./exponent.js";
@@ -159,7 +160,7 @@ export function argumentOfPole(
     return {
       ok: false,
       reason:
-        `arg(${formatSqrtExt(at)}) was not verified to be a rational multiple of π with denominator ` +
+        `$\\arg(${formatSqrtExt(at, LATEX)})$ was not verified to be a rational multiple of $\\pi$ with denominator ` +
         `1, 2, 3, 4 or 6 inside the declared range — those are the only roots of unity one quadratic ` +
         "extension of ℚ(i) can hold, and a fifth or seventh root reaches its answer by summing the " +
         "residues as a geometric series instead",
@@ -205,19 +206,19 @@ export function powerAtPole(at: SqrtExt, factor: PowerFactor): BranchResidue {
     argMultiple: r,
     certificate: exact(
       `z₀^α at ${formatSqrtExt(at)} is ${formatExpSum(ExpSum.of(SqrtExt.ONE, exponent))}`,
-      "the argument is DECIDED: a rational multiple of π is guessed numerically and then verified in exact arithmetic",
+      "the argument is decided: a rational multiple of $\\pi$ is guessed numerically and then verified in exact arithmetic",
       {
-        restriction: `arg z ∈ [${factor.argRange[0].n}/${factor.argRange[0].d}·π, ${factor.argRange[1].n}/${factor.argRange[1].d}·π)`,
+        restriction: `$\\arg z \\in [\\tfrac{${factor.argRange[0].n}}{${factor.argRange[0].d}}\\pi, \\tfrac{${factor.argRange[1].n}}{${factor.argRange[1].d}}\\pi)$`,
         provenance: [
           {
             ok: true,
-            text: `arg(${formatSqrtExt(at)}) = ${r.n}/${r.d}·π, verified exactly over ℚ(i)(√d) by dividing z₀ by e^{irπ} and finding a positive real${
-              argument.logModulus.isZero() ? " of modulus 1" : ` modulus with ln = ${formatLogPart(argument.logModulus)}`
+            text: `$\\arg(${formatSqrtExt(at, LATEX)}) = \\tfrac{${r.n}}{${r.d}}\\pi$, verified exactly over $\\mathbb{Q}(i)(\\sqrt{d})$ by dividing $z_0$ by $e^{ir\\pi}$ and finding a positive real${
+              argument.logModulus.isZero() ? " of modulus 1" : ` modulus with $\\ln = ${formatLogPart(argument.logModulus, LATEX)}$`
             }`,
           },
           {
             ok: true,
-            text: "the determination is an INPUT to the answer: the principal branch would change it by e^{2πiα} with nothing to warn you",
+            text: "the determination is an input to the answer: the principal branch would change it by $e^{2\\pi i\\alpha}$ with nothing to warn you",
           },
         ],
       },
@@ -478,32 +479,32 @@ export function multiPowerAtPole(z0: SqrtExt, factor: MultiPowerFactor): BranchR
     argMultiple: r,
     certificate: exact(
       `the branch factor at ${formatSqrtExt(z0)} is ${formatExpSum(value)}`,
-      "the WEIGHTED SUM of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement",
+      "the weighted sum of the arguments is verified exactly: raising the product to its exponents' common denominator clears every fractional power, and the phase is then a quotient of exact elements rather than a measurement",
       {
         restriction: factor.points
           .map(
             (p) =>
-              `arg(${p.sign < 0 ? `${p.label.replace("z = ", "")} − z` : `z − ${p.label.replace("z = ", "")}`}) ∈ [${formatFrac(p.argRange[0])}·π, ${formatFrac(p.argRange[1])}·π)`,
+              `$\\arg(${p.sign < 0 ? `${p.label.replace("z = ", "")} - z` : `z - ${p.label.replace("z = ", "")}`}) \\in [${formatFrac(p.argRange[0], LATEX)}\\pi, ${formatFrac(p.argRange[1], LATEX)}\\pi)$`,
           )
           .join("; "),
         provenance: [
           {
             ok: true,
-            text: `Σ αⱼ·arg(z₀ − bⱼ) = ${formatFrac(r)}·π, and the individual arguments need not be rational multiples of π — at D6's pole they are π − arctan a and arctan a, and only the half-sum is`,
+            text: `$\\sum_j \\alpha_j \\arg(z_0 - b_j) = ${formatFrac(r, LATEX)}\\pi$, and the individual arguments need not be rational multiples of $\\pi$ — at a conjugate pair of poles they are $\\pi - \\arctan a$ and $\\arctan a$, and only the weighted sum is`,
           },
           {
             ok: true,
-            text: `the exact phase pins it modulo ${formatFrac(step)}·π, and the declared determination picks which lift — the nearest alternative is ${formatFrac(step)}·π away`,
+            text: `the exact phase pins it modulo $${formatFrac(step, LATEX)}\\pi$, and the declared determination picks which lift — the nearest alternative is $${formatFrac(step, LATEX)}\\pi$ away`,
           },
           {
             ok: true,
-            text: `independent cross-check: a direct float evaluation of c·∏|z₀−bⱼ|^{αⱼ}·e^{iΣαⱼθⱼ} agrees to ${disagreement.toExponential(2)}, sharing no arithmetic with the exact route but the window`,
+            text: `independent cross-check: a direct float evaluation of $c\\prod_j|z_0-b_j|^{\\alpha_j}e^{i\\sum_j\\alpha_j\\theta_j}$ agrees to ${disagreement.toExponential(2)}, sharing no arithmetic with the exact route but the window`,
           },
           {
             ok: true,
             text: logModulus.isZero()
               ? "every branch point is at distance 1 from the pole, so the modulus contributes nothing"
-              : `ln ∏|z₀ − bⱼ|^{αⱼ} = ${formatLogPart(logModulus)}, over primes and therefore canonical`,
+              : `$\\ln \\prod_j|z_0 - b_j|^{\\alpha_j} = ${formatLogPart(logModulus, LATEX)}$, over primes and therefore canonical`,
           },
         ],
       },

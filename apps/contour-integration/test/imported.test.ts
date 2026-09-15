@@ -210,7 +210,7 @@ describe("Pass 5's fourth route", () => {
     if (!solved.ok) return;
     const row = solved.run.ledger.rows.find((r) => r.pieceId === "top");
     expect(row?.evidence.level).toBe("=");
-    expect(row?.claim).toContain("imported, not derived here");
+    expect(row?.claim).toContain("a known integral, not derived here");
     // The LEDGER's verdict stays `≤`, and correctly: the two verticals' finite-R ML bounds are
     // one-sided, exactly as E1's and every other ML-killed record's are. What the import fixes is
     // this piece's own row, which is what Pass 5 and the answer's verdict read.

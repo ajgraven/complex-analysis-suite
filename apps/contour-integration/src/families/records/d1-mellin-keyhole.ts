@@ -16,9 +16,23 @@ import type { Family } from "../schema.js";
 
 export const d1MellinKeyhole: Family = {
   id: "mellin-keyhole",
-  title: "∫₀^∞ x^(α−1)/(1+x) dx = π/sin(πα): the keyhole and Euler reflection",
-  taxonomySection: "5.1",
+  title: "∫₀^{∞} x^{α−1} dx/(1+x) by a keyhole",
+  titleLatex: "$\\int_0^{\\infty}\\frac{x^{\\alpha-1}}{1+x}\\,dx$ by a keyhole",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$ — both edges of the cut, the circle $|z|=R$, the circle $|z|=\\varepsilon$; branch $\\arg z\\in[0,2\\pi)$",
+    point:
+      "The lower edge returns $-e^{2\\pi i(\\alpha-1)}$ times the target, so $(1-e^{2\\pi i\\alpha})I=2\\pi i\\operatorname{Res}(f,-1)$ with $(-1)^{\\alpha-1}=e^{i\\pi(\\alpha-1)}$ in the chosen branch; the two circles are disposed of by $\\alpha<1$ and $\\alpha>0$ respectively.",
+    citations: [
+      { book: "Brown–Churchill", where: "§84", text: "integration along a branch cut" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+      { book: "Ahlfors", where: "Ch. 4 §5 (the \\(x^{\\alpha}R(x)\\) case)", text: "" },
+    ],
+  },
+  frontRow: 5,
 
   targets: [
     {
@@ -115,7 +129,7 @@ export const d1MellinKeyhole: Family = {
       },
       {
         id: "outer",
-        name: "the R → ∞ circle",
+        name: "the $R \\to \\infty$ circle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: 2 * Math.PI },
         role: "vanish",
         lemma: "L2",
@@ -135,7 +149,7 @@ export const d1MellinKeyhole: Family = {
       },
       {
         id: "inner",
-        name: "the ε → 0 circle",
+        name: "the $\\varepsilon \\to 0$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),

@@ -40,7 +40,7 @@ describe("both records load, close, and land on their closed form", () => {
     expect(r.solved.value).toBeCloseTo(want, 14);
     expect(assembleVerdict(r.solved.certificates).level).toBe("=");
     expect(r.run.ledger.closes).toBe(true);
-    expect(ledgerHeadline(r.run.ledger)).toBe("This argument closes.");
+    expect(ledgerHeadline(r.run.ledger)).toBe("The argument is complete.");
     // ℚ(i)(π), not the exponential basis: the kernel's Laurent expansion at an integer is EVEN.
     expect(r.route).toBe("sum");
     if (r.route !== "sum") return;
@@ -77,9 +77,9 @@ describe("SG-6 — the escalation is an obligation, not a licence", () => {
       expect(h?.onFail, family.id).toBe("escalate");
       expect(h?.escalateTo, family.id).toBe("merge-collision");
       const rows = solved(family).run.ledger.rows.filter((r) => r.constraint === "CATCH");
-      const row = rows.find((r) => /a stated hypothesis FAILS/.test(r.claim));
+      const row = rows.find((r) => /combine into a single pole/.test(r.claim));
       expect(row?.status, family.id).toBe("satisfied");
-      expect(row?.claim, family.id).toMatch(/merge-collision, over 1 declared collision/);
+      expect(row?.claim, family.id).toMatch(/combine into a single pole/);
     }
   });
 

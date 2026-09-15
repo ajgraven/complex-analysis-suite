@@ -51,9 +51,20 @@ const SIDE_NAMES = [
 
 export const g2SquareCotKernel: Family = {
   id: "series-cot-kernel",
-  title: "Σ_{n∈ℤ} 1/(n²+a²) = (π/a)coth(πa): the π cot(πz) kernel on half-integer squares",
-  taxonomySection: "8",
+  title: "Σ_{n∈ℤ} 1/(n²+a²) by π cot πz on squares",
+  titleLatex: "$\\sum_{n=-\\infty}^{\\infty}\\frac1{n^2+a^2}$ by $\\pi\\cot\\pi z$ on squares",
+  taxonomySection: "Series by the residue theorem",
   tier: "G",
+
+  description: {
+    contour: "the squares $\\Gamma_N$, $N+\\tfrac12$ half-width; integrand $\\pi\\cot(\\pi z)/(z^2+a^2)$",
+    point:
+      "$|\\cot\\pi z|\\le\\coth(\\pi/2)$ on every $\\Gamma_N$, so $\\oint_{\\Gamma_N}\\to0$; the residues at $\\pm ia$ are equal, not opposite, and their sum is minus the series.",
+    citations: [
+      { book: "Marsden–Hoffman", where: "§4", text: "" },
+      { book: "Freitag–Busam", where: "Ch. III §7", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -252,6 +263,7 @@ export const g2SquareCotKernel: Family = {
       // declares is the two-sided sum — and the record carries it because the halving is the tier's
       // commonest error and the number is what a reader needs to check against.
       params: { a: 0.75, sided: "one" },
+      label: "one-sided sum",
       value: "((pi/a)*coth(pi*a) - 1/a^2)/2",
       numeric: 1.2434764324674408,
       verifiedTo: 0,

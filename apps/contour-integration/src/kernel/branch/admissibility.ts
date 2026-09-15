@@ -185,17 +185,17 @@ export function checkAdmissibility(branch: BranchChoice): AdmissibilityReport {
     detail:
       bounded.length === 0
         ? "every cut reaches infinity, so no bounded component can carry monodromy"
-        : `every bounded component has Σα ∈ ℤ (${bounded.map((c) => `{${c.points.join(", ")}}`).join(", ")})`,
+        : `every bounded component has $\\sum\\alpha \\in \\mathbb{Z}$ (${bounded.map((c) => `{${c.points.join(", ")}}`).join(", ")})`,
     components,
     certificate: exact(
       "the cut system is admissible",
-      "research 06 §2.1, decided over ℚ: every genuine branch point is on the forest, every bounded component sums to an integer, and no log is bounded",
+      "each bounded cut joins branch points whose exponents sum to an integer; every logarithmic branch point is joined to $\\infty$",
       {
         provenance: [
           { ok: true, text: `${branch.points.length} branch point(s), ${branch.cuts.length} cut(s), no cycle` },
           ...bounded.map((c) => ({
             ok: true,
-            text: `bounded component {${c.points.join(", ")}}: Σα = ${c.sum?.n ?? "—"}/${c.sum?.d ?? "—"} ∈ ℤ`,
+            text: `bounded cut $\\{${c.points.join(", ")}\\}$: $\\sum\\alpha = ${c.sum?.n ?? "—"}/${c.sum?.d ?? "—"} \\in \\mathbb{Z}$`,
           })),
         ],
       },

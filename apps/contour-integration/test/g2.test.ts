@@ -65,7 +65,7 @@ describe("the record is loaded and it closes", () => {
       expect(assembleVerdict(r.solved.certificates).level).toBe("=");
       expect(r.solved.text).toMatch(/coth\(/);
       expect(r.run.ledger.closes).toBe(true);
-      expect(ledgerHeadline(r.run.ledger)).toBe("This argument closes.");
+      expect(ledgerHeadline(r.run.ledger)).toBe("The argument is complete.");
     },
   );
 

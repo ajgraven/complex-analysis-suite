@@ -168,6 +168,13 @@ function chainOuter(name: string, u: Node): Node {
     case "cot":
       // d/dz cot = −csc²(u)
       return neg(pow(call("csc", u), num(2)));
+    case "sech":
+      return neg(mul(call("sech", u), call("tanh", u)));
+    case "csch":
+      return neg(mul(call("csch", u), call("coth", u)));
+    case "coth":
+      // d/dz coth = −csch²(u)
+      return neg(pow(call("csch", u), num(2)));
     default:
       throw new ExprError(`'${name}()' is not differentiable for Newton's method`, 0);
   }

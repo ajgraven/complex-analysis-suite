@@ -20,6 +20,7 @@
 // It is a NUMBER TYPE, and lives here beside the app's others (`ExpSum`, `Exponent`, `SqrtExt`).
 // The elimination interface it instantiates is `families/field.ts`.
 import { Frac, Gauss, QiPoly, bigGcd } from "@cas/exact";
+import { TEXT, type Notation } from "./notation.js";
 import { gaussTerms, joinTerms, type Term } from "./formatExact.js";
 
 /**
@@ -151,23 +152,17 @@ export class RatPi {
   }
 }
 
-const SUPERSCRIPTS = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
-const superscript = (k: number): string =>
-  String(k)
-    .split("")
-    .map((d) => SUPERSCRIPTS[Number(d)] ?? d)
-    .join("");
-
 /** `π^k` as a symbol to hang a coefficient on: ``, `π`, `π²`, `π³`. */
-const piSymbol = (k: number): string => (k === 0 ? "" : k === 1 ? "π" : `π${superscript(k)}`);
+const piSymbol = (k: number, n_: Notation): string =>
+  k === 0 ? "" : n_.intPower(n_.pi, BigInt(k));
 
 /** The terms of `Σ cₖ π^k`, highest power first. */
-function polyTerms(p: QiPoly): Term[] {
+function polyTerms(p: QiPoly, n_: Notation): Term[] {
   const terms: Term[] = [];
   for (let k = p.degree(); k >= 0; k--) {
     const c = p.coeff(k);
     if (c.isZero()) continue;
-    terms.push(...gaussTerms(c, piSymbol(k)));
+    terms.push(...gaussTerms(c, piSymbol(k, n_), n_));
   }
   return terms;
 }
@@ -195,18 +190,20 @@ function isBarePiPower(p: QiPoly): boolean {
  *
  * Terms run highest power first, as a polynomial is written: `π² − 1`, and so also `−π² + 1`.
  */
-export function formatRatPi(x: RatPi): string {
-  if (x.den.degree() === 0 && x.den.coeff(0).equals(Gauss.ONE)) return joinTerms(polyTerms(x.num));
+export function formatRatPi(x: RatPi, n_: Notation = TEXT): string {
+  if (x.den.degree() === 0 && x.den.coeff(0).equals(Gauss.ONE)) {
+    return joinTerms(polyTerms(x.num, n_), n_);
+  }
   // The monic-denominator normal form pushes rational scalars up into the numerator, so `1/(4π²)`
   // is HELD as `(1/4)/π²` and would print as the ambiguous `1/4/π²`. Clearing the coefficient
   // denominators from both sides at once leaves the value alone and puts the 4 back where a reader
   // expects it. Display only — the stored representative stays canonical.
   const clear = Gauss.int(lcm(denominatorLcm(x.num), denominatorLcm(x.den)));
   const bottom = x.den.scale(clear);
-  const terms = polyTerms(x.num.scale(clear));
-  const num = joinTerms(terms);
-  const den = joinTerms(polyTerms(bottom));
+  const terms = polyTerms(x.num.scale(clear), n_);
+  const num = joinTerms(terms, n_);
+  const den = joinTerms(polyTerms(bottom, n_), n_);
   // A denominator needs its parentheses unless it is a bare power of π: `1/4π²` would read as
   // `(1/4)π²`, which is a different number, while `1/π` and `2π/(π² + 1)` are unambiguous.
-  return `${terms.length > 1 ? `(${num})` : num}/${isBarePiPower(bottom) ? den : `(${den})`}`;
+  return n_.quotient(num, den, { num: terms.length > 1, den: !isBarePiPower(bottom) });
 }

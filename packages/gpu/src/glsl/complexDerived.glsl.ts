@@ -55,6 +55,9 @@ cvec carctanh(cvec a) {
 cvec csec(cvec a) { return cdiv(vec_(1.0, 0.0), ccos(a)); }
 cvec ccsc(cvec a) { return cdiv(vec_(1.0, 0.0), csin(a)); }
 cvec ccot(cvec a) { return cdiv(ccos(a), csin(a)); }
+cvec csech(cvec a) { return cdiv(vec_(1.0, 0.0), ccosh(a)); }
+cvec ccsch(cvec a) { return cdiv(vec_(1.0, 0.0), csinh(a)); }
+cvec ccoth(cvec a) { return cdiv(ccosh(a), csinh(a)); }
 
 cvec lwZeroApprox(cvec z) {
   cvec ezsqrt = csqrt(cadd(vec_(1.0, 0.0), cmul(vec_(C_E, 0.0), z)));
@@ -105,6 +108,8 @@ cvec cgamma(cvec z) {
   }
   return cgammaCore(z);
 }
+// z! = Γ(z+1) — a NAME for cgamma, matching the JS reference (@cas/expr complexJs.ts factorial).
+cvec cfactorial(cvec z) { return cgamma(cadd(z, vec_(1.0, 0.0))); }
 
 // Riemann ζ(s) — Borwein's acceleration of the alternating series (the SAME algorithm + d_k recurrence
 // as the JS reference @cas/expr complexJs.ts zeta, so the backends agree to this build's precision; the

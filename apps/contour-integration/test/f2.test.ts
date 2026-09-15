@@ -73,7 +73,7 @@ describe("the arc bound, discharged", () => {
     for (const n of [2, 3]) {
       const ratios = [4, 6, 10].map((R) => {
         const r = solved(n, { R });
-        const bound = Number(/≤ ([0-9.e+-]+) at R/.exec(
+        const bound = Number(/\\le ([0-9.e+-]+)\$/.exec(
           r.run.ledger.rows.find((x) => x.pieceId === "arc")?.claim ?? "",
         )?.[1]);
         const arc = r.run.integral.pieces[1].value;
@@ -94,7 +94,7 @@ describe("the arc bound, discharged", () => {
     const row = solved(2).run.ledger.rows.find((x) => x.pieceId === "arc");
     expect(row?.status).toBe("satisfied");
     expect(row?.evidence.level).toBe("≤");
-    expect(row?.claim).toContain("→ 0 as R → ∞");
+    expect(row?.claim).toContain("\\to 0$ as $R \\to \\infty");
     expect(F2.vanishingLemmas[0].lemma).toBe("L6");
     // D-1: the admissible range is `π/(2n)` and not `π/n`, which the record declares as geometry
     // rather than as prose — `n·wedgeAngle = π/2` exactly.

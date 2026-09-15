@@ -126,7 +126,7 @@ export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
     const reason =
       "not every pole of the cofactor was pinned exactly, so the kernel cannot be evaluated at them — " +
       "and a residue sum missing a term is the one failure this tier could have and not notice";
-    return { ok: false, reason, certificate: refuse("Σ Res(K·f, z_j)", reason) };
+    return { ok: false, reason, certificate: refuse("$\\sum_j \\operatorname{Res}(Kf, z_j)$", reason) };
   }
 
   let total: ExpRatio = ratioOf(ExpSum.ZERO);
@@ -144,14 +144,14 @@ export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
       const reason =
         `the cofactor has a pole of order ${pole.order}, where Res(K·f, z₀) = K(z₀)·Res(f, z₀) does ` +
         "not hold — the kernel's own derivatives enter, which is a different computation";
-      return { ok: false, reason, certificate: refuse("Σ Res(K·f, z_j)", reason) };
+      return { ok: false, reason, certificate: refuse("$\\sum_j \\operatorname{Res}(Kf, z_j)$", reason) };
     }
     const z = pole.at.asGauss();
     if (z === null) {
       const reason =
         "a pole of the cofactor carries a √d, so e^{2πiz₀} is not in the basis (Exponent.pi is a " +
         "Gaussian multiple of π) and the kernel cannot be evaluated there exactly";
-      return { ok: false, reason, certificate: refuse("Σ Res(K·f, z_j)", reason) };
+      return { ok: false, reason, certificate: refuse("$\\sum_j \\operatorname{Res}(Kf, z_j)$", reason) };
     }
     // `kernelOverPi` returns null only at an INTEGER `z₀`, and the partition above has already
     // skipped every one of those — so this cannot be null here. It is read as a value rather than
@@ -166,7 +166,7 @@ export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
       const reason =
         "two of the kernel-weighted residues do not share one quadratic extension, so their sum is " +
         "not an element of the output basis";
-      return { ok: false, reason, certificate: refuse("Σ Res(K·f, z_j)", reason) };
+      return { ok: false, reason, certificate: refuse("$\\sum_j \\operatorname{Res}(Kf, z_j)$", reason) };
     }
     total = next;
   }
@@ -178,17 +178,17 @@ export function cofactorResidues(kernel: SummationKernel): CofactorResidues {
     certificate: exact(
       `Σ_j Res(K·f, z_j) = π·(${at.length} term${at.length === 1 ? "" : "s"}), each K(z_j)·Res(f, z_j)`,
       `the kernel is holomorphic and non-zero at every pole of f, so the residue of the product is the value times the residue; ${
-        kernel.kind === "cot" ? "cot" : "csc"
-      }(πz₀) is a Möbius function of e^{2πiz₀} and therefore an exact quotient of basis elements`,
+        kernel.kind === "cot" ? "$\\cot" : "$\\csc"
+      }(\\pi z_0)$ is a Möbius function of $e^{2\\pi i z_0}$ and therefore an exact quotient of basis elements`,
       {
         provenance: [
           {
             ok: true,
-            text: "the 2πi of the residue theorem CANCELS here, because the contour integral tends to zero and the identity is 0 = 2πi[Σ f(n) + Σ Res] — so the answer carries the kernel's own π and no other",
+            text: "the $2\\pi i$ of the residue theorem cancels here, because the contour integral tends to zero and the identity is $0 = 2\\pi i[\\sum f(n) + \\sum \\operatorname{Res}]$ — so the answer carries the kernel's own $\\pi$ and no other",
           },
           {
             ok: true,
-            text: "every pole is simple and Gaussian, which is what makes e^{2πiz₀} representable and K(z₀)·Res(f,z₀) the whole residue",
+            text: "every pole is simple and Gaussian, which is what makes $e^{2\\pi i z_0}$ representable and $K(z_0)\\operatorname{Res}(f, z_0)$ the whole residue",
           },
         ],
       },

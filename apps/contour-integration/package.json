@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "katex": "^0.17.0",
     "@cas/core": "workspace:*",
     "@cas/exact": "workspace:*",
     "@cas/export": "workspace:*",

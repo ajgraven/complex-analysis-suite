@@ -17,8 +17,9 @@
 // is infinite — and `π cot(πz)'s −π²/3` is the same computation on the other kernel, which is why the two
 // entries differ by one number and nothing else.
 //
-// **Its ring is ℚ(i)(π), not G2's.** The kernel's Laurent expansion at an integer is EVEN, so a
-// merged residue is a rational multiple of an even power of π; G2's `coth` is a quotient of
+// **Its ring is ℚ(i)(π), not G2's.** The kernel is ODD about every integer, so `u·K(n+u)` is even in
+// `u` and the coefficient of `u^{2k−1}` is a rational multiple of `π^{2k}`; a merged residue is
+// therefore a rational multiple of an even power of π; G2's `coth` is a quotient of
 // exponentials. A collision is therefore a different RING rather than a harder case, and this
 // record's cofactor has no pole but the collision — so `ρ = 0` and the whole identity lives here.
 //
@@ -50,9 +51,19 @@ const SIDE_NAMES = [
 
 export const g3SquareCscCollision: Family = {
   id: "series-csc-kernel-collision",
-  title: "Σ_{n≥1} (−1)ⁿ/n² = −π²/12: the π csc(πz) kernel, same collision",
-  taxonomySection: "8",
+  title: "Σ_{n≥1} (−1)ⁿ/n² by π csc πz on squares",
+  titleLatex: "$\\sum_{n=1}^{\\infty}\\frac{(-1)^n}{n^2}$ by $\\pi\\csc\\pi z$ on squares",
+  taxonomySection: "Series by the residue theorem",
   tier: "G",
+
+  description: {
+    contour: "the squares $\\Gamma_N$; integrand $\\pi\\csc(\\pi z)/z^2$",
+    point:
+      "$\\pi\\csc\\pi z$ has residue $(-1)^n$ at $n$, so the alternation belongs to the kernel; at $0$ the merged pole of order $3$ has residue $+\\pi^2/6$.",
+    citations: [
+      { book: "Marsden–Hoffman", where: "§4", text: "the $\\pi\\csc\\pi z$ kernel" },
+    ],
+  },
 
   targets: [
     {
@@ -109,8 +120,8 @@ export const g3SquareCscCollision: Family = {
     {
       id: "kernel-uniformly-bounded",
       statement:
-        "sup_{Γ_N}|cot πz| = coth(π(N+½)) ≤ coth(π/2) for every N ≥ 0, uniformly — what makes a LIMIT argument possible rather than four separate bounds",
-      check: "symbolic:kernelBound('cot', 'halfIntegerSquare') == coth(pi/2)",
+        "sup_{Γ_N}|csc πz| = 1 for every N ≥ 0, uniformly — ≤ 1/sinh(π/2) on the horizontal sides and ≤ 1 on the vertical ones — which is what makes a LIMIT argument possible rather than four separate bounds",
+      check: "symbolic:kernelBound('csc', 'halfIntegerSquare') == 1",
       onFail: "refuse",
     },
   ],
@@ -140,9 +151,11 @@ export const g3SquareCscCollision: Family = {
     lemma: "L2" as const,
     sideCondition:
       k % 2 === 1
-        ? "on y = ±(N+½): |cot πz| ≤ coth(π|y|) ≤ coth(π/2); and |f| ≤ 1/(N+½)²"
-        : "on x = ±(N+½): cos πx = 0 so |cot πz| = |tanh πy| < 1 — a DIFFERENT reason from the horizontal sides, and the stronger one",
-    discharge: "symbolic:squareSideBound(2*pi*coth(pi/2)*(N+1/2)*max|f|, limit=N->inf)",
+        ? "on y = ±(N+½): |csc πz| ≤ 1/sinh(π|y|) ≤ 1/sinh(π/2); and |f| ≤ 1/(N+½)²"
+        : "on x = ±(N+½): |sin πz| = cosh πy ≥ 1 so |csc πz| ≤ 1 — a DIFFERENT reason from the horizontal sides, and the binding one",
+    // No `coth(π/2)` factor: `sup|csc πz| = 1`, where `sup|cot πz| = coth(π/2)`. The engine's own
+    // certificate (`kernel/bounds/squareSide.ts`) drops it for this kernel, and so must the record.
+    discharge: "symbolic:squareSideBound(2*pi*(N+1/2)*max|f|, limit=N->inf)",
     rigorOfBound: "≤",
     rigorOfLimit: "=",
     rigorIfNumericOnly: "≈",
@@ -226,6 +239,7 @@ export const g3SquareCscCollision: Family = {
       // alternative derivation. It is the two-sided sum this contour establishes directly, before
       // the halving the target's declared range asks for.
       params: { sided: "two" },
+      label: "two-sided sum",
       value: "-pi^2/6",
       numeric: -1.6449340668482264,
       verifiedTo: 1.4e-16,

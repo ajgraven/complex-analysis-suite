@@ -14,6 +14,7 @@
 // element of the exponential basis — exactly like `2πi Σ Res`, which is `π · 2i Σ`. Working in those
 // units is what lets the whole Pass-5 system stay exact without ever needing π itself.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatExpSum, jordanExponent } from "../expSum.js";
 import { formatFrac } from "../formatExact.js";
@@ -74,7 +75,7 @@ export function smallArcLimit(
   frequency?: Frac,
 ): SmallArcResult {
   if (geom.kind !== "arc") {
-    return { ok: false, certificate: refuse("L4", "the small-arc lemma applies to an arc") };
+    return { ok: false, certificate: refuse("the indentation lemma", "it applies to an arc") };
   }
 
   const sweptAnglePi = signedSweepOverPi(geom);
@@ -82,8 +83,8 @@ export function smallArcLimit(
     return {
       ok: false,
       certificate: refuse(
-        "L4",
-        "the swept angle is not a recognised rational multiple of π, so iα·Res is not exact",
+        "the indentation lemma",
+        "the swept angle is not a recognised rational multiple of $\\pi$, so $i\\alpha\\operatorname{Res}$ is not exact",
       ),
     };
   }
@@ -99,7 +100,7 @@ export function smallArcLimit(
     return {
       ok: false,
       certificate: refuse(
-        "L4",
+        "the indentation lemma",
         "no exactly-known pole sits at the centre of this arc, so there is nothing being indented",
       ),
     };
@@ -110,8 +111,8 @@ export function smallArcLimit(
       ok: false,
       certificate: refuse(
         "L4",
-        `the indented pole has order ${at.order}, and L4 is FALSE for order ≥ 2 — ` +
-          `∫ over the ρ-arc grows like ρ^{1−m}, so the limit does not exist and no principal value does either`,
+        `the indented pole has order ${at.order}, and the indentation lemma is false for order $\\ge 2$ — ` +
+          "the integral over the $\\rho$-arc grows like $\\rho^{1-m}$, so the limit does not exist and no principal value does either",
       ),
     };
   }
@@ -131,8 +132,8 @@ export function smallArcLimit(
       sweptAnglePi,
       contribution,
       certificate: exact(
-        `the indentation contributes iα·Res = π·(${formatExpSum(contribution)}), swept angle α = ${formatFrac(sweptAnglePi)}π`,
-        "L4 at a simple pole; the sign comes from the signed swept angle (θ₁ − θ₀), which is the i·ε prescription in geometric form",
+        `the indentation contributes $i\\alpha\\operatorname{Res} = \\pi(${formatExpSum(contribution, LATEX)})$, swept angle $\\alpha = ${formatFrac(sweptAnglePi, LATEX)}\\pi$`,
+        "the indentation lemma at a simple pole; the sign comes from the signed swept angle $\\theta_1 - \\theta_0$",
       ),
     },
   };

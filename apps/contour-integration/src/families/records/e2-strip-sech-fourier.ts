@@ -24,9 +24,19 @@ const P = Math.PI;
 
 export const e2StripSechFourier: Family = {
   id: "strip-sech-fourier",
-  title: "∫ℝ sech(x)e^(iξx) dx = π sech(πξ/2): a Fourier transform by one strip",
-  taxonomySection: "6",
+  title: "∫_{−∞}^{∞} e^{iξx} sech x dx by a rectangle",
+  titleLatex: "$\\int_{-\\infty}^{\\infty}\\frac{e^{i\\xi x}}{\\cosh x}\\,dx$ by a rectangle",
+  taxonomySection: "Rectangles and sectors",
   tier: "E",
+
+  description: {
+    contour: "the rectangle with vertices $\\pm R,\\ \\pm R+i\\pi$",
+    point:
+      "$\\cosh(z+i\\pi)=-\\cosh z$, so the top side returns $e^{-\\pi\\xi}$ times the target; the only pole inside is $i\\pi/2$. The transform of $\\operatorname{sech}$ is again a $\\operatorname{sech}$.",
+    citations: [
+      { book: "Stein–Shakarchi", where: "Ch. 3 §2", text: "in the normalisation $\\int e^{-2\\pi ix\\xi}/\\cosh\\pi x\\,dx=1/\\cosh\\pi\\xi$" },
+    ],
+  },
 
   targets: [
     {
@@ -95,7 +105,7 @@ export const e2StripSechFourier: Family = {
       },
       {
         id: "right",
-        name: "the right vertical x = R",
+        name: "the right vertical $x = R$",
         geom: { kind: "segment", from: pt({ param: "R" }, 0), to: pt({ param: "R" }, P) },
         role: "vanish",
         lemma: "L1",
@@ -103,7 +113,7 @@ export const e2StripSechFourier: Family = {
       },
       {
         id: "top",
-        name: "the line Im z = π",
+        name: "the line $\\operatorname{Im} z = \\pi$",
         geom: { kind: "segment", from: pt({ param: "R" }, P), to: pt({ param: "R", mul: -1 }, P) },
         role: "reproduces",
         // `−λ = +e^{−πξ}`. The ONLY positive factor in the tier, and writing `−e^{−πξ}` here would
@@ -114,7 +124,7 @@ export const e2StripSechFourier: Family = {
       },
       {
         id: "left",
-        name: "the left vertical x = −R",
+        name: "the left vertical $x = -R$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: -1 }, P),

@@ -32,9 +32,20 @@ import type { Family } from "../schema.js";
 
 export const d5LogCubedKeyhole: Family = {
   id: "log-cubed-keyhole",
-  title: "∫₀^∞ R(x) (log x)² dx by the log³ keyhole — which does not close alone",
-  taxonomySection: "5.2",
+  title: "∫₀^{∞} (log x)² dx/(1+x²) by a keyhole with (log z)³",
+  titleLatex: "$\\int_0^{\\infty}\\frac{(\\log x)^2}{1+x^2}\\,dx$ by a keyhole with $(\\log z)^3$",
+  taxonomySection: "Multivalued integrands: keyholes",
   tier: "D",
+
+  description: {
+    contour: "the keyhole about $[0,\\infty)$; integrand $(\\log z)^3/(1+z^2)$",
+    point:
+      "The identity gives two real equations in three unknowns; $\\int(\\log x)^2R$ is determined only modulo $\\int R\\,dx=\\pi/2$, which must be supplied separately.",
+    citations: [
+      { book: "Brown–Churchill", where: "§83", text: "" },
+      { book: "Conway", where: "Ch. V §2", text: "" },
+    ],
+  },
 
   targets: [
     {
@@ -153,7 +164,7 @@ export const d5LogCubedKeyhole: Family = {
     pieces: [
       {
         id: "upper",
-        name: "the upper edge, log z = log x",
+        name: "the upper edge, $\\log z = \\log x$",
         geom: { kind: "segment", from: pt({ param: "eps" }, 0), to: pt({ param: "R_lim" }, 0) },
         role: "target",
         side: "above",
@@ -162,7 +173,7 @@ export const d5LogCubedKeyhole: Family = {
       },
       {
         id: "outer",
-        name: "the R → ∞ circle",
+        name: "the $R \\to \\infty$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -176,7 +187,7 @@ export const d5LogCubedKeyhole: Family = {
       },
       {
         id: "lower",
-        name: "the lower edge, log z = log x + 2πi",
+        name: "the lower edge, $\\log z = \\log x + 2\\pi i$",
         geom: { kind: "segment", from: pt({ param: "R_lim" }, 0), to: pt({ param: "eps" }, 0) },
         role: "reproduces",
         side: "below",
@@ -193,7 +204,7 @@ export const d5LogCubedKeyhole: Family = {
       },
       {
         id: "inner",
-        name: "the ε → 0 circle",
+        name: "the $\\varepsilon \\to 0$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -243,6 +254,7 @@ export const d5LogCubedKeyhole: Family = {
   closedForm: {
     expr: "Sigma3 := Sum(Res(R(z)*log(z)^3, z_k));  T2 = (4*pi^2*T0 - Re(Sigma3))/3;  T1 = -Im(Sigma3)/(6*pi)",
     simplified: "T2 = pi^3/8 for R = 1/(1+x^2), given T0 = pi/2",
+    simplifiedWhen: "p == 1",
   },
 
   rigor: {
