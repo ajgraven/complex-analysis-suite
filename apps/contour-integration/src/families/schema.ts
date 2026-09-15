@@ -492,7 +492,25 @@ export interface Family {
     | "enclosure"
     | "rootSum";
 
-  readonly closedForm: { readonly expr: string; readonly simplified?: string };
+  /**
+   * What the record claims, in two forms.
+   *
+   * `expr` is the DERIVATION — `2*pi*i*Sum(Res(P(z)/Q(z), z_k), im(z_k) > 0)` — a statement of the
+   * method in the gallery's own notation, not an expression any evaluator can read. `simplified` is
+   * the answer in closed form, and it is what a reader wants to see.
+   *
+   * **`simplified` is not always valid across the family**, which is why the condition exists. Five
+   * records' forms are sign-restricted or fixture-specific (`2*pi/sqrt(a^2 - b^2)` holds for `a > 0`
+   * only; `pi/6` is A3 at `n = 2`), and the record card printed each of them beside the engine's
+   * number for a fixture that contradicted it. `simplifiedWhen` is an `@cas/expr` boolean in the
+   * family's parameters; absent means unrestricted. `families/describe.ts` decides it, and a
+   * condition it cannot decide withholds the form rather than showing it unguarded.
+   */
+  readonly closedForm: {
+    readonly expr: string;
+    readonly simplified?: string;
+    readonly simplifiedWhen?: string;
+  };
   readonly rigor: { readonly policy: "min"; readonly inputs: readonly string[] };
   readonly traps: readonly {
     readonly id: string;

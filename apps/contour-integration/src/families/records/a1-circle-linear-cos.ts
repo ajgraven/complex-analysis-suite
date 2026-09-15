@@ -116,6 +116,8 @@ export const a1CircleLinearCos: Family = {
   closedForm: {
     expr: "2*pi*sign(a)/sqrt(a^2 - b^2)",
     simplified: "2*pi/sqrt(a^2 - b^2)",
+    // The familiar textbook form drops `sign(a)`; at `a = -2` it is positive where the value is not.
+    simplifiedWhen: "a > 0",
   },
 
   rigor: {

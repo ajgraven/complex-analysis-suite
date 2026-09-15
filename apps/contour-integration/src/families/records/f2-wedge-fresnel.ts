@@ -193,7 +193,10 @@ export const f2WedgeFresnel: Family = {
 
   closedForm: {
     expr: "-knownValue(ray1)",
-    simplified: "exp(i*pi/(2*n))*Gamma(1 + 1/n)",
+    // The PRIMARY target is `C = ∫cos(x^n)`, which is real; `e^{iπ/(2n)}Γ(1+1/n)` is the combined
+    // `C + iS`, and printing it as the claim put a complex number beside a real value. `C` is its
+    // real part, `S = sin(pi/(2*n))*Gamma(1 + 1/n)` its imaginary one.
+    simplified: "cos(pi/(2*n))*Gamma(1 + 1/n)",
   },
 
   rigor: {

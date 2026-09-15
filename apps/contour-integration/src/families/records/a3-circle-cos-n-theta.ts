@@ -99,7 +99,10 @@ export const a3CircleCosNTheta: Family = {
 
   closedForm: {
     expr: "(2*pi/3)*2^(-n)",
-    simplified: "pi/6", // at n = 2, the gallery value
+    // `pi/6` until M8 step 0.1 — which is this family's value at `n = 2` and at no other `n`, so it
+    // was the gallery's headline number masquerading as the family's closed form. The general form
+    // is elementary here and holds for every `n ≥ 0`; `Golden.value` carries the per-fixture number.
+    simplified: "(2*pi/3)*2^(-n)",
   },
 
   rigor: {

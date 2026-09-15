@@ -17,8 +17,9 @@
 // is infinite — and `π csc(πz)'s +π²/6` is the same computation on the other kernel, which is why the two
 // entries differ by one number and nothing else.
 //
-// **Its ring is ℚ(i)(π), not G2's.** The kernel's Laurent expansion at an integer is EVEN, so a
-// merged residue is a rational multiple of an even power of π; G2's `coth` is a quotient of
+// **Its ring is ℚ(i)(π), not G2's.** The kernel is ODD about every integer, so `u·K(n+u)` is even in
+// `u` and the coefficient of `u^{2k−1}` is a rational multiple of `π^{2k}`; a merged residue is
+// therefore a rational multiple of an even power of π; G2's `coth` is a quotient of
 // exponentials. A collision is therefore a different RING rather than a harder case, and this
 // record's cofactor has no pole but the collision — so `ρ = 0` and the whole identity lives here.
 //

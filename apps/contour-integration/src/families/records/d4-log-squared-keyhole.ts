@@ -243,6 +243,7 @@ export const d4LogSquaredKeyhole: Family = {
   closedForm: {
     expr: "Sigma := Sum(Res(R(z)*log(z)^2, z_k));  T1 = -Re(Sigma)/2;  T0 = -Im(Sigma)/(2*pi)",
     simplified: "T1 = -pi/4 and T0 = pi/4 for R = 1/(1+x^2)^2",
+    simplifiedWhen: "p == 2",
   },
 
   rigor: {

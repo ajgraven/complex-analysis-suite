@@ -360,7 +360,8 @@ export function solveResidueTerm(family: Family, inputs: ResidueTermInputs): Sol
                 },
                 {
                   ok: true,
-                  text: "the kernel's Laurent expansion at an integer is EVEN, so a merged residue is a rational multiple of an even power of π — this ring, and not the exponential basis G2 solves in",
+                  text:
+                    "the kernel is odd about every integer, so u·K(n+u) is even in u and the coefficient of u^(2k−1) is a rational multiple of π^(2k); the merged residue is therefore a rational multiple of an even power of π — this ring, and not the exponential basis G2 solves in",
                 },
                 ...(forced === 2
                   ? [

@@ -14,7 +14,7 @@ import type { Family } from "../schema.js";
 
 export const b1JordanCosineKernel: Family = {
   id: "jordan-cosine-kernel",
-  title: "∫_ℝ cos(ax)/(x²+b²) dx = (π/b) e^{−ab} — Jordan, and the sign of a as a hard branch",
+  title: "∫_ℝ cos(ax)/(x²+b²) dx = (π/|b|) e^{−|ab|} — Jordan, and the sign of a as a hard branch",
   taxonomySection: "3",
   tier: "B",
 

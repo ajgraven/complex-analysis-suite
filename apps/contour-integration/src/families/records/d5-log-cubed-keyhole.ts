@@ -243,6 +243,7 @@ export const d5LogCubedKeyhole: Family = {
   closedForm: {
     expr: "Sigma3 := Sum(Res(R(z)*log(z)^3, z_k));  T2 = (4*pi^2*T0 - Re(Sigma3))/3;  T1 = -Im(Sigma3)/(6*pi)",
     simplified: "T2 = pi^3/8 for R = 1/(1+x^2), given T0 = pi/2",
+    simplifiedWhen: "p == 1",
   },
 
   rigor: {

@@ -64,7 +64,13 @@ import {
   type Handle,
 } from "../engine/contour/edit.js";
 import { isVariant, primaryGolden, type FamilyRun } from "../families/runFamily.js";
-import type { Family, FamilyTarget, Golden } from "../families/schema.js";
+import {
+  closedFormClaim,
+  contourIntegrandText,
+  relationText,
+  targetText,
+} from "../families/describe.js";
+import type { Family, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
 import { TEMPLATES } from "./templates.js";
@@ -215,42 +221,6 @@ const fixtureLabel = (g: Golden): string => {
   );
   return parts.length > 0 ? parts.join(", ") : "no parameters";
 };
-
-/**
- * The real quantity a record is about, rendered from the record's own fields.
- *
- * Deliberately built from `FamilyTarget` rather than written as prose per record: a second,
- * hand-written statement of what the integral is would be a second source of truth, and the first
- * time it disagreed with the executable one the app would be lying in the most legible place.
- */
-const targetText = (t: FamilyTarget): string => {
-  const bound = (x: string): string => (x === "inf" ? "∞" : x === "-inf" ? "−∞" : x);
-  const range = `(${bound(t.lower)} → ${bound(t.upper)})`;
-  return t.kind === "sum"
-    ? `Σ ${t.variable} ${range}  ${t.summand ?? "?"}`
-    : `∫ ${range}  ${t.integrand ?? "?"}  d${t.variable}`;
-};
-
-/**
- * What the auxiliary integrand's relation to the target actually IS, in one line.
- *
- * **NOT ALWAYS "the target is Re of ∮ f dz", and printing that unconditionally was false for G2.**
- * A tier-G record's target is a TERM of the residue sum — the kernel has residue 1 at every integer,
- * so `Res(K·f, n)` IS the summand — and `∮` tends to zero, taking any real part of it with it. The
- * record fills `relation` because `auxiliary` means "the contour integrand differs from the target's",
- * which is true; what is not true is that a real-linear functional recovers the target from `∮`. The
- * same declaration the COVER row reads decides which sentence this is, so the two cannot disagree.
- */
-function relationText(family: Family): string {
-  const aux = family.auxiliary;
-  if (aux === undefined) return "";
-  const inSum = family.residueSelection.targetTerms?.[0];
-  const how =
-    inSum === undefined
-      ? `the target is ${aux.relation} of ∮ f dz`
-      : `${inSum.targetId} is a TERM of the residue sum, not a functional of ∮ f dz`;
-  return `${how} — ${aux.note}`;
-}
 
 /**
  * A mounted shell, from the outside.
@@ -2244,26 +2214,6 @@ export function mountApp(root: Element): ShellHandle {
   };
 
   /**
-   * What is actually integrated, which is NOT the posed integrand.
-   *
-   * GALLERY §5.0 calls confusing the two "the single commonest error in the whole subject":
-   * `cos 2θ/(5 − 4cos θ)` is smooth at every real θ, and the contour integrand it becomes has a
-   * pole of order 2 at the origin. Read straight off the record, so the statement on screen is the
-   * one the engine acted on.
-   */
-  function contourIntegrandText(fam: Family): string {
-    if (fam.auxiliary) return fam.auxiliary.integrand;
-    const t = fam.targets[0];
-    if (t?.substitution) {
-      return (
-        `${t.integrand ?? "?"}   with  z = ${t.substitution.map},  ` +
-        `d${t.variable} = ${t.substitution.jacobian} dz`
-      );
-    }
-    return `${t?.integrand ?? "?"}   read in z — the real axis IS a piece of the contour`;
-  }
-
-  /**
    * The open record: what it claims, and what the engine independently got.
    *
    * Showing both is the point. The record's `closedForm` was derived and numerically verified by
@@ -2313,8 +2263,19 @@ export function mountApp(root: Element): ShellHandle {
       dec.append(badge("≈"), ` ${fmt(solved.value)}`);
       recordCard.append(dec);
 
-      const claim = family.closedForm.simplified ?? family.closedForm.expr;
-      recordCard.append(el("p", "muted small", `the record claims  ${claim}`));
+      // The record's claim AT THIS FIXTURE, then the family's closed form where it holds. Both
+      // scopes are named, because a form valid for the family is not always valid here: see
+      // `families/describe.ts`.
+      const claim = closedFormClaim(family, golden);
+      // `claim.refusal` is deliberately NOT read here: a refusing fixture cannot reach this line.
+      // DESIGN §5's invariant 4 requires such a fixture to be rank-deficient, which is exactly what
+      // makes Pass 5 refuse, so `solved` is null and the whole block is skipped — measured on D3's
+      // two integer-`a` fixtures, where the card shows Pass 5's own refusal instead. A branch for it
+      // here would be unreachable code claiming to handle a case.
+      recordCard.append(el("p", "muted small", `the record claims  ${claim.atFixture}`));
+      if (claim.general !== null) {
+        recordCard.append(el("p", "muted small", `closed form  ${claim.general}`));
+      }
 
       const want = typeof golden.numeric === "number" ? golden.numeric : golden.numeric[0];
       const off = Math.abs(solved.value - want);

@@ -95,6 +95,7 @@ export const a2CirclePoisson: Family = {
   closedForm: {
     expr: "2*pi/abs(1 - a^2)",
     simplified: "2*pi/(1 - a^2)", // valid only on |a| < 1 — see traps.branch-hidden-by-closed-form
+    simplifiedWhen: "abs(a) < 1",
   },
 
   rigor: {
