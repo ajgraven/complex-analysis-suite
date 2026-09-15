@@ -9,6 +9,7 @@
 // isolates what, which is the only thing it is for. Declaring one that does not happen would let a
 // regression hide: if the engine stopped changing that row, the cell would go on claiming it does.
 import { describe, expect, it } from "vitest";
+import { constraintLabel, roleLabel } from "../src/engine/vocabulary.js";
 import { diffLedgers, rowKeys } from "../src/engine/contrast.js";
 import { CONTRAST_CELLS, contrastSideOf, contrastTable } from "../src/shell/contrastGrid.js";
 import { compile, resolveState } from "../src/shell/state.js";
@@ -226,8 +227,14 @@ describe("the table's row order", () => {
   });
 
   it("numbers a repeated bucket and leaves a unique one bare", () => {
-    expect(table.rows.find((r) => r.key === "COVER/argument#0")?.label).toBe("COVER · argument");
-    expect(table.rows.find((r) => r.key === "KILL/vanish#0")?.label).toBe("KILL · vanish #1");
+    // The KEY keeps the id; the LABEL is the reader's words (M8 step 0.2). Built from the map here
+    // rather than transcribed, so a label change is a one-line change and never a silent mismatch.
+    expect(table.rows.find((r) => r.key === "COVER/argument#0")?.label).toBe(
+      `${constraintLabel("COVER")} · ${roleLabel("argument")}`,
+    );
+    expect(table.rows.find((r) => r.key === "KILL/vanish#0")?.label).toBe(
+      `${constraintLabel("KILL")} · ${roleLabel("vanish")} 1`,
+    );
   });
 });
 

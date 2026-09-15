@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { headlineFails } from "../src/engine/vocabulary.js";
 import { makeComplexFn, parse } from "@cas/expr";
 import type { Cx } from "../src/kernel/geom.js";
 import { findPoles } from "../src/kernel/poles.js";
@@ -90,7 +91,7 @@ describe("the ledger fails visibly, and names which constraint", () => {
     const r = run("exp(i*z)/(1+z^2)", lower);
     expect(r.closes).toBe(false);
     expect(r.failedAt).toBe("KILL");
-    expect(ledgerHeadline(r)).toMatch(/does not close: KILL fails/);
+    expect(ledgerHeadline(r)).toBe(headlineFails("KILL"));
     const arc = rowsFor(r, "KILL").find((x) => x.status === "failed");
     expect(arc?.claim).toMatch(/DIVERGES/);
     expect(arc?.repair).toMatch(/other half-plane/);

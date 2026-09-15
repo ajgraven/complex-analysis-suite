@@ -18,6 +18,8 @@
 // round-trip-by-verdict test.
 
 import { semicircleTemplate } from "../engine/contour/templates.js";
+import { constraintLabel, roleLabel, type ConstraintId } from "../engine/vocabulary.js";
+import type { PieceRole } from "../engine/contour/model.js";
 import { rowKeys, type ContrastSide, type RowKey } from "../engine/contrast.js";
 import { TEMPLATES } from "./templates.js";
 import { compile, defaultState, resolveState, type ShellState } from "./state.js";
@@ -225,7 +227,7 @@ export interface ContrastEntry {
 
 export interface ContrastTableRow {
   readonly key: RowKey;
-  /** `KILL · vanish`, or `KILL · vanish #1` where the bucket repeats. */
+  /** `Boundary terms · vanishing piece`, numbered `… 2` where the bucket repeats. */
   readonly label: string;
   /** One per cell, positionally. `null` is an absence, and is drawn as one. */
   readonly cells: readonly (ContrastEntry | null)[];
@@ -327,7 +329,9 @@ export function contrastTable(cells: readonly ContrastCell[] = CONTRAST_CELLS): 
     const repeated = (bucketCount.get(bucket) ?? 0) > 1;
     return {
       key,
-      label: `${constraint} · ${role}${repeated ? ` #${ordinal + 1}` : ""}`,
+      label: `${constraintLabel(constraint as ConstraintId)} · ${roleLabel(role as PieceRole | "argument")}${
+        repeated ? ` ${ordinal + 1}` : ""
+      }`,
       cells: sides.map((side, i) => {
         if (side === null) return null;
         const at = keysPer[i].indexOf(key);

@@ -6,6 +6,7 @@
 // than the certificate it came from, and the answer's badge comes from the answer's own evidence
 // rather than from the argument-wide meet.
 import { describe, expect, it } from "vitest";
+import { constraintLabel } from "../src/engine/vocabulary.js";
 import { makeComplexFn, parse } from "@cas/expr";
 import { assembleVerdict, unknown } from "@cas/rigor";
 import { analyse } from "../src/engine/analyse.js";
@@ -122,8 +123,10 @@ describe("C2 — the same π, moved onto a different piece", () => {
   it("puts the non-zero contribution on the ARC, where C1 puts it on the indentation", () => {
     // GALLERY §5.0c's claim, executed: subtracting a principal part does not delete that term, it
     // MOVES its contribution onto the large arc. Same π, different piece.
-    const c1Piece = must(saidIn(c1, "solve").find((s) => s.includes("from KILL")), "C1's bᵢ");
-    const c2Piece = must(saidIn(c2, "solve").find((s) => s.includes("from KILL")), "C2's bᵢ");
+    // The label names the group in the reader's words (M8 step 0.2), so match through the map.
+    const from = `from ${constraintLabel("KILL").toLowerCase()}`;
+    const c1Piece = must(saidIn(c1, "solve").find((s) => s.includes(from)), "C1's bᵢ");
+    const c2Piece = must(saidIn(c2, "solve").find((s) => s.includes(from)), "C2's bᵢ");
     expect(c1Piece).toContain("indentation");
     expect(c2Piece).toContain("semicircle");
     expect(c1Piece).not.toBe(c2Piece);

@@ -21,6 +21,7 @@ import {
   type Verdict,
 } from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
+import { headlineFails, type ConstraintId } from "./vocabulary.js";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
@@ -55,7 +56,9 @@ import { largeArcLimit } from "../kernel/bounds/largeArcLimit.js";
 import type { ExpSum } from "../kernel/expSum.js";
 import type { ResidueTheoremResult } from "./residueTheorem.js";
 
-export type ConstraintId = "LEGALITY" | "CATCH" | "KILL" | "COVER";
+// Declared in `vocabulary.ts` (M8 step 0.2) so the ids and their labels sit together, and
+// re-exported here because this is where every consumer has always imported it from.
+export type { ConstraintId };
 
 export interface LedgerRow {
   readonly constraint: ConstraintId;
@@ -1351,6 +1354,6 @@ export function ledgerHeadline(result: LedgerResult): string {
       : "The closed-contour value is established exactly.";
   }
   if (result.failedAt === null) return "This argument is incomplete.";
-  return `This argument does not close: ${result.failedAt} fails.`;
+  return headlineFails(result.failedAt);
 }
 

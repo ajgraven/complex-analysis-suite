@@ -42,6 +42,7 @@
 // predicate every other winding number uses — and it is derived once and used for both the arithmetic
 // and the sentence, so the two cannot drift apart.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { constraintLabel } from "./vocabulary.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
 import { ExpSum, formatExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
@@ -232,7 +233,9 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
             text:
               sigma === 0
                 ? "σ = 0: the cut is outside, every weight is n(γ,aₖ) and the residue at infinity drops out — this IS the residue theorem, recovered rather than restated"
-                : "σ is measured at the BRANCH POINTS; that the contour winds the same way about every point of the cut between them is LEGALITY's business, which refuses an untagged crossing",
+                : `σ is measured at the BRANCH POINTS; that the contour winds the same way about every point of the cut between them is the ${constraintLabel(
+                    "LEGALITY",
+                  ).toLowerCase()} group's business, which refuses an untagged crossing`,
           },
           {
             ok: false,

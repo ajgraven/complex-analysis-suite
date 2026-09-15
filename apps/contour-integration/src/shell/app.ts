@@ -73,6 +73,7 @@ import {
 import type { Family, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
+import { constraintLabel, roleLabel, type ConstraintId } from "../engine/vocabulary.js";
 import { TEMPLATES } from "./templates.js";
 import { decodeShell, encodeShell } from "./viewState.js";
 import {
@@ -686,7 +687,11 @@ export function mountApp(root: Element): ShellHandle {
       if (cell.because !== null) th.append(el("div", "because small", `↑ ${cell.because}`));
       // **THE ANSWER, NOT `∮`.** C1's `∮` is exactly 0 while the integral it determines is π/2.
       const answer = el("div", "cellAnswer");
-      answer.textContent = cell.answer ?? (cell.closes ? "—" : `⚠ does not close (${cell.failedAt ?? "?"})`);
+      // `failedAt` is a ConstraintId — a data key. The cell names the GROUP (M8 step 0.2); an
+      // interpolated id is invisible to a grep over the source, and only the browser found it.
+      const failed = cell.failedAt === null ? null : constraintLabel(cell.failedAt as ConstraintId);
+      answer.textContent =
+        cell.answer ?? (cell.closes ? "—" : `⚠ does not close (${failed ?? "?"})`);
       th.append(answer);
       const open = el("button", "preset", "Open");
       open.type = "button";
@@ -854,7 +859,7 @@ export function mountApp(root: Element): ShellHandle {
     bar2.append(el("h2", undefined, "Choosing a contour"), drillClose);
     const legend = el("p", "muted small");
     legend.textContent =
-      "Four rungs, each supplying less: the worked argument, then its KILL column to fill in, then " +
+      "Four rungs, each supplying less: the worked argument, then its boundary terms to fill in, then " +
       "a choice of contour, then a blank plane. Where you start is where you left off.";
     const list = el("ul", "drillTasks");
     for (const task of DRILL_TASKS) {
@@ -1022,7 +1027,7 @@ export function mountApp(root: Element): ShellHandle {
     if (drillGraded === null) {
       const check = el("button", "preset", "Check");
       check.type = "button";
-      check.setAttribute("aria-label", "check the KILL column against the ledger");
+      check.setAttribute("aria-label", "check the boundary terms against the ledger");
       check.addEventListener("click", () => {
         drillGraded = gradePieces(questions, drillAnswers);
         if (allCorrect(drillGraded)) clearRung(task, 2);
@@ -2426,7 +2431,7 @@ export function mountApp(root: Element): ShellHandle {
       if (masked === "kill" && row.constraint === "KILL" && drillGraded === null) continue;
       const li = el("li", `ledgerRow ${row.status}`);
       li.append(
-        el("span", "constraint", row.constraint),
+        el("span", "constraint", constraintLabel(row.constraint)),
         el("span", "glyph", STATUS_GLYPH[row.status] ?? "?"),
         el("span", "ledgerClaim", row.claim),
       );
@@ -2811,7 +2816,7 @@ export function mountApp(root: Element): ShellHandle {
       const swatch = el("span", "chip");
       swatch.style.background = PIECE_COLOURS[piece.colour % PIECE_COLOURS.length];
       const pieceIntegral = integral?.pieces[k];
-      li.append(swatch, el("span", "pieceName", piece.name), el("span", "tag", piece.role));
+      li.append(swatch, el("span", "pieceName", piece.name), el("span", "tag", roleLabel(piece.role)));
       // **A SKIPPED QUADRATURE HAS NO VALUE, AND `0 + 0i` IS NOT IT.** `integrateContour` fills the
       // piece list with zeros when it declines to sample a multivalued integrand, which is fine as a
       // placeholder and a lie on screen: D6's upper edge is worth 2.22, and printing `0 + 0i` beside

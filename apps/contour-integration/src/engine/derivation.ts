@@ -32,10 +32,12 @@ import { formatPiExpSum } from "../kernel/expSum.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 import type { Piece } from "./contour/model.js";
+import { constraintLabel, stageTitle, type StageId } from "./vocabulary.js";
 import type { ConstraintId, LedgerResult, LedgerRow } from "./ledger.js";
 import { RESIDUE_THEOREM_IDENTITY, type ResidueTheoremResult } from "./residueTheorem.js";
 
-export type StageId = "setup" | "legality" | "catch" | "kill" | "cover" | "solve" | "verdict";
+// Declared in `vocabulary.ts` beside the titles it maps to (M8 step 0.2), re-exported here.
+export type { StageId };
 
 export interface StageSpec {
   readonly id: StageId;
@@ -57,37 +59,37 @@ export interface StageSpec {
 export const DERIVATION_STAGES: readonly StageSpec[] = [
   {
     id: "setup",
-    title: "The problem",
+    title: stageTitle("setup"),
     why: "What is being integrated, and over what. The contour integrand is not the posed integrand whenever the substitution has a Jacobian, and conflating the two is the single commonest error in the subject.",
   },
   {
     id: "legality",
-    title: "LEGALITY",
+    title: stageTitle("legality"),
     why: "The right to print anything at all: no piece may pass through a singularity, the contour must close, and its orientation must be declared. Run first, because everything downstream is meaningless if it fails.",
   },
   {
     id: "catch",
-    title: "CATCH",
+    title: stageTitle("catch"),
     why: "The singular set and the residue sum. The winding number and the enclosed-pole count are separate rows on purpose — one number implying the other is the conflation the dogbone exists to break.",
   },
   {
     id: "kill",
-    title: "KILL",
+    title: stageTitle("kill"),
     why: "Per-piece disposal. A vanishing piece owes two distinct statements: a bound at the finite limit parameter, and the limit itself. Only the second enters the solve.",
   },
   {
     id: "cover",
-    title: "COVER",
-    why: "The target appears as a labelled piece, under the declared substitution. In the sandbox there is no target, COVER is vacuous, and the closed-contour value is the result.",
+    title: stageTitle("cover"),
+    why: "The target appears as a labelled piece, under the declared substitution. In the sandbox there is no target, this step is vacuous, and the closed-contour value is the result.",
   },
   {
     id: "solve",
-    title: "SOLVE",
+    title: stageTitle("solve"),
     why: "The contour identity, solved for the real integral it was built to find. Worked in units of π throughout, so π is never evaluated and π/2 stays π/2.",
   },
   {
     id: "verdict",
-    title: "VERDICT",
+    title: stageTitle("verdict"),
     why: "The label is the meet over every step's certificate — computed from what was established, never chosen. One unknown step makes the whole claim unknown; one refusal refuses it.",
   },
 ];
@@ -306,7 +308,7 @@ export function buildDerivation(input: DerivationInput): Derivation {
       // `vanish` piece that does not vanish. C1's indentation and C2's arc are the same π, arriving
       // on different pieces, and both are the whole difference between π/2 and 0.
       say("solve", {
-        label: `from KILL · ${piece?.name ?? limit.pieceId}`,
+        label: `from ${constraintLabel("KILL").toLowerCase()} · ${piece?.name ?? limit.pieceId}`,
         text: `contributes ${formatPiExpSum(limit.contribution)} — a known limit, not zero`,
       });
     }

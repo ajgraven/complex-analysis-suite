@@ -7,6 +7,7 @@
 // argument *and the contour* off the screen, and that both come back. A mask that silently masked
 // nothing would leave every model test green.
 import { describe, expect, it, beforeEach } from "vitest";
+import { constraintLabel } from "../src/engine/vocabulary.js";
 import { mountApp, type ShellHandle } from "../src/shell/app.js";
 import { DRILL_TASKS, runTask, pieceQuestions } from "../src/shell/drill.js";
 import { PROGRESS_KEY, readProgress } from "../src/shell/drillProgress.js";
@@ -104,8 +105,8 @@ describe("rung ii — the KILL column is MASKED, and comes back", () => {
     const rows = [...root.querySelectorAll(".ledgerRow")];
     // The KILL rows are gone and the others are not: a mask, not a blank.
     expect(rows.length).toBeLessThan(before);
-    expect(rows.map((r) => text(r.querySelector(".constraint")))).not.toContain("KILL");
-    expect(rows.map((r) => text(r.querySelector(".constraint")))).toContain("LEGALITY");
+    expect(rows.map((r) => text(r.querySelector(".constraint")))).not.toContain(constraintLabel("KILL"));
+    expect(rows.map((r) => text(r.querySelector(".constraint")))).toContain(constraintLabel("LEGALITY"));
     expect(q(root, ".card + .card")).toBeTruthy();
     // The derivation says which lemma kills which piece, so masking one and not the other would be
     // masking nothing.
@@ -131,7 +132,7 @@ describe("rung ii — the KILL column is MASKED, and comes back", () => {
     clickIn(q(root, ".drillCard"), "Check");
     expect(text(q(root, ".drillCard"))).toContain("Every piece");
     // And the ledger is the answer sheet now: the KILL rows are back.
-    expect([...root.querySelectorAll(".ledgerRow")].map((r) => text(r.querySelector(".constraint")))).toContain("KILL");
+    expect([...root.querySelectorAll(".ledgerRow")].map((r) => text(r.querySelector(".constraint")))).toContain(constraintLabel("KILL"));
     // Cleared, which is what fades the support next time.
     expect(readProgress(window.localStorage).oscillatory).toBe(2);
   });
@@ -310,9 +311,7 @@ describe("a rung opened by LINK — M7's gate clause 2, at the shell", () => {
     expect(q(root, ".drillCard").hidden).toBe(false);
     expect(text(q(root, ".drillCard"))).toContain("rung 2 of 4");
     // Masked: the KILL rows are off the ledger and the questions are in the card.
-    expect([...root.querySelectorAll(".ledgerRow")].map((r) => text(r.querySelector(".constraint")))).not.toContain(
-      "KILL",
-    );
+    expect([...root.querySelectorAll(".ledgerRow")].map((r) => text(r.querySelector(".constraint")))).not.toContain(constraintLabel("KILL"));
     expect(root.querySelectorAll(".drillPick").length).toBeGreaterThan(0);
   });
 
@@ -416,6 +415,6 @@ describe("the fade", () => {
     expect(app.currentState().drill).toBeNull();
     expect(q(root, ".drillCard").hidden).toBe(true);
     // Every row is back, KILL included.
-    expect([...root.querySelectorAll(".ledgerRow")].map((r) => text(r.querySelector(".constraint")))).toContain("KILL");
+    expect([...root.querySelectorAll(".ledgerRow")].map((r) => text(r.querySelector(".constraint")))).toContain(constraintLabel("KILL"));
   });
 });

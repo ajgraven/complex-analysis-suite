@@ -486,7 +486,8 @@ ul.ledger {
 
 .ledgerRow {
   display: grid;
-  grid-template-columns: 4.6rem 1rem 1fr;
+  /* Wide enough for `Boundary terms`, the longest of the four (M8 step 0.2). */
+  grid-template-columns: 6.3rem 1rem 1fr;
   gap: 0.35rem;
   align-items: start;
   padding: 0.3rem 0;
@@ -495,8 +496,9 @@ ul.ledger {
 }
 
 .constraint {
-  font: 10.5px/1.6 ui-monospace, Menlo, Consolas, monospace;
-  letter-spacing: 0.04em;
+  /* A WORD now, not an id: proportional, and without the monospace that reads as a code token. */
+  font: 10.5px/1.6 system-ui, sans-serif;
+  letter-spacing: 0.02em;
   color: var(--c-muted);
 }
 

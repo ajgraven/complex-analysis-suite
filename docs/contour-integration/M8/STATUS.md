@@ -8,8 +8,8 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. **Next execution action:** step 0.2 (the display vocabulary),
-  an S step — the rest of suggested session A.
+- **Execution:** Phase 0 in progress. **Next execution action:** step 0.3 (structured ledger claims,
+  proven a no-op) — an M step, suggested session B.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -21,7 +21,8 @@ changed.
 | 2026-09-15 | plan Part 1 | 5efe5b9 | §0–§3, ADR-0043, CLAUDE.md pointer; the brief's "even" sentence corrected |
 | 2026-09-15 | plan Part 2 | a50b5ed | §4, Phase 1 in full: architecture, thirteen steps, ten suggested sessions |
 | 2026-09-15 | plan Part 3 | c014bdf | §5–§9: Phases 2–5 in full, the M8 risk register, the step index (42 steps, 28 sessions) |
-| 2026-09-15 | **0.1** | (this commit) | the six wrong claims on screen; `families/describe.ts`; `test/onScreenClaims.test.ts` (17 tests, sweep 7/7). Full gate green: 543 files / 5640 tests, lint and typecheck silent, browser suite 132/132 |
+| 2026-09-15 | **0.1** | 42bf3cd | the six wrong claims on screen; `families/describe.ts`; `test/onScreenClaims.test.ts` (17 tests, sweep 7/7). Full gate green: 543 files / 5640 tests, lint and typecheck silent, browser suite 132/132 |
+| 2026-09-15 | **0.2** | (this commit) | `engine/vocabulary.ts`; the four ids off every surface; `test/vocabulary.test.ts` (7 tests, incl. a corpus-wide sweep) + three shell assertions; sweep 12/12. Full gate green: 544 files / 5650 tests, browser suite 132/132 |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -66,6 +67,35 @@ changed.
   them, at 1863 tests, because the three functions lived inside `shell/app.ts`'s closure and the
   shell's own tests are jsdom. That is why they moved to `families/describe.ts` (DOM-free) and why the
   new file tests them in node. Sweep: 7 mutants, 7 killed, no survivors.
+- **(0.2) A grep over the source could not find all of them; three more needed the corpus and the
+  browser.** The plan's completion check is a grep for the four ids under `src/shell` and
+  `derivation.ts`. Run, it passed while three ids were still on screen: the `cover` stage's own
+  paragraph ("COVER is vacuous"), the solve's `from KILL · <piece>` statement label, and the dogbone
+  records' exterior-theorem provenance ("is LEGALITY's business"). The first two fell to the new
+  test's **corpus-wide sweep** — every ledger row, stage, line, statement and provenance step of all
+  28 records, scanned for the ids — and the third fell to the same sweep once it ran. A fourth was
+  invisible to BOTH, because it is interpolated rather than written: the contrast grid's answer cell
+  builds `⚠ does not close (${cell.failedAt})` from a data key, and only driving the built app found
+  it. Three instruments, three different finds.
+- **(0.2) "Hypotheses verified." cannot be the success headline, now that `Hypotheses` is one of the
+  four group names.** The plan (from the review) proposed it; above a table whose first group is
+  `Hypotheses` it reads as that group alone having been checked. The existing sentences — "This
+  argument closes." / "The closed-contour value is established exactly." — are already unambiguous
+  and textbook-neutral, so they stay and only the FAILING headline changed, from
+  "does not close: KILL fails" to a clause naming the group. `headlineVerified()` is therefore not
+  exported: it would have had one caller and no id in it.
+- **(0.2) The headline names the group, not the piece.** The plan's signature was
+  `headlineFails(id, piece?)`. `LedgerRow` carries a `pieceId`, not a piece NAME, so naming the piece
+  means plumbing the piece list into the headline to duplicate what the failing row directly beneath
+  already says. Dropped; the clause per group is exact enough (`CATCH` has exactly one failure mode,
+  an undecided winding, so its clause states it).
+- **(0.2) `COVER` never fails** — `ledger.ts` emits it `satisfied` or `unknown`, because the sandbox
+  having no target is not a failure. Its failure clause is written out anyway (the type is total) and
+  is unreachable today; recorded in the module rather than left to be rediscovered.
+- **(0.2) The `residue` role's label came from the ledger's own row, after the test guessed wrong.**
+  The first draft assumed the sandbox circle's piece was `free`; it is `residue`, the role
+  `circleTemplate` gives its one closed loop, and the ledger's row for it says "is computed directly".
+  That is now its label, so the tag and the row agree.
 
 ## Open questions for the owner
 
@@ -85,6 +115,14 @@ changed.
   `targetText`, `relationText`, `contourIntegrandExpr`/`Text`, `closedFormClaim`, and now `isVariant`
   (moved from `runFamily.ts`, which re-exports it so no call site changed). Step 0.4's LaTeX siblings
   go beside them.
+- **(0.2) `src/engine/vocabulary.ts` is the one place the reader's words are decided** — the four
+  group labels, the seven derivation titles (which READ the group labels, so a heading and the rows
+  beneath it cannot drift), the piece-role names, and the failing headline. `ConstraintId` and
+  `StageId` are declared there and re-exported by `ledger.ts` and `derivation.ts`, because both need
+  the labels and a type-only import back would be a cycle (`no-circular` runs over type-only edges).
+- **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
+  plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
+  the other would have introduced the inconsistency this step exists to remove.
 - **(0.1) `Family.closedForm` gains `simplifiedWhen`** — an `@cas/expr` boolean in the family's
   parameters, absent meaning unrestricted. A condition that cannot be decided withholds the general
   form rather than showing it unguarded: the guard exists because an unguarded form was wrong, so
