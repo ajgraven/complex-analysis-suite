@@ -22,6 +22,14 @@ import {
 } from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
 import { headlineFails, type ConstraintId } from "./vocabulary.js";
+import {
+  certificateClaim,
+  claimOf,
+  pieceArg,
+  renderClaim,
+  type Claim,
+  type ClaimArg,
+} from "./claims.js";
 import type { Node } from "@cas/expr";
 import type { Cx, Resolved } from "../kernel/geom.js";
 import { arcLength, endPoint, isClosed, startPoint } from "../kernel/geom.js";
@@ -64,8 +72,16 @@ export interface LedgerRow {
   readonly constraint: ConstraintId;
   readonly pieceId?: string;
   readonly status: "satisfied" | "failed" | "unknown";
-  /** One line, renderable — what this row asserts. */
+  /**
+   * One line, renderable — what this row asserts.
+   *
+   * DERIVED from {@link LedgerRow.claimData} by `rowFrom`, which is the only constructor of a row,
+   * so the two cannot drift. Read this to display the sentence; read `claimData` to typeset its
+   * parts (M8 step 0.4) or to reword it (step 0.5, which edits `claims.ts` and nothing else).
+   */
   readonly claim: string;
+  /** The same assertion as data: a template id and its typed arguments. */
+  readonly claimData: Claim;
   readonly evidence: Certificate;
   /** What to do about it, when it failed. */
   readonly repair?: string;
@@ -443,14 +459,30 @@ function disposeDogboneArc(
   });
 }
 
-const rowFrom = (
+/**
+ * The only constructor of a ledger row — which is what makes `claim` a derived field rather than a
+ * second source of truth for what the row says.
+ *
+ * Exported so that a test building a synthetic row goes through it too: a row assembled as a literal
+ * would carry a `claim` string and a `claimData` that need not agree, and the pair is only
+ * trustworthy because nothing can write them separately.
+ */
+export const rowFrom = (
   constraint: ConstraintId,
   status: LedgerRow["status"],
-  claim: string,
+  claimData: Claim,
   evidence: Certificate,
   pieceId?: string,
   repair?: string,
-): LedgerRow => ({ constraint, status, claim, evidence, pieceId, repair });
+): LedgerRow => ({
+  constraint,
+  status,
+  claim: renderClaim(claimData),
+  claimData,
+  evidence,
+  pieceId,
+  repair,
+});
 
 export interface LedgerInput {
   readonly ast: Node;
@@ -553,7 +585,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "LEGALITY",
         "failed",
-        "the contour must avoid every singularity of the integrand",
+        claimOf("legality.avoid-singularities"),
         refuse("LEGALITY", integral.refusal),
         undefined,
         "indent the contour around the singularity, or move it",
@@ -574,7 +606,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     rowFrom(
       "LEGALITY",
       closed ? "satisfied" : "failed",
-      closed ? "the contour is closed and its orientation is declared" : "the contour does not close",
+      claimOf(closed ? "legality.closed" : "legality.not-closed"),
       closed
         ? exact("the contour closes", "endpoint-to-endpoint check over the piece list")
         : refuse("LEGALITY", "the residue theorem applies to closed contours"),
@@ -602,7 +634,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "LEGALITY",
         "satisfied",
-        `every singularity is clear of the contour (nearest at ${minClearance.toPrecision(3)})`,
+        claimOf("legality.clearance", {
+          nearest: { kind: "number", value: minClearance, digits: 3 },
+        }),
         exact("clearance", "distance from each pole to each piece"),
       ),
     );
@@ -617,7 +651,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "LEGALITY",
         "satisfied",
-        "the integrand is entire, so there is no singularity for the contour to be clear of",
+        claimOf("legality.entire"),
         exact("the singular set is empty", "decided — not the absence of a pole search"),
       ),
     );
@@ -632,7 +666,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "LEGALITY",
         "unknown",
-        "the kernel has a pole at every integer, and this contour reaches too many of them to check",
+        claimOf("legality.kernel-band"),
         unknown(
           "clearance from the kernel's poles",
           "the band is read off the contour's own extent and is refused past a work limit — listing a prefix of an infinite pole set would report a contour as clear of poles it passes through",
@@ -656,9 +690,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "LEGALITY",
         admissible.ok ? "satisfied" : "failed",
-        admissible.ok
-          ? `the cut system is admissible — ${admissible.detail}`
-          : `the cut system is not admissible: ${admissible.detail}`,
+        claimOf(admissible.ok ? "legality.cuts-admissible" : "legality.cuts-inadmissible", {
+          detail: { kind: "text", text: admissible.detail },
+        }),
         admissible.certificate,
         undefined,
         admissible.repair,
@@ -730,8 +764,10 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           "LEGALITY",
           "failed",
           undecidedTurns.length > 0
-            ? "the winding about a branch point is undecided, so the monodromy along the contour is too"
-            : `the contour winds about a branch point and does not close on one sheet (${turns.join(", ")})`,
+            ? claimOf("legality.monodromy-undecided")
+            : claimOf("legality.monodromy-off-sheet", {
+                turns: { kind: "exact", text: turns.join(", ") },
+              }),
           refuse("LEGALITY", monodromyFailure, {
             provenance: [
               { ok: false, text: "each winding number is decided exactly, by the same sign predicates the poles use" },
@@ -762,7 +798,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         rowFrom(
           "LEGALITY",
           "satisfied",
-          `the contour winds about a branch point and still closes on one sheet (Σ n(γ,bⱼ)·αⱼ = ${formatFrac(monodromy)} ∈ ℤ)`,
+          claimOf("legality.monodromy-on-sheet", {
+            sum: { kind: "exact", text: formatFrac(monodromy) },
+          }),
           exact(
             `the monodromy along γ is e^(2πi·${formatFrac(monodromy)}) = 1`,
             "exact winding numbers against exact exponents, summed over ℚ — the admissibility arithmetic of research 06 §2.1(b), read along the contour",
@@ -780,8 +818,12 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       );
     }
 
-    const offending: string[] = [];
-    const undecidable: string[] = [];
+    // Each offending piece is kept BOTH ways: as the claim the row states (so the piece and the cut
+    // are arguments a renderer can typeset apart from the prose) and as the flat sentence the
+    // refusal certificate joins with every other one. The two are composed here, once, from the
+    // same three parts.
+    const offending: { readonly text: string; readonly claim: Claim }[] = [];
+    const undecidable: { readonly text: string; readonly claim: Claim }[] = [];
     /** What each offending crossing would COST — research 06 §3.2's other half. */
     const costs: string[] = [];
     let declared = 0;
@@ -795,11 +837,23 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         if (c.kind === "clear" || c.kind === "endpoint") continue;
         const piece = spec[k];
         const label = piece?.name ?? `piece ${k + 1}`;
+        const named: ClaimArg = { kind: "piece", id: piece?.id ?? `#${k + 1}`, name: label };
+        const onCut: ClaimArg = { kind: "cut", name: cut.id };
         if (c.kind === "touches") {
-          undecidable.push(`${label} grazes the cut '${cut.id}'`);
+          undecidable.push({
+            text: `${label} grazes the cut '${cut.id}'`,
+            claim: claimOf("legality.cut-grazed", { piece: named, cut: onCut }),
+          });
         } else if (piece?.side === undefined) {
           const how = c.kind === "along" ? "runs along" : "crosses";
-          offending.push(`${label} ${how} the cut '${cut.id}'`);
+          offending.push({
+            text: `${label} ${how} the cut '${cut.id}'`,
+            claim: claimOf("legality.cut-crossed", {
+              piece: named,
+              how: { kind: "text", text: how },
+              cut: onCut,
+            }),
+          });
           // **AND WHAT IT WOULD COST.** Research 06 §3.2: the app must "either refuse the crossing
           // or change sheet and say so, WITH THE MULTIPLICATIVE FACTOR SHOWN … silently continuing
           // is the misconception generator". It has refused since M4.1 and said nothing about the
@@ -820,11 +874,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         cutOk ? "satisfied" : "failed",
         cutOk
           ? declared === 0
-            ? "no piece of the contour meets a branch cut, except where it ends on one"
-            : `every piece that meets a branch cut declares the side it runs on (${declared} piece${declared === 1 ? "" : "s"})`
+            ? claimOf("legality.cuts-clear")
+            : claimOf("legality.cuts-sided", {
+                declared: { kind: "count", n: declared, noun: "piece" },
+              })
           : undecidable.length > 0
-            ? `${undecidable[0]}, so it has no side to declare`
-            : `${offending[0]} without declaring which side it runs on`,
+            ? undecidable[0].claim
+            : offending[0].claim,
         cutOk
           ? exact(
               "each piece is on a definite side of each cut",
@@ -848,8 +904,8 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           : refuse(
               "LEGALITY",
               undecidable.length > 0
-                ? `${undecidable.join("; ")} — a grazing contact has no side, so no tag would pin anything`
-                : `${offending.join("; ")}`,
+                ? `${undecidable.map((u) => u.text).join("; ")} — a grazing contact has no side, so no tag would pin anything`
+                : `${offending.map((o) => o.text).join("; ")}`,
               {
                 provenance: costs.map((text) => ({ ok: false, text })),
               },
@@ -874,7 +930,11 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         rowFrom(
           "LEGALITY",
           "satisfied",
-          `∮ is unchanged by moving ${branch.cuts.length === 1 ? "this cut" : "these cuts"}, while they stay clear of the contour`,
+          claimOf(
+            branch.cuts.length === 1
+              ? "legality.cut-invariance-one"
+              : "legality.cut-invariance-many",
+          ),
           cutGeometryInvariance(branch.cuts.length),
         ),
       );
@@ -901,9 +961,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       undecided.length === 0 ? "satisfied" : "failed",
       undecided.length === 0
         ? enclosed.length === 1
-          ? "1 singularity is enclosed, with an exactly decided winding number"
-          : `${enclosed.length} singularities are enclosed, each with an exactly decided winding number`
-        : "a winding number could not be decided",
+          ? claimOf("catch.enclosed-one")
+          : claimOf("catch.enclosed-many", { n: { kind: "count", n: enclosed.length } })
+        : claimOf("catch.winding-undecided"),
       undecided.length === 0
         ? exact(
             `n(γ, ·) for ${integral.windings.length} pole${integral.windings.length === 1 ? "" : "s"}`,
@@ -936,15 +996,17 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
     rowFrom(
       "CATCH",
       residuesExact || sumExact ? "satisfied" : "unknown",
-      residuesExact
-        ? "every enclosed residue is known exactly"
-        : summed
-          ? input.summation?.escalation === undefined
-            ? "every enclosed residue is known exactly — the kernel's at each integer, the cofactor's as an exact quotient"
-            : "every enclosed residue is known exactly — the kernel's at each integer, and the MERGED one from the Laurent route"
-          : sumExact
-            ? "Σ Res is known exactly, though no individual residue is expressible"
-            : "not every residue is known exactly, so the total is an estimate",
+      claimOf(
+        residuesExact
+          ? "catch.residues-exact"
+          : summed
+            ? input.summation?.escalation === undefined
+              ? "catch.residues-exact-kernel"
+              : "catch.residues-exact-merged"
+            : sumExact
+              ? "catch.sum-exact"
+              : "catch.residues-inexact",
+      ),
       residuesExact
         ? exact("the residues", "exact arithmetic over ℚ(i) or one quadratic extension of it")
         : summed
@@ -989,7 +1051,10 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "CATCH",
         "satisfied",
-        `a stated hypothesis FAILS and a stronger argument applies: ${escalation.to}, over ${escalation.collisions} declared collision${escalation.collisions === 1 ? "" : "s"}`,
+        claimOf("catch.escalation", {
+          to: { kind: "text", text: escalation.to },
+          collisions: { kind: "count", n: escalation.collisions, noun: "declared collision" },
+        }),
         exact(
           "the escalation",
           "the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument — the product is meromorphic there, orders ADD, and the merged residue is computed exactly",
@@ -1018,7 +1083,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         rowFrom(
           "KILL",
           "satisfied",
-          `${piece.name} is the target — it is what the argument solves for`,
+          claimOf("kill.target", { piece: pieceArg(piece) }),
           exact("the target piece", "declared by its role"),
           piece.id,
         ),
@@ -1036,7 +1101,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           rowFrom(
             "KILL",
             "satisfied",
-            small.limit.certificate.claim,
+            certificateClaim(small.limit.certificate.claim),
             small.limit.certificate,
             piece.id,
           ),
@@ -1047,7 +1112,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           rowFrom(
             "KILL",
             "failed",
-            `${piece.name} is an indentation, but L4 does not apply here`,
+            claimOf("kill.l4-inapplicable", { piece: pieceArg(piece) }),
             small.certificate,
             piece.id,
             "L4 needs a simple pole at the centre of the arc; at order ≥ 2 no limit exists and no principal value does either",
@@ -1068,7 +1133,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           rowFrom(
             "KILL",
             "unknown",
-            `${piece.name} is declared L5, but f could not be read as (Σ Nₖ e^{iaₖz})/D`,
+            claimOf("kill.l5-unreadable", { piece: pieceArg(piece) }),
             unknown(piece.name, "L5 needs z·f(z)'s limit, which needs that decomposition"),
             piece.id,
           ),
@@ -1083,7 +1148,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           pieceLimits.push({ pieceId: piece.id, contribution: large.limit.contribution });
         }
         push(
-          rowFrom("KILL", "satisfied", large.limit.certificate.claim, large.limit.certificate, piece.id),
+          rowFrom(
+            "KILL",
+            "satisfied",
+            certificateClaim(large.limit.certificate.claim),
+            large.limit.certificate,
+            piece.id,
+          ),
         );
       } else {
         killFailed = true;
@@ -1091,7 +1162,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           rowFrom(
             "KILL",
             "failed",
-            `${piece.name} is declared L5, but z·f(z) has no limit along it`,
+            claimOf("kill.l5-no-limit", { piece: pieceArg(piece) }),
             large.certificate,
             piece.id,
             "L5 needs z·f(z) → L uniformly; without it the arc's contribution is not a number the argument can use",
@@ -1111,7 +1182,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         rowFrom(
           "KILL",
           "satisfied",
-          `${piece.name} reproduces the target, as a multiple the solve reads off the family`,
+          claimOf("kill.reproduces", { piece: pieceArg(piece) }),
           exact(
             "the piece reproduces the unknown",
             "declared by its role; the coefficient enters Pass 5's M rather than the right-hand side",
@@ -1137,7 +1208,10 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           rowFrom(
             "KILL",
             "satisfied",
-            `${piece.name} is ${imported.text} — imported, not derived here`,
+            claimOf("kill.imported", {
+              piece: pieceArg(piece),
+              value: { kind: "exact", text: imported.text },
+            }),
             exact(`${piece.name} = ${imported.text}`, `imported, not derived here — ${imported.method}`, {
               provenance: [
                 { ok: true, text: imported.source },
@@ -1168,7 +1242,10 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         rowFrom(
           "KILL",
           "satisfied",
-          `${piece.name} is computed directly (${arcLength(geom).toPrecision(3)} long)`,
+          claimOf("kill.computed", {
+            piece: pieceArg(piece),
+            length: { kind: "number", value: arcLength(geom), digits: 3 },
+          }),
           integral.pieces[k]?.certificate ??
             unknown(piece.name, "no quadrature result for this piece"),
           piece.id,
@@ -1203,9 +1280,9 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         rowFrom(
           "KILL",
           "unknown",
-          unreadable
-            ? `${piece.name} must vanish, but its sweep is not an exact multiple of π and no bound can be stated`
-            : `${piece.name} must vanish, but no lemma here applies to this integrand`,
+          claimOf(unreadable ? "kill.sweep-unreadable" : "kill.no-lemma", {
+            piece: pieceArg(piece),
+          }),
           unknown(
             `the arc ${piece.name}`,
             geom.kind === "arc" && (geom.center[0] !== 0 || geom.center[1] !== 0)
@@ -1229,7 +1306,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       rowFrom(
         "KILL",
         ok ? "satisfied" : "failed",
-        disposal.certificate.claim,
+        certificateClaim(disposal.certificate.claim),
         disposal.certificate,
         piece.id,
         ok
@@ -1255,11 +1332,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       "COVER",
       hasTarget ? "satisfied" : "unknown",
       onContour
-        ? "the target appears as a labelled piece of the closed contour"
+        ? claimOf("cover.on-contour")
         : inSum !== undefined
-          ? `${inSum.id} is a TERM of the residue sum — the kernel's poles at the integers — not a piece of the contour` +
-            (inSum.weight === 1 ? "" : `, at weight ${inSum.weight}`)
-          : "no piece is marked as the target, so the ledger reports the closed-contour value itself",
+          ? claimOf(inSum.weight === 1 ? "cover.in-sum" : "cover.in-sum-weighted", {
+              id: { kind: "exact", text: inSum.id },
+              weight: { kind: "count", n: inSum.weight },
+            })
+          : claimOf("cover.none"),
       onContour
         ? exact("the target is covered", "declared by the piece list")
         : inSum !== undefined

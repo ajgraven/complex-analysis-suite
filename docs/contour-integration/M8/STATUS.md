@@ -8,8 +8,8 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. **Next execution action:** step 0.3 (structured ledger claims,
-  proven a no-op) — an M step, suggested session B.
+- **Execution:** Phase 0 in progress. **Next execution action:** step 0.4 (LaTeX for everything the
+  records and the engine print) — an M step, suggested session C.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -22,7 +22,9 @@ changed.
 | 2026-09-15 | plan Part 2 | a50b5ed | §4, Phase 1 in full: architecture, thirteen steps, ten suggested sessions |
 | 2026-09-15 | plan Part 3 | c014bdf | §5–§9: Phases 2–5 in full, the M8 risk register, the step index (42 steps, 28 sessions) |
 | 2026-09-15 | **0.1** | 42bf3cd | the six wrong claims on screen; `families/describe.ts`; `test/onScreenClaims.test.ts` (17 tests, sweep 7/7). Full gate green: 543 files / 5640 tests, lint and typecheck silent, browser suite 132/132 |
-| 2026-09-15 | **0.2** | (this commit) | `engine/vocabulary.ts`; the four ids off every surface; `test/vocabulary.test.ts` (7 tests, incl. a corpus-wide sweep) + three shell assertions; sweep 12/12. Full gate green: 544 files / 5650 tests, browser suite 132/132 |
+| 2026-09-15 | **0.2** | 8f3aa97 | `engine/vocabulary.ts`; the four ids off every surface; `test/vocabulary.test.ts` (7 tests, incl. a corpus-wide sweep) + three shell assertions; sweep 12/12. Full gate green: 544 files / 5650 tests, browser suite 132/132 |
+
+| 2026-09-15 | **0.3** | (this commit) | `engine/claims.ts`; 40 templates; `LedgerRow.claimData`; `test/claims.test.ts` (6 tests) + `test/ledgerDump.test.ts` byte-identical over 3,918 lines; sweep 18/18. Baseline captured first in 2cad10c. Full gate green: 546 files / 5658 tests, lint and typecheck silent. Browser suite not run — the slice adds no record and does not touch the stage |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -97,6 +99,53 @@ changed.
   `circleTemplate` gives its one closed loop, and the ledger's row for it says "is computed directly".
   That is now its label, so the tag and the row agree.
 
+- **(0.3) No ledger row is minted outside `ledger.ts`.** The plan lists `families/solveTarget.ts`,
+  `solveResidueTerm.ts`, `solveImported.ts` and `collisionCheck.ts` as row-minting sites; measured,
+  none of them constructs a row — `rowFrom` is the only constructor in the app, and those four mint
+  CERTIFICATES, which the step's own boundary leaves as strings. Nothing to convert there.
+- **(0.3) `claim` stays the string and `claimData` is the new object, against the plan's letter.**
+  The plan has `LedgerRow.claim` BECOME the `Claim`, with the text as `renderClaim(row.claim)`.
+  Measured, 122 sites read `.claim` as text and **108 of them are tests**; converting them buys no
+  behaviour and buries a no-op proof in a 120-file diff, which is the one thing this step must keep
+  reviewable. `rowFrom` computes `claim = renderClaim(claimData)` and is the ONLY constructor of a
+  row, so the derived field cannot drift — and `test/claims.test.ts` asserts `claim ===
+  renderClaim(claimData)` for every row of every fixture rather than trusting that sentence.
+- **(0.3) `rowFrom` is exported, because three tests built rows as literals.** A literal row can
+  carry a `claim` and a `claimData` that disagree; the pair is only worth anything because nothing
+  can write the two separately, so the tests go through the constructor too.
+- **(0.3) THE CORPUS REACHES 20 OF THE 40 TEMPLATES.** The byte-identical dump — 28 records × 79
+  fixtures, 3,918 lines — proves the restructure a no-op for exactly half the ledger's sentences.
+  The other twenty are the failure paths and the sandbox (a contour that does not close, a cut
+  crossed with no side declared, a piece no lemma disposes of, an inadmissible cut system, a sandbox
+  with no target), which is precisely where a silently moved sentence would go unnoticed. So
+  `test/claims.test.ts` pins those twenty byte for byte and asserts that the union of "reached by a
+  record" and "listed in the table" is ALL of `CLAIM_IDS` — a template added later cannot arrive
+  unpinned.
+- **(0.3) The twenty were verified against the pre-restructure source, not against my transcription.**
+  Every template's static fragments were required to appear verbatim in `2cad10c:ledger.ts`; all do,
+  except five SEAMS where the old code concatenated two literals — the grazed cut, the crossed cut,
+  the two cut-invariance wordings and the weighted target — each of which was checked by hand as the
+  concatenation of two fragments that are both present.
+- **(0.3) Two shapes the plan's `ClaimArg` lists are not carried.** `cx` has no use: no ledger row
+  renders a complex number (values reach the reader through the result card and the solve stage,
+  neither of which is a row). And `count` gained a `noun`, so no template spells a plural — the two
+  plural sites (`piece(s)`, `declared collision(s)`) were the kind of `${n === 1 ? "" : "s"}` that a
+  reworded template would drop.
+- **(0.3) The placeholder pattern is deliberately narrow, because a template contains mathematics
+  that looks like one.** `kill.l5-unreadable` says `f could not be read as (Σ Nₖ e^{iaₖz})/D`; a
+  renderer treating every brace as a placeholder would delete the exponent from the one claim that
+  names the decomposition L5 needs. `{iaₖz}` fails an ASCII-identifier test because `ₖ` is not one.
+- **(0.3) CLAUDE.md's test census was two steps stale** — it read 543 files / 5640 tests, the number
+  0.1 left, while 0.2 had already added a file. Now 546 / 5658. A stale census in the setup
+  instructions tells the next session its clean tree is broken, so it is bumped per step rather than
+  at the phase gate.
+- **(0.3) The sweep's one survivor was the behaviour nothing can yet observe, and 0.5 is when it
+  starts to matter.** A missing argument leaves its placeholder STANDING rather than deleting it —
+  unobservable today, since no claim in the corpus or the table is incomplete. Step 0.5 rewrites
+  every template, where renaming a placeholder and forgetting its argument is exactly the slip that
+  would otherwise delete a piece's name in silence. Standing text is a defect a reader can see; an
+  empty gap is not. 18/18 after the test.
+
 ## Open questions for the owner
 
 - none at present. (0.5a will ask for a review of `claims.md` before Phase 0 merges.)
@@ -123,6 +172,14 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(0.3) `src/engine/claims.ts` is where the ledger's wording lives**, as 40 templates keyed by id,
+  with `renderClaim` the one place a claim becomes text. The boundary the plan draws is recorded in
+  its header: a claim minted in `kernel/bounds/*` or `kernel/branch/*` stays a string and reaches a
+  row through `certificateClaim`, because it bakes its own numbers in next to the arithmetic that
+  produced them and step 0.5 will render it with `$…$` delimiters instead.
+- **(0.3) `derivation.ts` needed no change at all.** `lineFromRow` already reads `row.claim`, which
+  is now rendered from a template, so every derivation line moves with the ledger for free. A
+  `claimData` on `DerivationLine` is step 0.4's to add if it wants LaTeX in the derivation too.
 - **(0.1) `Family.closedForm` gains `simplifiedWhen`** — an `@cas/expr` boolean in the family's
   parameters, absent meaning unrestricted. A condition that cannot be decided withholds the general
   form rather than showing it unguarded: the guard exists because an unguarded form was wrong, so

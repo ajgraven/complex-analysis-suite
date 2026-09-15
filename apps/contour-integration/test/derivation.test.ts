@@ -13,7 +13,8 @@ import { analyse } from "../src/engine/analyse.js";
 import { buildDerivation, DERIVATION_STAGES, type Derivation, type StageId } from "../src/engine/derivation.js";
 import type { Contour } from "../src/engine/contour/model.js";
 import { semicircleTemplate } from "../src/engine/contour/templates.js";
-import type { LedgerResult } from "../src/engine/ledger.js";
+import { rowFrom, type LedgerResult } from "../src/engine/ledger.js";
+import { claimOf } from "../src/engine/claims.js";
 import { findPoles } from "../src/kernel/poles.js";
 import type { Cx } from "../src/kernel/geom.js";
 import { FAMILIES } from "../src/families/index.js";
@@ -188,12 +189,12 @@ describe("a line is never stronger than the certificate it came from", () => {
   /** A ledger carrying exactly one row, whose evidence is `unknown`. */
   const oneUnknownRow: LedgerResult = {
     rows: [
-      {
-        constraint: "CATCH",
-        status: "unknown",
-        claim: "not every residue is known exactly, so the total is an estimate",
-        evidence: unknown("the residues", "some poles are not expressible in ℚ(i)(√d)"),
-      },
+      rowFrom(
+        "CATCH",
+        "unknown",
+        claimOf("catch.residues-inexact"),
+        unknown("the residues", "some poles are not expressible in ℚ(i)(√d)"),
+      ),
     ],
     closes: false,
     verdict: assembleVerdict([unknown("the residues", "some poles are not expressible")]),

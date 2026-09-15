@@ -43,6 +43,8 @@ import {
   type KeyStore,
 } from "../src/shell/drillProgress.js";
 import { CONTRAST_CELLS } from "../src/shell/contrastGrid.js";
+import { rowFrom } from "../src/engine/ledger.js";
+import { certificateClaim } from "../src/engine/claims.js";
 import { compile, resolveState, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { TEMPLATES } from "../src/shell/templates.js";
@@ -180,8 +182,8 @@ describe("rung ii — the KILL column", () => {
     const qs = pieceQuestions({
       ledger: {
         rows: [
-          { constraint: "LEGALITY", pieceId: "lip", status: "satisfied", claim: "runs above the cut", evidence: cert },
-          { constraint: "KILL", pieceId: "lip", status: "satisfied", claim: "is the target", evidence: cert },
+          rowFrom("LEGALITY", "satisfied", certificateClaim("runs above the cut"), cert, "lip"),
+          rowFrom("KILL", "satisfied", certificateClaim("is the target"), cert, "lip"),
         ],
       },
       contour: { pieces: [piece] },
@@ -201,13 +203,11 @@ describe("rung ii — the KILL column", () => {
       role: "vanish" as const,
       colour: 0 as const,
     };
-    const row = { constraint: "KILL" as const, pieceId: "arc", status: "satisfied" as const, evidence: cert };
+    const row = (claim: string) =>
+      rowFrom("KILL", "satisfied", certificateClaim(claim), cert, "arc");
     const qs = pieceQuestions({
       ledger: {
-        rows: [
-          { ...row, claim: "|∫| ≤ … at R = 4" },
-          { ...row, claim: "→ 0 as R → ∞" },
-        ],
+        rows: [row("|∫| ≤ … at R = 4"), row("→ 0 as R → ∞")],
       },
       contour: { pieces: [piece] },
     });
@@ -217,13 +217,13 @@ describe("rung ii — the KILL column", () => {
   });
 
   it("says `fails` for a row the ledger did not satisfy, whatever the piece's role", () => {
-    const row = {
-      constraint: "KILL" as const,
-      pieceId: "arc",
-      status: "failed" as const,
-      claim: "the lower semicircle DIVERGES",
-      evidence: { level: "⚠", claim: "", method: "", provenance: [] } as never,
-    };
+    const row = rowFrom(
+      "KILL",
+      "failed",
+      certificateClaim("the lower semicircle DIVERGES"),
+      { level: "⚠", claim: "", method: "", provenance: [] } as never,
+      "arc",
+    );
     expect(disposalOf({ role: "vanish" }, row)).toBe("fails");
     expect(disposalOf({ role: "target" }, row)).toBe("fails");
     // And an `unknown` row is the same answer: the argument does not close there either.

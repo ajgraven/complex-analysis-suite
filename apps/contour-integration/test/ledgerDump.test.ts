@@ -19,9 +19,12 @@ import { dumpCorpus } from "./helpers/dumpLedger.js";
 
 const BASELINE = fileURLToPath(new URL("./fixtures/ledger-dump.txt", import.meta.url));
 
+// One pass over the corpus, shared: solving 28 records at every fixture is the expensive half of
+// this file, and both tests ask about the same text.
+const dump = dumpCorpus();
+
 describe("every claim the engine composes", () => {
   it("is byte-identical to the recorded baseline", () => {
-    const dump = dumpCorpus();
     if (process.env.M8_WRITE_DUMP === "1") {
       writeFileSync(BASELINE, dump);
       return;
@@ -50,7 +53,6 @@ describe("every claim the engine composes", () => {
   });
 
   it("covers every record and every fixture, so the baseline cannot pass by being empty", () => {
-    const dump = dumpCorpus();
     const headings = dump.split("\n").filter((l) => l.startsWith("## "));
     expect(new Set(headings.map((h) => h.split(" ")[1])).size).toBe(28);
     expect(headings.length).toBeGreaterThanOrEqual(79);
