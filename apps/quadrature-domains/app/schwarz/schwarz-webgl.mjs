@@ -46,7 +46,8 @@ import { makeColormapTexture } from '@cas/gpu/colormap';
 //       available: true,
 //       setPhi(phi, {boundaryPts, escapeR})    // rebuilds mask texture, packs uniforms
 //       setColormap(name)                      // rebuilds colormap texture
-//       render(view, {maxIter, scaleMode, modK}) // immediate, synchronous
+//       render(view, {maxIter, scaleMode, modK, viewMode, pixelSize}) // immediate, synchronous
+//       maxOutputSize() → largest renderable edge in device px (0 = unknown)
 //       capacityError() → string | null         // last setPhi failure reason
 //       destroy()                              // frees all GL resources
 //     }
@@ -1098,11 +1099,33 @@ void main() {
       colormapTex = buildColormapTexture(gl, pickColormap(name));
     }
 
+    // Largest edge, in device pixels, this context will render. A request past it
+    // does not come back smaller — it comes back failed — so the image exporter
+    // has to plan against this rather than discover it. 0 ⇒ unknown (dead context).
+    function maxOutputSize() {
+      if (gl.isContextLost()) return 0;
+      const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+      const rbuf = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) | 0;
+      const vmin = dims && dims.length >= 2 ? Math.min(dims[0] | 0, dims[1] | 0) : 0;
+      const both = [vmin, rbuf].filter((n) => n > 0);
+      return both.length ? Math.min.apply(null, both) : 0;
+    }
+
+    // `opts.pixelSize` ({W,H}) renders the SAME world framing into a buffer of
+    // exactly that width instead of the display's device-pixel one — what the
+    // high-res exporter needs. The scale factor S generalises devicePixelRatio:
+    // the shader's world↔fragment map only ever reads pxPerUnit/canvasSize as a
+    // ratio, so holding S in both keeps the frame fixed while the buffer grows.
+    // Absent, S is exactly (window.devicePixelRatio || 1) and every expression
+    // below is the one that was here before.
     function render(view, opts) {
       if (gl.isContextLost()) return;     // dead context — owner recreates on restore
       opts = opts || {};
-      const W = Math.max(1, Math.floor(view.cssW * (window.devicePixelRatio || 1)));
-      const H = Math.max(1, Math.floor(view.cssH * (window.devicePixelRatio || 1)));
+      const S = (opts.pixelSize && opts.pixelSize.W > 0 && view.cssW > 0)
+        ? (opts.pixelSize.W / view.cssW)
+        : (window.devicePixelRatio || 1);
+      const W = Math.max(1, Math.floor(view.cssW * S));
+      const H = Math.max(1, Math.floor(view.cssH * S));
       if (canvas.width !== W || canvas.height !== H) {
         canvas.width = W; canvas.height = H;
       }
@@ -1116,7 +1139,7 @@ void main() {
 
       // Uniforms.
       gl.uniform2f(U.viewCenter, view.cx, view.cy);
-      gl.uniform1f(U.pxPerUnit, view.scale * (window.devicePixelRatio || 1));
+      gl.uniform1f(U.pxPerUnit, view.scale * S);
       gl.uniform2f(U.canvasSize, W, H);
       gl.uniform1i(U.unbounded, phiState.unbounded ? 1 : 0);
       gl.uniform1i(U.family,    phiState.familyId);
@@ -1175,6 +1198,7 @@ void main() {
       setPhi,
       setColormap,
       render,
+      maxOutputSize,
       destroy,
       capacityError,
     };

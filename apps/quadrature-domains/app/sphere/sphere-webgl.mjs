@@ -28,6 +28,7 @@ import { SphereCommon } from './sphere-common.mjs';
 //       available: true,
 //       setPhi(phi, {boundaryPts, escapeR})
 //       setRenderParams({maxIter, colormap, scaleMode, modK, texSize})
+//       maxOutputSize() → largest renderable edge in device px (0 = unknown)
 //       setDisplayParams({rimDarken, showBoundary, showPoles,
 //                         showNorthPole, boundaryColor, poleColor})
 //       render(camera)   // camera = {azimuth, elevation, distance}
@@ -482,6 +483,18 @@ void main() { fragColor = u_color; }`;
     // =========================================================================
     // camera = { azimuth, elevation, distance }  (azimuth/elevation in radians)
     // size   = { W, H }  in physical pixels (canvas.width / canvas.height)
+    // Largest edge this context will render, in device pixels (0 ⇒ unknown). The
+    // image exporter plans against it: a request past MAX_VIEWPORT_DIMS fails the
+    // render rather than shrinking it. Mirrors schwarz-webgl's maxOutputSize.
+    function maxOutputSize() {
+      if (gl.isContextLost()) return 0;
+      const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+      const rbuf = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) | 0;
+      const vmin = dims && dims.length >= 2 ? Math.min(dims[0] | 0, dims[1] | 0) : 0;
+      const both = [vmin, rbuf].filter((n) => n > 0);
+      return both.length ? Math.min.apply(null, both) : 0;
+    }
+
     function render(camera, size) {
       if (gl.isContextLost()) return;     // dead context — owner recreates on restore
       const W = size ? size.W : canvas.clientWidth;
@@ -840,6 +853,7 @@ void main() { fragColor = u_color; }`;
       setRenderParams,
       setDisplayParams,
       render,
+      maxOutputSize,
       suspend,
       destroy,
       markFractalDirty() { fractalDirty = true; },

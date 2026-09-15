@@ -2290,6 +2290,63 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+66. **Schwarz image export: made high-resolution actually high-resolution (SHIPPED).**
+    The Export-PNG control had shipped with a 1×/2×/4× multiplier and did not do what
+    it said. Three defects and two limits, all measured in the real app before any
+    were touched.
+    * **1× SAVED A PICTURE WITH NO FRACTAL IN IT.** Both GL contexts are created with
+      `preserveDrawingBuffer: false`, so a composited canvas reads back empty —
+      measured **1 distinct colour against 26** (Schwarz) and **1 against 2858**
+      (sphere). The `mult > 1` path re-rendered first and survived; the `mult === 1`
+      path did not re-render and composited an empty buffer. There is no fast path
+      now: every multiplier renders synchronously and copies before yielding.
+    * **The export ignored the view mode.** The live render passes
+      `viewMode: inZ ? 'z' : 'w'` and picks `sState.zView`; the export passed
+      neither, so in the z-disk view it saved the PLANE at the PLANE's camera — a
+      different picture from the one on screen, and a plausible-looking one.
+    * **The overlays were a nearest-neighbour upscale**, which the old comment
+      admitted ("boundary lines will be 1-px regardless of multiplier"). They are
+      re-drawn now: `worldToPixel` is display-space and no painter touches the
+      transform, so ONE `setTransform(mult)` on a capture context (`getCtx()`
+      returns it while `setOverlayCapture` is armed) makes every existing painter
+      draw at size **with no change to any of them**. Measured by blockiness — a
+      nearest-neighbour N× upscale makes every pixel equal its N×N block's top-left
+      and scores **1.000**, the re-render scores **0.548**. Line WIDTH cannot check
+      this and the first attempt to use it duly reported ~4 for both, since a figure
+      drawn 4× bigger has 4× wider strokes either way.
+    * **No cap.** This container's GPU reports `MAX_VIEWPORT_DIMS` 8192; 4× on a
+      wide display exceeds it, and a request past the limit fails the render rather
+      than shrinking it. Both renderers gained `maxOutputSize()`, and the new
+      DOM-free `schwarz-export-plan.mjs` clamps against it — keeping the effective
+      multiplier FRACTIONAL, because snapping 5.12× down to 4× throws away
+      resolution the GPU was willing to give, and scaling both edges by the same
+      factor is what keeps the exported frame the frame on screen.
+    * **The control was unreachable in sphere view**, found by driving the real app:
+      it lived in the Dynamics card, which is `.view-2d`. It is now its own
+      un-gated **Export image** card — the sphere being the one view whose export
+      needs the most explaining.
+    * **Honest labelling.** `describeExportDetail` says where the detail comes from
+      rather than implying the multiplier applies to everything: a CPU escape-time
+      field only ever existed at the resolution slider's size, and the sphere's
+      fractal is a `texSize`-square texture on geometry (its silhouette and markers
+      DO sharpen; its surface does not). A live preview under the control shows the
+      output size, that label, and the cap when it binds — before the click.
+    * `render(view, opts)` gained `opts.pixelSize`: the same world framing into an
+      explicitly sized buffer. The scale factor S generalises `devicePixelRatio`
+      (the shader reads `pxPerUnit`/`canvasSize` only as a ratio), and with
+      `pixelSize` absent every expression is the one that was there before —
+      pinned by a test that the interactive buffer is still exactly
+      `floor(cssW · dpr)`.
+    * **Verified in the real app** (built, `vite preview`, Playwright): plane 1×
+      1152×950 and 4× 4608×3800, z-disk 2× 2304×1900, sphere 2× 2304×1900, each
+      with its preview line. Tests: `vitest/schwarz-export-plan.test.ts` (node — the
+      plan, the labels, and two source invariants: no painter touches the transform,
+      and the capture redirect is always cleared in a `finally`) and
+      `vitest/browser/schwarz-export.browser.test.ts` (real GLSL — the readback
+      window asserted from BOTH sides, `pixelSize`, the cap, the sphere, and the
+      crispness measurement with its upscale control, which must read 1.000 or the
+      metric is not measuring what it claims).
+
 65. **Schwarz GPU: the salmon speckle on tile boundaries was the MASK, not Newton (SHIPPED).**
     The fractal view scattered `KIND_INV` "bad pixel" dots — `rgb(180,90,90)` — along
     ∂Ω and every tile boundary. Entry 11 below read the same symptom as a Newton
