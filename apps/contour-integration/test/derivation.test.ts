@@ -214,7 +214,7 @@ describe("a line is never stronger than the certificate it came from", () => {
     const line = must(linesOf(d, "catch")[0], "the CATCH line");
     expect(line.level).toBe("?");
     expect(line.status).toBe("unknown");
-    expect(line.text).toBe("not every residue is known exactly, so the total is an estimate");
+    expect(line.text).toBe("some residues are numerical, so the total is an estimate");
     expect(d.closes).toBe(false);
     expect(d.conclusion).toBeUndefined();
   });

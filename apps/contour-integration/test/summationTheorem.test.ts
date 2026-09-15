@@ -139,10 +139,10 @@ describe("the ledger closes, and every row says something true", () => {
     expect(ledger.closes).toBe(true);
     expect(ledger.failedAt).toBeNull();
     expect(ledger.hasTarget).toBe(true);
-    expect(ledgerHeadline(ledger)).toBe("This argument closes.");
+    expect(ledgerHeadline(ledger)).toBe("The argument is complete.");
     const cover = ledger.rows.find((row) => row.constraint === "COVER");
     expect(cover?.status).toBe("satisfied");
-    expect(cover?.claim).toMatch(/S is a TERM of the residue sum/);
+    expect(cover?.claim).toMatch(/S is the sum of the residues at the integers/);
   });
 
   it("CATCH counts the cofactor's poles as well as the kernel's", () => {
@@ -150,7 +150,7 @@ describe("the ledger closes, and every row says something true", () => {
     // the whole product, not just the `cot` — so a square dragged onto `±ia` had the same "every
     // singularity is clear" that one dragged onto an integer had before M5.5b.
     const rows = run(COT_A, 4).ledger.rows.filter((row) => row.constraint === "CATCH");
-    expect(rows[0]?.claim).toMatch(/^11 singularities are enclosed/);
+    expect(rows[0]?.claim).toMatch(/at 11 singularities/);
   });
 
   it("and does NOT claim that no individual residue is expressible — they all are", () => {
@@ -159,7 +159,7 @@ describe("the ledger closes, and every row says something true", () => {
     const rows = run(COT_A, 4).ledger.rows.filter((row) => row.constraint === "CATCH");
     const residues = rows[1];
     expect(residues?.status).toBe("satisfied");
-    expect(residues?.claim).toMatch(/every enclosed residue is known exactly/);
+    expect(residues?.claim).toMatch(/every enclosed residue is exact/);
     expect(residues?.claim).not.toMatch(/no individual residue/);
   });
 
@@ -170,10 +170,10 @@ describe("the ledger closes, and every row says something true", () => {
     if (!r.ok) return;
     const cover = r.run.ledger.rows.find((row) => row.constraint === "COVER");
     expect(cover?.status).toBe("unknown");
-    expect(cover?.claim).toMatch(/no piece is marked as the target/);
+    expect(cover?.claim).toMatch(/no target is designated/);
     // The closed-contour value is still established exactly — that is what the sandbox gets.
     expect(r.run.ledger.closes).toBe(true);
-    expect(ledgerHeadline(r.run.ledger)).toBe("The closed-contour value is established exactly.");
+    expect(ledgerHeadline(r.run.ledger)).toBe("$\\oint_\\gamma f(z)\\,dz$ is established exactly.");
   });
 });
 

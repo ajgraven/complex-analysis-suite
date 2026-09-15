@@ -185,10 +185,10 @@ describe("the wedge reaches an exact value at every n", () => {
     const rows = wedge(5).ledger.rows.filter((r) => r.constraint === "CATCH");
     const residues = rows.find((r) => /residue/.test(r.claim));
     expect(residues?.status).toBe("satisfied");
-    expect(residues?.claim).toBe("Σ Res is known exactly, though no individual residue is expressible");
+    expect(residues?.claim).toBe("the residue sum is exact — the individual residues lie outside $\\mathbb{Q}(i)(\\sqrt{d})$, the sum does not");
     // …and the per-pole case still says the simpler thing.
     const at3 = wedge(3).ledger.rows.find((r) => /residue/.test(r.claim));
-    expect(at3?.claim).toBe("every enclosed residue is known exactly");
+    expect(at3?.claim).toBe("every enclosed residue is exact");
   });
 
   it("kills the sector arc at every n, now that a 2π/n sweep can be measured", () => {

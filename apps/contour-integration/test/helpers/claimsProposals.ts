@@ -64,7 +64,7 @@ export const PROPOSED: Readonly<Record<string, string>> = {
     "{piece}: $f$ was not recognised in the form $\\left(\\sum_k N_k e^{i a_k z}\\right)/D$",
   "kill.l5-no-limit": "{piece}: $z f(z)$ has no limit on the arc",
   "kill.reproduces": "{piece}: a constant multiple of the target",
-  "kill.imported": "{piece} $= ${value}$ — a known integral, not derived here",
+  "kill.imported": "{piece} = {value} — a known integral, not derived here",
   "kill.computed": "{piece}: evaluated numerically (length {length})",
   "kill.sweep-unreadable":
     "{piece}: no bound is available — the arc's angle is not a rational multiple of $\\pi$ with denominator at most 12",
@@ -74,7 +74,7 @@ export const PROPOSED: Readonly<Record<string, string>> = {
   "cover.on-contour": "the target is a piece of the contour",
   "cover.in-sum": "the target is the sum of the residues at the integers, not a piece of the contour",
   "cover.in-sum-weighted":
-    "the target is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
+    "{id} is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
   "cover.none": "no target is designated; the closed-contour integral is reported",
 
   // ---- headlines ---------------------------------------------------------------------------

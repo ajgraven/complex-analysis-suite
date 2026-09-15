@@ -232,13 +232,13 @@ describe("the poles LEGALITY could not see", () => {
     // the row is `?`, not a silent success.
     const wide = run("pi*cot(pi*z)/(z^2+1)", 9000, true);
     const row = wide.ledger.rows.find(
-      (r) => r.constraint === "LEGALITY" && /too many of them to check/.test(r.claim),
+      (r) => r.constraint === "LEGALITY" && /too many of them to enumerate/.test(r.claim),
     );
     expect(row?.status).toBe("unknown");
-    expect(row?.repair).toMatch(/shrink the contour/);
+    expect(row?.repair).toBe("Reduce $N$.");
     // …and within the limit there is no such row, so it is not merely always present.
     const near = run("pi*cot(pi*z)/(z^2+1)", 2, true);
-    expect(near.ledger.rows.some((r) => /too many of them to check/.test(r.claim))).toBe(false);
+    expect(near.ledger.rows.some((r) => /too many of them to enumerate/.test(r.claim))).toBe(false);
   });
 
   it("counts the enclosed integers, which a window on an infinite set must get right", () => {

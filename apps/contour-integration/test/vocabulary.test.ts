@@ -74,7 +74,7 @@ describe("the display vocabulary", () => {
     for (const id of IDS) {
       const line = headlineFails(id);
       expect(line, id).not.toMatch(ID_IN_TEXT);
-      expect(line, id).toMatch(/^This argument does not close: .+\.$/);
+      expect(line, id).toMatch(/^The argument is incomplete: .+\.$/);
     }
     expect(new Set(IDS.map(headlineFails)).size).toBe(4);
   });

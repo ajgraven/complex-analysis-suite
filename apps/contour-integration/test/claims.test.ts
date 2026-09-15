@@ -24,6 +24,7 @@ import {
   pieceArg,
   renderArg,
   renderClaim,
+  claimTemplate,
   type ClaimId,
 } from "../src/engine/claims.js";
 import { FAMILIES } from "../src/families/index.js";
@@ -36,76 +37,81 @@ const piece = pieceArg({ id: "arc", name: "the large arc" });
 const cut = { kind: "cut", name: "Γ" } as const;
 
 /** Template → (the args it is given, the sentence it must render). */
-const EXPECTED: Partial<Record<ClaimId, readonly [Parameters<typeof claimOf>[1], string]>> = {
-  "legality.avoid-singularities": [{}, "the contour must avoid every singularity of the integrand"],
-  "legality.not-closed": [{}, "the contour does not close"],
+const EXPECTED: Partial<
+  Record<ClaimId, readonly [Parameters<typeof claimOf>[1], string]>
+> = {
+  "legality.avoid-singularities": [
+    {},
+    "the contour must avoid every singularity of the integrand",
+  ],
+  "legality.not-closed": [{}, "the contour is not closed"],
   "legality.kernel-band": [
     {},
-    "the kernel has a pole at every integer, and this contour reaches too many of them to check",
+    "$\\pi\\cot\\pi z$ has a pole at every integer, and the contour reaches too many of them to enumerate",
   ],
   "legality.cuts-inadmissible": [
     { detail: { kind: "text", text: "the exponents sum to 1/2" } },
-    "the cut system is not admissible: the exponents sum to 1/2",
+    "the branch cuts do not make the integrand single-valued: the exponents sum to 1/2",
   ],
   "legality.monodromy-undecided": [
     {},
-    "the winding about a branch point is undecided, so the monodromy along the contour is too",
+    "a winding number about a branch point could not be decided, so neither could the monodromy",
   ],
   "legality.monodromy-off-sheet": [
     { turns: { kind: "exact", text: "n(γ, b) = 1" } },
-    "the contour winds about a branch point and does not close on one sheet (n(γ, b) = 1)",
+    "the integrand is not single-valued along the contour (n(γ, b) = 1)",
   ],
-  "legality.cuts-clear": [
-    {},
-    "no piece of the contour meets a branch cut, except where it ends on one",
-  ],
+  "legality.cuts-clear": [{}, "no piece crosses a branch cut"],
   "legality.cut-grazed": [
     { piece, cut },
-    "the large arc grazes the cut 'Γ', so it has no side to declare",
+    "the large arc touches the cut $\\Gamma$ tangentially, so it has no side",
   ],
   "legality.cut-crossed": [
     { piece, how: { kind: "text", text: "crosses" }, cut },
-    "the large arc crosses the cut 'Γ' without declaring which side it runs on",
+    "the large arc crosses the cut $\\Gamma$ with no side assigned",
   ],
   "legality.cut-invariance-one": [
     {},
-    "∮ is unchanged by moving this cut, while they stay clear of the contour",
+    "$\\oint_\\gamma f(z)\\,dz$ does not depend on where the cut runs, while the cut avoids $\\gamma$",
   ],
   "legality.cut-invariance-many": [
     {},
-    "∮ is unchanged by moving these cuts, while they stay clear of the contour",
+    "$\\oint_\\gamma f(z)\\,dz$ does not depend on where the cuts run, while they avoid $\\gamma$",
   ],
-  "catch.winding-undecided": [{}, "a winding number could not be decided"],
+  "catch.winding-undecided": [
+    {},
+    "$\\operatorname{Ind}_\\gamma(a)$ could not be decided — a pole lies too close to $\\gamma$",
+  ],
   "catch.residues-inexact": [
     {},
-    "not every residue is known exactly, so the total is an estimate",
+    "some residues are numerical, so the total is an estimate",
   ],
-  "kill.l4-inapplicable": [{ piece }, "the large arc is an indentation, but L4 does not apply here"],
+  "kill.l4-inapplicable": [
+    { piece },
+    "the large arc: the indentation lemma does not apply",
+  ],
   "kill.l5-unreadable": [
     { piece },
-    "the large arc is declared L5, but f could not be read as (Σ Nₖ e^{iaₖz})/D",
+    "the large arc: $f$ was not recognised in the form $\\left(\\sum_k N_k e^{i a_k z}\\right)/D$",
   ],
-  "kill.l5-no-limit": [{ piece }, "the large arc is declared L5, but z·f(z) has no limit along it"],
+  "kill.l5-no-limit": [{ piece }, "the large arc: $z f(z)$ has no limit on the arc"],
   "kill.computed": [
     { piece, length: { kind: "number", value: 3.14159, digits: 3 } },
-    "the large arc is computed directly (3.14 long)",
+    "the large arc: evaluated numerically (length 3.14)",
   ],
   "kill.sweep-unreadable": [
     { piece },
-    "the large arc must vanish, but its sweep is not an exact multiple of π and no bound can be stated",
+    "the large arc: no bound is available — the arc's angle is not a rational multiple of $\\pi$ with denominator at most 12",
   ],
-  "kill.no-lemma": [
-    { piece },
-    "the large arc must vanish, but no lemma here applies to this integrand",
-  ],
-  "cover.none": [
-    {},
-    "no piece is marked as the target, so the ledger reports the closed-contour value itself",
-  ],
+  "kill.no-lemma": [{ piece }, "the large arc: no bound is available for this integrand"],
+  "cover.none": [{}, "no target is designated; the closed-contour integral is reported"],
 };
 
 /** Every template the gallery actually produces, and the rows it produced them on. */
-function corpus(): { readonly reached: ReadonlySet<ClaimId>; readonly mismatches: readonly string[] } {
+function corpus(): {
+  readonly reached: ReadonlySet<ClaimId>;
+  readonly mismatches: readonly string[];
+} {
   const reached = new Set<ClaimId>();
   const mismatches: string[] = [];
   for (const family of FAMILIES) {
@@ -120,11 +126,24 @@ function corpus(): { readonly reached: ReadonlySet<ClaimId>; readonly mismatches
         if (row.claim !== renderClaim(row.claimData)) {
           mismatches.push(`${family.id}: ${row.claim} ≠ ${renderClaim(row.claimData)}`);
         }
-        // A placeholder with no argument is left standing by the renderer, deliberately, so that it
-        // shows up as text rather than as a thrown error inside a fatal boundary. Nothing may ship
-        // one.
-        if (/\{[A-Za-z][A-Za-z0-9]*\}/.test(row.claim.replace("e^{iaₖz}", ""))) {
-          mismatches.push(`${family.id}: an unfilled placeholder in — ${row.claim}`);
+        // **Every argument the row supplies must be NAMED by its template.** Scanning the rendered
+        // text for a leftover `{name}` no longer works: step 0.5b put LaTeX in the templates, and
+        // `\operatorname{Ind}`, `\mathbb{Z}` and `e^{iaₖz}` are braces that are mathematics. What the
+        // scan was really guarding is the rename slip — a placeholder renamed without its argument —
+        // and that shows up here exactly, as an argument the template never mentions.
+        const named = new Set(
+          [
+            ...claimTemplate(row.claimData.template).matchAll(
+              /\{([A-Za-z][A-Za-z0-9]*)\}/g,
+            ),
+          ].map((m) => m[1]),
+        );
+        for (const key of Object.keys(row.claimData.args)) {
+          if (!named.has(key)) {
+            mismatches.push(
+              `${family.id}: '${key}' is supplied but ${row.claimData.template} never names it`,
+            );
+          }
         }
       }
     }
@@ -143,7 +162,10 @@ describe("the ledger's claims", () => {
   it("pins EVERY template: reached by a record, or listed above", () => {
     const { reached, mismatches } = corpus();
     expect(mismatches).toEqual([]);
-    const pinned = new Set<ClaimId>([...reached, ...(Object.keys(EXPECTED) as ClaimId[])]);
+    const pinned = new Set<ClaimId>([
+      ...reached,
+      ...(Object.keys(EXPECTED) as ClaimId[]),
+    ]);
     expect(CLAIM_IDS.filter((id) => !pinned.has(id))).toEqual([]);
     // The measurement itself, kept: half of the ledger's sentences are unreachable from the gallery.
     // If a record ever reaches one of the twenty this number drops, and the entry above becomes
@@ -159,16 +181,18 @@ describe("the ledger's claims", () => {
     expect(renderArg({ kind: "count", n: 2, noun: "declared collision" })).toBe(
       "2 declared collisions",
     );
-    expect(renderArg({ kind: "count", n: 2, noun: "singularity", plural: "singularities" })).toBe(
-      "2 singularities",
-    );
+    expect(
+      renderArg({ kind: "count", n: 2, noun: "singularity", plural: "singularities" }),
+    ).toBe("2 singularities");
     expect(renderArg({ kind: "count", n: 7 })).toBe("7");
     // `number` is `toPrecision`, which is what the two measured claims have always used — a
     // clearance and an arc length, both to three significant figures, NOT to three decimals.
     expect(renderArg({ kind: "number", value: 0.04999999, digits: 3 })).toBe("0.0500");
     expect(renderArg({ kind: "number", value: 1234.5, digits: 3 })).toBe("1.23e+3");
     expect(renderArg({ kind: "number", value: 2 })).toBe("2");
-    expect(renderArg({ kind: "piece", id: "arc", name: "the large arc" })).toBe("the large arc");
+    expect(renderArg({ kind: "piece", id: "arc", name: "the large arc" })).toBe(
+      "the large arc",
+    );
     expect(renderArg({ kind: "exact", text: "π/2" })).toBe("π/2");
     expect(renderArg({ kind: "cut", name: "Γ" })).toBe("Γ");
     expect(renderArg({ kind: "text", text: "crosses" })).toBe("crosses");
@@ -192,7 +216,10 @@ describe("the ledger's claims", () => {
     });
     // And on a real row: the imported piece's value is typeset wherever a record imports one.
     const imported = FAMILIES.find((f) => f.id === "gaussian-shift-zero-residue");
-    const run = solveFamily(imported ?? ({} as never), imported?.golden[0] ?? ({} as never));
+    const run = solveFamily(
+      imported ?? ({} as never),
+      imported?.golden[0] ?? ({} as never),
+    );
     expect(run.ok).toBe(true);
     const row = run.ok
       ? run.run.ledger.rows.find((r) => r.claimData.template === "kill.imported")
@@ -205,10 +232,14 @@ describe("the ledger's claims", () => {
   });
 
   it("leaves mathematics that looks like a placeholder alone", () => {
-    // `e^{iaₖz}` is in a template, and `ₖ` is not an ASCII alphanumeric — which is the whole reason
-    // the pattern is narrow. A renderer that treated every brace as a placeholder would delete the
-    // exponent from the one claim that names the decomposition L5 needs.
-    expect(renderClaim(claimOf("kill.l5-unreadable", { piece }))).toContain("e^{iaₖz}");
+    // Braces that are MATHEMATICS, not placeholders — and after step 0.5b put LaTeX in the
+    // templates there are many more of them: `\operatorname{Ind}`, `\mathbb{Z}`, `\sqrt{2}`. A
+    // renderer that substituted every brace would delete the operator from the sentence. Only a
+    // name the claim actually supplies is replaced, which is why these survive.
+    expect(renderClaim(claimOf("kill.l5-unreadable", { piece }))).toContain(
+      "$f$ was not recognised in the form $\\left(\\sum_k N_k e^{i a_k z}\\right)/D$",
+    );
+    expect(renderClaim(claimOf("catch.winding-undecided"))).toContain("\\operatorname{Ind}");
   });
 
   it("leaves a placeholder STANDING when its argument is missing, rather than deleting it", () => {
@@ -217,9 +248,7 @@ describe("the ledger's claims", () => {
     // and step 0.5 rewrites every template, where renaming a placeholder without renaming its
     // argument is exactly the slip that would otherwise delete a piece's name from a sentence in
     // silence. Standing text is a defect a reader can SEE; an empty gap is not.
-    expect(renderClaim({ template: "kill.target", args: {} })).toBe(
-      "{piece} is the target — it is what the argument solves for",
-    );
+    expect(renderClaim({ template: "kill.target", args: {} })).toBe("{piece}: the target");
   });
 
   it("carries a certificate's own sentence through unchanged", () => {

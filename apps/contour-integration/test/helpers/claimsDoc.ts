@@ -77,7 +77,13 @@ function table(rows: readonly Row[]): string {
     const seen = r.seenIn === undefined ? "" : ` <br>*(${r.seenIn} record${r.seenIn === 1 ? "" : "s"})*`;
     out.push(
       `| \`${cell(r.where)}\`${seen} | ${cell(r.today)} | ${
-        r.proposed === null ? "**—**" : r.proposed === "" ? "*(delete)*" : cell(r.proposed)
+        r.proposed === null
+          ? "**—**"
+          : r.proposed === ""
+            ? "*(delete)*"
+            : r.proposed === r.today
+              ? "*(applied)*"
+              : cell(r.proposed)
       } | ${flags.length === 0 ? "" : cell(flags.join("; "))} |`,
     );
   }
@@ -123,6 +129,16 @@ function fromCorpus(): {
       });
       for (const stage of derivation.stages) {
         for (const s of stage.statements) note(statements, `${s.label} — ${s.text}`);
+        // **The derivation's LINES as well as its statements.** The first draft collected only the
+        // statements, and so missed every sentence that reaches the reader through a line whose
+        // evidence is a whole VERDICT rather than one ledger row — the solve's and the conclusion's,
+        // which is where `solveTarget.ts` and `solveResidueTerm.ts` do their talking. Four citations
+        // were reported where there are more.
+        for (const line of stage.lines) {
+          note(methods, line.method);
+          for (const step of line.provenance) note(provenance, step.text);
+          if (line.restriction !== undefined) note(restrictions, line.restriction);
+        }
       }
     }
   }
@@ -153,7 +169,7 @@ export function claimsDocument(): string {
     proposed: PROPOSED[id] ?? null,
   }));
   const headlines: Row[] = [
-    { where: "headline · closes", today: "This argument closes.", proposed: PROPOSED["headline.closes"] ?? null },
+    { where: "headline · closes", today: "The argument is complete.", proposed: PROPOSED["headline.closes"] ?? null },
     {
       where: "headline · sandbox",
       today: "The closed-contour value is established exactly.",
@@ -227,6 +243,11 @@ cd apps/contour-integration && M8_WRITE_CLAIMS=1 pnpm exec vitest run test/claim
 Step 0.5 of [the M8 plan](../M8-plan.md) rewrites the app's prose into terse, textbook-neutral
 language. These sentences are not decoration: they are the Closing Ledger's **assertions** about
 whether a contour argument is complete, so the owner approves the wording before it changes.
+
+**Applied.** The five blanket decisions below were approved and step 0.5b carried them out, so a
+row reading ***(applied)*** is a sentence whose proposal is now what the app says. What is left is
+the sentences the review flagged without rewriting — the bound and provenance strings — which are
+still being worked through one module at a time.
 
 **What to read.** The *today* column is the live code. The *proposed* column is a draft, taken from
 [\`review-inputs/content-review.md\`](review-inputs/content-review.md) §2 where that review wrote one.

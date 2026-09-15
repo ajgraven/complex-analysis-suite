@@ -50,6 +50,7 @@ import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import { buildDerivation, type Derivation, type Statement } from "../engine/derivation.js";
 import { RESIDUE_THEOREM_IDENTITY } from "../engine/residueTheorem.js";
 import { PRESETS } from "./presets.js";
+import { mathFragment, mathPlain } from "./math.js";
 import type { ContourIntegral } from "../engine/contour/integrate.js";
 import type { ResidueTheoremResult } from "../engine/residueTheorem.js";
 import { integralRefusal, ledgerHeadline, type LedgerResult } from "../engine/ledger.js";
@@ -204,6 +205,23 @@ const el = <K extends keyof HTMLElementTagNameMap>(
   const node = document.createElement(tag);
   if (className !== undefined) node.className = className;
   if (text !== undefined) node.textContent = text;
+  return node;
+};
+
+/**
+ * `el`, for a sentence that may carry mathematics between dollars.
+ *
+ * Everything the ENGINE composes goes through this rather than through `el`'s `textContent`: a
+ * ledger claim, a method, a provenance step, a derivation line. Prose the shell writes itself does
+ * not need it, and is left on `el` so the difference is visible at the call site.
+ */
+const elMath = <K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  text?: string,
+): HTMLElementTagNameMap[K] => {
+  const node = el(tag, className);
+  if (text !== undefined) node.append(mathFragment(text));
   return node;
 };
 
@@ -1021,7 +1039,7 @@ export function mountApp(root: Element): ShellHandle {
       // writes a sentence about why a piece does what it does, and a reader who was right does not
       // need the claim spelled out before they move on.
       if (graded !== undefined && !graded.ok) {
-        drillCard.append(el("p", "small drillWhy", q.row.claim));
+        drillCard.append(elMath("p", "small drillWhy", q.row.claim));
       }
     }
     if (drillGraded === null) {
@@ -2381,7 +2399,7 @@ export function mountApp(root: Element): ShellHandle {
     }
 
     const head = el("p", ledger.closes ? "headline closes" : "headline open");
-    head.textContent = ledgerHeadline(ledger);
+    head.append(mathFragment(ledgerHeadline(ledger)));
     ledgerCard.append(head);
 
     // The headline IS the product — "does this argument close?" — so a screen-reader user should
@@ -2395,7 +2413,9 @@ export function mountApp(root: Element): ShellHandle {
         : ledgerHeadline(ledger);
     if (sentence !== announced) {
       announced = sentence;
-      announce(sentence);
+      // Spoken, not displayed: a screen reader reading KaTeX's markup would hear nothing useful, so
+      // this is one of `mathPlain`'s places — the sentence with its delimiters removed.
+      announce(mathPlain(sentence));
     }
 
     if (ledger.closes && ledger.value) {
@@ -2433,7 +2453,7 @@ export function mountApp(root: Element): ShellHandle {
       li.append(
         el("span", "constraint", constraintLabel(row.constraint)),
         el("span", "glyph", STATUS_GLYPH[row.status] ?? "?"),
-        el("span", "ledgerClaim", row.claim),
+        elMath("span", "ledgerClaim", row.claim),
       );
       if (row.repair !== undefined) li.append(el("span", "repair", row.repair));
       list.append(li);
@@ -2478,7 +2498,7 @@ export function mountApp(root: Element): ShellHandle {
 
       for (const statement of st.statements) {
         const row = el("p", "statement");
-        row.append(el("span", "stLabel", statement.label), el("span", "num", statement.text));
+        row.append(el("span", "stLabel", statement.label), elMath("span", "num", statement.text));
         block.append(row);
       }
 
@@ -2507,23 +2527,23 @@ export function mountApp(root: Element): ShellHandle {
       for (const line of st.lines) {
         const li = el("div", `derivLine ${line.status}`);
         const head = el("p", "derivClaim");
-        head.append(badge(line.level), ` ${line.text}`);
+        head.append(badge(line.level), " ", mathFragment(line.text));
         li.append(head);
         if (line.pieceName !== undefined) li.append(el("p", "muted small", line.pieceName));
-        li.append(el("p", "muted small method", line.method));
+        li.append(elMath("p", "muted small method", line.method));
         if (line.restriction !== undefined) li.append(el("p", "restriction", line.restriction));
 
         // A failed step is the diagnostic and is never folded away. The satisfied ones are the audit
         // trail — worth having, not worth reading first — so they go behind one disclosure.
         const failedSteps = line.provenance.filter((x) => !x.ok);
         const okSteps = line.provenance.filter((x) => x.ok);
-        for (const step of failedSteps) li.append(el("p", "provBad", `✗ ${step.text}`));
+        for (const step of failedSteps) li.append(elMath("p", "provBad", `✗ ${step.text}`));
         if (okSteps.length > 0) {
           const trail = el("details", "prov");
           trail.append(
             el("summary", "muted small", `audit trail (${okSteps.length} step${okSteps.length === 1 ? "" : "s"})`),
           );
-          for (const step of okSteps) trail.append(el("p", "provOk", `✓ ${step.text}`));
+          for (const step of okSteps) trail.append(elMath("p", "provOk", `✓ ${step.text}`));
           li.append(trail);
         }
         if (line.repair !== undefined) li.append(el("p", "repair", line.repair));

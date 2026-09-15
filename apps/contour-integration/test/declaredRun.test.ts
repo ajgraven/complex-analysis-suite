@@ -171,7 +171,7 @@ describe("what MOVES the answer, and what cannot — north-star #3, honestly", (
     const failed = r.analysis.ledger.rows.filter((x) => x.constraint === "LEGALITY" && x.status === "failed");
     expect(failed.length).toBeGreaterThan(0);
     expect(failed.map((x) => x.claim).join(" ")).toMatch(/crosses the cut/);
-    expect(failed.map((x) => x.claim).join(" ")).toMatch(/which side it runs on/);
+    expect(failed.map((x) => x.claim).join(" ")).toMatch(/with no side assigned/);
   });
 
   it("changing the DETERMINATION jumps the answer by exactly the monodromy factor", () => {

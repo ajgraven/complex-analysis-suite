@@ -75,7 +75,17 @@ describe("the M8 claims review document", () => {
       fileURLToPath(new URL("../src/engine/ledger.ts", import.meta.url)),
       "utf8",
     );
-    const missing = REPAIRS.filter((r) => !ledger.includes(r.today)).map((r) => r.today);
+    // **After step 0.5b the APPLIED string is the one in the source.** The table keeps `today` as
+    // the sentence the owner reviewed, so what has to still be in `ledger.ts` is the proposal where
+    // there was one and the original where there was not — which is exactly "the decision was
+    // carried out", checked rather than assumed.
+    // The needle is a VALUE and the haystack is SOURCE, so a backslash in the sentence is one
+    // character here and two there — which `$\ge 2$` made visible the moment a repair carried
+    // LaTeX.
+    const inSource = (text: string): boolean => ledger.includes(text.replace(/\\/g, "\\\\"));
+    const missing = REPAIRS.filter((r) => !inSource(r.proposed ?? r.today)).map(
+      (r) => r.proposed ?? r.today,
+    );
     expect(missing).toEqual([]);
   });
 

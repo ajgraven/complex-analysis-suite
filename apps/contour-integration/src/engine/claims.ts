@@ -33,9 +33,19 @@ import { latexOf } from "../kernel/exprLatex.js";
  * derivation's solve stage, neither of which is a row).
  */
 export type ClaimArg =
-  | { readonly kind: "piece"; readonly id: string; readonly name: string; readonly role?: PieceRole }
+  | {
+      readonly kind: "piece";
+      readonly id: string;
+      readonly name: string;
+      readonly role?: PieceRole;
+    }
   /** A number of things, with the noun it counts, so a template need not spell the plural. */
-  | { readonly kind: "count"; readonly n: number; readonly noun?: string; readonly plural?: string }
+  | {
+      readonly kind: "count";
+      readonly n: number;
+      readonly noun?: string;
+      readonly plural?: string;
+    }
   /** A measured quantity. `digits` is `toPrecision`'s, absent meaning the plain decimal. */
   | { readonly kind: "number"; readonly value: number; readonly digits?: number }
   /** Mathematics, already written the way the engine writes it. Step 0.4 adds `latex`. */
@@ -60,66 +70,72 @@ export interface Claim {
  */
 const TEMPLATE = {
   // ---- LEGALITY ----------------------------------------------------------------------------
-  "legality.avoid-singularities": "the contour must avoid every singularity of the integrand",
-  "legality.closed": "the contour is closed and its orientation is declared",
-  "legality.not-closed": "the contour does not close",
-  "legality.clearance": "every singularity is clear of the contour (nearest at {nearest})",
-  "legality.entire":
-    "the integrand is entire, so there is no singularity for the contour to be clear of",
+  "legality.avoid-singularities":
+    "the contour must avoid every singularity of the integrand",
+  "legality.closed": "the contour is closed (orientation as drawn)",
+  "legality.not-closed": "the contour is not closed",
+  "legality.clearance": "no singularity lies on the contour (nearest distance {nearest})",
+  "legality.entire": "the integrand is entire; there are no singularities",
   "legality.kernel-band":
-    "the kernel has a pole at every integer, and this contour reaches too many of them to check",
-  "legality.cuts-admissible": "the cut system is admissible — {detail}",
-  "legality.cuts-inadmissible": "the cut system is not admissible: {detail}",
+    "$\\pi\\cot\\pi z$ has a pole at every integer, and the contour reaches too many of them to enumerate",
+  "legality.cuts-admissible":
+    "the branch cuts make the integrand single-valued off them — {detail}",
+  "legality.cuts-inadmissible":
+    "the branch cuts do not make the integrand single-valued: {detail}",
   "legality.monodromy-undecided":
-    "the winding about a branch point is undecided, so the monodromy along the contour is too",
+    "a winding number about a branch point could not be decided, so neither could the monodromy",
   "legality.monodromy-off-sheet":
-    "the contour winds about a branch point and does not close on one sheet ({turns})",
+    "the integrand is not single-valued along the contour ({turns})",
   "legality.monodromy-on-sheet":
-    "the contour winds about a branch point and still closes on one sheet (Σ n(γ,bⱼ)·αⱼ = {sum} ∈ ℤ)",
-  "legality.cuts-clear": "no piece of the contour meets a branch cut, except where it ends on one",
-  "legality.cuts-sided":
-    "every piece that meets a branch cut declares the side it runs on ({declared})",
-  "legality.cut-grazed": "{piece} grazes the cut '{cut}', so it has no side to declare",
-  "legality.cut-crossed": "{piece} {how} the cut '{cut}' without declaring which side it runs on",
+    "the integrand is single-valued along the contour: $\\sum_j \\operatorname{Ind}_\\gamma(b_j)\\,\\alpha_j = {sum} \\in \\mathbb{Z}$",
+  "legality.cuts-clear": "no piece crosses a branch cut",
+  "legality.cuts-sided": "each piece meeting a cut is assigned a side ({declared})",
+  "legality.cut-grazed":
+    "{piece} touches the cut $\\Gamma$ tangentially, so it has no side",
+  "legality.cut-crossed": "{piece} crosses the cut $\\Gamma$ with no side assigned",
   "legality.cut-invariance-one":
-    "∮ is unchanged by moving this cut, while they stay clear of the contour",
+    "$\\oint_\\gamma f(z)\\,dz$ does not depend on where the cut runs, while the cut avoids $\\gamma$",
   "legality.cut-invariance-many":
-    "∮ is unchanged by moving these cuts, while they stay clear of the contour",
+    "$\\oint_\\gamma f(z)\\,dz$ does not depend on where the cuts run, while they avoid $\\gamma$",
 
   // ---- CATCH -------------------------------------------------------------------------------
-  "catch.enclosed-one": "1 singularity is enclosed, with an exactly decided winding number",
-  "catch.enclosed-many": "{n} singularities are enclosed, each with an exactly decided winding number",
-  "catch.winding-undecided": "a winding number could not be decided",
-  "catch.residues-exact": "every enclosed residue is known exactly",
+  "catch.enclosed-one":
+    "$\\operatorname{Ind}_\\gamma(a) \\neq 0$ at 1 singularity, decided exactly",
+  "catch.enclosed-many":
+    "$\\operatorname{Ind}_\\gamma(a) \\neq 0$ at {n} singularities, each decided exactly",
+  "catch.winding-undecided":
+    "$\\operatorname{Ind}_\\gamma(a)$ could not be decided — a pole lies too close to $\\gamma$",
+  "catch.residues-exact": "every enclosed residue is exact",
   "catch.residues-exact-kernel":
-    "every enclosed residue is known exactly — the kernel's at each integer, the cofactor's as an exact quotient",
+    "every enclosed residue is exact — the kernel's at each integer, and $K(z_j)\\operatorname{Res}(f, z_j)$ at each pole of $f$",
   "catch.residues-exact-merged":
-    "every enclosed residue is known exactly — the kernel's at each integer, and the MERGED one from the Laurent route",
-  "catch.sum-exact": "Σ Res is known exactly, though no individual residue is expressible",
-  "catch.residues-inexact": "not every residue is known exactly, so the total is an estimate",
+    "every enclosed residue is exact, including the merged pole, whose residue comes from the Laurent expansion of the product",
+  "catch.sum-exact":
+    "the residue sum is exact — the individual residues lie outside $\\mathbb{Q}(i)(\\sqrt{d})$, the sum does not",
+  "catch.residues-inexact": "some residues are numerical, so the total is an estimate",
   "catch.escalation":
-    "a stated hypothesis FAILS and a stronger argument applies: {to}, over {collisions}",
+    "$f$ has a pole where the kernel has one; the two combine into a single pole, whose residue comes from the Laurent expansion of the product ({collisions})",
 
   // ---- KILL --------------------------------------------------------------------------------
-  "kill.target": "{piece} is the target — it is what the argument solves for",
-  "kill.l4-inapplicable": "{piece} is an indentation, but L4 does not apply here",
-  "kill.l5-unreadable": "{piece} is declared L5, but f could not be read as (Σ Nₖ e^{iaₖz})/D",
-  "kill.l5-no-limit": "{piece} is declared L5, but z·f(z) has no limit along it",
-  "kill.reproduces": "{piece} reproduces the target, as a multiple the solve reads off the family",
-  "kill.imported": "{piece} is {value} — imported, not derived here",
-  "kill.computed": "{piece} is computed directly ({length} long)",
+  "kill.target": "{piece}: the target",
+  "kill.l4-inapplicable": "{piece}: the indentation lemma does not apply",
+  "kill.l5-unreadable":
+    "{piece}: $f$ was not recognised in the form $\\left(\\sum_k N_k e^{i a_k z}\\right)/D$",
+  "kill.l5-no-limit": "{piece}: $z f(z)$ has no limit on the arc",
+  "kill.reproduces": "{piece}: a constant multiple of the target",
+  "kill.imported": "{piece} = {value} — a known integral, not derived here",
+  "kill.computed": "{piece}: evaluated numerically (length {length})",
   "kill.sweep-unreadable":
-    "{piece} must vanish, but its sweep is not an exact multiple of π and no bound can be stated",
-  "kill.no-lemma": "{piece} must vanish, but no lemma here applies to this integrand",
+    "{piece}: no bound is available — the arc's angle is not a rational multiple of $\\pi$ with denominator at most 12",
+  "kill.no-lemma": "{piece}: no bound is available for this integrand",
 
   // ---- COVER -------------------------------------------------------------------------------
-  "cover.on-contour": "the target appears as a labelled piece of the closed contour",
+  "cover.on-contour": "the target is a piece of the contour",
   "cover.in-sum":
-    "{id} is a TERM of the residue sum — the kernel's poles at the integers — not a piece of the contour",
+    "{id} is the sum of the residues at the integers, not a piece of the contour",
   "cover.in-sum-weighted":
-    "{id} is a TERM of the residue sum — the kernel's poles at the integers — not a piece of the contour, at weight {weight}",
-  "cover.none":
-    "no piece is marked as the target, so the ledger reports the closed-contour value itself",
+    "{id} is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
+  "cover.none": "no target is designated; the closed-contour integral is reported",
 
   // ---- the boundary ------------------------------------------------------------------------
   /** A certificate's own sentence, shown as the row's claim. See this module's header. */
@@ -129,7 +145,10 @@ const TEMPLATE = {
 export type ClaimId = keyof typeof TEMPLATE;
 
 /** Build a claim. The args are checked against the template by {@link renderClaim}'s output. */
-export function claimOf(template: ClaimId, args: Readonly<Record<string, ClaimArg>> = {}): Claim {
+export function claimOf(
+  template: ClaimId,
+  args: Readonly<Record<string, ClaimArg>> = {},
+): Claim {
   return { template, args };
 }
 
@@ -151,8 +170,17 @@ export function exactArg(text: string): ClaimArg {
 }
 
 /** A piece of the contour, by the name the reader sees on it. */
-export function pieceArg(piece: { readonly id: string; readonly name: string; readonly role?: PieceRole }): ClaimArg {
-  return { kind: "piece", id: piece.id, name: piece.name, ...(piece.role === undefined ? {} : { role: piece.role }) };
+export function pieceArg(piece: {
+  readonly id: string;
+  readonly name: string;
+  readonly role?: PieceRole;
+}): ClaimArg {
+  return {
+    kind: "piece",
+    id: piece.id,
+    name: piece.name,
+    ...(piece.role === undefined ? {} : { role: piece.role }),
+  };
 }
 
 /** One argument, as text. */
@@ -164,7 +192,9 @@ export function renderArg(arg: ClaimArg): string {
       if (arg.noun === undefined) return String(arg.n);
       return `${arg.n} ${arg.n === 1 ? arg.noun : (arg.plural ?? `${arg.noun}s`)}`;
     case "number":
-      return arg.digits === undefined ? String(arg.value) : arg.value.toPrecision(arg.digits);
+      return arg.digits === undefined
+        ? String(arg.value)
+        : arg.value.toPrecision(arg.digits);
     case "exact":
       return arg.text;
     case "cut":

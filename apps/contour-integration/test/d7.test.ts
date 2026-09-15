@@ -113,9 +113,9 @@ describe("two exponents on one cut", () => {
     expect(reasons()).toMatch(/Σ αⱼ = 1 ∈ ℤ, so the monodromy round a large circle is 1/);
     // And the contour's own version of the same arithmetic, in LEGALITY.
     const legality = ran().ledger.rows.filter((r) => r.constraint === "LEGALITY");
-    expect(legality.map((r) => r.claim).join(" | ")).toMatch(
-      /winds about a branch point and still closes on one sheet \(Σ n\(γ,bⱼ\)·αⱼ = −1 ∈ ℤ\)/,
-    );
+    const claims = legality.map((r) => r.claim).join(" | ");
+    expect(claims).toContain("is single-valued along the contour");
+    expect(claims).toContain("\\alpha_j = −1 \\in \\mathbb{Z}$");
   });
 
   it("refuses at infinity when the exponents do NOT sum to an integer", () => {

@@ -73,7 +73,7 @@ describe("the record loads and solves", () => {
 describe("what the dogbone teaches", () => {
   it("encloses NO pole, and says so in a row that says nothing about the value", () => {
     const catches = ran().ledger.rows.filter((r) => r.constraint === "CATCH");
-    expect(catches[0].claim).toMatch(/0 singularities are enclosed/);
+    expect(catches[0].claim).toMatch(/at 0 singularities/);
     expect(catches[0].status).toBe("satisfied");
     // And the value is not zero, on the same run.
     expect(must(ran().theorem.exactValue, "an exact ∮").text).toBe("π√2");

@@ -8,9 +8,12 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. **Step 0.5a is done and the work STOPS HERE** until the owner
-  has read [`claims.md`](claims.md) — see *Open questions* below. **Next execution action after
-  that: step 0.5b** (apply the approved wording), then 0.6 and the 0.7 phase gate.
+- **Execution:** Phase 0 in progress. The owner approved the five blanket decisions.
+  **Step 0.5b is SPLIT** (see Findings): **0.5b-i — the ledger's own sentences, and the renderer the
+  convention needs — is done.** **Next execution action: step 0.5b-ii** — carry the same five rules
+  through the bound, branch and solve strings (`kernel/bounds/*`, `kernel/branch/*`,
+  `families/solve*.ts`), which [`claims.md`](claims.md) now counts at 191 sentences. Then 0.6 and the
+  0.7 phase gate.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -32,6 +35,8 @@ changed.
 | 2026-09-15 | **0.4b** | 321d595 | `kernel/notation.ts` (TEXT + LATEX, one set of formatters at two notations); `kernel/exprLatex.ts`; `families/latex.ts`; `latex` on every `exactValue` and on the imported row; `test/formatLatex.test.ts` + `test/familyLatex.test.ts`; sweep 20/20. Full gate green: 550 files / 5686 tests. `no-shadow` caught a blanket edit that renamed a map callback into its own parent's binding |
 
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
+
+| 2026-09-15 | **0.5b-i** | (this commit) | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -201,6 +206,38 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.5b) THE CONVENTION NEEDS ITS RENDERER IN THE SAME STEP, and the plan has them two phases
+  apart.** It puts the `$…$` delimiters in 0.5 and KaTeX in Phase 1. Applied in that order, Phase 0 —
+  which merges to `master` alone — would ship a page of literal dollar signs; and writing the 200
+  sentences in Unicode first and rewriting them in Phase 1 is the same work twice. So `shell/math.ts`
+  lands here, at its smallest: split on the delimiters, typeset the odd spans, leave everything else
+  as text. A sentence with no dollars comes back unchanged, which is exactly what lets the remaining
+  bound and provenance strings keep their Unicode until 0.5b-ii reaches them.
+- **(0.5b) The step is SPLIT.** 0.5b-i is the ledger's own 72 sentences plus the renderer; 0.5b-ii is
+  the same five rules through `kernel/bounds/*`, `kernel/branch/*` and `families/solve*.ts`. The
+  document's own count is why: 191 sentences break at least one rule, and the ones left are the
+  bound and provenance strings the review flagged without rewriting.
+- **(0.5b) THE REVIEW DOCUMENT UNDER-REPORTED BY MORE THAN HALF, and only applying it showed that.**
+  0.5a collected ledger rows and derivation STATEMENTS; it did not collect the derivation's own
+  LINES, whose evidence is a whole verdict rather than a ledger row — which is where
+  `solveTarget.ts` and `solveResidueTerm.ts` do their talking. It reported 4 internal citations
+  where there are 26, and 98 flagged sentences where there are 191. Fixed, and the corrected
+  document is committed with this step.
+- **(0.5b) Four tests reported a refusal that had not happened**, and the wording pass is what
+  exposed them: `ledger.test.ts` found its cut rows by searching the claim TEXT for "cut" and for
+  "admissible". The new admissibility sentence does not contain the word, so the helper returned that
+  row — satisfied — and four refusal tests passed against the wrong row. They are keyed on
+  `claimData.template` now, which is what a row IS rather than what it happens to say; step 0.3's
+  restructure is what made that possible.
+- **(0.5b) The new argument check found three of my own drafts dropping a value.** `cover.in-sum`,
+  `cover.in-sum-weighted` and `catch.escalation` no longer named arguments the ledger still supplied
+  — so the target's own name would have vanished from the tier-G row. Two templates got the name
+  back; the third stopped being supplied. That check (an argument the template never mentions) went
+  in during 0.4b's review and fired on its first real use.
+- **(0.5b) `{piece} $= ${value}$` was one dollar too many**, and produced `the saddle line $= $−e^(…)·√π$`
+  on screen. The value is the engine's own Unicode notation, not LaTeX, so it belongs OUTSIDE the
+  delimiters; a `$…$` span would have to carry the `latex` sibling instead, which is a real extension
+  rather than a wording change.
 - **(0.5a) The proposals are CODE, not a column in the markdown.**
   `test/helpers/claimsProposals.ts` holds them and the document is a view of it, so regenerating
   cannot lose an edit and an edit cannot be made in the document without reaching the code — which
@@ -276,14 +313,15 @@ changed.
 
 ## Open questions for the owner
 
-- **THE ONE OPEN ITEM: read [`claims.md`](claims.md) and say what you want changed.** It is every
+- none open. The five blanket decisions are approved and being applied; 0.5b-ii finishes them.
+  (Historic, kept for the record: **read [`claims.md`](claims.md) and say what you want changed.** It is every
   sentence the app composes — 202 of them — with what it says today, what is proposed, and which of
   the plan's wording rules each still breaks. **The fastest way through it is the section "The five
   decisions, if you would rather not read 200 rows"**: each rule is offered as a blanket decision
   with its count and a sample, and approving the five settles most of the document. The tables are
   then only for sentences you want worded differently. Reply however suits — line edits, "the five
   are fine, apply them", or a rule that is not on the list. Phase 0 does not merge until this is
-  settled; step 0.5b is the application.
+  settled; step 0.5b is the application.) — **answered: "the five are fine, apply them".**
 
 ## Decisions taken during execution
 

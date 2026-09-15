@@ -526,7 +526,7 @@ describe("through the family door — the route is reached, and reached FIRST", 
     // — PLUS the cofactor's own `±(3/4)i`, which `findPoles` reports no more than it reports the
     // integers. Eleven. The count was nine until the cofactor's half of the hole was closed too.
     const catches = r.run.ledger.rows.filter((row) => row.constraint === "CATCH");
-    expect(catches.some((row) => /11 singularities are enclosed/.test(row.claim))).toBe(true);
+    expect(catches.some((row) => /at 11 singularities/.test(row.claim))).toBe(true);
     // And every side is killed by the SQUARE bound, which exists only because there is a kernel.
     const kills = r.run.ledger.rows.filter((row) => row.constraint === "KILL");
     expect(kills.length).toBe(4);

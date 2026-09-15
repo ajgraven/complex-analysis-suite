@@ -18,7 +18,8 @@ import type { PieceRole } from "./contour/model.js";
 export type ConstraintId = "LEGALITY" | "CATCH" | "KILL" | "COVER";
 
 /** One step of the generated derivation. A DATA KEY: see {@link stageTitle}. */
-export type StageId = "setup" | "legality" | "catch" | "kill" | "cover" | "solve" | "verdict";
+export type StageId =
+  "setup" | "legality" | "catch" | "kill" | "cover" | "solve" | "verdict";
 
 /**
  * What each constraint is called on screen.
@@ -96,12 +97,12 @@ export function roleLabel(role: PieceRole | "argument"): string {
  *    the type is total and a `?? ""` would hide the day that changes.
  */
 const FAILS: Readonly<Record<ConstraintId, string>> = {
-  LEGALITY: "the hypotheses do not hold",
-  CATCH: "a winding number could not be decided",
-  KILL: "a boundary term is not disposed of",
-  COVER: "the target is not a piece of the contour",
+  LEGALITY: "the residue theorem does not apply",
+  CATCH: "a residue is not determined",
+  KILL: "a boundary term does not vanish",
+  COVER: "the target is not on the contour",
 };
 
 export function headlineFails(id: ConstraintId): string {
-  return `This argument does not close: ${FAILS[id]}.`;
+  return `The argument is incomplete: ${FAILS[id]}.`;
 }
