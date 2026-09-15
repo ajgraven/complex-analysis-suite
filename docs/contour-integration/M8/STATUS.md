@@ -8,10 +8,9 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. **Step 0.4 is done** (split into 0.4a and 0.4b; piece
-  `nameLatex` moved to 0.5 — see Findings). **Next execution action: step 0.5a** — generate
-  `M8/claims.md` for the owner to review. **The session STOPS there**: Phase 0 does not merge until
-  the owner has reviewed that document.
+- **Execution:** Phase 0 in progress. **Step 0.5a is done and the work STOPS HERE** until the owner
+  has read [`claims.md`](claims.md) — see *Open questions* below. **Next execution action after
+  that: step 0.5b** (apply the approved wording), then 0.6 and the 0.7 phase gate.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -31,6 +30,8 @@ changed.
 | 2026-09-15 | **0.4a** | 0b2a141 | the LaTeX coverage sweep (`test/latexCoverage.test.ts`); `sech`/`csch`/`coth`/`factorial` in `@cas/expr` + `@cas/gpu`; `packages/gpu/test/glslCoverage.test.ts`; 0.1's display rewriter dropped; sweep 13/13. Full gate green: 548 files / 5672 tests. Browser: `@cas/gpu` parity 21/21 in real WebGL2 |
 
 | 2026-09-15 | **0.4b** | 321d595 | `kernel/notation.ts` (TEXT + LATEX, one set of formatters at two notations); `kernel/exprLatex.ts`; `families/latex.ts`; `latex` on every `exactValue` and on the imported row; `test/formatLatex.test.ts` + `test/familyLatex.test.ts`; sweep 20/20. Full gate green: 550 files / 5686 tests. `no-shadow` caught a blanket edit that renamed a map callback into its own parent's binding |
+
+| 2026-09-15 | **0.5a** | (this commit) | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -200,6 +201,29 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.5a) The proposals are CODE, not a column in the markdown.**
+  `test/helpers/claimsProposals.ts` holds them and the document is a view of it, so regenerating
+  cannot lose an edit and an edit cannot be made in the document without reaching the code — which
+  is what step 0.5b reads. The alternative, a hand-edited table, would have had to be re-transcribed
+  by hand into 200 string literals.
+- **(0.5a) The four wording rules are DECIDABLE, so the document computes them.** That is what makes
+  the 140 rows with no draft useful rather than a silent backlog: every sentence says which rule it
+  still breaks, and a row that HAS a draft is judged on the draft, since that is what will ship. A
+  test requires every proposal to break none of them — a review asking the owner to approve the very
+  thing it exists to remove would be worse than no review.
+- **(0.5a) The delimiter rule had to be strengthened before it meant anything.** "Does the sentence
+  contain a `$`?" is satisfied by a sentence that typesets half its formulas and leaves the rest as
+  characters, which is the likelier mistake; it now strips every `$…$` span first and checks what is
+  left.
+- **(0.5a) The repairs cannot be collected by running the corpus** — every gallery record closes, so
+  no repair line is ever composed. They are a static list quoted from `ledger.ts`, and a test
+  requires each quoted string to still be IN that file, which is what stops the list drifting from
+  what it claims to quote.
+- **(0.5a) The document is 202 sentences, and 98 of them still break a rule.** Measured rather than
+  estimated: 29 shout a word, 4 cite an internal document, 10 name a lemma by number, 4 use a house
+  word, and 90 carry mathematics that has to move inside `$…$`. Sixty of the ledger's own 72
+  sentences are drafted; the rest are the certificate and provenance strings, where the review
+  flagged more than it rewrote.
 - **(0.4b) The plan asks for a second set of formatters; there is ONE set at two notations.** Its
   `src/kernel/formatLatex.ts` would be a parallel implementation of a five-module layered printer —
   `formatPiExpSum` → `formatSqrtExt` + `formatExponent` → `formatLogPart`/`formatPiPart` — roughly
@@ -252,7 +276,14 @@ changed.
 
 ## Open questions for the owner
 
-- none at present. (0.5a will ask for a review of `claims.md` before Phase 0 merges.)
+- **THE ONE OPEN ITEM: read [`claims.md`](claims.md) and say what you want changed.** It is every
+  sentence the app composes — 202 of them — with what it says today, what is proposed, and which of
+  the plan's wording rules each still breaks. **The fastest way through it is the section "The five
+  decisions, if you would rather not read 200 rows"**: each rule is offered as a blanket decision
+  with its count and a sample, and approving the five settles most of the document. The tables are
+  then only for sentences you want worded differently. Reply however suits — line edits, "the five
+  are fine, apply them", or a rule that is not on the list. Phase 0 does not merge until this is
+  settled; step 0.5b is the application.
 
 ## Decisions taken during execution
 
