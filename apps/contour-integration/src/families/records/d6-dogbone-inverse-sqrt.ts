@@ -49,6 +49,7 @@ export const d6DogboneInverseSqrt: Family = {
       { book: "Ahlfors", where: "Ch. 4 §5.3", text: "compare the substitution $x=\\sin\\theta$, which reduces it to a unit-circle integral" },
     ],
   },
+  frontRow: 6,
 
   targets: [
     {

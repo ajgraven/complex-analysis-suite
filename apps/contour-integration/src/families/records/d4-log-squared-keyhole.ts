@@ -44,7 +44,6 @@ export const d4LogSquaredKeyhole: Family = {
       { book: "Brown–Churchill", where: "§83", text: "" },
     ],
   },
-  frontRow: 6,
 
   targets: [
     {

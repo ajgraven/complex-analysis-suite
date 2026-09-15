@@ -13,9 +13,11 @@ changed.
   sentences and the renderer), 0.5b-ii (the bound modules, the theorem identities and the solve) and
   0.5b-iii (the rest of `kernel/*`, `engine/*` and `families/*`). The review document reads
   **0 flagged, 0 unapplied**, against 191 flagged when the five decisions were approved.
-  **Step 0.6 is done** — all 28 records carry the four-line standard, the taxonomy is the eight
-  groups, and the front row is declared. **Next execution action: step 0.7**, the Phase 0 gate and
-  the solo merge of Phase 0 to `master`.
+  **PHASE 0 IS COMPLETE** — steps 0.1 through 0.7 are done. The gate is green against a base merged
+  up to `origin/master`, the a11y roster reports no regressions, and the Phase 0 PR is open for the
+  owner to merge. **Next execution action: merge the Phase 0 PR, then restart this branch from
+  `master` and begin Phase 1 at step 1.1** (`src/shell2/` beside `src/shell/`, reached with
+  `?shell=new`; the branch may be red between 1.1 and 1.12 and must be green at 1.13).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -39,6 +41,8 @@ changed.
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
+
+| 2026-09-15 | **0.7** | (this commit) | Phase 0 gate: 553 files / 5721 tests green on a base merged to `origin/master`, browser suite 8/132, a11y roster no regressions; front row swapped to one-per-group (D6 for D4, the 0.6 open question); `pnpm a11y` and the app's browser suite both run with nothing set; Phase 0 PR opened |
 
 | 2026-09-15 | **0.6** | 1732f42 | the four-line standard on all 28 records — human `title` + `titleLatex`, `description.{contour, point, citations}` over an eight-book enum, `taxonomySection` reduced to the eight groups, `frontRow` on the eight classics; `Golden.label` names each variant derivation; loader invariant 5 + corpus-level front-row uniqueness; `test/records.test.ts` (7 tests); GALLERY.md §0 |
 
@@ -214,6 +218,22 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.7) The plan's PR title is FALSE and is not used.** It says *foundations (no visible change)*,
+  and Phase 0 rewrote every ledger sentence (0.5b), every record title and every variant fixture
+  label (0.6), and made the record card typeset its title. Merging it under a title promising no
+  visible change would misdescribe the diff to the one reader most likely to trust the title.
+- **(0.7) The local `master` ref was 3 commits stale**, so the first read of the branch's diff
+  reported `scripts/a11y-baseline.json` as changed by Phase 0 when the change was M7's, already
+  merged upstream. Fetched and merged `origin/master` before opening the PR, resolving two conflicts:
+  `packages/gpu/vitest.browser.config.ts` takes UPSTREAM's version (it adds a `/opt/pw-browsers`
+  probe this side lacked) and CLAUDE.md's test census takes the real number.
+- **(0.7) `pnpm a11y` could not run in this container at all**, and the reason was a second name for
+  one thing: the script reads `PLAYWRIGHT_CHROMIUM_EXECUTABLE` while the browser suites and CLAUDE.md
+  say `CAS_CHROMIUM_EXECUTABLE`. Both are accepted now, and both the a11y roster and the app's
+  browser suite took `packages/gpu`'s `/opt/pw-browsers/chromium` probe, so each runs here with
+  NOTHING set. A gate CLAUDE.md tells a session to run, that needs an undocumented incantation
+  first, is a gate that gets skipped — which is exactly how the browser suite went red for three
+  milestones.
 - **(0.6) THE FOUR-LINE STANDARD IS THREE FIELDS, because the fourth is already the engine's.** The
   identity is `targets` + `closedForm` — the two things the app computes — so `description` carries
   only the contour, the point and the citations. A `description.identity` would have been a second
@@ -233,11 +253,13 @@ changed.
   citation with no chapter, an empty description, an unbalanced `$`, a rank outside 1–8, and an
   unlabelled variant fixture. Front-row collisions are corpus-level and live in `loadFamilies`.
   Every branch was probed and fires.
-- **(0.6) THE FRONT ROW IS NOT A TOUR OF THE TAXONOMY, and the test found it.** Eight classics and
+- **(0.6) THE FRONT ROW WAS NOT A TOUR OF THE TAXONOMY, and the test found it.** Eight classics and
   eight groups look designed to pair, but the plan's list puts D1 and D4 both among the keyholes and
-  leaves *dogbones and the residue at infinity* unrepresented. I kept the plan's eight rather than
-  silently swapping D4 for D6, pinned the real number (7 distinct groups) so a later change is
-  deliberate, and raised it as an open question.
+  leaves *dogbones and the residue at infinity* unrepresented. Raised as an open question rather than
+  fixed silently; **the owner's answer was to choose, and the choice is D6 at rank 6** (0.7), so the
+  row is one per group and the ranks run in group order — an index that skips a whole group is worse
+  than one omitting a famous integral still one click away inside its group. The test asserts the
+  group sequence, not just a count.
 - **(0.6) The variant fixture picker had been offering the IMPLEMENTATION's name.** `halfRange = true`,
   `companion = re`, `form = pv` — flag keys sharing a field with parameter bindings (the schema's own
   recorded finding 2 of 3). `Golden.label` names the derivation instead (`half-range corollary`, `the
@@ -425,12 +447,7 @@ changed.
 
 ## Open questions for the owner
 
-- **(0.6) Should the front row be a tour of the taxonomy?** The plan names A1, A6, B1, C1, D1, D4,
-  F2, G1 as the eight classics, and they cover seven of the eight groups — D1 and D4 are both
-  keyholes, and *dogbones and the residue at infinity* has no front-row entry. Swapping D4 for D6
-  would make the row one-per-group at the cost of dropping a more famous integral. Built as the plan
-  names it; one line in `d4-log-squared-keyhole.ts` and `d6-dogbone-inverse-sqrt.ts` either way.
-- Otherwise none open. The five blanket decisions are approved and **applied in full**: the review document reads 0 flagged, 0 unapplied.
+- none open. The five blanket decisions are approved and **applied in full**: the review document reads 0 flagged, 0 unapplied.
   (Historic, kept for the record: **read [`claims.md`](claims.md) and say what you want changed.** It is every
   sentence the app composes — 202 of them — with what it says today, what is proposed, and which of
   the plan's wording rules each still breaks. **The fastest way through it is the section "The five

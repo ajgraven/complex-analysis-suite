@@ -37,9 +37,11 @@ merely loose but useless`) told a reader the punchline before the example.
 values and indented contours* · *Multivalued integrands: keyholes* · *Multivalued integrands:
 dogbones and the residue at infinity* · *Rectangles and sectors* · *Series by the residue theorem*.
 
-`frontRow` ranks the eight classics 1–8 (A1, A6, B1, C1, D1, D4, F2, G1). Note that this is a
-selection of famous arguments rather than a tour of the taxonomy: D1 and D4 are both keyholes, so
-the dogbone group has no front-row entry.
+`frontRow` ranks the front row 1–8 — **one per group, in group order**: A1, A6, B1, C1, D1, D6, F2,
+G1. The M8 plan's list of classics named D4 at rank 6, which put D1 and D4 both among the keyholes
+and left *dogbones and the residue at infinity* with no entry; D6 takes the rank instead, so the row
+reads as the gallery's index. An index that skips a whole group is worse than one omitting a famous
+integral that is still one click away inside its group.
 
 **Loader invariant 5** enforces what the type system cannot — a missing `description` and a
 `taxonomySection` outside the eight are compile errors, so the invariant checks that a citation is

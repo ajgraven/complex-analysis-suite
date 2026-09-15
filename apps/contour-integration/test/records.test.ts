@@ -38,11 +38,15 @@ describe("the corpus describes itself", () => {
     const front = FAMILIES.filter((f) => f.frontRow !== undefined);
     expect(front.length).toBe(8);
     expect(front.map((f) => f.frontRow).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
-    // **Not one per group, and that is the plan's choice rather than an oversight here.** The eight
-    // classics it names put D1 and D4 both among the keyholes and leave the dogbones unrepresented,
-    // so the front row is a selection of famous arguments rather than a tour of the taxonomy. Pinned
-    // as it stands so that a later decision to make it a tour is a deliberate edit to this number.
-    expect(new Set(front.map((f) => f.taxonomySection)).size).toBe(7);
+    // **One per group, and the ranks run in group order.** The plan's list of classics put D1 and D4
+    // both among the keyholes, leaving the dogbones with no front-row entry at all; D6 takes rank 6
+    // instead, so the row reads as the gallery's index rather than as a favourites list. An index
+    // that skips a whole group is worse than one omitting a famous integral that is still one click
+    // away inside its group.
+    expect(new Set(front.map((f) => f.taxonomySection)).size).toBe(8);
+    expect(
+      [...front].sort((a, b) => (a.frontRow ?? 0) - (b.frontRow ?? 0)).map((f) => f.taxonomySection),
+    ).toEqual([...TAXONOMY_SECTIONS]);
   });
 
   it("cites only books in the enum, always with a chapter or section, never an exercise", () => {
