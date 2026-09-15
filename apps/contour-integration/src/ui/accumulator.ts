@@ -9,6 +9,7 @@
 // faintly, on the same axes, and `Σ Δz` closing to the origin on a closed contour is the cheapest
 // striking thing in the whole app.
 import type { Cx } from "../kernel/geom.js";
+import type { InkTheme } from "./inkTheme.js";
 import type { Accumulation } from "../engine/contour/accumulate.js";
 import { PIECE_COLOURS } from "./stage/ink.js";
 
@@ -22,6 +23,8 @@ export const CONTRAST_LABELS: Record<ContrastMode, string> = {
 };
 
 export interface AccumulatorOptions {
+  /** The palette — required, for the reason `InkOptions.theme` is (see `inkTheme.ts`). */
+  readonly theme: InkTheme;
   readonly upTo: number;
   readonly contrast: ContrastMode;
   readonly pieceColours: readonly number[];
@@ -132,6 +135,7 @@ export function drawAccumulator(
   h: number,
   opts: AccumulatorOptions,
 ): void {
+  const t = opts.theme.accumulator;
   ctx.clearRect(0, 0, w, h);
   if (acc.steps.length === 0) return;
 
@@ -145,7 +149,7 @@ export function drawAccumulator(
   const frame = accumulatorFrame([...acc.steps.map((s) => s.running), ...contrast], w, h);
 
   // Axes.
-  ctx.strokeStyle = "rgba(231, 233, 238, 0.16)";
+  ctx.strokeStyle = t.axes;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(0, frame.toY(0));
@@ -156,7 +160,7 @@ export function drawAccumulator(
 
   if (contrast.length > 0) {
     polyline(ctx, contrast, frame);
-    ctx.strokeStyle = "rgba(231, 233, 238, 0.42)";
+    ctx.strokeStyle = t.trail;
     ctx.setLineDash([4, 4]);
     ctx.lineWidth = 1.25;
     ctx.stroke();
@@ -165,7 +169,7 @@ export function drawAccumulator(
     const end = contrast[contrast.length - 1];
     ctx.beginPath();
     ctx.arc(frame.toX(end[0]), frame.toY(end[1]), 3, 0, 2 * Math.PI);
-    ctx.fillStyle = "rgba(231, 233, 238, 0.6)";
+    ctx.fillStyle = t.dots;
     ctx.fill();
   }
 
@@ -185,8 +189,8 @@ export function drawAccumulator(
   // Where the sum has got to.
   ctx.beginPath();
   ctx.arc(frame.toX(from[0]), frame.toY(from[1]), 4.5, 0, 2 * Math.PI);
-  ctx.fillStyle = "#ffffff";
-  ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+  ctx.fillStyle = t.headFill;
+  ctx.strokeStyle = t.headRing;
   ctx.lineWidth = 1.5;
   ctx.fill();
   ctx.stroke();

@@ -1,0 +1,262 @@
+/* The visual system — M8 step 1.2. Tokens, type, surfaces, controls.
+ *
+ * **Everything here that is not a token declaration is scoped under `.shell2`.** `index.html` loads
+ * this sheet for both shells, and a bare `button { … }` rule would restyle the old shell — which
+ * step 1.2's own file list says to leave alone until 1.12. The tokens themselves are inert until
+ * something reads them.
+ *
+ * Dark is the app's committed look, so the dark values are the ones on `:root`; `[data-theme=light]`
+ * overrides for the figure export's light plate and a later light theme. The phase portrait is DATA
+ * and does not theme-swap (PLAN.md §5.3) — only the chrome around it does.
+ */
+
+:root {
+  /* ---- ground and ink ---- */
+  --g-ground: #0f1115;
+  --g-panel: #171a21;
+  --g-panel-2: #11141a;
+  --g-border: #262b36;
+  --g-text: #e7e9ee;
+  --g-muted: #99a1b3;
+  --g-accent: #6ea8fe;
+  --g-ok: #7fd1a8;
+  --g-warn: #f0b45e;
+  --g-bad: #e5707a;
+
+  /* ---- the piece ramp ----
+     The SAME six hues `inkTheme.ts` draws with, so a rail row's swatch and the stroke on the stage
+     are one colour rather than two that have to be kept in step. If one of these moves, the other
+     must move with it — which is why the comment names the file. */
+  --piece-0: #6ea8fe;
+  --piece-1: #f0b45e;
+  --piece-2: #7fd1a8;
+  --piece-3: #e594b4;
+  --piece-4: #b79cf0;
+  --piece-5: #79d3e8;
+
+  /* ---- type ----
+     Five sizes and no more. The old shell has eleven distinct font-sizes, which is what makes a
+     panel read as a pile of unrelated notes rather than as one document. */
+  --t-xs: 11.5px;
+  --t-s: 12.5px;
+  --t-m: 14px;
+  --t-l: 16px;
+  --t-xl: 20px;
+
+  /* A humanist sans for everything the reader READS. Monospace is reserved for the expression input,
+     for code, and for tabular numbers — it is a signal that the text is machine syntax, and spending
+     it on ordinary prose is what made the old shell look like a terminal. */
+  --f-ui: Inter, "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, sans-serif;
+  --f-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+
+  /* ---- metrics ---- */
+  --r-card: 8px;
+  --r-control: 6px;
+  --pad-card: 0.7rem 0.75rem;
+}
+
+:root[data-theme="light"] {
+  --g-ground: #f7f8fa;
+  --g-panel: #ffffff;
+  --g-panel-2: #eef0f4;
+  --g-border: #d3d8e0;
+  --g-text: #14181f;
+  --g-muted: #55607a;
+  --g-accent: #1f5fc4;
+  --g-ok: #116b47;
+  --g-warn: #9a5b00;
+  --g-bad: #b32430;
+  --piece-0: #1f5fc4;
+  --piece-1: #9a5b00;
+  --piece-2: #116b47;
+  --piece-3: #a8296a;
+  --piece-4: #5b3bb5;
+  --piece-5: #0f6a80;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   Type and prose, inside the new shell only.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.shell2 {
+  font-family: var(--f-ui);
+  font-size: var(--t-m);
+  line-height: 1.45;
+  color: var(--g-text);
+  background: var(--g-ground);
+  -webkit-font-smoothing: antialiased;
+}
+
+.shell2 h1 {
+  font-size: var(--t-l);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+
+/* A card heading is a LABEL, not a headline: small, quiet, and not competing with the mathematics
+   under it. Uppercase with tracking rather than bold, so it recedes without going grey-on-grey. */
+.shell2 h2 {
+  font-size: var(--t-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--g-muted);
+  margin: 0 0 0.4rem;
+}
+
+.shell2 h3 {
+  font-size: var(--t-s);
+  font-weight: 600;
+  margin: 0 0 0.25rem;
+}
+
+.shell2 .muted {
+  color: var(--g-muted);
+}
+.shell2 .small {
+  font-size: var(--t-s);
+}
+
+/* Tabular figures wherever a number sits above or beside another number — a readout that jitters as
+   its digits change is the single cheapest way to look unfinished. */
+.shell2 .num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Machine syntax, and only machine syntax. */
+.shell2 .mono,
+.shell2 code,
+.shell2 input.expr {
+  font-family: var(--f-mono);
+  font-size: var(--t-s);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   Surfaces.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* **A card has a ground and NO border.** Two adjacent bordered boxes make four rules where the eye
+   needs one edge; the panel ground against the rail's darker ground is the edge. */
+.shell2 .card2 {
+  background: var(--g-panel);
+  border: 0;
+  border-radius: var(--r-card);
+  padding: var(--pad-card);
+}
+
+/* The result card alone carries a rule, on its left, in the accent. It is the answer, and it is the
+   one card a reader should be able to find without reading any of them. */
+.shell2 .card2[data-card="result"] {
+  border-left: 1px solid var(--g-accent);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.shell2 .placeholder {
+  margin: 0;
+  font-size: var(--t-s);
+  color: var(--g-muted);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   Controls.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.shell2 button {
+  font: inherit;
+  font-size: var(--t-s);
+  border-radius: var(--r-control);
+  border: 1px solid var(--g-border);
+  background: var(--g-panel-2);
+  color: var(--g-text);
+  padding: 0.28rem 0.6rem;
+  cursor: pointer;
+}
+.shell2 button:hover {
+  border-color: var(--g-muted);
+}
+.shell2 button:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 1px;
+}
+
+.shell2 button.primary {
+  background: var(--g-accent);
+  border-color: var(--g-accent);
+  color: #0b1220;
+  font-weight: 600;
+}
+
+/* A segmented control is ONE control with several positions, so it gets one border and internal
+   rules rather than a row of buttons — the difference between "pick one of these" and "here are
+   some things you could press". */
+.shell2 .segmented {
+  display: inline-flex;
+  border: 1px solid var(--g-border);
+  border-radius: var(--r-control);
+  overflow: hidden;
+}
+.shell2 .segmented > button {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.shell2 .segmented > button + button {
+  border-left: 1px solid var(--g-border);
+}
+.shell2 .segmented > button[aria-pressed="true"] {
+  background: var(--g-accent);
+  color: #0b1220;
+  font-weight: 600;
+}
+
+.shell2 input[type="text"],
+.shell2 select {
+  font: inherit;
+  font-size: var(--t-s);
+  color: var(--g-text);
+  background: var(--g-panel-2);
+  border: 1px solid var(--g-border);
+  border-radius: var(--r-control);
+  padding: 0.25rem 0.4rem;
+}
+.shell2 input[type="text"]:focus-visible,
+.shell2 select:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 1px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   Badges — the honest-labelling guardrail, as a glyph.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* `=` exact, `≤` a rigorous bound, `≈` an estimate. A square rather than a pill, because a pill
+   reads as a tag the app chose and a square reads as a stamp the argument earned. The three colours
+   are the same three the ledger's statuses use, so a reader learns one mapping. */
+.shell2 .badge {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  font-size: var(--t-m);
+  font-weight: 600;
+  line-height: 1;
+  color: #0b1220;
+}
+.shell2 .badge[data-level="="] {
+  background: var(--g-ok);
+}
+.shell2 .badge[data-level="≤"] {
+  background: var(--g-accent);
+}
+.shell2 .badge[data-level="≈"] {
+  background: var(--g-warn);
+}
+.shell2 .badge[data-level="⚠"] {
+  background: var(--g-bad);
+  color: #fff;
+}

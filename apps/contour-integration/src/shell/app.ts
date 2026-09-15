@@ -97,6 +97,7 @@ import {
   type StateResolution,
 } from "./state.js";
 import { GLStage } from "../ui/stage/glStage.js";
+import { DARK_INK } from "../ui/inkTheme.js";
 import { drawContour, PIECE_COLOURS } from "../ui/stage/ink.js";
 import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
 import { CONTRAST_CELLS, contrastTable } from "./contrastGrid.js";
@@ -1304,6 +1305,10 @@ export function mountApp(root: Element): ShellHandle {
       const hidden = mask() === "argument";
       if (ctx) {
         drawContour(ctx, hidden ? [] : resolved, view, vp, {
+          // **The OLD shell states the dark theme explicitly** (M8 step 1.2). It is the palette this
+          // app has always drawn with, moved to `inkTheme.ts` rather than chosen again, so the
+          // browser ink tests pass unchanged — which is what makes the step a refactor.
+          theme: DARK_INK,
           colours: hidden ? [] : contour.pieces.map((p) => p.colour),
           highlight: hidden ? undefined : highlight,
           marker: !hidden && acc && acc.steps.length > 0 ? scrub : undefined,
@@ -1615,6 +1620,7 @@ export function mountApp(root: Element): ShellHandle {
       return;
     }
     drawAccumulator(ctx, acc, w, h, {
+      theme: DARK_INK,
       upTo: scrub,
       contrast,
       pieceColours: contour.pieces.map((p) => p.colour),

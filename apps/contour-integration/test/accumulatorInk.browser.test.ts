@@ -13,6 +13,7 @@
 //
 // It rides the Playwright/Chromium harness M4.7a wired up — no new infrastructure.
 import { describe, expect, it } from "vitest";
+import { DARK_INK } from "../src/ui/inkTheme.js";
 import { drawAccumulator } from "../src/ui/accumulator.js";
 import { accumulate, type Accumulation } from "../src/engine/contour/accumulate.js";
 import { offeredFamilies, primaryGolden, runFamily } from "../src/families/runFamily.js";
@@ -49,7 +50,7 @@ function inkOf(acc: Accumulation, pieceColours: readonly number[], w = W, h = H)
   canvas.height = h;
   const ctx = canvas.getContext("2d");
   if (ctx === null) throw new Error("no 2-D context");
-  drawAccumulator(ctx, acc, w, h, { upTo: 1, contrast: "none", pieceColours });
+  drawAccumulator(ctx, acc, w, h, { theme: DARK_INK, upTo: 1, contrast: "none", pieceColours });
 
   const d = ctx.getImageData(0, 0, w, h).data;
   let minX = Infinity;

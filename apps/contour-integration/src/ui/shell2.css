@@ -1,12 +1,10 @@
-/* The new shell's layout — M8 step 1.1, plan §4.0. GRID ONLY.
+/* The new shell's layout — M8 steps 1.1 and 1.2. Grid, rails, stage, strip.
  *
- * The visual system is step 1.2's; this file exists so `?shell=new` boots to the right BOXES, and
- * every colour it uses is a token `app.css` already defines. Keeping the two sheets apart is what
- * lets the old shell stay untouched while the new one is built beside it (the plan's §4 rule), and
- * at 1.12 this file becomes the shell's stylesheet when the old one is deleted.
+ * Everything COLOURED here reads a token from `theme.css`; nothing declares a colour of its own.
+ * That split is what lets the light theme be one block of overrides rather than a second stylesheet.
  *
- * No breakpoints below 1024px — the owner's decision is desktop and laptop, and below 900px the
- * page shows the phone notice (step 1.12) rather than a grid that cannot hold two rails.
+ * No breakpoints below 1024px — the owner's decision is desktop and laptop, and below 900px the page
+ * shows the phone notice (step 1.12) rather than a grid that cannot hold two rails.
  */
 :root {
   --rail-left: 19rem;
@@ -35,8 +33,6 @@
     "bar bar bar"
     "left stage right"
     "left strip right";
-  background: var(--c-bg);
-  color: var(--c-text);
 }
 
 /* A folded rail keeps its grid column and shrinks to a labelled strip, so the stage grows and
@@ -51,39 +47,43 @@
   grid-template-columns: var(--rail-folded) minmax(0, 1fr) var(--rail-folded);
 }
 
+/* ---- bar ---- */
 .shell2 > .bar2 {
   grid-area: bar;
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0 0.75rem;
-  border-bottom: 1px solid var(--c-border);
-  background: var(--c-panel);
+  gap: 0.8rem;
+  padding: 0 0.85rem;
+  background: var(--g-panel);
+  /* One hairline under the bar and none between the rails and the stage: the panel grounds already
+     divide those, and a rule on every seam is four lines doing one line's work. */
+  border-bottom: 1px solid var(--g-border);
 }
 
+/* ---- rails ---- */
 .shell2 > .rail2 {
   overflow: auto;
   min-height: 0;
   padding: 0.6rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
-  background: var(--c-panel-2);
+  gap: 0.5rem;
+  background: var(--g-panel-2);
 }
 .shell2 > .rail2.left {
   grid-area: left;
-  border-right: 1px solid var(--c-border);
 }
 .shell2 > .rail2.right {
   grid-area: right;
-  border-left: 1px solid var(--c-border);
 }
 
+/* ---- stage ---- */
 .shell2 > .stage2 {
   grid-area: stage;
   position: relative;
   min-height: 0;
   overflow: hidden;
+  background: var(--g-ground);
 }
 .shell2 > .stage2 > canvas {
   position: absolute;
@@ -93,12 +93,13 @@
   display: block;
 }
 
+/* ---- strip ---- */
 .shell2 > .strip2 {
   grid-area: strip;
   min-height: 0;
-  border-top: 1px solid var(--c-border);
-  background: var(--c-panel);
   position: relative;
+  background: var(--g-panel);
+  border-top: 1px solid var(--g-border);
 }
 .shell2 > .strip2 > canvas {
   position: absolute;
@@ -106,24 +107,4 @@
   width: 100%;
   height: 100%;
   display: block;
-}
-
-.card2 {
-  border: 1px solid var(--c-border);
-  border-radius: 6px;
-  background: var(--c-panel);
-  padding: 0.55rem 0.65rem;
-}
-.card2 > h2 {
-  margin: 0 0 0.35rem;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--c-muted);
-  text-transform: uppercase;
-}
-.card2 > .placeholder {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--c-muted);
 }

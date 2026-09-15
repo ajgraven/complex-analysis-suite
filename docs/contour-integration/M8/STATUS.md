@@ -13,9 +13,12 @@ changed.
   squashed to `master` as `2a09ee0`; this branch was restarted from it. Its wording pass finished at
   **0 flagged, 0 unapplied** in the review document, against 191 flagged when the five blanket
   decisions were approved.
-  **Step 1.1 (the scaffold) is done** — `src/shell2/` exists beside `src/shell/`, `?shell=new` boots
-  it, and the old shell is untouched. **Next execution action: step 1.2** (the visual system). The
-  branch may be red between 1.1 and 1.12 and must be green at 1.13; it is green now.
+  **Steps 1.1 (the scaffold) and 1.2 (the visual system) are done** — `src/shell2/` exists beside
+  `src/shell/`, `?shell=new` boots it in the new visual system, and the old shell is untouched
+  (proven: its rendered page is the same PNG hash before and after). **Next execution action: step
+  1.3** (the stage controller). The branch may be red between 1.1 and 1.12 and must be green at
+  1.13; it is green now. The look is recorded at
+  [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -39,6 +42,8 @@ changed.
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
+
+| 2026-09-15 | **1.2** | (this commit) | the visual system: `theme.css` (tokens, five-size type scale, surfaces, controls, badges), `shell2.css` rewritten onto the tokens, `inkTheme.ts` (dark = the literals moved, light provided and not yet consumed); `drawContour`/`drawAccumulator` take a REQUIRED theme; 4 browser tests + sweep 8/8; screenshot committed |
 
 | 2026-09-15 | **1.1** | 072f74b | the shell2 scaffold: the keyed builder (`dom.ts`), memoised KaTeX (`math.ts`), the `Session` (`session.ts`), `mountShell2` with one `commit` door, the grid, and `?shell=new`; `test/shell2.test.ts` (17) + `test/shell2.browser.test.ts` (3); sweeps 8/8, 5/5, 2/2 after four real survivors |
 
@@ -218,6 +223,39 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(1.2) "Byte-identical" is proven by the MAPPING, not by the tests passing.** The browser ink
+  tests assert properties of the frame, so a mis-mapped literal — `halo` where `haloStrong` belonged
+  — would pass them. Every replaced literal was instead checked against the theme field that
+  replaced it: **12 plain assignments carry the same string character for character**, and the five
+  ternaries (`#f0b45e`→`refusedInk`, `#c77dff`→`cutInk`, `#ffffff`/`#e7e9ee`→`handleGrabbed`/
+  `handleRing`) map identically. The old shell's whole rendered page is then the same PNG hash
+  before and after, which is the claim end to end.
+- **(1.2) `theme` is a REQUIRED option on both drawing calls, not a defaulted one.** A default would
+  be a second place for the palette to live, which is the thing `inkTheme.ts` exists to prevent —
+  and the old shell stating `DARK_INK` explicitly is what makes "the old shell is unchanged" a
+  compile-time fact rather than a hope. Five call sites; the type error named each one.
+- **(1.2) Everything in `theme.css` that is not a token is scoped under `.shell2`.** `index.html`
+  loads the sheet for BOTH shells, so a bare `button { … }` rule would restyle the old shell — which
+  this step's own file list says to leave alone until 1.12.
+- **(1.2) Eighty lines of control and badge CSS render NOWHERE until steps 1.4 and 1.5**, so they
+  are exercised now against the real sheet and the real cascade rather than carried unverified
+  through a phase and found wrong when a card first uses them. Sweep **8/8** — the result card's
+  accent rule, borderless cards, 22 px badges, three distinct badge colours, the segmented
+  control's pressed position, prose not monospace, tabular numbers.
+- **(1.2) One of my own assertions compared a value with itself** and passed regardless: the result
+  card's rule colour, written as `expect(x).toBe(… ? x : x)` while fumbling the token lookup. It
+  resolves `--g-accent` through the browser now, so a hex and a computed `rgb(...)` compare as the
+  same thing — and the sweep's "the rule is not the accent" mutant confirms it bites.
+- **(1.2) `no-shadow` caught a shadow in my own test** — a `probe` canvas and a `probe()` helper in
+  one file. The rule M5.1 made an error for this app, doing its job on the first file since.
+- **(1.2) The light ink theme is provided and NOTHING consumes it**, which is stated in the module
+  rather than left for the next reader to discover: the figure export's plate is chrome only
+  (`FigureTheme`) and composites canvases drawn in the dark theme, so a light figure is a later
+  step's work. Its piece hues are darkened rather than reused — `#6ea8fe` on white is 1.9:1.
+- **(1.2) The plan's token list names things the canvas layers do not draw** (`pole`, `poleLabel`,
+  `grid`): poles and the grid come from the GLSL phase shader, not from `ink.ts`. `InkTheme` carries
+  what the code actually uses, and gains `haloStrong`, `cutHandle` and `markerFill` — which the
+  plan's list omits and the code has always had two of.
 - **(1.1) THE FIRST DRAFT REINTRODUCED A DEFECT THIS APP HAS ALREADY SHIPPED ONCE.** `.shell2` used
   `height: 100%`, which needs a sized ancestor that `#app` is not — so the shell collapsed to 440 px
   in a 900 px window and the stage was **186 px tall** — and, worse, it was anchored at `y = 0`
@@ -515,6 +553,12 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(1.2) `src/ui/theme.css` is the visual system and `src/ui/shell2.css` is the layout.** Nothing
+  in the layout sheet declares a colour; every coloured rule reads a token. `app.css` is untouched —
+  the old shell keeps it until 1.12.
+- **(1.2) `src/ui/inkTheme.ts` is the one home for the canvas palette**, and `PIECE_COLOURS` is now
+  a view of it rather than a second copy.
+
 - **(1.1) `src/shell2/dom.ts` is the app's DOM layer** — `h` + `patch`, no dependency. Unkeyed
   children get a positional key, so the reconciler has ONE path rather than a keyed mode and an
   unkeyed one that could diverge.

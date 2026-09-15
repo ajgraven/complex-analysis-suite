@@ -21,6 +21,7 @@ import { GLStage } from "../src/ui/stage/glStage.js";
 import "katex/dist/katex.min.css";
 import "@cas/ui/nav.css";
 import "../src/ui/app.css";
+import "../src/ui/theme.css";
 import "../src/ui/shell2.css";
 
 function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
@@ -55,10 +56,10 @@ describe("the new shell in a browser", () => {
     // And it really drew. `1/z` is a pole at the origin, so the portrait sweeps the whole hue
     // circle; a blank or single-coloured canvas is what a stage that never rendered looks like.
     // `preserveDrawingBuffer` is on (M6.3's finding), so a read after compositing is not empty.
-    const probe = document.createElement("canvas");
-    probe.width = 64;
-    probe.height = 64;
-    const ctx = probe.getContext("2d");
+    const readback = document.createElement("canvas");
+    readback.width = 64;
+    readback.height = 64;
+    const ctx = readback.getContext("2d");
     if (ctx === null || gl === null) throw new Error("no 2d context to read the portrait with");
     ctx.drawImage(gl, 0, 0, 64, 64);
     const { data } = ctx.getImageData(0, 0, 64, 64);
@@ -130,5 +131,100 @@ describe("the new shell in a browser", () => {
     await drawn();
     expect(spy.mock.calls.length, "a new integrand did NOT relink the program").toBe(afterBoot + 1);
     spy.mockRestore();
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The visual system — M8 step 1.2.
+//
+// **The controls and badges render nowhere until steps 1.4 and 1.5**, so without this they would be
+// eighty lines of stylesheet carried unexercised through a whole phase and discovered to be wrong
+// when a card first used them. A probe element is not the app, but it is the same sheet against the
+// same cascade, and it makes the rules falsifiable now.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** Mount the shell, then a probe INSIDE it so the `.shell2`-scoped rules apply as they will. */
+function probe(html: string): HTMLElement {
+  mountInBody();
+  const shell = document.querySelector("main.shell2");
+  if (shell === null) throw new Error("no shell");
+  const host = document.createElement("div");
+  host.innerHTML = html;
+  shell.append(host);
+  return host;
+}
+
+const rgb = (css: string): string => css.replace(/\s+/g, "");
+
+/** A token's value as the browser computes it, so a hex and an `rgb(...)` compare equal. */
+function resolved(token: string): string {
+  const probeEl = document.createElement("span");
+  probeEl.style.color = `var(${token})`;
+  document.body.append(probeEl);
+  const out = getComputedStyle(probeEl).color;
+  probeEl.remove();
+  return out;
+}
+
+describe("the visual system", () => {
+  it("gives the RESULT card an accent rule and every other card none", async () => {
+    const { root } = mount();
+    await drawn();
+    const result = root.querySelector('[data-card="result"]');
+    const other = root.querySelector('[data-card="integrand"]');
+    if (result === null || other === null) throw new Error("cards missing");
+    const rs = getComputedStyle(result);
+    const os = getComputedStyle(other);
+    // The answer is the one card a reader should find without reading any of them.
+    expect(parseFloat(rs.borderLeftWidth)).toBeGreaterThan(0);
+    // The rule is the ACCENT, not just some rule. Resolved through the browser so the token's hex
+    // and the computed `rgb(...)` are compared as the same thing.
+    expect(rgb(rs.borderLeftColor)).toBe(rgb(resolved("--g-accent")));
+    // Two adjacent bordered boxes make four rules where the eye needs one edge.
+    expect(parseFloat(os.borderLeftWidth)).toBe(0);
+    expect(parseFloat(os.borderTopWidth)).toBe(0);
+    // And a card is distinguishable from the rail it sits in by its GROUND.
+    const rail = root.querySelector("aside.rail2.left");
+    expect(getComputedStyle(other).backgroundColor).not.toBe(getComputedStyle(rail as Element).backgroundColor);
+  });
+
+  it("draws the three honest-labelling badges as 22px squares, each its own colour", () => {
+    const host = probe(
+      '<span class="badge" data-level="=">=</span>' +
+        '<span class="badge" data-level="≤">≤</span>' +
+        '<span class="badge" data-level="≈">≈</span>',
+    );
+    const [eq, le, ap] = [...host.querySelectorAll(".badge")].map((e) => getComputedStyle(e));
+    for (const s of [eq, le, ap]) {
+      expect(parseFloat(s.width)).toBe(22);
+      expect(parseFloat(s.height)).toBe(22);
+    }
+    // `=` exact, `≤` a bound, `≈` an estimate — three meanings, so three colours, all distinct.
+    const colours = new Set([eq, le, ap].map((s) => rgb(s.backgroundColor)));
+    expect(colours.size).toBe(3);
+  });
+
+  it("marks the pressed position of a segmented control, and only that one", () => {
+    const host = probe(
+      '<div class="segmented"><button aria-pressed="true">A</button><button aria-pressed="false">B</button></div>',
+    );
+    const [on, off] = [...host.querySelectorAll("button")].map((e) => getComputedStyle(e));
+    expect(rgb(on.backgroundColor)).not.toBe(rgb(off.backgroundColor));
+    // One control with several positions, not a row of buttons: the segment itself has no border.
+    expect(parseFloat(on.borderTopWidth)).toBe(0);
+  });
+
+  it("uses the five-size type scale, with numbers tabular and prose NOT monospace", () => {
+    const { root } = mount();
+    const h1 = getComputedStyle(root.querySelector("h1") as Element);
+    const h2 = getComputedStyle(root.querySelector("h2") as Element);
+    expect(parseFloat(h1.fontSize)).toBeGreaterThan(parseFloat(h2.fontSize));
+    // Monospace is a signal that the text is machine syntax; spending it on prose is what made the
+    // old shell read as a terminal.
+    expect(h1.fontFamily.toLowerCase()).not.toContain("mono");
+    const host = probe('<span class="num">1.25</span><span class="mono">1/z</span>');
+    const [num, mono] = [...host.children].map((e) => getComputedStyle(e));
+    expect(num.fontVariantNumeric).toContain("tabular-nums");
+    expect(mono.fontFamily.toLowerCase()).toContain("mono");
   });
 });

@@ -9,18 +9,23 @@
 // unrelated facts look like one.
 import { arcLength, pointAt, type Cx, type Resolved } from "../../kernel/geom.js";
 import { plotToScreen, type View, type Viewport } from "../../kernel/camera.js";
+import { DARK_INK, type InkTheme } from "../inkTheme.js";
 
-/** Six categorical colours, one per contour piece, reused to tint that piece everywhere it appears. */
-export const PIECE_COLOURS = [
-  "#6ea8fe",
-  "#f0b45e",
-  "#7fd1a8",
-  "#e594b4",
-  "#b79cf0",
-  "#79d3e8",
-] as const;
+/**
+ * Six categorical colours, one per contour piece.
+ *
+ * Kept as a named export because eight call sites tint a rail row or a legend swatch from it, but it
+ * is now a VIEW of the theme rather than a second copy — step 1.2's point is that the palette has
+ * one home. A consumer that can take a theme should take one.
+ */
+export const PIECE_COLOURS = DARK_INK.pieces;
 
 export interface InkOptions {
+  /**
+   * The palette. **Required, and deliberately not defaulted** — a default would be a second place
+   * for the colours to live, which is the thing `inkTheme.ts` exists to prevent.
+   */
+  readonly theme: InkTheme;
   readonly colours: readonly number[];
   /** Index of the piece to emphasise, or −1. */
   readonly highlight?: number;
@@ -58,7 +63,6 @@ export interface InkOptions {
   }[];
 }
 
-const CUT_INK = "#c77dff";
 /**
  * Liang–Barsky: the part of the screen segment `a → b` that lies inside the canvas, or null.
  *
@@ -140,7 +144,6 @@ function labelAnchor(
   return null;
 }
 
-const REFUSED_INK = "#f0b45e";
 
 /** Screen-space sampling of one piece, fine enough that an arc reads as a curve. */
 function screenPath(g: Resolved, view: View, vp: Viewport): [number, number][] {
@@ -211,6 +214,7 @@ export function drawContour(
   vp: Viewport,
   opts: InkOptions,
 ): void {
+  const t = opts.theme;
   ctx.clearRect(0, 0, vp.width, vp.height);
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
@@ -224,10 +228,10 @@ export function drawContour(
       return [x, y];
     });
     tracePath(ctx, pts);
-    ctx.strokeStyle = "rgba(8, 10, 14, 0.85)";
+    ctx.strokeStyle = t.halo;
     ctx.lineWidth = 6;
     ctx.stroke();
-    ctx.strokeStyle = cut.refused ? REFUSED_INK : CUT_INK;
+    ctx.strokeStyle = cut.refused ? t.refusedInk : t.cutInk;
     ctx.lineWidth = 2.5;
     ctx.stroke();
     // Hatching, the conventional mark for a cut in a textbook figure, and the one thing on this
@@ -264,9 +268,9 @@ export function drawContour(
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
         const tw = ctx.measureText(cut.label).width;
-        ctx.fillStyle = "rgba(8, 10, 14, 0.85)";
+        ctx.fillStyle = t.halo;
         ctx.fillRect(x - tw / 2 - 3, y - 8, tw + 6, 16);
-        ctx.fillStyle = cut.refused ? REFUSED_INK : CUT_INK;
+        ctx.fillStyle = cut.refused ? t.refusedInk : t.cutInk;
         ctx.fillText(cut.label, x, y);
       }
     }
@@ -279,7 +283,7 @@ export function drawContour(
   // one that separates from it at every hue.
   for (const pts of paths) {
     tracePath(ctx, pts);
-    ctx.strokeStyle = "rgba(8, 10, 14, 0.85)";
+    ctx.strokeStyle = t.halo;
     ctx.lineWidth = 6.5;
     ctx.stroke();
   }
@@ -288,7 +292,7 @@ export function drawContour(
     const colour = PIECE_COLOURS[(opts.colours[k] ?? k) % PIECE_COLOURS.length];
     const emphasised = opts.highlight === k;
     tracePath(ctx, paths[k]);
-    ctx.strokeStyle = opts.refused === true ? "#f0b45e" : colour;
+    ctx.strokeStyle = opts.refused === true ? t.refusedInk : colour;
     ctx.lineWidth = emphasised ? 4 : 2.5;
     if (opts.refused === true) ctx.setLineDash([7, 5]);
     ctx.stroke();
@@ -299,13 +303,13 @@ export function drawContour(
     // arrows are evenly spaced rather than bunched wherever its sampling happened to be dense.
     // Orientation is never something the reader has to infer from the piece list.
     const pts = paths[k];
-    ctx.fillStyle = opts.refused === true ? "#f0b45e" : colour;
+    ctx.fillStyle = opts.refused === true ? t.refusedInk : colour;
     const marks = Math.max(1, Math.min(6, Math.round(screenLength(pts) / 110)));
     for (let m = 0; m < marks; m++) {
       const at = along(pts, (m + 0.5) / marks);
       if (!at) continue;
       ctx.save();
-      ctx.strokeStyle = "rgba(8, 10, 14, 0.85)";
+      ctx.strokeStyle = t.halo;
       ctx.lineWidth = 2.5;
       arrowHead(ctx, at.x, at.y, at.dx, at.dy, 6.5);
       ctx.stroke();
@@ -319,10 +323,10 @@ export function drawContour(
     const r = handle.emphasis === "none" ? 5 : 7;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, 2 * Math.PI);
-    ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+    ctx.strokeStyle = t.haloStrong;
     ctx.lineWidth = 4;
     ctx.stroke();
-    ctx.strokeStyle = handle.emphasis === "grabbed" ? "#ffffff" : "#e7e9ee";
+    ctx.strokeStyle = handle.emphasis === "grabbed" ? t.handleGrabbed : t.handleRing;
     ctx.lineWidth = handle.emphasis === "none" ? 1.6 : 2.4;
     ctx.stroke();
   }
@@ -333,8 +337,8 @@ export function drawContour(
       const [x, y] = plotToScreen(z[0], z[1], view, vp);
       ctx.beginPath();
       ctx.arc(x, y, 5.5, 0, 2 * Math.PI);
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = "rgba(8, 10, 14, 0.9)";
+      ctx.fillStyle = t.markerFill;
+      ctx.strokeStyle = t.haloStrong;
       ctx.lineWidth = 2;
       ctx.fill();
       ctx.stroke();
