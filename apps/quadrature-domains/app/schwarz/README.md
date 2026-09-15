@@ -143,6 +143,12 @@ its silhouette, boundary curve and markers do sharpen with the frame, its surfac
 detail does not. The card's status line names the real numbers in both cases, and
 reports the cap when it binds.
 
+> **The same defect class lives in `@cas/gpu`'s shared mask**, which Complex Dynamics' σ view
+> uses. It was measured after this fix landed — 1.14% of a 512² frame at 30× zoom, 99.9% of it
+> tracing to the same contradiction — and closed there with a `conservativeOmega` option on
+> `buildPolygonMaskTexture`. QD keeps its own builder (this file); the shared one is not a
+> second consumer of it, only of the idea.
+
 Tests: [`vitest/schwarz-export-plan.test.ts`](../../vitest/schwarz-export-plan.test.ts)
 (node — the plan, the labels, and the two source invariants the design rests on) and
 [`vitest/browser/schwarz-export.browser.test.ts`](../../vitest/browser/schwarz-export.browser.test.ts)
