@@ -21,6 +21,10 @@ import { compile, defaultState, resolveState, withParam, type Compiled, type She
 import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
+import { injectPngText } from "@cas/export";
+
+import { drawFigure, figureCaption, figureLayout, figureMetadata, type FigureCaption } from "../shell/figure.js";
+import { encodeShell } from "../shell/viewState.js";
 import { patch, h } from "./dom.js";
 import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
@@ -214,7 +218,132 @@ export function mountShell2(root: Element): Shell2Handle {
     setOpen: (id, open) => {
       session.open = { ...session.open, [id]: open };
     },
+
+    copyLink: () => {
+      const enc = encodeShell(state);
+      if (!enc.ok) {
+        say(enc.reason, "⚠");
+        return;
+      }
+      const link = window.location.origin + window.location.pathname + enc.hash;
+      void navigator.clipboard?.writeText(link).then(
+        () => say("Link copied.", "="),
+        () => say("Could not copy — the link is in the address bar.", "⚠"),
+      );
+    },
+
+    saveFigure: (theme) => {
+      if (theme !== "dark") {
+        say("Only the dark plate is built yet — the light and print plates are Phase 2.", "⚠");
+        return;
+      }
+      void figureBytes().then((bytes) => {
+        if (bytes === null) {
+          say("The figure could not be drawn.", "⚠");
+          return;
+        }
+        const url = URL.createObjectURL(pngBlob(bytes));
+        const a = document.createElement("a");
+        a.href = url;
+        a.download =
+          resolution.kind === "gallery" ? `${resolution.family.id}.png` : "contour-integration.png";
+        // **In the document, and revoked LATER.** A detached anchor's click is ignored by some
+        // browsers, and revoking the URL in the same task cancels the download in others — the old
+        // shell learned both, and copying the shape is cheaper than relearning them.
+        document.body.append(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => {
+          URL.revokeObjectURL(url);
+        }, 10_000);
+        say("Figure saved.", "=");
+      });
+    },
+
+    copyFigure: () => {
+      if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
+        say("This browser cannot copy images — use Save figure.", "⚠");
+        return;
+      }
+      // **The PROMISE goes into `ClipboardItem`, not the resolved blob** — Safari requires the write
+      // to be made inside the user gesture, and awaiting the bytes first leaves the gesture.
+      const png = figureBytes().then((bytes) => {
+        if (bytes === null) throw new Error("no figure");
+        return pngBlob(bytes);
+      });
+      void navigator.clipboard.write([new ClipboardItem({ "image/png": png })]).then(
+        () => say("Figure copied.", "="),
+        () => say("Could not copy the figure — use Save figure.", "⚠"),
+      );
+    },
   };
+
+  /**
+   * PNG bytes as a `Blob`.
+   *
+   * Through a fresh `ArrayBuffer` rather than straight from the `Uint8Array`: the view may be backed
+   * by a `SharedArrayBuffer`, which is not a `BlobPart`, and the copy is what makes that impossible
+   * rather than merely unlikely.
+   */
+  function pngBlob(bytes: Uint8Array): Blob {
+    const buf = new ArrayBuffer(bytes.byteLength);
+    new Uint8Array(buf).set(bytes);
+    return new Blob([buf], { type: "image/png" });
+  }
+
+  /** Say what just happened, and redraw the rail that shows it. Transient: a link clears it. */
+  function say(text: string, level: "=" | "≤" | "≈" | "⚠"): void {
+    session.notice = { text, level };
+    patch(right, render(state, resolution, session, actions, polesNow()).right);
+  }
+
+  /**
+   * The figure, as PNG bytes.
+   *
+   * **EVERYTHING THE PLATE CLAIMS IS CAPTURED BEFORE THE FIRST `await`**, which a review of the old
+   * shell's copy is why: `toBlob` yields, so a caption read once for the drawing and again for the
+   * metadata could straddle a recompute — a figure whose drawn caption said one thing and whose
+   * stamped verdict said another, which is the dishonesty the verdict key exists to prevent.
+   */
+  async function figureBytes(scale = 2): Promise<Uint8Array | null> {
+    // The GL context has `preserveDrawingBuffer`, but the buffer holds the LAST frame; drawing now
+    // makes the plate a picture of the state the caption is about (M6.3's finding).
+    stageView.drawNow(drawState());
+    const caption = captionNow();
+    const enc = encodeShell(state);
+    const permalink = enc.ok ? window.location.origin + window.location.pathname + enc.hash : null;
+    const layout = figureLayout(
+      { w: glCanvas.width, h: glCanvas.height },
+      { w: accCanvas.width, h: accCanvas.height },
+      scale,
+    );
+    const style = getComputedStyle(shell);
+    const plate = document.createElement("canvas");
+    drawFigure(plate, layout, [glCanvas, inkCanvas], accCanvas, caption, {
+      background: style.getPropertyValue("--g-ground").trim() || "#0f1115",
+      text: style.getPropertyValue("--g-text").trim() || "#e7e9ee",
+      muted: style.getPropertyValue("--g-muted").trim() || "#99a1b3",
+    });
+    const blob = await new Promise<Blob | null>((done) => {
+      plate.toBlob(done, "image/png");
+    });
+    if (blob === null) return null;
+    return injectPngText(new Uint8Array(await blob.arrayBuffer()), figureMetadata(permalink, caption));
+  }
+
+  /** What the plate says it is a picture of — the same facts the Result card reads. */
+  function captionNow(): FigureCaption {
+    const r = resolution;
+    const run = r.kind === "gallery" ? r.run : null;
+    const analysis = r.kind === "plain" || r.kind === "declared" ? r.analysis : null;
+    return figureCaption({
+      title: r.kind === "gallery" ? (r.family.title ?? r.family.id) : `f(z) = ${state.expr}`,
+      integral: run?.integral ?? analysis?.integral ?? null,
+      theorem: run?.theorem ?? analysis?.theorem ?? null,
+      ledger: run?.ledger ?? analysis?.ledger ?? null,
+      solved: r.kind === "gallery" ? r.solved : null,
+    });
+  }
 
   function commit(next: ShellState, why: CommitReason): void {
     if (next.expr !== state.expr) compiled = compile(next.expr);

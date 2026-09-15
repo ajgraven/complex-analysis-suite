@@ -94,6 +94,14 @@ export interface Session {
   open: Record<string, boolean>;
   /** The theme the figure export draws in; not a property of the argument, so not in the link. */
   figureTheme: "light" | "dark";
+  /**
+   * What just happened, for the reader — "Link copied", "Could not copy the figure".
+   *
+   * **Transient by construction**: it is the outcome of an action the reader took a moment ago, so a
+   * restored state must not arrive claiming a link was copied. `level` is the honest-labelling
+   * vocabulary rather than a severity, so a notice cannot claim more than the app knows.
+   */
+  notice: { readonly text: string; readonly level: "=" | "≤" | "≈" | "⚠" } | null;
 }
 
 /**
@@ -116,6 +124,7 @@ export function defaultSession(): Session {
     rails: { left: false, right: false },
     open: {},
     figureTheme: "light",
+    notice: null,
   };
 }
 
@@ -136,4 +145,5 @@ export function resetTransient(session: Session): void {
   session.undo = [];
   session.redo = [];
   session.drillGraded = false;
+  session.notice = null;
 }

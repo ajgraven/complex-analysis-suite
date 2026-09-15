@@ -52,6 +52,9 @@ function spyActions(): ShellActions & { calls: string[] } {
     undeclare: () => calls.push("undeclare"),
     setDeclaration: (d, cut) => calls.push(`decl:${d.sign}:${d.logPower}:${d.window[0].n}/${d.window[0].d}:${cut === undefined ? "nocut" : "cut"}`),
     setOpen: (id, open) => calls.push(`open:${id}:${open}`),
+    copyLink: () => calls.push("copyLink"),
+    saveFigure: (t) => calls.push(`saveFigure:${t}`),
+    copyFigure: () => calls.push("copyFigure"),
   };
 }
 

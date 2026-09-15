@@ -83,6 +83,18 @@ export interface ShellActions {
    * element the reader just clicked is already in the state they clicked it into.
    */
   readonly setOpen: (id: string, open: boolean) => void;
+  /**
+   * Put the permalink for the CURRENT state on the clipboard.
+   *
+   * The card asks `encodeShell` itself for the REFUSAL, because that is a pure question about the
+   * state and belongs in the description; this is the side effect, and it reports its own outcome
+   * through `session.notice` rather than returning one — a description cannot await a promise.
+   */
+  readonly copyLink: () => void;
+  /** Download the figure as a PNG, in the named plate theme. */
+  readonly saveFigure: (theme: "dark" | "light" | "print") => void;
+  /** The same plate, onto the clipboard. Refuses by name where the browser cannot. */
+  readonly copyFigure: () => void;
 }
 
 /** What every card is handed. */

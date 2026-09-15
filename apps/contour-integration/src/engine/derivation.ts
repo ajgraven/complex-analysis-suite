@@ -111,6 +111,14 @@ export interface DerivationLine {
   readonly provenance: readonly Step[];
   /** The piece this is about, when it is about one. */
   readonly pieceName?: string;
+  /**
+   * The same piece's ID — added at M8 step 1.5b so a derivation line can HIGHLIGHT its piece.
+   *
+   * The name is what a reader sees and the id is what the three surfaces agree on: the piece list,
+   * the stage and the accumulator all key their highlight on `Piece.id`, and matching by name would
+   * make the link break the first time two pieces were named alike (a keyhole's two lips are).
+   */
+  readonly pieceId?: string;
   readonly repair?: string;
 }
 
@@ -204,7 +212,7 @@ function lineFromRow(row: LedgerRow, spec: readonly Piece[]): DerivationLine {
       ? {}
       : { restriction: row.evidence.restriction }),
     provenance: row.evidence.provenance,
-    ...(piece === undefined ? {} : { pieceName: piece.name }),
+    ...(piece === undefined ? {} : { pieceName: piece.name, pieceId: piece.id }),
     ...(row.repair === undefined ? {} : { repair: row.repair }),
   };
 }
