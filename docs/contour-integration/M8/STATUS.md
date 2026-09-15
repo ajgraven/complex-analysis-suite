@@ -40,6 +40,8 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-15 | **1.1** | 072f74b | the shell2 scaffold: the keyed builder (`dom.ts`), memoised KaTeX (`math.ts`), the `Session` (`session.ts`), `mountShell2` with one `commit` door, the grid, and `?shell=new`; `test/shell2.test.ts` (17) + `test/shell2.browser.test.ts` (3); sweeps 8/8, 5/5, 2/2 after four real survivors |
+
 | 2026-09-15 | **0.7** | 45cb6d5 | Phase 0 gate: 553 files / 5721 tests green on a base merged to `origin/master`, browser suite 8/132, a11y roster no regressions; front row swapped to one-per-group (D6 for D4, the 0.6 open question); `pnpm a11y` and the app's browser suite both run with nothing set; Phase 0 PR opened |
 
 | 2026-09-15 | **0.6** | 1732f42 | the four-line standard on all 28 records — human `title` + `titleLatex`, `description.{contour, point, citations}` over an eight-book enum, `taxonomySection` reduced to the eight groups, `frontRow` on the eight classics; `Golden.label` names each variant derivation; loader invariant 5 + corpus-level front-row uniqueness; `test/records.test.ts` (7 tests); GALLERY.md §0 |
@@ -216,6 +218,42 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(1.1) THE FIRST DRAFT REINTRODUCED A DEFECT THIS APP HAS ALREADY SHIPPED ONCE.** `.shell2` used
+  `height: 100%`, which needs a sized ancestor that `#app` is not — so the shell collapsed to 440 px
+  in a 900 px window and the stage was **186 px tall** — and, worse, it was anchored at `y = 0`
+  underneath the `position: fixed` suite nav, which sits at z-index 6 and swallows every click in
+  that band. The old shell's own CSS carries the comment recording the first time. `margin-top` and
+  `calc(100vh - var(--cas-nav-h, 0px))` fix it, and the browser test now measures the shell against
+  the WINDOW rather than against a host the test itself sized.
+- **(1.1) The browser harness was the next defect, exactly as in M7.2.** The viewport test then
+  failed claiming the nav was 287 px tall: the harness imported `app.css` and `shell2.css` but not
+  `@cas/ui/nav.css`, so the nav rendered as an unstyled block instead of a fixed bar. **Mounting
+  without a stylesheet does not give a plainer layout, it gives a different one** — the harness now
+  loads what `main.ts` loads, all of it.
+- **(1.1) Four sweep survivors, and every one was a test asserting the outcome without the reason.**
+  *(a)* "writes a property only when it differs" passed with the guard removed, because the test
+  patched twice with the same string and jsdom does not move the selection on a same-value write —
+  what the guard does is skip the WRITE, so the write is now counted through a spy. *(b)* KaTeX
+  "memoised" passed with the cache written and never read, because the html strings match and the
+  map still grows — so the test counts CALLS to `renderToString`. *(c)* Listener removal has two
+  paths and only one was covered; a card writing `onClick: enabled ? fn : undefined` keeps the key
+  and drops the function, which the previous-props loop never sees. *(d)* `resetTransient` was
+  tested on the helper, which was always right — **M7.4's actual defect is that `applyState` did not
+  CALL it**, so the property is now tested at the door.
+- **(1.1) One survivor is browser-only and is tested there rather than recorded as equivalent**: the
+  stage's program must be relinked for a new INTEGRAND and not for a moved camera (M5.1's review
+  found the old shell relinking on every frame of a contour drag). In jsdom there is no stage to
+  relink, so the node sweep cannot kill it; `test/shell2.browser.test.ts` spies on `setIntegrand`
+  and counts.
+- **(1.1) Two of the plan's items for this step were already done, and are recorded rather than
+  redone**: `katex ^0.17.0` has been a dependency since 0.5b-i (the renderer had to arrive with the
+  delimiter convention), and `splitMath` is reused rather than restated — it is DOM-free and already
+  the single reader of the `$…$` rule, and a second copy is a second place for the rule to drift.
+- **(1.1) The card titles go in `vocabulary.ts`, not in the cards.** Step 0.2's decision is that the
+  file is the one place the reader's words are decided; a title living in its own module would be a
+  title nothing can survey. `LEFT_CARDS` / `RIGHT_CARDS` carry the reading order with them, and the
+  Target card is filtered out in the sandbox — a card reading "—" forever would teach a reader that
+  the app has a target it is failing to find.
 - **(0.7) The plan's PR title is FALSE and is not used.** It says *foundations (no visible change)*,
   and Phase 0 rewrote every ledger sentence (0.5b), every record title and every variant fixture
   label (0.6), and made the record card typeset its title. Merging it under a title promising no
@@ -477,6 +515,15 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(1.1) `src/shell2/dom.ts` is the app's DOM layer** — `h` + `patch`, no dependency. Unkeyed
+  children get a positional key, so the reconciler has ONE path rather than a keyed mode and an
+  unkeyed one that could diverge.
+- **(1.1) `render(state, resolution, session)` computes no mathematics.** The engine surface is
+  `ShellState` + `resolveState`, and the shell is a pure function of the two plus the session.
+- **(1.1) `Session` is the half a permalink must not carry** — gesture, pen path, hover, undo/redo,
+  `drillGraded`. `applyState` clears the transient fields through `resetTransient` and deliberately
+  keeps the reader's own preferences (folded rails, open disclosures, figure theme).
+
 - **(0.6) `description` is three fields, not four** — the identity stays in `targets`/`closedForm`.
 - **(0.6) `Citation` is `{ text, book, where }` over a closed eight-book enum**, with `text` the
   optional gloss (`Jordan's lemma`) and the display line composed from `book` + `where`. Composing
