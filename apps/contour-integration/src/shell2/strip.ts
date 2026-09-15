@@ -1,0 +1,477 @@
+// The accumulator strip: the partial sum walking in its own plane, and the controls that point at
+// one term of it.
+//
+// M8 step 1.6. Two halves of one picture, and they must agree exactly:
+//
+//  - **The canvas** is `drawAccumulator`'s head-to-tail walk of `f(zₖ)·Δzₖ` — research 02's P0
+//    picture for this app, the one the interviewed experts tried an AREA for and abandoned. It is
+//    `role="img"` with a GENERATED sentence, because it was completely unannounced until M6.4 and
+//    because a hand-written alternative drifts the first time a record changes.
+//  - **The side panel** is the readout, the step counter, the scrub and the compare toggles.
+//
+// **The scrub is a STEP INDEX, and one function computes it.** `drawAccumulator` decides how much of
+// the trail to draw from `upTo` alone — `count = max(1, round(upTo·N))`, head dot at
+// `steps[count − 1]` — so a readout deriving its own index from the same slider by a different
+// formula would point at a term the picture does not end on, and the stage's marker (which reads
+// {@link StripView.stepAt}) would point at a third. {@link stepIndex} is that formula, written once
+// and read by all three.
+//
+// **The accumulation is CACHED BY VALUE.** `accumulateForIntegral` walks the whole contour — 240
+// terms, each a call into the compiled integrand — and every scrub tick is a commit, which builds a
+// FRESH resolution object although nothing about the integrand or the geometry moved. A guard on
+// object identity would therefore miss on every tick and re-walk the contour sixty times a second:
+// that is M5.1's finding (the old shell relinking its GLSL every frame, its guard comparing identity
+// against a product rebuilt on every resolve) in the one other place the shape recurs.
+import { attachCanvasA11y } from "@cas/ui";
+
+import { accumulateForIntegral, type Accumulation } from "../engine/contour/accumulate.js";
+import type { ContourIntegral, PathFn } from "../engine/contour/integrate.js";
+import type { CutSide } from "../engine/contour/model.js";
+import type { Cx, Resolved } from "../kernel/geom.js";
+import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
+import { DARK_INK, type InkTheme } from "../ui/inkTheme.js";
+import type { ShellState, StateResolution } from "../shell/state.js";
+import { h, patch } from "./dom.js";
+import { fmtApprox } from "./format.js";
+import { mathText } from "./math.js";
+import type { Session } from "./session.js";
+
+/** Everything the strip needs that it cannot read off the state. */
+export interface StripDraw {
+  readonly state: ShellState;
+  readonly resolution: StateResolution;
+  readonly session: Session;
+  readonly theme?: InkTheme;
+}
+
+/** What the strip calls back into the shell. */
+export interface StripInput {
+  /** Move the scrub position, in [0, 1]. The shell commits it to `ShellState.scrub`. */
+  readonly setScrub: (t: number) => void;
+  /** Choose the compare trail. The shell commits it to `ShellState.contrast`. */
+  readonly setContrast: (mode: ContrastMode) => void;
+  /** Say something into the app's live region. */
+  readonly announce: (message: string) => void;
+}
+
+export interface StripView {
+  readonly canvas: HTMLCanvasElement;
+  /** The accumulation for a draw, or null — CACHED by value, because the stage reads it too. */
+  accumulation(d: StripDraw): Accumulation | null;
+  /** The step the scrub is on, or null — what the stage draws its marker at. */
+  stepAt(d: StripDraw): { readonly index: number; readonly z: readonly [number, number] } | null;
+  /** Draw on the next frame. Coalesced: a scrub asks far more often than a frame can answer. */
+  schedule(d: () => StripDraw): void;
+  /** Draw now — for a test, and for the figure export, which must not wait a frame. */
+  drawNow(d: StripDraw): void;
+  destroy(): void;
+}
+
+/** How many stops the scrub has. The old shell's number, so a drag feels the same in both. */
+const STOPS = 1000;
+
+/**
+ * The toggles, in the order they are offered.
+ *
+ * Written out rather than taken from `Object.keys(CONTRAST_LABELS)`: the reading order is a decision
+ * about this panel, and leaving it to a literal's property order in another module makes it one that
+ * nobody made. The type annotation is what keeps it exhaustive when a mode is added.
+ */
+const CONTRAST_ORDER: readonly ContrastMode[] = ["none", "sumZ", "sumFz", "sumDz"];
+
+/** The name the canvas carries before anything has been drawn into it. */
+const EMPTY_DESCRIPTION = "The partial sum of f(z)·Δz along the contour. Nothing is plotted yet.";
+
+const clamp01 = (t: number): number => (Number.isFinite(t) ? Math.min(1, Math.max(0, t)) : 0);
+
+/**
+ * Which term the scrub is pointing at — **`drawAccumulator`'s own rule, and that is the point**.
+ *
+ * The panel draws `steps.slice(0, max(1, round(upTo·N)))` and puts its head dot on the last of them,
+ * so the term a reader is being shown is `count − 1`. Deriving it any other way — `round(t·(N−1))`
+ * reads more natural and is off by one against the picture at almost every position — would put the
+ * readout, the drawn head and the stage's marker on three different terms of the same sum, which is
+ * exactly the disagreement this step exists to make impossible.
+ *
+ * The upper clamp is this function's own: `drawAccumulator` SLICES, and a slice past the end is
+ * harmless where an INDEX past the end is `undefined`.
+ */
+export function stepIndex(scrub: number, steps: number): number {
+  if (steps <= 0) return -1;
+  const count = Math.min(steps, Math.max(1, Math.round(clamp01(scrub) * steps)));
+  return count - 1;
+}
+
+/**
+ * A stable string for anything the accumulation depends on.
+ *
+ * `JSON.stringify` with a bigint replacer, because the declaration and the cut system carry `Frac`s
+ * (`{n, d}`, both `bigint`) and a bare stringify THROWS on one — a cache key that throws on the very
+ * route where rebuilding the integrand is most expensive would be the worst place to find that out.
+ */
+const stable = (value: unknown): string =>
+  JSON.stringify(value, (_k, x: unknown) => (typeof x === "bigint" ? `${x}n` : x)) ?? "∅";
+
+/** What a resolution offers the accumulator — the three arguments it takes, or the reason for none. */
+type AccInputs =
+  | {
+      readonly ok: true;
+      readonly f: PathFn;
+      readonly pieces: readonly Resolved[];
+      readonly integral: ContourIntegral;
+      readonly sides: readonly (CutSide | undefined)[];
+    }
+  /** An engine sentence, never a phrase invented here. */
+  | { readonly ok: false; readonly refusal: string };
+
+function inputsOf(resolution: StateResolution): AccInputs {
+  switch (resolution.kind) {
+    case "gallery": {
+      const run = resolution.run;
+      if (run === null) return { ok: false, refusal: resolution.fatal ?? "this record could not be run" };
+      return { ok: true, f: run.f, pieces: run.resolved, integral: run.integral, sides: run.sides };
+    }
+    case "declared": {
+      const a = resolution.analysis;
+      return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, sides: a.sides };
+    }
+    case "declared-refused":
+      return { ok: false, refusal: resolution.reason };
+    case "plain": {
+      const a = resolution.analysis;
+      return { ok: true, f: resolution.f, pieces: a.resolved, integral: a.integral, sides: a.sides };
+    }
+    case "empty":
+      return { ok: false, refusal: resolution.reason ?? "there is no integrand to accumulate" };
+  }
+}
+
+/**
+ * Why `accumulateForIntegral` returned null — **the engine's own sentence, never a guess**.
+ *
+ * It returns null exactly when `integral.value` is undefined, which is a real case and not an error:
+ * the integral was refused (a contour dragged through a singularity), or the quadrature was
+ * deliberately SKIPPED (a multivalued integrand whose principal-branch samples would confidently
+ * answer a different question). Those are different facts and the strip says which, because
+ * `accumulate.ts`'s own rule is that a partial sum shown beside a refusal hands the reader the very
+ * number the refusal exists to withhold.
+ */
+const withheldBecause = (integral: ContourIntegral): string =>
+  integral.refusal ?? integral.quadratureSkipped ?? "the integral has no value to accumulate";
+
+/** In gallery mode the contour is the RECORD's output, rebuilt on every run (M6.1's finding). */
+const contourOf = (d: StripDraw): ShellState["contour"] =>
+  d.resolution.kind === "gallery" ? (d.resolution.run?.contour ?? d.state.contour) : d.state.contour;
+
+/**
+ * The floor below which a component of the partial sum is the SUM's OWN ROUNDING.
+ *
+ * `format.ts`'s rule needs an error estimate and a midpoint Riemann sum carries none, so this
+ * supplies the honest half that is computable: adding `k` terms whose partial sums reach `scale`
+ * accumulates at most about `k·ε·scale` of float64 rounding, and `fmtApprox` drops whatever is under
+ * it. That is exactly the `1.7641e-18 + 6.28318531i` the module was written for — `∮ dz/z` is `2πi`
+ * and the real part is dust. It is a bound on the ARITHMETIC and not a claim about how close the
+ * Riemann sum is to the integral, which the panel never makes: it says "partial sum", and `∮` is the
+ * result card's.
+ */
+function roundingFloor(acc: Accumulation, terms: number): number {
+  let scale = 0;
+  for (const s of acc.steps) {
+    const m = Math.max(Math.abs(s.running[0]), Math.abs(s.running[1]));
+    if (Number.isFinite(m) && m > scale) scale = m;
+  }
+  return 16 * Number.EPSILON * Math.max(1, terms) * scale;
+}
+
+/**
+ * The partial sum at one step, as text.
+ *
+ * **A NON-FINITE PARTIAL SUM IS NOT ZERO**, and `fmtApprox` would print one as `0`: both components
+ * fail its `> floor` test, which is the right answer for dust and the wrong one for `NaN`.
+ * `removable-one-minus-cos` reaches here — an even step count puts a midpoint exactly on the
+ * removable singularity of `(1 − cos z)/z²`, so every running total after it is undefined — and the
+ * readout must say what it has rather than a number the walk does not carry. The gap itself belongs
+ * to `accumulate.ts` and is named there; this is only the refusal to launder it.
+ */
+function readoutAt(acc: Accumulation, index: number): string {
+  const running = acc.steps[index].running;
+  if (!Number.isFinite(running[0]) || !Number.isFinite(running[1])) return "undefined";
+  return fmtApprox(running, roundingFloor(acc, index + 1));
+}
+
+/**
+ * One line saying what a comparison trail IS, shown only while that toggle is pressed.
+ *
+ * **`Σ Δz` gets the closure sentence only when the contour is CLOSED.** "It closes to 0 because the
+ * contour is closed" is the cheapest striking thing in the app and it is false on an open path,
+ * where that same sum is the displacement from the start to the end — so the claim is read off
+ * `ContourIntegral.closed`, which the engine decided, rather than asserted by a panel that cannot
+ * see the geometry. `null` — no integral at all — keeps the closed wording only because there is
+ * then no trail on screen to be wrong about.
+ */
+function contrastWhy(mode: ContrastMode, closed: boolean | null): string {
+  switch (mode) {
+    case "none":
+      return "Only the sum being computed, $\\sum_k f(z_k)\\,\\Delta z_k$.";
+    case "sumZ":
+      return "$\\sum_k z_k$ — the sample points added up, with neither $f$ nor $\\Delta z$: a walk along the contour itself.";
+    case "sumFz":
+      return "$\\sum_k f(z_k)$ — the values of $f$ added up without the $\\Delta z$ factor: the chop and the add, without the multiply.";
+    case "sumDz":
+      return closed === false
+        ? "$\\sum_k \\Delta z_k$ — the steps alone; it is the displacement from the start to the end, which is not $0$ because this contour is not closed."
+        : "$\\sum_k \\Delta z_k$ — the sum of the steps alone; it closes to $0$ because the contour is closed.";
+  }
+}
+
+/**
+ * What the canvas SHOWS, in words — generated, never written.
+ *
+ * Research 02 §8 makes the head-to-tail partial sum this app's P0 picture and it was completely
+ * unannounced before M6.4. Every clause comes from something that was computed: the step count, the
+ * term the scrub is on, and the partial sum there. A hand-written alternative would drift from the
+ * picture the first time a record changed, and would be the one sentence in this app claiming
+ * something nothing checked.
+ *
+ * Plain text throughout — it is an `aria-label`, where the `$…$` convention has no reader.
+ */
+function describe(scrub: number, acc: Accumulation | null, withheld: string | null): string {
+  if (acc === null || acc.steps.length === 0) {
+    return `The partial sum of f(z)·Δz along the contour. Nothing is plotted — ${withheld ?? "there is nothing to accumulate"}.`;
+  }
+  const index = stepIndex(scrub, acc.steps.length);
+  return (
+    `The partial sum Σ f(zₖ)·Δzₖ, plotted head to tail in the complex plane over ` +
+    `${acc.steps.length} steps along the contour. The trail is drawn to step ${index + 1} of ` +
+    `${acc.steps.length}, where the partial sum is ${readoutAt(acc, index)}.`
+  );
+}
+
+export function createStripView(host: HTMLElement, input: StripInput): StripView {
+  const canvas = document.createElement("canvas");
+  canvas.className = "acc";
+  // The panel is the canvas's SIBLING rather than a wrapper around it, so the sheet's existing
+  // `.shell2 > .strip2 > canvas` rule still sizes the canvas to its box and nothing drawn here waits
+  // on CSS that does not exist yet.
+  const side = document.createElement("div");
+  side.className = "accSide";
+  host.append(canvas, side);
+
+  // A STATIC view: `role="img"`, not focusable, no key map — everything a reader can change about it
+  // (the scrub position, the comparison) is a labelled control in the panel beside it. Every draw
+  // replaces the label with {@link describe}'s sentence; this call establishes the ROLE, and its
+  // initial name comes from the same place so the canvas is never nameless, not even for one frame.
+  const a11y = attachCanvasA11y(canvas, { role: "img", label: EMPTY_DESCRIPTION, liveRegionHost: host });
+
+  /** The accumulation, and the key it was computed for. Null means "nothing computed yet". */
+  let cached: { readonly key: string; readonly acc: Accumulation | null } | null = null;
+
+  /**
+   * Everything that can change the walk, as one string.
+   *
+   * The integrand half is stated in PRIMITIVES rather than by sampling `f`: in the sandbox the
+   * integrand is decided by the expression, the declared factor and the cut system; under a record
+   * by the record, the fixture and the bindings. The geometry half is the resolved pieces
+   * themselves, which are plain numbers (`kernel/geom.ts`'s two shapes). The last component is
+   * PERMISSION, because a contour dragged onto a pole changes the pieces and would be caught anyway
+   * — but a budget or a declaration that withdraws the value need not move anything else, and the
+   * picture must still go.
+   */
+  function keyOf(d: StripDraw, got: AccInputs): string {
+    if (!got.ok) return `x|${got.refusal}`;
+    const s = d.state;
+    const r = d.resolution;
+    const problem =
+      r.kind === "gallery"
+        ? `g|${r.family.id}|${s.fixture}|${stable(s.bindings)}|${stable(s.geometry)}`
+        : `s|${s.expr}|${stable(s.declaration)}|${stable(s.branch)}`;
+    return [
+      r.kind,
+      problem,
+      stable(got.pieces),
+      stable(got.sides),
+      got.integral.value === undefined ? "withheld" : "ok",
+    ].join("|");
+  }
+
+  function accumulate(d: StripDraw, got: AccInputs): Accumulation | null {
+    const key = keyOf(d, got);
+    if (cached !== null && cached.key === key) return cached.acc;
+    const acc = got.ok ? accumulateForIntegral(got.f, got.pieces, got.integral, undefined, got.sides) : null;
+    cached = { key, acc };
+    return acc;
+  }
+
+  function accumulation(d: StripDraw): Accumulation | null {
+    return accumulate(d, inputsOf(d.resolution));
+  }
+
+  function stepAt(d: StripDraw): { readonly index: number; readonly z: Cx } | null {
+    const acc = accumulation(d);
+    if (acc === null) return null;
+    const index = stepIndex(d.state.scrub, acc.steps.length);
+    const step = acc.steps[index];
+    if (step === undefined) return null;
+    return { index, z: step.z };
+  }
+
+  /** Size the canvas to its box at the device ratio, and return its context ready to draw in CSS px. */
+  function sized(): { readonly ctx: CanvasRenderingContext2D | null; readonly w: number; readonly ht: number } {
+    const w = canvas.clientWidth || 1;
+    const ht = canvas.clientHeight || 1;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const px = Math.round(w * dpr);
+    const py = Math.round(ht * dpr);
+    if (canvas.width !== px || canvas.height !== py) {
+      canvas.width = px;
+      canvas.height = py;
+    }
+    const ctx = canvas.getContext("2d");
+    if (ctx === null) return { ctx: null, w, ht };
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, ht };
+  }
+
+  /**
+   * The panel, keyed.
+   *
+   * Through `patch` for the reason every other surface in this shell is, and here it fires
+   * continuously: the scrub is an `<input type="range">` a reader holds with the pointer or drives
+   * with the arrow keys, and a panel rebuilt with `replaceChildren` on every tick would take the
+   * focus out of the very control being used — M7.2's sweep finding, in the one place it would
+   * happen sixty times a second.
+   */
+  function drawPanel(d: StripDraw, got: AccInputs, acc: Accumulation | null, withheld: string | null): void {
+    const title = h("h2", { key: "title" }, ...mathText("Partial sum $\\sum_k f(z_k)\\,\\Delta z_k$", "acct"));
+
+    if (acc === null || acc.steps.length === 0) {
+      // ONE honest sentence, whose reason is the ENGINE's. No readout, no counter, no slider: a
+      // control for a picture that is not there invites a reader to move it and conclude the app is
+      // broken, and a `0` in the value slot would be a number nothing computed.
+      const why = withheld ?? "there is nothing to accumulate";
+      patch(side, [
+        title,
+        h("p", { key: "none", class: "muted small", "data-testid": "acc-none" }, ...mathText(`Nothing is plotted — ${why}.`, "none")),
+      ]);
+      return;
+    }
+
+    const index = stepIndex(d.state.scrub, acc.steps.length);
+    const mode = d.state.contrast;
+    patch(side, [
+      title,
+      h("p", { key: "value", class: "num accValue", "data-testid": "acc-value" }, readoutAt(acc, index)),
+      h(
+        "p",
+        { key: "step", class: "muted small", "data-testid": "acc-step" },
+        `step ${index + 1} of ${acc.steps.length}`,
+      ),
+      h(
+        "label",
+        { key: "scrub", class: "pickRow" },
+        h("span", { key: "l", class: "muted small" }, "position"),
+        h("input", {
+          key: "i",
+          type: "range",
+          class: "slider",
+          min: "0",
+          max: String(STOPS),
+          // Builder rule 2: written as a PROPERTY and only when it differs, so the thumb a reader is
+          // holding is never shoved back by a value it already has.
+          value: String(Math.round(clamp01(d.state.scrub) * STOPS)),
+          "aria-label": `position along the contour, step ${index + 1} of ${acc.steps.length}`,
+          onInput: (e: Event) => input.setScrub(Number((e.target as HTMLInputElement).value) / STOPS),
+        }),
+      ),
+      h(
+        "div",
+        { key: "compare", class: "btnRow" },
+        h("span", { key: "l", class: "muted small" }, "compare with:"),
+        h(
+          "div",
+          { key: "seg", class: "segmented", role: "group", "aria-label": "compare with" },
+          ...CONTRAST_ORDER.map((m) =>
+            h(
+              "button",
+              {
+                key: `c:${m}`,
+                type: "button",
+                "data-mode": m,
+                // **`aria-pressed`, not a class.** The `on` class the old shell toggled is invisible
+                // to assistive tech, so a reader was told there were four buttons and never which of
+                // them was in effect. The stylesheet reads the same attribute, so there is one fact
+                // and not a pair that can disagree.
+                "aria-pressed": m === mode ? "true" : "false",
+                onClick: () => {
+                  input.setContrast(m);
+                  input.announce(m === "none" ? "Comparison off." : `Comparing with ${CONTRAST_LABELS[m]}.`);
+                },
+              },
+              ...mathText(CONTRAST_LABELS[m], `lab${m}`),
+            ),
+          ),
+        ),
+      ),
+      // The ACTIVE toggle's line and no other. Four explanations at once is a legend, and a legend is
+      // read once and then ignored; this one answers the question the reader just asked by pressing.
+      h(
+        "p",
+        { key: "why", class: "muted small", "data-testid": "acc-why" },
+        ...mathText(contrastWhy(mode, got.ok ? got.integral.closed : null), "why"),
+      ),
+    ]);
+  }
+
+  function drawNow(d: StripDraw): void {
+    const got = inputsOf(d.resolution);
+    const acc = accumulate(d, got);
+    const withheld = got.ok ? (acc === null ? withheldBecause(got.integral) : null) : got.refusal;
+
+    // **The panel first, and unconditionally** — `stageView.ts`'s rule, for the same reason: the
+    // canvas may have no 2-D context (jsdom, a lost context) and that is not a fact about the
+    // readout. Drawing the DOM after the early return tied one to the other through nothing but
+    // statement order.
+    drawPanel(d, got, acc, withheld);
+    canvas.setAttribute("aria-label", describe(d.state.scrub, acc, withheld));
+
+    const { ctx, w, ht } = sized();
+    if (ctx === null) return;
+    if (acc === null) {
+      // Cleared, not left standing. A trail from the previous integrand beside a refusal is the one
+      // picture that must never appear: it is the number the refusal exists to withhold, drawn.
+      ctx.clearRect(0, 0, w, ht);
+      return;
+    }
+    drawAccumulator(ctx, acc, w, ht, {
+      theme: d.theme ?? DARK_INK,
+      // The SAME clamped scrub `stepIndex` was given, which is what makes the drawn head, the
+      // readout and the stage's marker one term rather than three that usually agree.
+      upTo: clamp01(d.state.scrub),
+      contrast: d.state.contrast,
+      pieceColours: contourOf(d).pieces.map((p) => p.colour),
+    });
+  }
+
+  let pending = 0;
+  function schedule(next: () => StripDraw): void {
+    if (pending !== 0) return;
+    pending = requestAnimationFrame(() => {
+      pending = 0;
+      drawNow(next());
+    });
+  }
+
+  return {
+    canvas,
+    accumulation,
+    stepAt,
+    schedule,
+    drawNow,
+    destroy: () => {
+      if (pending !== 0) cancelAnimationFrame(pending);
+      a11y.destroy();
+      canvas.remove();
+      side.remove();
+    },
+  };
+}
