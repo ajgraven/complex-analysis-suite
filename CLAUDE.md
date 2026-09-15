@@ -1257,8 +1257,8 @@ the single-page shell; the domain-color render; the doc + PNG-export-verificatio
 **In progress — M8 (Contour Integration: the shell rebuild, ADR-0043).** The presentation layer of
 `apps/contour-integration` is being rebuilt on the existing engine: two rails, KaTeX, textbook vocabulary,
 stage modes, a worked-example mode, an editable piece list. Plan:
-[`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md) (written in parts; Part 1 =
-method + Phase 0). **Live state: [`docs/contour-integration/M8/STATUS.md`](docs/contour-integration/M8/STATUS.md)
+[`docs/contour-integration/M8-plan.md`](docs/contour-integration/M8-plan.md) (complete: method, five
+phases in step detail, risks, step index). **Live state: [`docs/contour-integration/M8/STATUS.md`](docs/contour-integration/M8/STATUS.md)
 — a session working on M8 reads it first, does the one step it names, updates it, commits and pushes
 before ending; never more than one step without a push.** Branch `claude/inspiring-keller-5sizwl`. Phase 0
 merges to `master` alone; Phases 1–5 land in one merge. The owner's usage is metered, so steps are small and

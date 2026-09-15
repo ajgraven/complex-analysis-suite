@@ -1,8 +1,8 @@
 # M8 — the Contour Integration shell rebuild
 
-> **Status: plan in progress.** Parts 1 and 2 (§0–§4: method, phase map, Phase 0 and Phase 1 in full)
-> are written. Part 3 (§5–§7: Phases 2–5 in full) is written in a later session and appended here.
-> The live state of execution is in [`M8/STATUS.md`](M8/STATUS.md) — **read that first**, every session.
+> **Status: plan complete** (Parts 1–3, 2026-09-15). The live state of execution is in
+> [`M8/STATUS.md`](M8/STATUS.md) — **read that first**, every session. The plan changes only through
+> a STATUS.md finding that names the step and the reason.
 
 The review that motivates this milestone is the published page
 `https://claude.ai/artifact/3uUWAhH4PM9qGR2siHvpjV`; its working materials are committed under
@@ -88,7 +88,7 @@ is updated, and the commit is pushed.
 | **4** Piece editor | Contour pieces as an editable list with roles including vanishing lemmas (refused by name when not certifiable); the permalink carries roles; hand-drawn contours can carry an argument. | full gate + browser suite | on the branch |
 | **5** Close | Real-GPU browser pass; a11y baseline; CLAUDE.md status paragraph; the final PR and merge. | full gate | **final merge** |
 
-Phase 1 is the largest and is specified in Part 2 (§4). Phases 2–5 are specified in Part 3 (§5–§7).
+Phase 1 is the largest (§4). Phases 2–5 are §5–§7; §8 is the risk register and §9 the step index.
 
 ## 3. Phase 0 — foundations (specified in full)
 
@@ -710,6 +710,436 @@ row without a test or a reason; pushed.
   and each stage mode, committed under `M8/screens/phase1/`.
 - STATUS.md: Phase 1 closed; Phase 2 step 2.1 next.
 
-## 5. Phase 2 — prose and figures *(Part 3)*
-## 6. Phase 3 — the teaching layer *(Part 3)*
-## 7. Phases 4 and 5 — the piece editor, and closing *(Part 3)*
+## 5. Phase 2 — prose and figures (specified in full)
+
+Phase 0 rewrote every sentence the **engine** composes and every record's description. Phase 1 built
+the shell with its structural strings in the new vocabulary but ported three cards' prose verbatim
+(branch cuts, drill, contrasts). Phase 2 finishes the language on every surface, makes the figure
+export what a colleague would paste into notes, and sweeps the documentation that describes the app.
+
+Suggested sessions: **F** = 2.1 · **G** = 2.2 + 2.3 · **H** = 2.4 + 2.5 + 2.6.
+
+### Step 2.1 — the shell's own prose (M)
+
+**Files.** `src/shell/cards/cuts.ts`, `src/shell/drillPanel.ts`, `src/shell/contrasts.ts`,
+`src/shell/contrastGrid.ts`, `src/shell/drill.ts`, `src/shell/templates.ts`, `src/engine/vocabulary.ts`
+(gains `tagLabel`, `disposalLabel`, `templateLabel`), tests.
+
+**Do.** Rewrite, using `review-inputs/content-review.md` §5 and the rules of 0.5a (no capitalised
+emphasis, no internal citations, no house names, maths in `$…$`):
+- **Branch cuts card**: the declaration intro (today: *"The integrand above is taken whole, in the
+  principal branch of every sub-expression — so its residues are not decidable and there is no ∮.
+  Declare a factorisation to get one …"*) → *"To integrate a multivalued integrand, declare its branch
+  factor: $f(z) = z^{\alpha}\,R(z)$ with a chosen argument window. The box then holds $R(z)$."*; the
+  two modulus paragraphs → one line each; the shadow-cut note → *"Cuts are the rays from $z_0$; drag
+  $z_0$ to move them. A bounded cut (dogbone) cannot be drawn in this mode."*; the seam note → *"The
+  cut is where the declared argument jumps; $\oint_\gamma f\,dz$ does not depend on where the cut lies
+  while it avoids $\gamma$."*; the crossing factor line keeps both forms of $e^{2\pi i J}$ with the
+  one-clause reason; button labels: `declare a factor on z = …` → **Declare branch factor at $z_0$**,
+  `undeclare` → **Remove branch factor**, `shadow cuts` → **Cuts as rays from $z_0$**, `join into one
+  cut` / `split into two rays` → **Join into one cut** / **Split into rays**, `written:` → **Factor
+  form**, `sheet:` → **Sheet**, `window:` → **Argument window**.
+- **Tags** (`tagLabel`): `derived` → *derived*, `→ ∞` → *$R\to\infty$*, `→ 0⁺` → *$\rho\to0^+$*,
+  `resolution capped` → *quadrature capped*, `not sampled` → *not sampled*, `n(γ) undecided` →
+  *$\operatorname{Ind}_\gamma$ undecided*, `located numerically` / `≈ located numerically` → *numerical*,
+  `may be removable` → *possibly removable*, `order uncertain` → *order uncertain*.
+- **Templates** (`templateLabel`): upper semicircle · lower semicircle · indented semicircle ·
+  rectangle · rectangle of height $2\pi$ · sector of angle $2\pi/n$ · square $\Gamma_N$ · keyhole ·
+  dogbone · circle.
+- **Drill** (`disposalLabel` and the panel): the five disposals → *the target* · *$\to 0$* · *a known
+  limit* · *a constant multiple of the target* · *no estimate*; `rung n of 4` → *stage n of 4*; the
+  legend and every instruction per content-review §5; the grading sentences → *Correct.* / *Not all
+  correct; the established statement is shown under each piece.*; `Leave the drill` → **Leave
+  practice**.
+- **Contrasts**: heading *Contrasting arguments*; the legend kept; cell notes and "because" lines per
+  content-review §5; the answer cell for a failing argument → *incomplete (boundary terms)*.
+- **Strip**: the compare toggles' explanations (1.6) checked against the rules.
+- A denylist test over the **built bundle** (`dist/assets/*.js` after `vite build`, or over
+  `src/shell/**` and `src/engine/**` string literals): none of `LEGALITY`, `CATCH`, `KILL`, `COVER`,
+  `rung`, `golden`, `ledger`, `the solve`, `research 0`, `Pass 5`, `L1`…`L8` as display text, and no
+  word of three or more capital letters other than `ML`, `GL`, `PNG`, `URL`, `CET`. Data-key uses of
+  the ids are allowed only in `vocabulary.ts`, `contrast.ts`, `drill.ts` and the codec, which the test
+  exempts by path.
+
+**Done when.** The denylist test passes; every jsdom test that matched old wording is updated through
+the map; pushed.
+
+### Step 2.2 — record-level prose on screen (S)
+
+**Files.** `src/families/records/*.ts` (`golden[].method` strings, 28 × fixtures), `src/families/
+schema.ts` (`golden[].label` from 0.6 verified), the Target card, tests.
+
+**Do.** The "how the value was checked" disclosure (today: *"how the golden value was verified"*) shows
+`golden[].method` rewritten in textbook voice: *"exact residue $-i/\sqrt{a^2-b^2}$ at the enclosed
+root; cross-checked by quadrature on a circle of radius $10^{-4}$ and along the contour"*. Any method
+string naming a trap id, a fixture flag or a research note is rewritten. The Target card shows, in
+order: the title, the target with its answer typeset, the fixture picker, the contour phrase, the
+point, the citation, then the disclosure.
+
+**Done when.** A test asserts no `golden[].method` contains `traps.`, `research`, `fixture that`,
+`catches`, or capitalised emphasis; pushed.
+
+### Step 2.3 — the figure export (M)
+
+**Files.** `src/shell/figure.ts` (`FigureTheme` widened), `src/shell/cards/share.ts`,
+`src/shell/stageView.ts` (offscreen re-render), `src/ui/stage/phase.glsl.ts` (an export-only `light`
+treatment), tests (node for layout and caption; browser for pixels).
+
+**Do.**
+- Three plates: **dark** (the stage as shown), **light** (the review's treatment 6: the phase portrait
+  lightened and desaturated onto a paper ground, the ink in the light theme, poles as ⊗ with labels),
+  **print** (the textbook mode: no portrait, axes, grid, contour, poles, cuts, labels; black ink on
+  white). The GL layer is re-rendered offscreen for light and cleared for print; the ink layer is
+  re-rendered offscreen with the chosen theme at 2×; the accumulator trail is re-drawn in the theme.
+- Caption: the record's human title (or, in the sandbox, *$\oint_\gamma f(z)\,dz$ for $f(z) = …$* in
+  plain text from the 0.4 text siblings), the value with its badge, and the headline. Try rendering the
+  caption through KaTeX → SVG `foreignObject` → canvas once, in the browser suite, and read the canvas
+  back: if it taints in Chromium the plain-text caption stays and STATUS.md records it; if it does
+  not, use it and add a Safari note to the browser-pass checklist (5.1).
+- Metadata unchanged (`Software`, `cas:state`, the verdict), plus `cas:theme`.
+- The Share card's menu enables the three plates; Copy figure copies the dark plate (the clipboard has
+  no theme choice).
+
+**Tests.** Node: `figureLayout`/`figureCaption` for the three themes; browser: the print plate's GL
+band is one colour and its ink band has the pole glyph pixels; the light plate differs from the dark
+plate by more than the M6.3 encode/decode floor; a saved PNG's `readPngText` carries `cas:theme`.
+
+**Done when.** Save figure offers dark, light and print and each downloads a correct plate; pushed.
+
+### Step 2.4 — errors, refusals and empty states in plain language (S)
+
+**Files.** `src/shell/errors.ts` (new), the integrand card, the share card, `src/main.ts`, tests.
+
+**Do.** One module maps every machine message to a sentence: `@cas/expr` parse errors (by error kind
+and position), the codec's refusal reasons (`unknown record` → *"This link names an example this
+version does not have."*, a fixture past the end, an unknown template, a non-finite number, a foreign
+app, a truncated hash, a declaration naming an absent branch point), clipboard failures, and the
+resolution's `empty` reasons. Empty states: the sandbox with an unparseable expression shows the
+axes and *"Type an integrand to begin"* under the input; a record that cannot run shows its title and
+the reason.
+
+**Done when.** A table test maps each known message to a sentence with no code identifiers; pushed.
+
+### Step 2.5 — documentation sweep (S)
+
+**Files.** `README.md` (root: the app row and the tree line), `apps/contour-integration/README.md`
+(status, layout section: the new `src/shell/` structure), `docs/contour-integration/PLAN.md` (§5
+marked superseded by ADR-0043 with a pointer; §7 milestone table gains M8), `DESIGN.md` §7–§8
+(worker protocol and state: note what the new shell does), `GALLERY.md` (the description standard,
+0.6), the M8 plan's status line.
+
+**Done when.** No document describes the old rail, the slug picker or the four internal names as
+user-facing; pushed.
+
+### Step 2.6 — Phase 2 gate (S)
+
+Full gate; browser suite; `pnpm a11y`; screenshots under `M8/screens/phase2/`; STATUS.md: Phase 3
+next.
+
+## 6. Phase 3 — the teaching layer (specified in full)
+
+Everything here is a view over data the engine already produces; the two engine touches (step
+ordering, structured bound values) are named.
+
+Suggested sessions: **I** = 3.1 · **J** = 3.2 · **K** = 3.3 + 3.5 · **L** = 3.4 · **M** = 3.6.
+
+### Step 3.1 — the derivation stepper, linked to the stage (M)
+
+**Files.** New `src/engine/steps.ts`, `src/shell/cards/derivation.ts` (stepper form),
+`src/shell/stageView.ts` (focus and callouts), `src/shell/session.ts` (`step` index), tests.
+
+**Do.**
+- `buildSteps(derivation, resolution): Step[]` with `Step = { id, title, lines: DerivationLine[],
+  focus: { pieceId?, poleIndex?, cutId?, param? }, action?: "limit" }`. The order is the lecturer's,
+  not the ledger's pass order: **the problem** (target, integrand, contour) → **hypotheses** (one
+  step) → **residues** (one step per enclosed pole, or one for the sum when residues are not
+  individually expressible) → **each boundary term** (one step per non-target piece: its bound or
+  its known limit, `focus.pieceId`) → **the limit** (`action: "limit"`, focusing the limit parameter)
+  → **the target identity** (the solved linear relation, from Pass 5's report) → **the conclusion**
+  (value, badge, headline). Records whose target is a residue term (tier G) put the sum step where the
+  residues are. Tested on all 28 records: every derivation line appears in exactly one step; the
+  conclusion is last; the number of boundary-term steps equals the number of non-target pieces.
+- The card in Explore mode: Prev / Next / All, step dots, ← → keys when the card has focus; `All`
+  shows every step expanded (the Phase 1 form). In Worked-example mode the stepper is open by default
+  at step 1, the left rail collapsed.
+- Stage focus: the focused piece drawn emphasised and the others dimmed (an `InkOptions.focus`
+  option; `highlight` stays for hover); the focused pole ringed; the focused parameter's handle
+  pulsing once (a 300 ms CSS transition on the overlay chip, honouring `prefers-reduced-motion`).
+  **Callouts**: for a boundary-term step, a chip on the plane at the piece's midpoint with the bound
+  typeset (`$|\int_{\Gamma_R} f\,dz| \le 0.0493$`); for the target step, the target piece's value; for
+  a residue step, the residue at the pole. Callouts are DOM in the overlay, positioned from the
+  camera, and hidden while a gesture is active.
+
+**Done when.** Stepping through A6, B1, C1, D1 and G1 highlights the right object at every step
+(jsdom: `session.hover`/focus values; browser: the ink focus pixels change); pushed.
+
+### Step 3.2 — scrubbable numbers and the limit as a scrubbed animation (M)
+
+**Files.** `src/kernel/bounds/mlRational.ts` and the other `ArcBound` producers (`ArcBound` gains
+`evaluated: { param: string; at: number; bound: number }` and the claim gets it as typed args),
+`src/engine/ledger.ts` (pass them into the `Claim`), new `src/shell/scrub.ts`, the derivation card,
+`src/shell/stageController.ts` (draft budget during a sweep), tests.
+
+**Do.**
+- A `scrub(paramName, value)` inline element: rendered as the number with a dashed underline,
+  `role="slider"` with `aria-valuenow/min/max`, horizontal drag changes the value (pixels → the
+  parameter's range from `frozenRanges`, at draft budget while dragging, full on release), ← → keys
+  step it, and it is the same field the slider and the stage handle write (`applyParam`). It appears
+  wherever a claim's args include a parameter value: *"let $R = $ ⟨4⟩"*, *"at $\rho = $ ⟨0.05⟩"*,
+  *"$N = $ ⟨3⟩"*.
+- The limit step's **play** control: sweeps the parameter from its current value toward
+  `Param.limit.to` (∞ → the range's maximum; 0⁺ → the minimum) over about three seconds with an
+  ease-out, as a series of `commit`s at draft budget and one at full budget at the end; the sweep is
+  a scrub, so dragging the number interrupts it. Beneath the step, a table fills as the sweep passes
+  checkpoints (for $R$: 2, 4, 8, 16, then "$\infty$" as the certified limit row): the target piece's
+  value (≈), the certified bound (≤), the measured boundary term (≈), each cell badged. No autoplay
+  anywhere; under `prefers-reduced-motion` the control is a "step" button that jumps checkpoint to
+  checkpoint.
+- The limit step's claim text uses the structured value, so the sentence and the number cannot drift.
+
+**Tests.** `ArcBound.evaluated` present for every bound kind on the records that use it; the scrub
+element writes through `applyParam` (jsdom, keyboard); a sweep produces monotone checkpoint rows
+whose bound column decreases for B1 (node, through the controller with a fake clock).
+
+**Done when.** On A6 in Worked-example mode, step 5 plays $R$ from 4 to the range maximum, the bound
+row shrinks in the table and on the callout, and dragging the underlined number scrubs it; pushed.
+
+### Step 3.3 — the amplitwist detail (S)
+
+**Files.** `src/shell/strip.ts`, `src/shell/stageView.ts`, `src/ui/stage/ink.ts` (two arrows and an
+angle arc as an `InkOptions.stepDetail`), tests.
+
+**Do.** With the scrubber at step $k$ (from `acc.steps[k]`): on the stage, at $z_k$, an arrow for
+$\Delta z_k$ and an arrow for $f(z_k)\,\Delta z_k$, both scaled by one factor chosen so the longer is
+about 60 px and stated in the readout (*"arrows ×12"*), with a small arc marking $\arg f(z_k)$; the
+strip highlights segment $k$ of the trail; the side panel shows $|f(z_k)|$, $\arg f(z_k)$ in degrees,
+$\Delta z_k$ and the term. A **Show step** toggle in the strip, on by default in Worked-example mode,
+off in Explore. Nothing else: two arrows and three numbers.
+
+**Done when.** Scrubbing draws the two arrows (browser: pixels in the arrow colours appear only while
+the toggle is on); the readout's numbers equal `acc.steps[k]`'s (jsdom); pushed.
+
+### Step 3.4 — the drill rehoused, with one prediction (M)
+
+**Files.** `src/shell/drillPanel.ts`, `src/shell/frontDoor.ts` (a **Practice** tab), `src/shell/
+drill.ts` (the prediction question data), `src/shell/drillProgress.ts` (a new key version), tests.
+
+**Do.**
+- Entry: the front door gains a **Practice** tab listing the drill tasks with their stage reached;
+  the bar's Drill segment opens it. The task runs in the right rail's top card (1.7) with the stage
+  live; the rung's masks as today.
+- Stage 2's questions typeset (piece names as `nameLatex`); stage 3 gains **one prediction** before
+  the contour menu: for tasks with a half-plane choice, *"In which half-plane must the arc lie for
+  the boundary term to vanish?"* (upper / lower / either), graded against the two closures' ledgers
+  (both exist as contrast cells); for the indented task, *"Does the closed contour enclose a
+  pole?"* (yes / no). The answer is revealed with the ledger's own row as the reason, then the menu
+  opens. One question, forced choice, no free text.
+- Progress storage: a new versioned key (`v2`) carrying the prediction outcome; an old `v1` value is
+  read as "stages only".
+
+**Done when.** The drill runs end to end in the rail with the prediction step; the a11y roster's
+drill permalink still resolves (its selector updated); pushed.
+
+### Step 3.5 — contrasts rehoused (S)
+
+**Files.** `src/shell/contrasts.ts`, `src/ui/shell.css`, tests.
+
+**Do.** The five cells become a collapsible **strip of cards above the stage** (opened from the bar's
+Contrasts button; closed by default): each card shows the typeset integral, the answer or *incomplete
+(boundary terms)*, and the one row that changed from its left neighbour in words; clicking a card
+applies its state and the changed row is highlighted in the hypothesis table (opened automatically
+for that click). The modal from 1.7 is removed. The grid test's content assertions (five cells, the
+declared difference sets, C1 prints the answer) move to the strip.
+
+**Done when.** The strip opens, applies cells, highlights the changed row; the modal code is gone;
+pushed.
+
+### Step 3.6 — Phase 3 gate (S)
+
+Full gate; browser suite; `pnpm a11y` with two new roster entries (a Worked-example permalink at step
+5 of A6; a drill stage-3 permalink with the prediction pending), each with an `expect` selector;
+screenshots under `M8/screens/phase3/`; STATUS.md: Phase 4 next.
+
+## 7. Phases 4 and 5 — the piece editor, and closing (specified in full)
+
+### Phase 4 — contour pieces as an editable list with roles
+
+Owner decision: option (b) — a reader may assign a vanishing lemma to a piece, and the engine
+refuses by name what it cannot certify. One scope limit, recorded here rather than discovered: the
+`reproduces` role needs a coefficient and a solve, which the sandbox does not have (Pass 5 is the
+family loader's), and M7.3 found the ledger takes that role on faith; so in the sandbox the roles are
+**target · vanishes (by a chosen lemma) · known limit (indentation) · free**, and `reproduces` stays
+a record-only role until a sandbox solve exists (a possible M9 item).
+
+Suggested sessions: **N** = 4.1 · **O** = 4.2 · **P** = 4.3 · **Q** = 4.4 + 4.5.
+
+#### Step 4.1 — the editable contour model (M)
+
+**Files.** `src/engine/contour/edit.ts` (new operations), `src/engine/contour/model.ts` (a
+`freeRole` marker is not needed; `Piece.role` and `Piece.lemma` become writable through the
+operations), `src/engine/ledger.ts` (disposal of a `vanish` piece by declared lemma; refusal by
+name), tests.
+
+**Do.**
+- Operations, all pure and returning a new `Contour`: `reversePiece(c, id)`, `reverseContour(c)`,
+  `reorderPieces(c, ids)`, `deletePiece(c, id)` (the neighbours are joined by a straight segment
+  when the endpoints differ, so the chain stays closed), `insertPiece(c, afterId, kind)` (a segment
+  or an arc between the neighbours' endpoints, bulge 0 or the default), `renamePiece(c, id, name,
+  nameLatex)`, `setRole(c, id, role, lemma?)`. The closure check (`ledger.ts` ≈571) already reads
+  endpoint chaining; the operations keep it true by construction (tested: every operation on every
+  template preserves closure).
+- Disposal by declared lemma: a `vanish` piece with `lemma` set routes to the reader for that lemma
+  (the ML estimate, Jordan, the indentation lemma, the large-arc limit, the wedge and strip and
+  square side bounds, the branch and log arcs); a reader that cannot certify returns a **refusal
+  naming the missing hypothesis** (*"$\Gamma_R$: declared to vanish by Jordan's lemma; not certified —
+  the integrand has no factor $e^{iaz}$"*), which becomes a failed Boundary-terms row with a repair.
+  A `vanish` piece with no lemma keeps today's behaviour (the ledger reads the lemma off the shape).
+  `known limit` is the indentation role (`L4`) and requires a simple pole at the arc's centre, as
+  today.
+- **Target in the sandbox**: with exactly one `target` piece and every other piece certified
+  (vanishing or a known limit), the ledger reports *"the integral over the target piece in the limit
+  equals $\oint_\gamma f\,dz$ minus the known limits"* and the result card shows that value with the
+  meet of the certificates as its badge — the sandbox's first real-integral answer. With any piece
+  `free`, no target value is reported and the row says which piece is undisposed.
+
+**Tests.** Every operation preserves closure and piece count invariants across the ten templates;
+Jordan declared on a rational integrand refuses by name; the ML estimate declared on B1's sandbox
+twin refuses with the degree-gap reason; the semicircle on $1/(1+z^2)$ with `[−R,R]` as target and
+$\Gamma_R$ vanishing by the ML estimate reports $\pi$ with `=`; a `free` piece blocks the target
+value.
+
+**Done when.** Tests green; pushed.
+
+#### Step 4.2 — the pen's pieces carry roles, and a drawn argument closes (M)
+
+**Files.** `src/engine/contour/pen.ts` (`PenPath` nodes may carry a role and lemma; `penContour`
+emits them), `src/shell/stageController.ts` (after closing a path, the pieces default to `free`),
+the ledger (a drawn piece with a declared role is treated exactly as a template piece), tests.
+
+**Do.** A hand-drawn contour becomes an argument by assigning roles to its pieces (4.3's UI); the
+engine side is that `penContour` preserves roles and the arc-extent reader accepts a drawn arc's
+geometry (centre and sweep from the bulge) for the ML and Jordan readers, which today read template
+arcs only. Where a drawn arc is not centred at the origin the readers refuse by name, as M4.6c
+established for off-centre arcs.
+
+**Tests.** A drawn upper semicircle (four-vertex approximation with one bulged arc) around $i$ for
+$1/(1+z^2)$, with the base segment as target and the arc vanishing by the ML estimate, reports $\pi$
+with the same badge as the template; a drawn arc off-centre refuses by name.
+
+**Done when.** Tests green; pushed.
+
+#### Step 4.3 — the list editor (M)
+
+**Files.** `src/shell/cards/contour.ts`, `src/shell/stageController.ts` (insert-by-drag: a new
+vertex on a segment), `src/ui/shell.css`, tests.
+
+**Do.** Each row gains: a drag grip for reorder (pointer and keyboard: Alt+↑/↓), a **role** menu
+(target · vanishes ▸ ML estimate / Jordan's lemma / large-arc limit / branch arc / log arc / wedge
+bound / strip side / square side · known limit · free), **reverse**, **delete**, **rename** (inline,
+Enter/Escape); a **+** control inserting a segment or arc after the row; the row shows the piece's
+ledger status inline (✓ certified, ⚠ refused with the reason on hover and in the row's expandable
+detail). The template menu and the pen remain the ways to create a whole contour. Every edit is one
+undo entry.
+
+**Tests.** jsdom: reorder by keyboard changes piece order and the stage draws the new order; a role
+change to Jordan on a rational integrand shows the refusal on the row; delete joins the neighbours;
+rename survives a recompute (keyed row).
+
+**Done when.** The list is fully editable with keyboard and mouse; pushed.
+
+#### Step 4.4 — the wire form carries roles (S)
+
+**Files.** `src/shell/viewState.ts`, tests.
+
+**Do.** `PenContourWire` gains optional `r: [role, lemma?][]` by piece index and `n: string[]` for
+renamed pieces; `TemplateContourWire` gains an optional `roles` override map when a template's roles
+or names were edited and an `ops` list is **not** carried (the edited piece list is carried as a pen
+wire instead — a template with structural edits is serialised as its vertices and bulges, since the
+recipe no longer rebuilds it). Encode-time verification as today (rebuild and compare by shape);
+decode refuses by name a role the lemma set does not know. The round-trip-by-verdict test gains
+edited contours.
+
+**Done when.** An edited contour's permalink reopens with the same ledger rows; pushed.
+
+#### Step 4.5 — Phase 4 gate (S)
+
+Full gate; browser suite; screenshots under `M8/screens/phase4/`; STATUS.md: Phase 5 next.
+
+### Phase 5 — closing
+
+Suggested session: **R** = 5.1 + 5.2 + 5.3 + 5.4 (four S steps; stop after any).
+
+#### Step 5.1 — the browser pass on a real GPU (S)
+
+**Files.** New `M8/browser-pass.md`.
+
+**Do.** A click-through checklist the owner runs on a real machine (the executor runs it under
+SwiftShader first and records the results): each stage mode on A6, D1, D7 and G1; a drag across a
+pole; the pen; the keyhole's cut drag; every figure plate saved and opened; the front door with
+keyboard only; the drill end to end; a worked example stepped and played; Safari and Firefox notes
+(the `ClipboardItem` promise form; `foreignObject` if 2.3 adopted it). Findings go to STATUS.md and
+are fixed before 5.4.
+
+#### Step 5.2 — accessibility baseline (S)
+
+`pnpm a11y` with the roster's app entries (default, drill, worked example); the target is zero rules
+as M6.4 achieved; every remaining rule named with its reason in `scripts/a11y-baseline.json`. A CDP
+walk of the accessibility tree (the M6.4 method, not a DOM walk) for the three states, recorded in
+STATUS.md: interactive node count, unnamed count (must be zero).
+
+#### Step 5.3 — documentation (S)
+
+`CLAUDE.md`: the "In progress — M8" paragraph becomes "Done — M8" with one paragraph in the style of
+the M7 entries (what changed, the findings that mattered); the test census numbers updated; the
+brief's Contour Integration paragraph mentions the new shell. `README.md` (root and app), `PLAN.md`
+§7, `docs/refactor/LOG.md` (the M8 findings from STATUS.md folded in), ADR-0043's action items
+ticked. `M8/STATUS.md` marked closed with the final commit.
+
+#### Step 5.4 — the final pull request and merge (S)
+
+Full gate; the PR from the branch to `master` titled *Contour Integration: M8 — the shell rebuild
+(Phases 1–5)*, body listing the phases, the decisions, the findings, and the screenshots; merged by
+the owner. Then the branch is done.
+
+## 8. Risks specific to M8
+
+| Risk | Where it bites | Mitigation |
+|---|---|---|
+| KaTeX cannot render to canvas; a typeset caption on the figure may taint the canvas via `foreignObject` | 2.3 | Try once in the browser suite; keep the plain-text caption if it taints; record the result |
+| CET-C6 table data not fetchable in the execution session | 1.9 | Keep the OKLCH ramp for `full`, stub the file, record the finding; never hand-type an approximation under the CET name |
+| The keyed builder has an edge case (listener duplication, focus loss on reorder) | 1.1 onward | Its own unit tests in 1.1; the "focused control survives a patch" test is the guard |
+| KaTeX in the rails is slow on a long derivation | 1.5, 3.1 | Memoisation by string; the stepper shows one step at a time; measure a 60-frame drag as M6.3 did and record ms/frame |
+| The old shell's tests pin wording that Phase 0 changes before Phase 1 exists | 0.2, 0.5 | Tests match through `vocabulary.ts` and the dump baseline from 0.3; the old shell is kept green through Phase 0 |
+| Bundle growth (KaTeX ≈ 300 kB + fonts) | 1.1 | Already paid by four sibling apps; fonts subset by KaTeX's own CSS; measure at 1.13 |
+| Structural edits to a template contour break the permalink's recipe | 4.4 | Serialise edited templates as pen wires; verify on encode |
+| A session ends mid-step with a broken tree | any | Checkpoint commits with `wip(contour)` and a STATUS.md line; the branch is allowed to be red between gates |
+| The Phase 0 solo merge conflicts with later work on the branch | 0.7 | Restart the branch from `master` after the merge, per the repo's merged-branch rule |
+
+## 9. Step index
+
+| Step | Size | Session | Step | Size | Session |
+|---|---|---|---|---|---|
+| 0.1 wrong claims | S | A | 2.1 shell prose | M | F |
+| 0.2 vocabulary | S | A | 2.2 record prose | S | G |
+| 0.3 structured claims | M | B | 2.3 figure export | M | G |
+| 0.4 LaTeX | M | C | 2.4 errors in plain language | S | H |
+| 0.5a claims doc | S | C | 2.5 doc sweep | S | H |
+| 0.5b apply sentences | M | D | 2.6 gate | S | H |
+| 0.6 descriptions, citations | M | D | 3.1 stepper | M | I |
+| 0.7 gate + merge | S | E | 3.2 scrubbable numbers | M | J |
+| 1.1 scaffold | S | S1 | 3.3 amplitwist | S | K |
+| 1.2 visual system | M | S1 | 3.4 drill + prediction | M | L |
+| 1.3 stage controller | M | S2 | 3.5 contrasts strip | S | K |
+| 1.4 left rail | M | S3 | 3.6 gate | S | M |
+| 1.5 right rail | M | S4 | 4.1 editable model | M | N |
+| 1.6 strip | S | S4 | 4.2 pen roles | M | O |
+| 1.7 modes, permalinks | M | S5 | 4.3 list editor | M | P |
+| 1.8 front door, cold start | M | S6 | 4.4 wire form | S | Q |
+| 1.9 stage modes, CET-C6 | M | S7 | 4.5 gate | S | Q |
+| 1.10 hover | S | S8 | 5.1 browser pass | S | R |
+| 1.11 undo | S | S8 | 5.2 a11y | S | R |
+| 1.12 parity, cutover | M | S9 | 5.3 docs | S | R |
+| 1.13 gate | S | S10 | 5.4 PR and merge | S | R |
+
+Forty-two steps in twenty-eight suggested sessions at the owner's stated rate; any session may stop
+after any step.

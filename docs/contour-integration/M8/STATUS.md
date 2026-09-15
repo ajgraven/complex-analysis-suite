@@ -7,8 +7,7 @@ changed.
 
 ## Current
 
-- **Plan drafting:** Parts 1 and 2 written (§0–§4). **Next drafting action:** write Part 3 (§5–§7,
-  Phases 2–5 in full) — a Fable session, about one S step. Execution of Phase 0 does not wait for it.
+- **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
 - **Execution:** not started. **Next execution action:** Phase 0, step 0.1 (an Opus session; suggested
   session A = steps 0.1 + 0.2).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
@@ -20,7 +19,8 @@ changed.
 |---|---|---|---|
 | 2026-09-14 | review | 3f3c9da | review published; working materials under `review-inputs/` |
 | 2026-09-15 | plan Part 1 | 5efe5b9 | §0–§3, ADR-0043, CLAUDE.md pointer; the brief's "even" sentence corrected |
-| 2026-09-15 | plan Part 2 | (this commit) | §4, Phase 1 in full: architecture, thirteen steps, ten suggested sessions |
+| 2026-09-15 | plan Part 2 | a50b5ed | §4, Phase 1 in full: architecture, thirteen steps, ten suggested sessions |
+| 2026-09-15 | plan Part 3 | (this commit) | §5–§9: Phases 2–5 in full, the M8 risk register, the step index (42 steps, 28 sessions) |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -39,3 +39,7 @@ changed.
   textbook are one click away. Rationale in plan §4 step 1.9.
 - (plan Part 2) The drill and the contrasts move out of full-screen overlays in Phase 1 only as far as
   a correct modal dialog and a rail card; their rehousing proper is Phase 3.
+- (plan Part 3) In the sandbox the piece roles are target · vanishes (by a chosen lemma) · known limit ·
+  free; `reproduces` stays record-only because it needs a coefficient and a solve the sandbox does not
+  have (plan §7). The sandbox gains a target value instead: $\oint$ minus the known limits, when every
+  other piece is certified.
