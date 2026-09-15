@@ -65,14 +65,12 @@ export const shareCard: Card = (ctx) => {
     // summary would spend. It goes through `mathText` for the same reason every engine sentence in
     // the rail does: the `$…$` rule is the rail's, not each card's, and a sentence that grows a
     // formula must not start rendering its delimiters.
-    head.push(
-      h("p", { key: "no", class: "verdict" }, badge("⚠"), ...mathText(` ${refusal}`, "rf")),
-      h(
-        "p",
-        { key: "fix", class: "repair small" },
-        "Pick a template, or redraw the contour, and the link comes back.",
-      ),
-    );
+    // **And no repair line.** `EncodeResult` carries a reason and no repair, and one guessed here
+    // would be false for at least one of the reasons it has to cover: "redraw the contour" is the
+    // answer to a recipe that does not rebuild and nonsense for gallery mode with no record open,
+    // which is repaired by opening one. A row that says something false is the defect M5.6c found
+    // three of; the codec's sentence alone says less and says it truly.
+    head.push(h("p", { key: "no", class: "verdict" }, badge("⚠"), ...mathText(` ${refusal}`, "rf")));
   } else if (bytes !== null) {
     const over = bytes > URL_WARNING_BYTES;
     head.push(
@@ -144,13 +142,18 @@ export const shareCard: Card = (ctx) => {
     // landed and `⚠` for one that did not, and a card that stamped its own badge could report a
     // failure under an `=`. It is transient by construction — `resetTransient` clears it — so a
     // restored state never opens claiming a link was copied.
-    session.notice === null
-      ? null
-      : h(
-          "p",
-          { key: "notice", class: "verdict", role: "status" },
-          badge(session.notice.level, "nb"),
-          ...mathText(` ${session.notice.text}`, "nt"),
-        ),
+    //
+    // **The region is always here and only its CONTENTS come and go**, which is the old shell's
+    // shape and the reason for it: a `role="status"` element inserted with its text already inside
+    // is not reliably announced — assistive technology watches a live region it was given the
+    // chance to observe empty. Rendering it conditionally would make every notice silent for
+    // exactly the readers who cannot see the badge.
+    h(
+      "p",
+      { key: "notice", class: "verdict", role: "status" },
+      ...(session.notice === null
+        ? []
+        : [badge(session.notice.level, "nb"), ...mathText(` ${session.notice.text}`, "nt")]),
+    ),
   );
 };

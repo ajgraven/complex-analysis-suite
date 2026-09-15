@@ -180,6 +180,25 @@ describe("the gate: the sandbox, with a declared branch", () => {
     if (!enc.ok) expect(enc.reason).toContain("does not rebuild the contour on screen");
   });
 
+  it("REFUSES a declaration whose branch point the state no longer has", () => {
+    // **The two halves of `encodeShell` held different postures**, found reviewing M8 step 1.5b. The
+    // contour's recipe is rebuilt and compared before a link is minted, because a link that opens a
+    // different shape is worse than no link. A declaration was written straight out, and the DECODE
+    // side refused it on arrival — loud rather than silent, so nothing was ever wrong, but the
+    // failure was deferred onto whoever opened the link, who is exactly the reader who cannot do
+    // anything about it. Reachable by declaring a factor and then removing its branch point, which
+    // no code path prevents.
+    const s = declaredKeyhole();
+    expect(s.declaration, "this fixture declares nothing, so the test asserts nothing").not.toBeNull();
+    const orphaned: ShellState = { ...s, branch: { ...s.branch, points: [] } };
+    const enc = encodeShell(orphaned);
+    expect(enc.ok).toBe(false);
+    if (!enc.ok) expect(enc.reason).toContain("no longer has");
+    // And the un-orphaned state still encodes, so the check is about the ORPHAN and not about
+    // declarations in general.
+    expect(encodeShell(s).ok).toBe(true);
+  });
+
   it("round-trips a contour at MOVED PARAMETERS, which move the ledger", () => {
     // The sandbox's `R` handle edits a parameter, so a link that dropped the values would reopen at
     // the template's own — a different contour behind the same picture. The arc's bound moves with

@@ -34,7 +34,7 @@ import { Frac } from "@cas/exact";
 import { setParam, translateContour } from "../engine/contour/edit.js";
 import type { Contour } from "../engine/contour/model.js";
 import type { Bindings } from "../families/schema.js";
-import type { BranchChoice, BranchPoint, CutArc } from "../kernel/branch/model.js";
+import { effectiveBranch, type BranchChoice, type BranchPoint, type CutArc } from "../kernel/branch/model.js";
 import type { Cx } from "../kernel/geom.js";
 import type { ContrastMode } from "../ui/accumulator.js";
 import { defaultState, offeredCorpus, type ContourSource, type DrillState, type ShellState } from "./state.js";
@@ -376,6 +376,19 @@ export function encodeShell(state: ShellState): EncodeResult {
     if (!same(c.wire, { t: TEMPLATES[0].id })) wire.c = c.wire;
     if (state.declaration !== null) {
       const dec = state.declaration;
+      // **VERIFIED, like the contour's recipe beside it** — M8 step 1.5b, from a review that found
+      // the two halves of this function held different postures. The recipe above is rebuilt and
+      // compared before a link is minted, because a link that opens a different shape is worse than
+      // no link; a declaration naming a branch point the state does not carry was written straight
+      // out, and `decodeShell` refuses it on arrival instead. The failure was loud rather than
+      // silent, so nothing was ever wrong — but it was deferred onto whoever OPENED the link, which
+      // is exactly the reader who cannot do anything about it.
+      if (!effectiveBranch(state.branch).points.some((q) => q.id === dec.pointId)) {
+        return {
+          ok: false,
+          reason: `the declared factor sits on branch point '${dec.pointId}', which this state no longer has — the link would open with nothing declared`,
+        };
+      }
       wire.dc = {
         p: dec.pointId,
         w: [fracOut(dec.window[0]), fracOut(dec.window[1])],

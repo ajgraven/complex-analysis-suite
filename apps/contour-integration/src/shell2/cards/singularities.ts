@@ -10,6 +10,7 @@
 // all three: `f` is entire and the singular set is EMPTY; `f` could not be read, so nothing is
 // claimed; `f` was read and has no poles. The card asks the decision first, for that reason.
 import { fmt, fmtCx } from "../../kernel/decimal.js";
+import { declaredOrder } from "../../shell/state.js";
 import type { ContourIntegral } from "../../engine/contour/integrate.js";
 import { h, type Desc } from "../dom.js";
 import { math } from "../math.js";
@@ -30,8 +31,10 @@ export const singularitiesCard: Card = ({ state, resolution, session, poles, act
   // With a factor declared these are the poles of `R(z)` and not of the integrand: a branch point is
   // not a pole and carries no residue, so the two lists are genuinely different and a reader
   // comparing this card to the expression box would otherwise be misled.
+  // `declaredOrder`, not the field — an orphaned declaration resolves to nothing and the poles are
+  // the integrand's again. See `integrand.ts` for the defect this prevents.
   const cofactorOnly =
-    (state.mode === "sandbox" && state.declaration !== null) ||
+    (state.mode === "sandbox" && declaredOrder(state) !== null) ||
     (resolution.kind === "gallery" && resolution.family.branch !== undefined);
 
   if (poles.entire === true) {

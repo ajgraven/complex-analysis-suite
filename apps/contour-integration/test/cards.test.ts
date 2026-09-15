@@ -142,22 +142,31 @@ describe("the Integrand card", () => {
     // could not see it was told the box held the integrand when it held the cofactor.
     const plain = q<HTMLInputElement>(rail(sandbox()).host, "input.expr");
     expect(plain.getAttribute("aria-label")).toBe("integrand f(z)");
-    const cofactorBox = q<HTMLInputElement>(
-      rail(
-        sandbox({
-          expr: "1/(1+z)",
-          declaration: {
-            pointId: "b1",
-            window: [Frac.of(0n), Frac.of(2n)],
-            sign: 1,
-            constant: [1, 0],
-            logPower: 1,
-          },
-        }),
-      ).host,
-      "input.expr",
-    );
+    const cofactorBox = q<HTMLInputElement>(rail(declared()).host, "input.expr");
     expect(cofactorBox.getAttribute("aria-label")).toBe("cofactor R(z)");
+  });
+
+  it("calls the box the INTEGRAND again when the declaration is orphaned", () => {
+    // **The first draft of the test above built exactly this state and asserted the opposite.** A
+    // declaration names a branch POINT; remove the point and `declaredOrder` returns null, so
+    // `resolveState` falls through to the plain branch and integrates the box WHOLE — while a card
+    // keyed on `state.declaration !== null` goes on calling it the cofactor. That is M6.1's finding
+    // in a new place, and the test that documented it is how it would have survived.
+    const orphan = sandbox({
+      expr: "1/(1+z)",
+      declaration: {
+        pointId: "b1",
+        window: [Frac.ZERO, Frac.of(2n)],
+        sign: 1,
+        constant: [1, 0],
+        logPower: 1,
+      },
+    });
+    expect(orphan.branch.points, "this state has a branch point, so nothing is orphaned").toEqual([]);
+    const box = q<HTMLInputElement>(rail(orphan).host, "input.expr");
+    expect(box.getAttribute("aria-label")).toBe("integrand f(z)");
+    // And the singularities are the INTEGRAND's again, not "of the cofactor R(z)".
+    expect(q(rail(orphan).host, '[data-card="singularities"]').textContent ?? "").not.toContain("cofactor R(z)");
   });
 
   it("previews what PARSING produced, which is not what was typed", () => {

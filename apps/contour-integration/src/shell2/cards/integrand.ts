@@ -11,6 +11,7 @@
 // no longer the example the ledger is arguing about.
 import { toLatex } from "@cas/expr";
 
+import { declaredOrder } from "../../shell/state.js";
 import { PRESETS } from "../../shell/presets.js";
 import { contourIntegrandLatex } from "../../families/latex.js";
 import { h } from "../dom.js";
@@ -33,7 +34,14 @@ export const integrandCard: Card = ({ state, resolution, actions }) => {
   // Under a declaration the box holds `R(z)`, and the declared factor is shown above it typeset —
   // which is the same fact the old shell carried in a swapped label, moved somewhere a reader who
   // cannot see the label still gets it.
-  const declared = state.declaration !== null;
+  //
+  // **`declaredOrder`, NOT `state.declaration !== null`**, and the difference is a live defect this
+  // card shipped at 1.4a. A declaration names a branch POINT, and removing that point leaves the
+  // declaration orphaned: `declaredOrder` then returns null and `resolveState` falls through to the
+  // plain branch, integrating the box WHOLE — while a card keyed on the field alone goes on calling
+  // it the cofactor. That is M6.1's own finding in a new place, where the box held `R(z)` under an
+  // `R(z) =` label and the app integrated it as the integrand with a plausible number beside it.
+  const declared = declaredOrder(state) !== null;
   // **The preview's source depends on which branch ran**, and that is content rather than plumbing:
   // with a factor declared the box holds `R(z)`, so the AST to typeset is the COFACTOR and not the
   // product — which is exactly what the label above the box says it is.
