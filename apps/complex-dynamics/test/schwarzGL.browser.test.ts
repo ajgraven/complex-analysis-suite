@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { makeBoundedSchwarz, makeUnboundedLaurentSchwarz, type Complex } from "@cas/schwarz";
-import { schwarzBoundaryPoly, renderSchwarzField, SCHWARZ_OFF_DISK_RGB } from "../src/render/schwarzView";
+import {
+  schwarzBoundaryPoly,
+  renderSchwarzField,
+  schwarzEscapeAt,
+  pixelToPlot,
+  SCHWARZ_OFF_DISK_RGB,
+} from "../src/render/schwarzView";
 import { createSchwarzGLRenderer } from "../src/render/schwarzGL";
 import { schwarzColormap } from "../src/render/schwarzColormaps";
 import { quatFromAxisAngle } from "../src/render/sphereView";
@@ -148,19 +154,105 @@ describe("CD σ GPU render (S4b-ii + ADR-0009 item 3) — full pipeline in real 
     r.destroy();
   });
 
-  it("renders a pole-bearing σ field (single exterior pole) with structure — parity with the CPU path", () => {
+  // A pole-bearing φ (one finite branch pole), and the one test in this file that checks the GPU field
+  // against the CPU engine PIXEL BY PIXEL rather than against a property of the frame.
+  //
+  // It has to, because a frame property cannot see this map's structure. Its σ field is EXACTLY two
+  // classes — K (n=0) and the first tile (n=1) — at every zoom: every point of Ω enters K in ONE step, so
+  // there is no escaping set and no deeper tiling to find (measured on the CPU engine at zoom
+  // 0.3/0.5/0.8/1.2/2/3/5: the 48-iteration escape time returns n=0 and n=1 and nothing else). And under
+  // the LINEAR scale mode the shader paints those two the SAME colour, correctly: computeT(1) is exactly
+  // 0 and computeT(0) is negative and clamps there, which is the very fact the K-interior test above
+  // depends on. So the honest linear frame for this map is a FLAT FILL, and the `distinctColors > 1`
+  // this test used to assert was being satisfied by two stray `invalid` (80,80,80) speckle pixels — the
+  // mask-vs-ψ defect that `schwarzMask.browser.test.ts` now pins at zero. The assertion passed on the
+  // defect, so removing the defect broke it.
+  //
+  // sqrt separates the two classes (t=0 vs √(1/48)), which is what lets a frame show the split at all.
+  // The two colours are then read OFF THE FRAME rather than predicted, so this stays a parity check and
+  // does not re-implement computeT or the colormap LUT.
+  it("renders a pole-bearing σ field (single exterior pole): the K / first-tile split matches the CPU", () => {
     const r = createSchwarzGLRenderer();
     expect(r).not.toBeNull();
     if (!r) return;
     const phi = { c: 1, F: [] as Complex[], branches: [{ z: [0.2, 0] as Complex, A: [[0.3, 0] as Complex] }] };
     const engine = makeUnboundedLaurentSchwarz(phi.c, phi.F, phi.branches);
-    r.setPhi(phi, schwarzBoundaryPoly(engine));
+    const poly = schwarzBoundaryPoly(engine);
+    r.setPhi(phi, poly);
     const size = 64;
-    expect(r.render({ center: [0, 0], zoom: 0.3 }, size, OPTS)).toBe(true);
+    const view = { center: [0, 0] as [number, number], zoom: 0.3 };
+    const opts = { ...OPTS, scaleMode: "sqrt" as const };
 
+    // The CPU classification, on the SAME pixel centers the shader uses (pixelToPlot is the app's own
+    // view map). `cpuN[i]` is the fundamental step count; the premise that it is only ever 0 or 1 is
+    // asserted, not assumed — a φ that grew an escaping set would make the frame properties below wrong.
+    const cpuN = new Int32Array(size * size);
+    for (let py = 0; py < size; py++) {
+      for (let px = 0; px < size; px++) {
+        const res = schwarzEscapeAt(engine, poly, pixelToPlot(px, py, size, view), opts);
+        expect(res.kind, `CPU class at (${px},${py})`).toBe("fundamental");
+        cpuN[py * size + px] = res.kind === "fundamental" ? res.n : -1;
+      }
+    }
+    const nK = cpuN.reduce((acc, n) => acc + (n === 0 ? 1 : 0), 0);
+    const nTile1 = cpuN.reduce((acc, n) => acc + (n === 1 ? 1 : 0), 0);
+    expect(nK + nTile1, "the CPU field is exactly {n=0, n=1}").toBe(size * size);
+    expect(nK, "K is a real part of this window").toBeGreaterThan(size);
+    expect(nTile1, "so is the first tile").toBeGreaterThan(size);
+
+    expect(r.render(view, size, opts)).toBe(true);
     const d = readPixels(r.canvas, size);
     for (let i = 3; i < d.length; i += 4) expect(d[i]).toBe(255); // opaque
-    expect(distinctColors(d).size).toBeGreaterThan(1); // structure, not a flat fill
+
+    // Two classes ⇒ two colours and no third: an `invalid` speckle pixel, an escaped pixel or an
+    // interior pixel would each show up here as one more.
+    const colors = distinctColors(d);
+    expect(colors.size, `two σ classes ⇒ two colours (saw ${[...colors].join(" | ")})`).toBe(2);
+
+    // Which colour is which is pinned by the palette, not by the counts: K is n=0 ⇒ computeT(0) clamps to
+    // the ramp's t=0 end, the same datum the deltoid K-interior test above uses.
+    const kColor = `${schwarzColormap("viridis")[0].join(",")}`;
+    expect(colors.has(kColor), `K paints at the ramp's t=0 end (${kColor})`).toBe(true);
+
+    // Per-pixel parity. The mask is a 1024² rasterisation of ∂Ω re-stroked AGAINST Ω (conservativeOmega),
+    // so its edge carries a deliberate ≤ 1-texel bias; a pixel whose center falls inside that band may
+    // legitimately land on the other side from the CPU's exact polygon test. What may NOT differ is a
+    // pixel in the interior of either class — so the allowance is derived from the CPU map itself (is this
+    // pixel on its own class boundary?) rather than set as a tolerance.
+    //
+    // This is the clause schwarzMask.browser.test.ts could not build against the DELTOID, and it is what
+    // stops "no invalid pixels" from being buyable by over-dilating the mask until Ω is gone. Its
+    // sensitivity was measured by widening the conservative stroke and re-running: at the shipped ±1
+    // texel (2.69e-3 world) 0 interior and 2 boundary pixels differ; at ±20 texels 0 / 42 — caught by the
+    // boundary cap; at ±60 texels 14 / 102 and at ±200, 108 / 102. So the check bites once the boundary
+    // moves by about one SCREEN pixel (1.04e-1 world here), and the margin actually shipped is 38.7×
+    // finer than that. The class-edge count saturates at 102 — the edge's own length — which is what the
+    // cap below is a fraction of.
+    let interiorMismatch = 0;
+    let boundaryMismatch = 0;
+    for (let py = 0; py < size; py++) {
+      for (let px = 0; px < size; px++) {
+        const i = (py * size + px) * 4;
+        const n = cpuN[py * size + px];
+        const gpuIsK = `${d[i]},${d[i + 1]},${d[i + 2]}` === kColor;
+        if (gpuIsK === (n === 0)) continue;
+        let onClassEdge = false;
+        for (let dy = -1; dy <= 1 && !onClassEdge; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const qx = px + dx;
+            const qy = py + dy;
+            if (qx < 0 || qy < 0 || qx >= size || qy >= size) continue;
+            if (cpuN[qy * size + qx] !== n) onClassEdge = true;
+          }
+        }
+        if (onClassEdge) boundaryMismatch++;
+        else interiorMismatch++;
+      }
+    }
+    expect(interiorMismatch, "GPU and CPU agree away from ∂Ω").toBe(0);
+    expect(boundaryMismatch, "and the ∂Ω band they may differ on is a few pixels, not a region").toBeLessThan(
+      size / 4,
+    );
     r.destroy();
   });
 
