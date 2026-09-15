@@ -56,6 +56,36 @@ describe("the keyed builder", () => {
     expect([...host.children]).toEqual([b]);
   });
 
+  it("REFUSES two children of one parent that share a key", () => {
+    // A duplicate key is a caller's bug that used to be silent and permanent: the map holds one node
+    // per key, so the first is never matched and never removed, and the app draws it twice forever.
+    // Step 1.4 shipped exactly that for one render — a card's table taking the `<h2>`'s key.
+    const host = document.createElement("div");
+    expect(() => patch(host, [h("h2", { key: "t" }, "A"), h("table", { key: "t" })])).toThrow(/share the key 't'/);
+  });
+
+  it("OWNS its parent's children: anything it did not put there is removed", () => {
+    // Removal by "what is left in the key map" misses a node that has no key at all, so a stray
+    // appended into a patched parent lives there forever. Removing by "not wanted" makes the
+    // contract statable: a patched parent is the patch's, and the shell appends to its own hosts.
+    const host = document.createElement("div");
+    patch(host, [h("p", { key: "a" }, "A")]);
+    host.append(document.createElement("hr"));
+    expect(host.children.length).toBe(2);
+    patch(host, [h("p", { key: "a" }, "A")]);
+    expect(host.children.length, "a foreign node survived a patch").toBe(1);
+  });
+
+  it("removes a node whose key another child TOOK, rather than stranding it", () => {
+    // The other half of the same defect: removal used to be "whatever is left in the key map", and a
+    // node that had been displaced from that map was in neither list.
+    const host = document.createElement("div");
+    patch(host, [h("h2", { key: "t" }, "A")]);
+    patch(host, [h("p", { key: "t" }, "B")]);
+    expect(host.children.length).toBe(1);
+    expect(host.children[0].tagName).toBe("P");
+  });
+
   it("leaves a FOCUSED input focused, with its caret, across a patch", () => {
     const host = document.createElement("div");
     document.body.append(host);
@@ -673,5 +703,64 @@ describe("the stage's gestures", () => {
     // jsdom gives the stage a 1×1 viewport, so the pan's magnitude is not the property — that it
     // panned at all, and released, is.
     expect(app.currentState().view.center).not.toEqual(before);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The left rail, at the mounted shell — M8 step 1.4.
+//
+// The cards' own sentences are asserted in `test/cards.test.ts`, by rendering them. What needs a
+// MOUNTED app is the thing M7.2's sweep bought: that an element a reader is holding survives the
+// recompute their own gesture caused.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the left rail, live", () => {
+  it("keeps the SAME slider element, and its focus, across ten keyboard presses", () => {
+    // `replaceChildren` destroys the control, so a reader who has tabbed to a slider loses it the
+    // moment their first arrow key recomputes — and every press after that goes to the body. The
+    // keyed builder is what makes this true; this is the test that says so for a parameter scrub.
+    const { root, app } = mount();
+    const slider = q<HTMLInputElement>(root, '[data-card="parameters"] input.slider');
+    slider.focus();
+    expect(document.activeElement).toBe(slider);
+    const before = app.currentState().contour.params;
+    for (let i = 0; i < 10; i++) {
+      slider.value = String(Number(slider.value) + 7);
+      slider.dispatchEvent(new Event("input", { bubbles: true }));
+      expect(q(root, '[data-card="parameters"] input.slider'), `press ${i} re-created the slider`).toBe(slider);
+      expect(document.activeElement, `press ${i} lost the focus`).toBe(slider);
+    }
+    const after = app.currentState().contour.params;
+    const name = Object.keys(before)[0];
+    expect(after[name].value, "ten presses moved nothing").not.toBe(before[name].value);
+  });
+
+  it("follows the box: the preview is what the ENGINE parsed", () => {
+    const { root, app } = mount();
+    const input = q<HTMLInputElement>(root, '[data-card="integrand"] input.expr');
+    input.value = "1/(1+z^4)";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    expect(app.currentState().expr).toBe("1/(1+z^4)");
+    // Four poles, so the singularities table follows the box too — one edit, both cards.
+    expect(root.querySelectorAll('[data-card="singularities"] tbody tr').length).toBe(4);
+    // And the SAME input node, with the caret where the reader left it.
+    expect(q(root, '[data-card="integrand"] input.expr')).toBe(input);
+  });
+
+  it("clears a fixture's overrides when the fixture changes", () => {
+    // In gallery mode the contour is the RECORD's output (M6.1), so a binding a reader set on the
+    // previous fixture describes parameters this one may not have.
+    const { app } = mount();
+    app.applyState({
+      ...app.currentState(),
+      mode: "gallery",
+      record: "circle-linear-cos",
+      fixture: 0,
+      bindings: { a: 9 },
+    });
+    expect(app.currentState().bindings).toEqual({ a: 9 });
+    app.actions().setFixture(1);
+    expect(app.currentState().fixture).toBe(1);
+    expect(app.currentState().bindings, "a stale binding rode into the new fixture").toEqual({});
   });
 });

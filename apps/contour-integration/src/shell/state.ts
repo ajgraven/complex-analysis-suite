@@ -39,6 +39,7 @@ import { runDeclared, type SandboxDeclaration } from "../engine/declaredRun.js";
 import { checkSplit, type SplitCheck } from "../engine/splitCheck.js";
 import type { QuadratureBudget, PathFn } from "../engine/contour/integrate.js";
 import { type Contour } from "../engine/contour/model.js";
+import { setParam } from "../engine/contour/edit.js";
 import { effectiveBranch, NO_BRANCH, type BranchChoice } from "../kernel/branch/model.js";
 import type { DeclaredOrder } from "../kernel/branch/declaration.js";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
@@ -259,6 +260,55 @@ export type StateResolution =
     }
   /** Nothing could be computed — an unparseable expression, or no record selected. */
   | { readonly kind: "empty"; readonly reason: string | null };
+
+/**
+ * Which channel a parameter's slider writes to.
+ *
+ * In the sandbox every parameter is geometry, so a move edits the contour in place. Under a record
+ * the three kinds are genuinely different: a FAMILY parameter rebuilds the integrand as well as the
+ * contour, a LIMIT parameter is geometry alone (and must never be substituted into the integrand —
+ * tier B renames its radius `R_lim` because `R` there is the rational function), and a DERIVED value
+ * is computed from the others, so moving it independently would desync the geometry from its own
+ * definition. Anything a family did not declare falls to `derived`, which is read-only.
+ *
+ * **Here rather than in either shell**, at M8 step 1.4: both shells ask it, and a rule about which
+ * field a write lands in belongs beside the fields. `src/shell/app.ts`'s `channelOf` delegates.
+ */
+export type ParamChannel = "sandbox" | "binding" | "geometry" | "derived";
+
+export function paramChannel(state: ShellState, family: Family | null, name: string): ParamChannel {
+  if (state.mode !== "gallery" || family === null) return "sandbox";
+  if (family.contour.limitParams.some((l) => l.name === name)) return "geometry";
+  if (family.parameters.some((q) => q.name === name)) return "binding";
+  return "derived";
+}
+
+/**
+ * The state with one parameter moved, through whichever channel owns it.
+ *
+ * A `derived` parameter is READ-ONLY and returns the state unchanged rather than throwing: a slider
+ * for one is never rendered, and a caller that reaches here for one has asked for something the
+ * record's own definition forbids.
+ */
+export function withParam(
+  state: ShellState,
+  family: Family | null,
+  name: string,
+  value: number,
+): ShellState {
+  switch (paramChannel(state, family, name)) {
+    case "binding":
+      return { ...state, bindings: { ...state.bindings, [name]: value } };
+    case "geometry":
+      return { ...state, geometry: { ...state.geometry, [name]: value } };
+    case "derived":
+      return state;
+    default: {
+      const moved = setParam(state.contour, name, value);
+      return { ...state, contour: moved, sandboxContour: moved };
+    }
+  }
+}
 
 /** The declared order, read off the branch point the factor sits on — never stored twice. */
 export function declaredOrder(state: ShellState): DeclaredOrder | null {

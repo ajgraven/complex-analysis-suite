@@ -210,3 +210,110 @@
   min-width: 0;
   font-family: inherit;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The left rail's cards — M8 step 1.4.
+
+   One row idiom throughout: a label or readout, then the control, then any tags. Nothing here
+   declares a colour of its own; every one is a token from `theme.css`.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+.shell2 .card2 > * + * {
+  margin-top: 0.45rem;
+}
+
+/* A label and a control on one line, the label fixed and the control taking the rest. */
+.shell2 .pickRow,
+.shell2 .exprRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.shell2 .pickRow > select,
+.shell2 .exprRow > input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.shell2 .parseError {
+  color: var(--g-bad);
+  margin: 0;
+}
+
+/* A target is the one formula in the rail that gets DISPLAY mode — it is what the record is about,
+   and shrinking it to inline size beside a slider is how a rail comes to read as a settings panel. */
+.shell2 .targetLine {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  overflow-x: auto;
+}
+
+.shell2 .cites {
+  list-style: none;
+  margin: 0.35rem 0 0;
+  padding: 0;
+}
+
+/* ---- parameters ---- */
+.shell2 .paramRow2 {
+  display: grid;
+  grid-template-columns: minmax(6rem, auto) 1fr auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+.shell2 .paramValue {
+  font-size: var(--t-s);
+}
+.shell2 .slider {
+  width: 100%;
+  accent-color: var(--g-accent);
+}
+
+/* ---- tags ---- */
+.shell2 .tag {
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+  border: 1px solid var(--g-border);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+}
+.shell2 .tag.warn {
+  color: var(--g-warn);
+  border-color: var(--g-warn);
+}
+
+/* ---- the singularities table ---- */
+.shell2 .poleTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-s);
+}
+/* **NOT uppercased.** These headings are FORMULAS — `Res(f, z₀)`, `Ind(γ, z₀)` — and the rail's
+   `h2` treatment turned them into `RES(F, Z₀)`, which is a different function. A heading that is
+   mathematics is set as mathematics. */
+.shell2 .poleTable th {
+  text-align: left;
+  font-weight: 600;
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+  padding: 0 0.3rem 0.2rem 0;
+  white-space: nowrap;
+}
+.shell2 .poleTable td {
+  padding: 0.15rem 0.3rem 0.15rem 0;
+  vertical-align: baseline;
+  /* A residue broken across three lines mid-radical is unreadable; the card scrolls instead. */
+  white-space: nowrap;
+}
+/* The rail is 19rem and a four-pole residue is wider than that. Scrolling the TABLE keeps every
+   other card's width, where wrapping the formula destroys the formula. */
+.shell2 .card2[data-card="singularities"] {
+  overflow-x: auto;
+}
+/* The three-way highlight's rail end (step 1.10 completes the others). */
+.shell2 .poleTable tr.hot {
+  background: rgba(110, 168, 254, 0.1);
+}

@@ -13,14 +13,18 @@ changed.
   squashed to `master` as `2a09ee0`; this branch was restarted from it. Its wording pass finished at
   **0 flagged, 0 unapplied** in the review document, against 191 flagged when the five blanket
   decisions were approved.
-  **Steps 1.1 (the scaffold), 1.2 (the visual system) and 1.3 (the stage controller) are done** —
-  `src/shell2/` exists beside `src/shell/`, `?shell=new` boots it in the new visual system over a
-  live, DRAGGABLE stage, and the old shell is untouched (proven at 1.2: its rendered page is the same
-  PNG hash before and after). **Next execution action: step 1.4** (the left rail). The branch may be
+  **Steps 1.1 (the scaffold), 1.2 (the visual system), 1.3 (the stage controller) and 1.4a (four of
+  the left rail's six cards) are done** — `src/shell2/` exists beside `src/shell/`, `?shell=new`
+  boots it in the new visual system over a live, DRAGGABLE stage with a working Integrand,
+  Parameters, Singularities and (in gallery mode) Target card. **Step 1.4 is SPLIT**, on the pattern
+  M5.1 and 0.5b used: 1.4a is those four, and **1.4b** is the Contour and Branch-cuts cards — ~430
+  lines of the old shell between them — plus the hover-linking the plan's Contour bullet asks for.
+  **Next execution action: step 1.4b.** The branch may be
   red between 1.1 and 1.12 and must be green at 1.13; it is green now. The look is recorded at
   [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png) and
   [`1.3-shell2-stage-1440x900.png`](screens/1.3-shell2-stage-1440x900.png) /
-  [`1.3-shell2-chip.png`](screens/1.3-shell2-chip.png).
+  [`1.3-shell2-chip.png`](screens/1.3-shell2-chip.png) /
+  [`1.4-shell2-sandbox-1440x900.png`](screens/1.4-shell2-sandbox-1440x900.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -45,6 +49,8 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-15 | **1.4a** | (this commit) | four of the six left-rail cards: `src/shell2/cards/` (`card.ts` the contract + `ShellActions`, `target.ts`, `integrand.ts`, `parameters.ts`, `singularities.ts`, `parseError.ts`); `render.ts` builds from a card registry; `paramChannel`/`withParam` lifted into `shell/state.ts` (the old shell's `channelOf` delegates); `fmt`/`fmtCx` → `kernel/decimal.ts` and `fixtureLabel` → `families/describe.ts` on the second-consumer rule; `Pole.residue` gains a `latex` twin. `test/cards.test.ts` (23) + `test/parseError.test.ts` (3) + 5 live tests; sweep **27/28, one recorded equivalent**. Full gate green: 556 files / 5789 tests, lint and typecheck silent, browser suite 147/147, a11y no regressions |
+
 | 2026-09-15 | **1.3** | e9b52c9 | the stage controller: `stageView.ts` (three layers, poles moved onto the INK canvas, value-keyed program, a cleared portrait on a parse failure) + `stageController.ts` (pointer / wheel / keyboard / pen, one cursor convention, a `[0.05, 200]` zoom clamp, `fitContour` on double-click and a toolbar button); `render` gains plan §4.0's `actions`; `Session` gains `PenDraft`, `held` and `scrubbing`; `drawnCuts`/`sameBranchGrab` lifted into `engine/branchEdit.ts` so both shells share one implementation. 19 node + 7 browser tests; sweep **27/30, 2 recorded equivalents, 1 line deleted as dead**. Full gate green: 554 files / 5757 tests, lint and typecheck silent, browser suite 147/147, a11y no regressions |
 
 | 2026-09-15 | **1.2** | 4fb54cb | the visual system: `theme.css` (tokens, five-size type scale, surfaces, controls, badges), `shell2.css` rewritten onto the tokens, `inkTheme.ts` (dark = the literals moved, light provided and not yet consumed); `drawContour`/`drawAccumulator` take a REQUIRED theme; 4 browser tests + sweep 8/8; screenshot committed |
@@ -60,6 +66,52 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(1.4) THE PLAN ASKS FOR ERROR KINDS `@cas/expr` DOES NOT HAVE.** Its `ExprError` carries a
+  free-text `message` and a `pos`, and every throw site writes its own prose. So the mapping to plain
+  language is from the MESSAGE — another package's wording — and it is made falsifiable rather than
+  accepted: `test/parseError.test.ts` drives the real `compile` over the shapes a reader types and
+  requires every one to reach a mapped sentence **with the fallback unused**. It earned its keep on
+  its first run: the end-of-input token prints as `eof`, not as the empty string the draft guessed,
+  so the card would have told a reader that *“eof” cannot appear there*.
+- **(1.4) And then the mapping was not WIRED.** The card printed `resolution.reason` straight, so the
+  whole module existed, passed its own suite, and reached no reader. Caught by asserting both halves
+  in `test/cards.test.ts` — the sentence appears AND the parser's own wording does not.
+- **(1.4) A DUPLICATE KEY STRANDED A NODE, and only a screenshot saw it.** The Singularities card
+  gave its table the key `card()` had already spent on the `<h2>`; `patch` holds one node per key, so
+  the first heading was never matched and never removed and the app drew **SINGULARITIES twice**.
+  Two repairs, both structural: a repeated key among one parent's children now **throws by name**
+  (silently suffixing would keep the collision as a permanent source of lost identity), and removal
+  is by *not wanted* rather than by *left in the key map*, which also makes the contract statable —
+  **a patched parent's children are the patch's**. The product-level test is that every card has
+  exactly one heading, for every record; nothing had counted them.
+- **(1.4) A `<select>`'s `value` means nothing until its `<option>`s exist.** `applyProps` ran before
+  the children, so the write was silently dropped and the fixture picker showed the first option
+  while the app ran a different fixture. The properties are written AGAIN after the children, and
+  rule 2's differs-guard makes the second write a no-op everywhere it was already right.
+- **(1.4) `text-transform: uppercase` on a table heading destroyed the mathematics** — `Res(f, z₀)`
+  drew as `RES(F, Z₀)`, which is a different function. A heading that is mathematics is set as
+  mathematics; the residue column is `nowrap` and the card scrolls, because a residue broken across
+  three lines mid-radical is unreadable.
+- **(1.4) The old shell FREEZES each parameter track and this card does not, measured.** Over all 28
+  records, moving the limit parameter by 1.7× moved ZERO tracks: the ranges come from the templates
+  and are constants. So the freeze is carried as a question in a comment rather than as code.
+- **(1.4) The circle's `R` slider spans twelve decades** (`[1e-6, 1e6]`, log), so 95 % of the track
+  is `1e6` and the span a reader wants — say 0.5 to 5 — is about 8 % of it. **Identical in the old
+  shell**, so it is not a regression, and the range is deliberate (`R → ∞` is the argument's own
+  limit). What is wrong is the mapping, not the range; recorded for Phase 2/4 rather than changed
+  from inside a card.
+- **(1.4) `Pole.residue` had no LaTeX twin**, so "Res typeset" would have meant re-formatting from a
+  string. It gains one the way step 0.4b's `exactValue` did — `formatSqrtExt`/`formatExpSum` at
+  `LATEX`, the same formatter at a second notation, never a second rendering — and making the field
+  REQUIRED is what named the three other construction sites for the compiler.
+- **(1.4) The Target card is verified in jsdom only.** `?shell=new` has no record picker until step
+  1.6 and does not decode `#vs=` yet, so there is no way to reach gallery mode in a browser; the
+  sandbox cards are browser-verified, and all 28 records are covered by `test/cards.test.ts`.
+- **(1.4) Sweep 27/28, one recorded equivalent.** `missing-as-zero` — printing `0` for a pole the
+  contour was never ASKED about — survives because `integrateContour` weighs every pole the report
+  found, so the branch is unreachable from any state the tests can build. It is kept for M6.4's
+  reason: a description should not depend on an invariant established in another module.
 
 - **(1.3) THE STAGE WAS DEAD TO A REAL MOUSE, and fifteen green tests said otherwise.** `app.css`
   carries an unscoped `.ink { pointer-events: none }` — correct for the old shell, whose gestures

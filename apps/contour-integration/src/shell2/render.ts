@@ -10,21 +10,17 @@
 // each placeholder with a real card — a function `(state, resolution, session, actions) → Desc` —
 // so the shape here is the shape they land into rather than scaffolding to be thrown away.
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocabulary.js";
+import type { PoleReport } from "../kernel/poles.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
+import { integrandCard } from "./cards/integrand.js";
+import { parametersCard } from "./cards/parameters.js";
+import { singularitiesCard } from "./cards/singularities.js";
+import { targetCard } from "./cards/target.js";
+import type { Card, CardContext, ShellActions } from "./cards/card.js";
 import { h, type Desc } from "./dom.js";
 import type { Session } from "./session.js";
 
-/**
- * What a description may CALL.
- *
- * Plan §4.0's card contract is `(state, resolution, session, actions) → description`, and this is
- * that fourth argument arriving with its first member rather than at 1.4 with a dozen: a card never
- * reaches into the shell's closure, so every button's effect is a named function a test can call.
- */
-export interface ShellActions {
-  /** Frame the whole contour. Also on double-click — one function, two ways to ask for it. */
-  readonly fitContour: () => void;
-}
+export type { ShellActions } from "./cards/card.js";
 
 /** What the shell renders into: one description list per grid area, plus the grid's own state. */
 export interface Rendered {
@@ -77,13 +73,29 @@ function resolutionLine(resolution: StateResolution): string {
  * than fixed: a sandbox expression has no record to state, and a card reading "—" forever would
  * teach a reader that the app has a target it is failing to find.
  */
+/**
+ * Which card function builds each id — the cards that exist. A placeholder stands where one does not.
+ *
+ * Steps 1.4 and 1.5 fill this in a card at a time, so a half-built rail is a rail with placeholders
+ * in it rather than a rail that throws, and the four structural invariants hold throughout.
+ */
+const CARDS: Partial<Record<CardId, Card>> = {
+  target: targetCard,
+  integrand: integrandCard,
+  parameters: parametersCard,
+  singularities: singularitiesCard,
+};
+
 export function render(
   state: ShellState,
   resolution: StateResolution,
   session: Session,
   actions: ShellActions,
+  poles: PoleReport | null = null,
 ): Rendered {
   const gallery = state.mode === "gallery";
+  const ctx: CardContext = { state, resolution, session, poles, actions };
+  const build = (id: CardId): Desc => CARDS[id]?.(ctx) ?? placeholder(id);
   return {
     bar: [
       h("h1", { key: "brand", class: "brand2" }, "Contour Integration"),
@@ -96,8 +108,8 @@ export function render(
         "Fit contour",
       ),
     ],
-    left: LEFT_CARDS.filter((id) => gallery || id !== "target").map(placeholder),
-    right: RIGHT_CARDS.map(placeholder),
+    left: LEFT_CARDS.filter((id) => gallery || id !== "target").map(build),
+    right: RIGHT_CARDS.map(build),
     rails: {
       left: session.rails.left ? "folded" : "open",
       right: session.rails.right ? "folded" : "open",

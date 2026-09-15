@@ -79,7 +79,7 @@ export function stripFactorOf(family: Family, bindings: Bindings, ast: Node): St
       order: p.order,
       orderCertain: true,
       possiblyRemovable: false,
-      residue: { value: p.residue.toTuple(), text: p.residueText },
+      residue: { value: p.residue.toTuple(), text: p.residueText, latex: p.residueLatex },
       isExact: true,
     })),
     // `f` is NOT a rational function of z — the substitution is what makes it one of `w` — and the

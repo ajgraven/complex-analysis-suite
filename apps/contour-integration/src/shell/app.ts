@@ -68,9 +68,11 @@ import { isVariant, primaryGolden, type FamilyRun } from "../families/runFamily.
 import {
   closedFormClaim,
   contourIntegrandText,
+  fixtureLabel,
   relationText,
   targetText,
 } from "../families/describe.js";
+import { fmt, fmtCx } from "../kernel/decimal.js";
 import type { Family, Golden } from "../families/schema.js";
 import type { PiSolvedTargets, SolvedValue } from "../families/solveTarget.js";
 import type { Bindings } from "../families/system.js";
@@ -88,11 +90,13 @@ import {
   compile,
   declaredOrder as orderOfState,
   offeredCorpus,
+  paramChannel,
   recordOf,
   resolveState,
   type Compiled,
   type ContourSource,
   type DrillState,
+  type ParamChannel,
   type ShellState,
   type StateResolution,
 } from "./state.js";
@@ -226,32 +230,6 @@ const elMath = <K extends keyof HTMLElementTagNameMap>(
   return node;
 };
 
-const fmt = (x: number): string => {
-  if (Object.is(x, -0)) return "0";
-  const a = Math.abs(x);
-  if (a !== 0 && (a < 1e-4 || a >= 1e6)) return x.toExponential(4);
-  return String(Math.round(x * 1e8) / 1e8);
-};
-const fmtCx = ([re, im]: Cx): string => `${fmt(re)} ${im < 0 ? "−" : "+"} ${fmt(Math.abs(im))}i`;
-
-/** A fixture's bindings, short enough for a `<select>` option: `a = 5, b = 3`. */
-/**
- * How a fixture reads in the picker: `a = 2, b = 1`, `half-range corollary`, `a = 0.75, one-sided sum`.
- *
- * A variant fixture's `params` carry a FLAG rather than a binding, so the flag is printed from the
- * golden's own `label` and the key is skipped — `halfRange = true` named the implementation where a
- * reader is choosing between alternative derivations. Real bindings still come from `params`, so a
- * fixture carrying both (`series-cot-kernel` at `a = 0.75`) prints the number once, from one place.
- */
-const fixtureLabel = (family: Family, g: Golden): string => {
-  const declared = new Set(family.parameters.map((p) => p.name));
-  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
-  const parts = Object.entries(g.params)
-    .filter(([k]) => declared.has(k))
-    .map(([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`);
-  if (g.label !== undefined) parts.push(g.label);
-  return parts.length > 0 ? parts.join(", ") : "no parameters";
-};
 
 /**
  * A mounted shell, from the outside.
@@ -2698,12 +2676,10 @@ export function mountApp(root: Element): ShellHandle {
     recompute();
   }
 
-  function channelOf(name: string): "sandbox" | "binding" | "geometry" | "derived" {
-    if (mode !== "gallery" || !family) return "sandbox";
-    if (family.contour.limitParams.some((l) => l.name === name)) return "geometry";
-    if (family.parameters.some((q) => q.name === name)) return "binding";
-    return "derived";
-  }
+  // Delegated to `state.ts` at M8 step 1.4, where both shells read it: the rule about which field a
+  // parameter write lands in belongs beside the fields, and two copies of it would be two answers.
+  const channelOf = (name: string): ParamChannel =>
+    paramChannel(currentState(), family ?? null, name);
 
   function renderContourCard(): void {
     contourCard.replaceChildren(el("h2", undefined, "Contour"));

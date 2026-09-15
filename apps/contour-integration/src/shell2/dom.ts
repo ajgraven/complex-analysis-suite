@@ -138,6 +138,20 @@ function applyProps(node: Node, desc: Desc, previous: Readonly<Record<string, un
   }
 }
 
+/**
+ * Re-write the form PROPERTIES after the children exist.
+ *
+ * Only the {@link PROPERTIES} subset, and only where the value differs — so this costs nothing on
+ * every node that has none, and cannot move a caret in one that does.
+ */
+function applyProperties(node: Node, desc: Desc): void {
+  const el = node as HTMLElement & Record<string, unknown>;
+  for (const [name, value] of Object.entries(desc.props)) {
+    if (!PROPERTIES.has(name)) continue;
+    if (el[name] !== value) el[name] = value;
+  }
+}
+
 /** The props a node was last patched with, so removals can be detected. */
 const LAST = new WeakMap<Node, Readonly<Record<string, unknown>>>();
 
@@ -156,9 +170,20 @@ export function patch(parent: Node, descriptions: readonly Child[]): void {
     if (k !== undefined) existing.set(k, node);
   }
 
+  // **A repeated key among one parent's children is a CALLER's bug, and it is named.** Found in a
+  // browser at step 1.4: the Singularities card gave its table the key `"t"`, which `card()` had
+  // already spent on the `<h2>`, and the app drew the heading TWICE — the map holds one node per
+  // key, so the first was never matched and never removed. Silently suffixing the second would
+  // preserve the collision as a permanent source of lost identity; throwing puts it in front of
+  // whoever wrote it, inside the fatal boundary, on the first render.
+  const seen = new Set<string>();
   const wanted: Node[] = [];
   descs.forEach((desc, i) => {
     const k = keyOf(desc, i);
+    if (seen.has(k)) {
+      throw new Error(`patch: two children of <${(parent as Element).tagName?.toLowerCase() ?? "?"}> share the key '${k}'`);
+    }
+    seen.add(k);
     const found = existing.get(k);
     // Rule 1: same key AND same tag means the SAME NODE, updated. A tag change is a different
     // element by any reading, so it is the one case that re-creates.
@@ -170,11 +195,21 @@ export function patch(parent: Node, descriptions: readonly Child[]): void {
     KEY.set(node, k);
     applyProps(node, desc, LAST.get(node) ?? {});
     LAST.set(node, desc.props);
-    if (desc.tag !== "#text" && !("html" in desc.props)) patch(node, desc.children);
+    if (desc.tag !== "#text" && !("html" in desc.props)) {
+      patch(node, desc.children);
+      // **A `<select>`'s `value` means nothing until its `<option>`s exist.** Writing it first — as
+      // the single pass did — silently drops it, so a fixture picker showed the first option while
+      // the app ran a different fixture. The properties are written AGAIN after the children, and
+      // rule 2's differs-guard makes the second write a no-op everywhere it was already right.
+      applyProperties(node, desc);
+    }
     wanted.push(node);
   });
 
-  for (const stale of existing.values()) stale.parentNode?.removeChild(stale);
+  // Remove by "not wanted" rather than by "left in `existing`": an unkeyed node, or one whose key
+  // another child took, is not in that map and would otherwise be stranded in the document forever.
+  const keep = new Set(wanted);
+  for (const node of [...parent.childNodes]) if (!keep.has(node)) parent.removeChild(node);
   // Place them in order. `insertBefore` with the node already in position is a no-op in the DOM, so
   // an unchanged list does no work and no node is detached and re-attached (which would lose focus).
   wanted.forEach((node, i) => {

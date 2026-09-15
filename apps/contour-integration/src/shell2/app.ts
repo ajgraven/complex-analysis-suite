@@ -13,7 +13,8 @@
 import { attachCanvasA11y, mountNavHeader } from "@cas/ui";
 
 import { circleTemplate } from "../engine/contour/templates.js";
-import { compile, defaultState, resolveState, type Compiled, type ShellState, type StateResolution } from "../shell/state.js";
+import { compile, defaultState, resolveState, withParam, type Compiled, type ShellState, type StateResolution } from "../shell/state.js";
+import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
 import { patch, h } from "./dom.js";
@@ -38,6 +39,14 @@ export interface Shell2Handle {
   readonly resolution: () => StateResolution;
   /** The stage's gesture machine — the pen's buttons, `fitContour`, what is held. */
   readonly stage: () => StageController;
+  /**
+   * What a rendered control calls.
+   *
+   * Exposed for the same reason `stage()` is: the cards are pure and are asserted by rendering them
+   * (`test/cards.test.ts`), so what needs the mounted app is the EFFECT of an action — and driving
+   * that through a `<select>`'s synthesised `change` would be testing jsdom's event dispatch.
+   */
+  readonly actions: () => ShellActions;
   readonly destroy: () => void;
 }
 
@@ -100,6 +109,9 @@ export function mountShell2(root: Element): Shell2Handle {
     return compiled?.ok === true ? compiled.poles : null;
   };
 
+  /** The record behind the current resolution, or null — what `withParam` needs to pick a channel. */
+  const familyNow = (): Family | null => (resolution.kind === "gallery" ? resolution.family : null);
+
   const drawState = (): StageDraw => ({ state, resolution, session, poles: polesNow() });
   const scheduleDraw = (): void => stageView.schedule(drawState);
 
@@ -107,8 +119,32 @@ export function mountShell2(root: Element): Shell2Handle {
 
   let controller: StageController | null = null;
 
-  /** What a rendered control may call. The closure is never handed out; these are. */
-  const actions: ShellActions = { fitContour: () => controller?.fitContour() };
+  /**
+   * What a rendered control may call. The closure is never handed out; these are.
+   *
+   * Every one goes through `commit` or through `scheduleDraw`, and the split is the plan's: a change
+   * to the ARGUMENT recomputes, and a change to what the reader is merely pointing at does not.
+   */
+  const actions: ShellActions = {
+    fitContour: () => controller?.fitContour(),
+    setExpr: (src) => commit({ ...state, expr: src }, "edit"),
+    // A fixture change is a different binding AND a different contour, and the record rebuilds both
+    // — which is M6.1's finding, that in gallery mode the contour is an OUTPUT. So nothing is carried
+    // over: the overrides a reader set on the previous fixture describe parameters this one may not
+    // have.
+    setFixture: (index) => commit({ ...state, fixture: index, bindings: {}, geometry: {} }, "edit"),
+    setParam: (name, value) => commit(withParam(state, familyNow(), name, value), "gesture"),
+    setScrubbing: (on) => {
+      session.scrubbing = on;
+      // The full budget on release, unconditionally — the same settle the stage's `gesture-end` makes.
+      if (!on) commit(state, "gesture-end");
+    },
+    hover: (piece) => {
+      session.hover = { ...session.hover, piece };
+      scheduleDraw();
+      patch(left, render(state, resolution, session, actions, polesNow()).left);
+    },
+  };
 
   function commit(next: ShellState, why: CommitReason): void {
     if (next.expr !== state.expr) compiled = compile(next.expr);
@@ -117,7 +153,7 @@ export function mountShell2(root: Element): Shell2Handle {
     // nothing drags yet, so this is the shape rather than an optimisation already earning its keep.
     const draft = session.gesture !== "none" || session.scrubbing || why === "gesture";
     resolution = resolveState(state, compiled, draft ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined);
-    const out = render(state, resolution, session, actions);
+    const out = render(state, resolution, session, actions, polesNow());
     shell.dataset.left = out.rails.left;
     shell.dataset.right = out.rails.right;
     patch(bar, out.bar);
@@ -159,7 +195,7 @@ export function mountShell2(root: Element): Shell2Handle {
     // Said in the bar rather than thrown: the shell works without a portrait, and a reader who
     // cannot see one should be told why rather than shown an empty box.
     patch(bar, [
-      ...render(state, resolution, session, actions).bar,
+      ...render(state, resolution, session, actions, polesNow()).bar,
       h("span", { key: "glerr", class: "placeholder" }, stageView.glError),
     ]);
   }
@@ -182,6 +218,7 @@ export function mountShell2(root: Element): Shell2Handle {
     },
     session: () => session,
     resolution: () => resolution,
+    actions: () => actions,
     /** The gestures, for the cards that drive them (the pen's buttons at step 1.4) and for tests. */
     stage: () => controller as StageController,
     destroy: () => {

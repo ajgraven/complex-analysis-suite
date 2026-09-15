@@ -13,6 +13,8 @@
 // lying in the most legible place on the screen.
 import { evaluate, parse, type Complex } from "@cas/expr";
 
+import { fmt } from "../kernel/decimal.js";
+
 import type { Family, FamilyTarget, Golden } from "./schema.js";
 
 /** The real quantity a record is about: `∫ (0 → 2π)  1/(a + b*cos(theta))  dtheta`. */
@@ -190,4 +192,26 @@ function conditionHolds(condition: string, params: Golden["params"]): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * How a fixture reads in the picker: `a = 2, b = 1`, `half-range corollary`, `a = 0.75, one-sided sum`.
+ *
+ * A variant fixture's `params` carry a FLAG rather than a binding, so the flag is printed from the
+ * golden's own `label` and the key is skipped — `halfRange = true` named the implementation where a
+ * reader is choosing between alternative derivations. Real bindings still come from `params`, so a
+ * fixture carrying both (`series-cot-kernel` at `a = 0.75`) prints the number once, from one place.
+ *
+ * Moved here from `src/shell/app.ts` at M8 step 1.4 on the second-consumer rule: the new shell's
+ * Target card is the second reader, and it sits beside {@link isVariant}, which decides the same
+ * question about the same pair.
+ */
+export function fixtureLabel(family: Family, g: Golden): string {
+  const declared = new Set(family.parameters.map((p) => p.name));
+  for (const t of family.targets) for (const name of Object.keys(t.symbols)) declared.add(name);
+  const parts = Object.entries(g.params)
+    .filter(([k]) => declared.has(k))
+    .map(([k, v]) => `${k} = ${typeof v === "number" ? fmt(v) : String(v)}`);
+  if (g.label !== undefined) parts.push(g.label);
+  return parts.length > 0 ? parts.join(", ") : "no parameters";
 }
