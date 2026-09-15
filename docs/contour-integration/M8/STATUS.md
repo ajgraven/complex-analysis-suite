@@ -15,7 +15,7 @@ changed.
   **0 flagged, 0 unapplied**, against 191 flagged when the five decisions were approved.
   **PHASE 0 IS COMPLETE** — steps 0.1 through 0.7 are done. The gate is green against a base merged
   up to `origin/master`, the a11y roster reports no regressions, and the Phase 0 PR is open for the
-  owner to merge. **Next execution action: merge the Phase 0 PR, then restart this branch from
+  owner to merge: **[#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)**. **Next execution action: merge the Phase 0 PR, then restart this branch from
   `master` and begin Phase 1 at step 1.1** (`src/shell2/` beside `src/shell/`, reached with
   `?shell=new`; the branch may be red between 1.1 and 1.12 and must be green at 1.13).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
