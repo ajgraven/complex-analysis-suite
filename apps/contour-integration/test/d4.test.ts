@@ -62,7 +62,7 @@ describe("the system: one complex identity, two real rows", () => {
   it("builds M over ℚ(i)(π), realified", () => {
     const s = piSystem(D4, { p: 2 });
     expect(s.targetIds).toEqual(["T0", "T1", "T2"]);
-    expect(s.matrix.map((r) => r.map(formatRatPi))).toEqual([
+    expect(s.matrix.map((r) => r.map((v) => formatRatPi(v)))).toEqual([
       ["4π²", "0", "0"],
       ["0", "−4π", "0"],
     ]);

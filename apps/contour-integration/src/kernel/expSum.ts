@@ -23,6 +23,7 @@
 // refuses and falls back rather than guessing. Every tier-B denominator is squarefree, so nothing in
 // the corpus is lost by that.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { TEXT, type Notation } from "./notation.js";
 import { formatPiSqrt, formatSqrtExt, formatTwoPiISqrt } from "./formatExact.js";
 import { Exponent, formatExponent, jordanExponent } from "./exponent.js";
 import { formatLogPower } from "./logPart.js";
@@ -257,17 +258,17 @@ export class ExpSum {
 }
 
 /** Render `e^{β}`, with the exponents worth a nicer name than the general form. */
-function formatExponential(exponent: Exponent): string {
+function formatExponential(exponent: Exponent, n_: Notation): string {
   if (exponent.isZero()) return "";
   const one = Exponent.fromSqrtExt(SqrtExt.fromGauss(Gauss.ONE));
-  if (exponent.equals(one)) return "e";
-  if (exponent.equals(one.neg())) return "1/e";
+  if (exponent.equals(one)) return n_.e;
+  if (exponent.equals(one.neg())) return n_.recipE;
   // A purely logarithmic exponent is a POWER, and writing it as an exponential hides what it is:
   // `e^{(3/4)ln 40}` is `40^{3/4}`, which is the form the record states and the reader can check.
   // (The fold in `Exponent.asAlgebraicFactor` has already taken the cases that land in ℚ or one
   // quadratic extension, so what reaches here is the genuinely carried remainder.)
-  if (exponent.algebraic.isZero() && exponent.pi.isZero()) return formatLogPower(exponent.log);
-  return `e^(${formatExponent(exponent)})`;
+  if (exponent.algebraic.isZero() && exponent.pi.isZero()) return formatLogPower(exponent.log, n_);
+  return n_.exp(formatExponent(exponent, n_));
 }
 
 /**
@@ -276,8 +277,11 @@ function formatExponential(exponent: Exponent): string {
  * The coefficient `1` is dropped where it can be, so `1·e^(−2)` reads `e^(−2)`; and the `1/e` form
  * is folded into the coefficient so `π·1/e` reads `π/e`, which is what the gallery calls it.
  */
-export function formatExpSum(sum: ExpSum): string {
-  return joinExpTerms(sum.terms.map((t) => attachExponential(formatSqrtExt(t.coefficient), t.exponent)));
+export function formatExpSum(sum: ExpSum, n_: Notation = TEXT): string {
+  return joinExpTerms(
+    sum.terms.map((t) => attachExponential(formatSqrtExt(t.coefficient, n_), t.exponent, n_)),
+    n_,
+  );
 }
 
 /**
@@ -287,9 +291,12 @@ export function formatExpSum(sum: ExpSum): string {
  * algebraic families, so `2πi·(−i/2)·e^{−1}` comes out as `π/e` rather than as a product of three
  * things the reader has to multiply themselves.
  */
-export function formatTwoPiIExpSum(sum: ExpSum): string {
+export function formatTwoPiIExpSum(sum: ExpSum, n_: Notation = TEXT): string {
   if (sum.isZero()) return "0";
-  return joinExpTerms(sum.terms.map((t) => attachExponential(formatTwoPiISqrt(t.coefficient), t.exponent)));
+  return joinExpTerms(
+    sum.terms.map((t) => attachExponential(formatTwoPiISqrt(t.coefficient, n_), t.exponent, n_)),
+    n_,
+  );
 }
 
 /**
@@ -299,15 +306,13 @@ export function formatTwoPiIExpSum(sum: ExpSum): string {
  * and L5's `iα·L` all are. So the solve works in units of π throughout and π is never evaluated:
  * `π/2`, `π/e`, `π − π/e`.
  */
-export function formatPiExpSum(sum: ExpSum): string {
+export function formatPiExpSum(sum: ExpSum, n_: Notation = TEXT): string {
   if (sum.isZero()) return "0";
   return joinExpTerms(
-    sum.terms.map((t) => attachExponential(formatPiSqrt(t.coefficient), t.exponent)),
+    sum.terms.map((t) => attachExponential(formatPiSqrt(t.coefficient, n_), t.exponent, n_)),
+    n_,
   );
 }
-
-/** Whether a rendered coefficient is a SUM, and so needs bracketing before anything multiplies it. */
-const isCompound = (text: string): boolean => text.includes(" + ") || text.includes(" − ");
 
 /**
  * Combine a rendered algebraic coefficient with its exponential factor.
@@ -317,24 +322,30 @@ const isCompound = (text: string): boolean => text.includes(" + ") || text.inclu
  * compound coefficient is bracketed. This was caught by looking at B3's output, not by a test: the
  * value was right and the rendering was wrong, which is the failure mode a numeric check cannot see.
  */
-function attachExponential(coefficient: string, exponent: Exponent): string {
-  const exponential = formatExponential(exponent);
+function attachExponential(coefficient: string, exponent: Exponent, n_: Notation): string {
+  const exponential = formatExponential(exponent, n_);
   if (exponential === "") return coefficient;
   if (coefficient === "1") return exponential;
-  if (coefficient === "−1") return `−${exponential}`;
-  if (isCompound(coefficient)) return `(${coefficient})·${exponential}`;
+  if (coefficient === `${n_.minus}1`) return `${n_.minus}${exponential}`;
+  if (n_.isSum(coefficient)) return n_.product(coefficient, exponential, true);
   // `−i/2/e` is two divisions in a row and reads as neither; only fold the `1/e` into a coefficient
-  // that has no denominator of its own.
-  if (exponential === "1/e" && !coefficient.includes("/")) return `${coefficient}/e`;
-  if (exponential === "1/e") return `${coefficient}·e^(−1)`;
-  return `${coefficient}·${exponential}`;
+  // that has no denominator of its own. A LaTeX `\frac` is self-delimiting, so it always folds.
+  if (exponential === n_.recipE && !n_.hasQuotient(coefficient)) {
+    return n_.quotient(coefficient, n_.e, { num: false, den: false });
+  }
+  if (exponential === n_.recipE) {
+    return n_.product(coefficient, n_.exp(`${n_.minus}1`), false);
+  }
+  return n_.product(coefficient, exponential, false);
 }
 
-function joinExpTerms(parts: readonly string[]): string {
+function joinExpTerms(parts: readonly string[], n_: Notation): string {
   if (parts.length === 0) return "0";
   return parts.reduce((acc, p, i) => {
     if (i === 0) return p;
-    return p.startsWith("−") ? `${acc} − ${p.slice(1)}` : `${acc} + ${p}`;
+    return p.startsWith(n_.minus)
+      ? `${acc} ${n_.minus} ${p.slice(n_.minus.length)}`
+      : `${acc} + ${p}`;
   }, "");
 }
 

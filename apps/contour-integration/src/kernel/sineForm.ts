@@ -31,6 +31,7 @@
 // `(π/n)/sin(πa/n)` remains perfectly finite and correct by continuity while the derivation is
 // dead. A correct value from a collapsed argument is not a proof.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { TEXT, type Notation } from "./notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatPiExpSum } from "./expSum.js";
 import { Exponent, formatExponent } from "./exponent.js";
@@ -440,19 +441,22 @@ function divideCarryingCosh(
 }
 
 /** `π·Σ cₖ e^{βₖ} / sin(π r)`, written the way the gallery writes it: `π/sin(3π/10)`, `(π/4)/sin(3π/8)`. */
-export function formatSineForm(form: SineForm): string {
-  const head = formatPiExpSum(form.sum);
+export function formatSineForm(form: SineForm, n_: Notation = TEXT): string {
+  const head = formatPiExpSum(form.sum, n_);
   const factor = denominatorOf(form);
   if (factor === null) return head;
-  const written = `${factor.kind}(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(factor.r, Frac.ZERO)))})`;
+  const written = n_.call(
+    factor.kind,
+    formatPiSqrt(SqrtExt.fromGauss(new Gauss(factor.r, Frac.ZERO)), n_),
+  );
   // `π/4/sin(3π/8)` is two divisions in a row and reads as neither; the record itself writes
-  // `(pi/4)/sin(3*pi/8)`.
-  const compound = head.includes("/") || head.includes(" + ") || head.includes(" − ");
-  const bracketed = compound ? `(${head})` : head;
+  // `(pi/4)/sin(3*pi/8)`. A LaTeX `\frac` needs no such protection, which is what `hasQuotient`
+  // answers for each notation.
+  const compound = n_.hasQuotient(head) || n_.isSum(head);
   // A hyperbolic form MULTIPLIES — see `SineForm.hyperbolic`.
   return factor.kind === "coth" || factor.kind === "csch"
-    ? `${bracketed}·${written}`
-    : `${bracketed}/${written}`;
+    ? n_.product(head, written, compound)
+    : n_.quotient(head, written, { num: compound, den: false });
 }
 
 /** The decimal. `≈` by construction — this is where π and the sine are finally evaluated. */

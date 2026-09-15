@@ -20,6 +20,7 @@
 // trap describes the cross-check that IS available for a keyhole (the same integral by the `2π/n`
 // wedge), and it is a job for M4.2e onward, not a float comparison.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
 import { branchResidue, type PowerFactor } from "../kernel/branchResidue.js";
@@ -79,9 +80,10 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
       const [re, im] = piUnits.toTuple();
       const value: Cx = [Math.PI * re, Math.PI * im];
       const text = formatTwoPiIExpSum(sum.value);
+      const latex = formatTwoPiIExpSum(sum.value, LATEX);
       const check = checkAgainstQuadrature(value, text, integral);
       return {
-        exactValue: { value, text },
+        exactValue: { value, text, latex },
         piUnits,
         ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
         ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
@@ -150,6 +152,7 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
 
   const value: Cx = [Math.PI * re, Math.PI * im];
   const text = formatTwoPiIExpSum(residueSum);
+  const latex = formatTwoPiIExpSum(residueSum, LATEX);
   // **THE CROSS-CHECK, WHICH THIS ROUTE COULD NEVER HAVE (M5.0).** The quadrature was skipped for
   // every branch record, so there was nothing to compare against and no comparison was written.
   // `kernel/branch/declared.ts` now samples the DECLARED determination, with each piece's `side`
@@ -163,7 +166,7 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
   if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
-    exactValue: { value, text },
+    exactValue: { value, text, latex },
     piUnits,
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
     ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),

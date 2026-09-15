@@ -37,6 +37,8 @@ export interface ImportedAtom {
   readonly id: string;
   /** How it prints in an answer — `√π`, `Γ(4/3)`. */
   readonly text: string;
+  /** The same, typeset — carried rather than re-parsed, since `text` is the app's own notation. */
+  readonly latex: string;
   /** Its value. The FORM is `=`; this decimal is `≈`, as every decimal in this app is. */
   readonly numeric: number;
   /** The sentence the derivation renders after "imported, not derived here". */
@@ -65,6 +67,7 @@ export interface ImportedAtom {
 const SQRT_PI: ImportedAtom = {
   id: "sqrt(pi)",
   text: "√π",
+  latex: "\\sqrt{\\pi}",
   numeric: Math.sqrt(Math.PI),
   provenance:
     "Γ(1/2) = √π — the Gaussian ∫ℝ e^{−x²}dx = √π, established by polar coordinates, not by any contour",
@@ -105,11 +108,13 @@ export function gammaImport(q: Frac): { readonly atom: ImportedAtom; readonly mu
     return { atom: SQRT_PI, multiple };
   }
 
-  const text = `Γ(${q.d === 1n ? `${q.n}` : `${q.n}/${q.d}`})`;
+  const arg = q.d === 1n ? `${q.n}` : `${q.n}/${q.d}`;
+  const text = `Γ(${arg})`;
   return {
     atom: {
       id: text,
       text,
+      latex: `\\Gamma\\left(${q.d === 1n ? `${q.n}` : `\\frac{${q.n}}{${q.d}}`}\\right)`,
       numeric: C.gamma([q.toNumber(), 0])[0],
       provenance:
         `${text} = ∫₀^∞ t^{${q.d === 1n ? `${q.n - 1n}` : `${q.n - q.d}/${q.d}`}}e^{−t}dt — ` +

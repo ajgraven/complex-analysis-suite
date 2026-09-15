@@ -132,7 +132,7 @@ describe("buildSystem — the crossing phase chooses the ring", () => {
   it("routes an ADDITIVE phase into ℚ(i)(π), realified", () => {
     const s = piSystem(buildSystem(logKeyhole(2)));
     expect(s.targetIds).toEqual(["T0", "T1", "T2"]);
-    expect(s.matrix.map((r) => r.map(formatRatPi))).toEqual([
+    expect(s.matrix.map((r) => r.map((v) => formatRatPi(v)))).toEqual([
       ["4π²", "0", "0"],
       ["0", "−4π", "0"],
     ]);
@@ -156,7 +156,7 @@ describe("buildSystem — the crossing phase chooses the ring", () => {
     // k = 1: the T1 terms cancel and the surviving equation is −2πi·T0 = 2πi ΣRes, which determines
     // ∫R dx and says nothing about ∫R log x. The gate's sentence, computed.
     const s = piSystem(buildSystem(logKeyhole(1)));
-    expect(s.matrix.map((r) => r.map(formatRatPi))).toEqual([
+    expect(s.matrix.map((r) => r.map((v) => formatRatPi(v)))).toEqual([
       ["0", "0"],
       ["−2π", "0"],
     ]);

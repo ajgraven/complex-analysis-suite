@@ -12,6 +12,7 @@
 // arriving at the same number is strong evidence that both are right, and a disagreement is a bug
 // report. This module is where they are compared, and a disagreement is reported as one.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, bound, estimate, exact, refuse, type Certificate, type Verdict } from "@cas/rigor";
 import type { Node } from "@cas/expr";
 import type { Cx } from "../kernel/geom.js";
@@ -23,8 +24,13 @@ import type { PoleReport } from "../kernel/poles.js";
 import type { ContourIntegral } from "./contour/integrate.js";
 
 export interface ResidueTheoremResult {
-  /** `2πi Σ n·Res`, exact, present only when every pole and winding was exact. */
-  readonly exactValue?: { readonly value: Cx; readonly text: string };
+  /**
+   * `2πi Σ n·Res`, exact, present only when every pole and winding was exact.
+   *
+   * `latex` is the SAME value in the LaTeX notation — the same formatter at `LATEX`, not a second
+   * rendering (M8 step 0.4b), so the card and the typeset page cannot come to disagree.
+   */
+  readonly exactValue?: { readonly value: Cx; readonly text: string; readonly latex: string };
   /**
    * The same value in UNITS OF π — i.e. `2i Σ n·Res`.
    *
@@ -177,9 +183,10 @@ export function applyResidueTheorem(
         const [re, im] = piUnits.toTuple();
         const value: Cx = [Math.PI * re, Math.PI * im];
         const text = formatTwoPiIExpSum(sum.value);
+        const latex = formatTwoPiIExpSum(sum.value, LATEX);
         const check = checkAgainstQuadrature(value, text, integral);
         return {
-          exactValue: { value, text },
+          exactValue: { value, text, latex },
           piUnits,
           ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
           ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),
@@ -242,6 +249,7 @@ export function applyResidueTheorem(
   const twoPi = 2 * Math.PI;
   const value: Cx = [-twoPi * sumIm, twoPi * sumRe];
   const text = formatTwoPiIExpSum(sum);
+  const latex = formatTwoPiIExpSum(sum, LATEX);
 
   certificates.push(
     exact(
@@ -254,7 +262,7 @@ export function applyResidueTheorem(
   if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
-    exactValue: { value, text },
+    exactValue: { value, text, latex },
     // 2πi·Σ = π·(2i·Σ), and the scaling stays inside the exponential basis.
     piUnits: sum.scale(SqrtExt.fromGauss(Gauss.int(0, 2))),
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),

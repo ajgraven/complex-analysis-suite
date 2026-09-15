@@ -8,10 +8,10 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. **Step 0.4 is split** (see Findings): **0.4a** — the coverage
-  sweep and the language gap — is done. **Next execution action: step 0.4b** — the app's LaTeX
-  printers (`families/latex.ts`, `kernel/formatLatex.ts`, piece `nameLatex`, `ClaimArg.exact.latex`).
-  An M step.
+- **Execution:** Phase 0 in progress. **Step 0.4 is done** (split into 0.4a and 0.4b; piece
+  `nameLatex` moved to 0.5 — see Findings). **Next execution action: step 0.5a** — generate
+  `M8/claims.md` for the owner to review. **The session STOPS there**: Phase 0 does not merge until
+  the owner has reviewed that document.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -29,6 +29,8 @@ changed.
 | 2026-09-15 | **0.3** | 0974f13 | `engine/claims.ts`; 40 templates; `LedgerRow.claimData`; `test/claims.test.ts` (6 tests) + `test/ledgerDump.test.ts` byte-identical over 3,918 lines; sweep 18/18. Baseline captured first in 2cad10c. Full gate green: 546 files / 5658 tests, lint and typecheck silent. Browser suite not run — the slice adds no record and does not touch the stage |
 
 | 2026-09-15 | **0.4a** | 0b2a141 | the LaTeX coverage sweep (`test/latexCoverage.test.ts`); `sech`/`csch`/`coth`/`factorial` in `@cas/expr` + `@cas/gpu`; `packages/gpu/test/glslCoverage.test.ts`; 0.1's display rewriter dropped; sweep 13/13. Full gate green: 548 files / 5672 tests. Browser: `@cas/gpu` parity 21/21 in real WebGL2 |
+
+| 2026-09-15 | **0.4b** | (this commit) | `kernel/notation.ts` (TEXT + LATEX, one set of formatters at two notations); `kernel/exprLatex.ts`; `families/latex.ts`; `latex` on every `exactValue` and on the imported row; `test/formatLatex.test.ts` + `test/familyLatex.test.ts`; sweep 20/20. Full gate green: 550 files / 5686 tests. `no-shadow` caught a blanket edit that renamed a map callback into its own parent's binding |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -198,6 +200,56 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.4b) The plan asks for a second set of formatters; there is ONE set at two notations.** Its
+  `src/kernel/formatLatex.ts` would be a parallel implementation of a five-module layered printer —
+  `formatPiExpSum` → `formatSqrtExt` + `formatExponent` → `formatLogPart`/`formatPiPart` — roughly
+  200 lines that can drift from the text it is supposed to agree with. What differs between
+  `π√2/2` and `\frac{\pi\sqrt{2}}{2}` is not the STRUCTURE but the spelling of each join, so
+  `kernel/notation.ts` declares those joins and every formatter takes the notation it writes in,
+  defaulting to the text the app has always printed. A term one form drops is a term the other drops,
+  because it is the same line. The text output is unchanged and 0.3's byte-identical ledger dump
+  proves it.
+- **(0.4b) `\pi` followed by `i` is `\pii`, and EVERY `2πi` in the gallery came out that way.** An
+  undefined control sequence, which KaTeX refuses outright — so the first draft rendered nothing at
+  all for most of the corpus. Concatenating rendered symbols is not string concatenation in LaTeX,
+  and `Notation.juxtapose` is where that lives: a space goes in exactly when a control sequence is
+  followed by a letter. Found by the corpus KaTeX sweep on its first run.
+- **(0.4b) An optional second parameter on a formatter silently binds to `Array.map`'s INDEX.**
+  `summed.totals.map(formatRatPi)` passes `0, 1, 2…` as the notation. TypeScript caught it here
+  because `Notation` is an object type — a formatter whose second parameter were number-ish would
+  not be caught at all. Nine call sites, two of them in `src/`, all now wrapped.
+- **(0.4b) The sweep's three survivors were three different holes, and each bought a test.** A LaTeX
+  form emitting the text notation's own `−`, `π`, `√`, `·` and Unicode superscripts is invisible to a
+  canonical comparison that normalises both sides, and KaTeX renders several of them — so the forms
+  are now required to contain **no Unicode mathematics at all**, which is what makes them LaTeX
+  rather than something that happens to render. A compound coefficient losing its brackets before a
+  `·` prints a DIFFERENT FORMULA (the text formatter's own comment records finding that by eye on
+  B3), and the canonical comparison strips every bracket, so the two shapes are pinned outright. And
+  an imported value's `latex` was asserted PRESENT rather than correct, which `latex: ""` satisfies.
+  20/20 after.
+- **(0.4b) `imported.text` is the ENGINE's notation, not the record's, so it cannot be re-parsed.**
+  It reads `−e^(−1/4)·√π`, built by `formatImported` from `formatExpSum` — 0.4a's finding about the
+  two notations, arriving in a second place. The repair is the one this step is built on: the LaTeX
+  is carried from the FORMATTER, so `ImportedAtom` gains a `latex` and `formatImported` takes a
+  notation, rather than the ledger trying to read the engine's own prose back as an expression.
+- **(0.4b) `nameLatex` is moved to 0.5, because the piece names are PROSE.** The plan expects symbols
+  (`\Gamma_R`, `[-R,\,R]`, `\gamma_\rho`); measured, the 137 piece names in the corpus are
+  sentences with mathematics inside them — `the real segment [−R, R]`, `the lower edge, log z = log x
+  + 2πi`, `the R → ∞ semicircle`. Giving each a LaTeX SYMBOL would invent a naming scheme the records
+  do not have, by hand, in 137 places, which is the drift M6.4 recorded. What they actually need is
+  0.5's `$…$` delimiter convention applied to prose — a WORDING change, which is what 0.5a puts in
+  front of the owner.
+- **(0.4b) Two `toLatex` refinements are recorded rather than made.** It prints every product with
+  `\cdot`, so `\sin(\pi \cdot \alpha)` where a textbook writes `\sin(\pi\alpha)`; and a leading
+  minus stays inside a fraction, `\frac{-\pi}{4}` where a textbook writes `-\frac{\pi}{4}`. Both
+  are small and both are in a package three other apps print through, so they belong in the
+  presentation pass where the rendered page can judge them. The proposed rules: juxtapose a product
+  unless the right operand starts with a digit; lift a negated numerator's sign out of the fraction.
+- **(0.4b) A record's parameters are SPELLED for their Greek letters** — `alpha`, `mu`, `xi`, `eta`,
+  `theta` — which `toLatex` prints verbatim as italic words. `kernel/exprLatex.ts` applies the
+  convention, in the app rather than in the package: a plotter's `a, b, c` are not Greek, and a
+  user's variable named `eta` may not be either.
+
 ## Open questions for the owner
 
 - none at present. (0.5a will ask for a review of `claims.md` before Phase 0 merges.)
@@ -224,6 +276,14 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(0.4b) `src/kernel/notation.ts` is where the app's two alphabets are decided** — `TEXT` (what it
+  has always printed) and `LATEX` — and every exact-value formatter takes one. `kernel/exprLatex.ts`
+  holds the expression printer plus the Greek convention, below `families/` so that `engine/` may use
+  it too (its second consumer is the ledger's own exact claims). `families/latex.ts` is
+  `describe.ts`'s sibling: the target, the contour integrand and the closed form, typeset.
+- **(0.4b) `exactValue` carries `latex` alongside `text` on all seven theorems**, from the same
+  formatter at `LATEX`. That is how Phase 1's result card gets its typeset `∮`, and why the card and
+  the page cannot come to disagree.
 - **(0.4a) `katex` is a devDependency of `apps/contour-integration`** — the coverage test renders
   every printed form through `renderToString` with `throwOnError`, because `toLatex` emitting a string
   does not mean KaTeX accepts it. Phase 1 promotes it to a dependency when the shell renders.

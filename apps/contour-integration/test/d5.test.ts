@@ -64,7 +64,7 @@ describe("the contour does NOT close alone, and the system says exactly how", ()
     // upper edge and the other three survive. Dropping the last removes T0 SILENTLY.
     const s = piSystem(D5, { p: 1 });
     expect(s.targetIds).toEqual(["T0", "T1", "T2", "T3"]);
-    expect(s.matrix.map((r) => r.map(formatRatPi))).toEqual([
+    expect(s.matrix.map((r) => r.map((v) => formatRatPi(v)))).toEqual([
       ["0", "12π²", "0", "0"],
       ["8π³", "0", "−6π", "0"],
     ]);
@@ -75,7 +75,7 @@ describe("the contour does NOT close alone, and the system says exactly how", ()
     expect(s.report.rank).toBe(2);
     expect(s.report.determined.map((d) => s.targetIds[d.column])).toEqual(["T1"]);
     // The kernel NAMES the missing input: T2 is knowable only together with T0.
-    const kernel = s.report.kernel.map((v) => v.map(formatRatPi));
+    const kernel = s.report.kernel.map((row) => row.map((v) => formatRatPi(v)));
     expect(kernel).toContainEqual(["3/(4π²)", "0", "1", "0"]);
   });
 

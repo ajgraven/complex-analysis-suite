@@ -39,6 +39,7 @@ import { classifyAgainstCut, needsSide } from "../kernel/branch/crossing.js";
 import { allCrossingMonodromy, crossingMonodromy, cutGeometryInvariance } from "../kernel/branch/monodromy.js";
 import { NO_BRANCH, cutPolyline, type BranchChoice } from "../kernel/branch/model.js";
 import { formatFrac } from "../kernel/formatExact.js";
+import { LATEX } from "../kernel/notation.js";
 import { toExactRational } from "../kernel/exactRational.js";
 import {
   asExponentialOfPolynomial,
@@ -551,6 +552,9 @@ export interface LedgerInput {
     readonly pieceId: string;
     /** How the value reads — `e^(−289/400)·√π`. */
     readonly text: string;
+    /** The same value typeset. Carried from the formatter: `text` is the app's own notation and
+     *  does not parse as an expression, so a re-print here would have nothing to read. */
+    readonly latex: string;
     readonly numeric: readonly [number, number];
     /** The record's provenance sentence. */
     readonly method: string;
@@ -799,7 +803,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
           "LEGALITY",
           "satisfied",
           claimOf("legality.monodromy-on-sheet", {
-            sum: { kind: "exact", text: formatFrac(monodromy) },
+            sum: { kind: "exact", text: formatFrac(monodromy), latex: formatFrac(monodromy, LATEX) },
           }),
           exact(
             `the monodromy along γ is e^(2πi·${formatFrac(monodromy)}) = 1`,
@@ -1210,7 +1214,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             "satisfied",
             claimOf("kill.imported", {
               piece: pieceArg(piece),
-              value: { kind: "exact", text: imported.text },
+              value: { kind: "exact", text: imported.text, latex: imported.latex },
             }),
             exact(`${piece.name} = ${imported.text}`, `imported, not derived here — ${imported.method}`, {
               provenance: [

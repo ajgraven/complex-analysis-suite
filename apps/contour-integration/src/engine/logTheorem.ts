@@ -18,6 +18,7 @@
 // `exactInPi` rather than `piUnits`. That is the same ring the family's `M` lives in, which is why
 // Pass 5 can solve the two together without leaving exact arithmetic.
 import { Gauss, Frac } from "@cas/exact";
+import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { logResidue, type LogFactor } from "../kernel/logResidue.js";
 import { RatPi, formatRatPi } from "../kernel/ratPi.js";
@@ -110,6 +111,7 @@ export function applyLogTheorem(input: LogTheoremInput): ResidueTheoremResult {
   );
 
   const text = formatRatPi(value);
+  const latex = formatRatPi(value, LATEX);
   // **THE CROSS-CHECK, WHICH THIS ROUTE COULD NEVER HAVE (M5.0).** The quadrature was skipped for
   // every branch record, so there was nothing to compare against and no comparison was written.
   // `kernel/branch/declared.ts` now samples the DECLARED determination, with each piece's `side`
@@ -123,7 +125,7 @@ export function applyLogTheorem(input: LogTheoremInput): ResidueTheoremResult {
   if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
-    exactValue: { value: [re, im], text },
+    exactValue: { value: [re, im], text, latex },
     exactInPi: value,
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
     ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),

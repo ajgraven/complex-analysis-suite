@@ -16,6 +16,7 @@
 // reproduces with λ² but encloses z = iπ and z = 3iπ*". A record whose strip and whose contour
 // disagree is not a record with a small error in it; it is two different arguments.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../kernel/notation.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatTwoPiIExpSum } from "../kernel/expSum.js";
 import type { LatticePole } from "../kernel/expLattice.js";
@@ -139,11 +140,12 @@ export function applyStripTheorem(input: StripTheoremInput): ResidueTheoremResul
 
   const value: Cx = [Math.PI * re, Math.PI * im];
   const text = formatTwoPiIExpSum(residueSum);
+  const latex = formatTwoPiIExpSum(residueSum, LATEX);
   const check = checkAgainstQuadrature(value, text, integral);
   if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
-    exactValue: { value, text },
+    exactValue: { value, text, latex },
     piUnits,
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),
     ...(check?.agrees === true ? { crossCheck: check.crossCheck } : {}),

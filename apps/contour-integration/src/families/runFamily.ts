@@ -332,6 +332,7 @@ export function runFamily(
               imported: imports.map((x) => ({
                 pieceId: x.pieceId,
                 text: x.text,
+                latex: x.latex,
                 numeric: x.value.numeric,
                 method: x.method,
                 source: x.value.atom.provenance,

@@ -19,6 +19,7 @@
 // is refused; here the consequence is that `combineOver` cannot be used, because the right-hand side
 // is a MODULE over the field rather than an element of it.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX, TEXT, type Notation } from "../kernel/notation.js";
 import { exact, refuse, unknown, type Certificate, type Level } from "@cas/rigor";
 import { parse } from "@cas/expr";
 import { ExpSum, formatExpSum } from "../kernel/expSum.js";
@@ -85,6 +86,8 @@ export interface ResolvedImport {
   readonly rigor: Level;
   /** How the value reads: `e^(−289/400)·√π`. */
   readonly text: string;
+  /** The same value typeset (M8 step 0.4b). */
+  readonly latex: string;
 }
 
 /**
@@ -116,6 +119,7 @@ export function resolveImports(
       method: declared.method,
       rigor: declared.rigor,
       text: formatImported(value.value.coefficient, value.value.atom),
+      latex: formatImported(value.value.coefficient, value.value.atom, LATEX),
     });
   }
   return { ok: true, imports: out };
@@ -303,11 +307,16 @@ export function solveImported(family: Family, inputs: ImportedSolveInputs): Solv
  * answer rests on something it does not. The parenthesis rule is the term COUNT rather than a scan
  * for a sign, since `e^(−289/400)` is one term carrying a minus inside its own exponent.
  */
-export function formatImported(multiple: ExpSum, atom: ImportedAtom): string {
+export function formatImported(
+  multiple: ExpSum,
+  atom: ImportedAtom,
+  n_: Notation = TEXT,
+): string {
+  const symbol = n_ === LATEX ? atom.latex : atom.text;
   if (multiple.isZero()) return "0";
   const one = multiple.asSqrtExt();
-  if (one !== null && one.equals(SqrtExt.ONE)) return atom.text;
-  if (one !== null && one.equals(SqrtExt.ONE.neg())) return `−${atom.text}`;
-  const body = formatExpSum(multiple);
-  return `${multiple.terms.length > 1 ? `(${body})` : body}·${atom.text}`;
+  if (one !== null && one.equals(SqrtExt.ONE)) return symbol;
+  if (one !== null && one.equals(SqrtExt.ONE.neg())) return `${n_.minus}${symbol}`;
+  const body = formatExpSum(multiple, n_);
+  return n_.product(body, symbol, multiple.terms.length > 1);
 }

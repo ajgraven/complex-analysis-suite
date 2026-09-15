@@ -42,6 +42,7 @@
 // predicate every other winding number uses — and it is derived once and used for both the arithmetic
 // and the sentence, so the two cannot drift apart.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../kernel/notation.js";
 import { constraintLabel } from "./vocabulary.js";
 import { assembleVerdict, exact, refuse, type Certificate } from "@cas/rigor";
 import type { Node } from "@cas/expr";
@@ -213,6 +214,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
   const [re, im] = piUnits.toTuple();
   const value: Cx = [Math.PI * re, Math.PI * im];
   const text = formatTwoPiIExpSum(sum);
+  const latex = formatTwoPiIExpSum(sum, LATEX);
 
   certificates.push(
     exact(
@@ -250,7 +252,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
   if (check?.contradiction !== undefined) certificates.push(check.contradiction);
 
   return {
-    exactValue: { value, text },
+    exactValue: { value, text, latex },
     piUnits,
     identity: EXTERIOR_IDENTITY,
     ...(check === null ? {} : { disagreement: check.disagreement, agrees: check.agrees }),

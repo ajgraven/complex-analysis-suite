@@ -19,6 +19,7 @@
 // corpus is one, so it stays outside the declared basis (PLAN §9's R3 — declare the basis and refuse
 // outside it).
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { TEXT, type Notation } from "./notation.js";
 
 /**
  * Trial division stops here. A cofactor left above it cannot be certified prime, and an uncertified
@@ -189,33 +190,26 @@ export class LogPart {
   }
 }
 
-const MINUS = "−";
 
 /** `q·ln p` written by hand: `ln 2`, `−ln 2`, `3ln 5`, `ln 2/2`. */
-function formatTerm(t: LogTerm): string {
+function formatTerm(t: LogTerm, n_: Notation): string {
   const n = t.weight.n < 0n ? -t.weight.n : t.weight.n;
-  const head = n === 1n ? `ln ${t.prime}` : `${n}ln ${t.prime}`;
-  return t.weight.d === 1n ? head : `${head}/${t.weight.d}`;
+  const ln = n_.ln(String(t.prime));
+  const head = n === 1n ? ln : `${n}${ln}`;
+  return t.weight.d === 1n ? head : n_.over(head, t.weight.d);
 }
 
 /** `β`'s logarithmic part, as a sum. Empty is the empty string, which the caller elides. */
-export function formatLogPart(x: LogPart): string {
+export function formatLogPart(x: LogPart, n_: Notation = TEXT): string {
   return x.terms
     .map((t, i) => {
-      const sign = t.weight.n < 0n ? MINUS : "";
-      const body = formatTerm(t);
+      const sign = t.weight.n < 0n ? n_.minus : "";
+      const body = formatTerm(t, n_);
       if (i === 0) return `${sign}${body}`;
-      return t.weight.n < 0n ? ` ${MINUS} ${body}` : ` + ${body}`;
+      return t.weight.n < 0n ? ` ${n_.minus} ${body}` : ` + ${body}`;
     })
     .join("");
 }
-
-const SUPERSCRIPT_DIGITS = ["⁰", "¹", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹"];
-const superscript = (n: bigint): string =>
-  String(n)
-    .split("")
-    .map((d) => (d === "-" ? "⁻" : (SUPERSCRIPT_DIGITS[Number(d)] ?? d)))
-    .join("");
 
 /**
  * `e^{Σ qⱼ ln pⱼ}` as the product of powers it IS — `2^{1/2}`, `2^{9/4}·5^{3/4}`.
@@ -224,12 +218,12 @@ const superscript = (n: bigint): string =>
  * record writes: D7's `40^{3/4}` prints as `2^{9/4}·5^{3/4}`, the same number factored. Recovering a
  * record's own grouping would mean remembering it, which is a display concern and not this basis's.
  */
-export function formatLogPower(x: LogPart): string {
+export function formatLogPower(x: LogPart, n_: Notation = TEXT): string {
   return x.terms
     .map((t) =>
       t.weight.d === 1n
-        ? `${t.prime}${superscript(t.weight.n)}`
-        : `${t.prime}^(${t.weight.n}/${t.weight.d})`,
+        ? n_.intPower(String(t.prime), t.weight.n)
+        : n_.power(String(t.prime), `${t.weight.n}/${t.weight.d}`),
     )
-    .join("·");
+    .join(n_.times);
 }

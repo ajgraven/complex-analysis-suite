@@ -25,6 +25,7 @@
 // π is transcendental, so `q₁ + q₂·π = q₃ + q₄·π` over ℚ(i) exactly when the components match —
 // which makes `equals` a decision, not a comparison.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { TEXT, type Notation } from "./notation.js";
 import { formatSqrtExt } from "./formatExact.js";
 import { LogPart, formatLogPart } from "./logPart.js";
 import { unitRoot } from "./unitRoot.js";
@@ -254,36 +255,40 @@ export function jordanExponent(a: Frac, at: SqrtExt): Exponent {
   return Exponent.fromSqrtExt(at.mul(SqrtExt.fromGauss(new Gauss(Frac.ZERO, a))));
 }
 
-const MINUS = "−";
-
 /** `c·π` written by hand: `π`, `−π`, `iπ/2`, `3π/5`, `2π + iπ`. */
-function formatPiPart(c: Gauss): string {
+function formatPiPart(c: Gauss, n_: Notation): string {
   const one = (f: Frac, symbol: string): string => {
     const n = f.n < 0n ? -f.n : f.n;
     const head = n === 1n ? symbol : `${n}${symbol}`;
-    return f.d === 1n ? head : `${head}/${f.d}`;
+    return f.d === 1n ? head : n_.over(head, f.d);
   };
   const parts: string[] = [];
-  if (!c.re.isZero()) parts.push(`${c.re.n < 0n ? MINUS : ""}${one(c.re, "π")}`);
+  if (!c.re.isZero()) parts.push(`${c.re.n < 0n ? n_.minus : ""}${one(c.re, n_.pi)}`);
   if (!c.im.isZero()) {
-    const text = one(c.im, "iπ");
-    parts.push(parts.length === 0 ? `${c.im.n < 0n ? MINUS : ""}${text}` : `${c.im.n < 0n ? ` ${MINUS} ` : " + "}${text}`);
+    const text = one(c.im, n_.juxtapose(n_.imaginary, n_.pi));
+    parts.push(
+      parts.length === 0
+        ? `${c.im.n < 0n ? n_.minus : ""}${text}`
+        : `${c.im.n < 0n ? ` ${n_.minus} ` : " + "}${text}`,
+    );
   }
   return parts.join("");
 }
 
 /** Join two rendered summands with the right sign, eliding an empty one. */
-function joinSummands(left: string, right: string): string {
+function joinSummands(left: string, right: string, n_: Notation): string {
   if (left === "") return right;
   if (right === "") return left;
-  return right.startsWith(MINUS) ? `${left} ${MINUS} ${right.slice(1)}` : `${left} + ${right}`;
+  return right.startsWith(n_.minus)
+    ? `${left} ${n_.minus} ${right.slice(n_.minus.length)}`
+    : `${left} + ${right}`;
 }
 
 /** `β` written by hand — the algebraic part, the π part, the logarithms, or their sum. */
-export function formatExponent(e: Exponent): string {
-  const algebraic = e.algebraic.isZero() ? "" : formatSqrtExt(e.algebraic);
-  const pi = e.pi.isZero() ? "" : formatPiPart(e.pi);
-  const log = e.log.isZero() ? "" : formatLogPart(e.log);
-  const text = joinSummands(joinSummands(algebraic, pi), log);
-  return text === "" ? formatSqrtExt(e.algebraic) : text;
+export function formatExponent(e: Exponent, n_: Notation = TEXT): string {
+  const algebraic = e.algebraic.isZero() ? "" : formatSqrtExt(e.algebraic, n_);
+  const pi = e.pi.isZero() ? "" : formatPiPart(e.pi, n_);
+  const log = e.log.isZero() ? "" : formatLogPart(e.log, n_);
+  const text = joinSummands(joinSummands(algebraic, pi, n_), log, n_);
+  return text === "" ? formatSqrtExt(e.algebraic, n_) : text;
 }

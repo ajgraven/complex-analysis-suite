@@ -21,6 +21,7 @@
 // carries it through {@link certificateClaim} — a single `text` argument, which is what "this
 // sentence is not ours to template" looks like in the type.
 import type { PieceRole } from "./contour/model.js";
+import { latexOf } from "../kernel/exprLatex.js";
 
 /**
  * One substitutable part of a claim.
@@ -135,6 +136,18 @@ export function claimOf(template: ClaimId, args: Readonly<Record<string, ClaimAr
 /** A sentence composed outside this module, carried through unchanged. */
 export function certificateClaim(text: string): Claim {
   return claimOf("certificate", { text: { kind: "text", text } });
+}
+
+/**
+ * An expression the reader sees as mathematics, with its LaTeX sibling PRINTED rather than written.
+ *
+ * `latex` is absent when the text is not an expression — a composed phrase such as the monodromy
+ * row's `n(γ, b) = 1, n(γ, b') = −1`, which is a sentence about several windings rather than one
+ * value. Absent is the honest answer there; step 0.5 gives such a phrase its `$…$` delimiters.
+ */
+export function exactArg(text: string): ClaimArg {
+  const latex = latexOf(text);
+  return { kind: "exact", text, ...(latex === null ? {} : { latex }) };
 }
 
 /** A piece of the contour, by the name the reader sees on it. */

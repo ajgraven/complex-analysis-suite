@@ -20,6 +20,7 @@ import {
   CLAIM_IDS,
   claimOf,
   certificateClaim,
+  exactArg,
   pieceArg,
   renderArg,
   renderClaim,
@@ -27,6 +28,9 @@ import {
 } from "../src/engine/claims.js";
 import { FAMILIES } from "../src/families/index.js";
 import { solveFamily } from "../src/families/runFamily.js";
+
+/** E3's imported piece, `−e^{−1/4}·√π`, typeset. */
+const IMPORTED_LATEX = "-e^{-\\frac{1}{4}} \\cdot \\sqrt{\\pi}";
 
 const piece = pieceArg({ id: "arc", name: "the large arc" });
 const cut = { kind: "cut", name: "Γ" } as const;
@@ -168,6 +172,36 @@ describe("the ledger's claims", () => {
     expect(renderArg({ kind: "exact", text: "π/2" })).toBe("π/2");
     expect(renderArg({ kind: "cut", name: "Γ" })).toBe("Γ");
     expect(renderArg({ kind: "text", text: "crosses" })).toBe("crosses");
+  });
+
+  it("carries a LaTeX sibling on an exact argument that IS an expression", () => {
+    // M8 step 0.4b. `exactArg` prints the LaTeX from the same text, so the ledger's rows can be
+    // typeset without a second copy of any formula — and it withholds one where the text is not an
+    // expression, which is the honest answer for a composed phrase.
+    expect(exactArg("sqrt(pi)*exp(-1/4)")).toEqual({
+      kind: "exact",
+      text: "sqrt(pi)*exp(-1/4)",
+      // `\\frac{-1}{4}` rather than `-\\frac{1}{4}`: `-1/4` parses as `(-1)/4`, and lifting a
+      // leading minus out of a fraction is a `toLatex` refinement recorded for the presentation
+      // pass rather than made here (M8 step 0.4b).
+      latex: "\\sqrt{\\pi} \\cdot e^{\\frac{-1}{4}}",
+    });
+    expect(exactArg("n(γ, b) = 1, n(γ, b') = −1")).toEqual({
+      kind: "exact",
+      text: "n(γ, b) = 1, n(γ, b') = −1",
+    });
+    // And on a real row: the imported piece's value is typeset wherever a record imports one.
+    const imported = FAMILIES.find((f) => f.id === "gaussian-shift-zero-residue");
+    const run = solveFamily(imported ?? ({} as never), imported?.golden[0] ?? ({} as never));
+    expect(run.ok).toBe(true);
+    const row = run.ok
+      ? run.run.ledger.rows.find((r) => r.claimData.template === "kill.imported")
+      : undefined;
+    const value = row?.claimData.args.value;
+    expect(value?.kind).toBe("exact");
+    // Pinned, not merely present: `latex: ""` is defined too, and an empty typeset value on the one
+    // row whose whole content is "this number came from outside" is worse than none.
+    expect(value?.kind === "exact" ? value.latex : undefined).toBe(IMPORTED_LATEX);
   });
 
   it("leaves mathematics that looks like a placeholder alone", () => {
