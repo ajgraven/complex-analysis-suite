@@ -3811,3 +3811,75 @@ exactly the point where it is handing you a result from elsewhere.
    error in the value, so no tight verdict is available. What it separates is a converging tail from
    a different number — E3's is 1.5e-8 of the value at R = 4 and 2.2e-11 at R = 6, while the same
    record with one factor dropped is off by half the value.
+
+## ADR-0043: Contour Integration rebuilds its shell — two rails, a keyed renderer, KaTeX, textbook vocabulary
+
+**Status:** Accepted  **Date:** 2026-09-15  **Deciders:** Andrew
+
+*The decision behind M8. Plan: [`contour-integration/M8-plan.md`](contour-integration/M8-plan.md);
+review: `https://claude.ai/artifact/3uUWAhH4PM9qGR2siHvpjV`, materials under
+[`contour-integration/M8/review-inputs/`](contour-integration/M8/review-inputs/).*
+
+### Context
+
+A review of the app on `master` (M7 complete, all 28 records loaded) found the engine sound and the
+presentation layer the liability. Concretely: no mathematics is typeset (targets print as
+`∫ (−∞ → ∞) cos(a*x)/(x^2 + b^2) dx`); one right-hand rail carries seven concerns, scrolls seven screens
+on a laptop, and is torn down on every recompute (so disclosures close, sliders die on their own input
+event, focus is lost — one architectural fact behind a dozen visible defects); the gallery's front door
+is a `<select>` of slugs; the ledger speaks in house ids (`COVER / KILL / CATCH / LEGALITY`) and
+essay-voiced prose that cites internal research notes; the cold start is the sandbox on `1/z`, against
+the app's own rule 1; and three sentences on screen are mathematically wrong (the "target is Im/2 of
+∮" template on records where ∮ = 0; a sign-restricted "record claims" form printed beside a value it
+contradicts; "the kernel's Laurent expansion at an integer is even", where the kernel is odd). The
+owner's goal is a tool that can be handed to colleagues who teach complex analysis and to graduate
+students, as an exploration instrument first with a pedagogical mode.
+
+### Decision
+
+1. **The shell is rebuilt, not patched**, as a renderer over the existing `ShellState → resolveState`
+   contract (`src/shell/state.ts`), with keyed in-place DOM updates. The engine
+   (`src/kernel`, `src/engine`, `src/families`) is unchanged except for hooks named in the plan
+   (structured claims, LaTeX siblings of the formatters, piece ids on derivation lines, roles on free
+   pieces). The gesture machine, the pen geometry, the `#vs=` codec, the templates, the figure layout,
+   the accumulator and the GL stage are carried over. No UI framework: the suite has none and ADR-0007
+   admits no dependency without a second consumer; the keyed builder is a few dozen lines.
+2. **Layout B**: left rail = what is being integrated (target, integrand with live typeset preview,
+   parameters, contour pieces, cuts, singularities); right rail = what it proves (result with the
+   hypothesis table collapsed, derivation, share); stage between; accumulator beneath. Either rail
+   collapses. Worked-example mode is the same screen with the left rail collapsed and the derivation
+   driving the stage. Desktop and laptop only; a phone gets a notice.
+3. **KaTeX** becomes a dependency of this app (already one of four sibling apps). `@cas/expr`'s
+   `toLatex` prints expressions; the app adds LaTeX siblings for its exact-value formatters and the
+   record targets. Maths inside engine-minted strings uses a `$…$` delimiter convention the shell
+   renders; structured `Claim` objects carry typed arguments for the ledger and derivation.
+4. **Vocabulary**: the ids stay data keys; the screen shows *Hypotheses · Residues · Boundary terms ·
+   Target*, with headlines "Hypotheses verified." / "Hypotheses fail: ⟨piece⟩ does not vanish."
+   House notation `∮_γ f(z) dz`, `Res(f, a)`, `Ind_γ(a)`, `Γ_R`. Prose is terse and textbook-neutral;
+   every engine sentence is listed for owner sign-off before it ships.
+5. **Stage modes** quiet (default) · full · isochromatic · textbook, plus the modulus toggle; the CET-C6
+   cyclic map replaces the documented approximation; textbook and light-phase are the figure export's
+   print and light variants.
+6. **The gallery front door** is eight classics as cards over eight groups; each record carries a
+   four-line description (integral · contour · point · chapter-level citation) as schema data.
+7. **Process**: one branch; Phase 0 (invisible foundations, the correctness fixes included) merges to
+   `master` alone; the rest lands in one merge; the branch may be broken between gates; every step is
+   sized for a metered session and ends pushed with `M8/STATUS.md` updated.
+
+### Consequences
+
+- The honest-labelling guardrail is unchanged: badges come from verdicts; `=` and `≈` never share a
+  line; the numerics disclosure opens by default when certification fails so an explorer always gets a
+  labelled number.
+- Five shell test files that pin DOM structure are rewritten against roles and accessible names; the
+  DOM-free suites (codec by verdict, figure caption, contrast ladder, drill, engine and kernel) are the
+  safety net and are untouched.
+- The `@cas/ui` nav header stays hard-coded dark; a full light theme is deferred (plan P3).
+- Supersedes PLAN §5's two-left-rails table for this app; the ten interaction rules and the P0
+  pedagogical constraints stand.
+
+### Action items
+
+1. Phase 0 through Phase 5 per the plan; STATUS.md is the record.
+2. After the final merge: CLAUDE.md status paragraph, README, PLAN §5 and §7 updated; the M8 plan's
+   findings folded into `docs/refactor/LOG.md`.
