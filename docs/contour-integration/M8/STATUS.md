@@ -28,7 +28,7 @@ changed.
 
 | 2026-09-15 | **0.3** | 0974f13 | `engine/claims.ts`; 40 templates; `LedgerRow.claimData`; `test/claims.test.ts` (6 tests) + `test/ledgerDump.test.ts` byte-identical over 3,918 lines; sweep 18/18. Baseline captured first in 2cad10c. Full gate green: 546 files / 5658 tests, lint and typecheck silent. Browser suite not run — the slice adds no record and does not touch the stage |
 
-| 2026-09-15 | **0.4a** | (this commit) | the LaTeX coverage sweep (`test/latexCoverage.test.ts`); `sech`/`csch`/`coth`/`factorial` in `@cas/expr` + `@cas/gpu`; `packages/gpu/test/glslCoverage.test.ts`; 0.1's display rewriter dropped; sweep 13/13. Full gate green: 548 files / 5672 tests. Browser: `@cas/gpu` parity 21/21 in real WebGL2 |
+| 2026-09-15 | **0.4a** | 0b2a141 | the LaTeX coverage sweep (`test/latexCoverage.test.ts`); `sech`/`csch`/`coth`/`factorial` in `@cas/expr` + `@cas/gpu`; `packages/gpu/test/glslCoverage.test.ts`; 0.1's display rewriter dropped; sweep 13/13. Full gate green: 548 files / 5672 tests. Browser: `@cas/gpu` parity 21/21 in real WebGL2 |
 
 ## Findings (things learned while executing; each names its step)
 
