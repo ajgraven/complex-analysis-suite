@@ -70,7 +70,7 @@ const SQRT_PI: ImportedAtom = {
   latex: "\\sqrt{\\pi}",
   numeric: Math.sqrt(Math.PI),
   provenance:
-    "Γ(1/2) = √π — the Gaussian ∫ℝ e^{−x²}dx = √π, established by polar coordinates, not by any contour",
+    "$\\Gamma(1/2) = \\sqrt{\\pi}$ — the Gaussian $\\int_{\\mathbb{R}} e^{-x^2}dx = \\sqrt{\\pi}$, established by polar coordinates, not by any contour",
   rigor: "=",
 };
 
@@ -110,15 +110,16 @@ export function gammaImport(q: Frac): { readonly atom: ImportedAtom; readonly mu
 
   const arg = q.d === 1n ? `${q.n}` : `${q.n}/${q.d}`;
   const text = `Γ(${arg})`;
+  const latex = `\\Gamma\\left(${q.d === 1n ? `${q.n}` : `\\frac{${q.n}}{${q.d}}`}\\right)`;
   return {
     atom: {
       id: text,
       text,
-      latex: `\\Gamma\\left(${q.d === 1n ? `${q.n}` : `\\frac{${q.n}}{${q.d}}`}\\right)`,
+      latex,
       numeric: C.gamma([q.toNumber(), 0])[0],
       provenance:
-        `${text} = ∫₀^∞ t^{${q.d === 1n ? `${q.n - 1n}` : `${q.n - q.d}/${q.d}`}}e^{−t}dt — ` +
-        "the Gamma function at a rational argument, established by the real substitution u = tⁿ and " +
+        `$${latex} = \\int_0^{\\infty} t^{${q.d === 1n ? `${q.n - 1n}` : `${q.n - q.d}/${q.d}`}}e^{-t}\\,dt$ — ` +
+        "the Gamma function at a rational argument, established by the real substitution $u = t^n$ and " +
         "not by any contour",
       rigor: "=",
     },

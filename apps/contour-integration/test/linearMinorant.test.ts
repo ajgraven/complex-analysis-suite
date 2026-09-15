@@ -67,7 +67,7 @@ describe("dampedArcIntegral — the side condition, decided in ℚ", () => {
 
   it("names the identity in the cos face's method, so the sharing is visible", () => {
     const d = dampedArcIntegral(q(1, 4), "cos");
-    expect(d.certificate.method).toMatch(/SAME inequality under φ = π\/2 − ψ/);
+    expect(d.certificate.method).toMatch(/same inequality under \$\\varphi = \\pi\/2 - \\psi\$/);
   });
 
   it("folds the sin face past π/2, at exactly twice the constant", () => {
@@ -76,7 +76,7 @@ describe("dampedArcIntegral — the side condition, decided in ℚ", () => {
       expect(d.constant?.equals(Frac.ONE)).toBe(true);
       expect(d.withinMinorant).toBe(false);
       expect(d.certificate.level).toBe("≤");
-      expect(d.certificate.method).toMatch(/sin ψ = sin\(π − ψ\)/);
+      expect(d.certificate.method).toMatch(/\\sin\\psi = \\sin\(\\pi - \\psi\)/);
     }
   });
 

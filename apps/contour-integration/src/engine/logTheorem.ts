@@ -42,7 +42,7 @@ export interface LogTheoremInput {
 }
 
 const declined = (reason: string, also?: Certificate): ResidueTheoremResult => ({
-  verdict: assembleVerdict(also === undefined ? [refuse("∮ f dz", reason)] : [refuse("∮ f dz", reason), also]),
+  verdict: assembleVerdict(also === undefined ? [refuse("$\\oint_\\gamma f(z)\\,dz$", reason)] : [refuse("$\\oint_\\gamma f(z)\\,dz$", reason), also]),
 });
 
 export function applyLogTheorem(input: LogTheoremInput): ResidueTheoremResult {

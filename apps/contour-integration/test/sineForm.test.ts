@@ -119,7 +119,7 @@ describe("D1 — π/sin(πα) out of 1 − e^{2πiα}", () => {
     if (!r.ok) return;
     expect(sineArgument(r.form)?.pi.equals(Gauss.rat(3n, 10n))).toBe(true);
     expect(r.certificate.level).toBe("=");
-    expect(r.certificate.method).toMatch(/2i·sin/);
+    expect(r.certificate.method).toMatch(/2i\\sin/);
   });
 });
 

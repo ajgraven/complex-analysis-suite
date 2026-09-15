@@ -102,7 +102,7 @@ export const e1StripExponentialQuasiperiod: Family = {
       },
       {
         id: "right",
-        name: "the right vertical x = R",
+        name: "the right vertical $x = R$",
         geom: { kind: "segment", from: pt({ param: "R" }, 0), to: pt({ param: "R" }, P) },
         role: "vanish",
         lemma: "L1",
@@ -110,7 +110,7 @@ export const e1StripExponentialQuasiperiod: Family = {
       },
       {
         id: "top",
-        name: "the line Im z = 2π",
+        name: "the line $\\operatorname{Im} z = 2\\pi$",
         geom: { kind: "segment", from: pt({ param: "R" }, P), to: pt({ param: "R", mul: -1 }, P) },
         role: "reproduces",
         // Convention F: the factor is the FULL multiplier of the target, reversal included. The minus
@@ -121,7 +121,7 @@ export const e1StripExponentialQuasiperiod: Family = {
       },
       {
         id: "left",
-        name: "the left vertical x = −R",
+        name: "the left vertical $x = -R$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: -1 }, P),

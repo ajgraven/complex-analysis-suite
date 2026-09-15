@@ -120,9 +120,9 @@ describe("honesty about what is exact here", () => {
     const b = outer(q(3, 10), q(1000));
     expect(b.certificate.level).toBe("≤");
     const trail = b.certificate.provenance;
-    expect(trail.some((s) => s.ok && /exact ℚ coefficient bounds/.test(s.text))).toBe(true);
+    expect(trail.some((s) => s.ok && /exact \$\\mathbb\{Q\}\$ coefficient bounds/.test(s.text))).toBe(true);
     expect(trail.some((s) => !s.ok && /irrational power/.test(s.text))).toBe(true);
-    expect(trail.some((s) => s.ok && /its SIGN is decided/.test(s.text))).toBe(true);
+    expect(trail.some((s) => s.ok && /its sign is decided/.test(s.text))).toBe(true);
   });
 
   it("refuses a radius inside the denominator's root bound rather than reporting a wrong number", () => {

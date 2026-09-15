@@ -97,7 +97,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
     pieces: [
       {
         id: "left",
-        name: "the real axis, x < −ρ",
+        name: "the real axis, $x < -\\rho$",
         geom: { kind: "segment", from: pt({ param: "R", mul: -1 }, 0), to: pt({ param: "rho", mul: -1 }, 0) },
         role: "target",
         // As in C1: only the SUM of the target coefficients is identifiable, since Pass 5 sums the
@@ -107,7 +107,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       },
       {
         id: "indent",
-        name: "the indentation over the real pole z = 0",
+        name: "the indentation over the real pole $z = 0$",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "rho" }, theta0: Math.PI, theta1: 0 },
         role: "vanish",
         lemma: "L4",
@@ -115,7 +115,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       },
       {
         id: "right",
-        name: "the real axis, x > ρ",
+        name: "the real axis, $x > \\rho$",
         geom: { kind: "segment", from: pt({ param: "rho" }, 0), to: pt({ param: "R" }, 0) },
         role: "target",
         coefficients: [{ targetId: "I", coefficient: "1/2" }],
@@ -123,7 +123,7 @@ export const c3PvSineOverXTimesQuadratic: Family = {
       },
       {
         id: "bigarc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: Math.PI },
         role: "vanish",
         lemma: "L3",

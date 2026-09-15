@@ -363,8 +363,8 @@ export function polesInBand(form: LatticeForm, lo: Frac, hi: Frac): StripResult 
     poles,
     certificate: exact(
       `${poles.length} pole${poles.length === 1 ? "" : "s"} with ${lo.n}/${lo.d} < Im z/2π < ${hi.n}/${hi.d}, each simple, with exact residues`,
-      "w = e^z makes f rational in w; each root of D(w) is a root of unity, so log w is 2πi times an " +
-        "exact rational, and Res_z = e^{az₀}·Res_w(N/D, w₀)/w₀ lands in ℚ(i)(√d) × e^{ℚ(i)·π}",
+      "$w = e^z$ makes $f$ rational in $w$; each root of $D(w)$ is a root of unity, so $\\log w$ is $2\\pi i$ times an " +
+        "exact rational, and $\\operatorname{Res}_z = e^{az_0}\\operatorname{Res}_w(N/D, w_0)/w_0$ lands in $\\mathbb{Q}(i)(\\sqrt{d}) \\times e^{\\mathbb{Q}(i)\\pi}$",
     ),
   };
 }

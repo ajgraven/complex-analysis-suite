@@ -208,23 +208,23 @@ export function cyclotomicWeightedSum(
         ...(argRange === undefined
           ? {}
           : {
-              restriction: `arg z ∈ [${argRange[0].n}/${argRange[0].d}·π, ${argRange[1].n}/${argRange[1].d}·π)`,
+              restriction: `$\\arg z \\in [\\tfrac{${argRange[0].n}}{${argRange[0].d}}\\pi, \\tfrac{${argRange[1].n}}{${argRange[1].d}}\\pi)$`,
             }),
         provenance: [
           {
             ok: true,
-            text: `zₖ^n = e^{i(${form.psi.n}/${form.psi.d})π} was verified exactly, so arg zₖ = (ψ + 2k)π/n for k = 0…${form.n - 1}`,
+            text: `$z_k^n = e^{i(${form.psi.n}/${form.psi.d})\\pi}$ was verified exactly, so $\\arg z_k = (\\psi + 2k)\\pi/n$ for $k = 0,\\dots,${form.n - 1}$`,
           },
           {
             ok: true,
-            text: "no individual root is expressed: a fifth or seventh root of −1 needs a degree-4 or degree-6 field, and the SUM needs none",
+            text: "no individual root is expressed: a fifth or seventh root of $-1$ generates a field of degree 4 or 6 over $\\mathbb{Q}$, and the sum needs none",
           },
           ...(counted === form.n
             ? []
             : [
                 {
                   ok: true,
-                  text: "each root's winding number was decided by the same exact-sign predicates every other winding uses; the roots are located numerically only to ASK that question",
+                  text: "each root's winding number was decided by the same exact-sign predicates every other winding uses; the roots are located numerically only to ask that question",
                 },
               ]),
         ],

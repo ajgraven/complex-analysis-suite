@@ -199,7 +199,7 @@ export function applyResidueTheorem(
       }
       // A cyclotomic denominator whose sum REFUSED is not a case to fall through on: the refusal is
       // about an undecided winding, which the per-pole route below would meet identically.
-      return { verdict: assembleVerdict([refuse("∮ f dz", sum.reason), sum.certificate]) };
+      return { verdict: assembleVerdict([refuse("$\\oint_\\gamma f(z)\\,dz$", sum.reason), sum.certificate]) };
     }
     return {
       verdict: assembleVerdict([
@@ -255,7 +255,7 @@ export function applyResidueTheorem(
   certificates.push(
     exact(
       `∮ f dz = 2πi Σ n(γ,aₖ)·Res(f,aₖ) = ${text}`,
-      "exact residues over ℚ(i), exact winding numbers, and the residue theorem",
+      "exact residues over $\\mathbb{Q}(i)$, exact winding numbers, and the residue theorem",
     ),
   );
 

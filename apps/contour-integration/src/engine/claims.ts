@@ -132,9 +132,9 @@ const TEMPLATE = {
   // ---- COVER -------------------------------------------------------------------------------
   "cover.on-contour": "the target is a piece of the contour",
   "cover.in-sum":
-    "{id} is the sum of the residues at the integers, not a piece of the contour",
+    "the target is the sum of the residues at the integers, not a piece of the contour",
   "cover.in-sum-weighted":
-    "{id} is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
+    "the target is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
   "cover.none": "no target is designated; the closed-contour integral is reported",
 
   // ---- the boundary ------------------------------------------------------------------------
@@ -211,11 +211,27 @@ export function renderArg(arg: ClaimArg): string {
 // standing, which the corpus dump sees immediately as a claim that changed.
 const PLACEHOLDER = /\{([A-Za-z][A-Za-z0-9]*)\}/g;
 
-/** The claim as one line of text — the only place a claim becomes a sentence. */
+/**
+ * The claim as one line of text — the only place a claim becomes a sentence.
+ *
+ * **Where an argument carries a LaTeX sibling, the PLACEHOLDER decides which one is used**, by
+ * counting the delimiters before it: a placeholder inside a `$…$` span takes the bare LaTeX, one
+ * outside takes `$…$` around it. Neither half works alone. Rendering the text everywhere printed an
+ * engine-notation `−1/2·e^(iπ/4)·√π` next to a piece name that was already typeset — two notations
+ * in one sentence; wrapping everywhere nested the delimiters inside the templates that already put
+ * their placeholder in maths (`… \alpha_j = {sum} \in \mathbb{Z}$`), which `splitMath` then reads
+ * as an unbalanced line and the corpus check refuses. The question is about the SITE, so it is
+ * answered there.
+ */
 export function renderClaim(claim: Claim): string {
-  return TEMPLATE[claim.template].replace(PLACEHOLDER, (whole, name: string) => {
+  const template = TEMPLATE[claim.template];
+  return template.replace(PLACEHOLDER, (whole, name: string, at: number) => {
     const arg = claim.args[name];
-    return arg === undefined ? whole : renderArg(arg);
+    if (arg === undefined) return whole;
+    const text = renderArg(arg);
+    if (arg.kind !== "exact" || arg.latex === undefined) return text;
+    const inMath = (template.slice(0, at).match(/\$/g) ?? []).length % 2 === 1;
+    return inMath ? arg.latex : `$${arg.latex}$`;
   });
 }
 

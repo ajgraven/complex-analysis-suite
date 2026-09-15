@@ -227,16 +227,16 @@ export function applySummationTheorem(input: SummationTheoremInput): ResidueTheo
     ...mergedCertificates,
     exact(
       `∮ = 2πi[Σ over ${counted} integer pole${counted === 1 ? "" : "s"} + Σ over ${cofactor.at.length} pole${cofactor.at.length === 1 ? "" : "s"} of the cofactor]`,
-      "the kernel's residue is exactly 1 (cot) or exactly (−1)ⁿ (csc) at every integer, so its term is f(n) evaluated exactly over ℚ(i); the cofactor's is K(zⱼ)·Res(f,zⱼ), exact as a quotient of basis elements",
+      "the kernel's residue is exactly $1$ ($\\cot$) or exactly $(-1)^n$ ($\\csc$) at every integer, so its term is $f(n)$ evaluated exactly over $\\mathbb{Q}(i)$; at a pole $z_j$ of $f$ it is $K(z_j)\\operatorname{Res}(f, z_j)$, exact as a quotient of basis elements",
       {
         provenance: [
           {
             ok: true,
-            text: `every pole of the cofactor was asked for its winding number and is enclosed ${weight === 1 ? "once" : `with winding ${weight}`} — the record's 'once N+½ > a', checked rather than assumed`,
+            text: `every pole of the cofactor was asked for its winding number and is enclosed ${weight === 1 ? "once" : `with winding ${weight}`} — checked rather than assumed`,
           },
           {
             ok: true,
-            text: "at the contour drawn this is 2πi times the PARTIAL sum minus the infinite one; it is the limit N → ∞ that sends it to zero, and that limit is what the vanishing sides establish",
+            text: "at the contour drawn this is $2\\pi i$ times the partial sum minus the infinite one; it is the limit $N \\to \\infty$ that sends it to zero, and that limit is what the vanishing sides establish",
           },
         ],
       },

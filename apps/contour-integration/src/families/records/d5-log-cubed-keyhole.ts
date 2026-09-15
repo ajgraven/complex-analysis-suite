@@ -153,7 +153,7 @@ export const d5LogCubedKeyhole: Family = {
     pieces: [
       {
         id: "upper",
-        name: "the upper edge, log z = log x",
+        name: "the upper edge, $\\log z = \\log x$",
         geom: { kind: "segment", from: pt({ param: "eps" }, 0), to: pt({ param: "R_lim" }, 0) },
         role: "target",
         side: "above",
@@ -162,7 +162,7 @@ export const d5LogCubedKeyhole: Family = {
       },
       {
         id: "outer",
-        name: "the R → ∞ circle",
+        name: "the $R \\to \\infty$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -176,7 +176,7 @@ export const d5LogCubedKeyhole: Family = {
       },
       {
         id: "lower",
-        name: "the lower edge, log z = log x + 2πi",
+        name: "the lower edge, $\\log z = \\log x + 2\\pi i$",
         geom: { kind: "segment", from: pt({ param: "R_lim" }, 0), to: pt({ param: "eps" }, 0) },
         role: "reproduces",
         side: "below",
@@ -193,7 +193,7 @@ export const d5LogCubedKeyhole: Family = {
       },
       {
         id: "inner",
-        name: "the ε → 0 circle",
+        name: "the $\\varepsilon \\to 0$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),

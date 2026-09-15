@@ -223,7 +223,7 @@ describe("jordanArcBound — where the sign of a is a hard branch", () => {
     const { num, den } = exact("1/(1+z^2)");
     const b = jordanArcBound(num, den, q(1), "upper", q(50));
     const texts = b.certificate.provenance.map((s) => s.text).join(" | ");
-    expect(texts).toMatch(/∫₀\^\{π\} e\^\{−κ sin ψ\} dψ ≤ π\/κ/);
-    expect(texts).toMatch(/sin ψ = sin\(π − ψ\)/);
+    expect(texts).toMatch(/\\int_0\^\{\\pi\} e\^\{-\\kappa\\sin\\psi\}\\,d\\psi \\le \\pi\/\\kappa/);
+    expect(texts).toMatch(/\\sin\\psi = \\sin\(\\pi - \\psi\)/);
   });
 });

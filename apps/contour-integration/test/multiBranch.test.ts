@@ -49,14 +49,14 @@ describe("the dogbone's branch factor", () => {
     if (!r.ok) throw new Error(r.reason);
     expect(r.argMultiple.equals(q(-1n, 2n))).toBe(true);
     const steps = r.certificate.provenance.map((s) => s.text).join(" | ");
-    expect(steps).toMatch(/Σ αⱼ·arg\(z₀ − bⱼ\) = −1\/2·π/);
-    expect(steps).toMatch(/pins it modulo 1\/2·π/);
+    expect(steps).toMatch(/\\sum_j \\alpha_j \\arg\(z_0 - b_j\) = -\\frac\{1\}\{2\}\\pi/);
+    expect(steps).toMatch(/pins it modulo \$\\frac\{1\}\{2\}\\pi\$/);
     // The engine checks itself, rather than leaving that to the suite: the exact route and a direct
     // float evaluation of the declared branch share only the window, so a wrong log weight, a dropped
     // constant or a mis-lifted phase is a refusal here rather than a plausible number downstream.
     expect(steps).toMatch(/independent cross-check: a direct float evaluation/);
-    expect(steps).toMatch(/ln ∏\|z₀ − bⱼ\|\^\{αⱼ\} = −ln 2\/2/);
-    expect(r.certificate.method).toMatch(/WEIGHTED SUM/);
+    expect(steps).toMatch(/\\ln \\prod_j\|z_0 - b_j\|\^\{\\alpha_j\} = /);
+    expect(r.certificate.method).toMatch(/weighted sum/);
   });
 
   it("lands in the output basis: 1/√2, not a decimal", () => {

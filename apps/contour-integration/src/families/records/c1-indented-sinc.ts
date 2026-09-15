@@ -110,7 +110,7 @@ export const c1IndentedSinc: Family = {
       },
       {
         id: "indent",
-        name: "the ρ → 0 indentation over z = 0",
+        name: "the $\\rho \\to 0$ indentation over $z = 0$",
         // θ: π → 0 sweeps CLOCKWISE over the origin, so α = −π and the piece pays −iπ·Res.
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "rho" }, theta0: Math.PI, theta1: 0 },
         role: "vanish",
@@ -127,7 +127,7 @@ export const c1IndentedSinc: Family = {
       },
       {
         id: "bigarc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: Math.PI },
         role: "vanish",
         lemma: "L3",

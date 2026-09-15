@@ -74,7 +74,7 @@ export const PROPOSED: Readonly<Record<string, string>> = {
   "cover.on-contour": "the target is a piece of the contour",
   "cover.in-sum": "the target is the sum of the residues at the integers, not a piece of the contour",
   "cover.in-sum-weighted":
-    "{id} is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
+    "the target is the sum of the residues at the integers, not a piece of the contour (weight {weight})",
   "cover.none": "no target is designated; the closed-contour integral is reported",
 
   // ---- headlines ---------------------------------------------------------------------------

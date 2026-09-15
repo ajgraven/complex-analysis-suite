@@ -142,7 +142,7 @@ describe("the ledger closes, and every row says something true", () => {
     expect(ledgerHeadline(ledger)).toBe("The argument is complete.");
     const cover = ledger.rows.find((row) => row.constraint === "COVER");
     expect(cover?.status).toBe("satisfied");
-    expect(cover?.claim).toMatch(/S is the sum of the residues at the integers/);
+    expect(cover?.claim).toMatch(/the target is the sum of the residues at the integers/);
   });
 
   it("CATCH counts the cofactor's poles as well as the kernel's", () => {

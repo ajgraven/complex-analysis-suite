@@ -135,7 +135,7 @@ export const d6DogboneInverseSqrt: Family = {
       },
       {
         id: "endB",
-        name: "the η-circle round z = 1, upper lip to lower",
+        name: "the $\\eta$-circle round $z = 1$, upper lip to lower",
         geom: {
           kind: "arc",
           center: pt(1, 0),
@@ -165,7 +165,7 @@ export const d6DogboneInverseSqrt: Family = {
       },
       {
         id: "endA",
-        name: "the η-circle round z = −1, lower lip to upper",
+        name: "the $\\eta$-circle round $z = -1$, lower lip to upper",
         geom: {
           kind: "arc",
           center: pt(-1, 0),

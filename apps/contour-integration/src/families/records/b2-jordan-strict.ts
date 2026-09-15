@@ -97,7 +97,7 @@ export const b2JordanStrict: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle (upper: a = 1 > 0)",
+        name: "the $R \\to \\infty$ semicircle (upper: $a = 1 > 0$)",
         geom: {
           kind: "arc",
           center: pt(0, 0),

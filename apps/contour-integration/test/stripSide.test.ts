@@ -98,8 +98,8 @@ describe("E1's window is the two exponents' signs, not a declaration", () => {
   it("says which exponent it used, so the derivation can show the two jobs", () => {
     const right = boundOf(e1("3/10"), { side: "right" }).certificate.provenance[0].text;
     const left = boundOf(e1("3/10"), { side: "left" }).certificate.provenance[0].text;
-    expect(right).toMatch(/Re\(a\) \+ deg N − deg D/);
-    expect(left).toMatch(/−Re\(a\) − ord₀N \+ ord₀D/);
+    expect(right).toMatch(/\\operatorname\{Re\}\(a\) \+ \\deg N - \\deg D/);
+    expect(left).toMatch(/-\\operatorname\{Re\}\(a\) - \\operatorname\{ord\}_0 N \+ \\operatorname\{ord\}_0 D/);
   });
 });
 
@@ -184,7 +184,7 @@ describe("the bound is a bound, at finite R", () => {
   it("flags the float step in its own provenance rather than letting it pass", () => {
     const p = boundOf(e1("3/10")).certificate.provenance;
     const flagged = p.find((s) => !s.ok);
-    expect(flagged?.text).toMatch(/e\^\{κR\} is transcendental/);
+    expect(flagged?.text).toMatch(/\$e\^\{\\kappa R\}\$ is transcendental/);
   });
 
   it("carries no `value` field, because that one is documented exact", () => {

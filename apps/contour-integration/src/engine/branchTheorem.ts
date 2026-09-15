@@ -74,7 +74,7 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
     if (enclosed !== null) {
       const sum = cyclotomicResidueSum(cyclotomic, factor.alpha, factor.argRange);
       if (!sum.ok) {
-        return { verdict: assembleVerdict([refuse("∮ f dz", sum.reason), sum.certificate]) };
+        return { verdict: assembleVerdict([refuse("$\\oint_\\gamma f(z)\\,dz$", sum.reason), sum.certificate]) };
       }
       const piUnits = sum.value.scale(TWO_I);
       const [re, im] = piUnits.toTuple();
@@ -100,7 +100,7 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
   if (exactPoles === undefined || !poles.exactlyComplete) {
     const reason =
       "the rational cofactor's poles were not all pinned exactly, so z₀^α cannot be evaluated in the declared determination";
-    return { verdict: assembleVerdict([refuse("∮ f dz", reason)]) };
+    return { verdict: assembleVerdict([refuse("$\\oint_\\gamma f(z)\\,dz$", reason)]) };
   }
 
   const windingOf = (at: readonly [number, number]): { n: number; decided: boolean } => {
@@ -116,12 +116,12 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
     const w = windingOf(pole.at.toTuple());
     if (!w.decided) {
       const reason = `the winding number about a pole of the rational cofactor was not decided, so its residue cannot be weighted`;
-      return { verdict: assembleVerdict([refuse("∮ f dz", reason)]) };
+      return { verdict: assembleVerdict([refuse("$\\oint_\\gamma f(z)\\,dz$", reason)]) };
     }
     if (w.n === 0) continue;
     const residue = branchResidue(pole, factor);
     if (!residue.ok) {
-      return { verdict: assembleVerdict([refuse("∮ f dz", residue.reason), residue.certificate]) };
+      return { verdict: assembleVerdict([refuse("$\\oint_\\gamma f(z)\\,dz$", residue.reason), residue.certificate]) };
     }
     certificates.push(residue.certificate);
     sum = sum.add(residue.value.scale(SqrtExt.fromGauss(Gauss.int(w.n))));
@@ -137,13 +137,13 @@ export function applyBranchTheorem(input: BranchTheoremInput): ResidueTheoremRes
   certificates.push(
     exact(
       `∮ = 2πi Σ n(γ,zₖ)·Res(z^α R, zₖ) over ${counted} pole${counted === 1 ? "" : "s"}`,
-      "the branch point carries no residue; each pole of the rational cofactor contributes z₀^α·Res(R, z₀) in the declared determination",
+      "the branch point carries no residue; each pole of the rational cofactor contributes $z_0^{\\alpha}\\operatorname{Res}(R, z_0)$ in the declared determination",
       {
         provenance: [
           { ok: true, text: "the branch point is NOT a pole: there is no Laurent series at it and no residue to take" },
           {
             ok: false,
-            text: "no quadrature cross-check: sampling z^α needs a determination, and a naive evaluator would use the principal branch and answer a different question",
+            text: "no quadrature cross-check: sampling $z^{\\alpha}$ needs a determination, and a naive evaluator would use the principal branch and answer a different question",
           },
         ],
       },
@@ -208,7 +208,7 @@ function everyRootEnclosed(
       provenance: [
         {
           ok: true,
-          text: "the roots are located numerically only to ASK the winding question; their residues are never evaluated",
+          text: "the roots are located numerically only to ask the winding question; their residues are never evaluated",
         },
       ],
     },

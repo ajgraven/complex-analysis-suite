@@ -21,6 +21,7 @@
 // different shapes here rather than one shape with a flag, and the additive one carries no factor to
 // print.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
+import { LATEX } from "../notation.js";
 import { exact, type Certificate } from "@cas/rigor";
 import { formatFrac, formatSqrtExt } from "../formatExact.js";
 import { Exponent } from "../exponent.js";
@@ -83,25 +84,25 @@ export function crossingMonodromy(branch: BranchChoice, cutId: string): Crossing
 
   if (jump === null) {
     const detail =
-      `crossing '${cutId}' ADDS 2πi to the logarithm: its monodromy has infinite order, so no ` +
+      `crossing '${cutId}' adds $2\\pi i$ to the logarithm: its monodromy has infinite order, so no ` +
       "factor multiplies the integrand and no sheet count closes the loop";
     return {
       kind: "additive",
       cut: cutId,
       detail,
-      certificate: exact(detail, "research 06 §3.4: log(x − i0) = log(x + i0) + 2πi"),
+      certificate: exact(detail, "$\\log(x - i0) = \\log(x + i0) + 2\\pi i$"),
     };
   }
   if (jump === undefined || jump.d === 1n) return null; // integral weight: no discontinuity here
 
   const { exponent, value } = asFactor(jump);
   const reduced = reduce(jump);
-  const literal = `e^(2πi·${formatFrac(jump)})`;
-  const reducedText = `e^(2πi·${formatFrac(reduced)})`;
-  const asNumber = value === null ? "" : ` = ${formatSqrtExt(value)}`;
+  const literal = `e^{2\\pi i \\cdot ${formatFrac(jump, LATEX)}}`;
+  const reducedText = `e^{2\\pi i \\cdot ${formatFrac(reduced, LATEX)}}`;
+  const asNumber = value === null ? "" : ` = ${formatSqrtExt(value, LATEX)}`;
   const detail =
-    `crossing '${cutId}' multiplies the integrand by ${literal}${asNumber}` +
-    (reduced.equals(jump) ? "" : `, which is ${reducedText} with the integer part of J dropped`);
+    `crossing '${cutId}' multiplies the integrand by $${literal}${asNumber}$` +
+    (reduced.equals(jump) ? "" : `, which is $${reducedText}$ with the integer part of $J$ dropped`);
 
   return {
     kind: "multiplicative",
@@ -112,21 +113,21 @@ export function crossingMonodromy(branch: BranchChoice, cutId: string): Crossing
     reduced: reducedText,
     value,
     detail,
-    certificate: exact(detail, "research 06 §3.4, from the arc's jump weight J = Σα over one side", {
+    certificate: exact(detail, "the jump across the cut is $e^{2\\pi i \\sum\\alpha}$, over the arc's \"from\" side", {
       provenance: [
-        { ok: true, text: `J = ${formatFrac(jump)}, exactly — Σα over the arc's "from" side` },
+        { ok: true, text: `$J = ${formatFrac(jump, LATEX)}$, exactly — $\\sum\\alpha$ over the arc's "from" side` },
         // BOTH forms, and the reason they agree. Dropping the integer part is what turns D1's
         // literal `e^{2πi(α−1)}` into the textbook `e^{2πiα}`, and a reader who only ever sees the
         // second carries it over to an `x^s` integrand where the `−1` is not there to cancel.
         {
           ok: true,
           text: reduced.equals(jump)
-            ? `${literal} is already reduced: J ∈ [0, 1)`
-            : `${literal} = ${reducedText}, because e^(−2πi) = 1 — the same number, and the literal form is the one the integrand's exponent gives`,
+            ? `$${literal}$ is already reduced: $J \\in [0, 1)$`
+            : `$${literal} = ${reducedText}$, because $e^{-2\\pi i} = 1$ — the same number, and the literal form is the one the integrand's exponent gives`,
         },
         ...(value === null
-          ? [{ ok: true, text: "4J ∉ ℤ, so the factor is carried as an exponential rather than folded" }]
-          : [{ ok: true, text: `4J ∈ ℤ, so the factor folds to ${formatSqrtExt(value)} in ℚ(i)` }]),
+          ? [{ ok: true, text: "$4J \\notin \\mathbb{Z}$, so the factor is carried as an exponential rather than folded" }]
+          : [{ ok: true, text: `$4J \\in \\mathbb{Z}$, so the factor folds to $${formatSqrtExt(value, LATEX)}$ in $\\mathbb{Q}(i)$` }]),
       ],
     }),
   };

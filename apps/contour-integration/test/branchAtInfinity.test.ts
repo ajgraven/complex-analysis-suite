@@ -55,10 +55,10 @@ describe("D7's residue at infinity", () => {
     const r = branchResidueAtInfinity(d7(3n, 4n, 3n), poly(1n), poly(5n, -1n));
     if (!r.ok) throw new Error(r.reason);
     const steps = r.certificate.provenance.map((s) => s.text).join(" | ");
-    expect(steps).toMatch(/branch constant is c·e\^\(iπ·−1\/4\)/);
-    expect(steps).toMatch(/1\/2·π at z = 0, −1\/2·π at z = b/);
+    expect(steps).toMatch(/branch constant is \$c\\,e\^\{i\\pi\\cdot-\\frac\{1\}\{4\}\}\$/);
+    expect(steps).toMatch(/\\frac\{1\}\{2\}\\pi\$ at z = 0, \$-\\frac\{1\}\{2\}\\pi\$ at z = b/);
     expect(steps).toMatch(/an exact rational, so the constant is a root of unity and not a fit/);
-    expect(steps).toMatch(/Σ αⱼ = 1 ∈ ℤ, so the monodromy round a large circle is 1/);
+    expect(steps).toMatch(/\\sum_j \\alpha_j = 1 \\in \\mathbb\{Z\}\$, so the monodromy round a large circle is \$1\$/);
     expect(steps).toMatch(/NOT enough to make the residue vanish/);
   });
 
@@ -92,9 +92,9 @@ describe("and when it is zero, that is certified rather than assumed", () => {
     expect(r.value.isZero()).toBe(true);
     expect(r.order.equals(q(-3n))).toBe(true);
     expect(r.certificate.claim).toBe("Res(f, ∞) = 0");
-    expect(r.certificate.method).toMatch(/an order of −2 or less leaves no z⁻¹ coefficient/);
+    expect(r.certificate.method).toMatch(/an order of \$-2\$ or less leaves no \$z\^\{-1\}\$ coefficient/);
     expect(r.certificate.provenance.map((s) => s.text).join(" | ")).toMatch(
-      /SAME computation discharges L2 on an outer circle/,
+      /same computation discharges the large-circle estimate on an outer circle/,
     );
   });
 
@@ -127,7 +127,7 @@ describe("it refuses what has no residue at infinity to find", () => {
     const r = branchResidueAtInfinity(bad, poly(1n), poly(1n, 0n, 1n));
     expect(r.ok).toBe(false);
     if (!r.ok) {
-      expect(r.reason).toMatch(/Σ αⱼ = −3\/4 is not an integer/);
+      expect(r.reason).toMatch(/\\sum_j \\alpha_j = -\\frac\{3\}\{4\}\$ is not an integer/);
       expect(r.reason).toMatch(/not single-valued near infinity/);
       expect(r.reason).toMatch(/no residue there to compute/);
     }

@@ -140,7 +140,7 @@ export const f2WedgeFresnel: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ sector arc, angle π/(2n)",
+        name: "the $R \\to \\infty$ sector arc, angle $\\pi/(2n)$",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -154,7 +154,7 @@ export const f2WedgeFresnel: Family = {
       },
       {
         id: "ray1",
-        name: "the return ray arg z = π/(2n)",
+        name: "the return ray $\\arg z = \\pi/(2n)$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: { param: "wedgeX" } }, { param: "R", mul: { param: "wedgeY" } }),
@@ -164,7 +164,7 @@ export const f2WedgeFresnel: Family = {
         knownValue: {
           expr: "-exp(i*pi/(2*n))*gamma(1 + 1/n)",
           method:
-            "on this ray e^{izⁿ} = e^{−tⁿ}; ∫₀^∞e^{−tⁿ}dt = Γ(1+1/n) is IMPORTED (the real substitution u = tⁿ), and the leading minus is the reversed traversal",
+            "on this ray $e^{iz^n} = e^{-t^n}$; $\\int_0^\\infty e^{-t^n}dt = \\Gamma(1+1/n)$ is imported (the real substitution $u = t^n$), and the leading minus is the reversed traversal",
           rigor: "=",
         },
         colour: 2,

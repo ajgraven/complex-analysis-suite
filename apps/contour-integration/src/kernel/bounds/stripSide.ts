@@ -153,8 +153,8 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
     {
       ok: true,
       text:
-        `the exponent ${exponentText} = ${s.side === "right" ? "Re(a) + deg N − deg D" : "−Re(a) − ord₀N + ord₀D"} ` +
-        "is an exact rational, so its SIGN is decided",
+        `the exponent $${exponentText} = ${s.side === "right" ? "\\operatorname{Re}(a) + \\deg N - \\deg D" : "-\\operatorname{Re}(a) - \\operatorname{ord}_0 N + \\operatorname{ord}_0 D"}$ ` +
+        "is an exact rational, so its sign is decided",
     },
     {
       ok: true,
@@ -162,7 +162,7 @@ export function stripSideBound(form: LatticeForm, s: StripSide): ArcBound {
     },
     {
       ok: false,
-      text: "e^{κR} is transcendental, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone",
+      text: "$e^{\\kappa R}$ is transcendental, so the bound's value is a float — the limit depends only on the sign of the exponent",
     },
   ];
 

@@ -454,7 +454,7 @@ export function solvePiTargets(family: Family, inputs: PiSolveInputs): SolvePiRe
     const certificates = [
       exact(
         `${targetId} is ${text}`,
-        "Pass 5 over ℚ(i)(π): M t = ∮ − Σbᵢ, split into its real and imaginary parts and solved exactly",
+        "$Mt = \\oint_\\gamma f\\,dz - \\sum_i b_i$ over $\\mathbb{Q}(i)(\\pi)$, split into its real and imaginary parts and solved exactly",
         borrowed.length === 0
           ? undefined
           : {

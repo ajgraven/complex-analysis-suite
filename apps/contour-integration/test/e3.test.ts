@@ -82,7 +82,7 @@ describe("the two verticals", () => {
       expect(side.evidence.level).toBe("≤");
       // The limit rests on `Re(q₂)` and nothing else — `e^{−R²}`.
       expect(side.claim).toContain("O(e^{(−1)R^2})");
-      expect(side.evidence.provenance.some((p) => p.text.includes("ATTAINED, not majorised"))).toBe(true);
+      expect(side.evidence.provenance.some((p) => p.text.includes("attained, not majorised"))).toBe(true);
     }
   });
 
@@ -112,7 +112,7 @@ describe("the import", () => {
     expect(row?.evidence.method).toContain("imported, not derived here");
     expect(row?.evidence.provenance[0].text).toContain("polar coordinates");
     // It is `Γ(1/2)`, which is what makes the closed set one entry rather than two.
-    expect(row?.evidence.provenance[0].text).toContain("Γ(1/2)");
+    expect(row?.evidence.provenance[0].text).toContain("\\Gamma(1/2)");
   });
 
   it("is corroborated by the piece's own quadrature", () => {

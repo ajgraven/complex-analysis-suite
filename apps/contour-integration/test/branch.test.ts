@@ -174,7 +174,7 @@ describe("checkAdmissibility", () => {
       const bounded = r.components.filter((c) => !c.touchesInfinity);
       expect(bounded).toHaveLength(1);
       expect(bounded[0].sum?.equals(frac(-1))).toBe(true);
-      expect(r.detail).toMatch(/Σα ∈ ℤ/);
+      expect(r.detail).toMatch(/\$\\sum\\alpha \\in \\mathbb\{Z\}\$/);
     });
 
     it("is ALSO admissible as two rays to infinity", () => {
@@ -326,7 +326,7 @@ describe("checkAdmissibility", () => {
       choice([power("a", [-1, 0], -1, 2), power("b", [1, 0], -1, 2)], [cut("c", "a", "b")]),
     );
     const lines = r.certificate.provenance;
-    expect(lines.some((l) => /Σα = -1\/1 ∈ ℤ/.test(l.text))).toBe(true);
+    expect(lines.some((l) => /\\sum\\alpha = -1\/1 \\in \\mathbb\{Z\}/.test(l.text))).toBe(true);
     expect(lines.every((l) => l.ok)).toBe(true);
   });
 });

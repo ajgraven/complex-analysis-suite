@@ -256,6 +256,11 @@ export function solveImported(family: Family, inputs: ImportedSolveInputs): Solv
             ExpSum.ZERO,
           );
     const text = multiple === undefined ? undefined : formatImported(multiple, atom);
+    // The LaTeX sibling, so the derivation's `$I = …$` line typesets. Without it that line fell back
+    // to `text` INSIDE its own delimiters and shipped `$I = e^(−1/4)·√π$` — delimited but in engine
+    // notation, which KaTeX renders as upright letters and a raw `√`. Six of them, and the
+    // balance check could not see any: they are balanced, they are just not LaTeX.
+    const latex = multiple === undefined ? undefined : formatImported(multiple, atom, LATEX);
     certificates.push(
       multiple === undefined
         ? unknown(
@@ -265,11 +270,11 @@ export function solveImported(family: Family, inputs: ImportedSolveInputs): Solv
           )
         : exact(
             `${targetId} is ${text}`,
-            "Pass 5: the contour encloses nothing, so M t = −Σ(imported values), split into its real " +
-              "and imaginary parts and solved exactly over ℚ",
+            "the contour encloses nothing, so the linear system reads $Mt = -\\sum(\\text{imported values})$, " +
+              "split into its real and imaginary parts and solved exactly over $\\mathbb{Q}$",
           ),
     );
-    solved.push({ targetId, atom, value, ...(text === undefined ? {} : { text }), ...(multiple === undefined ? {} : { multiple }), certificates: [] });
+    solved.push({ targetId, atom, value, ...(text === undefined ? {} : { text }), ...(latex === undefined ? {} : { latex }), ...(multiple === undefined ? {} : { multiple }), certificates: [] });
   }
 
   // The import's own row — the claim and the reason it is believed, travelling together. The

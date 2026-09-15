@@ -110,12 +110,12 @@ describe("the residue at infinity carries the answer", () => {
 
 describe("two exponents on one cut", () => {
   it("needs Σ αⱼ ∈ ℤ, and says so where infinity is concerned", () => {
-    expect(reasons()).toMatch(/Σ αⱼ = 1 ∈ ℤ, so the monodromy round a large circle is 1/);
+    expect(reasons()).toMatch(/\\sum_j \\alpha_j = 1 \\in \\mathbb\{Z\}\$, so the monodromy round a large circle is \$1\$/);
     // And the contour's own version of the same arithmetic, in LEGALITY.
     const legality = ran().ledger.rows.filter((r) => r.constraint === "LEGALITY");
     const claims = legality.map((r) => r.claim).join(" | ");
     expect(claims).toContain("is single-valued along the contour");
-    expect(claims).toContain("\\alpha_j = −1 \\in \\mathbb{Z}$");
+    expect(claims).toContain("\\alpha_j = -1 \\in \\mathbb{Z}$");
   });
 
   it("refuses at infinity when the exponents do NOT sum to an integer", () => {
@@ -138,7 +138,7 @@ describe("two exponents on one cut", () => {
     );
     expect(at.ok).toBe(false);
     if (!at.ok) {
-      expect(at.reason).toMatch(/Σ αⱼ = 13\/12 is not an integer/);
+      expect(at.reason).toMatch(/\\sum_j \\alpha_j = \\frac\{13\}\{12\}\$ is not an integer/);
       expect(at.reason).toMatch(/not single-valued near infinity/);
     }
   });
@@ -149,7 +149,7 @@ describe("two exponents on one cut", () => {
       [1, [0, 2]],
       [-1, [-1, 1]],
     ]);
-    expect(reasons()).toMatch(/arg\(z − 0\) ∈ \[0·π, 2·π\); arg\(b − z\) ∈ \[−1·π, 1·π\)/);
+    expect(reasons()).toMatch(/\\arg\(z - 0\) \\in \[0\\pi, 2\\pi\)\$; \$\\arg\(b - z\) \\in \[-1\\pi, 1\\pi\)/);
   });
 
   it("takes arg(b − z) = −π at the pole, not +π — the residue trap, as arithmetic", () => {

@@ -9,11 +9,12 @@ changed.
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
 - **Execution:** Phase 0 in progress. The owner approved the five blanket decisions.
-  **Step 0.5b is SPLIT** (see Findings). **0.5b-i (the ledger's own sentences and the renderer) and
-  0.5b-ii (the bound modules, the theorem identities and the solve) are done** — the document's count
-  is **191 → 152**. **Next execution action: step 0.5b-iii**, the last of the five rules where they
-  still bite: 53 sentences shout a word and 136 carry undelimited mathematics, nearly all of them
-  provenance strings in `kernel/*` and the record modules. Then 0.6 and the 0.7 phase gate.
+  **Step 0.5b is SPLIT** (see Findings) and **0.5b is now COMPLETE** — 0.5b-i (the ledger's own
+  sentences and the renderer), 0.5b-ii (the bound modules, the theorem identities and the solve) and
+  0.5b-iii (the rest of `kernel/*`, `engine/*` and `families/*`). The review document reads
+  **0 flagged, 0 unapplied**, against 191 flagged when the five decisions were approved.
+  **Next execution action: step 0.6** (record descriptions, citations, taxonomy), then the 0.7 phase
+  gate and the solo merge of Phase 0 to `master`.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -37,6 +38,8 @@ changed.
 | 2026-09-15 | **0.5a** | aaad6e7 | `claims.md` generated — 202 sentences, five blanket decisions, 72 ledger sentences with 60 drafted; `test/helpers/claimsDoc.ts` + `claimsProposals.ts` + `test/claimsDoc.test.ts` (5 tests) |
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
+
+| 2026-09-15 | **0.5b-iii** | (this commit) | the five rules through the rest of `kernel/*`, `engine/*` and `families/*`; **152 → 0 flagged, 0 unapplied**; `everySentence` made the one corpus walk; two new corpus checks (balanced `$`, KaTeX strict); 41 wording-pinned node tests + 2 browser tests updated; new `ledger-dump.txt` baseline |
 
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
@@ -208,6 +211,56 @@ changed.
   Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
   becomes a sentence fails rather than being absorbed by a regex.
 
+- **(0.5b-iii) A BLANKET REPLACEMENT CORRUPTED A SENTENCE AND SHIPPED GREEN.** `branchArc.ts`'s
+  float-honesty row read *"the limit depends only on the sign of the exponentt rests on the sign
+  alone"* — the tail of the phrase it replaced, welded on mid-word — and it was committed in 0.5b-ii,
+  because no test reads provenance prose and the five rules it was checked against are about caps,
+  citations and delimiters rather than grammar. Found by diffing the commit's own replacements for a
+  new line that ends with a suffix of the old one starting mid-word; **exactly one**, confirmed by
+  pairing removed and added lines WITHIN a hunk (pairing across the whole diff reported nine, eight of
+  them unrelated sentences that happen to end alike).
+- **(0.5b-iii) The same sweep had rewritten 21 lines of DOC COMMENT**, turning `∈ ℤ` into
+  `\\in \\mathbb{Z}$` inside prose that is never rendered — invisible to every check, since the
+  review document reads what the app COMPOSES and a comment composes nothing. Comments are not
+  shipped sentences and are reverted. A blanket replacement over source needs a comment guard; the
+  one here (`^\s*(\*|//|/\*)`) missed a `/**`-opening line on its first pass, which is the smaller
+  version of the same mistake.
+- **(0.5b-iii) THE `$`-BALANCE CHECK HAD A NARROWER REACH THAN THE THING IT CHECKED, and reported a
+  clean corpus it had not read.** It walked the ledger's rows; the review document walks those AND
+  the derivation's lines. Twenty sentences opened a `$` and never closed it — every one of them on a
+  derivation certificate, which is where the bound modules and the solve do most of their talking.
+  `everySentence` is now the single corpus walk both read, and the count went 0 → 20 → 0. A second
+  reader with its own walk is not a weaker check; it is a check that answers about a different corpus.
+- **(0.5b-iii) A BALANCED `$…$` PROVES NOTHING ABOUT ITS BODY, and that class is larger.** Six
+  sentences shipped `$I = e^(−1/4)·√π$` — delimited, and in engine notation, which KaTeX renders as
+  upright letters and a raw `√`. No count of delimiters can tell it from LaTeX, so the instrument is
+  **KaTeX at `strict: "error"`**, now a corpus test beside the balance check. Its first draft used
+  `throwOnError` alone and reported **zero**: KaTeX does not throw on unknown Unicode, it warns — the
+  suite's own log had been printing those warnings all along. The app keeps `throwOnError: false` and
+  the default `strict: "warn"` on purpose (a malformed sentence must not blank a panel); the test is
+  what stops one existing. Mutation-checked: dropping the fix takes it red.
+- **(0.5b-iii) The review document's hand-written rows FROZE `today` and so reported finished work as
+  outstanding** — eight repairs and three headlines, all applied in 0.5b-i, still printing their
+  pre-0.5b sentences. The headlines are named in `vocabulary.ts` (`HEADLINES`) and read live; the
+  repairs cannot be (they are composed only on a FAILING row, and every gallery record closes), so
+  the column decides by looking in the source. A review document that misreports the code is worse
+  than none, because it is believed.
+- **(0.5b-iii) `renderArg` returning `$latex$` was right in one place and wrong in another.** Three
+  claims printed an engine-notation value beside an already-typeset piece name, and wrapping the
+  argument fixed those while nesting delimiters inside the templates that already put their
+  placeholder in maths (`… \\alpha_j = {sum} \\in \\mathbb{Z}$`). The question is about the SITE,
+  so `renderClaim` answers it there: count the `$` before the placeholder — odd means inside, take
+  the bare LaTeX. The balance check caught the nesting on its first run, which is the instrument
+  earning its keep the same day it was widened.
+- **(0.5b-iii) The browser suite was red on wording from 0.5b-i**, two assertions in
+  `penInk.browser.test.ts` pinning `legality.closed` and the enclosed-count claim. The node gate is
+  structurally unable to see it, which is the standing warning in CLAUDE.md met again — the rule is
+  to run `test:browser` when a slice touches what the stage shows, and a wording slice does.
+- **(0.5b-iii) The dump's 1,457 changed lines are proven wording-only by the SHAPE of the change**,
+  not by reading them: every row's structural prefix — kind, constraint, status, verdict, piece id —
+  is byte-identical, keyed on the row kind, because the sentence sits in a different column for each
+  (a first attempt excluded only the LAST column and reported 653 false "structural" changes). The
+  values are pinned by the green suite, whose golden corpus fixes every record's closed form.
 - **(0.5b-ii) 65 tests broke, and the reason is worth keeping: they SCRAPE the sentences.** A bound
   test reads its number back out of the claim with `/≤ ([0-9.e+-]+)/`, and `≤` is now `\le` — so a
   wording change silently turned a measured bound into `NaN` and the comparison into
@@ -330,7 +383,7 @@ changed.
 
 ## Open questions for the owner
 
-- none open. The five blanket decisions are approved and being applied; 0.5b-ii finishes them.
+- none open. The five blanket decisions are approved and **applied in full**: the review document reads 0 flagged, 0 unapplied.
   (Historic, kept for the record: **read [`claims.md`](claims.md) and say what you want changed.** It is every
   sentence the app composes — 202 of them — with what it says today, what is proposed, and which of
   the plan's wording rules each still breaks. **The fastest way through it is the section "The five
@@ -362,6 +415,16 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(0.5b-iii) `everySentence` (in `test/helpers/claimsDoc.ts`) is the ONE walk over everything the
+  app composes** — the ledger's rows and the derivation's lines and statements — and the review
+  document, the `$`-balance check and the KaTeX-strict check all read it. Any future check over the
+  corpus goes through it rather than growing its own walk.
+- **(0.5b-iii) `renderClaim` decides text-vs-LaTeX at the PLACEHOLDER, by counting the delimiters
+  before it.** An argument carrying a `latex` sibling renders bare inside a `$…$` span and wrapped
+  outside one. `renderArg` stays notation-free.
+- **(0.5b-iii) `HEADLINES` in `vocabulary.ts` names the three headlines that cite no constraint**, so
+  the review document reads them instead of holding a copy.
+
 - **(0.4b) `src/kernel/notation.ts` is where the app's two alphabets are decided** — `TEXT` (what it
   has always printed) and `LATEX` — and every exact-value formatter takes one. `kernel/exprLatex.ts`
   holds the expression printer plus the Greek convention, below `families/` so that `engine/` may use

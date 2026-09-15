@@ -107,7 +107,7 @@ export const c2RemovableOneMinusCos: Family = {
       },
       {
         id: "bigarc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: Math.PI },
         // `vanish` with a KNOWN LIMIT rather than zero — DESIGN §4 Pass 5's `bᵢ = 0, or a known
         // limit`. The role says the piece touches no unknown, not that it contributes nothing.

@@ -279,8 +279,8 @@ describe("the pen, drawn with a real pointer", () => {
     // and the quadrature merely agrees with it.
     expect(text).toContain("2πi");
     expect(text).toContain("quadrature agrees");
-    expect(text).toContain("the contour is closed and its orientation is declared");
-    expect(text).toContain("1 singularity is enclosed");
+    expect(text).toContain("the contour is closed (orientation as drawn)");
+    expect(text).toContain("at 1 singularity, decided exactly");
     // And the card says the contour is hand-drawn, which is the only clue that it has no recipe.
     expect(text).toContain("drawn · 3 pieces");
     expect(handle.currentState().contourSource).toBeNull();

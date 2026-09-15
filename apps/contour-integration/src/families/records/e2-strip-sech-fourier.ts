@@ -95,7 +95,7 @@ export const e2StripSechFourier: Family = {
       },
       {
         id: "right",
-        name: "the right vertical x = R",
+        name: "the right vertical $x = R$",
         geom: { kind: "segment", from: pt({ param: "R" }, 0), to: pt({ param: "R" }, P) },
         role: "vanish",
         lemma: "L1",
@@ -103,7 +103,7 @@ export const e2StripSechFourier: Family = {
       },
       {
         id: "top",
-        name: "the line Im z = π",
+        name: "the line $\\operatorname{Im} z = \\pi$",
         geom: { kind: "segment", from: pt({ param: "R" }, P), to: pt({ param: "R", mul: -1 }, P) },
         role: "reproduces",
         // `−λ = +e^{−πξ}`. The ONLY positive factor in the tier, and writing `−e^{−πξ}` here would
@@ -114,7 +114,7 @@ export const e2StripSechFourier: Family = {
       },
       {
         id: "left",
-        name: "the left vertical x = −R",
+        name: "the left vertical $x = -R$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: -1 }, P),

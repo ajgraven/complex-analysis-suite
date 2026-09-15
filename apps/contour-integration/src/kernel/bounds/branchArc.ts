@@ -120,14 +120,14 @@ export function branchArcBound(
       : `and it diverges as ${rho_}: the bound is $O(\\rho^{${exponentText}})$`;
 
   const provenance = [
-    { ok: true, text: "|R| bounded above by exact ℚ coefficient bounds, numerator and denominator separately" },
+    { ok: true, text: "$|R|$ bounded above by exact $\\mathbb{Q}$ coefficient bounds, numerator and denominator separately" },
     {
       ok: true,
-      text: `the exponent ${exponentText} = α + 1 + (${opts.limit === "inf" ? "deg P − deg Q" : "ord₀P − ord₀Q"}) is an exact rational, so its SIGN is decided`,
+      text: `the exponent $${exponentText} = α + 1 + (${opts.limit === "inf" ? "deg P − deg Q" : "ord₀P − ord₀Q"})$ is an exact rational, so its sign is decided`,
     },
     {
       ok: false,
-      text: "ρ^α is an irrational power of a rational, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone",
+      text: "$\\rho^{\\alpha}$ is an irrational power of a rational, so the bound's value is a float — the limit depends only on the sign of the exponent",
     },
   ];
 
@@ -137,11 +137,11 @@ export function branchArcBound(
     exponent,
     degreeGap,
     certificate: vanishes
-      ? bound("≤", `${claim}, ${because}`, "ML bound for z^α·R, exact in ℚ except for the power ρ^α", { provenance })
+      ? bound("≤", `${claim}, ${because}`, "the ML-estimate for $z^{\\alpha}R$, exact in $\\mathbb{Q}$ except for the power $\\rho^{\\alpha}$", { provenance })
       : refuse(`${claim}, ${because}`, "ML bound for z^α·R — the bound holds, the lemma does not discharge", {
           provenance: [
             { ok: true, text: `the bound itself is valid ${at}` },
-            { ok: false, text: `but the exponent is ${exponentText}, so it does not tend to zero in this limit` },
+            { ok: false, text: `but the exponent is $${exponentText}$, so it does not tend to zero in this limit` },
           ],
         }),
   };
@@ -283,18 +283,18 @@ export function dogboneArcBound(input: DogboneArcInput): ArcBound {
     },
     {
       ok: true,
-      text: `the exponent ${exponentText} = α_b + 1 + (ord₀Ñ − ord₀D̃) is an exact rational, so its sign is decided; α_b > −1 is the integrability of the endpoint singularity, spent here`,
+      text: `the exponent $${exponentText} = \\alpha_b + 1 + (\\operatorname{ord}_0 \\tilde N - \\operatorname{ord}_0 \\tilde D)$ is an exact rational, so its sign is decided; $\\alpha_b > -1$ is the integrability of the endpoint singularity, spent here`,
     },
     {
       ok: true,
       text:
         others.length === 0
           ? "this is the only branch point, so no other factor enters"
-          : `η² < |b − bⱼ|² at every other branch point, checked exactly over ℚ, so the ${others.length} remaining factor${others.length === 1 ? " is" : "s are"} bounded above and below and move the VALUE without moving the exponent`,
+          : `$\\eta^2 < |b - b_j|^2$ at every other branch point, checked exactly over $\\mathbb{Q}$, so the ${others.length} remaining factor${others.length === 1 ? " is" : "s are"} bounded above and below, and move the bound's value without moving the exponent`,
     },
     {
       ok: false,
-      text: "$\\eta^{\\alpha}$ and the other factors' powers are irrational powers of rationals, so the bound's value is a float — the limit depends only on the sign of the exponentt rests on the sign alone",
+      text: "$\\eta^{\\alpha}$ and the other factors' powers are irrational powers of rationals, so the bound's value is a float — the limit depends only on the sign of the exponent",
     },
   ];
 

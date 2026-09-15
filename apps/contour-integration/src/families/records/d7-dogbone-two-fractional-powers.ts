@@ -136,7 +136,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
     pieces: [
       {
         id: "top",
-        name: "the upper edge, left to right (arg z = 0, arg(b−z) = 0)",
+        name: "the upper edge, left to right ($\\arg z = 0$, $\\arg(b-z) = 0$)",
         geom: {
           kind: "segment",
           from: pt({ param: "eta" }, 0),
@@ -148,7 +148,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       },
       {
         id: "endB",
-        name: "the η-circle round z = b, upper lip to lower",
+        name: "the $\\eta$-circle round $z = b$, upper lip to lower",
         geom: {
           kind: "arc",
           center: pt({ param: "b" }, 0),
@@ -162,7 +162,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       },
       {
         id: "bottom",
-        name: "the lower edge, right to left (arg z = 2π)",
+        name: "the lower edge, right to left ($\\arg z = 2\\pi$)",
         geom: {
           kind: "segment",
           from: pt({ param: "eta", mul: -1, add: { param: "b" } }, 0),
@@ -178,7 +178,7 @@ export const d7DogboneTwoFractionalPowers: Family = {
       },
       {
         id: "endA",
-        name: "the η-circle round z = 0, lower lip to upper",
+        name: "the $\\eta$-circle round $z = 0$, lower lip to upper",
         geom: {
           kind: "arc",
           center: pt(0, 0),

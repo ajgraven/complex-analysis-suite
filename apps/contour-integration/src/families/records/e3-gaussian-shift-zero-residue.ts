@@ -131,7 +131,7 @@ export const e3GaussianShiftZeroResidue: Family = {
       },
       {
         id: "right",
-        name: "the right vertical x = R",
+        name: "the right vertical $x = R$",
         geom: {
           kind: "segment",
           from: pt({ param: "R" }, 0),
@@ -143,7 +143,7 @@ export const e3GaussianShiftZeroResidue: Family = {
       },
       {
         id: "top",
-        name: "the saddle line Im z = b/2",
+        name: "the saddle line $\\operatorname{Im} z = b/2$",
         geom: {
           kind: "segment",
           from: pt({ param: "R" }, { param: "saddle" }),
@@ -153,14 +153,14 @@ export const e3GaussianShiftZeroResidue: Family = {
         knownValue: {
           expr: "-sqrt(pi)*exp(-b^2/4)",
           method:
-            "on Im z = b/2 the integrand collapses to e^{−x²−b²/4}; the remaining ∫ℝe^{−x²}dx = Γ(1/2) = √π is IMPORTED, not derived here",
+            "on $\\operatorname{Im} z = b/2$ the integrand collapses to $e^{-x^2-b^2/4}$; the remaining $\\int_{\\mathbb{R}} e^{-x^2}dx = \\Gamma(1/2) = \\sqrt{\\pi}$ is imported, not derived here",
           rigor: "=",
         },
         colour: 2,
       },
       {
         id: "left",
-        name: "the left vertical x = −R",
+        name: "the left vertical $x = -R$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: -1 }, { param: "saddle" }),

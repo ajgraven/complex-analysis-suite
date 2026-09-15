@@ -106,7 +106,7 @@ export function applyStripTheorem(input: StripTheoremInput): ResidueTheoremResul
     if (!w.decided) {
       return {
         verdict: assembleVerdict([
-          refuse("∮ f dz", "the winding number about a pole of the strip was not decided, so its residue cannot be weighted"),
+          refuse("$\\oint_\\gamma f(z)\\,dz$", "the winding number about a pole of the strip was not decided, so its residue cannot be weighted"),
         ]),
       };
     }
@@ -122,7 +122,7 @@ export function applyStripTheorem(input: StripTheoremInput): ResidueTheoremResul
   certificates.push(
     exact(
       `∮ = 2πi Σ n(γ,zₖ)·Res(f,zₖ) over ${counted} pole${counted === 1 ? "" : "s"} of the strip`,
-      "w = e^z makes f rational in w; each root of D(w) generates a vertical lattice, and the declared strip selects finitely many of them",
+      "$w = e^z$ makes $f$ rational in $w$; each root of $D(w)$ generates a vertical lattice, and the declared strip selects finitely many of them",
       {
         provenance: [
           {
@@ -131,7 +131,7 @@ export function applyStripTheorem(input: StripTheoremInput): ResidueTheoremResul
           },
           {
             ok: true,
-            text: "each residue is Res_w(N/D, w₀)/w₀ times e^{az₀}, exact in ℚ(i)(√d) × e^{ℚ(i)·π}",
+            text: "each residue is $\\operatorname{Res}_w(N/D, w_0)/w_0$ times $e^{az_0}$, exact in $\\mathbb{Q}(i)(\\sqrt{d}) \\times e^{\\mathbb{Q}(i)\\pi}$",
           },
         ],
       },

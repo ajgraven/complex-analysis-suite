@@ -125,19 +125,19 @@ export function logArcBound(
   const provenance = [
     {
       ok: true,
-      text: "|R| bounded above by exact ℚ coefficient bounds, numerator and denominator separately",
+      text: "$|R|$ bounded above by exact $\\mathbb{Q}$ coefficient bounds, numerator and denominator separately",
     },
     {
       ok: true,
-      text: `|log z| ≤ |ln ρ| + ${a.toFixed(6)} on the circle, from the DECLARED determination rather than an assumed 2π`,
+      text: `$|\\log z| \\le |\\ln \\rho| + ${a.toFixed(6)}$ on the circle, from the declared determination rather than an assumed $2\\pi$`,
     },
     {
       ok: true,
-      text: `the exponent ${exponentText} = 1 + (${opts.limit === "inf" ? "deg P − deg Q" : "ord₀P − ord₀Q"}) is an exact integer, so its SIGN is decided; the log cannot change it`,
+      text: `the exponent $${exponentText} = 1 + (${opts.limit === "inf" ? "deg P − deg Q" : "ord₀P − ord₀Q"})$ is an exact integer, so its sign is decided; the log cannot change it`,
     },
     {
       ok: false,
-      text: "ln ρ is a float, so the bound's VALUE is a float — the limit is what the lemma needs, and that rests on the sign alone",
+      text: "$\\ln \\rho$ is a float, so the bound's value is a float — the limit depends only on the sign of the exponent",
     },
   ];
 
@@ -147,13 +147,13 @@ export function logArcBound(
     exponent,
     degreeGap,
     certificate: vanishes
-      ? bound("≤", `${claim}, ${because}`, `ML bound for R·log^${power}, exact in ℚ except for ln ρ`, {
+      ? bound("≤", `${claim}, ${because}`, `the ML-estimate for $R\\log^{${power}}$, exact in $\\mathbb{Q}$ except for $\\ln \\rho$`, {
           provenance,
         })
-      : refuse(`${claim}, ${because}`, `ML bound for R·log^${power} — the bound holds, the lemma does not discharge`, {
+      : refuse(`${claim}, ${because}`, `the ML-estimate for $R\\log^{${power}}$ — the bound holds, the lemma does not discharge`, {
           provenance: [
             { ok: true, text: `the bound itself is valid ${at}` },
-            { ok: false, text: `but the exponent is ${exponentText}, so it does not tend to zero in this limit` },
+            { ok: false, text: `but the exponent is $${exponentText}$, so it does not tend to zero in this limit` },
           ],
         }),
   };

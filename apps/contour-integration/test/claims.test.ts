@@ -14,6 +14,7 @@
 // Every string in `EXPECTED` was verified against the PRE-RESTRUCTURE `ledger.ts` (commit 2cad10c):
 // each template's static fragments were required to appear verbatim in that file, which they do, the
 // five seams where the old code concatenated two literals checked by hand.
+import katex from "katex";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -28,6 +29,7 @@ import {
   type ClaimId,
 } from "../src/engine/claims.js";
 import { FAMILIES } from "../src/families/index.js";
+import { everySentence } from "./helpers/claimsDoc.js";
 import { solveFamily } from "../src/families/runFamily.js";
 
 /** E3's imported piece, `−e^{−1/4}·√π`, typeset. */
@@ -202,23 +204,43 @@ describe("the ledger's claims", () => {
     // `splitMath` re-joins an odd trailing delimiter as TEXT rather than swallowing the rest of the
     // line — the safe direction — so the defect shows as a stray dollar sign on screen and nothing
     // else. Found in a browser at two per record; this is the check that keeps it found.
-    const unbalanced: string[] = [];
-    const look = (text: string, where: string): void => {
-      if ((text.match(/\$/g) ?? []).length % 2 === 1) unbalanced.push(`${where}: ${text}`);
-    };
-    for (const family of FAMILIES) {
-      for (const golden of family.golden) {
-        const r = solveFamily(family, golden);
-        if (!r.ok) continue;
-        for (const row of r.run.ledger.rows) {
-          look(row.claim, family.id);
-          look(row.evidence.method, family.id);
-          if (row.repair !== undefined) look(row.repair, family.id);
-          for (const p of row.evidence.provenance) look(p.text, family.id);
+    //
+    // It reads `everySentence`, the SAME walk the review document reads. When it had its own walk it
+    // reached the ledger's rows only, and three sentences that open a `$` and never close it went
+    // past it — all three on derivation certificates, which the document could see and this could
+    // not. A check with a narrower reach than the thing it checks reports a clean corpus it has not
+    // read.
+    const unbalanced = everySentence()
+      .filter((s) => ((s.text.match(/\$/g) ?? []).length & 1) === 1)
+      .map((s) => `${s.familyId} (${s.kind}): ${s.text}`);
+    expect([...new Set(unbalanced)]).toEqual([]);
+  });
+
+  it("renders every `$…$` body as LaTeX, under KaTeX's own strict mode", () => {
+    // **The balance check cannot see this class, and it is the larger one.** A sentence can carry a
+    // perfectly balanced `$…$` whose BODY is engine notation — `$I = e^(−1/4)·√π$` — which KaTeX
+    // renders as upright letters and a raw `√`, and which no count of delimiters can distinguish
+    // from real LaTeX. Six shipped that way, all of them the derivation's headline `$I = …$` line
+    // falling back to `text` for want of a `latex` sibling.
+    //
+    // The instrument is KaTeX itself, at `strict: "error"`. The app renders at `throwOnError: false`
+    // and the default `strict: "warn"`, deliberately: a reader must never meet a blank panel because
+    // one sentence was malformed. That is a rule about the RENDERER's behaviour on bad input, and
+    // this is a rule about the corpus never containing any — the app is lenient so that the failure
+    // is visible rather than fatal, and this is what makes it not happen.
+    const bad = new Map<string, string>();
+    for (const s of everySentence()) {
+      const parts = s.text.split("$");
+      if (parts.length % 2 === 0) continue; // unbalanced — the check above owns that
+      for (let i = 1; i < parts.length; i += 2) {
+        try {
+          katex.renderToString(parts[i], { throwOnError: true, strict: "error" });
+        } catch (e) {
+          bad.set(parts[i], `${s.familyId} (${s.kind}): ${(e as Error).message}`);
         }
       }
     }
-    expect(unbalanced).toEqual([]);
+    expect([...bad.values()]).toEqual([]);
   });
 
   it("carries a LaTeX sibling on an exact argument that IS an expression", () => {

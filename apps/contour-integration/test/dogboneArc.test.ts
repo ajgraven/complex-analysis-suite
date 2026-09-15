@@ -73,7 +73,7 @@ describe("the ML bound about a branch point", () => {
     expect(r.certificate.level).toBe("≤");
     expect(r.certificate.claim).toMatch(/O\(\\eta\^\{1\/2\}\)/);
     expect(r.certificate.provenance.map((s) => s.text).join(" | ")).toMatch(
-      /α_b > −1 is the integrability of the endpoint singularity/,
+      /\\alpha_b > -1\$ is the integrability of the endpoint singularity/,
     );
   });
 

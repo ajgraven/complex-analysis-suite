@@ -79,7 +79,7 @@ export const a3CircleCosNTheta: Family = {
     pieces: [
       {
         id: "unitCircle",
-        name: "the unit circle |z| = 1",
+        name: "the unit circle $|z| = 1$",
         geom: { kind: "arc", center: pt(0, 0), radius: 1, theta0: 0, theta1: 2 * Math.PI },
         role: "target",
         colour: 0,

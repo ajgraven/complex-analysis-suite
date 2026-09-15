@@ -17,9 +17,11 @@
 //    no citations of research notes or ledger passes, no lemma numbers, no house jargon), and they
 //    are decidable, so every string that still breaks one says so. That is what makes the rows with
 //    no proposal yet useful rather than a silent backlog.
+import { readFileSync } from "node:fs";
+
 import { CLAIM_IDS, claimTemplate } from "../../src/engine/claims.js";
 import { buildDerivation, DERIVATION_STAGES } from "../../src/engine/derivation.js";
-import { headlineFails, stageTitle } from "../../src/engine/vocabulary.js";
+import { HEADLINES, headlineFails, stageTitle } from "../../src/engine/vocabulary.js";
 import { FAMILIES } from "../../src/families/index.js";
 import { solveFamily } from "../../src/families/runFamily.js";
 import { PROPOSED, REPAIRS } from "./claimsProposals.js";
@@ -50,7 +52,10 @@ export function flagsFor(text: string): string[] {
   // Mathematics outside `$…$`. Everything BETWEEN the delimiters is removed first, so a sentence
   // that typesets half its formulas and leaves the other half as characters is caught — which a
   // "does it contain a dollar sign" test would call clean, and which is the likelier mistake.
-  const outside = text.replace(/\$[^$]*\$/g, "");
+  // ` · ` between spaces is the app's own SEPARATOR — `boundary terms · the arc` — and not a
+  // multiplication, so it is removed before the scan. Flagging it made every labelled statement read
+  // as carrying undelimited mathematics when the only symbol outside the dollars was the bullet.
+  const outside = text.replace(/\$[^$]*\$/g, "").replace(/ · /g, " ");
   if (/[∮∫Σπℚℤ√≤≥→∞αβγδεθλμνξρσφψω⁰¹²³⁴⁵⁶⁷⁸⁹·]/.test(outside)) flags.push("maths undelimited");
   return flags;
 }
@@ -91,33 +96,42 @@ function table(rows: readonly Row[]): string {
 }
 
 /** Everything a certificate composed, across the corpus, grouped by masked sentence. */
-function fromCorpus(): {
-  readonly claims: Row[];
-  readonly methods: Row[];
-  readonly provenance: Row[];
-  readonly restrictions: Row[];
-  readonly statements: Row[];
-} {
-  const claims = new Map<string, { text: string; n: number }>();
-  const methods = new Map<string, { text: string; n: number }>();
-  const provenance = new Map<string, { text: string; n: number }>();
-  const restrictions = new Map<string, { text: string; n: number }>();
-  const statements = new Map<string, { text: string; n: number }>();
-  const note = (m: Map<string, { text: string; n: number }>, text: string): void => {
-    const key = mask(text);
-    const seen = m.get(key);
-    if (seen === undefined) m.set(key, { text, n: 1 });
-    else seen.n += 1;
+/** Which bucket a sentence belongs to in the review document. */
+export type SentenceKind = "claim" | "method" | "provenance" | "restriction" | "statement";
+
+/** One sentence the app composes, with where it came from. */
+export interface Sentence {
+  readonly kind: SentenceKind;
+  readonly familyId: string;
+  readonly text: string;
+}
+
+/**
+ * **Every sentence the app composes, from one walk.**
+ *
+ * The review document and the corpus checks in `claims.test.ts` both need this, and when they each
+ * had their own walk they disagreed: the check reached the ledger's rows only, so three sentences
+ * that open a `$` and never close it — on DERIVATION certificates, which is where `solveTarget.ts`
+ * and the bound modules do most of their talking — shipped past a test whose whole job is to catch
+ * exactly that. A second reader with a narrower reach is not a weaker check, it is a check that
+ * reports a clean corpus it has not read.
+ */
+export function everySentence(): readonly Sentence[] {
+  const out: Sentence[] = [];
+  const note = (kind: SentenceKind, familyId: string, text: string): void => {
+    out.push({ kind, familyId, text });
   };
   for (const family of FAMILIES) {
     for (const golden of family.golden) {
       const r = solveFamily(family, golden);
       if (!r.ok) continue;
       for (const row of r.run.ledger.rows) {
-        if (row.claimData.template === "certificate") note(claims, row.claim);
-        note(methods, row.evidence.method);
-        for (const p of row.evidence.provenance) note(provenance, p.text);
-        if (row.evidence.restriction !== undefined) note(restrictions, row.evidence.restriction);
+        if (row.claimData.template === "certificate") note("claim", family.id, row.claim);
+        note("method", family.id, row.evidence.method);
+        for (const p of row.evidence.provenance) note("provenance", family.id, p.text);
+        if (row.evidence.restriction !== undefined) {
+          note("restriction", family.id, row.evidence.restriction);
+        }
       }
       const derivation = buildDerivation({
         ledger: r.run.ledger,
@@ -128,19 +142,50 @@ function fromCorpus(): {
         solved: r.solved,
       });
       for (const stage of derivation.stages) {
-        for (const s of stage.statements) note(statements, `${s.label} — ${s.text}`);
+        for (const st of stage.statements) {
+          note("statement", family.id, `${st.label} — ${st.text}`);
+        }
         // **The derivation's LINES as well as its statements.** The first draft collected only the
         // statements, and so missed every sentence that reaches the reader through a line whose
         // evidence is a whole VERDICT rather than one ledger row — the solve's and the conclusion's,
         // which is where `solveTarget.ts` and `solveResidueTerm.ts` do their talking. Four citations
         // were reported where there are more.
         for (const line of stage.lines) {
-          note(methods, line.method);
-          for (const step of line.provenance) note(provenance, step.text);
-          if (line.restriction !== undefined) note(restrictions, line.restriction);
+          // **The line's own CLAIM, not only its method.** `line.text` is the sentence in the
+          // derivation's left column — `∮ f dz = 2πi[…]`, `Res(f, ∞) = 0` — and it went uncollected
+          // while `line.method` beside it was read, so the bound claims never faced the rules at
+          // all. The same narrow reach as the `$`-balance check, one field over.
+          note("claim", family.id, line.text);
+          note("method", family.id, line.method);
+          for (const step of line.provenance) note("provenance", family.id, step.text);
+          if (line.restriction !== undefined) note("restriction", family.id, line.restriction);
         }
       }
     }
+  }
+  return out;
+}
+
+function fromCorpus(): {
+  readonly claims: Row[];
+  readonly methods: Row[];
+  readonly provenance: Row[];
+  readonly restrictions: Row[];
+  readonly statements: Row[];
+} {
+  const buckets: Record<SentenceKind, Map<string, { text: string; n: number }>> = {
+    claim: new Map(),
+    method: new Map(),
+    provenance: new Map(),
+    restriction: new Map(),
+    statement: new Map(),
+  };
+  for (const s of everySentence()) {
+    const m = buckets[s.kind];
+    const key = mask(s.text);
+    const seen = m.get(key);
+    if (seen === undefined) m.set(key, { text: s.text, n: 1 });
+    else seen.n += 1;
   }
   const rows = (m: Map<string, { text: string; n: number }>, where: string): Row[] =>
     [...m.entries()]
@@ -152,11 +197,11 @@ function fromCorpus(): {
         seenIn: v.n,
       }));
   return {
-    claims: rows(claims, "bound claim"),
-    methods: rows(methods, "method"),
-    provenance: rows(provenance, "provenance"),
-    restrictions: rows(restrictions, "restriction"),
-    statements: rows(statements, "statement"),
+    claims: rows(buckets.claim, "bound claim"),
+    methods: rows(buckets.method, "method"),
+    provenance: rows(buckets.provenance, "provenance"),
+    restrictions: rows(buckets.restriction, "restriction"),
+    statements: rows(buckets.statement, "statement"),
   };
 }
 
@@ -169,13 +214,13 @@ export function claimsDocument(): string {
     proposed: PROPOSED[id] ?? null,
   }));
   const headlines: Row[] = [
-    { where: "headline · closes", today: "The argument is complete.", proposed: PROPOSED["headline.closes"] ?? null },
+    { where: "headline · closes", today: HEADLINES.closes, proposed: PROPOSED["headline.closes"] ?? null },
     {
       where: "headline · sandbox",
-      today: "The closed-contour value is established exactly.",
+      today: HEADLINES.sandbox,
       proposed: PROPOSED["headline.sandbox"] ?? null,
     },
-    { where: "headline · incomplete", today: "This argument is incomplete.", proposed: PROPOSED["headline.incomplete"] ?? null },
+    { where: "headline · incomplete", today: HEADLINES.incomplete, proposed: PROPOSED["headline.incomplete"] ?? null },
     ...(["LEGALITY", "CATCH", "KILL", "COVER"] as const).map((id) => ({
       where: `headline · fails ${id}`,
       today: headlineFails(id),
@@ -186,9 +231,20 @@ export function claimsDocument(): string {
     { where: `stage ${stage.id} · title`, today: stageTitle(stage.id), proposed: PROPOSED[`stage.${stage.id}.title`] ?? null },
     { where: `stage ${stage.id} · why`, today: stage.why, proposed: PROPOSED[`stage.${stage.id}.why`] ?? null },
   ]);
+  // **Repairs read the source, because nothing else can reach them.** A repair is only composed on a
+  // FAILING row and every gallery record closes, so the corpus walk never yields one and the table
+  // has to be written by hand. That is fine; freezing `today` was not. Step 0.5b applied eight of
+  // these and the column went on printing the pre-0.5b sentence, which reported finished work as
+  // outstanding — so `today` is now the proposal where the proposal is what the code says, decided
+  // by looking. The needle is a VALUE and the haystack SOURCE, so a backslash is one character here
+  // and two there.
+  const composed = ["ledger.ts", "contour/integrate.ts"]
+    .map((f) => readFileSync(new URL(`../../src/engine/${f}`, import.meta.url), "utf8"))
+    .join("\n");
+  const applied = (text: string): boolean => composed.includes(text.replace(/\\/g, "\\\\"));
   const repairs: Row[] = REPAIRS.map((r, k) => ({
     where: `repair ${k + 1}`,
-    today: r.today,
+    today: r.proposed !== null && applied(r.proposed) ? r.proposed : r.today,
     proposed: r.proposed,
   }));
 

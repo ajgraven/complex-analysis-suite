@@ -303,7 +303,7 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     const row = cutRows(r).find((x) => x.status === "failed");
     expect(row).toBeDefined();
     const lines = (row?.evidence.provenance ?? []).map((x) => x.text);
-    expect(lines.some((t) => t.includes("multiplies the integrand by e^(2πi·1/3)"))).toBe(true);
+    expect(lines.some((t) => t.includes("multiplies the integrand by $e^{2\\pi i \\cdot \\frac{1}{3}}"))).toBe(true);
     // And it is marked as the cost of a FAILURE, not as a satisfied step.
     expect((row?.evidence.provenance ?? []).every((x) => !x.ok)).toBe(true);
     expect(r.failedAt).toBe("LEGALITY");
@@ -335,8 +335,8 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     // so it is CARRIED as an exponential rather than folded into ℚ(i) — the same rule
     // `Exponent.asAlgebraicFactor` applies to an answer, applied here to a crossing, so the app
     // never invents a radical it cannot write down.
-    expect(lines.some((t) => t.includes("multiplies the integrand by e^(2πi·1/3)"))).toBe(true);
-    expect(lines.some((t) => t.includes("4J ∉ ℤ"))).toBe(true);
+    expect(lines.some((t) => t.includes("multiplies the integrand by $e^{2\\pi i \\cdot \\frac{1}{3}}"))).toBe(true);
+    expect(lines.some((t) => t.includes("4J \\notin \\mathbb{Z}$"))).toBe(true);
     expect(lines.some((t) => t.includes("folds to"))).toBe(false);
   });
 
@@ -377,8 +377,8 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     expect(r.value).toBeUndefined();
     const row = cutRows(r).find((x) => x.claimData.template === "legality.monodromy-off-sheet");
     expect(row?.status).toBe("failed");
-    expect(row?.claim).toMatch(/n\(γ, z = 0\) = 1/);
-    expect(row?.evidence.method).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = 1\/3 is not an integer/);
+    expect(row?.claim).toMatch(/\\operatorname\{Ind\}_\\gamma\(0\) = 1/);
+    expect(row?.evidence.method).toMatch(/\\alpha_j = \\frac\{1\}\{3\}\$ is not an integer/);
     expect(row?.repair).toMatch(/keyhole/);
     // And it fires FIRST: the per-piece row is never reached.
     expect(cutRows(r).some((x) => /declaring which side|declares the side|meets a branch cut/.test(x.claim))).toBe(false);
@@ -438,7 +438,7 @@ describe("LEGALITY, steps 2 and 3 — the cut system", () => {
     const oneEnd = run("(z+3)/(z^2+1)", circleTemplate([1, 0], 0.4), cut);
     const bad = cutRows(oneEnd).find((x) => x.claimData.template === "legality.monodromy-off-sheet");
     expect(bad?.status).toBe("failed");
-    expect(bad?.evidence.method).toMatch(/Σ n\(γ,bⱼ\)·αⱼ = −1\/2 is not an integer/);
+    expect(bad?.evidence.method).toMatch(/\\alpha_j = -\\frac\{1\}\{2\}\$ is not an integer/);
   });
 
   it("does not apply the winding rule to a point that is not a branch point at all", () => {

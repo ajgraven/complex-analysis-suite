@@ -31,7 +31,7 @@
 // `(π/n)/sin(πa/n)` remains perfectly finite and correct by continuity while the derivation is
 // dead. A correct value from a collapsed argument is not a proof.
 import { Frac, Gauss, SqrtExt } from "@cas/exact";
-import { TEXT, type Notation } from "./notation.js";
+import { LATEX, TEXT, type Notation } from "./notation.js";
 import { exact, refuse, type Certificate } from "@cas/rigor";
 import { ExpSum, formatPiExpSum } from "./expSum.js";
 import { Exponent, formatExponent } from "./exponent.js";
@@ -96,7 +96,7 @@ const DEGENERATE_TRAIL = [
   { ok: false, text: "the classical symptom is 'the edges cancel and the integral collapses to 0'" },
   {
     ok: true,
-    text: "what actually happened: the DENOMINATOR vanished, so there is no value to report — not a value of zero",
+    text: "what actually happened: the denominator vanished, so there is no value to report — not a value of zero",
   },
 ] as const;
 
@@ -242,7 +242,7 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
     const only = denominator.terms[0];
     const inv = tryInv(only.coefficient);
     if (inv === null) {
-      const reason = `the coefficient ${formatPiExpSum(denominator)} does not invert inside one quadratic extension`;
+      const reason = `the coefficient $${formatPiExpSum(denominator, LATEX)}$ does not invert inside one quadratic extension`;
       return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
     }
     return {
@@ -347,7 +347,7 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
   const twoI = SqrtExt.fromGauss(new Gauss(Frac.ZERO, Frac.of(2n)));
   const scale = tryInv(lead.coefficient.mul(twoI));
   if (scale === null) {
-    const reason = `the coefficient ${formatPiExpSum(denominator)} does not invert inside one quadratic extension`;
+    const reason = `the coefficient $${formatPiExpSum(denominator, LATEX)}$ does not invert inside one quadratic extension`;
     return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
   }
   const signed = normalised.sign === 1 ? scale : scale.neg();
@@ -359,11 +359,11 @@ export function divideCarryingSine(numerator: ExpSum, denominator: ExpSum): Sine
     form: isUnitSine(normalised.r) ? { sum } : { sum, sine: normalised.r },
     certificate: exact(
       `the coefficient on the unknown factors as a sine`,
-      `${formatPiExpSum(denominator)} = c·e^{(β₁+β₂)/2}·2i·sin(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(normalised.r, Frac.ZERO)))})`,
+      `$${formatPiExpSum(denominator, LATEX)} = c\\,e^{(\\beta_1+\\beta_2)/2}\\,2i\\sin(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(normalised.r, Frac.ZERO)), LATEX)})$`,
       {
         provenance: [
-          { ok: true, text: "a − b·e^{β} with |a| = |b| factors as e^{β/2}(e^{−β/2} − e^{β/2}); one rule, for one shape" },
-          { ok: true, text: "the sine is CARRIED, never evaluated: the form is exact and only its decimal is an estimate" },
+          { ok: true, text: "$a - be^{\\beta}$ with $|a| = |b|$ factors as $e^{\\beta/2}(e^{-\\beta/2} - e^{\\beta/2})$; one rule, for one shape" },
+          { ok: true, text: "the sine is carried, never evaluated: the form is exact and only its decimal is an estimate" },
         ],
       },
     ),
@@ -415,7 +415,7 @@ function divideCarryingCosh(
   const two = SqrtExt.fromGauss(Gauss.int(2));
   const scale = tryInv(first.coefficient.mul(two));
   if (scale === null) {
-    const reason = `the coefficient ${formatPiExpSum(denominator)} does not invert inside one quadratic extension`;
+    const reason = `the coefficient $${formatPiExpSum(denominator, LATEX)}$ does not invert inside one quadratic extension`;
     return { ok: false, reason, degenerate: false, certificate: refuse("the target", reason) };
   }
   const halfSum = first.exponent.add(second.exponent).half();
@@ -428,12 +428,12 @@ function divideCarryingCosh(
     form: r.isZero() ? { sum } : { sum, cosh: r },
     certificate: exact(
       "the coefficient on the unknown factors as a hyperbolic cosine",
-      `${formatPiExpSum(denominator)} = c·e^{(β₁+β₂)/2}·2cosh(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(r, Frac.ZERO)))})`,
+      `$${formatPiExpSum(denominator, LATEX)} = c\\,e^{(\\beta_1+\\beta_2)/2}\\,2\\cosh(${formatPiSqrt(SqrtExt.fromGauss(new Gauss(r, Frac.ZERO)), LATEX)})$`,
       {
         provenance: [
-          { ok: true, text: "a + b·e^{β} with a = b factors as e^{β/2}(e^{−β/2} + e^{β/2}); the sine's other half, for a NEGATIVE quasi-period" },
-          { ok: true, text: "cosh vanishes only at an imaginary argument, and γ is real here — so unlike the sine there is no degenerate case" },
-          { ok: true, text: "the cosh is CARRIED, never evaluated: the form is exact and only its decimal is an estimate" },
+          { ok: true, text: "$a + be^{\\beta}$ with $a = b$ factors as $e^{\\beta/2}(e^{-\\beta/2} + e^{\\beta/2})$; the sine's other half, for a negative quasi-period" },
+          { ok: true, text: "$\\cosh$ vanishes only at an imaginary argument, and $\\gamma$ is real here — so unlike the sine there is no degenerate case" },
+          { ok: true, text: "the cosh is carried, never evaluated: the form is exact and only its decimal is an estimate" },
         ],
       },
     ),

@@ -107,7 +107,7 @@ export const b1JordanCosineKernel: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle (upper when a > 0, lower when a < 0)",
+        name: "the $R \\to \\infty$ semicircle (upper when $a > 0$, lower when $a < 0$)",
         geom: {
           kind: "arc",
           center: pt(0, 0),

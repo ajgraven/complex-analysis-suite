@@ -21,7 +21,7 @@ import {
   type Verdict,
 } from "@cas/rigor";
 import { Frac, SqrtExt } from "@cas/exact";
-import { headlineFails, type ConstraintId } from "./vocabulary.js";
+import { HEADLINES, headlineFails, type ConstraintId } from "./vocabulary.js";
 import {
   certificateClaim,
   claimOf,
@@ -783,18 +783,18 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         continue;
       }
       if (w.n === 0) continue;
-      turns.push(`n(γ, ${point.label}) = ${formatFrac(Frac.of(BigInt(w.n)))}`);
+      turns.push(`$\\operatorname{Ind}_\\gamma(${point.label.replace("z = ", "")}) = ${formatFrac(Frac.of(BigInt(w.n)), LATEX)}$`);
       if (point.order.kind === "log") logTurns.push(point.label);
       else monodromy = monodromy.add(point.order.alpha.mul(Frac.of(BigInt(w.n))));
     }
 
     const monodromyFailure =
       undecidedTurns.length > 0
-        ? `the winding number about a branch point could not be decided (${undecidedTurns.join("; ")}), so the monodromy along γ is not decided either`
+        ? `the winding number about a branch point could not be decided (${undecidedTurns.join("; ")}), so the monodromy along $\\gamma$ is not decided either`
         : logTurns.length > 0
-          ? `the contour winds about the logarithmic branch point ${logTurns.join(", ")}: one turn adds 2πi to log(z − b), and no winding but zero brings it back`
+          ? `the contour winds about the logarithmic branch point ${logTurns.join(", ")}: one turn adds $2\\pi i$ to $\\log(z - b)$, and no winding but zero brings it back`
           : turns.length > 0 && monodromy.d !== 1n
-            ? `the contour's total monodromy is e^(2πi·${formatFrac(monodromy)}) ≠ 1: ${turns.join(", ")}, and Σ n(γ,bⱼ)·αⱼ = ${formatFrac(monodromy)} is not an integer, so the integrand does not return to the value it started with and no single sheet carries the answer`
+            ? `the contour's total monodromy is $e^{2\\pi i \\cdot ${formatFrac(monodromy, LATEX)}} \\ne 1$: ${turns.join(", ")}, and $\\sum_j \\operatorname{Ind}_\\gamma(b_j)\\,\\alpha_j = ${formatFrac(monodromy, LATEX)}$ is not an integer, so the integrand does not return to the value it started with and no single sheet carries the answer`
             : null;
 
     if (monodromyFailure !== null) {
@@ -815,7 +815,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
               },
               {
                 ok: true,
-                text: "the test is on the SUM Σ n(γ,bⱼ)·αⱼ, not on any single winding: a contour may encircle two branch points and still close on one sheet, which is what a dogbone does",
+                text: "the test is on the sum $\\sum_j \\operatorname{Ind}_\\gamma(b_j)\\alpha_j$, not on any single winding: a contour may encircle two branch points and still close on one sheet, which is what a dogbone does",
               },
             ],
           }),
@@ -848,13 +848,13 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             },
           }),
           exact(
-            `the monodromy along γ is e^(2πi·${formatFrac(monodromy)}) = 1`,
+            `the monodromy along $\\gamma$ is $e^{2\\pi i \\cdot ${formatFrac(monodromy, LATEX)}} = 1$`,
             "$\\sum_j \\operatorname{Ind}_\\gamma(b_j)\\,\\alpha_j$, over exact winding numbers and exact exponents",
             {
               provenance: [
                 {
                   ok: true,
-                  text: `${turns.join(", ")} — non-zero, and the SUM is what has to be an integer`,
+                  text: `${turns.join(", ")} — non-zero, and the sum is what has to be an integer`,
                 },
                 {
                   ok: true,
@@ -1066,24 +1066,24 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
       residuesExact
         ? exact(
             "the residues",
-            "exact arithmetic over ℚ(i) or one quadratic extension of it",
+            "exact arithmetic over $\\mathbb{Q}(i)$ or one quadratic extension of it",
           )
         : summed
           ? exact(
               "the residues",
               input.summation?.escalation === undefined
-                ? "Res(K·f, n) is f(n) over ℚ(i) at every integer (the kernel's own residue is exactly 1 or exactly (−1)ⁿ); Res(K·f, zⱼ) is K(zⱼ)·Res(f,zⱼ), exact because cot and csc are Möbius functions of e^{2πiz₀}"
-                : "Res(K·f, n) is f(n) over ℚ(i) at every integer the kernel alone has a pole at; where the cofactor has one too the orders ADD and the merged residue is the z⁻¹ coefficient of the product's Laurent series, exact in ℚ(i)(π)",
+                ? "$\\operatorname{Res}(\\pi\\cot(\\pi z)f, n) = f(n)$ and $\\operatorname{Res}(\\pi\\csc(\\pi z)f, n) = (-1)^n f(n)$; at a pole $z_j$ of $f$, $\\operatorname{Res} = K(z_j)\\operatorname{Res}(f, z_j)$"
+                : "$\\operatorname{Res}(Kf, n) = f(n)$ at every integer the kernel alone has a pole at; where $f$ has one too the orders add, and the merged residue is the $z^{-1}$ coefficient of the product's Laurent series",
             )
           : sumExact
             ? exact(
                 "the residue SUM",
-                "the structural route: the roots of a rotated regular n-gon, whose residues sum in the exponent basis with no root ever represented",
+                "the residue sum over the $n$-th roots is computed as a geometric sum, without naming a root",
                 {
                   provenance: [
                     {
                       ok: true,
-                      text: "a fifth or seventh root of −1 needs a degree-4 or degree-6 field — which is why the per-pole route declined, and why this one is not the same claim",
+                      text: "a fifth or seventh root of $-1$ generates a field of degree 4 or 6 over $\\mathbb{Q}$, which is why no individual residue is written down",
                     },
                   ],
                 },
@@ -1095,8 +1095,8 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
                 // that "some poles are not expressible in ℚ(i)(√d)" names a difficulty the engine never
                 // reached. Which of the two it is is exactly what `rational` records.
                 poles.rational
-                  ? "some poles are not expressible in ℚ(i)(√d); the numeric value stands"
-                  : "f could not be read exactly, so no pole list was established — which is not the same as there being no poles",
+                  ? "some poles lie outside $\\mathbb{Q}(i)(\\sqrt{d})$; their residues are numerical"
+                  : "$f$ was not recognised as rational, so its poles were not located — which is not the same as there being none",
               ),
     ),
   );
@@ -1119,12 +1119,12 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         }),
         exact(
           "the escalation",
-          "the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument — the product is meromorphic there, orders ADD, and the merged residue is computed exactly",
+          "the hypothesis that $f$ has no pole at an integer is sufficient for the clean form of the theorem and not necessary for the contour argument — the product is meromorphic there, the orders add, and the merged residue is computed exactly",
           {
             provenance: [
               {
                 ok: true,
-                text: "refusing would be wrong (the answer is correct) and warning would be wrong (nothing is uncertain); what the escalation costs the record is a DECLARED merged order and residue, both checked against the engine's own",
+                text: "the merged order and residue are declared and checked against the ones computed here",
               },
             ],
           },
@@ -1285,7 +1285,7 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
               value: { kind: "exact", text: imported.text, latex: imported.latex },
             }),
             exact(
-              `${piece.name} = ${imported.text}`,
+              `${piece.name} $= ${imported.latex}$`,
               `imported, not derived here — ${imported.method}`,
               {
                 provenance: [
@@ -1415,9 +1415,8 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
             // harmless while nothing looked, and is the shape of the slip `claims.test.ts` now
             // refuses: an argument the sentence does not mention is one a reader never sees.
             inSum.weight === 1
-            ? claimOf("cover.in-sum", { id: { kind: "exact", text: inSum.id } })
+            ? claimOf("cover.in-sum")
             : claimOf("cover.in-sum-weighted", {
-                id: { kind: "exact", text: inSum.id },
                 weight: { kind: "count", n: inSum.weight },
               })
           : claimOf("cover.none"),
@@ -1426,11 +1425,11 @@ export function evaluateLedger(input: LedgerInput): LedgerResult {
         : inSum !== undefined
           ? exact(
               "the target is covered",
-              "declared by `residueSelection.targetTerms`: the contour's own sides all vanish, so ∮ → 0 and the identity is read backwards as a statement about the sum",
+              "every side of the contour vanishes, so $\\oint_\\gamma f\\,dz \\to 0$ and the identity is read backwards as a statement about the sum",
             )
           : unknown(
               "the target",
-              "sandbox mode: there is no real integral being solved for",
+              "no target is designated, so there is no real integral being solved for",
             ),
     ),
   );
@@ -1520,10 +1519,8 @@ export function ledgerHeadline(result: LedgerResult): string {
   if (result.closes) {
     // In sandbox mode there is no real integral being solved for, so "the argument closes" would
     // claim more than happened: what was established is the closed-contour value itself.
-    return result.hasTarget
-      ? "The argument is complete."
-      : "$\\oint_\\gamma f(z)\\,dz$ is established exactly.";
+    return result.hasTarget ? HEADLINES.closes : HEADLINES.sandbox;
   }
-  if (result.failedAt === null) return "The argument is incomplete.";
+  if (result.failedAt === null) return HEADLINES.incomplete;
   return headlineFails(result.failedAt);
 }

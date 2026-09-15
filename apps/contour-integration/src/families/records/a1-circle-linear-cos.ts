@@ -84,7 +84,7 @@ export const a1CircleLinearCos: Family = {
     pieces: [
       {
         id: "unitCircle",
-        name: "the unit circle |z| = 1",
+        name: "the unit circle $|z| = 1$",
         geom: {
           kind: "arc",
           center: pt(0, 0),

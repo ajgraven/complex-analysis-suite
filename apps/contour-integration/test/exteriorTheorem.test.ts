@@ -136,7 +136,7 @@ describe("the exterior residue theorem", () => {
     expect(r.exactValue?.value[1]).toBeCloseTo(0, 12);
     // The whole point: Σ Res over the finite poles is NOT zero, so the answer is zero only because
     // Res(f,∞) is in it.
-    expect(reasons(r)).toMatch(/σ = −1, Σ Res over the 2 finite poles = 1, and Res\(f,∞\) = −1/);
+    expect(reasons(r)).toMatch(/\\sigma = -1\$, \$\\sum \\operatorname\{Res\}\$ over the 2 finite poles is \$1\$, and \$\\operatorname\{Res\}\(f, \\infty\) = -1\$/);
     expect(reasons(r)).toMatch(/null-homologous in the cut-free plane/);
     // And the quadrature, which shares no machinery with any of that, agrees.
     expect(r.agrees).toBe(true);
@@ -146,8 +146,8 @@ describe("the exterior residue theorem", () => {
   it("reports the two facts separately: nothing enclosed, and a value that says nothing about it", () => {
     const r = run("(z+3)/(z^2+1)", dogboneTemplate(), segmentCut());
     expect(reasons(r)).toMatch(/n\(γ, aₖ\) ≠ 0 at 0 of the 2 poles/);
-    expect(reasons(r)).toMatch(/says what is ENCLOSED and says nothing whatever about the value/);
-    expect(reasons(r)).toMatch(/encloses the cut clockwise \(σ = −1 at every branch point\)/);
+    expect(reasons(r)).toMatch(/says what is enclosed and says nothing whatever about the value/);
+    expect(reasons(r)).toMatch(/encloses the cut clockwise \(\$\\sigma = -1\$ at every branch point\)/);
   });
 
   it("weights an ENCLOSED pole by n − σ, and the quadrature says so", () => {
@@ -159,7 +159,7 @@ describe("the exterior residue theorem", () => {
     expect(r.exactValue?.value[0]).toBeCloseTo(0, 9);
     expect(r.exactValue?.value[1]).toBeCloseTo(2 * Math.PI, 9);
     expect(reasons(r)).toMatch(/n\(γ, aₖ\) ≠ 0 at 2 of the 2 poles/);
-    expect(reasons(r)).toMatch(/weighted by n\(γ,aₖ\) − σ = n\(γ,aₖ\) − 1/);
+    expect(reasons(r)).toMatch(/weighted by \$\\operatorname\{Ind\}_\\gamma\(a_k\) - \\sigma\$ with \$\\sigma = 1\$/);
     expect(r.agrees).toBe(true);
   });
 
@@ -179,7 +179,7 @@ describe("the exterior residue theorem", () => {
     expect(mine.exactValue?.text).toBe(ordinary.exactValue?.text);
     expect(mine.exactValue?.value[0]).toBeCloseTo(ordinary.exactValue?.value[0] ?? NaN, 12);
     expect(mine.exactValue?.value[1]).toBeCloseTo(ordinary.exactValue?.value[1] ?? NaN, 12);
-    expect(reasons(mine)).toMatch(/leaves the cut outside \(σ = 0 at every branch point\)/);
+    expect(reasons(mine)).toMatch(/leaves the cut outside \(\$\\sigma = 0\$ at every branch point\)/);
     expect(reasons(mine)).toMatch(/this IS the residue theorem, recovered rather than restated/);
   });
 
@@ -201,7 +201,7 @@ describe("the exterior residue theorem", () => {
     // The honest limitation, asserted rather than left to a reader: `Σ Res + Res(f,∞) = 0` kills the
     // whole σ-dependent term for a rational f, so nothing in this file falsifies σ's SIGN. D6 does.
     const r = run("(z+3)/(z^2+1)", dogboneTemplate(), segmentCut());
-    expect(reasons(r)).toMatch(/cannot falsify the SIGN of σ/);
+    expect(reasons(r)).toMatch(/cannot falsify the sign of \$\\sigma\$/);
   });
 });
 

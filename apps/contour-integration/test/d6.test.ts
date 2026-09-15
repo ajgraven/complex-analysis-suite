@@ -77,23 +77,23 @@ describe("what the dogbone teaches", () => {
     expect(catches[0].status).toBe("satisfied");
     // And the value is not zero, on the same run.
     expect(must(ran().theorem.exactValue, "an exact ∮").text).toBe("π√2");
-    expect(reasons()).toMatch(/says what is ENCLOSED and says nothing whatever about the value/);
+    expect(reasons()).toMatch(/says what is enclosed and says nothing whatever about the value/);
   });
 
   it("weights those poles by n − σ = 1, which is where the cut being inside is paid for", () => {
-    expect(reasons()).toMatch(/encloses the cut clockwise \(σ = −1 at every branch point\)/);
-    expect(reasons()).toMatch(/weighted by n\(γ,aₖ\) − σ = n\(γ,aₖ\) − −1/);
+    expect(reasons()).toMatch(/encloses the cut clockwise \(\$\\sigma = -1\$ at every branch point\)/);
+    expect(reasons()).toMatch(/weighted by \$\\operatorname\{Ind\}_\\gamma\(a_k\) - \\sigma\$ with \$\\sigma = -1\$/);
   });
 
   it("certifies Res(f,∞) = 0 from the degree rather than assuming it", () => {
     expect(reasons()).toMatch(/Res\(f, ∞\) = 0/);
-    expect(reasons()).toMatch(/f = O\(z\^\(−3\)\) at infinity/);
-    expect(reasons()).toMatch(/an order of −2 or less leaves no z⁻¹ coefficient/);
+    expect(reasons()).toMatch(/\$f = O\(z\^\{-3\}\)\$ at infinity/);
+    expect(reasons()).toMatch(/an order of \$-2\$ or less leaves no \$z\^\{-1\}\$ coefficient/);
     // The one-number unification: the same computation would discharge an outer circle by L2.
-    expect(reasons()).toMatch(/SAME computation discharges L2 on an outer circle/);
+    expect(reasons()).toMatch(/same computation discharges the large-circle estimate on an outer circle/);
     // And the condition that makes the question meaningful at all, now that a branch factor reaches
     // infinity too: `Σ αⱼ = −1 ∈ ℤ`, so the monodromy round a large circle is 1.
-    expect(reasons()).toMatch(/Σ αⱼ = −1 ∈ ℤ, so f IS single-valued near infinity/);
+    expect(reasons()).toMatch(/\\sum_j \\alpha_j = -1 \\in \\mathbb\{Z\}\$, so \$f\$ is single-valued near infinity/);
   });
 
   it("takes OPPOSITE signs at the conjugate poles — the trap that returns 0 and looks fine", () => {

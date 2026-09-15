@@ -106,3 +106,21 @@ const FAILS: Readonly<Record<ConstraintId, string>> = {
 export function headlineFails(id: ConstraintId): string {
   return `The argument is incomplete: ${FAILS[id]}.`;
 }
+
+/**
+ * The three headlines that name no constraint.
+ *
+ * Named here rather than written inline in `ledgerHeadline` so the M8 review document can read what
+ * the app says instead of carrying a copy. The copy was the defect: step 0.5b applied all three
+ * proposals and the document went on printing the pre-0.5b sentences as *today*, so a reader was
+ * told that finished work was outstanding — and a review document that misreports the code is worse
+ * than none, because it is believed.
+ */
+export const HEADLINES = {
+  /** A record: the argument determines the integral it set out to determine. */
+  closes: "The argument is complete.",
+  /** The sandbox: there is no target, so what was established is the closed-contour value itself. */
+  sandbox: "$\\oint_\\gamma f(z)\\,dz$ is established exactly.",
+  /** It does not close, and no single constraint is the one that stopped it. */
+  incomplete: "The argument is incomplete.",
+} as const;

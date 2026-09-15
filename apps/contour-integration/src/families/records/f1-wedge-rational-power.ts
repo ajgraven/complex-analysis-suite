@@ -120,7 +120,7 @@ export const f1WedgeRationalPower: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ sector arc",
+        name: "the $R \\to \\infty$ sector arc",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -134,7 +134,7 @@ export const f1WedgeRationalPower: Family = {
       },
       {
         id: "ray1",
-        name: "the return ray arg z = 2π/n",
+        name: "the return ray $\\arg z = 2\\pi/n$",
         geom: {
           kind: "segment",
           from: pt({ param: "R", mul: { param: "wedgeX" } }, { param: "R", mul: { param: "wedgeY" } }),

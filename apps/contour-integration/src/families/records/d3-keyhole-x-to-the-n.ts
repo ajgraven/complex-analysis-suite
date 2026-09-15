@@ -102,7 +102,7 @@ export const d3KeyholeXToTheN: Family = {
       },
       {
         id: "outer",
-        name: "the R → ∞ circle",
+        name: "the $R \\to \\infty$ circle",
         geom: { kind: "arc", center: pt(0, 0), radius: { param: "R" }, theta0: 0, theta1: 2 * Math.PI },
         role: "vanish",
         lemma: "L2",
@@ -119,7 +119,7 @@ export const d3KeyholeXToTheN: Family = {
       },
       {
         id: "inner",
-        name: "the ε → 0 circle",
+        name: "the $\\varepsilon \\to 0$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),

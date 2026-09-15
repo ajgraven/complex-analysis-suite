@@ -117,7 +117,7 @@ export const d2KeyholeTwoPoles: Family = {
     pieces: [
       {
         id: "upper",
-        name: "the upper edge, arg z = 0+",
+        name: "the upper edge, $\\arg z = 0^+$",
         geom: { kind: "segment", from: pt({ param: "eps" }, 0), to: pt({ param: "R_lim" }, 0) },
         role: "target",
         side: "above",
@@ -125,7 +125,7 @@ export const d2KeyholeTwoPoles: Family = {
       },
       {
         id: "outer",
-        name: "the R → ∞ circle",
+        name: "the $R \\to \\infty$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),
@@ -139,7 +139,7 @@ export const d2KeyholeTwoPoles: Family = {
       },
       {
         id: "lower",
-        name: "the lower edge, arg z = 2π−",
+        name: "the lower edge, $\\arg z = 2\\pi^-$",
         geom: { kind: "segment", from: pt({ param: "R_lim" }, 0), to: pt({ param: "eps" }, 0) },
         role: "reproduces",
         side: "below",
@@ -151,7 +151,7 @@ export const d2KeyholeTwoPoles: Family = {
       },
       {
         id: "inner",
-        name: "the ε → 0 circle",
+        name: "the $\\varepsilon \\to 0$ circle",
         geom: {
           kind: "arc",
           center: pt(0, 0),

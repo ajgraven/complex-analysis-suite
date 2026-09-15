@@ -104,7 +104,7 @@ export const a6SemicircleQuartic: Family = {
       },
       {
         id: "arc",
-        name: "the R → ∞ semicircle",
+        name: "the $R \\to \\infty$ semicircle",
         geom: {
           kind: "arc",
           center: pt(0, 0),

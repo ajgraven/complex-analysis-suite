@@ -32,6 +32,7 @@
 import { Frac } from "@cas/exact";
 import { bound, refuse, type Certificate } from "@cas/rigor";
 import { fracCmp } from "./ratBound.js";
+import { LATEX, TEXT, type Notation } from "../notation.js";
 
 /**
  * Which reading of the one inequality a caller needs.
@@ -64,9 +65,10 @@ export interface DampedArcIntegral {
 }
 
 /** `Ψ/π`, rendered the way the certificates talk about it. */
-function asPi(turns: Frac): string {
-  if (turns.d === 1n) return turns.n === 1n ? "π" : `${turns.n}π`;
-  return turns.n === 1n ? `π/${turns.d}` : `${turns.n}π/${turns.d}`;
+function asPi(turns: Frac, n_: Notation = TEXT): string {
+  const pi = n_.pi;
+  if (turns.d === 1n) return turns.n === 1n ? pi : `${turns.n}${pi}`;
+  return n_.over(turns.n === 1n ? pi : `${turns.n}${pi}`, turns.d);
 }
 
 /**
@@ -98,10 +100,10 @@ export function dampedArcIntegral(upper: Frac, face: MinorantFace): DampedArcInt
       withinMinorant: true,
       certificate: bound(
         "≤",
-        `∫₀^{${asPi(upper)}} e^{−κ ${face} ψ} dψ ≤ π/(2κ) for every κ > 0`,
+        `$\\int_0^{${asPi(upper, LATEX)}} e^{-\\kappa\\${face}\\psi}\\,d\\psi \\le \\pi/(2\\kappa)$ for every $\\kappa > 0$`,
         face === "sin"
-          ? "Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2]"
-          : "cos φ ≥ 1 − 2φ/π on [0, π/2] — the SAME inequality under φ = π/2 − ψ",
+          ? "Jordan's inequality $\\sin\\psi \\ge 2\\psi/\\pi$ on $[0, \\pi/2]$"
+          : "$\\cos\\varphi \\ge 1 - 2\\varphi/\\pi$ on $[0, \\pi/2]$ — the same inequality under $\\varphi = \\pi/2 - \\psi$",
         {
           provenance: [
             { ok: true, text: `the range ${asPi(upper)} ≤ π/2, so the linear minorant applies on all of it` },
@@ -162,8 +164,8 @@ export function dampedArcIntegral(upper: Frac, face: MinorantFace): DampedArcInt
     withinMinorant: false,
     certificate: bound(
       "≤",
-      `∫₀^{${asPi(upper)}} e^{−κ sin ψ} dψ ≤ π/κ for every κ > 0`,
-      "Jordan's inequality sin ψ ≥ 2ψ/π on [0, π/2], extended to [0, π] by sin ψ = sin(π − ψ)",
+      `$\\int_0^{${asPi(upper, LATEX)}} e^{-\\kappa\\sin\\psi}\\,d\\psi \\le \\pi/\\kappa$ for every $\\kappa > 0$`,
+      "Jordan's inequality $\\sin\\psi \\ge 2\\psi/\\pi$ on $[0, \\pi/2]$, extended to $[0, \\pi]$ by $\\sin\\psi = \\sin(\\pi - \\psi)$",
       {
         provenance: [
           {

@@ -13,7 +13,7 @@
 // WHERE THE IDENTITY COMES FROM, in one line each. `σ` is what the contour winds about the cut:
 //
 //   - `Z = γ − σ·C_R` winds `σ − σ = 0` about every point of the cut, so it is null-homologous in
-//     the cut-free plane and the ORDINARY residue theorem applies to it — which is the only theorem
+//     the cut-free plane and the ordinary residue theorem applies to it — which is the only theorem
 //     used anywhere in this file. Nothing new is assumed; a different cycle is chosen.
 //   - `n(Z, aₖ) = n(γ,aₖ) − σ`, so `∮_Z f = 2πi Σ (nₖ − σ)·Res(f,aₖ)`.
 //   - `∮_{C_R,ccw} f = −2πi·Res(f,∞)` is the DEFINITION of the residue at infinity, exact for every
@@ -62,7 +62,7 @@ import { checkAgainstQuadrature, type ResidueTheoremResult } from "./residueTheo
 const TWO_I = SqrtExt.fromGauss(new Gauss(Frac.ZERO, Frac.of(2n)));
 
 /** An integer with the app's real minus sign, through the one place that owns it. */
-const int = (n: number): string => formatFrac(Frac.of(BigInt(n)));
+const int = (n: number): string => formatFrac(Frac.of(BigInt(n)), LATEX);
 
 /**
  * What this module applies, in the form the derivation panel states it.
@@ -182,7 +182,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
     return {
       identity: EXTERIOR_IDENTITY,
       verdict: assembleVerdict([
-        refuse("Res(f, ∞)", `the rational cofactor is not a quotient of polynomials over ℚ(i): ${split.reason}`),
+        refuse("$\\operatorname{Res}(f, \\infty)$", `the rational cofactor is not a quotient of polynomials over $\\mathbb{Q}(i)$: ${split.reason}`),
       ]),
     };
   }
@@ -200,7 +200,7 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
       identity: EXTERIOR_IDENTITY,
       verdict: assembleVerdict([
         ...certificates,
-        refuse("the exterior residue theorem", atInfinity.ok ? "Res(f, ∞) is not known exactly" : atInfinity.reason),
+        refuse("the exterior residue theorem", atInfinity.ok ? "$\\operatorname{Res}(f, \\infty)$ is not known exactly" : atInfinity.reason),
       ]),
     };
   }
@@ -220,23 +220,23 @@ export function applyExteriorTheorem(input: ExteriorTheoremInput): ResidueTheore
   certificates.push(
     exact(
       `∮ f dz = 2πi [ Σ (n(γ,aₖ) − σ)·Res(f,aₖ) − σ·Res(f,∞) ] = ${text}`,
-      "the ORDINARY residue theorem applied to γ − σ·C_R, which winds zero times about the cut and is therefore null-homologous in the cut-free plane; ∮_{C_R,ccw} = −2πi·Res(f,∞) by definition",
+      "the ordinary residue theorem applied to $\\gamma - \\sigma C_R$, which winds zero times about the cut and is therefore null-homologous in the cut-free plane; $\\oint_{C_R,\\,\\mathrm{ccw}} = -2\\pi i\\operatorname{Res}(f,\\infty)$ by definition",
       {
         provenance: [
           {
             ok: true,
-            text: `σ = ${int(sigma)}, Σ Res over the ${weighted.count} finite pole${weighted.count === 1 ? "" : "s"} = ${weighted.plainText}, and Res(f,∞) = ${formatExpSum(atInf)} is the outer circle exactly, not an estimate of it`,
+            text: `$\\sigma = ${int(sigma)}$, $\\sum \\operatorname{Res}$ over the ${weighted.count} finite pole${weighted.count === 1 ? "" : "s"} is $${weighted.plainLatex}$, and $\\operatorname{Res}(f, \\infty) = ${formatExpSum(atInf, LATEX)}$ is the outer circle exactly, not an estimate of it`,
           },
           {
             ok: true,
-            text: "no pole is enclosed AND the integral is not zero: two rows, and neither implies the other — the hypothesis that fails is holomorphy, because the CUT is inside",
+            text: "no pole is enclosed and the integral is not zero: two rows, and neither implies the other — the hypothesis that fails is holomorphy, because the cut is inside",
           },
           {
             ok: sigma === 0,
             text:
               sigma === 0
                 ? "σ = 0: the cut is outside, every weight is n(γ,aₖ) and the residue at infinity drops out — this IS the residue theorem, recovered rather than restated"
-                : `σ is measured at the BRANCH POINTS; that the contour winds the same way about every point of the cut between them is the ${constraintLabel(
+                : `$\\sigma$ is measured at the branch points; that the contour winds the same way about every point of the cut between them is the ${constraintLabel(
                     "LEGALITY",
                   ).toLowerCase()} group's business, which refuses an untagged crossing`,
           },
@@ -305,18 +305,18 @@ function orientationAbout(pieces: readonly Resolved[], branch: BranchChoice): Or
     sigma,
     certificate: exact(
       sigma === 0
-        ? "the contour leaves the cut outside (σ = 0 at every branch point)"
-        : `the contour encloses the cut ${sigma < 0 ? "clockwise" : "anticlockwise"} (σ = ${int(sigma)} at every branch point)`,
+        ? "the contour leaves the cut outside ($\\sigma = 0$ at every branch point)"
+        : `the contour encloses the cut ${sigma < 0 ? "clockwise" : "anticlockwise"} ($\\sigma = ${int(sigma)}$ at every branch point)`,
       "exact-sign crossing count at each branch point, the same predicate every winding number uses",
       {
         provenance: [
           {
             ok: true,
-            text: "σ is MEASURED, not assumed — and it is read once, so the arithmetic and the sentence cannot disagree about it",
+            text: "$\\sigma$ is measured, not assumed — and it is read once, so the arithmetic and the sentence cannot disagree about it",
           },
           {
             ok: false,
-            text: "a rational integrand cannot falsify the SIGN of σ: Σ Res + Res(f,∞) = 0 for such an f, so the whole σ-dependent term vanishes whatever σ is. D6 is what pins it",
+            text: "a rational integrand cannot falsify the sign of $\\sigma$: $\\sum \\operatorname{Res} + \\operatorname{Res}(f, \\infty) = 0$ for such an $f$, so the whole $\\sigma$-dependent term vanishes whatever $\\sigma$ is. D6 is what pins it",
           },
         ],
       },
@@ -331,6 +331,8 @@ type Weighed =
       readonly sum: ExpSum;
       /** `Σ Res(f,aₖ)` unweighted, for the sentence — branch factor included, since that is what `f` is. */
       readonly plainText: string;
+      /** The same sum typeset. */
+      readonly plainLatex: string;
       readonly count: number;
       readonly certificate: Certificate;
       /** One per pole when a branch factor is present: what its value there was, and why. */
@@ -395,6 +397,7 @@ function weighPoles(
     sum,
     residues: certificates,
     plainText: formatExpSum(plain.foldSigns()),
+    plainLatex: formatExpSum(plain.foldSigns(), LATEX),
     count: exactPoles.length,
     certificate: exact(
       `n(γ, aₖ) ≠ 0 at ${enclosed} of the ${exactPoles.length} pole${exactPoles.length === 1 ? "" : "s"}`,
@@ -403,11 +406,11 @@ function weighPoles(
         provenance: [
           {
             ok: true,
-            text: "this row says what is ENCLOSED and says nothing whatever about the value: the dogbone encloses nothing and its integral is not zero",
+            text: "this row says what is enclosed and says nothing whatever about the value: the dogbone encloses nothing and its integral is not zero",
           },
           {
             ok: true,
-            text: `each residue is weighted by n(γ,aₖ) − σ = n(γ,aₖ) − ${int(sigma)}, which is its winding about γ − σ·C_R`,
+            text: `each residue is weighted by $\\operatorname{Ind}_\\gamma(a_k) - \\sigma$ with $\\sigma = ${int(sigma)}$, which is its winding about $\\gamma - \\sigma C_R$`,
           },
         ],
       },

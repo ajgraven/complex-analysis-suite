@@ -92,12 +92,12 @@ export function checkDeclaredCollisions(
   certificates.push(
     exact(
       `${declared.length} declared collision${declared.length === 1 ? "" : "s"} reproduce${declared.length === 1 ? "s" : ""} the engine's own merged residue`,
-      "the record's `collisions[]` carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted",
+      "the declared collision carries the order arithmetic and the residue, and both are checked against the Laurent route rather than trusted",
       {
         provenance: [
           {
             ok: true,
-            text: "the hypothesis 'f has no pole at an integer' is SUFFICIENT for the clean form of the theorem and not NECESSARY for the contour argument, which is why `escalate` is right where `refuse` and `warn` are both wrong",
+            text: "the hypothesis that $f$ has no pole at an integer is sufficient for the clean form of the theorem and not necessary for the contour argument, which is why `escalate` is right where `refuse` and `warn` are both wrong",
           },
         ],
       },

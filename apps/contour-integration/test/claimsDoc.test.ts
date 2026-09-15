@@ -47,6 +47,9 @@ describe("the M8 claims review document", () => {
     expect(flagsFor("the bound is $O(R)$ and $∮ → 0$")).toEqual([]);
     // Half-typeset is not typeset: the characters OUTSIDE the delimiters are what is checked.
     expect(flagsFor("the bound is $O(R)$ and ∮ → 0")).toEqual(["maths undelimited"]);
+    // The app's own bullet is a separator, not a product.
+    expect(flagsFor("boundary terms · the arc")).toEqual([]);
+    expect(flagsFor("the coefficient 2·π")).toEqual(["maths undelimited"]);
     // `ML` is a name, not emphasis.
     expect(flagsFor("an ML bound")).toEqual([]);
   });
