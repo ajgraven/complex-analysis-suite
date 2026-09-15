@@ -46,7 +46,8 @@ import { makeColormapTexture } from '@cas/gpu/colormap';
 //       available: true,
 //       setPhi(phi, {boundaryPts, escapeR})    // rebuilds mask texture, packs uniforms
 //       setColormap(name)                      // rebuilds colormap texture
-//       render(view, {maxIter, scaleMode, modK}) // immediate, synchronous
+//       render(view, {maxIter, scaleMode, modK, viewMode, pixelSize}) // immediate, synchronous
+//       maxOutputSize() → largest renderable edge in device px (0 = unknown)
 //       capacityError() → string | null         // last setPhi failure reason
 //       destroy()                              // frees all GL resources
 //     }
@@ -69,8 +70,22 @@ import { makeColormapTexture } from '@cas/gpu/colormap';
   // The mask is a binary classifier (inside/outside polygon); we want sharp
   // edges, not smooth interpolation. 2048² gives sub-pixel boundary fidelity
   // at typical viewport sizes and combined with NEAREST sampling (set below)
-  // eliminates the "boundary speckle" artifact that linear filtering caused.
+  // eliminates the "boundary speckle" artifact that LINEAR filtering caused
+  // (intermediate v straddling the 0.5 threshold). That is not the whole story:
+  // a texel is still a finite world distance, which caused a second, different
+  // speckle — see buildMaskTexture for what resolves it.
   const MASK_SIZE    = 2048;
+  // Mask bbox padding. Only large enough to keep the polygon (dilated by the
+  // conservative stroke below) off the CLAMP_TO_EDGE border — inOmega() already
+  // answers correctly outside the texture, so every extra factor here is spent
+  // resolution. It was 5.0 (unbounded) / 2.4 (bounded), which cost ~4.8× / ~2.3×
+  // of the mask's precision along ∂Ω. Callers that need a WORLD extent (an
+  // escape radius, the sphere view's fractal coverage) must size it from
+  // `polyHalfExtent` and their own factor, NOT from the mask's half-extent.
+  const MASK_PAD     = 1.05;
+  // Default escape radius as a multiple of the polygon's half-extent, for a
+  // caller that supplies no escapeR. (schwarz-ui always supplies one.)
+  const ESCAPE_R_FACTOR = 30.0;
 
   // ===========================================================================
   // Shader sources.
@@ -475,11 +490,17 @@ vec2 newtonSeedFresh(vec2 w) {
 }
 
 // Acceptance test for a ψ-Newton result. Bounded: z must lie in 𝔻. Unbounded:
-// z must lie in 𝔻*. Threshold loosened from 1e-7 (float32 ε) to 1e-4 so
-// near-boundary points don't bounce between accepted and rejected on noise.
+// z must lie in 𝔻*. φ is univalent on that sheet, so ANY root found there is
+// THE root — this test decides the sheet, nothing else.
+//
+// The dead band is sized to the noise it actually absorbs. Measured against the
+// float64 engine over 4000 points of 𝔻*, float32 Newton's error in |z| is p99
+// 2.1e-7 and max 6.2e-7 — float32 ε, as expected. The band was 1e-4, ~485× that,
+// and rejected genuine near-boundary roots: a converged, correct z landing at
+// |z| = 1 + 3e-5 was thrown away and the pixel declared a Newton failure.
 bool acceptZ(vec2 z) {
   float r = length(z);
-  return (u_unbounded == 1) ? (r > 1.0 + 1e-4) : (r < 1.0 - 1e-4);
+  return (u_unbounded == 1) ? (r > 1.0 + 1e-6) : (r < 1.0 - 1e-6);
 }
 
 // σ(w) = conj(F(ψ(w))). seedHint speeds Newton (previous iterate's z).
@@ -551,6 +572,10 @@ float computeT(int n) {
 }
 
 // Color lookup. kind in {0=fund, 1=esc, 2=int, 3=invalid, 4=outside}.
+// kind 3 = ψ found no admissible preimage, so σ could not be applied. It is NOT
+// "Newton diverged": Newton converges, to a preimage on the wrong sheet. With a
+// conservative mask (buildMaskTexture) this should not arise for a w the mask
+// calls in-Ω; it is kept as a visible, diagnosable signal if it ever does.
 vec4 kindToColor(int kind, int n) {
   if (kind == 4) return vec4(245.0/255.0, 245.0/255.0, 248.0/255.0, 1.0);
   if (kind == 2) return vec4(28.0/255.0, 28.0/255.0, 36.0/255.0, 1.0);
@@ -736,12 +761,32 @@ void main() {
   }
 
   // Build a 2048² (MASK_SIZE-square) RED-channel mask texture by drawing the
-  // polygon into an off-screen 2D canvas, then uploading. Mask covers the
-  // polygon's bbox with a configurable padding factor (set per family in
-  // setPhi: 2.4× for bounded, 5× for unbounded). NEAREST sampling + no
-  // anti-aliasing on the 2D fill = clean binary classifier with no
-  // boundary-speckle artifacts.
-  function buildMaskTexture(gl, polyPts, padFactor) {
+  // polygon into an off-screen 2D canvas, then uploading.
+  //
+  // The mask is the shader's ONLY in-Ω test, and it is an APPROXIMATION of ∂Ω
+  // — accurate to about half a texel, since a Canvas-2D path fill is
+  // anti-aliased (`imageSmoothingEnabled` governs drawImage, NOT path
+  // rasterisation) and the shader thresholds the uploaded coverage at 0.5.
+  // ψ = φ⁻¹, by contrast, is exact: it exists only for w ∈ φ(𝔻*) / φ(𝔻). Where
+  // the two disagree the shader asks sigma() for a point outside σ's domain,
+  // Newton correctly finds no admissible preimage, and the pixel used to be
+  // painted as a numerical failure (the KIND_INV "bad pixel" colour) — a
+  // salmon speckle along ∂Ω and, because the tiles are σ⁻ⁿ(∂Ω), along every
+  // tile boundary. Two properties keep that from happening:
+  //
+  //   • RESOLUTION. The mask spans the polygon's bbox times MASK_PAD and
+  //     nothing more. The pad exists only so the polygon cannot touch the
+  //     CLAMP_TO_EDGE border (inOmega() already answers correctly for any uv
+  //     outside [0,1]); every factor beyond that is thrown-away resolution.
+  //   • CONSERVATISM. After the fill, the outline is re-stroked in the colour
+  //     that means NOT-in-Ω, so the rasteriser's own error band is resolved
+  //     AGAINST Ω. "The mask says in Ω" then implies "ψ exists", which is the
+  //     invariant sigma() depends on. It costs a ≤1-texel bias of ∂Ω, which is
+  //     the accuracy the mask had anyway — only now it has a known sign.
+  //
+  // `unbounded` selects which side of the polygon is Ω: for an unbounded QD
+  // the polygon is K (the fundamental tile) and Ω is its complement.
+  function buildMaskTexture(gl, polyPts, unbounded) {
     const off = document.createElement('canvas');
     off.width = MASK_SIZE; off.height = MASK_SIZE;
     const ctx = off.getContext('2d');
@@ -755,14 +800,10 @@ void main() {
     }
     const w = maxX - minX, h = maxY - minY;
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    const half = Math.max(w, h) / 2 * padFactor;       // square mask centered on polygon
+    const polyHalf = Math.max(w, h) / 2;               // un-padded, for callers sizing WORLD extents
+    const half = polyHalf * MASK_PAD;                  // square mask centered on polygon
     const maskCenter = { re: cx, im: cy };
     const maskHalfExtent = { x: half, y: half };
-    // The mask is a hard binary classifier — turn off anti-aliasing in the
-    // 2D context so the polygon edge isn't soft-feathered, then sample with
-    // NEAREST below. Together this kills the "ring of speckle on ∂Ω"
-    // artifact caused by intermediate alpha values across the boundary.
-    ctx.imageSmoothingEnabled = false;
     // Clear to BLACK (mask = 0 outside polygon).
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, MASK_SIZE, MASK_SIZE);
@@ -784,6 +825,15 @@ void main() {
     }
     ctx.closePath();
     ctx.fill();
+    // Conservative margin: re-stroke the outline in the NOT-in-Ω colour so the
+    // half-texel rasterisation error can never make the mask claim "in Ω" for a
+    // point where ψ has no admissible preimage. lineWidth 2 (±1 texel) covers
+    // that error with a factor of two to spare; a round join keeps a cusp from
+    // throwing a miter spike far outside ∂Ω.
+    ctx.strokeStyle = unbounded ? '#fff' : '#000';
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
     // Re-flip vertically when uploading so the shader's uv.y (which goes up
     // with world.y) reads the correct pixel.
     // Easier: just upload as-is and account for the flip in the shader's uv
@@ -807,7 +857,7 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    return { tex, maskCenter, maskHalfExtent };
+    return { tex, maskCenter, maskHalfExtent, polyHalfExtent: polyHalf };
   }
 
   // ===========================================================================
@@ -1016,23 +1066,29 @@ void main() {
         phiState.rInfConj[0] = rInf.re;
         phiState.rInfConj[1] = -rInf.im;
       }
-      // Build mask from polygon. Pad bounded modestly; unbounded needs more
-      // headroom because iterates can wander.
-      const padFactor = phiState.unbounded ? 5.0 : 2.4;
+      // Build mask from polygon. Its extent is sized for RESOLUTION (MASK_PAD),
+      // so nothing may read a world-space size off it — see polyHalf below.
       if (phiState.mask) gl.deleteTexture(phiState.mask);
+      // Fallback escape radius, for a caller that supplies none. With no polygon
+      // there is no scale to derive one from, so keep the 6.0 the mask-less path
+      // has always used (it was maskHalfExtent[0] = 1, times 6.0).
+      let escapeRFallback = 6.0;
       if (!polyPts.length) {
         phiState.mask = null;
         phiState.maskCenter[0] = 0; phiState.maskCenter[1] = 0;
         phiState.maskHalfExtent[0] = 1; phiState.maskHalfExtent[1] = 1;
       } else {
-        const m = buildMaskTexture(gl, polyPts, padFactor);
+        const m = buildMaskTexture(gl, polyPts, phiState.unbounded);
         phiState.mask = m.tex;
         phiState.maskCenter[0] = m.maskCenter.re;
         phiState.maskCenter[1] = m.maskCenter.im;
         phiState.maskHalfExtent[0] = m.maskHalfExtent.x;
         phiState.maskHalfExtent[1] = m.maskHalfExtent.y;
+        // From the polygon's OWN half-extent, so it stays put now that the mask is
+        // no longer padded 5× — ESCAPE_R_FACTOR reproduces the former (5.0 × 6.0).
+        escapeRFallback = m.polyHalfExtent * ESCAPE_R_FACTOR;
       }
-      phiState.escapeR = opts.escapeR || (phiState.unbounded ? phiState.maskHalfExtent[0] * 6.0 : 1e10);
+      phiState.escapeR = opts.escapeR || (phiState.unbounded ? escapeRFallback : 1e10);
       return true;
     }
 
@@ -1043,11 +1099,33 @@ void main() {
       colormapTex = buildColormapTexture(gl, pickColormap(name));
     }
 
+    // Largest edge, in device pixels, this context will render. A request past it
+    // does not come back smaller — it comes back failed — so the image exporter
+    // has to plan against this rather than discover it. 0 ⇒ unknown (dead context).
+    function maxOutputSize() {
+      if (gl.isContextLost()) return 0;
+      const dims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+      const rbuf = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) | 0;
+      const vmin = dims && dims.length >= 2 ? Math.min(dims[0] | 0, dims[1] | 0) : 0;
+      const both = [vmin, rbuf].filter((n) => n > 0);
+      return both.length ? Math.min.apply(null, both) : 0;
+    }
+
+    // `opts.pixelSize` ({W,H}) renders the SAME world framing into a buffer of
+    // exactly that width instead of the display's device-pixel one — what the
+    // high-res exporter needs. The scale factor S generalises devicePixelRatio:
+    // the shader's world↔fragment map only ever reads pxPerUnit/canvasSize as a
+    // ratio, so holding S in both keeps the frame fixed while the buffer grows.
+    // Absent, S is exactly (window.devicePixelRatio || 1) and every expression
+    // below is the one that was here before.
     function render(view, opts) {
       if (gl.isContextLost()) return;     // dead context — owner recreates on restore
       opts = opts || {};
-      const W = Math.max(1, Math.floor(view.cssW * (window.devicePixelRatio || 1)));
-      const H = Math.max(1, Math.floor(view.cssH * (window.devicePixelRatio || 1)));
+      const S = (opts.pixelSize && opts.pixelSize.W > 0 && view.cssW > 0)
+        ? (opts.pixelSize.W / view.cssW)
+        : (window.devicePixelRatio || 1);
+      const W = Math.max(1, Math.floor(view.cssW * S));
+      const H = Math.max(1, Math.floor(view.cssH * S));
       if (canvas.width !== W || canvas.height !== H) {
         canvas.width = W; canvas.height = H;
       }
@@ -1061,7 +1139,7 @@ void main() {
 
       // Uniforms.
       gl.uniform2f(U.viewCenter, view.cx, view.cy);
-      gl.uniform1f(U.pxPerUnit, view.scale * (window.devicePixelRatio || 1));
+      gl.uniform1f(U.pxPerUnit, view.scale * S);
       gl.uniform2f(U.canvasSize, W, H);
       gl.uniform1i(U.unbounded, phiState.unbounded ? 1 : 0);
       gl.uniform1i(U.family,    phiState.familyId);
@@ -1120,6 +1198,7 @@ void main() {
       setPhi,
       setColormap,
       render,
+      maxOutputSize,
       destroy,
       capacityError,
     };

@@ -695,11 +695,23 @@ view is active.
     MAX_K=8, MAX_LAURENT=12 (covers every shipped preset with
     headroom). Float32 precision — fine for iteration depths ≤ ~200
     at moderate zoom; for extreme zooms, switch to CPU mode or accept
-    minor banding.
+    minor banding. Its in-Ω test is a rasterised mask rather than the
+    CPU's exact polygon, and that mask must never claim membership for
+    a point ψ cannot invert — see
+    [`app/schwarz/README.md`](app/schwarz/README.md), *The in-Ω mask*.
   * **CPU** (fallback). Progressive 4×4 → 2×2 → 1×1 pyramid chunked
     across `requestAnimationFrame` ticks. Always available; used
     automatically when WebGL 2 is unavailable, when φ exceeds the
     GPU caps, or when explicitly selected.
+* **Export image** — writes the current view to a PNG at 1×/2×/4×/8× the
+  display size, in all three view modes. The field layer is genuinely
+  re-rendered at that size (not upscaled) and the 2D overlays are
+  re-drawn vector-crisp under a scale transform, so the result is a
+  figure rather than a big screenshot. The size is capped at the
+  renderer's own limit, and the status line says where the detail
+  actually comes from — a CPU field and the sphere's surface texture
+  cannot be sharpened by the multiplier and are labelled as upscaled.
+  See [`app/schwarz/README.md`](app/schwarz/README.md), *Image export*.
 * **Canvas** — pan (drag) and zoom (wheel) re-render the GPU frame
   every mousemove (~30 ms) so panning is interactive. **Double-click**
   a point in Ω to plot its orbit {w₀, σ(w₀), σ²(w₀), …}; single click

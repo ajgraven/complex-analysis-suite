@@ -79,9 +79,42 @@ float64 JS backend, `runGLSL(gl, ...)` runs it in a live WebGL2 context, and
 ready set of holomorphic, anti-holomorphic, rational, and transcendental cases; single-GLSL
 matches float64 JS to ≈1.5e-7 relative error across them.
 
+**Polygon mask** (`./mask`) — `polygonMaskFrame(polygon, padFactor)` gives the world-space
+square a mask covers; `buildPolygonMaskTexture(gl, polygon, opts)` rasterises the polygon into
+an R8 texture (1 inside, 0 outside, NEAREST + CLAMP_TO_EDGE) so a shader can classify a
+fragment against a region with one texture read instead of an O(n) crossing count.
+
+Two things about it are load-bearing, and both were learned the expensive way:
+
+* **`halfExtent` is a RESOLUTION figure, not a coverage one.** It is the bbox times
+  `padFactor`, so how much world the texture spans — hence how fine a texel is. A caller that
+  reads a world-space size off it (an escape radius, another texture's extent) couples that
+  size to the pad, and it shrinks silently the moment the pad is tuned. Quadrature Domains had
+  exactly that coupling in two places in its own equivalent.
+* **`conservativeOmega`** re-strokes the outline in the colour meaning NOT-in-Ω, so the
+  rasteriser's half-texel edge error is resolved *against* Ω. Pass it whenever a shader will
+  feed masked-in points to a **partial** function — an inverse map that exists only on part of
+  the plane. Where the mask and that function disagree, the shader asks about a point outside
+  the domain and gets a numerical failure back: measured on Complex Dynamics' σ view, 1.14% of
+  a 512² frame at 30× zoom, of which 99.9% traced to a point the mask called in-Ω where no
+  preimage existed, against 0 of 3000 control pixels. It costs a ≤1-texel bias of the boundary
+  — the accuracy the mask had anyway, now with a known sign. Omit it for a mask nothing
+  inverts through, and the classification keeps its unbiased error.
+
+A large pad is not headroom. A shader reads the mask only to classify, and out-of-`[0,1]` uv
+already classifies correctly, so every factor above ~1 is spent boundary resolution. Both known
+consumers measured this and dropped to 1.05; the default stays 4 for callers that have not.
+
 ## Tests
 
-`test/df64.test.ts` (the double-float ops vs. an IEEE reference) and
+`test/maskTexture.test.ts` (the mask frame's geometry, plus source guards bounding the
+conservative margin at ±1 texel — the GL upload half needs a WebGL2 context and a DOM, so the
+end-to-end assertions live in the consumer's browser suite: Complex Dynamics'
+`schwarzMask.browser.test.ts` pins zero invalid pixels, and `schwarzGL.browser.test.ts` pins the
+classification per pixel against the float64 CPU engine — the clause that stops "no invalid
+pixels" from being bought by over-dilating the mask. That second one bites once ∂Ω moves by about
+one screen pixel, 38.7× the margin shipped), `test/df64.test.ts` (the double-float ops vs. an IEEE
+reference) and
 `test/dualBackend.test.ts` (`buildProbeGLSL` / `jsReference` / `compareResults` in Node).
 `runGLSL` needs a real WebGL2 context (with `EXT_color_buffer_float` for float readback), so
 the end-to-end GPU leg is validated in a preview browser rather than headless Node.

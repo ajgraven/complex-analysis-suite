@@ -495,10 +495,25 @@ export function createSchwarzGLRenderer(): SchwarzGLRenderer | null {
     }
     if (escapeDegree < 2) escapeDegree = 2; // smooth's log(d) needs d ≥ 2; degree-1 escape isn't superattracting
     if (maskTex) ctx.deleteTexture(maskTex);
-    // padFactor 5: the unbounded exterior lets iterates wander well past ∂K before escaping (QD uses 5). A
-    // bounded Ω is compact, so a tighter pad keeps the mask's resolution on ∂Ω (QD uses 2.4 for a bounded
-    // interior — @cas/gpu maskTexture).
-    const m = buildPolygonMaskTexture(ctx, boundaryPoly, { padFactor: boundedOmega ? 2.4 : 5, size: 1024 });
+    // The mask is this shader's ONLY in-Ω test, and σ is PARTIAL: ψ = φ⁻¹ exists on φ(𝔻*) alone. Where the
+    // two disagree, sigma() is asked about a point outside its domain, Newton converges to a wrong-sheet
+    // preimage, and the pixel returns the flat grey "invalid" — speckle along ∂Ω and every σ-preimage of
+    // it, which is to say along every tile edge.
+    //
+    // It WAS measured here, on the cusped deltoid the browser suite already uses: at padFactor 5 / size
+    // 1024 a texel was 1.27e-2 world units and 1.14% of a 512² frame came back invalid at 30× zoom (0.55%
+    // at 1×), of which 99.9% reached a point the mask called in-Ω where no |z| > 1 preimage exists at all —
+    // against 0 of 3000 control pixels, and 0 from the float64 CPU field, which tests ∂Ω exactly.
+    //
+    // padFactor 1.05 buys back that resolution (a pad only has to keep the polygon off the CLAMP_TO_EDGE
+    // border), and conservativeOmega resolves the rasteriser's residual half-texel AGAINST Ω, so "the mask
+    // says in Ω" implies ψ exists. Ω is the exterior of ∂Ω for the unbounded-Laurent family and its
+    // interior for a bounded QD (S5-C2), which is exactly which side the stroke must protect.
+    const m = buildPolygonMaskTexture(ctx, boundaryPoly, {
+      padFactor: 1.05,
+      size: 1024,
+      conservativeOmega: boundedOmega ? "inside" : "outside",
+    });
     maskTex = m.texture;
     maskCenter = m.center;
     maskHalfExtent = m.halfExtent;

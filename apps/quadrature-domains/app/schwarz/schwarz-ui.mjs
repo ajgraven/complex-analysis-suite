@@ -191,7 +191,7 @@ const QD = _QD;
   // interaction install call them by name — see schwarz-features.js).
   let _recomputeDomainColoring, _rebuildPreimageTreeIfActive, _refreshPreimageTreeStats;
   let _computeLimitSet, _clearLimitSet, _recomputeCriticalOrbits, _findCycles;
-  let _exportPng, _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves;
+  let _exportPng, _refreshExportPreview, _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves;
 
   // ---------------------------------------------------------------------------
   // Lazy mount
@@ -272,6 +272,7 @@ const QD = _QD;
     root.appendChild(makeLimitSetCard());
     root.appendChild(makeAnalysisCard());
     root.appendChild(makeForwardCard());
+    root.appendChild(makeExportCard());
     root.appendChild(makeRenderCard());
     root.appendChild(makeInfoCard());
     // Mount-time placeholder for SphereView's display + camera cards. The
@@ -796,6 +797,41 @@ const QD = _QD;
   // S5: Forward-dynamics card. Bundles H7 (critical orbits), E11 (curve
   // forward-image), E10 (cycle finder), H8 (orbit sweep).
   // ---------------------------------------------------------------------------
+  // Image export. Its own card, and deliberately NOT `.view-2d`: the export covers
+  // the sphere view as well, and while it lived in the 2D-gated Dynamics card its
+  // control was simply absent in sphere mode — the one view whose export needed
+  // the most explaining.
+  function makeExportCard() {
+    const card = document.createElement('section');
+    card.className = 'card';
+    card.id = 'schwarz-export-card';
+    card.innerHTML = `
+      <h2>Export image</h2>
+      <label style="display:block; font-size:12px; margin:4px 0;">
+        Resolution:
+        <select id="schwarz-export-mult">
+          <option value="1">1× (display)</option>
+          <option value="2" selected>2×</option>
+          <option value="4">4×</option>
+          <option value="8">8×</option>
+        </select>
+        <button type="button" id="schwarz-export-png"
+                style="font-size:11px; margin-left:6px;">Export PNG</button>
+      </label>
+      <div id="schwarz-export-png-status" aria-live="polite"
+           style="font-size:11px; color:#555; margin:2px 0 0; line-height:1.35;"></div>
+    `;
+    setTimeout(() => {
+      // The preview keeps the output size and the honest-detail line in step with
+      // the multiplier, the view mode and the renderer, so the cap is visible
+      // before the click rather than discovered in the saved file.
+      card.querySelector('#schwarz-export-png').addEventListener('click', _exportPng);
+      card.querySelector('#schwarz-export-mult').addEventListener('change', _refreshExportPreview);
+      _refreshExportPreview();
+    }, 0);
+    return card;
+  }
+
   function makeForwardCard() {
     const card = document.createElement('section');
     card.className = 'card view-2d';
@@ -846,17 +882,6 @@ const QD = _QD;
           <button type="button" id="schwarz-sweep-clear"
                   style="font-size:11px; margin-left:4px;">Clear</button>
         </label>
-        <div style="font-size:12px; margin:8px 0 4px;"><b>Export PNG:</b></div>
-        <label style="display:block; font-size:12px; margin:4px 0;">
-          Multiplier:
-          <select id="schwarz-export-mult">
-            <option value="1">1× (display)</option>
-            <option value="2" selected>2×</option>
-            <option value="4">4×</option>
-          </select>
-          <button type="button" id="schwarz-export-png"
-                  style="font-size:11px; margin-left:6px;">Export PNG</button>
-        </label>
       </details>
     `;
     setTimeout(() => {
@@ -899,8 +924,6 @@ const QD = _QD;
         sState.sweepOrbits = null;
         paintBoundaryOnTop();
       });
-      // F8: PNG export
-      card.querySelector('#schwarz-export-png').addEventListener('click', _exportPng);
     }, 0);
     return card;
   }
@@ -909,6 +932,13 @@ const QD = _QD;
   // _computeSweep / _recomputeZPanelOrbit), σ level curves
   // (_recomputeLevelCurves), and high-res PNG export (_exportPng) ->
   // schwarz-features.js (Phase-3 item E).
+
+  // The export preview reports the view mode, the renderer and the field size, so
+  // it has to be refreshed whenever one of those moves — otherwise it goes on
+  // describing the picture the user was looking at a moment ago.
+  function refreshExportPreviewIfMounted() {
+    if (typeof _refreshExportPreview === 'function') _refreshExportPreview();
+  }
 
   function setViewMode(mode) {
     if (mode !== 'plane' && mode !== 'z' && mode !== 'sphere') return;
@@ -948,6 +978,7 @@ const QD = _QD;
     if (!sState.schwarz) { showGLLayer(false); clearCanvas(); return; }
     showGLLayer((mode === 'plane' || mode === 'z') && activeRenderer() === 'gpu');
     requestRecompute();
+    refreshExportPreviewIfMounted();
   }
 
   function _applyViewModeVisibility() {
@@ -1115,6 +1146,7 @@ const QD = _QD;
     setTimeout(() => {
       document.getElementById('schwarz-renderer').addEventListener('change', e => {
         sState.grid.renderer = e.target.value;
+        refreshExportPreviewIfMounted();
         showGLLayer(activeRenderer() === 'gpu');
         requestRecompute();
       });
@@ -1401,7 +1433,21 @@ const QD = _QD;
   // Canvas plumbing (we own the shared canvas while this tab is active).
   // ---------------------------------------------------------------------------
   function getCanvas() { return document.getElementById('canvas'); }
-  function getCtx()    { const c = getCanvas(); return c ? c.getContext('2d') : null; }
+
+  // Overlay-capture redirect. While non-null, EVERY painter that asks for the 2D
+  // context gets this one instead of the on-screen canvas's. The image exporter
+  // sets it to an offscreen context carrying a setTransform(mult) so the existing
+  // painters — which work in display-space coordinates and never touch the
+  // transform — draw vector-crisp at export size, with no change to any of them.
+  // Always cleared in a `finally`: leaving it set would silently send the live
+  // app's painting into a detached canvas.
+  let _overlayCaptureCtx = null;
+  function setOverlayCapture(ctx) { _overlayCaptureCtx = ctx || null; }
+
+  function getCtx() {
+    if (_overlayCaptureCtx) return _overlayCaptureCtx;
+    const c = getCanvas(); return c ? c.getContext('2d') : null;
+  }
 
   // Canvas interaction -> schwarz-interaction.js (Phase-3 item E). The drag
   // state + attachCanvasHandlers + the handlers below are installed near the
@@ -1553,9 +1599,10 @@ const QD = _QD;
   ({
     _recomputeDomainColoring, _rebuildPreimageTreeIfActive, _refreshPreimageTreeStats,
     _computeLimitSet, _clearLimitSet, _recomputeCriticalOrbits, _findCycles,
-    _exportPng, _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves,
+    _exportPng, _refreshExportPreview, _recomputeZPanelOrbit, _computeSweep, _recomputeLevelCurves,
   } = QD_UI.installSchwarzFeatures({
     sState, paintBoundaryOnTop, paintPreimageTree, paintLimitSet,
+    paintAll, paintOrbit, paintZView, setOverlayCapture,
     activeRenderer, getCtx, getCanvas,
   }));
 

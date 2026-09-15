@@ -2290,6 +2290,119 @@ enforces c_1 ≠ 0.
 
 In rough chronological order across recent sessions (newest first):
 
+66. **Schwarz image export: made high-resolution actually high-resolution (SHIPPED).**
+    The Export-PNG control had shipped with a 1×/2×/4× multiplier and did not do what
+    it said. Three defects and two limits, all measured in the real app before any
+    were touched.
+    * **1× SAVED A PICTURE WITH NO FRACTAL IN IT.** Both GL contexts are created with
+      `preserveDrawingBuffer: false`, so a composited canvas reads back empty —
+      measured **1 distinct colour against 26** (Schwarz) and **1 against 2858**
+      (sphere). The `mult > 1` path re-rendered first and survived; the `mult === 1`
+      path did not re-render and composited an empty buffer. There is no fast path
+      now: every multiplier renders synchronously and copies before yielding.
+    * **The export ignored the view mode.** The live render passes
+      `viewMode: inZ ? 'z' : 'w'` and picks `sState.zView`; the export passed
+      neither, so in the z-disk view it saved the PLANE at the PLANE's camera — a
+      different picture from the one on screen, and a plausible-looking one.
+    * **The overlays were a nearest-neighbour upscale**, which the old comment
+      admitted ("boundary lines will be 1-px regardless of multiplier"). They are
+      re-drawn now: `worldToPixel` is display-space and no painter touches the
+      transform, so ONE `setTransform(mult)` on a capture context (`getCtx()`
+      returns it while `setOverlayCapture` is armed) makes every existing painter
+      draw at size **with no change to any of them**. Measured by blockiness — a
+      nearest-neighbour N× upscale makes every pixel equal its N×N block's top-left
+      and scores **1.000**, the re-render scores **0.548**. Line WIDTH cannot check
+      this and the first attempt to use it duly reported ~4 for both, since a figure
+      drawn 4× bigger has 4× wider strokes either way.
+    * **No cap.** This container's GPU reports `MAX_VIEWPORT_DIMS` 8192; 4× on a
+      wide display exceeds it, and a request past the limit fails the render rather
+      than shrinking it. Both renderers gained `maxOutputSize()`, and the new
+      DOM-free `schwarz-export-plan.mjs` clamps against it — keeping the effective
+      multiplier FRACTIONAL, because snapping 5.12× down to 4× throws away
+      resolution the GPU was willing to give, and scaling both edges by the same
+      factor is what keeps the exported frame the frame on screen.
+    * **The control was unreachable in sphere view**, found by driving the real app:
+      it lived in the Dynamics card, which is `.view-2d`. It is now its own
+      un-gated **Export image** card — the sphere being the one view whose export
+      needs the most explaining.
+    * **Honest labelling.** `describeExportDetail` says where the detail comes from
+      rather than implying the multiplier applies to everything: a CPU escape-time
+      field only ever existed at the resolution slider's size, and the sphere's
+      fractal is a `texSize`-square texture on geometry (its silhouette and markers
+      DO sharpen; its surface does not). A live preview under the control shows the
+      output size, that label, and the cap when it binds — before the click.
+    * `render(view, opts)` gained `opts.pixelSize`: the same world framing into an
+      explicitly sized buffer. The scale factor S generalises `devicePixelRatio`
+      (the shader reads `pxPerUnit`/`canvasSize` only as a ratio), and with
+      `pixelSize` absent every expression is the one that was there before —
+      pinned by a test that the interactive buffer is still exactly
+      `floor(cssW · dpr)`.
+    * **Verified in the real app** (built, `vite preview`, Playwright): plane 1×
+      1152×950 and 4× 4608×3800, z-disk 2× 2304×1900, sphere 2× 2304×1900, each
+      with its preview line. Tests: `vitest/schwarz-export-plan.test.ts` (node — the
+      plan, the labels, and two source invariants: no painter touches the transform,
+      and the capture redirect is always cleared in a `finally`) and
+      `vitest/browser/schwarz-export.browser.test.ts` (real GLSL — the readback
+      window asserted from BOTH sides, `pixelSize`, the cap, the sphere, and the
+      crispness measurement with its upscale control, which must read 1.000 or the
+      metric is not measuring what it claims).
+
+65. **Schwarz GPU: the salmon speckle on tile boundaries was the MASK, not Newton (SHIPPED).**
+    The fractal view scattered `KIND_INV` "bad pixel" dots — `rgb(180,90,90)` — along
+    ∂Ω and every tile boundary. Entry 11 below read the same symptom as a Newton
+    convergence problem and widened `acceptZ` from `1e-7` to `1e-4` to damp it. That
+    diagnosis was wrong, and the widening became a second, smaller cause.
+    * **Measured, in the real shader** (deltoid `h = w²`, unbounded, `c = 0.5` — the
+      extremal cusped domain, `φ′ = 0` exactly on `|z| = 1`): 796 of 810,000 pixels.
+      Instrumenting `sigma()` with per-failure reason codes: **776 (97.5%) converged to
+      a preimage with `|z| ≤ 1`** — the wrong sheet; 20 (2.5%) converged into the `1e-4`
+      dead band; and **zero** diverged, hit the `z ≈ 0` guard, or went non-finite.
+      Newton never fails here. The CPU (float64, exact polygon test) reports 0.
+    * **Root cause: two inconsistent definitions of Ω.** `inOmega()` is a rasterised
+      polygon mask; `ψ = φ⁻¹` is exact and exists only on `φ(𝔻*)`. At `padFactor 5.0`
+      a mask texel was **3.17e-3 world units**, so the two disagree in a band along ∂Ω.
+      Emulating the mask in float64 and deciding preimage existence from exact cubic
+      roots: **723 of 796 (90.8%)** of the dots reach an orbit point the mask calls
+      "in Ω" where `φ(z) = w` has **no root with `|z| > 1` at all** — against **0 of
+      3000** control pixels. The shader was asking σ for points outside σ's domain and
+      painting the correct refusal as a numerical failure. The dots land on tile
+      boundaries because the tiles ARE `σ⁻ⁿ(∂Ω)`: failing pixels' orbits reach
+      `|z| − 1 ≈ 3.6e-3` (median) against 2.44 for the control.
+    * **It got worse on zoom** — the mask's error is fixed in world units while the
+      screen pixel shrinks: 796 / 2,125 / 2,764 dots at 1× / 6× / 30×.
+    * **Fix, in `buildMaskTexture`.** (a) `MASK_PAD = 1.05` replaces `padFactor` 5.0 /
+      2.4: the pad exists only to keep the polygon off the CLAMP_TO_EDGE border —
+      `inOmega()` already answers correctly outside the texture — so the rest was
+      thrown-away resolution (texel 3.17e-3 → 6.6e-4). (b) The outline is re-stroked
+      in the NOT-in-Ω colour (white for unbounded, where the polygon is K; black for
+      bounded, where it is Ω), so the rasteriser's own half-texel error resolves
+      AGAINST Ω and "the mask says in Ω" now implies "ψ exists". (c) `acceptZ`'s band
+      `1e-4 → 1e-6`: measured against the float64 engine, float32 Newton's error in
+      `|z|` is p99 **2.1e-7**, so the old band was ~485× the noise it absorbed.
+    * **Decoupling.** The mask's half-extent is now a RESOLUTION figure, so both
+      renderers stopped reading world sizes off it: the fallback `escapeR` comes from
+      the polygon's own half-extent (`ESCAPE_R_FACTOR = 30.0` reproduces the old
+      `5.0 × 6.0`), and `sphere-webgl.mjs`'s **fractal texture w-extent** — which was
+      literally `maskHalfExtent[0]` — keeps its own `coverFactor` of 5.0 / 2.4. Missing
+      this would have shrunk the sphere view's coverage 4.8× in silence.
+    * **Result, scored against the float64 engine** (exact polygon + exact ψ, no mask):
+      0 dots at every zoom on both the deltoid and the bounded cardioid, and agreement
+      UP — 99.896% → 99.992% at 1×, 99.588% → 99.750% at 6×. Dilating alone at the old
+      pad went the other way (98.866% at 6×), which is why the regression test pins
+      agreement as well as the dot count.
+    * **A correction to the label.** `describeKind(KIND_INV)` said *"Newton diverged"*,
+      which the reason-code measurement shows is false. It now reads *"σ undefined here
+      (ψ found no admissible preimage)"*. The class is deliberately KEPT and still
+      painted: it should not arise under a conservative mask, and if it ever does it
+      must stay visible.
+    * **Tests.** `vitest/browser/schwarz-mask.browser.test.ts` (3 specs, browser suite —
+      real GLSL) pins zero `KIND_INV` at 1× / 6× / 30× on the deltoid, zero on the
+      bounded cardioid (the eroding side of the margin), and GPU↔CPU class agreement
+      floors placed to reject BOTH the old mask and an over-dilated one. Verified to
+      fail on the pre-fix tree. Two source-contract specs in
+      `vitest/schwarz-shader-parity.test.ts` guard the `acceptZ` band and the mask's
+      conservatism from the NODE gate, since CI's browser job does not block a merge.
+
 64. **QOL pass — design tokens, responsive layout, copy-link, feedback (SHIPPED).**
     A focused, practitioner-first UI quality pass after a 3-agent review of the
     whole app. (The full prioritized review report lives in the plan file
@@ -5249,7 +5362,11 @@ In rough chronological order across recent sessions (newest first):
    verify σ ≈ id on ∂Ω at machine precision for every LQD family
    (358 total tests passing).
 
-11. **Schwarz GPU robustness pass** (post-shipping speckle fix). The first
+11. **Schwarz GPU robustness pass** (post-shipping speckle fix). *Partly superseded
+   by entry 65 above: the "wrong root's basin" reading below is right about the
+   mechanism but wrong about the cause — the seed was not the problem, the in-Ω mask
+   was asking ψ to invert points with no preimage. The `1e-7 → 1e-4` widening here
+   became a second cause and is now `1e-6`.* The first
    GPU build showed scattered single-pixel noise even in clearly-uniform
    tiles. Root cause was twofold: (a) Newton convergence and final-validation
    tolerances in the fragment shader were copied from the CPU (float64)

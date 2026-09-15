@@ -42,12 +42,118 @@ The last four are the Phase-3 (item E) factory-module split of the former
 | **GPU** (`createGPURenderer`) | Default when WebGL 2 + caps OK. | Full 1024² frame at `maxIter=128` in ~150 ms. Float32 precision; banding at zoom > 1e6. |
 | **CPU** (`escapeTime` per pixel) | Fallback when no WebGL 2, caps exceeded, or explicitly chosen in the UI. | Progressive 4×4 → 2×2 → 1×1. Computed off-thread in `QD.SchwarzCpuWorker` when available (one transferable field snapshot per pass), else in-page chunked across `requestAnimationFrame` ticks. Always available. |
 
+### The in-Ω mask, and the invariant it has to keep
+
+The two paths answer *"is w ∈ Ω?"* differently, and that difference is load-bearing.
+The CPU tests the sampled ∂Ω polygon exactly (`pointInPolygonIndexed`); the GPU cannot
+walk a 1024-gon per fragment per iterate, so `inOmega()` reads a **rasterised R8 mask**
+built once per φ by `buildMaskTexture`. A mask texel is a finite world distance, so the
+mask is an approximation of ∂Ω — but `ψ = φ⁻¹` is **exact**, and exists only on `φ(𝔻*)`
+(unbounded) / `φ(𝔻)` (bounded). The invariant the shader depends on is therefore:
+
+> **the mask says "in Ω"  ⟹  ψ has an admissible preimage.**
+
+Break it and `sigma()` is asked for a point outside σ's domain. Newton does not diverge
+there — it converges, to a preimage on the **wrong sheet**, `acceptZ` correctly refuses
+it, and the pixel comes back `kind: 'invalid'`. Because the tiles are `σ⁻ⁿ(∂Ω)`, an orbit
+grazing ∂Ω is exactly a pixel *on a tile boundary*, so the failures read as speckle along
+every tile edge — and get worse zoomed in, the mask's error being fixed in world units
+while the screen pixel shrinks. (Measured on the cusped deltoid: 796 / 810,000 pixels at
+1×, 2,764 at 30×, of which 90.8% reached an orbit point with no `|z| > 1` preimage at all.
+HANDOFF entry 65.)
+
+`buildMaskTexture` keeps the invariant with two properties, and both are required:
+
+* **Resolution.** The mask spans the polygon's bbox × `MASK_PAD` (1.05) and no more. The
+  pad exists only so the polygon cannot touch the `CLAMP_TO_EDGE` border — `inOmega()`
+  already answers correctly for any uv outside `[0,1]` — so any larger factor is spent
+  precision. Its half-extent is consequently a **resolution** figure: a caller needing a
+  world size (an escape radius; the sphere view's fractal coverage) must take
+  `polyHalfExtent` and apply its own factor.
+* **Conservatism.** After the fill the outline is re-stroked in the colour that means
+  NOT-in-Ω — white when the polygon is K (unbounded), black when it is Ω (bounded) — so
+  the rasteriser's own half-texel error is resolved *against* Ω. The cost is a ≤1-texel
+  outward bias of ∂Ω, which is the accuracy the mask had in any case; the fix gives it a
+  known sign. (A Canvas-2D path fill is anti-aliased and `imageSmoothingEnabled` does not
+  change that — it governs `drawImage` — so the fill's own edge is ~½ a texel wide.)
+
+`kind: 'invalid'` is deliberately kept and still painted (`rgb(180,90,90)`): under a
+conservative mask it should not arise, and must stay visible if it ever does. It does NOT
+mean "Newton diverged" — measured, Newton never did.
+
+Both properties are pinned by
+[`vitest/browser/schwarz-mask.browser.test.ts`](../../vitest/browser/schwarz-mask.browser.test.ts),
+which runs the real GLSL and asserts zero `invalid` pixels *and* class agreement with the
+float64 engine — the second clause because zero is also what a grossly over-dilated mask
+gives, and that answer is wrong. Two source-contract specs in
+[`vitest/schwarz-shader-parity.test.ts`](../../vitest/schwarz-shader-parity.test.ts) guard
+the stroke and `acceptZ`'s band from the node gate, since CI's browser job does not block.
+
 CPU↔GPU parity (for the six classical/LQD families; the four PQD families
 are CPU-only): both adapters consume the same `phi` shape (with the
 `lqdBeta`/`lqdGamma` fields carried through for unbounded LQDs).
 HANDOFF #26 added 5 round-trip tests asserting σ(w) ≈ w on ∂Ω at
 3e-13 for the previously-broken unbounded-LQD polyPart case; those
 live in [`app/node-test.js`](../node-test.js).
+
+## Image export (high resolution)
+
+The **Export image** card writes the current view to a PNG at 1× / 2× / 4× / 8× the
+display size, for all three view modes. It is its own card, deliberately NOT
+`.view-2d`: the export covers the sphere as well, and while it lived inside the
+2D-gated Dynamics card its control was simply absent in sphere mode.
+
+Three properties it has to hold, each measured rather than assumed:
+
+* **Re-render, always.** Both GL contexts are created with
+  `preserveDrawingBuffer: false`, so a canvas that the browser has composited reads
+  back EMPTY — measured 1 distinct colour against 26 (Schwarz) and 1 against 2858
+  (sphere). The export therefore renders synchronously and copies before yielding,
+  at *every* multiplier. There is no re-render-free fast path; the one that used to
+  exist at 1× is what made "1× (display)" save a picture with no fractal in it.
+  Anything between the render and the `drawImage` — an `await`, a `toBlob`
+  callback — loses the frame.
+* **The view mode is part of the frame.** The z-disk view has its own camera
+  (`sState.zView`) and its own shader branch (`viewMode: 'z'`); passing neither
+  exports the plane at the plane's camera, which looks entirely plausible and is a
+  different picture from the one on screen.
+* **Overlays are re-drawn, not upscaled.** This is the difference between a
+  high-resolution export and a big screenshot. `worldToPixel` yields display-space
+  coordinates and no painter touches the transform, so ONE `setTransform(mult)` on
+  a capture context makes every existing painter draw vector-crisp at size with no
+  change to any of them — `getCtx()` returns that context while
+  `setOverlayCapture` is armed (and a `finally` always disarms it, since leaving it
+  set would send the live app's painting into a detached canvas). The painters
+  clear their whole canvas, so the overlay gets its own layer composited over the
+  field. Measured by blockiness — a nearest-neighbour N× upscale makes every pixel
+  equal its N×N block's top-left, scoring 1.000, where the re-render scores 0.548.
+  Note that line *width* cannot check this: a figure drawn 4× bigger has 4× wider
+  strokes either way.
+
+`schwarz-export-plan.mjs` is the DOM-free half — the size plan and the honest
+label — so the node gate can hold both. The size is capped at the renderer's own
+`maxOutputSize()` (`MAX_VIEWPORT_DIMS` / `MAX_RENDERBUFFER_SIZE`), because a
+request past it fails the render rather than shrinking it; the effective
+multiplier stays fractional so the exported frame keeps the aspect ratio on screen.
+
+What cannot be sharpened is said rather than implied: a CPU escape-time field
+exists only at the resolution slider's size and is upscaled into the export, and
+the sphere's fractal arrives as a `texSize`-square texture mapped onto geometry —
+its silhouette, boundary curve and markers do sharpen with the frame, its surface
+detail does not. The card's status line names the real numbers in both cases, and
+reports the cap when it binds.
+
+> **The same defect class lives in `@cas/gpu`'s shared mask**, which Complex Dynamics' σ view
+> uses. It was measured after this fix landed — 1.14% of a 512² frame at 30× zoom, 99.9% of it
+> tracing to the same contradiction — and closed there with a `conservativeOmega` option on
+> `buildPolygonMaskTexture`. QD keeps its own builder (this file); the shared one is not a
+> second consumer of it, only of the idea.
+
+Tests: [`vitest/schwarz-export-plan.test.ts`](../../vitest/schwarz-export-plan.test.ts)
+(node — the plan, the labels, and the two source invariants the design rests on) and
+[`vitest/browser/schwarz-export.browser.test.ts`](../../vitest/browser/schwarz-export.browser.test.ts)
+(real GLSL — the readback window, `pixelSize`, the cap, the sphere, and the
+overlay-crispness measurement with its upscale control).
 
 ## Source-φ capture (P0.1a integration)
 

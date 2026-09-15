@@ -95,7 +95,7 @@ pnpm build
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
-Green is **551 test files / 5692 tests** with lint and typecheck silent. `pnpm lint` includes
+Green is **552 test files / 5700 tests** with lint and typecheck silent. `pnpm lint` includes
 `pnpm dep:check` (dependency-cruiser). `pnpm test` builds the `packages/*` dists first, so a clean
 clone can run it directly. Two suites behave unusually: the Quadrature-Domains maths runs as a
 separate headless runner wrapped as one Vitest spec (`node app/node-test.js`), and `packages/ui` plus
@@ -109,12 +109,19 @@ Dev servers go through `.claude/launch.json` (one entry per app, each with its p
 
 **The browser suites are NOT in `pnpm test`** and must be run deliberately — `pnpm test:browser` in
 the app that has one (contour-integration, complex-dynamics, complex-function-plotter, quadrature-domains,
-`packages/gpu`). They compile real GLSL and need a Chromium; where Playwright's pinned build is absent,
-`apps/contour-integration/vitest.browser.config.ts` reads `CAS_CHROMIUM_EXECUTABLE`, so
-`CAS_CHROMIUM_EXECUTABLE=/opt/pw-browsers/chromium pnpm test:browser` works in a container that has one
-under a different version. **Run it when a slice adds a record or touches the stage:** the contour-integration
+`packages/gpu`, `packages/schwarz`). They compile real GLSL and need a Chromium, and Playwright pins an
+exact build that `pnpm install` does not fetch, so a container holding one under a different version
+cannot launch the provider at all. Four of the six configs say so: contour-integration reads
+`CAS_CHROMIUM_EXECUTABLE`, quadrature-domains probes `/opt/pw-browsers/chromium`, and complex-dynamics
+and `packages/gpu` take both in that order. **complex-function-plotter and `packages/schwarz` still take
+neither, so their suites cannot run in such a container** — unify them when one is next touched.
+**Run it when a slice adds a record or touches the stage:** the contour-integration
 browser suite was red for three milestones on a hardcoded record count, and the node gate structurally
-cannot see it.
+cannot see it. Anything about a shader's NUMBERS belongs there too — QD's Schwarz in-Ω mask claimed
+membership for points its exact ψ could not invert, and Complex Dynamics' σ view carried the same defect
+through the SHARED `@cas/gpu` mask; neither is reachable from the node gate, which never compiles the
+GLSL (`apps/quadrature-domains/vitest/browser/schwarz-mask.browser.test.ts`,
+`apps/complex-dynamics/test/schwarzMask.browser.test.ts`).
 
 **Line endings are LF everywhere**, enforced by `.gitattributes`. The index was always LF; before
 that file existed, a Windows checkout produced a CRLF working tree and two gate tests failed locally
@@ -278,6 +285,28 @@ Still open: **U7** (wire the nav header's hand-off picker to `@cas/interchange`'
 cross-app interop becomes user-visible). Two correctness guards also landed this arc: a **convention-neutral**
 scan over `@cas/core` (ADR-0006 AI-2) and a **Schwarz σ differential** guard between QD's engine and `@cas/schwarz`
 (ADR-0026 AI-2).
+
+**The σ mask defect, now closed on BOTH sides of it (QD #337, then `@cas/gpu` + Complex Dynamics).** QD's
+Schwarz view had salmon speckle along every tile boundary; the cause was not Newton but the in-Ω test. A
+rasterised polygon mask is an APPROXIMATION of ∂Ω while ψ = φ⁻¹ is exact and **PARTIAL** — it exists on
+φ(𝔻*) alone — so inside the band where the two disagree the shader asks σ about a point outside its
+domain, Newton converges to a WRONG-SHEET preimage, and the pixel is painted as a numerical failure. It
+iterates, so it lands on ∂Ω and on every σ-preimage of ∂Ω. Two things fix it and neither is a tolerance:
+drop the pad (a pad is not headroom — out-of-`[0,1]` uv already classifies correctly, so every factor
+above ~1 is spent boundary resolution), and re-stroke the outline in the colour meaning NOT-in-Ω so the
+rasteriser's own half-texel error is resolved AGAINST Ω. Complex Dynamics' σ view rides the SHARED
+`@cas/gpu` mask and had the same defect — measured, 1.14% of a 512² frame at 30× zoom, 99.9% of it points
+with no `|z| > 1` preimage at all (exact cubic roots, so non-existence rather than a search that gave up),
+against 0 of 3000 control pixels — closed by a `conservativeOmega` option on `buildPolygonMaskTexture`.
+**And fixing it broke a test that the defect had been satisfying.** `schwarzGL.browser.test.ts`'s
+pole-bearing case asserted `distinctColors > 1`, "structure, not a flat fill" — but that φ's σ field is
+exactly two classes at every zoom (K and the first tile; every point of Ω enters K in ONE step), and the
+linear ramp paints both at `t = 0` correctly, so its honest frame IS flat and the assertion had been
+passing on two stray `invalid` pixels. It is now a per-pixel parity check against the float64 CPU engine
+under the sqrt ramp, which also supplies the anti-vacuity clause the deltoid could not — "no invalid
+pixels" is no longer buyable by over-dilating the mask until Ω is gone. Measured by widening the stroke:
+the check bites once ∂Ω moves by about one SCREEN pixel, 38.7× the margin shipped. QD's own high-resolution
+Schwarz export (#338) landed alongside.
 
 **`apps/contour-integration`** (2026-09): a sandbox and 28-integral worked-example gallery for contour
 integration and the residue theorem, including the evaluation of real definite integrals in closed
