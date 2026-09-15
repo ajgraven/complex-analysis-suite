@@ -128,6 +128,21 @@ export class GLStage {
     gl.bindVertexArray(null);
   }
 
+  /**
+   * Blank the portrait to the ground colour.
+   *
+   * For a parse failure. **Leaving the last good portrait up is the worst of both**: the reader is
+   * told the expression is broken while looking at a picture of something else, and the picture is
+   * the more convincing of the two. The colour is `--g-ground`'s, stated here because a GL clear
+   * cannot read a CSS variable.
+   */
+  clear(): void {
+    const { gl } = this;
+    gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    gl.clearColor(0x0f / 255, 0x11 / 255, 0x15 / 255, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
   dispose(): void {
     const { gl } = this;
     if (this.program) gl.deleteProgram(this.program);

@@ -14,11 +14,13 @@ import { attachCanvasA11y, mountNavHeader } from "@cas/ui";
 
 import { circleTemplate } from "../engine/contour/templates.js";
 import { compile, defaultState, resolveState, type Compiled, type ShellState, type StateResolution } from "../shell/state.js";
-import { GLStage } from "../ui/stage/glStage.js";
-import type { Viewport } from "../kernel/camera.js";
+import type { PoleReport } from "../kernel/poles.js";
+import type { StageDraw } from "./stageView.js";
 import { patch, h } from "./dom.js";
-import { render } from "./render.js";
+import { render, type ShellActions } from "./render.js";
 import { defaultSession, resetTransient, type Session } from "./session.js";
+import { createStageController, type StageController } from "./stageController.js";
+import { createStageView } from "./stageView.js";
 
 /** A mounted shell, from the outside — the same two functions the old shell exposes. */
 export interface Shell2Handle {
@@ -26,6 +28,17 @@ export interface Shell2Handle {
   readonly applyState: (next: ShellState) => void;
   /** The live session. Tests and later steps read it; a permalink never sees it. */
   readonly session: () => Session;
+  /**
+   * What the current state resolved to — the ledger, the run, or the reason there is neither.
+   *
+   * The cards read it through `render`; this is for a test that needs to know what was COMPUTED
+   * rather than what was drawn. The draft evaluation budget, for one, is visible nowhere else: it
+   * changes a quadrature's node count, which a card will print at step 1.5 and nothing prints today.
+   */
+  readonly resolution: () => StateResolution;
+  /** The stage's gesture machine — the pen's buttons, `fitContour`, what is held. */
+  readonly stage: () => StageController;
+  readonly destroy: () => void;
 }
 
 /** Why a commit happened. Read by the undo stack (1.11) and the budget choice below. */
@@ -33,9 +46,6 @@ export type CommitReason = "init" | "edit" | "gesture" | "gesture-end" | "link";
 
 /** The work ceiling while a gesture is live — the old shell's number, so the two behave alike. */
 const DRAFT_EVALUATIONS = 768;
-
-/** How many modulus contours `iso: true` means. The reader picks a count at step 1.2. */
-const ISO_CONTOURS = 8;
 
 export function mountShell2(root: Element): Shell2Handle {
   const session = defaultSession();
@@ -50,7 +60,7 @@ export function mountShell2(root: Element): Shell2Handle {
   // shell puts site navigation inside the page's one landmark AND makes it the last thing a screen
   // reader reaches, while `position: fixed` draws it at the top.
   const navHost = document.createElement("div");
-  navHost.className = "navHost";
+  navHost.className = "shell2Nav";
 
   const shell = document.createElement("main");
   shell.className = "shell2";
@@ -68,13 +78,8 @@ export function mountShell2(root: Element): Shell2Handle {
   const strip = document.createElement("footer");
   strip.className = "strip2";
 
-  const glCanvas = document.createElement("canvas");
-  glCanvas.className = "gl";
-  const inkCanvas = document.createElement("canvas");
-  inkCanvas.className = "ink";
   const accCanvas = document.createElement("canvas");
   accCanvas.className = "acc";
-  stageWrap.append(glCanvas, inkCanvas);
   strip.append(accCanvas);
   shell.append(bar, left, stageWrap, right, strip);
   root.replaceChildren(navHost, shell);
@@ -82,63 +87,37 @@ export function mountShell2(root: Element): Shell2Handle {
 
   // --- the stage ------------------------------------------------------------------------------
   //
-  // Inside a `try`, as the old shell does: jsdom has no WebGL2 and neither does a driver without it,
-  // and the whole rest of the shell is ordinary DOM that works without a portrait. `main.ts`'s fatal
-  // boundary catches anything else.
-  let stage: GLStage | null = null;
-  let stageError: string | null = null;
-  try {
-    stage = new GLStage(glCanvas);
-  } catch (e) {
-    stageError = e instanceof Error ? e.message : String(e);
-  }
+  // Three layers and a gesture machine, both in their own modules (step 1.3). `createStageView`
+  // builds the canvases inside the host and handles WebGL2's absence; the controller owns the
+  // pointer, the wheel and the keyboard, and talks back through `commit` alone.
+  const stageView = createStageView(stageWrap);
+  const glCanvas = stageView.gl;
+  const inkCanvas = stageView.ink;
 
-  const viewport = (): Viewport => ({
-    width: stageWrap.clientWidth || 1,
-    height: stageWrap.clientHeight || 1,
-  });
+  /** The poles to mark: a record's come from its run, the sandbox's from the cached compile. */
+  const polesNow = (): PoleReport | null => {
+    if (resolution.kind === "gallery") return resolution.run?.poles ?? null;
+    return compiled?.ok === true ? compiled.poles : null;
+  };
 
-  /** The integrand the portrait is currently built for, so the program is not relinked per frame. */
-  let stageKey: string | null = null;
-
-  function drawStage(): void {
-    if (stage === null) return;
-    // Only `plain` and `declared` carry an AST the portrait can be built from; a gallery record's
-    // comes from its run (1.6's work). Until then the stage shows the sandbox's, which is what the
-    // default state is.
-    const ast = resolution.kind === "plain" ? resolution.ast : null;
-    if (ast === null) return;
-    const key = state.expr;
-    if (key !== stageKey) {
-      stage.setIntegrand(ast);
-      stageKey = key;
-    }
-    // `ShellState.iso` is a boolean toggle; the stage takes a contour COUNT, so `true` means the
-    // default density. Kept explicit rather than cast, because the two are genuinely different
-    // types and the conversion is a decision (step 1.2 gives the reader the count).
-    stage.render(state.view, viewport(), state.iso === true ? { iso: ISO_CONTOURS } : {});
-  }
-
-  /** One rAF coalescer, as the old shell has: a drag asks to draw far more often than it can. */
-  let pending = 0;
-  function scheduleDraw(): void {
-    if (pending !== 0) return;
-    pending = requestAnimationFrame(() => {
-      pending = 0;
-      drawStage();
-    });
-  }
+  const drawState = (): StageDraw => ({ state, resolution, session, poles: polesNow() });
+  const scheduleDraw = (): void => stageView.schedule(drawState);
 
   // --- the one door ---------------------------------------------------------------------------
+
+  let controller: StageController | null = null;
+
+  /** What a rendered control may call. The closure is never handed out; these are. */
+  const actions: ShellActions = { fitContour: () => controller?.fitContour() };
 
   function commit(next: ShellState, why: CommitReason): void {
     if (next.expr !== state.expr) compiled = compile(next.expr);
     state = next;
     // A draft budget while a gesture is live and the full one on settle — the plan's rule. At 1.1
     // nothing drags yet, so this is the shape rather than an optimisation already earning its keep.
-    const draft = session.gesture !== "none" || why === "gesture";
+    const draft = session.gesture !== "none" || session.scrubbing || why === "gesture";
     resolution = resolveState(state, compiled, draft ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined);
-    const out = render(state, resolution, session);
+    const out = render(state, resolution, session, actions);
     shell.dataset.left = out.rails.left;
     shell.dataset.right = out.rails.right;
     patch(bar, out.bar);
@@ -153,12 +132,22 @@ export function mountShell2(root: Element): Shell2Handle {
   // a static `role="img"`. Both descriptions become generated sentences at 1.2 and 1.9 — here they
   // are named so that the four structural invariants hold from the first commit rather than being
   // fixed at the end of Phase 1.
-  attachCanvasA11y(inkCanvas, {
+  const stageA11y = attachCanvasA11y(inkCanvas, {
     label: "the complex plane, with the contour drawn over a phase portrait of the integrand",
     role: "application",
     render: glCanvas,
     liveRegionHost: stageWrap,
-    onKey: () => {},
+    onKey: (action, ev) => controller?.onCanvasKey(action, ev),
+  });
+
+  controller = createStageController({
+    view: stageView,
+    getState: () => state,
+    getSession: () => session,
+    getPoles: polesNow,
+    commit: (next, why) => commit(next, why),
+    redraw: scheduleDraw,
+    announce: (message) => stageA11y.announce(message),
   });
   attachCanvasA11y(accCanvas, {
     label: "the running partial sum of f(z) dz along the contour",
@@ -166,10 +155,13 @@ export function mountShell2(root: Element): Shell2Handle {
   });
 
   commit(state, "init");
-  if (stageError !== null) {
-    // Said in the rail rather than thrown: the shell works without a portrait, and a reader who
+  if (stageView.glError !== null) {
+    // Said in the bar rather than thrown: the shell works without a portrait, and a reader who
     // cannot see one should be told why rather than shown an empty box.
-    patch(bar, [...render(state, resolution, session).bar, h("span", { key: "glerr", class: "placeholder" }, stageError)]);
+    patch(bar, [
+      ...render(state, resolution, session, actions).bar,
+      h("span", { key: "glerr", class: "placeholder" }, stageView.glError),
+    ]);
   }
 
   // The stage has no size until layout runs, so the first draw would be at 1×1 without this.
@@ -182,8 +174,20 @@ export function mountShell2(root: Element): Shell2Handle {
       // M7.4's decision, structural here: a restored state inherits no half-drawn path, no grading
       // that would unmask a rung's own answer, and no hover pointing at a piece it does not have.
       resetTransient(session);
+      // The session's transient fields are cleared by `resetTransient`; the CONTROLLER's are not,
+      // because they are its own locals — M7.4's defect, answered at the door rather than trusted to
+      // be remembered. A restored state must not arrive holding a handle from a contour it lacks.
+      controller?.reset();
       commit(next, "link");
     },
     session: () => session,
+    resolution: () => resolution,
+    /** The gestures, for the cards that drive them (the pen's buttons at step 1.4) and for tests. */
+    stage: () => controller as StageController,
+    destroy: () => {
+      controller?.destroy();
+      stageView.destroy();
+      observer?.disconnect();
+    },
   };
 }

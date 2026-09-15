@@ -14,6 +14,13 @@
   --strip2: 12rem;
 }
 
+/* The nav's host. Its own name rather than the old shell's `.navHost`, for the reason at the foot
+   of this file; `display: contents` because `.cas-nav` is `position: fixed` and the host occupies
+   nothing. */
+.shell2Nav {
+  display: contents;
+}
+
 .shell2 {
   display: grid;
   /* **The suite nav is `position: fixed` and publishes its own height as `--cas-nav-h`.** A shell
@@ -60,6 +67,11 @@
   border-bottom: 1px solid var(--g-border);
 }
 
+/* The bar's controls sit at its right end, away from the title. */
+.shell2 > .bar2 > .barBtn {
+  margin-left: auto;
+}
+
 /* ---- rails ---- */
 .shell2 > .rail2 {
   overflow: auto;
@@ -93,6 +105,23 @@
   display: block;
 }
 
+/* **The INK canvas is the one that takes the pointer.**
+ *
+ * `app.css` carries an UNSCOPED `.ink { pointer-events: none }` — correct for the old shell, whose
+ * gestures land on a separate `.overlay` div, and silently wrong here, where the controller puts its
+ * listeners on the ink canvas itself. `index.html` loads both sheets, so the old shell's rule reached
+ * into the new one and the whole stage was dead to a real mouse: every gesture test dispatches
+ * straight at the canvas and so could not see it, and only a probe with a real pointer did.
+ *
+ * The GL layer is DATA and `aria-hidden`; it must never take a click, or the pointer lands on the
+ * layer that has no idea what a contour is. */
+.shell2 > .stage2 > canvas.ink {
+  pointer-events: auto;
+}
+.shell2 > .stage2 > canvas.gl {
+  pointer-events: none;
+}
+
 /* ---- strip ---- */
 .shell2 > .strip2 {
   grid-area: strip;
@@ -107,4 +136,77 @@
   width: 100%;
   height: 100%;
   display: block;
+}
+
+/* ---- the stage's overlay ----
+ *
+ * Transient text only — the snap name and what the arrows hold. Anything that belongs in an exported
+ * figure is drawn on the ink canvas instead, which is why the pole rings moved there at step 1.3.
+ * `pointer-events: none` throughout: the overlay sits above the ink canvas and would otherwise eat
+ * every gesture the controller exists to handle.
+ *
+ * **`stageChip`, not `chip`** — see the collision block at the foot of this file. */
+.shell2 > .stage2 > .overlay2 {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.shell2 .overlay2 .stageChip {
+  position: absolute;
+  /* Offset up and right of the point, so the chip never covers the thing it names. */
+  transform: translate(0.6rem, -1.6rem);
+  white-space: nowrap;
+  font-size: var(--t-xs);
+  line-height: 1;
+  padding: 0.22rem 0.4rem;
+  border-radius: 4px;
+  background: var(--g-panel);
+  border: 1px solid var(--g-border);
+  color: var(--g-text);
+}
+/* The snap chip is the one that says a vertex MOVED, so it carries the accent rather than blending
+   into the chrome — research 07 rule 5 is about being noticed. */
+.shell2 .overlay2 .stageChip.snap {
+  border-color: var(--g-accent);
+  color: var(--g-accent);
+}
+.shell2 .overlay2 .readout {
+  position: absolute;
+  right: 0.5rem;
+  bottom: 0.5rem;
+  font-size: var(--t-xs);
+  color: var(--g-muted);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The old sheet's unscoped rules, cancelled.
+
+   **Scoping `theme.css` under `.shell2` protects the OLD shell from the NEW rules and does nothing
+   in the other direction** — step 1.2's comment states only the first half, and this step found the
+   second half twice in one afternoon. `index.html` loads `app.css` for both shells, and its rules
+   are unscoped, so anything the new shell names the same way inherits them.
+
+   Measured: eight classes collide — `.num`, `.small`, `.muted`, `.badge`, `.chip`, `.gl`, `.ink`,
+   `.navHost`, `.expr`. Two were repaired by RENAMING, because the old meaning is a different thing
+   entirely: `.chip` is the old shell's 9 × 9 colour swatch, which collapsed the stage's snap chip to
+   a 9 px square with its text spilling out (found in a browser; every node test reads `textContent`,
+   which does not have a width), and `.navHost` is the old shell's. The rest mean the SAME thing in
+   both shells, so they are cancelled here rather than renamed — the old rule's extras are what leak,
+   not its intent.
+
+   This whole block goes away at step 1.12 with `app.css`. */
+.shell2 .num {
+  /* The old sheet makes every `.num` monospace. Step 1.2's rule is that monospace is a SIGNAL that
+     the text is machine syntax; a tabular number is not machine syntax. */
+  font-family: inherit;
+}
+.shell2 .muted {
+  margin: 0;
+}
+.shell2 .badge {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  font-family: inherit;
 }

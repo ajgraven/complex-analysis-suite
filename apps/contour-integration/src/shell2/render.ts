@@ -1,4 +1,4 @@
-// `render(state, resolution, session)` — the whole shell as a description.
+// `render(state, resolution, session, actions)` — the whole shell as a description.
 //
 // M8 step 1.1, plan §4.0. **Nothing in here computes mathematics.** The engine surface is
 // `ShellState` plus `resolveState(state, compiled, budget) → StateResolution`, and this function's
@@ -13,6 +13,18 @@ import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocab
 import type { ShellState, StateResolution } from "../shell/state.js";
 import { h, type Desc } from "./dom.js";
 import type { Session } from "./session.js";
+
+/**
+ * What a description may CALL.
+ *
+ * Plan §4.0's card contract is `(state, resolution, session, actions) → description`, and this is
+ * that fourth argument arriving with its first member rather than at 1.4 with a dozen: a card never
+ * reaches into the shell's closure, so every button's effect is a named function a test can call.
+ */
+export interface ShellActions {
+  /** Frame the whole contour. Also on double-click — one function, two ways to ask for it. */
+  readonly fitContour: () => void;
+}
 
 /** What the shell renders into: one description list per grid area, plus the grid's own state. */
 export interface Rendered {
@@ -59,18 +71,30 @@ function resolutionLine(resolution: StateResolution): string {
 /**
  * The whole shell, as descriptions.
  *
- * The three arguments are the contract Phase 1's cards are written against (plan §4.0: a card is
+ * The four arguments are the contract Phase 1's cards are written against (plan §4.0: a card is
  * `(state, resolution, session, actions) → description`), so the signature is the one they land
  * into. **The Target card is gallery-only**, which is why the left rail's list is filtered rather
  * than fixed: a sandbox expression has no record to state, and a card reading "—" forever would
  * teach a reader that the app has a target it is failing to find.
  */
-export function render(state: ShellState, resolution: StateResolution, session: Session): Rendered {
+export function render(
+  state: ShellState,
+  resolution: StateResolution,
+  session: Session,
+  actions: ShellActions,
+): Rendered {
   const gallery = state.mode === "gallery";
   return {
     bar: [
       h("h1", { key: "brand", class: "brand2" }, "Contour Integration"),
       h("span", { key: "mode", class: "placeholder", "data-testid": "mode" }, resolutionLine(resolution)),
+      // The stage's one toolbar control. Double-click does the same thing; a reader who has zoomed
+      // into nothing needs a way back that does not require knowing about the double-click.
+      h(
+        "button",
+        { key: "fit", class: "barBtn", "data-testid": "fit", onClick: () => actions.fitContour() },
+        "Fit contour",
+      ),
     ],
     left: LEFT_CARDS.filter((id) => gallery || id !== "target").map(placeholder),
     right: RIGHT_CARDS.map(placeholder),

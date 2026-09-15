@@ -10,7 +10,7 @@
 // Naming it makes those answerable. `applyState` resets the session's transient fields by
 // construction rather than by remembering each one, and a field that should ride in a link is a
 // field in the wrong object — a question with an answer instead of a habit.
-import type { PenPath } from "../engine/contour/pen.js";
+import type { PenNode } from "../engine/contour/pen.js";
 import type { Cx } from "../kernel/geom.js";
 
 /** What the pointer is currently doing. `none` is not a gesture; it is the absence of one. */
@@ -34,10 +34,54 @@ export interface Hover {
 
 export const NO_HOVER: Hover = { z: null, piece: null, handle: null };
 
+/**
+ * A path being drawn, mid-gesture.
+ *
+ * **Not `PenPath`.** That is the finished object `penContour` reads — nodes and a `closed` flag. A
+ * DRAFT additionally carries where the pointer is, which snap fired there, and which piece the
+ * button is currently bowing, none of which survive committing. Declaring it here rather than inside
+ * the controller is what lets the stage DRAW the snap chip without the controller reaching across to
+ * paint it: the view reads the session, as it does for everything else transient.
+ */
+export interface PenDraft {
+  nodes: PenNode[];
+  /** The pending end, snapped. Null before the first click. */
+  at: Cx | null;
+  /** The constraint that fired, in words — research 07 rule 5: never snap silently. */
+  snap: string | null;
+  /** The piece a held button is bowing: the one ENDING at the vertex just placed (M7.2's defect). */
+  drag: { readonly from: Cx; readonly index: number } | null;
+}
+
+/**
+ * What the keyboard's arrows currently move, for the chip beside it.
+ *
+ * The plan's "a **visible label** of what is held (a small chip near the handle, not only the live
+ * region)". A live region announces once and is then gone; a reader who tabs away and back, or who
+ * is not using a screen reader at all, has no way to ask what Enter selected. `at` is in PLOT
+ * coordinates, so the chip follows its handle through a pan and a zoom without the controller
+ * having to move it.
+ */
+export interface Held {
+  readonly label: string;
+  readonly at: Cx;
+}
+
 export interface Session {
   gesture: Gesture;
   /** The path being drawn, or null. Deliberately not restorable: a half-drawn path is not a state. */
-  pen: PenPath | null;
+  pen: PenDraft | null;
+  /** What the arrow keys move, or null when they pan. Set by `cycleGrab` and by a pointer grab. */
+  held: Held | null;
+  /**
+   * Whether a SLIDER is being dragged.
+   *
+   * `gesture` covers the stage; a rail slider's scrub is the same thing happening somewhere the
+   * stage cannot see, and the draft evaluation budget has to apply to both or a parameter drag
+   * recomputes at full precision on every pointer move. The sliders that set it arrive with the
+   * cards at steps 1.4 and 1.5; the budget reads it from here today.
+   */
+  scrubbing: boolean;
   hover: Hover;
   /** Undo and redo hold whole `ShellState`s; the stacks are session-local and a link clears both. */
   undo: unknown[];
@@ -63,6 +107,8 @@ export function defaultSession(): Session {
   return {
     gesture: "none",
     pen: null,
+    held: null,
+    scrubbing: false,
     hover: NO_HOVER,
     undo: [],
     redo: [],
@@ -84,6 +130,8 @@ export function defaultSession(): Session {
 export function resetTransient(session: Session): void {
   session.gesture = "none";
   session.pen = null;
+  session.held = null;
+  session.scrubbing = false;
   session.hover = NO_HOVER;
   session.undo = [];
   session.redo = [];

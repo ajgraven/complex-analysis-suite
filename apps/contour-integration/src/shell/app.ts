@@ -16,14 +16,12 @@ import {
 import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import { checkAdmissibility } from "../kernel/branch/admissibility.js";
-import { jumpWeights } from "../kernel/branch/correction.js";
 import { allCrossingMonodromy } from "../kernel/branch/monodromy.js";
 import type { DeclaredProduct } from "../kernel/branch/declared.js";
 import { formatFrac, formatSqrtExt } from "../kernel/formatExact.js";
 import {
   INFINITY as INFINITY_ID,
   NO_BRANCH,
-  cutPolyline,
   effectiveBranch,
   type BranchChoice,
 } from "../kernel/branch/model.js";
@@ -31,13 +29,15 @@ import {
   OFFERED_ORDERS,
   addBranchPoint,
   applyBranchGrab,
+  drawnCuts,
+  sameBranchGrab,
+  type DrawnCut,
   branchHandles,
   joinToOneCut,
   orderLabel,
   removeBranchPoint,
   setOrder,
   splitToRays,
-  type BranchGrab,
   type BranchHandle,
   setCutFromWindow,
   setShadow,
@@ -1538,35 +1538,15 @@ export function mountApp(root: Element): ShellHandle {
    * drawing: a ray has to leave the visible plane, and the ledger's own clipping (which is about the
    * geometry, not the picture) is computed separately from the contour's extent.
    */
-  function cutPolylines(): { points: readonly Cx[]; refused: boolean; label?: string }[] {
-    // THE RECORD'S OWN CUT, under a record. D1's `argRange` decides where the cut runs and the whole
-    // record is about what happens when it runs somewhere else, so a figure without it is missing
-    // the thing it is teaching. In the sandbox the cut is the user's.
-    const drawn = effective();
-    if (drawn.cuts.length === 0) return [];
-    const vp = viewport();
-    const reach =
-      4 *
-      (Math.hypot(view.center[0], view.center[1]) +
-        view.halfHeight * (1 + Math.max(1, vp.width) / Math.max(1, vp.height)));
-    // ONE reading of legality for the picture and the rail: the ledger's LEGALITY row and this
-    // colour must never disagree about whether a cut system is admissible.
-    const refused = !checkAdmissibility(drawn).ok;
-    // The jump weight, from the same `jumpWeights` the correction sums over — so the number on the
-    // arc is the number the picture is corrected by, not a second computation of it. `null` is a
-    // log's side: infinite-order monodromy has no finite jump, and the label says so rather than
-    // printing a number for it.
-    const weights = jumpWeights(drawn);
-    const out: { points: readonly Cx[]; refused: boolean; label?: string }[] = [];
-    for (const cut of drawn.cuts) {
-      const poly = cutPolyline(drawn, cut, reach);
-      if (poly === null) continue;
-      const jump = weights.get(cut.id);
-      const label =
-        jump === undefined ? undefined : jump === null ? "J = ∞" : `J = ${formatFrac(jump)}`;
-      out.push({ points: poly, refused, ...(label === undefined ? {} : { label }) });
-    }
-    return out;
+  /**
+   * The cut system to DRAW: the record's under a record, the reader's in the sandbox.
+   *
+   * The polylines themselves come from `engine/branchEdit.drawnCuts`, shared with the new shell
+   * (M8 step 1.3) — one reading of admissibility for the picture and the rail, and one reading of
+   * the jump weights for the label and the correction.
+   */
+  function cutPolylines(): readonly DrawnCut[] {
+    return drawnCuts(effective(), view, viewport());
   }
 
   function drawBranchHandles(ctx: CanvasRenderingContext2D, vp: Viewport): void {
@@ -3645,14 +3625,6 @@ export function mountApp(root: Element): ShellHandle {
     const again = bHandles.find((h) => sameBranchGrab(h.grab, want));
     grab = again === undefined ? null : { kind: "branch", handle: again };
   }
-
-  const sameBranchGrab = (a: BranchGrab, b: BranchGrab): boolean => {
-    // The base grab has no id: there is exactly one base point, so the kind identifies it.
-    if (a.kind !== b.kind) return false;
-    if (a.kind === "base") return true;
-    if (a.kind === "point") return b.kind === "point" && a.id === b.id;
-    return b.kind === "cut" && a.id === b.id && a.index === b.index;
-  };
 
   /** Enter / Space walks what the arrows act on: the view, the contour, then each radius handle. */
   function cycleGrab(): void {

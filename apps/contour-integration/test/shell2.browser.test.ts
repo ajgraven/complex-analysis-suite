@@ -214,6 +214,26 @@ describe("the visual system", () => {
     expect(parseFloat(on.borderTopWidth)).toBe(0);
   });
 
+  it("is NOT restyled by the old shell's unscoped rules", () => {
+    // **Scoping `theme.css` under `.shell2` protects the OLD shell from the NEW rules and does
+    // nothing in the other direction.** `index.html` loads `app.css` for both, and its rules carry
+    // no scope at all, so every class the new shell names the same way inherits them. Step 1.3 found
+    // this twice: `.ink { pointer-events: none }` made the whole stage dead to a real mouse, and
+    // `.chip { width: 9px; height: 9px }` — the old shell's colour swatch — collapsed the stage's
+    // snap chip to a 9 px square with its text spilling out of it.
+    const host = probe(
+      '<span class="num">1.25</span><p class="muted">m</p><span class="badge" data-level="=">=</span>',
+    );
+    const [num, muted, badge] = [...host.children].map((e) => getComputedStyle(e));
+    // A tabular number is not machine syntax; the old sheet makes every `.num` monospace.
+    expect(num.fontFamily.toLowerCase(), "the old sheet's monospace leaked in").not.toContain("mono");
+    expect(parseFloat(muted.marginTop), "the old sheet's margin leaked in").toBe(0);
+    // The badge is a stamp: a flat 22 px square, no border and no margin of its own.
+    expect(parseFloat(badge.borderTopWidth)).toBe(0);
+    expect(parseFloat(badge.marginRight)).toBe(0);
+    expect(parseFloat(badge.width)).toBe(22);
+  });
+
   it("uses the five-size type scale, with numbers tabular and prose NOT monospace", () => {
     const { root } = mount();
     const h1 = getComputedStyle(root.querySelector("h1") as Element);
@@ -226,5 +246,215 @@ describe("the visual system", () => {
     const [num, mono] = [...host.children].map((e) => getComputedStyle(e));
     expect(num.fontVariantNumeric).toContain("tabular-nums");
     expect(mono.fontFamily.toLowerCase()).toContain("mono");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The stage controller — M8 step 1.3.
+//
+// **A hit test is exactly what jsdom cannot check.** There, `clientWidth` is 0, `getBoundingClientRect`
+// is all zeros and `scale()` is whatever the `|| 1` viewport guard makes it — the node suite has to
+// stub a size, and what it then drives is the gesture's EFFECT rather than its aim. Here the stage has
+// a real box, so a drag that starts on the contour starts on the contour.
+//
+// Synthetic `PointerEvent`s carry a `pointerId` the browser has no active pointer for, and
+// `setPointerCapture` throws `NotFoundError` on one. Stubbing the three capture calls is the harness
+// accommodating a synthetic pointer; everything the assertions are about — the layout, the hit test,
+// the camera — is the product's own.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+import { handlesOf } from "../src/engine/contour/edit.js";
+import { resolveAll } from "../src/engine/contour/model.js";
+import { plotToScreen } from "../src/kernel/camera.js";
+import { pointAt } from "../src/kernel/geom.js";
+
+function stubCapture(el: Element): void {
+  const e = el as Element & Record<string, unknown>;
+  e.setPointerCapture = (): void => {};
+  e.releasePointerCapture = (): void => {};
+  e.hasPointerCapture = (): boolean => false;
+}
+
+/** A stage with a real box, its ink canvas, and plot → client coordinates through the live camera. */
+function mountDrag(): {
+  app: ReturnType<typeof mountShell2>;
+  ink: HTMLCanvasElement;
+  client: (z: readonly [number, number]) => { x: number; y: number };
+  drag: (from: readonly [number, number], to: { x: number; y: number }) => void;
+} {
+  const { root, app } = mount();
+  const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+  const host = root.querySelector<HTMLElement>("div.stage2");
+  if (ink === null || host === null) throw new Error("no stage");
+  stubCapture(ink);
+  const client = (z: readonly [number, number]): { x: number; y: number } => {
+    const rect = ink.getBoundingClientRect();
+    const [sx, sy] = plotToScreen(z[0], z[1], app.currentState().view, {
+      width: host.clientWidth,
+      height: host.clientHeight,
+    });
+    return { x: rect.left + sx, y: rect.top + sy };
+  };
+  const send = (type: string, at: { x: number; y: number }): void => {
+    ink.dispatchEvent(
+      new PointerEvent(type, { bubbles: true, cancelable: true, clientX: at.x, clientY: at.y, buttons: 1, pointerId: 1 }),
+    );
+  };
+  const drag = (from: readonly [number, number], to: { x: number; y: number }): void => {
+    send("pointerdown", client(from));
+    send("pointermove", to);
+    send("pointerup", to);
+  };
+  return { app, ink, client, drag };
+}
+
+describe("the stage's gestures, aimed at a real layout", () => {
+  it("MOVES the contour when the drag starts on it", async () => {
+    const { app, client, drag } = mountDrag();
+    await drawn();
+    const before = app.currentState().contour;
+    const pieces = resolveAll(before);
+    const handles = handlesOf(before, pieces);
+    // A point on the curve and AWAY from every handle, because a handle wins the hit test — which is
+    // the decision the controller makes and so the one the aim has to respect.
+    let best: readonly [number, number] = pointAt(pieces[0], 0);
+    let bestGap = -1;
+    for (let i = 0; i < 64; i++) {
+      const z = pointAt(pieces[0], i / 64);
+      const gap = Math.min(...handles.map((h) => Math.hypot(h.at[0] - z[0], h.at[1] - z[1])));
+      if (gap > bestGap) {
+        bestGap = gap;
+        best = z;
+      }
+    }
+    const at = client(best);
+    drag(best, { x: at.x + 60, y: at.y });
+    const after = app.currentState();
+    expect(after.contour, "the contour did not move").not.toBe(before);
+    // Rightwards on screen is rightwards in the plane, and the recipe moved with the geometry so a
+    // link cannot reopen a different shape (M6.2).
+    const [cx] = pointAt(resolveAll(after.contour)[0], 0);
+    expect(cx).toBeGreaterThan(pointAt(pieces[0], 0)[0]);
+    expect(after.contourSource?.shift[0] ?? 0).toBeGreaterThan(0);
+  });
+
+  it("CHANGES the parameter when the drag starts on a radius handle", async () => {
+    const { app, client, drag } = mountDrag();
+    await drawn();
+    const state = app.currentState();
+    const handle = handlesOf(state.contour, resolveAll(state.contour))[0];
+    expect(handle, "the circle has no radius handle to grab").toBeTruthy();
+    const before = state.geometry[handle.param];
+    // Outwards along the handle's own ray, so the new radius is unambiguously larger.
+    const out: readonly [number, number] = [handle.at[0] * 1.5, handle.at[1] * 1.5];
+    drag(handle.at, client(out));
+    const after = app.currentState().geometry[handle.param];
+    expect(after, "the radius parameter was not set").toBeTypeOf("number");
+    expect(after).toBeGreaterThan(before ?? 0);
+    // The CONTOUR is untouched as an object — a radius handle edits a parameter, not the geometry.
+    expect(app.currentState().contourSource?.shift).toEqual([0, 0]);
+  });
+
+  it("CLEARS the portrait when the expression stops parsing", async () => {
+    // Leaving the last good portrait up is the worst of both: the reader is told the expression is
+    // broken while looking at a picture of something else. Only a browser can see this — in jsdom
+    // there is no GL stage to clear.
+    const { app } = mountDrag();
+    await drawn();
+    const gl = document.querySelector<HTMLCanvasElement>("canvas.gl");
+    if (gl === null) throw new Error("no gl canvas");
+    const colours = (): Set<number> => {
+      const read = document.createElement("canvas");
+      read.width = 48;
+      read.height = 48;
+      const ctx = read.getContext("2d");
+      if (ctx === null) throw new Error("no 2d context");
+      ctx.drawImage(gl, 0, 0, 48, 48);
+      const { data } = ctx.getImageData(0, 0, 48, 48);
+      const out = new Set<number>();
+      for (let i = 0; i < data.length; i += 4) out.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+      return out;
+    };
+    expect(colours().size, "the portrait never drew, so clearing it proves nothing").toBeGreaterThan(12);
+    app.applyState({ ...app.currentState(), expr: "1/(" });
+    await drawn();
+    // One colour: the ground. Not "fewer colours" — a stale portrait with a band over it would pass
+    // that, and the claim is that nothing of the old integrand is left.
+    expect(colours().size).toBe(1);
+  });
+
+  it("lets a real pointer REACH the ink canvas", async () => {
+    // Every other gesture test dispatches straight at the canvas, which skips hit testing entirely —
+    // so all of them passed while the stage was dead to an actual mouse. `app.css` carries an
+    // unscoped `.ink { pointer-events: none }` for the OLD shell, whose gestures land on a separate
+    // overlay div, and `index.html` loads both sheets. `elementFromPoint` is the primitive: it is
+    // the same hit test the browser does for a click.
+    mountDrag();
+    await drawn();
+    const host = document.querySelector("div.stage2");
+    if (host === null) throw new Error("no stage");
+    const r = host.getBoundingClientRect();
+    for (const [dx, dy] of [[0.5, 0.5], [0.25, 0.3], [0.8, 0.7]] as const) {
+      const hit = document.elementFromPoint(r.left + r.width * dx, r.top + r.height * dy);
+      expect(hit?.className, `the pointer landed on ${hit?.tagName}.${hit?.className}`).toBe("ink");
+    }
+  });
+
+  it("says with the CURSOR what a click would do", async () => {
+    // One convention, set by the controller and never by CSS: `grab` over anything grabbable,
+    // `crosshair` while drawing, `default` otherwise. The old shell's cursor came from three places
+    // and disagreed with itself over a handle in pen mode. Only a browser can check it — jsdom
+    // computes no styles and, with a 1x1 viewport, has no "over" to be over.
+    const { app, ink, client } = mountDrag();
+    await drawn();
+    const state = app.currentState();
+    const handle = handlesOf(state.contour, resolveAll(state.contour))[0];
+    const move = (at: { x: number; y: number }): void => {
+      ink.dispatchEvent(
+        new PointerEvent("pointermove", { bubbles: true, clientX: at.x, clientY: at.y, buttons: 0, pointerId: 1 }),
+      );
+    };
+    const corner = ink.getBoundingClientRect();
+    move({ x: corner.left + 3, y: corner.top + 3 });
+    expect(ink.style.cursor, "the empty plane offered a grab").toBe("default");
+    move(client(handle.at));
+    expect(ink.style.cursor, "a radius handle did not offer a grab").toBe("grab");
+    // With the pen out the stage is a drawing surface, over a handle as much as anywhere else.
+    app.stage().penStart();
+    move(client(handle.at));
+    expect(ink.style.cursor).toBe("crosshair");
+  });
+
+  it("draws the POLE on the ink canvas, where the figure export can see it", async () => {
+    // M6.3's lesson: assert the PRIMITIVE. The old shell drew pole markers into the DOM overlay, so
+    // they were absent from every exported figure and no pixel test could have told the difference.
+    // The control is an ENTIRE integrand, which has no pole to draw and leaves the same box empty —
+    // without it, "some ink near the middle" is bought by anything at all.
+    const { app, ink } = mountDrag();
+    await drawn();
+    const inkNear = (): number => {
+      const box = 24;
+      const r = ink.getBoundingClientRect();
+      const dpr = ink.width / r.width;
+      const read = document.createElement("canvas");
+      read.width = box;
+      read.height = box;
+      const ctx = read.getContext("2d");
+      if (ctx === null) throw new Error("no 2d context");
+      // The pole of `1/z` is at the origin, which is the camera's centre.
+      const cx = Math.round((r.width / 2) * dpr);
+      const cy = Math.round((r.height / 2) * dpr);
+      ctx.drawImage(ink, cx - box / 2, cy - box / 2, box, box, 0, 0, box, box);
+      const { data } = ctx.getImageData(0, 0, box, box);
+      let lit = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 24) lit++;
+      return lit;
+    };
+    const withPole = inkNear();
+    expect(withPole, "no pole ring was drawn at the origin").toBeGreaterThan(20);
+
+    app.applyState({ ...app.currentState(), expr: "z^2" });
+    await drawn();
+    expect(inkNear(), "an ENTIRE integrand left a ring behind").toBe(0);
   });
 });

@@ -15,8 +15,11 @@ import katex from "katex";
 import { describe, expect, it, vi } from "vitest";
 
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle } from "../src/engine/vocabulary.js";
+import { handlesOf } from "../src/engine/contour/edit.js";
+import { resolveAll } from "../src/engine/contour/model.js";
+import { plotToScreen } from "../src/kernel/camera.js";
 import { h, patch } from "../src/shell2/dom.js";
-import { math, mathText, renderedCount } from "../src/shell2/math.js";
+import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js";
 import { mountShell2 } from "../src/shell2/app.js";
 import { defaultSession, resetTransient } from "../src/shell2/session.js";
 
@@ -300,5 +303,375 @@ describe("the new shell's structure", () => {
     app.applyState({ ...app.currentState(), expr: "1/(1+z^2)" });
     expect(q(root, '[data-card="integrand"]')).toBe(before);
     expect(app.currentState().expr).toBe("1/(1+z^2)");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The stage controller — M8 step 1.3.
+//
+// Driven through the controller rather than through the DOM where the DOM adds nothing: jsdom has
+// no `PointerEvent` and no layout, so a synthesised drag is a synthesised drag either way, and the
+// property under test is what the GESTURE does to the state. The browser suite drives real pointers
+// over a real layout, which is where a hit test can be wrong.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+/** jsdom has no pointer capture; the controller calls it on every gesture. */
+function stubPointer(el: Element): void {
+  const e = el as Element & Record<string, unknown>;
+  e.setPointerCapture = (): void => {};
+  e.releasePointerCapture = (): void => {};
+  e.hasPointerCapture = (): boolean => false;
+}
+
+/**
+ * A pointer event jsdom will dispatch. `PointerEvent` does not exist there; the fields do.
+ *
+ * `extra` goes into the CONSTRUCTOR, not onto the instance: `altKey` and its siblings are getter-only
+ * on `MouseEvent`, so assigning them throws rather than being ignored. `pointerId` is not a
+ * `MouseEvent` field at all, which is why that one is assigned.
+ */
+function pointer(type: string, x: number, y: number, extra: Record<string, unknown> = {}): Event {
+  const ev = new MouseEvent(type, { bubbles: true, clientX: x, clientY: y, buttons: 1, ...extra });
+  Object.assign(ev, { pointerId: 1 });
+  return ev;
+}
+
+/**
+ * The stage, at a REAL size.
+ *
+ * jsdom performs no layout, so `clientWidth`/`clientHeight` are 0 and `StageView.viewport()`'s
+ * `|| 1` guard returns a 1×1 box — in which `scale()` is enormous, the 11 px grab radius covers the
+ * whole plane, and every `pointerdown` lands on a handle. M7.2 found the same class of artefact in
+ * the browser harness (a suite aimed at an unsized stage is aiming at an artefact) and step 1.1 found
+ * the same `|| 1` magnifying the pen's geometry by 4. So the size is stubbed rather than the
+ * assertion weakened: 900 × 600 is the stage's own box at the shell's default rail widths.
+ */
+/**
+ * Wait for the coalesced draw.
+ *
+ * The overlay is painted in `StageView.drawNow`, which `schedule` coalesces onto a frame — a drag
+ * asks far more often than a frame can answer, and a chip re-created per pointer move would be a
+ * fresh node for the accessibility tree sixty times a second. So a test that asserts a chip has to
+ * let the frame run; asserting synchronously would be asserting that the coalescing is absent.
+ */
+const frame = (): Promise<void> => new Promise((done) => requestAnimationFrame(() => done()));
+
+function mountStage(): { root: HTMLElement; app: ReturnType<typeof mountShell2>; ink: HTMLCanvasElement } {
+  const { root, app } = mount();
+  const host = q(root, ".stage2");
+  for (const [prop, value] of [["clientWidth", 900], ["clientHeight", 600]] as const) {
+    Object.defineProperty(host, prop, { configurable: true, get: () => value });
+  }
+  const ink = q<HTMLCanvasElement>(root, "canvas.ink");
+  stubPointer(ink);
+  return { root, app, ink };
+}
+
+describe("the pen, through the controller", () => {
+  it("places a vertex per click and Backspace takes one back", () => {
+    const { app, ink } = mountStage();
+    const pen = app.stage();
+    pen.penStart();
+    for (const [x, y] of [[10, 10], [40, 10], [40, 40]]) ink.dispatchEvent(pointer("pointerdown", x, y));
+    const session = app.session() as { pen: { nodes: unknown[] } | null };
+    expect(session.pen?.nodes.length).toBe(3);
+    pen.penBack();
+    expect(session.pen?.nodes.length).toBe(2);
+  });
+
+  it("WILL NOT CLOSE on two vertices — a degenerate loop the ledger cannot read", () => {
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(pointer("pointerdown", 40, 10));
+    // A third click back on the FIRST vertex would close a path of three; on a path of two it must
+    // place a vertex instead.
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    const session = app.session() as { pen: { nodes: unknown[] } | null };
+    expect(session.pen, "the pen was put away, so something committed").not.toBeNull();
+    expect(app.currentState().contour, "the contour changed").toBe(before);
+  });
+
+  it("Escape keeps the contour that was already there", () => {
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(pointer("pointerdown", 40, 10));
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    expect(app.session().pen).toBeNull();
+    expect(app.currentState().contour).toBe(before);
+  });
+
+  it("Enter commits a drawn path, and the drawn contour has NO recipe", () => {
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    app.stage().penStart();
+    for (const [x, y] of [[10, 10], [60, 10], [60, 60]]) ink.dispatchEvent(pointer("pointerdown", x, y));
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    const after = app.currentState();
+    expect(app.session().pen, "the pen stayed out after committing").toBeNull();
+    expect(after.contour).not.toBe(before);
+    // `contourSource` is NULL for a drawn contour — the truth about it rather than a gap. M6.2's
+    // codec reads the vertices back out of the geometry instead.
+    expect(after.contourSource).toBeNull();
+    expect(after.sandboxContour).toBe(after.contour);
+  });
+
+  it("is PUT AWAY by applyState — M7.4's defect, at the door", () => {
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(pointer("pointerdown", 40, 10));
+    expect(app.session().pen).not.toBeNull();
+    app.applyState({ ...app.currentState(), expr: "1/(1+z^2)" });
+    // A half-drawn path is not a state worth restoring, and leaving it out would let a click in a
+    // mode with no pen controls place a vertex the reader never asked for.
+    expect(app.session().pen).toBeNull();
+    expect(app.session().gesture).toBe("none");
+  });
+});
+
+/** Plot coordinates to the stage-local pixels a jsdom pointer event carries (the rect is all zeros). */
+function screenOf(app: ReturnType<typeof mountShell2>, z: readonly [number, number]): readonly [number, number] {
+  return plotToScreen(z[0], z[1], app.currentState().view, { width: 900, height: 600 });
+}
+
+describe("the stage's gestures", () => {
+  it("clamps a wheel zoom, so a flick cannot lose the plane", () => {
+    const { app, ink } = mountStage();
+    const deep = new WheelEvent("wheel", { deltaY: -100000, bubbles: true, cancelable: true });
+    ink.dispatchEvent(deep);
+    expect(app.currentState().view.halfHeight).toBeGreaterThanOrEqual(0.05);
+    const far = new WheelEvent("wheel", { deltaY: 100000, bubbles: true, cancelable: true });
+    ink.dispatchEvent(far);
+    expect(app.currentState().view.halfHeight).toBeLessThanOrEqual(200);
+  });
+
+  it("fits the contour into the view, from the TOOLBAR as well as the controller", () => {
+    const { root, app } = mountStage();
+    app.applyState({ ...app.currentState(), view: { center: [500, 500], halfHeight: 0.1 } });
+    // Through the rendered button, which is how a reader who does not know about the double-click
+    // gets back from a zoom into nothing.
+    q<HTMLButtonElement>(root, '[data-testid="fit"]').click();
+    const v = app.currentState().view;
+    // The default contour is the circle |z| = 1.5 about the origin, so a fit lands on it.
+    expect(Math.hypot(v.center[0], v.center[1])).toBeLessThan(0.5);
+    expect(v.halfHeight).toBeGreaterThan(1);
+    expect(v.halfHeight).toBeLessThan(10);
+  });
+
+  it("names what is held ON THE STAGE, not only in the live region", async () => {
+    // The plan's "a **visible label** of what is held (a small chip near the handle, not only the
+    // live region)". A live region announces once and is then gone; a reader who tabs away and back
+    // — or who is not using a screen reader at all — has no way left to ask what Enter selected.
+    const { root, app } = mountStage();
+    await frame();
+    expect(root.querySelector(".overlay2 .stageChip.held"), "nothing is held yet").toBeNull();
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    await frame();
+    const chip = q(root, ".overlay2 .stageChip.held");
+    expect(chip.textContent).toBe(app.stage().grabLabel());
+    // **What it says is derived from the state, not from the chip.** Comparing the chip to
+    // `grabLabel()` alone asserts only that two readers of one function agree — a label of "held"
+    // would satisfy it. The first stop after "nothing" is the contour itself, in the sandbox.
+    expect(chip.textContent).toBe("the whole contour");
+    // The next is a radius handle, which must name the piece AND the parameter it edits — a reader
+    // holding one of four handles needs to know which.
+    const state = app.currentState();
+    const handle = handlesOf(state.contour, resolveAll(state.contour))[0];
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    await frame();
+    const chip2 = q(root, ".overlay2 .stageChip.held");
+    // **A piece name is a SENTENCE in the `$…$` convention**, so the chip is typeset and its
+    // `textContent` is KaTeX's (which repeats the formula three times over). The label is where the
+    // sentence is readable, and `$` appearing ON SCREEN is the defect a browser found here.
+    expect(chip2.getAttribute("aria-label")).toBe(mathPlain(app.stage().grabLabel() ?? ""));
+    expect(chip2.textContent ?? "", "the chip printed its delimiters").not.toContain("$");
+    expect(chip2.querySelector(".katex"), "the piece name was not typeset").not.toBeNull();
+    // **`toContain(handle.param)` alone is bought by the piece name**, measured: the circle is named
+    // `the circle $|z - a| = R$`, so a label that dropped the parameter entirely would still contain
+    // `R`. The parenthesised suffix is the content — WHICH parameter of this piece, for a reader
+    // holding one of four handles.
+    const next = chip2.getAttribute("aria-label") ?? "";
+    expect(next).toContain(mathPlain(handle.pieceName));
+    expect(next).toContain(`(${handle.param})`);
+    expect(next).not.toBe(mathPlain(handle.pieceName));
+  });
+
+  it("LETS GO at the door — M7.4's defect, for a controller local", async () => {
+    // `resetTransient` clears `session.held`, but `grab` is the controller's own variable and the
+    // door cannot see it. That is exactly the shape of M7.4's `drillGraded`, which outlived its rung
+    // because `applyState` did not clear a local it did not own.
+    const { root, app } = mountStage();
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(app.stage().grabLabel()).not.toBeNull();
+    app.applyState({ ...app.currentState(), expr: "1/(1+z^2)" });
+    await frame();
+    expect(app.stage().grabLabel(), "a handle from a contour the new state may not have").toBeNull();
+    expect(app.session().held).toBeNull();
+    expect(root.querySelector(".overlay2 .stageChip.held")).toBeNull();
+  });
+
+  it("shows the pen's SNAP by name, beside the pointer", async () => {
+    const { root, app, ink } = mountStage();
+    app.stage().penStart();
+    // The stage is 900 x 600 about the origin, so the plane's y = 0 runs across its middle: a move
+    // one pixel off that line is within the 11 px grab radius of the real axis.
+    ink.dispatchEvent(pointer("pointermove", 200, 301));
+    await frame();
+    const chip = q(root, ".overlay2 .stageChip.snap");
+    expect(chip.textContent).toBe("the real axis");
+    expect(app.session().pen?.snap).toBe("the real axis");
+    // Alt suppresses the lot — and the chip goes with it, or the reader is told about a snap that
+    // did not fire.
+    ink.dispatchEvent(pointer("pointermove", 200, 301, { altKey: true }));
+    await frame();
+    expect(root.querySelector(".overlay2 .stageChip.snap")).toBeNull();
+  });
+
+  it("puts a DRAFT budget on a slider scrub, not only on a stage gesture", () => {
+    // `gesture` covers the stage; a rail slider's drag is the same thing happening somewhere the
+    // stage cannot see. The sliders arrive with the cards at 1.4/1.5; the budget reads the flag now.
+    const { app } = mountStage();
+    expect(app.session().scrubbing).toBe(false);
+    app.session().scrubbing = true;
+    app.applyState({ ...app.currentState(), expr: "1/(1+z^2)" });
+    expect(app.session().scrubbing, "a link arrives with nobody's finger down").toBe(false);
+  });
+
+  it("will not commit a path of ONE vertex", () => {
+    // `penCommit` needs two. One vertex is not a curve, and `penContour` would hand the ledger a
+    // contour with nothing to integrate along.
+    const { app, ink } = mountStage();
+    const before = app.currentState().contour;
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 10, 10));
+    ink.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(app.currentState().contour, "a one-vertex path was adopted").toBe(before);
+    expect(app.session().pen, "and the pen was put away over it").not.toBeNull();
+  });
+
+  it("LETS GO of the handle when the pen comes out", () => {
+    // Nothing is held while drawing. Leaving the chip up would tell a reader the arrows move a
+    // handle when what they do is nothing at all — the pen takes the keyboard as well as the click.
+    const { app } = mountStage();
+    app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+    expect(app.session().held).not.toBeNull();
+    app.stage().penStart();
+    expect(app.session().held).toBeNull();
+    expect(app.stage().grabLabel()).toBeNull();
+  });
+
+  it("BOWS the piece that ENDS at the new vertex, not the one leaving it", () => {
+    // M7.2's shipped defect, at the shell. Bowing the piece LEAVING the vertex measures against a
+    // chord whose far end is still the click, so the chord is zero and the gesture does nothing.
+    const { app, ink } = mountStage();
+    app.stage().penStart();
+    ink.dispatchEvent(pointer("pointerdown", 200, 200));
+    ink.dispatchEvent(pointer("pointerdown", 400, 200));
+    ink.dispatchEvent(pointer("pointermove", 400, 260));
+    const nodes = app.session().pen?.nodes ?? [];
+    expect(nodes.length).toBe(2);
+    expect(nodes[0].bulge, "the piece arriving at the new vertex did not bow").toBeTypeOf("number");
+    expect(Math.abs(nodes[0].bulge ?? 0)).toBeGreaterThan(0);
+    expect(nodes[1].bulge, "the piece LEAVING it bowed instead").toBeUndefined();
+  });
+
+  it("names the FIRST vertex as the snap that closes the path", async () => {
+    const { root, app, ink } = mountStage();
+    app.stage().penStart();
+    for (const [x, y] of [[200, 200], [400, 200], [400, 320]]) ink.dispatchEvent(pointer("pointerdown", x, y));
+    // `buttons: 0` — a HELD button bows the piece just placed instead of moving the pending end,
+    // and `pointer()` presses one by default because most of these tests are drags.
+    ink.dispatchEvent(pointer("pointermove", 202, 201, { buttons: 0 }));
+    await frame();
+    expect(q(root, ".overlay2 .stageChip.snap").textContent).toContain("click to close");
+    expect(app.session().pen?.nodes.length, "the move committed something").toBe(3);
+  });
+
+  it("gives the CUT's handle the click when it sits on a radius handle", () => {
+    // The controller's declared order: a cut vertex first, because it is the smaller target and
+    // usually sits on top. A drag that took the contour instead would move the one object the
+    // reader was trying to hold still. Put the two in the same place and the order is the property.
+    const { app, ink } = mountStage();
+    const s0 = app.currentState();
+    const handle = handlesOf(s0.contour, resolveAll(s0.contour))[0];
+    app.applyState({
+      ...s0,
+      branch: {
+        ...s0.branch,
+        points: [{ id: "b", at: handle.at, order: { kind: "log" }, label: "b" }],
+      },
+    });
+    // The handle is at (-1.5, 0) in a 900 x 600 stage centred on the origin.
+    const [px, py] = screenOf(app, handle.at);
+    ink.dispatchEvent(pointer("pointerdown", px, py));
+    expect(app.session().gesture, "the radius handle took a click meant for the cut").toBe("branch");
+  });
+
+  it("will NOT move a gallery record's contour bodily", () => {
+    // Under a record the contour is the record's, and translating it would leave a worked example
+    // whose pieces no longer match the argument it is making. The radius handles still work, because
+    // those edit parameters the record itself declares.
+    const { app } = mountStage();
+    const sandboxStops: string[] = [];
+    const walk = (): string[] => {
+      const seen: string[] = [];
+      for (let i = 0; i < 8; i++) {
+        app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+        seen.push(app.stage().grabLabel() ?? "«the view»");
+      }
+      return seen;
+    };
+    sandboxStops.push(...walk());
+    expect(sandboxStops, "the sandbox cannot move its own contour").toContain("the whole contour");
+    app.applyState({ ...app.currentState(), mode: "gallery", record: "circle-linear-cos", fixture: 0 });
+    expect(walk(), "a record's contour was offered to the arrows").not.toContain("the whole contour");
+  });
+
+  it("spends the DRAFT budget while a slider is being scrubbed", () => {
+    // `gesture` covers the stage; a rail slider's drag is the same thing happening somewhere the
+    // stage cannot see, and without this a parameter scrub recomputes at full precision on every
+    // pointer move. The sliders that set the flag arrive with the cards at 1.4/1.5 — the budget
+    // reads it today, and the node count is where a budget becomes visible.
+    // Read off the quadrature's own certificate rather than a field: `integrateContour` records
+    // `"gauss-legendre, N nodes"` as its method, and a scan for that number does not have to
+    // transcribe the shape of `ContourIntegral` into the test.
+    const nodes = (app: ReturnType<typeof mountShell2>): number => {
+      const r = app.resolution();
+      if (r.kind !== "plain" && r.kind !== "declared") throw new Error(`nothing was integrated (${r.kind})`);
+      const found = /(\d+) nodes/.exec(JSON.stringify(r.analysis.integral));
+      if (found === null) throw new Error("no quadrature node count in the integral");
+      return Number(found[1]);
+    };
+    const { app } = mountStage();
+    // **The DEFAULT state is too easy for the budget to bite**, measured: `1/z` inside `|z| = 1.5`
+    // puts the pole 1.5 away from every node, so the rule wants 56 nodes and the draft ceiling of
+    // 768/3 never comes near it. A pole just inside the circle is what a reader dragging a contour
+    // actually has under the pointer, and there the ceiling is the whole point.
+    app.applyState({ ...app.currentState(), expr: "1/(z-1.4)" });
+    const full = nodes(app);
+    app.session().scrubbing = true;
+    app.stage().fitContour();
+    const draft = nodes(app);
+    expect(draft, "the scrub ran at full precision").toBeLessThan(full);
+  });
+
+  it("pans the VIEW when a drag starts on nothing grabbable", () => {
+    const { app, ink } = mountStage();
+    const before = app.currentState().view.center;
+    ink.dispatchEvent(pointer("pointerdown", 5, 5));
+    expect(app.session().gesture).toBe("view");
+    ink.dispatchEvent(pointer("pointermove", 40, 5));
+    ink.dispatchEvent(pointer("pointerup", 40, 5));
+    expect(app.session().gesture).toBe("none");
+    // And the gesture let go of whatever it held: the arrows go back to panning, and no chip is
+    // left pinned to the stage.
+    expect(app.session().held).toBeNull();
+    // jsdom gives the stage a 1×1 viewport, so the pan's magnitude is not the property — that it
+    // panned at all, and released, is.
+    expect(app.currentState().view.center).not.toEqual(before);
   });
 });

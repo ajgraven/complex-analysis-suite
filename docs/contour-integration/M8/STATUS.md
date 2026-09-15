@@ -13,12 +13,14 @@ changed.
   squashed to `master` as `2a09ee0`; this branch was restarted from it. Its wording pass finished at
   **0 flagged, 0 unapplied** in the review document, against 191 flagged when the five blanket
   decisions were approved.
-  **Steps 1.1 (the scaffold) and 1.2 (the visual system) are done** — `src/shell2/` exists beside
-  `src/shell/`, `?shell=new` boots it in the new visual system, and the old shell is untouched
-  (proven: its rendered page is the same PNG hash before and after). **Next execution action: step
-  1.3** (the stage controller). The branch may be red between 1.1 and 1.12 and must be green at
-  1.13; it is green now. The look is recorded at
-  [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png).
+  **Steps 1.1 (the scaffold), 1.2 (the visual system) and 1.3 (the stage controller) are done** —
+  `src/shell2/` exists beside `src/shell/`, `?shell=new` boots it in the new visual system over a
+  live, DRAGGABLE stage, and the old shell is untouched (proven at 1.2: its rendered page is the same
+  PNG hash before and after). **Next execution action: step 1.4** (the left rail). The branch may be
+  red between 1.1 and 1.12 and must be green at 1.13; it is green now. The look is recorded at
+  [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png) and
+  [`1.3-shell2-stage-1440x900.png`](screens/1.3-shell2-stage-1440x900.png) /
+  [`1.3-shell2-chip.png`](screens/1.3-shell2-chip.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -43,6 +45,8 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-15 | **1.3** | e24511b | the stage controller: `stageView.ts` (three layers, poles moved onto the INK canvas, value-keyed program, a cleared portrait on a parse failure) + `stageController.ts` (pointer / wheel / keyboard / pen, one cursor convention, a `[0.05, 200]` zoom clamp, `fitContour` on double-click and a toolbar button); `render` gains plan §4.0's `actions`; `Session` gains `PenDraft`, `held` and `scrubbing`; `drawnCuts`/`sameBranchGrab` lifted into `engine/branchEdit.ts` so both shells share one implementation. 19 node + 7 browser tests; sweep **27/30, 2 recorded equivalents, 1 line deleted as dead**. Full gate green: 554 files / 5757 tests, lint and typecheck silent, browser suite 147/147, a11y no regressions |
+
 | 2026-09-15 | **1.2** | 4fb54cb | the visual system: `theme.css` (tokens, five-size type scale, surfaces, controls, badges), `shell2.css` rewritten onto the tokens, `inkTheme.ts` (dark = the literals moved, light provided and not yet consumed); `drawContour`/`drawAccumulator` take a REQUIRED theme; 4 browser tests + sweep 8/8; screenshot committed |
 
 | 2026-09-15 | **1.1** | 072f74b | the shell2 scaffold: the keyed builder (`dom.ts`), memoised KaTeX (`math.ts`), the `Session` (`session.ts`), `mountShell2` with one `commit` door, the grid, and `?shell=new`; `test/shell2.test.ts` (17) + `test/shell2.browser.test.ts` (3); sweeps 8/8, 5/5, 2/2 after four real survivors |
@@ -56,6 +60,63 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(1.3) THE STAGE WAS DEAD TO A REAL MOUSE, and fifteen green tests said otherwise.** `app.css`
+  carries an unscoped `.ink { pointer-events: none }` — correct for the old shell, whose gestures
+  land on a separate `.overlay` div — and `index.html` loads that sheet for both shells, so the new
+  shell's controller, which listens on the ink canvas itself, never saw a pointer. Every gesture
+  test dispatches an event straight AT the canvas, which skips hit testing entirely, so nothing in
+  either suite could see it; a probe with a real mouse against the dev server found it in one sweep
+  (`cursor 'grab' first at x = NEVER`). The primitive is `document.elementFromPoint`, now asserted at
+  three points over the stage, and the GL layer is explicitly denied the pointer — it is DATA and
+  `aria-hidden`, and a click landing there lands on the layer that has no idea what a contour is.
+- **(1.3) The same collision again within the hour, and then measured as a class.** `.chip` is the
+  old shell's 9 × 9 colour swatch, so the stage's snap and held chips collapsed to a 9 px square with
+  their text spilling out of them — `width: 14.78px` for a border box whose content width was zero.
+  **Step 1.2's comment states only half the rule**: scoping `theme.css` under `.shell2` protects the
+  OLD shell from the NEW rules and does nothing in the other direction. Measured across the new
+  shell's whole class vocabulary, **nine collide** — `.num`, `.small`, `.muted`, `.badge`, `.chip`,
+  `.gl`, `.ink`, `.navHost`, `.expr`. Two are RENAMED (`stageChip`, `shell2Nav`) because the old
+  meaning is a different object; the rest mean the same thing in both shells and are cancelled in a
+  named block in `shell2.css`, because what leaks is the old rule's extras rather than its intent —
+  `.num` was arriving MONOSPACE, which inverts step 1.2's own rule that monospace is a signal the
+  text is machine syntax. The block goes away at 1.12 with `app.css`; a browser test pins all three.
+- **(1.3) The chip printed its `$…$` delimiters on screen.** A piece name is a SENTENCE in this
+  app's convention — the circle is called `the circle $|z - a| = R$` — and the chip set it as plain
+  text. It goes through `mathText` now, with `aria-label` carrying `mathPlain`. **No node assertion
+  on `textContent` could have seen it**, because a KaTeX span's `textContent` is not the sentence
+  either; the test asserts the label, that no `$` appears in the visible text, and that a `.katex`
+  node is there.
+- **(1.3) jsdom gives the stage a 1 × 1 box, so the 11 px grab radius covers the entire plane** and
+  every `pointerdown` landed on a handle. The harness stubs `clientWidth`/`clientHeight` at
+  900 × 600 rather than weakening the assertion — M7.2's "a test aimed at an unsized stage is aiming
+  at an artefact", and step 1.1's `|| 1` guard magnifying the pen's geometry by 4, for the third time.
+- **(1.3) The overlay is DOM and must not be gated on a CANVAS fact.** Drawing it at the end of
+  `drawNow` put it after two returns — an absent 2D context and an empty resolution — so a reader's
+  snap chip depended on whether the ink layer could get a context. It is drawn first and
+  unconditionally; the mutant that moves it back is killed.
+- **(1.3) A finished pointer gesture must LET GO.** Keeping the grab after `pointerup` left the chip
+  pinned to the stage after every drag (seen in a browser) and silently rebound the arrow keys to
+  whatever the mouse last touched. The keyboard's grab is something a reader ASKS for with Enter.
+- **(1.3) `reset()` at the door, because `grab` is the controller's own local.** `resetTransient`
+  clears the session's transient half, but it cannot see a variable it does not own — which is
+  exactly M7.4's `drillGraded`, so `applyState` calls `controller.reset()` and a test drives it.
+- **(1.3) The draft evaluation budget does not bite on the app's DEFAULT state**, measured: `1/z`
+  inside `|z| = 1.5` puts the pole 1.5 away from every node, so the rule wants 56 nodes and the
+  768/3 ceiling never comes near it. The test uses a pole just inside the circle, which is what a
+  reader dragging a contour actually has under the pointer. (`session.scrubbing` is read by the
+  budget now; the sliders that SET it arrive with the cards at 1.4/1.5.)
+- **(1.3) A strengthened assertion was still bought by the piece name.** `toContain(handle.param)`
+  passes for a label that drops the parameter entirely, because the circle is named
+  `the circle $|z - a| = R$` and that contains `R`. The parenthesised suffix is the content — WHICH
+  parameter of this piece — so the assertion is `toContain("(R)")` and `not.toBe(pieceName)`.
+- **(1.3) Sweep 27/30, two recorded equivalents and one line deleted as dead.** `setPen(null)` in
+  `reset()` was unobservable — the pen lives on the session, which the door already clears — and a
+  line nothing can falsify is a line that will be wrong one day without anything saying so. The two
+  survivors are kept with their reasons: the view's `session.pen === null` guard on the held chip is
+  UNREACHABLE (`penStart` clears the grab, and `onPointerDown` returns before `setGrab` while the pen
+  is out) and is kept defensively on M6.4's precedent, and `resetTransient` clearing `held` is
+  redundant with `controller.reset()` doing the same, deliberately, since each clears what it owns.
 
 - (review) `@cas/expr` already exports `toLatex` (`packages/expr/src/latex.ts`), used by three sibling
   apps. Step 0.4 measures its coverage rather than writing a printer.
