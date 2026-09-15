@@ -7,8 +7,8 @@ changed.
 
 ## Current
 
-- **Plan drafting:** Part 1 written (§0–§3). **Next drafting action:** write Part 2 (§4, Phase 1 in
-  full) — a Fable session, about one S step.
+- **Plan drafting:** Parts 1 and 2 written (§0–§4). **Next drafting action:** write Part 3 (§5–§7,
+  Phases 2–5 in full) — a Fable session, about one S step. Execution of Phase 0 does not wait for it.
 - **Execution:** not started. **Next execution action:** Phase 0, step 0.1 (an Opus session; suggested
   session A = steps 0.1 + 0.2).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
@@ -19,7 +19,8 @@ changed.
 | date | step | commit | notes |
 |---|---|---|---|
 | 2026-09-14 | review | 3f3c9da | review published; working materials under `review-inputs/` |
-| 2026-09-15 | plan Part 1 | (this commit) | §0–§3, ADR-0043, CLAUDE.md pointer; the brief's "even" sentence corrected |
+| 2026-09-15 | plan Part 1 | 5efe5b9 | §0–§3, ADR-0043, CLAUDE.md pointer; the brief's "even" sentence corrected |
+| 2026-09-15 | plan Part 2 | (this commit) | §4, Phase 1 in full: architecture, thirteen steps, ten suggested sessions |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -34,4 +35,7 @@ changed.
 
 ## Decisions taken during execution
 
-- none yet.
+- (plan Part 2) Default stage mode is **quiet** in all three app modes; full, isochromatic and
+  textbook are one click away. Rationale in plan §4 step 1.9.
+- (plan Part 2) The drill and the contrasts move out of full-screen overlays in Phase 1 only as far as
+  a correct modal dialog and a rail card; their rehousing proper is Phase 3.
