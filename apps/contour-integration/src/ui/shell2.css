@@ -317,3 +317,76 @@
 .shell2 .poleTable tr.hot {
   background: rgba(110, 168, 254, 0.1);
 }
+
+/* ---- the contour's piece list and the cut editor (step 1.4b) ---- */
+.shell2 .btnRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.shell2 .pieces2 {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.shell2 .pieces2 > li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  font-size: var(--t-s);
+  padding: 0.1rem 0.2rem;
+  border-radius: 4px;
+}
+/* The rail end of the three-way highlight (step 1.10 completes the others). */
+.shell2 .pieces2 > li.hot {
+  background: rgba(110, 168, 254, 0.1);
+}
+.shell2 .pieceName {
+  flex: 1 1 7rem;
+  min-width: 0;
+}
+.shell2 .pieceValue {
+  flex-basis: 100%;
+  color: var(--g-muted);
+  font-size: var(--t-xs);
+}
+/* **The SAME six hues the stage strokes with** — `--piece-N` is `inkTheme.ts`'s `pieces[N]`, so a
+   reader matching a row to a curve is matching one colour rather than two kept in step. */
+.shell2 .swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+  align-self: center;
+}
+
+.shell2 .declaration {
+  border-left: 1px solid var(--g-border);
+  padding-left: 0.5rem;
+}
+.shell2 .verdict {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  margin: 0;
+  font-size: var(--t-s);
+}
+/* A badge in a flex row is a fixed 22 px stamp, not something to squeeze: without this the `⚠` on a
+   long refusal collapses to a red hairline, which is the one glyph that must not be missable. */
+.shell2 .verdict > .badge {
+  flex: none;
+}
+/* A note on a picker row wraps under it rather than being clipped mid-word — the sheet spinner's
+   sentence is 60 characters and the rail is 19rem. */
+.shell2 .pickRow {
+  flex-wrap: wrap;
+}
+.shell2 .pickRow > .muted.small:last-child {
+  flex-basis: 100%;
+}

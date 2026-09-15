@@ -458,3 +458,50 @@ describe("the stage's gestures, aimed at a real layout", () => {
     expect(inkNear(), "an ENTIRE integrand left a ring behind").toBe(0);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The three-way highlight — M8 step 1.4b.
+//
+// The rail's half is asserted in jsdom; THIS half cannot be, because jsdom has no 2D context and
+// `drawNow` returns before it strokes anything.
+//
+// **Measured as INK, not as a spy.** `vi.spyOn` on a module namespace fails in the browser build
+// (the exports are frozen getters), and it would anyway assert that one function was CALLED with a
+// number rather than that a curve looks different. An emphasised piece is stroked at `lineWidth: 4`
+// against 2.5, so it lays down measurably more ink — and the control is built in: leaving the row
+// must put the count back.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("hovering a piece row", () => {
+  it("makes the stage stroke the piece the row NAMES, and stop when the pointer leaves", async () => {
+    const { root } = mount();
+    await drawn();
+    const canvas = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    if (canvas === null) throw new Error("no ink canvas");
+    // **Count the piece's HUE, not "any ink".** Measured: every stroke is laid over a dark halo at a
+    // fixed width, so widening the coloured line from 2.5 px to 4 px adds no pixel above an alpha
+    // threshold — it recolours pixels the halo already lit. The first draft counted alpha and read
+    // 10963 both times, which looked like a product defect and was a bad instrument.
+    const hue = (): number => {
+      const ctx = canvas.getContext("2d");
+      if (ctx === null) throw new Error("no 2d context");
+      const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let lit = 0;
+      // `--piece-0` is `#6ea8fe` = (110, 168, 254): blue-dominant and much lighter than the halo.
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 2] > 180 && data[i + 2] - data[i] > 60 && data[i + 3] > 200) lit++;
+      }
+      return lit;
+    };
+    const row = root.querySelector('[data-card="contour"] .pieces2 > li');
+    if (row === null) throw new Error("no piece row");
+    const before = hue();
+    expect(before, "the piece is not drawn, so a thicker stroke would prove nothing").toBeGreaterThan(100);
+    row.dispatchEvent(new Event("pointerenter", { bubbles: true }));
+    await drawn();
+    expect(hue(), "the hovered piece was not emphasised").toBeGreaterThan(before);
+    row.dispatchEvent(new Event("pointerleave", { bubbles: true }));
+    await drawn();
+    expect(hue(), "the emphasis outlived the pointer").toBe(before);
+  });
+});

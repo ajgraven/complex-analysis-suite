@@ -165,3 +165,30 @@ export function onContour(
 ): boolean {
   return resolved.some((g) => distanceToPoint(g, at) <= tolerance);
 }
+
+/**
+ * The same curve, walked the other way — M8 step 1.4b.
+ *
+ * `∮` changes SIGN, which is what makes this worth a button: a reader who has watched the residue
+ * theorem give `2πi Σ Res` can watch the same contour give `−2πi Σ Res` and see that the orientation
+ * is part of the statement rather than a convention the app applied for them.
+ *
+ * **Every piece is reversed AND the list is reversed**, because a contour is a CHAIN: reversing the
+ * pieces alone would leave each one ending where the next begins in the old direction, and the path
+ * would no longer be connected. The roles, ids, names, colours and `lemma` tags ride along unchanged
+ * — they are facts about which piece this is, not about which way it is walked.
+ *
+ * `side` is deliberately NOT flipped. It names which limiting value the piece carries where it lies
+ * ON a cut — "above" is above whichever way you walk — so flipping it would silently move the piece
+ * onto the other lip, which is a different contour and not this one backwards.
+ */
+export function reverseContour(contour: Contour): Contour {
+  const pieces = [...contour.pieces].reverse().map((piece) => ({
+    ...piece,
+    geom:
+      piece.geom.kind === "segment"
+        ? { ...piece.geom, from: piece.geom.to, to: piece.geom.from }
+        : { ...piece.geom, theta0: piece.geom.theta1, theta1: piece.geom.theta0 },
+  }));
+  return { ...contour, pieces };
+}

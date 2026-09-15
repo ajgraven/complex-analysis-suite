@@ -212,9 +212,14 @@ export function createStageView(host: HTMLElement): StageView {
     const pieces = resolvedPieces(d.state, d.resolution);
     const { radius } = handles(d.state);
     const hoveredHandle = d.session.hover.handle;
+    // **The rail's hover, on the stage.** `session.hover.piece` is one id read by the piece list,
+    // the stage and (at 1.9) the accumulator, so hovering a row lights the same curve it names —
+    // three surfaces, one identifier, which is what stops a highlight meaning different things.
+    const drawnPieces = contourOf(d.state, d.resolution).pieces;
     drawContour(ctx, pieces, view, vp, {
       theme: t,
-      colours: contourOf(d.state, d.resolution).pieces.map((p) => p.colour),
+      highlight: drawnPieces.findIndex((p) => p.id === d.session.hover.piece),
+      colours: drawnPieces.map((p) => p.colour),
       handles: radius.map((handle, i) => ({
         at: handle.at,
         emphasis: d.session.gesture === "handle" && hoveredHandle === i ? "grabbed" : hoveredHandle === i ? "hover" : "none",

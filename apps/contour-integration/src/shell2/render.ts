@@ -12,6 +12,8 @@
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle, type CardId } from "../engine/vocabulary.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
+import { contourCard } from "./cards/contour.js";
+import { cutsCard } from "./cards/cuts.js";
 import { integrandCard } from "./cards/integrand.js";
 import { parametersCard } from "./cards/parameters.js";
 import { singularitiesCard } from "./cards/singularities.js";
@@ -83,6 +85,8 @@ const CARDS: Partial<Record<CardId, Card>> = {
   target: targetCard,
   integrand: integrandCard,
   parameters: parametersCard,
+  contour: contourCard,
+  cuts: cutsCard,
   singularities: singularitiesCard,
 };
 

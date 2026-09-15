@@ -764,3 +764,50 @@ describe("the left rail, live", () => {
     expect(app.currentState().bindings, "a stale binding rode into the new fixture").toEqual({});
   });
 });
+
+describe("the hover, across three surfaces", () => {
+  it("records the piece's OWN id, and clears it", () => {
+    // The rail's half. **The stage's half cannot be seen here**: jsdom has no 2D context, so
+    // `drawNow` returns before it strokes anything — `test/shell2.browser.test.ts` asserts the index
+    // `drawContour` is actually given, where there is a context to give it to.
+    const { root, app } = mountStage();
+    const row = q(root, '[data-card="contour"] .pieces2 > li');
+    row.dispatchEvent(new Event("pointerenter", { bubbles: true }));
+    expect(app.session().hover.piece).toBe("circle");
+    row.dispatchEvent(new Event("pointerleave", { bubbles: true }));
+    expect(app.session().hover.piece).toBeNull();
+  });
+});
+
+describe("the contour and the cuts, live", () => {
+  it("SEEDS the cut system a template presupposes, and never overwrites the reader's own", () => {
+    // The keyhole's argument needs a branch point and a ray; the dogbone needs two points and a
+    // bounded arc. Offering the shape without the cuts would open a contour whose ledger refuses for
+    // a reason the reader did not cause.
+    const { app } = mount();
+    expect(app.currentState().branch.points.length).toBe(0);
+    app.actions().setTemplate("keyhole");
+    const seeded = app.currentState().branch;
+    expect(seeded.points.length, "the keyhole seeded no branch point").toBe(1);
+    // A second template must not overwrite what is now the reader's cut system.
+    app.actions().setTemplate("dogbone");
+    expect(app.currentState().branch.points, "a template overwrote the reader's own points").toEqual(seeded.points);
+  });
+
+  it("puts what was TYPED back in the box when the factor is undeclared", () => {
+    // The box holds `R(z)` once a factor is declared, so leaving it alone and merely dropping the
+    // declaration would take the cofactor and CALL it the integrand — silently a different problem,
+    // and one that still looks plausible.
+    const { app } = mount();
+    app.actions().setExpr("z^(-0.5)/(1+z)");
+    app.actions().setTemplate("keyhole");
+    const pointId = app.currentState().branch.points[0].id;
+    app.actions().declare(pointId);
+    expect(app.currentState().beforeDeclaration, "nothing was remembered to put back").toBe("z^(-0.5)/(1+z)");
+    app.actions().setExpr("1/(1+z)");
+    app.actions().undeclare();
+    expect(app.currentState().expr).toBe("z^(-0.5)/(1+z)");
+    expect(app.currentState().declaration).toBeNull();
+    expect(app.currentState().beforeDeclaration).toBeNull();
+  });
+});

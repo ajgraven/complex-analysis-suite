@@ -12,7 +12,11 @@
 // join it where the plan puts them.
 import { attachCanvasA11y, mountNavHeader } from "@cas/ui";
 
+import { Frac } from "@cas/exact";
+
 import { circleTemplate } from "../engine/contour/templates.js";
+import { reverseContour } from "../engine/contour/edit.js";
+import { TEMPLATES } from "../shell/templates.js";
 import { compile, defaultState, resolveState, withParam, type Compiled, type ShellState, type StateResolution } from "../shell/state.js";
 import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
@@ -144,6 +148,65 @@ export function mountShell2(root: Element): Shell2Handle {
       scheduleDraw();
       patch(left, render(state, resolution, session, actions, polesNow()).left);
     },
+
+    // ── the contour ───────────────────────────────────────────────────────────────────────
+    setTemplate: (id) => {
+      const template = TEMPLATES.find((t) => t.id === id);
+      if (template === undefined) return;
+      const built = template.build();
+      // A template that presupposes a cut system SEEDS one — the keyhole's ray, the dogbone's
+      // bounded arc — but only into an empty one, so a reader's own points are never overwritten.
+      const branch =
+        template.seed !== undefined && state.branch.points.length === 0 ? template.seed(state.branch) : state.branch;
+      commit(
+        { ...state, contour: built, sandboxContour: built, contourSource: { template: template.id, shift: [0, 0] }, branch },
+        "edit",
+      );
+      controller?.fitContour();
+    },
+    // `contourSource` is kept: a reversal is still the same template at the same parameters, and
+    // `viewState.ts` rebuilds from the recipe, so DROPPING it would refuse to mint a link for a
+    // contour that has one. The recipe's own verification is what would catch it if that were wrong.
+    reverseContour: () => {
+      const flipped = reverseContour(state.contour);
+      commit({ ...state, contour: flipped, sandboxContour: flipped, contourSource: null }, "edit");
+    },
+    penStart: () => {
+      controller?.penStart();
+      inkCanvas.focus();
+    },
+    penStop: () => controller?.penStop(),
+    penBack: () => controller?.penBack(),
+    penCommit: (closed) => controller?.penCommit(closed),
+
+    // ── the branch cuts ───────────────────────────────────────────────────────────────────
+    setBranch: (next) => commit({ ...state, branch: next }, "edit"),
+    setIso: (on) => commit({ ...state, iso: on }, "edit"),
+    declare: (pointId) =>
+      commit(
+        {
+          ...state,
+          // **What the box held a moment ago is the split check's reference, and its only one.**
+          beforeDeclaration: state.expr,
+          declaration: { pointId, window: [Frac.ZERO, Frac.of(2n)], sign: 1, constant: [1, 0], logPower: 2 },
+        },
+        "edit",
+      ),
+    // **Put back what was TYPED, not what is in the box.** The box holds `R(z)` now, so leaving it
+    // alone and merely dropping the declaration would take the cofactor and call it the integrand —
+    // silently a different problem, and one that still looks plausible.
+    undeclare: () =>
+      commit(
+        {
+          ...state,
+          expr: state.beforeDeclaration ?? state.expr,
+          declaration: null,
+          beforeDeclaration: null,
+        },
+        "edit",
+      ),
+    setDeclaration: (next, cut) =>
+      commit({ ...state, declaration: next, ...(cut === undefined ? {} : { branch: cut }) }, "edit"),
   };
 
   function commit(next: ShellState, why: CommitReason): void {

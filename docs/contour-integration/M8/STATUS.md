@@ -15,16 +15,18 @@ changed.
   decisions were approved.
   **Steps 1.1 (the scaffold), 1.2 (the visual system), 1.3 (the stage controller) and 1.4a (four of
   the left rail's six cards) are done** — `src/shell2/` exists beside `src/shell/`, `?shell=new`
-  boots it in the new visual system over a live, DRAGGABLE stage with a working Integrand,
-  Parameters, Singularities and (in gallery mode) Target card. **Step 1.4 is SPLIT**, on the pattern
-  M5.1 and 0.5b used: 1.4a is those four, and **1.4b** is the Contour and Branch-cuts cards — ~430
-  lines of the old shell between them — plus the hover-linking the plan's Contour bullet asks for.
-  **Next execution action: step 1.4b.** The branch may be
+  boots it in the new visual system over a live, DRAGGABLE stage with **all six left-rail cards**
+  working. Step 1.4 was SPLIT, on the pattern M5.1 and 0.5b used: 1.4a was Target / Integrand /
+  Parameters / Singularities, and 1.4b the Contour and Branch-cuts cards — ~430 lines of the old
+  shell between them — plus the rail → stage half of the three-way highlight.
+  **Next execution action: step 1.5** (the right rail). The branch may be
   red between 1.1 and 1.12 and must be green at 1.13; it is green now. The look is recorded at
   [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png) and
   [`1.3-shell2-stage-1440x900.png`](screens/1.3-shell2-stage-1440x900.png) /
   [`1.3-shell2-chip.png`](screens/1.3-shell2-chip.png) /
-  [`1.4-shell2-sandbox-1440x900.png`](screens/1.4-shell2-sandbox-1440x900.png).
+  [`1.4-shell2-sandbox-1440x900.png`](screens/1.4-shell2-sandbox-1440x900.png) /
+  [`1.4b-shell2-keyhole-1440x900.png`](screens/1.4b-shell2-keyhole-1440x900.png) /
+  [`1.4b-shell2-declared-1440x900.png`](screens/1.4b-shell2-declared-1440x900.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -49,6 +51,8 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-15 | **1.4b** | (this commit) | the last two left-rail cards: `cards/contour.ts` (template menu, pen, **Reverse orientation**, the piece list with colour / name / role / its own value) and `cards/cuts.ts` (the old `renderBranchCard` + `renderDeclaration` ported structurally and KEYED); `reverseContour` in `engine/contour/edit.ts`; the rail → stage half of the three-way highlight; `ShellActions` gains eleven members. `test/contourEdit.test.ts` (3) + 11 card tests + 2 live + 1 browser; sweep **22/23, one recorded equivalent**. Full gate green: 557 files / 5810 tests, lint and typecheck silent, browser suite 148/148, a11y no regressions |
+
 | 2026-09-15 | **1.4a** | 207e197 | four of the six left-rail cards: `src/shell2/cards/` (`card.ts` the contract + `ShellActions`, `target.ts`, `integrand.ts`, `parameters.ts`, `singularities.ts`, `parseError.ts`); `render.ts` builds from a card registry; `paramChannel`/`withParam` lifted into `shell/state.ts` (the old shell's `channelOf` delegates); `fmt`/`fmtCx` → `kernel/decimal.ts` and `fixtureLabel` → `families/describe.ts` on the second-consumer rule; `Pole.residue` gains a `latex` twin. `test/cards.test.ts` (23) + `test/parseError.test.ts` (3) + 5 live tests; sweep **27/28, one recorded equivalent**. Full gate green: 556 files / 5789 tests, lint and typecheck silent, browser suite 147/147, a11y no regressions |
 
 | 2026-09-15 | **1.3** | e9b52c9 | the stage controller: `stageView.ts` (three layers, poles moved onto the INK canvas, value-keyed program, a cleared portrait on a parse failure) + `stageController.ts` (pointer / wheel / keyboard / pen, one cursor convention, a `[0.05, 200]` zoom clamp, `fitContour` on double-click and a toolbar button); `render` gains plan §4.0's `actions`; `Session` gains `PenDraft`, `held` and `scrubbing`; `drawnCuts`/`sameBranchGrab` lifted into `engine/branchEdit.ts` so both shells share one implementation. 19 node + 7 browser tests; sweep **27/30, 2 recorded equivalents, 1 line deleted as dead**. Full gate green: 554 files / 5757 tests, lint and typecheck silent, browser suite 147/147, a11y no regressions |
@@ -66,6 +70,37 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(1.4b) THE OLD SHELL PRINTS RAW LaTeX in its Branch-cuts card.** `CrossingMonodromy.literal` and
+  `.reduced` are bare LaTeX fragments, and the old card assembles them into a string it sets as
+  TEXT — so it reads `× e^{2\pi i \cdot \frac{1}{2}} = −1` on screen, backslashes and all. The new
+  card prints `detail` instead, which is the same content as one `$…$` sentence, already in step
+  0.5b's convention and already carrying BOTH of §3.4's forms and the reason they agree. Seen in a
+  browser; the fix also removes a second wording of a sentence the kernel already writes.
+- **(1.4b) "Any ink" is the wrong instrument for an emphasised stroke.** Every contour stroke is laid
+  over a dark halo at a fixed width, so widening the coloured line from 2.5 px to 4 px adds NO pixel
+  above an alpha threshold — it recolours pixels the halo already lit. The first browser test read
+  10963 both times and looked like a product defect; counting the piece's own HUE reads the
+  difference. (`vi.spyOn` on a module namespace is not available in the browser build, and would
+  anyway assert that a function was CALLED with a number rather than that a curve looks different.)
+- **(1.4b) A badge in a flex row collapses to a hairline.** The `⚠` on the split check's long refusal
+  was a red vertical line 2 px wide — the one glyph that must not be missable. `flex: none` on a
+  badge inside `.verdict`; a picker row's trailing note also wraps now instead of being clipped
+  mid-word ("the determina as declare").
+- **(1.4b) `reverseContour`'s piece ORDER is invisible to connectivity and to the integral.**
+  Measured: for a closed two-piece contour, reversing each piece and leaving the list alone also
+  joins up, and the sum over pieces is identical — so the first test passed under the mutant. What
+  the order decides is which piece is walked FIRST, which is the accumulator's trail and an open
+  contour's endpoints, and that is asserted directly.
+- **(1.4b) A picker bound to nothing still looks right when the value IS the default.** The
+  branch-point order select reads `√ (α = 1/2)` either way, because `addBranchPoint` gives a fresh
+  point `OFFERED_ORDERS[0]`; the binding is only observable on a point whose order is something
+  else. The same shape as 1.4a's `<select>` value bug, found by the sweep rather than by a browser.
+- **(1.4b) The `not sampled` branch is unreachable and stays**, for the reason 1.4a recorded and
+  M6.4 set the precedent for: M5.0 dropped the quadrature skip for all seven tier-D records, and the
+  one skip it left needs a cut running VERTICALLY along a piece, which no template and window this
+  card offers produces. The corpus is asserted to reach it nowhere, so a regression in M5.0's claim
+  turns that test red rather than leaving the branch merely untested. Sweep **22/23**.
 
 - **(1.4) THE PLAN ASKS FOR ERROR KINDS `@cas/expr` DOES NOT HAVE.** Its `ExprError` carries a
   free-text `message` and a `pos`, and every throw site writes its own prose. So the mapping to plain

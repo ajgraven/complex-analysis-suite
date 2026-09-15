@@ -11,7 +11,9 @@ import { describe, expect, it } from "vitest";
 import { Frac } from "@cas/exact";
 
 import { circleTemplate } from "../src/engine/contour/templates.js";
-import { LEFT_CARDS } from "../src/engine/vocabulary.js";
+import { penContour } from "../src/engine/contour/pen.js";
+import { addBranchPoint, setOrder, setShadow } from "../src/engine/branchEdit.js";
+import { LEFT_CARDS, roleLabel } from "../src/engine/vocabulary.js";
 import {
   compile,
   defaultState,
@@ -38,6 +40,17 @@ function spyActions(): ShellActions & { calls: string[] } {
     setParam: (n, v) => calls.push(`param:${n}=${v}`),
     setScrubbing: (on) => calls.push(`scrub:${on}`),
     hover: (p) => calls.push(`hover:${p}`),
+    setTemplate: (id) => calls.push(`template:${id}`),
+    reverseContour: () => calls.push("reverse"),
+    penStart: () => calls.push("pen:start"),
+    penStop: () => calls.push("pen:stop"),
+    penBack: () => calls.push("pen:back"),
+    penCommit: (closed) => calls.push(`pen:commit:${closed}`),
+    setBranch: (b) => calls.push(`branch:${b.points.length}:${b.cuts.length}:${b.shadow === true}:${b.sheet}`),
+    setIso: (on) => calls.push(`iso:${on}`),
+    declare: (id) => calls.push(`declare:${id}`),
+    undeclare: () => calls.push("undeclare"),
+    setDeclaration: (d, cut) => calls.push(`decl:${d.sign}:${d.logPower}:${d.window[0].n}/${d.window[0].d}:${cut === undefined ? "nocut" : "cut"}`),
   };
 }
 
@@ -64,6 +77,28 @@ const sandbox = (over: Partial<ShellState> = {}): ShellState => ({
 
 const gallery = (record: string, fixture = 0): ShellState =>
   sandbox({ mode: "gallery", record, fixture });
+
+/** A sandbox with one branch point, its cut, and a `√` order — the keyhole's starting shape. */
+const withPoint = (): ShellState => {
+  const base = sandbox({ expr: "1/(1+z)" });
+  return { ...base, branch: addBranchPoint(base.branch, [0, 0]) };
+};
+
+/** The same, with a factor declared on it — so the box holds `R(z)`. */
+const declared = (): ShellState => {
+  const base = withPoint();
+  return {
+    ...base,
+    beforeDeclaration: "z^(-0.5)/(1+z)",
+    declaration: {
+      pointId: base.branch.points[0].id,
+      window: [Frac.ZERO, Frac.of(2n)],
+      sign: 1,
+      constant: [1, 0],
+      logPower: 2,
+    },
+  };
+};
 
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
   const e = root.querySelector<T>(sel);
@@ -100,7 +135,7 @@ describe("the Integrand card", () => {
     // could not see it was told the box held the integrand when it held the cofactor.
     const plain = q<HTMLInputElement>(rail(sandbox()).host, "input.expr");
     expect(plain.getAttribute("aria-label")).toBe("integrand f(z)");
-    const declared = q<HTMLInputElement>(
+    const cofactorBox = q<HTMLInputElement>(
       rail(
         sandbox({
           expr: "1/(1+z)",
@@ -115,7 +150,7 @@ describe("the Integrand card", () => {
       ).host,
       "input.expr",
     );
-    expect(declared.getAttribute("aria-label")).toBe("cofactor R(z)");
+    expect(cofactorBox.getAttribute("aria-label")).toBe("cofactor R(z)");
   });
 
   it("previews what PARSING produced, which is not what was typed", () => {
@@ -234,6 +269,189 @@ describe("the Singularities card", () => {
     const row = q(host, '[data-card="singularities"] tbody tr');
     row.dispatchEvent(new Event("pointerenter", { bubbles: true }));
     expect(actions.calls[0] ?? "").toMatch(/^hover:pole:/);
+  });
+});
+
+describe("the Contour card", () => {
+  it("gives every piece its colour, its NAME typeset, and what the argument uses it for", () => {
+    const { host } = rail(sandbox({ expr: "1/(1+z^2)" }));
+    const rows = host.querySelectorAll('[data-card="contour"] .pieces2 > li');
+    expect(rows.length).toBe(1);
+    const row = rows[0];
+    // The swatch reads the SAME token the stage strokes with, so the two cannot drift.
+    expect((row.querySelector(".swatch") as HTMLElement).style.background).toContain("--piece-");
+    // The piece name is a sentence in the `$…$` convention — `the circle $|z - a| = R$` — so it is
+    // typeset, and its delimiters never reach the screen.
+    expect(row.querySelector(".katex"), "the piece name was not typeset").not.toBeNull();
+    expect(row.textContent ?? "").not.toContain("$");
+    // And what it is FOR, in the reader's word rather than the schema's id.
+    expect(row.textContent ?? "").toContain(roleLabel("residue"));
+  });
+
+  it("prints a piece's own value", () => {
+    const { host } = rail(sandbox({ expr: "1/(1+z^2)" }));
+    expect(host.querySelector('[data-card="contour"] .pieceValue')?.textContent ?? "").toMatch(/\d/);
+  });
+
+  it("has NO record that skips its quadrature — which is M5.0's own result", () => {
+    // The `not sampled` tag exists because `integrateContour` fills the piece list with ZEROS when
+    // it declines to sample, and `0 + 0i` beside D6's upper edge (worth 2.22) is exactly the number
+    // a reader would go looking for the bug in. Measured here: **no loaded record reaches it.** M5.0
+    // honoured `side` and dropped the skip for all seven tier-D records, and the one skip it left is
+    // narrower — a cut running VERTICALLY along a piece, which no template and window this card
+    // offers produces. So the branch is kept as `integrateContour`'s contract and is asserted to be
+    // unreachable rather than left looking untested.
+    for (const id of RECORD_IDS) {
+      const { host } = rail(gallery(id));
+      const tags = [...host.querySelectorAll('[data-card="contour"] .tag')].map((t) => t.textContent);
+      expect(tags, `${id} skipped its quadrature — M5.0's claim has regressed`).not.toContain("not sampled");
+    }
+  });
+
+  it("offers no template picker and no pen under a RECORD", () => {
+    // The contour is the record's; swapping it would leave a worked example whose pieces no longer
+    // match the argument it is making.
+    const { host } = rail(gallery("circle-linear-cos"));
+    expect(host.querySelector('[data-card="contour"] select')).toBeNull();
+    expect(host.querySelector('[data-card="contour"] button')).toBeNull();
+    // The piece list is still there — reading a record's contour is the point of the card.
+    expect(host.querySelectorAll('[data-card="contour"] .pieces2 > li').length).toBeGreaterThan(0);
+  });
+
+  it("names a HAND-DRAWN contour as drawn, rather than claiming a template", () => {
+    const drawn = penContour({
+      nodes: [{ at: [-1, 0] }, { at: [1, 0] }, { at: [0, 1] }],
+      closed: true,
+    });
+    const { host } = rail(sandbox({ contour: drawn, sandboxContour: drawn, contourSource: null }));
+    const select = q<HTMLSelectElement>(host, '[data-card="contour"] select');
+    expect(select.value).toBe("");
+    expect(select.options[0].textContent).toBe("drawn by hand");
+    expect(host.querySelector('[data-card="contour"] .tag')?.textContent ?? "").toContain("drawn · 3 pieces");
+  });
+
+  it("asks for a HOVER by the piece's own id — the same id the stage draws it under", () => {
+    const { host, actions } = rail(sandbox());
+    const row = q(host, '[data-card="contour"] .pieces2 > li');
+    row.dispatchEvent(new Event("pointerenter", { bubbles: true }));
+    expect(actions.calls).toContain("hover:circle");
+  });
+
+  it("shows the PEN's grammar while it is out, and its vertex count", () => {
+    const session = defaultSession();
+    session.pen = { nodes: [{ at: [0, 0] }, { at: [1, 0] }], at: [1, 0], snap: null, drag: null };
+    const state = sandbox();
+    const compiled = compile(state.expr);
+    const host = document.createElement("div");
+    const actions = spyActions();
+    patch(host, render(state, resolveState(state, compiled), session, actions, null).left);
+    const card = q(host, '[data-card="contour"]');
+    expect(card.textContent ?? "").toContain("2 vertexes");
+    // Close is refused on two: a two-vertex loop is degenerate and the ledger cannot read it.
+    expect(q<HTMLButtonElement>(card, 'button[aria-label*="close the drawn path"]').disabled).toBe(true);
+    expect(card.textContent ?? "").toContain("Alt suppresses snapping");
+  });
+});
+
+describe("the Branch cuts card", () => {
+  it("is READ-ONLY under a record, and still offers the modulus device", () => {
+    const { host } = rail(gallery("circle-linear-cos"));
+    const card = q(host, '[data-card="cuts"]');
+    expect(card.textContent ?? "").toContain("A record's cuts are the record's");
+    expect(card.querySelector('button[aria-pressed]'), "the modulus toggle is missing").not.toBeNull();
+    expect(card.querySelector('button[aria-label^="remove branch point"]')).toBeNull();
+  });
+
+  it("says the integrand is single-valued until a branch point is declared", () => {
+    const { host, actions } = rail(sandbox());
+    const card = q(host, '[data-card="cuts"]');
+    expect(card.textContent ?? "").toContain("treated as single-valued");
+    q<HTMLButtonElement>(card, 'button:not([aria-pressed])').click();
+    expect(actions.calls.some((c) => c.startsWith("branch:1:")), "no branch point was added").toBe(true);
+  });
+
+  it("rebuilds the CUT with the window, because declaring the determination IS declaring the cut", () => {
+    // Left alone, the answer (which reads the window) and the drawn cut (which reads the geometry)
+    // would disagree about where the discontinuity is — M5.1's review found exactly that.
+    const state = declared();
+    const { host, actions } = rail(state);
+    const select = q<HTMLSelectElement>(host, '[data-card="cuts"] select[aria-label^="argument window"]');
+    select.value = "arg ∈ [−π, π)";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const call = actions.calls.find((c) => c.startsWith("decl:"));
+    expect(call, "the window change asked for nothing").toBeDefined();
+    expect(call, "the window moved and the cut did not").toContain(":cut");
+  });
+
+  it("moves the SHEET through the branch, and the cut does not move with it", () => {
+    const { host, actions } = rail(declared());
+    const spinner = q<HTMLInputElement>(host, '[data-card="cuts"] input[aria-label^="sheet"]');
+    expect(spinner.value).toBe("0");
+    spinner.value = "2";
+    spinner.dispatchEvent(new Event("change", { bubbles: true }));
+    const call = actions.calls.find((c) => c.startsWith("branch:"));
+    // A sheet is a whole-turn offset of the WINDOW: the point count and the cut count are untouched,
+    // and only the last field — the sheet — moves.
+    expect(call).toMatch(/^branch:1:1:false:2$/);
+  });
+
+  it("puts what was TYPED back in the box when the factor is undeclared", () => {
+    const { host, actions } = rail(declared());
+    q<HTMLButtonElement>(host, '[data-card="cuts"] button[aria-label^="undeclare"]').click();
+    expect(actions.calls).toContain("undeclare");
+  });
+
+  it("prints the crossing factor as MATHEMATICS, not as LaTeX source", () => {
+    // `literal` and `reduced` are bare LaTeX fragments, and the old shell prints them as text — its
+    // card reads `× e^{2\pi i \cdot \frac{1}{2}}` on screen, backslashes and all. `detail` is the
+    // same content as one `$…$` sentence, already in step 0.5b's convention.
+    const { host } = rail(declared());
+    const row = host.querySelector('[data-card="cuts"] .pieces2 > li');
+    expect(row, "no crossing row — the cut carries no jump").not.toBeNull();
+    expect(row?.querySelector(".katex"), "the factor was not typeset").not.toBeNull();
+    // **`.katex-mathml` carries the raw LaTeX**, so `textContent` is not what a reader sees — the
+    // same trap step 1.3's chip test met. Strip it and read what is actually drawn.
+    const clone = row?.cloneNode(true) as HTMLElement;
+    for (const m of clone.querySelectorAll(".katex-mathml")) m.remove();
+    const text = clone.textContent ?? "";
+    expect(text, "LaTeX source reached the screen").not.toMatch(/\\pi|\\frac|\\cdot/);
+    expect(text).not.toContain("$");
+  });
+
+  it("offers the ORDER of each branch point, and shows the one it HAS", () => {
+    // **Not the default one.** `addBranchPoint` gives a fresh point `OFFERED_ORDERS[0]`, so a picker
+    // that binds nothing still reads `√ (α = 1/2)` and looks right — the binding is only observable
+    // on a point whose order is something else.
+    const base = withPoint();
+    const logged = { ...base, branch: setOrder(base.branch, base.branch.points[0].id, { kind: "log" }) };
+    expect(q<HTMLSelectElement>(rail(logged).host, '[data-card="cuts"] select[aria-label^="order of branch point"]').value).toBe("log");
+    const { host, actions } = rail(withPoint());
+    const select = q<HTMLSelectElement>(host, '[data-card="cuts"] select[aria-label^="order of branch point"]');
+    expect(select.value).toBe("√ (α = 1/2)");
+    select.value = "log";
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    expect(actions.calls.some((c) => c.startsWith("branch:")), "the order change asked for nothing").toBe(true);
+  });
+});
+
+describe("the Branch cuts card, in shadow mode", () => {
+  it("offers NO join or split, because there the cuts are a consequence", () => {
+    // Those buttons read `branch.cuts` — the declaration — which shadow mode ignores, so they edited
+    // something invisible and changed nothing on screen. The JOIN is worse: it offers the one shape
+    // a shadow system structurally cannot express, since every ray reaches infinity.
+    const base = sandbox();
+    const two = addBranchPoint(addBranchPoint(base.branch, [0, 0]), [2, 0]);
+    const declared2 = { ...base, branch: two };
+    const shadowed = { ...base, branch: setShadow(two, true) };
+    const label = (st: ShellState): string[] =>
+      [...rail(st).host.querySelectorAll('[data-card="cuts"] button')].map((b) => b.textContent ?? "");
+    expect(label(declared2), "the join is missing where it MEANS something").toContain("join into one cut");
+    expect(label(shadowed)).not.toContain("join into one cut");
+    expect(label(shadowed)).not.toContain("split into two rays");
+    // And the mode says what a reader should do instead.
+    expect(rail(shadowed).host.querySelector('[data-card="cuts"]')?.textContent ?? "").toContain(
+      "switch this off to build it",
+    );
   });
 });
 

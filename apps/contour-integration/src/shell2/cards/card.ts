@@ -10,7 +10,9 @@
 // list of special cases — and the page's heading outline (one of the four structural invariants
 // `test/shell2.test.ts` asserts) holds by construction rather than by each card remembering.
 import { cardTitle, type CardId } from "../../engine/vocabulary.js";
+import type { BranchChoice } from "../../kernel/branch/model.js";
 import type { PoleReport } from "../../kernel/poles.js";
+import type { DeclarationState } from "../../shell/state.js";
 import type { ShellState, StateResolution } from "../../shell/state.js";
 import { h, type Child, type Desc } from "../dom.js";
 import type { Session } from "../session.js";
@@ -35,6 +37,41 @@ export interface ShellActions {
   readonly setScrubbing: (on: boolean) => void;
   /** What the pointer is over, by piece id or `pole:x,y` — the three-way highlight (step 1.10). */
   readonly hover: (piece: string | null) => void;
+
+  // ── the contour (step 1.4b) ───────────────────────────────────────────────────────────────
+  /** Replace the contour with a template, seeding whatever cut system its shape presupposes. */
+  readonly setTemplate: (id: string) => void;
+  /** The same curve, walked the other way — `∮` changes sign. Sandbox only. */
+  readonly reverseContour: () => void;
+  /** The pen. Straight through to the stage controller, which owns the drawing state. */
+  readonly penStart: () => void;
+  readonly penStop: () => void;
+  readonly penBack: () => void;
+  readonly penCommit: (closed: boolean) => void;
+
+  // ── the branch cuts (step 1.4b) ───────────────────────────────────────────────────────────
+  /**
+   * Replace the whole cut system.
+   *
+   * ONE action for add / remove / order / join / split / shadow / sheet, because every one of those
+   * is already a pure `BranchChoice → BranchChoice` in `engine/branchEdit.ts`. Seven actions that
+   * each re-derived the same write would be seven places for the recompute to be forgotten.
+   */
+  readonly setBranch: (next: BranchChoice) => void;
+  /** The modulus-contour overlay. `null` in the state means "whatever the determination implies". */
+  readonly setIso: (on: boolean) => void;
+  /** Declare a factor on a branch point: the box then holds `R(z)`. */
+  readonly declare: (pointId: string) => void;
+  /** Put the whole integrand back in the box — the expression that was TYPED, not the cofactor. */
+  readonly undeclare: () => void;
+  /**
+   * Edit the declared factor, optionally rebuilding the cut with it.
+   *
+   * The second argument is not a convenience: **declaring the determination IS declaring the cut**,
+   * so a window change that left the geometry alone would make the two disagree about where the
+   * discontinuity is. Passing them together is what makes that unrepresentable.
+   */
+  readonly setDeclaration: (next: DeclarationState, cut?: BranchChoice) => void;
 }
 
 /** What every card is handed. */
