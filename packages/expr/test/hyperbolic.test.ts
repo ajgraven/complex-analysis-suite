@@ -19,6 +19,15 @@ const near = (a: Complex, b: Complex, p = 10): void => {
   expect(a[1]).toBeCloseTo(b[1], p);
 };
 
+/** A central finite difference along the real axis — the independent check on every derivative. */
+const fd = (src: string, z: Complex): Complex => {
+  const h = 1e-6;
+  const f = makeComplexFn(parse(src));
+  const a = f([z[0] + h, z[1]], ZERO);
+  const b = f([z[0] - h, z[1]], ZERO);
+  return [(a[0] - b[0]) / (2 * h), (a[1] - b[1]) / (2 * h)];
+};
+
 describe("hyperbolic / reciprocal-trig builtins (B3)", () => {
   const pts: Complex[] = [
     [0.6, 0.4],
@@ -65,13 +74,6 @@ describe("hyperbolic / reciprocal-trig builtins (B3)", () => {
   });
 
   it("have symbolic derivatives matching a central finite difference", () => {
-    const h = 1e-6;
-    const fd = (src: string, z: Complex): Complex => {
-      const f = makeComplexFn(parse(src));
-      const a = f([z[0] + h, z[1]], ZERO);
-      const b = f([z[0] - h, z[1]], ZERO);
-      return [(a[0] - b[0]) / (2 * h), (a[1] - b[1]) / (2 * h)];
-    };
     const z: Complex = [0.7, 0.35];
     const srcs = [
       "sinh(z)",
@@ -100,5 +102,57 @@ describe("hyperbolic / reciprocal-trig builtins (B3)", () => {
     expect(toLatex(parse("sinh(z)"))).toBe("\\sinh\\left(z\\right)");
     expect(toLatex(parse("cot(z)"))).toBe("\\cot\\left(z\\right)");
     expect(toLatex(parse("arccosh(z)"))).toBe("\\operatorname{arccosh}\\left(z\\right)");
+  });
+});
+
+/**
+ * The reciprocal hyperbolics, added for the Contour Integration gallery (M8 step 0.4).
+ *
+ * `sech` and `coth` are what two of its records CLAIM — `π sech(πξ/2)` is the Fourier transform of
+ * `1/cosh`, and `(π/a)coth(πa)` is the cot-kernel summation identity — so the language rewriting
+ * them as `1/cosh` and `1/tanh` would typeset a different form of the same number, in an app whose
+ * whole posture is that the form is part of the claim.
+ */
+describe("reciprocal hyperbolic builtins", () => {
+  const pts: Complex[] = [
+    [0.6, 0.4],
+    [-0.3, 0.9],
+    [1.2, -0.5],
+  ];
+
+  it("are the reciprocals they are named for", () => {
+    for (const z of pts) {
+      near(evalAt("sech(z)", z), evalAt("1/cosh(z)", z));
+      near(evalAt("csch(z)", z), evalAt("1/sinh(z)", z));
+      near(evalAt("coth(z)", z), evalAt("1/tanh(z)", z));
+      near(evalAt("sech(z)^2 + tanh(z)^2", z), [1, 0]); // sech² + tanh² = 1
+      near(evalAt("coth(z)^2 - csch(z)^2", z), [1, 0]); // coth² − csch² = 1
+    }
+  });
+
+  it("match the real-axis reference values", () => {
+    near(evalAt("sech(z)", [1, 0]), [1 / Math.cosh(1), 0]);
+    near(evalAt("csch(z)", [1, 0]), [1 / Math.sinh(1), 0]);
+    near(evalAt("coth(z)", [1, 0]), [1 / Math.tanh(1), 0]);
+  });
+
+  it("differentiate to the closed forms", () => {
+    const z: Complex = [0.7, 0.35];
+    for (const src of ["sech(z)", "csch(z)", "coth(z)"]) {
+      const analytic = makeComplexFn(differentiate(parse(src), "z"))(z, ZERO);
+      near(analytic, fd(src, z), 5);
+    }
+  });
+
+  it("emit the GLSL stdlib call names", () => {
+    expect(compileF(parse("sech(z)"))).toContain("csech(z)");
+    expect(compileF(parse("csch(z)"))).toContain("ccsch(z)");
+    expect(compileF(parse("coth(z)"))).toContain("ccoth(z)");
+  });
+
+  it("typeset via toLatex — `\\coth` is an operator, `sech` and `csch` are not", () => {
+    expect(toLatex(parse("coth(z)"))).toBe("\\coth\\left(z\\right)");
+    expect(toLatex(parse("sech(z)"))).toBe("\\operatorname{sech}\\left(z\\right)");
+    expect(toLatex(parse("csch(z)"))).toBe("\\operatorname{csch}\\left(z\\right)");
   });
 });

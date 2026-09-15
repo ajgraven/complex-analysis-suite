@@ -49,6 +49,9 @@ export const COMPLEX_FUNCTIONS = new Set([
   "sec",
   "csc",
   "cot",
+  "sech",
+  "csch",
+  "coth",
   "arcsin",
   "arccos",
   "arctan",
@@ -57,6 +60,9 @@ export const COMPLEX_FUNCTIONS = new Set([
   "arctanh",
   "lambertw",
   "gamma",
+  // `z!` = Γ(z+1) — the standard extension, and the notation Cauchy's formula for the derivatives
+  // is written in. It is a NAME for `gamma(z+1)` rather than a second implementation.
+  "factorial",
   "zeta",
   "round",
   "floor",

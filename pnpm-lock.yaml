@@ -323,6 +323,9 @@ importers:
       jsdom:
         specifier: ^26.1.0
         version: 26.1.0
+      katex:
+        specifier: ^0.17.0
+        version: 0.17.0
       typescript:
         specifier: ^5.7.2
         version: 5.9.3

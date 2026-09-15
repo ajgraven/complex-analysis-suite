@@ -196,7 +196,9 @@ export const f2WedgeFresnel: Family = {
     // The PRIMARY target is `C = ∫cos(x^n)`, which is real; `e^{iπ/(2n)}Γ(1+1/n)` is the combined
     // `C + iS`, and printing it as the claim put a complex number beside a real value. `C` is its
     // real part, `S = sin(pi/(2*n))*Gamma(1 + 1/n)` its imaginary one.
-    simplified: "cos(pi/(2*n))*Gamma(1 + 1/n)",
+    // `gamma`, not `Gamma`: the app's parser spells the function in lower case and prints it `\Gamma`,
+    // so this is a spelling normalisation and not a change of form (M8 step 0.4).
+    simplified: "cos(pi/(2*n))*gamma(1 + 1/n)",
   },
 
   rigor: {
@@ -260,7 +262,7 @@ export const f2WedgeFresnel: Family = {
     },
     {
       params: { n: 3 },
-      value: "Gamma(4/3)*cos(pi/6)",
+      value: "gamma(4/3)*cos(pi/6)",
       numeric: 0.77334294207799015,
       verifiedTo: 7.2e-16,
       method: "alternating + CVZ, exercising the general n form where cos(π/(2n)) ≠ sin(π/(2n))",

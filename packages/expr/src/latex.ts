@@ -33,6 +33,10 @@ const UNARY_TEX: Record<string, (a: string) => string> = {
   sec: (a) => `\\sec\\left(${a}\\right)`,
   csc: (a) => `\\csc\\left(${a}\\right)`,
   cot: (a) => `\\cot\\left(${a}\\right)`,
+  // `\coth` is a LaTeX operator; `sech` and `csch` are not, so they take `\operatorname`.
+  sech: (a) => `\\operatorname{sech}\\left(${a}\\right)`,
+  csch: (a) => `\\operatorname{csch}\\left(${a}\\right)`,
+  coth: (a) => `\\coth\\left(${a}\\right)`,
   arcsin: (a) => `\\arcsin\\left(${a}\\right)`,
   arccos: (a) => `\\arccos\\left(${a}\\right)`,
   arctan: (a) => `\\arctan\\left(${a}\\right)`,
@@ -122,6 +126,10 @@ function emitArith(op: string, left: Node, right: Node): Tex {
 
 function emitCall(name: string, args: Node[]): string {
   if (name === "f") return `f\\left(${args.map((a) => emit(a).tex).join(", ")}\\right)`;
+  // `n!`, not `\operatorname{factorial}(n)` — and the argument is bracketed only when it needs to
+  // be, which is why this is here rather than in the table above: `UNARY_TEX` sees the emitted
+  // string and no longer knows whether it was an atom.
+  if (name === "factorial" && args.length === 1) return `${wrap(args[0], P_POW + 1)}!`;
   const unary = UNARY_TEX[name];
   if (unary && args.length === 1) return unary(emit(args[0]).tex);
   const argTex = args.map((a) => emit(a).tex).join(", ");

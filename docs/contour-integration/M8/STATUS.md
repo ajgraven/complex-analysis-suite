@@ -8,8 +8,10 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. **Next execution action:** step 0.4 (LaTeX for everything the
-  records and the engine print) — an M step, suggested session C.
+- **Execution:** Phase 0 in progress. **Step 0.4 is split** (see Findings): **0.4a** — the coverage
+  sweep and the language gap — is done. **Next execution action: step 0.4b** — the app's LaTeX
+  printers (`families/latex.ts`, `kernel/formatLatex.ts`, piece `nameLatex`, `ClaimArg.exact.latex`).
+  An M step.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -25,6 +27,8 @@ changed.
 | 2026-09-15 | **0.2** | 8f3aa97 | `engine/vocabulary.ts`; the four ids off every surface; `test/vocabulary.test.ts` (7 tests, incl. a corpus-wide sweep) + three shell assertions; sweep 12/12. Full gate green: 544 files / 5650 tests, browser suite 132/132 |
 
 | 2026-09-15 | **0.3** | 0974f13 | `engine/claims.ts`; 40 templates; `LedgerRow.claimData`; `test/claims.test.ts` (6 tests) + `test/ledgerDump.test.ts` byte-identical over 3,918 lines; sweep 18/18. Baseline captured first in 2cad10c. Full gate green: 546 files / 5658 tests, lint and typecheck silent. Browser suite not run — the slice adds no record and does not touch the stage |
+
+| 2026-09-15 | **0.4a** | (this commit) | the LaTeX coverage sweep (`test/latexCoverage.test.ts`); `sech`/`csch`/`coth`/`factorial` in `@cas/expr` + `@cas/gpu`; `packages/gpu/test/glslCoverage.test.ts`; 0.1's display rewriter dropped; sweep 13/13. Full gate green: 548 files / 5672 tests. Browser: `@cas/gpu` parity 21/21 in real WebGL2 |
 
 ## Findings (things learned while executing; each names its step)
 
@@ -146,6 +150,54 @@ changed.
   would otherwise delete a piece's name in silence. Standing text is a defect a reader can see; an
   empty gap is not. 18/18 after the test.
 
+- **(0.4) The step is SPLIT into 0.4a and 0.4b.** As written it is three M items — a coverage sweep,
+  a records/targets LaTeX module, and fifteen formatter siblings — where the plan's own session budget
+  is one to two. 0.4a is the sweep and the language gap it found; 0.4b is
+  `families/latex.ts` + `kernel/formatLatex.ts` + piece `nameLatex` + `ClaimArg.exact.latex`. Both end
+  pushed, which is the point.
+- **(0.4a) THE PLAN LOOKED FOR THE GAP IN THE WRONG PLACE, and measuring said so.** It expects
+  `toLatex` coverage gaps and names seven functions. Run over every expression in the corpus,
+  `toLatex` has **none**: nothing throws, nothing prints `undefined`, and its `\operatorname{…}`
+  fallback is correct LaTeX. The gaps are in the **PARSER** — `sech`, `coth`, `factorial` and a
+  capitalised `Gamma` are not names the language knows, so those strings never reach the printer at
+  all. Six of the seven functions the plan lists (`csc`, `cot`, `sqrt`, `abs`, `log`, `gamma`) were
+  already there.
+- **(0.4a) The two repairs are opposite, and ONE rule chooses between them: preserve the printed
+  FORM, normalise only the spelling.** `sech`/`csch`/`coth` became builtins because rewriting them as
+  `1/cosh` and `1/tanh` would typeset a different form of the same number — and the form is part of
+  the claim in an app that prints `17/4·e^{−iπ/4}` rather than `17√2/8 − 17i√2/8` on purpose, and
+  whose G2 headline IS `(π/a)coth(πa)`. `Gamma` was normalised to the table's `gamma` in the one
+  record that spelled it that way, because `gamma` PRINTS `\Gamma` and nothing is lost. `factorial`
+  is a builtin for the first reason: `2π/Γ(n+1)` is correct and no longer the formula a reader knows.
+- **(0.4a) `Golden.value` and the engine's `solved.text` are two different notations, and nothing
+  compares them.** Measured: E3's record says `sqrt(pi)*exp(-1/4)` where the engine prints
+  `e^(−1/4)·√π`, and the golden corpus compares `numeric`. So the records are written in `@cas/expr`
+  INPUT notation, which is what 0.4a made readable, and the engine's answers are in its own OUTPUT
+  notation from `kernel/format*.ts` — which is exactly 0.4b.
+- **(0.4a) 0.1's display-notation rewriter is gone.** `onScreenClaims.test.ts` rewrote three spellings
+  before parsing; with the gap closed from both ends it parses every fixture's value **verbatim**, so
+  what the test evaluates is what the card displays.
+- **(0.4a) NOTHING JOINED THE LANGUAGE TO THE SHADER LIBRARY.** A builtin added to `@cas/expr` without
+  its GLSL half compiles, links, and passes every node test — and fails only when a user types it into
+  a plotter, from the one surface with no node coverage. `packages/gpu/test/glslCoverage.test.ts` is
+  the join: it reads the emitted CALL rather than the private name map, and covers all 32 functions
+  rather than the four new ones. It passes today, so this is a guard and not a repair.
+- **(0.4a) `@cas/gpu`'s parity gate could not be run in this container at all** — Playwright pins an
+  exact Chromium and `pnpm` skips its postinstall. Its browser config now takes
+  `CAS_CHROMIUM_EXECUTABLE`, the line `apps/contour-integration`'s config already carries and whose
+  own comment says the other three would be better for having. With it, 21 GLSL≈JS cases run here.
+- **(0.4a) The parity classifier is keyed on SPELLING, and `z!` does not look transcendental.** The
+  sweep found `cfactorial` losing its `+1` surviving — Γ(z) is a perfectly good function and the wrong
+  one, and no node test can tell, because the emitted call is `cfactorial` either way. Putting it in
+  `DUAL_BACKEND_CORPUS` then held it to the ARITHMETIC tolerance, which the float32 Lanczos series
+  cannot meet, because the regex matches `gamma` and not `factorial`. Both fixed, and the mutant dies
+  in a real WebGL2 context. Sweep 13/13.
+- **(0.4a) Two records' `closedForm.simplified` is PROSE.** D4's and D5's determine several unknowns
+  at once, so their general form is a sentence about which — `T1 = -pi/4 and T0 = pi/4 for
+  R = 1/(1+x^2)^2` — which is true and is not a closed form, so no printer can typeset it as one.
+  Declared by id in the coverage test and CHECKED to still be prose, so a third record that quietly
+  becomes a sentence fails rather than being absorbed by a regex.
+
 ## Open questions for the owner
 
 - none at present. (0.5a will ask for a review of `claims.md` before Phase 0 merges.)
@@ -172,6 +224,13 @@ changed.
 - **(0.2) `roleLabel` is applied to the contour card's piece tags as well as the contrast grid.** The
   plan named only the grid, but the tag printed the raw `PieceRole`, and labelling one while leaving
   the other would have introduced the inconsistency this step exists to remove.
+- **(0.4a) `katex` is a devDependency of `apps/contour-integration`** — the coverage test renders
+  every printed form through `renderToString` with `throwOnError`, because `toLatex` emitting a string
+  does not mean KaTeX accepts it. Phase 1 promotes it to a dependency when the shell renders.
+- **(0.4a) `sech`, `csch`, `coth` and `factorial` are `@cas/expr` builtins**, each with its evaluator,
+  GLSL call, LaTeX form and — for the three hyperbolics — its symbolic derivative. `factorial` is a
+  NAME for `gamma(z+1)` in both backends rather than a second implementation. The sandbox can now be
+  typed `coth(z)` and see it rendered, which is a product gain the gallery paid for.
 - **(0.3) `src/engine/claims.ts` is where the ledger's wording lives**, as 40 templates keyed by id,
   with `renderClaim` the one place a claim becomes text. The boundary the plan draws is recorded in
   its header: a claim minted in `kernel/bounds/*` or `kernel/branch/*` stays a string and reaches a

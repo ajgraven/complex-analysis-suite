@@ -48,22 +48,18 @@ function asComplex(v: unknown): Complex {
 }
 
 /**
- * Read a DISPLAY closed form as an expression.
+ * Read a DISPLAY closed form as an expression — **verbatim**.
  *
- * `Golden.value` is written for a reader, in the notation the gallery uses, and three of its
- * spellings are not `@cas/expr`'s: `sech`/`coth` are not in its function table (it has `cosh` and
- * `tanh`), and `Gamma` is capitalised where the table says `gamma`. Rewriting those three here — in
- * the test, never in the app — is what lets this run over **every** fixture rather than exempting
- * the interesting ones; an exemption list is where a wrong claim would go to hide.
- *
- * Nothing else is rewritten. A value that still does not parse fails the test by name.
+ * This used to rewrite three spellings the language did not have (`sech`, `coth`, and a capitalised
+ * `Gamma`), which was the honest thing to do while the gap was real but left the corpus written in a
+ * notation nothing could read. M8 step 0.4 closed it from both ends: `sech`/`csch`/`coth` are
+ * builtins now, because rewriting them as `1/cosh` and `1/tanh` would have typeset a different form
+ * of the same number; and `Gamma` was normalised to the table's `gamma`, which prints `\Gamma` and so
+ * loses nothing. Every fixture's value is therefore parsed exactly as it is displayed, and a value
+ * that does not parse fails the test by name.
  */
 function evaluateAt(text: string, params: Golden["params"]): Complex {
-  const src = text
-    .replace(/\bsech\(/g, "1/cosh(")
-    .replace(/\bcoth\(/g, "1/tanh(")
-    .replace(/\bGamma\(/g, "gamma(");
-  return asComplex(evaluate(parse(src), [0, 0], [0, 0], undefined, bindings(params)));
+  return asComplex(evaluate(parse(text), [0, 0], [0, 0], undefined, bindings(params)));
 }
 
 function want(g: Golden): Complex {
