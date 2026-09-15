@@ -8,16 +8,14 @@ changed.
 ## Current
 
 - **Plan drafting:** complete (Parts 1–3, §0–§9). No drafting action remains.
-- **Execution:** Phase 0 in progress. The owner approved the five blanket decisions.
-  **Step 0.5b is SPLIT** (see Findings) and **0.5b is now COMPLETE** — 0.5b-i (the ledger's own
-  sentences and the renderer), 0.5b-ii (the bound modules, the theorem identities and the solve) and
-  0.5b-iii (the rest of `kernel/*`, `engine/*` and `families/*`). The review document reads
-  **0 flagged, 0 unapplied**, against 191 flagged when the five decisions were approved.
-  **PHASE 0 IS COMPLETE** — steps 0.1 through 0.7 are done. The gate is green against a base merged
-  up to `origin/master`, the a11y roster reports no regressions, and the Phase 0 PR is open for the
-  owner to merge: **[#340](https://github.com/ajgraven/complex-analysis-suite/pull/340)**. **Next execution action: merge the Phase 0 PR, then restart this branch from
-  `master` and begin Phase 1 at step 1.1** (`src/shell2/` beside `src/shell/`, reached with
-  `?shell=new`; the branch may be red between 1.1 and 1.12 and must be green at 1.13).
+- **Execution: PHASE 0 IS MERGED, and PHASE 1 HAS BEGUN.**
+  Phase 0 (steps 0.1–0.7) landed as [#340](https://github.com/ajgraven/complex-analysis-suite/pull/340),
+  squashed to `master` as `2a09ee0`; this branch was restarted from it. Its wording pass finished at
+  **0 flagged, 0 unapplied** in the review document, against 191 flagged when the five blanket
+  decisions were approved.
+  **Step 1.1 (the scaffold) is done** — `src/shell2/` exists beside `src/shell/`, `?shell=new` boots
+  it, and the old shell is untouched. **Next execution action: step 1.2** (the visual system). The
+  branch may be red between 1.1 and 1.12 and must be green at 1.13; it is green now.
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 

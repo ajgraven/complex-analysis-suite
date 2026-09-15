@@ -1,0 +1,129 @@
+/* The new shell's layout — M8 step 1.1, plan §4.0. GRID ONLY.
+ *
+ * The visual system is step 1.2's; this file exists so `?shell=new` boots to the right BOXES, and
+ * every colour it uses is a token `app.css` already defines. Keeping the two sheets apart is what
+ * lets the old shell stay untouched while the new one is built beside it (the plan's §4 rule), and
+ * at 1.12 this file becomes the shell's stylesheet when the old one is deleted.
+ *
+ * No breakpoints below 1024px — the owner's decision is desktop and laptop, and below 900px the
+ * page shows the phone notice (step 1.12) rather than a grid that cannot hold two rails.
+ */
+:root {
+  --rail-left: 19rem;
+  --rail-right: 24rem;
+  --rail-folded: 38px;
+  --bar2: 3.25rem;
+  --strip2: 12rem;
+}
+
+.shell2 {
+  display: grid;
+  /* **The suite nav is `position: fixed` and publishes its own height as `--cas-nav-h`.** A shell
+     anchored at y = 0 runs UNDERNEATH it — which this app already did once: it adopted the nav
+     without the offset and the top 32 px of its bar was covered, and because the nav sits at
+     z-index 6 it swallowed every click in that band too. The first draft of this file used
+     `height: 100%` and reproduced it exactly, with the stage collapsing to 186 px besides, because
+     a percentage height needs a sized ancestor and `#app` is not one. Reserve the strip and take it
+     off the height, so the shell fills what is left and nothing scrolls. The `0px` fallback keeps a
+     page that does not load `nav.css` where it was. */
+  margin-top: var(--cas-nav-h, 0px);
+  height: calc(100vh - var(--cas-nav-h, 0px));
+  min-height: 0;
+  grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-right);
+  grid-template-rows: var(--bar2) minmax(0, 1fr) var(--strip2);
+  grid-template-areas:
+    "bar bar bar"
+    "left stage right"
+    "left strip right";
+  background: var(--c-bg);
+  color: var(--c-text);
+}
+
+/* A folded rail keeps its grid column and shrinks to a labelled strip, so the stage grows and
+   nothing below it reflows — the reader's eye stays where it was. */
+.shell2[data-left="folded"] {
+  grid-template-columns: var(--rail-folded) minmax(0, 1fr) var(--rail-right);
+}
+.shell2[data-right="folded"] {
+  grid-template-columns: var(--rail-left) minmax(0, 1fr) var(--rail-folded);
+}
+.shell2[data-left="folded"][data-right="folded"] {
+  grid-template-columns: var(--rail-folded) minmax(0, 1fr) var(--rail-folded);
+}
+
+.shell2 > .bar2 {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0 0.75rem;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-panel);
+}
+
+.shell2 > .rail2 {
+  overflow: auto;
+  min-height: 0;
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--c-panel-2);
+}
+.shell2 > .rail2.left {
+  grid-area: left;
+  border-right: 1px solid var(--c-border);
+}
+.shell2 > .rail2.right {
+  grid-area: right;
+  border-left: 1px solid var(--c-border);
+}
+
+.shell2 > .stage2 {
+  grid-area: stage;
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+.shell2 > .stage2 > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.shell2 > .strip2 {
+  grid-area: strip;
+  min-height: 0;
+  border-top: 1px solid var(--c-border);
+  background: var(--c-panel);
+  position: relative;
+}
+.shell2 > .strip2 > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.card2 {
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  background: var(--c-panel);
+  padding: 0.55rem 0.65rem;
+}
+.card2 > h2 {
+  margin: 0 0 0.35rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--c-muted);
+  text-transform: uppercase;
+}
+.card2 > .placeholder {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--c-muted);
+}

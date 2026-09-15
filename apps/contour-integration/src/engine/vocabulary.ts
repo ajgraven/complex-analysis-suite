@@ -116,6 +116,54 @@ export function headlineFails(id: ConstraintId): string {
  * told that finished work was outstanding — and a review document that misreports the code is worse
  * than none, because it is believed.
  */
+/**
+ * The cards the two rails hold, by id.
+ *
+ * M8 step 1.1. Here for the reason the constraint labels and the derivation titles are here: this
+ * file is the one place the reader's words are decided, so a heading and the rows beneath it cannot
+ * drift (step 0.2's decision). The scaffold builds these as empty cards and Phase 1 fills them in
+ * one at a time; a card whose title lived in its own module would be a title nothing could survey.
+ */
+export type CardId =
+  | "target"
+  | "integrand"
+  | "parameters"
+  | "contour"
+  | "cuts"
+  | "singularities"
+  | "result"
+  | "derivation"
+  | "share";
+
+const CARD_TITLES: Readonly<Record<CardId, string>> = {
+  target: "Target",
+  integrand: "Integrand",
+  parameters: "Parameters",
+  contour: "Contour",
+  cuts: "Branch cuts",
+  singularities: "Singularities",
+  result: "Result",
+  derivation: "Derivation",
+  share: "Share",
+};
+
+/** The cards of the LEFT rail — what is being integrated — in the order they are read. */
+export const LEFT_CARDS: readonly CardId[] = [
+  "target",
+  "integrand",
+  "parameters",
+  "contour",
+  "cuts",
+  "singularities",
+];
+
+/** The cards of the RIGHT rail — what the argument proves. */
+export const RIGHT_CARDS: readonly CardId[] = ["result", "derivation", "share"];
+
+export function cardTitle(id: CardId): string {
+  return CARD_TITLES[id];
+}
+
 export const HEADLINES = {
   /** A record: the argument determines the integral it set out to determine. */
   closes: "The argument is complete.",
