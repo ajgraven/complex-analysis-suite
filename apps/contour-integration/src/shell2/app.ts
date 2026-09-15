@@ -207,6 +207,13 @@ export function mountShell2(root: Element): Shell2Handle {
       ),
     setDeclaration: (next, cut) =>
       commit({ ...state, declaration: next, ...(cut === undefined ? {} : { branch: cut }) }, "edit"),
+
+    // ── the right rail ────────────────────────────────────────────────────────────────────
+    // **No re-render.** The `<details>` the reader clicked is already open; re-rendering it here
+    // would fight the browser's own toggle, and the next commit reads the session anyway.
+    setOpen: (id, open) => {
+      session.open = { ...session.open, [id]: open };
+    },
   };
 
   function commit(next: ShellState, why: CommitReason): void {

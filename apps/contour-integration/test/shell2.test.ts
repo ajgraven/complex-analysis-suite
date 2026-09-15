@@ -811,3 +811,26 @@ describe("the contour and the cuts, live", () => {
     expect(app.currentState().beforeDeclaration).toBeNull();
   });
 });
+
+describe("a disclosure, live", () => {
+  it("REMEMBERS an explicit open across a recompute", () => {
+    // The old shell's disclosures lost their state whenever a card re-rendered, because the state
+    // was the DOM's. Here it is the session's, and `setOpen` is what puts it there.
+    const { root, app } = mount();
+    const numerics = [...root.querySelectorAll('[data-card="result"] details')].find(
+      (d) => (d.querySelector("summary")?.textContent ?? "") === "Numerics",
+    ) as HTMLDetailsElement | undefined;
+    expect(numerics, "no Numerics disclosure").toBeDefined();
+    expect(numerics?.open).toBe(false);
+    // jsdom fires `toggle` asynchronously in some versions; drive the property and the event the
+    // way a click does, so what is under test is the handler rather than jsdom's scheduling.
+    (numerics as HTMLDetailsElement).open = true;
+    numerics?.dispatchEvent(new Event("toggle"));
+    expect(app.session().open["result:numerics"], "the click was not recorded").toBe(true);
+    app.applyState({ ...app.currentState(), expr: "1/(1+z^4)" });
+    const after = [...root.querySelectorAll('[data-card="result"] details')].find(
+      (d) => (d.querySelector("summary")?.textContent ?? "") === "Numerics",
+    ) as HTMLDetailsElement | undefined;
+    expect(after?.open, "a recompute shut a disclosure the reader opened").toBe(true);
+  });
+});

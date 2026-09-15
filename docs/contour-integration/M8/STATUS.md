@@ -18,15 +18,19 @@ changed.
   boots it in the new visual system over a live, DRAGGABLE stage with **all six left-rail cards**
   working. Step 1.4 was SPLIT, on the pattern M5.1 and 0.5b used: 1.4a was Target / Integrand /
   Parameters / Singularities, and 1.4b the Contour and Branch-cuts cards — ~430 lines of the old
-  shell between them — plus the rail → stage half of the three-way highlight.
-  **Next execution action: step 1.5** (the right rail). The branch may be
+  shell between them — plus the rail → stage half of the three-way highlight. **Step 1.5 is SPLIT
+  the same way:** 1.5a is `format.ts` + the **Result** card (done); **1.5b** is the Derivation and
+  Share cards.
+  **Next execution action: step 1.5b.** The branch may be
   red between 1.1 and 1.12 and must be green at 1.13; it is green now. The look is recorded at
   [`M8/screens/1.2-shell2-1440x900.png`](screens/1.2-shell2-1440x900.png) and
   [`1.3-shell2-stage-1440x900.png`](screens/1.3-shell2-stage-1440x900.png) /
   [`1.3-shell2-chip.png`](screens/1.3-shell2-chip.png) /
   [`1.4-shell2-sandbox-1440x900.png`](screens/1.4-shell2-sandbox-1440x900.png) /
   [`1.4b-shell2-keyhole-1440x900.png`](screens/1.4b-shell2-keyhole-1440x900.png) /
-  [`1.4b-shell2-declared-1440x900.png`](screens/1.4b-shell2-declared-1440x900.png).
+  [`1.4b-shell2-declared-1440x900.png`](screens/1.4b-shell2-declared-1440x900.png) /
+  [`1.5-shell2-result-1440x900.png`](screens/1.5-shell2-result-1440x900.png) /
+  [`1.5-shell2-refused-1440x900.png`](screens/1.5-shell2-refused-1440x900.png).
 - **Last commit:** see `git log -1` on the branch; this file is updated in the same commit as the work
   it describes.
 
@@ -51,6 +55,8 @@ changed.
 
 | 2026-09-15 | **0.5b-i** | 597697d | the five decisions applied to the ledger's 72 own sentences; `shell/math.ts` + KaTeX; 43 wording-pinned tests re-keyed on templates; new `ledger-dump.txt` baseline |
 
+| 2026-09-15 | **1.5a** | (this commit) | `src/shell2/format.ts` (`fmtApprox` / `fmtNum` — the error estimate decides the digits AND what is shown at all) + the **Result** card: headline, the solved value and the exact `∮` each badged from their OWN evidence, the hypothesis table opening on failure, the Numerics disclosure opening when the approximate value IS the answer, and `session.open` as the tri-state that lets a click win. `ShellActions` gains `setOpen`. `test/format.test.ts` (9) + 7 card tests + 1 live; sweep **17/18 applicable, one recorded equivalent, one guard removed as dead**. Full gate green: 558 files / 5829 tests, lint and typecheck silent, browser suite 148/148, a11y no regressions |
+
 | 2026-09-15 | **1.4b** | 159f985 | the last two left-rail cards: `cards/contour.ts` (template menu, pen, **Reverse orientation**, the piece list with colour / name / role / its own value) and `cards/cuts.ts` (the old `renderBranchCard` + `renderDeclaration` ported structurally and KEYED); `reverseContour` in `engine/contour/edit.ts`; the rail → stage half of the three-way highlight; `ShellActions` gains eleven members. `test/contourEdit.test.ts` (3) + 11 card tests + 2 live + 1 browser; sweep **22/23, one recorded equivalent**. Full gate green: 557 files / 5810 tests, lint and typecheck silent, browser suite 148/148, a11y no regressions |
 
 | 2026-09-15 | **1.4a** | 207e197 | four of the six left-rail cards: `src/shell2/cards/` (`card.ts` the contract + `ShellActions`, `target.ts`, `integrand.ts`, `parameters.ts`, `singularities.ts`, `parseError.ts`); `render.ts` builds from a card registry; `paramChannel`/`withParam` lifted into `shell/state.ts` (the old shell's `channelOf` delegates); `fmt`/`fmtCx` → `kernel/decimal.ts` and `fixtureLabel` → `families/describe.ts` on the second-consumer rule; `Pole.residue` gains a `latex` twin. `test/cards.test.ts` (23) + `test/parseError.test.ts` (3) + 5 live tests; sweep **27/28, one recorded equivalent**. Full gate green: 556 files / 5789 tests, lint and typecheck silent, browser suite 147/147, a11y no regressions |
@@ -70,6 +76,30 @@ changed.
 | 2026-09-15 | **0.5b-ii** | 573fb8c | the five rules through `kernel/bounds/*`, the three theorem identities, `derivation.ts`'s solve stage and `solveTarget.ts`; `latex` on the solved value; 65 wording-pinned tests updated; 191 → 152 flagged |
 
 ## Findings (things learned while executing; each names its step)
+
+- **(1.5a) A TEST THAT PASSED ON THE WRONG SENTENCE.** The numerics note is asserted to say "a
+  convergence estimate, not a proved error bound" — and the quadrature's own verdict carries a
+  RESTRICTION with that exact phrase, which the card prints at the top. So the first draft passed
+  with the note reworded to "Δ refine is the error.": the phrase was on screen, from somewhere else.
+  The assertion is on the note itself now, keyed by the column it names (`Δ refine`,
+  `|I_fine − I_coarse|`). M5.2's lesson again — pinning the outcome without pinning the reason.
+- **(1.5a) The digit count is the WRONG discriminator between `fmtApprox` and `fmtCx`.** `1/sin(z)`
+  round the circle converges to ~1e-13, so twelve decimals is exactly what its estimate supports and
+  a test forbidding long decimals fails on a correct value. What `fmtCx` actually adds is
+  `4.9564e-17 + ` — a real part that is the quadrature's rounding and not a number the app has. The
+  DROPPED component is the property.
+- **(1.5a) `fmtNum` needs no `-0` guard, measured:** `(-0).toFixed(2)` is already `"0.00"` and
+  `(-0).toExponential(3)` is `"0.000e+0"`. `kernel/decimal.ts`'s `fmt` needs one because it rounds
+  through `String(Math.round(…))`, which does not. The guard was removed rather than left as a line
+  nothing can falsify (step 1.3's precedent).
+- **(1.5a) `session.open` is TRI-STATE, and that is the whole design.** `undefined` means "never
+  touched", which is what lets the hypothesis table open itself the moment a row fails and stay shut
+  afterwards if the reader has shut it. A boolean with a false default cannot express that; one with
+  a true default re-opens on every recompute. Verified in a browser: shut it on a failing state,
+  edit the expression, it stays shut.
+- **(1.5a) `setOpen` deliberately re-renders NOTHING.** The `<details>` the reader clicked is already
+  in the state they clicked it into, and re-rendering would fight the browser's own toggle; the next
+  commit reads the session. The sweep's `open-not-stored` mutant is what makes that falsifiable.
 
 - **(1.4b) THE OLD SHELL PRINTS RAW LaTeX in its Branch-cuts card.** `CrossingMonodromy.literal` and
   `.reduced` are bare LaTeX fragments, and the old card assembles them into a string it sets as

@@ -390,3 +390,109 @@
 .shell2 .pickRow > .muted.small:last-child {
   flex-basis: 100%;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════════════════════
+   The right rail — M8 step 1.5.
+   ════════════════════════════════════════════════════════════════════════════════════════════ */
+
+/* The headline is the product — "does this argument close?" — so it is the one line in the rail set
+   at reading size rather than at the card scale. */
+.shell2 .headline {
+  margin: 0;
+  font-size: var(--t-m);
+}
+.shell2 .headline.closes {
+  color: var(--g-ok);
+}
+.shell2 .headline.open {
+  color: var(--g-warn);
+}
+
+.shell2 .resultValue {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  overflow-x: auto;
+}
+.shell2 .resultValue > .badge {
+  flex: none;
+}
+
+.shell2 .repair {
+  color: var(--g-accent);
+  margin: 0;
+}
+.shell2 .restriction {
+  color: var(--g-warn);
+  margin: 0;
+}
+
+/* A disclosure's summary is a control: it gets the pointer and the focus ring every other control
+   has, and its marker stays so the open/shut state is not carried by position alone. */
+.shell2 details > summary {
+  cursor: pointer;
+  font-size: var(--t-s);
+  color: var(--g-muted);
+  padding: 0.15rem 0;
+  border-radius: var(--r-control);
+}
+.shell2 details > summary:focus-visible {
+  outline: 2px solid var(--g-accent);
+  outline-offset: 1px;
+}
+.shell2 details[open] > summary {
+  color: var(--g-text);
+}
+
+.shell2 .ledger2 {
+  list-style: none;
+  margin: 0.3rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.shell2 .ledger2 > li {
+  display: grid;
+  grid-template-columns: 22px auto 1fr;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: var(--t-s);
+}
+.shell2 .ledger2 > li > .claim {
+  min-width: 0;
+}
+.shell2 .ledger2 > li > .repair {
+  grid-column: 2 / -1;
+}
+/* A failed row is the one a reader is looking for, so it carries a rule in the bad colour rather
+   than relying on its badge alone — three glyphs down a list is not a scannable difference. */
+.shell2 .ledger2 > li.failed {
+  border-left: 2px solid var(--g-bad);
+  padding-left: 0.35rem;
+  margin-left: -0.35rem;
+}
+
+.shell2 .numTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-xs);
+  margin-top: 0.3rem;
+}
+.shell2 .numTable th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--g-muted);
+  padding: 0 0.3rem 0.2rem 0;
+  white-space: nowrap;
+}
+.shell2 .numTable td {
+  padding: 0.1rem 0.3rem 0.1rem 0;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* The right rail is 24rem and a four-piece contour's values are wider; the card scrolls rather than
+   wrapping a complex number across two lines. */
+.shell2 .card2[data-card="result"] {
+  overflow-x: auto;
+}

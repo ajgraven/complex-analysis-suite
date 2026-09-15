@@ -15,6 +15,7 @@ import type { ShellState, StateResolution } from "../shell/state.js";
 import { contourCard } from "./cards/contour.js";
 import { cutsCard } from "./cards/cuts.js";
 import { integrandCard } from "./cards/integrand.js";
+import { resultCard } from "./cards/result.js";
 import { parametersCard } from "./cards/parameters.js";
 import { singularitiesCard } from "./cards/singularities.js";
 import { targetCard } from "./cards/target.js";
@@ -88,6 +89,7 @@ const CARDS: Partial<Record<CardId, Card>> = {
   contour: contourCard,
   cuts: cutsCard,
   singularities: singularitiesCard,
+  result: resultCard,
 };
 
 export function render(

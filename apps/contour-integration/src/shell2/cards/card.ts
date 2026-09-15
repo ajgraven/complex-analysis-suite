@@ -72,6 +72,17 @@ export interface ShellActions {
    * discontinuity is. Passing them together is what makes that unrepresentable.
    */
   readonly setDeclaration: (next: DeclarationState, cut?: BranchChoice) => void;
+
+  // ── the right rail (step 1.5) ─────────────────────────────────────────────────────────────
+  /**
+   * Open or close a disclosure, by id.
+   *
+   * Recorded in the SESSION rather than read off the DOM, because a patch that rebuilt a
+   * `<details>` would otherwise silently close it — the old shell's disclosures lost their state
+   * whenever a card re-rendered. It redraws nothing: the state is read on the next render, and the
+   * element the reader just clicked is already in the state they clicked it into.
+   */
+  readonly setOpen: (id: string, open: boolean) => void;
 }
 
 /** What every card is handed. */

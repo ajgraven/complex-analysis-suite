@@ -10,10 +10,10 @@
 import { describe, expect, it } from "vitest";
 import { Frac } from "@cas/exact";
 
-import { circleTemplate } from "../src/engine/contour/templates.js";
+import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templates.js";
 import { penContour } from "../src/engine/contour/pen.js";
 import { addBranchPoint, setOrder, setShadow } from "../src/engine/branchEdit.js";
-import { LEFT_CARDS, roleLabel } from "../src/engine/vocabulary.js";
+import { LEFT_CARDS, RIGHT_CARDS, roleLabel } from "../src/engine/vocabulary.js";
 import {
   compile,
   defaultState,
@@ -51,11 +51,12 @@ function spyActions(): ShellActions & { calls: string[] } {
     declare: (id) => calls.push(`declare:${id}`),
     undeclare: () => calls.push("undeclare"),
     setDeclaration: (d, cut) => calls.push(`decl:${d.sign}:${d.logPower}:${d.window[0].n}/${d.window[0].d}:${cut === undefined ? "nocut" : "cut"}`),
+    setOpen: (id, open) => calls.push(`open:${id}:${open}`),
   };
 }
 
-/** Draw the left rail for a state, and hand back the host plus the actions it will call. */
-function rail(state: ShellState): { host: HTMLElement; actions: ReturnType<typeof spyActions> } {
+/** Draw one rail for a state, and hand back the host plus the actions it will call. */
+function railOf(state: ShellState, side: "left" | "right"): { host: HTMLElement; actions: ReturnType<typeof spyActions> } {
   const compiled = compile(state.expr);
   const resolution = resolveState(state, compiled);
   const poles =
@@ -66,9 +67,12 @@ function rail(state: ShellState): { host: HTMLElement; actions: ReturnType<typeo
         : null;
   const actions = spyActions();
   const host = document.createElement("div");
-  patch(host, render(state, resolution, defaultSession(), actions, poles).left);
+  patch(host, render(state, resolution, defaultSession(), actions, poles)[side]);
   return { host, actions };
 }
+
+const rail = (state: ShellState): ReturnType<typeof railOf> => railOf(state, "left");
+const right = (state: ShellState): ReturnType<typeof railOf> => railOf(state, "right");
 
 const sandbox = (over: Partial<ShellState> = {}): ShellState => ({
   ...defaultState(circleTemplate([0, 0], 1.5)),
@@ -505,6 +509,122 @@ describe("the Target card", () => {
   });
 });
 
+describe("the Result card", () => {
+  it("shows NO value when `integralRefusal` refuses — not a greyed one, none", () => {
+    // A contour THROUGH a pole: the winding is undecided, so `2πi Σ n·Res` has no coefficients and
+    // the quadrature is sampling a singularity. Three independent reasons, asked in one place.
+    const { host } = right(sandbox({ expr: "1/(z-1.5)" }));
+    const card = q(host, '[data-card="result"]');
+    expect(card.textContent ?? "").toContain("Refused");
+    expect(card.querySelector(".resultValue"), "a value was printed past a refusal").toBeNull();
+  });
+
+  it("leads with the EXACT value and its own badge, not the ledger's meet", () => {
+    const { host } = right(sandbox({ expr: "1/(1+z^2)" }));
+    const value = q(host, '[data-card="result"] .resultValue');
+    expect(value.querySelector(".katex"), "the value was not typeset").not.toBeNull();
+    // `=` is the residue theorem's own level. The ledger's meet carries the weakest step's `≤`,
+    // which is a true statement about that step and a false one about the answer.
+    expect(value.querySelector(".badge")?.getAttribute("data-level")).toBe("=");
+  });
+
+  it("opens the hypothesis table BY DEFAULT when a row has failed, and not otherwise", () => {
+    const fine = q(right(sandbox({ expr: "1/(1+z^2)" })).host, '[data-card="result"] details');
+    expect((fine as HTMLDetailsElement).open, "the hypotheses opened with nothing wrong").toBe(false);
+    const broken = right(sandbox({ expr: "1/(z-1.5)" })).host;
+    const opened = [...broken.querySelectorAll("details")].find((d) =>
+      (d.querySelector("summary")?.textContent ?? "").startsWith("Hypotheses"),
+    );
+    expect(opened?.open, "a failed hypothesis did not open its own table").toBe(true);
+    expect(opened?.querySelector("summary")?.textContent ?? "").toMatch(/\d+ of \d+ failed/);
+  });
+
+  it("lets an explicit click WIN over the computed default", () => {
+    // `session.open[id]` is tri-state: `undefined` is "never touched", which is what lets the table
+    // open itself on a failure and stay shut afterwards if the reader has shut it.
+    const state = sandbox({ expr: "1/(z-1.5)" });
+    const session = defaultSession();
+    session.open = { "result:hypotheses": false };
+    const host = document.createElement("div");
+    patch(host, render(state, resolveState(state, compile(state.expr)), session, spyActions(), null).right);
+    const table = [...host.querySelectorAll("details")].find((d) =>
+      (d.querySelector("summary")?.textContent ?? "").startsWith("Hypotheses"),
+    );
+    expect(table?.open, "the reader's own choice was overridden by the default").toBe(false);
+  });
+
+  it("opens the NUMERICS when the approximate value IS the answer, and closes them otherwise", () => {
+    // `1/sin(z)` has no exact reading, so the quadrature is all there is; `1/(1+z^2)` has an exact
+    // `∮` and the numerics are corroboration a reader can go and look for.
+    const numerics = (expr: string): boolean => {
+      const host = right(sandbox({ expr })).host;
+      const d = [...host.querySelectorAll("details")].find(
+        (x) => (x.querySelector("summary")?.textContent ?? "") === "Numerics",
+      );
+      if (d === undefined) throw new Error(`no Numerics disclosure for ${expr}`);
+      return d.open;
+    };
+    expect(numerics("1/sin(z)"), "the numerics hid the only value there was").toBe(true);
+    expect(numerics("1/(1+z^2)"), "the numerics opened over an exact answer").toBe(false);
+  });
+
+  it("names Δ refine for what it IS — a convergence estimate, not a bound", () => {
+    // **Asserted on the NOTE, not on the phrase.** The quadrature's own verdict carries a
+    // restriction saying "a convergence estimate, not a proved error bound", which the card prints
+    // at the top — so the first draft of this test passed with the note reworded to "Δ refine is the
+    // error." The column's name is what has to be attached to the sentence.
+    const { host } = right(sandbox({ expr: "1/sin(z)" }));
+    const note = [...host.querySelectorAll('[data-card="result"] p')]
+      .map((n) => n.textContent ?? "")
+      .find((t) => t.startsWith("Δ refine"));
+    expect(note, "the numerics table has no note naming its own column").toBeDefined();
+    expect(note ?? "").toContain("|I_fine − I_coarse|");
+    expect(note ?? "").toContain("not a proved error bound");
+  });
+
+  it("prints the APPROXIMATE headline at the precision its estimate supports", () => {
+    // `1/sin(z)` has no exact reading, so the quadrature IS the answer and the `else` branch runs —
+    // where printing at `fmtCx`'s eight decimals would show digits the estimate does not support.
+    const { host } = right(sandbox({ expr: "1/sin(z)" }));
+    const value = q(host, '[data-card="result"] .resultValue .num').textContent ?? "";
+    expect(value, "the headline value is missing").not.toBe("");
+    // The discriminator is the DROPPED component, not the digit count: `1/sin(z)` round the circle
+    // converges to ~1e-13, so twelve decimals is exactly what the estimate supports. What `fmtCx`
+    // would add is `4.9564e-17 + `, a real part that is the quadrature's rounding and not a value.
+    expect(value, "a noise-level real part reached the headline").not.toMatch(/e-\d/);
+    expect(value).toMatch(/i$/);
+  });
+
+  it("limits the digits by the WORST piece, not the best", () => {
+    // A two-piece contour whose halves converge differently: taking the best estimate would print
+    // digits the other piece cannot support, which is the quiet version of overstating a result.
+    const c = semicircleTemplate(3, "upper");
+    const { host } = right(sandbox({ expr: "1/sin(z)", contour: c, sandboxContour: c, contourSource: null }));
+    const text = q(host, '[data-card="result"]').textContent ?? "";
+    const errs = [...text.matchAll(/(\d\.\d)e([+-]\d+)/g)].map((m) => Number(`${m[1]}e${m[2]}`));
+    expect(errs.length, "no per-piece estimates to compare").toBeGreaterThan(1);
+    const worst = Math.max(...errs);
+    const best = Math.min(...errs);
+    expect(worst, "the two pieces converge identically, so this asserts nothing").toBeGreaterThan(best * 10);
+    const value = q(host, '[data-card="result"] .resultValue .num').textContent ?? "";
+    const decimals = (/\.(\d+)/.exec(value)?.[1] ?? "").length;
+    expect(decimals, "the headline used the BEST estimate's digits").toBeLessThanOrEqual(
+      Math.max(0, Math.floor(-Math.log10(worst))),
+    );
+  });
+
+  it("limits the printed digits by the estimate, and drops a component below it", () => {
+    // `∮ dz/z = 2πi` exactly; the quadrature's real part is rounding. Printing it says the argument
+    // established a real part.
+    const { host } = right(sandbox({ expr: "1/z" }));
+    const numeric = [...host.querySelectorAll('[data-card="result"] .num')]
+      .map((n) => n.textContent ?? "")
+      .find((t) => /6\.28/.test(t));
+    expect(numeric, "the quadrature's value is not shown at all").toBeDefined();
+    expect(numeric ?? "", "a noise-level real part reached the screen").not.toMatch(/e-1[0-9]/);
+  });
+});
+
 describe("every card, for every record", () => {
   it("gives each card EXACTLY ONE heading", () => {
     // Found in a browser: the Singularities card drew its heading twice, because its table carried
@@ -513,7 +633,10 @@ describe("every card, for every record", () => {
     // which is why a screenshot found it. `patch` now refuses a duplicate key outright; this is the
     // product-level statement of the same thing, and it holds for every record.
     for (const id of [...RECORD_IDS, null]) {
-      const { host } = rail(id === null ? sandbox() : gallery(id));
+      const state = id === null ? sandbox() : gallery(id);
+      const host = document.createElement("div");
+      const out = render(state, resolveState(state, compile(state.expr)), defaultSession(), spyActions(), null);
+      patch(host, [...out.left, ...out.right]);
       for (const card of host.querySelectorAll("[data-card]")) {
         const headings = card.querySelectorAll("h2");
         expect(headings.length, `${id ?? "sandbox"}: ${card.getAttribute("data-card")} has ${headings.length} headings`).toBe(1);
@@ -525,11 +648,19 @@ describe("every card, for every record", () => {
   it("renders all 28 records at fixture 0 with no throw and no empty card", () => {
     for (const id of RECORD_IDS) {
       const { host } = rail(gallery(id));
-      // Every left-rail card is present (the Target one included, since this is gallery mode).
+      const rightHost = right(gallery(id)).host;
+      // Every card in both rails is present (the Target one included, since this is gallery mode).
       for (const card of LEFT_CARDS) {
         const node = host.querySelector(`[data-card="${card}"]`);
         expect(node, `${id}: no ${card} card`).not.toBeNull();
         // A heading and SOMETHING under it. An empty card is the failure mode the plan names.
+        expect((node?.textContent ?? "").trim().length, `${id}: ${card} is empty`).toBeGreaterThan(
+          (node?.querySelector("h2")?.textContent ?? "").length,
+        );
+      }
+      for (const card of RIGHT_CARDS) {
+        const node = rightHost.querySelector(`[data-card="${card}"]`);
+        expect(node, `${id}: no ${card} card`).not.toBeNull();
         expect((node?.textContent ?? "").trim().length, `${id}: ${card} is empty`).toBeGreaterThan(
           (node?.querySelector("h2")?.textContent ?? "").length,
         );
