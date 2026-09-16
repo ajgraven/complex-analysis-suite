@@ -100,7 +100,27 @@ test scaffold.
 
 ---
 
-## WP2 — Instruments, tier 1: the numbers that are wrong by orders of magnitude · effort M · closes I1, I2
+## WP2 — Instruments, tier 1: the numbers that are wrong by orders of magnitude · effort M · closes I1, I2 · **DONE**
+
+> **Landed** (commit `83db907`). Gate green: lint, typecheck, 553 files / 5,734 tests, build. Both
+> fixes negative-control checked. **Measuring corrected the review twice, and the plan below with it.**
+>
+> **I1.** The bailout radius turns out to matter far less than written here: every ratio is stable
+> from R = 4 to R = 1e10, so `DE_RADIUS = 1e6` is headroom rather than a tuned constant, and the 70×
+> error exists only because the app's own predicate bails at |z| > 2. The real second defect was a
+> leading **½** that the code carried and its README did not — a systematic 2× under-read, exactly
+> visible on the unit disk (0.502 where the formula is an equality). And the review's true distances
+> were wrong: c = 0.26 is **1.96e-3** from M, not the 1e-2 of "0.26 − 0.25", because the cusp wraps to
+> the right of ¼. The new truths were computed by minimising over the cardioid. What cannot be fixed
+> by any constant is the spread: 0.46×–1.99× on cases with an exact answer, which is the Koebe ¼
+> theorem, so the row is labelled `≈` and the glossary says so.
+>
+> **I2.** The disqualifier is "the tail closes up on a cycle", since a rotation domain contains no
+> periodic orbit — not the rationality test sketched here, whose resolution is worse than the
+> rotation number's own measurement error (0.621 measured for a golden 0.618). The review's tongue
+> list was also wrong: measured, τ = 0, ½, ⅓ and **1/√2** close up (periods 1, 2, 3, 7 — the last an
+> Arnold tongue at an _irrational_ τ), while τ = ¼, 0.1 and 2/7 do **not** within 1500 iterations and
+> are therefore asserted in neither direction.
 
 **I1 distance to set** (`src/render/inspect.ts:255-278`). Replace the "break on first escape" with the
 standard DE loop: keep iterating `z` and `D` until `|z| > DE_RADIUS` (1e10 is conventional and safe in
