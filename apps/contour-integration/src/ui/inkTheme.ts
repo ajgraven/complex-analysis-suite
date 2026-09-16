@@ -23,6 +23,17 @@ export interface InkTheme {
   readonly halo: string;
   /** The same, at the weight the handles and the marker use. Two alphas, because the code has two. */
   readonly haloStrong: string;
+  /**
+   * The ground the plate sits on — the one colour here that is NOT drawn by the ink layer.
+   *
+   * It is in the theme because M8 step 1.9's **textbook** stage mode clears the GL canvas to it: a
+   * GL clear cannot read a CSS variable, so the value has to be stated in JS, and stating it twice
+   * (once here, once at the clear) is how a plate comes to be drawn on a ground the ink was not
+   * chosen against. The dark value is `--g-ground`'s, which is what `GLStage.clear` has always
+   * hard-coded; the light one is the thumbnails' `THUMBNAIL_GROUND`, so a textbook plate and a
+   * front-door card are on the same paper.
+   */
+  readonly paper: string;
   /** Six categorical hues, one per contour piece, reused wherever that piece appears. */
   readonly pieces: readonly string[];
   /** A branch cut: never a piece colour, because a cut is a barrier rather than part of the path. */
@@ -31,6 +42,17 @@ export interface InkTheme {
   readonly cutHandle: string;
   /** Anything LEGALITY has refused — one colour for "this does not close", not two. */
   readonly refusedInk: string;
+  /**
+   * A neutral full-strength stroke that carries no meaning of its own.
+   *
+   * The textbook plate's axes, its `Re`/`Im` labels, its grid (at reduced alpha) and the ⊗ pole
+   * glyph are drawn in it. **It exists because every other member of this interface means
+   * something**: a piece colour names a piece, `cutInk` a barrier, `refusedInk` a refusal,
+   * `handleRing` a thing to grab. The plate's furniture is none of those, and the first draft
+   * borrowed `handleRing` for it — which would have made "the real axis" and "you can drag this"
+   * the same colour on a canvas that already has one round thing too many.
+   */
+  readonly plateInk: string;
   /** A grabbable handle's ring, and the same while held. */
   readonly handleRing: string;
   readonly handleGrabbed: string;
@@ -58,10 +80,12 @@ export interface InkTheme {
 export const DARK_INK: InkTheme = {
   halo: "rgba(8, 10, 14, 0.85)",
   haloStrong: "rgba(8, 10, 14, 0.9)",
+  paper: "#0f1115",
   pieces: ["#6ea8fe", "#f0b45e", "#7fd1a8", "#e594b4", "#b79cf0", "#79d3e8"],
   cutInk: "#c77dff",
   cutHandle: "#c77dff",
   refusedInk: "#f0b45e",
+  plateInk: "#e7e9ee",
   handleRing: "#e7e9ee",
   handleGrabbed: "#ffffff",
   markerFill: "#ffffff",
@@ -78,10 +102,12 @@ export const DARK_INK: InkTheme = {
 /**
  * The light plate.
  *
- * **Nothing consumes this yet**, and that is stated rather than hidden: the figure export's plate is
- * chrome only (`FigureTheme` — background, text, muted) and composites canvases that were drawn in
- * the dark theme, so a light figure is a later step's work. It exists because the palette is being
- * named now and naming half of it would leave the next reader guessing which half.
+ * **M8 step 1.9's `textbook` stage mode is its first consumer** — the plate that clears the portrait
+ * away and draws axes, a unit grid, the contour and the poles on paper. That is also why the plate
+ * is light in BOTH app themes: it is imitating a printed figure, and a printed figure is on paper.
+ * (Until 1.9 nothing consumed this, which the comment said; the figure export's plate is chrome only
+ * — `FigureTheme`, background/text/muted — and still composites canvases drawn in the dark theme, so
+ * a light *figure* remains a later step's work.)
  *
  * The halo flips, which is the polarity PLAN.md §5.3 names. **The piece hues are DARKENED rather
  * than reused**: `#6ea8fe` on white is a 1.9:1 contrast — legible as a wide stroke and not as the
@@ -90,10 +116,12 @@ export const DARK_INK: InkTheme = {
 export const LIGHT_INK: InkTheme = {
   halo: "rgba(255, 255, 255, 0.85)",
   haloStrong: "rgba(255, 255, 255, 0.92)",
+  paper: "#f7f8fa",
   pieces: ["#1f5fc4", "#9a5b00", "#116b47", "#a8296a", "#5b3bb5", "#0f6a80"],
   cutInk: "#7b28c4",
   cutHandle: "#7b28c4",
   refusedInk: "#9a5b00",
+  plateInk: "#2a2e38",
   handleRing: "#2a2e38",
   handleGrabbed: "#000000",
   markerFill: "#000000",

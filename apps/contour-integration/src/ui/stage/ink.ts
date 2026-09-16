@@ -8,7 +8,7 @@
 // "not certified" (QD's non-univalent families), and reusing them for orientation would make two
 // unrelated facts look like one.
 import { arcLength, pointAt, type Cx, type Resolved } from "../../kernel/geom.js";
-import { plotToScreen, type View, type Viewport } from "../../kernel/camera.js";
+import { plotToScreen, screenToPlot, type View, type Viewport } from "../../kernel/camera.js";
 import { DARK_INK, type InkTheme } from "../inkTheme.js";
 
 /**
@@ -61,6 +61,24 @@ export interface InkOptions {
      */
     readonly label?: string;
   }[];
+  /**
+   * Draw a cut DASHED instead of hatched — the textbook plate's convention.
+   *
+   * **This is a real collision and it is taken deliberately.** The app has already spent dashes
+   * twice: on "not certified" (the suite-wide convention this module's own header cites) and on a
+   * contour LEGALITY has refused, which `drawContour` dashes a few lines below. A third meaning on
+   * the same canvas is exactly the thing that header warns against — so what makes it survivable is
+   * that nothing else on the plate looks like it. A cut keeps `cutInk`, never a piece colour, and
+   * keeps its label; a refused contour is amber and closed-looking rather than a thin purple dashed
+   * arc; "not certified" is a label in the rail and not a stroke here at all. The reason to take it
+   * anyway is that the textbook plate is imitating a printed figure, and in a printed figure a
+   * dashed curve IS the cut — a hatched one reads as a boundary with a shaded side.
+   *
+   * The rule a reader needs is the one the header already states for amber: **dashes do not mean
+   * one thing, so look at WHAT THEY ARE ON.** Purple with a jump weight beside it is a cut; amber
+   * following the contour is a refusal.
+   */
+  readonly dashCuts?: boolean;
 }
 
 /**
@@ -233,12 +251,18 @@ export function drawContour(
     ctx.stroke();
     ctx.strokeStyle = cut.refused ? t.refusedInk : t.cutInk;
     ctx.lineWidth = 2.5;
+    // The halo above stays SOLID either way: it is the stroke's legibility against the portrait, and
+    // a dashed halo would leave the gaps of a dashed cut with nothing under them.
+    if (opts.dashCuts === true) ctx.setLineDash([6, 4]);
     ctx.stroke();
+    ctx.setLineDash([]);
     // Hatching, the conventional mark for a cut in a textbook figure, and the one thing on this
     // canvas that cannot be confused with a contour piece: dashes are already spoken for
-    // ("not certified"), and arrowheads mean orientation.
+    // ("not certified"), and arrowheads mean orientation. `dashCuts` is the plate's exception — see
+    // the option's own note; the two marks are alternatives, never both, because a cut wearing
+    // hatching AND dashes reads as two overlapping curves.
     ctx.lineWidth = 1.6;
-    for (let k = 0; k + 1 < pts.length; k++) {
+    for (let k = 0; opts.dashCuts !== true && k + 1 < pts.length; k++) {
       const [x0, y0] = pts[k];
       const [x1, y1] = pts[k + 1];
       const len = Math.hypot(x1 - x0, y1 - y0);
@@ -367,4 +391,224 @@ export function pointAtFraction(pieces: readonly Resolved[], s: number): Cx | nu
     want -= lengths[k];
   }
   return null;
+}
+
+// ---------------------------------------------------------------------------------------------
+// The textbook plate — M8 step 1.9.
+//
+// `LIGHT_INK`'s first consumer. `inkTheme.ts` has said "nothing consumes this yet" since step 1.2;
+// this is what it was named for, and that comment is now out of date.
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The serif italic a printed figure sets its axis names in.
+ *
+ * Stated inline rather than pulled from a CSS variable because this canvas has no stylesheet to read
+ * — `ctx.font` takes a string, and a `getComputedStyle` round trip to discover one would make the
+ * plate's typography depend on whether the ink canvas happened to be in the document yet.
+ */
+const PLATE_FONT = 'italic 13px Georgia, "Times New Roman", Times, serif';
+
+export interface TextbookOptions {
+  /** The palette. `LIGHT_INK` in practice — the plate is paper. */
+  readonly theme: InkTheme;
+  /** The unit grid. Off is a bare pair of axes, which is what some figures want. */
+  readonly grid: boolean;
+}
+
+/**
+ * The grid's step, from the 1-2-5 decade ladder.
+ *
+ * **The ladder is what stops the grid from becoming a grey wash at low zoom.** A fixed step of one
+ * unit is right at the app's default `halfHeight` of 2 and ruinous at the camera's `HALF_HEIGHT_MAX`
+ * of 200, where a 900 px canvas is 400 units tall: that is four hundred horizontal rules at 2.25 px
+ * apart, which is not a grid but a flat tone — and it costs the same thousands of strokes per frame
+ * to draw. Climbing 1 → 2 → 5 → 10 → … until the on-screen spacing clears 28 px keeps the count
+ * bounded by the canvas size instead of by the zoom, and 1-2-5 rather than powers of ten because a
+ * pure decade ladder jumps 1 → 10 and leaves the intermediate zooms either dense or nearly empty.
+ *
+ * 28 px is the smallest spacing at which the rules still read as separate lines at this weight;
+ * below it the antialiased 1 px strokes start to merge.
+ */
+function gridStep(pxPerUnit: number): number {
+  const MIN_SPACING = 28;
+  const ladder = [1, 2, 5];
+  let decade = 1;
+  let step = 1;
+  for (let k = 0; k < 45; k++) {
+    step = ladder[k % 3] * decade;
+    if (step * pxPerUnit >= MIN_SPACING) return step;
+    if (k % 3 === 2) decade *= 10;
+  }
+  return step;
+}
+
+/**
+ * The plate's background furniture: the unit grid and the two axes, with `Re` and `Im`.
+ *
+ * **Does not clear.** The caller owns clearing, because on the real stage this canvas is `drawContour`'s
+ * too and that call opens with `clearRect` — a second clear here would either erase the contour or
+ * force the two calls into an order neither of them states. Everything on the plate is therefore
+ * additive, and the caller draws this first.
+ *
+ * Only the furniture. The contour, its handles and its cuts stay `drawContour`'s and the poles stay
+ * the shell's, so a mode switch changes what is BEHIND the argument and never the argument itself.
+ */
+export function drawTextbookPlate(
+  ctx: CanvasRenderingContext2D,
+  view: View,
+  vp: Viewport,
+  opts: TextbookOptions,
+): void {
+  const t = opts.theme;
+  const pxPerUnit = Math.max(vp.height, 1) / (2 * view.halfHeight);
+  const [x0, y1] = screenToPlot(0, 0, view, vp);
+  const [x1, y0] = screenToPlot(vp.width, vp.height, view, vp);
+  const [ox, oy] = plotToScreen(0, 0, view, vp);
+
+  ctx.save();
+  ctx.lineJoin = "miter";
+  ctx.lineCap = "butt";
+
+  if (opts.grid) {
+    const step = gridStep(pxPerUnit);
+    // Fainter than the axes deliberately: the grid is a ruler the reader consults, and the axes are
+    // the figure's frame of reference. `accumulator.axes` is the theme's own axis value (0.20 alpha
+    // on the light plate); 0.6 of that puts the grid a clear step below the solid ink above it.
+    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = t.accumulator.axes;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let k = Math.ceil(x0 / step); k * step <= x1; k++) {
+      // The half-pixel offset is the difference between a 1 px rule and a 2 px smear: an integer
+      // screen coordinate falls BETWEEN device pixels, so the stroke straddles two of them at half
+      // weight each and the grid comes out blurrier than the axes it is meant to sit under.
+      const x = Math.round(plotToScreen(k * step, 0, view, vp)[0]) + 0.5;
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, vp.height);
+    }
+    for (let k = Math.ceil(y0 / step); k * step <= y1; k++) {
+      const y = Math.round(plotToScreen(0, k * step, view, vp)[1]) + 0.5;
+      ctx.moveTo(0, y);
+      ctx.lineTo(vp.width, y);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  // `plateInk` and not a hue: every other member of the theme carries a meaning the axes must not
+  // borrow — a piece colour would say "this is part of the contour", `cutInk` "this is a barrier",
+  // `handleRing` "you can drag this". The plate's furniture says none of those.
+  ctx.strokeStyle = t.plateInk;
+  ctx.fillStyle = t.plateInk;
+  ctx.lineWidth = 1.25;
+  ctx.font = PLATE_FONT;
+  ctx.textBaseline = "middle";
+
+  // **Clamped by DRAWING NOTHING rather than by pinning the axis to the edge.** A horizontal rule
+  // along the top of the canvas when the origin is a screen above it would be a line labelled `Re`
+  // that is not the real axis — a figure asserting something false about where the plane is. The
+  // grid still runs, so a reader panned off the origin keeps a scale.
+  if (oy >= 0 && oy <= vp.height) {
+    ctx.beginPath();
+    ctx.moveTo(0, oy);
+    ctx.lineTo(vp.width, oy);
+    ctx.stroke();
+    arrowHead(ctx, vp.width - 10, oy, 1, 0, 8);
+    ctx.textAlign = "right";
+    ctx.fillText("Re", vp.width - 16, oy - 14);
+  }
+  if (ox >= 0 && ox <= vp.width) {
+    ctx.beginPath();
+    ctx.moveTo(ox, vp.height);
+    ctx.lineTo(ox, 0);
+    ctx.stroke();
+    arrowHead(ctx, ox, 10, 0, -1, 8);
+    ctx.textAlign = "left";
+    ctx.fillText("Im", ox + 14, 16);
+  }
+
+  ctx.restore();
+}
+
+/**
+ * `base^{sup}` → its two runs, with an empty `sup` when there is no `^{`.
+ *
+ * Exported and pure so the parsing can be checked in the node gate, where the drawing cannot be.
+ *
+ * **Lossless on a malformed input**, which is the only decision here: the closing brace is stripped
+ * only when it ends the string, so `e^{iπ/4}` gives `iπ/4` and anything stranger keeps every
+ * character it arrived with rather than being silently truncated to whatever sat inside the first
+ * pair of braces. A label is the record's own text and a glyph that quietly drops half of it is
+ * worse than one that draws an odd-looking superscript.
+ */
+export function splitSuperscript(s: string): { base: string; sup: string } {
+  const i = s.indexOf("^{");
+  if (i < 0) return { base: s, sup: "" };
+  const tail = s.slice(i + 2);
+  return { base: s.slice(0, i), sup: tail.endsWith("}") ? tail.slice(0, -1) : tail };
+}
+
+/**
+ * A pole, as ⊗ — a ring with a cross through it — with an optional typeset-ish label.
+ *
+ * **The cross is what makes it a pole rather than a handle.** `drawContour` already puts rings on
+ * this canvas for the grabbable handles, so a bare ring at a singularity would be a fourth round
+ * thing on a stage the module's own comment says has one too many at three. Crossing it at ±45°
+ * (rather than upright) keeps both strokes clear of the axes, which on the textbook plate run
+ * through exactly the horizontal and vertical the upright cross would use.
+ */
+export function drawPoleGlyph(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  opts: { readonly theme: InkTheme; readonly r: number; readonly hot: boolean; readonly label?: string },
+): void {
+  const t = opts.theme;
+  const r = opts.r;
+  const d = r / Math.SQRT2;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, 2 * Math.PI);
+  ctx.moveTo(x - d, y - d);
+  ctx.lineTo(x + d, y + d);
+  ctx.moveTo(x - d, y + d);
+  ctx.lineTo(x + d, y - d);
+  // Halo under the whole glyph in one pass rather than per stroke, so the ring's halo cannot sit on
+  // top of the cross where the two meet.
+  ctx.strokeStyle = t.haloStrong;
+  ctx.lineWidth = opts.hot ? 5 : 4;
+  ctx.stroke();
+  ctx.strokeStyle = opts.hot ? t.handleGrabbed : t.plateInk;
+  ctx.lineWidth = opts.hot ? 2.4 : 1.6;
+  ctx.stroke();
+
+  if (opts.label !== undefined && opts.label !== "") {
+    const { base, sup } = splitSuperscript(opts.label);
+    const size = 13;
+    const lx = x + r + 6;
+    const ly = y - r - 4;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = PLATE_FONT;
+    const bw = ctx.measureText(base).width;
+    const supFont = `italic ${Math.round(size * 0.72)}px Georgia, "Times New Roman", Times, serif`;
+    ctx.font = supFont;
+    const sw = sup === "" ? 0 : ctx.measureText(sup).width;
+    // The halo is a plate under the text rather than a stroke around it: the label lands over the
+    // grid, and a stroked outline at this size fattens the serifs into blobs.
+    ctx.fillStyle = t.halo;
+    ctx.fillRect(lx - 3, ly - size, bw + sw + 6, size * 1.7);
+    ctx.fillStyle = opts.hot ? t.handleGrabbed : t.plateInk;
+    ctx.font = PLATE_FONT;
+    ctx.fillText(base, lx, ly);
+    if (sup !== "") {
+      ctx.font = supFont;
+      ctx.fillText(sup, lx + bw, ly - size * 0.42);
+    }
+  }
+
+  ctx.restore();
 }
