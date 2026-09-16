@@ -64,7 +64,21 @@ export interface NearestAngles extends AnglesOfPoint {
 
 const DEFAULT_MAX_PERIOD = 8;
 const DEFAULT_MAX_PREPERIOD = 2;
-const DEFAULT_TOL = 5e-3;
+/**
+ * How close a ray's REFINED landing must come to the target to count as landing there.
+ *
+ * It was 5e-3, which is a screen distance rather than a landing error, so the finder reported every
+ * ray that landed anywhere nearby. Measured: the basilica's β fixed point, where exactly one ray
+ * (θ = 0) lands, was reported with **valence 21**; ∂M's tip c = −2, where only θ = 1/2 lands, with
+ * **valence 33**; and a point near the tip with 28. Every one of those was then printed as
+ * "biaccessible", which is the opposite of what β and the tip are.
+ *
+ * Tightening costs nothing, which is the point: the genuine multi-ray points are found identically
+ * at 5e-3, 1e-6, 1e-9 and 1e-12 (the basilica's α keeps valence 2, the rabbit's α keeps 3), because
+ * a real co-landing agrees to ~1e-16 while the nearest DISTINCT landing is ~1e-4 away. Same constant
+ * and same reasoning as the lamination's clustering tolerance.
+ */
+const DEFAULT_TOL = 1e-9;
 const DEFAULT_SNAP_RADIUS = 0.06;
 
 function gcd(a: number, b: number): number {

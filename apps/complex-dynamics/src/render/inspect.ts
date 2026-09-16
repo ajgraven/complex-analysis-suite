@@ -374,10 +374,16 @@ export function inspect(
  * supported families, so ∂(critPoint)/∂c = 0). The recurrence is the same
  * f_z·D + f_c that the distance estimate uses, generalised to any holomorphic `f`.
  *
- * Returns null for a non-holomorphic `f` (no analytic derivative) or if Newton fails to
- * converge from `c0` (caller should leave `c` unchanged). Seed it with a point already
- * inside the component (the clicked `c`) so it converges to that component's centre and
- * not a lower-period root of g.
+ * Returns null for a non-holomorphic `f` (no analytic derivative), if Newton fails to converge from
+ * `c0`, or — new in WP4 — if it converges to a centre of the **wrong period**.
+ *
+ * That last check is not belt-and-braces. Every period-2 centre is also a root of
+ * g(c) = f⁴(0) − 0, so Newton had no reason to prefer the period-4 one, and the advice to "seed it
+ * inside the component" was never enforced. Measured: from (−0.9, 0.05) asking for period 4 it
+ * returned **c = −1**, which is period 2; from (0.6, 0.6) asking for period 3 it returned **c = 0**,
+ * the period-1 cardioid centre, 0.85 away. Both were snapped to and reported as the nucleus the user
+ * asked for. The guard is exact rather than a distance threshold: at a genuine period-n nucleus the
+ * critical orbit closes at n and at no proper divisor of n.
  */
 export function findNucleus(
   fAst: Node,
@@ -405,9 +411,35 @@ export function findNucleus(
     const delta = C.div(g, der);
     c = [c[0] - delta[0], c[1] - delta[1]];
     if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) return null;
-    if (cabs(delta) < 1e-13) return c;
+    if (cabs(delta) < 1e-13) return exactCriticalPeriod(f, critPoint, c, period) ? c : null;
   }
   return null; // did not converge within the iteration budget
+}
+
+/**
+ * Is the critical orbit at `c` periodic with EXACTLY `period` — closing at `period` and at no proper
+ * divisor of it? The test a Newton solve for a nucleus must pass to be the nucleus of the component
+ * it was asked for (see {@link findNucleus}).
+ */
+function exactCriticalPeriod(
+  f: (z: Complex, c: Complex) => Complex,
+  critPoint: Complex,
+  c: Complex,
+  period: number,
+  tol = 1e-8,
+): boolean {
+  const orbit: Complex[] = [];
+  let z: Complex = [critPoint[0], critPoint[1]];
+  for (let k = 0; k < period; k++) {
+    z = f(z, c);
+    if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) return false;
+    orbit.push([z[0], z[1]]);
+  }
+  const closes = (k: number): boolean =>
+    Math.hypot(orbit[k - 1][0] - critPoint[0], orbit[k - 1][1] - critPoint[1]) < tol;
+  if (!closes(period)) return false;
+  for (let d = 1; d < period; d++) if (period % d === 0 && closes(d)) return false;
+  return true;
 }
 
 /**

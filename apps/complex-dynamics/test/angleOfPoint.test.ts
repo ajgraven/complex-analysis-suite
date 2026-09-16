@@ -177,3 +177,32 @@ describe("landing memo (cd-render-08)", () => {
     expect(wide.angles.length).toBeGreaterThanOrEqual(narrow.angles.length);
   });
 });
+
+// ── WP4 / I3 (review 2026-09-16): valence is a decision, not a proximity count ────────────────
+// Co-landing was decided at 5e-3 — a screen distance, not a landing error — so the finder counted
+// every ray that landed anywhere nearby and then printed the point as "biaccessible".
+describe("angles of a point — a ray counts only if it lands THERE", () => {
+  it("β is univalent: exactly one ray lands at the basilica's β fixed point", () => {
+    // β = the repelling fixed point on the real axis; only θ = 0 lands there. At 5e-3 this
+    // reported valence 21, every one of them spurious, and called β biaccessible.
+    const r = nearestDynamicalAngles([1.618034, 0], [-1, 0]);
+    expect(r.valence).toBe(1);
+    expect(r.biaccessible).toBe(false);
+    expect(r.angles[0].p / r.angles[0].q).toBeCloseTo(0, 12);
+  });
+
+  it("the tip of ∂M is univalent: only θ = 1/2 lands at c = −2", () => {
+    // Reported valence 33 at 5e-3.
+    const r = nearestParameterAngles([-2, 0]);
+    expect(r.valence).toBe(1);
+    expect(r.angles[0].p / r.angles[0].q).toBeCloseTo(0.5, 12);
+  });
+
+  it("still finds the genuine co-landings it always found", () => {
+    // The anti-vacuity clause: tightening must remove the false rays and no others. Both of these
+    // are identical at 5e-3, 1e-6, 1e-9 and 1e-12 — a real co-landing agrees to ~1e-16.
+    expect(nearestDynamicalAngles([-0.618034, 0], [-1, 0]).valence).toBe(2); // basilica α
+    expect(nearestDynamicalAngles([-0.276, 0.4797], [-0.122561, 0.744862]).valence).toBe(3); // rabbit α
+    expect(nearestParameterAngles([-0.75, 0]).valence).toBe(2); // the period-2 root
+  });
+});

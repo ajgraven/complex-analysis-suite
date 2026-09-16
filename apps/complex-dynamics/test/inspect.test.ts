@@ -225,3 +225,30 @@ describe("inspect — the exterior distance estimate is honest", () => {
     expect(r.distance).toBeNull();
   });
 });
+
+// ── WP4 / I7 (review 2026-09-16): a Newton solve must land where it was sent ──────────────────
+describe("findNucleus — refuses a centre of the wrong period", () => {
+  // Every period-2 centre is also a root of g(c) = f⁴(0) − 0, so Newton had no reason to prefer the
+  // period-4 one. The advice to "seed it inside the component" was never enforced, and the result
+  // was snapped to and reported as the nucleus the user asked for.
+  it("does not return the period-2 centre when asked for period 4", () => {
+    // From inside the 1/2 bulb this returned c = −1 — a genuine nucleus, of the wrong period.
+    expect(findNucleus(F, O, 4, [-0.9, 0.05])).toBeNull();
+  });
+
+  it("does not return the cardioid centre when asked for period 3 from far away", () => {
+    // This returned c = 0, the period-1 centre, 0.85 away from the seed.
+    expect(findNucleus(F, O, 3, [0.6, 0.6])).toBeNull();
+  });
+
+  it("still finds every nucleus it was finding before", () => {
+    // The anti-vacuity clause: the guard must reject only the wrong-period answers.
+    const half = findNucleus(F, O, 2, [-0.9, 0.05]);
+    expect(half?.[0]).toBeCloseTo(-1, 9);
+    const rabbit = findNucleus(F, O, 3, [-0.12, 0.75]);
+    expect(rabbit?.[0]).toBeCloseTo(-0.122561, 5);
+    expect(rabbit?.[1]).toBeCloseTo(0.744862, 5);
+    const p4 = findNucleus(F, O, 4, [-1.31, 0.01]);
+    expect(p4?.[0]).toBeCloseTo(-1.310703, 5);
+  });
+});
