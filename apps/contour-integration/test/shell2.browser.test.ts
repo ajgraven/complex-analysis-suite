@@ -290,6 +290,7 @@ describe("the visual system", () => {
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 
 import { handlesOf } from "../src/engine/contour/edit.js";
+import { circleTemplate } from "../src/engine/contour/templates.js";
 import { resolveAll } from "../src/engine/contour/model.js";
 import { plotToScreen } from "../src/kernel/camera.js";
 import { pointAt } from "../src/kernel/geom.js";
@@ -645,5 +646,70 @@ describe("the drill's mask, on the stage", () => {
     const px = new Uint8Array(4);
     glCtx?.readPixels(Math.floor(gl.width / 4), Math.floor(gl.height / 4), 1, 1, glCtx.RGBA, glCtx.UNSIGNED_BYTE, px);
     expect(px[3], "the phase portrait went with the contour").toBeGreaterThan(0);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The DRAWN handles — M8 step 1.7, from the step's own mutation sweep.
+//
+// `test/shell2.test.ts`'s `offers a record NO handle belonging to the parked sandbox contour` pins
+// the controller's half: the keyboard stops come from `handles(state, resolution)` and a record
+// must not offer one for the curve the reader parked in the sandbox. The DRAW path calls the same
+// function and paints a dot, and that half is ink — so jsdom cannot see it, and the sweep's
+// `draw-handles-unresolved` survived the node suite entirely.
+//
+// The vacuity guard is the sandbox: the same box must be LIT there, or "no ink at that point" is
+// bought by any camera that happens to put the point off screen.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the handles the stage draws", () => {
+  it("paints NONE belonging to the parked sandbox contour when a record is open", async () => {
+    const { root, app } = mount();
+    const ink = root.querySelector<HTMLCanvasElement>("canvas.ink");
+    const host = root.querySelector<HTMLElement>("div.stage2");
+    if (ink === null || host === null) throw new Error("no stage");
+
+    // A sandbox circle placed clear of the record's own contour — the record is the real axis and
+    // an arc of radius `R_lim`, and this sits on neither. Its radius handle is at (-0.5, 3).
+    const parked = circleTemplate([0, 3], 0.5);
+    const view = { center: [0, 2] as const, halfHeight: 4 };
+    app.applyState({ ...app.currentState(), contour: parked, sandboxContour: parked, view });
+    await drawn();
+
+    const litAt = (z: readonly [number, number]): number => {
+      const box = 20;
+      const r = ink.getBoundingClientRect();
+      const dpr = ink.width / r.width;
+      const [sx, sy] = plotToScreen(z[0], z[1], app.currentState().view, {
+        width: host.clientWidth,
+        height: host.clientHeight,
+      });
+      const read = document.createElement("canvas");
+      read.width = box;
+      read.height = box;
+      const ctx = read.getContext("2d");
+      if (ctx === null) throw new Error("no 2d context");
+      ctx.drawImage(ink, Math.round(sx * dpr) - box / 2, Math.round(sy * dpr) - box / 2, box, box, 0, 0, box, box);
+      const { data } = ctx.getImageData(0, 0, box, box);
+      let n = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i] > 24) n++;
+      return n;
+    };
+
+    const handleAt: readonly [number, number] = [-0.5, 3];
+    const inSandbox = litAt(handleAt);
+    expect(inSandbox, "the sandbox drew no handle, so the check below proves nothing").toBeGreaterThan(8);
+
+    // The record keeps the camera, so the same screen position is asked about — only the resolution
+    // changes, which is the whole point.
+    app.applyState({
+      ...app.currentState(),
+      mode: "gallery",
+      record: "jordan-cosine-kernel",
+      fixture: 0,
+      view,
+    });
+    await drawn();
+    expect(litAt(handleAt), "a record painted the sandbox contour's handle").toBe(0);
   });
 });
