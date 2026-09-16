@@ -293,6 +293,14 @@ const isQuadraticFamily = (plot: { monicDegree: number | null }): boolean => plo
 
 /** Opens the glossary modal at an optional term anchor; assigned by setupGlossary(). */
 let openGlossary: (termId?: string) => void = () => {};
+/**
+ * Show the sidebar tab owning a control — late-bound, because the tabs are built inside `init()`
+ * while {@link startTour} is module-level. Two of the tour's eight steps point at controls WP10
+ * moved onto a tab that is hidden by default (`#mode` and `#overlays-group` both live on
+ * Appearance, and the app opens on Function), so driver.js highlighted a `display: none` element
+ * and the popover had no anchor. (Review follow-up.)
+ */
+let showTabFor: (memberId: string) => void = () => {};
 
 /**
  * The placeholder the image-derived Julia-properties rows hold until the Tier-2 worker returns.
@@ -423,6 +431,8 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
  */
 function startTour(): void {
   // Expand the Overlays group so its tour step shows the actual toggles, not just the header.
+  // (Its tab is opened by that step's own `onHighlightStarted` — opening a <details> inside a
+  // hidden panel is what made the step highlight a zero-size box.)
   document.getElementById("overlays-group")?.setAttribute("open", "");
   driver({
     showProgress: true,
@@ -453,6 +463,7 @@ function startTour(): void {
       },
       {
         element: "#inpf",
+        onHighlightStarted: () => showTabFor("inpf"),
         popover: {
           title: "Function f(z, c)",
           description: "Edit the iterated function — it is typeset live just below.",
@@ -460,6 +471,7 @@ function startTour(): void {
       },
       {
         element: "#fractal_presets",
+        onHighlightStarted: () => showTabFor("fractal_presets"),
         popover: {
           title: "Presets",
           description: "Jump to a built-in family — Mandelbrot, burning ship, magnet, and more.",
@@ -467,6 +479,7 @@ function startTour(): void {
       },
       {
         element: "#mode",
+        onHighlightStarted: () => showTabFor("mode"),
         popover: {
           title: "Colouring",
           description:
@@ -475,6 +488,7 @@ function startTour(): void {
       },
       {
         element: "#overlays-group",
+        onHighlightStarted: () => showTabFor("overlays-group"),
         popover: {
           title: "Overlays",
           description:
@@ -483,6 +497,7 @@ function startTour(): void {
       },
       {
         element: "#places",
+        onHighlightStarted: () => showTabFor("places"),
         popover: {
           title: "Places",
           description:
@@ -2863,7 +2878,7 @@ export function init(): void {
         el.replaceChildren();
         continue;
       }
-      const model = describeLegend(modeStr, legendSetName(view, plane));
+      const model = describeLegend(modeStr, legendSetName(view, plane), plane);
       renderLegend(el, model, palette, custom, rotation);
     }
   }
@@ -7329,6 +7344,9 @@ export function init(): void {
     const actions = byId("apply_all").closest(".inline-actions");
     if (actions instanceof HTMLElement) byId("pane-actions").append(actions);
     sidebarTabs = mountSidebarTabs(byId("sidebar-tablist"), byId("sidebar-panels"));
+    // `select` takes a member id and opens its owning tab WITHOUT moving focus, which is what the
+    // tour needs — `reveal` would fight driver.js for it.
+    showTabFor = (memberId) => sidebarTabs?.select(memberId);
     const strip = byId("active-settings");
     refreshActiveSettings = () =>
       renderActiveSettings(strip, (control) => sidebarTabs?.reveal(control));

@@ -657,6 +657,53 @@ describe("WP8/S4 — a mode the app cannot draw says so, and says so when it mov
   });
 });
 
+describe("Review follow-up — the tab move leaves nothing behind, and the tour follows it", () => {
+  it("no empty landmark or empty panel survives the move", async () => {
+    await mount();
+    // A named <section> is a `region` landmark; an empty one sends a screen-reader user somewhere
+    // with nothing in it. axe's `region` rule cannot see this — it checks that content is INSIDE a
+    // region, never that a region has content — so it is asserted here, where it blocks.
+    // Scoped to the STRUCTURAL landmarks — a named `<section>`, `<main>`, `<nav>`. Deliberately not
+    // every `role="region"`: the exterior-coefficient lists are named regions that are empty until
+    // the map is computed, which is legitimate, and a canvas a11y overlay is empty by nature
+    // because its name describes the canvas it covers. What must never be empty is a container the
+    // markup declares and the tab move then hollows out.
+    for (const el of document.querySelectorAll<HTMLElement>(
+      "section[aria-label], section[aria-labelledby], main, nav",
+    )) {
+      const hasContent = el.children.length > 0 || (el.textContent ?? "").trim() !== "";
+      expect(hasContent, `${el.tagName}.${el.className} "${el.getAttribute("aria-label")}"`).toBe(
+        true,
+      );
+    }
+  });
+
+  it("every tour step points at an element on a VISIBLE tab when it is highlighted", async () => {
+    await mount();
+    const { SIDEBAR_TABS } = await import("../src/ui/sidebarTabs");
+    // The tour's two Appearance steps used to highlight a `display: none` element, because the app
+    // opens on Function. Rather than driving driver.js, assert the fact underneath: each step's
+    // target is owned by a tab, and the tour is told which one before it highlights.
+    const ownerOf = (id: string): string | null => {
+      for (const t of SIDEBAR_TABS) if (t.members.some((m) => m.id === id)) return t.id;
+      return null;
+    };
+    const src = (await import("../src/main.ts?raw")).default as string;
+    // Every element id the tour steps at, in order.
+    const targets = [...src.matchAll(/element: "#([\w-]+)"/g)].map((m) => m[1]);
+    expect(targets.length, "the tour has steps").toBeGreaterThan(4);
+    for (const id of targets) {
+      const tab = ownerOf(id);
+      if (tab === null) continue; // not a sidebar control (the canvases, the app bar)
+      const step = src.slice(src.indexOf(`element: "#${id}"`));
+      expect(
+        step.slice(0, 200),
+        `the step at #${id} is on the "${tab}" tab and must open it`,
+      ).toContain(`showTabFor("${id}")`);
+    }
+  });
+});
+
 describe("Review follow-up — three shell defects the review found", () => {
   it("the SAME preset can be applied again — the menu acts, it does not show state", async () => {
     await mount();
