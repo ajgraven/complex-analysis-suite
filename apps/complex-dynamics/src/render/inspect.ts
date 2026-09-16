@@ -79,6 +79,20 @@ const NEUTRAL_TOL = 1e-3;
 const DOUBLE_ROOT_TOL = 1e-5;
 /** |λ| below this ⇒ superattracting (the cycle contains a critical point). */
 const SUPERATTRACTING_TOL = 1e-6;
+/**
+ * `|λ| − 1` above this ⇒ the fixed point is REPELLING, and {@link attractingFixedPoint} declines.
+ *
+ * This is deliberately NOT {@link NEUTRAL_TOL}, which is a *display* band — how close to 1 is close
+ * enough to tell a reader "indifferent". Reusing it as an *acceptance* band admitted fixed points up
+ * to |λ| = 1.001, i.e. genuinely repelling ones, and that sliver hugs the outside of the whole
+ * cardioid boundary — at deep zoom it fills the screen. Measured through this exact code path: every
+ * genuinely indifferent parameter lands within **2.3e-16** of 1 (the golden-mean Siegel point,
+ * θ = 1/2, 1/3, 1/7, √2−1), while the false positives sit at **2.0e-5** (c = 0.25001) and
+ * **1.0e-4** (c = −0.7501). Eleven orders of clear space; 1e-12 sits in it with ~4,500× headroom
+ * over the honest cases and seven orders of refusal over the wrong ones. The double root is handled
+ * before this test, because its error scale is √ε rather than ε. (Review follow-up, finding 1.)
+ */
+const REPELLING_TOL = 1e-12;
 
 /**
  * Classify the Fatou component a cycle bounds from its multiplier λ:
@@ -326,10 +340,14 @@ function escapeDistance(
  * click and `paramClass: "neutral"` was dead code.
  *
  * Fixed points are roots of f(z) − z, which for a polynomial is a polynomial: they are solved for and
- * certified by residual, never iterated toward. Returns the root of smallest |f′| when that is ≤ 1
- * (within {@link NEUTRAL_TOL}) — an attracting or indifferent fixed point is the attractor, so it is
- * what the click is asking about — and null otherwise, which includes every c whose attractor is a
- * genuine higher-period cycle (there α is repelling and this correctly declines to answer).
+ * certified by residual, never iterated toward. Returns the root of smallest |f′| when that root is
+ * genuinely non-repelling (|λ| ≤ 1 within {@link REPELLING_TOL}, or a double root, which IS λ = 1) —
+ * an attracting or indifferent fixed point is the attractor, so it is what the click is asking about
+ * — and null otherwise, which includes every c whose attractor is a genuine higher-period cycle
+ * (there α is repelling and this correctly declines to answer).
+ *
+ * It declines by returning null, and the caller then leaves the orbit's fate `"undetermined"`: what
+ * this establishes is a fact about the MAP's fixed point, not about where the clicked orbit went.
  */
 function attractingFixedPoint(
   fAst: Node,
@@ -351,21 +369,32 @@ function attractingFixedPoint(
     if (!Number.isFinite(mag)) continue;
     if (!best || mag < best.mag) best = { point: pt, multiplier: lam, mag };
   }
-  if (!best || best.mag > 1 + NEUTRAL_TOL) return null;
+  if (!best) return null;
+  const fp = best;
   // A DOUBLE root of f(z) − z is exactly the parabolic case with rotation number 0: two fixed points
   // colliding means f′ = 1 there. Durand–Kerner converges only linearly at a multiple root, so it
-  // returns the pair about √ε apart — measured at the cardioid cusp c = 1/4, 5.8e-9. |λ| survives
+  // returns the pair about √ε apart — re-measured at the cardioid cusp c = 1/4, 3.8e-8. |λ| survives
   // that (1.000000000 to nine places) but ARG does not: the spurious imaginary part put θ at ~1e-8
   // instead of 0, the continued fraction did not terminate, and the app reported a **Siegel disc** at
   // the cusp. Snapping the multiplier to exactly 1 states the fact the collision already proves, and
   // leaves the rotation-number classifier — which cannot tell a near-Cremer irrational from a
   // rational at float64, and does not have to — untouched. (WP5 / I5, review 2026-09-16.)
+  //
+  // The collision is tested BEFORE the repelling band because the two have different error scales:
+  // Durand–Kerner returns a double root about √ε apart, so |λ| there carries ~1e-8 of error (measured
+  // at the cusp: 1.7e-8, which happens to land just INSIDE 1 — luck, not a guarantee), where a simple
+  // root's |λ| is good to ~1e-16. The `mag ≈ 1` clause keeps the collision from being a second way in:
+  // two genuinely distinct fixed points that happen to sit within DOUBLE_ROOT_TOL of each other are
+  // only parabolic if their multiplier says so, and otherwise fall through to the band below.
   const collided = roots.some((r) => {
-    const d = Math.hypot(r[0] - best.point[0], r[1] - best.point[1]);
+    const d = Math.hypot(r[0] - fp.point[0], r[1] - fp.point[1]);
     return d > 0 && d < DOUBLE_ROOT_TOL;
   });
-  if (collided) return { point: best.point, multiplier: [1, 0] };
-  return { point: best.point, multiplier: best.multiplier };
+  if (collided && Math.abs(fp.mag - 1) < DOUBLE_ROOT_TOL) {
+    return { point: fp.point, multiplier: [1, 0] };
+  }
+  if (fp.mag > 1 + REPELLING_TOL) return null; // repelling — not what the orbit is attracted to
+  return { point: fp.point, multiplier: fp.multiplier };
 }
 
 /** Classify and measure the orbit at a clicked point. See the module comment for plane semantics. */
@@ -426,7 +455,16 @@ export function inspect(
     // all. Solve for it instead of waiting for it. (WP5 / I5, review 2026-09-16.)
     const fp = attractingFixedPoint(fAst, a, c, deriv);
     if (fp) {
-      out.fate = "converged";
+      // `fate` deliberately stays "undetermined". What the solve establishes is a property of the
+      // MAP — f has a non-repelling fixed point — not of the clicked ORBIT, which still neither
+      // escaped nor closed. Overwriting it to "converged" printed *"settles to a fixed point"* under
+      // an `estimate` certificate naming cycle detection (neither happened, and at an indifferent
+      // λ the orbit never settles at all), and, worse, collapsed `connectivityUndetermined` in
+      // juliaProperties — so the Julia panel asserted "connected (c ∈ Mandelbrot set)" from an
+      // iteration-limited orbit, which the comment at its own call site forbids. Every row this
+      // fallback exists to reach — Period, Multiplier λ, Fatou component, the Brjuno verdict,
+      // `paramClass`, the Lyapunov exponent — reads `period`/`multiplier` and never `fate`, so
+      // leaving it honest costs the verdicts nothing. (Review follow-up, finding 1.)
       out.period = 1;
       out.cyclePoints = [fp.point];
       out.multiplier = fp.multiplier;
