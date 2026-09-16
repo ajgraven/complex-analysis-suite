@@ -15,16 +15,32 @@ import katex from "katex";
 import { describe, expect, it, vi } from "vitest";
 
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle } from "../src/engine/vocabulary.js";
-import { handlesOf } from "../src/engine/contour/edit.js";
+import { handlesOf, onContour } from "../src/engine/contour/edit.js";
 import { resolveAll } from "../src/engine/contour/model.js";
-import { plotToScreen } from "../src/kernel/camera.js";
+import { plotToScreen, scale } from "../src/kernel/camera.js";
+import { pointAt } from "../src/kernel/geom.js";
 import { h, patch } from "../src/shell2/dom.js";
 import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js";
 import { mountShell2 } from "../src/shell2/app.js";
+import { createStageController } from "../src/shell2/stageController.js";
+import { createStageView } from "../src/shell2/stageView.js";
 import { defaultSession, resetTransient } from "../src/shell2/session.js";
+import { resolveState } from "../src/shell/state.js";
 
+/**
+ * Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context.
+ *
+ * **ONE jsdom `window` SERVES THE WHOLE FILE, SO THE ADDRESS BAR IS CLEARED HERE.** `mountShell2`
+ * opens whatever `#vs=` link it finds, and `syncHash` writes one from every commit on a 250 ms
+ * coalescing timer — so without this a test inherits whichever EARLIER test's permalink happened to
+ * land before it mounted, which is a race rather than an order. Measured: the wheel-zoom test's
+ * `deltaY: 100000` leaves the camera at `center [1.05e64, -6.97e63]` (`clampView` bounds the half
+ * height and not the centre), and a later mount that inherits it is 1e64 from every point its
+ * pointer events name.
+ */
 function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
+  window.history.replaceState(null, "", window.location.pathname);
   const root = document.createElement("div");
   document.body.replaceChildren(root);
   return { root, app: mountShell2(root) };
@@ -731,6 +747,82 @@ describe("the stage's gestures", () => {
       stops.filter((label) => label.includes(sandboxName)),
       "a record offered a handle from the contour parked in the sandbox",
     ).toHaveLength(0);
+  });
+
+  it("HIT-TESTS the contour the resolution draws, not the one the state parks", () => {
+    // The other half of the test above, for the other reader of the resolution. `handles` is covered
+    // there; **`pieces()` — what the controller hit-tests, and what `bodyAnchor()` measures the
+    // whole-contour chip against — was covered by nothing**, and a sweep of step 1.7 found it:
+    // dropping its argument (`stage.resolvedPieces(getState(), undefined)`) killed no test. An
+    // omitted resolution sends `contourOf` down its `state.contour` branch, so the press below would
+    // be measured against the parked sandbox circle while the unit circle is what is on screen.
+    //
+    // **The state and the resolution are held APART here, and the app cannot pair them that way
+    // today** — measured, not assumed: `pieces()` is reached only through `canMoveBody()`, which is
+    // `mode === "sandbox"`, and `resolveState` returns a `gallery` resolution only for
+    // `mode === "gallery"`, so the two guards make the omission invisible from the app's own
+    // surface. Making `pieces()` throw on a gallery resolution leaves the whole node gate green
+    // (115 files, 2208 tests). That is a property of one policy gate rather than of this function,
+    // and the day the body becomes movable under a record — or a fifth caller lands outside the
+    // guard — the hit test would silently answer about a curve that is not in view. So the
+    // controller's own two inputs are given deliberately different contours, which is the only place
+    // the question "which one does it read?" has an answer.
+    const { app } = mount();
+    const parked = app.currentState();
+    const drawn = resolveState({ ...parked, mode: "gallery", record: "circle-linear-cos", fixture: 0 }, null);
+    if (drawn.kind !== "gallery" || drawn.run === null) throw new Error("the record did not run");
+    const onScreen = resolveAll(drawn.run.contour);
+    const parkedPieces = resolveAll(parked.contour);
+
+    const host = document.createElement("div");
+    document.body.append(host);
+    for (const [prop, value] of [["clientWidth", 900], ["clientHeight", 600]] as const) {
+      Object.defineProperty(host, prop, { configurable: true, get: () => value });
+    }
+    const port = { width: 900, height: 600 };
+    const view = createStageView(host);
+    stubPointer(view.ink);
+    const session = defaultSession();
+    let state = parked;
+    const controller = createStageController({
+      view,
+      getState: () => state,
+      getSession: () => session,
+      getPoles: () => null,
+      getResolution: () => drawn,
+      commit: (next) => {
+        state = next;
+      },
+      redraw: () => {},
+      announce: () => {},
+    });
+
+    /** What a press at a point in the plane turns out to MEAN. */
+    const press = (z: readonly [number, number]): string => {
+      const [px, py] = plotToScreen(z[0], z[1], state.view, port);
+      view.ink.dispatchEvent(pointer("pointerdown", px, py));
+      const meant = session.gesture;
+      view.ink.dispatchEvent(pointer("pointerup", px, py));
+      return meant;
+    };
+
+    const atDrawn = pointAt(onScreen[0], 0.25);
+    const atParked = pointAt(parkedPieces[0], 0.25);
+    // The record draws $|z| = 1$ and the sandbox parks $|z| = 1.5$, half a unit apart against an
+    // 11 px grab radius that is 0.073 units wide at the default view — so neither point is within
+    // reach of the other curve, and neither assertion below can be satisfied by both at once.
+    const tol = 11 * scale(parked.view, port);
+    expect(onContour(parkedPieces, atDrawn, tol), "the two curves overlap, so the test is vacuous").toBe(false);
+    expect(onContour(onScreen, atParked, tol), "the two curves overlap, so the test is vacuous").toBe(false);
+
+    // **This is the assertion the mutant breaks**: with the resolution omitted the drawn point is
+    // measured against the parked circle, misses it, and the press pans the view instead.
+    expect(press(atDrawn), "a press on the contour ON SCREEN did not grab it").toBe("contour");
+    expect(press(atParked), "a press on the parked contour grabbed a curve nobody can see").toBe("view");
+
+    controller.destroy();
+    view.destroy();
+    host.remove();
   });
 
   it("spends the DRAFT budget while a slider is being scrubbed", () => {

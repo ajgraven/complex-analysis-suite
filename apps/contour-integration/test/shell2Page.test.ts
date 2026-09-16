@@ -23,9 +23,20 @@ import { sameShape } from "../src/engine/contour/pen.js";
 import { mountShell2 } from "../src/shell2/app.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 
-/** Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context. */
+/**
+ * Mount a fresh app. jsdom has no canvas, and the shell already handles not getting a context.
+ *
+ * **ONE jsdom `window` SERVES THE WHOLE FILE, SO THE ADDRESS BAR IS CLEARED HERE.** `mountShell2`
+ * opens whatever `#vs=` link it finds, and `syncHash` writes one from every commit on a 250 ms
+ * coalescing timer — so without this a test inherits whichever EARLIER test's permalink happened to
+ * land before it mounted, which is a race rather than an order. Measured: the wheel-zoom test's
+ * `deltaY: 100000` leaves the camera at `center [1.05e64, -6.97e63]` (`clampView` bounds the half
+ * height and not the centre), and a later mount that inherits it is 1e64 from every point its
+ * pointer events name.
+ */
 function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
+  window.history.replaceState(null, "", window.location.pathname);
   const root = document.createElement("div");
   document.body.replaceChildren(root);
   return { root, app: mountShell2(root) };
@@ -383,5 +394,39 @@ describe("the pen, at the mounted shell", () => {
     expect(back?.ok).toBe(true);
     if (back === null || !back.ok) return;
     expect(sameShape(back.state.contour, app.currentState().contour)).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// The hovered piece, across BOTH rails.
+//
+// `test/shell2.test.ts` asserts that a Contour row puts the piece's own id on the session, and
+// `test/cards.test.ts` renders each card against a session that already carries one. Neither can
+// see the REPAINT between them — whether the id a row sets reaches every card that reads it.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("the hovered piece, lit in both rails", () => {
+  it("lights the LEFT rail's row and the RIGHT rail's derivation line from ONE hover", () => {
+    // **A sweep survivor of step 1.7's.** The mutant is the OLD `hover`: `repaint`'s
+    // `scheduleDraw(); render2();` replaced by `scheduleDraw(); patch(left, render(…).left);`, which
+    // throws the rest of the description away. `cards/derivation.ts` is a RIGHT-rail card and puts
+    // `hot` on the line whose piece is hovered, so a left-only patch lights half of a three-surface
+    // link — measured with B1 open, one row in each rail here against one and none under the mutant.
+    //
+    // The clearing half is what stops this passing on a node that is permanently hot: `hover(null)`
+    // has to take BOTH rows back down again.
+    const { root, app } = mount();
+    app.applyState({ ...app.currentState(), mode: "gallery", record: "jordan-cosine-kernel", fixture: 0 });
+    // Through the Contour card's own row, which is the reader's path to `actions.hover`.
+    const row = q(root, '[data-card="contour"] .pieces2 > li');
+    row.dispatchEvent(new Event("pointerenter", { bubbles: true }));
+    // B1's real segment is its target piece, and the derivation attributes a line to it.
+    expect(app.session().hover.piece, "the row set no id, so the rails have nothing to light").not.toBeNull();
+    expect(root.querySelectorAll(".rail2.left .hot"), "the piece list did not light").toHaveLength(1);
+    expect(root.querySelectorAll(".rail2.right .hot"), "the derivation line stayed cold").toHaveLength(1);
+
+    row.dispatchEvent(new Event("pointerleave", { bubbles: true }));
+    expect(app.session().hover.piece).toBeNull();
+    expect(root.querySelectorAll(".rail2 .hot"), "a hot node outlived the hover").toHaveLength(0);
   });
 });
