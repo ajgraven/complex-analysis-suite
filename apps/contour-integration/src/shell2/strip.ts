@@ -28,8 +28,9 @@ import { accumulateForIntegral, type Accumulation } from "../engine/contour/accu
 import type { ContourIntegral, PathFn } from "../engine/contour/integrate.js";
 import type { CutSide } from "../engine/contour/model.js";
 import type { Cx, Resolved } from "../kernel/geom.js";
-import { CONTRAST_LABELS, drawAccumulator, type ContrastMode } from "../ui/accumulator.js";
+import { CONTRAST_LABELS, drawAccumulator, stepNear, type ContrastMode } from "../ui/accumulator.js";
 import { DARK_INK, type InkTheme } from "../ui/inkTheme.js";
+import { drawnContour } from "../shell/state.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
 import { h, patch } from "./dom.js";
 import { fmtApprox } from "./format.js";
@@ -50,6 +51,13 @@ export interface StripInput {
   readonly setScrub: (t: number) => void;
   /** Choose the compare trail. The shell commits it to `ShellState.contrast`. */
   readonly setContrast: (mode: ContrastMode) => void;
+  /**
+   * Light the piece a point of the trail came from, or clear it — M8 step 1.10.
+   *
+   * The same action the rail rows and the stage use, with the same ids, so the three surfaces
+   * cannot disagree about which piece is hot.
+   */
+  readonly hover: (piece: string | null) => void;
   /** Say something into the app's live region. */
   readonly announce: (message: string) => void;
 }
@@ -159,10 +167,6 @@ function inputsOf(resolution: StateResolution): AccInputs {
 const withheldBecause = (integral: ContourIntegral): string =>
   integral.refusal ?? integral.quadratureSkipped ?? "the integral has no value to accumulate";
 
-/** In gallery mode the contour is the RECORD's output, rebuilt on every run (M6.1's finding). */
-const contourOf = (d: StripDraw): ShellState["contour"] =>
-  d.resolution.kind === "gallery" ? (d.resolution.run?.contour ?? d.state.contour) : d.state.contour;
-
 /**
  * The floor below which a component of the partial sum is the SUM's OWN ROUNDING.
  *
@@ -247,6 +251,20 @@ function describe(scrub: number, acc: Accumulation | null, withheld: string | nu
   );
 }
 
+/**
+ * Which piece the hover names, as an INDEX into the drawn contour, or `undefined`.
+ *
+ * `session.hover.piece` is an id because the rail rows, the derivation lines and the stage all speak
+ * ids; `AccumulationStep.piece` is an index because the walk is built from the resolved geometry.
+ * One translation, here, rather than the strip carrying a second identifier.
+ */
+function pieceIndexOf(d: StripDraw): number | undefined {
+  const id = d.session.hover.piece;
+  if (id === null) return undefined;
+  const k = drawnContour(d.state, d.resolution).pieces.findIndex((p) => p.id === id);
+  return k < 0 ? undefined : k;
+}
+
 export function createStripView(host: HTMLElement, input: StripInput): StripView {
   const canvas = document.createElement("canvas");
   canvas.className = "acc";
@@ -265,6 +283,9 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
 
   /** The accumulation, and the key it was computed for. Null means "nothing computed yet". */
   let cached: { readonly key: string; readonly acc: Accumulation | null } | null = null;
+
+  /** The last draw, so a pointer move can be answered without the shell pushing one in. */
+  let last: StripDraw | null = null;
 
   /**
    * Everything that can change the walk, as one string.
@@ -423,6 +444,7 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
   }
 
   function drawNow(d: StripDraw): void {
+    last = d;
     const got = inputsOf(d.resolution);
     const acc = accumulate(d, got);
     const withheld = got.ok ? (acc === null ? withheldBecause(got.integral) : null) : got.refusal;
@@ -448,9 +470,44 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
       // readout and the stage's marker one term rather than three that usually agree.
       upTo: clamp01(d.state.scrub),
       contrast: d.state.contrast,
-      pieceColours: contourOf(d).pieces.map((p) => p.colour),
+      pieceColours: drawnContour(d.state, d.resolution).pieces.map((p) => p.colour),
+      // The third surface of step 1.10's link. The hover carries a piece ID; the trail knows piece
+      // INDICES, so the drawn contour is what turns one into the other — the same list the colours
+      // come from, so a highlight and a colour cannot name different pieces.
+      highlight: pieceIndexOf(d),
     });
   }
+
+  /**
+   * The trail, hovered — M8 step 1.10's third surface.
+   *
+   * **It answers from the LAST DRAW rather than asking the shell for a state.** The strip is handed
+   * its draw; a pointer handler that pulled one would need a second accessor into the app, and the
+   * one thing that must be true here is that the hit test runs against the picture on screen —
+   * `stepNear` shares `walkOnScreen` with `drawAccumulator`, so the frame and the drawn slice are
+   * the same objects, and feeding it a fresher state than the canvas shows would undo that.
+   *
+   * Nothing is committed and nothing is announced: a hover is where the reader's pointer is, and
+   * `actions.hover` already declines to repaint when the piece has not changed.
+   */
+  const onMove = (ev: PointerEvent): void => {
+    if (last === null) return;
+    const acc = accumulation(last);
+    if (acc === null) {
+      input.hover(null);
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    const k = stepNear(acc, rect.width || 1, rect.height || 1, ev.clientX - rect.left, ev.clientY - rect.top, {
+      upTo: clamp01(last.state.scrub),
+      contrast: last.state.contrast,
+    });
+    const pieces = drawnContour(last.state, last.resolution).pieces;
+    input.hover(k === null ? null : (pieces[acc.steps[k].piece]?.id ?? null));
+  };
+  const onLeave = (): void => input.hover(null);
+  canvas.addEventListener("pointermove", onMove);
+  canvas.addEventListener("pointerleave", onLeave);
 
   let pending = 0;
   function schedule(next: () => StripDraw): void {
@@ -469,6 +526,8 @@ export function createStripView(host: HTMLElement, input: StripInput): StripView
     drawNow,
     destroy: () => {
       if (pending !== 0) cancelAnimationFrame(pending);
+      canvas.removeEventListener("pointermove", onMove);
+      canvas.removeEventListener("pointerleave", onLeave);
       a11y.destroy();
       canvas.remove();
       side.remove();

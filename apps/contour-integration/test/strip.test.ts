@@ -27,6 +27,7 @@ interface Recorded extends StripInput {
   readonly scrubs: number[];
   readonly contrasts: ContrastMode[];
   readonly said: string[];
+  readonly hovered: (string | null)[];
 }
 
 function mount(): { host: HTMLElement; view: StripView; input: Recorded } {
@@ -36,12 +37,15 @@ function mount(): { host: HTMLElement; view: StripView; input: Recorded } {
   const scrubs: number[] = [];
   const contrasts: ContrastMode[] = [];
   const said: string[] = [];
+  const hovered: (string | null)[] = [];
   const input: Recorded = {
     scrubs,
     contrasts,
     said,
+    hovered,
     setScrub: (t) => scrubs.push(t),
     setContrast: (m) => contrasts.push(m),
+    hover: (p) => hovered.push(p),
     announce: (m) => said.push(m),
   };
   return { host, view: createStripView(host, input), input };

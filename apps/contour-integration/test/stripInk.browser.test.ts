@@ -58,6 +58,7 @@ function mount(): StripView {
   const view = createStripView(host, {
     setScrub: () => undefined,
     setContrast: () => undefined,
+    hover: () => undefined,
     announce: () => undefined,
   });
   view.canvas.style.cssText = `position: absolute; left: 0; top: 0; width: ${W}px; height: ${H}px`;

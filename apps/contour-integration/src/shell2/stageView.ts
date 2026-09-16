@@ -30,8 +30,10 @@ import { drawPoleGlyph, drawTextbookPlate } from "../ui/stage/ink.js";
 import { drillMask } from "./drillPanel.js";
 import { drawContour } from "../ui/stage/ink.js";
 import { GLStage } from "../ui/stage/glStage.js";
+import { drawnContour } from "../shell/state.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
 import { h, patch } from "./dom.js";
+import { readout } from "./readout.js";
 import { mathPlain, mathText } from "./math.js";
 import type { Session } from "./session.js";
 
@@ -228,12 +230,8 @@ export function createStageView(host: HTMLElement): StageView {
     return null;
   }
 
-  /** In gallery mode the contour is the RECORD's output, rebuilt on every run (M6.1's finding). */
-  const contourOf = (state: ShellState, resolution: StateResolution | undefined): ShellState["contour"] =>
-    resolution?.kind === "gallery" ? (resolution.run?.contour ?? state.contour) : state.contour;
-
   const resolvedPieces = (state: ShellState, resolution: StateResolution | undefined): readonly Resolved[] =>
-    resolveAll(contourOf(state, resolution));
+    resolveAll(drawnContour(state, resolution));
 
   // **`handlesOf` gets the SAME contour `resolvedPieces` resolved.** It read `state.contour` beside
   // a resolution of the drawn one, so under a record the two disagreed about which curve they were
@@ -242,7 +240,7 @@ export function createStageView(host: HTMLElement): StageView {
     state: ShellState,
     resolution: StateResolution | undefined,
   ): { radius: readonly Handle[]; branch: readonly BranchHandle[] } => ({
-    radius: handlesOf(contourOf(state, resolution), resolvedPieces(state, resolution)),
+    radius: handlesOf(drawnContour(state, resolution), resolvedPieces(state, resolution)),
     branch: branchHandles(state.branch),
   });
 
@@ -393,7 +391,7 @@ export function createStageView(host: HTMLElement): StageView {
     // **The rail's hover, on the stage.** `session.hover.piece` is one id read by the piece list,
     // the stage and (at 1.9) the accumulator, so hovering a row lights the same curve it names —
     // three surfaces, one identifier, which is what stops a highlight meaning different things.
-    const drawnPieces = hidden ? [] : contourOf(d.state, d.resolution).pieces;
+    const drawnPieces = hidden ? [] : drawnContour(d.state, d.resolution).pieces;
     drawContour(ctx, pieces, view, vp, {
       theme: t,
       highlight: drawnPieces.findIndex((p) => p.id === d.session.hover.piece),
@@ -482,9 +480,21 @@ export function createStageView(host: HTMLElement): StageView {
       }
     }
 
-    // The hover readout's host. Empty until step 1.10, which puts the pointer's position and the
-    // piece under it here; named now so the overlay's shape is settled rather than grown.
-    chips.push(h("div", { key: "readout", class: "readout", "data-testid": "hover-readout" }));
+    // **The hover readout — M8 step 1.10.** Step 1.1 reserved an empty host here; this is what it
+    // was reserved for. It is a pure function of the draw, so nothing about what is under the
+    // pointer is computed twice: `session.hover` is written once, by the controller, and read here.
+    //
+    // The piece's NAME rather than its id, because the id is the app's identifier for the link and
+    // the name is what the record calls it. `hover.piece` can also be a pole's id (the Singularities
+    // card sets it) — no drawn piece matches, so the row is simply absent, which is the truth.
+    const named = drawnContour(d.state, d.resolution).pieces.find((p) => p.id === d.session.hover.piece);
+    const block = readout({
+      hover: d.session.hover,
+      state: d.state,
+      resolution: d.resolution,
+      pieceName: named?.name ?? null,
+    });
+    if (block !== null) chips.push(block);
     patch(overlay, chips);
   }
 

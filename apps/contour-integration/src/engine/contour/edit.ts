@@ -167,6 +167,37 @@ export function onContour(
 }
 
 /**
+ * WHICH piece `at` is nearest to within `tolerance`, or `-1`.
+ *
+ * {@link onContour} answers *is the pointer on the curve*, which is the question a GRAB asks — a
+ * body drag moves the whole contour, so which piece was under the pointer does not enter it. M8 step
+ * 1.10's hover asks a different question, because the piece is the answer: hovering the curve has to
+ * light the row in the rail that names that piece, and the readout has to print its name.
+ *
+ * **The NEAREST within tolerance, not the first.** Every closed contour has pieces meeting at their
+ * endpoints, and at a join both are inside any tolerance at once — so "the first that qualifies"
+ * would hand the reader whichever piece the record happened to list first, from a pointer sitting
+ * equally on two. Ties still go to the earlier piece, which is a tie and not a choice.
+ */
+export function pieceAt(resolved: readonly Resolved[], at: Cx, tolerance: number): number {
+  let best = -1;
+  let bestDist = tolerance;
+  for (let k = 0; k < resolved.length; k++) {
+    const d = distanceToPoint(resolved[k], at);
+    if (d <= bestDist) {
+      // `<` rather than `<=` here, against the `<=` on the tolerance above: the first comparison
+      // admits a piece, the second replaces one, and using `<=` for both would make the LAST of two
+      // equidistant pieces win, which is the arbitrary answer this function exists to avoid.
+      if (best === -1 || d < bestDist) {
+        best = k;
+        bestDist = d;
+      }
+    }
+  }
+  return best;
+}
+
+/**
  * The same curve, walked the other way — M8 step 1.4b.
  *
  * `∮` changes SIGN, which is what makes this worth a button: a reader who has watched the residue

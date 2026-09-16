@@ -14,7 +14,8 @@
 // It rides the Playwright/Chromium harness M4.7a wired up — no new infrastructure.
 import { describe, expect, it } from "vitest";
 import { DARK_INK } from "../src/ui/inkTheme.js";
-import { drawAccumulator } from "../src/ui/accumulator.js";
+import { accumulatorFrame, drawAccumulator } from "../src/ui/accumulator.js";
+import type { Cx } from "../src/kernel/geom.js";
 import { accumulate, type Accumulation } from "../src/engine/contour/accumulate.js";
 import { offeredFamilies, primaryGolden, runFamily } from "../src/families/runFamily.js";
 import { FAMILIES } from "../src/families/index.js";
@@ -159,5 +160,204 @@ describe("what the old fit would have drawn, in the same canvas", () => {
     const legacyW = (Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0]))) * legacyScale;
     const legacyH = (Math.max(...pts.map((p) => p[1])) - Math.min(...pts.map((p) => p[1]))) * legacyScale;
     expect((now.width * now.height) / (legacyW * legacyH)).toBeGreaterThan(3);
+  });
+});
+
+
+// **THE HIGHLIGHT** — `AccumulatorOptions.highlight`, the strip's half of M8 step 1.10's hover link
+// between the piece list, the contour on the stage, and this trail.
+//
+// The claim is not "something changed": it is that what changed is the highlighted piece's OWN
+// segments and nothing else. So every count here comes with the control the header demands — the
+// difference is measured against a draw with the option off, and the region it is compared to is one
+// the piece does not occupy. A highlight that were silently ignored makes `changed` zero, which
+// fails; a highlight that thickened the whole trail puts changed pixels in the other region, which
+// also fails.
+
+/** The raw RGBA of one draw, so two draws can be compared byte for byte. */
+function pixelsOf(
+  acc: Accumulation,
+  pieceColours: readonly number[],
+  highlight?: number,
+): Uint8ClampedArray {
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) throw new Error("no 2-D context");
+  drawAccumulator(ctx, acc, W, H, {
+    theme: DARK_INK,
+    upTo: 1,
+    contrast: "none",
+    pieceColours,
+    ...(highlight === undefined ? {} : { highlight }),
+  });
+  return ctx.getImageData(0, 0, W, H).data;
+}
+
+/**
+ * Every pixel within `NEAR` of one piece's drawn segments.
+ *
+ * Built from `accumulatorFrame` directly rather than from anything the highlight touches, so the two
+ * regions being compared are geometry rather than a restatement of the thing under test. `NEAR = 4`
+ * is a real margin: the stroke goes from 2 px to 3.2 px, so at most 1.6 px of centre-line offset
+ * plus about a pixel of antialiasing can move, and the mask is more than twice that.
+ */
+const NEAR = 4;
+
+function regionOf(acc: Accumulation, piece: number): Uint8Array {
+  const f = accumulatorFrame(acc.steps.map((s) => s.running), W, H);
+  const mask = new Uint8Array(W * H);
+  let from: Cx = [0, 0];
+  for (const step of acc.steps) {
+    const to = step.running;
+    const ax = f.toX(from[0]);
+    const ay = f.toY(from[1]);
+    const bx = f.toX(to[0]);
+    const by = f.toY(to[1]);
+    from = to;
+    if (step.piece !== piece) continue;
+    // `removable-one-minus-cos` goes NaN partway (see above), and a NaN endpoint is drawn as nothing
+    // — so it is in no region, which is what makes `neither === 0` below a real claim about it.
+    if (!Number.isFinite(ax + ay + bx + by)) continue;
+    const n = Math.max(1, Math.ceil(2 * Math.hypot(bx - ax, by - ay)));
+    for (let i = 0; i <= n; i++) {
+      const cx = Math.round(ax + ((bx - ax) * i) / n);
+      const cy = Math.round(ay + ((by - ay) * i) / n);
+      for (let dy = -NEAR; dy <= NEAR; dy++) {
+        for (let dx = -NEAR; dx <= NEAR; dx++) {
+          if (dx * dx + dy * dy > NEAR * NEAR) continue;
+          const x = cx + dx;
+          const y = cy + dy;
+          if (x < 0 || y < 0 || x >= W || y >= H) continue;
+          mask[y * W + x] = 1;
+        }
+      }
+    }
+  }
+  return mask;
+}
+
+interface Spread {
+  readonly id: string;
+  readonly piece: number;
+  /** Pixels the highlight changed, in total. */
+  readonly changed: number;
+  /** …of which: on this piece alone, on another piece alone, on both, on neither. */
+  readonly onPiece: number;
+  readonly onOther: number;
+  readonly onBoth: number;
+  readonly onNeither: number;
+}
+
+function spreadOf(
+  id: string,
+  acc: Accumulation,
+  colours: readonly number[],
+  piece: number,
+  pieces: readonly number[],
+): Spread {
+  const plain = pixelsOf(acc, colours);
+  const lit = pixelsOf(acc, colours, piece);
+  const mine = regionOf(acc, piece);
+  const theirs = new Uint8Array(W * H);
+  for (const q of pieces) {
+    if (q === piece) continue;
+    const m = regionOf(acc, q);
+    for (let i = 0; i < m.length; i++) if (m[i] === 1) theirs[i] = 1;
+  }
+
+  let changed = 0;
+  let onPiece = 0;
+  let onOther = 0;
+  let onBoth = 0;
+  let onNeither = 0;
+  for (let i = 0; i < W * H; i++) {
+    let moved = false;
+    for (let c = 0; c < 4; c++) {
+      if (plain[i * 4 + c] !== lit[i * 4 + c]) {
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) continue;
+    changed++;
+    const a = mine[i] === 1;
+    const b = theirs[i] === 1;
+    if (a && b) onBoth++;
+    else if (a) onPiece++;
+    else if (b) onOther++;
+    else onNeither++;
+  }
+  return { id, piece, changed, onPiece, onOther, onBoth, onNeither };
+}
+
+const SPREADS: readonly Spread[] = CASES.flatMap(({ id, acc, colours }) => {
+  const pieces = [...new Set(acc.steps.map((s) => s.piece))].sort((a, b) => a - b);
+  return pieces.map((p) => spreadOf(id, acc, colours, p, pieces));
+});
+
+describe("the highlight emphasises one piece of the trail, and nothing else", () => {
+  it("covers every loaded record, every piece", () => {
+    // Derived, for the reason the coverage assertion above is: a record added later cannot make this
+    // stale rather than false.
+    expect(new Set(SPREADS.map((s) => s.id))).toEqual(new Set(CASES.map((c) => c.id)));
+    // 84 pairs over the 28 records, as the corpus stands.
+    expect(SPREADS.length).toBeGreaterThan(2 * CASES.length);
+  });
+
+  it("changes pixels — and every one of them is on the highlighted piece", () => {
+    // **Measured before the bound was written**, over all 84 (record, piece) pairs: the pixels the
+    // highlight changes that lie near ANOTHER piece and not near this one number **0**, and the
+    // pixels near neither number **0** as well. Everything that moved is within 4 px of a segment of
+    // the piece that was named. The largest single case is `wedge-fresnel` piece 0 at 4,801 changed
+    // pixels (4,629 on the piece alone, 172 where two pieces run within 4 px of each other).
+    const stray = SPREADS.filter((s) => s.onOther > 0 || s.onNeither > 0);
+    expect(stray).toEqual([]);
+    // **The control, and without it the line above is satisfied by doing nothing.** Each record has
+    // at least one piece whose emphasis is plainly visible; the weakest is `series-cot-kernel` at
+    // 358 changed pixels, so 300 is a floor the corpus clears rather than a number chosen to pass.
+    const bestPerRecord = CASES.map(({ id }) => {
+      const mine = SPREADS.filter((s) => s.id === id);
+      return { id, best: Math.max(...mine.map((s) => s.changed)) };
+    });
+    expect(bestPerRecord.filter((r) => r.best <= 300)).toEqual([]);
+  });
+
+  it("concentrates the change on the piece it names — 1,210 pixels against 0", () => {
+    // One pair written out, because the sweep above states the invariant and this states the SIZE of
+    // it. `indented-sinc` has four pieces and its walk doubles back over itself, so it is the case
+    // where a region test could most easily have leaked: measured, piece 0's highlight changes 1,210
+    // pixels, of which 1,051 are near piece 0 alone, 159 are in the band where piece 0 runs within
+    // 4 px of another piece, and **0** are near another piece and not this one.
+    const s = SPREADS.find((x) => x.id === "indented-sinc" && x.piece === 0);
+    if (s === undefined) throw new Error("indented-sinc piece 0 should be measured");
+    expect({ changed: s.changed > 800, onPiece: s.onPiece > 500, onOther: s.onOther, onNeither: s.onNeither })
+      .toEqual({ changed: true, onPiece: true, onOther: 0, onNeither: 0 });
+  });
+
+  it("an index no step carries changes nothing at all", () => {
+    // The clause that says the option is READ rather than accepted: if `highlight` were ignored this
+    // passes, but the sweep above fails — and if the emphasis were applied unconditionally this
+    // fails. Byte-identical, measured at 0 differing bytes out of 877,200.
+    const kase = CASES.find((c) => c.id === "mellin-keyhole");
+    if (kase === undefined) throw new Error("mellin-keyhole should be offered");
+    const plain = pixelsOf(kase.acc, kase.colours);
+    const absent = pixelsOf(kase.acc, kase.colours, 99);
+    let differing = 0;
+    for (let i = 0; i < plain.length; i++) if (plain[i] !== absent[i]) differing++;
+    expect({ bytes: plain.length, differing }).toEqual({ bytes: 4 * W * H, differing: 0 });
+  });
+
+  it("and an explicit `highlight: undefined` is the drawing that was there before", () => {
+    // `drawAccumulator` sets the stroke width per segment now rather than once before the loop, so
+    // the no-op is worth asserting directly as well as through the untouched tests above.
+    const kase = CASES.find((c) => c.id === "mellin-keyhole");
+    if (kase === undefined) throw new Error("mellin-keyhole should be offered");
+    const omitted = pixelsOf(kase.acc, kase.colours);
+    const explicit = pixelsOf(kase.acc, kase.colours, undefined);
+    let differing = 0;
+    for (let i = 0; i < omitted.length; i++) if (omitted[i] !== explicit[i]) differing++;
+    expect(differing).toBe(0);
   });
 });

@@ -10,12 +10,14 @@
 // target and usually sits on top — a drag that hit the contour instead would move the one object the
 // reader was trying to hold still.
 import { applyBranchGrab, branchHandles, sameBranchGrab, type BranchHandle } from "../engine/branchEdit.js";
-import { nearestHandle, onContour, radiusDragValue, translateContour, type Handle } from "../engine/contour/edit.js";
+import { nearestHandle, onContour, pieceAt, radiusDragValue, translateContour, type Handle } from "../engine/contour/edit.js";
 import { bulgeFromApex, penContour } from "../engine/contour/pen.js";
 import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
+import { drawnContour } from "../shell/state.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
+import { NO_HOVER } from "./session.js";
 import type { PenDraft, Session } from "./session.js";
 import type { StageView } from "./stageView.js";
 
@@ -72,6 +74,15 @@ export interface StageControllerInput {
   readonly commit: (next: ShellState, why: "edit" | "gesture" | "gesture-end") => void;
   /** Redraw without changing the state — a hover, a camera move, a pen vertex. */
   readonly redraw: () => void;
+  /**
+   * Redraw the STAGE alone, leaving the rails and the bar as they are — M8 step 1.10.
+   *
+   * A pointer move over the stage changes the readout on every event, and the readout is on the
+   * stage. `redraw` is the whole shell: it patches the bar and both rails, which is right when the
+   * hovered PIECE changes (the rail rows light from `session.hover.piece`) and is a rebuild of
+   * nine cards to move four numbers when only the position has.
+   */
+  readonly redrawStage: () => void;
   /** Say something into the stage's live region. */
   readonly announce: (message: string) => void;
 }
@@ -112,7 +123,7 @@ export interface CanvasKeyLike {
 }
 
 export function createStageController(input: StageControllerInput): StageController {
-  const { view: stage, getState, getSession, getPoles, getResolution, commit, redraw, announce } = input;
+  const { view: stage, getState, getSession, getPoles, getResolution, commit, redraw, redrawStage, announce } = input;
   const ink = stage.ink;
 
   let grab: Grab = null;
@@ -425,10 +436,21 @@ export function createStageController(input: StageControllerInput): StageControl
       const h = draw();
       const handle = nearestHandle(h.radius, at, tol);
       const index = handle === null ? -1 : h.radius.indexOf(handle);
-      if (index !== (s.hover.handle ?? -1) || s.hover.z === null) {
-        s.hover = { z: at, piece: s.hover.piece, handle: index < 0 ? null : index };
-        redraw();
-      }
+      // **WHICH piece, not whether.** `onContour` answers the grab's question; the hover's answer is
+      // the piece itself, because it is what lights the rail row and what the readout prints.
+      const drawn = drawnContour(getState(), getResolution()).pieces;
+      const near = pieceAt(pieces(), at, tol);
+      const piece = near < 0 ? null : (drawn[near]?.id ?? null);
+      // **`z` is written on EVERY move, and it was written on almost none.** The guard was
+      // `index !== s.hover.handle || s.hover.z === null`, so after the first move the position only
+      // refreshed when the pointer crossed into or out of a handle — which was invisible while
+      // nothing read `z`, and is the whole readout the moment something does. The redraw is still
+      // guarded, on what the PICTURE depends on (the handle and the piece); a readout that must
+      // follow the pointer asks for one of its own.
+      const linked = index !== (s.hover.handle ?? -1) || piece !== s.hover.piece;
+      s.hover = { z: at, piece, handle: index < 0 ? null : index };
+      if (linked) redraw();
+      else redrawStage();
       updateCursor(px, py);
       return;
     }
@@ -639,7 +661,28 @@ export function createStageController(input: StageControllerInput): StageControl
     }
   };
 
+  /**
+   * The pointer left the stage — M8 step 1.10.
+   *
+   * **The readout has to go with it, and so does the piece the STAGE lit.** Without this the block
+   * would sit there showing `z` and `f(z)` for a point the pointer left, which is a number on
+   * screen about nowhere; and the rail row the curve had lit would stay lit while the reader hovers
+   * a different row, so the three-way link would be showing two pieces at once.
+   *
+   * Only while nothing is held: a drag that leaves the canvas keeps its pointer capture and is
+   * still a drag, and clearing the hover under it would take the grabbed handle's emphasis away
+   * mid-gesture.
+   */
+  const onPointerLeave = (): void => {
+    const s = getSession();
+    if (s.gesture !== "none" || s.pen !== null) return;
+    if (s.hover.z === null && s.hover.piece === null && s.hover.handle === null) return;
+    s.hover = NO_HOVER;
+    redraw();
+  };
+
   ink.addEventListener("pointerdown", onPointerDown);
+  ink.addEventListener("pointerleave", onPointerLeave);
   ink.addEventListener("pointermove", onPointerMove);
   ink.addEventListener("pointerup", endGesture);
   ink.addEventListener("pointercancel", endGesture);
@@ -666,6 +709,7 @@ export function createStageController(input: StageControllerInput): StageControl
     onCanvasKey,
     destroy: () => {
       ink.removeEventListener("pointerdown", onPointerDown);
+      ink.removeEventListener("pointerleave", onPointerLeave);
       ink.removeEventListener("pointermove", onPointerMove);
       ink.removeEventListener("pointerup", endGesture);
       ink.removeEventListener("pointercancel", endGesture);

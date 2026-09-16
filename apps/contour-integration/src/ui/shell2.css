@@ -308,12 +308,49 @@
   border-color: var(--g-accent);
   color: var(--g-accent);
 }
-.shell2 .overlay2 .readout {
+/* The hover readout — M8 step 1.10.
+ *
+ * **Top-left, which the plan names and the geometry agrees with.** Step 1.1 reserved the host at
+ * bottom-right; the trouble with that corner is that it is where the accumulator strip's panel
+ * begins, so a block there sits between two readouts of different things. Top-left is the one corner
+ * no other surface claims, and it is where a reader's eye already is after a glance at the rail.
+ *
+ * `pointer-events: none` comes from `.overlay2`, so the block cannot intercept the pointer whose
+ * position it is reporting — which would make it flicker off the moment it appeared over the curve.
+ *
+ * A panel ground rather than a bare overlay: the phase portrait is saturated at full chroma and a
+ * muted label on top of it is unreadable at some hues and not at others, which is the one thing a
+ * colour-map comment in this app keeps saying not to do. */
+.shell2 .overlay2 .readout2 {
   position: absolute;
-  right: 0.5rem;
-  bottom: 0.5rem;
+  left: 0.5rem;
+  top: 0.5rem;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 0.05rem 0.5rem;
+  align-items: baseline;
   font-size: var(--t-xs);
+  line-height: 1.35;
+  padding: 0.3rem 0.5rem;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--g-panel) 88%, transparent);
+  border: 1px solid var(--g-border);
+  /* Never more than a quarter of the stage: `f(z)` at a huge modulus is a long string, and a block
+     that grows to fit it would cover the contour it is describing. */
+  max-width: 25%;
+}
+.shell2 .overlay2 .readout2 > .readoutRow {
+  display: contents;
+}
+.shell2 .overlay2 .readout2 .readoutLabel {
   color: var(--g-muted);
+  white-space: nowrap;
+}
+.shell2 .overlay2 .readout2 .num {
+  color: var(--g-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ════════════════════════════════════════════════════════════════════════════════════════════

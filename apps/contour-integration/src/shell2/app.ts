@@ -165,6 +165,9 @@ export function mountShell2(root: Element): Shell2Handle {
   const stripView = createStripView(strip, {
     setScrub: (t) => commit({ ...state, scrub: t }, "gesture"),
     setContrast: (mode) => commit({ ...state, contrast: mode }, "edit"),
+    // The third surface of step 1.10's link, through the same action the rail rows use — one
+    // identifier, three readers, which is what stops a highlight meaning different things.
+    hover: (piece) => actions.hover(piece),
     announce: (message) => stageA11y.announce(message),
   });
   const accCanvas = stripView.canvas;
@@ -234,6 +237,11 @@ export function mountShell2(root: Element): Shell2Handle {
       if (!on) commit(state, "gesture-end");
     },
     hover: (piece) => {
+      // **The piece only; `z` belongs to the stage.** A rail row knows which piece it names and
+      // nothing about where the pointer is, and the stage clears the whole hover on `pointerleave`
+      // — so by the time a row can fire this, `z` is already null. Guarded because `pointerleave`
+      // fires `hover(null)` on a row that was never hovered, and a repaint patches nine cards.
+      if (session.hover.piece === piece) return;
       session.hover = { ...session.hover, piece };
       repaint();
     },
@@ -480,9 +488,17 @@ export function mountShell2(root: Element): Shell2Handle {
    * 1440 x 900 under SwiftShader. A tenth of a 60 Hz frame is what it costs to draw a card that was
    * not being drawn at all, and the alternative is the wrong scope rather than a cheaper right one.
    * Away from the pen it is 0.011 ms, because nothing calls this on an ordinary move.
+   *
+   * **And the STRIP is the third surface, which this did not draw** — M8 step 1.10. The paragraph
+   * above says "three-surface link" and then names two rails; the accumulator's trail was the one
+   * that was never repainted, so hovering a piece lit the rail and the stage and left the trail as
+   * it was. Measured: 0 pixels of the accumulator canvas moved when a piece row was hovered, and
+   * 960 move now. Like the stage's, its draw is rAF-coalesced, so this is one frame and not one
+   * per pointer event.
    */
   function repaint(): void {
     scheduleDraw();
+    stripView.schedule(stripState);
     render2();
   }
 
@@ -624,6 +640,9 @@ export function mountShell2(root: Element): Shell2Handle {
     getResolution: () => resolution,
     commit: (next, why) => commit(next, why),
     redraw: repaint,
+    // The stage alone — `scheduleDraw` is rAF-coalesced, so a pointer move costs one stage frame
+    // rather than a patch of the bar and both rails. See `StageControllerInput.redrawStage`.
+    redrawStage: scheduleDraw,
     announce: (message) => stageA11y.announce(message),
   });
 

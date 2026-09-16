@@ -276,6 +276,29 @@ export function compile(expr: string): Compiled {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   const fn = makeComplexFn(ast);
+  // **An expression that PARSES can still be unusable, and it was reaching the app as usable.**
+  // `makeComplexFn` builds a lazy evaluator: `1/(z-q)` parses, compiles, and throws
+  // `Unknown variable 'q'` on its first call. Nothing caught that. Measured in Chromium at M8 step
+  // 1.10: typing it into the sandbox threw an uncaught `ExprError` out of `resolveState` and left
+  // the app showing `∮ = 2πi` — the PREVIOUS integrand's answer — beside the new expression, with
+  // nothing saying so. (The old shell shows the same stale answer without the throw, so the
+  // dishonest half is older than the rebuild and the noisy half is the new shell's.)
+  //
+  // One probe at an ordinary point is enough and cannot reject a legitimate expression, because
+  // `makeComplexFn` throws for STRUCTURAL reasons — an unknown variable, a node it cannot build —
+  // which do not depend on where it is evaluated. Where a function is merely undefined it returns
+  // `NaN` or an infinity, as `1/z` and `log z` do at the origin, and those are values the app shows
+  // rather than errors it refuses.
+  const probe = (): string | null => {
+    try {
+      fn([0.5, 0.5], [0, 0]);
+      return null;
+    } catch (e) {
+      return e instanceof Error ? e.message : String(e);
+    }
+  };
+  const unusable = probe();
+  if (unusable !== null) return { ok: false, error: unusable };
   return {
     ok: true,
     ast,
@@ -421,6 +444,23 @@ export function recordOf(state: ShellState): { family: Family; golden: Golden } 
   if (family === undefined) return null;
   const golden = family.golden[state.fixture] ?? primaryGolden(family);
   return { family, golden };
+}
+
+/**
+ * The contour the app actually DRAWS — M8 step 1.10, on the second-consumer rule.
+ *
+ * In gallery mode the contour is the record's OUTPUT, rebuilt from `(record, fixture, bindings,
+ * geometry)` on every run, while `state.contour` is still the reader's parked sandbox curve (M6.1's
+ * finding). Everything that asks about the curve on screen has to ask this and not the state.
+ *
+ * **It was written out three times before it was a function**: once in `shell2/stageView.ts`, once in
+ * `shell2/strip.ts` with a different signature, and step 1.10's hover would have been the third —
+ * which is ADR-0007's rule arriving. Here rather than in either module because it is a fact about a
+ * state and a resolution, which is what this file is for, and because the two copies had already
+ * drifted in shape if not yet in meaning.
+ */
+export function drawnContour(state: ShellState, resolution: StateResolution | undefined): Contour {
+  return resolution?.kind === "gallery" ? (resolution.run?.contour ?? state.contour) : state.contour;
 }
 
 /**

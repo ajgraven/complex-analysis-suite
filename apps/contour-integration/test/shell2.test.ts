@@ -26,7 +26,7 @@ import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js"
 import { mountShell2 } from "../src/shell2/app.js";
 import { createStageController } from "../src/shell2/stageController.js";
 import { createStageView } from "../src/shell2/stageView.js";
-import { COLD_START_RECORD, shellMode } from "../src/shell/state.js";
+import { COLD_START_RECORD, compile, shellMode } from "../src/shell/state.js";
 import { defaultSession, resetTransient } from "../src/shell2/session.js";
 import { resolveState } from "../src/shell/state.js";
 
@@ -903,6 +903,7 @@ describe("the stage's gestures", () => {
         state = next;
       },
       redraw: () => {},
+      redrawStage: () => {},
       announce: () => {},
     });
 
@@ -1188,5 +1189,145 @@ describe("the stage's text alternative — M6.4's generated description, ported 
     const label = ink(root);
     expect(label).toContain("Arrow keys pan");
     expect(label.indexOf("Arrow keys pan")).toBeLessThan(label.indexOf("The contour is drawn"));
+  });
+});
+
+describe("an expression that parses and cannot be evaluated — found at M8 step 1.10", () => {
+  it("is REFUSED by `compile`, so the app never shows the previous answer beside it", () => {
+    // **Measured in Chromium**: typing `1/(z-q)` into the sandbox threw an uncaught `ExprError` out
+    // of `resolveState` and left `∮ = 2πi` — `1/z`'s answer — on screen beside the new expression.
+    // `makeComplexFn` builds a LAZY evaluator, so an unknown variable survives `parse` and throws on
+    // the first call. The old shell shows the same stale answer without the throw, so the dishonest
+    // half is older than the rebuild.
+    const bad = compile("1/(z-q)");
+    expect(bad.ok).toBe(false);
+    expect(bad.ok === false ? bad.error : "").toContain("q");
+
+    // And the app SAYS so rather than going quiet: the resolution is empty with the reason.
+    const { root, app } = mount();
+    const before = q(root, '[data-card="result"]').textContent ?? "";
+    expect(before).toContain("2");
+    app.applyState({ ...app.currentState(), expr: "1/(z-q)" });
+    const after = q(root, '[data-card="result"]').textContent ?? "";
+    expect(after, "the previous integrand's answer is still on screen").not.toEqual(before);
+  });
+
+  it("still accepts an expression that is merely UNDEFINED somewhere", () => {
+    // The probe must not reject a function the app is built to draw: `1/z` is `NaN` at the origin
+    // and `log z` is an infinity there, and both are values the readout prints a word for rather
+    // than errors the box refuses. A probe that confused the two would take the poles away.
+    for (const expr of ["1/z", "log(z)", "z^(1/2)", "1/(1+z^4)"]) {
+      expect({ expr, ok: compile(expr).ok }).toEqual({ expr, ok: true });
+    }
+  });
+});
+
+describe("the hover: one id, three surfaces — M8 step 1.10", () => {
+  /**
+   * Let the stage's rAF coalescer draw.
+   *
+   * **The readout is on the STAGE's overlay, so it appears a frame later**, which is not a defect to
+   * work around: a pointer move that repainted the overlay synchronously would patch it once per
+   * pointer event rather than once per frame, and a pointer emits far more of those than a display
+   * can show. Every test that asks about the overlay waits, exactly as the browser suite does.
+   */
+  const drawn = async (): Promise<void> => {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  };
+
+  /** A point ON the sandbox circle: the boot contour is |z| = R, so a point at angle θ on it. */
+  const onCircle = (app: ReturnType<typeof mountShell2>, theta: number): readonly [number, number] => {
+    const r = app.currentState().contour.params.R.value;
+    return screenOf(app, [r * Math.cos(theta), r * Math.sin(theta)]);
+  };
+
+  it("lights the PIECE the pointer is over, by the id the rail row uses", () => {
+    const { root, app, ink } = mountStage();
+    const contour = app.currentState().contour;
+    expect(contour.pieces).toHaveLength(1);
+    const id = contour.pieces[0].id;
+
+    const [x, y] = onCircle(app, 0.7);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    expect(app.session().hover.piece).toBe(id);
+    // **The rail, from the same field.** This is the direction that did not exist: the piece list
+    // has set `session.hover.piece` since step 1.4, and the stage READ it — so hovering a row lit
+    // the curve and hovering the curve lit nothing.
+    const hot = root.querySelectorAll(".hot");
+    expect(hot.length, "no rail row went hot for the hovered piece").toBeGreaterThan(0);
+  });
+
+  it("keeps `z` current on a move that changes nothing else", () => {
+    // **The guard was `the handle changed OR z is null`**, so after the first move the position only
+    // refreshed when the pointer crossed into or out of a handle. Invisible while nothing read `z`;
+    // the whole readout the moment something does.
+    const { app, ink } = mountStage();
+    const a = screenOf(app, [0.31, 0.17]);
+    ink.dispatchEvent(pointer("pointermove", a[0], a[1], { buttons: 0 }));
+    const first = app.session().hover.z;
+    const b = screenOf(app, [0.62, 0.41]);
+    ink.dispatchEvent(pointer("pointermove", b[0], b[1], { buttons: 0 }));
+    const second = app.session().hover.z;
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    expect(second?.[0]).not.toBeCloseTo(first?.[0] ?? 0, 6);
+  });
+
+  it("clears the whole hover when the pointer LEAVES the stage", () => {
+    // Otherwise the readout sits there reporting a point the pointer left, and the row the curve lit
+    // stays lit while the reader hovers a different one — two pieces hot at once.
+    const { app, ink } = mountStage();
+    const [x, y] = onCircle(app, 1.1);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    expect(app.session().hover.piece).not.toBeNull();
+    ink.dispatchEvent(pointer("pointerleave", x, y, { buttons: 0 }));
+    expect(app.session().hover).toEqual({ z: null, piece: null, handle: null });
+  });
+
+  it("does NOT clear it mid-gesture, when the drag leaves the canvas under pointer capture", () => {
+    const { app, ink } = mountStage();
+    const [x, y] = onCircle(app, 0.4);
+    ink.dispatchEvent(pointer("pointerdown", x, y));
+    const held = app.session().hover;
+    ink.dispatchEvent(pointer("pointerleave", -50, -50));
+    expect(app.session().hover).toEqual(held);
+  });
+
+  it("shows the READOUT on the stage while the pointer is on it, and not after", async () => {
+    const { root, app, ink } = mountStage();
+    const find = (): Element | null => root.querySelector('[data-testid="readout"]');
+    expect(find(), "a readout before the pointer has been anywhere").toBeNull();
+    const [x, y] = onCircle(app, 0.9);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    await drawn();
+    const block = find();
+    expect(block).not.toBeNull();
+    const text = block?.textContent ?? "";
+    // The four numeric rows and the piece, from one hover.
+    for (const label of ["z", "f(z)", "|f|", "arg f"]) expect(text).toContain(label);
+    // **The piece's name TYPESET, not its source.** A browser pass at this step read
+    // `piece the $R \to \infty$ semicircle` off the stage — piece names carry LaTeX, and the
+    // readout was printing it raw. The prose survives; the `$` delimiters do not.
+    const name = app.currentState().contour.pieces[0].name;
+    expect(name, "this test needs a piece whose name carries maths").toContain("$");
+    expect(text).toContain(name.slice(0, name.indexOf("$")).trim());
+    expect(text, "the readout is printing LaTeX source").not.toContain("$");
+    ink.dispatchEvent(pointer("pointerleave", x, y, { buttons: 0 }));
+    await drawn();
+    expect(find()).toBeNull();
+  });
+
+  it("gives the readout NO number at a pole, rather than `Infinity`", async () => {
+    // `1/z` at the origin is one drag from anywhere, and it is where a reader being taught about
+    // poles aims first. `fmtNum` prints a non-finite number as `String(v)`, so an unguarded readout
+    // says `Infinity` in the same column and face as `2.0000`.
+    const { root, app, ink } = mountStage();
+    const [x, y] = screenOf(app, [0, 0]);
+    ink.dispatchEvent(pointer("pointermove", x, y, { buttons: 0 }));
+    await drawn();
+    const text = root.querySelector('[data-testid="readout"]')?.textContent ?? "";
+    expect(text, "the readout was not drawn at all").not.toBe("");
+    expect(text).not.toContain("Infinity");
+    expect(text).not.toContain("NaN");
   });
 });

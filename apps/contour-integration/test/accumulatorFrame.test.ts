@@ -16,7 +16,8 @@
 //     origin pinned to the canvas centre, which is tight only for a walk reaching equally far in
 //     all four directions. D1's keyhole runs `0 → 4.39 − 3.19i` and never leaves one quadrant.
 import { describe, expect, it } from "vitest";
-import { accumulatorFrame } from "../src/ui/accumulator.js";
+import { accumulatorFrame, stepNear } from "../src/ui/accumulator.js";
+import type { Accumulation, AccumulationStep } from "../src/engine/contour/accumulate.js";
 import type { Cx } from "../src/kernel/geom.js";
 
 /** The panel as the shell lays it out at a 1500 × 1050 viewport: `--strip` tall, minus `.accSide`. */
@@ -204,5 +205,151 @@ describe("the degenerate cases are decided rather than left to divide by zero", 
     const f = accumulatorFrame(KEYHOLE, 1, 1);
     expect(Number.isFinite(f.toX(1))).toBe(true);
     expect(Number.isFinite(f.toY(1))).toBe(true);
+  });
+});
+
+
+// **THE HIT TEST** — `stepNear`, which answers "which term of the sum is the pointer over?" and so
+// links the trail to the piece list and to the contour on the stage.
+//
+// It needs no canvas for the same reason `accumulatorFrame` does not: the mapping is arithmetic. Its
+// one correctness obligation is that it agrees with what `drawAccumulator` DREW — the same frame, the
+// same `upTo` slice — so the fixture below is walked by hand and the screen positions are written out
+// as literals rather than recomputed from the thing under test.
+
+/** A step with only the fields the hit test reads; the rest are along for the interface. */
+const stepAt = (running: Cx, piece: number, s: number): AccumulationStep => ({
+  z: [0, 0],
+  dz: [0, 0],
+  fz: [0, 0],
+  term: [0, 0],
+  running,
+  piece,
+  s,
+});
+
+/**
+ * Four steps: right, right, up, up — two pieces of two steps each.
+ *
+ * Its box is `[0,2] × [0,2]`, so in the 860 × 255 panel the height binds and the scale is
+ * `(255 − 36)/2 = 109.5` px per unit, with the box centred: `toX(re) = 430 + (re − 1)·109.5`,
+ * `toY(im) = 127.5 − (im − 1)·109.5`. Every coordinate below is that arithmetic done by hand.
+ */
+const WALK: Accumulation = {
+  steps: [
+    stepAt([1, 0], 0, 0.25),
+    stepAt([2, 0], 0, 0.5),
+    stepAt([2, 1], 1, 0.75),
+    stepAt([2, 2], 1, 1),
+  ],
+  total: [2, 2],
+  // `Σ Δz` reaching well outside the real walk's box, so turning the contrast on demonstrably moves
+  // the frame — which is the point of the last test in this block.
+  contrasts: { sumZ: [], sumFz: [], sumDz: [[0, 0], [0, 0], [0, 0], [-6, 0]] },
+};
+
+/** The origin, and the endpoint of each of the four steps, in canvas pixels. */
+const AT = {
+  origin: [320.5, 237] as const,
+  s0: [430, 237] as const,
+  s1: [539.5, 237] as const,
+  s2: [539.5, 127.5] as const,
+  s3: [539.5, 18] as const,
+};
+
+describe("stepNear agrees with what was drawn, because it asks the same frame", () => {
+  it("the fixture really is where the hand arithmetic says", () => {
+    // Pins the literals above against `accumulatorFrame` itself, so if the fit ever moves, the rest
+    // of this block fails as a wrong EXPECTATION rather than silently testing a different picture.
+    const f = accumulatorFrame(WALK.steps.map((s) => s.running), W, H);
+    expect(f.scale).toBeCloseTo(109.5, 9);
+    expect([f.toX(0), f.toY(0)]).toEqual([AT.origin[0], AT.origin[1]]);
+    expect([f.toX(2), f.toY(2)]).toEqual([AT.s3[0], AT.s3[1]]);
+  });
+
+  it("a point exactly on a step's screen position returns that step", () => {
+    const hit = (p: readonly [number, number]): number | null =>
+      stepNear(WALK, W, H, p[0], p[1], { upTo: 1, contrast: "none" });
+    // A vertex is shared by the step arriving at it and the step leaving it, both at distance 0. The
+    // tie goes to the earlier one — the segment that ARRIVES — so `s2`'s position is step 2.
+    expect([hit(AT.s0), hit(AT.s1), hit(AT.s2), hit(AT.s3)]).toEqual([0, 1, 2, 3]);
+    // And a point in the middle of a segment, where there is no tie at all: half-way along step 3,
+    // which runs (539.5, 127.5) → (539.5, 18).
+    expect(hit([539.5, 72.75])).toBe(3);
+  });
+
+  it("a point far from every segment returns null", () => {
+    // (100, 40) is 295.7 px from the nearest drawn segment — the top-left of the panel, where this
+    // walk never goes.
+    expect(stepNear(WALK, W, H, 100, 40, { upTo: 1, contrast: "none" })).toBeNull();
+  });
+
+  it("a step BEYOND `upTo` is not returned, because the drawing did not draw it", () => {
+    // `drawAccumulator` shows `round(upTo · steps.length)` steps, so `upTo = 0.5` draws steps 0–1
+    // and stops at (539.5, 237). The frame does NOT change — it fits every step's running total so
+    // that scrubbing moves the head along a fixed picture — so `s3` is still at (539.5, 18), 219 px
+    // up the canvas from where the drawing stops, and nothing is there to hit.
+    const half = { upTo: 0.5, contrast: "none" } as const;
+    expect(stepNear(WALK, W, H, AT.s1[0], AT.s1[1], half)).toBe(1);
+    expect(stepNear(WALK, W, H, AT.s2[0], AT.s2[1], half)).toBeNull();
+    expect(stepNear(WALK, W, H, AT.s3[0], AT.s3[1], half)).toBeNull();
+  });
+});
+
+describe("the tolerance is a boundary, not a suggestion", () => {
+  /** Straight up from the middle of step 0, which runs (320.5, 237) → (430, 237) horizontally. */
+  const above = (d: number, tolerance?: number): number | null =>
+    stepNear(WALK, W, H, 375, 237 - d, { upTo: 1, contrast: "none", ...(tolerance === undefined ? {} : { tolerance }) });
+
+  it("the default is 8 px, inclusive", () => {
+    // Measured over the loaded corpus in this same 860 × 255 box: 28 records, 6,524 segments, whose
+    // consecutive vertices are a median of 1.11 px apart (mean 3.38, max 121.6 — `mellin-keyhole`'s
+    // outer circle against its lips). So the tolerance is never about resolving neighbouring steps;
+    // it is about how far OFF the trail still counts. At 8 px a uniform 40 × 12 grid of probes over
+    // every record lands on a segment 3.5% of the time (1.7% at 4 px, 9.7% at 12, 13.5% at 20), so a
+    // miss stays the common case and `null` is a real answer rather than a rare one.
+    expect([above(7.9), above(8), above(8.1)]).toEqual([0, 0, null]);
+  });
+
+  it("and a caller's own tolerance is the boundary instead", () => {
+    expect([above(4.9, 5), above(5, 5), above(5.1, 5)]).toEqual([0, 0, null]);
+    // Far outside the default, well inside a generous one.
+    expect([above(30), above(30, 40)]).toEqual([null, 0]);
+  });
+
+  it("an empty walk is null at every tolerance", () => {
+    const empty: Accumulation = {
+      steps: [],
+      total: [0, 0],
+      contrasts: { sumZ: [], sumFz: [], sumDz: [] },
+    };
+    expect(stepNear(empty, W, H, W / 2, H / 2, { upTo: 1, contrast: "none", tolerance: 1e6 })).toBeNull();
+  });
+});
+
+describe("the contrast walk decides the frame, and is not itself hoverable", () => {
+  // Both halves of one claim: `stepNear` is given `contrast` because the FIT spans both walks, so
+  // the same canvas point is over a different segment with the contrast shown and hidden — and the
+  // answer it returns is always a step of the real trail, never of the faint dashed one.
+  it("turning the contrast on moves where the steps are", () => {
+    // `Σ Δz` reaches (−6, 0), so the box becomes `[−6,2] × [0,2]` and the WIDTH binds instead:
+    // scale `(860 − 36)/8 = 103`, box centre (−2, 1), so step 3 lands at (842, 24.5) rather than
+    // (539.5, 18) — 302.6 px away, well outside any tolerance a pointer uses.
+    const f = accumulatorFrame(
+      [...WALK.steps.map((s) => s.running), ...WALK.contrasts.sumDz],
+      W,
+      H,
+    );
+    expect([f.toX(2), f.toY(2)]).toEqual([842, 24.5]);
+    const withContrast = { upTo: 1, contrast: "sumDz" } as const;
+    expect(stepNear(WALK, W, H, 842, 24.5, withContrast)).toBe(3);
+    expect(stepNear(WALK, W, H, AT.s3[0], AT.s3[1], withContrast)).toBeNull();
+  });
+
+  it("a point on the contrast trail alone hits nothing", () => {
+    // Under that same frame the contrast runs from the origin at (636, 230.5) out to (18, 230.5),
+    // and the real walk's leftmost point is that origin — so (100, 230.5) is squarely ON the dashed
+    // trail and 536 px from anything drawn in a piece colour.
+    expect(stepNear(WALK, W, H, 100, 230.5, { upTo: 1, contrast: "sumDz" })).toBeNull();
   });
 });
