@@ -55,12 +55,22 @@ export interface StageView {
   /**
    * Everything the ink layer can be grabbed by, and the pieces it draws.
    *
-   * These take the STATE rather than a whole `StageDraw`, because that is all they read — a
-   * controller asking for handles should not have to hold a resolution and a pole report to get
-   * them, and a parameter nothing reads is a parameter that will be filled in with a placeholder.
+   * **The resolution is REQUIRED, and it was optional** — which is how three of its four call sites
+   * came to omit it, the draw path among them. In gallery mode the contour is the RECORD's output
+   * (M6.1's finding) and `state.contour` is the reader's parked sandbox curve, so an omitted
+   * resolution silently resolved the wrong contour: a record drew, and offered as a keyboard stop, a
+   * radius handle labelled `the circle |z − a| = R` sitting at (−1.5, 0) for a curve that was not on
+   * screen, while its own contour offered none. A drag of it is a no-op today only because
+   * `paramChannel` sends `R` to `derived` — it becomes a live edit the moment a record's limit
+   * parameter shares a template parameter's name, which is exactly why tier B renames its radius
+   * `R_lim`. An optional parameter that four readers must remember to pass is the defect, so it is
+   * not optional.
    */
-  handles(state: ShellState): { readonly radius: readonly Handle[]; readonly branch: readonly BranchHandle[] };
-  resolvedPieces(state: ShellState, resolution?: StateResolution): readonly Resolved[];
+  handles(
+    state: ShellState,
+    resolution: StateResolution | undefined,
+  ): { readonly radius: readonly Handle[]; readonly branch: readonly BranchHandle[] };
+  resolvedPieces(state: ShellState, resolution: StateResolution | undefined): readonly Resolved[];
   /** Draw on the next frame. Coalesced: a drag asks far more often than a frame can answer. */
   schedule(d: () => StageDraw): void;
   /** Draw now — for a test, and for the figure export, which must not wait a frame. */
@@ -111,14 +121,20 @@ export function createStageView(host: HTMLElement): StageView {
   let programKey: string | null = null;
 
   /** In gallery mode the contour is the RECORD's output, rebuilt on every run (M6.1's finding). */
-  const contourOf = (state: ShellState, resolution?: StateResolution): ShellState["contour"] =>
+  const contourOf = (state: ShellState, resolution: StateResolution | undefined): ShellState["contour"] =>
     resolution?.kind === "gallery" ? (resolution.run?.contour ?? state.contour) : state.contour;
 
-  const resolvedPieces = (state: ShellState, resolution?: StateResolution): readonly Resolved[] =>
+  const resolvedPieces = (state: ShellState, resolution: StateResolution | undefined): readonly Resolved[] =>
     resolveAll(contourOf(state, resolution));
 
-  const handles = (state: ShellState): { radius: readonly Handle[]; branch: readonly BranchHandle[] } => ({
-    radius: handlesOf(state.contour, resolvedPieces(state)),
+  // **`handlesOf` gets the SAME contour `resolvedPieces` resolved.** It read `state.contour` beside
+  // a resolution of the drawn one, so under a record the two disagreed about which curve they were
+  // describing — see {@link StageView.handles}.
+  const handles = (
+    state: ShellState,
+    resolution: StateResolution | undefined,
+  ): { radius: readonly Handle[]; branch: readonly BranchHandle[] } => ({
+    radius: handlesOf(contourOf(state, resolution), resolvedPieces(state, resolution)),
     branch: branchHandles(state.branch),
   });
 
@@ -210,7 +226,7 @@ export function createStageView(host: HTMLElement): StageView {
     }
 
     const pieces = resolvedPieces(d.state, d.resolution);
-    const { radius } = handles(d.state);
+    const { radius } = handles(d.state, d.resolution);
     const hoveredHandle = d.session.hover.handle;
     // **The rail's hover, on the stage.** `session.hover.piece` is one id read by the piece list,
     // the stage and (at 1.9) the accumulator, so hovering a row lights the same curve it names —

@@ -15,7 +15,7 @@ import { bulgeFromApex, penContour } from "../engine/contour/pen.js";
 import { panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
-import type { ShellState } from "../shell/state.js";
+import type { ShellState, StateResolution } from "../shell/state.js";
 import type { PenDraft, Session } from "./session.js";
 import type { StageView } from "./stageView.js";
 
@@ -59,6 +59,8 @@ export interface StageControllerInput {
   readonly getState: () => ShellState;
   readonly getSession: () => Session;
   readonly getPoles: () => PoleReport | null;
+  /** What the state resolved to. The DRAWN contour is a record's output, not `state.contour`. */
+  readonly getResolution: () => StateResolution;
   readonly commit: (next: ShellState, why: "edit" | "gesture" | "gesture-end") => void;
   /** Redraw without changing the state — a hover, a camera move, a pen vertex. */
   readonly redraw: () => void;
@@ -102,7 +104,7 @@ export interface CanvasKeyLike {
 }
 
 export function createStageController(input: StageControllerInput): StageController {
-  const { view: stage, getState, getSession, getPoles, commit, redraw, announce } = input;
+  const { view: stage, getState, getSession, getPoles, getResolution, commit, redraw, announce } = input;
   const ink = stage.ink;
 
   let grab: Grab = null;
@@ -147,8 +149,9 @@ export function createStageController(input: StageControllerInput): StageControl
   const plotAt = (px: number, py: number): Cx => screenToPlot(px, py, currentView(), vp());
   const tolerance = (): number => GRAB_PX * scale(currentView(), vp());
 
-  const draw = (): { radius: readonly Handle[]; branch: readonly BranchHandle[] } => stage.handles(getState());
-  const pieces = (): readonly Resolved[] => stage.resolvedPieces(getState());
+  const draw = (): { radius: readonly Handle[]; branch: readonly BranchHandle[] } =>
+    stage.handles(getState(), getResolution());
+  const pieces = (): readonly Resolved[] => stage.resolvedPieces(getState(), getResolution());
 
   /**
    * Whether the contour may be moved bodily. **Sandbox only.**
@@ -332,7 +335,7 @@ export function createStageController(input: StageControllerInput): StageControl
   /** Frame the whole contour with a margin. The review's addition; double-click and a button. */
   const fitContour = (): void => {
     const s = getState();
-    const drawn = stage.resolvedPieces(s);
+    const drawn = stage.resolvedPieces(s, getResolution());
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;

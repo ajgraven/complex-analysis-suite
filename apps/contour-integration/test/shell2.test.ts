@@ -702,6 +702,37 @@ describe("the stage's gestures", () => {
     expect(walk(), "a record's contour was offered to the arrows").not.toContain("the whole contour");
   });
 
+  it("offers a record NO handle belonging to the parked sandbox contour", () => {
+    // **`handles` resolved the wrong curve**, because its resolution was optional and three of its
+    // four call sites — the DRAW path among them — omitted it. In gallery mode the contour on screen
+    // is the record's output (M6.1) while `state.contour` is the sandbox curve the reader parked, so
+    // a record drew and offered as a keyboard stop a radius handle labelled for the sandbox's
+    // circle, at a point on no curve in view. A drag of it is a no-op today only because
+    // `paramChannel` sends `R` to `derived`; it becomes a live edit for any record whose limit
+    // parameter shares a template parameter's name, which is why tier B renames its radius `R_lim`.
+    //
+    // The assertion is on the stops' NAMES rather than on a count, because the record has radius
+    // handles of its own and the defect is an EXTRA one that names a curve that is not there.
+    const { app } = mountStage();
+    const sandboxName = app.currentState().contour.pieces[0]?.name ?? "";
+    expect(sandboxName, "the sandbox's own piece has a name to look for").not.toBe("");
+    app.applyState({ ...app.currentState(), mode: "gallery", record: "circle-linear-cos", fixture: 0 });
+    const drawn = app.resolution();
+    const onScreen =
+      drawn.kind === "gallery" ? (drawn.run?.contour.pieces ?? []).map((q) => q.name) : [];
+    expect(onScreen, "the record resolved a contour of its own").not.toHaveLength(0);
+    expect(onScreen, "the test is vacuous unless the two contours differ").not.toContain(sandboxName);
+    const stops: string[] = [];
+    for (let i = 0; i < 8; i++) {
+      app.stage().onCanvasKey({ kind: "commit" }, new KeyboardEvent("keydown", { key: "Enter" }));
+      stops.push(app.stage().grabLabel() ?? "«the view»");
+    }
+    expect(
+      stops.filter((label) => label.includes(sandboxName)),
+      "a record offered a handle from the contour parked in the sandbox",
+    ).toHaveLength(0);
+  });
+
   it("spends the DRAFT budget while a slider is being scrubbed", () => {
     // `gesture` covers the stage; a rail slider's drag is the same thing happening somewhere the
     // stage cannot see, and without this a parameter scrub recomputes at full precision on every

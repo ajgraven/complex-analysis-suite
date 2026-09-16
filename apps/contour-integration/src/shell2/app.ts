@@ -193,8 +193,7 @@ export function mountShell2(root: Element): Shell2Handle {
     },
     hover: (piece) => {
       session.hover = { ...session.hover, piece };
-      scheduleDraw();
-      patch(left, render(state, resolution, session, actions, polesNow()).left);
+      repaint();
     },
 
     // ── the contour ───────────────────────────────────────────────────────────────────────
@@ -219,6 +218,14 @@ export function mountShell2(root: Element): Shell2Handle {
       const flipped = reverseContour(state.contour);
       commit({ ...state, contour: flipped, sandboxContour: flipped, contourSource: null }, "edit");
     },
+    // **These four go through the controller, and the controller's `redraw` repaints the RAIL as
+    // well as the stage** — which it did not, and the pen's whole card was dead in the live app as a
+    // result: pressing `Draw` gave a crosshair cursor and a canvas that silently accumulated
+    // vertices, with no count, no grammar and no Close, Undo or Cancel, because `redraw` was wired
+    // to `scheduleDraw` and the stage is the only thing that answers to. `penCommit` was the one
+    // that worked, and only because it ends in `commit`. Neither `test/cards.test.ts` (which renders
+    // the card against a session with `pen` already set) nor `test/shell2.test.ts` (which drives the
+    // controller and asserts the session) could see it; it is visible only from the reader's path.
     penStart: () => {
       controller?.penStart();
       inkCanvas.focus();
@@ -387,6 +394,31 @@ export function mountShell2(root: Element): Shell2Handle {
    * putting them through `commit` would re-resolve the whole state to redraw a panel. The stage and
    * the strip are untouched for the same reason.
    */
+  /**
+   * The stage AND the chrome, for a session change the reader is making with the pointer.
+   *
+   * **The controller's `redraw` is this rather than `scheduleDraw`**, which is the defect recorded
+   * above `penStart`: a pen vertex, a snap, a held handle and a hovered piece all change what the
+   * left rail SAYS, and a repaint that reached only the canvases left the card describing a pen that
+   * was not out.
+   *
+   * **Both rails, and the left one alone is not enough** — `derivation.ts` is a RIGHT-rail card and
+   * carries the `hot` class on the line whose piece is hovered, so the old `hover`, which patched
+   * `left` and threw the rest of the description away, could only light half of the three-surface
+   * link it was written for. Measured with a record open: hovering a piece in the Contour card now
+   * lights one row in each rail, where the left-only patch lit one and none.
+   *
+   * **The cost is 1.56 ms per pointer move while the pen is out**, against 0.57 ms for a left-only
+   * patch and 0.008 ms for the stage alone — best of three runs of 300 synthesised moves each, at
+   * 1440 x 900 under SwiftShader. A tenth of a 60 Hz frame is what it costs to draw a card that was
+   * not being drawn at all, and the alternative is the wrong scope rather than a cheaper right one.
+   * Away from the pen it is 0.011 ms, because nothing calls this on an ordinary move.
+   */
+  function repaint(): void {
+    scheduleDraw();
+    render2();
+  }
+
   function render2(): void {
     const out = render(state, resolution, session, actions, polesNow());
     shell.dataset.left = out.rails.left;
@@ -394,6 +426,18 @@ export function mountShell2(root: Element): Shell2Handle {
     patch(bar, out.bar);
     patch(left, out.left);
     patch(right, out.right);
+    // **The banner is drawn from the FIELD, on every repaint, rather than written where the field
+    // is set.** It was written at its two setters, and so outlived its own field: `resetTransient`
+    // nulls `linkRefusal` on every `applyState`, nothing redrew the element, and `writeHash`'s
+    // `!== null` guard then declined to clear a box it thought was already clear — so a contrast
+    // cell or a drill rung left the page still saying a link could not be opened, about a state the
+    // reader had since left. One reader, and the question cannot be answered twice.
+    const why = session.linkRefusal;
+    linkBox.hidden = why === null;
+    linkBox.textContent =
+      why === null
+        ? ""
+        : `This shared link could not be opened: ${why}. Showing the app's own starting state instead.`;
   }
 
   /**
@@ -454,12 +498,10 @@ export function mountShell2(root: Element): Shell2Handle {
     // nothing drags yet, so this is the shape rather than an optimisation already earning its keep.
     const draft = session.gesture !== "none" || session.scrubbing || why === "gesture";
     resolution = resolveState(state, compiled, draft ? { maxEvaluations: DRAFT_EVALUATIONS } : undefined);
-    const out = render(state, resolution, session, actions, polesNow());
-    shell.dataset.left = out.rails.left;
-    shell.dataset.right = out.rails.right;
-    patch(bar, out.bar);
-    patch(left, out.left);
-    patch(right, out.right);
+    // **Through `render2`, not a second copy of its body.** It was a copy, and the two came apart
+    // the first time one of them grew a line: the arrival banner was added to `render2` and a
+    // restored state — which comes through here — went on showing it. One writer per surface.
+    render2();
     scheduleDraw();
     stripView.schedule(stripState);
     // **Every commit, and that is the structural payoff.** The old shell called `syncHash` from five
@@ -488,8 +530,9 @@ export function mountShell2(root: Element): Shell2Handle {
     getState: () => state,
     getSession: () => session,
     getPoles: polesNow,
+    getResolution: () => resolution,
     commit: (next, why) => commit(next, why),
-    redraw: scheduleDraw,
+    redraw: repaint,
     announce: (message) => stageA11y.announce(message),
   });
 
@@ -516,7 +559,7 @@ export function mountShell2(root: Element): Shell2Handle {
     // The reader has acted, so a sentence about the link they arrived on is no longer about them.
     if (session.linkRefusal !== null) {
       session.linkRefusal = null;
-      showLinkRefusal();
+      render2();
     }
     const enc = encodeShell(state);
     if (!enc.ok) return;
@@ -537,14 +580,6 @@ export function mountShell2(root: Element): Shell2Handle {
     hashTimer = window.setTimeout(writeHash, HASH_SETTLE_MS);
   }
 
-  function showLinkRefusal(): void {
-    const why = session.linkRefusal;
-    linkBox.hidden = why === null;
-    linkBox.textContent =
-      why === null
-        ? ""
-        : `This shared link could not be opened: ${why}. Showing the app's own starting state instead.`;
-  }
 
   commit(state, "init");
   if (stageView.glError !== null) {
@@ -571,7 +606,7 @@ export function mountShell2(root: Element): Shell2Handle {
     if (link.ok) applyStateNow(link.state);
     else {
       session.linkRefusal = link.reason;
-      showLinkRefusal();
+      render2();
     }
   }
   hashReady = true;
