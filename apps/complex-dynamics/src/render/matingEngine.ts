@@ -589,9 +589,21 @@ export function mateableLimbs(p1: number, q1: number, p2: number, q2: number): b
   return a1 * b2 + a2 * b1 !== b1 * b2; // p₁/q₁ + p₂/q₂ ≠ 1
 }
 
-// The seed sweep for the general pullback: scales × {conjugated-postcritical seed, generic seed}. Broad
-// enough that the true mating is reached from both argument orders for periods up to ~7 (see the de-risk).
+// The seed sweep for the general pullback: scales × {conjugated-postcritical seed, generic seed}.
+//
+// TWO TIERS, because the claim attached to the original list — "broad enough … for periods up to ~7" —
+// was measured and is false at 7. The narrow sweep reaches every NON-DIAGONAL mating to period 6 and
+// **none at period 7**: 1/7 ⊔ 2/7, 1/7 ⊔ 1/3 and 1/3 ⊔ 1/7 all failed in both argument orders, while
+// the diagonal 1/7 ⊔ 1/7 succeeded (it is gated by the cheaper self-swap u·v = 1). The wide sweep
+// reaches all of them.
+//
+// It is a fallback rather than a replacement because it costs about 4.5× (a period-7 pair goes from
+// 450 ms to 2.0 s) and nearly every mating a reader asks for is answered by the narrow one. Widening
+// cannot make a wrong map: swap-consistency and the period validation are unchanged, so extra seeds
+// only supply more candidates for the same gates to reject. Verified — every mating the narrow sweep
+// already produced comes back bit-identical to eight decimals under the wide one.
 const GEN_SEED_SCALES = [0.5, 0.8, 1.1, 1.5, 2.0, 2.6];
+const GEN_SEED_SCALES_WIDE = [0.3, 0.5, 0.65, 0.8, 0.95, 1.1, 1.3, 1.5, 1.75, 2.0, 2.3, 2.6, 3.0];
 
 /** Period-validated candidate maps (u,v) from the seed sweep — crit 0 realises f_A, crit ∞ realises f_B. */
 function generalCandidates(
@@ -599,10 +611,11 @@ function generalCandidates(
   orbB: PostcriticalOrbit,
   qA: number,
   qB: number,
+  scales: readonly number[] = GEN_SEED_SCALES,
 ): Complex[][] {
   const out: Complex[][] = [];
-  for (const sa of GEN_SEED_SCALES)
-    for (const sb of GEN_SEED_SCALES)
+  for (const sa of scales)
+    for (const sb of scales)
       for (const ph of [0, 1]) {
         const seedA = orbA.orbit.map((p, i): Complex =>
           ph ? [sa * Math.cos(1 + i), sa * Math.sin(1 + i)] : [sa * p[0], -sa * p[1]],
@@ -638,30 +651,36 @@ export function generalMate(cA: Complex, cB: Complex): GeneralMating | null {
   const qA = orbA.period;
   const qB = orbB.period;
   const diagonal = cdist(cA, cB) < 1e-12;
-  const ab = generalCandidates(orbA, orbB, qA, qB);
-  const ba = diagonal ? ab : generalCandidates(orbB, orbA, qB, qA);
-  const tally: { u: Complex; v: Complex; n: number }[] = [];
-  for (const [u, v] of ab) {
-    const pu = cinv(v); // swap partner (1/v, 1/u)
-    const pv = cinv(u);
-    const consistent = diagonal
-      ? cdist(pu, u) < 3e-3 && cdist(pv, v) < 3e-3 // self-swap ⇒ u·v = 1
-      : ba.some(([ju, jv]) => cdist(ju, pu) < 3e-3 && cdist(jv, pv) < 3e-3);
-    if (!consistent) continue;
-    const t = tally.find((e) => cdist(e.u, u) < 3e-3 && cdist(e.v, v) < 3e-3);
-    if (t) t.n++;
-    else tally.push({ u, v, n: 1 });
+  // Narrow sweep first; widen only if it finds nothing (see GEN_SEED_SCALES_WIDE). The gates below
+  // are identical either way, so the fallback can add reach but never a wrong map.
+  for (const scales of [GEN_SEED_SCALES, GEN_SEED_SCALES_WIDE]) {
+    const ab = generalCandidates(orbA, orbB, qA, qB, scales);
+    const ba = diagonal ? ab : generalCandidates(orbB, orbA, qB, qA, scales);
+    const tally: { u: Complex; v: Complex; n: number }[] = [];
+    for (const [u, v] of ab) {
+      const pu = cinv(v); // swap partner (1/v, 1/u)
+      const pv = cinv(u);
+      const consistent = diagonal
+        ? cdist(pu, u) < 3e-3 && cdist(pv, v) < 3e-3 // self-swap ⇒ u·v = 1
+        : ba.some(([ju, jv]) => cdist(ju, pu) < 3e-3 && cdist(jv, pv) < 3e-3);
+      if (!consistent) continue;
+      const t = tally.find((e) => cdist(e.u, u) < 3e-3 && cdist(e.v, v) < 3e-3);
+      if (t) t.n++;
+      else tally.push({ u, v, n: 1 });
+    }
+    tally.sort((a, b) => b.n - a.n);
+    const win = tally[0];
+    if (win) {
+      return {
+        u: win.u,
+        v: win.v,
+        fString: generalMatedFString(win.u, win.v),
+        periodA: qA,
+        periodB: qB,
+      };
+    }
   }
-  tally.sort((a, b) => b.n - a.n);
-  const win = tally[0];
-  if (!win) return null;
-  return {
-    u: win.u,
-    v: win.v,
-    fString: generalMatedFString(win.u, win.v),
-    periodA: qA,
-    periodB: qB,
-  };
+  return null;
 }
 
 /**

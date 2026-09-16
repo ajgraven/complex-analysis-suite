@@ -1560,6 +1560,22 @@ select.invalid {
   border-radius: var(--radius);
 }
 
+/* The rigor level of an inspector row (= exact, ≤/≥ bound, ≈ estimate, ? unknown, ⚠ refused).
+   Computed by @cas/rigor from the row's certificates, never typed by hand — see ui/inspectorRows.ts. */
+.rigor-badge {
+  display: inline-block;
+  min-width: 1.1em;
+  text-align: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted, #666);
+  border: 1px solid color-mix(in srgb, var(--muted, #666) 40%, transparent);
+  border-radius: 0.25rem;
+  padding: 0 0.15rem;
+  line-height: 1.25;
+  cursor: help;
+}
+
 /* Inline "?" jump-to-glossary link (inspector rows + overlay labels). */
 .gloss-link {
   border: none;

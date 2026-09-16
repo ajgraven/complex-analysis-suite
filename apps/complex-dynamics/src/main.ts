@@ -8,23 +8,19 @@
 
 import "./styles/main.css";
 import type { Vec2 } from "./arrays";
-import { argDegrees, formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
+import { formatComplex, parseComplex, truncateComplex, type Complex } from "./complex";
 import { PROJECTIONS, type ProjectionMode } from "./render/projection";
 import { getMaxTextureSize, downloadCanvas, copyCanvasToClipboard, ensurePngName } from "./hiResExport";
 import { PlotView } from "./render/plotView";
 import type { GLPlot, FractType } from "./render/glPlot";
 import { initialRes } from "./render/glPlot";
 import { ddCenterToString, ddCenterFromString, ddToNumber } from "./render/dd";
-import {
-  inspect,
-  findNucleus,
-  findMisiurewicz,
-  fatouComponentType,
-  type InspectResult,
-} from "./render/inspect";
+import { inspect, findNucleus, findMisiurewicz, type InspectResult } from "./render/inspect";
 import { matingVerdict } from "./render/mating";
+import { buildInspectorRows } from "./ui/inspectorRows";
+import { describeLevel } from "@cas/rigor";
 import { CANONICAL_MATINGS, mateBulbWithBasilica, mateBulbs, mateableLimbs } from "./render/matingEngine";
-import { computeOrbit, orbitAndClassify, type Annotation, type OrbitFate } from "./render/overlay";
+import { computeOrbit, orbitAndClassify, type Annotation } from "./render/overlay";
 import { toNumber as angleToNumber, binaryItinerary } from "./combinatorics/angles";
 import { coreEntropy } from "./combinatorics/coreEntropy";
 import { MAX_DOUBLING_Q, portraitSummary, rotationCycleAngles } from "./combinatorics/orbitPortrait";
@@ -271,13 +267,6 @@ function hoverReadout(elementId: string): (coord: Vec2 | null) => void {
   };
 }
 
-const FATE_TEXT: Record<OrbitFate, string> = {
-  escaped: "escapes to ∞",
-  converged: "settles to a fixed point",
-  periodic: "settles into a cycle",
-  undetermined: "no escape or cycle within the iteration limit",
-};
-
 /**
  * Is the plot's f the QUADRATIC family z²+c? The gate for every overlay whose mathematics is
  * hard-coded quadratic — external rays and ray pairs (`rays.ts` iterates z ← z²+c), Farey bulb
@@ -357,75 +346,21 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
   byId("inspector-title").textContent =
     plane === "param" ? `Parameter c = ${formatComplex(pt)}` : `Orbit of z₀ = ${formatComplex(pt)}`;
 
-  const rows: [string, string][] = [["Fate", FATE_TEXT[info.fate]]];
-  if (info.fate === "escaped") rows.push(["Escape time", `${info.escapeIter} iterations`]);
-  if (info.period > 0) rows.push(["Period", String(info.period)]);
-  if (info.multiplier && info.multiplierMag !== null) {
-    const deg = argDegrees(info.multiplier);
-    // Classify with a tolerance so neutral / parabolic cycles (|λ| = 1) are not rounded into
-    // "attracting"/"repelling" — matches the Julia panel's neutral band (juliaProperties.ts).
-    const kind =
-      Math.abs(info.multiplierMag - 1) < 1e-3
-        ? "indifferent (neutral)"
-        : info.multiplierMag < 1
-          ? "attracting"
-          : "repelling";
-    rows.push([
-      "Multiplier λ",
-      `${info.multiplierMag.toFixed(4)} ∠ ${deg.toFixed(0)}° (${kind})`,
-    ]);
-  }
-  // Name the Fatou component from λ, and for an indifferent irrational rotation add the
-  // rotation number + Brjuno verdict (Siegel disc vs near-Cremer) with an estimated radius.
-  const fatou = fatouComponentType(info.multiplier, info.multiplierMag);
-  if (fatou) {
-    const FATOU_LABEL: Record<string, string> = {
-      superattracting: "superattracting (centre)",
-      attracting: "attracting basin",
-      repelling: "repelling (Julia set)",
-      parabolic: "parabolic",
-      siegel: "Siegel disc",
-      cremer: "Cremer point",
-      neutral: "neutral",
-    };
-    rows.push(["Fatou component", FATOU_LABEL[fatou.type]]);
-    if (
-      fatou.theta !== null &&
-      fatou.rotation &&
-      (fatou.type === "siegel" || fatou.type === "cremer")
-    ) {
-      const r = fatou.rotation;
-      rows.push([
-        "Rotation number",
-        fatou.type === "cremer"
-          ? `θ ≈ ${fatou.theta.toFixed(6)} (near-Cremer — disc ≈ 0)`
-          : `θ ≈ ${fatou.theta.toFixed(6)} (${r.kind}; disc radius ≈ ${r.conformalRadius.toExponential(1)})`,
-      ]);
-    }
-  }
-  if (info.rotation) rows.push(["Internal angle", `${info.rotation.p}/${info.rotation.q}`]);
-  // On the parameter plane the rotation number p/q names the main-cardioid limb; show its
-  // complex-conjugate limb and whether it self-mates (every bulb but the 1/2 limb does).
-  if (plane === "param" && info.rotation) {
-    const limb = matingVerdict(info.rotation.p, info.rotation.q, info.rotation.p, info.rotation.q);
-    if (limb.conjugateOfA) {
-      rows.push([
-        "Limb",
-        `conjugate ${limb.conjugateOfA[0]}/${limb.conjugateOfA[1]} · self-mateable: ${limb.mateable ? "yes" : "no"}`,
-      ]);
-    }
-  }
-  // `≈`, and not decorative: the exterior estimate is only sharp to within a factor of a few
-  // (Koebe ¼ puts the truth in [d/4, 4d]; measured, 0.46×–1.99× on cases with an exact answer).
-  // It used to print as a bare number. (WP2/I1, review 2026-09-16.)
-  if (info.distance !== null)
-    rows.push(["Distance to set", `≈ ${info.distance.toExponential(2)}`]);
-
   const body = byId("inspector-body");
   body.replaceChildren();
-  for (const [key, value] of rows) {
+  for (const { key, value, verdict } of buildInspectorRows(info, plane)) {
     const dt = document.createElement("dt");
     dt.textContent = key;
+    // The rigor level of the row, from `@cas/rigor`'s meet over its certificates rather than from
+    // a glyph typed here. It sits on the term, not in front of the value, so that rows whose value
+    // is a WORD ("escapes to ∞", "attracting basin") read as English and still carry their
+    // level. (WP6/U9, review 2026-09-16.)
+    const badge = document.createElement("span");
+    badge.className = "rigor-badge";
+    badge.textContent = verdict.level;
+    badge.title = describeLevel(verdict.level);
+    badge.setAttribute("aria-label", describeLevel(verdict.level));
+    dt.append(" ", badge);
     const term = TERM_FOR_ROW[key];
     if (term) {
       const q = document.createElement("button");
@@ -1994,6 +1929,15 @@ export function init(): void {
   let lastConnectivityRigorous = false; // Tier-1 polynomial verdict set ⇒ skip the image estimate
   let juliaMeasureTimer = 0;
   const juliaMetricsClient = new JuliaMetricsClient(); // Tier-2 masks off the main thread (sync fallback)
+  // A worker failure used to be dropped silently, leaving the image-derived rows at "measuring…" for
+  // ever. Say so instead, in the rows themselves. (WP6, review 2026-09-16.)
+  juliaMetricsClient.onError((message) => {
+    for (const id of ["jp-dimension", "jp-area", "jp-bounding", "jp-symmetry", "jp-connectivity"]) {
+      const el = document.getElementById(id);
+      if (el && el.textContent === "measuring…") el.textContent = "⚠ measurement failed";
+    }
+    console.warn("[julia metrics] worker failed:", message);
+  });
   const jSet = (id: string, text: string): void => {
     byId(id).textContent = text;
   };
@@ -6195,7 +6139,15 @@ export function init(): void {
     }
     const m = mateBulbs(p1, q1, p2, q2);
     if (!m) {
-      note.textContent = `${p1}/${q1} ⊔ ${p2}/${q2} — couldn't compute a trustworthy mating. Try 1/3 ⊔ 1/4, 1/4 ⊔ 1/5, 1/5 ⊔ 2/5, or a diagonal like 1/4 ⊔ 1/4.`;
+      // The pair is NOT obstructed (that branch is above) — the pullback simply found no
+      // swap-consistent map, which is a limit of this engine rather than of the mathematics. Say
+      // which it is: the two read identically to a user and only one of them means "no mating
+      // exists". (WP6, review 2026-09-16.)
+      note.textContent =
+        `${p1}/${q1} ⊔ ${p2}/${q2} is mateable (the limbs are not conjugate), but the Thurston ` +
+        `pullback found no swap-consistent map, so nothing is drawn rather than a map that might be ` +
+        `wrong. This is a limit of the search, not a proof that the mating does not exist — it shows ` +
+        `up at high periods. Try 1/3 ⊔ 1/4, 1/5 ⊔ 2/5, or a diagonal like 1/4 ⊔ 1/4.`;
       return;
     }
     renderMatedMap(

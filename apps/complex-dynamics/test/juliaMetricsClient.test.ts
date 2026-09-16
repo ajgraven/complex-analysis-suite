@@ -23,6 +23,10 @@ class MockWorker {
   respond(reqId: number, metrics?: JuliaImageMetrics): void {
     this.onmessage?.({ data: { reqId, metrics } } as MessageEvent);
   }
+  /** Deliver the `{ reqId, error }` the worker posts when its compute throws. */
+  fail(reqId: number, error: string): void {
+    this.onmessage?.({ data: { reqId, error } } as MessageEvent);
+  }
 }
 
 const METRICS = { tag: "m" } as unknown as JuliaImageMetrics; // sentinel — the test checks identity, not shape
@@ -99,5 +103,54 @@ describe("JuliaMetricsClient — send-side coalescing (single-in-flight lane)", 
     expect(got).toEqual([]); // dropped
     client.request(req("r2"), (m) => void got.push(m));
     expect(w.posted.length).toBe(1); // r1 still considered in flight ⇒ r2 coalesced, not sent
+  });
+});
+
+// WP6 (review 2026-09-16). `juliaMetrics.worker.ts` has always posted `{ reqId, error }` on a throw,
+// and the client mapped it to `result: undefined` — which `createComputeClient` drops WITHOUT calling
+// back. Nothing downstream ever learned, so the five Julia-properties rows sat at "measuring…" for the
+// rest of the session with no message anywhere saying why. The reason now reaches the caller.
+describe("JuliaMetricsClient — a worker failure is reported, not swallowed", () => {
+  let savedWorker: unknown;
+  beforeEach(() => {
+    savedWorker = (globalThis as { Worker?: unknown }).Worker;
+    (globalThis as { Worker?: unknown }).Worker = MockWorker as unknown;
+    MockWorker.instances = [];
+  });
+  afterEach(() => {
+    (globalThis as { Worker?: unknown }).Worker = savedWorker;
+  });
+
+  it("delivers the worker's error message to onError, and paints nothing", () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const errors: string[] = [];
+    const got: JuliaImageMetrics[] = [];
+    client.onError((m) => void errors.push(m));
+    client.request(req("r1"), (m) => void got.push(m));
+
+    w.fail(w.posted[0].reqId, "boundingRadius must be finite");
+    expect(errors).toEqual(["boundingRadius must be finite"]);
+    expect(got).toEqual([]); // a failure is not a result
+  });
+
+  it("a SUCCESS never reaches onError (the anti-vacuity clause)", () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const errors: string[] = [];
+    client.onError((m) => void errors.push(m));
+    client.request(req("r1"), () => {});
+    w.respond(w.posted[0].reqId, METRICS);
+    expect(errors).toEqual([]);
+  });
+
+  it("a metrics-less response with NO error stays silent — absence is not a failure", () => {
+    const client = new JuliaMetricsClient();
+    const w = MockWorker.instances[0];
+    const errors: string[] = [];
+    client.onError((m) => void errors.push(m));
+    client.request(req("r1"), () => {});
+    w.respond(w.posted[0].reqId); // neither metrics nor error
+    expect(errors).toEqual([]);
   });
 });

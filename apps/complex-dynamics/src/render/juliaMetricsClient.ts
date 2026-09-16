@@ -38,6 +38,7 @@ function runSync(req: JuliaMetricsRequest): JuliaImageMetrics {
 
 export class JuliaMetricsClient {
   private readonly client: ComputeClient<JuliaMetricsRequest, JuliaImageMetrics>;
+  private errorCb: ((message: string) => void) | null = null;
 
   constructor() {
     this.client = createComputeClient<JuliaMetricsRequest, JuliaImageMetrics>({
@@ -47,15 +48,27 @@ export class JuliaMetricsClient {
       worker: () =>
         new Worker(new URL("./juliaMetrics.worker.ts", import.meta.url), { type: "module" }),
       toMessage: (req, reqId): JuliaMetricsMessage => ({ reqId, ...req }),
-      fromMessage: (data): { reqId: number; result?: JuliaImageMetrics } => {
+      fromMessage: (data): { reqId: number; result?: JuliaImageMetrics; error?: string } => {
+        // The worker posts `{ reqId, error }` on a throw. Passing it through is what lets the panel
+        // say so; before WP6 it was mapped to `result: undefined` and dropped by the client, and the
+        // rows sat at "measuring…" for ever with nothing on screen explaining why.
         const r = data as JuliaMetricsResponse;
-        return { reqId: r.reqId, result: r.metrics };
+        return { reqId: r.reqId, result: r.metrics, error: r.error };
       },
+      onError: (message) => this.errorCb?.(message),
     });
   }
 
   /** Compute metrics for `req`; `cb` fires with the latest result (worker async, or sync fallback). */
   request(req: JuliaMetricsRequest, cb: (m: JuliaImageMetrics) => void): void {
     this.client.request(req, cb);
+  }
+
+  /**
+   * Called when the worker reports a failure instead of a result, so the caller can stop waiting.
+   * Without it the rows it feeds sit at "measuring…" for ever. (WP6, review 2026-09-16.)
+   */
+  onError(cb: (message: string) => void): void {
+    this.errorCb = cb;
   }
 }

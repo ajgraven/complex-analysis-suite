@@ -323,7 +323,53 @@ no exact-dimension row.
 
 ---
 
-## WP6 — Instruments, tier 4: matings, worker errors, honest labels in the inspector · effort S · closes I7 (matings, worker), U9
+## WP6 — Instruments, tier 4: matings, worker errors, honest labels in the inspector · effort S · closes I7 (matings, worker), U9 · **DONE**
+
+> **Landed.** Gate green: lint, typecheck, **555 files / 5,781 tests**, build; CD browser suite 5 files /
+> 26 tests. Each fix negative-control checked by reverting it and confirming red. **Measuring changed
+> two of the three bullets below.**
+>
+> **The mating bullet's premise was wrong, and the fix is not the one written here.** `1/7 ⊔ 2/7` does
+> not "fail to converge" — the pair is mateable and the map exists; the seed sweep simply never
+> reached it. The comment above `GEN_SEED_SCALES` claimed the list was "broad enough … for periods up
+> to ~7"; measured, it reaches every NON-DIAGONAL mating to period 6 and **none at period 7** —
+> `1/7 ⊔ 2/7`, `1/7 ⊔ 1/3` and `1/3 ⊔ 1/7` all failed in both argument orders, while the diagonal
+> `1/7 ⊔ 1/7` succeeded because it is gated by the cheaper self-swap `u·v = 1` rather than by
+> cross-confirmation. So the repair is a **second, wider sweep as a fallback**, not a refusal message
+> dressed up as mathematics: `generalMate` runs the narrow list, and only if that finds nothing runs a
+> 13-scale one. It costs ~4.5× when it runs (a period-7 pair goes 450 ms → 2.0 s) and never runs for a
+> pair the narrow sweep answers. **Widening cannot manufacture a wrong map** — swap-consistency and the
+> period validation are the same gates either way, so extra seeds only supply more candidates for them
+> to reject — and it was verified not to move an existing answer: every mating the narrow sweep already
+> produced came back bit-identical to eight decimals.
+>
+> The other half of the bullet was **already done**: the Tan Lei conjugate-limb gate has always
+> refused `1/3 ⊔ 2/3` by name before any compute. What was missing is the _distinction_ — a mateable
+> pair the engine could not pin down printed "couldn't compute a trustworthy mating", which reads
+> exactly like an obstruction. It now says which it is, and that the failure is a limit of the search
+> rather than a proof that no mating exists.
+>
+> **The `@cas/rigor` adoption grew a module rather than a sprinkling of `≈` strings**, because the rows
+> were being built **twice**. `main.ts`'s `showInspect` (the panel) and `ui/dataExport.ts`'s
+> `inspectToText` (the clipboard copy) each assembled the same report independently, and they had
+> already drifted: the panel labelled the Koebe distance `≈` after WP2 and **the copied text printed
+> the same number bare**. Both now read `src/ui/inspectorRows.ts`, which is pure and runs in the node
+> gate, so a row cannot be honest in one and not the other. Each row carries a `Verdict`, and the level
+> is the **meet** over that row's certificates rather than a glyph typed at the call site. Two levels
+> fall out that a hand-written `≈` would not have produced: an **undetermined fate is `?`**, not `≈` —
+> nothing was established, and reporting it as an estimate would vouch for a classification nobody
+> made — and the **Limb row is `≈` although its own arithmetic is exact**, because Tan Lei's criterion
+> is exact _about a `p/q` that is not_. The escape time is the one `=`: it is a counted index.
+> The glyph sits on the term as a badge rather than in front of the value, so rows whose value is a
+> word ("escapes to ∞", "attracting basin") still read as English while carrying their level.
+>
+> The lockfile change is the single `link:../../packages/rigor` line and nothing else.
+
+**Files:** `apps/complex-dynamics/src/ui/inspectorRows.ts` (new), `src/ui/dataExport.ts`, `src/main.ts`,
+`src/render/matingEngine.ts`, `src/render/juliaMetricsClient.ts`, `src/ui/glossary.ts`,
+`src/styles/main.css`, `package.json`, `packages/ui/src/computeClient.ts`, `pnpm-lock.yaml`;
+tests `test/inspectorRows.test.ts` (new), `test/dataExport.test.ts`, `test/juliaMetricsClient.test.ts`,
+`test/matingEngine.test.ts`, `packages/ui/test/computeClient.test.ts`.
 
 - `matingEngine.ts` `generalMate`: when the pullback diverges, return a _reason_ (`{refused: "obstructed"
 | "did not converge in N"}`) rather than `null`, and the panel prints it; add the Tan-Lei conjugate-limb
