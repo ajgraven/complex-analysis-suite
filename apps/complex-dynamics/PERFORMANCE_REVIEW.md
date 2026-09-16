@@ -69,7 +69,9 @@ the green/orange bounded-hint near the boundary — so it was deliberately left 
 ### ✅ 4. Cache compiled closures keyed on `(ast, a)` in `evaluate.ts` — **DONE (PR-2)**
 
 **[Impact M–L / Effort M / Risk low]** — added `getComplexFn(ast, a)` + `getEscapeFn(escapeAst, fAst,
-a)` to `src/expr/evaluate.ts` (a `WeakMap` on AST identity → a small `a`-keyed map), and routed the
+a)` to what is now `packages/expr/src/evaluate.ts` (`src/expr/evaluate.ts` when this was written —
+the compiler moved out to `@cas/expr` in Phase 5) — a `WeakMap` on AST identity → a small `a`-keyed
+map — and routed the
 stable-AST hot paths (`overlay`, `orbitPreview`, `inspect`, `juliaProperties`, `critical`) through
 them. The uncached `make*` primitives stay for the cold probes (`glPlot`, `rational`) and the
 `differentiate(...)` callers (which build a fresh AST each call). Removes the per-frame recompile on

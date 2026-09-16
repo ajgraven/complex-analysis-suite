@@ -2626,7 +2626,11 @@ export function init(): void {
   function buildStampMetadata(view: PlotView): Record<string, string> {
     const plot = view.plot;
     const round = (x: number): string => Number.parseFloat(x.toPrecision(6)).toString();
-    // ASCII signs only — PNG tEXt is Latin-1, so a Unicode minus (U+2212) would be mangled to '?'.
+    // ASCII signs, still — but no longer because the format forces it. `@cas/export`'s
+    // `injectPngText` now picks the chunk per entry (`tEXt` when the text is losslessly Latin-1,
+    // `iTXt` — PNG's UTF-8 chunk — otherwise), so a Unicode minus would survive. It stays ASCII
+    // because this is a PARAMETER string meant to be pasted back into the app's own inputs, which
+    // parse `-`, not U+2212. (WP12, review 2026-09-16.)
     const cplx = (re: number, im: number): string =>
       `${round(re)} ${im >= 0 ? "+" : "-"} ${round(Math.abs(im))}i`;
     const [cx, cy] = plot.cValue;
@@ -2635,10 +2639,15 @@ export function init(): void {
     const params =
       `plane=${plane}; f(z,c)=${plot.f}; c=${cplx(cx, cy)}; center=${cplx(ox, oy)}; ` +
       `zoom=${plot.zoom.toExponential(3)}; iterations=${plot.nplot}; mode=${byId<HTMLSelectElement>("mode").value}`;
+    // `cas:state` is the key `@cas/export` documents, so ONE reader opens a figure from any app in
+    // the suite; `cdjs:state` is written alongside it for one release so nothing that already reads
+    // this app's PNGs breaks, and then goes. (WP12, review 2026-09-16.)
+    const link = `${location.origin}${location.pathname}${encodeState(readFullState())}`;
     return {
-      Software: "ComplexDynamicsJS",
+      Software: "complex-dynamics (complex-analysis-suite)",
       "cdjs:params": params,
-      "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
+      "cas:state": link,
+      "cdjs:state": link, // deprecated alias — drop after one release
     };
   }
 
@@ -4501,7 +4510,7 @@ export function init(): void {
   /**
    * Save the σ view as a PNG with the reproducible state embedded (ADR-0009 item 2, PNG surface). Re-renders
    * the field clean (no orbit overlay) at `size` on the GPU when available — a crisper export than the
-   * on-screen 512² — else falls back to the current canvas. The `cdjs:state` tEXt is the same permalink
+   * on-screen 512² — else falls back to the current canvas. The `cas:state` text chunk is the same permalink
    * `readFullState` builds, so it now carries `_sigma`; `cdjs:sigma` is a human-readable summary.
    */
   /** Render the σ export image (size + baked overlays) and its reproducibility metadata, shared by the
@@ -4592,10 +4601,12 @@ export function init(): void {
     } else {
       canvas = byId<HTMLCanvasElement>("JCSSchwarz"); // CPU fallback: the current field as shown (size ignored)
     }
+    const sigmaLink = `${location.origin}${location.pathname}${encodeState(readFullState())}`;
     const metadata: Record<string, string> = {
-      Software: "ComplexDynamicsJS",
+      Software: "complex-dynamics (complex-analysis-suite)",
       "cdjs:sigma": schwarzStampParams(sig),
-      "cdjs:state": `${location.origin}${location.pathname}${encodeState(readFullState())}`,
+      "cas:state": sigmaLink, // the documented key (see buildStampMetadata)
+      "cdjs:state": sigmaLink, // deprecated alias — drop after one release
     };
     return { canvas, metadata };
   }

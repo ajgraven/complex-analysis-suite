@@ -92,7 +92,8 @@ function fake2D(canvas: HTMLCanvasElement): unknown {
     getLineDash: () => [] as number[],
   } as Record<string, unknown>;
   return new Proxy(target, {
-    get: (t, prop: string) => (prop in t ? t[prop] : /^[a-z]/.test(prop) ? () => undefined : undefined),
+    get: (t, prop: string) =>
+      prop in t ? t[prop] : /^[a-z]/.test(prop) ? () => undefined : undefined,
     set: () => true, // fillStyle, font, lineWidth … all accepted and ignored
     has: () => true,
   });
@@ -147,7 +148,11 @@ async function mount(hash = ""): Promise<void> {
   const originals = patched.map((t) => t.addEventListener);
   for (const t of patched) {
     const original = t.addEventListener.bind(t);
-    t.addEventListener = ((type: string, fn: EventListenerOrEventListenerObject, opts?: unknown) => {
+    t.addEventListener = ((
+      type: string,
+      fn: EventListenerOrEventListenerObject,
+      opts?: unknown,
+    ) => {
       leaked.push({ target: t, type, fn });
       original(type, fn, opts as never);
     }) as typeof t.addEventListener;
@@ -175,9 +180,7 @@ const fire = (id: string, kind: string): void => {
   byId(id).dispatchEvent(new Event(kind, { bubbles: true }));
 };
 const enterOn = (id: string, mods: { ctrlKey?: boolean } = {}): void => {
-  byId(id).dispatchEvent(
-    new KeyboardEvent("keyup", { key: "Enter", bubbles: true, ...mods }),
-  );
+  byId(id).dispatchEvent(new KeyboardEvent("keyup", { key: "Enter", bubbles: true, ...mods }));
 };
 
 beforeEach(() => {
@@ -261,9 +264,8 @@ describe("the shareable state round-trips into a document it is not in", () => {
     fire("critorbit", "change");
     byId("apply_all").click();
 
-    const { readAppState, applyAppState, encodeState, decodeState } = await import(
-      "../src/state/appState"
-    );
+    const { readAppState, applyAppState, encodeState, decodeState } =
+      await import("../src/state/appState");
     const shared = readAppState();
     expect(shared.inpf).toBe("z^3+c");
     // Through the real codec, not just the object: a permalink is what a reader actually receives.
@@ -330,8 +332,9 @@ describe("the page's structure", () => {
 
 /** The dev-only handle `init()` publishes, so a test can read the state the PLOTS are in. */
 function views(): { param: { sphere: boolean }; dyn: { sphere: boolean } } {
-  const v = (window as unknown as { __views?: { param: { sphere: boolean }; dyn: { sphere: boolean } } })
-    .__views;
+  const v = (
+    window as unknown as { __views?: { param: { sphere: boolean }; dyn: { sphere: boolean } } }
+  ).__views;
   if (!v) throw new Error("__views not published — is import.meta.env.DEV false?");
   return v;
 }
@@ -453,7 +456,9 @@ describe("WP7/S6 — a link pasted into an open tab is honoured", () => {
     window.location.hash = "#vs=" + btoa(JSON.stringify({ v: 1, app: "qd", state: {} }));
     window.dispatchEvent(new HashChangeEvent("hashchange"));
     expect(val("inpf")).toBe("z^2+c"); // unchanged
-    expect(document.querySelector(".toast")?.textContent ?? "").toContain("no Complex Dynamics view");
+    expect(document.querySelector(".toast")?.textContent ?? "").toContain(
+      "no Complex Dynamics view",
+    );
   });
 });
 
@@ -467,7 +472,10 @@ describe("WP7/S2 — 'Copy properties' waits for the measurement", () => {
     postMessage(m: { reqId: number }): void {
       // A failure, not a result: it needs no `JuliaImageMetrics` shape, and it exercises WP6's
       // error path end-to-end at the same time. Either way the rows stop saying "measuring…".
-      setTimeout(() => this.onmessage?.({ data: { reqId: m.reqId, error: "stub" } } as MessageEvent), 0);
+      setTimeout(
+        () => this.onmessage?.({ data: { reqId: m.reqId, error: "stub" } } as MessageEvent),
+        0,
+      );
     }
     terminate(): void {}
   }
@@ -482,7 +490,12 @@ describe("WP7/S2 — 'Copy properties' waits for the measurement", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     let copied: string | null = null;
     Object.defineProperty(navigator, "clipboard", {
-      value: { writeText: (t: string) => { copied = t; return Promise.resolve(); } },
+      value: {
+        writeText: (t: string) => {
+          copied = t;
+          return Promise.resolve();
+        },
+      },
       configurable: true,
     });
     try {
@@ -590,7 +603,9 @@ describe("WP8/S4 — a mode the app cannot draw says so, and says so when it mov
     setVal("inpf", "conjugate(z^2)+c");
     byId("apply_all").click();
     expect(sel.value).toBe("smooth"); // it always did this
-    const toast = [...document.querySelectorAll(".toast")].map((t) => t.textContent ?? "").join(" ");
+    const toast = [...document.querySelectorAll(".toast")]
+      .map((t) => t.textContent ?? "")
+      .join(" ");
     expect(toast).toContain("Multiplier map"); // …but now it says which mode it took away
     expect(toast).toContain("not holomorphic"); // …and why
     expect(toast).toContain("Smooth"); // …and what is showing instead
@@ -661,7 +676,10 @@ describe("WP8/U7 — a panel that needs z²+c says so before you press anything"
       (b) => !b.classList.contains("gloss-link"),
     );
     expect(gated.length, "the panel has action buttons to gate").toBeGreaterThan(0);
-    expect(gated.every((b) => b.disabled), "the gate IS in effect").toBe(true);
+    expect(
+      gated.every((b) => b.disabled),
+      "the gate IS in effect",
+    ).toBe(true);
     const links = [...panel.querySelectorAll<HTMLButtonElement>(".gloss-link")];
     expect(links.length, "the panel has glossary links").toBeGreaterThan(0);
     for (const g of links) expect(g.disabled).toBe(false);
@@ -759,8 +777,7 @@ describe("WP10/U4 — the sidebar is five tabs", () => {
 
   it("the four re-homed controls are on the tab that owns their MEANING", async () => {
     await mount();
-    const on = (id: string): string =>
-      panels().find((p) => p.contains(byId(id)))?.id ?? "(none)";
+    const on = (id: string): string => panels().find((p) => p.contains(byId(id)))?.id ?? "(none)";
     // Newton changes what is ITERATED, not the accuracy of iterating it.
     expect(on("newton")).toBe("tabpanel-function");
     // Anti-aliasing and idle refine are how HARD the plot works, not how it is coloured.
@@ -774,7 +791,10 @@ describe("WP10/U4 — the sidebar is five tabs", () => {
     await mount();
     for (const id of ["apply_all", "reset_all", "undo-btn", "redo-btn"]) {
       expect(byId("pane-actions").contains(byId(id)), id).toBe(true);
-      expect(panels().some((p) => p.contains(byId(id))), `${id} is not on a tab`).toBe(false);
+      expect(
+        panels().some((p) => p.contains(byId(id))),
+        `${id} is not on a tab`,
+      ).toBe(false);
     }
   });
 
@@ -922,7 +942,9 @@ describe("WP10 — the rest of the shell pass", () => {
     byId("import-dialog-load").click();
     expect(dlg.hidden, "a bad paste does not close the dialog").toBe(false);
     expect(byId("import-dialog-error").hidden).toBe(false);
-    expect(text.value, "…and the text survives, so it is one edit not one re-paste").toBe("not a link");
+    expect(text.value, "…and the text survives, so it is one edit not one re-paste").toBe(
+      "not a link",
+    );
   });
 
   it("U11: every way of moving c keeps the caption, the input and the legend in step", async () => {
@@ -1046,5 +1068,41 @@ describe("WP11/U10 — accessibility, asserted where the axe roster cannot look"
     expect(document.activeElement).toBe(byId("onboarding_dismiss"));
     escape();
     expect(card.hidden).toBe(true);
+  });
+});
+
+describe("WP12 — the metadata key is the one the package documents", () => {
+  // `@cas/export`'s README and tests specify `Software` + `cas:state`; this app wrote `cdjs:state`
+  // alone, so a reader that opens any figure in the suite could not open one of ours. The old key
+  // rides along for one release rather than breaking anything that already reads these PNGs.
+  //
+  // Source-level, like `glContextRestore.test.ts` and `renderParity.test.ts`: the two stamp builders
+  // are closures inside `init()`, and reaching their output would mean driving a real export.
+  it("both stamp builders write it, beside the deprecated alias", async () => {
+    const src = (await import("../src/main.ts?raw")).default as string;
+    expect(src.match(/"cas:state"/g) ?? [], "both builders").toHaveLength(2);
+    expect(src.match(/"cdjs:state"/g) ?? [], "…and the alias, for one release").toHaveLength(2);
+    expect(src).toContain('Software: "complex-dynamics (complex-analysis-suite)"');
+    expect(src).not.toContain('Software: "ComplexDynamicsJS"');
+  });
+});
+
+describe("WP12 — the citation the page hands out is a citation", () => {
+  // Found while repointing the URL: WP11's footer move had re-indented the `<pre>`, and a `<pre>`'s
+  // whitespace is its CONTENT — the five field NAMES (`author`, `title`, `year`, `version`, `url`),
+  // the entry's closing brace and `</code></pre>` were all gone. The page still looked fine, because
+  // the values were intact and the browser closes the tags itself; what the Copy button put on the
+  // clipboard was `@software{... = {Graven, Andrew}, ...`, which no BibTeX reader accepts. Nothing
+  // asserted it, so the gate, the browser suite and the axe roster all stayed green through it.
+  it("copies a well-formed entry naming this repository", async () => {
+    await mount();
+    const bib = byId("cite-bibtex").textContent ?? "";
+    for (const field of ["author", "title", "year", "version", "url"]) {
+      expect(bib, `the ${field} field is named`).toMatch(new RegExp(`\\n\\s*${field}\\s*=\\s*\\{`));
+    }
+    expect(bib).toContain("{https://github.com/ajgraven/complex-analysis-suite}");
+    expect(bib.trimEnd().endsWith("}"), "the entry is closed").toBe(true);
+    // Balanced, so the whole entry parses rather than merely starting and ending with a brace.
+    expect(bib.split("{").length, "braces balance").toBe(bib.split("}").length);
   });
 });

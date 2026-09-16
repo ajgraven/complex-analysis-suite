@@ -28,20 +28,20 @@ fragment shaders, with an emulated double-float (df64) path for deep zoom.
 ## Running
 
 ```bash
-npm install
-npm run dev        # start the Vite dev server (http://localhost:5173)
+pnpm install       # from the repository root — this is a pnpm workspace
+pnpm dev           # start the Vite dev server (http://localhost:5173)
 ```
 
 Other scripts:
 
 | Script              | Purpose                        |
 | ------------------- | ------------------------------ |
-| `npm run build`     | Production build into `dist/`  |
-| `npm run preview`   | Serve the production build     |
-| `npm test`          | Run the Vitest unit suite      |
-| `npm run lint`      | ESLint over `src/` and config  |
-| `npm run typecheck` | Type-check with `tsc --noEmit` |
-| `npm run format`    | Format with Prettier           |
+| `pnpm build`        | Production build into `dist/`  |
+| `pnpm preview`      | Serve the production build     |
+| `pnpm test`         | Run the Vitest unit suite      |
+| `pnpm lint`         | ESLint over `src/` and config  |
+| `pnpm typecheck`    | Type-check with `tsc --noEmit` |
+| `pnpm format`       | Format with Prettier           |
 
 The rendering engine has no dependencies (hand-written WebGL2); a few small libraries
 power peripheral features (KaTeX for formula typesetting, driver.js for the tour, gif.js
@@ -74,6 +74,12 @@ quick coarse pass first and then refine to full resolution, so interaction stays
 responsive.
 
 ## Presets
+
+Choosing a preset from the **Presets** dropdown applies it immediately — there is no separate
+"apply preset" button (a select is expected to act; **reset** is the way back to a preset's
+defaults after edits). The app opens on the **Douady rabbit**, `c = −0.122561 + 0.744862i`: the
+period-3 superattracting centre, so the dynamical plane opens on a connected Julia set with its
+critical orbit closing on a 3-cycle rather than on a Cantor dust.
 
 Presets live in [`src/presets.ts`](src/presets.ts) as two dictionaries
 (`paramPresets`, `dynPresets`) sharing the same keys. Each entry is a `Preset`:
@@ -108,6 +114,10 @@ doubly-connected Fatou component — possible only for degree ≥ 3). Its _Herma
 ring on the dynamical plane via the weighted-Birkhoff quasiperiodicity test
 ([`detectHermanRing`](src/render/hermanRing.ts)), reporting the rotation number (the golden mean,
 0.618…, at the default τ) and the conformal modulus, and drawing the invariant circles in gold.
+The verdict reads **"Ring detected (≈)"**, not "confirmed": the weighted-Birkhoff test is a
+convergence rate, so a slowly-converging *periodic* orbit can pass it. The detector now also rejects
+an orbit that collapses onto a finite cycle, which is the case it was mistaking for a ring — but a
+rate is still not a proof, and the label says so.
 
 A few use non-textbook conventions, noted here for honesty: **tricorn** and **celtic**
 are faithful (`conj(z)²+c` and `|Re(z²)|+i·Im(z²)+c`); **burning ship** is parameterised
@@ -121,12 +131,18 @@ names are decorative — they are not Schwarz-triangle maps).
 
 The `f` / `escape` expression language (a CindyScript-compatible subset) supports:
 
-- **Constants:** `e`, `pi`, `i`.
+- **Constants:** `e`, `pi`, `tau`, `phi`, `i`.
 - **Operators:** `+ - * / ^` (complex powers, principal branch), comparisons
   `> < ==`, and `if(cond, a, b)`, `not(...)`, `true`/`false`.
-- **Functions:** `sqrt`, `exp`, `log`, `sin`, `cos`, `tan`, `arcsin`, `arccos`,
-  `arctan`, `arctan2(x,y)`, `lambertw`, `re`, `im`, `conjugate`, `abs`, `arg`,
-  `mod(x,y)`, `round`, `floor`, `ceil`.
+- **Functions** (the full set, from [`packages/expr/src/ast.ts`](../../packages/expr/src/ast.ts)):
+  - _Powers and logs:_ `sqrt`, `exp`, `log`
+  - _Trigonometric:_ `sin`, `cos`, `tan`, `sec`, `csc`, `cot`
+  - _Inverse trigonometric:_ `arcsin`, `arccos`, `arctan`, `arctan2(x,y)`
+  - _Hyperbolic:_ `sinh`, `cosh`, `tanh`, `sech`, `csch`, `coth`
+  - _Inverse hyperbolic:_ `arcsinh`, `arccosh`, `arctanh`
+  - _Special:_ `lambertw`, `gamma`, `zeta`, `factorial`
+  - _Parts and rounding:_ `re`, `im`, `conjugate`, `abs`, `arg`, `mod(x,y)`, `round`,
+    `floor`, `ceil`
 - **Statements:** `;`-separated, with local assignment (e.g. `u=…; …; result`).
   The `escape` predicate may call `f(z, c)`.
 - **Variables:** `z` and `c`, plus a live parameter **`a`** — when `f` (or `escape`) uses
@@ -162,6 +178,15 @@ the orbit and tests) from one AST — see [`@cas/expr`](../../packages/expr).
   opens the inspector) and exposes an ARIA label; a visually-hidden live region
   announces the view (centre/zoom) and the parameter `c` to screen readers as they
   change.
+- **The controls pane is five tabs** — _Function · Appearance · Precision · Instruments · Studio_.
+  Above them, an **active-settings strip** lists every non-default setting that changes the render
+  (perturbation, Newton, auto-iterations, AA, relief lighting, post-processing, a projection, the
+  sphere); each entry is a button that switches to the owning tab and focuses the control, so a
+  setting parked on a tab you are not looking at is still visible from the one you are. The strip is
+  hidden when everything is at its default. **apply changes / reset / ↶ undo / ↷ redo** are pinned
+  in a footer below the tabs, reachable from all five. Which tab is open is remembered per device and
+  is deliberately NOT part of a share link — a permalink restores a mathematical view, and which tab
+  the sender had open is not part of one.
 - Press **Enter** (or **apply changes**) to apply edits to the input fields — while
   edits are pending the changed fields are highlighted, an "unapplied edits" hint shows,
   and the Apply button is ringed; **reset** reverts every option (including colouring) to
@@ -245,11 +270,18 @@ clipboard) buttons in the **Export image** section, with two adjacent controls:
   labelled with its width in plot coordinates, so a shared image carries its zoom
   scale. Independent of **overlays**, so you can add it to a clean image.
 
-Every downloaded PNG also embeds invisible **reproducibility metadata** (`tEXt` chunks — no image
+Every downloaded PNG also embeds invisible **reproducibility metadata** (PNG text chunks — no image
 pixels change): the software name, a human-readable parameter summary (`f`, `c`, centre, zoom,
-iterations, mode), and the full **shareable-state URL** — paste it back to reproduce the exact view,
-double-double centre and all (via the shared [`@cas/export`](../../packages/export) `injectPngText`,
-called from [`hiResExport.ts`](src/hiResExport.ts)).
+iterations, mode) under `cdjs:params`, and the full **shareable-state URL** under **`cas:state`** —
+paste it back to reproduce the exact view, double-double centre and all. `cas:state` is the key
+[`@cas/export`](../../packages/export) documents, so one reader opens a figure from any app in the
+suite; the old `cdjs:state` is written alongside it for one release and then goes. `injectPngText`
+picks the chunk per entry — `tEXt` when the text is losslessly Latin-1, `iTXt` (UTF-8) otherwise —
+so a non-ASCII value survives rather than being mangled to `?`.
+
+An export is **one frame's worth of settings, start to finish**: the look is snapshotted when it
+begins, and the plot ignores its own pointer and keyboard input for the duration, so a pan or a
+palette nudge halfway through cannot leave a seam across the image.
 
 The renderer draws into an off-screen RGBA8 framebuffer in horizontal strips
 ([`GLPlot.renderToImageData`](src/render/glPlot.ts)) — full detail at the requested
@@ -395,7 +427,15 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   On the **dynamical plane** the located attracting cycle is marked (ringed dots joined in
   orbit order), and when its cycle has a rotation number _p_/_q_ a **Show orbit portrait** button
   draws the external rays landing at the α fixed point and reports the portrait's valence, rotation
-  number, and characteristic arc. On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
+  number, and characteristic arc. Every row carries its **rigor level** as a badge — `=` for a counted
+  quantity (the escape time), `≈` for everything a tolerance found (the period, the multiplier, the
+  Fatou component, the internal angle, the Koebe distance estimate, which is sharp only to within a
+  factor of a few), `?` when the orbit neither escaped nor settled within the cap. The levels are
+  computed by [`@cas/rigor`](../../packages/rigor) from each row's evidence rather than typed by
+  hand, and the same rows feed **Copy report**, so the clipboard cannot disagree with the panel.
+  A parameter whose orbit has not settled is solved for rather than waited on: an attracting or
+  indifferent fixed point is found exactly from the roots of `f(z) − z`, which is what lets the
+  cardioid boundary report a parabolic point at all. On the **parameter plane**, when a finite cycle is found, a **Find nucleus**
   button Newton-snaps `c` to the exact superattracting centre, and **Show bulb rays** turns
   on that bulb's landing rays; a **Misiurewicz** finder Newton-snaps to the exact preperiodic
   point `fᵐ⁺ᵏ(0) = fᵐ(0)` nearest the view, and **Siegel c for θ** jumps to the cardioid point
@@ -467,7 +507,10 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   at the same point of ∂K_c; collapsing the chords recovers the Julia set's topology. The leaves are
   **measured**, not assumed — the app lands the low-period rays with the same Newton tracer used
   elsewhere and joins the ones that co-land, so it is a faithful finite-**detail** approximation (a
-  slider raises the period bound). Invariant under angle doubling and under z ↦ −z. Needs a repelling α
+  slider raises the period bound). A ray whose landing the tracer did **not** refine to tolerance is
+  dropped rather than drawn, and the whole widget is withheld where the critical orbit escapes — a
+  disconnected Julia set has no pinched-disk model, so drawing one there would have been a picture of
+  nothing. Invariant under angle doubling and under z ↦ −z. Needs a repelling α
   (c outside the main cardioid). Basilica (c = −1): the α leaf {1/3, 2/3} and the −α leaf {1/6, 5/6};
   the rabbit's α is an ideal triangle {1/7, 2/7, 4/7}. A second toggle draws the **QML** (quadratic
   minor lamination) — the parameter-plane analogue on ∂M, whose **minor leaves** join the parameter
@@ -495,8 +538,11 @@ Beyond the colouring, the 2D overlay visualises the dynamics directly:
   _Go to external angle_ or _Siegel c for θ_ to reach one), samples orbits outward from the
   indifferent fixed point and draws the ones that stay bounded — the nested rotation curves filling
   the Siegel disc. Only shown for a genuine Brjuno rotation number (parabolic / Cremer have no
-  disc). `z²+c`.
-- **Riemann sphere (3D)** — renders either plane on the Riemann sphere live in interactive 3D:
+  disc), and only where `|λ|` is indifferent to **1e-9** — the tolerance used to be 0.02, which is
+  a band wide enough to hold attracting and repelling parameters, so the curves were drawn at
+  parameters that have no Siegel disc at all. `z²+c`.
+- **Riemann sphere (3D)** — part of the shared view (a link reopens on the sphere, and one without
+  it turns the sphere off). Renders either plane on the Riemann sphere live in interactive 3D:
   drag to rotate, scroll to zoom. The whole extended plane is shown at once (south pole _z_ = 0,
   equator |_z_| = 1, north pole = ∞, so you see the dynamics at ∞ too), lit as a ball with the
   fractal as its surface. Works for **any** _f_ (holomorphic, rational, transcendental, and
@@ -591,36 +637,97 @@ symbolically
 ([`@cas/expr`'s `derivative` pass](../../packages/expr)); it's available for holomorphic
 `f` and reports a clear error for non-holomorphic builtins (`abs`, `re`, `im`, …).
 
+## Schwarz reflection σ
+
+**Schwarz reflection σ…** (Function tab) opens a **peer view** of the two plots rather than an
+overlay: σ takes the whole workspace, and ↩ or Escape returns to the plots exactly as they were.
+
+A quadrature domain Ω carries a *Schwarz function* S with `S(w) = w̄` on ∂Ω; the anti-holomorphic
+**Schwarz reflection** `σ(w) = conj(S(w))` is then a dynamical system on Ω, and the view renders its
+escape-time field — how many reflections a point survives before leaving the fundamental set K.
+It is `≈`-labelled throughout: σ is reconstructed numerically from φ, not solved in closed form.
+
+- **Where φ comes from.** Either the **builder** in the σ pane (a preset, or a hand-written
+  exterior Laurent map `φ(z) = c·z + Σ Fₖ z⁻ᵏ` with its poles, or a bounded `φ: 𝔻 → Ω`), or the
+  Quadrature Domains app, which exports its own σ as a `form:"schwarz"` interchange recipe (see
+  below). Both families are authorable natively and importable.
+- **What it draws.** The escape field on the GPU (with a CPU fallback), plus optional overlays: ∂Ω,
+  the branch points and σ-poles, the preimage tiling tree, the limit set, orbit families, level
+  curves of `|σ|` and `arg σ`, period-n cycles, and the forward images of a drawn curve. Click
+  inspects an orbit; shift-drag draws a curve.
+- **Coordinate views.** The w-plane, the z-disk (the forward image of φ), and the Riemann sphere.
+  Each keeps its own centre/zoom, and leaving σ and coming back keeps them — the view is reset only
+  when the builder's own values change.
+- **What travels in a link.** The φ recipe, the window, the colouring and the boundary/singularity
+  toggles ride in the `#vs=` permalink and in an exported PNG. The computed *analyses* (the orbit
+  family, the level curves, the cycles, the forward curves, the limit set) do **not**: they are
+  point clouds, so the only honest form is the recipe plus a recompute on open, and that is not
+  built yet.
+
+## Interchange (moving a map between apps)
+
+The suite's apps hand maps to one another through **`@cas/interchange`** — a versioned, convention-
+tagged envelope carrying a map, not a picture. This app is both ends of it.
+
+- **Import — `Import map…`** (Function tab) opens a dialog: paste a deep link (`#s=…`) or its JSON
+  and press **Load**. A `form:"schwarz"` recipe from the **Quadrature Domains** app enters the σ
+  peer view directly; a `kind:"map"` Laurent map loads as a dynamical map. A payload the app cannot
+  read says so in the dialog and keeps your text, so a mis-copied link is one edit rather than one
+  re-paste. A `#s=` link in the address bar is imported on load, and one pasted into an already-open
+  tab is honoured too.
+- **Export — `Riemann Map ↗`** (Instruments → Exterior map) hands a filled Julia set's Böttcher map
+  to the **Riemann Map** studio as a `kind:"map"` `LaurentMap`, which opens it as an imported
+  disk-image source. Cross-app goldens (`CD_TO_RM_BOTTCHER_LINK`, `QD_TO_CD`) pin both directions.
+- **Conventions are tagged, not assumed.** The interchange format is canonical; each app's own
+  normalisation (factors of π, 2πi) stays at its edge, so a hand-off cannot silently change a
+  constant.
+
 ## Architecture
 
 ```
 index.html                  Vite entry; markup only (no inline styles/handlers)
 src/
-  main.ts                   Entry: builds both plots, wires controls + coupling
-  presets.ts                Preset type + the two preset dictionaries
-  complex.ts                Complex-number parse / format
+  boot.ts                   Calls init() inside @cas/ui's fatal-error boundary
+  main.ts                   The shell: builds both plots, wires every control + the coupling
+  presets.ts                Preset type + the two preset dictionaries (parameter / dynamical)
+  complex.ts                Complex-number parse / format (+ the one display formatter)
   transforms.ts             Canvas <-> plot coordinate transforms
-  arrays.ts                 2-vector helpers
-  hiResExport.ts            Engine-agnostic export helpers (clamp, filename, ...)
-  expr/                     The f / escape expression compiler
-    lexer.ts parser.ts ast.ts   Source -> AST
-    glsl.ts                 AST -> GLSL (abstract complex ops)
-    evaluate.ts complexJs.ts    AST -> value (JS doubles); orbit + tests
-  glsl/                     GLSL stdlib (TS modules exporting shader source)
-    complexSingle.glsl.ts   Single-precision base ops (vec2)
-    df64.glsl.ts complexDf64.glsl.ts   Double-float base ops (vec4) + df64Ref.ts
-    complexDerived.glsl.ts  Precision-agnostic cpow / lambertw / inverse trig
-  render/
-    shaderBuilder.ts        Assembles the fragment shader (stdlib + f/escape + loop)
-    glPlot.ts               GLPlot: WebGL2 renderer + state (single + df64 programs)
-    overlay.ts              Orbit polyline / point / label on a 2D overlay canvas
+  arrays.ts  palettes.ts    2-vector helpers; the named colour ramps
+  hiResExport.ts            Engine-agnostic export helpers (clamp, filename, PNG metadata)
+  render/                   ~55 modules. The engine and everything drawn over it:
+    glPlot.ts               GLPlot: the WebGL2 renderer + all of its state
+    shaderBuilder.ts        Assembles the fragment shader (stdlib + f/escape + the loop)
     plotView.ts             GLPlot + overlay + native pointer/keyboard interaction
-  ui/
-    controls.ts             Typed read/write over the control inputs
-    dom.ts                  Small typed DOM helpers
+    overlay.ts  legend.ts   The 2-D layer: orbit, rays, markers, labels; the colour key
+    dd.ts perturbation.ts perturbationPoly.ts bla.ts   Deep zoom: double-double,
+                            the reference orbit, the general-polynomial kernel, the skip table
+    inspect.ts juliaProperties.ts juliaMetrics*.ts     Click-to-inspect; the metrics worker
+    critical.ts brjuno.ts hermanRing.ts siegelCurves.ts interiorDE.ts   Dynamics
+    rays.ts farey.ts lamination.ts yoccoz*.ts angleOfPoint.ts           Combinatorial overlays
+    mating.ts matingEngine.ts                                          Matings (Boyd–Henriksen)
+    schwarz*.ts (14)        The Schwarz-reflection σ peer view: φ form, GPU field, overlays
+    projection.ts sphereView.ts                       Log-polar / Poincaré; the Riemann sphere
+  combinatorics/            Exact number theory, no rendering:
+    angles.ts stripping.ts orbitPortrait.ts dynatomic.ts coreEntropy.ts
+  state/                    Everything that can be saved, shared or undone:
+    appState.ts             SHARE_IDS + the `#vs=` codec (on @cas/interchange)
+    schwarzState.ts notes.ts places.ts profiles.ts
+  interchange/              The cross-app hand-off: exportMap.ts / importMap.ts
+  ui/                       DOM-only modules, no maths:
+    sidebarTabs.ts activeSettings.ts   The five-tab pane and its active-settings strip
+    controls.ts dom.ts validate.ts toast.ts escapeStack.ts
+    gradient.ts plotLegend.ts glossary.ts suggestions.ts recorder.ts
+    inspectorRows.ts dataExport.ts
   styles/main.css           Stylesheet (CSS grid, responsive)
-test/                       Vitest unit tests (pure modules + the compiler)
+test/                       Vitest: ~90 node/jsdom files, plus a `test:browser` GL suite
 ```
+
+**What is NOT here.** The expression compiler and the GLSL standard library used to live in
+`src/expr/` and `src/glsl/`; both are shared packages now — **`@cas/expr`** (lexer, parser, AST,
+the JS evaluator, the AST→GLSL emitter, symbolic differentiation) and **`@cas/gpu`** (the
+single/df64 complex stdlib and the shared shader snippets). This app also consumes **`@cas/core`**,
+**`@cas/exact`**, **`@cas/dynamics`** (Böttcher maps + external rays), **`@cas/schwarz`**,
+**`@cas/interchange`**, **`@cas/export`**, **`@cas/rigor`** and **`@cas/ui`**.
 
 **One AST, two backends.** The expression compiler parses `f`/`escape` once and
 emits both a GLSL function (for the GPU render) and a JS evaluator (for the orbit
@@ -706,15 +813,21 @@ other than that site; no extra path configuration is needed either way, because 
   single precision); beyond that, df64 precision runs out and the image pixelates.
   For polynomial maps (both planes), the **perturbation (deep zoom)** toggle goes further still
   (structure resolves where df64 has flattened) — pixels rebase, so it is glitch-free —
-  and is limited to ≈10²⁸× by its double-double reference centre. A bignum reference (for
-  10¹⁰⁰⁺×) and per-pixel BLA iteration-skipping (the table is staged in `src/render/bla.ts`,
-  not yet wired to the GPU kernel) remain future work.
+  and is limited to ≈10²⁸× by its double-double reference centre. The BLA skip-table **is**
+  wired to the GPU kernel (see _Architecture_); a bignum reference (for 10¹⁰⁰⁺×) remains
+  future work.
+- **Projections and deep zoom do not combine.** The log-polar and Poincaré views exist only in
+  the single-precision shader — neither the df64 build nor the perturbation kernel has a
+  projected coordinate — so while a projection is active the deep-zoom paths are refused and the
+  view stays single precision. Past the df64 threshold an advisory says so and offers to switch
+  back to the linear view. (It used to snap silently to linear while the note still claimed the
+  projection was active.)
 - **Heavy df64 shaders:** the first deep zoom of a transcendental-heavy preset
   (the Schwarz maps) compiles a large df64 shader. This now happens in the
   background (the view shows single precision and upgrades when ready), so it no
   longer freezes interaction; the compiled program is cached afterwards.
-- **`npm audit`:** the only reported advisories are in dev-only tooling
-  (esbuild/Vite dev server). `npm audit --omit=dev` reports zero — nothing ships
+- **`pnpm audit`:** the only reported advisories are in dev-only tooling
+  (esbuild/Vite dev server). `pnpm audit --prod` reports zero — nothing ships
   to production.
 
 ## Methods & references

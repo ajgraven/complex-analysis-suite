@@ -922,7 +922,61 @@ permitted (CD-motivated) but optional: the blocking shell test is the stronger g
 
 ---
 
-## WP12 — Documentation currency · effort M · closes §3 of the report
+## WP12 — Documentation currency · effort M · closes §3 of the report · **DONE**
+
+> **Landed.** Gate green: lint, typecheck, **560 files / 5,869 tests**, build; CD browser suite 35
+> tests; `node scripts/a11y-audit.mjs` reports complex-dynamics CLEAN and no regressions anywhere.
+> Two negative controls, each reverted and confirmed red.
+>
+> **The docs pass found a defect WP11 had shipped, in code, and the gate could not see it.** Moving
+> the `<footer>` to page level re-indented the citation `<pre>` — and a `<pre>`'s whitespace IS its
+> content. The five field NAMES (`author`, `title`, `year`, `version`, `url`), the entry's closing
+> brace and `</code></pre>` were all gone, leaving `@software{…, = {Graven, Andrew}, …`. The page
+> looked right, because the VALUES survived and the browser closes the tags itself; what the Copy
+> button put on the clipboard was something no BibTeX reader accepts. Nothing asserted it, so the
+> node gate, the browser suite and the axe roster all stayed green through it — **a citation block is
+> exactly the kind of thing every instrument is aimed past.** It is repaired, and `test/shell.test.ts`
+> now reads the entry the Copy button reads, checks each field is NAMED and that the braces balance
+> (so the assertion cannot be satisfied by a string that merely opens and closes with one).
+>
+> **The metadata key was the plan's real find, and the plan's own gate line was wrong about it.**
+> `@cas/export` documents `Software` + `cas:state`; this app wrote `cdjs:state` alone, so a reader
+> that opens any figure in the suite could not open one of ours — the CD end of the discrepancy
+> contour-integration's M6.3 recorded (one adopter of six). Both stamp builders now write `cas:state`
+> with `cdjs:state` alongside for one release. The plan said the change "touches
+> `hiResExport.test.ts` expectations": measured, **no test asserted the `Software` tag or either key
+> at all**, which is precisely how this app's key could drift from the documented one unnoticed. One
+> now does, source-level (the builders are closures inside `init()`), counting BOTH occurrences of
+> each key so a half-applied change is caught.
+>
+> **Both "Latin-1, ASCII only" comments stated a reason that had stopped being true.** `@cas/export`
+> picks the chunk per entry now (`tEXt` when Latin-1 holds the text losslessly, `iTXt` otherwise), so
+> the format no longer forces ASCII. The strings stay ASCII for a different and better reason, which
+> the comments now give: they are PARAMETER strings meant to be pasted back into the app's own
+> inputs, which parse `-` and not U+2212.
+>
+> The rest as specified. `README.md`'s _Architecture_ is the real tree (`render/`, `combinatorics/`,
+> `state/`, `interchange/`, `ui/`) with a **"What is NOT here"** paragraph naming `@cas/expr` and
+> `@cas/gpu` and the eight other packages — the old tree still listed `src/expr/` and `src/glsl/`,
+> which moved out in Phase 5; _Known limitations_ loses "BLA not yet wired" and gains WP9's
+> projection/precision rule; new **Schwarz reflection σ** and **Interchange** sections; the full
+> function list read off `packages/expr/src/ast.ts`; `pnpm` throughout; and the Presets, Controls
+> (five tabs + strip + pinned actions), PNG-metadata, Herman, inspector, lamination, Siegel and
+> sphere paragraphs brought to WP1–WP11's state. `CONTRIBUTING.md`'s gotchas point at the packages and
+> its `uMode` list gains interior-DE, Marty and Newton-basins. `FEATURE_RESEARCH.md` §0 and
+> `FRONTIER_ROADMAP.md` A2 say perturbation takes any additive-c polynomial and that BLA is wired;
+> `PERFORMANCE_REVIEW.md`'s PR-2 path is the package's. The four citation/reference URLs point at
+> `complex-analysis-suite`. `package-lock.json` (2,744 lines of npm lockfile in a pnpm workspace) is
+> deleted.
+>
+> **`pnpm format:check` is not a gate this repo has.** Measured: it fails on **722 files identically
+> on HEAD**, with or without this work, and it is not in `ci.yml` — so the plan's gate line cites a
+> check that has never passed. The files this WP touched are formatted; the repo-wide state is left
+> as found, because reformatting 722 files is not a Complex Dynamics change.
+
+**Files:** `apps/complex-dynamics/README.md`, `CONTRIBUTING.md`, `FEATURE_RESEARCH.md`,
+`FRONTIER_ROADMAP.md`, `PERFORMANCE_REVIEW.md`, `index.html`, `src/main.ts`,
+`src/state/schwarzState.ts`; deleted `package-lock.json`; tests `test/shell.test.ts`.
 
 Written last so it describes the app as it ends up after WP1–11.
 
@@ -949,7 +1003,9 @@ Written last so it describes the app as it ends up after WP1–11.
   next person knows the app's own docs are current and the repo's are not.
 
 **Gate:** `pnpm format:check` and the full gate (docs only, but the `Software` tag change touches
-`hiResExport.test.ts` expectations).
+`hiResExport.test.ts` expectations). — **Both halves of this line were wrong and are corrected in the
+DONE block:** `format:check` fails on 722 files identically on HEAD and is not in CI, and no test
+asserted the `Software` tag or either metadata key, which is why the key had drifted.
 
 ---
 
