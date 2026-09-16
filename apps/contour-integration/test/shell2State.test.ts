@@ -19,7 +19,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { CENTER_MAX, DEFAULT_VIEW } from "../src/kernel/camera.js";
 import type { Contour } from "../src/engine/contour/model.js";
 import { penContour, sameShape } from "../src/engine/contour/pen.js";
-import { offeredCorpus, shellMode, type ShellState } from "../src/shell/state.js";
+import { COLD_START_RECORD, offeredCorpus, shellMode, type ShellState } from "../src/shell/state.js";
 import { decodeShell, encodeShell } from "../src/shell/viewState.js";
 import { mountShell2, type Shell2Handle } from "../src/shell2/app.js";
 
@@ -43,6 +43,24 @@ function mount(hash = ""): { root: HTMLElement; app: Shell2Handle } {
 afterEach(() => {
   for (const app of mounted.splice(0)) app.destroy();
 });
+
+/**
+ * The app as a reader finds it, then the Sandbox button.
+ *
+ * **The cold start is a RECORD** (M8 step 1.8b), and most of what this file pins is the sandbox's —
+ * a declared factor, a sheet offset, a hand-drawn contour, a state the codec refuses. It goes
+ * through `toSandbox` rather than assembling a state, because that is the reader's own route and
+ * the one that has to keep working. `mount(hash)` stays the boot, which is what the permalink tests
+ * below are about.
+ */
+/** The app exactly as it opens — a record, since step 1.8b. An alias, for tests whose subject is that. */
+const mountCold = (): { root: HTMLElement; app: Shell2Handle } => mount();
+
+function mountSandbox(): { root: HTMLElement; app: Shell2Handle } {
+  const m = mount();
+  m.app.actions().toSandbox();
+  return m;
+}
 
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
   const e = root.querySelector<T>(sel);
@@ -152,7 +170,7 @@ describe("the argument window", () => {
   // 1.4's own finding: the old shell said which function was in the box only in a way no screen
   // reader reached.
   it("keeps the declared factor when the determination changes", () => {
-    const { root } = mount();
+    const { root } = mountSandbox();
     declaredKeyhole(root);
     expect(rails(root)).toContain("Declared factor");
 
@@ -169,7 +187,7 @@ describe("the argument window", () => {
   });
 
   it("moves the cut, so LEGALITY refuses and no ∮ is printed", () => {
-    const { root } = mount();
+    const { root } = mountSandbox();
     declaredKeyhole(root);
     // The keyhole's determination: the cut is on ℝ₊, down the middle of the two lips, and the
     // argument closes.
@@ -215,7 +233,7 @@ const openRecord = (app: Shell2Handle, id: string, fixture = 0): void => {
 
 describe("applyState(currentState()) is a fixed point", () => {
   it("for all 28 gallery records at their primary fixture", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     const ids = offeredCorpus().tiers.flatMap((t) => t.families.map((fam) => fam.id));
     expect(ids).toHaveLength(28);
 
@@ -246,7 +264,7 @@ describe("applyState(currentState()) is a fixed point", () => {
   // directions, with every field differing between them — which is what makes each field's loss
   // observable rather than mutually cancelling.
   it("restores a state the app is NOT in — both directions, every field", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     const boot = app.currentState();
 
     // ── A: the sandbox, with everything the gate names — a declared branch, a sheet offset and a
@@ -354,7 +372,7 @@ describe("applyState(currentState()) is a fixed point", () => {
   });
 
   it("and carries the VIEW, which no number may depend on", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     const moved: ShellState = {
       ...app.currentState(),
       view: { center: [1.25, -0.5], halfHeight: 42 },
@@ -372,7 +390,7 @@ describe("the round trip is not vacuous", () => {
   // the fixed point above is satisfied by a `currentState` that returns nothing and an `applyState`
   // that does nothing.
   it("the declaration decides the integrand, so dropping it changes the answer", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     declaredKeyhole(root);
     const declared = screen(root);
     app.applyState({ ...app.currentState(), declaration: null });
@@ -386,7 +404,7 @@ describe("the round trip is not vacuous", () => {
   });
 
   it("the sheet decides the value — M5.1d's e^(2πisα), through the shell", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     declaredKeyhole(root);
     const sheet0 = screen(root);
     app.applyState({ ...app.currentState(), branch: { ...app.currentState().branch, sheet: 1 } });
@@ -397,7 +415,7 @@ describe("the round trip is not vacuous", () => {
   });
 
   it("a family binding decides a record's numbers, so a moved one shows", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     openRecord(app, "circle-linear-cos");
     const at2 = screen(root);
     app.applyState({ ...app.currentState(), bindings: { a: 3, b: 1 } });
@@ -426,7 +444,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   const refusal = (root: Element): HTMLElement => q(root, ".linkRefusal");
 
   it("opens the state a link names, not the app's defaults", () => {
-    const wanted = mount();
+    const wanted = mountSandbox();
     openRecord(wanted.app, "log-cubed-keyhole");
     const target = wanted.app.currentState();
     const want = screen(wanted.root);
@@ -443,7 +461,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   });
 
   it("opens a sandbox link carrying a declared factor and a sheet offset", () => {
-    const built = mount();
+    const built = mountSandbox();
     declaredKeyhole(built.root);
     const base = built.app.currentState();
     const target: ShellState = { ...base, branch: { ...base.branch, sheet: 2 } };
@@ -457,7 +475,14 @@ describe("the `#vs=` permalink, at the shell", () => {
   });
 
   it("SHOWS a refusal and keeps its own starting state — it never opens something plausible", () => {
-    const clean = mount();
+    // **The cold start made this test's own claim harder to make, and that is the point of it.**
+    // Its subject is that a link the app cannot honour must not quietly open something ELSE — and
+    // until M8 step 1.8b the app's default was unmistakably not a record, so "still in the sandbox"
+    // was discrimination enough. The default IS a record now, and A6 is exactly the plausible thing
+    // a reader might mistake for what they followed the link for. So the discriminator is no longer
+    // the KIND of state but WHICH record: the app must sit on its own cold start, and specifically
+    // not on the one the bad link named.
+    const clean = mountCold();
     const defaults = clean.app.currentState();
 
     const opened = mount("#vs=" + btoa(JSON.stringify({ v: 1, app: "ci", state: { m: "g", r: "no-such-record" } }))
@@ -466,13 +491,12 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(box.hidden).toBe(false);
     expect(box.textContent).toContain("no-such-record");
     expect(box.textContent).toContain("could not be opened");
-    // And the app itself is exactly where it would have been with no link at all. Compared on the
-    // STATE rather than on the screen, because the refusal box is part of the page — which is the
-    // point, not a discrepancy.
+    // Exactly where it would have been with no link at all. Compared on the STATE rather than on the
+    // screen, because the refusal box is part of the page — which is the point, not a discrepancy.
     expect(opened.app.currentState()).toEqual(defaults);
-    // Nothing of the refused link leaked in: not the mode, not the record.
-    expect(opened.app.currentState().mode).toBe("sandbox");
-    expect(opened.app.currentState().record).toBeNull();
+    expect(opened.app.currentState().record).toBe(COLD_START_RECORD);
+    // Nothing of the refused link leaked in.
+    expect(opened.app.currentState().record).not.toBe("no-such-record");
   });
 
   it("brings an ABSURD camera back into the plane, rather than opening on nothing", () => {
@@ -485,7 +509,7 @@ describe("the `#vs=` permalink, at the shell", () => {
     // The number comes from the defect that prompted this: `clampView` bounded the half-height and
     // passed the centre through, so one `deltaY: 100000` put the camera exactly there — and
     // `syncHash` then minted a permalink to it, which is how the camera reached a link at all.
-    const from = mount();
+    const from = mountSandbox();
     openRecord(from.app, "jordan-cosine-kernel");
     const lost = { ...from.app.currentState(), view: { center: [1e64, -1e64] as const, halfHeight: 200 } };
     const enc = encodeShell(lost);
@@ -503,7 +527,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   });
 
   it("says nothing at all when there is no link", () => {
-    const opened = mount();
+    const opened = mountSandbox();
     expect(refusal(opened.root).hidden).toBe(true);
   });
 
@@ -531,7 +555,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   });
 
   it("writes the address bar on settle, and the result reopens the same state", async () => {
-    const app = mount();
+    const app = mountSandbox();
     openRecord(app.app, "dogbone-inverse-sqrt");
     await settle();
     expect(window.location.hash).toMatch(/^#vs=/);
@@ -550,7 +574,7 @@ describe("the `#vs=` permalink, at the shell", () => {
     // whenever a reader used one. Here `commit` is the only caller and every state change goes
     // through `commit`, so the property is structural rather than five things remembered — and this
     // is the assertion that says so, on the three that used to be missed.
-    const app = mount();
+    const app = mountSandbox();
     app.app.applyState({ ...app.app.currentState(), contrast: "sumZ", scrub: 0.25, iso: true });
     await settle();
     const decoded = decodeShell(window.location.hash);
@@ -569,7 +593,7 @@ describe("the `#vs=` permalink, at the shell", () => {
     // state change goes through one `commit` and `commit` is the only caller of `syncHash`, which is
     // what makes the question about ORDER stop existing; `screen()` cannot see a camera, which is
     // why this reads the hash itself.
-    const app = mount();
+    const app = mountSandbox();
     openRecord(app.app, "keyhole-two-poles");
     app.app.stage().fitContour();
     await settle();
@@ -581,7 +605,7 @@ describe("the `#vs=` permalink, at the shell", () => {
 
   it("uses replaceState, so a session leaves ONE history entry rather than one per change", async () => {
     const before = window.history.length;
-    const app = mount();
+    const app = mountSandbox();
     for (const id of ["circle-poisson", "semicircle-order2", "jordan-strict", "mellin-keyhole"]) {
       openRecord(app.app, id);
     }
@@ -599,7 +623,7 @@ describe("the `#vs=` permalink, at the shell", () => {
     // the STATE, so the card asks `encodeShell` on every render and the control that cannot work is
     // disabled beside the reason — a contour with no recipe whose pieces the pen did not draw
     // either, which is the case M7.2 narrowed this refusal down to.
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     app.applyState({ ...app.currentState(), contourSource: null });
     const share = q(root, '[data-card="share"]');
     expect(textOf(share)).toContain("neither a template nor the pen");
@@ -607,7 +631,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   });
 
   it("but a DRAWN contour does get a link, which is the point of M7.2's wire form", () => {
-    const { root, app } = mount();
+    const { root, app } = mountSandbox();
     const drawn = penContour({ nodes: [{ at: [-2, -2] }, { at: [2, -2] }, { at: [0, 2] }], closed: true });
     app.applyState({ ...app.currentState(), contour: drawn, contourSource: null, sandboxContour: drawn });
     const share = q(root, '[data-card="share"]');
@@ -635,7 +659,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   // `shellMode`, and a link that restored the boolean while the bar went on showing Explore would
   // satisfy a field check and nothing a reader cares about.
   it("carries Worked example through the address bar, into a fresh app", async () => {
-    const built = mount();
+    const built = mountSandbox();
     clickNamed(q(built.root, '[data-testid="mode"]'), "Worked example");
     expect(shellMode(built.app.currentState())).toBe("worked");
     await settle();
@@ -660,7 +684,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   // the pen did not draw either, which is the case the Share card's own test uses, and it reaches
   // `writeHash` because `applyState` commits like every other change.
   it("leaves a good link in the bar when the state stops being linkable", async () => {
-    const { app } = mount();
+    const { app } = mountSandbox();
     app.actions().setExpr("1/(1+z^2)");
     await settle();
     const good = window.location.hash;
@@ -696,11 +720,16 @@ describe("the `#vs=` permalink, at the shell", () => {
     await settle();
     expect(window.location.hash, "the boot commit wrote over the link that was refused").toBe(bad);
 
-    app.actions().setExpr("1/(1+z^4)");
+    // **A FIXTURE, not an expression**, and the cold start is why: the refused link leaves the app on
+    // its own default, which is a record, and a gallery link is `{record, fixture}` and nothing else
+    // (M6.2). Typing in the box would move a field the link does not carry, so the hash would be
+    // replaced by one that looks unchanged and the assertion would pass for no reason.
+    app.actions().setFixture(1);
     await settle();
     expect(window.location.hash).not.toBe(bad);
     const decoded = decodeShell(window.location.hash);
-    expect(decoded?.ok === true && decoded.state.expr).toBe("1/(1+z^4)");
+    expect(decoded?.ok === true && decoded.state.record).toBe(COLD_START_RECORD);
+    expect(decoded?.ok === true && decoded.state.fixture).toBe(1);
   });
 
   // **A link comes through the DOOR, and the door does more than commit.** Mutant
@@ -714,7 +743,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   // output — the attribute the CSS grid reads, so this is the fold a reader would SEE rather than
   // the session field behind it.
   it("opens a worked-example link with its left rail already folded", () => {
-    const built = mount();
+    const built = mountSandbox();
     built.app.applyState({ ...built.app.currentState(), workedExample: true });
     const target = built.app.currentState();
     expect(shellMode(target)).toBe("worked");
@@ -724,7 +753,7 @@ describe("the `#vs=` permalink, at the shell", () => {
     expect(shellMode(opened.app.currentState())).toBe("worked");
     expect(shell.dataset.left, "the link arrived without the mode's own fold").toBe("folded");
     // And the default it had to move off, so the assertion above is not true of every mount.
-    expect(q(mount().root, "main.shell2").dataset.left).toBe("open");
+    expect(q(mountSandbox().root, "main.shell2").dataset.left).toBe("open");
   });
 
   // **One write per settle, which is the whole point of the timer.** Mutant `no-timer-cancel`:
@@ -742,7 +771,7 @@ describe("the `#vs=` permalink, at the shell", () => {
   // Two settles rather than one, so the claim is "one per settle" and not "at most one ever" —
   // which `if (false) writeHash()` would satisfy perfectly.
   it("coalesces a burst of changes into ONE write, and the next burst into one more", async () => {
-    const { app } = mount();
+    const { app } = mountSandbox();
     const spy = vi.spyOn(window.history, "replaceState").mockImplementation(() => undefined);
     try {
       for (const src of ["1/(1+z^2)", "1/(1+z^3)", "1/(1+z^4)", "1/(1+z^5)", "1/(1+z^6)"]) {

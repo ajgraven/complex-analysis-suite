@@ -207,6 +207,38 @@ export function defaultState(contour: Contour): ShellState {
   };
 }
 
+/** The record the app opens on. A6 — `∫dx/(1+x⁴)` by a semicircle — which is `frontRow: 2`. */
+export const COLD_START_RECORD = "semicircle-quartic";
+
+/**
+ * What the app boots into: A6, at its first fixture, in Explore mode.
+ *
+ * **Separate from {@link defaultState}, and the plan said to change that one.** Measuring says
+ * otherwise. `defaultState` is the default STATE — a blank sandbox — and it has callers who all mean
+ * exactly that: the contrast ladder's wrong-way cell, the drill's rungs iii and iv, the codec's
+ * `defaults()`, and every test fixture that wants somewhere neutral to start. Flipping it makes all
+ * of them gallery states, which is 121 of the suite's 2,253 tests and, worse, three PRODUCTION
+ * behaviours that have nothing to do with what the app opens on. Naming the cold start separately
+ * costs one function and leaves `defaultState` meaning what its name says.
+ *
+ * It also makes the plan's own next clause true for free: *"the sandbox's default expression stays
+ * `1/z` on the circle for when Sandbox is chosen"*. That works because `sandboxContour` is set from
+ * the contour handed in, and `toSandbox` reads it — so the reader who presses Sandbox lands on the
+ * circle at `1/z`, which is the state this is built on top of rather than a second declaration of it.
+ *
+ * The CAMERA is not set here: framing needs the resolved contour and a viewport, neither of which
+ * exists until the stage has a size. `mountShell2` fits once after the first commit, and only when
+ * no link was honoured — a link carries the camera its sharer chose (M6.2).
+ */
+export function coldStartState(contour: Contour): ShellState {
+  return {
+    ...defaultState(contour),
+    mode: "gallery",
+    record: COLD_START_RECORD,
+    fixture: 0,
+  };
+}
+
 // ──────────────────────────────────────────────────────────────────────────────────────────────
 // Compiling the sandbox's expression.
 //

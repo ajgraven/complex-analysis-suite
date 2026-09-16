@@ -34,12 +34,28 @@ import { decodeShell, encodeShell } from "../src/shell/viewState.js";
  * height and not the centre), and a later mount that inherits it is 1e64 from every point its
  * pointer events name.
  */
-function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
+/** The app exactly as it opens — a record, since M8 step 1.8b. For tests whose subject is the boot. */
+function mountCold(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
   window.history.replaceState(null, "", window.location.pathname);
   const root = document.createElement("div");
   document.body.replaceChildren(root);
   return { root, app: mountShell2(root) };
+}
+
+/**
+ * The app as a reader finds it, then the Sandbox button.
+ *
+ * **The cold start is a RECORD** (M8 step 1.8b), and most of this file is about the sandbox — the
+ * pen, the template picker, a declared factor, the typed expression. So the helpers take the reader's
+ * own route into it, through `toSandbox` rather than by assembling a state: that is the path that has
+ * to keep working, and it is what hands back `sandboxContour`, which `coldStartState` sets from the
+ * circle it is built on. {@link mountCold} is for the tests whose subject IS the boot.
+ */
+function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
+  const m = mountCold();
+  m.app.actions().toSandbox();
+  return m;
 }
 
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {

@@ -18,7 +18,7 @@ import { clampView } from "../kernel/camera.js";
 import { circleTemplate } from "../engine/contour/templates.js";
 import { reverseContour } from "../engine/contour/edit.js";
 import { TEMPLATES } from "../shell/templates.js";
-import { compile, defaultState, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "../shell/state.js";
+import { coldStartState, compile, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "../shell/state.js";
 import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
@@ -74,7 +74,11 @@ const HASH_SETTLE_MS = 250;
 
 export function mountShell2(root: Element): Shell2Handle {
   const session = defaultSession();
-  let state: ShellState = defaultState(circleTemplate([0, 0], 1.5));
+  // **The cold start is A6, not the sandbox** (M8 step 1.8b). `coldStartState` layers the record on
+  // top of `defaultState`, so the circle at `1/z` is still what `toSandbox` hands back — the reader
+  // who presses Sandbox lands on the state this was built from rather than on a second declaration
+  // of it. `defaultState` itself is untouched, and `state.ts` says why.
+  let state: ShellState = coldStartState(circleTemplate([0, 0], 1.5));
   let compiled: Compiled | null = compile(state.expr);
   let resolution: StateResolution = resolveState(state, compiled);
 
@@ -367,11 +371,19 @@ export function mountShell2(root: Element): Shell2Handle {
     // **The PARKED sandbox contour**, which exists so that opening a record and coming back does not
     // leave a keyhole standing under `1/z`. Null means the reader has never been to the sandbox, in
     // which case the contour on screen is as good a starting point as any.
-    toSandbox: () =>
+    toSandbox: () => {
       commit(
         { ...state, mode: "sandbox", contour: state.sandboxContour ?? state.contour, drill: null },
         "edit",
-      ),
+      );
+      // **And FRAME it**, which it did not, and the cold start is what made that visible. Pressing
+      // Sandbox swaps the contour — the record's, for the circle parked here — which is exactly what
+      // `setTemplate` does, and `setTemplate` fits for the reason that applies here too: the two
+      // curves have no scale in common. From A6's fitted camera the circle is a small mark off to
+      // one side. The camera is not part of what a reader asked to keep when they asked for the
+      // sandbox; a LINK is the case where it is, and that goes through a different door.
+      controller?.fitContour();
+    },
     setContrastsOpen: (open) => {
       session.contrastsOpen = open;
       // The dialog owns its own DOM, its focus and the page's `inert`; the session flag is what the
@@ -654,6 +666,13 @@ export function mountShell2(root: Element): Shell2Handle {
       render2();
     }
   }
+  // **The cold start FRAMES its contour, and a link does not.** A6 runs to R = 4 against a default
+  // half-height of 2, so a bare visit would open on about half of its own argument; the front door
+  // frames for the same reason, and through the same call. A link is the opposite case — it carries
+  // the camera its sharer chose, and reframing would throw that away (M6.2's first finding) — so
+  // this runs only where no link was honoured, which is also why it cannot simply live in
+  // `coldStartState`.
+  if (link?.ok !== true) controller?.fitContour();
   hashReady = true;
 
   /** The door a link, a contrast cell and a drill rung all come through. */

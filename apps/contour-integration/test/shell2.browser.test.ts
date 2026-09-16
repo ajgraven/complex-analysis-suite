@@ -46,7 +46,8 @@ afterEach(() => {
   if (window.location.hash !== "") window.history.replaceState(null, "", window.location.pathname);
 });
 
-function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
+/** The app exactly as it opens — a record, since M8 step 1.8b. For tests whose subject is the boot. */
+function mountCold(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   const root = document.createElement("div");
   // The app's grid needs a box with a size; the browser harness's default body has none, and M7.2
   // spent a slice discovering that a test aimed at an unsized stage is aimed at an artefact.
@@ -55,6 +56,21 @@ function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   const app = mountShell2(root);
   mounted.push(app);
   return { root, app };
+}
+
+/**
+ * The app as a reader finds it, then the Sandbox button.
+ *
+ * **The cold start is a RECORD**, and most of what this file measures is the sandbox's: the drag
+ * that moves a contour, the radius handle, the portrait clearing on a parse failure, the pole ring
+ * at the origin of `1/z`. It goes through `toSandbox` — the reader's own route — rather than
+ * assembling a state, and the Sandbox button frames, so the geometry every pixel assertion below is
+ * aimed at is the one a reader would be looking at.
+ */
+function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
+  const m = mountCold();
+  m.app.actions().toSandbox();
+  return m;
 }
 
 /** Mount straight into the body, so the shell's own sizing is what is measured. */
@@ -72,15 +88,21 @@ const drawn = async (): Promise<void> => {
 };
 
 describe("the new shell in a browser", () => {
-  it("boots over a LIVE phase portrait of the default state", async () => {
-    const { root } = mount();
+  it("boots over a LIVE phase portrait of the record it opens on", async () => {
+    // **Through `mountCold`, because the boot IS the subject.** Under `mount()` this would measure
+    // the sandbox's `1/z` and pass while claiming something about the cold start — which is now A6,
+    // a gallery record, and therefore the path `stageView` did not draw at all until the portrait
+    // was ported (the `run.ast` half). Step 1.1's gate is *"`?shell=new` boots to a LIVE phase
+    // portrait"*, and the state it boots to has changed underneath it.
+    const { root } = mountCold();
     await drawn();
     const gl = root.querySelector<HTMLCanvasElement>("canvas.gl");
     expect(gl).not.toBeNull();
     // The stage really got a WebGL2 context — in jsdom this is where the shell takes its catch.
     expect(gl?.getContext("webgl2")).toBeTruthy();
-    // And it really drew. `1/z` is a pole at the origin, so the portrait sweeps the whole hue
-    // circle; a blank or single-coloured canvas is what a stage that never rendered looks like.
+    // And it really drew. A6 is `1/(1+x⁴)`, four poles off the axes, so the portrait sweeps the hue
+    // circle several times over; a blank or single-coloured canvas is what a stage that never
+    // rendered looks like — and measured, that is exactly what a record used to give: 1 colour.
     // `preserveDrawingBuffer` is on (M6.3's finding), so a read after compositing is not empty.
     const readback = document.createElement("canvas");
     readback.width = 64;

@@ -24,6 +24,7 @@ import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js"
 import { mountShell2 } from "../src/shell2/app.js";
 import { createStageController } from "../src/shell2/stageController.js";
 import { createStageView } from "../src/shell2/stageView.js";
+import { COLD_START_RECORD, shellMode } from "../src/shell/state.js";
 import { defaultSession, resetTransient } from "../src/shell2/session.js";
 import { resolveState } from "../src/shell/state.js";
 
@@ -38,12 +39,28 @@ import { resolveState } from "../src/shell/state.js";
  * height and not the centre), and a later mount that inherits it is 1e64 from every point its
  * pointer events name.
  */
-function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
+/** The app exactly as it opens — a record, since M8 step 1.8b. For tests whose subject is the boot. */
+function mountCold(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
   HTMLCanvasElement.prototype.getContext = (() => null) as never;
   window.history.replaceState(null, "", window.location.pathname);
   const root = document.createElement("div");
   document.body.replaceChildren(root);
   return { root, app: mountShell2(root) };
+}
+
+/**
+ * The app as a reader finds it, then the Sandbox button.
+ *
+ * **The cold start is a RECORD** (M8 step 1.8b), and most of this file is about the sandbox — the
+ * pen, the template picker, a declared factor, the typed expression. So the helpers take the reader's
+ * own route into it, through `toSandbox` rather than by assembling a state: that is the path that has
+ * to keep working, and it is what hands back `sandboxContour`, which `coldStartState` sets from the
+ * circle it is built on. {@link mountCold} is for the tests whose subject IS the boot.
+ */
+function mount(): { root: HTMLElement; app: ReturnType<typeof mountShell2> } {
+  const m = mountCold();
+  m.app.actions().toSandbox();
+  return m;
 }
 
 const q = <T extends HTMLElement = HTMLElement>(root: ParentNode, sel: string): T => {
@@ -325,27 +342,53 @@ describe("the new shell's structure", () => {
     expect(q(root, "canvas.acc").getAttribute("role")).toBe("img");
   });
 
-  it("boots into the sandbox with both rails open and every card titled", () => {
-    const { root, app } = mount();
-    expect(app.currentState().mode).toBe("sandbox");
+  it("boots on A6 in Explore, with both rails open and every card titled", () => {
+    // **Through `mountCold`, and that is the point of the helper.** This test's subject IS the boot,
+    // so it must not go through the Sandbox button the rest of the file takes — under `mount()` it
+    // would pass while asserting `toSandbox`, which is a different claim wearing this one's name.
+    const { root, app } = mountCold();
+    const state = app.currentState();
+    expect(state.mode).toBe("gallery");
+    expect(state.record).toBe(COLD_START_RECORD);
+    expect(state.fixture).toBe(0);
+    expect(shellMode(state), "the cold start opens in a teaching mode rather than Explore").toBe("explore");
+
     const shell = q(root, "main.shell2");
     expect(shell.dataset.left).toBe("open");
     expect(shell.dataset.right).toBe("open");
-    // The Target card is gallery-only; the other five of the left rail are here.
+    // A record has all nine, the Target card included — which is the half that changed, and the
+    // clause that makes this an assertion about the RECORD rather than about any state at all.
     const titles = [...root.querySelectorAll("h2")].map((e) => e.textContent);
     for (const id of [...LEFT_CARDS, ...RIGHT_CARDS]) {
-      if (id === "target") {
-        expect(titles).not.toContain(cardTitle(id));
-        continue;
-      }
       expect(titles, `${id} is missing`).toContain(cardTitle(id));
     }
-    // And the engine actually ran: the bar states what the resolution is.
-    // `data-testid="mode"` NAMES THE MODE CONTROL now, not the scaffold's debug line — which is
-    // what the id always said and what 1.1 spent it on for want of anything else. The property is
-    // the same: the engine ran and the shell knows which state it is in.
+
+    // And the engine actually ran, which is what the boot has to prove: the headline is the ledger's
+    // own sentence for a closing argument. **Not "Hypotheses verified."** — the plan's acceptance
+    // string, which exists nowhere in this app; `HEADLINES.closes` is this, and `result.ts` records
+    // a deliberate decision AGAINST the word "Hypotheses" here, because a browser pass found it
+    // sitting beside the Derivation card's own `Hypotheses` two cards away.
+    expect(q(root, '[data-card="result"] .headline').textContent).toContain("The argument is complete.");
     expect(q(root, '[data-testid="mode"] button[aria-pressed="true"]').textContent).toBe("Explore");
-    expect(q(root, '[data-testid="record"]').textContent).toBe("Choose a record");
+    expect(q(root, '[data-testid="record"]').textContent).not.toBe("Choose a record");
+  });
+
+  it("gives the SANDBOX its circle at 1/z, framed, when the reader asks for it", () => {
+    // The plan's clause that the cold start must not cost: *the sandbox's default expression stays
+    // `1/z` on the circle for when Sandbox is chosen*. It holds because `coldStartState` layers the
+    // record on top of `defaultState`, so `sandboxContour` is still the circle handed in — and the
+    // camera is FRAMED, which `toSandbox` did not do until the cold start made it visible: from A6's
+    // fitted view the circle is a small mark off to one side.
+    const { app } = mountCold();
+    const framed = app.currentState().view.halfHeight;
+    app.actions().toSandbox();
+    const state = app.currentState();
+    expect(state.mode).toBe("sandbox");
+    expect(state.expr).toBe("1/z");
+    expect(state.contourSource?.template).toBe("circle");
+    expect(state.view.halfHeight, "the sandbox kept the record's camera").not.toBe(framed);
+    // The circle has radius 1.5, so a frame of it is nowhere near A6's R = 4.
+    expect(state.view.halfHeight).toBeLessThan(framed);
   });
 
   it("clears the session's transient half on applyState — M7.4's defect, structurally", () => {
