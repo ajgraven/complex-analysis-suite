@@ -323,8 +323,25 @@ describe("the new shell's structure", () => {
     expect(s.gesture).toBe("none");
     expect(s.drillGraded).toBe(false);
     expect(s.hover.piece).toBeNull();
-    // The reader's own preferences are not theirs to lose, so the folded rail survives the link.
+    // The reader's own preferences are not theirs to lose, so a folded rail survives a link that
+    // stays in the same MODE. A link that changes the mode resets the fold instead — the test below
+    // — because a worked example whose left rail arrives open is not the one that was shared.
     expect(s.rails).toEqual({ left: true, right: false });
+  });
+
+  it("resets the fold when the link changes the MODE, and only then", () => {
+    const { app } = mount();
+    const s = app.session();
+    s.rails = { left: true, right: true };
+    // Same mode: the reader keeps what they folded.
+    app.applyState({ ...app.currentState(), expr: "1/(1+z^2)" });
+    expect(s.rails).toEqual({ left: true, right: true });
+    // Into a worked example: the left rail collapses, because that is what the mode IS.
+    app.applyState({ ...app.currentState(), workedExample: true });
+    expect(s.rails).toEqual({ left: true, right: false });
+    // And back out of it, the layout is Explore's again rather than the worked example's.
+    app.applyState({ ...app.currentState(), workedExample: false });
+    expect(s.rails).toEqual({ left: false, right: false });
   });
 
   it("re-renders through one door, keeping the card nodes it already built", () => {

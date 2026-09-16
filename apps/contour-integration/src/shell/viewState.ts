@@ -171,6 +171,13 @@ interface Wire {
    * what is MASKED), so it is filed with the view.
    */
   readonly dr?: readonly [string, number];
+  /**
+   * `workedExample` — the left rail collapsed and every derivation stage open (M8 step 1.7).
+   *
+   * A flag rather than a value with a default, and absent when false, so the common state costs no
+   * bytes. Filed with the view for the reason `dr` is: it decides what is SHOWN and never a number.
+   */
+  readonly we?: 1;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -418,6 +425,9 @@ export function encodeShell(state: ShellState): EncodeResult {
   put("s", state.scrub, d.scrub);
   put("i", state.iso ?? undefined, undefined);
   if (state.drill !== null) wire.dr = [state.drill.task, state.drill.stage] as const;
+  // Optional, and absent when false — a worked example is a thing to share, and the default costs
+  // no bytes. `put` is not used because the wire field is a flag rather than a value with a default.
+  if (state.workedExample) wire.we = 1;
 
   return { ok: true, hash: encodeViewState(APP, wire) };
 }
@@ -703,6 +713,10 @@ export function decodeShell(hashOrLink: string): DecodeResult | null {
       scrub,
       iso,
       drill,
+      // `=== 1` rather than truthiness: the wire is `1` or absent, and a link carrying anything else
+      // there is a link this codec did not mint. `envelope` has already refused a foreign app, so
+      // this is about a hand-edited hash rather than about another tool.
+      workedExample: w.we === 1,
       // The parked sandbox contour is SESSION state, not the problem: a link opens with the contour
       // it names parked as the sandbox's, so coming back from a record lands somewhere meaningful.
       sandboxContour: gallery ? base.contour : contour,

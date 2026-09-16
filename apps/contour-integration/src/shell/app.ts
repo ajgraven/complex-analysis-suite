@@ -1873,6 +1873,10 @@ export function mountApp(root: Element): ShellHandle {
       // The box, verbatim — under a declaration this is the COFACTOR `R(z)` and not the integrand.
       expr: input.value,
       declaration,
+      // The OLD shell has no worked-example mode; it reports the field's default so that a state
+      // projected here and applied to shell2 is a state shell2 understands. It goes away at 1.12
+      // with the rest of this file.
+      workedExample: false,
       beforeDeclaration: beforeDeclarationSrc,
       branch,
       contour,

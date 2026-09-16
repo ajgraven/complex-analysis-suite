@@ -17,7 +17,7 @@ import { Frac } from "@cas/exact";
 import { circleTemplate } from "../engine/contour/templates.js";
 import { reverseContour } from "../engine/contour/edit.js";
 import { TEMPLATES } from "../shell/templates.js";
-import { compile, defaultState, resolveState, withParam, type Compiled, type ShellState, type StateResolution } from "../shell/state.js";
+import { compile, defaultState, resolveState, shellMode, withParam, type Compiled, type ShellMode, type ShellState, type StateResolution } from "../shell/state.js";
 import type { Family } from "../families/schema.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { StageDraw } from "./stageView.js";
@@ -274,6 +274,40 @@ export function mountShell2(root: Element): Shell2Handle {
       });
     },
 
+    setMode: (mode) => {
+      // Whichever field the derivation reads, and only that one. Leaving Drill means clearing the
+      // rung; entering it without a task is not a mode this action can express, so a reader gets
+      // there through a drill card or a link (step 1.7's drill panel owns the task choice).
+      if (mode === "drill") {
+        if (state.drill === null) {
+          say("Choose a drill task from the panel.", "⚠");
+          return;
+        }
+        commit({ ...state, workedExample: false }, "edit");
+        return;
+      }
+      commit({ ...state, drill: null, workedExample: mode === "worked" }, "edit");
+    },
+    setRail: (side, folded) => {
+      session.rails = { ...session.rails, [side]: folded };
+      render2();
+    },
+    // **The PARKED sandbox contour**, which exists so that opening a record and coming back does not
+    // leave a keyhole standing under `1/z`. Null means the reader has never been to the sandbox, in
+    // which case the contour on screen is as good a starting point as any.
+    toSandbox: () =>
+      commit(
+        { ...state, mode: "sandbox", contour: state.sandboxContour ?? state.contour, drill: null },
+        "edit",
+      ),
+    setContrastsOpen: (open) => {
+      session.contrastsOpen = open;
+      render2();
+    },
+    applyState: (next) => applyStateNow(next),
+    openFrontDoor: () => say("The worked-example picker arrives at step 1.8.", "⚠"),
+    notify: (text, level) => say(text, level),
+
     copyFigure: () => {
       if (typeof ClipboardItem === "undefined" || typeof navigator.clipboard?.write !== "function") {
         say("This browser cannot copy images — use Save figure.", "⚠");
@@ -305,10 +339,26 @@ export function mountShell2(root: Element): Shell2Handle {
     return new Blob([buf], { type: "image/png" });
   }
 
-  /** Say what just happened, and redraw the rail that shows it. Transient: a link clears it. */
+  /** Say what just happened, and redraw. Transient: a link clears it. */
   function say(text: string, level: "=" | "≤" | "≈" | "⚠"): void {
     session.notice = { text, level };
-    patch(right, render(state, resolution, session, actions, polesNow()).right);
+    render2();
+  }
+
+  /**
+   * Re-render the chrome without recomputing.
+   *
+   * A rail fold, a dialog and a notice are all SESSION changes: they cannot move a number, so
+   * putting them through `commit` would re-resolve the whole state to redraw a panel. The stage and
+   * the strip are untouched for the same reason.
+   */
+  function render2(): void {
+    const out = render(state, resolution, session, actions, polesNow());
+    shell.dataset.left = out.rails.left;
+    shell.dataset.right = out.rails.right;
+    patch(bar, out.bar);
+    patch(left, out.left);
+    patch(right, out.right);
   }
 
   /**
@@ -417,18 +467,33 @@ export function mountShell2(root: Element): Shell2Handle {
   const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => scheduleDraw());
   observer?.observe(stageWrap);
 
+  /** The door a link, a contrast cell and a drill rung all come through. */
+  function applyStateNow(next: ShellState): void {
+    // M7.4's decision, structural here: a restored state inherits no half-drawn path, no grading
+    // that would unmask a rung's own answer, and no hover pointing at a piece it does not have.
+    resetTransient(session);
+    // And the CONTROLLER's own locals, which `resetTransient` cannot see — M7.4's defect exactly.
+    controller?.reset();
+    // **The rails follow the MODE, and only when the mode CHANGES.** 1.1's test says a reader's
+    // folded panel is not theirs to lose on a link, and 1.7's spec says `applyState` resets the
+    // fold to the mode's default. Both are right about different links: a worked example whose left
+    // rail arrives open is not the worked example that was shared, and an Explore link that
+    // unfolded a panel the reader had deliberately folded is taking something from them for no
+    // reason. So the reset happens exactly when the layout is part of what the link MEANS.
+    const wasMode = shellMode(state);
+    const nextMode = shellMode(next);
+    if (nextMode !== wasMode) session.rails = railsFor(nextMode);
+    commit(next, "link");
+  }
+
+  /** What each mode opens with. Explore is both rails; a worked example is the derivation. */
+  function railsFor(mode: ShellMode): { left: boolean; right: boolean } {
+    return { left: mode === "worked", right: false };
+  }
+
   return {
     currentState: () => state,
-    applyState: (next: ShellState) => {
-      // M7.4's decision, structural here: a restored state inherits no half-drawn path, no grading
-      // that would unmask a rung's own answer, and no hover pointing at a piece it does not have.
-      resetTransient(session);
-      // The session's transient fields are cleared by `resetTransient`; the CONTROLLER's are not,
-      // because they are its own locals — M7.4's defect, answered at the door rather than trusted to
-      // be remembered. A restored state must not arrive holding a handle from a contour it lacks.
-      controller?.reset();
-      commit(next, "link");
-    },
+    applyState: applyStateNow,
     session: () => session,
     resolution: () => resolution,
     actions: () => actions,

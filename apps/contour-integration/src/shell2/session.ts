@@ -102,6 +102,13 @@ export interface Session {
    * vocabulary rather than a severity, so a notice cannot claim more than the app knows.
    */
   notice: { readonly text: string; readonly level: "=" | "≤" | "≈" | "⚠" } | null;
+  /**
+   * Whether the contrasts dialog is open.
+   *
+   * SESSION, not state: a dialog is where the reader's hands are, and a permalink that reopened one
+   * would hand someone else a modal over the thing they came to look at.
+   */
+  contrastsOpen: boolean;
 }
 
 /**
@@ -125,6 +132,7 @@ export function defaultSession(): Session {
     open: {},
     figureTheme: "light",
     notice: null,
+    contrastsOpen: false,
   };
 }
 
@@ -146,4 +154,5 @@ export function resetTransient(session: Session): void {
   session.redo = [];
   session.drillGraded = false;
   session.notice = null;
+  session.contrastsOpen = false;
 }

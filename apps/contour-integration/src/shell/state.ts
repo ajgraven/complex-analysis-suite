@@ -137,6 +137,22 @@ export interface ShellState {
    * also what puts it under M6.2's round-trip-by-verdict test.
    */
   readonly drill: DrillState | null;
+  /**
+   * Whether the reader is in **Worked example** mode — M8 step 1.7.
+   *
+   * **A VIEW field**, filed beside `iso` and `contrast` rather than with the problem: it collapses
+   * the left rail and opens every derivation stage, and cannot change a number. It is in the state
+   * and in the codec because a worked example is a thing to SHARE — the same reason `drill` is —
+   * and because the mode has to be one fact rather than a shell local the codec cannot see.
+   *
+   * The mode itself is DERIVED and never stored: `drill !== null` wins, then this, then Explore.
+   * Storing three booleans for one choice is how two of them come to be true at once.
+   *
+   * (The plan's §1.7 writes this as `session.workedExample` in one clause and as a `ShellState`
+   * field in the next. The state is the one that can be linked to, which is what the same paragraph
+   * asks for, so the state is where it is.)
+   */
+  readonly workedExample: boolean;
 
   // ── session ────────────────────────────────────────────────────────────────────────────────
   /** The sandbox's contour, parked while a record is open. */
@@ -186,6 +202,7 @@ export function defaultState(contour: Contour): ShellState {
     scrub: 1,
     iso: null,
     drill: null,
+    workedExample: false,
     sandboxContour: contour,
   };
 }
@@ -308,6 +325,14 @@ export function withParam(
       return { ...state, contour: moved, sandboxContour: moved };
     }
   }
+}
+
+/** Which of the three the reader is in. DERIVED, so two of them can never be true at once. */
+export type ShellMode = "explore" | "worked" | "drill";
+
+export function shellMode(state: ShellState): ShellMode {
+  if (state.drill !== null) return "drill";
+  return state.workedExample ? "worked" : "explore";
 }
 
 /** The declared order, read off the branch point the factor sits on — never stored twice. */

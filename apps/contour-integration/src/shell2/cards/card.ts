@@ -13,7 +13,7 @@ import { cardTitle, type CardId } from "../../engine/vocabulary.js";
 import type { BranchChoice } from "../../kernel/branch/model.js";
 import type { PoleReport } from "../../kernel/poles.js";
 import type { DeclarationState } from "../../shell/state.js";
-import type { ShellState, StateResolution } from "../../shell/state.js";
+import type { ShellMode, ShellState, StateResolution } from "../../shell/state.js";
 import { h, type Child, type Desc } from "../dom.js";
 import type { Session } from "../session.js";
 
@@ -95,6 +95,35 @@ export interface ShellActions {
   readonly saveFigure: (theme: "dark" | "light" | "print") => void;
   /** The same plate, onto the clipboard. Refuses by name where the browser cannot. */
   readonly copyFigure: () => void;
+
+  // ── modes, the bar and the panels (step 1.7) ──────────────────────────────────────────────
+  /**
+   * Put the app in a mode.
+   *
+   * The mode is DERIVED from the state (`shellMode`), so this writes whichever field that
+   * derivation reads: Drill sets `drill`, Worked example sets `workedExample`, Explore clears
+   * both. One action rather than three toggles, because two toggles can be true at once and a
+   * derived mode cannot.
+   */
+  readonly setMode: (mode: ShellMode) => void;
+  /** Fold or unfold a rail. The reader's own preference, so it survives a link. */
+  readonly setRail: (side: "left" | "right", folded: boolean) => void;
+  /** Leave whatever record is open and go to the sandbox, keeping the parked sandbox contour. */
+  readonly toSandbox: () => void;
+  /** Open or shut the contrasts dialog. */
+  readonly setContrastsOpen: (open: boolean) => void;
+  /** Apply a whole state — a contrast cell, a drill rung, a front-door card. */
+  readonly applyState: (next: ShellState) => void;
+  /**
+   * Open the front door — step 1.8 builds it.
+   *
+   * Declared now and **deliberately inert**, so the bar's record button exists in the shape it will
+   * keep. It announces that it is not built rather than doing nothing silently: a control that
+   * swallows a click teaches a reader the app is broken.
+   */
+  readonly openFrontDoor: () => void;
+  /** Say something in the honest-labelling vocabulary — the Share card's notice channel, shared. */
+  readonly notify: (text: string, level: "=" | "≤" | "≈" | "⚠") => void;
 }
 
 /** What every card is handed. */

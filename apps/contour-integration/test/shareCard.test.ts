@@ -52,6 +52,13 @@ function spyActions(): ShellActions & { calls: string[] } {
     copyLink: () => calls.push("copyLink"),
     saveFigure: (t) => calls.push(`saveFigure:${t}`),
     copyFigure: () => calls.push("copyFigure"),
+    setMode: (m) => calls.push(`mode:${m}`),
+    setRail: (side, folded) => calls.push(`rail:${side}:${folded}`),
+    toSandbox: () => calls.push("toSandbox"),
+    setContrastsOpen: (open) => calls.push(`contrasts:${open}`),
+    applyState: () => calls.push("applyState"),
+    openFrontDoor: () => calls.push("frontDoor"),
+    notify: (text, level) => calls.push(`notify:${level}:${text}`),
   };
 }
 
