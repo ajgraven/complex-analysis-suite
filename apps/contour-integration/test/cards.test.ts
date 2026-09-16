@@ -14,6 +14,8 @@ import { circleTemplate, semicircleTemplate } from "../src/engine/contour/templa
 import { penContour } from "../src/engine/contour/pen.js";
 import { addBranchPoint, setOrder, setShadow } from "../src/engine/branchEdit.js";
 import { LEFT_CARDS, RIGHT_CARDS, roleLabel } from "../src/engine/vocabulary.js";
+import { citationLine } from "../src/families/describe.js";
+import { FAMILIES } from "../src/families/index.js";
 import {
   compile,
   defaultState,
@@ -476,6 +478,24 @@ describe("the Branch cuts card, in shadow mode", () => {
     expect(rail(shadowed).host.querySelector('[data-card="cuts"]')?.textContent ?? "").toContain(
       "switch this off to build it",
     );
+  });
+});
+
+describe("citationLine", () => {
+  it("omits the dash when a citation has no covering phrase — which most of the corpus does", () => {
+    // The sweep found this: `cite-always-dash` — dropping the empty-text branch — survived, because
+    // nothing asserted the shape of a citation with no gloss. It is not an edge case: A6's three
+    // citations all carry `text: ""`, so the cold start's own Target card takes this branch three
+    // times, and the mutant prints `Brown–Churchill, §79 — ` with a dash and nothing after it.
+    expect(citationLine({ book: "Brown–Churchill", where: "§79", text: "" })).toBe("Brown–Churchill, §79");
+    expect(citationLine({ book: "Ahlfors", where: "Ch. 4 §5.3", text: "Jordan's lemma" })).toBe(
+      "Ahlfors, Ch. 4 §5.3 — Jordan's lemma",
+    );
+    // And it is the corpus's common case rather than a contrived one, measured over every record.
+    const all = FAMILIES.flatMap((f) => f.description.citations);
+    const bare = all.filter((c) => c.text === "");
+    expect(bare.length, "no record cites without a gloss, so the branch is unreachable").toBeGreaterThan(0);
+    for (const c of bare) expect(citationLine(c), `${c.book} ${c.where}`).not.toMatch(/—\s*$/);
   });
 });
 

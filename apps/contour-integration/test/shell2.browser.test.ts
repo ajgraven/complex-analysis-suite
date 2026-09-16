@@ -687,6 +687,35 @@ describe("the cold start's camera", () => {
     expect(minY, "the top of the arc is clipped — the camera never framed it").toBeGreaterThan(0);
     expect(maxY, "the contour runs off the bottom of the stage").toBeLessThan(ink.height - 1);
   });
+
+  it("FRAMES the record a front-door card opens, the way the cold start frames its own", async () => {
+    // The sweep's `door-no-fit`: dropping `controller?.fitContour()` from the front door's `apply`
+    // killed nothing. A reader who opens a card has chosen no camera, so the panel's door fits —
+    // and `applyStateNow` deliberately does NOT, because a LINK carries the camera its sharer chose
+    // (M6.2). Two doors, two different right answers, and only one of them was pinned.
+    //
+    // Driven from a camera deliberately unlike any record's, so "it ends up framed" cannot be
+    // inherited from where it started.
+    const { root, app } = mountCold();
+    await drawn();
+    app.applyState({ ...app.currentState(), view: { center: [40, 40], halfHeight: 0.2 } });
+    await drawn();
+    expect(app.currentState().view.halfHeight).toBe(0.2);
+
+    // The reader's own route: the bar's record button, then a card.
+    root.querySelector<HTMLButtonElement>('[data-testid="record"]')?.click();
+    await drawn();
+    const card = root.querySelector<HTMLButtonElement>('[role="dialog"] [data-record] [data-door]');
+    expect(card, "the front door drew no cards to open").not.toBeNull();
+    card?.click();
+    await drawn();
+
+    const view = app.currentState().view;
+    expect(view.halfHeight, "the card opened under the camera the reader happened to be on").not.toBe(0.2);
+    // Framed on the record it opened, not merely changed: its contour has to be on screen.
+    expect(Math.hypot(view.center[0] - 40, view.center[1] - 40)).toBeGreaterThan(1);
+    expect(view.halfHeight).toBeGreaterThan(1);
+  });
 });
 
 describe("the phase portrait, under a record", () => {
