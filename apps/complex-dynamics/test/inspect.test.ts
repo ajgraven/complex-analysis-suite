@@ -173,3 +173,55 @@ describe("findNucleus", () => {
     expect(findNucleus(bar, O, 2, [-0.9, 0.1])).toBeNull();
   });
 });
+
+// ── WP2 / I1 (review 2026-09-16): the exterior distance estimate ──────────────────────────────
+// It used to stop iterating the moment `escape(z, c)` fired — which is exactly where |z| is
+// smallest and ln|z| is closest to zero, so the quotient was noise. At the default `abs(z) > 2`
+// the estimate at c = −2.01 came back 70× too large. It now carries the orbit on to DE_RADIUS,
+// and the leading ½ is gone (it was a systematic 2× under-read and contradicted the README).
+//
+// Truths: the unit disk is analytic (K for c = 0 is |z| ≤ 1); the real tip of M is exactly −2;
+// the cardioid distances were computed by minimising |c − (e^{iθ}/2 − e^{2iθ}/4)| over θ to
+// machine precision — note these are NOT the naive "0.26 − 0.25" values, because the cusp wraps
+// to the RIGHT of ¼, so c = 0.26 is 1.96e-3 from M rather than 1e-2.
+describe("inspect — the exterior distance estimate is honest", () => {
+  const ratio = (got: number | null, truth: number): number => (got ?? NaN) / truth;
+
+  it("is exact on the one case that has an exact answer (K = the unit disk, c = 0)", () => {
+    // Nothing else pins the CONSTANT: the disk is where d ≈ |z|ln|z|/|z'| is an equality in the
+    // limit, so a stray factor shows up here and nowhere else. The old ½ read 0.502.
+    expect(ratio(inspect(F, ESC, "dyn", [1.01, 0], [0, 0]).distance, 0.01)).toBeCloseTo(1, 1);
+    expect(ratio(inspect(F, ESC, "dyn", [1.0001, 0], [0, 0]).distance, 1e-4)).toBeCloseTo(1, 1);
+  });
+
+  it("stays inside the Koebe factor-of-4 band on the parameter plane", () => {
+    // d/4 ≤ true ≤ 4d is a THEOREM, not slack in the implementation — no constant makes this
+    // sharp, which is why the row is labelled ≈.
+    const cases: Array<[string, [number, number], number]> = [
+      ["real tip c = −2.01", [-2.01, 0], 1.0e-2],
+      ["cusp c = 0.26", [0.26, 0], 1.9612e-3],
+      ["cusp c = 0.2501", [0.2501, 0], 1.9996e-6],
+      ["c = 0.3", [0.3, 0], 2.0412e-2],
+    ];
+    for (const [name, c, truth] of cases) {
+      const r = ratio(inspect(F, ESC, "param", O, c).distance, truth);
+      expect(r, `${name}: estimate/truth = ${r}`).toBeGreaterThan(0.25);
+      expect(r, `${name}: estimate/truth = ${r}`).toBeLessThan(4);
+    }
+  });
+
+  it("no longer reads 70× high at the real tip (the defect this closes)", () => {
+    // The specific number from the review. Stopping at the predicate gave 0.70 for a true 0.01.
+    const d = inspect(F, ESC, "param", O, [-2.01, 0]).distance ?? NaN;
+    expect(d).toBeLessThan(0.1); // 10× the truth; the old code returned ~0.70
+  });
+
+  it("reports nothing when the predicate fires on something other than divergence", () => {
+    // The magnet family escapes on CONVERGENCE to its fixed point z = 1, so |z| stays bounded and
+    // an EXTERIOR distance estimate is meaningless there. Silence beats a confident wrong number.
+    const magnetF = parse("((z^2+c-1)/(2*z+c-2))^2");
+    const magnetEsc = parse("if(abs(z)>3,true,abs(z-1)<0.001)");
+    const r = inspect(magnetF, magnetEsc, "dyn", [1.0001, 0], [1.5, 0.5]);
+    expect(r.distance).toBeNull();
+  });
+});

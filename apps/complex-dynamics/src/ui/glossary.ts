@@ -126,7 +126,7 @@ export const GLOSSARY: GlossaryEntry[] = [
   {
     id: "distance-estimate",
     term: "Distance estimate",
-    defn: "An estimate of the distance from a point to the set, from the orbit and its running derivative — used to draw crisp, resolution-independent boundary filaments.",
+    defn: "An estimate of the distance from a point to the set, from the orbit and its running derivative — used to draw crisp, resolution-independent boundary filaments, and reported for an inspected escaping point. It is an estimate within a factor of a few and is always labelled ≈: the Koebe ¼ theorem places the true distance between d/4 and 4d. Measured on cases with an exact answer it runs from about 0.46× the truth just outside the cardioid cusp to about 2× at the real tip c = −2, and is exact on the unit disk (c = 0).",
     latex: "d \\approx \\frac{|z|\\,\\log|z|}{|z'|}",
   },
   {

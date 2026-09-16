@@ -106,6 +106,18 @@ export function fatouComponentType(
 }
 
 const MAX_DE_ITER = 1024; // cap for the CPU distance-estimate loop
+/**
+ * Bailout for the exterior distance estimate, which is NOT the escape predicate's bailout.
+ *
+ * `escape(z, c)` decides *whether* the point escapes; the formula d ≈ |z|·ln|z| / |z′| then needs
+ * |z| far past that, because at |z| barely over the predicate's radius `ln|z|` is almost zero and
+ * the quotient is noise. Measured against three cases with an analytically known distance: at the
+ * default `abs(z) > 2` the estimate at c = −2.01 (true d = 0.01, the real tip) came out **70×** too
+ * large; carrying the orbit on to |z| > 1e4 fixes it, and everything is fully converged by 1e6 —
+ * the ratios do not move between 1e4 and 1e10, so this is headroom, not a tuned constant. For z²+c
+ * the modulus squares each step, so reaching 1e6 from 2 costs about five extra iterations.
+ */
+const DE_RADIUS = 1e6;
 const SETTLE = 1024; // iterations to land on the attractor before sampling the cycle
 
 const cabs = (z: Complex): number => Math.hypot(z[0], z[1]);
@@ -245,8 +257,23 @@ function derivatives(
 }
 
 /**
- * Exterior distance estimate d ≈ |z|·log|z| / |D|, carrying the running derivative
+ * Exterior distance estimate d ≈ |z|·ln|z| / |D|, carrying the running derivative
  * D = ∂z/∂c (parameter plane) or ∂z/∂z₀ (dynamical plane) alongside the orbit.
+ *
+ * **It is an estimate within a factor of a few, and that is a theorem rather than a defect.** The
+ * Koebe ¼ bound places the true distance in [d/4, 4d]; measured here on cases with an exact answer,
+ * the ratio runs from 0.46 (just outside the cardioid cusp) to 1.99 (at the real tip c = −2), and is
+ * 1.005 on the one case that is analytically exact — the unit disk, K for c = 0. The caller must
+ * label it `≈`; no constant makes it sharp.
+ *
+ * The leading ½ this function used to carry is gone: it made the estimate a systematic 2× UNDER-read
+ * (0.50 on the unit disk, where the formula is exact), and it contradicted the app's own README and
+ * Methods section, both of which document `d ≈ |z|·log|z| / |z′|`. The GPU colouring modes keep their
+ * own ½ — there it only scales a screen-space ratio and changes no reported number.
+ *
+ * Returns null unless the orbit genuinely diverges to {@link DE_RADIUS}: a predicate that fires on
+ * something other than divergence (the magnet family escapes on CONVERGENCE to its fixed point z = 1)
+ * leaves |z| bounded, and the exterior estimate means nothing there.
  */
 function escapeDistance(
   fAst: Node,
@@ -261,18 +288,24 @@ function escapeDistance(
   const esc = getEscapeFn(escapeAst, fAst, a);
   let z: Complex = [z0[0], z0[1]];
   let der: Complex = plane === "param" ? [0, 0] : [1, 0]; // D₀ = 0 (param), z′₀ = 1 (dyn)
+  let escaped = false;
   for (let k = 0; k < MAX_DE_ITER; k++) {
-    if (esc(z, c)) break;
+    if (!escaped && esc(z, c)) escaped = true;
+    // Keep going PAST the predicate until the modulus is large enough for the formula to mean
+    // something. (The old loop stopped at the predicate, which is where ln|z| is smallest.)
+    if (escaped && cabs(z) > DE_RADIUS) break;
     // Advance the derivative at the current iterate, before advancing z.
     const step = C.mul(deriv.fz(z, c), der);
     der = plane === "param" ? C.add(step, deriv.fc(z, c)) : step;
     z = f(z, c);
     if (!Number.isFinite(z[0]) || !Number.isFinite(z[1])) break;
+    if (!Number.isFinite(der[0]) || !Number.isFinite(der[1])) break; // |D| overflowed → no estimate
   }
   const az = cabs(z);
   const ad = cabs(der);
-  if (az <= 1 || ad === 0 || !Number.isFinite(ad)) return null;
-  return (0.5 * az * Math.log(az)) / ad;
+  // Require a genuine divergence, not merely that the predicate fired (see the note above).
+  if (!escaped || az <= DE_RADIUS || ad === 0 || !Number.isFinite(ad)) return null;
+  return (az * Math.log(az)) / ad;
 }
 
 /** Classify and measure the orbit at a clicked point. See the module comment for plane semantics. */

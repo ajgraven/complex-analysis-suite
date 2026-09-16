@@ -416,7 +416,11 @@ function showInspect(info: InspectResult, point: Vec2, plane: FractType): void {
       ]);
     }
   }
-  if (info.distance !== null) rows.push(["Distance to set", info.distance.toExponential(2)]);
+  // `≈`, and not decorative: the exterior estimate is only sharp to within a factor of a few
+  // (Koebe ¼ puts the truth in [d/4, 4d]; measured, 0.46×–1.99× on cases with an exact answer).
+  // It used to print as a bare number. (WP2/I1, review 2026-09-16.)
+  if (info.distance !== null)
+    rows.push(["Distance to set", `≈ ${info.distance.toExponential(2)}`]);
 
   const body = byId("inspector-body");
   body.replaceChildren();
@@ -6040,14 +6044,19 @@ function init(): void {
       byId(id).textContent = text;
     };
     if (res.isRing && res.rotationNumber !== null && res.modulus !== null) {
-      set("herman-status", "Ring confirmed");
+      // "detected (≈)", not "confirmed": this is a numerical orbit test over finitely many seed
+      // radii and finitely many iterations, so it can neither certify a ring nor rule one out.
+      // It used to read "Ring confirmed" beside two ≈ values. (WP2/I2, review 2026-09-16.)
+      set("herman-status", "Ring detected (≈)");
       set("herman-rotation", `≈ ${res.rotationNumber.toFixed(6)}`); // numerically estimated, not exact
       set("herman-modulus", `≈ ${res.modulus.toFixed(4)}`);
       set(
         "herman-annulus",
         `${(res.rInner as number).toFixed(3)} – ${(res.rOuter as number).toFixed(3)}`,
       );
-      byId("herman-note").textContent = "";
+      byId("herman-note").textContent =
+        "Numerical: the probed orbits stay bounded, do not close up on a cycle, and pass the " +
+        "weighted-Birkhoff quasiperiodicity test. Not a proof.";
       dv.setHermanCurves(res.curves);
       showToast(
         `Herman ring: rotation ${res.rotationNumber.toFixed(4)}, modulus ${res.modulus.toFixed(3)}.`,
