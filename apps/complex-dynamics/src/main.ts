@@ -110,7 +110,6 @@ import {
   type SigmaViewState,
 } from "./state/schwarzState";
 import { decodeLink, validateEnvelope, type Envelope, type SchwarzMap } from "@cas/interchange";
-import { runWithFatalBoundary } from "@cas/ui";
 import {
   envelopeToMapSpec,
   mapSpecToExpr,
@@ -1037,7 +1036,13 @@ function beginExport(label: string): {
 }
 
 /** Build both plots and wire all controls. Throws if WebGL2 is unavailable. */
-function init(): void {
+/**
+ * Build the whole app into the document. Exported so `test/shell.test.ts` can mount it under jsdom:
+ * the page is ordinary DOM apart from the two WebGL2 canvases, and those already take a guarded path
+ * when `getContext` returns null. The boot call that used to sit at the bottom of this file lives in
+ * `boot.ts`, so importing this module has no side effect beyond the CSS. (WP3, review 2026-09-16.)
+ */
+export function init(): void {
   // Smaller default render resolution on a phone (500 on desktop/tablet) — see initialRes(). Seed
   // the canvas-size inputs to match so the serialized state agrees; a shared view still overrides.
   const res0 = initialRes(window.innerWidth);
@@ -5065,14 +5070,14 @@ function init(): void {
     const reIn = document.getElementById("schwarz-center-re") as HTMLInputElement | null;
     const imIn = document.getElementById("schwarz-center-im") as HTMLInputElement | null;
     const zoomIn = document.getElementById("schwarz-zoom") as HTMLInputElement | null;
-    const applyBtn = document.getElementById("schwarz-view-apply");
+    const schwarzApplyBtn = document.getElementById("schwarz-view-apply");
     const resetBtn = document.getElementById("schwarz-view-reset");
-    if (reIn && imIn && zoomIn && applyBtn && resetBtn) {
+    if (reIn && imIn && zoomIn && schwarzApplyBtn && resetBtn) {
       const apply = (): void => {
         schwarzView = parseSchwarzViewInput(reIn.value, imIn.value, zoomIn.value, schwarzView);
         scheduleSchwarzPaint();
       };
-      applyBtn.addEventListener("click", apply);
+      schwarzApplyBtn.addEventListener("click", apply);
       // Enter in any field applies (matches the standard plots' center/zoom fields).
       for (const el of [reIn, imIn, zoomIn]) {
         el.addEventListener("keydown", (e) => {
@@ -6894,17 +6899,3 @@ function init(): void {
     };
   }
 }
-
-// Run init inside @cas/ui's shared fatal-error boundary (ADR-0028, U1): a throw shows the WebGL2-aware
-// banner in #webgl-error and the boot overlay is always removed — the same behavior this file used to
-// implement inline, now the shell primitive every app shares.
-runWithFatalBoundary(init, {
-  bannerId: "webgl-error",
-  bootOverlayId: "boot-loading",
-  onError: (err) => console.error("Failed to initialize the visualizer:", err),
-  webglMessage:
-    "This visualizer needs WebGL2, which isn't available in your browser. " +
-    "Try a recent version of Chrome, Firefox, Edge, or Safari 15+, and make sure " +
-    "hardware acceleration is enabled.",
-  genericMessage: "Something went wrong starting the visualizer. See the browser console for details.",
-});

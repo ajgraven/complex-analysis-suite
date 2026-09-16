@@ -708,14 +708,17 @@ export function computeJuliaImageMetrics(opts: {
   rigorousConnectivity: boolean;
   size: number;
 }): JuliaImageMetrics {
-  const { fAst, escAst, a, c, centerX, centerY, zoom, boundingRadius, escapes, size } = opts;
+  // `boundingRadius:` is aliased because the module also EXPORTS a `boundingRadius` function; the
+  // destructured number was shadowing it inside this whole body. (WP3 / no-shadow.)
+  const { fAst, escAst, a, c, centerX, centerY, zoom, escapes, size } = opts;
+  const { boundingRadius: boundingR } = opts;
 
-  if (boundingRadius !== null) {
+  if (boundingR !== null) {
     // Monic z^d + c: the bounding disk encloses the whole set exactly; the symmetry / connectivity /
     // bounding rows stay analytic (omitted here so the caller leaves them untouched).
-    const mask = interiorMask(fAst, escAst, c, a, 0, 0, boundingRadius, size, 150);
+    const mask = interiorMask(fAst, escAst, c, a, 0, 0, boundingR, size, 150);
     const interior = countInterior(mask);
-    const cell = (2 * boundingRadius) / size;
+    const cell = (2 * boundingR) / size;
     const bd = boxCountDimension(mask, size);
     const boundaryCells = countInterior(boundaryMask(mask, size));
     return {

@@ -199,7 +199,7 @@ describe("internalAddressFromAngle (the inverse: external angle → internal add
 });
 
 describe("renormalizationTower / formatTower (the tuning tower of an internal address)", () => {
-  const sat = (a: number[]): boolean[] => renormalizationTower(a).map((s) => s.satellite);
+  const sat = (addr: number[]): boolean[] => renormalizationTower(addr).map((s) => s.satellite);
 
   it("classifies each step satellite (Sᵢ | Sᵢ₊₁) vs primitive, matching known components", () => {
     expect(sat([1, 3])).toEqual([true]); // rabbit — ×3 satellite bulb of the cardioid
