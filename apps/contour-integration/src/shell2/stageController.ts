@@ -12,7 +12,7 @@
 import { applyBranchGrab, branchHandles, sameBranchGrab, type BranchHandle } from "../engine/branchEdit.js";
 import { nearestHandle, onContour, radiusDragValue, translateContour, type Handle } from "../engine/contour/edit.js";
 import { bulgeFromApex, penContour } from "../engine/contour/pen.js";
-import { panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
+import { clampView, panBy, scale, screenToPlot, zoomAt, type View, type Viewport } from "../kernel/camera.js";
 import { pointAt, type Cx, type Resolved } from "../kernel/geom.js";
 import type { PoleReport } from "../kernel/poles.js";
 import type { ShellState, StateResolution } from "../shell/state.js";
@@ -29,8 +29,16 @@ const GRAB_PX = 11;
  * own arithmetic loses the contour entirely and the only way back is a reload — a dead end a reader
  * cannot see coming and cannot undo.
  */
-const HALF_HEIGHT_MIN = 0.05;
-const HALF_HEIGHT_MAX = 200;
+/**
+ * How much ONE wheel event may zoom.
+ *
+ * The PHYSICAL bound, and it is separate from {@link clampView}'s because it answers a different
+ * question. A wheel notch is `deltaY` of about ±100, so a real event asks for about 1.16× and this
+ * is four notches at once; past that the event is not a gesture. Clamped BEFORE the zoom, not after
+ * it: `zoomAt` folds the factor into the centre as well, so a clamp applied to the result has
+ * already lost where the reader is.
+ */
+const WHEEL_FACTOR_MAX = 4;
 
 /** What the arrows currently act on. */
 type Grab =
@@ -327,11 +335,6 @@ export function createStageController(input: StageControllerInput): StageControl
 
   // ── the camera ──────────────────────────────────────────────────────────────────────────────
 
-  const clampView = (v: View): View => ({
-    center: v.center,
-    halfHeight: Math.min(HALF_HEIGHT_MAX, Math.max(HALF_HEIGHT_MIN, v.halfHeight)),
-  });
-
   /** Frame the whole contour with a margin. The review's addition; double-click and a button. */
   const fitContour = (): void => {
     const s = getState();
@@ -488,7 +491,12 @@ export function createStageController(input: StageControllerInput): StageControl
     ev.preventDefault();
     const rect = ink.getBoundingClientRect();
     const st = getState();
-    const zoomed = zoomAt(st.view, Math.exp(-ev.deltaY * 0.0015), ev.clientX - rect.left, ev.clientY - rect.top, vp());
+    // The factor is clamped BEFORE the zoom, not the view after it: `zoomAt` folds the factor into
+    // the centre as well as the half-height, so a clamp applied afterwards has already lost where
+    // the reader is. See {@link WHEEL_FACTOR_MAX}.
+    const asked = Math.exp(-ev.deltaY * 0.0015);
+    const factor = Math.min(WHEEL_FACTOR_MAX, Math.max(1 / WHEEL_FACTOR_MAX, asked));
+    const zoomed = zoomAt(st.view, factor, ev.clientX - rect.left, ev.clientY - rect.top, vp());
     commit({ ...st, view: clampView(zoomed) }, "edit");
   };
 

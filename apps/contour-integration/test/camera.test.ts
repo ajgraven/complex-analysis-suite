@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  CENTER_MAX,
+  clampView,
   DEFAULT_VIEW,
+  HALF_HEIGHT_MAX,
+  HALF_HEIGHT_MIN,
   fitView,
   panBy,
   panDelta,
@@ -166,5 +170,50 @@ describe("fitView", () => {
     expect(Number.isFinite(view.halfHeight)).toBe(true);
     expect(Number.isFinite(view.center[0])).toBe(true);
     expect(Number.isFinite(view.center[1])).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+// `clampView` — M8 step 1.7, from the step's own mutation sweep.
+//
+// It lived in `stageController.ts`, bounded the half-height and passed the CENTRE through. That is
+// half a clamp, and the missing half is where the reader is: `zoomAt` folds a wheel's factor into
+// the centre as well, so one `deltaY: 100000` left the camera 1e64 from the origin at a perfectly
+// ordinary half-height of 200 — a sane magnification pointed at nothing. It is here because the
+// wheel is not the way in that matters: the codec admits any three finite numbers with a positive
+// height, so a `#vs=` carrying 1e64 lands a reader somewhere they did not navigate to.
+// ──────────────────────────────────────────────────────────────────────────────────────────────
+
+describe("clampView", () => {
+  it("bounds the CENTRE as well as the zoom", () => {
+    const far = clampView({ center: [1e64, -1e64], halfHeight: 200 });
+    expect(Math.abs(far.center[0])).toBeLessThanOrEqual(CENTER_MAX);
+    expect(Math.abs(far.center[1])).toBeLessThanOrEqual(CENTER_MAX);
+    // The SIGN survives: clamping is a nearest point in the plane, not a reset to the origin.
+    expect(Math.sign(far.center[0])).toBe(1);
+    expect(Math.sign(far.center[1])).toBe(-1);
+  });
+
+  it("leaves an ordinary camera exactly alone", () => {
+    // The clamp must be invisible everywhere a reader actually is, or it is a limit rather than a
+    // guard — and `DEFAULT_VIEW` is where every session starts.
+    const ok: View = { center: [1.25, -0.5], halfHeight: 7 };
+    expect(clampView(ok)).toEqual(ok);
+    expect(clampView(DEFAULT_VIEW)).toEqual(DEFAULT_VIEW);
+  });
+
+  it("bounds the zoom at both ends", () => {
+    expect(clampView({ center: [0, 0], halfHeight: 1e-9 }).halfHeight).toBe(HALF_HEIGHT_MIN);
+    expect(clampView({ center: [0, 0], halfHeight: 1e9 }).halfHeight).toBe(HALF_HEIGHT_MAX);
+  });
+
+  it("sends a NON-FINITE axis to the origin rather than through the comparison", () => {
+    // `Math.min(a, Math.max(-a, NaN))` is NaN — the bound does not catch it, because every
+    // comparison with NaN is false. There is no nearest point to fall back to, so the origin is the
+    // answer: it is where the plane is, and a reader who arrives there can see something.
+    const bad = clampView({ center: [NaN, Infinity], halfHeight: NaN });
+    expect(bad.center).toEqual([0, 0]);
+    expect(bad.halfHeight).toBe(DEFAULT_VIEW.halfHeight);
+    expect(clampView({ center: [0, -Infinity], halfHeight: 2 }).center[1]).toBe(0);
   });
 });

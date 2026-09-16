@@ -17,7 +17,7 @@ import { describe, expect, it, vi } from "vitest";
 import { LEFT_CARDS, RIGHT_CARDS, cardTitle } from "../src/engine/vocabulary.js";
 import { handlesOf, onContour } from "../src/engine/contour/edit.js";
 import { resolveAll } from "../src/engine/contour/model.js";
-import { plotToScreen, scale } from "../src/kernel/camera.js";
+import { CENTER_MAX, plotToScreen, scale } from "../src/kernel/camera.js";
 import { pointAt } from "../src/kernel/geom.js";
 import { h, patch } from "../src/shell2/dom.js";
 import { math, mathPlain, mathText, renderedCount } from "../src/shell2/math.js";
@@ -527,13 +527,54 @@ function screenOf(app: ReturnType<typeof mountShell2>, z: readonly [number, numb
 
 describe("the stage's gestures", () => {
   it("clamps a wheel zoom, so a flick cannot lose the plane", () => {
+    // **It asserted the half-height and nothing else, and the plane was lost anyway.** `zoomAt`
+    // folds the factor into the CENTRE as well, and `clampView` passed the centre through — so this
+    // event left the camera 1e64 from the origin at a perfectly ordinary half-height of 200, which
+    // is the reader looking at nothing. It went unnoticed for three steps and then polluted this
+    // file, because `syncHash` minted a permalink to that camera and the next mount opened it.
     const { app, ink } = mountStage();
     const deep = new WheelEvent("wheel", { deltaY: -100000, bubbles: true, cancelable: true });
     ink.dispatchEvent(deep);
     expect(app.currentState().view.halfHeight).toBeGreaterThanOrEqual(0.05);
     const far = new WheelEvent("wheel", { deltaY: 100000, bubbles: true, cancelable: true });
     ink.dispatchEvent(far);
-    expect(app.currentState().view.halfHeight).toBeLessThanOrEqual(200);
+    const { center, halfHeight } = app.currentState().view;
+    expect(halfHeight).toBeLessThanOrEqual(200);
+    // The clause the name always promised. A bound rather than the exact centre, because where one
+    // clamped flick lands is arithmetic nobody should have to reproduce to change the constant —
+    // what must hold is that the reader is still somewhere a contour can be.
+    // Per axis, which is what the clamp promises — the magnitude bound is `CENTER_MAX·√2`.
+    expect(Math.abs(center[0]), "a flick lost the plane").toBeLessThanOrEqual(CENTER_MAX);
+    expect(Math.abs(center[1]), "a flick lost the plane").toBeLessThanOrEqual(CENTER_MAX);
+    expect(Number.isFinite(center[0]) && Number.isFinite(center[1])).toBe(true);
+  });
+
+  it("keeps a flick NEAR where the reader was, which the plane bound alone does not", () => {
+    // **The two clamps overlap, and this is the half only the FACTOR one holds.** With the centre
+    // bounded, dropping the factor clamp still leaves the camera inside the plane — `clampView`
+    // catches the 1e64 and pulls it to the corner — so "a flick cannot lose the plane" passes
+    // either way and says nothing about the factor. What it cannot pass is this: a gesture zooms,
+    // it does not teleport. Measured by the sweep, which is how the overlap showed at all.
+    const { app, ink } = mountStage();
+    app.applyState({ ...app.currentState(), view: { center: [1, 1], halfHeight: 2 } });
+    const before = app.currentState().view.center;
+    ink.dispatchEvent(new WheelEvent("wheel", { deltaY: 100000, bubbles: true, cancelable: true }));
+    const after = app.currentState().view.center;
+    // A bound in SCREENS at the widest view, rather than a distance: what a reader loses is their
+    // place, and a place is measured against what is on screen.
+    const screens = Math.hypot(after[0] - before[0], after[1] - before[1]) / 200;
+    expect(screens, "a single wheel event moved the reader off their own page").toBeLessThan(2);
+  });
+
+  it("keeps ONE wheel notch a notch, so the clamp is not the only thing holding the plane", () => {
+    // The factor is clamped before the zoom, so the ordinary case must be untouched: a real notch
+    // is `deltaY` of about ±100, well inside `[1/4, 4]`, and clamping it there would turn every
+    // scroll into a jump. Measured against `zoomAt`'s own arithmetic rather than a literal.
+    const { app, ink } = mountStage();
+    const before = app.currentState().view.halfHeight;
+    ink.dispatchEvent(new WheelEvent("wheel", { deltaY: 100, bubbles: true, cancelable: true }));
+    const after = app.currentState().view.halfHeight;
+    expect(after / before).toBeCloseTo(Math.exp(100 * 0.0015), 10);
   });
 
   it("fits the contour into the view, from the TOOLBAR as well as the controller", () => {

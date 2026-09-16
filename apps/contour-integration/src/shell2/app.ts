@@ -14,6 +14,7 @@ import { attachCanvasA11y, mountNavHeader } from "@cas/ui";
 
 import { Frac } from "@cas/exact";
 
+import { clampView } from "../kernel/camera.js";
 import { circleTemplate } from "../engine/contour/templates.js";
 import { reverseContour } from "../engine/contour/edit.js";
 import { TEMPLATES } from "../shell/templates.js";
@@ -627,6 +628,13 @@ export function mountShell2(root: Element): Shell2Handle {
 
   /** The door a link, a contrast cell and a drill rung all come through. */
   function applyStateNow(next: ShellState): void {
+    // **The camera comes back into the plane HERE**, because a link is the way a reader arrives at
+    // one they did not navigate to. `decodeShell` checks the camera is three finite numbers with a
+    // positive height and says nothing about magnitude — rightly, since a far-off camera is a link
+    // that CAN be honoured — so without this a `#vs=` carrying `1e64` opens on a sane magnification
+    // pointed at nothing, with no way back but the Fit button. Every other field is honoured as
+    // written; this is the one the app may reasonably know better than the link.
+    const wanted: ShellState = { ...next, view: clampView(next.view) };
     // M7.4's decision, structural here: a restored state inherits no half-drawn path, no grading
     // that would unmask a rung's own answer, and no hover pointing at a piece it does not have.
     resetTransient(session);
@@ -639,9 +647,9 @@ export function mountShell2(root: Element): Shell2Handle {
     // unfolded a panel the reader had deliberately folded is taking something from them for no
     // reason. So the reset happens exactly when the layout is part of what the link MEANS.
     const wasMode = shellMode(state);
-    const nextMode = shellMode(next);
+    const nextMode = shellMode(wanted);
     if (nextMode !== wasMode) session.rails = railsFor(nextMode);
-    commit(next, "link");
+    commit(wanted, "link");
   }
 
   /** What each mode opens with. Explore is both rails; a worked example is the derivation. */

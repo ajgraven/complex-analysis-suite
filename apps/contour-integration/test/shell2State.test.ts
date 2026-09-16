@@ -16,7 +16,7 @@
 // KaTeX's three copies of its own spans.
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_VIEW } from "../src/kernel/camera.js";
+import { CENTER_MAX, DEFAULT_VIEW } from "../src/kernel/camera.js";
 import type { Contour } from "../src/engine/contour/model.js";
 import { penContour, sameShape } from "../src/engine/contour/pen.js";
 import { offeredCorpus, shellMode, type ShellState } from "../src/shell/state.js";
@@ -473,6 +473,33 @@ describe("the `#vs=` permalink, at the shell", () => {
     // Nothing of the refused link leaked in: not the mode, not the record.
     expect(opened.app.currentState().mode).toBe("sandbox");
     expect(opened.app.currentState().record).toBeNull();
+  });
+
+  it("brings an ABSURD camera back into the plane, rather than opening on nothing", () => {
+    // The codec admits any three finite numbers with a positive height, and it is right to: a
+    // far-off camera is a link that CAN be honoured. What it cannot do is decide it is worth
+    // honouring literally — so the DOOR clamps it, and a `#vs=` carrying 1e64 opens somewhere a
+    // contour can be instead of on a sane magnification pointed at nothing, with no way back but
+    // the Fit button. Every other field of the link is honoured as written.
+    //
+    // The number comes from the defect that prompted this: `clampView` bounded the half-height and
+    // passed the centre through, so one `deltaY: 100000` put the camera exactly there — and
+    // `syncHash` then minted a permalink to it, which is how the camera reached a link at all.
+    const from = mount();
+    openRecord(from.app, "jordan-cosine-kernel");
+    const lost = { ...from.app.currentState(), view: { center: [1e64, -1e64] as const, halfHeight: 200 } };
+    const enc = encodeShell(lost);
+    if (!enc.ok) throw new Error(`the camera made the state unlinkable: ${enc.reason}`);
+
+    const opened = mount(enc.hash);
+    const { center, halfHeight } = opened.app.currentState().view;
+    // PER AXIS, which is what the clamp promises: the magnitude bound is `CENTER_MAX·√2`, and
+    // asserting the hypotenuse against `CENTER_MAX` fails on a camera the clamp handled correctly.
+    expect(Math.abs(center[0]), "the link opened outside the plane").toBeLessThanOrEqual(CENTER_MAX);
+    expect(Math.abs(center[1]), "the link opened outside the plane").toBeLessThanOrEqual(CENTER_MAX);
+    expect(halfHeight, "the zoom the sharer chose was not honoured").toBe(200);
+    // And the link is otherwise obeyed: this is a clamp on one field, not a refusal.
+    expect(opened.app.currentState().record).toBe("jordan-cosine-kernel");
   });
 
   it("says nothing at all when there is no link", () => {
