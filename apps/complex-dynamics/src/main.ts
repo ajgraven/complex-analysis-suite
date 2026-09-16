@@ -6234,9 +6234,18 @@ export function init(): void {
     dynamicalView.setPointRays(null);
 
     if (res.angles.length === 0 || !res.point) {
-      readout.textContent =
-        "No external ray lands near that point — it may be interior or exterior, or its rays have period above the search bound.";
-      showToast("No external ray found near that point.", "info");
+      // Two different answers wore the same sentence. "Nothing landed here" and "rays landed here
+      // but Newton could not resolve them" are not the same claim, and the second used to be
+      // reported as the first — or, worse, as a confident valence that omitted them. (Follow-up.)
+      readout.textContent = res.exact
+        ? "No external ray lands near that point — it may be interior or exterior, or its rays have period above the search bound."
+        : "≈ Rays land near that point, but none could be resolved: the ray tracer did not converge, so no valence is claimed. Zoom in and click closer to the boundary, or raise the search bound.";
+      showToast(
+        res.exact
+          ? "No external ray found near that point."
+          : "≈ Rays are present but unresolved — no valence claimed.",
+        "info",
+      );
       return;
     }
     const turns = res.angles.map((a) => a.p / a.q);
@@ -6245,12 +6254,19 @@ export function init(): void {
 
     const list = res.angles.map((a) => `${a.p}/${a.q}`).join(", ");
     const where = plane === "dyn" ? "ζ" : "c";
+    // `exact` false ⇒ an unresolved landing sits near this point, so the count is a LOWER BOUND and
+    // "not biaccessible" could be a false negative. Say ≥ and ≈ rather than printing a bare number:
+    // at the period-6 root c ≈ −1.28418 − 0.42710i the two co-landing rays are both unresolved, and
+    // the app read "Not biaccessible (valence 1)" about a point that is biaccessible.
+    const n = res.exact ? `${res.valence}` : `≥ ${res.valence}`;
     const bicc = res.biaccessible
-      ? `Biaccessible (valence ${res.valence}).`
-      : `Not biaccessible (valence ${res.valence}).`;
+      ? `Biaccessible (valence ${n}).`
+      : res.exact
+        ? `Not biaccessible (valence ${n}).`
+        : `≈ Biaccessibility undecided — at least one ray here could not be resolved.`;
     readout.textContent =
-      `${res.valence} ray${res.valence === 1 ? "" : "s"} land at ${where} = ${fmtPt(res.point)}: ` +
-      `θ ∈ {${list}}. ${bicc}`;
+      `${res.exact ? "" : "≈ "}${n} ray${res.valence === 1 && res.exact ? "" : "s"} land at ` +
+      `${where} = ${fmtPt(res.point)}: θ ∈ {${list}}. ${bicc}`;
     // On ∂M a component root's rays name a hyperbolic component — append its internal address (the
     // combinatorial GPS: rabbit 1-3 vs airplane 1-2-3). Both co-landing angles share it, so read the
     // first; a Misiurewicz point's rays are pre-periodic ⇒ no address (said honestly, not guessed).
@@ -6260,7 +6276,7 @@ export function init(): void {
         ? ` Internal address ${addr.address.join("-")} (period ${addr.period}, ν = ${formatKneading(addr.kneading)}). Tuning tower: ${formatTower(addr.address)}.`
         : " These rays are pre-periodic (a Misiurewicz point) — no internal address.";
     }
-    showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${res.valence}).`, "info");
+    showToast(`${where} = ${fmtPt(res.point)} ← {${list}} (valence ${n}).`, "info");
   });
   // Symbolic console: strip an internal address to its kneading sequence + characteristic angles.
   const fmtAngleBits = (ang: { p: number; q: number }, period: number): string =>
